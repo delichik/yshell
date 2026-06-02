@@ -14,6 +14,7 @@ import {
   type QuickConnectDraft,
   type RuntimeStatus,
   type SessionProfile,
+  type TerminalConfig,
   type TerminalStatusEvent,
   type WorkspaceTab,
 } from '../bindings/types';
@@ -38,6 +39,18 @@ const createEmptyTab = (index = 1): WorkspaceTab => ({
   ],
   activePaneId: '',
 });
+
+function sessionToQuickConnectDraft(session: SessionProfile): QuickConnectDraft {
+  return {
+    protocol: session.protocol,
+    name: session.name,
+    host: session.host ?? '',
+    port: session.port ?? 22,
+    username: session.username ?? session.auth.username ?? '',
+    authMethod: session.auth.method,
+    saveAsSession: false,
+  };
+}
 
 export function App() {
   const [sessions, setSessions] = useState<SessionProfile[]>([]);
@@ -90,7 +103,7 @@ export function App() {
     );
   };
 
-  const updatePaneRuntime = (tabId: string, paneId: string, runtimeId: string, title: string, status: RuntimeStatus) => {
+  const updatePaneRuntime = (tabId: string, paneId: string, runtimeId: string | null, title: string, status: RuntimeStatus) => {
     setTabs((current) =>
       current.map((tab) =>
         tab.id === tabId
@@ -104,13 +117,19 @@ export function App() {
     );
   };
 
-  const openLocal = async () => {
+  const openLocal = async (terminalConfig: TerminalConfig = settings.terminal, tabTitle = '正在打开本地终端') => {
     const tab = createEmptyTab(tabs.length + 1);
     tab.activePaneId = tab.panes[0].id;
-    setTabs((current) => [...current, { ...tab, title: '正在打开本地终端' }]);
+    setTabs((current) => [...current, { ...tab, title: tabTitle }]);
     setActiveTabId(tab.id);
-    const runtime = await openLocalTerminal(tab.id, tab.panes[0].id, 120, 30, settings.terminal);
-    updatePaneRuntime(tab.id, tab.panes[0].id, runtime.runtimeId, runtime.title, runtime.status);
+    try {
+      const runtime = await openLocalTerminal(tab.id, tab.panes[0].id, 120, 30, terminalConfig);
+      updatePaneRuntime(tab.id, tab.panes[0].id, runtime.runtimeId, runtime.title, runtime.status);
+    } catch (error) {
+      console.error('Failed to open local terminal', error);
+      updatePaneRuntime(tab.id, tab.panes[0].id, null, '本地终端启动失败', 'failed');
+      throw error;
+    }
   };
 
   const openQuickConnection = async (draft: QuickConnectDraft) => {
@@ -119,34 +138,48 @@ export function App() {
     const title = draft.protocol === 'local' ? '本地终端' : draft.name || `${draft.username}@${draft.host}`;
     setTabs((current) => [...current, { ...tab, title }]);
     setActiveTabId(tab.id);
-    setQuickConnectOpen(false);
-    if (draft.saveAsSession) {
-      const now = new Date().toISOString();
-      const stored = await saveSession({
-        id: crypto.randomUUID(),
-        name: title,
-        folderId: null,
-        tags: [],
-        protocol: draft.protocol,
-        host: draft.protocol === 'ssh' ? draft.host : null,
-        port: draft.protocol === 'ssh' ? draft.port : null,
-        username: draft.protocol === 'ssh' ? draft.username || null : null,
-        auth: { method: draft.authMethod, username: draft.username || undefined },
-        proxy: null,
-        terminal: settings.terminal,
-        appearance: settings.appearance,
-        logging: settings.logging,
-        createdAt: now,
-        updatedAt: now,
-        lastConnectedAt: null,
-      });
-      setSessions((current) => [stored, ...current.filter((session) => session.id !== stored.id)]);
+    try {
+      if (draft.saveAsSession) {
+        const now = new Date().toISOString();
+        const stored = await saveSession({
+          id: crypto.randomUUID(),
+          name: title,
+          folderId: null,
+          tags: [],
+          protocol: draft.protocol,
+          host: draft.protocol === 'ssh' ? draft.host : null,
+          port: draft.protocol === 'ssh' ? draft.port : null,
+          username: draft.protocol === 'ssh' ? draft.username || null : null,
+          auth: { method: draft.authMethod, username: draft.username || undefined },
+          proxy: null,
+          terminal: settings.terminal,
+          appearance: settings.appearance,
+          logging: settings.logging,
+          createdAt: now,
+          updatedAt: now,
+          lastConnectedAt: null,
+        });
+        setSessions((current) => [stored, ...current.filter((session) => session.id !== stored.id)]);
+      }
+      const runtime =
+        draft.protocol === 'local'
+          ? await openLocalTerminal(tab.id, tab.panes[0].id, 120, 30, settings.terminal)
+          : await openSshTerminal(draft, tab.id, tab.panes[0].id);
+      updatePaneRuntime(tab.id, tab.panes[0].id, runtime.runtimeId, runtime.title, runtime.status);
+      setQuickConnectOpen(false);
+    } catch (error) {
+      console.error('Failed to open quick connection', error);
+      updatePaneRuntime(tab.id, tab.panes[0].id, null, '连接失败', 'failed');
+      throw error;
     }
-    const runtime =
-      draft.protocol === 'local'
-        ? await openLocalTerminal(tab.id, tab.panes[0].id, 120, 30, settings.terminal)
-        : await openSshTerminal(draft, tab.id, tab.panes[0].id);
-    updatePaneRuntime(tab.id, tab.panes[0].id, runtime.runtimeId, runtime.title, runtime.status);
+  };
+
+  const openSavedSession = async (session: SessionProfile) => {
+    if (session.protocol === 'local') {
+      await openLocal(session.terminal, session.name || '本地终端');
+      return;
+    }
+    await openQuickConnection(sessionToQuickConnectDraft(session));
   };
 
   const persistSettings = async (nextSettings: AppSettings) => {
@@ -185,12 +218,17 @@ export function App() {
         </div>
         <nav aria-label="主操作">
           <button type="button" onClick={() => setQuickConnectOpen(true)}>快速连接</button>
-          <button type="button" onClick={openLocal}>新建本地终端</button>
+          <button type="button" onClick={() => void openLocal()}>新建本地终端</button>
           <button type="button" onClick={() => setSettingsOpen(true)}>设置</button>
         </nav>
       </header>
       <main className="main-layout">
-        <SessionSidebar sessions={sessions} onQuickConnect={() => setQuickConnectOpen(true)} />
+        <SessionSidebar
+          sessions={sessions}
+          onOpenLocal={() => void openLocal()}
+          onOpenSession={(session) => void openSavedSession(session)}
+          onQuickConnect={() => setQuickConnectOpen(true)}
+        />
         <Workspace
           tabs={tabs}
           activeTabId={activeTabId}

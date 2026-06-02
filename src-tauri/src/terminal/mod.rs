@@ -240,7 +240,6 @@ impl RuntimeRegistry {
                 let _ = child.wait();
             }
         }
-        Ok(())
     }
 }
 
