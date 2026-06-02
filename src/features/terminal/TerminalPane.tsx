@@ -17,6 +17,7 @@ export function TerminalPane({ pane, config, active }: TerminalPaneProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
+  const resizeTimerRef = useRef<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
@@ -68,9 +69,14 @@ export function TerminalPane({ pane, config, active }: TerminalPaneProps) {
 
     const resize = () => {
       fitAddon.fit();
-      if (pane.runtimeId) {
-        void resizeTerminal(pane.runtimeId, terminal.cols, terminal.rows);
+      if (!pane.runtimeId) return;
+      if (resizeTimerRef.current !== null) {
+        window.clearTimeout(resizeTimerRef.current);
       }
+      resizeTimerRef.current = window.setTimeout(() => {
+        resizeTimerRef.current = null;
+        void resizeTerminal(pane.runtimeId as string, terminal.cols, terminal.rows);
+      }, 80);
     };
     const observer = new ResizeObserver(resize);
     observer.observe(hostRef.current);
@@ -80,6 +86,10 @@ export function TerminalPane({ pane, config, active }: TerminalPaneProps) {
       unlisten?.();
       inputDisposable.dispose();
       observer.disconnect();
+      if (resizeTimerRef.current !== null) {
+        window.clearTimeout(resizeTimerRef.current);
+        resizeTimerRef.current = null;
+      }
       terminal.dispose();
       terminalRef.current = null;
       searchRef.current = null;

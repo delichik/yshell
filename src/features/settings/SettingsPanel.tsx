@@ -43,8 +43,58 @@ export function SettingsPanel({ settings, onClose, onSave }: SettingsPanelProps)
             字号
             <input
               type="number"
+              min={8}
+              max={48}
               value={draft.terminal.fontSize}
               onChange={(event) => setDraft({ ...draft, terminal: { ...draft.terminal, fontSize: Number(event.target.value) } })}
+            />
+          </label>
+          <label>
+            行高
+            <input
+              type="number"
+              min={1}
+              max={2}
+              step={0.05}
+              value={draft.terminal.lineHeight}
+              onChange={(event) => setDraft({ ...draft, terminal: { ...draft.terminal, lineHeight: Number(event.target.value) } })}
+            />
+          </label>
+          <label>
+            滚动缓冲
+            <input
+              type="number"
+              min={100}
+              step={100}
+              value={draft.terminal.scrollback}
+              onChange={(event) => setDraft({ ...draft, terminal: { ...draft.terminal, scrollback: Number(event.target.value) } })}
+            />
+          </label>
+          <label>
+            配色方案
+            <select
+              value={draft.terminal.colorScheme}
+              onChange={(event) => setDraft({ ...draft, terminal: { ...draft.terminal, colorScheme: event.target.value } })}
+            >
+              <option value="One Dark">One Dark</option>
+              <option value="Light">Light</option>
+              <option value="Solarized Light">Solarized Light</option>
+            </select>
+          </label>
+          <label>
+            默认 Shell
+            <input
+              value={draft.terminal.shell ?? ''}
+              onChange={(event) => setDraft({ ...draft, terminal: { ...draft.terminal, shell: event.target.value || undefined } })}
+              placeholder="留空使用系统默认"
+            />
+          </label>
+          <label>
+            工作目录
+            <input
+              value={draft.terminal.workingDirectory ?? ''}
+              onChange={(event) => setDraft({ ...draft, terminal: { ...draft.terminal, workingDirectory: event.target.value || undefined } })}
+              placeholder="留空使用当前目录"
             />
           </label>
           <label className="checkbox-row">

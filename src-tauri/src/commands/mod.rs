@@ -3,7 +3,7 @@ use serde::Deserialize;
 use tauri::{AppHandle, State};
 
 use crate::{
-    config::{AppSettings, ConfigStore, SessionProfile},
+    config::{AppSettings, ConfigStore, SessionProfile, TerminalConfig},
     terminal::{RuntimeRegistry, TerminalRuntime},
 };
 
@@ -55,8 +55,19 @@ pub fn terminal_open_local(
     pane_id: String,
     cols: Option<u16>,
     rows: Option<u16>,
+    terminal: Option<TerminalConfig>,
 ) -> Result<TerminalRuntime, String> {
-    registry.open_local(app_handle, tab_id, pane_id, cols, rows)
+    let shell = terminal.as_ref().and_then(|config| config.shell.clone());
+    let working_directory = terminal.and_then(|config| config.working_directory);
+    registry.open_local(
+        app_handle,
+        tab_id,
+        pane_id,
+        cols,
+        rows,
+        shell,
+        working_directory,
+    )
 }
 
 #[tauri::command]
@@ -66,12 +77,28 @@ pub fn terminal_open_ssh(
     tab_id: String,
     pane_id: String,
 ) -> Result<TerminalRuntime, String> {
+    if draft.protocol != "ssh" {
+        return Err(format!("unsupported terminal protocol: {}", draft.protocol));
+    }
+
+    if !matches!(
+        draft.auth_method.as_str(),
+        "password" | "private_key" | "agent"
+    ) {
+        return Err(format!(
+            "unsupported SSH authentication method: {}",
+            draft.auth_method
+        ));
+    }
+
     let title = if draft.name.is_empty() {
         format!("{}@{}:{}", draft.username, draft.host, draft.port)
     } else {
         draft.name
     };
-    registry.open_ssh_placeholder(tab_id, pane_id, title)
+    let runtime = registry.open_ssh_placeholder(tab_id, pane_id, title)?;
+    let _should_persist_profile = draft.save_as_session;
+    Ok(runtime)
 }
 
 #[tauri::command]
@@ -99,4 +126,9 @@ pub fn terminal_close(
     runtime_id: String,
 ) -> Result<(), String> {
     registry.close(&runtime_id)
+}
+
+#[tauri::command]
+pub fn terminal_close_all(registry: State<'_, RuntimeRegistry>) -> Result<(), String> {
+    registry.close_all()
 }

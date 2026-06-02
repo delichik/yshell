@@ -13,6 +13,7 @@ use uuid::Uuid;
 use crate::config::SessionProtocol;
 
 const OUTPUT_EVENT: &str = "terminal://output";
+const STATUS_EVENT: &str = "terminal://status";
 const DEFAULT_COLS: u16 = 120;
 const DEFAULT_ROWS: u16 = 30;
 
@@ -45,6 +46,13 @@ struct TerminalOutputEvent {
     data: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalStatusEvent {
+    pub runtime_id: String,
+    pub status: RuntimeStatus,
+}
+
 type PtyWriter = Arc<Mutex<Box<dyn Write + Send>>>;
 
 struct RuntimeHandle {
@@ -67,6 +75,8 @@ impl RuntimeRegistry {
         pane_id: String,
         cols: Option<u16>,
         rows: Option<u16>,
+        shell: Option<String>,
+        working_directory: Option<String>,
     ) -> Result<TerminalRuntime, String> {
         let runtime = TerminalRuntime {
             runtime_id: Uuid::new_v4().to_string(),
@@ -75,7 +85,7 @@ impl RuntimeRegistry {
             status: RuntimeStatus::Connected,
             pane_id,
             tab_id,
-            title: default_shell_title(),
+            title: shell.clone().unwrap_or_else(default_shell_title),
         };
 
         let pty_system = native_pty_system();
@@ -88,7 +98,7 @@ impl RuntimeRegistry {
             })
             .map_err(|error| format!("failed to open local PTY: {error}"))?;
 
-        let mut command = default_shell_command();
+        let mut command = default_shell_command(shell, working_directory);
         command.env("TERM", "xterm-256color");
         let child = pair
             .slave
@@ -204,6 +214,26 @@ impl RuntimeRegistry {
             .map_err(|_| "terminal runtime registry lock poisoned".to_string())?
             .remove(runtime_id);
 
+        Self::terminate_handle(handle);
+        Ok(())
+    }
+
+    pub fn close_all(&self) -> Result<(), String> {
+        let handles = self
+            .runtimes
+            .lock()
+            .map_err(|_| "terminal runtime registry lock poisoned".to_string())?
+            .drain()
+            .map(|(_, handle)| handle)
+            .collect::<Vec<_>>();
+
+        for handle in handles {
+            Self::terminate_handle(Some(handle));
+        }
+        Ok(())
+    }
+
+    fn terminate_handle(handle: Option<RuntimeHandle>) {
         if let Some(mut handle) = handle {
             if let Some(mut child) = handle.child.take() {
                 let _ = child.kill();
@@ -211,6 +241,12 @@ impl RuntimeRegistry {
             }
         }
         Ok(())
+    }
+}
+
+impl Drop for RuntimeRegistry {
+    fn drop(&mut self) {
+        let _ = self.close_all();
     }
 }
 
@@ -237,12 +273,24 @@ fn spawn_output_reader(
                 Err(_) => break,
             }
         }
+        let _ = app_handle.emit(
+            STATUS_EVENT,
+            TerminalStatusEvent {
+                runtime_id,
+                status: RuntimeStatus::Disconnected,
+            },
+        );
     });
 }
 
-fn default_shell_command() -> CommandBuilder {
-    let mut command = CommandBuilder::new(default_shell_path());
-    if let Ok(directory) = std::env::current_dir() {
+fn default_shell_command(
+    shell: Option<String>,
+    working_directory: Option<String>,
+) -> CommandBuilder {
+    let mut command = CommandBuilder::new(shell.unwrap_or_else(default_shell_path));
+    if let Some(directory) = working_directory {
+        command.cwd(directory);
+    } else if let Ok(directory) = std::env::current_dir() {
         command.cwd(directory);
     }
     command

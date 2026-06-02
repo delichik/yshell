@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { AppSettings, QuickConnectDraft, SessionProfile, TerminalRuntime } from './types';
+import type { AppSettings, QuickConnectDraft, SessionProfile, TerminalConfig, TerminalRuntime } from './types';
 
 export const runningInTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -20,7 +20,13 @@ export async function saveSession(profile: SessionProfile): Promise<SessionProfi
   return invoke<SessionProfile>('sessions_save', { profile });
 }
 
-export async function openLocalTerminal(tabId: string, paneId: string, cols = 120, rows = 30): Promise<TerminalRuntime> {
+export async function openLocalTerminal(
+  tabId: string,
+  paneId: string,
+  cols = 120,
+  rows = 30,
+  terminal?: TerminalConfig,
+): Promise<TerminalRuntime> {
   if (!runningInTauri) {
     return {
       runtimeId: `preview-${paneId}`,
@@ -32,7 +38,7 @@ export async function openLocalTerminal(tabId: string, paneId: string, cols = 12
       title: 'Preview Shell',
     };
   }
-  return invoke<TerminalRuntime>('terminal_open_local', { tabId, paneId, cols, rows });
+  return invoke<TerminalRuntime>('terminal_open_local', { tabId, paneId, cols, rows, terminal });
 }
 
 export async function openSshTerminal(draft: QuickConnectDraft, tabId: string, paneId: string): Promise<TerminalRuntime> {
@@ -63,6 +69,11 @@ export async function resizeTerminal(runtimeId: string, cols: number, rows: numb
 export async function closeTerminal(runtimeId: string): Promise<void> {
   if (!runningInTauri) return;
   return invoke('terminal_close', { runtimeId });
+}
+
+export async function closeAllTerminals(): Promise<void> {
+  if (!runningInTauri) return;
+  return invoke('terminal_close_all');
 }
 
 export async function loadSettings(): Promise<AppSettings | null> {

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { SessionSidebar } from '../features/sessions/SessionSidebar';
 import { QuickConnectPanel } from '../features/sessions/QuickConnectPanel';
 import { Workspace } from '../features/workspace/Workspace';
 import { SettingsPanel } from '../features/settings/SettingsPanel';
 import { StatusBar } from '../components/StatusBar';
-import { closeTerminal, listSessions, loadSettings, openLocalTerminal, openSshTerminal, saveSession, saveSettings } from '../bindings/ipc';
+import { closeAllTerminals, closeTerminal, listSessions, loadSettings, openLocalTerminal, openSshTerminal, runningInTauri, saveSession, saveSettings } from '../bindings/ipc';
 import {
   defaultAppearance,
   defaultLogging,
@@ -13,6 +14,7 @@ import {
   type QuickConnectDraft,
   type RuntimeStatus,
   type SessionProfile,
+  type TerminalStatusEvent,
   type WorkspaceTab,
 } from '../bindings/types';
 
@@ -55,8 +57,38 @@ export function App() {
       .catch((error) => console.error('Failed to load settings', error));
   }, []);
 
+  useEffect(() => {
+    if (!runningInTauri) return undefined;
+    let unlisten: (() => void) | undefined;
+    void listen<TerminalStatusEvent>('terminal://status', (event) => {
+      updateRuntimeStatus(event.payload.runtimeId, event.payload.status);
+    }).then((cleanup) => {
+      unlisten = cleanup;
+    });
+
+    const closeAll = () => {
+      void closeAllTerminals();
+    };
+    window.addEventListener('beforeunload', closeAll);
+
+    return () => {
+      unlisten?.();
+      window.removeEventListener('beforeunload', closeAll);
+      closeAll();
+    };
+  }, []);
+
   const activeTab = useMemo(() => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0], [activeTabId, tabs]);
   const activePane = activeTab?.panes.find((pane) => pane.id === activeTab.activePaneId) ?? activeTab?.panes[0];
+
+  const updateRuntimeStatus = (runtimeId: string, status: RuntimeStatus) => {
+    setTabs((current) =>
+      current.map((tab) => ({
+        ...tab,
+        panes: tab.panes.map((pane) => (pane.runtimeId === runtimeId ? { ...pane, status } : pane)),
+      })),
+    );
+  };
 
   const updatePaneRuntime = (tabId: string, paneId: string, runtimeId: string, title: string, status: RuntimeStatus) => {
     setTabs((current) =>
@@ -77,7 +109,7 @@ export function App() {
     tab.activePaneId = tab.panes[0].id;
     setTabs((current) => [...current, { ...tab, title: '正在打开本地终端' }]);
     setActiveTabId(tab.id);
-    const runtime = await openLocalTerminal(tab.id, tab.panes[0].id);
+    const runtime = await openLocalTerminal(tab.id, tab.panes[0].id, 120, 30, settings.terminal);
     updatePaneRuntime(tab.id, tab.panes[0].id, runtime.runtimeId, runtime.title, runtime.status);
   };
 
@@ -112,7 +144,7 @@ export function App() {
     }
     const runtime =
       draft.protocol === 'local'
-        ? await openLocalTerminal(tab.id, tab.panes[0].id)
+        ? await openLocalTerminal(tab.id, tab.panes[0].id, 120, 30, settings.terminal)
         : await openSshTerminal(draft, tab.id, tab.panes[0].id);
     updatePaneRuntime(tab.id, tab.panes[0].id, runtime.runtimeId, runtime.title, runtime.status);
   };
