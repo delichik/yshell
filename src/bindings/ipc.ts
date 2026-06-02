@@ -3,13 +3,20 @@ import type { AppSettings, QuickConnectDraft, SessionProfile, TerminalRuntime } 
 
 export const runningInTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
+const previewSessionsKey = 'yshell.preview.sessions';
+const previewSettingsKey = 'yshell.preview.settings';
+
 export async function listSessions(): Promise<SessionProfile[]> {
-  if (!runningInTauri) return [];
+  if (!runningInTauri) return readPreviewJson<SessionProfile[]>(previewSessionsKey, []);
   return invoke<SessionProfile[]>('sessions_list');
 }
 
 export async function saveSession(profile: SessionProfile): Promise<SessionProfile> {
-  if (!runningInTauri) return profile;
+  if (!runningInTauri) {
+    const sessions = readPreviewJson<SessionProfile[]>(previewSessionsKey, []);
+    writePreviewJson(previewSessionsKey, [profile, ...sessions.filter((session) => session.id !== profile.id)]);
+    return profile;
+  }
   return invoke<SessionProfile>('sessions_save', { profile });
 }
 
@@ -59,6 +66,30 @@ export async function closeTerminal(runtimeId: string): Promise<void> {
 }
 
 export async function loadSettings(): Promise<AppSettings | null> {
-  if (!runningInTauri) return null;
+  if (!runningInTauri) return readPreviewJson<AppSettings | null>(previewSettingsKey, null);
   return invoke<AppSettings>('settings_load');
+}
+
+export async function saveSettings(settings: AppSettings): Promise<AppSettings> {
+  if (!runningInTauri) {
+    writePreviewJson(previewSettingsKey, settings);
+    return settings;
+  }
+  return invoke<AppSettings>('settings_save', { settings });
+}
+
+function readPreviewJson<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  const rawValue = window.localStorage.getItem(key);
+  if (!rawValue) return fallback;
+  try {
+    return JSON.parse(rawValue) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function writePreviewJson(key: string, value: unknown) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(key, JSON.stringify(value));
 }

@@ -135,3 +135,114 @@ impl Default for AppSettings {
         }
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PersistedConfig {
+    version: u32,
+    sessions: Vec<SessionProfile>,
+    settings: AppSettings,
+}
+
+impl Default for PersistedConfig {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            sessions: Vec::new(),
+            settings: AppSettings::default(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ConfigStore {
+    path: std::path::PathBuf,
+    state: std::sync::Mutex<PersistedConfig>,
+}
+
+impl ConfigStore {
+    pub fn load_default() -> Self {
+        let path = default_config_path();
+        let state = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|content| serde_json::from_str::<PersistedConfig>(&content).ok())
+            .unwrap_or_default();
+        Self {
+            path,
+            state: std::sync::Mutex::new(state),
+        }
+    }
+
+    pub fn list_sessions(&self) -> Result<Vec<SessionProfile>, String> {
+        let state = self.lock_state()?;
+        Ok(state.sessions.clone())
+    }
+
+    pub fn save_session(&self, profile: SessionProfile) -> Result<SessionProfile, String> {
+        let mut state = self.lock_state()?;
+        if let Some(existing) = state
+            .sessions
+            .iter_mut()
+            .find(|session| session.id == profile.id)
+        {
+            *existing = profile.clone();
+        } else {
+            state.sessions.insert(0, profile.clone());
+        }
+        Self::persist(&self.path, &state)?;
+        Ok(profile)
+    }
+
+    pub fn load_settings(&self) -> Result<AppSettings, String> {
+        let state = self.lock_state()?;
+        Ok(state.settings.clone())
+    }
+
+    pub fn save_settings(&self, settings: AppSettings) -> Result<AppSettings, String> {
+        let mut state = self.lock_state()?;
+        state.settings = settings.clone();
+        Self::persist(&self.path, &state)?;
+        Ok(settings)
+    }
+
+    fn lock_state(&self) -> Result<std::sync::MutexGuard<'_, PersistedConfig>, String> {
+        self.state
+            .lock()
+            .map_err(|_| "config store lock poisoned".to_string())
+    }
+
+    fn persist(path: &std::path::Path, state: &PersistedConfig) -> Result<(), String> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|error| format!("failed to create config directory: {error}"))?;
+        }
+        let content = serde_json::to_string_pretty(state)
+            .map_err(|error| format!("failed to serialize config: {error}"))?;
+        std::fs::write(path, content).map_err(|error| format!("failed to write config: {error}"))
+    }
+}
+
+fn default_config_path() -> std::path::PathBuf {
+    let base = if cfg!(windows) {
+        std::env::var_os("APPDATA")
+            .map(std::path::PathBuf::from)
+            .or_else(home_config_dir)
+    } else if cfg!(target_os = "macos") {
+        std::env::var_os("HOME").map(|home| {
+            std::path::PathBuf::from(home)
+                .join("Library")
+                .join("Application Support")
+        })
+    } else {
+        std::env::var_os("XDG_CONFIG_HOME")
+            .map(std::path::PathBuf::from)
+            .or_else(home_config_dir)
+    }
+    .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    base.join("yshell").join("config.json")
+}
+
+fn home_config_dir() -> Option<std::path::PathBuf> {
+    std::env::var_os("HOME").map(|home| std::path::PathBuf::from(home).join(".config"))
+}

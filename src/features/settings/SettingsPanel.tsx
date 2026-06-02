@@ -1,12 +1,15 @@
+import { useState } from 'react';
 import type { AppSettings } from '../../bindings/types';
 
 interface SettingsPanelProps {
   settings: AppSettings;
   onClose: () => void;
-  onChange: (settings: AppSettings) => void;
+  onSave: (settings: AppSettings) => Promise<void>;
 }
 
-export function SettingsPanel({ settings, onClose, onChange }: SettingsPanelProps) {
+export function SettingsPanel({ settings, onClose, onSave }: SettingsPanelProps) {
+  const [draft, setDraft] = useState<AppSettings>(settings);
+
   return (
     <div className="dialog-backdrop" role="presentation">
       <section className="dialog settings-dialog">
@@ -19,9 +22,9 @@ export function SettingsPanel({ settings, onClose, onChange }: SettingsPanelProp
           <label>
             应用主题
             <select
-              value={settings.appearance.appTheme}
+              value={draft.appearance.appTheme}
               onChange={(event) =>
-                onChange({ ...settings, appearance: { ...settings.appearance, appTheme: event.target.value as AppSettings['appearance']['appTheme'] } })
+                setDraft({ ...draft, appearance: { ...draft.appearance, appTheme: event.target.value as AppSettings['appearance']['appTheme'] } })
               }
             >
               <option value="system">跟随系统</option>
@@ -32,29 +35,30 @@ export function SettingsPanel({ settings, onClose, onChange }: SettingsPanelProp
           <label>
             字体
             <input
-              value={settings.terminal.fontFamily}
-              onChange={(event) => onChange({ ...settings, terminal: { ...settings.terminal, fontFamily: event.target.value } })}
+              value={draft.terminal.fontFamily}
+              onChange={(event) => setDraft({ ...draft, terminal: { ...draft.terminal, fontFamily: event.target.value } })}
             />
           </label>
           <label>
             字号
             <input
               type="number"
-              value={settings.terminal.fontSize}
-              onChange={(event) => onChange({ ...settings, terminal: { ...settings.terminal, fontSize: Number(event.target.value) } })}
+              value={draft.terminal.fontSize}
+              onChange={(event) => setDraft({ ...draft, terminal: { ...draft.terminal, fontSize: Number(event.target.value) } })}
             />
           </label>
           <label className="checkbox-row">
             <input
               type="checkbox"
-              checked={settings.logging.enabled}
-              onChange={(event) => onChange({ ...settings, logging: { ...settings.logging, enabled: event.target.checked } })}
+              checked={draft.logging.enabled}
+              onChange={(event) => setDraft({ ...draft, logging: { ...draft.logging, enabled: event.target.checked } })}
             />
             默认启用会话日志提示
           </label>
         </div>
         <footer>
-          <button type="button" className="primary" onClick={onClose}>完成</button>
+          <button type="button" onClick={onClose}>取消</button>
+          <button type="button" className="primary" onClick={() => void onSave(draft)}>保存</button>
         </footer>
       </section>
     </div>

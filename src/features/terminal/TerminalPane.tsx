@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { SearchAddon } from '@xterm/addon-search';
 import '@xterm/xterm/css/xterm.css';
 import { resizeTerminal, runningInTauri, writeTerminal } from '../../bindings/ipc';
 import type { TerminalConfig, TerminalOutputEvent, WorkspacePane } from '../../bindings/types';
@@ -14,25 +15,27 @@ interface TerminalPaneProps {
 
 export function TerminalPane({ pane, config, active }: TerminalPaneProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const terminalRef = useRef<Terminal | null>(null);
+  const searchRef = useRef<SearchAddon | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (!hostRef.current) return undefined;
     const fitAddon = new FitAddon();
+    const searchAddon = new SearchAddon();
     const terminal = new Terminal({
       cursorBlink: true,
       fontFamily: config.fontFamily,
       fontSize: config.fontSize,
       lineHeight: config.lineHeight,
       scrollback: config.scrollback,
-      theme: {
-        background: '#0f1117',
-        foreground: '#d7dae0',
-        cursor: '#79c0ff',
-        selectionBackground: '#264f78',
-      },
+      theme: terminalTheme(config.colorScheme),
     });
 
+    terminalRef.current = terminal;
+    searchRef.current = searchAddon;
     terminal.loadAddon(fitAddon);
+    terminal.loadAddon(searchAddon);
     terminal.open(hostRef.current);
     fitAddon.fit();
 
@@ -43,7 +46,7 @@ export function TerminalPane({ pane, config, active }: TerminalPaneProps) {
       terminal.writeln('输入内容会在预览模式中本地回显；Tauri 模式会写入后端 shell stdin。');
     }
 
-    const inputDisposable = terminal.onData((data) => {
+    const inputDisposable = terminal.onData((data: string) => {
       if (!pane.runtimeId) return;
       if (!runningInTauri) {
         terminal.write(data.replace(/\r/g, '\r\n'));
@@ -78,16 +81,71 @@ export function TerminalPane({ pane, config, active }: TerminalPaneProps) {
       inputDisposable.dispose();
       observer.disconnect();
       terminal.dispose();
+      terminalRef.current = null;
+      searchRef.current = null;
     };
   }, [config.colorScheme, config.fontFamily, config.fontSize, config.lineHeight, config.scrollback, pane.runtimeId]);
+
+  const copySelection = async () => {
+    const selection = terminalRef.current?.getSelection();
+    if (!selection) return;
+    await navigator.clipboard.writeText(selection);
+  };
+
+  const pasteClipboard = async () => {
+    if (!pane.runtimeId) return;
+    const content = await navigator.clipboard.readText();
+    if (!content) return;
+    if (!runningInTauri) {
+      terminalRef.current?.write(content.replace(/\r?\n/g, '\r\n'));
+      return;
+    }
+    await writeTerminal(pane.runtimeId, content);
+  };
+
+  const findNext = () => {
+    if (!searchQuery) return;
+    searchRef.current?.findNext(searchQuery);
+  };
 
   return (
     <article className="terminal-pane" data-active={active}>
       <header>
         <strong>{pane.title}</strong>
-        <span>{pane.status}</span>
+        <div className="terminal-actions">
+          <input
+            aria-label="搜索当前终端"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') findNext();
+            }}
+            placeholder="搜索…"
+          />
+          <button type="button" onClick={findNext}>查找</button>
+          <button type="button" onClick={() => void copySelection()}>复制</button>
+          <button type="button" onClick={() => void pasteClipboard()}>粘贴</button>
+          <span>{pane.status}</span>
+        </div>
       </header>
       <div className="terminal-host" ref={hostRef} />
     </article>
   );
+}
+
+function terminalTheme(colorScheme: string) {
+  if (colorScheme.toLowerCase().includes('light')) {
+    return {
+      background: '#fbfbfb',
+      foreground: '#1f2937',
+      cursor: '#2563eb',
+      selectionBackground: '#bfdbfe',
+    };
+  }
+  return {
+    background: '#0f1117',
+    foreground: '#d7dae0',
+    cursor: '#79c0ff',
+    selectionBackground: '#264f78',
+  };
 }

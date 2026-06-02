@@ -4,7 +4,7 @@ import { QuickConnectPanel } from '../features/sessions/QuickConnectPanel';
 import { Workspace } from '../features/workspace/Workspace';
 import { SettingsPanel } from '../features/settings/SettingsPanel';
 import { StatusBar } from '../components/StatusBar';
-import { closeTerminal, listSessions, loadSettings, openLocalTerminal, openSshTerminal, saveSession } from '../bindings/ipc';
+import { closeTerminal, listSessions, loadSettings, openLocalTerminal, openSshTerminal, saveSession, saveSettings } from '../bindings/ipc';
 import {
   defaultAppearance,
   defaultLogging,
@@ -117,6 +117,12 @@ export function App() {
     updatePaneRuntime(tab.id, tab.panes[0].id, runtime.runtimeId, runtime.title, runtime.status);
   };
 
+  const persistSettings = async (nextSettings: AppSettings) => {
+    const storedSettings = await saveSettings(nextSettings);
+    setSettings(storedSettings);
+    setSettingsOpen(false);
+  };
+
   const closeTab = (tabId: string) => {
     const closingTab = tabs.find((tab) => tab.id === tabId);
     closingTab?.panes.forEach((pane) => {
@@ -163,7 +169,9 @@ export function App() {
       </main>
       <StatusBar pane={activePane} loggingEnabled={settings.logging.enabled} />
       {quickConnectOpen && <QuickConnectPanel onCancel={() => setQuickConnectOpen(false)} onConnect={openQuickConnection} />}
-      {settingsOpen && <SettingsPanel settings={settings} onClose={() => setSettingsOpen(false)} onChange={setSettings} />}
+      {settingsOpen && (
+        <SettingsPanel settings={settings} onClose={() => setSettingsOpen(false)} onSave={persistSettings} />
+      )}
     </div>
   );
 }

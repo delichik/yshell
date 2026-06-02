@@ -3,7 +3,7 @@ use serde::Deserialize;
 use tauri::{AppHandle, State};
 
 use crate::{
-    config::{AppSettings, SessionProfile},
+    config::{AppSettings, ConfigStore, SessionProfile},
     terminal::{RuntimeRegistry, TerminalRuntime},
 };
 
@@ -20,20 +20,31 @@ pub struct QuickConnectDraft {
 }
 
 #[tauri::command]
-pub fn sessions_list() -> Result<Vec<SessionProfile>, String> {
-    Ok(Vec::new())
+pub fn sessions_list(config_store: State<'_, ConfigStore>) -> Result<Vec<SessionProfile>, String> {
+    config_store.list_sessions()
 }
 
 #[tauri::command]
-pub fn sessions_save(mut profile: SessionProfile) -> Result<SessionProfile, String> {
+pub fn sessions_save(
+    config_store: State<'_, ConfigStore>,
+    mut profile: SessionProfile,
+) -> Result<SessionProfile, String> {
     let now = Utc::now();
     profile.updated_at = now;
-    Ok(profile)
+    config_store.save_session(profile)
 }
 
 #[tauri::command]
-pub fn settings_load() -> Result<AppSettings, String> {
-    Ok(AppSettings::default())
+pub fn settings_load(config_store: State<'_, ConfigStore>) -> Result<AppSettings, String> {
+    config_store.load_settings()
+}
+
+#[tauri::command]
+pub fn settings_save(
+    config_store: State<'_, ConfigStore>,
+    settings: AppSettings,
+) -> Result<AppSettings, String> {
+    config_store.save_settings(settings)
 }
 
 #[tauri::command]
