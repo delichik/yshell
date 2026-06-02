@@ -13,7 +13,7 @@ export async function saveSession(profile: SessionProfile): Promise<SessionProfi
   return invoke<SessionProfile>('sessions_save', { profile });
 }
 
-export async function openLocalTerminal(tabId: string, paneId: string): Promise<TerminalRuntime> {
+export async function openLocalTerminal(tabId: string, paneId: string, cols = 120, rows = 30): Promise<TerminalRuntime> {
   if (!runningInTauri) {
     return {
       runtimeId: `preview-${paneId}`,
@@ -25,7 +25,7 @@ export async function openLocalTerminal(tabId: string, paneId: string): Promise<
       title: 'Preview Shell',
     };
   }
-  return invoke<TerminalRuntime>('terminal_open_local', { tabId, paneId });
+  return invoke<TerminalRuntime>('terminal_open_local', { tabId, paneId, cols, rows });
 }
 
 export async function openSshTerminal(draft: QuickConnectDraft, tabId: string, paneId: string): Promise<TerminalRuntime> {

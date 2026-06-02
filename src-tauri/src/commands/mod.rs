@@ -42,8 +42,10 @@ pub fn terminal_open_local(
     registry: State<'_, RuntimeRegistry>,
     tab_id: String,
     pane_id: String,
+    cols: Option<u16>,
+    rows: Option<u16>,
 ) -> Result<TerminalRuntime, String> {
-    registry.open_local(app_handle, tab_id, pane_id)
+    registry.open_local(app_handle, tab_id, pane_id, cols, rows)
 }
 
 #[tauri::command]
