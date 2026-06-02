@@ -69,6 +69,11 @@ export interface TerminalRuntime {
   title: string;
 }
 
+export interface TerminalOutputEvent {
+  runtimeId: string;
+  data: string;
+}
+
 export interface WorkspacePane {
   id: string;
   runtimeId: string | null;

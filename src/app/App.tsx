@@ -4,7 +4,7 @@ import { QuickConnectPanel } from '../features/sessions/QuickConnectPanel';
 import { Workspace } from '../features/workspace/Workspace';
 import { SettingsPanel } from '../features/settings/SettingsPanel';
 import { StatusBar } from '../components/StatusBar';
-import { listSessions, loadSettings, openLocalTerminal, openSshTerminal, saveSession } from '../bindings/ipc';
+import { closeTerminal, listSessions, loadSettings, openLocalTerminal, openSshTerminal, saveSession } from '../bindings/ipc';
 import {
   defaultAppearance,
   defaultLogging,
@@ -118,6 +118,13 @@ export function App() {
   };
 
   const closeTab = (tabId: string) => {
+    const closingTab = tabs.find((tab) => tab.id === tabId);
+    closingTab?.panes.forEach((pane) => {
+      if (pane.runtimeId) {
+        void closeTerminal(pane.runtimeId);
+      }
+    });
+
     setTabs((current) => {
       const next = current.filter((tab) => tab.id !== tabId);
       if (next.length === 0) {

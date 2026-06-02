@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { AppSettings, QuickConnectDraft, SessionProfile, TerminalRuntime } from './types';
 
-const runningInTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+export const runningInTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 export async function listSessions(): Promise<SessionProfile[]> {
   if (!runningInTauri) return [];
@@ -41,6 +41,16 @@ export async function openSshTerminal(draft: QuickConnectDraft, tabId: string, p
     };
   }
   return invoke<TerminalRuntime>('terminal_open_ssh', { draft, tabId, paneId });
+}
+
+export async function writeTerminal(runtimeId: string, data: string): Promise<void> {
+  if (!runningInTauri) return;
+  return invoke('terminal_write', { runtimeId, data });
+}
+
+export async function resizeTerminal(runtimeId: string, cols: number, rows: number): Promise<void> {
+  if (!runningInTauri) return;
+  return invoke('terminal_resize', { runtimeId, cols, rows });
 }
 
 export async function closeTerminal(runtimeId: string): Promise<void> {

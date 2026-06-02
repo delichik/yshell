@@ -9,7 +9,7 @@ mod terminal;
 
 use commands::{
     sessions_list, sessions_save, settings_load, terminal_close, terminal_open_local,
-    terminal_open_ssh,
+    terminal_open_ssh, terminal_resize, terminal_write,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -23,6 +23,8 @@ pub fn run() {
             settings_load,
             terminal_open_local,
             terminal_open_ssh,
+            terminal_resize,
+            terminal_write,
             terminal_close,
         ])
         .run(tauri::generate_context!())
