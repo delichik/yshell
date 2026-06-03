@@ -8,7 +8,16 @@ pub struct SessionProfile {
     pub id: String,
     pub name: String,
     pub folder_id: Option<String>,
+    #[serde(default)]
     pub tags: Vec<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub color: Option<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub favorite: bool,
     pub protocol: SessionProtocol,
     pub host: Option<String>,
     pub port: Option<u16>,

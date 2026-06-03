@@ -16,6 +16,11 @@ const defaultDraft: QuickConnectDraft = {
   host: '',
   port: 22,
   username: '',
+  description: '',
+  tags: [],
+  folderId: null,
+  color: '#3b82f6',
+  favorite: false,
   authMethod: 'password',
   privateKeyPath: '',
   password: '',
@@ -39,6 +44,11 @@ export function QuickConnectPanel({ initialSession, mode = 'connect', onCancel, 
   const [host, setHost] = useState(initialDraft.host);
   const [port, setPort] = useState(initialDraft.port);
   const [username, setUsername] = useState(initialDraft.username);
+  const [description, setDescription] = useState(initialDraft.description ?? '');
+  const [tagsDraft, setTagsDraft] = useState((initialDraft.tags ?? []).join(', '));
+  const [folderId, setFolderId] = useState(initialDraft.folderId ?? '');
+  const [color, setColor] = useState(initialDraft.color ?? '#3b82f6');
+  const [favorite, setFavorite] = useState(Boolean(initialDraft.favorite));
   const [authMethod, setAuthMethod] = useState<AuthMethod>(initialDraft.authMethod);
   const [password, setPassword] = useState(initialDraft.password ?? '');
   const [privateKeyPath, setPrivateKeyPath] = useState(initialDraft.privateKeyPath ?? '');
@@ -59,6 +69,11 @@ export function QuickConnectPanel({ initialSession, mode = 'connect', onCancel, 
         host,
         port,
         username,
+        description: description.trim() || undefined,
+        tags: tagsDraft.split(',').map((tag) => tag.trim()).filter(Boolean),
+        folderId: folderId.trim() || null,
+        color,
+        favorite,
         authMethod,
         password: authMethod === 'password' ? password : undefined,
         privateKeyPath: authMethod === 'private_key' ? privateKeyPath : undefined,
@@ -103,6 +118,26 @@ export function QuickConnectPanel({ initialSession, mode = 'connect', onCancel, 
                   <label>
                     名称
                     <input value={name} onChange={(event) => setName(event.target.value)} placeholder="生产跳板机" />
+                  </label>
+                  <label>
+                    描述
+                    <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="用途、环境、负责人" />
+                  </label>
+                  <label>
+                    标签
+                    <input value={tagsDraft} onChange={(event) => setTagsDraft(event.target.value)} placeholder="prod, db, cn-north" />
+                  </label>
+                  <label>
+                    文件夹
+                    <input value={folderId} onChange={(event) => setFolderId(event.target.value)} placeholder="生产环境/数据库" />
+                  </label>
+                  <label>
+                    颜色
+                    <input type="color" value={color} onChange={(event) => setColor(event.target.value)} />
+                  </label>
+                  <label className="checkbox-row inline-checkbox">
+                    <input type="checkbox" checked={favorite} onChange={(event) => setFavorite(event.target.checked)} />
+                    加入收藏
                   </label>
                   <label>
                     协议
@@ -240,6 +275,11 @@ function sessionToDraft(session?: SessionProfile | null): QuickConnectDraft {
     host: session.host ?? '',
     port: session.port ?? 22,
     username: session.username ?? session.auth.username ?? '',
+    description: session.description ?? '',
+    tags: session.tags ?? [],
+    folderId: session.folderId,
+    color: session.color ?? '#3b82f6',
+    favorite: Boolean(session.favorite),
     authMethod: session.auth.method,
     privateKeyPath: session.auth.privateKeyPath ?? '',
     password: '',

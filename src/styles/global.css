@@ -417,3 +417,98 @@ button, input, select, textarea { color-scheme: dark; }
   .properties-layout { grid-template-columns: 1fr; }
   .properties-nav { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.08); grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.session-manager-header p {
+  color: #8fa4bf;
+  font-size: .82rem;
+  margin: 4px 0 0;
+  max-width: 230px;
+}
+.session-manager-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0 14px;
+}
+.session-manager-actions button {
+  background: #1a65ad;
+  border: 1px solid #327fc8;
+  border-radius: 5px;
+  color: #fff;
+  padding: 7px 10px;
+}
+.session-count {
+  color: #8fa4bf;
+  font-size: .78rem;
+  font-weight: 400;
+}
+.session-folder {
+  border-left: 1px solid #24364b;
+  margin: 10px 0 14px 6px;
+  padding-left: 10px;
+}
+.session-folder h4 {
+  color: #b9cbe1;
+  font-size: .86rem;
+  font-weight: 600;
+  margin: 8px 0;
+}
+.session-card {
+  border-left: 3px solid var(--session-color, #3b82f6);
+  position: relative;
+}
+.session-card::before {
+  background: var(--session-color, #3b82f6);
+  border-radius: 999px;
+  content: '';
+  height: 8px;
+  left: 9px;
+  position: absolute;
+  top: 13px;
+  width: 8px;
+}
+.session-node-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.session-node-main strong,
+.session-node-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-description {
+  color: #a9b9ce !important;
+}
+.session-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+.session-tags em {
+  background: rgba(76, 155, 232, .15);
+  border: 1px solid rgba(76, 155, 232, .22);
+  border-radius: 999px;
+  color: #beddff;
+  font-size: .68rem;
+  font-style: normal;
+  padding: 1px 6px;
+}
+.session-group-favorites .session-card {
+  background: rgba(251, 191, 36, .06);
+  border-color: #f6b53f;
+}
+.local-node {
+  border-left: 3px solid #8b5cf6;
+}
+.inline-checkbox {
+  align-content: center;
+  justify-content: flex-start;
+  min-height: 66px;
+}
+.dialog input[type='color'] {
+  height: 42px;
+  padding: 4px;
+}
