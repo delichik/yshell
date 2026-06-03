@@ -131,17 +131,19 @@ impl RuntimeRegistry {
         Ok(runtime)
     }
 
-    pub fn open_ssh_placeholder(
+    pub fn open_ssh_placeholder_with_notice(
         &self,
+        app_handle: AppHandle,
         tab_id: String,
         pane_id: String,
         title: String,
+        notice: String,
     ) -> Result<TerminalRuntime, String> {
         let runtime = TerminalRuntime {
             runtime_id: Uuid::new_v4().to_string(),
             profile_id: None,
             kind: SessionProtocol::Ssh,
-            status: RuntimeStatus::Connecting,
+            status: RuntimeStatus::Failed,
             pane_id,
             tab_id,
             title,
@@ -158,6 +160,20 @@ impl RuntimeRegistry {
                     child: None,
                 },
             );
+        let _ = app_handle.emit(
+            OUTPUT_EVENT,
+            TerminalOutputEvent {
+                runtime_id: runtime.runtime_id.clone(),
+                data: notice,
+            },
+        );
+        let _ = app_handle.emit(
+            STATUS_EVENT,
+            TerminalStatusEvent {
+                runtime_id: runtime.runtime_id.clone(),
+                status: RuntimeStatus::Failed,
+            },
+        );
         Ok(runtime)
     }
 
@@ -240,7 +256,6 @@ impl RuntimeRegistry {
                 let _ = child.wait();
             }
         }
-        Ok(())
     }
 }
 

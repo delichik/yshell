@@ -8,7 +8,8 @@ mod ssh;
 mod terminal;
 
 use commands::{
-    sessions_list, sessions_save, settings_load, settings_save, terminal_close, terminal_close_all,
+    sessions_delete, sessions_duplicate, sessions_export, sessions_import, sessions_list,
+    sessions_save, settings_load, settings_save, terminal_close, terminal_close_all,
     terminal_open_local, terminal_open_ssh, terminal_resize, terminal_write,
 };
 
@@ -21,6 +22,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             sessions_list,
             sessions_save,
+            sessions_delete,
+            sessions_duplicate,
+            sessions_export,
+            sessions_import,
             settings_load,
             settings_save,
             terminal_open_local,

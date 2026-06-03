@@ -78,3 +78,11 @@ h2, h3, p { margin-top: 0; }
 .terminal-actions input { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.10); border-radius: 8px; color: #f4f7fb; max-width: 150px; padding: 4px 8px; }
 .terminal-actions button { background: rgba(255,255,255,.08); border-radius: 8px; color: #cbd5e1; padding: 4px 8px; }
 .terminal-actions button:hover { background: rgba(255,255,255,.14); }
+.session-card { background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 16px; margin: 10px 0; padding: 6px; }
+.session-card .session-node { margin: 0; }
+.session-actions { display: flex; gap: 6px; justify-content: flex-end; padding: 6px 4px 2px; }
+.session-actions button { background: rgba(255,255,255,.07); border-radius: 8px; color: #cbd5e1; padding: 4px 8px; }
+.session-actions button:hover { background: rgba(255,255,255,.14); }
+.security-note { color: #fbbf24; font-size: .84rem; margin: 12px 0 0; }
+.status-message { color: #79c0ff; margin-left: auto; }
+.visually-hidden { height: 1px; left: -9999px; opacity: 0; overflow: hidden; position: absolute; top: auto; width: 1px; }
