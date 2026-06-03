@@ -21,6 +21,7 @@
     "@xterm/addon-search": "^0.15.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2"
   }
