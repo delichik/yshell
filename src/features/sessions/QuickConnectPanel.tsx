@@ -14,19 +14,26 @@ export function QuickConnectPanel({ onCancel, onConnect }: QuickConnectPanelProp
   const [authMethod, setAuthMethod] = useState<AuthMethod>('password');
   const [saveAsSession, setSaveAsSession] = useState(true);
   const [connecting, setConnecting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setConnecting(true);
-    await onConnect({
-      protocol,
-      name: protocol === 'local' ? '本地终端' : `${username || 'user'}@${host}`,
-      host,
-      port,
-      username,
-      authMethod,
-      saveAsSession,
-    });
+    setErrorMessage(null);
+    try {
+      await onConnect({
+        protocol,
+        name: protocol === 'local' ? '本地终端' : `${username || 'user'}@${host}`,
+        host,
+        port,
+        username,
+        authMethod,
+        saveAsSession,
+      });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '连接失败，请检查连接参数后重试。');
+      setConnecting(false);
+    }
   };
 
   return (
@@ -72,6 +79,7 @@ export function QuickConnectPanel({ onCancel, onConnect }: QuickConnectPanelProp
           <input type="checkbox" checked={saveAsSession} onChange={(event) => setSaveAsSession(event.target.checked)} />
           保存为会话配置
         </label>
+        {errorMessage && <p className="form-error" role="alert">{errorMessage}</p>}
         <footer>
           <button type="button" onClick={onCancel}>取消</button>
           <button type="submit" className="primary" disabled={connecting}>{connecting ? '连接中…' : '连接'}</button>

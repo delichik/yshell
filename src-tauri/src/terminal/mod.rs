@@ -5,7 +5,7 @@ use std::{
     thread,
 };
 
-use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
@@ -54,17 +54,19 @@ pub struct TerminalStatusEvent {
 }
 
 type PtyWriter = Arc<Mutex<Box<dyn Write + Send>>>;
+type ChildKillerHandle = Arc<Mutex<Box<dyn ChildKiller + Send + Sync>>>;
+type RuntimeMap = Arc<Mutex<HashMap<String, RuntimeHandle>>>;
 
 struct RuntimeHandle {
     runtime: TerminalRuntime,
     writer: Option<PtyWriter>,
     master: Option<Box<dyn MasterPty + Send>>,
-    child: Option<Box<dyn Child + Send>>,
+    killer: Option<ChildKillerHandle>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct RuntimeRegistry {
-    runtimes: Mutex<HashMap<String, RuntimeHandle>>,
+    runtimes: RuntimeMap,
 }
 
 impl RuntimeRegistry {
@@ -104,6 +106,7 @@ impl RuntimeRegistry {
             .slave
             .spawn_command(command)
             .map_err(|error| format!("failed to spawn local shell in PTY: {error}"))?;
+        let killer = Arc::new(Mutex::new(child.clone_killer()));
         drop(pair.slave);
 
         let reader = pair
@@ -114,7 +117,7 @@ impl RuntimeRegistry {
             .master
             .take_writer()
             .map_err(|error| format!("failed to open PTY writer: {error}"))?;
-        spawn_output_reader(app_handle, runtime.runtime_id.clone(), reader);
+        spawn_output_reader(app_handle.clone(), runtime.runtime_id.clone(), reader);
 
         self.runtimes
             .lock()
@@ -125,9 +128,15 @@ impl RuntimeRegistry {
                     runtime: runtime.clone(),
                     writer: Some(Arc::new(Mutex::new(writer))),
                     master: Some(pair.master),
-                    child: Some(child),
+                    killer: Some(killer),
                 },
             );
+        spawn_child_waiter(
+            app_handle,
+            self.runtimes.clone(),
+            runtime.runtime_id.clone(),
+            child,
+        );
         Ok(runtime)
     }
 
@@ -155,7 +164,7 @@ impl RuntimeRegistry {
                     runtime: runtime.clone(),
                     writer: None,
                     master: None,
-                    child: None,
+                    killer: None,
                 },
             );
         Ok(runtime)
@@ -234,13 +243,13 @@ impl RuntimeRegistry {
     }
 
     fn terminate_handle(handle: Option<RuntimeHandle>) {
-        if let Some(mut handle) = handle {
-            if let Some(mut child) = handle.child.take() {
-                let _ = child.kill();
-                let _ = child.wait();
+        if let Some(handle) = handle {
+            if let Some(killer) = handle.killer {
+                if let Ok(mut killer) = killer.lock() {
+                    let _ = killer.kill();
+                }
             }
         }
-        Ok(())
     }
 }
 
@@ -272,6 +281,27 @@ fn spawn_output_reader(
                 }
                 Err(_) => break,
             }
+        }
+        let _ = app_handle.emit(
+            STATUS_EVENT,
+            TerminalStatusEvent {
+                runtime_id,
+                status: RuntimeStatus::Disconnected,
+            },
+        );
+    });
+}
+
+fn spawn_child_waiter(
+    app_handle: AppHandle,
+    runtimes: RuntimeMap,
+    runtime_id: String,
+    mut child: Box<dyn portable_pty::Child + Send + Sync>,
+) {
+    thread::spawn(move || {
+        let _ = child.wait();
+        if let Ok(mut runtimes) = runtimes.lock() {
+            runtimes.remove(&runtime_id);
         }
         let _ = app_handle.emit(
             STATUS_EVENT,
