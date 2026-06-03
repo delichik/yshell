@@ -1,0 +1,28 @@
+export component Toolbar inherits Rectangle {
+    callback quick-connect(string);
+    callback new-session();
+    callback toggle-sftp();
+    callback toggle-tunnels();
+    callback toggle-commands();
+
+    height: 44px;
+    background: #2c3340;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 8px;
+        TextInput {
+            placeholder-text: "ssh://user@host:22";
+            accepted(text) => { root.quick-connect(text); }
+        }
+        Button { text: "Connect"; clicked => { root.quick-connect(""); } }
+        Button { text: "New"; clicked => { root.new-session(); } }
+        Button { text: "Split"; }
+        Button { text: "SFTP"; clicked => { root.toggle-sftp(); } }
+        Button { text: "Tunnels"; clicked => { root.toggle-tunnels(); } }
+        Button { text: "Commands"; clicked => { root.toggle-commands(); } }
+        Button { text: "Log"; }
+        Button { text: "Search"; }
+    }
+}

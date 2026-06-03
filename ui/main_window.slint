@@ -1,0 +1,47 @@
+// YShell main window placeholder. Business state comes from Rust view models.
+import { AppMenu } from "components/app_menu.slint";
+import { Toolbar } from "components/toolbar.slint";
+import { StatusBar } from "components/status_bar.slint";
+import { SessionTree } from "components/session_tree.slint";
+import { TerminalTabBar } from "components/terminal_tab_bar.slint";
+import { TerminalView } from "components/terminal_view.slint";
+import { SftpPanel } from "components/sftp_panel.slint";
+import { TunnelPanel } from "components/tunnel_panel.slint";
+import { QuickCommands } from "components/quick_commands.slint";
+
+export component MainWindow inherits Window {
+    title: "YShell";
+    preferred-width: 1280px;
+    preferred-height: 800px;
+
+    callback quick-connect(string);
+    callback new-session();
+    callback toggle-sftp();
+    callback toggle-tunnels();
+    callback toggle-commands();
+
+    VerticalLayout {
+        AppMenu {}
+        Toolbar {
+            quick-connect(input) => { root.quick-connect(input); }
+            new-session() => { root.new-session(); }
+            toggle-sftp() => { root.toggle-sftp(); }
+            toggle-tunnels() => { root.toggle-tunnels(); }
+            toggle-commands() => { root.toggle-commands(); }
+        }
+        HorizontalLayout {
+            SessionTree { width: 260px; }
+            VerticalLayout {
+                TerminalTabBar {}
+                TerminalView {}
+            }
+            VerticalLayout {
+                width: 320px;
+                SftpPanel {}
+                TunnelPanel {}
+                QuickCommands {}
+            }
+        }
+        StatusBar {}
+    }
+}

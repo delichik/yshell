@@ -1,0 +1,10 @@
+export component StatusBar inherits Rectangle {
+    in property <string> message: "Ready";
+    height: 28px;
+    background: #20242d;
+    Text {
+        text: root.message;
+        color: #cdd6e3;
+        vertical-alignment: center;
+    }
+}
