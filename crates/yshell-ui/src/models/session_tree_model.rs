@@ -6,6 +6,8 @@ pub struct SessionTreeItem {
     pub display_name: String,
     pub kind: SessionTreeItemKind,
     pub depth: u8,
+    pub host: Option<String>,
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,6 +32,8 @@ impl SessionTreeModel {
                 display_name: "Welcome".to_owned(),
                 kind: SessionTreeItemKind::Session,
                 depth: 0,
+                host: None,
+                tags: Vec::new(),
             }],
             selected_id: Some("welcome".to_owned()),
         }

@@ -9,6 +9,25 @@ pub enum ViewEvent {
     TerminalOutputAvailable {
         session_id: String,
     },
+    SftpListingUpdated {
+        session_id: String,
+        path: String,
+    },
+    TransferProgressChanged {
+        transfer_id: String,
+        bytes_done: u64,
+    },
+    TunnelStateChanged {
+        tunnel_id: String,
+        state: String,
+    },
+    LogEntryAdded {
+        level: String,
+        message: String,
+    },
+    SearchResultsChanged {
+        match_count: usize,
+    },
     StatusMessageChanged(String),
 }
 

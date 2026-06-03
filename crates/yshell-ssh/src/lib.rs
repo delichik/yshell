@@ -1,4 +1,4 @@
-//! SSH protocol adapter skeleton for YShell.
+//! SSH protocol adapter for YShell.
 
 pub mod auth;
 pub mod channel;
@@ -12,5 +12,12 @@ pub mod proxy_socks4;
 pub mod proxy_socks5;
 pub mod pty;
 
-pub use client::{SshClient, SshConnectionConfig};
-pub use error::{SshError, SshResult};
+pub use auth::AuthMethod;
+pub use client::{
+    ExecOutput, FakeSshAdapter, FakeSshSession, SshAdapter, SshClient, SshConnectionConfig,
+};
+pub use error::{SshError, SshErrorKind, SshResult};
+pub use forwarding::{ForwardingKind, TunnelConfig, TunnelState};
+pub use host_key::{HostKeyDecision, HostKeyFingerprint, HostKeyPolicy, KnownHosts};
+pub use proxy::{ProxyConfig, ProxyState};
+pub use pty::{PtyConfig, PtySize};

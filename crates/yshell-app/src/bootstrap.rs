@@ -10,10 +10,8 @@ pub struct YShellApp {
 
 impl YShellApp {
     pub fn run(self) -> AppResult<()> {
-        let dispatcher = crate::commands::AppCommandDispatcher;
-        dispatcher.dispatch(yshell_ui::ViewCommand::ToggleQuickCommands);
         println!(
-            "YShell app shell initialized. Config directory: {}",
+            "YShell UI runtime is not wired yet. Config directory: {}",
             self.state.config_dir.display()
         );
         Ok(())

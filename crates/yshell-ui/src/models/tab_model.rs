@@ -6,6 +6,8 @@ pub struct TabItem {
     pub title: String,
     pub state_label: String,
     pub is_active: bool,
+    pub has_sftp: bool,
+    pub unread_count: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -21,6 +23,8 @@ impl TabModel {
                 title: "Welcome".to_owned(),
                 state_label: "Disconnected".to_owned(),
                 is_active: true,
+                has_sftp: false,
+                unread_count: 0,
             }],
         }
     }

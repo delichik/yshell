@@ -6,12 +6,24 @@ pub type SftpResult<T> = Result<T, SftpError>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SftpError {
+    pub kind: SftpErrorKind,
     pub message: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SftpErrorKind {
+    NotFound,
+    AlreadyExists,
+    PermissionDenied,
+    InvalidPath,
+    TransferCancelled,
+    Backend,
+}
+
 impl SftpError {
-    pub fn new(message: impl Into<String>) -> Self {
+    pub fn new(kind: SftpErrorKind, message: impl Into<String>) -> Self {
         Self {
+            kind,
             message: message.into(),
         }
     }
@@ -19,7 +31,7 @@ impl SftpError {
 
 impl fmt::Display for SftpError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.message)
+        write!(formatter, "{:?}: {}", self.kind, self.message)
     }
 }
 
