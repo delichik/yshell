@@ -6,6 +6,12 @@ YShell 是一个开源、跨平台、现代化的 SSH 终端与 SFTP 客户端�
 
 本项目不复制 Xshell 的商标、视觉资产、专有协议实现、脚本接口或受版权保护的界面细节，而是实现功能兼容和使用体验对标。第一版只支持 SSH 相关能力，但 SSH 范围内必须包含交互式终端、SFTP 文件管理、端口转发、会话管理、认证管理和日志能力。
 
+配套文档：
+
+- 详细开发拆分计划：`docs/product/yshell-detailed-development-plan.md`
+- GitHub Actions 自动发布配置：`docs/product/github-actions-release.md`
+- UI 草图 HTML：`docs/product/ui-sketches/yshell-ui-sketches.html`
+
 ## 2. 设计原则
 
 - 开源优先：代码、配置格式、构建流程和扩展接口应便于社区审计与贡献。

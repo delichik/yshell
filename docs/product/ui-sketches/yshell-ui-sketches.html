@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell UI 草图</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #111318;
+      --panel: #181b22;
+      --panel-2: #20242d;
+      --line: #313744;
+      --text: #e6eaf2;
+      --muted: #9aa4b5;
+      --accent: #4f8cff;
+      --green: #48c774;
+      --yellow: #e7c547;
+      --red: #f05f68;
+      --terminal: #090b10;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, sans-serif;
+      line-height: 1.4;
+    }
+    header {
+      padding: 28px 32px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #141720;
+    }
+    h1 { margin: 0 0 8px; font-size: 26px; }
+    h2 { margin: 32px 0 12px; font-size: 20px; }
+    p { color: var(--muted); margin: 0 0 14px; }
+    main { padding: 0 32px 48px; }
+    .sketch {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 26px;
+    }
+    .titlebar {
+      height: 36px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      background: #20242c;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); }
+    .dot:nth-child(2) { background: var(--yellow); }
+    .dot:nth-child(3) { background: var(--green); }
+    .app {
+      display: grid;
+      grid-template-columns: 260px minmax(420px, 1fr) 330px;
+      grid-template-rows: 42px 34px 520px 30px;
+      min-height: 626px;
+    }
+    .menu, .toolbar, .status, .sidebar, .workspace, .dock {
+      border-color: var(--line);
+    }
+    .menu {
+      grid-column: 1 / 4;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 0 14px;
+      background: #181b22;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+    }
+    .toolbar {
+      grid-column: 1 / 4;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 12px;
+      background: #151922;
+      border-bottom: 1px solid var(--line);
+    }
+    .input {
+      height: 24px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: #0f1219;
+      color: var(--muted);
+      padding: 3px 9px;
+      font-size: 12px;
+      min-width: 300px;
+    }
+    .button {
+      height: 24px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 3px 9px;
+      font-size: 12px;
+    }
+    .sidebar {
+      grid-row: 3;
+      border-right: 1px solid var(--line);
+      background: #151820;
+      display: flex;
+      flex-direction: column;
+    }
+    .side-head, .dock-head {
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .tree { padding: 10px; font-size: 13px; }
+    .tree div { padding: 4px 6px; border-radius: 4px; }
+    .tree .active { background: #25304a; color: #fff; }
+    .workspace {
+      grid-row: 3;
+      background: #10131b;
+      display: grid;
+      grid-template-rows: 34px 1fr;
+    }
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--line);
+      background: #191d26;
+    }
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 150px;
+      padding: 0 10px;
+      border-right: 1px solid var(--line);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .tab.active { background: #111318; color: var(--text); }
+    .term {
+      background: var(--terminal);
+      padding: 14px;
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 13px;
+      color: #d9e3ff;
+      overflow: hidden;
+    }
+    .term .prompt { color: #75d995; }
+    .term .cmd { color: #9ec7ff; }
+    .dock {
+      grid-row: 3;
+      border-left: 1px solid var(--line);
+      background: #151820;
+      display: grid;
+      grid-template-rows: 34px 1fr 170px;
+    }
+    .sftp-list {
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+    .file-row {
+      display: grid;
+      grid-template-columns: 1fr 70px 80px;
+      gap: 8px;
+      padding: 5px 6px;
+      border-bottom: 1px solid #252b36;
+    }
+    .queue {
+      border-top: 1px solid var(--line);
+      padding: 8px 10px;
+      font-size: 12px;
+      background: #11141c;
+    }
+    .progress {
+      height: 6px;
+      border-radius: 999px;
+      background: #2d3442;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+    .progress span { display: block; height: 100%; background: var(--accent); width: 68%; }
+    .status {
+      grid-column: 1 / 4;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 12px;
+      background: #181b22;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+    .dialog {
+      padding: 18px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+    .fake-input {
+      height: 28px;
+      border: 1px solid var(--line);
+      background: #0f1219;
+      border-radius: 5px;
+      color: var(--muted);
+      padding: 5px 8px;
+    }
+    .tabs-small {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 14px;
+    }
+    .tabs-small span {
+      padding: 5px 9px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: #151923;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .tabs-small .active { background: #25304a; color: #fff; }
+    .note {
+      border-left: 3px solid var(--accent);
+      padding: 8px 12px;
+      background: #151a25;
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 22px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>YShell UI 草图</h1>
+    <p>这些草图用于约束信息架构和布局，不代表最终视觉风格。目标是现代、密集、可扫描，适合高频 SSH/SFTP 工作。</p>
+  </header>
+
+  <main>
+    <h2>1. 主窗口：终端 + 会话树 + SFTP 停靠面板</h2>
+    <div class="note">默认工作台应让用户一眼看到会话、终端、SFTP、传输状态和连接状态。SFTP 是第一版核心功能，不应藏在二级入口。</div>
+    <section class="sketch">
+      <div class="titlebar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span>YShell - ops-prod-01</span></div>
+      <div class="app">
+        <div class="menu"><span>File</span><span>Edit</span><span>Session</span><span>View</span><span>Tools</span><span>Help</span></div>
+        <div class="toolbar">
+          <div class="input">ssh://deploy@10.0.1.25:22</div>
+          <div class="button">Connect</div>
+          <div class="button">Split</div>
+          <div class="button">SFTP</div>
+          <div class="button">Tunnel</div>
+          <div class="button">Commands</div>
+        </div>
+        <aside class="sidebar">
+          <div class="side-head"><span>Session Manager</span><span>+ New</span></div>
+          <div class="tree">
+            <div>▾ Production</div>
+            <div class="active">  ● ops-prod-01</div>
+            <div>  ● ops-prod-02</div>
+            <div>▾ Staging</div>
+            <div>  ○ api-staging</div>
+            <div>▸ Lab</div>
+            <div>★ Favorites</div>
+            <div>⌕ Recent Connections</div>
+          </div>
+        </aside>
+        <section class="workspace">
+          <div class="tabs">
+            <div class="tab active">● ops-prod-01</div>
+            <div class="tab">● api-staging</div>
+            <div class="tab">+ New Tab</div>
+          </div>
+          <div class="term">
+            <div><span class="prompt">deploy@ops-prod-01</span>:<span class="cmd">~</span>$ systemctl status nginx</div>
+            <div>● nginx.service - A high performance web server</div>
+            <div>   Loaded: loaded (/lib/systemd/system/nginx.service; enabled)</div>
+            <div>   Active: <span style="color:#48c774">active (running)</span> since Wed 2026-06-03 09:12:44 UTC</div>
+            <br>
+            <div><span class="prompt">deploy@ops-prod-01</span>:<span class="cmd">~</span>$ tail -f /var/log/nginx/access.log</div>
+            <div>10.0.3.18 - - "GET /health HTTP/1.1" 200 2</div>
+            <div>10.0.3.20 - - "GET /api/v1/status HTTP/1.1" 200 128</div>
+          </div>
+        </section>
+        <aside class="dock">
+          <div class="dock-head"><span>SFTP: /var/www/app</span><span>↗</span></div>
+          <div class="sftp-list">
+            <div class="file-row"><b>Name</b><b>Size</b><b>Modified</b></div>
+            <div class="file-row"><span>..</span><span></span><span></span></div>
+            <div class="file-row"><span>config/</span><span>-</span><span>09:20</span></div>
+            <div class="file-row"><span>releases/</span><span>-</span><span>09:18</span></div>
+            <div class="file-row"><span>app.log</span><span>14 MB</span><span>09:24</span></div>
+            <div class="file-row"><span>deploy.sh</span><span>4 KB</span><span>08:58</span></div>
+          </div>
+          <div class="queue">
+            <b>Transfer Queue</b>
+            <div style="margin-top:10px">Uploading release.tar.gz · 68%</div>
+            <div class="progress"><span></span></div>
+            <div style="margin-top:8px;color:var(--muted)">2.1 MB/s · retry available on failure</div>
+          </div>
+        </aside>
+        <footer class="status">
+          <span>Connected</span>
+          <span>deploy@10.0.1.25</span>
+          <span>Latency 32 ms</span>
+          <span>SFTP active</span>
+          <span>Logging on</span>
+          <span>SOCKS proxy off</span>
+        </footer>
+      </div>
+    </section>
+
+    <h2>2. 会话编辑器与安全提示</h2>
+    <div class="grid-2">
+      <section class="dialog">
+        <div class="tabs-small"><span class="active">General</span><span>Auth</span><span>Terminal</span><span>SFTP</span><span>Tunnels</span></div>
+        <div class="form-row"><label>Name</label><div class="fake-input">ops-prod-01</div></div>
+        <div class="form-row"><label>Host</label><div class="fake-input">10.0.1.25</div></div>
+        <div class="form-row"><label>Port</label><div class="fake-input">22</div></div>
+        <div class="form-row"><label>Username</label><div class="fake-input">deploy</div></div>
+        <div class="form-row"><label>Default SFTP dir</label><div class="fake-input">/var/www/app</div></div>
+        <div class="form-row"><label>Log template</label><div class="fake-input">{date}/{session}-{host}.log</div></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px"><div class="button">Test Connection</div><div class="button">Save</div></div>
+      </section>
+      <section class="dialog">
+        <h3 style="margin-top:0">Host Key Changed</h3>
+        <p>主机密钥变更必须是阻断式提示，不能只在状态栏闪一下。用户需要看到旧 fingerprint、新 fingerprint 和 known_hosts 路径。</p>
+        <div class="form-row"><label>Host</label><div class="fake-input">10.0.1.25:22</div></div>
+        <div class="form-row"><label>Old</label><div class="fake-input">SHA256:old-host-key-fingerprint</div></div>
+        <div class="form-row"><label>New</label><div class="fake-input">SHA256:new-host-key-fingerprint</div></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px"><div class="button">Cancel</div><div class="button">Trust Once</div><div class="button">Replace Key</div></div>
+      </section>
+    </div>
+
+    <h2>3. 端口转发与快捷命令面板</h2>
+    <div class="grid-2">
+      <section class="dialog">
+        <h3 style="margin-top:0">Tunnels</h3>
+        <div class="file-row"><b>Type</b><b>Listen</b><b>Target</b></div>
+        <div class="file-row"><span>Local</span><span>127.0.0.1:15432</span><span>db:5432</span></div>
+        <div class="file-row"><span>Dynamic</span><span>127.0.0.1:1080</span><span>SOCKS5</span></div>
+        <div class="file-row"><span>Remote</span><span>0.0.0.0:9000</span><span>localhost:9000</span></div>
+        <div style="display:flex;gap:8px;margin-top:14px"><div class="button">+ Add</div><div class="button">Stop</div><div class="button">Restart</div></div>
+      </section>
+      <section class="dialog">
+        <h3 style="margin-top:0">Quick Commands</h3>
+        <div class="button" style="margin:0 6px 8px 0">systemctl status nginx</div>
+        <div class="button" style="margin:0 6px 8px 0">tail app.log</div>
+        <div class="button" style="margin:0 6px 8px 0">df -h</div>
+        <div class="button" style="margin:0 6px 8px 0">docker ps</div>
+        <div class="fake-input" style="height:90px;margin-top:12px">Compose Pane: paste multi-line command here, then send to current tab or selected sessions.</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><div class="button">Send Current</div><div class="button">Broadcast...</div></div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
