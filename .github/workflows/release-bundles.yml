@@ -11,6 +11,7 @@ jobs:
   build:
     name: Build ${{ matrix.name }} bundles
     runs-on: ${{ matrix.os }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -39,15 +40,17 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache Rust build
+      - name: Cache Rust dependencies and build outputs
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri -> target
-
+          workspaces: |
+            src-tauri -> target
+          cache-on-failure: true
       - name: Install Linux Tauri dependencies
         if: runner.os == 'Linux'
         run: |
