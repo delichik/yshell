@@ -4,9 +4,11 @@ interface StatusBarProps {
   pane?: WorkspacePane;
   loggingEnabled: boolean;
   message?: string | null;
+  broadcastEnabled: boolean;
+  broadcastTargetCount: number;
 }
 
-export function StatusBar({ pane, loggingEnabled, message }: StatusBarProps) {
+export function StatusBar({ pane, loggingEnabled, message, broadcastEnabled, broadcastTargetCount }: StatusBarProps) {
   return (
     <footer className="status-bar">
       <span>状态：{pane?.status ?? 'idle'}</span>
@@ -14,7 +16,7 @@ export function StatusBar({ pane, loggingEnabled, message }: StatusBarProps) {
       <span>尺寸：自适应</span>
       <span>编码：UTF-8</span>
       <span>日志：{loggingEnabled ? '开启' : '关闭'}</span>
-      <span>广播输入：关闭</span>
+      <span>广播输入：{broadcastEnabled ? `开启（${broadcastTargetCount} 个目标）` : '关闭'}</span>
       {message && <span className="status-message">{message}</span>}
     </footer>
   );

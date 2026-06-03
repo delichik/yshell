@@ -18,6 +18,7 @@ pub struct QuickConnectDraft {
     pub username: String,
     pub auth_method: String,
     pub private_key_path: Option<String>,
+    pub password: Option<String>,
     pub host_key_policy: HostKeyPolicy,
     pub save_as_session: bool,
 }
@@ -153,7 +154,10 @@ pub fn terminal_open_ssh(
         draft.name.clone()
     };
     let args = build_ssh_args(&draft);
-    registry.open_ssh(app_handle, tab_id, pane_id, cols, rows, title, args)
+    let password = draft.password.filter(|value| !value.is_empty());
+    registry.open_ssh(
+        app_handle, tab_id, pane_id, cols, rows, title, args, password,
+    )
 }
 
 #[tauri::command]

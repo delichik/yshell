@@ -94,12 +94,16 @@ export interface WorkspacePane {
   status: RuntimeStatus;
 }
 
+export type SplitDirection = 'horizontal' | 'vertical';
+
 export interface WorkspaceTab {
   id: string;
   title: string;
   locked: boolean;
   panes: WorkspacePane[];
   activePaneId: string;
+  splitDirection?: SplitDirection;
+  splitRatio?: number;
 }
 
 export interface QuickConnectDraft {
@@ -110,6 +114,7 @@ export interface QuickConnectDraft {
   username: string;
   authMethod: AuthMethod;
   privateKeyPath?: string;
+  password?: string;
   hostKeyPolicy: HostKeyPolicy;
   saveAsSession: boolean;
 }
