@@ -1,301 +1,224 @@
 # YShell 技术架构设计
 
-## 1. 技术目标
+## 1. 架构目标
 
-YShell 使用 Tauri 作为桌面外壳和系统集成层，使用 xterm.js 作为终端渲染层。前端负责窗口、布局、交互状态和终端呈现；Rust 后端负责本地 PTY、SSH 协议、文件系统、密钥与凭据、配置读写、日志、系统集成和安全边界。
+YShell 使用 Tauri + Rust 作为桌面壳和系统运行时，使用 React + xterm.js 作为交互与终端渲染层。架构必须支撑专业 SSH 客户端，而不是一次性演示程序。
 
-架构目标：
+目标：
 
-- 将终端渲染、会话模型、连接协议和持久化配置解耦。
-- 使用强类型 IPC 避免前后端命令漂移。
-- 支持 Windows、Linux、macOS 的本地终端与 SSH 行为。
-- 为后续 SFTP、端口转发、插件系统和团队配置源预留扩展点。
+- 前端只负责界面、布局、终端渲染和用户意图，不持有明文凭据，不保存大量终端输出。
+- 后端负责 PTY、SSH、SFTP、端口转发、文件系统、配置、凭据、安全和日志。
+- IPC 使用强类型命令与事件；所有长期运行任务通过事件流更新状态。
+- 运行中连接与持久化配置分离，避免关闭 UI 后残留进程。
+- 所有跨平台差异收敛在 platform 层。
 
-## 2. 推荐目录结构
+## 2. 分层结构
 
-```text
-yshell/
-├── src/                         # 前端应用
-│   ├── app/                     # 应用启动、路由、全局状态
-│   ├── components/              # Fluent 风格基础组件
-│   ├── features/
-│   │   ├── sessions/            # 会话树、会话编辑、快速连接
-│   │   ├── terminal/            # xterm.js 包装、窗格、搜索、复制粘贴
-│   │   ├── workspace/           # 标签页、分屏、窗口状态
-│   │   ├── settings/            # 设置中心
-│   │   └── logs/                # 日志 UI
-│   ├── bindings/                # Tauri IPC 类型绑定
-│   └── styles/                  # 主题、设计令牌、全局样式
-├── src-tauri/
-│   ├── src/
-│   │   ├── commands/            # Tauri command 入口
-│   │   ├── config/              # 配置模型、导入导出、迁移
-│   │   ├── crypto/              # 加密与安全存储适配
-│   │   ├── pty/                 # 本地 PTY
-│   │   ├── ssh/                 # SSH 连接、认证、通道、SFTP
-│   │   ├── terminal/            # 终端会话运行时、事件分发
-│   │   ├── logging/             # 会话日志与审计
-│   │   └── platform/            # 平台差异适配
-│   └── tauri.conf.json
-├── docs/design/                 # 设计文档
-└── tests/                       # 集成与端到端测试
+```mermaid
+flowchart TB
+  UI[React UI: shell/sidebar/tabs/settings] --> TERM[xterm.js Terminal Layer]
+  UI --> STATE[Frontend State: layout/session summaries]
+  UI --> IPC[Typed IPC Client]
+  TERM --> IPC
+  IPC <--> BACKEND[Tauri Rust Commands]
+  BACKEND --> REG[Runtime Registry]
+  BACKEND --> PTY[Local PTY]
+  BACKEND --> SSH[SSH Runtime]
+  SSH --> SFTP[SFTP Runtime]
+  SSH --> TUNNEL[Port Forward Runtime]
+  BACKEND --> CONFIG[Config Store]
+  BACKEND --> SECRET[Credential Store]
+  BACKEND --> LOG[Log Writer]
+  BACKEND --> HOSTKEY[Host Key Store]
 ```
 
-实际工程可按所选前端框架微调，但必须保持“UI 状态、终端渲染、协议运行时、配置存储”四层边界清晰。
-
-## 3. 核心模块
-
-### 3.1 前端 Shell
-
-职责：
-
-- 应用启动、全局主题、窗口布局。
-- 标签页、窗格、侧边栏、状态栏。
-- 命令面板、设置中心、会话编辑器。
-- 调用 IPC 命令并订阅后端事件。
-
-非职责：
-
-- 不直接处理 SSH 密码认证。
-- 不直接保存明文凭据。
-- 不在 UI 状态中保存大体量终端输出。
-
-### 3.2 xterm.js 终端层
-
-职责：
-
-- 创建、销毁和复用 xterm.js 实例。
-- 处理输入、输出、resize、搜索、复制粘贴、链接识别。
-- 维护每个窗格的终端渲染设置。
-
-设计要点：
-
-- 后端输出以二进制或 UTF-8 文本事件流推送给对应终端实例。
-- 前端输入通过 IPC 发送到指定 `terminal_runtime_id`。
-- 终端缓冲区由 xterm.js 管理，应用状态只保存必要元数据。
-- resize 事件需要节流，避免拖拽分屏时频繁请求后端调整 PTY/SSH 通道大小。
-
-### 3.3 会话配置模块
-
-会话配置是持久化对象，与运行中的终端实例分离。
-
-推荐核心字段：
+## 3. 推荐目录边界
 
 ```text
-SessionProfile
-- id: string
-- name: string
-- folder_id: string | null
-- tags: string[]
-- protocol: local | ssh
-- host: string | null
-- port: number | null
-- username: string | null
-- auth: AuthConfig
-- proxy: ProxyConfig | null
-- terminal: TerminalConfig
-- appearance: AppearanceConfig | null
-- logging: LoggingConfig | null
-- created_at: datetime
-- updated_at: datetime
-- last_connected_at: datetime | null
+src/
+  app/                    # 应用启动、全局错误、主题、路由
+  components/             # 可复用 UI 组件
+  features/
+    sessions/             # 会话树、编辑器、导入导出
+    terminal/             # xterm 封装、搜索、复制粘贴
+    workspace/            # 标签页、分屏、布局
+    sftp/                 # 文件面板和传输队列
+    tunnels/              # 端口转发状态面板
+    settings/             # 设置中心与快捷键
+  bindings/               # IPC 类型与客户端
+src-tauri/src/
+  commands/               # Tauri 命令入口，仅做参数校验和调度
+  runtime/                # runtime registry 与状态机
+  pty/                    # 本地 PTY
+  ssh/                    # SSH shell、认证、keepalive、host key
+  sftp/                   # SFTP 文件操作与队列
+  tunnel/                 # local/remote/dynamic forwarding
+  config/                 # 配置读写、版本迁移、导入导出
+  credentials/            # 系统安全存储适配
+  logging/                # 终端日志和审计事件
+  platform/               # Windows/macOS/Linux 差异
 ```
 
-运行实例使用独立对象：
+规则：
 
-```text
-TerminalRuntime
-- runtime_id: string
-- profile_id: string | null
-- kind: local | ssh
-- status: connecting | connected | disconnected | failed
-- pane_id: string
-- tab_id: string
-- process_ref/channel_ref: backend owned
+- `commands` 不写业务细节，只做输入校验、权限校验、调用服务、返回错误。
+- `runtime` 持有所有进程/连接句柄，前端只拿 opaque ID。
+- `config` 与 `credentials` 严格分离。
+- `terminal.output` 事件不得进入全局 Redux/Zustand 大状态，只直接写入对应 xterm 实例。
+
+## 4. 运行时状态机
+
+```mermaid
+stateDiagram-v2
+  [*] --> Created
+  Created --> Connecting
+  Connecting --> Authenticating
+  Authenticating --> Connected
+  Connecting --> Failed
+  Authenticating --> Failed
+  Connected --> Reconnecting
+  Reconnecting --> Connected
+  Reconnecting --> Failed
+  Connected --> Closing
+  Failed --> Closing
+  Closing --> Closed
+  Closed --> [*]
 ```
 
-### 3.4 Rust 运行时模块
+- `Created`：前端请求已通过，后端分配 runtime。
+- `Connecting`：TCP/PTY 建立中。
+- `Authenticating`：等待密码、键盘交互、Agent 或私钥认证。
+- `Connected`：shell 已可交互。
+- `Reconnecting`：网络断开且策略允许重连。
+- `Failed`：连接失败但 UI 可保留标签并重试。
+- `Closing`：用户关闭或应用退出。
+- `Closed`：句柄释放完成。
 
-Rust 后端维护真实连接与进程句柄：
+验收：任意状态下调用 close 都必须最终进入 `Closed`，并释放子进程、socket、文件句柄、日志句柄。
 
-- 本地 PTY：启动 shell、写入 stdin、读取 stdout/stderr、resize、kill。
-- SSH：建立 TCP 连接、认证、打开 session channel、处理 shell、exec、resize、关闭。
-- 日志：将输出流按配置写入文件。
-- 安全存储：读写密码、私钥口令和代理凭据。
-- 配置：读写 JSON/TOML/SQLite，并执行版本迁移。
+## 5. IPC 规范
 
-后端应使用 runtime registry 管理活跃终端，避免前端伪造句柄访问其他会话。
+### 5.1 命令
 
-## 4. IPC 设计
+| 命令 | 参数 | 返回 | 说明 |
+| --- | --- | --- | --- |
+| `sessions.list` | `workspace_id` | `SessionTree` | 获取会话树摘要。 |
+| `sessions.save` | `SessionProfileDraft` | `SessionProfile` | 创建/更新会话。 |
+| `sessions.delete` | `ids, strategy` | `DeleteResult` | 删除或移动会话/文件夹。 |
+| `sessions.duplicate` | `profile_id` | `SessionProfile` | 复制会话，不复制明文凭据。 |
+| `config.import` | `path, options` | `ImportPreview/Result` | 支持先预览再执行。 |
+| `config.export` | `scope, options` | `ExportResult` | 默认脱敏。 |
+| `terminal.open_local` | `LocalOpenRequest` | `RuntimeHandle` | 打开本地 PTY。 |
+| `terminal.open_ssh` | `SshOpenRequest` | `RuntimeHandle` | 打开 SSH shell。 |
+| `terminal.write` | `runtime_id, bytes` | `Ack` | 写入输入。 |
+| `terminal.resize` | `runtime_id, cols, rows` | `Ack` | resize。 |
+| `terminal.close` | `runtime_id, reason` | `Ack` | 关闭 runtime。 |
+| `logging.start` | `runtime_id, options` | `LogHandle` | 开始日志。 |
+| `logging.stop` | `runtime_id` | `Ack` | 停止日志。 |
+| `sftp.open` | `runtime_id/profile_id` | `SftpHandle` | 打开 SFTP。 |
+| `sftp.list` | `handle, path` | `RemoteEntry[]` | 列目录。 |
+| `sftp.transfer` | `TransferRequest` | `TransferId` | 创建传输任务。 |
+| `tunnel.start` | `runtime_id/profile_id, rule` | `TunnelId` | 启动端口转发。 |
+| `tunnel.stop` | `tunnel_id` | `Ack` | 停止转发。 |
+| `credentials.set` | `credential` | `CredentialRef` | 写入安全存储。 |
+| `credentials.delete` | `credential_ref` | `Ack` | 删除凭据。 |
+| `host_keys.accept` | `challenge_id, scope` | `Ack` | 接受主机密钥。 |
 
-### 4.1 命令原则
+### 5.2 事件
 
-- IPC 输入输出必须有稳定类型。
-- 每个命令只做一个清晰动作。
-- 长生命周期任务通过事件推送结果，命令只返回启动状态。
-- 后端必须校验 `runtime_id`、路径、配置 ID 和权限边界。
-
-### 4.2 建议命令
-
-| 命令 | 方向 | 说明 |
+| 事件 | Payload | 说明 |
 | --- | --- | --- |
-| `sessions.list` | 前端 -> 后端 | 获取会话树和会话摘要。 |
-| `sessions.save` | 前端 -> 后端 | 创建或更新会话配置。 |
-| `sessions.delete` | 前端 -> 后端 | 删除会话配置，可选择是否删除凭据。 |
-| `terminal.open_local` | 前端 -> 后端 | 启动本地 PTY。 |
-| `terminal.open_ssh` | 前端 -> 后端 | 启动 SSH shell。 |
-| `terminal.write` | 前端 -> 后端 | 向运行中终端写入用户输入。 |
-| `terminal.resize` | 前端 -> 后端 | 调整终端尺寸。 |
-| `terminal.close` | 前端 -> 后端 | 关闭运行中终端。 |
-| `terminal.start_log` | 前端 -> 后端 | 为终端开启日志。 |
-| `terminal.stop_log` | 前端 -> 后端 | 停止日志。 |
-| `credentials.set` | 前端 -> 后端 | 写入安全凭据。 |
-| `credentials.delete` | 前端 -> 后端 | 删除安全凭据。 |
-| `config.export` | 前端 -> 后端 | 导出配置。 |
-| `config.import` | 前端 -> 后端 | 导入配置。 |
+| `terminal.output` | `runtime_id, seq, bytes` | 终端输出，必须有序。 |
+| `terminal.status` | `runtime_id, status, message` | 状态变化。 |
+| `terminal.exit` | `runtime_id, exit_code, signal` | 进程/通道退出。 |
+| `terminal.error` | `runtime_id, error` | 运行时错误。 |
+| `host_key.challenge` | `challenge_id, host, fingerprint` | 等待用户确认。 |
+| `sessions.changed` | `workspace_id, version` | 会话树变化。 |
+| `log.status` | `runtime_id, enabled, path` | 日志状态。 |
+| `sftp.progress` | `transfer_id, progress` | 传输进度。 |
+| `tunnel.status` | `tunnel_id, status` | 转发状态。 |
 
-### 4.3 建议事件
+## 6. 数据存储
 
-| 事件 | 方向 | 说明 |
-| --- | --- | --- |
-| `terminal.output` | 后端 -> 前端 | 终端输出数据。 |
-| `terminal.status_changed` | 后端 -> 前端 | 连接状态变化。 |
-| `terminal.exit` | 后端 -> 前端 | 进程或 SSH 通道退出。 |
-| `terminal.error` | 后端 -> 前端 | 运行时错误。 |
-| `sessions.changed` | 后端 -> 前端 | 会话配置变化。 |
-| `host_key.verify_required` | 后端 -> 前端 | 主机密钥需要用户确认。 |
-| `log.status_changed` | 后端 -> 前端 | 日志状态变化。 |
+### 6.1 配置文件
 
-## 5. 数据存储
+推荐使用版本化 JSON，后续可迁移 SQLite。基本结构：
 
-### 5.1 配置文件
-
-推荐早期使用可读 JSON 或 TOML，并预留迁移版本号：
-
-```text
-config_version: 1
-profiles: SessionProfile[]
-folders: SessionFolder[]
-settings: AppSettings
-keybindings: Keybinding[]
+```json
+{
+  "config_version": 1,
+  "workspaces": [],
+  "folders": [],
+  "profiles": [],
+  "settings": {},
+  "keybindings": [],
+  "themes": []
+}
 ```
 
-优点是易于调试、导入导出和社区贡献。后续如果会话数量很大或需要复杂查询，可迁移到 SQLite。
+要求：
 
-### 5.2 凭据存储
+- 每次迁移前自动备份旧配置。
+- 导入前生成预览，列出新增、覆盖、冲突、无效项。
+- 导出默认不包含凭据引用；用户明确选择包含引用时也不能包含明文。
+- 配置写入必须原子化：写临时文件、fsync、rename。
 
-- 阶段 2 不在普通表单中收集或持久化 SSH 密码、私钥口令和代理凭据；密码/口令由系统 OpenSSH 在终端内交互输入，SSH Agent 由系统环境提供。
-- 后续如增加“保存凭据”能力，Windows 优先系统凭据管理器，macOS 优先 Keychain，Linux 优先 Secret Service/libsecret，缺失时提示用户选择加密文件存储或不保存。
-- 凭据通过 `credential_ref` 与会话配置关联，配置文件不保存明文。
+### 6.2 凭据存储
 
-### 5.3 主机密钥
+- Windows：优先 Windows Credential Manager。
+- macOS：优先 Keychain。
+- Linux：优先 Secret Service/libsecret；不可用时提示用户“不保存”或“加密文件存储”。
+- 凭据值只通过后端读取，前端只保存 `credential_ref` 和状态。
+- 诊断日志、终端日志、错误消息必须脱敏。
 
-主机密钥数据库独立存储，字段包含：
+### 6.3 主机密钥
 
-- host、port、algorithm、fingerprint、public_key、first_seen_at、last_seen_at。
-- 主机密钥变化时必须阻断连接并要求用户确认。
+主机密钥存储字段：
 
-## 6. SSH 与本地 PTY
+- `host`、`port`、`algorithm`、`fingerprint_sha256`、`public_key`。
+- `first_seen_at`、`last_seen_at`、`accepted_by`、`source`。
 
-### 6.1 SSH 能力
+未知密钥可以接受一次或永久保存；变化密钥必须阻断连接并要求二次确认。
 
-MVP：
+## 7. SSH 技术策略
 
-- 通过系统 OpenSSH 客户端提供密码认证、私钥认证和 SSH Agent 认证。
-- 交互式 shell。
-- resize。
-- keepalive。
-- 主机密钥校验，阶段 2 映射到 OpenSSH `StrictHostKeyChecking` 策略。
+首个可用版本可以选择两种策略之一，但验收行为必须一致：
 
-后续：
+1. **系统 OpenSSH 方案**：用 PTY 启动系统 `ssh`，复用用户 known_hosts、Agent、配置文件；优点是兼容性高，缺点是 SFTP/隧道管理需要额外封装。
+2. **Rust SSH 库方案**：直接使用 Rust SSH 库建立连接；优点是事件和认证可控，缺点是兼容性和算法覆盖需要充分验证。
 
-- 跳板机链路。
-- HTTP/SOCKS 代理。
-- 本地/远程/动态端口转发。
-- SFTP。
-- X11 转发。
+无论选择哪种：
 
-### 6.2 本地 PTY
+- 密码和键盘交互不能被日志记录。
+- resize 必须同步到远端 pty。
+- keepalive 和 timeout 必须可配置。
+- 断线必须产生明确状态事件。
+- 主机密钥策略必须满足产品验收。
 
-- Windows 使用 ConPTY。
-- Linux/macOS 使用系统 PTY。
-- shell 配置包含命令、参数、环境变量和工作目录。
-- 所有平台都需要处理 resize、退出码、编码和信号差异。
+## 8. 性能与可靠性约束
 
-## 7. 安全设计
+- 终端输出事件采用序列号；前端检测乱序和丢包。
+- 高吞吐输出采用批处理/节流，但不得造成输入延迟明显升高。
+- xterm 实例销毁时必须解绑事件监听，避免内存泄漏。
+- 分屏拖拽 resize 视觉实时，后端 resize 节流到 30-60ms。
+- 日志写入使用后台任务，不阻塞终端输出。
+- 应用退出时执行 shutdown manager：停止广播、停止 SFTP 传输、关闭隧道、停止日志、关闭 runtime。
 
-### 7.1 敏感数据
+## 9. 安全边界
 
-- 前端默认不持有 SSH 密码或私钥口令，阶段 2 由终端内 OpenSSH 交互处理敏感输入。
-- 保存凭据时通过 IPC 交给后端写入系统安全存储；阶段 2 尚不提供保存 SSH 密码或私钥口令的入口。
-- 导出配置默认排除凭据引用对应的秘密内容。
-- 加密导出必须要求用户设置导出口令，并提示保管风险。
+| 风险 | 约束 |
+| --- | --- |
+| 明文凭据泄露 | UI 状态、配置、导出、日志、崩溃报告均不得包含明文密码/口令。 |
+| 主机伪装 | 主机密钥未知需确认，变化需阻断。 |
+| 路径注入 | 日志路径、私钥路径、导入导出路径必须规范化和权限校验。 |
+| 广播误操作 | 状态强提示、多行确认、危险命令确认、目标数量提示。 |
+| 命令注入 | 启动系统 ssh 时参数必须数组传递，不拼接 shell 字符串。 |
+| 越权 runtime | IPC 必须校验 runtime 所属窗口/工作区。 |
 
-### 7.2 危险操作
+## 10. 测试策略
 
-以下操作默认需要确认：
-
-- 删除会话或文件夹。
-- 关闭含活跃连接的窗口。
-- 粘贴多行命令。
-- 开启广播输入。
-- 接受未知主机密钥。
-- 在主机密钥变化后继续连接。
-
-### 7.3 日志安全
-
-- 日志开启时在状态栏显示明显状态。
-- 日志文件默认不记录用户键盘输入，仅记录远端输出；若需要输入日志必须单独开启。
-- 日志路径应避免默认落在公开同步目录。
-
-## 8. 可扩展性
-
-### 8.1 插件预留
-
-早期不实现完整插件系统，但接口设计应避免封死扩展能力：
-
-- 命令面板命令注册。
-- 会话上下文菜单扩展。
-- 终端链接处理器扩展。
-- 配色与主题包。
-- 命令片段库。
-
-### 8.2 协议扩展
-
-协议运行时抽象应允许新增：
-
-- Telnet。
-- 串口。
-- Kubernetes exec。
-- Docker exec。
-- WSL 发行版终端。
-
-## 9. 测试策略
-
-### 9.1 Rust 后端
-
-- 会话配置序列化与迁移测试。
-- 凭据引用和敏感字段过滤测试。
-- PTY 启动、resize、关闭测试。
-- SSH 可使用本地测试服务器或容器化 OpenSSH 进行集成测试。
-
-### 9.2 前端
-
-- 会话树增删改查测试。
-- 标签页和分屏状态 reducer 测试。
-- 快捷键冲突检测测试。
-- xterm.js 包装层使用 mock IPC 验证输入输出绑定。
-
-### 9.3 端到端
-
-- 打开本地终端并执行命令。
-- 创建 SSH 会话并连接测试服务器。
-- 保存、重启应用、恢复会话树。
-- 分屏、广播输入、日志开启关闭。
-
-## 10. 发布与更新
-
-- 使用 Tauri 打包 Windows、Linux、macOS 安装包。
-- 发布产物需要包含校验和。
-- 自动更新应可关闭，并支持稳定版与预览版通道。
-- 安装包签名策略按平台逐步完善，早期至少保证发布说明和校验文件清晰。
+- 单元测试：配置迁移、连接字符串解析、快捷键冲突、危险命令检测、日志模板。
+- 集成测试：本地 PTY open/write/resize/close，SSH mock server 认证与断线，SFTP 队列。
+- E2E：快速连接、会话 CRUD、标签关闭确认、分屏 resize、广播确认、导入导出。
+- 跨平台手测矩阵：Windows 11、macOS 最新两个主版本、Ubuntu LTS。
+- 发布门禁：所有验收矩阵 P0/P1 项通过，且无明文凭据泄露测试失败。
