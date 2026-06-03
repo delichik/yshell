@@ -1,0 +1,16 @@
+export component SessionTree inherits Rectangle {
+    background: #252b36;
+    VerticalLayout {
+        padding: 12px;
+        spacing: 8px;
+        HorizontalLayout {
+            Text { text: "Session Manager"; color: #f4f7fb; }
+            Button { text: "+"; }
+            Button { text: "..."; }
+        }
+        TextInput { placeholder-text: "Search sessions"; }
+        Text { text: "Favorites"; color: #a8b3c7; }
+        Text { text: "Welcome"; color: #f4f7fb; }
+        Text { text: "Recent"; color: #a8b3c7; }
+    }
+}
