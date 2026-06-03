@@ -96,9 +96,6 @@ export function App() {
   const [sessionMessage, setSessionMessage] = useState<string | null>(null);
   const [broadcastEnabled, setBroadcastEnabled] = useState(false);
   const [broadcastTargetPaneIds, setBroadcastTargetPaneIds] = useState<string[]>([]);
-  const [quickConnectTarget, setQuickConnectTarget] = useState<{ tabId: string; paneId: string } | null>(null);
-  const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
-  const [renameDraft, setRenameDraft] = useState('');
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -378,17 +375,9 @@ export function App() {
   const renameTab = (tabId: string) => {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
-    setRenamingTabId(tabId);
-    setRenameDraft(tab.title);
-  };
-
-  const saveTabRename = () => {
-    if (!renamingTabId) return;
-    const title = renameDraft.trim();
+    const title = window.prompt('请输入新的标签名称', tab.title)?.trim();
     if (!title) return;
-    setTabs((current) => current.map((item) => (item.id === renamingTabId ? { ...item, title } : item)));
-    setRenamingTabId(null);
-    setRenameDraft('');
+    setTabs((current) => current.map((item) => (item.id === tabId ? { ...item, title } : item)));
   };
 
   const toggleTabLock = (tabId: string) => {
@@ -422,13 +411,6 @@ export function App() {
   const activatePane = (tabId: string, paneId: string) => {
     setTabs((current) => current.map((tab) => (tab.id === tabId ? { ...tab, activePaneId: paneId } : tab)));
   };
-
-  const openQuickConnectInPane = (tabId: string, paneId: string) => {
-    setQuickConnectTarget({ tabId, paneId });
-    setQuickConnectOpen(true);
-    activatePane(tabId, paneId);
-  };
-
 
   const focusRelativePane = (direction: -1 | 1) => {
     const paneIndex = activeTab.panes.findIndex((pane) => pane.id === activeTab.activePaneId);
@@ -481,9 +463,9 @@ export function App() {
     setTabs((current) => current.map((tab) => (tab.id === tabId ? { ...tab, splitRatio } : tab)));
   };
 
-  const splitPane = (tabId: string, direction: SplitDirection) => {
+  const splitPane = async (tabId: string, direction: SplitDirection) => {
     const paneId = crypto.randomUUID();
-    const placeholder = { id: paneId, runtimeId: null, title: '选择连接来源', status: 'idle' as RuntimeStatus };
+    const placeholder = { id: paneId, runtimeId: null, title: '正在打开分屏终端', status: 'connecting' as RuntimeStatus };
     setTabs((current) =>
       current.map((tab) =>
         tab.id === tabId
@@ -491,13 +473,20 @@ export function App() {
           : tab,
       ),
     );
-    setSessionMessage('已创建分屏窗格：请在窗格内选择 SSH 快速连接或本地 Shell。');
-  };
-
-  const disconnectActivePane = () => {
-    if (!activePane?.runtimeId) return;
-    void closeTerminal(activePane.runtimeId);
-    updatePaneRuntime(activeTab.id, activePane.id, null, '已断开', 'disconnected', false);
+    const source = window.prompt('选择新分屏连接来源：local=本地终端，empty=空窗格', 'local')?.trim().toLowerCase() ?? 'local';
+    if (source === 'empty') {
+      updatePaneRuntime(tabId, paneId, null, '空分屏窗格', 'idle', false);
+      setSessionMessage('已创建空分屏窗格，可从会话树或快速连接打开新连接。');
+      return;
+    }
+    try {
+      const runtime = await openLocalTerminal(tabId, paneId, 120, 30, settings.terminal);
+      updatePaneRuntime(tabId, paneId, runtime.runtimeId, runtime.title, runtime.status, false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      updatePaneRuntime(tabId, paneId, null, '分屏连接失败', 'failed', false);
+      setSessionMessage(`分屏打开失败：${message}`);
+    }
   };
 
   return (
@@ -582,10 +571,8 @@ export function App() {
           onToggleTabLock={toggleTabLock}
           onMoveTab={moveTab}
           onReorderTab={reorderTab}
-          onSplitPane={splitPane}
+          onSplitPane={(tabId, direction) => void splitPane(tabId, direction)}
           onResizeSplit={resizeSplit}
-          onOpenLocalPane={(tabId, paneId) => void openLocalInPane(tabId, paneId)}
-          onOpenQuickConnectPane={openQuickConnectInPane}
           onToggleBroadcast={toggleBroadcast}
           broadcastTargetPaneIds={broadcastTargetPaneIds}
           onToggleBroadcastTarget={toggleBroadcastTarget}
@@ -598,15 +585,7 @@ export function App() {
         broadcastEnabled={broadcastEnabled}
         broadcastTargetCount={activeBroadcastTargetCount}
       />
-      {quickConnectOpen && (
-        <QuickConnectPanel
-          onCancel={() => {
-            setQuickConnectOpen(false);
-            setQuickConnectTarget(null);
-          }}
-          onConnect={openQuickConnection}
-        />
-      )}
+      {quickConnectOpen && <QuickConnectPanel onCancel={() => setQuickConnectOpen(false)} onConnect={openQuickConnection} />}
       {editingSession && (
         <QuickConnectPanel
           mode="edit"
