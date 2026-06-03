@@ -3,11 +3,14 @@
 use std::time::Duration;
 
 use crate::auth::AuthMethod;
+use crate::channel::ShellSession;
 use crate::error::{SshError, SshErrorKind, SshResult};
+use crate::fake::FakeSshAdapter;
 use crate::forwarding::TunnelConfig;
 use crate::host_key::HostKeyPolicy;
-use crate::proxy::{ProxyConfig, ProxyState};
+use crate::proxy::ProxyConfig;
 use crate::pty::PtyConfig;
+use crate::real::RealSshAdapter;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SshConnectionConfig {
@@ -70,6 +73,27 @@ pub trait SshAdapter {
     fn disconnect(&self, session: Self::Session) -> SshResult<()>;
 }
 
+pub trait ShellAdapter {
+    type Shell: ShellSession + 'static;
+
+    fn open_shell(&self, config: &SshConnectionConfig) -> SshResult<Self::Shell>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransportBackend {
+    Fake,
+    Real,
+}
+
+impl TransportBackend {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Fake => "fake",
+            Self::Real => "real",
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct SshClient<A = FakeSshAdapter> {
     adapter: A,
@@ -78,6 +102,18 @@ pub struct SshClient<A = FakeSshAdapter> {
 impl SshClient<FakeSshAdapter> {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn with_fake_backend() -> Self {
+        Self::new()
+    }
+}
+
+impl SshClient<RealSshAdapter> {
+    pub fn with_real_backend() -> Self {
+        Self {
+            adapter: RealSshAdapter,
+        }
     }
 }
 
@@ -102,77 +138,54 @@ where
     }
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct FakeSshAdapter;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FakeSshSession {
-    pub host: String,
-    pub username: String,
-    pub proxy_state: ProxyState,
-    pub executed_commands: Vec<String>,
-    connected: bool,
+#[derive(Debug, Default)]
+pub struct ShellClient<A = FakeSshAdapter> {
+    adapter: A,
 }
 
-impl SshAdapter for FakeSshAdapter {
-    type Session = FakeSshSession;
-
-    fn connect(&self, config: &SshConnectionConfig) -> SshResult<Self::Session> {
-        config.validate()?;
-        Ok(FakeSshSession {
-            host: config.host.clone(),
-            username: config.username().to_owned(),
-            proxy_state: match config.proxy.address() {
-                Some(address) => ProxyState::Connected {
-                    address: address.to_owned(),
-                },
-                None => ProxyState::Disabled,
-            },
-            executed_commands: Vec::new(),
-            connected: true,
-        })
+impl ShellClient<FakeSshAdapter> {
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    fn exec(&self, session: &mut Self::Session, command: &str) -> SshResult<ExecOutput> {
-        if !session.connected {
-            return Err(SshError::new(
-                SshErrorKind::Channel,
-                "cannot execute command on disconnected session",
-            ));
+    pub fn with_fake_backend() -> Self {
+        Self::new()
+    }
+}
+
+impl ShellClient<RealSshAdapter> {
+    pub fn with_real_backend() -> Self {
+        Self {
+            adapter: RealSshAdapter,
         }
-        session.executed_commands.push(command.to_owned());
-        Ok(ExecOutput {
-            stdout: format!("fake ssh executed: {command}\n").into_bytes(),
-            stderr: Vec::new(),
-            exit_status: 0,
-        })
+    }
+}
+
+impl<A> ShellClient<A>
+where
+    A: ShellAdapter,
+{
+    pub fn with_adapter(adapter: A) -> Self {
+        Self { adapter }
     }
 
-    fn disconnect(&self, mut session: Self::Session) -> SshResult<()> {
-        session.connected = false;
-        Ok(())
+    pub fn open_shell(&self, config: &SshConnectionConfig) -> SshResult<A::Shell> {
+        self.adapter.open_shell(config)
+    }
+
+    pub fn open_shell_boxed(&self, config: &SshConnectionConfig) -> SshResult<Box<dyn ShellSession>>
+    where
+        A::Shell: 'static,
+    {
+        self.adapter
+            .open_shell(config)
+            .map(|session| Box::new(session) as Box<dyn ShellSession>)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn fake_adapter_connects_and_executes_deterministically() {
-        let client = SshClient::new();
-        let config = SshConnectionConfig::new(
-            "example.test",
-            22,
-            AuthMethod::Agent {
-                username: "alice".to_owned(),
-            },
-        );
-        let mut session = client.connect(&config).expect("connect");
-        let output = client.exec(&mut session, "uptime").expect("exec");
-        assert_eq!(session.host, "example.test");
-        assert_eq!(output.stdout, b"fake ssh executed: uptime\n");
-    }
 
     #[test]
     fn validates_required_connection_fields() {

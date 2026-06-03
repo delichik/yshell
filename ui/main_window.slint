@@ -8,12 +8,24 @@ export component MainWindow inherits Window {
     in-out property <string> status_text: "Ready";
     in-out property <string> config_dir: "";
     in-out property <string> active_session: "Welcome";
+    in-out property <string> session_summary_text: "No runtime sessions yet.";
+    in-out property <string> tab_text: "Welcome  idle";
+    in-out property <string> terminal_title_text: "YShell terminal";
+    in-out property <string> terminal_body_text: "Runtime is ready. Open a Quick Connect target or create a draft session.";
+    in-out property <string> transport_backend_text: "fake";
     in-out property <bool> sftp_visible: true;
     in-out property <bool> tunnels_visible: true;
     in-out property <bool> commands_visible: true;
 
     callback quick_connect(string);
     callback new_session();
+    callback save_session();
+    callback open_saved_session();
+    callback send_demo_input();
+    callback disconnect_session();
+    callback reconnect_session();
+    callback select_fake_backend();
+    callback select_real_backend();
     callback toggle_sftp();
     callback toggle_tunnels();
     callback toggle_commands();
@@ -54,6 +66,13 @@ export component MainWindow inherits Window {
                 }
                 Button { text: "Connect"; clicked => { root.quick_connect(quick_input.text); } }
                 Button { text: "New"; clicked => { root.new_session(); } }
+                Button { text: "Save"; clicked => { root.save_session(); } }
+                Button { text: "Open Saved"; clicked => { root.open_saved_session(); } }
+                Button { text: "Send pwd"; clicked => { root.send_demo_input(); } }
+                Button { text: "Disconnect"; clicked => { root.disconnect_session(); } }
+                Button { text: "Reconnect"; clicked => { root.reconnect_session(); } }
+                Button { text: "Use Fake"; clicked => { root.select_fake_backend(); } }
+                Button { text: "Use Real"; clicked => { root.select_real_backend(); } }
                 Button { text: "Split"; enabled: false; }
                 Button { text: root.sftp_visible ? "Hide SFTP" : "SFTP"; clicked => { root.toggle_sftp(); } }
                 Button { text: root.tunnels_visible ? "Hide Tunnels" : "Tunnels"; clicked => { root.toggle_tunnels(); } }
@@ -78,10 +97,15 @@ export component MainWindow inherits Window {
                     }
                     LineEdit { placeholder-text: "Search sessions"; }
                     Text { text: "Favorites"; color: #a8b3c7; }
-                    Rectangle { height: 30px; background: #313948; border-radius: 4px;
+                    Rectangle {
+                        height: 30px;
+                        background: #313948;
+                        border-radius: 4px;
                         Text { text: root.active_session; color: #f4f7fb; x: 8px; y: 6px; }
                     }
                     Text { text: "Recent"; color: #a8b3c7; }
+                    Text { text: "Backend: " + root.transport_backend_text; color: #7dd3fc; }
+                    Text { text: root.session_summary_text; color: #cdd6e3; wrap: word-wrap; }
                     Text { text: root.config_dir; color: #69758b; wrap: word-wrap; }
                 }
             }
@@ -93,7 +117,7 @@ export component MainWindow inherits Window {
                     HorizontalLayout {
                         padding-left: 8px;
                         spacing: 6px;
-                        Button { text: root.active_session + "  disconnected  ×"; }
+                        Button { text: root.tab_text; }
                         Button { text: "+"; clicked => { root.new_session(); } }
                     }
                 }
@@ -102,8 +126,8 @@ export component MainWindow inherits Window {
                     VerticalLayout {
                         padding: 16px;
                         spacing: 12px;
-                        Text { text: "YShell terminal"; color: #d7e0ef; font-size: 20px; }
-                        Text { text: "Ready for SSH sessions. Use Quick Connect to validate a target and open a tab."; color: #a8b3c7; wrap: word-wrap; }
+                        Text { text: root.terminal_title_text; color: #d7e0ef; font-size: 20px; }
+                        Text { text: root.terminal_body_text; color: #a8b3c7; wrap: word-wrap; }
                         Text { text: root.status_text; color: #7dd3fc; wrap: word-wrap; }
                     }
                 }
@@ -115,13 +139,19 @@ export component MainWindow inherits Window {
                 VerticalLayout {
                     padding: 10px;
                     spacing: 10px;
-                    Rectangle { height: root.sftp_visible ? 150px : 0px; background: #252b36;
+                    Rectangle {
+                        height: root.sftp_visible ? 150px : 0px;
+                        background: #252b36;
                         Text { text: "SFTP\nConnect a session to browse remote files."; color: #f4f7fb; x: 10px; y: 10px; }
                     }
-                    Rectangle { height: root.tunnels_visible ? 130px : 0px; background: #252b36;
+                    Rectangle {
+                        height: root.tunnels_visible ? 130px : 0px;
+                        background: #252b36;
                         Text { text: "Tunnels\nNo active tunnels"; color: #f4f7fb; x: 10px; y: 10px; }
                     }
-                    Rectangle { height: root.commands_visible ? 130px : 0px; background: #252b36;
+                    Rectangle {
+                        height: root.commands_visible ? 130px : 0px;
+                        background: #252b36;
                         Text { text: "Quick Commands\nCommand presets will appear here."; color: #f4f7fb; x: 10px; y: 10px; }
                     }
                 }

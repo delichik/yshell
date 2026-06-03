@@ -2,19 +2,20 @@
 
 use std::path::PathBuf;
 
-use yshell_ui::AppViewModel;
+use crate::{error::AppResult, runtime::AppRuntime};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct AppState {
     pub config_dir: PathBuf,
-    pub view_model: AppViewModel,
+    pub runtime: AppRuntime,
 }
 
 impl AppState {
-    pub fn new(config_dir: PathBuf) -> Self {
-        Self {
+    pub fn new(config_dir: PathBuf) -> AppResult<Self> {
+        let runtime = AppRuntime::new(config_dir.clone())?;
+        Ok(Self {
             config_dir,
-            view_model: AppViewModel::default(),
-        }
+            runtime,
+        })
     }
 }

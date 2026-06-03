@@ -2,13 +2,15 @@
 
 mod app_state;
 mod bootstrap;
-mod commands;
 mod error;
+mod runtime;
+mod session_runtime;
 
 use std::env;
 
 use bootstrap::bootstrap_app;
 use error::{AppError, AppResult};
+use runtime::AppRuntime;
 
 fn main() -> AppResult<()> {
     match CliCommand::parse(env::args().skip(1))? {
@@ -23,16 +25,12 @@ fn main() -> AppResult<()> {
             Ok(())
         }
         CliCommand::QuickConnect(input) => {
-            let target =
-                yshell_config::parse_quick_connect(&input).map_err(AppError::from_error)?;
-            let request = yshell_ui::QuickConnectRequest { raw_input: input };
-            let dispatcher = commands::AppCommandDispatcher;
-            dispatcher.dispatch(yshell_ui::ViewCommand::OpenQuickConnect(request));
+            let config_dir = yshell_config::discover_config_dir().map_err(AppError::from_error)?;
+            let mut runtime = AppRuntime::new(config_dir)?;
+            let projection = runtime.handle_quick_connect(&input)?;
             println!(
-                "quick connect OK: user={} host={} port={}",
-                target.username.as_deref().unwrap_or("<default>"),
-                target.host,
-                target.port
+                "quick connect pipeline initialized: {}",
+                projection.status_text
             );
             Ok(())
         }
@@ -82,7 +80,7 @@ impl CliCommand {
 
 fn print_help() {
     println!(
-        "YShell\n\nUSAGE:\n    yshell [OPTIONS]\n\nOPTIONS:\n    --check-config            Validate configuration discovery\n    --print-config-dir        Print the configuration directory\n    --quick-connect <input>   Queue a quick-connect request without launching UI\n    --version                 Print version\n    --help                    Print help"
+        "YShell\n\nUSAGE:\n    yshell [OPTIONS]\n\nOPTIONS:\n    --check-config            Validate configuration discovery\n    --print-config-dir        Print the configuration directory\n    --quick-connect <input>   Run the runtime quick-connect path without launching UI\n    --version                 Print version\n    --help                    Print help"
     );
 }
 
