@@ -109,9 +109,7 @@ export interface QuickConnectDraft {
   port: number;
   username: string;
   authMethod: AuthMethod;
-  password?: string;
   privateKeyPath?: string;
-  passphrase?: string;
   hostKeyPolicy: HostKeyPolicy;
   saveAsSession: boolean;
 }

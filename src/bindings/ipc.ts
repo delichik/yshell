@@ -92,7 +92,7 @@ export async function openLocalTerminal(
   return invoke<TerminalRuntime>('terminal_open_local', { tabId, paneId, cols, rows, terminal });
 }
 
-export async function openSshTerminal(draft: QuickConnectDraft, tabId: string, paneId: string): Promise<TerminalRuntime> {
+export async function openSshTerminal(draft: QuickConnectDraft, tabId: string, paneId: string, cols = 120, rows = 30): Promise<TerminalRuntime> {
   if (!runningInTauri) {
     return {
       runtimeId: `preview-${paneId}`,
@@ -104,7 +104,7 @@ export async function openSshTerminal(draft: QuickConnectDraft, tabId: string, p
       title: draft.name || `${draft.username}@${draft.host}`,
     };
   }
-  return invoke<TerminalRuntime>('terminal_open_ssh', { draft, tabId, paneId });
+  return invoke<TerminalRuntime>('terminal_open_ssh', { draft, tabId, paneId, cols, rows });
 }
 
 export async function writeTerminal(runtimeId: string, data: string): Promise<void> {

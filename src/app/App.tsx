@@ -108,7 +108,7 @@ export function App() {
     );
   };
 
-  const updatePaneRuntime = (tabId: string, paneId: string, runtimeId: string, title: string, status: RuntimeStatus) => {
+  const updatePaneRuntime = (tabId: string, paneId: string, runtimeId: string | null, title: string, status: RuntimeStatus) => {
     setTabs((current) =>
       current.map((tab) =>
         tab.id === tabId
@@ -165,17 +165,30 @@ export function App() {
     const title = draft.protocol === 'local' ? draft.name || '本地终端' : draft.name || `${draft.username}@${draft.host}`;
     setTabs((current) => [...current, { ...tab, title }]);
     setActiveTabId(tab.id);
-    setQuickConnectOpen(false);
-    if (draft.saveAsSession) {
+
+    try {
+      const runtime =
+        draft.protocol === 'local'
+          ? await openLocalTerminal(tab.id, tab.panes[0].id, 120, 30, settings.terminal)
+          : await openSshTerminal(draft, tab.id, tab.panes[0].id);
+      updatePaneRuntime(tab.id, tab.panes[0].id, runtime.runtimeId, runtime.title, runtime.status);
+      setQuickConnectOpen(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      updatePaneRuntime(tab.id, tab.panes[0].id, null, '连接失败', 'failed');
+      setSessionMessage(`连接失败：${message}`);
+      return;
+    }
+
+    if (!draft.saveAsSession) return;
+    try {
       const stored = await saveSession(profileFromDraft(draft));
       setSessions((current) => [stored, ...current.filter((session) => session.id !== stored.id)]);
-      setSessionMessage(`已保存会话：${stored.name}`);
+      setSessionMessage(`已连接并保存会话：${stored.name}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setSessionMessage(`连接已打开，但保存会话失败：${message}`);
     }
-    const runtime =
-      draft.protocol === 'local'
-        ? await openLocalTerminal(tab.id, tab.panes[0].id, 120, 30, settings.terminal)
-        : await openSshTerminal(draft, tab.id, tab.panes[0].id);
-    updatePaneRuntime(tab.id, tab.panes[0].id, runtime.runtimeId, runtime.title, runtime.status);
   };
 
   const openSavedSession = async (session: SessionProfile) => {
@@ -233,10 +246,15 @@ export function App() {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    const bundle = JSON.parse(await file.text()) as SessionExportBundle;
-    const nextSessions = await importSessions(bundle);
-    setSessions(nextSessions);
-    setSessionMessage(`已导入 ${nextSessions.length} 个会话。`);
+    try {
+      const bundle = JSON.parse(await file.text()) as SessionExportBundle;
+      const nextSessions = await importSessions(bundle);
+      setSessions(nextSessions);
+      setSessionMessage(`已导入 ${nextSessions.length} 个会话。`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setSessionMessage(`导入失败：${message}`);
+    }
   };
 
   const persistSettings = async (nextSettings: AppSettings) => {

@@ -17,9 +17,7 @@ pub struct QuickConnectDraft {
     pub port: u16,
     pub username: String,
     pub auth_method: String,
-    pub password: Option<String>,
     pub private_key_path: Option<String>,
-    pub passphrase: Option<String>,
     pub host_key_policy: HostKeyPolicy,
     pub save_as_session: bool,
 }
@@ -117,6 +115,8 @@ pub fn terminal_open_ssh(
     draft: QuickConnectDraft,
     tab_id: String,
     pane_id: String,
+    cols: Option<u16>,
+    rows: Option<u16>,
 ) -> Result<TerminalRuntime, String> {
     if draft.protocol != "ssh" {
         return Err(format!("unsupported terminal protocol: {}", draft.protocol));
@@ -152,27 +152,8 @@ pub fn terminal_open_ssh(
     } else {
         draft.name.clone()
     };
-    let has_ephemeral_secret = draft
-        .password
-        .as_deref()
-        .is_some_and(|value| !value.is_empty())
-        || draft
-            .passphrase
-            .as_deref()
-            .is_some_and(|value| !value.is_empty());
-    let notice = format!(
-        "YShell SSH runtime boundary is ready, but the protocol backend is not enabled in this build.\r\nRequested: {}@{}:{}\r\nAuthentication: {}{}\r\nHost key policy: {:?}\r\nSecrets are treated as ephemeral input and are not written to the session config or export bundle.\r\n",
-        if draft.username.is_empty() { "<current-user>" } else { &draft.username },
-        draft.host,
-        draft.port,
-        draft.auth_method,
-        if has_ephemeral_secret { " (ephemeral secret supplied)" } else { "" },
-        draft.host_key_policy,
-    );
-    let runtime =
-        registry.open_ssh_placeholder_with_notice(app_handle, tab_id, pane_id, title, notice)?;
-    let _should_persist_profile = draft.save_as_session;
-    Ok(runtime)
+    let args = build_ssh_args(&draft);
+    registry.open_ssh(app_handle, tab_id, pane_id, cols, rows, title, args)
 }
 
 #[tauri::command]
@@ -205,4 +186,74 @@ pub fn terminal_close(
 #[tauri::command]
 pub fn terminal_close_all(registry: State<'_, RuntimeRegistry>) -> Result<(), String> {
     registry.close_all()
+}
+
+fn build_ssh_args(draft: &QuickConnectDraft) -> Vec<String> {
+    let mut args = vec![
+        "-tt".to_string(),
+        "-p".to_string(),
+        draft.port.to_string(),
+        "-o".to_string(),
+        format!(
+            "StrictHostKeyChecking={}",
+            host_key_policy_option(&draft.host_key_policy)
+        ),
+        "-o".to_string(),
+        "ServerAliveInterval=30".to_string(),
+        "-o".to_string(),
+        "ServerAliveCountMax=3".to_string(),
+    ];
+
+    match draft.auth_method.as_str() {
+        "password" => {
+            args.extend([
+                "-o".to_string(),
+                "PreferredAuthentications=password,keyboard-interactive".to_string(),
+                "-o".to_string(),
+                "PubkeyAuthentication=no".to_string(),
+            ]);
+        }
+        "private_key" => {
+            args.extend([
+                "-o".to_string(),
+                "PreferredAuthentications=publickey".to_string(),
+                "-i".to_string(),
+                expand_home_path(draft.private_key_path.as_deref().unwrap_or_default()),
+            ]);
+        }
+        "agent" => {
+            args.extend([
+                "-o".to_string(),
+                "PreferredAuthentications=publickey".to_string(),
+            ]);
+        }
+        _ => {}
+    }
+
+    args.push(if draft.username.trim().is_empty() {
+        draft.host.clone()
+    } else {
+        format!("{}@{}", draft.username, draft.host)
+    });
+    args
+}
+
+fn host_key_policy_option(policy: &HostKeyPolicy) -> &'static str {
+    match policy {
+        HostKeyPolicy::Strict => "yes",
+        HostKeyPolicy::AcceptNew => "accept-new",
+        HostKeyPolicy::Prompt => "ask",
+    }
+}
+
+fn expand_home_path(path: &str) -> String {
+    let Some(remainder) = path.strip_prefix("~/") else {
+        return path.to_string();
+    };
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(|home| std::path::PathBuf::from(home).join(remainder))
+        .unwrap_or_else(|| std::path::PathBuf::from(path))
+        .to_string_lossy()
+        .into_owned()
 }

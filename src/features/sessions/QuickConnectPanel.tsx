@@ -28,9 +28,7 @@ export function QuickConnectPanel({ initialSession, mode = 'connect', onCancel, 
   const [port, setPort] = useState(initialDraft.port);
   const [username, setUsername] = useState(initialDraft.username);
   const [authMethod, setAuthMethod] = useState<AuthMethod>(initialDraft.authMethod);
-  const [password, setPassword] = useState('');
   const [privateKeyPath, setPrivateKeyPath] = useState(initialDraft.privateKeyPath ?? '');
-  const [passphrase, setPassphrase] = useState('');
   const [hostKeyPolicy, setHostKeyPolicy] = useState<HostKeyPolicy>(initialDraft.hostKeyPolicy);
   const [saveAsSession, setSaveAsSession] = useState(mode === 'edit' ? true : initialDraft.saveAsSession);
   const [connecting, setConnecting] = useState(false);
@@ -46,9 +44,7 @@ export function QuickConnectPanel({ initialSession, mode = 'connect', onCancel, 
         port,
         username,
         authMethod,
-        password: authMethod === 'password' ? password : undefined,
         privateKeyPath: authMethod === 'private_key' ? privateKeyPath : undefined,
-        passphrase: authMethod === 'private_key' ? passphrase : undefined,
         hostKeyPolicy,
         saveAsSession,
       });
@@ -63,7 +59,7 @@ export function QuickConnectPanel({ initialSession, mode = 'connect', onCancel, 
         <header>
           <span className="eyebrow">{mode === 'edit' ? 'Session Editor' : 'Quick Connect'}</span>
           <h2>{mode === 'edit' ? '编辑会话' : '快速连接'}</h2>
-          <p>阶段 2 支持密码、私钥和 Agent 认证参数；密码和口令仅用于本次连接，不写入普通配置或导出文件。</p>
+          <p>阶段 2 使用系统 OpenSSH 打开远程 shell；密码和私钥口令在终端提示中输入，不写入普通配置或导出文件。</p>
         </header>
         <div className="form-grid">
           <label>
@@ -101,21 +97,11 @@ export function QuickConnectPanel({ initialSession, mode = 'connect', onCancel, 
                   <option value="agent">SSH Agent</option>
                 </select>
               </label>
-              {authMethod === 'password' && (
-                <label>
-                  密码（仅本次连接）
-                  <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="不会保存到配置" />
-                </label>
-              )}
               {authMethod === 'private_key' && (
                 <>
                   <label>
                     私钥路径
                     <input value={privateKeyPath} onChange={(event) => setPrivateKeyPath(event.target.value)} placeholder="~/.ssh/id_ed25519" />
-                  </label>
-                  <label>
-                    私钥口令（仅本次连接）
-                    <input type="password" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} placeholder="不会保存到配置" />
                   </label>
                 </>
               )}
@@ -128,7 +114,7 @@ export function QuickConnectPanel({ initialSession, mode = 'connect', onCancel, 
                 </select>
               </label>
             </div>
-            <p className="security-note">阶段 2 验收项：未知主机密钥、密钥变化和凭据持久化都在连接边界显式处理。</p>
+            <p className="security-note">阶段 2 验收项：未知主机密钥、密钥变化和凭据输入均由系统 OpenSSH 在终端会话内显式处理。</p>
           </>
         )}
         {mode === 'connect' && (

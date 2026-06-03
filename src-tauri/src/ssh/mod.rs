@@ -1,9 +1,9 @@
 //! SSH protocol integration boundary.
 //!
 //! Authentication, host-key verification, shell channels, SFTP, keepalive, and
-//! future jump-host support live behind this module. Stage 2 currently exposes
-//! the data contracts and explicit placeholder failure path while the real SSH
-//! transport is wired in.
+//! future jump-host support live behind this module. Stage 2 uses the system
+//! OpenSSH client for interactive shell transport while keeping host-key data
+//! contracts explicit for future native protocol support.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
