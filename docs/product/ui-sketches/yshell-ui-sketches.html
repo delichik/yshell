@@ -522,6 +522,38 @@
         <div class="form-row"><label>Confirm</label><div class="fake-input">Type RECORD INPUT</div></div>
       </section>
     </div>
+
+    <h2>6. Context menus are context-specific</h2>
+    <div class="note">右键菜单不能做成一套万能菜单。SSH 终端、SFTP 文件管理和 Session Manager 的右键菜单必须完全按上下文变化。</div>
+    <div class="grid-3">
+      <section class="dialog">
+        <h3>SSH terminal right click</h3>
+        <div class="check-row"><span>Paste</span><span>clipboard required</span></div>
+        <div class="check-row"><span>Paste as Bracketed</span><span>connected SSH</span></div>
+        <div class="check-row"><span>Send Key Input To...</span><span>source pane</span></div>
+        <div class="check-row"><span>Select All / Find</span><span>terminal buffer</span></div>
+        <div class="check-row"><span>Clear Scrollback</span><span class="badge">confirm</span></div>
+        <div class="check-row"><span>Logging Settings...</span><span>session editor</span></div>
+      </section>
+      <section class="dialog">
+        <h3>SFTP file right click</h3>
+        <div class="check-row"><span>Open / Edit</span><span>remote temp copy</span></div>
+        <div class="check-row"><span>Download / Download To...</span><span>transfer queue</span></div>
+        <div class="check-row"><span>Rename</span><span>inline edit</span></div>
+        <div class="check-row"><span>Delete</span><span class="badge">confirm</span></div>
+        <div class="check-row"><span>Chmod...</span><span>permissions</span></div>
+        <div class="check-row"><span>Copy Remote Path</span><span>clipboard</span></div>
+      </section>
+      <section class="dialog">
+        <h3>Session tree right click</h3>
+        <div class="check-row"><span>Connect / Open in Split</span><span>new tab or pane</span></div>
+        <div class="check-row"><span>Open SFTP</span><span>connect then SFTP</span></div>
+        <div class="check-row"><span>Edit Session...</span><span>session editor</span></div>
+        <div class="check-row"><span>Send Key Input To Target</span><span>only connected SSH</span></div>
+        <div class="check-row"><span>Edit Folder Defaults...</span><span>folder only</span></div>
+        <div class="check-row"><span>Delete</span><span class="badge">confirm</span></div>
+      </section>
+    </div>
   </main>
 </body>
 </html>

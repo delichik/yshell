@@ -12,6 +12,7 @@ YShell 是一个开源、跨平台、现代化的 SSH 终端与 SFTP 客户端�
 - GitHub Actions 自动发布配置：`docs/product/github-actions-release.md`
 - UI 草图 HTML：`docs/product/ui-sketches/yshell-ui-sketches.html`
 - UI 逐控件交互契约：`docs/product/yshell-ui-interaction-contract.md`
+- 右键菜单设计矩阵：`docs/product/context-menu-design.md`
 
 ## 2. 设计原则
 
