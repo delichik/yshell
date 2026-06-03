@@ -53,6 +53,10 @@ export interface SessionProfile {
   name: string;
   folderId: string | null;
   tags: string[];
+  description?: string;
+  color?: string;
+  icon?: string;
+  favorite?: boolean;
   protocol: SessionProtocol;
   host: string | null;
   port: number | null;
@@ -112,8 +116,14 @@ export interface QuickConnectDraft {
   host: string;
   port: number;
   username: string;
+  description?: string;
+  tags?: string[];
+  folderId?: string | null;
+  color?: string;
+  favorite?: boolean;
   authMethod: AuthMethod;
   privateKeyPath?: string;
+  password?: string;
   hostKeyPolicy: HostKeyPolicy;
   saveAsSession: boolean;
 }

@@ -163,13 +163,23 @@ export function App() {
     );
   };
 
+  const openLocalInPane = async (tabId: string, paneId: string, updateTabTitle = false) => {
+    updatePaneRuntime(tabId, paneId, null, '正在打开本地终端', 'connecting', updateTabTitle);
+    try {
+      const runtime = await openLocalTerminal(tabId, paneId, 120, 30, settings.terminal);
+      updatePaneRuntime(tabId, paneId, runtime.runtimeId, runtime.title, runtime.status, updateTabTitle);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      updatePaneRuntime(tabId, paneId, null, '本地终端打开失败', 'failed', updateTabTitle);
+      setSessionMessage(`本地终端打开失败：${message}`);
+    }
+  };
+
   const openLocal = async () => {
     const tab = createEmptyTab(tabs.length + 1);
-    tab.activePaneId = tab.panes[0].id;
     setTabs((current) => [...current, { ...tab, title: '正在打开本地终端' }]);
     setActiveTabId(tab.id);
-    const runtime = await openLocalTerminal(tab.id, tab.panes[0].id, 120, 30, settings.terminal);
-    updatePaneRuntime(tab.id, tab.panes[0].id, runtime.runtimeId, runtime.title, runtime.status);
+    await openLocalInPane(tab.id, tab.panes[0].id, true);
   };
 
   const profileFromDraft = (draft: QuickConnectDraft, existing?: SessionProfile | null): SessionProfile => {
@@ -178,8 +188,12 @@ export function App() {
     return {
       id: existing?.id ?? crypto.randomUUID(),
       name: title,
-      folderId: existing?.folderId ?? null,
-      tags: existing?.tags ?? [],
+      folderId: draft.folderId === undefined ? existing?.folderId ?? null : draft.folderId,
+      tags: draft.tags ?? existing?.tags ?? [],
+      description: draft.description,
+      color: draft.color,
+      icon: existing?.icon,
+      favorite: Boolean(draft.favorite),
       protocol: draft.protocol,
       host: draft.protocol === 'ssh' ? draft.host : null,
       port: draft.protocol === 'ssh' ? draft.port : null,
@@ -201,22 +215,31 @@ export function App() {
   };
 
   const openQuickConnection = async (draft: QuickConnectDraft) => {
-    const tab = createEmptyTab(tabs.length + 1);
-    tab.activePaneId = tab.panes[0].id;
+    const target = quickConnectTarget;
+    const tab = target ? tabs.find((item) => item.id === target.tabId) : createEmptyTab(tabs.length + 1);
+    if (!tab) return;
+    const paneId = target ? target.paneId : tab.panes[0].id;
     const title = draft.protocol === 'local' ? draft.name || '本地终端' : draft.name || `${draft.username}@${draft.host}`;
-    setTabs((current) => [...current, { ...tab, title }]);
-    setActiveTabId(tab.id);
+    if (!target) {
+      setTabs((current) => [...current, { ...tab, title }]);
+      setActiveTabId(tab.id);
+    } else {
+      setActiveTabId(target.tabId);
+      activatePane(target.tabId, target.paneId);
+    }
 
     try {
+      updatePaneRuntime(tab.id, paneId, null, `正在连接 ${title}`, 'connecting', !target);
       const runtime =
         draft.protocol === 'local'
-          ? await openLocalTerminal(tab.id, tab.panes[0].id, 120, 30, settings.terminal)
-          : await openSshTerminal(draft, tab.id, tab.panes[0].id);
-      updatePaneRuntime(tab.id, tab.panes[0].id, runtime.runtimeId, runtime.title, runtime.status);
+          ? await openLocalTerminal(tab.id, paneId, 120, 30, settings.terminal)
+          : await openSshTerminal(draft, tab.id, paneId);
+      updatePaneRuntime(tab.id, paneId, runtime.runtimeId, runtime.title, runtime.status, !target);
       setQuickConnectOpen(false);
+      setQuickConnectTarget(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      updatePaneRuntime(tab.id, tab.panes[0].id, null, '连接失败', 'failed');
+      updatePaneRuntime(tab.id, paneId, null, '连接失败', 'failed', !target);
       setSessionMessage(`连接失败：${message}`);
       return;
     }
@@ -244,6 +267,11 @@ export function App() {
       port: session.port ?? 22,
       username: session.username ?? session.auth.username ?? '',
       authMethod: session.auth.method,
+      description: session.description,
+      tags: session.tags,
+      folderId: session.folderId,
+      color: session.color,
+      favorite: session.favorite,
       privateKeyPath: session.auth.privateKeyPath,
       hostKeyPolicy: 'prompt',
       saveAsSession: false,
@@ -463,18 +491,61 @@ export function App() {
 
   return (
     <div className="app-shell" data-theme={settings.appearance.appTheme}>
-      <header className="title-bar">
-        <div>
+      <header className="title-bar xshell-chrome">
+        <div className="app-brand">
           <strong>YShell</strong>
-          <span>开源跨平台终端与远程会话客户端</span>
+          <span>Open SSH Client · Xshell workflow baseline</span>
         </div>
-        <nav aria-label="主操作">
-          <button type="button" onClick={() => setQuickConnectOpen(true)}>快速连接</button>
-          <button type="button" onClick={openLocal}>新建本地终端</button>
-          <button type="button" onClick={() => void exportSessionFile()}>导出会话</button>
-          <button type="button" onClick={() => importInputRef.current?.click()}>导入会话</button>
-          <button type="button" onClick={() => setSettingsOpen(true)}>设置</button>
+        <nav className="menu-bar" aria-label="Xshell 菜单栏">
+          <div className="menu-root"><button type="button">文件(F)</button><div className="menu-panel">
+            <button type="button" onClick={() => setQuickConnectOpen(true)}>新建会话 / 快速连接...</button>
+            <button type="button" onClick={() => void openLocal()}>新建本地 Shell</button>
+            <button type="button" onClick={disconnectActivePane}>断开当前连接</button>
+            <span className="menu-separator" />
+            <button type="button" onClick={() => importInputRef.current?.click()}>导入会话...</button>
+            <button type="button" onClick={() => void exportSessionFile()}>导出会话...</button>
+          </div></div>
+          <div className="menu-root"><button type="button">编辑(E)</button><div className="menu-panel">
+            <button type="button">复制</button>
+            <button type="button">粘贴</button>
+            <button type="button">查找...</button>
+            <button type="button" disabled>撰写栏 / 撰写窗格</button>
+          </div></div>
+          <div className="menu-root"><button type="button">查看(V)</button><div className="menu-panel">
+            <button type="button">会话管理器</button>
+            <button type="button">工具栏</button>
+            <button type="button">状态栏</button>
+            <button type="button" disabled>全屏</button>
+          </div></div>
+          <div className="menu-root"><button type="button">选项卡(T)</button><div className="menu-panel">
+            <button type="button" onClick={() => setQuickConnectOpen(true)}>新建 SSH 标签...</button>
+            <button type="button" onClick={() => renameTab(activeTab.id)}>重命名当前标签</button>
+            <button type="button" onClick={() => toggleTabLock(activeTab.id)}>{activeTab.locked ? '解除锁定当前标签' : '锁定当前标签'}</button>
+            <button type="button" onClick={() => closeTab(activeTab.id)}>关闭当前标签</button>
+            <button type="button" onClick={() => closeOtherTabs(activeTab.id)}>关闭其他标签</button>
+          </div></div>
+          <div className="menu-root"><button type="button">窗口(W)</button><div className="menu-panel">
+            <button type="button" onClick={() => splitPane(activeTab.id, 'vertical')}>垂直分割窗格</button>
+            <button type="button" onClick={() => splitPane(activeTab.id, 'horizontal')}>水平分割窗格</button>
+            <button type="button" onClick={() => focusRelativePane(1)}>下一个窗格</button>
+            <button type="button" onClick={() => focusRelativePane(-1)}>上一个窗格</button>
+            <button type="button" onClick={toggleBroadcast}>{broadcastEnabled ? '停止广播输入' : '广播输入到当前标签'}</button>
+          </div></div>
+          <div className="menu-root"><button type="button">工具(O)</button><div className="menu-panel">
+            <button type="button" disabled>用户密钥管理器</button>
+            <button type="button" disabled>主机密钥管理器</button>
+            <button type="button" disabled>日志管理器</button>
+            <button type="button" onClick={() => setSettingsOpen(true)}>选项...</button>
+          </div></div>
+          <div className="menu-root"><button type="button">帮助(H)</button><div className="menu-panel"><button type="button">关于 YShell</button></div></div>
         </nav>
+        <div className="main-toolbar" aria-label="常用工具栏">
+          <button type="button" onClick={() => setQuickConnectOpen(true)}>快速连接</button>
+          <button type="button" onClick={() => splitPane(activeTab.id, 'vertical')}>垂直分屏</button>
+          <button type="button" onClick={() => splitPane(activeTab.id, 'horizontal')}>水平分屏</button>
+          <button type="button" data-active={broadcastEnabled} onClick={toggleBroadcast}>广播</button>
+          <button type="button" onClick={() => setSettingsOpen(true)}>选项</button>
+        </div>
         <input ref={importInputRef} className="visually-hidden" type="file" accept="application/json" onChange={(event) => void importSessionFile(event)} />
       </header>
       <main className="main-layout">
@@ -525,6 +596,31 @@ export function App() {
       )}
       {settingsOpen && (
         <SettingsPanel settings={settings} onClose={() => setSettingsOpen(false)} onSave={persistSettings} />
+      )}
+      {renamingTabId && (
+        <div className="dialog-backdrop" role="presentation">
+          <form
+            className="dialog compact-dialog"
+            onSubmit={(event) => {
+              event.preventDefault();
+              saveTabRename();
+            }}
+          >
+            <header>
+              <span className="eyebrow">Tab</span>
+              <h2>重命名标签</h2>
+              <p>对应 Xshell 标签上下文菜单中的“重命名”，不打断当前终端会话。</p>
+            </header>
+            <label>
+              标签名称
+              <input autoFocus value={renameDraft} onChange={(event) => setRenameDraft(event.target.value)} />
+            </label>
+            <footer>
+              <button type="button" onClick={() => setRenamingTabId(null)}>取消</button>
+              <button type="submit" className="primary">保存</button>
+            </footer>
+          </form>
+        </div>
       )}
     </div>
   );

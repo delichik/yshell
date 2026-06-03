@@ -50,7 +50,12 @@ export function TerminalPane({
   }, [active]);
 
   useEffect(() => {
-    if (!hostRef.current) return undefined;
+    if (!active) return;
+    terminalRef.current?.focus();
+  }, [active]);
+
+  useEffect(() => {
+    if (!hostRef.current || !pane.runtimeId) return undefined;
     const fitAddon = new FitAddon();
     const searchAddon = new SearchAddon();
     const terminal = new Terminal({
@@ -69,9 +74,7 @@ export function TerminalPane({
     terminal.open(hostRef.current);
     fitAddon.fit();
 
-    if (!pane.runtimeId) {
-      terminal.writeln('YShell local terminal is ready to open a runtime.');
-    } else if (!runningInTauri) {
+    if (!runningInTauri) {
       terminal.writeln('YShell browser preview');
       terminal.writeln('输入内容会在预览模式中本地回显；Tauri 模式会写入后端 shell stdin。');
     }
@@ -168,6 +171,31 @@ export function TerminalPane({
     if (!searchQuery) return;
     searchRef.current?.findNext(searchQuery);
   };
+
+  if (!pane.runtimeId) {
+    return (
+      <article
+        className="terminal-pane terminal-pane-empty"
+        data-active={active}
+        data-broadcast-target={false}
+        onMouseDown={onActivate}
+      >
+        <header>
+          <strong>{pane.title}</strong>
+          <div className="terminal-actions"><span>{pane.status}</span></div>
+        </header>
+        <div className="terminal-source-picker">
+          <span className="eyebrow">Connection Source</span>
+          <h3>选择连接来源</h3>
+          <p>像 Xshell 分屏一样，先创建窗格，再在窗格中打开 SSH 快速连接或本地 Shell；不会弹出临时终端窗口。</p>
+          <div className="source-actions">
+            <button type="button" onClick={onOpenQuickConnect}>SSH 快速连接</button>
+            <button type="button" onClick={onOpenLocal}>本地 Shell</button>
+          </div>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article

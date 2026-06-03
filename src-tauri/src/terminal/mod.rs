@@ -114,7 +114,8 @@ impl RuntimeRegistry {
             .master
             .take_writer()
             .map_err(|error| format!("failed to open PTY writer: {error}"))?;
-        spawn_output_reader(app_handle, runtime.runtime_id.clone(), reader);
+        let writer = Arc::new(Mutex::new(writer));
+        spawn_output_reader(app_handle, runtime.runtime_id.clone(), reader, None, None);
 
         self.runtimes
             .lock()
@@ -123,7 +124,7 @@ impl RuntimeRegistry {
                 runtime.runtime_id.clone(),
                 RuntimeHandle {
                     runtime: runtime.clone(),
-                    writer: Some(Arc::new(Mutex::new(writer))),
+                    writer: Some(writer),
                     master: Some(pair.master),
                     child: Some(child),
                 },
@@ -140,6 +141,7 @@ impl RuntimeRegistry {
         rows: Option<u16>,
         title: String,
         args: Vec<String>,
+        password: Option<String>,
     ) -> Result<TerminalRuntime, String> {
         let runtime = TerminalRuntime {
             runtime_id: Uuid::new_v4().to_string(),
@@ -178,7 +180,14 @@ impl RuntimeRegistry {
             .master
             .take_writer()
             .map_err(|error| format!("failed to open SSH PTY writer: {error}"))?;
-        spawn_output_reader(app_handle, runtime.runtime_id.clone(), reader);
+        let writer = Arc::new(Mutex::new(writer));
+        spawn_output_reader(
+            app_handle,
+            runtime.runtime_id.clone(),
+            reader,
+            Some(writer.clone()),
+            password,
+        );
 
         self.runtimes
             .lock()
@@ -187,7 +196,7 @@ impl RuntimeRegistry {
                 runtime.runtime_id.clone(),
                 RuntimeHandle {
                     runtime: runtime.clone(),
-                    writer: Some(Arc::new(Mutex::new(writer))),
+                    writer: Some(writer),
                     master: Some(pair.master),
                     child: Some(child),
                 },
@@ -285,14 +294,27 @@ fn spawn_output_reader(
     app_handle: AppHandle,
     runtime_id: String,
     mut reader: Box<dyn Read + Send>,
+    writer: Option<PtyWriter>,
+    password: Option<String>,
 ) {
     thread::spawn(move || {
         let mut buffer = [0_u8; 4096];
+        let mut prompt_window = String::new();
+        let mut password_sent = false;
         loop {
             match reader.read(&mut buffer) {
                 Ok(0) => break,
                 Ok(bytes_read) => {
                     let data = String::from_utf8_lossy(&buffer[..bytes_read]).into_owned();
+                    if let (Some(secret), Some(writer)) = (password.as_ref(), writer.as_ref()) {
+                        if !password_sent && looks_like_password_prompt(&mut prompt_window, &data) {
+                            if let Ok(mut writer) = writer.lock() {
+                                let _ = writer.write_all(format!("{secret}\n").as_bytes());
+                                let _ = writer.flush();
+                                password_sent = true;
+                            }
+                        }
+                    }
                     let _ = app_handle.emit(
                         OUTPUT_EVENT,
                         TerminalOutputEvent {
@@ -312,6 +334,16 @@ fn spawn_output_reader(
             },
         );
     });
+}
+
+fn looks_like_password_prompt(prompt_window: &mut String, data: &str) -> bool {
+    prompt_window.push_str(data);
+    if prompt_window.len() > 512 {
+        let keep_chars = prompt_window.chars().rev().take(512).collect::<Vec<_>>();
+        *prompt_window = keep_chars.into_iter().rev().collect();
+    }
+    let normalized = prompt_window.to_ascii_lowercase();
+    normalized.contains("password:") || normalized.contains("passphrase for key")
 }
 
 fn default_shell_command(
