@@ -91,11 +91,14 @@ export function App() {
   const [tabs, setTabs] = useState<WorkspaceTab[]>(() => restoreWorkspaceTabs() ?? [createEmptyTab()]);
   const [activeTabId, setActiveTabId] = useState(() => tabs[0].id);
   const [quickConnectOpen, setQuickConnectOpen] = useState(false);
+  const [quickConnectTarget, setQuickConnectTarget] = useState<{ tabId: string; paneId: string } | null>(null);
   const [editingSession, setEditingSession] = useState<SessionProfile | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sessionMessage, setSessionMessage] = useState<string | null>(null);
   const [broadcastEnabled, setBroadcastEnabled] = useState(false);
   const [broadcastTargetPaneIds, setBroadcastTargetPaneIds] = useState<string[]>([]);
+  const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -375,9 +378,17 @@ export function App() {
   const renameTab = (tabId: string) => {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
-    const title = window.prompt('请输入新的标签名称', tab.title)?.trim();
+    setRenamingTabId(tabId);
+    setRenameDraft(tab.title);
+  };
+
+  const saveTabRename = () => {
+    if (!renamingTabId) return;
+    const title = renameDraft.trim();
     if (!title) return;
-    setTabs((current) => current.map((item) => (item.id === tabId ? { ...item, title } : item)));
+    setTabs((current) => current.map((item) => (item.id === renamingTabId ? { ...item, title } : item)));
+    setRenamingTabId(null);
+    setRenameDraft('');
   };
 
   const toggleTabLock = (tabId: string) => {
@@ -459,6 +470,30 @@ export function App() {
     });
   };
 
+  const openQuickConnectDialog = (target: { tabId: string; paneId: string } | null = null) => {
+    setQuickConnectTarget(target);
+    setQuickConnectOpen(true);
+  };
+
+  const openLocalInExistingPane = (tabId: string, paneId: string) => {
+    setActiveTabId(tabId);
+    activatePane(tabId, paneId);
+    void openLocalInPane(tabId, paneId, false);
+  };
+
+  const disconnectActivePane = () => {
+    if (!activePane?.runtimeId) {
+      setSessionMessage('当前窗格没有可断开的连接。');
+      return;
+    }
+
+    const runtimeId = activePane.runtimeId;
+    void closeTerminal(runtimeId);
+    updatePaneRuntime(activeTab.id, activePane.id, null, `${activePane.title}（已断开）`, 'disconnected', false);
+    setBroadcastTargetPaneIds((current) => current.filter((paneId) => paneId !== activePane.id));
+    setSessionMessage(`已断开当前窗格：${activePane.title}`);
+  };
+
   const resizeSplit = (tabId: string, splitRatio: number) => {
     setTabs((current) => current.map((tab) => (tab.id === tabId ? { ...tab, splitRatio } : tab)));
   };
@@ -498,7 +533,7 @@ export function App() {
         </div>
         <nav className="menu-bar" aria-label="Xshell 菜单栏">
           <div className="menu-root"><button type="button">文件(F)</button><div className="menu-panel">
-            <button type="button" onClick={() => setQuickConnectOpen(true)}>新建会话 / 快速连接...</button>
+            <button type="button" onClick={() => openQuickConnectDialog()}>新建会话 / 快速连接...</button>
             <button type="button" onClick={() => void openLocal()}>新建本地 Shell</button>
             <button type="button" onClick={disconnectActivePane}>断开当前连接</button>
             <span className="menu-separator" />
@@ -518,7 +553,7 @@ export function App() {
             <button type="button" disabled>全屏</button>
           </div></div>
           <div className="menu-root"><button type="button">选项卡(T)</button><div className="menu-panel">
-            <button type="button" onClick={() => setQuickConnectOpen(true)}>新建 SSH 标签...</button>
+            <button type="button" onClick={() => openQuickConnectDialog()}>新建 SSH 标签...</button>
             <button type="button" onClick={() => renameTab(activeTab.id)}>重命名当前标签</button>
             <button type="button" onClick={() => toggleTabLock(activeTab.id)}>{activeTab.locked ? '解除锁定当前标签' : '锁定当前标签'}</button>
             <button type="button" onClick={() => closeTab(activeTab.id)}>关闭当前标签</button>
@@ -540,7 +575,7 @@ export function App() {
           <div className="menu-root"><button type="button">帮助(H)</button><div className="menu-panel"><button type="button">关于 YShell</button></div></div>
         </nav>
         <div className="main-toolbar" aria-label="常用工具栏">
-          <button type="button" onClick={() => setQuickConnectOpen(true)}>快速连接</button>
+          <button type="button" onClick={() => openQuickConnectDialog()}>快速连接</button>
           <button type="button" onClick={() => splitPane(activeTab.id, 'vertical')}>垂直分屏</button>
           <button type="button" onClick={() => splitPane(activeTab.id, 'horizontal')}>水平分屏</button>
           <button type="button" data-active={broadcastEnabled} onClick={toggleBroadcast}>广播</button>
@@ -551,7 +586,7 @@ export function App() {
       <main className="main-layout">
         <SessionSidebar
           sessions={sessions}
-          onQuickConnect={() => setQuickConnectOpen(true)}
+          onQuickConnect={() => openQuickConnectDialog()}
           onOpenLocal={openLocal}
           onOpenSession={(session) => void openSavedSession(session)}
           onEditSession={setEditingSession}
@@ -565,6 +600,8 @@ export function App() {
           broadcastEnabled={broadcastEnabled}
           onActivateTab={setActiveTabId}
           onActivatePane={activatePane}
+          onOpenQuickConnect={(tabId, paneId) => openQuickConnectDialog({ tabId, paneId })}
+          onOpenLocal={openLocalInExistingPane}
           onCloseTab={closeTab}
           onCloseOtherTabs={closeOtherTabs}
           onRenameTab={renameTab}
@@ -585,7 +622,15 @@ export function App() {
         broadcastEnabled={broadcastEnabled}
         broadcastTargetCount={activeBroadcastTargetCount}
       />
-      {quickConnectOpen && <QuickConnectPanel onCancel={() => setQuickConnectOpen(false)} onConnect={openQuickConnection} />}
+      {quickConnectOpen && (
+        <QuickConnectPanel
+          onCancel={() => {
+            setQuickConnectOpen(false);
+            setQuickConnectTarget(null);
+          }}
+          onConnect={openQuickConnection}
+        />
+      )}
       {editingSession && (
         <QuickConnectPanel
           mode="edit"

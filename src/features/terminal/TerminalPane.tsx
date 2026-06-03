@@ -18,6 +18,8 @@ interface TerminalPaneProps {
   broadcastTargetRuntimeIds: string[];
   markedForBroadcast: boolean;
   onActivate: () => void;
+  onOpenQuickConnect: () => void;
+  onOpenLocal: () => void;
 }
 
 export function TerminalPane({
@@ -29,6 +31,8 @@ export function TerminalPane({
   broadcastTargetRuntimeIds,
   markedForBroadcast,
   onActivate,
+  onOpenQuickConnect,
+  onOpenLocal,
 }: TerminalPaneProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);

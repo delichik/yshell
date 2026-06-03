@@ -10,6 +10,8 @@ interface WorkspaceProps {
   broadcastTargetPaneIds: string[];
   onActivateTab: (tabId: string) => void;
   onActivatePane: (tabId: string, paneId: string) => void;
+  onOpenQuickConnect: (tabId: string, paneId: string) => void;
+  onOpenLocal: (tabId: string, paneId: string) => void;
   onCloseTab: (tabId: string) => void;
   onCloseOtherTabs: (tabId: string) => void;
   onRenameTab: (tabId: string) => void;
@@ -30,6 +32,8 @@ export function Workspace({
   broadcastTargetPaneIds,
   onActivateTab,
   onActivatePane,
+  onOpenQuickConnect,
+  onOpenLocal,
   onCloseTab,
   onCloseOtherTabs,
   onRenameTab,
@@ -189,6 +193,8 @@ export function Workspace({
             broadcastTargetRuntimeIds={broadcastRuntimeIds}
             markedForBroadcast={broadcastTargets.includes(pane.id)}
             onActivate={() => onActivatePane(activeTab.id, pane.id)}
+            onOpenQuickConnect={() => onOpenQuickConnect(activeTab.id, pane.id)}
+            onOpenLocal={() => onOpenLocal(activeTab.id, pane.id)}
           />
         ))}
       </div>
