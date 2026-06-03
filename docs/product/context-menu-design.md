@@ -23,8 +23,11 @@
 | Paste as Bracketed | 剪贴板非空且 bracketed paste 可用 | 使用 bracketed paste 粘贴。 | 默认推荐。 |
 | Send Key Input To... | 当前 SSH connected | 打开 Send Key Input To Dialog，源为当前 pane。 | 复制实时终端输入事件。 |
 | Stop Send Key Input To | 当前 pane 是源 pane | 停止键输入复制。 | 危险色但不需要确认。 |
-| Select All | 当前终端存在内容 | 选择 scrollback 和当前屏幕。 | 选择后菜单关闭。 |
-| Find... | 当前终端存在内容 | 打开终端搜索栏。 | |
+| Select Screen | 当前屏幕存在内容 | 仅选择当前可见屏幕内容，不包含 scrollback。 | 对应“全选屏幕内容”。 |
+| Select All | 当前终端存在内容 | 选择 scrollback 和当前屏幕。 | 对应“全选全部终端内容”。 |
+| Find... | 当前终端存在内容 | 打开终端搜索栏。 | 普通文本查找。 |
+| Find Regex... | 当前终端存在内容 | 打开终端搜索栏并启用 regex。 | 正则非法时显示错误。 |
+| Find Across SSH... | 至少存在 2 个 SSH terminal | 打开跨 SSH 查找面板。 | 支持当前窗口所有 SSH 或可见 SSH。 |
 | Clear Screen | SSH connected | 清除当前屏幕，不清 scrollback。 | |
 | Clear Scrollback | scrollback 非空 | 打开 Clear Scrollback Confirmation。 | 危险操作。 |
 | Save Output As... | scrollback 非空 | 打开保存文件对话框。 | 保存 sanitized text。 |
@@ -39,10 +42,13 @@
 | Copy | 有选区 | 复制选区。 | 默认菜单第一项。 |
 | Copy with ANSI | 有选区 | 复制包含 ANSI 样式的文本。 | 第一版可 disabled。 |
 | Copy as HTML | 有选区 | 复制 HTML 富文本。 | 第一版可 disabled。 |
+| Copy Current Line | 当前光标行存在内容 | 复制当前行。 | 无选区时也可用。 |
+| Copy Screen | 当前屏幕存在内容 | 复制可见屏幕内容。 | 不包含 scrollback。 |
 | Paste | 剪贴板非空且 SSH connected | 粘贴到当前 SSH。 | |
 | Send Selection to Current | 有选区且 SSH connected | 将选区文本发送到当前 SSH。 | 需要确认。 |
 | Send Selection to... | 有选区 | 打开 Broadcast Confirmation。 | 一次性文本，不是 Send Key Input To。 |
 | Find Selection | 有选区 | 用选区填充搜索栏并搜索。 | |
+| Find Selection Across SSH | 有选区且至少存在 2 个 SSH terminal | 打开跨 SSH 查找面板，以选区为 query。 | |
 | Clear Selection | 有选区 | 清除选区。 | |
 
 ### 2.3 终端接收目标 pane header
@@ -75,7 +81,10 @@
 | Split Down | pane 数小于 4 | 移到下方新 pane。 |
 | Move to Pane | 存在其它 pane | 展开 pane 子菜单。 |
 | Close Others | 标签数大于 1 | 关闭其它标签。 |
+| Close Tabs to Left | 左侧有标签 | 关闭左侧标签。 |
 | Close Tabs to Right | 右侧有标签 | 关闭右侧标签。 |
+| Close All Tabs | 标签数大于 0 | 关闭当前 pane 内全部标签，活动会话逐个确认。 |
+| Close Disconnected Tabs | 存在 disconnected/error 标签 | 关闭所有已断开或错误标签。 |
 | Close | 始终启用 | 关闭当前标签。 |
 
 ## 4. SFTP 右键菜单
@@ -154,7 +163,12 @@
 | Open in Split Down | 当前工作区 pane 数小于 4 | 新建下方 pane 并连接。 |
 | Open SFTP | 可连接 SSH | 连接后打开 SFTP。 |
 | Edit Session... | 始终启用 | 打开 Session Editor。 |
-| Duplicate | 始终启用 | 复制 session 并打开编辑器。 |
+| Duplicate | 始终启用 | 复制 session，名称追加 `Copy`，并打开编辑器。 |
+| Duplicate Without Secrets | 始终启用 | 复制 session 但不复制 password/passphrase secret_ref。 |
+| Duplicate to Folder... | 至少存在一个 folder | 选择目标 folder 后复制 session。 |
+| Copy Connection String | 始终启用 | 复制 `ssh://user@host:port`。 |
+| Copy Host | 始终启用 | 复制 host。 |
+| Copy User@Host | username 非空 | 复制 `user@host`。 |
 | Favorite / Unfavorite | 始终启用 | 切换收藏。 |
 | Send Key Input To Target | 存在 active source 且该 session connected | 勾选/取消作为键输入接收目标。 |
 | Export Session... | 始终启用 | 导出该 session。 |
@@ -172,6 +186,8 @@
 | Open All Visible | 当前筛选结果有 session | 打开筛选可见 session。必须确认数量。 |
 | Send Key Input To Folder | 存在 active source | 将该 folder 下 connected SSH 加入目标。 |
 | Edit Folder Defaults... | 始终启用 | 打开 Folder Editor。 |
+| Duplicate Folder... | 始终启用 | 复制 folder、子 folder 和 session，可选择是否复制 secrets。 |
+| Copy Folder Path | 始终启用 | 复制 session tree 路径。 |
 | Rename | 始终启用 | 行内改名。 |
 | Export Folder... | 始终启用 | 导出 folder 配置。 |
 | Delete Folder | 始终启用 | 删除确认，显示子项数量。 |

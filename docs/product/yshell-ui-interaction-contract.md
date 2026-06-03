@@ -30,6 +30,7 @@
 | `Ctrl+Tab` | 切到下一个标签。 |
 | `Ctrl+Shift+Tab` | 切到上一个标签。 |
 | `Ctrl+F` / `Cmd+F` | 当前终端或 SFTP 列表内搜索。 |
+| `Ctrl+Shift+F` / `Cmd+Shift+F` | 跨 SSH 查找；如果焦点在终端，以当前终端 query 初始化。 |
 | `Ctrl+C` / `Cmd+C` | 终端有选区时复制；无选区时发送 interrupt。 |
 | `Ctrl+Shift+C` / `Cmd+Shift+C` | 强制复制终端选区。 |
 | `Ctrl+V` / `Cmd+V` | 粘贴到当前终端或输入框。 |
@@ -115,7 +116,7 @@ StatusBar
 | `menu.view.quick_commands` | Quick Commands | 勾选菜单项 | 右侧 Dock 切换到 Quick Commands tab。 | 无 | 始终启用。 |
 | `menu.view.tunnel_panel` | Tunnel Panel | 勾选菜单项 | 右侧 Dock 切换到 Tunnels tab。 | 无 | 始终启用。 |
 | `menu.view.fullscreen` | Full Screen | 勾选菜单项 | 切换全屏。 | `F11` | 始终启用。 |
-| `menu.view.focus_mode` | Focus Mode | 勾选菜单项 | 隐藏左右面板和工具栏，仅保留标签、终端、状态栏。 | `Ctrl+Shift+F` | 当前存在终端标签时启用。 |
+| `menu.view.focus_mode` | Focus Mode | 勾选菜单项 | 隐藏左右面板和工具栏，仅保留标签、终端、状态栏。 | 无 | 当前存在终端标签时启用。 |
 
 ## 4. MainToolbar
 
@@ -206,7 +207,10 @@ StatusBar
 | Split Down | 将标签移入下方分屏。 | 当前工作区可分屏时启用。 |
 | Move to New Window | 后续版本；第一版 disabled。 | 始终 disabled，tooltip 说明。 |
 | Close Others | 关闭其它标签。 | 标签数大于 1 时启用。 |
+| Close Tabs to Left | 关闭左侧标签。 | 左侧存在标签时启用。 |
 | Close Tabs to Right | 关闭右侧标签。 | 右侧存在标签时启用。 |
+| Close All Tabs | 关闭当前 pane 全部标签。 | 标签数大于 0 时启用。 |
+| Close Disconnected Tabs | 关闭断开或错误标签。 | 存在断开/错误标签时启用。 |
 | Close | 关闭当前标签。 | 始终启用。 |
 
 ## 6.3 分屏交互
@@ -248,8 +252,8 @@ Split 下拉菜单：
 | Alt + 左键拖拽 | 创建矩形选区。 |
 | 左键双击 | 选择当前单词。 |
 | 左键三击 | 选择当前行。 |
-| 右键单击选区 | 打开 Copy/Paste/Select All/Search/Clear 菜单。 |
-| 右键单击无选区 | 打开 Paste/Select All/Search/Clear 菜单。 |
+| 右键单击选区 | 打开 Copy/Paste/Select Screen/Select All/Find/Find Across SSH/Clear 菜单。 |
+| 右键单击无选区 | 打开 Paste/Select Screen/Select All/Find/Find Across SSH/Clear 菜单。 |
 | 鼠标滚轮 | 滚动 scrollback。 |
 | Shift + 鼠标滚轮 | 水平滚动，若终端启用横向滚动。 |
 
@@ -258,10 +262,15 @@ Split 下拉菜单：
 | 菜单项 | 行为 | 状态 |
 |---|---|---|
 | Copy | 复制选区。 | 有选区时启用。 |
+| Copy Current Line | 复制当前光标行。 | 当前行存在内容时启用。 |
+| Copy Screen | 复制当前可见屏幕内容。 | 当前屏幕存在内容时启用。 |
 | Paste | 粘贴剪贴板。 | 剪贴板非空且已连接时启用。 |
 | Paste as Bracketed | 使用 bracketed paste 包裹粘贴。 | 剪贴板非空且终端支持时启用。 |
+| Select Screen | 仅选择当前可见屏幕内容。 | 当前屏幕存在内容时启用。 |
 | Select All | 选择可见终端和 scrollback。 | 始终启用。 |
 | Find | 打开终端搜索栏。 | 始终启用。 |
+| Find Regex | 打开终端搜索栏并启用正则模式。 | 始终启用。 |
+| Find Across SSH | 打开跨 SSH 查找面板。 | 至少存在 2 个 SSH terminal 时启用。 |
 | Clear Screen | 发送清屏并清空当前屏幕。 | 已连接时启用。 |
 | Clear Scrollback | 清除 scrollback，弹确认。 | scrollback 非空时启用。 |
 | Save Output As... | 将 scrollback 保存为文本。 | scrollback 非空时启用。 |
@@ -276,6 +285,28 @@ Split 下拉菜单：
 | `terminal.search.case_sensitive` | checkbox | 切换大小写敏感。 |
 | `terminal.search.regex` | checkbox | 切换正则模式。正则非法时显示错误。 |
 | `terminal.search.close` | 按钮 | 关闭搜索栏并保留终端焦点。 |
+
+### 7.4 跨 SSH 查找面板
+
+跨 SSH 查找用于在多个 SSH 终端的 scrollback 和当前屏幕中搜索字符串。
+
+| 控件 ID | 类型 | 行为 |
+|---|---|---|
+| `terminal.search_all.query` | 单行输入框 | 输入普通文本或正则 query。 |
+| `terminal.search_all.mode` | segmented control | Text / Regex。 |
+| `terminal.search_all.scope` | segmented control | Current SSH / All Visible SSH / All Connected SSH / Manual。 |
+| `terminal.search_all.highlight_all` | checkbox | 在所有匹配终端中高亮结果。 |
+| `terminal.search_all.case_sensitive` | checkbox | 切换大小写敏感。 |
+| `terminal.search_all.results` | 列表 | 按 session 分组显示匹配行、行号或 scrollback offset。 |
+| `terminal.search_all.open_result` | 结果行 | 左键跳转到对应 SSH 标签/pane 并定位匹配。 |
+| `terminal.search_all.close` | 按钮 | 关闭面板并清除跨 SSH 高亮。 |
+
+规则：
+
+- 普通文本查找按字面量匹配。
+- Regex 模式使用 Rust regex 语法；正则非法时不执行搜索，并显示错误。
+- Highlight All 开启时，目标终端标签显示匹配数量 badge。
+- 搜索不发送任何内容到 SSH，不影响连接状态。
 
 ## 8. RightDock
 

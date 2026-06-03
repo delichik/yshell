@@ -531,9 +531,11 @@
         <div class="check-row"><span>Paste</span><span>clipboard required</span></div>
         <div class="check-row"><span>Paste as Bracketed</span><span>connected SSH</span></div>
         <div class="check-row"><span>Send Key Input To...</span><span>source pane</span></div>
-        <div class="check-row"><span>Select All / Find</span><span>terminal buffer</span></div>
+        <div class="check-row"><span>Copy / Copy Line / Copy Screen</span><span>selection or screen</span></div>
+        <div class="check-row"><span>Select Screen / Select All</span><span>visible vs scrollback</span></div>
+        <div class="check-row"><span>Find / Find Regex</span><span>highlight matches</span></div>
+        <div class="check-row"><span>Find Across SSH...</span><span>all visible/connected</span></div>
         <div class="check-row"><span>Clear Scrollback</span><span class="badge">confirm</span></div>
-        <div class="check-row"><span>Logging Settings...</span><span>session editor</span></div>
       </section>
       <section class="dialog">
         <h3>SFTP file right click</h3>
@@ -549,9 +551,30 @@
         <div class="check-row"><span>Connect / Open in Split</span><span>new tab or pane</span></div>
         <div class="check-row"><span>Open SFTP</span><span>connect then SFTP</span></div>
         <div class="check-row"><span>Edit Session...</span><span>session editor</span></div>
+        <div class="check-row"><span>Duplicate / Duplicate without secrets</span><span>human friendly copy</span></div>
+        <div class="check-row"><span>Copy ssh:// / host / user@host</span><span>clipboard</span></div>
         <div class="check-row"><span>Send Key Input To Target</span><span>only connected SSH</span></div>
         <div class="check-row"><span>Edit Folder Defaults...</span><span>folder only</span></div>
-        <div class="check-row"><span>Delete</span><span class="badge">confirm</span></div>
+      </section>
+    </div>
+
+    <div class="grid-2" style="margin-top:18px">
+      <section class="dialog">
+        <h3>Tab right click</h3>
+        <div class="check-row"><span>Reconnect / Disconnect</span><span>connection state</span></div>
+        <div class="check-row"><span>Duplicate Tab</span><span>same session profile</span></div>
+        <div class="check-row"><span>Close</span><span>current tab</span></div>
+        <div class="check-row"><span>Close Others</span><span>keep current</span></div>
+        <div class="check-row"><span>Close Left / Close Right</span><span>directional cleanup</span></div>
+        <div class="check-row"><span>Close All / Close Disconnected</span><span class="badge">confirm active</span></div>
+      </section>
+      <section class="dialog">
+        <h3>Find across SSH</h3>
+        <div class="form-row"><label>Query</label><div class="fake-input">nginx|systemd</div></div>
+        <div class="form-row"><label>Mode</label><div class="fake-input">Text / Regex</div></div>
+        <div class="form-row"><label>Scope</label><div class="fake-input">Current SSH / All Visible / All Connected / Manual</div></div>
+        <div class="form-row"><label>Highlight</label><div class="fake-input">Highlight all matches and show tab badges</div></div>
+        <div class="form-row"><label>Results</label><div class="fake-input">ops-prod-01: 12, ops-prod-02: 7, api-staging: 0</div></div>
       </section>
     </div>
   </main>
