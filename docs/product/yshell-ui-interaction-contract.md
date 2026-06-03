@@ -287,18 +287,25 @@ RightDock 是 tabbed dock，第一版包含 `SFTP`、`Transfers`、`Tunnels`、`
 | Commands | 切换到快捷命令。 | 菜单：New Command、Manage Groups。 |
 | Session Info | 切换到当前会话信息。 | 无。 |
 
-## 8.1 同步输入状态条
+## 8.1 Send Key Input To 状态条
 
-当 Send Key Input To 启用时，终端上方必须显示同步输入状态条。
+当 Send Key Input To 启用时，终端上方必须显示状态条。该功能表示用户在源 SSH 窗口直接按下的终端输入事件会实时复制到目标 SSH 窗口，不是发送命令文本。
 
 | 控件 ID | 类型 | 行为 |
 |---|---|---|
-| `sync_input.banner` | 状态条 | 显示 `Sync Input: source -> N targets`。 |
-| `sync_input.target_list` | 链接按钮 | 左键打开目标会话列表。 |
-| `sync_input.pause` | toggle 按钮 | 暂停/恢复同步，不断开会话。 |
-| `sync_input.stop` | 危险按钮 | 立即停止同步输入。 |
+| `key_broadcast.banner` | 状态条 | 显示 `Send Key Input To: source -> N targets`。 |
+| `key_broadcast.preset` | 下拉 | 选择 All SSH / All Visible / All Connected / Current Split / Current Tab Group / Same Folder / Manual。 |
+| `key_broadcast.target_list` | 链接按钮 | 左键打开目标窗口列表。 |
+| `key_broadcast.pause` | toggle 按钮 | 暂停/恢复复制键输入，不断开会话。 |
+| `key_broadcast.stop` | 危险按钮 | 立即停止复制键输入。 |
 
 状态条必须使用警示色，不允许和普通连接状态混淆。
+
+每个可见 SSH pane 的 pane header 必须显示接收开关：
+
+| 控件 ID | 类型 | 左键行为 | 状态 |
+|---|---|---|---|
+| `pane.receive_key_input_toggle` | checkbox/toggle | 将当前 pane 加入或移出 Send Key Input To 目标。 | 仅 connected SSH shell pane 启用；源 pane disabled。 |
 
 ## 9. SFTP Panel
 
@@ -438,7 +445,7 @@ Tunnel 行菜单：
 | `commands.compose.textarea` | 多行输入框 | 编辑待发送文本。 | Cut/Copy/Paste/Select All。 |
 | `commands.send_current` | 主按钮 | 发送 compose 内容到当前终端。 | 无 |
 | `commands.broadcast` | 危险按钮 | 打开 Broadcast Confirmation。 | 无 |
-| `commands.sync_input_to` | 危险按钮 | 打开 Send Key Input To Dialog。 | 无 |
+| `commands.send_key_input_to` | 危险按钮 | 打开 Send Key Input To Dialog。 | 无 |
 
 ### 12.1 Broadcast Confirmation
 
@@ -611,24 +618,26 @@ Folder Editor 用于保存文件夹级默认配置。
 
 触发入口：
 
-- Quick Commands Panel 的 `Sync Input To`。
+- Quick Commands Panel 的 `Send Key Input To`。
 - 终端右键菜单 `Send Key Input To...`。
 - 标签右键菜单 `Send Key Input To...`。
+- 每个可见 SSH pane header 上的接收开关。
 
 控件：
 
 | 控件 ID | 类型 | 默认 | 行为 |
 |---|---|---|---|
-| `sync.source_session` | 只读文本 | 当前 active SSH session | 显示源会话。 |
-| `sync.scope` | segmented control | Current Split | Current Split / Current Tab Group / Same Folder / Matching Filter / Manual。 |
-| `sync.filter.username` | checkbox + 输入 | false | 勾选后只匹配同用户名或输入的用户名。 |
-| `sync.filter.host_prefix` | checkbox + 输入 | false | 勾选后按 host 前缀匹配。 |
-| `sync.filter.tags` | token input | 空 | 只匹配包含任一 tag 的 session。 |
-| `sync.targets` | checkbox list | 自动计算 | 只列出 connected SSH shell sessions。 |
-| `sync.preview` | 只读文本 | 无 | 显示将同步到的目标数量和名称。 |
-| `sync.confirm_text` | 单行输入框 | 空 | 必须输入 `SYNC` 才启用 Start。 |
-| `sync.cancel` | 按钮 | 无 | 关闭。 |
-| `sync.start` | 危险主按钮 | disabled | 启动同步输入。 |
+| `key_broadcast.source_session` | 只读文本 | 当前 active SSH pane | 显示源窗口。 |
+| `key_broadcast.preset` | segmented/dropdown | All Visible | All SSH / All Visible / All Connected / Current Split / Current Tab Group / Same Folder / Manual。 |
+| `key_broadcast.target_toggles` | checkbox list | 按 preset 自动计算 | 每一行表示一个 SSH 窗口；用户可直接勾选/取消。 |
+| `key_broadcast.filter.username` | checkbox + 输入 | false | 可选：只匹配同用户名或输入的用户名。 |
+| `key_broadcast.filter.host_prefix` | checkbox + 输入 | false | 可选：按 host 前缀匹配。 |
+| `key_broadcast.filter.tags` | token input | 空 | 可选：匹配 session tag。 |
+| `key_broadcast.event_scope` | 只读说明 | All terminal input events | 明确会复制字符、Enter、Backspace、方向键、Ctrl/Alt 组合、粘贴等。 |
+| `key_broadcast.preview` | 只读文本 | 无 | 显示将接收键输入的目标数量和名称。 |
+| `key_broadcast.confirm_text` | 单行输入框 | 空 | 必须输入 `KEYS` 才启用 Start。 |
+| `key_broadcast.cancel` | 按钮 | 无 | 关闭。 |
+| `key_broadcast.start` | 危险主按钮 | disabled | 启动 Send Key Input To。 |
 
 排除规则：
 
@@ -636,14 +645,16 @@ Folder Editor 用于保存文件夹级默认配置。
 - 排除 disconnected、connecting、error 状态会话。
 - 排除没有交互式 Shell channel 的会话。
 - 排除 SFTP-only 操作。
-- 排除当前正在接收其它同步输入的会话，避免循环。
+- 排除当前正在接收其它 Send Key Input To 的会话，避免循环。
 
-同步期间：
+启用期间：
 
-- 源终端每次键盘输入都复制到目标会话。
+- 源终端每次终端输入事件先发送给源 SSH，再复制到目标 SSH。
+- 复制的事件包括普通字符、Enter、Backspace、Tab、方向键、Home/End、PageUp/PageDown、功能键、Ctrl/Alt 组合和粘贴。
+- 不复制 UI 操作，例如切换标签、打开菜单、拖拽 pane、SFTP 操作。
 - 粘贴大段文本前弹确认，显示目标数量和字符数。
-- `Ctrl+C` interrupt 会同步，但必须在确认弹窗中单独提示。
-- 停止同步后不关闭任何 SSH 会话。
+- `Ctrl+C` interrupt 会复制，但必须在确认弹窗中单独提示。
+- 停止后不关闭任何 SSH 会话。
 
 ## 14. Settings
 
@@ -748,7 +759,9 @@ Settings 是非 modal 页面或 dialog，左侧分类，右侧表单。
 | SFTP 文件双击 | 目录 | SFTP 当前目录 | remote path。 |
 | Tunnel Add | 左键 | Tunnel Editor | 当前 SessionProfile id。 |
 | Command Button | 左键 | Terminal | command text。 |
-| Broadcast Button | 左键 | Broadcast Confirmation | selected session ids + text。 |
+| Broadcast Button | 左键 | Broadcast Confirmation | selected session ids + command text。 |
+| Send Key Input To Button | 左键 | Send Key Input To Dialog | source pane id + target preset。 |
+| Pane Receive Key Input Toggle | 左键 | Update Send Key Input Targets | pane session id + checked state。 |
 | Host Key Prompt | Trust and Save | Terminal Tab | host key record。 |
 | Session Editor Save and Connect | 左键 | Terminal Tab | saved SessionProfile id。 |
 

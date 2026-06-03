@@ -426,8 +426,10 @@ CreateTunnel(session_id, tunnel_profile)
 StopTunnel(session_id, tunnel_id)
 RunQuickCommand(session_id, command_id)
 BroadcastInput(session_ids, text)
-StartSynchronizedInput(source_session_id, target_filter)
-StopSynchronizedInput(source_session_id)
+StartKeyInputBroadcast(source_session_id, target_preset, explicit_target_session_ids)
+UpdateKeyInputBroadcastTargets(source_session_id, explicit_target_session_ids)
+StopKeyInputBroadcast(source_session_id)
+SendTerminalInputEvent(source_session_id, terminal_input_event)
 UpdateWorkspaceSplit(layout_command)
 ```
 
@@ -446,11 +448,36 @@ TransferCompleted(task_id)
 TransferFailed(task_id, error)
 TunnelStarted(session_id, tunnel_id, listen_addr)
 TunnelStopped(session_id, tunnel_id)
-SynchronizedInputStarted(source_session_id, target_session_ids)
-SynchronizedInputStopped(source_session_id)
+KeyInputBroadcastStarted(source_session_id, target_session_ids, target_preset)
+KeyInputBroadcastTargetsChanged(source_session_id, target_session_ids)
+KeyInputBroadcastStopped(source_session_id)
 LoggingStarted(session_id, log_path)
 LoggingStopped(session_id, log_path)
 ```
+
+### 5.3 TerminalInputEvent
+
+Send Key Input To 必须复制终端输入事件，而不是命令字符串。建议事件模型：
+
+```text
+TerminalInputEvent
+  PrintableText { text }
+  ControlKey { key: enter | backspace | tab | escape | delete }
+  NavigationKey { key: arrow_left | arrow_right | arrow_up | arrow_down | home | end | page_up | page_down }
+  FunctionKey { number: 1..24, modifiers }
+  ModifiedKey { key, modifiers: ctrl | alt | shift | meta }
+  Paste { bytes, bracketed: bool }
+  Resize { columns, rows }       // 不广播，保留给源会话
+  MouseInput { mode, payload }    // 第一版不广播，除非后续显式支持 terminal mouse broadcast
+```
+
+广播规则：
+
+- 源窗口收到终端输入事件后，先发送给源 SSH channel，再复制到目标 SSH channel。
+- 目标窗口必须是 connected SSH shell session。
+- 目标窗口收到复制事件时不再二次触发广播，避免循环。
+- 用户在目标窗口直接输入，只进入目标窗口自身，不反向复制。
+- UI 操作不广播，例如打开菜单、切换标签、调整 pane、SFTP 操作。
 
 ## 6. 错误处理要求
 
@@ -538,12 +565,12 @@ LoggingStopped(session_id, log_path)
 - 实现快捷命令栏。
 - 实现 Compose Pane。
 - 实现广播输入确认。
-- 实现 Send Key Input To 同步输入筛选、确认、状态条、停止入口。
+- 实现 Send Key Input To 实时键输入复制：目标预设、窗口内接收开关、确认、状态条、停止入口。
 - 实现 session logging。
 - 实现 raw transcript 和 sanitized text 两种日志格式。
 - 实现 session/folder/global default 三级日志策略继承。
 - 实现 secret store 和平台 keychain。
-- 验收：敏感输入不写入日志，广播输入必须确认，secret 不明文进入配置文件。
+- 验收：敏感输入不写入日志，广播命令和 Send Key Input To 必须确认，secret 不明文进入配置文件。
 
 ### Milestone 8：打包与自动发布
 

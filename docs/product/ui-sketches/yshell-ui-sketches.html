@@ -328,12 +328,12 @@
 <body>
   <header>
     <h1>YShell UI Sketches</h1>
-    <p>这些草图用于约束信息架构、控件位置和交互状态，不代表最终视觉风格。更新重点：分屏、同步输入、代理、日志、外观继承和文件夹默认配置。</p>
+    <p>这些草图用于约束信息架构、控件位置和交互状态，不代表最终视觉风格。更新重点：分屏、Send Key Input To 实时键输入复制、代理、日志、外观继承和文件夹默认配置。</p>
   </header>
 
   <main>
-    <h2>1. Main Window: split panes + SFTP + sync input</h2>
-    <div class="note">主窗口必须直接暴露 SFTP、分屏和同步输入状态。同步输入启用时要有醒目状态条，避免用户误把输入发送到多个 SSH。</div>
+    <h2>1. Main Window: split panes + SFTP + Send Key Input To</h2>
+    <div class="note">Send Key Input To 表示在源 SSH 窗口直接按下的终端输入事件会实时复制到目标 SSH 窗口。每个可见 pane 都要能直接切换是否接收。</div>
     <section class="sketch">
       <div class="titlebar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span>YShell - dev-purerust workspace</span></div>
       <div class="app">
@@ -345,7 +345,7 @@
           <div class="button">SFTP</div>
           <div class="button">Tunnels</div>
           <div class="button">Commands</div>
-          <div class="button danger">Sync Input To...</div>
+          <div class="button danger">Send Key Input To...</div>
           <div class="button">Log: On</div>
         </div>
         <aside class="sidebar">
@@ -368,12 +368,12 @@
             <div class="tab">+ New Tab</div>
           </div>
           <div class="sync-banner">
-            <span>Sync Input: ops-prod-01 -> 2 targets (current split, same user deploy)</span>
-            <span><button class="button">Targets</button> <button class="button">Pause</button> <button class="button danger">Stop</button></span>
+            <span>Send Key Input To: ops-prod-01 -> 2 targets (preset: All Visible SSH)</span>
+            <span><button class="button">Preset: All Visible</button> <button class="button">Targets</button> <button class="button">Pause</button> <button class="button danger">Stop</button></span>
           </div>
           <div class="split-workspace">
             <div class="pane">
-              <div class="pane-head"><span>Pane A / ops-prod-01</span><span>Right click: split, move, close</span></div>
+              <div class="pane-head"><span>Pane A / ops-prod-01</span><span>Source - receive toggle disabled</span></div>
               <div class="term">
                 <div><span class="prompt">deploy@ops-prod-01</span>:<span class="cmd">~</span>$ systemctl status nginx</div>
                 <div>nginx.service - running</div>
@@ -385,12 +385,12 @@
             </div>
             <div class="splitter" title="Drag to resize panes"></div>
             <div class="pane">
-              <div class="pane-head"><span>Pane B / ops-prod-02</span><span>Drag tab here</span></div>
+              <div class="pane-head"><span>Pane B / ops-prod-02</span><span>[x] Receive key input</span></div>
               <div class="term">
                 <div><span class="prompt">deploy@ops-prod-02</span>:<span class="cmd">~</span>$</div>
-                <div style="color:#f3d58a">Receiving synchronized key input from ops-prod-01</div>
+                <div style="color:#f3d58a">Receiving every terminal input event from ops-prod-01</div>
                 <br>
-                <div>Last command mirrored: systemctl status nginx</div>
+                <div>Mirrors chars, Enter, Backspace, arrows, Ctrl combos, paste</div>
               </div>
             </div>
           </div>
@@ -421,7 +421,7 @@
           <span>Proxy: SOCKS5 corp-proxy</span>
           <span>SFTP active</span>
           <span>Logging: sanitized text</span>
-          <span>Sync input active</span>
+          <span>Send Key Input active</span>
         </footer>
       </div>
     </section>
@@ -440,11 +440,12 @@
       <section class="dialog">
         <h3>Send Key Input To Dialog</h3>
         <div class="form-row"><label>Source</label><div class="fake-input">ops-prod-01 (read-only)</div></div>
-        <div class="form-row"><label>Scope</label><div class="fake-input">Current Split / Tab Group / Same Folder / Matching Filter / Manual</div></div>
+        <div class="form-row"><label>Preset</label><div class="fake-input">All SSH / All Visible / All Connected / Current Split / Current Tab Group / Same Folder / Manual</div></div>
         <div class="form-row"><label>Filters</label><div class="fake-input">username=deploy, host prefix=ops-prod, tags=production</div></div>
-        <div class="form-row"><label>Targets</label><div class="fake-input">[x] ops-prod-02  [x] ops-prod-03  [ ] api-staging</div></div>
-        <div class="form-row"><label>Confirm</label><div class="fake-input">Type SYNC to enable Start</div></div>
-        <div style="display:flex;gap:8px;justify-content:flex-end"><div class="button">Cancel</div><div class="button danger">Start Sync</div></div>
+        <div class="form-row"><label>Targets</label><div class="fake-input">[x] ops-prod-02  [x] ops-prod-03  [ ] api-staging (visible toggles also update this list)</div></div>
+        <div class="form-row"><label>Events copied</label><div class="fake-input">Characters, Enter, Backspace, Tab, arrows, function keys, Ctrl/Alt combos, paste</div></div>
+        <div class="form-row"><label>Confirm</label><div class="fake-input">Type KEYS to enable Start</div></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end"><div class="button">Cancel</div><div class="button danger">Start Send Key Input To</div></div>
       </section>
     </div>
 
