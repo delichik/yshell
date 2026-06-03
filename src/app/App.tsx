@@ -27,6 +27,7 @@ import {
   type AppSettings,
   type QuickConnectDraft,
   type RuntimeStatus,
+  type SplitDirection,
   type SessionExportBundle,
   type SessionProfile,
   type TerminalStatusEvent,
@@ -39,33 +40,62 @@ const initialSettings: AppSettings = {
   logging: defaultLogging,
 };
 
-const createEmptyTab = (index = 1): WorkspaceTab => ({
-  id: crypto.randomUUID(),
-  title: `本地终端 ${index}`,
-  locked: false,
-  panes: [
-    {
-      id: crypto.randomUUID(),
-      runtimeId: null,
-      title: '未连接',
-      status: 'idle',
-    },
-  ],
-  activePaneId: '',
-});
+const createEmptyTab = (index = 1): WorkspaceTab => {
+  const paneId = crypto.randomUUID();
+  return {
+    id: crypto.randomUUID(),
+    title: `本地终端 ${index}`,
+    locked: false,
+    panes: [
+      {
+        id: paneId,
+        runtimeId: null,
+        title: '未连接',
+        status: 'idle',
+      },
+    ],
+    activePaneId: paneId,
+    splitDirection: 'vertical',
+    splitRatio: 50,
+  };
+};
+
+const workspaceStorageKey = 'yshell.workspace.tabs.v1';
+
+const restoreWorkspaceTabs = (): WorkspaceTab[] | null => {
+  if (typeof window === 'undefined') return null;
+  const stored = window.localStorage.getItem(workspaceStorageKey);
+  if (!stored) return null;
+  try {
+    const restored = JSON.parse(stored) as WorkspaceTab[];
+    if (!Array.isArray(restored) || restored.length === 0) return null;
+    return restored.map((tab, tabIndex) => {
+      const panes = Array.isArray(tab.panes) && tab.panes.length > 0 ? tab.panes : createEmptyTab(tabIndex + 1).panes;
+      return {
+        ...tab,
+        locked: Boolean(tab.locked),
+        panes: panes.map((pane) => ({ ...pane, runtimeId: null, status: 'idle' as RuntimeStatus })),
+        activePaneId: panes.some((pane) => pane.id === tab.activePaneId) ? tab.activePaneId : panes[0].id,
+        splitDirection: tab.splitDirection ?? 'vertical',
+        splitRatio: typeof tab.splitRatio === 'number' ? tab.splitRatio : 50,
+      };
+    });
+  } catch {
+    return null;
+  }
+};
 
 export function App() {
   const [sessions, setSessions] = useState<SessionProfile[]>([]);
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
-  const [tabs, setTabs] = useState<WorkspaceTab[]>(() => {
-    const tab = createEmptyTab();
-    return [{ ...tab, activePaneId: tab.panes[0].id }];
-  });
+  const [tabs, setTabs] = useState<WorkspaceTab[]>(() => restoreWorkspaceTabs() ?? [createEmptyTab()]);
   const [activeTabId, setActiveTabId] = useState(() => tabs[0].id);
   const [quickConnectOpen, setQuickConnectOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<SessionProfile | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sessionMessage, setSessionMessage] = useState<string | null>(null);
+  const [broadcastEnabled, setBroadcastEnabled] = useState(false);
+  const [broadcastTargetPaneIds, setBroadcastTargetPaneIds] = useState<string[]>([]);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -74,6 +104,14 @@ export function App() {
       .then((storedSettings) => storedSettings && setSettings(storedSettings))
       .catch((error) => console.error('Failed to load settings', error));
   }, []);
+
+  useEffect(() => {
+    const serializableTabs = tabs.map((tab) => ({
+      ...tab,
+      panes: tab.panes.map((pane) => ({ ...pane, runtimeId: null, status: 'idle' as RuntimeStatus })),
+    }));
+    if (typeof window !== 'undefined') window.localStorage.setItem(workspaceStorageKey, JSON.stringify(serializableTabs));
+  }, [tabs]);
 
   useEffect(() => {
     if (!runningInTauri) return undefined;
@@ -98,6 +136,9 @@ export function App() {
 
   const activeTab = useMemo(() => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0], [activeTabId, tabs]);
   const activePane = activeTab?.panes.find((pane) => pane.id === activeTab.activePaneId) ?? activeTab?.panes[0];
+  const activeBroadcastTargetCount = broadcastEnabled
+    ? activeTab.panes.filter((pane) => pane.runtimeId && broadcastTargetPaneIds.includes(pane.id)).length
+    : 0;
 
   const updateRuntimeStatus = (runtimeId: string, status: RuntimeStatus) => {
     setTabs((current) =>
@@ -108,13 +149,13 @@ export function App() {
     );
   };
 
-  const updatePaneRuntime = (tabId: string, paneId: string, runtimeId: string | null, title: string, status: RuntimeStatus) => {
+  const updatePaneRuntime = (tabId: string, paneId: string, runtimeId: string | null, title: string, status: RuntimeStatus, updateTabTitle = true) => {
     setTabs((current) =>
       current.map((tab) =>
         tab.id === tabId
           ? {
               ...tab,
-              title,
+              title: updateTabTitle ? title : tab.title,
               panes: tab.panes.map((pane) => (pane.id === paneId ? { ...pane, runtimeId, title, status } : pane)),
             }
           : tab,
@@ -263,9 +304,16 @@ export function App() {
     setSettingsOpen(false);
   };
 
+  const hasActiveConnection = (tab: WorkspaceTab) =>
+    tab.panes.some((pane) => pane.runtimeId && pane.status !== 'failed' && pane.status !== 'disconnected');
+
   const closeTab = (tabId: string) => {
     const closingTab = tabs.find((tab) => tab.id === tabId);
-    closingTab?.panes.forEach((pane) => {
+    if (!closingTab) return;
+    if (closingTab.locked && !window.confirm(`标签“${closingTab.title}”已锁定，仍要关闭吗？`)) return;
+    if (hasActiveConnection(closingTab) && !window.confirm(`标签“${closingTab.title}”仍有活跃连接，关闭后会断开终端。确认关闭吗？`)) return;
+
+    closingTab.panes.forEach((pane) => {
       if (pane.runtimeId) {
         void closeTerminal(pane.runtimeId);
       }
@@ -275,13 +323,142 @@ export function App() {
       const next = current.filter((tab) => tab.id !== tabId);
       if (next.length === 0) {
         const replacement = createEmptyTab();
-        replacement.activePaneId = replacement.panes[0].id;
         setActiveTabId(replacement.id);
         return [replacement];
       }
       if (activeTabId === tabId) setActiveTabId(next[0].id);
       return next;
     });
+  };
+
+  const closeOtherTabs = (tabId: string) => {
+    const closeableTabs = tabs.filter((tab) => tab.id !== tabId && !tab.locked);
+    const activeCount = closeableTabs.filter(hasActiveConnection).length;
+    if (activeCount > 0 && !window.confirm(`将关闭 ${activeCount} 个包含活跃连接的未锁定标签，锁定标签会保留。确认继续吗？`)) return;
+    closeableTabs.forEach((tab) => {
+      tab.panes.forEach((pane) => {
+        if (pane.runtimeId) void closeTerminal(pane.runtimeId);
+      });
+    });
+    setTabs((current) => current.filter((tab) => tab.id === tabId || tab.locked));
+    setActiveTabId(tabId);
+  };
+
+  const renameTab = (tabId: string) => {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    const title = window.prompt('请输入新的标签名称', tab.title)?.trim();
+    if (!title) return;
+    setTabs((current) => current.map((item) => (item.id === tabId ? { ...item, title } : item)));
+  };
+
+  const toggleTabLock = (tabId: string) => {
+    setTabs((current) => current.map((tab) => (tab.id === tabId ? { ...tab, locked: !tab.locked } : tab)));
+  };
+
+  const moveTab = (tabId: string, direction: -1 | 1) => {
+    setTabs((current) => {
+      const index = current.findIndex((tab) => tab.id === tabId);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) return current;
+      const next = [...current];
+      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+      return next;
+    });
+  };
+
+  const reorderTab = (draggedTabId: string, targetTabId: string) => {
+    if (draggedTabId === targetTabId) return;
+    setTabs((current) => {
+      const draggedIndex = current.findIndex((tab) => tab.id === draggedTabId);
+      const targetIndex = current.findIndex((tab) => tab.id === targetTabId);
+      if (draggedIndex < 0 || targetIndex < 0) return current;
+      const next = [...current];
+      const [dragged] = next.splice(draggedIndex, 1);
+      next.splice(targetIndex, 0, dragged);
+      return next;
+    });
+  };
+
+  const activatePane = (tabId: string, paneId: string) => {
+    setTabs((current) => current.map((tab) => (tab.id === tabId ? { ...tab, activePaneId: paneId } : tab)));
+  };
+
+  const focusRelativePane = (direction: -1 | 1) => {
+    const paneIndex = activeTab.panes.findIndex((pane) => pane.id === activeTab.activePaneId);
+    if (paneIndex < 0 || activeTab.panes.length < 2) return;
+    const nextPane = activeTab.panes[(paneIndex + direction + activeTab.panes.length) % activeTab.panes.length];
+    activatePane(activeTab.id, nextPane.id);
+    setSessionMessage(`已切换到窗格：${nextPane.title}`);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!event.altKey || !event.shiftKey || (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft')) return;
+      event.preventDefault();
+      focusRelativePane(event.key === 'ArrowRight' ? 1 : -1);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab]);
+
+  const toggleBroadcast = () => {
+    if (broadcastEnabled) {
+      setBroadcastEnabled(false);
+      setBroadcastTargetPaneIds([]);
+      setSessionMessage('广播输入已关闭：输入仅进入活动窗格。');
+      return;
+    }
+    const runtimePaneIds = activeTab.panes.filter((pane) => pane.runtimeId).map((pane) => pane.id);
+    if (runtimePaneIds.length < 2) {
+      window.alert('当前标签至少需要 2 个已连接窗格才能开启广播输入。');
+      return;
+    }
+    setBroadcastTargetPaneIds(runtimePaneIds);
+    setBroadcastEnabled(true);
+    setSessionMessage(`广播输入已开启：当前标签 ${runtimePaneIds.length} 个目标窗格将同步接收输入。`);
+  };
+
+  const toggleBroadcastTarget = (paneId: string) => {
+    setBroadcastTargetPaneIds((current) => {
+      const next = current.includes(paneId) ? current.filter((id) => id !== paneId) : [...current, paneId];
+      if (broadcastEnabled && next.length < 2) {
+        window.alert('广播输入至少需要保留 2 个目标窗格。');
+        return current;
+      }
+      setSessionMessage(`广播目标已更新：${next.length} 个窗格。`);
+      return next;
+    });
+  };
+
+  const resizeSplit = (tabId: string, splitRatio: number) => {
+    setTabs((current) => current.map((tab) => (tab.id === tabId ? { ...tab, splitRatio } : tab)));
+  };
+
+  const splitPane = async (tabId: string, direction: SplitDirection) => {
+    const paneId = crypto.randomUUID();
+    const placeholder = { id: paneId, runtimeId: null, title: '正在打开分屏终端', status: 'connecting' as RuntimeStatus };
+    setTabs((current) =>
+      current.map((tab) =>
+        tab.id === tabId
+          ? { ...tab, panes: [...tab.panes, placeholder], activePaneId: paneId, splitDirection: direction, splitRatio: tab.splitRatio ?? 50 }
+          : tab,
+      ),
+    );
+    const source = window.prompt('选择新分屏连接来源：local=本地终端，empty=空窗格', 'local')?.trim().toLowerCase() ?? 'local';
+    if (source === 'empty') {
+      updatePaneRuntime(tabId, paneId, null, '空分屏窗格', 'idle', false);
+      setSessionMessage('已创建空分屏窗格，可从会话树或快速连接打开新连接。');
+      return;
+    }
+    try {
+      const runtime = await openLocalTerminal(tabId, paneId, 120, 30, settings.terminal);
+      updatePaneRuntime(tabId, paneId, runtime.runtimeId, runtime.title, runtime.status, false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      updatePaneRuntime(tabId, paneId, null, '分屏连接失败', 'failed', false);
+      setSessionMessage(`分屏打开失败：${message}`);
+    }
   };
 
   return (
@@ -314,11 +491,29 @@ export function App() {
           tabs={tabs}
           activeTabId={activeTabId}
           terminalConfig={settings.terminal}
+          broadcastEnabled={broadcastEnabled}
           onActivateTab={setActiveTabId}
+          onActivatePane={activatePane}
           onCloseTab={closeTab}
+          onCloseOtherTabs={closeOtherTabs}
+          onRenameTab={renameTab}
+          onToggleTabLock={toggleTabLock}
+          onMoveTab={moveTab}
+          onReorderTab={reorderTab}
+          onSplitPane={(tabId, direction) => void splitPane(tabId, direction)}
+          onResizeSplit={resizeSplit}
+          onToggleBroadcast={toggleBroadcast}
+          broadcastTargetPaneIds={broadcastTargetPaneIds}
+          onToggleBroadcastTarget={toggleBroadcastTarget}
         />
       </main>
-      <StatusBar pane={activePane} loggingEnabled={settings.logging.enabled} message={sessionMessage} />
+      <StatusBar
+        pane={activePane}
+        loggingEnabled={settings.logging.enabled}
+        message={sessionMessage}
+        broadcastEnabled={broadcastEnabled}
+        broadcastTargetCount={activeBroadcastTargetCount}
+      />
       {quickConnectOpen && <QuickConnectPanel onCancel={() => setQuickConnectOpen(false)} onConnect={openQuickConnection} />}
       {editingSession && (
         <QuickConnectPanel
