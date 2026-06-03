@@ -7,18 +7,47 @@ import '@xterm/xterm/css/xterm.css';
 import { resizeTerminal, runningInTauri, writeTerminal } from '../../bindings/ipc';
 import type { TerminalConfig, TerminalOutputEvent, WorkspacePane } from '../../bindings/types';
 
+const dangerousCommandPatterns = ['rm -rf', 'mkfs', 'reboot', 'shutdown', 'poweroff', 'dd if=', ':(){ :|:& };:'];
+
 interface TerminalPaneProps {
   pane: WorkspacePane;
   config: TerminalConfig;
   active: boolean;
+  broadcastEnabled: boolean;
+  broadcastTargetCount: number;
+  broadcastTargetRuntimeIds: string[];
+  markedForBroadcast: boolean;
+  onActivate: () => void;
 }
 
-export function TerminalPane({ pane, config, active }: TerminalPaneProps) {
+export function TerminalPane({
+  pane,
+  config,
+  active,
+  broadcastEnabled,
+  broadcastTargetCount,
+  broadcastTargetRuntimeIds,
+  markedForBroadcast,
+  onActivate,
+}: TerminalPaneProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
   const resizeTimerRef = useRef<number | null>(null);
+  const commandBufferRef = useRef('');
+  const activeRef = useRef(active);
+  const broadcastEnabledRef = useRef(broadcastEnabled);
+  const broadcastTargetRuntimeIdsRef = useRef(broadcastTargetRuntimeIds);
   const [searchQuery, setSearchQuery] = useState('');
+
+  activeRef.current = active;
+  broadcastEnabledRef.current = broadcastEnabled;
+  broadcastTargetRuntimeIdsRef.current = broadcastTargetRuntimeIds;
+
+  useEffect(() => {
+    if (!active) return;
+    terminalRef.current?.focus();
+  }, [active]);
 
   useEffect(() => {
     if (!hostRef.current) return undefined;
@@ -48,12 +77,8 @@ export function TerminalPane({ pane, config, active }: TerminalPaneProps) {
     }
 
     const inputDisposable = terminal.onData((data: string) => {
-      if (!pane.runtimeId) return;
-      if (!runningInTauri) {
-        terminal.write(data.replace(/\r/g, '\r\n'));
-        return;
-      }
-      void writeTerminal(pane.runtimeId, data);
+      if (!activeRef.current) return;
+      void sendInput(data, looksLikePaste(data));
     });
 
     let unlisten: UnlistenFn | undefined;
@@ -96,6 +121,37 @@ export function TerminalPane({ pane, config, active }: TerminalPaneProps) {
     };
   }, [config.colorScheme, config.fontFamily, config.fontSize, config.lineHeight, config.scrollback, pane.runtimeId]);
 
+  const sendInput = async (data: string, fromPaste: boolean) => {
+    const runtimeIds = broadcastEnabledRef.current ? broadcastTargetRuntimeIdsRef.current : pane.runtimeId ? [pane.runtimeId] : [];
+    if (runtimeIds.length === 0) return;
+
+    if (requiresInputConfirmation(data, fromPaste) && !confirmRiskyInput(data, runtimeIds.length)) {
+      terminalRef.current?.writeln('\r\n已取消发送。');
+      return;
+    }
+
+    if (!fromPaste && broadcastEnabledRef.current && data.includes('\r')) {
+      const command = commandBufferRef.current;
+      commandBufferRef.current = '';
+      if (containsDangerousCommand(command) && !window.confirm(`检测到危险命令：${command}\n\n广播目标：${runtimeIds.length} 个窗格。确认发送回车执行吗？`)) {
+        terminalRef.current?.writeln('\r\n危险命令已拦截，未发送回车。');
+        return;
+      }
+    } else if (!fromPaste) {
+      if (data.includes('\u007f')) {
+        commandBufferRef.current = commandBufferRef.current.slice(0, -1);
+      }
+      commandBufferRef.current += data.replace(/[\u0000-\u001f\u007f]/g, '');
+    }
+
+    if (!runningInTauri) {
+      terminalRef.current?.write(data.replace(/\r/g, '\r\n'));
+      return;
+    }
+
+    await Promise.all(runtimeIds.map((runtimeId) => writeTerminal(runtimeId, data)));
+  };
+
   const copySelection = async () => {
     const selection = terminalRef.current?.getSelection();
     if (!selection) return;
@@ -103,14 +159,9 @@ export function TerminalPane({ pane, config, active }: TerminalPaneProps) {
   };
 
   const pasteClipboard = async () => {
-    if (!pane.runtimeId) return;
     const content = await navigator.clipboard.readText();
     if (!content) return;
-    if (!runningInTauri) {
-      terminalRef.current?.write(content.replace(/\r?\n/g, '\r\n'));
-      return;
-    }
-    await writeTerminal(pane.runtimeId, content);
+    await sendInput(content, true);
   };
 
   const findNext = () => {
@@ -119,10 +170,16 @@ export function TerminalPane({ pane, config, active }: TerminalPaneProps) {
   };
 
   return (
-    <article className="terminal-pane" data-active={active}>
+    <article
+      className="terminal-pane"
+      data-active={active}
+      data-broadcast-target={markedForBroadcast}
+      onMouseDown={onActivate}
+    >
       <header>
         <strong>{pane.title}</strong>
         <div className="terminal-actions">
+          {markedForBroadcast && <span className="broadcast-pill">广播中</span>}
           <input
             aria-label="搜索当前终端"
             value={searchQuery}
@@ -136,11 +193,36 @@ export function TerminalPane({ pane, config, active }: TerminalPaneProps) {
           <button type="button" onClick={() => void copySelection()}>复制</button>
           <button type="button" onClick={() => void pasteClipboard()}>粘贴</button>
           <span>{pane.status}</span>
+          {broadcastEnabled && <span className="target-count">目标 {broadcastTargetCount}</span>}
         </div>
       </header>
-      <div className="terminal-host" ref={hostRef} />
+      <div className="terminal-host" ref={hostRef} onFocus={onActivate} />
     </article>
   );
+}
+
+function requiresInputConfirmation(data: string, fromPaste: boolean) {
+  return (fromPaste && lineCount(data) > 1) || containsDangerousCommand(data);
+}
+
+function looksLikePaste(data: string) {
+  return lineCount(data) > 1 || data.length > 128;
+}
+
+function lineCount(data: string) {
+  return data.split(/\r\n|\r|\n/).filter((line) => line.trim().length > 0).length;
+}
+
+function confirmRiskyInput(data: string, targetCount: number) {
+  const lines = data.split(/\r?\n/).filter(Boolean);
+  const preview = lines.slice(0, 3).join('\n') || data.slice(0, 120);
+  const risky = containsDangerousCommand(data) ? '\n\n检测到危险命令关键字。' : '';
+  return window.confirm(`确认发送输入到 ${targetCount} 个目标窗格吗？\n\n预览：\n${preview}${risky}`);
+}
+
+function containsDangerousCommand(data: string) {
+  const normalized = data.toLowerCase();
+  return dangerousCommandPatterns.some((pattern) => normalized.includes(pattern.toLowerCase()));
 }
 
 function terminalTheme(colorScheme: string) {
