@@ -1,9 +1,13 @@
 export component TerminalView inherits Rectangle {
+    in property <string> log-output: "YShell terminal placeholder";
+
     background: #0f1117;
     Text {
-        text: "YShell terminal placeholder";
+        text: root.log-output;
         color: #d7e0ef;
         x: 16px;
         y: 16px;
+        width: parent.width - 32px;
+        wrap: word-wrap;
     }
 }

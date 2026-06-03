@@ -3,6 +3,7 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ViewCommand {
     OpenQuickConnect(QuickConnectRequest),
+    NewSession,
     OpenSession {
         session_id: String,
     },

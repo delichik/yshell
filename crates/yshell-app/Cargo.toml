@@ -13,6 +13,10 @@ name = "yshell"
 path = "src/main.rs"
 
 [dependencies]
+slint = { version = "=1.9.2", default-features = false, features = ["std", "compat-1-2", "backend-winit-x11", "renderer-software"] }
 yshell-config = { path = "../yshell-config" }
 yshell-logging = { path = "../yshell-logging" }
 yshell-ui = { path = "../yshell-ui" }
+
+[build-dependencies]
+slint-build = "=1.9.2"

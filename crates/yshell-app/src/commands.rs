@@ -1,12 +1,14 @@
-//! App-shell command dispatcher placeholder.
+//! App-shell command dispatcher for native UI actions.
 
 use yshell_ui::ViewCommand;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct AppCommandDispatcher;
 
 impl AppCommandDispatcher {
-    pub fn dispatch(&self, command: ViewCommand) {
-        println!("queued UI command: {command:?}");
+    pub fn dispatch(&self, command: ViewCommand) -> String {
+        let message = format!("queued UI command: {command:?}");
+        println!("{message}");
+        message
     }
 }

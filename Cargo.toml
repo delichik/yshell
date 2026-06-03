@@ -19,7 +19,7 @@ license = "MIT OR Apache-2.0"
 rust-version = "1.80"
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "deny"
 
 [workspace.dependencies]
 tracing = "0.1"
