@@ -128,7 +128,7 @@ TaskSupervisor
 - host key 验证。
 - PTY 和 Shell channel。
 - local/remote/dynamic forwarding。
-- SOCKS5 和 HTTP CONNECT 代理。
+- SOCKS4、SOCKS4a、SOCKS5、HTTP CONNECT 代理。
 
 主要文件：
 
@@ -141,6 +141,9 @@ crates/yshell-ssh/src/channel.rs
 crates/yshell-ssh/src/pty.rs
 crates/yshell-ssh/src/forwarding.rs
 crates/yshell-ssh/src/proxy.rs
+crates/yshell-ssh/src/proxy_socks4.rs
+crates/yshell-ssh/src/proxy_socks5.rs
+crates/yshell-ssh/src/proxy_http_connect.rs
 crates/yshell-ssh/src/error.rs
 ```
 
@@ -196,6 +199,7 @@ crates/yshell-terminal/src/input.rs
 - 配置路径发现。
 - TOML 序列化和迁移。
 - sessions、profiles、themes、commands、known_hosts、state 文件管理。
+- default、folder、session 三级外观和日志配置继承。
 - 配置 schema 版本。
 
 主要文件：
@@ -209,6 +213,10 @@ crates/yshell-config/src/auth_profile.rs
 crates/yshell-config/src/proxy_profile.rs
 crates/yshell-config/src/sftp_profile.rs
 crates/yshell-config/src/tunnel_profile.rs
+crates/yshell-config/src/appearance_profile.rs
+crates/yshell-config/src/logging_profile.rs
+crates/yshell-config/src/folder_profile.rs
+crates/yshell-config/src/inheritance.rs
 crates/yshell-config/src/migration.rs
 crates/yshell-config/src/store.rs
 ```
@@ -239,6 +247,9 @@ crates/yshell-secret/src/error.rs
 
 - 会话日志。
 - SFTP 传输日志。
+- SSH Shell channel 远端输出日志。
+- raw transcript 和 sanitized text 两种日志格式。
+- session、folder、global default 三级日志策略继承。
 - 日志路径模板。
 - 敏感输入屏蔽。
 - 日志轮转。
@@ -252,7 +263,59 @@ crates/yshell-logging/src/transfer_logger.rs
 crates/yshell-logging/src/path_template.rs
 crates/yshell-logging/src/redaction.rs
 crates/yshell-logging/src/rotation.rs
+crates/yshell-logging/src/transcript_format.rs
 ```
+
+## 3.1 分屏状态模型
+
+分屏必须作为数据模型实现，不能只靠 UI 临时布局。建议模型：
+
+```text
+WorkspaceLayout
+  root: PaneNode
+
+PaneNode
+  Split {
+    axis: horizontal | vertical
+    ratio: f32
+    first: PaneNode
+    second: PaneNode
+  }
+  Leaf {
+    pane_id
+    tab_ids
+    active_tab_id
+  }
+```
+
+约束：
+
+- 第一版最多 4 个 Leaf。
+- 拖拽标签到 pane 边缘时创建 Split。
+- 关闭 Leaf 内最后一个 tab 后合并相邻 pane。
+- ratio 变化要写入 `state.toml`。
+
+## 3.2 外观和日志配置继承
+
+配置解析必须提供显式继承函数：
+
+```text
+resolve_appearance(session_id) -> ResolvedAppearance
+resolve_logging(session_id) -> ResolvedLoggingPolicy
+resolve_proxy(session_id) -> ResolvedProxyPolicy
+```
+
+继承顺序：
+
+```text
+session override
+  -> nearest folder override
+  -> parent folder override
+  -> global default
+  -> built-in default
+```
+
+禁止 UI 自己拼继承逻辑；UI 只能读取 resolved view model。
 
 ### 2.10 `crates/yshell-test-support`
 
@@ -363,6 +426,9 @@ CreateTunnel(session_id, tunnel_profile)
 StopTunnel(session_id, tunnel_id)
 RunQuickCommand(session_id, command_id)
 BroadcastInput(session_ids, text)
+StartSynchronizedInput(source_session_id, target_filter)
+StopSynchronizedInput(source_session_id)
+UpdateWorkspaceSplit(layout_command)
 ```
 
 ### 5.2 Core 到 UI
@@ -380,6 +446,10 @@ TransferCompleted(task_id)
 TransferFailed(task_id, error)
 TunnelStarted(session_id, tunnel_id, listen_addr)
 TunnelStopped(session_id, tunnel_id)
+SynchronizedInputStarted(source_session_id, target_session_ids)
+SynchronizedInputStopped(source_session_id)
+LoggingStarted(session_id, log_path)
+LoggingStopped(session_id, log_path)
 ```
 
 ## 6. 错误处理要求
@@ -448,24 +518,30 @@ TunnelStopped(session_id, tunnel_id)
 - 实现 Session Editor。
 - 实现 Quick Connect。
 - 实现标签页、分屏、重连入口。
+- 实现分屏状态模型、pane 合并、pane ratio 持久化。
 - 实现最近连接、收藏、搜索。
 - 验收：用户无需编辑文件即可创建、连接、修改、删除会话。
 
 ### Milestone 6：端口转发与代理
 
-- 实现 SOCKS5 和 HTTP CONNECT 代理。
+- 实现 SOCKS4、SOCKS4a、SOCKS5、HTTP CONNECT 代理。
+- 实现 SOCKS5 用户名/密码认证。
+- 实现代理连接测试三阶段状态：TCP、proxy handshake、SSH handshake。
 - 实现 local forwarding。
 - 实现 remote forwarding。
 - 实现 dynamic SOCKS5 forwarding。
 - 实现 tunnel panel 状态。
-- 验收：每种转发都有集成测试和 UI 状态展示。
+- 验收：每种代理和每种转发都有集成测试和 UI 状态展示。
 
 ### Milestone 7：快捷命令、日志、安全收尾
 
 - 实现快捷命令栏。
 - 实现 Compose Pane。
 - 实现广播输入确认。
+- 实现 Send Key Input To 同步输入筛选、确认、状态条、停止入口。
 - 实现 session logging。
+- 实现 raw transcript 和 sanitized text 两种日志格式。
+- 实现 session/folder/global default 三级日志策略继承。
 - 实现 secret store 和平台 keychain。
 - 验收：敏感输入不写入日志，广播输入必须确认，secret 不明文进入配置文件。
 

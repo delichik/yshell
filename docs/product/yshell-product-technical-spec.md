@@ -88,15 +88,24 @@ YShell 第一版只覆盖 SSH 协议族能力：
 - 支持单窗口多标签。
 - 支持标签拖拽排序、关闭、复制会话、重连。
 - 支持左右/上下分屏标签组。
+- 支持递归分屏布局：一个工作区可继续向右或向下拆分，但第一版最大分屏叶子数限制为 4，避免状态管理失控。
+- 支持将标签拖入已有分屏区域，也支持通过标签右键菜单执行 Split Right、Split Down、Move to Pane。
+- 支持分屏比例拖拽调整，并在应用状态中保存最后一次布局。
+- 支持分屏内同步输入，但默认关闭，必须由用户显式选择目标会话。
 - 支持标签颜色、会话状态图标、未读输出提示。
 - 支持全屏模式和专注模式。
 
-### 5.6 快捷命令与广播输入
+### 5.6 快捷命令、广播输入与同步输入
 
 - 支持每个会话或全局快捷命令。
 - 快捷命令可显示为按钮栏或命令面板。
 - 支持向当前会话发送命令。
 - 支持向选中的多个会话广播输入，默认需要二次确认。
+- 支持 Send Key Input To：将当前 SSH 终端的键盘输入实时同步到其它符合条件的 SSH 会话。
+- 同步输入目标可按以下条件筛选：当前分屏、当前标签组、同一文件夹、同一标签、同一用户名、同一主机名前缀、手动勾选。
+- 同步输入只作用于处于 connected 状态且拥有交互式 Shell channel 的 SSH 会话，不作用于 SFTP、断开会话、错误会话、非 SSH 会话。
+- 同步输入必须有醒目的状态条，显示源会话、目标数量、停止按钮；发送前必须二次确认。
+- 同步输入默认不跨窗口；第一版没有多窗口时该限制自然成立。
 - 支持多行 Compose Pane：用户先编辑多行文本，再发送到一个或多个会话。
 
 ### 5.7 端口转发
@@ -109,23 +118,35 @@ YShell 第一版只覆盖 SSH 协议族能力：
 
 ### 5.8 代理
 
+- 支持 SOCKS4 代理。
+- 支持 SOCKS4a 代理，允许代理端解析域名。
 - 支持 SOCKS5 代理。
+- 支持 SOCKS5 用户名/密码认证。
 - 支持 HTTP CONNECT 代理。
+- 支持无代理、全局代理、会话代理三种模式。
 - 支持每个会话单独配置代理，也支持全局代理配置。
+- 支持代理连接测试，必须展示 TCP 连接、代理握手、SSH 握手三个阶段的状态。
 
 ### 5.9 日志与审计
 
 - 支持会话日志自动保存。
-- 支持纯文本日志和带时间戳日志。
+- 支持记录连接到的 SSH Shell channel 的所有远端输出，包括普通输出、stderr 合并输出、控制序列清洗后的文本。
+- 支持两种日志格式：raw transcript 和 sanitized text。raw transcript 保留原始字节或 escape sequence，sanitized text 去除 ANSI 控制序列，便于阅读。
+- 支持纯文本日志和带时间戳日志，时间戳可按行前缀写入。
 - 支持日志路径模板：日期、会话名、主机名、用户名。
 - 支持敏感输入保护：密码提示期间不记录用户输入。
+- 日志默认记录远端输出，不记录本地用户键盘输入；如果用户开启 input logging，必须二次确认并在状态栏标红显示。
+- 支持每个 session、每个文件夹、全局默认日志策略；优先级为 session > folder > global default。
 - 支持日志查看入口和打开所在目录。
 
 ### 5.10 主题与外观
 
 - 支持浅色、深色、跟随系统。
 - 支持终端配色方案导入/导出。
-- 支持每个会话独立设置颜色方案。
+- 支持默认外观配置、文件夹外观配置、每个保存的 session 外观配置。
+- 外观配置采用继承优先级：session appearance > folder appearance > global default appearance > built-in default。
+- 文件夹外观可作用于其子文件夹和保存的 session，子文件夹可继续覆盖。
+- 每个 session 可独立设置应用主题、终端颜色方案、字体、字号、行距、光标形状、标签颜色、SFTP 面板默认可见性。
 - 支持现代化主界面：左侧会话树、中央终端工作区、右侧可停靠工具面板、底部状态栏。
 - 支持高 DPI 和多显示器。
 
@@ -212,9 +233,25 @@ auth_profile_id
 proxy_profile_id
 terminal_profile_id
 sftp_profile_id
+appearance_profile_id
+logging_profile_id
 tunnel_profiles
 tags
 color
+created_at
+updated_at
+```
+
+### 9.1.1 FolderProfile
+
+```text
+id
+parent_folder_id
+name
+appearance_profile_id
+logging_profile_id
+proxy_profile_id
+sort_order
 created_at
 updated_at
 ```
@@ -254,6 +291,52 @@ target_port
 enabled_on_connect
 ```
 
+### 9.5 ProxyProfile
+
+```text
+id
+name
+mode: none | global | session
+protocol: socks4 | socks4a | socks5 | http_connect
+host
+port
+username
+secret_ref
+resolve_dns_by_proxy
+```
+
+### 9.6 AppearanceProfile
+
+```text
+id
+name
+scope: global_default | folder | session
+theme_mode: system | light | dark
+terminal_color_scheme_id
+font_family
+font_size
+line_height
+cursor_shape
+tab_color
+show_sftp_on_connect
+show_quick_commands_on_connect
+```
+
+### 9.7 LoggingProfile
+
+```text
+id
+name
+scope: global_default | folder | session
+enabled
+format: raw_transcript | sanitized_text
+include_timestamps
+record_remote_output
+record_local_input
+path_template
+rotate_policy
+```
+
 ## 10. UI 信息架构
 
 主窗口采用专业工具布局：
@@ -288,6 +371,9 @@ SFTP 面板可以作为右侧停靠面板，也可以作为独立标签打开。
 
 - `sessions.toml`：会话、文件夹、标签。
 - `profiles.toml`：认证、代理、终端、SFTP、隧道配置。
+- `appearance.toml`：全局默认、文件夹、session 外观配置和继承关系。
+- `logging.toml`：全局默认、文件夹、session 日志策略。
+- `proxies.toml`：SOCKS4、SOCKS4a、SOCKS5、HTTP CONNECT 代理配置。
 - `themes.toml`：主题和终端配色。
 - `known_hosts`：主机密钥。
 - `commands.toml`：快捷命令和命令组。
@@ -326,8 +412,8 @@ SFTP 面板可以作为右侧停靠面板，也可以作为独立标签打开。
 ### Milestone 4：高级 SSH 工作流
 
 - 支持本地、远程、动态端口转发。
-- 支持代理。
-- 支持快捷命令、Compose Pane、广播输入。
+- 支持 SOCKS4、SOCKS4a、SOCKS5、HTTP CONNECT 代理。
+- 支持快捷命令、Compose Pane、广播输入、Send Key Input To 同步输入。
 - 支持自动日志。
 
 ### Milestone 5：体验打磨

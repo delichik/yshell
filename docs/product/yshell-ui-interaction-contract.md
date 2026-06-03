@@ -207,6 +207,34 @@ StatusBar
 | Close Tabs to Right | 关闭右侧标签。 | 右侧存在标签时启用。 |
 | Close | 关闭当前标签。 | 始终启用。 |
 
+## 6.3 分屏交互
+
+| 控件/区域 | 左键行为 | 右键行为 | 拖拽行为 | 状态 |
+|---|---|---|---|---|
+| `workspace.pane_splitter` | 无 | 无 | 拖动调整相邻 pane 比例。 | 两个 pane 同时存在时显示。 |
+| `workspace.empty_pane` | 聚焦 pane。 | 菜单：Close Pane、New Session Here。 | 可接收标签拖入。 | pane 无标签时显示。 |
+| `workspace.pane_header` | 聚焦 pane。 | 菜单：Split Right、Split Down、Close Pane、Move All Tabs。 | 可拖拽整个 pane 中的 active tab。 | 始终显示。 |
+| `tab.drag_to_right_edge` | 无 | 无 | 在目标 pane 右侧创建竖向分屏。 | 分屏叶子数小于 4 时允许。 |
+| `tab.drag_to_bottom_edge` | 无 | 无 | 在目标 pane 下方创建横向分屏。 | 分屏叶子数小于 4 时允许。 |
+
+Split 下拉菜单：
+
+| 菜单项 | 行为 | 状态 |
+|---|---|---|
+| Split Right | 当前 active tab 移到右侧新 pane。 | pane 数小于 4 时启用。 |
+| Split Down | 当前 active tab 移到下方新 pane。 | pane 数小于 4 时启用。 |
+| Move Tab to Previous Pane | 将 active tab 移到上一个 pane。 | 存在其它 pane 时启用。 |
+| Move Tab to Next Pane | 将 active tab 移到下一个 pane。 | 存在其它 pane 时启用。 |
+| Close Current Pane | 关闭当前 pane，内部标签逐个触发关闭确认。 | pane 数大于 1 时启用。 |
+| Balance Panes | 将同级 pane ratio 重置为 50%。 | 存在 split 时启用。 |
+
+分屏规则：
+
+- 第一版最多 4 个 pane。
+- 关闭 pane 内最后一个标签后，自动合并相邻 pane。
+- 调整比例后立即更新内存状态，500ms debounce 写入 `state.toml`。
+- 分屏状态只保存布局和 tab/session id，不保存 SSH 连接 secret。
+
 ## 7. TerminalWorkspace
 
 ### 7.1 终端视图
@@ -258,6 +286,19 @@ RightDock 是 tabbed dock，第一版包含 `SFTP`、`Transfers`、`Tunnels`、`
 | Tunnels | 切换到端口转发面板。 | 菜单：Add Tunnel、Stop All。 |
 | Commands | 切换到快捷命令。 | 菜单：New Command、Manage Groups。 |
 | Session Info | 切换到当前会话信息。 | 无。 |
+
+## 8.1 同步输入状态条
+
+当 Send Key Input To 启用时，终端上方必须显示同步输入状态条。
+
+| 控件 ID | 类型 | 行为 |
+|---|---|---|
+| `sync_input.banner` | 状态条 | 显示 `Sync Input: source -> N targets`。 |
+| `sync_input.target_list` | 链接按钮 | 左键打开目标会话列表。 |
+| `sync_input.pause` | toggle 按钮 | 暂停/恢复同步，不断开会话。 |
+| `sync_input.stop` | 危险按钮 | 立即停止同步输入。 |
+
+状态条必须使用警示色，不允许和普通连接状态混淆。
 
 ## 9. SFTP Panel
 
@@ -397,6 +438,7 @@ Tunnel 行菜单：
 | `commands.compose.textarea` | 多行输入框 | 编辑待发送文本。 | Cut/Copy/Paste/Select All。 |
 | `commands.send_current` | 主按钮 | 发送 compose 内容到当前终端。 | 无 |
 | `commands.broadcast` | 危险按钮 | 打开 Broadcast Confirmation。 | 无 |
+| `commands.sync_input_to` | 危险按钮 | 打开 Send Key Input To Dialog。 | 无 |
 
 ### 12.1 Broadcast Confirmation
 
@@ -431,6 +473,7 @@ Session Editor 是 modal dialog，宽度 `760px`，高度不超过屏幕 `85%`�
 | Proxy | 显示代理设置。 |
 | Logging | 显示日志设置。 |
 | Advanced | 显示 keepalive、环境变量等高级设置。 |
+| Appearance | 显示该 session 的外观覆盖设置。 |
 
 ### 13.2 General 表单
 
@@ -482,7 +525,63 @@ Session Editor 是 modal dialog，宽度 `760px`，高度不超过屏幕 `85%`�
 | `sftp.show_hidden_files` | checkbox | true | 无。 |
 | `sftp.transfer_parallelism` | 数字输入 | `2` | `1-8`。 |
 
-### 13.6 底部按钮
+### 13.6 Proxy 表单
+
+| 控件 ID | 类型 | 默认 | 校验 |
+|---|---|---|---|
+| `proxy.mode` | segmented control | Inherit | Inherit / None / Global / Custom。 |
+| `proxy.protocol` | 下拉 | SOCKS5 | SOCKS4 / SOCKS4a / SOCKS5 / HTTP CONNECT。 |
+| `proxy.host` | 单行输入框 | 空 | Custom 时非空。 |
+| `proxy.port` | 数字输入 | 空 | Custom 时 `1-65535`。 |
+| `proxy.resolve_dns_by_proxy` | checkbox | true | SOCKS4 disabled；SOCKS4a/SOCKS5 可用。 |
+| `proxy.username` | 单行输入框 | 空 | SOCKS5/HTTP CONNECT 可用。 |
+| `proxy.password.save` | checkbox | false | 勾选后保存到 SecretStore。 |
+| `proxy.password.input` | password input | 空 | SOCKS5/HTTP CONNECT 可用。 |
+| `proxy.test` | 按钮 | 无 | 执行 TCP、proxy handshake、SSH handshake 三阶段测试。 |
+
+### 13.7 Logging 表单
+
+| 控件 ID | 类型 | 默认 | 校验 |
+|---|---|---|---|
+| `logging.mode` | segmented control | Inherit | Inherit / Disabled / Enabled。 |
+| `logging.format` | 下拉 | Sanitized Text | Raw Transcript / Sanitized Text。 |
+| `logging.record_remote_output` | checkbox | true | 第一版默认 true，且为日志核心能力。 |
+| `logging.record_local_input` | checkbox | false | 勾选时弹安全确认。 |
+| `logging.include_timestamps` | checkbox | true | 无。 |
+| `logging.path_template` | 单行输入框 | `{date}/{session}-{host}.log` | 非空，变量必须来自允许列表。 |
+| `logging.open_folder` | 按钮 | 无 | 打开日志目录。 |
+
+日志按钮右键菜单：
+
+| 菜单项 | 行为 | 状态 |
+|---|---|---|
+| Start Logging | 开启当前会话日志。 | 未开启时启用。 |
+| Stop Logging | 停止当前会话日志。 | 已开启时启用。 |
+| Open Current Log | 打开当前日志文件。 | 已生成日志文件时启用。 |
+| Open Log Folder | 打开日志目录。 | 始终启用。 |
+| Logging Settings | 跳转 Session Editor Logging section。 | 当前 session 可编辑时启用。 |
+
+### 13.8 Appearance 表单
+
+| 控件 ID | 类型 | 默认 | 行为 |
+|---|---|---|---|
+| `appearance.mode` | segmented control | Inherit | Inherit / Custom。 |
+| `appearance.theme_mode` | 下拉 | Inherit | System / Light / Dark。 |
+| `appearance.terminal_color_scheme` | 下拉 | Inherit | 选择终端配色。 |
+| `appearance.font_family` | 字体选择 | Inherit | 选择终端字体。 |
+| `appearance.font_size` | 数字输入 | Inherit | `8-36`。 |
+| `appearance.line_height` | 数字输入 | Inherit | `1.0-2.0`。 |
+| `appearance.cursor_shape` | 下拉 | Inherit | Block / Bar / Underline。 |
+| `appearance.tab_color` | 色块选择 | Inherit | 设置标签颜色。 |
+| `appearance.show_sftp_on_connect` | checkbox | Inherit | 连接后自动显示 SFTP。 |
+
+继承提示：
+
+- 每一项显示最终 resolved 值，例如 `Inherited from folder Production: Dark`。
+- 用户点击 Reset Field 恢复单项继承。
+- 用户点击 Reset All 恢复整个 session 的外观继承。
+
+### 13.9 底部按钮
 
 | 控件 ID | 文案 | 类型 | 行为 | 状态 |
 |---|---|---|---|---|
@@ -490,6 +589,61 @@ Session Editor 是 modal dialog，宽度 `760px`，高度不超过屏幕 `85%`�
 | `session_editor.cancel` | Cancel | 按钮 | 若有未保存改动，弹 Discard Changes。 | 始终启用。 |
 | `session_editor.save` | Save | 主按钮 | 校验并保存。 | 表单合法且有改动时启用。 |
 | `session_editor.save_connect` | Save and Connect | 主按钮 | 保存后打开标签并连接。 | 表单合法时启用。 |
+
+## 13.10 Folder Editor
+
+Folder Editor 用于保存文件夹级默认配置。
+
+| 控件 ID | 类型 | 默认 | 行为 |
+|---|---|---|---|
+| `folder.name` | 单行输入框 | 空 | 非空，同级不重名。 |
+| `folder.parent` | 下拉/选择器 | 当前父级 | 选择父文件夹。 |
+| `folder.appearance.mode` | segmented control | Inherit | Inherit / Custom。 |
+| `folder.logging.mode` | segmented control | Inherit | Inherit / Disabled / Enabled。 |
+| `folder.proxy.mode` | segmented control | Inherit | Inherit / None / Global / Custom。 |
+| `folder.apply_preview` | 只读列表 | 无 | 显示受影响的子文件夹和 session 数量。 |
+| `folder.cancel` | 按钮 | 无 | 关闭。 |
+| `folder.save` | 主按钮 | 无 | 保存文件夹配置。 |
+
+保存文件夹级配置时，不弹出逐个 session 确认；但必须在 preview 中显示影响范围。
+
+## 13.11 Send Key Input To Dialog
+
+触发入口：
+
+- Quick Commands Panel 的 `Sync Input To`。
+- 终端右键菜单 `Send Key Input To...`。
+- 标签右键菜单 `Send Key Input To...`。
+
+控件：
+
+| 控件 ID | 类型 | 默认 | 行为 |
+|---|---|---|---|
+| `sync.source_session` | 只读文本 | 当前 active SSH session | 显示源会话。 |
+| `sync.scope` | segmented control | Current Split | Current Split / Current Tab Group / Same Folder / Matching Filter / Manual。 |
+| `sync.filter.username` | checkbox + 输入 | false | 勾选后只匹配同用户名或输入的用户名。 |
+| `sync.filter.host_prefix` | checkbox + 输入 | false | 勾选后按 host 前缀匹配。 |
+| `sync.filter.tags` | token input | 空 | 只匹配包含任一 tag 的 session。 |
+| `sync.targets` | checkbox list | 自动计算 | 只列出 connected SSH shell sessions。 |
+| `sync.preview` | 只读文本 | 无 | 显示将同步到的目标数量和名称。 |
+| `sync.confirm_text` | 单行输入框 | 空 | 必须输入 `SYNC` 才启用 Start。 |
+| `sync.cancel` | 按钮 | 无 | 关闭。 |
+| `sync.start` | 危险主按钮 | disabled | 启动同步输入。 |
+
+排除规则：
+
+- 排除源会话自身。
+- 排除 disconnected、connecting、error 状态会话。
+- 排除没有交互式 Shell channel 的会话。
+- 排除 SFTP-only 操作。
+- 排除当前正在接收其它同步输入的会话，避免循环。
+
+同步期间：
+
+- 源终端每次键盘输入都复制到目标会话。
+- 粘贴大段文本前弹确认，显示目标数量和字符数。
+- `Ctrl+C` interrupt 会同步，但必须在确认弹窗中单独提示。
+- 停止同步后不关闭任何 SSH 会话。
 
 ## 14. Settings
 
