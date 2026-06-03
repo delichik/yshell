@@ -10,6 +10,14 @@ export interface AuthConfig {
   credentialRef?: string;
 }
 
+export type HostKeyPolicy = 'strict' | 'accept_new' | 'prompt';
+
+export interface HostKeyState {
+  status: 'trusted' | 'unknown' | 'changed';
+  fingerprint?: string;
+  message: string;
+}
+
 export interface TerminalConfig {
   shell?: string;
   workingDirectory?: string;
@@ -101,7 +109,15 @@ export interface QuickConnectDraft {
   port: number;
   username: string;
   authMethod: AuthMethod;
+  privateKeyPath?: string;
+  hostKeyPolicy: HostKeyPolicy;
   saveAsSession: boolean;
+}
+
+export interface SessionExportBundle {
+  version: number;
+  exportedAt: string;
+  sessions: SessionProfile[];
 }
 
 export interface AppSettings {

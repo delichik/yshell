@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { AppSettings, QuickConnectDraft, SessionProfile, TerminalConfig, TerminalRuntime } from './types';
+import type { AppSettings, QuickConnectDraft, SessionExportBundle, SessionProfile, TerminalConfig, TerminalRuntime } from './types';
 
 export const runningInTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -14,10 +14,61 @@ export async function listSessions(): Promise<SessionProfile[]> {
 export async function saveSession(profile: SessionProfile): Promise<SessionProfile> {
   if (!runningInTauri) {
     const sessions = readPreviewJson<SessionProfile[]>(previewSessionsKey, []);
-    writePreviewJson(previewSessionsKey, [profile, ...sessions.filter((session) => session.id !== profile.id)]);
-    return profile;
+    writePreviewJson(previewSessionsKey, [sanitizeSession(profile), ...sessions.filter((session) => session.id !== profile.id)]);
+    return sanitizeSession(profile);
   }
   return invoke<SessionProfile>('sessions_save', { profile });
+}
+
+export async function deleteSession(sessionId: string): Promise<SessionProfile[]> {
+  if (!runningInTauri) {
+    const sessions = readPreviewJson<SessionProfile[]>(previewSessionsKey, []).filter((session) => session.id !== sessionId);
+    writePreviewJson(previewSessionsKey, sessions);
+    return sessions;
+  }
+  return invoke<SessionProfile[]>('sessions_delete', { sessionId });
+}
+
+export async function duplicateSession(sessionId: string): Promise<SessionProfile> {
+  if (!runningInTauri) {
+    const sessions = readPreviewJson<SessionProfile[]>(previewSessionsKey, []);
+    const source = sessions.find((session) => session.id === sessionId);
+    if (!source) throw new Error(`session ${sessionId} not found`);
+    const now = new Date().toISOString();
+    const clone = sanitizeSession({
+      ...source,
+      id: crypto.randomUUID(),
+      name: `${source.name} 副本`,
+      createdAt: now,
+      updatedAt: now,
+      lastConnectedAt: null,
+    });
+    writePreviewJson(previewSessionsKey, [clone, ...sessions]);
+    return clone;
+  }
+  return invoke<SessionProfile>('sessions_duplicate', { sessionId });
+}
+
+export async function exportSessions(): Promise<SessionExportBundle> {
+  if (!runningInTauri) {
+    return {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      sessions: readPreviewJson<SessionProfile[]>(previewSessionsKey, []).map(sanitizeSessionForExport),
+    };
+  }
+  return invoke<SessionExportBundle>('sessions_export');
+}
+
+export async function importSessions(bundle: SessionExportBundle): Promise<SessionProfile[]> {
+  if (!runningInTauri) {
+    const current = readPreviewJson<SessionProfile[]>(previewSessionsKey, []);
+    const imported = bundle.sessions.map(sanitizeSessionForImport);
+    const merged = [...imported, ...current.filter((session) => !imported.some((item) => item.id === session.id))];
+    writePreviewJson(previewSessionsKey, merged);
+    return merged;
+  }
+  return invoke<SessionProfile[]>('sessions_import', { bundle });
 }
 
 export async function openLocalTerminal(
@@ -41,19 +92,19 @@ export async function openLocalTerminal(
   return invoke<TerminalRuntime>('terminal_open_local', { tabId, paneId, cols, rows, terminal });
 }
 
-export async function openSshTerminal(draft: QuickConnectDraft, tabId: string, paneId: string): Promise<TerminalRuntime> {
+export async function openSshTerminal(draft: QuickConnectDraft, tabId: string, paneId: string, cols = 120, rows = 30): Promise<TerminalRuntime> {
   if (!runningInTauri) {
     return {
       runtimeId: `preview-${paneId}`,
       profileId: null,
       kind: 'ssh',
-      status: 'connecting',
+      status: 'failed',
       paneId,
       tabId,
       title: draft.name || `${draft.username}@${draft.host}`,
     };
   }
-  return invoke<TerminalRuntime>('terminal_open_ssh', { draft, tabId, paneId });
+  return invoke<TerminalRuntime>('terminal_open_ssh', { draft, tabId, paneId, cols, rows });
 }
 
 export async function writeTerminal(runtimeId: string, data: string): Promise<void> {
@@ -87,6 +138,28 @@ export async function saveSettings(settings: AppSettings): Promise<AppSettings> 
     return settings;
   }
   return invoke<AppSettings>('settings_save', { settings });
+}
+
+function sanitizeSession(profile: SessionProfile): SessionProfile {
+  return {
+    ...profile,
+    auth: {
+      method: profile.auth.method,
+      username: profile.auth.username,
+      privateKeyPath: profile.auth.privateKeyPath,
+      credentialRef: profile.auth.credentialRef,
+    },
+  };
+}
+
+function sanitizeSessionForExport(profile: SessionProfile): SessionProfile {
+  const session = sanitizeSession(profile);
+  return { ...session, auth: { ...session.auth, credentialRef: undefined } };
+}
+
+function sanitizeSessionForImport(profile: SessionProfile): SessionProfile {
+  const session = sanitizeSession(profile);
+  return { ...session, auth: { ...session.auth, credentialRef: undefined } };
 }
 
 function readPreviewJson<T>(key: string, fallback: T): T {

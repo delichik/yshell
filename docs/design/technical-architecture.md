@@ -184,9 +184,8 @@ keybindings: Keybinding[]
 
 ### 5.2 凭据存储
 
-- Windows：优先系统凭据管理器。
-- macOS：优先 Keychain。
-- Linux：优先 Secret Service/libsecret，缺失时提示用户选择加密文件存储或不保存。
+- 阶段 2 不在普通表单中收集或持久化 SSH 密码、私钥口令和代理凭据；密码/口令由系统 OpenSSH 在终端内交互输入，SSH Agent 由系统环境提供。
+- 后续如增加“保存凭据”能力，Windows 优先系统凭据管理器，macOS 优先 Keychain，Linux 优先 Secret Service/libsecret，缺失时提示用户选择加密文件存储或不保存。
 - 凭据通过 `credential_ref` 与会话配置关联，配置文件不保存明文。
 
 ### 5.3 主机密钥
@@ -202,13 +201,11 @@ keybindings: Keybinding[]
 
 MVP：
 
-- 密码认证。
-- 私钥认证。
-- SSH Agent 认证。
+- 通过系统 OpenSSH 客户端提供密码认证、私钥认证和 SSH Agent 认证。
 - 交互式 shell。
 - resize。
 - keepalive。
-- 主机密钥校验。
+- 主机密钥校验，阶段 2 映射到 OpenSSH `StrictHostKeyChecking` 策略。
 
 后续：
 
@@ -229,8 +226,8 @@ MVP：
 
 ### 7.1 敏感数据
 
-- 前端只在用户输入过程中短暂持有敏感字段。
-- 保存凭据时通过 IPC 交给后端写入系统安全存储。
+- 前端默认不持有 SSH 密码或私钥口令，阶段 2 由终端内 OpenSSH 交互处理敏感输入。
+- 保存凭据时通过 IPC 交给后端写入系统安全存储；阶段 2 尚不提供保存 SSH 密码或私钥口令的入口。
 - 导出配置默认排除凭据引用对应的秘密内容。
 - 加密导出必须要求用户设置导出口令，并提示保管风险。
 

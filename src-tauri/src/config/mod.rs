@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -108,6 +109,14 @@ pub struct AppSettings {
     pub logging: LoggingConfig,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionExportBundle {
+    pub version: u32,
+    pub exported_at: DateTime<Utc>,
+    pub sessions: Vec<SessionProfile>,
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -179,6 +188,7 @@ impl ConfigStore {
     }
 
     pub fn save_session(&self, profile: SessionProfile) -> Result<SessionProfile, String> {
+        Self::validate_session(&profile)?;
         let mut state = self.lock_state()?;
         if let Some(existing) = state
             .sessions
@@ -193,6 +203,83 @@ impl ConfigStore {
         Ok(profile)
     }
 
+    pub fn delete_session(&self, session_id: &str) -> Result<Vec<SessionProfile>, String> {
+        let mut state = self.lock_state()?;
+        let original_len = state.sessions.len();
+        state.sessions.retain(|session| session.id != session_id);
+        if state.sessions.len() == original_len {
+            return Err(format!("session {session_id} not found"));
+        }
+        Self::persist(&self.path, &state)?;
+        Ok(state.sessions.clone())
+    }
+
+    pub fn duplicate_session(&self, session_id: &str) -> Result<SessionProfile, String> {
+        let mut state = self.lock_state()?;
+        let Some(source) = state
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+        else {
+            return Err(format!("session {session_id} not found"));
+        };
+        let now = Utc::now();
+        let mut cloned = source.clone();
+        cloned.id = Uuid::new_v4().to_string();
+        cloned.name = format!("{} 副本", source.name);
+        cloned.created_at = now;
+        cloned.updated_at = now;
+        cloned.last_connected_at = None;
+        state.sessions.insert(0, cloned.clone());
+        Self::persist(&self.path, &state)?;
+        Ok(cloned)
+    }
+
+    pub fn export_sessions(&self) -> Result<SessionExportBundle, String> {
+        let state = self.lock_state()?;
+        let mut sessions = state.sessions.clone();
+        for session in &mut sessions {
+            session.auth.credential_ref = None;
+        }
+        Ok(SessionExportBundle {
+            version: state.version,
+            exported_at: Utc::now(),
+            sessions,
+        })
+    }
+
+    pub fn import_sessions(
+        &self,
+        bundle: SessionExportBundle,
+    ) -> Result<Vec<SessionProfile>, String> {
+        if bundle.version != 1 {
+            return Err(format!(
+                "unsupported session export version: {}",
+                bundle.version
+            ));
+        }
+        let mut state = self.lock_state()?;
+        for mut imported in bundle.sessions {
+            Self::validate_session(&imported)?;
+            imported.auth.credential_ref = None;
+            imported.updated_at = Utc::now();
+            if imported.id.trim().is_empty() {
+                imported.id = Uuid::new_v4().to_string();
+            }
+            if let Some(existing) = state
+                .sessions
+                .iter_mut()
+                .find(|session| session.id == imported.id)
+            {
+                *existing = imported;
+            } else {
+                state.sessions.insert(0, imported);
+            }
+        }
+        Self::persist(&self.path, &state)?;
+        Ok(state.sessions.clone())
+    }
+
     pub fn load_settings(&self) -> Result<AppSettings, String> {
         let state = self.lock_state()?;
         Ok(state.settings.clone())
@@ -203,6 +290,27 @@ impl ConfigStore {
         state.settings = settings.clone();
         Self::persist(&self.path, &state)?;
         Ok(settings)
+    }
+
+    fn validate_session(profile: &SessionProfile) -> Result<(), String> {
+        if profile.name.trim().is_empty() {
+            return Err("session name is required".to_string());
+        }
+        if matches!(profile.protocol, SessionProtocol::Ssh) {
+            if profile
+                .host
+                .as_deref()
+                .unwrap_or_default()
+                .trim()
+                .is_empty()
+            {
+                return Err(format!("SSH session {} is missing host", profile.name));
+            }
+            if profile.port.is_none() {
+                return Err(format!("SSH session {} is missing port", profile.name));
+            }
+        }
+        Ok(())
     }
 
     fn lock_state(&self) -> Result<std::sync::MutexGuard<'_, PersistedConfig>, String> {

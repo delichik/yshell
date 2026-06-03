@@ -131,21 +131,55 @@ impl RuntimeRegistry {
         Ok(runtime)
     }
 
-    pub fn open_ssh_placeholder(
+    pub fn open_ssh(
         &self,
+        app_handle: AppHandle,
         tab_id: String,
         pane_id: String,
+        cols: Option<u16>,
+        rows: Option<u16>,
         title: String,
+        args: Vec<String>,
     ) -> Result<TerminalRuntime, String> {
         let runtime = TerminalRuntime {
             runtime_id: Uuid::new_v4().to_string(),
             profile_id: None,
             kind: SessionProtocol::Ssh,
-            status: RuntimeStatus::Connecting,
+            status: RuntimeStatus::Connected,
             pane_id,
             tab_id,
             title,
         };
+
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: rows.unwrap_or(DEFAULT_ROWS),
+                cols: cols.unwrap_or(DEFAULT_COLS),
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|error| format!("failed to open SSH PTY: {error}"))?;
+
+        let mut command = CommandBuilder::new(default_ssh_command());
+        command.args(args);
+        command.env("TERM", "xterm-256color");
+        let child = pair
+            .slave
+            .spawn_command(command)
+            .map_err(|error| format!("failed to spawn OpenSSH client: {error}"))?;
+        drop(pair.slave);
+
+        let reader = pair
+            .master
+            .try_clone_reader()
+            .map_err(|error| format!("failed to clone SSH PTY reader: {error}"))?;
+        let writer = pair
+            .master
+            .take_writer()
+            .map_err(|error| format!("failed to open SSH PTY writer: {error}"))?;
+        spawn_output_reader(app_handle, runtime.runtime_id.clone(), reader);
+
         self.runtimes
             .lock()
             .map_err(|_| "terminal runtime registry lock poisoned".to_string())?
@@ -153,9 +187,9 @@ impl RuntimeRegistry {
                 runtime.runtime_id.clone(),
                 RuntimeHandle {
                     runtime: runtime.clone(),
-                    writer: None,
-                    master: None,
-                    child: None,
+                    writer: Some(Arc::new(Mutex::new(writer))),
+                    master: Some(pair.master),
+                    child: Some(child),
                 },
             );
         Ok(runtime)
@@ -191,19 +225,17 @@ impl RuntimeRegistry {
             return Err(format!("terminal runtime {runtime_id} not found"));
         };
 
-        match (&handle.runtime.kind, &handle.master) {
-            (SessionProtocol::Local, Some(master)) => master
+        if let Some(master) = &handle.master {
+            master
                 .resize(PtySize {
                     rows,
                     cols,
                     pixel_width: 0,
                     pixel_height: 0,
                 })
-                .map_err(|error| format!("failed to resize PTY: {error}")),
-            (SessionProtocol::Ssh, _) => Ok(()),
-            (SessionProtocol::Local, None) => {
-                Err(format!("terminal runtime {runtime_id} has no PTY master"))
-            }
+                .map_err(|error| format!("failed to resize PTY: {error}"))
+        } else {
+            Err(format!("terminal runtime {runtime_id} has no PTY master"))
         }
     }
 
@@ -240,7 +272,6 @@ impl RuntimeRegistry {
                 let _ = child.wait();
             }
         }
-        Ok(())
     }
 }
 
@@ -308,4 +339,14 @@ fn default_shell_path() -> String {
 
 fn default_shell_title() -> String {
     default_shell_path()
+}
+
+#[cfg(windows)]
+fn default_ssh_command() -> String {
+    "ssh.exe".to_string()
+}
+
+#[cfg(not(windows))]
+fn default_ssh_command() -> String {
+    "ssh".to_string()
 }
