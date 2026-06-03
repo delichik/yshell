@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell UI 草图</title>
+  <title>YShell UI Sketches</title>
   <style>
     :root {
       color-scheme: dark;
@@ -18,6 +18,8 @@
       --yellow: #e7c547;
       --red: #f05f68;
       --terminal: #090b10;
+      --warning-bg: #2c2413;
+      --warning-line: #8f6b22;
     }
 
     * { box-sizing: border-box; }
@@ -29,14 +31,23 @@
       line-height: 1.4;
     }
     header {
-      padding: 28px 32px 14px;
+      padding: 28px 32px 16px;
       border-bottom: 1px solid var(--line);
       background: #141720;
     }
     h1 { margin: 0 0 8px; font-size: 26px; }
-    h2 { margin: 32px 0 12px; font-size: 20px; }
+    h2 { margin: 34px 0 12px; font-size: 20px; }
+    h3 { margin: 0 0 12px; font-size: 16px; }
     p { color: var(--muted); margin: 0 0 14px; }
     main { padding: 0 32px 48px; }
+    .note {
+      border-left: 3px solid var(--accent);
+      padding: 8px 12px;
+      background: #151a25;
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 22px;
+    }
     .sketch {
       border: 1px solid var(--line);
       background: var(--panel);
@@ -60,12 +71,9 @@
     .dot:nth-child(3) { background: var(--green); }
     .app {
       display: grid;
-      grid-template-columns: 260px minmax(420px, 1fr) 330px;
+      grid-template-columns: 260px minmax(560px, 1fr) 360px;
       grid-template-rows: 42px 34px 520px 30px;
       min-height: 626px;
-    }
-    .menu, .toolbar, .status, .sidebar, .workspace, .dock {
-      border-color: var(--line);
     }
     .menu {
       grid-column: 1 / 4;
@@ -86,25 +94,30 @@
       background: #151922;
       border-bottom: 1px solid var(--line);
     }
-    .input {
-      height: 24px;
+    .input, .fake-input {
       border: 1px solid var(--line);
       border-radius: 5px;
       background: #0f1219;
       color: var(--muted);
-      padding: 3px 9px;
+      padding: 5px 8px;
       font-size: 12px;
-      min-width: 300px;
     }
+    .input { height: 24px; min-width: 300px; padding: 3px 9px; }
+    .fake-input { min-height: 28px; }
     .button {
-      height: 24px;
+      min-height: 24px;
       border: 1px solid var(--line);
       border-radius: 5px;
       background: var(--panel-2);
       color: var(--text);
       padding: 3px 9px;
       font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
+    .button.danger { border-color: #7d333a; background: #3a1d22; color: #ffb8bf; }
+    .button.primary { border-color: #315da9; background: #1f3560; }
     .sidebar {
       grid-row: 3;
       border-right: 1px solid var(--line);
@@ -129,7 +142,7 @@
       grid-row: 3;
       background: #10131b;
       display: grid;
-      grid-template-rows: 34px 1fr;
+      grid-template-rows: 34px 34px 1fr;
     }
     .tabs {
       display: flex;
@@ -147,11 +160,47 @@
       color: var(--muted);
     }
     .tab.active { background: #111318; color: var(--text); }
+    .sync-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 0 10px;
+      background: var(--warning-bg);
+      border-bottom: 1px solid var(--warning-line);
+      color: #f3d58a;
+      font-size: 12px;
+    }
+    .split-workspace {
+      display: grid;
+      grid-template-columns: 1fr 6px 1fr;
+      min-height: 0;
+    }
+    .splitter {
+      background: #303747;
+      border-left: 1px solid #1f2430;
+      border-right: 1px solid #1f2430;
+    }
+    .pane {
+      display: grid;
+      grid-template-rows: 26px 1fr;
+      min-width: 0;
+    }
+    .pane-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+      background: #171b24;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+    }
     .term {
       background: var(--terminal);
-      padding: 14px;
+      padding: 12px;
       font-family: "Cascadia Mono", Consolas, monospace;
-      font-size: 13px;
+      font-size: 12px;
       color: #d9e3ff;
       overflow: hidden;
     }
@@ -164,16 +213,27 @@
       display: grid;
       grid-template-rows: 34px 1fr 170px;
     }
-    .sftp-list {
-      padding: 8px 10px;
+    .dock-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--line);
       font-size: 12px;
     }
+    .dock-tabs span {
+      padding: 3px 7px;
+      border-radius: 4px;
+      color: var(--muted);
+    }
+    .dock-tabs .active { background: #25304a; color: white; }
+    .sftp-list { padding: 8px 10px; font-size: 12px; }
     .file-row {
       display: grid;
       grid-template-columns: 1fr 70px 80px;
       gap: 8px;
       padding: 5px 6px;
       border-bottom: 1px solid #252b36;
+      font-size: 12px;
     }
     .queue {
       border-top: 1px solid var(--line);
@@ -205,6 +265,11 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 18px;
     }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
     .dialog {
       padding: 18px;
       background: var(--panel);
@@ -213,24 +278,17 @@
     }
     .form-row {
       display: grid;
-      grid-template-columns: 120px 1fr;
+      grid-template-columns: 130px 1fr;
       align-items: center;
       gap: 10px;
       margin-bottom: 10px;
       font-size: 13px;
     }
-    .fake-input {
-      height: 28px;
-      border: 1px solid var(--line);
-      background: #0f1219;
-      border-radius: 5px;
-      color: var(--muted);
-      padding: 5px 8px;
-    }
     .tabs-small {
       display: flex;
       gap: 4px;
       margin-bottom: 14px;
+      flex-wrap: wrap;
     }
     .tabs-small span {
       padding: 5px 9px;
@@ -241,135 +299,226 @@
       color: var(--muted);
     }
     .tabs-small .active { background: #25304a; color: #fff; }
-    .note {
-      border-left: 3px solid var(--accent);
-      padding: 8px 12px;
-      background: #151a25;
-      color: var(--muted);
+    .check-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 7px 0;
+      border-bottom: 1px solid #252b36;
       font-size: 13px;
-      margin-bottom: 22px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 2px 7px;
+      font-size: 11px;
+      background: #25304a;
+      color: #b7c9ff;
+    }
+    @media (max-width: 1100px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      .app { grid-template-columns: 220px minmax(420px, 1fr); }
+      .dock { display: none; }
+      .menu, .toolbar, .status { grid-column: 1 / 3; }
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>YShell UI 草图</h1>
-    <p>这些草图用于约束信息架构和布局，不代表最终视觉风格。目标是现代、密集、可扫描，适合高频 SSH/SFTP 工作。</p>
+    <h1>YShell UI Sketches</h1>
+    <p>这些草图用于约束信息架构、控件位置和交互状态，不代表最终视觉风格。更新重点：分屏、同步输入、代理、日志、外观继承和文件夹默认配置。</p>
   </header>
 
   <main>
-    <h2>1. 主窗口：终端 + 会话树 + SFTP 停靠面板</h2>
-    <div class="note">默认工作台应让用户一眼看到会话、终端、SFTP、传输状态和连接状态。SFTP 是第一版核心功能，不应藏在二级入口。</div>
+    <h2>1. Main Window: split panes + SFTP + sync input</h2>
+    <div class="note">主窗口必须直接暴露 SFTP、分屏和同步输入状态。同步输入启用时要有醒目状态条，避免用户误把输入发送到多个 SSH。</div>
     <section class="sketch">
-      <div class="titlebar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span>YShell - ops-prod-01</span></div>
+      <div class="titlebar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span>YShell - dev-purerust workspace</span></div>
       <div class="app">
         <div class="menu"><span>File</span><span>Edit</span><span>Session</span><span>View</span><span>Tools</span><span>Help</span></div>
         <div class="toolbar">
           <div class="input">ssh://deploy@10.0.1.25:22</div>
-          <div class="button">Connect</div>
-          <div class="button">Split</div>
+          <div class="button primary">Connect</div>
+          <div class="button">Split v</div>
           <div class="button">SFTP</div>
-          <div class="button">Tunnel</div>
+          <div class="button">Tunnels</div>
           <div class="button">Commands</div>
+          <div class="button danger">Sync Input To...</div>
+          <div class="button">Log: On</div>
         </div>
         <aside class="sidebar">
           <div class="side-head"><span>Session Manager</span><span>+ New</span></div>
           <div class="tree">
-            <div>▾ Production</div>
-            <div class="active">  ● ops-prod-01</div>
-            <div>  ● ops-prod-02</div>
-            <div>▾ Staging</div>
-            <div>  ○ api-staging</div>
-            <div>▸ Lab</div>
-            <div>★ Favorites</div>
-            <div>⌕ Recent Connections</div>
+            <div>v Production <span class="badge">folder defaults</span></div>
+            <div class="active">  * ops-prod-01</div>
+            <div>  * ops-prod-02</div>
+            <div>v Staging</div>
+            <div>  * api-staging</div>
+            <div>> Lab</div>
+            <div>Favorites</div>
+            <div>Recent Connections</div>
           </div>
         </aside>
         <section class="workspace">
           <div class="tabs">
-            <div class="tab active">● ops-prod-01</div>
-            <div class="tab">● api-staging</div>
+            <div class="tab active">* ops-prod-01</div>
+            <div class="tab">* ops-prod-02</div>
             <div class="tab">+ New Tab</div>
           </div>
-          <div class="term">
-            <div><span class="prompt">deploy@ops-prod-01</span>:<span class="cmd">~</span>$ systemctl status nginx</div>
-            <div>● nginx.service - A high performance web server</div>
-            <div>   Loaded: loaded (/lib/systemd/system/nginx.service; enabled)</div>
-            <div>   Active: <span style="color:#48c774">active (running)</span> since Wed 2026-06-03 09:12:44 UTC</div>
-            <br>
-            <div><span class="prompt">deploy@ops-prod-01</span>:<span class="cmd">~</span>$ tail -f /var/log/nginx/access.log</div>
-            <div>10.0.3.18 - - "GET /health HTTP/1.1" 200 2</div>
-            <div>10.0.3.20 - - "GET /api/v1/status HTTP/1.1" 200 128</div>
+          <div class="sync-banner">
+            <span>Sync Input: ops-prod-01 -> 2 targets (current split, same user deploy)</span>
+            <span><button class="button">Targets</button> <button class="button">Pause</button> <button class="button danger">Stop</button></span>
+          </div>
+          <div class="split-workspace">
+            <div class="pane">
+              <div class="pane-head"><span>Pane A / ops-prod-01</span><span>Right click: split, move, close</span></div>
+              <div class="term">
+                <div><span class="prompt">deploy@ops-prod-01</span>:<span class="cmd">~</span>$ systemctl status nginx</div>
+                <div>nginx.service - running</div>
+                <br>
+                <div><span class="prompt">deploy@ops-prod-01</span>:<span class="cmd">~</span>$ tail -f /var/log/nginx/access.log</div>
+                <div>10.0.3.18 GET /health 200</div>
+                <div>10.0.3.20 GET /api/v1/status 200</div>
+              </div>
+            </div>
+            <div class="splitter" title="Drag to resize panes"></div>
+            <div class="pane">
+              <div class="pane-head"><span>Pane B / ops-prod-02</span><span>Drag tab here</span></div>
+              <div class="term">
+                <div><span class="prompt">deploy@ops-prod-02</span>:<span class="cmd">~</span>$</div>
+                <div style="color:#f3d58a">Receiving synchronized key input from ops-prod-01</div>
+                <br>
+                <div>Last command mirrored: systemctl status nginx</div>
+              </div>
+            </div>
           </div>
         </section>
         <aside class="dock">
-          <div class="dock-head"><span>SFTP: /var/www/app</span><span>↗</span></div>
-          <div class="sftp-list">
-            <div class="file-row"><b>Name</b><b>Size</b><b>Modified</b></div>
-            <div class="file-row"><span>..</span><span></span><span></span></div>
-            <div class="file-row"><span>config/</span><span>-</span><span>09:20</span></div>
-            <div class="file-row"><span>releases/</span><span>-</span><span>09:18</span></div>
-            <div class="file-row"><span>app.log</span><span>14 MB</span><span>09:24</span></div>
-            <div class="file-row"><span>deploy.sh</span><span>4 KB</span><span>08:58</span></div>
+          <div class="dock-tabs"><span class="active">SFTP</span><span>Transfers</span><span>Tunnels</span><span>Commands</span></div>
+          <div>
+            <div class="dock-head"><span>SFTP: /var/www/app</span><span>Open as tab</span></div>
+            <div class="sftp-list">
+              <div class="file-row"><b>Name</b><b>Size</b><b>Modified</b></div>
+              <div class="file-row"><span>..</span><span></span><span></span></div>
+              <div class="file-row"><span>config/</span><span>-</span><span>09:20</span></div>
+              <div class="file-row"><span>releases/</span><span>-</span><span>09:18</span></div>
+              <div class="file-row"><span>app.log</span><span>14 MB</span><span>09:24</span></div>
+              <div class="file-row"><span>deploy.sh</span><span>4 KB</span><span>08:58</span></div>
+            </div>
           </div>
           <div class="queue">
             <b>Transfer Queue</b>
-            <div style="margin-top:10px">Uploading release.tar.gz · 68%</div>
+            <div style="margin-top:10px">Uploading release.tar.gz - 68%</div>
             <div class="progress"><span></span></div>
-            <div style="margin-top:8px;color:var(--muted)">2.1 MB/s · retry available on failure</div>
+            <div style="margin-top:8px;color:var(--muted)">2.1 MB/s - retry available on failure</div>
           </div>
         </aside>
         <footer class="status">
           <span>Connected</span>
           <span>deploy@10.0.1.25</span>
-          <span>Latency 32 ms</span>
+          <span>Proxy: SOCKS5 corp-proxy</span>
           <span>SFTP active</span>
-          <span>Logging on</span>
-          <span>SOCKS proxy off</span>
+          <span>Logging: sanitized text</span>
+          <span>Sync input active</span>
         </footer>
       </div>
     </section>
 
-    <h2>2. 会话编辑器与安全提示</h2>
+    <h2>2. Split menu and Send Key Input To</h2>
     <div class="grid-2">
       <section class="dialog">
-        <div class="tabs-small"><span class="active">General</span><span>Auth</span><span>Terminal</span><span>SFTP</span><span>Tunnels</span></div>
-        <div class="form-row"><label>Name</label><div class="fake-input">ops-prod-01</div></div>
-        <div class="form-row"><label>Host</label><div class="fake-input">10.0.1.25</div></div>
-        <div class="form-row"><label>Port</label><div class="fake-input">22</div></div>
-        <div class="form-row"><label>Username</label><div class="fake-input">deploy</div></div>
-        <div class="form-row"><label>Default SFTP dir</label><div class="fake-input">/var/www/app</div></div>
-        <div class="form-row"><label>Log template</label><div class="fake-input">{date}/{session}-{host}.log</div></div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px"><div class="button">Test Connection</div><div class="button">Save</div></div>
+        <h3>Split dropdown / pane context menu</h3>
+        <div class="check-row"><span>Split Right</span><span class="badge">enabled if panes &lt; 4</span></div>
+        <div class="check-row"><span>Split Down</span><span class="badge">enabled if panes &lt; 4</span></div>
+        <div class="check-row"><span>Move Tab to Previous Pane</span><span>left click</span></div>
+        <div class="check-row"><span>Move Tab to Next Pane</span><span>left click</span></div>
+        <div class="check-row"><span>Balance Panes</span><span>sets ratio to 50%</span></div>
+        <div class="check-row"><span>Close Current Pane</span><span class="badge">confirm active sessions</span></div>
       </section>
       <section class="dialog">
-        <h3 style="margin-top:0">Host Key Changed</h3>
-        <p>主机密钥变更必须是阻断式提示，不能只在状态栏闪一下。用户需要看到旧 fingerprint、新 fingerprint 和 known_hosts 路径。</p>
-        <div class="form-row"><label>Host</label><div class="fake-input">10.0.1.25:22</div></div>
-        <div class="form-row"><label>Old</label><div class="fake-input">SHA256:old-host-key-fingerprint</div></div>
-        <div class="form-row"><label>New</label><div class="fake-input">SHA256:new-host-key-fingerprint</div></div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px"><div class="button">Cancel</div><div class="button">Trust Once</div><div class="button">Replace Key</div></div>
+        <h3>Send Key Input To Dialog</h3>
+        <div class="form-row"><label>Source</label><div class="fake-input">ops-prod-01 (read-only)</div></div>
+        <div class="form-row"><label>Scope</label><div class="fake-input">Current Split / Tab Group / Same Folder / Matching Filter / Manual</div></div>
+        <div class="form-row"><label>Filters</label><div class="fake-input">username=deploy, host prefix=ops-prod, tags=production</div></div>
+        <div class="form-row"><label>Targets</label><div class="fake-input">[x] ops-prod-02  [x] ops-prod-03  [ ] api-staging</div></div>
+        <div class="form-row"><label>Confirm</label><div class="fake-input">Type SYNC to enable Start</div></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end"><div class="button">Cancel</div><div class="button danger">Start Sync</div></div>
       </section>
     </div>
 
-    <h2>3. 端口转发与快捷命令面板</h2>
+    <h2>3. Session / folder defaults / appearance inheritance</h2>
     <div class="grid-2">
       <section class="dialog">
-        <h3 style="margin-top:0">Tunnels</h3>
-        <div class="file-row"><b>Type</b><b>Listen</b><b>Target</b></div>
-        <div class="file-row"><span>Local</span><span>127.0.0.1:15432</span><span>db:5432</span></div>
-        <div class="file-row"><span>Dynamic</span><span>127.0.0.1:1080</span><span>SOCKS5</span></div>
-        <div class="file-row"><span>Remote</span><span>0.0.0.0:9000</span><span>localhost:9000</span></div>
-        <div style="display:flex;gap:8px;margin-top:14px"><div class="button">+ Add</div><div class="button">Stop</div><div class="button">Restart</div></div>
+        <div class="tabs-small">
+          <span>General</span><span>Auth</span><span>Terminal</span><span>SFTP</span><span>Proxy</span><span>Logging</span><span class="active">Appearance</span>
+        </div>
+        <h3>Session Editor - Appearance</h3>
+        <div class="form-row"><label>Mode</label><div class="fake-input">Inherit / Custom</div></div>
+        <div class="form-row"><label>Theme</label><div class="fake-input">Inherited from folder Production: Dark</div></div>
+        <div class="form-row"><label>Color Scheme</label><div class="fake-input">Solarized Dark</div></div>
+        <div class="form-row"><label>Font</label><div class="fake-input">Cascadia Mono, 13px, line height 1.2</div></div>
+        <div class="form-row"><label>Tab Color</label><div class="fake-input">Production Blue</div></div>
+        <div class="form-row"><label>On Connect</label><div class="fake-input">Show SFTP panel: inherited true</div></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end"><div class="button">Reset Field</div><div class="button">Reset All</div><div class="button primary">Save</div></div>
       </section>
       <section class="dialog">
-        <h3 style="margin-top:0">Quick Commands</h3>
-        <div class="button" style="margin:0 6px 8px 0">systemctl status nginx</div>
-        <div class="button" style="margin:0 6px 8px 0">tail app.log</div>
-        <div class="button" style="margin:0 6px 8px 0">df -h</div>
-        <div class="button" style="margin:0 6px 8px 0">docker ps</div>
-        <div class="fake-input" style="height:90px;margin-top:12px">Compose Pane: paste multi-line command here, then send to current tab or selected sessions.</div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><div class="button">Send Current</div><div class="button">Broadcast...</div></div>
+        <h3>Folder Editor - defaults inherited by sessions</h3>
+        <div class="form-row"><label>Folder Name</label><div class="fake-input">Production</div></div>
+        <div class="form-row"><label>Appearance</label><div class="fake-input">Custom: Dark, Production Blue tabs</div></div>
+        <div class="form-row"><label>Logging</label><div class="fake-input">Enabled, sanitized text, timestamps on</div></div>
+        <div class="form-row"><label>Proxy</label><div class="fake-input">Custom: SOCKS5 corp-proxy:1080</div></div>
+        <div class="form-row"><label>Apply Preview</label><div class="fake-input">Affects 2 child folders and 18 saved sessions</div></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end"><div class="button">Cancel</div><div class="button primary">Save Folder Defaults</div></div>
+      </section>
+    </div>
+
+    <h2>4. Proxy and logging settings</h2>
+    <div class="grid-2">
+      <section class="dialog">
+        <h3>Proxy section</h3>
+        <div class="form-row"><label>Mode</label><div class="fake-input">Inherit / None / Global / Custom</div></div>
+        <div class="form-row"><label>Protocol</label><div class="fake-input">SOCKS4 / SOCKS4a / SOCKS5 / HTTP CONNECT</div></div>
+        <div class="form-row"><label>Host</label><div class="fake-input">corp-proxy.local</div></div>
+        <div class="form-row"><label>Port</label><div class="fake-input">1080</div></div>
+        <div class="form-row"><label>DNS</label><div class="fake-input">Resolve DNS by proxy: enabled for SOCKS4a/SOCKS5</div></div>
+        <div class="form-row"><label>Auth</label><div class="fake-input">Username/password, saved via SecretStore</div></div>
+        <div class="form-row"><label>Test</label><div class="fake-input">TCP ok -> proxy handshake ok -> SSH handshake ok</div></div>
+      </section>
+      <section class="dialog">
+        <h3>Logging section</h3>
+        <div class="form-row"><label>Mode</label><div class="fake-input">Inherit / Disabled / Enabled</div></div>
+        <div class="form-row"><label>Format</label><div class="fake-input">Raw Transcript / Sanitized Text</div></div>
+        <div class="form-row"><label>Remote Output</label><div class="fake-input">Record all SSH shell channel output: ON</div></div>
+        <div class="form-row"><label>Local Input</label><div class="fake-input">OFF by default; enabling requires confirmation</div></div>
+        <div class="form-row"><label>Path Template</label><div class="fake-input">{date}/{session}-{host}.log</div></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end"><div class="button">Open Log Folder</div><div class="button primary">Save</div></div>
+      </section>
+    </div>
+
+    <h2>5. Safety prompts</h2>
+    <div class="grid-3">
+      <section class="dialog">
+        <h3>Host Key Changed</h3>
+        <p>阻断式弹窗，默认焦点必须是 Cancel。</p>
+        <div class="form-row"><label>Host</label><div class="fake-input">10.0.1.25:22</div></div>
+        <div class="form-row"><label>Old</label><div class="fake-input">SHA256:old-host-key</div></div>
+        <div class="form-row"><label>New</label><div class="fake-input">SHA256:new-host-key</div></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end"><div class="button">Cancel</div><div class="button">Copy Details</div><div class="button danger">Replace Key</div></div>
+      </section>
+      <section class="dialog">
+        <h3>Broadcast command</h3>
+        <p>发送多行命令到多个 SSH 会话前必须确认。</p>
+        <div class="form-row"><label>Targets</label><div class="fake-input">3 connected SSH sessions</div></div>
+        <div class="form-row"><label>Preview</label><div class="fake-input">systemctl restart nginx</div></div>
+        <div class="form-row"><label>Confirm</label><div class="fake-input">Type BROADCAST</div></div>
+      </section>
+      <section class="dialog">
+        <h3>Input logging</h3>
+        <p>记录本地输入属于高风险操作，必须显式打开并在状态栏标红。</p>
+        <div class="form-row"><label>Risk</label><div class="fake-input">May record secrets typed by user</div></div>
+        <div class="form-row"><label>Confirm</label><div class="fake-input">Type RECORD INPUT</div></div>
       </section>
     </div>
   </main>
