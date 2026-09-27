@@ -4,9 +4,11 @@
 //! and `cargo xtask run` forwards everything after `--` to the app.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use anyhow::{bail, Result};
 
+use crate::contrast::{ContrastOptions, ThemeSelection};
 use crate::dist::{ChecksumOptions, DistOptions};
 use crate::tasks::{BuildOptions, CleanOptions, RunOptions, TestOptions};
 
@@ -24,6 +26,8 @@ Commands:
   run         Run the native app from source.
   dist        Build release artifacts: portable archive and installers.
   checksums   Regenerate SHA256SUMS.txt for the artifacts in dist/.
+  contrast    Check WCAG contrast of the color tokens in ui/theme.slint
+              (light + dark) and fail when a combination is below its ratio.
   deny        Run cargo-deny license and advisory checks (CI gate).
   doctor      Print toolchain and packaging-tool diagnostics.
   clean       Remove artifacts produced by `cargo xtask dist` (with --all also
@@ -61,10 +65,17 @@ Options:
   checksums --dir <dir>             Directory to scan (default: dist/).
             --output <file>         Output file (default: <dir>/SHA256SUMS.txt).
 
+  contrast  --theme <light|dark|both>
+                                      Theme(s) to check (default: both).
+            --theme-file <path>       Theme file to read (default:
+                                      ui/theme.slint, relative to the repo root).
+            --verbose                 Also list passing icon / large-text rows.
+
   clean     --all                   Also remove the cargo target directory.
 
 Examples:
   cargo xtask check
+  cargo xtask contrast
   cargo xtask test --live --ssh-target root@127.0.0.1:2222
   cargo xtask dist --formats portable,deb,rpm
   cargo xtask dist --target x86_64-pc-windows-msvc --formats portable,msi
@@ -87,6 +98,7 @@ pub enum Command {
     Ci,
     Dist(DistOptions),
     Checksums(ChecksumOptions),
+    Contrast(ContrastOptions),
 }
 
 /// Options collected for one command.
@@ -193,6 +205,7 @@ pub fn parse(argv: &[String]) -> Result<Command> {
         "run" => parse_arguments(rest, &[], &["release"])?,
         "clean" => parse_arguments(rest, &[], &["all"])?,
         "checksums" => parse_arguments(rest, &["dir", "output"], &[])?,
+        "contrast" => parse_arguments(rest, &["theme", "theme-file"], &["verbose"])?,
         "dist" => parse_arguments(
             rest,
             &["target", "platform", "version", "formats", "out"],
@@ -260,6 +273,17 @@ pub fn parse(argv: &[String]) -> Result<Command> {
             Ok(Command::Checksums(ChecksumOptions {
                 dir: parsed.value("dir").map(str::to_string),
                 output: parsed.value("output").map(str::to_string),
+            }))
+        }
+        "contrast" => {
+            parsed.ensure_no_positional("contrast")?;
+            Ok(Command::Contrast(ContrastOptions {
+                theme: match parsed.value("theme") {
+                    Some(value) => ThemeSelection::parse(value)?,
+                    None => ThemeSelection::Both,
+                },
+                theme_file: parsed.value("theme-file").map(PathBuf::from),
+                verbose: parsed.flag("verbose"),
             }))
         }
         "dist" => Ok(Command::Dist(DistOptions::parse(&parsed)?)),

@@ -14,7 +14,11 @@ pub mod proxy_socks5;
 pub mod pty;
 pub mod real;
 
-pub use auth::AuthMethod;
+pub use auth::{
+    AuthAttempt, AuthAttemptKind, AuthMethod, AuthMethods, AuthProblemKind,
+    KeyboardInteractiveChallenge, KeyboardInteractivePrompter, KeyboardInteractiveResponse, Prompt,
+    ScriptedPrompter, SingleSecretPrompter,
+};
 pub use channel::{ChannelKind, ShellSession};
 pub use client::{
     ExecOutput, ShellAdapter, ShellClient, SshAdapter, SshClient, SshConnectionConfig,

@@ -81,28 +81,35 @@ See [docs/product/github-actions-release.md](docs/product/github-actions-release
 Linux is the current development focus; Windows and macOS use the same
 commands. The supported setup is WSL2 (Debian 13) with a current Rust
 toolchain. Note that Debian's packaged `rustc` 1.85 is too old for the locked
-dependencies (MSRV is 1.89), so install Rust with rustup:
+dependencies (MSRV is 1.92), so install Rust with rustup:
 
 ```bash
 export RUSTUP_DIST_SERVER=https://rsproxy.cn RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal -c rustfmt -c clippy
+```
+
+The repository lives on the WSL filesystem at `/root/yshell`; Windows
+accesses it as `\\wsl.localhost\debian\root\yshell`. The old `D:\NewSpace\yshell`
+copy is a frozen historical backup - do not edit code or build in it. Start
+each shell by sourcing [scripts/wsl-env.sh](scripts/wsl-env.sh), which puts the
+rustup toolchain on `PATH` (non-login shells otherwise get Debian's `rustc`
+1.85) and points `CARGO_TARGET_DIR` at the shared `/root/yshell-target`:
+
+```bash
+cd /root/yshell
+source scripts/wsl-env.sh
 cargo xtask doctor   # prints the apt command for the Linux build/runtime libraries
 cargo xtask test     # cargo test --workspace --all-features
 cargo xtask run      # run the native app from source
 cargo xtask dist     # build the release artifacts into dist/
 ```
 
-When the repository lives on a Windows mount (`/mnt/*`), set a target directory
-on the WSL filesystem to speed up builds - `cargo xtask doctor` reminds you:
-
-```bash
-export CARGO_TARGET_DIR=$HOME/yshell-target
-```
-
-Run the dev build from Windows (needs WSLg, i.e. Windows 11 or a recent WSL):
+Builds must run from the WSL filesystem (9p mounts such as `/mnt/*` are very
+slow for cargo). Run the dev build from Windows (needs WSLg, i.e. Windows 11 or
+a recent WSL):
 
 ```powershell
-wsl.exe -e bash -lc 'cd /mnt/d/NewSpace/yshell && cargo xtask run'
+wsl.exe -e bash -lc 'cd /root/yshell && source scripts/wsl-env.sh && cargo xtask run'
 ```
 
 Live SSH/SFTP smoke tests run against a disposable Docker container:

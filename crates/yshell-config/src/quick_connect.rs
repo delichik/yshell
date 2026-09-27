@@ -21,6 +21,30 @@ impl QuickConnectTarget {
         profile.port = self.port;
         profile
     }
+
+    /// Formats the target as the canonical `[user@]host:port` string.
+    ///
+    /// This is the representation persisted in `quick_connect.history` and
+    /// `quick_links`; IPv6 hosts are bracketed and the port is always included.
+    #[must_use]
+    pub fn canonical(&self) -> String {
+        let port = self.port;
+        let host = if self.host.contains(':') {
+            format!("[{}]", self.host)
+        } else {
+            self.host.clone()
+        };
+        match &self.username {
+            Some(username) => format!("{username}@{host}:{port}"),
+            None => format!("{host}:{port}"),
+        }
+    }
+}
+
+impl fmt::Display for QuickConnectTarget {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.canonical())
+    }
 }
 
 /// Quick Connect parse/validation failures.
@@ -178,5 +202,22 @@ mod tests {
             parse_quick_connect("bad host").expect_err("bad host"),
             QuickConnectError::InvalidHost("bad host".to_owned())
         );
+    }
+
+    #[test]
+    fn canonicalizes_parsed_targets() {
+        let cases = [
+            ("example.com", "example.com:22"),
+            ("alice@example.com", "alice@example.com:22"),
+            ("ssh://alice@example.com:2200/srv", "alice@example.com:2200"),
+            ("[::1]", "[::1]:22"),
+            ("root@[2001:db8::1]:2222", "root@[2001:db8::1]:2222"),
+        ];
+
+        for (input, expected) in cases {
+            let parsed = parse_quick_connect(input).expect(input);
+            assert_eq!(parsed.canonical(), expected);
+            assert_eq!(parsed.to_string(), expected);
+        }
     }
 }

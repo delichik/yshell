@@ -22,6 +22,12 @@ E2E_APP_WIN=""
 E2E_SHOT_PREFIX="e2e"
 E2E_THEME="${E2E_THEME:-dark}"
 E2E_ROWS=()
+# 固定 Xvfb 几何；与 WINIT_X11_SCALE_FACTOR=1 一起保证截图可复现（96dpi、缩放 1.0）。
+# 覆盖：E2E_SCREEN=1600x1000x24；HiDPI 对比：E2E_WINIT_SCALE=1.25。
+E2E_SCREEN="${E2E_SCREEN:-1920x1200x24}"
+E2E_WINIT_SCALE="${E2E_WINIT_SCALE:-1.0}"
+# e2e_ensure_xvfb 实际选中的 display（复用 :99 几何不符时会换到空闲 display）。
+E2E_DISPLAY=""
 
 e2e_log() { printf '[e2e] %s\n' "$*"; }
 e2e_warn() { printf '[e2e] !! %s\n' "$*" >&2; }
@@ -42,14 +48,53 @@ e2e_require_tools() {
 }
 
 # ---------------------------------------------------------------- Xvfb
+# 找一个空闲的 X display（:99 起），用于 :99 已被其它几何的 Xvfb 占用的情况。
+e2e_free_display() {
+  local port candidate
+  for ((port = 99; port <= 220; port++)); do
+    candidate=":$port"
+    if [ ! -e "/tmp/.X11-unix/X$port" ] && ! pgrep -f "Xvfb $candidate" >/dev/null 2>&1; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# xdotool 输出 "1920 1200"，统一成 WxH 便于比较。
+e2e_display_geometry() {
+  xdotool getdisplaygeometry 2>/dev/null | awk '{ if (NF >= 2) print $1"x"$2 }'
+}
+
+# 启动/复用固定几何的 Xvfb。几何不符（例如复用了旧的非 1920x1200 :99）时自动换
+# 一个空闲 display，避免以 1.0833 之类的非整数缩放渲染、污染像素级对比。
+# 结果放在全局 E2E_DISPLAY；同时导出 DISPLAY。
 e2e_ensure_xvfb() { # $1 = display（如 :99）
-  local display="$1"
+  local display="$1" want="${E2E_SCREEN%x*}" tag current
+  if pgrep -f "Xvfb $display" >/dev/null 2>&1; then
+    current=$(DISPLAY="$display" e2e_display_geometry)
+    if [ -n "$current" ] && [ "$current" != "$want" ]; then
+      e2e_warn "已有 Xvfb $display 几何为 $current（期望 $want），换用专用 display"
+      display=$(e2e_free_display) || {
+        e2e_warn "找不到空闲 display（:99–:220）"
+        return 1
+      }
+    fi
+  fi
   if ! pgrep -f "Xvfb $display" >/dev/null 2>&1; then
-    e2e_log "启动 Xvfb $display"
-    Xvfb "$display" -screen 0 1920x1200x24 >/tmp/xvfb99.log 2>&1 &
+    tag="${display#:}"
+    e2e_log "启动 Xvfb $display（-screen 0 $E2E_SCREEN）"
+    Xvfb "$display" -screen 0 "$E2E_SCREEN" >"/tmp/xvfb$tag.log" 2>&1 &
     sleep 1.5
   fi
+  E2E_DISPLAY="$display"
   export DISPLAY="$display"
+  current=$(e2e_display_geometry)
+  e2e_log "Xvfb $display 几何：${current:-未知}（期望 $want），WINIT_X11_SCALE_FACTOR=$E2E_WINIT_SCALE"
+  if [ "$current" != "$want" ]; then
+    e2e_warn "Xvfb $display 几何 ${current:-未知} ≠ $want，像素断言不可复现"
+    return 1
+  fi
 }
 
 # ---------------------------------------------------------------- 应用进程/窗口
@@ -70,15 +115,18 @@ e2e_wait_window() { # $1 = pid，$2 = 轮数（每轮 2s）→ stdout 窗口 id
 }
 
 # 启动 app：固定 1440x900、窗口移动到 (0,0)（坐标均为窗口内坐标）。
-# 不读任何菜单：后端由 YSHELL_SSH_BACKEND 决定（等价 View 菜单，见 implementation-notes）。
+# 固定 WINIT_X11_SCALE_FACTOR=1，保证 winit 设备缩放 = 1.0（见 lib.sh 全局说明）。
+# 不读任何菜单：桌面版默认 native SSH，UI 已无后端切换入口；YSHELL_SSH_BACKEND
+# 只供 e2e/测试覆盖（fake 离线路径等），这里显式钉住 native-ssh。
 e2e_launch_app() { # $1=bin $2=config_dir $3=theme $4=lang $5=log $6=display
   local bin="$1" config_dir="$2" theme="$3" lang="$4" log="$5" display="$6"
   if [ ! -x "$bin" ]; then
     e2e_warn "找不到可执行文件：$bin（先 cargo xtask build）"
     return 1
   fi
-  DISPLAY="$display" \
+  DISPLAY="${E2E_DISPLAY:-$display}" \
     env -u YSHELL_MASTER_PASSWORD \
+    WINIT_X11_SCALE_FACTOR="$E2E_WINIT_SCALE" \
     YSHELL_SSH_BACKEND=native-ssh \
     YSHELL_THEME="$theme" \
     YSHELL_LANG="$lang" \
@@ -230,11 +278,17 @@ e2e_connect_enabled() {
 
 # SFTP 文件列表出现了多行 → 会话已连接且 SFTP 已挂载。
 # 判据用「行带的灰度标准差」：有图标/文字的行对比度高，空行接近 0（深浅主题通用）。
+#
+# N1（2026-09-28）重新校准：远端列表改为紧凑头部（面包屑 + 路径输入两行）后，
+# 数据行从 y=344 起、行高 32px（原先 322/27）。取样 4 行、每行上沿 +8px、高 16px，
+# x 从 1180 起 260 宽（覆盖 Name/Size，避开图标列）。
+# 未连接时同一区域只有远端页脚（y≈416）与本地栏头部（y≈448）两条内容 → 计数 ≤2；
+# 连接后 4 行数据全部命中 → 计数 4。阈值 ≥3 对两种状态都稳健。
 e2e_sftp_row_bands() {
   local i y sd count=0
-  for i in 0 1 2 3 4; do
-    y=$((322 + i * 27))
-    sd=$(e2e_region_stddev 1125 "$y" 300 24)
+  for i in 0 1 2 3; do
+    y=$((352 + i * 32))
+    sd=$(e2e_region_stddev 1180 "$y" 260 16)
     if awk -v s="${sd:-0}" 'BEGIN { exit !(s > 0.025) }'; then
       count=$((count + 1))
     fi

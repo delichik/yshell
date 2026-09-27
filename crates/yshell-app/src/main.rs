@@ -3,8 +3,10 @@
 mod app_state;
 mod bootstrap;
 mod error;
+mod local_fs;
 mod runtime;
 mod session_runtime;
+mod sftp_jobs;
 mod sftp_view;
 
 use std::env;

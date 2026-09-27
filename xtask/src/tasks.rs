@@ -261,7 +261,7 @@ pub fn doctor(ctx: &Context) -> Result<()> {
         println!("Linux build dependencies (needed to compile):");
         println!("  sudo apt-get install -y --no-install-recommends build-essential \\");
         println!("    pkg-config libssl-dev libx11-dev libxcb1-dev libxcb-render0-dev \\");
-        println!("    libxcb-shape0-dev libxcb-xfixes0-dev");
+        println!("    libxcb-shape0-dev libxcb-xfixes0-dev libfontconfig1-dev");
         println!();
         println!("Linux GUI runtime libraries (needed to run, not to build):");
         println!("  sudo apt-get install -y --no-install-recommends libx11-xcb1 \\");

@@ -1,11 +1,73 @@
+// 状态栏（26px）：左侧状态文案 + 弹性空白 + 右侧日志区（N6）。
+//
+// 拆分自 `ui/main_window.slint`（R1 结构重构）：只搬代码，不改布局/文案/行为。
+// 说明：S2 已移除后端切换入口；N6 在右侧新增终端日志入口/ REC 指示——文案由宿主
+// 用 `TextFormats.logging-status-display` 渲染，点击打开与终端右键菜单相同的日志
+// 菜单（Start/Stop/Open File/Open Folder）。
 import { Theme } from "../theme.slint";
+
 export component StatusBar inherits Rectangle {
     in property <string> message: "Ready";
-    height: 28px;
+    /// N6：日志区是否可用（有活动会话）。
+    in property <bool> logging-usable: false;
+    /// N6：活动会话是否正在记录（REC 圆点）。
+    in property <bool> logging-active: false;
+    /// N6：日志区文案（宿主渲染；空 = 只显示入口标签）。
+    in property <string> logging-text: "";
+
+    callback logging-clicked();
+
+    height: Theme.bar-height-status;
     background: Theme.layer-fill;
-    Text {
-        text: root.message;
-        color: Theme.text-secondary;
-        vertical-alignment: center;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 8px;
+
+        Text {
+            text: root.message;
+            color: Theme.text-secondary;
+            font-size: Theme.font-caption;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        status_spacer := Rectangle { }
+
+        // N6：日志入口（REC 指示 + 文案；点击 = 日志菜单，与终端右键菜单同一入口）。
+        if root.logging-usable : Rectangle {
+            border-radius: Theme.radius-control;
+            background: logging-touch.has-hover ? Theme.subtle-hover : transparent;
+            animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+            HorizontalLayout {
+                padding-left: Theme.spacing-8;
+                padding-right: Theme.spacing-8;
+                spacing: 6px;
+                alignment: center;
+
+                // REC 圆点：仅在记录中显示（避免静态元素占位）。
+                if root.logging-active : Rectangle {
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 4px;
+                    background: Theme.critical;
+                }
+
+                Text {
+                    text: root.logging-text;
+                    color: root.logging-active ? Theme.text-primary : Theme.text-secondary;
+                    font-size: Theme.font-caption;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                }
+            }
+
+            logging-touch := TouchArea {
+                clicked => { root.logging-clicked(); }
+            }
+        }
     }
 }

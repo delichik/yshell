@@ -8,7 +8,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use crate::schema::{ConfigDocument, ConfigSchemaError};
+use crate::schema::{ConfigDocument, ConfigSchemaError, ConfigWarning};
 use yshell_ssh::{HostKeyFingerprint, KnownHosts};
 
 const CONFIG_FILE_NAME: &str = "config.toml";
@@ -56,27 +56,49 @@ impl ConfigStore {
     /// If the existing TOML is unreadable or invalid, it is renamed to a
     /// timestamped `.bak` file and replaced with a default document.
     pub fn load_or_recover(&self) -> Result<LoadOutcome, ConfigStoreError> {
+        self.load_or_recover_with_warnings()
+            .map(|(outcome, _)| outcome)
+    }
+
+    /// Loads the document and returns non-fatal warnings found while loading.
+    ///
+    /// Warnings cover invalid Quick Connect/quick-link targets and invalid theme
+    /// values that were dropped or cleared by [`ConfigDocument::sanitize`].
+    pub fn load_or_recover_with_warnings(
+        &self,
+    ) -> Result<(LoadOutcome, Vec<ConfigWarning>), ConfigStoreError> {
         fs::create_dir_all(&self.root)?;
         let path = self.config_file();
         if !path.exists() {
             let document = ConfigDocument::default();
             self.save(&document)?;
-            return Ok(LoadOutcome {
+            let outcome = LoadOutcome {
                 document,
                 recovered_from_backup: None,
-            });
+            };
+            return Ok((outcome, Vec::new()));
         }
 
         let input = fs::read_to_string(&path);
         match input {
-            Ok(input) => match ConfigDocument::from_toml_str(&input) {
-                Ok(document) => Ok(LoadOutcome {
-                    document,
-                    recovered_from_backup: None,
-                }),
-                Err(error) => self.backup_and_reset(path, ConfigStoreError::Schema(error)),
+            Ok(input) => match ConfigDocument::from_toml_str_with_warnings(&input) {
+                Ok((document, warnings)) => {
+                    let outcome = LoadOutcome {
+                        document,
+                        recovered_from_backup: None,
+                    };
+                    Ok((outcome, warnings))
+                }
+                Err(error) => {
+                    let outcome =
+                        self.backup_and_reset(path, ConfigStoreError::Schema(error))?;
+                    Ok((outcome, Vec::new()))
+                }
             },
-            Err(error) => self.backup_and_reset(path, ConfigStoreError::Io(error)),
+            Err(error) => {
+                let outcome = self.backup_and_reset(path, ConfigStoreError::Io(error))?;
+                Ok((outcome, Vec::new()))
+            }
         }
     }
 
@@ -237,6 +259,34 @@ mod tests {
 
         assert_eq!(outcome.document, document);
         assert!(outcome.recovered_from_backup.is_none());
+    }
+
+    #[test]
+    fn load_reports_sanitize_warnings_and_drops_invalid_targets() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = ConfigStore::new(temp.path());
+        fs::create_dir_all(temp.path()).expect("mkdir");
+        fs::write(
+            store.config_file(),
+            r#"
+schema_version = 2
+
+[[quick_connect.history]]
+target = "not a host"
+"#,
+        )
+        .expect("write config");
+
+        let (outcome, warnings) = store
+            .load_or_recover_with_warnings()
+            .expect("load with warnings");
+
+        assert!(outcome.recovered_from_backup.is_none());
+        assert!(outcome.document.quick_connect.history.is_empty());
+        assert!(matches!(
+            warnings.as_slice(),
+            [ConfigWarning::InvalidQuickConnectTarget { target, .. }] if target == "not a host"
+        ));
     }
 
     #[test]

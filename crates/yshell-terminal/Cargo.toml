@@ -12,5 +12,5 @@ workspace = true
 path = "src/lib.rs"
 
 [dependencies]
-fontdue = "0.9"
+swash = { workspace = true }
 unicode-width = "0.1"

@@ -1,0 +1,504 @@
+// 认证弹窗（N4 设计 §2）：按服务端能力展示 password / publickey /
+// keyboard-interactive 三种方式，多方式重试不清空已填内容；keyboard-interactive
+// 支持按服务端 challenge 动态渲染多轮 prompt（name / instruction / 多 prompt / echo）。
+//
+// 与宿主（Rust / main_window）的约定：
+//   * `open` 由宿主投影驱动；`cancel` 关闭弹窗（Esc / 遮罩点击 / Cancel 按钮同一路径）。
+//   * `selected-method`（0/1/2）与 `*-visible` 由宿主按 A0 的 `AuthMethods` 投影：
+//       0 = password、1 = publickey（含 ssh-agent 选项）、2 = keyboard-interactive。
+//   * 输入属性（password-text / passphrase-text / challenge answers）在弹窗内编辑，
+//     提交时经回调回传宿主；宿主关闭弹窗时负责清空敏感值（设计 §2）。
+//   * keyboard-interactive 每轮一个 `challenge-prompts` 列表 + `challenge-round`
+//     轮号；提交后宿主用下一轮 challenge 覆盖这组属性（多轮如实呈现）。
+//
+// 规范：docs/product/ui-winui3-design-language.md §5.10（ContentDialog 形态）。
+
+import { Theme } from "../theme.slint";
+import { Icon } from "basic/icons.slint";
+import { WinButton, WinIconButton, WinToggle } from "basic/controls.slint";
+import { WinTextInput } from "basic/text_input.slint";
+
+/// 私钥下拉的一行（来自托管私钥清单；`detail` = 算法 + 指纹）。
+export struct AuthKeyOption {
+    id: string,
+    label: string,
+    detail: string,
+}
+
+/// keyboard-interactive 的一个 prompt（echo=false 时用密码框）。
+export struct AuthKeyboardPrompt {
+    text: string,
+    echo: bool,
+    answer: string,
+}
+
+/// 私钥下拉行：标签 + 算法/指纹（两行 44px）。
+component AuthKeyListItem inherits Rectangle {
+    in property <AuthKeyOption> node;
+    in property <bool> selected: false;
+    callback clicked();
+
+    height: 44px;
+    border-radius: Theme.radius-control;
+    background: selected ? Theme.subtle-selected
+        : touch.has-hover ? Theme.subtle-hover
+        : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    VerticalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        padding-top: 5px;
+        padding-bottom: 5px;
+        spacing: 1px;
+
+        Text {
+            text: node.label;
+            color: Theme.text-primary;
+            font-size: Theme.font-body;
+            font-weight: root.selected ? Theme.weight-semibold : 400;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        Text {
+            text: node.detail;
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            font-family: Theme.font-mono;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+export component AuthPromptDialog inherits Rectangle {
+    in property <bool> open: false;
+    /// 文案里的 `user@host:port`
+    in property <string> host-text: "";
+    /// 上一次尝试的错误提示（空 = 首次弹窗）
+    in property <string> problem-text: "";
+    /// 服务端是否有任意可用方式（false 时禁用主操作并提示）
+    in property <bool> has-usable-method: true;
+
+    /// 当前方式：0 = password、1 = publickey、2 = keyboard-interactive
+    in-out property <int> selected-method: 0;
+    /// 服务端是否允许各方式（设计 §2：仅 publickey 时不显示密码）
+    in property <bool> password-visible: true;
+    in property <bool> publickey-visible: true;
+    in property <bool> keyboard-visible: true;
+    /// 宿主按输入完整性计算（Rust 侧仍会校验兜底）
+    in property <bool> submit-enabled: true;
+
+    // --- password ---------------------------------------------------------
+    in-out property <string> password-text: "";
+    in-out property <bool> remember-password: false;
+
+    // --- publickey --------------------------------------------------------
+    in property <[AuthKeyOption]> key-options: [];
+    in-out property <int> selected-key-index: -1;
+    in property <string> selected-key-label: "";
+    in-out property <string> passphrase-text: "";
+    in-out property <bool> use-agent: false;
+    in property <bool> publickey-submit-enabled: false;
+
+    // --- keyboard-interactive（多轮）-------------------------------------
+    in property <string> challenge-name: "";
+    in property <string> challenge-instruction: "";
+    in property <[AuthKeyboardPrompt]> challenge-prompts: [];
+    /// 当前轮号（1-based；0 = 服务端尚未给出 challenge）
+    in property <int> challenge-round: 0;
+    /// 到此为止服务端给出的轮数（含当前轮），用于 "Round n of m" 文案
+    in property <int> challenge-round-total: 0;
+    /// 当前轮是否为最后一轮（主操作文案 Connect / Continue）
+    in property <bool> keyboard-final-round: false;
+    in property <bool> keyboard-submit-enabled: false;
+
+    callback cancel();
+    callback select-method(int);
+    callback submit-password();
+    callback toggle-remember-password(bool);
+    callback select-key(int);
+    callback update-passphrase(string);
+    callback toggle-use-agent(bool);
+    callback browse-key-file();
+    callback update-challenge-answer(int, string);
+    callback submit-keyboard-round();
+
+    visible: self.open;
+    background: Theme.scrim;
+
+    private property <bool> show-password:
+        root.selected-method == 0 && root.password-visible;
+    private property <bool> show-publickey:
+        root.selected-method == 1 && root.publickey-visible;
+    private property <bool> show-keyboard:
+        root.selected-method == 2 && root.keyboard-visible;
+    /// 只有一个可用方式时不显示切换行（服务端能力已唯一确定当前方式）。
+    private property <bool> method-chooser-visible:
+        (root.password-visible && (root.publickey-visible || root.keyboard-visible))
+        || (root.publickey-visible && root.keyboard-visible);
+
+    // L2（Esc / 遮罩点击关闭）：与 Cancel 按钮同一路径；面板吞掉空白点击。
+    dialog_scope := FocusScope {
+        width: parent.width;
+        height: parent.height;
+
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.cancel();
+                return accept;
+            }
+            return reject;
+        }
+
+        TouchArea {
+            clicked => { root.cancel(); }
+        }
+
+        Rectangle {
+            x: (parent.width - 460px) / 2;
+            y: max((parent.height - self.height) / 2, Theme.spacing-24);
+            width: 460px;
+            height: body.preferred-height;
+            background: Theme.panel-background;
+            border-radius: Theme.radius-panel;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
+
+            TouchArea { }
+
+            body := VerticalLayout {
+                padding: Theme.spacing-20;
+                spacing: Theme.spacing-12;
+
+                // 标题行
+                HorizontalLayout {
+                    spacing: Theme.spacing-8;
+
+                    Rectangle {
+                        width: Theme.icon-size;
+                        vertical-stretch: 1;
+                        background: transparent;
+
+                        Icon {
+                            name: "shield";
+                            icon-color: Theme.accent;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    VerticalLayout {
+                        spacing: 2px;
+                        horizontal-stretch: 1;
+
+                        Text {
+                            text: @tr("Authentication required");
+                            color: Theme.text-primary;
+                            font-size: Theme.font-subtitle;
+                            font-weight: Theme.weight-semibold;
+                            wrap: no-wrap;
+                        }
+
+                        Text {
+                            text: @tr("Sign in to {0}", root.host-text);
+                            color: Theme.text-secondary;
+                            font-size: Theme.font-body;
+                            wrap: no-wrap;
+                            overflow: elide;
+                        }
+                    }
+
+                    WinIconButton {
+                        icon: "close";
+                        accessible-name: @tr("Cancel");
+                        clicked => { root.cancel(); }
+                    }
+                }
+
+                // 失败提示（关闭弹窗清空；多方式重试时刷新）
+                if root.problem-text != "" : Rectangle {
+                    background: Theme.attention-background;
+                    border-radius: Theme.radius-control;
+                    border-width: 1px;
+                    border-color: Theme.attention-stroke;
+
+                    HorizontalLayout {
+                        padding: Theme.spacing-12;
+                        spacing: Theme.spacing-8;
+                        alignment: start;
+
+                        Icon {
+                            name: "warning";
+                            icon-color: Theme.critical;
+                            icon-size: Theme.icon-size-small;
+                        }
+
+                        Text {
+                            text: root.problem-text;
+                            color: Theme.attention-text;
+                            font-size: Theme.font-body;
+                            wrap: word-wrap;
+                            horizontal-stretch: 1;
+                        }
+                    }
+                }
+
+                if !root.has-usable-method : Text {
+                    text: @tr("The server does not offer any authentication method YShell supports.");
+                    color: Theme.critical;
+                    font-size: Theme.font-body;
+                    wrap: word-wrap;
+                }
+
+                // 方式切换：随服务端能力显隐（设计 §2）；只有一种可用方式时整行不渲染
+                if root.has-usable-method && root.method-chooser-visible : HorizontalLayout {
+                    spacing: Theme.spacing-8;
+
+                    if root.password-visible : WinButton {
+                        text: @tr("Password");
+                        accent: root.selected-method == 0;
+                        subtle: root.selected-method != 0;
+                        clicked => { root.select-method(0); }
+                    }
+
+                    if root.publickey-visible : WinButton {
+                        text: @tr("Public key");
+                        accent: root.selected-method == 1;
+                        subtle: root.selected-method != 1;
+                        clicked => { root.select-method(1); }
+                    }
+
+                    if root.keyboard-visible : WinButton {
+                        text: @tr("Keyboard interactive");
+                        accent: root.selected-method == 2;
+                        subtle: root.selected-method != 2;
+                        clicked => { root.select-method(2); }
+                    }
+                }
+
+                // --- password --------------------------------------------------
+                if root.show-password : VerticalLayout {
+                    spacing: Theme.spacing-8;
+
+                    WinTextInput {
+                        text <=> root.password-text;
+                        placeholder-text: @tr("Password");
+                        input-type: password;
+                        accepted => { if root.submit-enabled { root.submit-password(); } }
+                    }
+
+                    WinToggle {
+                        text: @tr("Remember password");
+                        checked: root.remember-password;
+                        toggled => { root.toggle-remember-password(self.checked); }
+                    }
+
+                    HorizontalLayout {
+                        alignment: end;
+                        spacing: Theme.spacing-8;
+
+                        WinButton {
+                            text: @tr("Cancel");
+                            clicked => { root.cancel(); }
+                        }
+
+                        WinButton {
+                            text: @tr("Connect");
+                            accent: true;
+                            enabled: root.submit-enabled;
+                            clicked => { root.submit-password(); }
+                        }
+                    }
+                }
+
+                // --- publickey -------------------------------------------------
+                if root.show-publickey : VerticalLayout {
+                    spacing: Theme.spacing-8;
+
+                    Text {
+                        text: @tr("Private key");
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-body;
+                    }
+
+                    Rectangle {
+                        height: min(44px * root.key-options.length + 4px, 132px);
+                        background: Theme.panel-background;
+                        border-radius: Theme.radius-control;
+                        border-width: 1px;
+                        border-color: Theme.divider;
+                        clip: true;
+
+                        Flickable {
+                            width: parent.width;
+                            height: parent.height;
+                            interactive: true;
+                            content-width: self.width;
+                            content-height: key-list.preferred-height;
+
+                            key-list := VerticalLayout {
+                                padding: 2px;
+                                spacing: 2px;
+
+                                for option[i] in root.key-options : AuthKeyListItem {
+                                    node: option;
+                                    selected: i == root.selected-key-index;
+                                    clicked => {
+                                        root.selected-key-index = i;
+                                        root.select-key(i);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if root.key-options.length == 0 : Text {
+                        text: @tr("No managed private key. Import one on the Private Keys page, or browse for a key file.");
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        wrap: word-wrap;
+                    }
+
+                    HorizontalLayout {
+                        spacing: Theme.spacing-8;
+
+                        Text {
+                            text: root.selected-key-label;
+                            color: Theme.text-secondary;
+                            font-size: Theme.font-caption;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                            wrap: no-wrap;
+                            overflow: elide;
+                        }
+
+                        WinButton {
+                            text: @tr("Browse…");
+                            icon: "file";
+                            clicked => { root.browse-key-file(); }
+                        }
+                    }
+
+                    WinTextInput {
+                        text <=> root.passphrase-text;
+                        placeholder-text: @tr("Key passphrase (optional)");
+                        input-type: password;
+                        accepted => {
+                            if root.publickey-submit-enabled { root.submit-password(); }
+                        }
+                    }
+
+                    WinToggle {
+                        text: @tr("Use ssh-agent");
+                        checked: root.use-agent;
+                        toggled => { root.toggle-use-agent(self.checked); }
+                    }
+
+                    HorizontalLayout {
+                        alignment: end;
+                        spacing: Theme.spacing-8;
+
+                        WinButton {
+                            text: @tr("Cancel");
+                            clicked => { root.cancel(); }
+                        }
+
+                        WinButton {
+                            text: @tr("Connect");
+                            accent: true;
+                            enabled: root.publickey-submit-enabled;
+                            clicked => { root.submit-password(); }
+                        }
+                    }
+                }
+
+                // --- keyboard-interactive（多轮）-------------------------------
+                if root.show-keyboard : VerticalLayout {
+                    spacing: Theme.spacing-8;
+
+                    if root.challenge-name != "" : Text {
+                        text: root.challenge-name;
+                        color: Theme.text-primary;
+                        font-size: Theme.font-body;
+                        font-weight: Theme.weight-semibold;
+                        wrap: word-wrap;
+                    }
+
+                    if root.challenge-instruction != "" : Text {
+                        text: root.challenge-instruction;
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-body;
+                        wrap: word-wrap;
+                    }
+
+                    if root.challenge-round-total > 1 : Text {
+                        text: @tr("Round {0} of {1}", root.challenge-round, root.challenge-round-total);
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                    }
+
+                    if root.challenge-prompts.length == 0 : Text {
+                        text: @tr("Waiting for the server challenge…");
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-body;
+                    }
+
+                    for prompt[i] in root.challenge-prompts : VerticalLayout {
+                        spacing: 4px;
+
+                        Text {
+                            text: prompt.text;
+                            color: Theme.text-secondary;
+                            font-size: Theme.font-body;
+                            wrap: word-wrap;
+                        }
+
+                        WinTextInput {
+                            text: prompt.answer;
+                            input-type: prompt.echo ? InputType.text : InputType.password;
+                            accepted => {
+                                if root.keyboard-submit-enabled { root.submit-keyboard-round(); }
+                            }
+                            edited => { root.update-challenge-answer(i, self.text); }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        alignment: end;
+                        spacing: Theme.spacing-8;
+
+                        WinButton {
+                            text: @tr("Cancel");
+                            clicked => { root.cancel(); }
+                        }
+
+                        WinButton {
+                            // 多轮：中间轮是 Continue，最后一轮才是 Connect（宿主判断）
+                            text: root.keyboard-final-round ? @tr("Connect") : @tr("Continue");
+                            accent: true;
+                            enabled: root.keyboard-submit-enabled;
+                            clicked => { root.submit-keyboard-round(); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
+    public function focus-dialog() {
+        dialog_scope.focus();
+    }
+
+    changed open => {
+        if (root.open) {
+            dialog_scope.focus();
+        }
+    }
+}

@@ -1,0 +1,386 @@
+// `@tr` 模板函数库（纯函数，无状态）：把 Rust 投影的原始值渲染成界面显示句子。
+//
+// 拆分自 `ui/main_window.slint`（R1 结构重构）：只搬代码，行为不变。
+// 为什么独立成文件：`main_window.slint` 的体积目标（R1 设计 §4.4：≤1500 行），
+// 而窗口状态/回调/快捷键/菜单模型/弹窗实例都按设计留在 main_window。
+// 约定：
+//   * 全部函数是纯函数（输入参数 + `@tr`），不持有任何状态；调用方是
+//     main_window 的 `*_display` 属性（以及本文件内部的相互调用）。
+//   * `@tr` 显式带 `"MainWindow"` 上下文（拆分前这些函数在 MainWindow 组件里，
+//     隐式上下文就是 MainWindow）。这样 gettext 的 (msgctxt, msgid) 与拆分前
+//     完全一致，既有译文不失效；`@tr("Sftp" => ...)` 等已有显式上下文的保持原样。
+
+export global TextFormats {
+    // --- 显示串函数（原 main_window 的 `*_display` 属性）------------------------
+    // Rust 只投影原始值；句子在这里用 @tr 渲染（译者只翻这里出现的句子）。
+    public pure function editor-folder-display(known: bool, label: string, id: string) -> string {
+        return known
+            ? @tr("MainWindow" => "{0} ({1})", label, id)
+            : @tr("MainWindow" => "Unknown folder ({0})", id);
+    }
+
+    public pure function editor-target-display(editing: bool, session_id: string) -> string {
+        return editing
+            ? @tr("MainWindow" => "Editing {0}", session_id)
+            : @tr("MainWindow" => "Creating new saved session");
+    }
+
+    public pure function editor-tunnel-summary-display(count: int, rows: string) -> string {
+        return count == 0
+            ? @tr("MainWindow" => "No tunnel forwards configured.")
+            : rows;
+    }
+
+    public pure function logging-summary-display(enabled: string, format: string, directory: string) -> string {
+        return @tr("MainWindow" => "global={0} format={1} directory={2}", enabled, format, directory);
+    }
+
+    public pure function known-hosts-inventory-display(empty: bool, rows: string) -> string {
+        return empty
+            ? @tr("MainWindow" => "No persisted known hosts yet.")
+            : rows;
+    }
+
+    public pure function active-session-display(kind: string, name: string, state: string, saved_count: int) -> string {
+        return kind == "session"
+            ? name + "  " + state
+            : (kind == "saved-sessions"
+                ? @tr("MainWindow" => "Saved Sessions ({0})", saved_count)
+                : @tr("MainWindow" => "Welcome"));
+    }
+
+    public pure function session-summary-display(count: int, hidden_count: int, rows: string) -> string {
+        return count == 0
+            ? @tr("MainWindow" => "No runtime sessions yet.")
+            : (hidden_count > 0
+                ? rows + "\n" + @tr("MainWindow" => "... and {0} more", hidden_count)
+                : rows);
+    }
+
+    public pure function saved-session-inventory-display(empty: bool, query: string, rows: string) -> string {
+        return empty
+            ? (query == ""
+                ? @tr("MainWindow" => "No saved sessions yet.")
+                : @tr("MainWindow" => "No saved sessions matched `{0}`.", query))
+            : rows;
+    }
+
+    public pure function recent-sessions-display(empty: bool, rows: string) -> string {
+        return empty
+            ? @tr("MainWindow" => "No recent runtime sessions yet.")
+            : rows;
+    }
+
+    public pure function tab-display(has_session: bool, name: string, state: string) -> string {
+        return (has_session ? name + "  " : @tr("MainWindow" => "Welcome") + "  ") + state;
+    }
+
+    public pure function terminal-title-display(has_session: bool, name: string) -> string {
+        return has_session
+            ? @tr("MainWindow" => "Terminal: {0}", name)
+            : @tr("MainWindow" => "YShell terminal");
+    }
+
+    public pure function terminal-body-display(kind: string, body: string) -> string {
+        return kind == "ready"
+            ? @tr("MainWindow" => "Runtime is ready. Open a Quick Connect target or create a draft session.")
+            : (kind == "no-output"
+                ? @tr("MainWindow" => "Terminal runtime is initialized but no output is available yet.")
+                : body);
+    }
+
+    public pure function sftp-empty-display(empty_text: string, kind: string, rows: string, session_key: string, path: string, error: string) -> string {
+        return empty_text != "" ? empty_text : sftp-listing-summary(kind, rows, session_key, path, error);
+    }
+
+    public pure function sftp-remote-edit-display(active: bool, remote_path: string, local_path: string) -> string {
+        return active
+            ? @tr("MainWindow" => "Remote edit: {0} <-> {1}", remote_path, local_path)
+            : @tr("MainWindow" => "No active remote edit session");
+    }
+
+    public pure function transfer-queue-display(empty: bool, rows: string) -> string {
+        return empty
+            ? @tr("MainWindow" => "No active transfers")
+            : rows;
+    }
+
+    public pure function tunnels-summary-display(kind: string, rows: string) -> string {
+        return kind == "none"
+            ? @tr("MainWindow" => "No configured tunnels for the active session.")
+            : (kind == "no-active"
+                ? @tr("MainWindow" => "No active tunnels")
+                : rows);
+    }
+
+    public pure function secret-store-status(kind: string, path: string) -> string {
+        if kind == "file" {
+            if path == "" {
+                return @tr("MainWindow" => "Secret store enabled through the local encrypted store.");
+            }
+            return @tr("MainWindow" => "Secret store enabled at {0}", path);
+        }
+        if kind == "os" {
+            return @tr("MainWindow" => "Secret store enabled through the operating system keychain.");
+        }
+        if kind == "injected" {
+            return @tr("MainWindow" => "Secret store enabled through injected runtime keychain");
+        }
+        return @tr("MainWindow" => "Secret store disabled. Set YSHELL_MASTER_PASSWORD to enable the local encrypted store or use the operating system keychain.");
+    }
+
+    public pure function editor-auth-test-status(kind: string, host: string, backend: string, startup: string, error: string) -> string {
+        if kind == "hint" {
+            return @tr("MainWindow" => "Run Auth Test to validate the current editor fields without saving.");
+        }
+        if kind == "loaded" {
+            return @tr("MainWindow" => "Loaded saved session into the editor. Run Auth Test before saving if you want to validate the current form.");
+        }
+        if kind == "failed" {
+            return @tr("MainWindow" => "Auth test failed: {0}", error);
+        }
+        if startup == "" {
+            return @tr("MainWindow" => "Auth test succeeded for {0} using the `{1}` backend.", host, backend);
+        }
+        return @tr("MainWindow" => "Auth test succeeded for {0} using the `{1}` backend. Startup: {2}", host, backend, startup);
+    }
+
+    public pure function proxy-summary-text(kind: string, protocol: string, address: string, user: string, dns: bool) -> string {
+        if kind == "none" {
+            return @tr("MainWindow" => "Proxy disabled for this editor session.");
+        }
+        if kind == "incomplete" {
+            return @tr("MainWindow" => "Custom proxy draft: {0} (address incomplete).", protocol);
+        }
+        return @tr("MainWindow" => "Custom proxy draft: {0} {1} user={2} dns-by-proxy={3}", protocol, address, user, dns ? "on" : "off");
+    }
+
+    pure function settings-terminal-field-label(field: string) -> string {
+        if field == "scrollback-max-cells" {
+            return @tr("MainWindow" => "Scrollback memory cap");
+        }
+        return @tr("MainWindow" => "Scrollback lines");
+    }
+
+    public pure function settings-terminal-status(kind: string, field: string, value: string, limit: string) -> string {
+        if kind == "hint" {
+            return @tr("MainWindow" => "Save terminal settings to apply the scrollback limits to existing sessions.");
+        }
+        if kind == "defaults-loaded" {
+            return @tr("MainWindow" => "Defaults loaded. Click Save to apply.");
+        }
+        if kind == "saved" {
+            return @tr("MainWindow" => "Saved terminal settings: scrollback={0} lines, cap={1} cells.", value, limit);
+        }
+        if kind == "empty" {
+            return @tr("MainWindow" => "{0} must not be empty.", settings-terminal-field-label(field));
+        }
+        if kind == "not-number" {
+            return @tr("MainWindow" => "{0} must be a whole number.", settings-terminal-field-label(field));
+        }
+        return @tr("MainWindow" => "{0} must be between {1} and {2}.", settings-terminal-field-label(field), value, limit);
+    }
+
+    public pure function known-hosts-selection(kind: string, host: string, port: string, index: int, total: int) -> string {
+        if kind == "selected" {
+            return @tr("MainWindow" => "Selected known host {0}:{1} ({2} of {3}).", host, port, index, total);
+        }
+        if kind == "loaded" {
+            return @tr("MainWindow" => "Known hosts manager loaded {n} entry." | "Known hosts manager loaded {n} entries." % total);
+        }
+        return @tr("MainWindow" => "No persisted known hosts are available.");
+    }
+
+    public pure function saved-session-selection(kind: string, name: string, host: string, id: string) -> string {
+        if kind == "profile" {
+            return @tr("MainWindow" => "{0} ({1})", name, host);
+        }
+        if kind == "missing" {
+            return @tr("MainWindow" => "{0} (missing)", id);
+        }
+        return @tr("MainWindow" => "No saved session selected");
+    }
+
+    public pure function terminal-search-summary(kind: string, query: string, count: int, current: int) -> string {
+        if kind == "empty" {
+            return @tr("MainWindow" => "No matches for `{0}` in the visible terminal.", query);
+        }
+        if kind == "found" {
+            return @tr("MainWindow" => "Found {n} match for `{0}` in the visible terminal." | "Found {n} matches for `{0}` in the visible terminal." % count, query)
+                + " " + @tr("MainWindow" => "Showing {0}/{1}.", current, count);
+        }
+        return @tr("MainWindow" => "Find in terminal");
+    }
+
+    public pure function sftp-listing-summary(kind: string, rows: string, session_key: string, path: string, error: string) -> string {
+        if kind == "connect-real" {
+            return @tr("MainWindow" => "Connect a real session and refresh SFTP to browse remote files.");
+        }
+        if kind == "draft-disconnected" {
+            return @tr("MainWindow" => "SFTP session is disconnected. Connect the draft before browsing remote files.");
+        }
+        if kind == "refresh-needs-session" {
+            return @tr("MainWindow" => "Connect a runtime session before refreshing the SFTP panel.");
+        }
+        if kind == "fake-backend-selected" {
+            return @tr("MainWindow" => "Fake backend selected. Switch to `native-ssh` when you want to validate the embedded SSH and SFTP paths.");
+        }
+        if kind == "native-ssh-selected" {
+            return @tr("MainWindow" => "Native SSH selected. Connect a session to open the managed SFTP lifecycle.");
+        }
+        if kind == "empty-directory" {
+            return @tr("MainWindow" => "Current directory is empty.");
+        }
+        if kind == "reconnect-failed" {
+            return @tr("MainWindow" => "SFTP session failed because the native SSH session is not connected.");
+        }
+        if kind == "sync-fake-backend" {
+            return @tr("MainWindow" => "SFTP is unavailable on the fake backend. Switch to `native-ssh` first.");
+        }
+        if kind == "sync-missing-session" {
+            return @tr("MainWindow" => "SFTP lifecycle failed because the active runtime session is missing.");
+        }
+        if kind == "sync-disconnected" {
+            return @tr("MainWindow" => "SFTP session is disconnected. Connect or reconnect the runtime session first.");
+        }
+        if kind == "sync-reconnect-native" {
+            return @tr("MainWindow" => "SFTP session is disconnected. Reconnect this runtime session with `native-ssh` before using SFTP.");
+        }
+        if kind == "sync-failed" {
+            return @tr("MainWindow" => "SFTP session is attached to `{0}`, but listing `{1}` failed: {2}", session_key, path, error);
+        }
+        return rows;
+    }
+
+    public pure function sftp-session-status(kind: string, reason: string, detail: string, session_key: string) -> string {
+        if kind == "unavailable" {
+            if reason == "fake-backend" {
+                return @tr("MainWindow" => "SFTP unavailable: fake transport backend is selected");
+            }
+            return @tr("MainWindow" => "SFTP unavailable: select the native-ssh backend before using SFTP");
+        }
+        if kind == "disconnected" {
+            if session_key == "" {
+                return @tr("MainWindow" => "SFTP session disconnected. Connect a runtime session first.");
+            }
+            return @tr("MainWindow" => "SFTP session disconnected for runtime session `{0}`.", session_key);
+        }
+        if kind == "ready" {
+            return @tr("MainWindow" => "SFTP session ready for runtime session `{0}`.", session_key);
+        }
+        if session_key == "" {
+            return @tr("MainWindow" => "SFTP session failed: {0}", detail);
+        }
+        return @tr("MainWindow" => "SFTP session failed for runtime session `{0}`: {1}", session_key, detail);
+    }
+
+    public pure function sftp-sort-summary(column: string, ascending: bool) -> string {
+        if column == "size" {
+            return @tr("Sftp" => "Size") + (ascending ? " ↑" : " ↓");
+        }
+        if column == "modified" {
+            return @tr("Sftp" => "Modified") + (ascending ? " ↑" : " ↓");
+        }
+        if column == "permissions" {
+            return @tr("Sftp" => "Permissions") + (ascending ? " ↑" : " ↓");
+        }
+        return @tr("Sftp" => "Name") + (ascending ? " ↑" : " ↓");
+    }
+
+    // --- N6：终端日志（状态栏 REC/入口文案 + 状态模板）------------------------
+    public pure function logging-mode-label(mode: string) -> string {
+        if (mode == "manual") {
+            return @tr("MainWindow" => "manual");
+        }
+        if (mode == "auto") {
+            return @tr("MainWindow" => "automatic");
+        }
+        return @tr("MainWindow" => "off");
+    }
+
+    /// 状态栏日志区文案：未记录时是入口标签，记录中显示 `REC · manual · file.log`。
+    public pure function logging-status-display(active: bool, mode: string, file_name: string) -> string {
+        if (!active) {
+            return @tr("MainWindow" => "Logging");
+        }
+        if (file_name == "") {
+            return @tr("MainWindow" => "REC · {0}", logging-mode-label(mode));
+        }
+        return @tr("MainWindow" => "REC · {0} · {1}", logging-mode-label(mode), file_name);
+    }
+
+    // --- W4 收尾：状态栏模板（覆盖最常见的 kind；未覆盖的 kind 回退英文 status_text）---
+    // Rust 侧 `AppProjection::status_kind` 只在覆盖的生产者处设置，其余赋值路径
+    // 保持 kind 为空（见 runtime.rs 的 status_i18n_parts）。
+    public pure function status-message(kind: string, param_1: string, param_2: string, fallback: string) -> string {
+        if kind == "sftp-sorted" {
+            return @tr("MainWindow" => "Sorted SFTP entries by {0}.", sftp-sort-summary(param_1, param_2 == "ascending"));
+        }
+        if kind == "sftp-ready" {
+            // param_2 为空 = 仅生命周期就绪；否则为 "SFTP session ready. Loaded N ..."（N 存字符串）。
+            if param_2 == "" {
+                return @tr("MainWindow" => "SFTP session ready for runtime session `{0}`.", param_1);
+            }
+            return @tr("MainWindow" => "SFTP session ready. Loaded {n} SFTP entry from `{0}`." | "SFTP session ready. Loaded {n} SFTP entries from `{0}`." % round(param_2.to-float()), param_1);
+        }
+        if kind == "sftp-failed" {
+            if param_1 == "" {
+                return @tr("MainWindow" => "SFTP session failed: {0}", param_2);
+            }
+            return @tr("MainWindow" => "SFTP session failed for runtime session `{0}`: {1}", param_1, param_2);
+        }
+        if kind == "logging-saved" {
+            return @tr("MainWindow" => "Saved global logging policy: {0}.", param_1);
+        }
+        if kind == "logging-started" {
+            return @tr("MainWindow" => "Logging terminal output to `{0}` ({1}).", param_1, param_2);
+        }
+        if kind == "logging-stopped" {
+            return @tr("MainWindow" => "Stopped {1} logging. Log file: `{0}`.", param_1, param_2);
+        }
+        if kind == "logging-error" {
+            if param_1 == "" {
+                return @tr("MainWindow" => "Terminal logging failed: {0}", param_2);
+            }
+            return @tr("MainWindow" => "Terminal logging failed for `{0}`: {1}", param_1, param_2);
+        }
+        if kind == "logging-no-session" {
+            return @tr("MainWindow" => "Open a session before starting terminal logging.");
+        }
+        if kind == "secrets-reset" {
+            if param_2 == "master-password-missing" {
+                return @tr("MainWindow" => "Deleted `{0}` and left the secret store disabled because YSHELL_MASTER_PASSWORD is not set.", param_1);
+            }
+            if param_2 == "master-password-empty" {
+                return @tr("MainWindow" => "Deleted `{0}` and left the secret store disabled because YSHELL_MASTER_PASSWORD is empty.", param_1);
+            }
+            return @tr("MainWindow" => "Reset the local secret store at `{0}`.", param_1);
+        }
+        if kind == "quick-connect-error" {
+            return @tr("MainWindow" => "Quick Connect error: {0}", param_1);
+        }
+        if kind == "session-saved" {
+            return @tr("MainWindow" => "Saved active runtime session as profile `{0}`. Config now contains {1} saved session(s).", param_1, param_2);
+        }
+        if kind == "session-deleted" {
+            return @tr("MainWindow" => "Deleted saved session `{0}` and persisted the updated config.", param_1);
+        }
+        return fallback;
+    }
+
+    // --- N0：标签关闭确认弹窗文案 -------------------------------------------
+    public pure function close-tabs-confirm-title(single: bool) -> string {
+        return single
+            ? @tr("MainWindow" => "Close Session")
+            : @tr("MainWindow" => "Close Tabs");
+    }
+
+    public pure function close-tabs-confirm-message(single: bool, name: string, count: int, active_count: int) -> string {
+        if (single) {
+            return @tr("MainWindow" => "Close `{0}`? Its active connection will be disconnected.", name);
+        }
+        return @tr("MainWindow" => "Close {n} tab" | "Close {n} tabs" % count, count)
+            + "  "
+            + (@tr("MainWindow" => "{n} of them has an active connection and will be disconnected." | "{n} of them have active connections and will be disconnected." % active_count, active_count));
+    }
+}

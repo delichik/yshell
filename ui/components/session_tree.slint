@@ -181,6 +181,8 @@ export component SessionTree inherits Rectangle {
     callback activate(string);
     callback toggle-folder(string);
     callback context-menu-requested(string, length, length);
+    /// S1：会话树空白区（行以外/空树）右键 —— 只上报窗口坐标，由宿主打开空白区菜单。
+    callback blank-context-menu-requested(length, length);
 
     /// 内容高度（行数 × 行高）；宿主可用来判断占位。
     out property <length> content-height: root.rows.length * root.row-height;
@@ -195,8 +197,8 @@ export component SessionTree inherits Rectangle {
         height: parent.height;
 
         key-pressed(event) => {
-            // Slint 1.9 的 KeyEvent 没有 `key`，回车按 `event.text` 的键码比较
-            // （与 crates/yshell-terminal/src/keys.rs 的 RETURN 一致）。
+            // 回车按 `event.text` 的键码比较（Slint 1.18.1 的 KeyEvent 仍无 `key`
+            // 字段，与 crates/yshell-terminal/src/keys.rs 的 RETURN 一致）。
             if (event.text == "\u{000a}" || event.text == "\u{000d}") {
                 if (root.selected-id != "") {
                     root.activate(root.selected-id);
@@ -206,14 +208,32 @@ export component SessionTree inherits Rectangle {
             return reject;
         }
 
+        // S1：会话树空白区右键。声明在 Flickable 之前（下层）：行的命中区在上层先拿
+        // 事件，只有没落到任何行上的右键才会到这里；同时因为是 FocusScope 的子元素，
+        // 它先于 FocusScope 自身的 focus-on-click 拿到事件，不被抢焦点吞掉。
+        blank_touch := TouchArea {
+            x: 0;
+            y: 0;
+            width: parent.width;
+            height: parent.height;
+            pointer-event(event) => {
+                if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                    root.blank-context-menu-requested(
+                        self.absolute-position.x + self.mouse-x,
+                        self.absolute-position.y + self.mouse-y
+                    );
+                }
+            }
+        }
+
         Flickable {
             visible: root.rows.length > 0;
             x: 0;
             y: 0;
             width: parent.width;
             height: parent.height;
-            viewport-width: self.width;
-            viewport-height: rows_layout.preferred-height;
+            content-width: self.width;
+            content-height: rows_layout.preferred-height;
 
             rows_layout := VerticalLayout {
                 spacing: 1px;

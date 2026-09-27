@@ -1,0 +1,463 @@
+// 快速连接页（N2 设计 §2）：大输入框 + 最近连接列表 + 快速链接列表 + 空态/错误态。
+//
+// 纯展示组件（不解析目标、不校验输入、不排序/去重）：
+//   * 行数据由运行时投影（`[QuickConnectRow]` / `[QuickLinkRow]`），排序、去重、
+//     "历史是否开启"与错误文案同样由宿主（runtime）决定；
+//   * 回调全部按设计 §2 透传；宿主接线见 runtime/bootstrap（Phase 2）；
+//   * 页面作为 QuickConnect 标签内容实例化后，宿主用 `focus-quick-connect()`
+//     响应 Ctrl+O / File > Quick Connect（设计 §3）。
+//
+// 结构：Flickable（窄窗口可纵向滚动）→ 居中内容列（≤720px）→
+//   标题/说明 → 输入行（+ 内联错误）→ 最近连接卡片 → 快速链接卡片 →
+//   "保存为会话…"入口（连接成功后由宿主写 `last-target-text` 显示）。
+import { Theme } from "../theme.slint";
+import { Icon } from "../components/basic/icons.slint";
+import { WinButton, WinCard, WinCardHeader, WinIconButton } from "../components/basic/controls.slint";
+import { WinTextInput } from "../components/basic/text_input.slint";
+
+/// 最近连接行：运行时对"QC 历史 + 已保存会话最近使用"去重排序后的展示投影。
+///
+/// `kind` 取值：`"recent"`（QC 历史）/ `"saved"`（已保存会话）/ `"link"`（预留：
+/// 统一列表形态）。只影响行首图标，不做任何过滤。
+export struct QuickConnectRow {
+    kind: string,
+    title: string,
+    target: string,
+    last_used_text: string,
+}
+
+/// 快速链接行：`QuickLink{id,label,target,sort_order}` 的展示投影（已按 sort_order 排好）。
+///
+/// 回调回传约定：连接/复制用 `target`；移除用 `id`（与 runtime `quick_link_remove` 对齐）。
+export struct QuickLinkRow {
+    id: string,
+    label: string,
+    target: string,
+}
+
+// 空态/错误态提示：标题 + 次要说明，整体水平居中（卡片内使用）。
+component QuickConnectHint inherits VerticalLayout {
+    in property <string> title: "";
+    in property <string> detail: "";
+
+    spacing: Theme.spacing-4;
+    padding-top: Theme.spacing-16;
+    padding-bottom: Theme.spacing-16;
+    // 主轴 start：两行文案贴顶，提示块高度 = preferred（不被卡片剩余空间撑开）。
+    alignment: start;
+
+    Text {
+        text: root.title;
+        color: Theme.text-secondary;
+        font-size: Theme.font-body;
+        horizontal-alignment: center;
+        wrap: word-wrap;
+    }
+
+    if root.detail != "" : Text {
+        text: root.detail;
+        color: Theme.text-tertiary;
+        font-size: Theme.font-caption;
+        horizontal-alignment: center;
+        wrap: word-wrap;
+    }
+}
+
+// 最近连接行：图标 + 标题/目标（等宽）+ 最近使用时间 + 连接 / pin / 复制。
+component QuickConnectRowItem inherits Rectangle {
+    in property <QuickConnectRow> data;
+
+    callback connect();
+    callback pin();
+    callback copy();
+
+    height: Theme.row-height-nav;
+    border-radius: Theme.radius-control;
+    background: row-hover.has-hover ? Theme.subtle-hover : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    // 悬停高亮：声明在内容之前（下层），不与行内按钮的命中区抢事件。
+    row-hover := TouchArea { }
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-8;
+        padding-right: Theme.spacing-8;
+        spacing: Theme.spacing-12;
+        // 交叉轴（垂直）居中：32px 按钮/图标在 40px 行内居中；
+        // 主轴保持默认（Stretch + 文本块 horizontal-stretch: 1），让动作按钮靠右。
+        cross-axis-alignment: center;
+
+        Rectangle {
+            width: Theme.icon-size;
+            height: Theme.icon-size;
+            background: transparent;
+
+            Icon {
+                name: root.data.kind == "saved" ? "folder"
+                    : root.data.kind == "link" ? "link"
+                    : "terminal";
+                icon-color: Theme.text-secondary;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: Theme.spacing-4;
+
+            Text {
+                text: root.data.title;
+                color: Theme.text-primary;
+                font-size: Theme.font-body;
+                horizontal-alignment: left;
+                wrap: no-wrap;
+                overflow: elide;
+            }
+
+            // 历史行没有单独标题（title == target）时不重复显示目标。
+            if root.data.target != root.data.title : Text {
+                text: root.data.target;
+                color: Theme.text-tertiary;
+                font-size: Theme.font-caption;
+                font-family: Theme.font-mono;
+                horizontal-alignment: left;
+                wrap: no-wrap;
+                overflow: elide;
+            }
+        }
+
+        if root.data.last_used_text != "" : Text {
+            text: root.data.last_used_text;
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            horizontal-alignment: left;
+            vertical-alignment: center;
+            wrap: no-wrap;
+        }
+
+        WinButton {
+            text: @tr("Connect");
+            icon: "connect";
+            subtle: true;
+            clicked => { root.connect(); }
+        }
+
+        WinIconButton {
+            icon: "link";
+            accessible-name: @tr("Pin as quick link");
+            clicked => { root.pin(); }
+        }
+
+        WinIconButton {
+            icon: "copy";
+            accessible-name: @tr("Copy target");
+            clicked => { root.copy(); }
+        }
+    }
+}
+
+// 快速链接行：图标 + 标签/目标（等宽）+ 连接 / 复制 / 移除。
+component QuickLinkRowItem inherits Rectangle {
+    in property <QuickLinkRow> data;
+
+    callback connect();
+    callback copy();
+    callback remove();
+
+    height: Theme.row-height-nav;
+    border-radius: Theme.radius-control;
+    background: row-hover.has-hover ? Theme.subtle-hover : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    // 悬停高亮：同 QuickConnectRowItem（下层，避免抢按钮事件）。
+    row-hover := TouchArea { }
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-8;
+        padding-right: Theme.spacing-8;
+        spacing: Theme.spacing-12;
+        // 交叉轴（垂直）居中：32px 按钮/图标在 40px 行内居中；
+        // 主轴保持默认（Stretch + 文本块 horizontal-stretch: 1），让动作按钮靠右。
+        cross-axis-alignment: center;
+
+        Rectangle {
+            width: Theme.icon-size;
+            height: Theme.icon-size;
+            background: transparent;
+
+            Icon {
+                name: "link";
+                icon-color: Theme.text-secondary;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: Theme.spacing-4;
+
+            Text {
+                text: root.data.label;
+                color: Theme.text-primary;
+                font-size: Theme.font-body;
+                horizontal-alignment: left;
+                wrap: no-wrap;
+                overflow: elide;
+            }
+
+            Text {
+                text: root.data.target;
+                color: Theme.text-tertiary;
+                font-size: Theme.font-caption;
+                font-family: Theme.font-mono;
+                horizontal-alignment: left;
+                wrap: no-wrap;
+                overflow: elide;
+            }
+        }
+
+        WinButton {
+            text: @tr("Connect");
+            icon: "connect";
+            subtle: true;
+            clicked => { root.connect(); }
+        }
+
+        WinIconButton {
+            icon: "copy";
+            accessible-name: @tr("Copy target");
+            clicked => { root.copy(); }
+        }
+
+        WinIconButton {
+            icon: "trash";
+            accessible-name: @tr("Remove quick link");
+            clicked => { root.remove(); }
+        }
+    }
+}
+
+/// N2 快速连接页。
+///
+/// 宿主（Phase 2 的 runtime/main_window）负责：投影行数据与错误文案、决定历史开关、
+/// 连接成功后写 `last-target-text`、把各回调接到 runtime 的 QC 动作上。
+export component QuickConnectPage inherits Rectangle {
+    /// 输入框内容（宿主可读写：打开页时可预填/清空）。
+    in-out property <string> input-text: "";
+    /// 非法输入的内联提示（空字符串 = 无错误；由运行时按同一套解析规则投影）。
+    in property <string> input-error-text: "";
+    /// D12：连接历史是否开启（关闭时不显示"清空历史"，空态改为提示去设置里开启）。
+    in property <bool> history-enabled: true;
+    /// 最近连接行（QC 历史 + 已保存会话最近使用，运行时已去重排序）。
+    in property <[QuickConnectRow]> recent-rows: [];
+    /// 快速链接行（运行时已按 sort_order 排序）。
+    in property <[QuickLinkRow]> link-rows: [];
+    /// 最近一次连接成功的目标；非空时显示"保存为会话…"入口（设计 §1.6）。
+    in property <string> last-target-text: "";
+    /// 输入框下方的摘要（历史条数/上限；空 = 不显示）。
+    in property <string> summary-text: "";
+
+    callback submit(string);
+    callback connect-target(string);
+    callback pin-target(string);
+    callback copy-target(string);
+    callback remove-link(string);
+    callback save-as-session(string);
+    callback clear-history();
+    /// 输入框逐键回传：宿主保存副本，投影回写时不会吃掉用户正在输入的内容。
+    callback input-changed(string);
+
+    /// Ctrl+O / Ctrl+L 与 File > Quick Connect：聚焦输入框并全选（设计 §3）。
+    public function focus-quick-connect() {
+        target-input.focus-input();
+        target-input.select-all();
+    }
+
+    background: Theme.window-background;
+
+    Flickable {
+        width: parent.width;
+        height: parent.height;
+        interactive: true;
+        content-width: self.width;
+        content-height: max(column.preferred-height + 2 * Theme.spacing-24, self.height);
+
+        column := VerticalLayout {
+            // 内容列：居中、最大 720px，窄窗口左右各留 24px。
+            x: (parent.width - self.width) / 2;
+            y: Theme.spacing-24;
+            width: min(720px, parent.width - 2 * Theme.spacing-24);
+            spacing: Theme.spacing-20;
+            // 主轴 start：子项各取 preferred 高度、剩余空间留在底部。
+            // （默认 alignment=stretch 会把多余空间均分给可增长的子项，卡片/行会被撑开。）
+            alignment: start;
+
+            // 标题与说明
+            VerticalLayout {
+                spacing: Theme.spacing-4;
+                alignment: start;
+
+                Text {
+                    text: @tr("Quick Connect");
+                    color: Theme.text-primary;
+                    font-size: Theme.font-title;
+                    font-weight: Theme.weight-semibold;
+                }
+
+                Text {
+                    text: @tr("Type a target such as ssh://user@host:22 and press Enter to connect.");
+                    color: Theme.text-secondary;
+                    font-size: Theme.font-body;
+                    wrap: word-wrap;
+                }
+            }
+
+            // 输入行：大输入框 + 主操作（每屏建议 ≤1 个强调色按钮，§5.1）
+            VerticalLayout {
+                spacing: Theme.spacing-4;
+                alignment: start;
+
+                HorizontalLayout {
+                    spacing: Theme.spacing-8;
+
+                    target-input := WinTextInput {
+                        height: Theme.row-height-nav;
+                        font-size: Theme.font-body-large;
+                        placeholder-text: "ssh://user@host:22";
+                        horizontal-stretch: 1;
+                        text <=> root.input-text;
+                        accepted => { root.submit(root.input-text); }
+                        edited(text) => { root.input-changed(text); }
+                    }
+
+                    WinButton {
+                        text: @tr("Connect");
+                        icon: "connect";
+                        accent: true;
+                        // 空输入没有可解析的目标（与 W5-A3 的状态门限一致）。
+                        enabled: root.input-text != "";
+                        clicked => { root.submit(root.input-text); }
+                    }
+                }
+
+                // 非法输入的内联提示（运行时投影的文案；空 = 无错误）。
+                if root.input-error-text != "" : HorizontalLayout {
+                    spacing: Theme.spacing-8;
+                    cross-axis-alignment: center;
+
+                    Rectangle {
+                        width: Theme.icon-size-small;
+                        height: Theme.icon-size-small;
+                        background: transparent;
+
+                        Icon {
+                            name: "warning";
+                            icon-color: Theme.critical;
+                            icon-size: Theme.icon-size-small;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    Text {
+                        text: root.input-error-text;
+                        color: Theme.critical;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                        wrap: word-wrap;
+                    }
+                }
+
+                // 历史摘要（Rust 侧拼装；空 = 不显示）
+                if root.summary-text != "" : Text {
+                    text: root.summary-text;
+                    color: Theme.text-tertiary;
+                    font-size: Theme.font-caption;
+                    horizontal-alignment: left;
+                    wrap: no-wrap;
+                    overflow: elide;
+                }
+            }
+
+            // 最近连接：QC 历史 + 已保存会话最近使用（运行时去重排序）
+            WinCard {
+                WinCardHeader {
+                    title: @tr("Recent Connections");
+                    icon: "terminal";
+
+                    Rectangle { horizontal-stretch: 1; }
+
+                    // D12：历史可清空；历史关闭时不提供该入口。
+                    if root.history-enabled && root.recent-rows.length > 0 : WinButton {
+                        text: @tr("Clear History");
+                        subtle: true;
+                        clicked => { root.clear-history(); }
+                    }
+                }
+
+                if root.recent-rows.length == 0 : QuickConnectHint {
+                    title: root.history-enabled
+                        ? @tr("No recent connections yet.")
+                        : @tr("Connection history is disabled.");
+                    detail: root.history-enabled
+                        ? @tr("Targets you connect to will be listed here.")
+                        : @tr("Enable it in Settings to list recent targets here.");
+                }
+
+                for entry[i] in root.recent-rows : QuickConnectRowItem {
+                    data: entry;
+                    connect() => { root.connect-target(entry.target); }
+                    pin() => { root.pin-target(entry.target); }
+                    copy() => { root.copy-target(entry.target); }
+                }
+            }
+
+            // 快速链接：只存目标（D13）
+            WinCard {
+                WinCardHeader {
+                    title: @tr("Quick Links");
+                    icon: "link";
+                }
+
+                if root.link-rows.length == 0 : QuickConnectHint {
+                    title: @tr("No quick links yet.");
+                    detail: @tr("Pin a recent connection to keep it here.");
+                }
+
+                for link[i] in root.link-rows : QuickLinkRowItem {
+                    data: link;
+                    connect() => { root.connect-target(link.target); }
+                    copy() => { root.copy-target(link.target); }
+                    remove() => { root.remove-link(link.id); }
+                }
+            }
+
+            // 连接成功后的"保存为会话…"入口（§1.6）：宿主在成功路径写 last-target-text。
+            if root.last-target-text != "" : WinCard {
+                HorizontalLayout {
+                    spacing: Theme.spacing-8;
+                    cross-axis-alignment: center;
+
+                    Text {
+                        text: @tr("Connected to {0}", root.last-target-text);
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-body;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    WinButton {
+                        text: @tr("Save as Session…");
+                        icon: "plus";
+                        clicked => { root.save-as-session(root.last-target-text); }
+                    }
+                }
+            }
+        }
+    }
+}

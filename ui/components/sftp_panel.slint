@@ -1,33 +1,73 @@
-// SFTP 面板（WinUI 3 / Fluent 2 形态）。
+// SFTP 面板（N1 紧凑化 + 双栏 + 拖放 + 队列抽屉）。
 //
-// 结构（自上而下）：导航工具行 → 操作工具行 → 面包屑 → 路径输入 → 列头 → 文件列表
-//                  → 远程编辑行（可选）→ 状态/汇总行。
+// 结构（自上而下，窄宽上下叠放 / 宽面板左右并排）：
+//   远端栏：紧凑头部（面包屑 + ↑ + 刷新 + 显隐 + ⋯）→ 路径输入 → 内联错误条
+//           → 列头 → 列表（行 = DragArea + 多选 TouchArea；目录行与空白 = DropArea）
+//           → 汇总行
+//   传输抽屉：摘要一行（展开开关 + 计数 + Clear completed）→ 任务列表（行内操作）
+//   本地栏：components/local_pane.slint（只读接线）+ 拖动图标槽 + 整栏 DropArea
+//
 // 规范：docs/product/ui-winui3-design-language.md §5.2 / §5.5 / §5.11 / §5.14
-// 约定：颜色与尺寸只引用 Theme token；下方 `export` 属性/回调是主窗口与 Rust 的契约，
-//      名字与类型保持不变（只新增了带默认值的可选 `session-connected`）。
+//       docs/product/context-menu-design.md §4（四套行菜单）/ §6（队列动作）
+// 约定：颜色与尺寸只引用 Theme token；本文件导出 SftpPanel 与三个窗口级弹窗
+//       （Entry / Conflict / Properties）以及行右键菜单 SftpContextMenu。
 import { ListView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
-import { WinButton, WinIconButton, WinListRow } from "basic/controls.slint";
+import { WinButton, WinIconButton, WinToggle } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
+import { MenuEntry, MenuPopup } from "menu_popup.slint";
+import { LocalPane, LocalRow } from "local_pane.slint";
 
-// Slint-facing mirrors of the runtime SFTP row/crumb data.
+// ---------------------------------------------------------------- 数据结构
 
+/// Slint-facing mirror of the runtime SFTP row data.
 export struct SftpRow {
     name: string,
+    path-text: string,
     kind-text: string,
     size-text: string,
     modified-text: string,
     permissions-text: string,
     is-dir: bool,
+    is-symlink: bool,
+    selected: bool,
 }
 
+/// Slint-facing mirror of the runtime breadcrumb data.
 export struct SftpCrumb {
     label: string,
     path: string,
 }
 
-// 可点击排序的列头：28px 高、caption 字号；排序列 text-primary + ↑/↓，其余 text-tertiary。
+/// Slint-facing mirror of `runtime::transfer::TransferRowData`.
+export struct SftpTransferRow {
+    id: string,
+    direction-id: string,
+    direction-text: string,
+    file-name-text: string,
+    source-text: string,
+    destination-text: string,
+    status-id: string,
+    status-text: string,
+    progress-text: string,
+    progress-percent: int,
+    error-text: string,
+    retry-count: int,
+    max-retries: int,
+    can-pause: bool,
+    can-resume: bool,
+    can-retry: bool,
+    can-cancel: bool,
+    can-remove: bool,
+    is-active: bool,
+    is-failed: bool,
+    is-completed: bool,
+}
+
+// ---------------------------------------------------------------- 通用件
+
+/// 可点击排序的列头：28px 高、caption 字号；排序列 text-primary + ↑/↓。
 component SftpColumnHeader inherits Rectangle {
     in property <string> label: "";
     in property <bool> active: false;
@@ -40,7 +80,6 @@ component SftpColumnHeader inherits Rectangle {
     background: header-touch.has-hover ? Theme.subtle-hover : transparent;
 
     Text {
-        // 排序指示箭头属于文案：走 @tr 模板（§7.2 禁止在 Slint 里拼接成句）
         text: root.active
             ? (root.ascending ? @tr("{0} ↑", root.label) : @tr("{0} ↓", root.label))
             : root.label;
@@ -61,31 +100,32 @@ component SftpColumnHeader inherits Rectangle {
     }
 }
 
-// Single-column remote file manager: navigation toolbar, clickable breadcrumbs,
-// action toolbar, sortable column headers, a virtualized ListView and the
-// remote edit status line. Dialogs live in `SftpEntryDialog` so they can center
-// on the window instead of being clipped to the narrow side panel.
-export component SftpPanel inherits Rectangle {
+// ---------------------------------------------------------------- 远端栏
+
+/// 远端单栏：紧凑头部 + 列表 + 内联错误 + 汇总行。
+component SftpRemotePane inherits Rectangle {
+    /// Host-provided width for the responsive column/breadcrumb decisions.
+    /// Using `self.width` here would loop: this pane's width is layout-derived
+    /// from children whose visibility depends on the decision.
+    in property <length> available-width: 0px;
     in property <[SftpRow]> rows;
     in property <[SftpCrumb]> crumbs;
     in property <int> selected-index: -1;
-    in property <string> session-status-text: "";
     in property <string> sort-column: "name";
     in property <bool> sort-ascending: true;
     in property <string> sort-text: "Name ↑";
     in property <bool> show-hidden: false;
-    in property <string> item-summary-text: "";
-    /// 汇总行计数（Rust 只投影数字；单复数与句子由下方 item-summary-display 组装）。
     in property <int> item-count: 0;
     in property <int> dir-count: 0;
+    in property <int> selected-count: 0;
     in property <string> empty-text: "";
-    in property <string> selected-name-text: "";
-    in property <string> remote-edit-text: "";
+    in property <string> error-text: "";
+    in property <bool> connected: false;
     in property <bool> remote-edit-active: false;
+    in property <string> remote-edit-text: "";
     in-out property <string> path-text: "/";
-    /// 新增（可选）：SFTP 会话是否已连接。主窗口暂未提供布尔值，默认 false 时状态点
-    /// 用 text-tertiary（断开色）；绑定为 true 后状态点显示 success 绿点。
-    in property <bool> session-connected: false;
+    /// 键盘剪贴板焦点（点击行/列表后由宿主 scope 持有）。
+    callback focus-requested();
 
     callback refresh();
     callback up();
@@ -94,39 +134,32 @@ export component SftpPanel inherits Rectangle {
     callback open-crumb(int);
     callback sort-by(string);
     callback toggle-hidden();
-    callback select-row(int);
+    callback select-row(int, bool, bool);
     callback activate-row(int);
     callback context-menu-requested(int, length, length);
-    callback new-folder();
-    callback upload();
-    callback download();
-    callback edit-remote();
-    callback rename();
-    callback delete();
-    callback chmod();
+    callback panel-menu-requested(length, length);
     callback save-edit();
     callback cancel-edit();
+    pure callback drag-payload() -> data-transfer;
+    callback drop-on-row(int, data-transfer, DragAction);
+    callback drop-on-blank(data-transfer, DragAction);
 
-    private property <bool> has-selection: root.selected-index >= 0;
-    // 元数据列宽 + 列间距（Size / Modified / Permissions）：列头与数据行共用同一组值，
-    // 避免两处漂移。296px 内容宽下的分配：Name 72 · Size 56 · Modified 96 · Perm 56，列间 8px。
-    // theme.slint 暂无列宽 token，故集中在这里。
+    background: transparent;
+
+    // 元数据列宽：Name 恒显，Modified/Permissions 窄宽隐藏（→ Properties 弹窗）。
+    private property <bool> shows-modified: root.available-width >= 360px;
+    private property <bool> shows-permissions: root.available-width >= 460px;
     private property <length> column-gap: Theme.spacing-8;
     private property <length> column-size-width: 56px;
-    private property <length> column-modified-width: 96px;
+    private property <length> column-modified-width: 116px;
     private property <length> column-permissions-width: 56px;
-    // 元数据区总宽 = Size + gap + Modified + gap + Permissions
-    private property <length> meta-width: root.column-size-width + root.column-gap
-        + root.column-modified-width + root.column-gap + root.column-permissions-width;
+    private property <length> meta-width: root.column-size-width
+        + (root.shows-modified ? root.column-gap + root.column-modified-width : 0px)
+        + (root.shows-permissions ? root.column-gap + root.column-permissions-width : 0px);
+    // 窄宽（右栏 280px 级别）只保留最后两段面包屑。
+    private property <bool> compact-crumbs: root.available-width < 360px;
 
-    // 汇总行："{n} item(s) · {m} dir(s)"。复数用 @tr 模板，分隔符复用现有 msgid；
-    // Rust 只投影计数，禁止在 Slint 里拼接成句（§7.2）。context 即组件名 SftpPanel。
-    private property <string> item-summary-display:
-        @tr("{0} · {1}",
-            @tr("{n} item" | "{n} items" % root.item-count),
-            @tr("{n} dir" | "{n} dirs" % root.dir-count));
-
-    // Draws the "/" between two breadcrumbs without indexing out of bounds.
+    /// 面包屑分隔符：前一段不是根 `/` 时显示。
     pure function shows-crumb-separator(index: int) -> bool {
         if (index <= 0) {
             return false;
@@ -134,34 +167,81 @@ export component SftpPanel inherits Rectangle {
         return root.crumbs[index - 1].label != "/";
     }
 
-    // 卡片外壳（main_window）已提供 card-fill 表面，面板自身不再叠一层底色。
-    background: transparent;
-
-    // Panel background right click: keeps the selection, offers New Folder/Refresh.
-    TouchArea {
-        pointer-event(event) => {
-            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
-                root.context-menu-requested(
-                    -1,
-                    self.absolute-position.x + self.mouse-x,
-                    self.absolute-position.y + self.mouse-y
-                );
-            }
+    /// 窄宽折叠：只显示最后两段（`… / 上级 / 当前` 语义）。
+    pure function crumb-visible(index: int) -> bool {
+        if (!root.compact-crumbs) {
+            return true;
         }
+        return index >= root.crumbs.length - 2;
     }
 
     VerticalLayout {
-        // 左右 4px：与卡片标题行（main_window 里 x = 12px）对齐，列表行也靠这个内边距
-        padding-left: Theme.spacing-4;
-        padding-right: Theme.spacing-4;
-        padding-top: Theme.spacing-8;
-        padding-bottom: Theme.spacing-8;
         spacing: Theme.spacing-4;
 
-        // --- 工具行 1：导航（上一级 / 刷新 / 远端根目录）+ 隐藏文件开关 -----
+        // --- 头部第 1 行：面包屑 + 导航 + 显隐 + ⋯ -----------------------
         HorizontalLayout {
             height: Theme.control-height;
             spacing: Theme.spacing-4;
+
+            // 面包屑容器：吃掉剩余宽度，内部横向排布。
+            Rectangle {
+                horizontal-stretch: 1;
+                height: Theme.control-height;
+                background: Theme.control-fill;
+                border-radius: Theme.radius-control;
+                border-width: 1px;
+                border-color: Theme.control-stroke;
+                clip: true;
+
+                HorizontalLayout {
+                    padding-left: Theme.spacing-4;
+                    padding-right: Theme.spacing-4;
+                    spacing: 0;
+
+                    if root.compact-crumbs : Text {
+                        text: "…";
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                    }
+
+                    for crumb[i] in root.crumbs : HorizontalLayout {
+                        visible: root.crumb-visible(i);
+                        spacing: 0;
+
+                        if root.shows-crumb-separator(i) && root.crumb-visible(i) : Text {
+                            text: "/";
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            vertical-alignment: center;
+                        }
+
+                        crumb_hit := Rectangle {
+                            border-radius: Theme.radius-control;
+                            background: crumb_hit_touch.has-hover ? Theme.subtle-hover : transparent;
+
+                            HorizontalLayout {
+                                padding-left: Theme.spacing-4;
+                                padding-right: Theme.spacing-4;
+
+                                Text {
+                                    text: crumb.label;
+                                    color: i == root.crumbs.length - 1 ? Theme.text-primary : Theme.text-secondary;
+                                    font-size: Theme.font-caption;
+                                    vertical-alignment: center;
+                                    wrap: no-wrap;
+                                }
+                            }
+
+                            crumb_hit_touch := TouchArea {
+                                clicked => { root.open-crumb(i); }
+                            }
+                        }
+                    }
+
+                    crumbs_spacer := Rectangle { horizontal-stretch: 1; }
+                }
+            }
 
             WinIconButton {
                 icon: "up";
@@ -173,131 +253,65 @@ export component SftpPanel inherits Rectangle {
                 accessible-name: @tr("Refresh");
                 clicked => { root.refresh(); }
             }
-            // 图标集里没有 home，用 globe 表示"远端根目录"
-            WinIconButton {
-                icon: "globe";
-                accessible-name: @tr("Remote root directory");
-                clicked => { root.home(); }
-            }
-
-            // 显式 stretch：Slint 在"没有人声明 stretch"时会平均分配剩余宽度，
-            // 会让按钮被拉宽；这里让弹簧独占剩余空间，按钮保持内容宽度。
-            nav_toolbar_spacer := Rectangle { horizontal-stretch: 1; }
-
-            // 开关型动作：开启态用强调色实底表达（避免依赖会被内部赋值打断的双向绑定）
-            WinButton {
-                text: root.show-hidden ? @tr("Hidden: on") : @tr("Hidden: off");
+            WinToggle {
+                text: "";
                 icon: "eye";
-                accent: root.show-hidden;
-                clicked => { root.toggle-hidden(); }
-            }
-        }
-
-        // --- 工具行 2：文件操作（禁用态跟随选择）----------------------------
-        HorizontalLayout {
-            height: Theme.control-height;
-            spacing: Theme.spacing-4;
-
-            WinIconButton {
-                icon: "plus";
-                accessible-name: @tr("New folder");
-                clicked => { root.new-folder(); }
+                checked: root.show-hidden;
+                accessible-name: @tr("Show hidden files");
+                toggled => { root.toggle-hidden(); }
             }
             WinIconButton {
-                icon: "upload";
-                accessible-name: @tr("Upload file");
-                clicked => { root.upload(); }
-            }
-            WinIconButton {
-                icon: "download";
-                accessible-name: @tr("Download selected entry");
-                enabled: root.has-selection;
-                clicked => { root.download(); }
-            }
-            WinIconButton {
-                icon: "edit";
-                accessible-name: @tr("Edit remote file");
-                enabled: root.has-selection;
-                clicked => { root.edit-remote(); }
-            }
-            WinIconButton {
-                icon: "trash";
-                accessible-name: @tr("Delete selected entry");
-                enabled: root.has-selection;
-                clicked => { root.delete(); }
-            }
-            WinIconButton {
-                icon: "shield";
-                accessible-name: @tr("Change permissions");
-                enabled: root.has-selection;
-                clicked => { root.chmod(); }
-            }
-
-            action_toolbar_spacer := Rectangle { horizontal-stretch: 1; }
-        }
-
-        // --- 面包屑：当前段用主文本色，其余次文本色 -------------------------
-        Rectangle {
-            height: Theme.row-height-tree;
-            background: Theme.control-fill;
-            border-radius: Theme.radius-control;
-            border-width: 1px;
-            border-color: Theme.control-stroke;
-            clip: true;
-
-            HorizontalLayout {
-                padding-left: Theme.spacing-4;
-                padding-right: Theme.spacing-4;
-                spacing: 0;
-
-                for crumb[i] in root.crumbs : HorizontalLayout {
-                    spacing: 0;
-
-                    if root.shows-crumb-separator(i) : Text {
-                        text: "/";
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-caption;
-                        vertical-alignment: center;
-                    }
-
-                    crumb_hit := Rectangle {
-                        border-radius: Theme.radius-control;
-                        background: crumb_hit_touch.has-hover ? Theme.subtle-hover : transparent;
-
-                        HorizontalLayout {
-                            padding-left: Theme.spacing-4;
-                            padding-right: Theme.spacing-4;
-
-                            Text {
-                                text: crumb.label;
-                                color: i == root.crumbs.length - 1 ? Theme.text-primary : Theme.text-secondary;
-                                font-size: Theme.font-caption;
-                                vertical-alignment: center;
-                                wrap: no-wrap;
-                            }
-                        }
-
-                        crumb_hit_touch := TouchArea {
-                            clicked => { root.open-crumb(i); }
-                        }
-                    }
+                icon: "more";
+                accessible-name: @tr("SFTP operations");
+                clicked => {
+                    root.panel-menu-requested(
+                        self.absolute-position.x,
+                        self.absolute-position.y + self.height
+                    );
                 }
-
-                // 面包屑左对齐：末尾弹簧吃掉剩余宽度（否则各段会被剩余宽度平均拉散）
-                crumbs_spacer := Rectangle { horizontal-stretch: 1; }
             }
         }
 
-        // --- 路径输入：WinTextInput（回车打开）-------------------------------
-        // 自绘输入框自带 control-fill 底 / control-stroke 描边 / 聚焦强调条（§5.2），
-        // 不再需要外层容器；placeholder 是路径格式示例，不翻译。
+        // --- 头部第 2 行：路径输入（回车打开）----------------------------
         WinTextInput {
             text <=> root.path-text;
             placeholder-text: "/remote/path";
+            font-family: Theme.font-mono;
             accepted => { root.open-path(self.text); }
         }
 
-        // --- 列头 + 1px 分隔线（点击列头排序）-------------------------------
+        // --- 内联错误条 + 重试 -------------------------------------------
+        if root.error-text != "" : Rectangle {
+            height: Theme.row-height-tree;
+            background: Theme.attention-background;
+            border-radius: Theme.radius-control;
+            border-width: 1px;
+            border-color: Theme.attention-stroke;
+
+            HorizontalLayout {
+                padding-left: Theme.spacing-8;
+                padding-right: Theme.spacing-4;
+                spacing: Theme.spacing-8;
+
+                Text {
+                    text: root.error-text;
+                    color: Theme.attention-text;
+                    font-size: Theme.font-caption;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                    overflow: elide;
+                    horizontal-stretch: 1;
+                }
+
+                WinButton {
+                    text: @tr("Retry");
+                    subtle: true;
+                    clicked => { root.refresh(); }
+                }
+            }
+        }
+
+        // --- 列头 --------------------------------------------------------
         Rectangle {
             height: Theme.row-height-tree;
             background: transparent;
@@ -311,7 +325,6 @@ export component SftpPanel inherits Rectangle {
                 ascending: root.sort-ascending;
                 activated => { root.sort-by("name"); }
             }
-
             SftpColumnHeader {
                 x: parent.width - root.meta-width;
                 width: root.column-size-width;
@@ -322,9 +335,8 @@ export component SftpPanel inherits Rectangle {
                 right-aligned: true;
                 activated => { root.sort-by("size"); }
             }
-
-            SftpColumnHeader {
-                x: parent.width - root.column-permissions-width - root.column-gap - root.column-modified-width;
+            if root.shows-modified : SftpColumnHeader {
+                x: parent.width - root.meta-width + root.column-size-width + root.column-gap;
                 width: root.column-modified-width;
                 height: parent.height;
                 label: @tr("Modified");
@@ -333,12 +345,10 @@ export component SftpPanel inherits Rectangle {
                 right-aligned: true;
                 activated => { root.sort-by("modified"); }
             }
-
-            SftpColumnHeader {
+            if root.shows-permissions : SftpColumnHeader {
                 x: parent.width - root.column-permissions-width;
                 width: root.column-permissions-width;
                 height: parent.height;
-                // 短标签：56px 列宽放不下 "Permissions"（英文长标签会贴边/省略）
                 label: @tr("Perm");
                 active: root.sort-column == "permissions";
                 ascending: root.sort-ascending;
@@ -351,18 +361,30 @@ export component SftpPanel inherits Rectangle {
                 y: parent.height - 1px;
                 width: parent.width;
                 height: 1px;
-                // 浮层内表头下沿：divider 比 layer-stroke 强一档
                 background: Theme.divider;
             }
         }
 
-        // --- 文件列表（ListView 虚拟化，空态居中提示）-----------------------
+        // --- 列表（ListView 虚拟化 + 空态 + 行拖动/放置）------------------
         Rectangle {
             clip: true;
             vertical-stretch: 1;
 
+            // 列表级 DropArea：空白处落下 = 移动到当前目录 / 外部文件导入。
+            DropArea {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: parent.height;
+                can-drop(event) => { return root.drop-action(event.proposed-action); }
+                dropped(event) => {
+                    root.drop-on-blank(event.data, root.drop-action(event.proposed-action));
+                    return root.drop-action(event.proposed-action);
+                }
+            }
+
             Text {
-                visible: root.rows.length == 0;
+                visible: root.rows.length == 0 && root.error-text == "";
                 text: root.empty-text;
                 color: Theme.text-tertiary;
                 font-size: Theme.font-caption;
@@ -374,39 +396,35 @@ export component SftpPanel inherits Rectangle {
                 wrap: word-wrap;
             }
 
-            ListView {
+            list := ListView {
                 for row[index] in root.rows : Rectangle {
                     height: Theme.row-height-list;
                     border-radius: Theme.radius-control;
-                    // 选中 > 悬停；WinListRow 自身背景保持透明（见下方注释），
-                    // 整行底色由这一层统一绘制，右侧元数据列同底色。
-                    background: index == root.selected-index ? Theme.subtle-selected
+                    background: row.selected || index == root.selected-index ? Theme.subtle-selected
                         : row_hit.has-hover ? Theme.subtle-hover
                         : transparent;
 
-                    // 行图标：文件夹 / 文件（选中时转强调色，与 WinListRow 选中态一致）
                     Icon {
-                        name: row.is-dir ? "folder" : "file";
-                        icon-color: index == root.selected-index ? Theme.accent : Theme.text-secondary;
+                        name: row.is-dir ? "folder" : (row.is-symlink ? "link" : "file");
+                        icon-color: row.selected || index == root.selected-index ? Theme.accent : Theme.text-secondary;
                         icon-size: Theme.icon-size-small;
                         x: 0;
                         y: (parent.height - self.height) / 2;
                     }
 
-                    // 文件名：由 WinListRow 提供省略号与垂直居中；它自己的左内边距正好是
-                    // 图标与文件名之间的 8px 间隔，右内边距让它不贴住元数据列。
-                    WinListRow {
-                        x: Theme.icon-size-small;
+                    Text {
+                        x: Theme.icon-size-small + Theme.spacing-8;
                         y: 0;
-                        width: parent.width - root.meta-width - Theme.icon-size-small;
+                        width: parent.width - root.meta-width - Theme.icon-size-small - 2 * Theme.spacing-8;
                         height: parent.height;
                         text: row.name;
-                        // 底色 / 图标 / 悬停都由整行与独立图标表达，避免两层状态色叠加
-                        selected: false;
-                        alternate: false;
+                        color: Theme.text-primary;
+                        font-size: Theme.font-body;
+                        vertical-alignment: center;
+                        wrap: no-wrap;
+                        overflow: elide;
                     }
 
-                    // 右侧元数据列：与列头共用 x / 宽度与对齐方式（三列都右对齐）
                     Text {
                         x: parent.width - root.meta-width;
                         width: root.column-size-width;
@@ -419,9 +437,8 @@ export component SftpPanel inherits Rectangle {
                         wrap: no-wrap;
                         overflow: elide;
                     }
-
-                    Text {
-                        x: parent.width - root.column-permissions-width - root.column-gap - root.column-modified-width;
+                    if root.shows-modified : Text {
+                        x: parent.width - root.meta-width + root.column-size-width + root.column-gap;
                         width: root.column-modified-width;
                         height: parent.height;
                         text: row.modified-text;
@@ -432,8 +449,7 @@ export component SftpPanel inherits Rectangle {
                         wrap: no-wrap;
                         overflow: elide;
                     }
-
-                    Text {
+                    if root.shows-permissions : Text {
                         x: parent.width - root.column-permissions-width;
                         width: root.column-permissions-width;
                         height: parent.height;
@@ -446,27 +462,56 @@ export component SftpPanel inherits Rectangle {
                         overflow: elide;
                     }
 
-                    // 覆盖整行的命中区：单击选中 / 双击激活 / 右键（先选中再弹菜单）。
-                    // WinListRow 自带的 TouchArea 只覆盖名称格且无法上报右键，故由它统一接管。
-                    row_hit := TouchArea {
-                        clicked => { root.select-row(index); }
-                        double-clicked => { root.activate-row(index); }
-                        pointer-event(event) => {
-                            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
-                                root.select-row(index);
-                                root.context-menu-requested(
-                                    index,
-                                    self.absolute-position.x + self.mouse-x,
-                                    self.absolute-position.y + self.mouse-y
-                                );
+                    // 目录行接住"拖到目录上 = 移动进目录"。
+                    if row.is-dir : DropArea {
+                        x: 0;
+                        y: 0;
+                        width: parent.width;
+                        height: parent.height;
+                        can-drop(event) => { return root.drop-action(event.proposed-action); }
+                        dropped(event) => {
+                            root.drop-on-row(index, event.data, root.drop-action(event.proposed-action));
+                            return root.drop-action(event.proposed-action);
+                        }
+                    }
+
+                    // 行主体 = DragArea（拖动载荷由宿主按当前选择生成）+
+                    // TouchArea（按下即选、双击激活、右键菜单）。
+                    DragArea {
+                        x: 0;
+                        y: 0;
+                        width: parent.width;
+                        height: parent.height;
+                        data: root.drag-payload();
+                        allow-copy: true;
+                        allow-move: true;
+
+                        row_hit := TouchArea {
+                            pointer-event(event) => {
+                                if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                                    root.select-row(index, false, false);
+                                    root.context-menu-requested(
+                                        index,
+                                        self.absolute-position.x + self.mouse-x,
+                                        self.absolute-position.y + self.mouse-y
+                                    );
+                                } else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                                    root.focus-requested();
+                                    root.select-row(
+                                        index,
+                                        event.modifiers.control || event.modifiers.meta,
+                                        event.modifiers.shift
+                                    );
+                                }
                             }
+                            double-clicked => { root.activate-row(index); }
                         }
                     }
                 }
             }
         }
 
-        // --- 远程编辑进行中：caution 文案 + 保存/取消 ------------------------
+        // --- 远程编辑进行中：细条 + Save/Cancel --------------------------
         if root.remote-edit-active : HorizontalLayout {
             height: Theme.control-height;
             spacing: Theme.spacing-4;
@@ -491,73 +536,842 @@ export component SftpPanel inherits Rectangle {
             }
         }
 
-        // --- 状态行 + 汇总行（§5.14：8px 圆点 + caption 文本）---------------
-        Rectangle {
-            height: 2 * Theme.line-caption + 2 * Theme.spacing-4;
-            background: Theme.layer-fill;
-            border-radius: Theme.radius-control;
+        // --- 汇总行：计数 + 选中 + 排序 ----------------------------------
+        Text {
+            text: root.selected-count > 0
+                ? @tr("{0} · {1} selected · {2}", root.item-summary-display(), root.selected-count, root.sort-text)
+                : @tr("{0} · {1}", root.item-summary-display(), root.sort-text);
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+    }
 
-            VerticalLayout {
-                padding-left: Theme.spacing-8;
-                padding-right: Theme.spacing-8;
-                padding-top: Theme.spacing-4;
-                padding-bottom: Theme.spacing-4;
-                spacing: 0;
+    /// 汇总：`{n} item(s) · {m} dir(s)`（Rust 只投影计数，句子在这里组装）。
+    pure function item-summary-display() -> string {
+        return @tr("{0} · {1}",
+            @tr("{n} item" | "{n} items" % root.item-count),
+            @tr("{n} dir" | "{n} dirs" % root.dir-count));
+    }
 
-                // 会话状态：连接态 success 绿点，未连接/未知 text-tertiary 灰点
-                HorizontalLayout {
-                    height: Theme.line-caption;
-                    spacing: Theme.spacing-8;
+    /// N1 语义：无修饰键（Slint 提议 move）= 复制；Ctrl（提议 copy）= 移动。
+    pure function drop-action(proposed: DragAction) -> DragAction {
+        if (proposed == DragAction.move) {
+            return DragAction.copy;
+        }
+        if (proposed == DragAction.copy) {
+            return DragAction.move;
+        }
+        return DragAction.none;
+    }
+}
 
-                    Rectangle {
-                        width: Theme.spacing-8;
-                        vertical-stretch: 1;
-                        background: transparent;
+// ---------------------------------------------------------------- 队列抽屉
 
-                        Rectangle {
-                            width: Theme.spacing-8;
-                            height: Theme.spacing-8;
-                            border-radius: Theme.spacing-4;
-                            y: (parent.height - self.height) / 2;
-                            background: root.session-connected ? Theme.success : Theme.text-tertiary;
-                        }
-                    }
+/// 传输抽屉：摘要一行 + 展开后的任务列表（行内 pause/resume/retry/cancel/remove）。
+component SftpTransferDrawer inherits Rectangle {
+    in property <[SftpTransferRow]> rows;
+    in property <bool> expanded: false;
+    in property <int> total-count: 0;
+    in property <int> active-count: 0;
+    in property <int> paused-count: 0;
+    in property <int> failed-count: 0;
+    in property <int> completed-count: 0;
+    in property <int> retryable-count: 0;
+
+    callback toggle-expanded();
+    callback pause(string);
+    callback resume(string);
+    callback retry(string);
+    callback cancel(string);
+    callback remove(string);
+    callback clear-completed();
+
+    background: Theme.layer-fill;
+    border-radius: Theme.radius-control;
+
+    VerticalLayout {
+        spacing: 0;
+
+        // --- 摘要行 ------------------------------------------------------
+        HorizontalLayout {
+            height: Theme.control-height;
+            padding-left: Theme.spacing-8;
+            padding-right: Theme.spacing-4;
+            spacing: Theme.spacing-4;
+
+            WinIconButton {
+                icon: root.expanded ? "chevron-down" : "chevron-right";
+                accessible-name: root.expanded ? @tr("Hide transfers") : @tr("Show transfers");
+                clicked => { root.toggle-expanded(); }
+            }
+
+            // 固定尺寸容器：Icon 直接放在布局里会被布局改成 0 宽，软件渲染器
+            // 对 0 尺寸图片会算出 NaN 并 panic（与 WinIconButton 同形）。
+            Rectangle {
+                width: Theme.icon-size-small;
+                vertical-stretch: 1;
+                background: transparent;
+
+                Icon {
+                    name: "download";
+                    icon-color: Theme.text-secondary;
+                    icon-size: Theme.icon-size-small;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+            }
+
+            Text {
+                text: root.summary-text();
+                color: Theme.text-secondary;
+                font-size: Theme.font-caption;
+                vertical-alignment: center;
+                wrap: no-wrap;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+
+            if root.completed-count > 0 : WinButton {
+                text: @tr("Clear completed");
+                subtle: true;
+                clicked => { root.clear-completed(); }
+            }
+        }
+
+        // --- 展开的任务列表 ----------------------------------------------
+        if root.expanded : Rectangle {
+            clip: true;
+            height: min(root.rows.length * Theme.row-height-list + Theme.spacing-4, 240px);
+
+            ListView {
+                for row[index] in root.rows : Rectangle {
+                    height: Theme.row-height-list;
+                    border-radius: Theme.radius-control;
+                    background: row.is-failed ? Theme.attention-background
+                        : Math.mod(index, 2) == 0 ? transparent : Theme.card-fill;
 
                     Text {
-                        text: root.session-status-text;
+                        x: Theme.spacing-8;
+                        y: 0;
+                        width: 90px;
+                        height: parent.height;
+                        text: row.direction-text;
                         color: Theme.text-secondary;
                         font-size: Theme.font-caption;
                         vertical-alignment: center;
                         wrap: no-wrap;
                         overflow: elide;
                     }
+
+                    Text {
+                        x: 98px;
+                        y: 0;
+                        width: parent.width - 98px - root.action-width() - Theme.spacing-8;
+                        height: parent.height;
+                        text: row.file-name-text;
+                        color: Theme.text-primary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    Text {
+                        x: parent.width - root.action-width() - 72px - Theme.spacing-8;
+                        y: 0;
+                        width: 72px;
+                        height: parent.height;
+                        text: row.is-failed ? row.status-text : row.progress-text;
+                        color: row.is-failed ? Theme.critical : Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        horizontal-alignment: right;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    // 行内动作：按状态显示可用的队列操作。
+                    HorizontalLayout {
+                        x: parent.width - root.action-width();
+                        y: 0;
+                        width: root.action-width();
+                        height: parent.height;
+                        spacing: 0;
+                        alignment: end;
+
+                        if row.can-pause : WinIconButton {
+                            icon: "pause";
+                            accessible-name: @tr("Pause transfer");
+                            clicked => { root.pause(row.id); }
+                        }
+                        if row.can-resume : WinIconButton {
+                            icon: "play";
+                            accessible-name: @tr("Resume transfer");
+                            clicked => { root.resume(row.id); }
+                        }
+                        if row.can-retry : WinIconButton {
+                            icon: "refresh";
+                            accessible-name: @tr("Retry transfer");
+                            clicked => { root.retry(row.id); }
+                        }
+                        if row.can-cancel : WinIconButton {
+                            icon: "close";
+                            accessible-name: @tr("Cancel transfer");
+                            clicked => { root.cancel(row.id); }
+                        }
+                        if row.can-remove : WinIconButton {
+                            icon: "trash";
+                            accessible-name: @tr("Remove transfer");
+                            clicked => { root.remove(row.id); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// 动作列宽按行内容固定为 3 个按钮（最多同时显示 3 个动作）。
+    pure function action-width() -> length {
+        return 3 * Theme.control-height;
+    }
+
+    pure function summary-text() -> string {
+        return @tr("{0} transfer(s) · {1} active · {2} paused · {3} failed · {4} completed",
+            root.total-count, root.active-count, root.paused-count, root.failed-count, root.completed-count);
+    }
+}
+
+// ---------------------------------------------------------------- 本地栏
+
+/// 本地栏：LocalPane（只读接线）+ 图标拖动槽 + 整栏 DropArea。
+component SftpLocalSection inherits Rectangle {
+    in property <[LocalRow]> rows;
+    in property <string> path-text: "/";
+    in property <bool> show-hidden: false;
+    in property <string> sort-column: "name";
+    in property <bool> sort-ascending: true;
+    in property <string> sort-text: "Name ↑";
+    in property <int> item-count: 0;
+    in property <int> dir-count: 0;
+    in property <int> selected-count: 0;
+    in property <string> empty-text: "";
+    in property <string> error-text: "";
+    in property <bool> retry-visible: true;
+    in property <bool> collapsed: false;
+    in property <string> title-text: "";
+    in property <string> selected-name-text: "";
+
+    callback toggle-collapsed();
+    callback up();
+    callback home();
+    callback refresh();
+    callback open-path(string);
+    callback sort-by(string);
+    callback toggle-hidden();
+    callback select-row(int, bool, bool);
+    callback activate-row(int);
+    callback context-menu-requested(int, length, length);
+    callback retry();
+    pure callback drag-payload() -> data-transfer;
+    callback drop-received(data-transfer, DragAction);
+    callback focus-requested();
+
+    background: transparent;
+
+    // LocalPane 内部布局（padding-top 8 + 头部 32 + 间距 4 + 路径输入 32 + 间距 4
+    // [+ 错误条 28 + 间距 4] + 列头 28 + 间距 4）→ 列表顶部的固定偏移。
+    private property <length> list-top: 112px + (root.error-text != "" ? 32px : 0px);
+    private property <length> list-height: max(0px, root.height - root.list-top);
+
+    pane := LocalPane {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+
+        rows: root.rows;
+        selected-index: -1;
+        show-hidden: root.show-hidden;
+        sort-column: root.sort-column;
+        sort-ascending: root.sort-ascending;
+        sort-text: root.sort-text;
+        item-count: root.item-count;
+        dir-count: root.dir-count;
+        empty-text: root.empty-text;
+        error-text: root.error-text;
+        retry-visible: root.retry-visible;
+        collapsed: root.collapsed;
+        title-text: root.title-text;
+        selected-name-text: root.selected-name-text;
+        path-text: root.path-text;
+
+        toggle-collapsed => { root.toggle-collapsed(); }
+        up => { root.up(); }
+        home => { root.home(); }
+        refresh => { root.refresh(); }
+        open-path(path) => { root.open-path(path); }
+        sort-by(column) => { root.sort-by(column); }
+        toggle-hidden => { root.toggle-hidden(); }
+        select-row(index, ctrl, shift) => {
+            root.focus-requested();
+            root.select-row(index, ctrl, shift);
+        }
+        activate-row(index) => { root.activate-row(index); }
+        context-menu-requested(index, x, y) => { root.context-menu-requested(index, x, y); }
+        retry => { root.retry(); }
+    }
+
+    // 整栏 DropArea（远端 → 本地 / 系统文件）：LocalPane 的点击会向下转发，
+    // 拖动悬停时由本层接管。
+    if !root.collapsed : DropArea {
+        x: 0;
+        y: root.list-top;
+        width: parent.width;
+        height: root.list-height;
+        can-drop(event) => { return root.drop-action(event.proposed-action); }
+        dropped(event) => {
+            root.drop-received(event.data, root.drop-action(event.proposed-action));
+            return root.drop-action(event.proposed-action);
+        }
+    }
+
+    // 图标槽 DragArea：LocalPane 属 N6/共享件不可改，行内没有 DragArea；
+    // 这里在图标列（16px + 2px 余量）覆盖一条拖动槽，名称列的选择/双击不受影响。
+    // 载荷 = 宿主按当前本地选择生成（点击名称列先选、再拖图标）。
+    if !root.collapsed : DragArea {
+        x: Theme.spacing-4;
+        y: root.list-top;
+        width: 18px;
+        height: root.list-height;
+        data: root.drag-payload();
+        allow-copy: true;
+        allow-move: true;
+    }
+
+    pure function drop-action(proposed: DragAction) -> DragAction {
+        if (proposed == DragAction.move) {
+            return DragAction.copy;
+        }
+        if (proposed == DragAction.copy) {
+            return DragAction.move;
+        }
+        return DragAction.none;
+    }
+}
+
+// ---------------------------------------------------------------- 主面板
+
+/// 双栏 SFTP 面板：远端栏 + 传输抽屉 + 本地栏（宽面板并排、窄面板上下叠放）。
+export component SftpPanel inherits Rectangle {
+    // 远端投影
+    in property <[SftpRow]> rows;
+    in property <[SftpCrumb]> crumbs;
+    in property <int> selected-index: -1;
+    in property <string> session-status-text: "";
+    in property <string> sort-column: "name";
+    in property <bool> sort-ascending: true;
+    in property <string> sort-text: "Name ↑";
+    in property <bool> show-hidden: false;
+    in property <int> item-count: 0;
+    in property <int> dir-count: 0;
+    in property <int> selected-count: 0;
+    in property <string> empty-text: "";
+    in property <string> error-text: "";
+    in property <bool> connected: false;
+    in property <bool> remote-edit-active: false;
+    in property <string> remote-edit-text: "";
+    in-out property <string> path-text: "/";
+    // 本地栏投影
+    in property <[LocalRow]> local-rows;
+    in property <string> local-path-text: "/";
+    in property <bool> local-show-hidden: false;
+    in property <string> local-sort-column: "name";
+    in property <bool> local-sort-ascending: true;
+    in property <string> local-sort-text: "Name ↑";
+    in property <int> local-item-count: 0;
+    in property <int> local-dir-count: 0;
+    in property <int> local-selected-count: 0;
+    in property <string> local-empty-text: "";
+    in property <string> local-error-text: "";
+    in property <bool> local-retry-visible: true;
+    in property <bool> local-collapsed: false;
+    in property <string> local-title-text: "";
+    in property <string> local-selected-name-text: "";
+    // 传输抽屉投影
+    in property <[SftpTransferRow]> transfer-rows;
+    in property <bool> transfer-expanded: false;
+    in property <int> transfer-total-count: 0;
+    in property <int> transfer-active-count: 0;
+    in property <int> transfer-paused-count: 0;
+    in property <int> transfer-failed-count: 0;
+    in property <int> transfer-completed-count: 0;
+    in property <int> transfer-retryable-count: 0;
+
+    // --- 远端回调 ---------------------------------------------------------
+    callback refresh();
+    callback up();
+    callback home();
+    callback open-path(string);
+    callback open-crumb(int);
+    callback sort-by(string);
+    callback toggle-hidden();
+    callback select-row(int, bool, bool);
+    callback activate-row(int);
+    callback context-menu-requested(int, length, length);
+    callback panel-menu-requested(length, length);
+    callback save-edit();
+    callback cancel-edit();
+    pure callback drag-remote-transfer() -> data-transfer;
+    callback drop-on-remote-row(int, data-transfer, DragAction);
+    callback drop-on-remote-blank(data-transfer, DragAction);
+    // --- 本地回调 ---------------------------------------------------------
+    callback local-toggle-collapsed();
+    callback local-up();
+    callback local-home();
+    callback local-refresh();
+    callback local-open-path(string);
+    callback local-sort-by(string);
+    callback local-toggle-hidden();
+    callback local-select-row(int, bool, bool);
+    callback local-activate-row(int);
+    callback local-context-menu-requested(int, length, length);
+    callback local-redirect-requested();
+    callback local-retry();
+    pure callback drag-local-transfer() -> data-transfer;
+    callback drop-on-local(data-transfer, DragAction);
+    // --- 队列抽屉 ---------------------------------------------------------
+    callback transfer-toggle-expanded();
+    callback transfer-pause(string);
+    callback transfer-resume(string);
+    callback transfer-retry(string);
+    callback transfer-cancel(string);
+    callback transfer-remove(string);
+    callback transfer-clear-completed();
+    // --- 键盘剪贴板 -------------------------------------------------------
+    callback copy-selection();
+    callback cut-selection();
+    callback paste-cross-pane();
+
+    background: transparent;
+
+    /// 宽面板（并排）阈值：两栏各 ≥ 280px。
+    private property <bool> side-by-side: root.width >= 600px;
+    private property <length> local-column-width: max(240px, root.width * 0.42);
+    /// 折叠后只剩一行头部（8 + 32 + 8 + 卡片内边距）。
+    private property <length> local-section-height: root.local-collapsed
+        ? 64px
+        : max(150px, root.height * 0.34);
+
+    // 键盘剪贴板：Ctrl+C/X/V（跨栏语义见 runtime::clipboard）。
+    pane_scope := FocusScope {
+        key-pressed(event) => {
+            if (event.modifiers.control || event.modifiers.meta) {
+                if (event.text == "c") {
+                    root.copy-selection();
+                    return accept;
+                }
+                if (event.text == "x") {
+                    root.cut-selection();
+                    return accept;
+                }
+                if (event.text == "v") {
+                    root.paste-cross-pane();
+                    return accept;
+                }
+            }
+            return reject;
+        }
+    }
+
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        background: transparent;
+
+        VerticalLayout {
+            // 与 sftp_panel 旧版一致：左右 4px 内边距，列表行与卡片标题对齐。
+            padding-left: Theme.spacing-4;
+            padding-right: Theme.spacing-4;
+            padding-top: Theme.spacing-8;
+            padding-bottom: Theme.spacing-8;
+            spacing: Theme.spacing-4;
+
+            if root.side-by-side : HorizontalLayout {
+                spacing: Theme.spacing-8;
+
+                SftpRemotePane {
+                    horizontal-stretch: 1;
+                    available-width: max(120px, root.width - root.local-column-width - Theme.spacing-16);
+                    rows: root.rows;
+                    crumbs: root.crumbs;
+                    selected-index: root.selected-index;
+                    sort-column: root.sort-column;
+                    sort-ascending: root.sort-ascending;
+                    sort-text: root.sort-text;
+                    show-hidden: root.show-hidden;
+                    item-count: root.item-count;
+                    dir-count: root.dir-count;
+                    selected-count: root.selected-count;
+                    empty-text: root.empty-text;
+                    error-text: root.error-text;
+                    connected: root.connected;
+                    remote-edit-active: root.remote-edit-active;
+                    remote-edit-text: root.remote-edit-text;
+                    path-text <=> root.path-text;
+                    focus-requested => { pane_scope.focus(); }
+                    refresh => { root.refresh(); }
+                    up => { root.up(); }
+                    home => { root.home(); }
+                    open-path(path) => { root.open-path(path); }
+                    open-crumb(index) => { root.open-crumb(index); }
+                    sort-by(column) => { root.sort-by(column); }
+                    toggle-hidden => { root.toggle-hidden(); }
+                    select-row(index, ctrl, shift) => { root.select-row(index, ctrl, shift); }
+                    activate-row(index) => { root.activate-row(index); }
+                    context-menu-requested(index, x, y) => { root.context-menu-requested(index, x, y); }
+                    panel-menu-requested(x, y) => { root.panel-menu-requested(x, y); }
+                    save-edit => { root.save-edit(); }
+                    cancel-edit => { root.cancel-edit(); }
+                    drag-payload => { return root.drag-remote-transfer(); }
+                    drop-on-row(index, data, action) => { root.drop-on-remote-row(index, data, action); }
+                    drop-on-blank(data, action) => { root.drop-on-remote-blank(data, action); }
                 }
 
-                Text {
-                    // 汇总行：item/dir 计数与分隔符都在本组件内用 @tr 组装；
-                    // sort-text / selected-name-text 已由 MainWindow 模板化。
-                    text: root.selected-name-text != ""
-                        ? @tr("{0} · selected: {1} · {2}", root.item-summary-display, root.selected-name-text, root.sort-text)
-                        : @tr("{0} · {1}", root.item-summary-display, root.sort-text);
-                    color: Theme.text-tertiary;
-                    font-size: Theme.font-caption;
-                    vertical-alignment: center;
-                    wrap: no-wrap;
-                    overflow: elide;
+                SftpLocalSection {
+                    width: root.local-column-width;
+                    rows: root.local-rows;
+                    path-text: root.local-path-text;
+                    show-hidden: root.local-show-hidden;
+                    sort-column: root.local-sort-column;
+                    sort-ascending: root.local-sort-ascending;
+                    sort-text: root.local-sort-text;
+                    item-count: root.local-item-count;
+                    dir-count: root.local-dir-count;
+                    selected-count: root.local-selected-count;
+                    empty-text: root.local-empty-text;
+                    error-text: root.local-error-text;
+                    retry-visible: root.local-retry-visible;
+                    collapsed: root.local-collapsed;
+                    title-text: root.local-title-text;
+                    selected-name-text: root.local-selected-name-text;
+                    toggle-collapsed => { root.local-toggle-collapsed(); }
+                    up => { root.local-up(); }
+                    home => { root.local-home(); }
+                    refresh => { root.local-refresh(); }
+                    open-path(path) => { root.local-open-path(path); }
+                    sort-by(column) => { root.local-sort-by(column); }
+                    toggle-hidden => { root.local-toggle-hidden(); }
+                    select-row(index, ctrl, shift) => { root.local-select-row(index, ctrl, shift); }
+                    activate-row(index) => { root.local-activate-row(index); }
+                    context-menu-requested(index, x, y) => { root.local-context-menu-requested(index, x, y); }
+                    retry => { root.local-retry(); }
+                    drag-payload => { return root.drag-local-transfer(); }
+                    drop-received(data, action) => { root.drop-on-local(data, action); }
+                    focus-requested => { pane_scope.focus(); }
                 }
+            }
+
+            if !root.side-by-side : SftpRemotePane {
+                vertical-stretch: 1;
+                available-width: max(120px, root.width - Theme.spacing-8);
+                rows: root.rows;
+                crumbs: root.crumbs;
+                selected-index: root.selected-index;
+                sort-column: root.sort-column;
+                sort-ascending: root.sort-ascending;
+                sort-text: root.sort-text;
+                show-hidden: root.show-hidden;
+                item-count: root.item-count;
+                dir-count: root.dir-count;
+                selected-count: root.selected-count;
+                empty-text: root.empty-text;
+                error-text: root.error-text;
+                connected: root.connected;
+                remote-edit-active: root.remote-edit-active;
+                remote-edit-text: root.remote-edit-text;
+                path-text <=> root.path-text;
+                focus-requested => { pane_scope.focus(); }
+                refresh => { root.refresh(); }
+                up => { root.up(); }
+                home => { root.home(); }
+                open-path(path) => { root.open-path(path); }
+                open-crumb(index) => { root.open-crumb(index); }
+                sort-by(column) => { root.sort-by(column); }
+                toggle-hidden => { root.toggle-hidden(); }
+                select-row(index, ctrl, shift) => { root.select-row(index, ctrl, shift); }
+                activate-row(index) => { root.activate-row(index); }
+                context-menu-requested(index, x, y) => { root.context-menu-requested(index, x, y); }
+                panel-menu-requested(x, y) => { root.panel-menu-requested(x, y); }
+                save-edit => { root.save-edit(); }
+                cancel-edit => { root.cancel-edit(); }
+                drag-payload => { return root.drag-remote-transfer(); }
+                drop-on-row(index, data, action) => { root.drop-on-remote-row(index, data, action); }
+                drop-on-blank(data, action) => { root.drop-on-remote-blank(data, action); }
+            }
+
+            SftpTransferDrawer {
+                rows: root.transfer-rows;
+                expanded: root.transfer-expanded;
+                total-count: root.transfer-total-count;
+                active-count: root.transfer-active-count;
+                paused-count: root.transfer-paused-count;
+                failed-count: root.transfer-failed-count;
+                completed-count: root.transfer-completed-count;
+                retryable-count: root.transfer-retryable-count;
+                toggle-expanded => { root.transfer-toggle-expanded(); }
+                pause(id) => { root.transfer-pause(id); }
+                resume(id) => { root.transfer-resume(id); }
+                retry(id) => { root.transfer-retry(id); }
+                cancel(id) => { root.transfer-cancel(id); }
+                remove(id) => { root.transfer-remove(id); }
+                clear-completed => { root.transfer-clear-completed(); }
+            }
+
+            if !root.side-by-side : SftpLocalSection {
+                height: root.local-section-height;
+                rows: root.local-rows;
+                path-text: root.local-path-text;
+                show-hidden: root.local-show-hidden;
+                sort-column: root.local-sort-column;
+                sort-ascending: root.local-sort-ascending;
+                sort-text: root.local-sort-text;
+                item-count: root.local-item-count;
+                dir-count: root.local-dir-count;
+                selected-count: root.local-selected-count;
+                empty-text: root.local-empty-text;
+                error-text: root.local-error-text;
+                retry-visible: root.local-retry-visible;
+                collapsed: root.local-collapsed;
+                title-text: root.local-title-text;
+                selected-name-text: root.local-selected-name-text;
+                toggle-collapsed => { root.local-toggle-collapsed(); }
+                up => { root.local-up(); }
+                home => { root.local-home(); }
+                refresh => { root.local-refresh(); }
+                open-path(path) => { root.local-open-path(path); }
+                sort-by(column) => { root.local-sort-by(column); }
+                toggle-hidden => { root.local-toggle-hidden(); }
+                select-row(index, ctrl, shift) => { root.local-select-row(index, ctrl, shift); }
+                activate-row(index) => { root.local-activate-row(index); }
+                context-menu-requested(index, x, y) => { root.local-context-menu-requested(index, x, y); }
+                retry => { root.local-retry(); }
+                drag-payload => { return root.drag-local-transfer(); }
+                drop-received(data, action) => { root.drop-on-local(data, action); }
+                focus-requested => { pane_scope.focus(); }
             }
         }
     }
 }
 
-// Light modal used by the SFTP panel for New Folder / Rename / Chmod / Delete /
-// Upload / Download. MainWindow instantiates it so it centers on the window and
-// blocks the whole app like the other dialogs.
+// ---------------------------------------------------------------- 右键菜单
+
+/// SFTP 上下文菜单（context-menu-design.md §4 四套 + 本地栏两套）。
+///
+/// 由宿主按右键位置传入 `target-kind` 与启用条件；条目文案与索引→动作 id 的
+/// 映射都集中在这里，宿主只消费语义 id（`selected(string)`）。
+export component SftpContextMenu inherits Rectangle {
+    in property <bool> open: false;
+    in property <length> anchor-x: 0px;
+    in property <length> anchor-y: 0px;
+    /// file / dir / multi / blank / local / local-blank
+    in property <string> target-kind: "blank";
+    in property <bool> connected: false;
+    in property <bool> has-selection: false;
+    in property <bool> clipboard-has-remote: false;
+    in property <bool> clipboard-has-local: false;
+    in property <bool> show-hidden: false;
+    in property <bool> remote-edit-active: false;
+
+    callback selected(string);
+    callback dismissed();
+
+    visible: self.open;
+    background: transparent;
+
+    private property <[MenuEntry]> file-entries: [
+        { label: @tr("Open"), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Edit Remote File"), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Download"), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Download To..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Copy To..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Rename..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Delete..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Chmod..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Copy"), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Copy Remote Path"), shortcut: "", enabled: true, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Properties"), shortcut: "", enabled: true, checked: false, separator: false }
+    ];
+
+    private property <[MenuEntry]> dir-entries: [
+        { label: @tr("Open"), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Download"), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Download To..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Copy To..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Upload Here..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("New Folder"), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Rename..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Delete..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Chmod..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Copy"), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Copy Remote Path"), shortcut: "", enabled: true, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Properties"), shortcut: "", enabled: true, checked: false, separator: false }
+    ];
+
+    private property <[MenuEntry]> blank-entries: [
+        { label: @tr("Upload Files..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("New Folder"), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Refresh"), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Show Hidden Files"), shortcut: "", enabled: true, checked: root.show-hidden, separator: false },
+        { label: @tr("Copy Current Path"), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Paste"), shortcut: "", enabled: root.clipboard-has-local, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Parent directory"), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Home directory"), shortcut: "", enabled: true, checked: false, separator: false }
+    ];
+
+    private property <[MenuEntry]> multi-entries: [
+        { label: @tr("Download Selected"), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Copy To..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Delete Selected"), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Chmod Selected..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Copy"), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Copy Remote Paths"), shortcut: "", enabled: true, checked: false, separator: false }
+    ];
+
+    private property <[MenuEntry]> local-entries: [
+        { label: @tr("Upload to Remote"), shortcut: "", enabled: root.connected && root.has-selection, checked: false, separator: false },
+        { label: @tr("Copy"), shortcut: "", enabled: root.has-selection, checked: false, separator: false },
+        { label: @tr("Copy Path"), shortcut: "", enabled: root.has-selection, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Paste"), shortcut: "", enabled: root.clipboard-has-remote, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Refresh"), shortcut: "", enabled: true, checked: false, separator: false },
+        { label: @tr("Show Hidden Files"), shortcut: "", enabled: true, checked: root.show-hidden, separator: false }
+    ];
+
+    private property <[MenuEntry]> entries: root.target-kind == "file" ? root.file-entries
+        : root.target-kind == "dir" ? root.dir-entries
+        : root.target-kind == "multi" ? root.multi-entries
+        : root.target-kind == "local" || root.target-kind == "local-blank" ? root.local-entries
+        : root.blank-entries;
+
+    pure function action(index: int) -> string {
+        if (root.target-kind == "file") {
+            return root.file-action(index);
+        }
+        if (root.target-kind == "dir") {
+            return root.dir-action(index);
+        }
+        if (root.target-kind == "multi") {
+            return root.multi-action(index);
+        }
+        if (root.target-kind == "local" || root.target-kind == "local-blank") {
+            return root.local-action(index);
+        }
+        return root.blank-action(index);
+    }
+
+    pure function file-action(index: int) -> string {
+        if (index == 0) { return "open"; }
+        if (index == 1) { return "edit"; }
+        if (index == 2) { return "download"; }
+        if (index == 3) { return "download-to"; }
+        if (index == 4) { return "copy-to"; }
+        if (index == 6) { return "rename"; }
+        if (index == 7) { return "delete"; }
+        if (index == 8) { return "chmod"; }
+        if (index == 10) { return "copy"; }
+        if (index == 11) { return "copy-path"; }
+        if (index == 13) { return "properties"; }
+        return "";
+    }
+
+    pure function dir-action(index: int) -> string {
+        if (index == 0) { return "open"; }
+        if (index == 1) { return "download"; }
+        if (index == 2) { return "download-to"; }
+        if (index == 3) { return "copy-to"; }
+        if (index == 4) { return "upload-here"; }
+        if (index == 5) { return "new-folder"; }
+        if (index == 7) { return "rename"; }
+        if (index == 8) { return "delete"; }
+        if (index == 9) { return "chmod"; }
+        if (index == 11) { return "copy"; }
+        if (index == 12) { return "copy-path"; }
+        if (index == 14) { return "properties"; }
+        return "";
+    }
+
+    pure function blank-action(index: int) -> string {
+        if (index == 0) { return "upload"; }
+        if (index == 1) { return "new-folder"; }
+        if (index == 3) { return "refresh"; }
+        if (index == 4) { return "toggle-hidden"; }
+        if (index == 5) { return "copy-path-current"; }
+        if (index == 7) { return "paste-into-remote"; }
+        if (index == 9) { return "up"; }
+        if (index == 10) { return "home"; }
+        return "";
+    }
+
+    pure function multi-action(index: int) -> string {
+        if (index == 0) { return "download"; }
+        if (index == 1) { return "copy-to"; }
+        if (index == 2) { return "delete"; }
+        if (index == 3) { return "chmod"; }
+        if (index == 5) { return "copy"; }
+        if (index == 6) { return "copy-path"; }
+        return "";
+    }
+
+    pure function local-action(index: int) -> string {
+        if (index == 0) { return "upload-selection"; }
+        if (index == 1) { return "copy-local"; }
+        if (index == 2) { return "copy-local-path"; }
+        if (index == 4) { return "paste-into-local"; }
+        if (index == 6) { return "local-refresh"; }
+        if (index == 7) { return "local-toggle-hidden"; }
+        return "";
+    }
+
+    menu := MenuPopup {
+        width: parent.width;
+        height: parent.height;
+        open: root.open;
+        entries: root.entries;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        panel-width: 240px;
+        dismissed => { root.dismissed(); }
+        selected(index) => { root.selected(root.action(index)); }
+    }
+}
+
+// ---------------------------------------------------------------- 输入弹窗
+
+/// 输入类操作弹窗（New Folder / Rename / Chmod / Delete / Upload 路径回退 /
+/// Download 目标 / Copy To 目标）。宿主在窗口层级实例化以便居中且不被面板裁剪。
 export component SftpEntryDialog inherits Rectangle {
     in property <bool> open: false;
+    /// new-folder / rename / chmod / delete / upload / download / copy-to
     in property <string> kind: "none";
     in property <string> selected-name-text: "";
     in property <string> selected-path-text: "";
+    in property <int> selected-count: 0;
     in-out property <string> name-text: "";
     in-out property <string> permissions-text: "644";
     in-out property <string> local-path-text: "";
@@ -568,6 +1382,7 @@ export component SftpEntryDialog inherits Rectangle {
     callback chmod-selected(string);
     callback upload-selected(string);
     callback download-selected(string);
+    callback copy-to-selected(string);
     callback canceled();
 
     function is-name-kind() -> bool {
@@ -575,7 +1390,11 @@ export component SftpEntryDialog inherits Rectangle {
     }
 
     function shows-local-path() -> bool {
-        return root.kind == "upload" || root.kind == "download";
+        return root.kind == "upload" || root.kind == "download" || root.kind == "copy-to";
+    }
+
+    function shows-delete-summary() -> bool {
+        return root.kind == "delete";
     }
 
     function title-text() -> string {
@@ -584,7 +1403,8 @@ export component SftpEntryDialog inherits Rectangle {
         if (root.kind == "chmod") { return @tr("Change Permissions"); }
         if (root.kind == "delete") { return @tr("Delete"); }
         if (root.kind == "upload") { return @tr("Upload File"); }
-        if (root.kind == "download") { return @tr("Download File"); }
+        if (root.kind == "download") { return @tr("Download"); }
+        if (root.kind == "copy-to") { return @tr("Copy To..."); }
         return @tr("SFTP");
     }
 
@@ -592,9 +1412,14 @@ export component SftpEntryDialog inherits Rectangle {
         if (root.kind == "new-folder") { return @tr("Relative names are created inside the current remote directory."); }
         if (root.kind == "rename") { return @tr("Relative names stay inside the current remote directory."); }
         if (root.kind == "chmod") { return @tr("Three-digit octal permissions, for example 644 or 755."); }
-        if (root.kind == "delete") { return @tr("This permanently removes the remote entry."); }
-        if (root.kind == "upload") { return @tr("Uploads into the current remote directory using the local file name."); }
-        if (root.kind == "download") { return @tr("Downloads the selected remote entry to this local path."); }
+        if (root.kind == "delete") {
+            return root.selected-count > 1
+                ? @tr("This permanently removes the {0} selected remote entries, directories recursively.", root.selected-count)
+                : @tr("This permanently removes the remote entry.");
+        }
+        if (root.kind == "upload") { return @tr("Uploads the local file or directory into the current remote directory using its name."); }
+        if (root.kind == "download") { return @tr("Downloads the selected remote entries into this local directory."); }
+        if (root.kind == "copy-to") { return @tr("Downloads to a temporary copy and uploads it into this remote directory."); }
         return "";
     }
 
@@ -604,8 +1429,9 @@ export component SftpEntryDialog inherits Rectangle {
     }
 
     function local-label() -> string {
-        if (root.kind == "upload") { return @tr("Local file to upload"); }
-        return @tr("Local destination path");
+        if (root.kind == "upload") { return @tr("Local file or directory"); }
+        if (root.kind == "copy-to") { return @tr("Remote destination directory"); }
+        return @tr("Local destination directory");
     }
 
     function primary-label() -> string {
@@ -615,6 +1441,7 @@ export component SftpEntryDialog inherits Rectangle {
         if (root.kind == "delete") { return @tr("Delete"); }
         if (root.kind == "upload") { return @tr("Upload"); }
         if (root.kind == "download") { return @tr("Download"); }
+        if (root.kind == "copy-to") { return @tr("Copy"); }
         return @tr("Run");
     }
 
@@ -632,109 +1459,376 @@ export component SftpEntryDialog inherits Rectangle {
         else if (root.kind == "delete") { root.delete-selected(); }
         else if (root.kind == "upload") { root.upload-selected(root.local-path-text); }
         else if (root.kind == "download") { root.download-selected(root.local-path-text); }
+        else if (root.kind == "copy-to") { root.copy-to-selected(root.local-path-text); }
     }
 
     visible: self.open;
     background: Theme.scrim;
 
-    // Block interaction with the content behind the modal.
-    TouchArea { }
+    dialog_scope := FocusScope {
+        width: parent.width;
+        height: parent.height;
 
-    Rectangle {
-        x: (parent.width - 520px) / 2;
-        y: max((parent.height - self.height) / 2, 40px);
-        width: 520px;
-        height: body.preferred-height;
-        background: Theme.panel-background;
-        border-radius: Theme.radius-panel;
-        border-width: 1px;
-        border-color: Theme.control-stroke;
-
-        body := VerticalLayout {
-            padding: Theme.spacing-20;
-            spacing: 10px;
-
-            Text {
-                text: root.title-text();
-                color: Theme.text-primary;
-                font-size: Theme.font-subtitle;
-                font-weight: Theme.weight-semibold;
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.canceled();
+                return accept;
             }
+            return reject;
+        }
 
-            Text {
-                text: root.hint-text();
-                color: Theme.text-tertiary;
-                wrap: word-wrap;
-            }
+        TouchArea {
+            clicked => { root.canceled(); }
+        }
 
-            if root.kind == "delete" : VerticalLayout {
-                spacing: Theme.spacing-4;
+        Rectangle {
+            x: (parent.width - 520px) / 2;
+            y: max((parent.height - self.height) / 2, 40px);
+            width: 520px;
+            height: body.preferred-height;
+            background: Theme.panel-background;
+            border-radius: Theme.radius-panel;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
+
+            TouchArea { }
+
+            body := VerticalLayout {
+                padding: Theme.spacing-20;
+                spacing: 10px;
 
                 Text {
-                    text: root.selected-name-text;
+                    text: root.title-text();
                     color: Theme.text-primary;
-                    font-size: Theme.font-body;
+                    font-size: Theme.font-subtitle;
                     font-weight: Theme.weight-semibold;
-                    wrap: no-wrap;
-                    overflow: elide;
                 }
+
                 Text {
-                    text: root.selected-path-text;
+                    text: root.hint-text();
+                    color: Theme.text-tertiary;
+                    wrap: word-wrap;
+                }
+
+                if root.shows-delete-summary() : VerticalLayout {
+                    spacing: Theme.spacing-4;
+
+                    Text {
+                        text: root.selected-count > 1
+                            ? @tr("{0} entries", root.selected-count)
+                            : root.selected-name-text;
+                        color: Theme.text-primary;
+                        font-size: Theme.font-body;
+                        font-weight: Theme.weight-semibold;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+                    if root.selected-count <= 1 : Text {
+                        text: root.selected-path-text;
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        wrap: word-wrap;
+                    }
+                }
+
+                if root.is-name-kind() : VerticalLayout {
+                    spacing: Theme.spacing-4;
+
+                    Text { text: root.name-label(); color: Theme.text-secondary; font-size: Theme.font-body; }
+                    WinTextInput {
+                        text <=> root.name-text;
+                        placeholder-text: root.kind == "new-folder" ? "new-folder" : "new-name";
+                    }
+                }
+
+                if root.kind == "chmod" : VerticalLayout {
+                    spacing: Theme.spacing-4;
+
+                    Text { text: @tr("Permissions (octal)"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                    WinTextInput {
+                        text <=> root.permissions-text;
+                        placeholder-text: "644";
+                    }
+                }
+
+                if root.shows-local-path() : VerticalLayout {
+                    spacing: Theme.spacing-4;
+
+                    Text { text: root.local-label(); color: Theme.text-secondary; font-size: Theme.font-body; }
+                    WinTextInput {
+                        text <=> root.local-path-text;
+                        placeholder-text: root.kind == "copy-to" ? "/remote/dir" : "/local/path";
+                        font-family: Theme.font-mono;
+                    }
+                }
+
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: Theme.spacing-8;
+
+                    WinButton {
+                        text: @tr("Cancel");
+                        clicked => { root.canceled(); }
+                    }
+
+                    WinButton {
+                        text: root.primary-label();
+                        accent: true;
+                        critical: root.kind == "delete";
+                        enabled: root.primary-enabled();
+                        clicked => { root.confirm(); }
+                    }
+                }
+            }
+        }
+    }
+
+    public function focus-dialog() {
+        dialog_scope.focus();
+    }
+
+    changed open => {
+        if (root.open) {
+            dialog_scope.focus();
+        }
+    }
+}
+
+// ---------------------------------------------------------------- 冲突弹窗
+
+/// Ask 策略下的覆盖冲突：列出冲突路径，让用户选择后续策略并重跑。
+export component SftpConflictDialog inherits Rectangle {
+    in property <bool> open: false;
+    in property <string> source-text: "";
+    in property <string> destination-text: "";
+    in property <int> conflict-count: 0;
+    in property <string> conflict-paths-text: "";
+
+    callback resolve(string);
+    callback canceled();
+
+    visible: self.open;
+    background: Theme.scrim;
+
+    dialog_scope := FocusScope {
+        width: parent.width;
+        height: parent.height;
+
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.canceled();
+                return accept;
+            }
+            return reject;
+        }
+
+        TouchArea {
+            clicked => { root.canceled(); }
+        }
+
+        Rectangle {
+            x: (parent.width - 560px) / 2;
+            y: max((parent.height - self.height) / 2, 40px);
+            width: 560px;
+            height: body.preferred-height;
+            background: Theme.panel-background;
+            border-radius: Theme.radius-panel;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
+
+            TouchArea { }
+
+            body := VerticalLayout {
+                padding: Theme.spacing-20;
+                spacing: 10px;
+
+                Text {
+                    text: @tr("Resolve name conflicts");
+                    color: Theme.text-primary;
+                    font-size: Theme.font-subtitle;
+                    font-weight: Theme.weight-semibold;
+                }
+
+                Text {
+                    text: @tr("{0} destination path(s) already exist.", root.conflict-count);
+                    color: Theme.caution;
+                    wrap: word-wrap;
+                }
+
+                Text {
+                    text: @tr("{0} → {1}", root.source-text, root.destination-text);
                     color: Theme.text-tertiary;
                     font-size: Theme.font-caption;
                     wrap: word-wrap;
                 }
-            }
 
-            if root.is-name-kind() : VerticalLayout {
-                spacing: Theme.spacing-4;
+                Rectangle {
+                    height: min(120px, conflicts-text.preferred-height + 2 * Theme.spacing-8);
+                    background: Theme.control-fill;
+                    border-radius: Theme.radius-control;
+                    border-width: 1px;
+                    border-color: Theme.control-stroke;
+                    clip: true;
 
-                Text { text: root.name-label(); color: Theme.text-secondary; font-size: Theme.font-body; }
-                // WinTextInput 自带 control-fill 底 + control-stroke 描边 + 聚焦强调条；
-                // placeholder 是示例名（非 UI 文案），不翻译。
-                WinTextInput {
-                    text <=> root.name-text;
-                    placeholder-text: root.kind == "new-folder" ? "new-folder" : "new-name";
-                }
-            }
-
-            if root.kind == "chmod" : VerticalLayout {
-                spacing: Theme.spacing-4;
-
-                Text { text: @tr("Permissions (octal)"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                WinTextInput {
-                    text <=> root.permissions-text;
-                    placeholder-text: "644";
-                }
-            }
-
-            if root.shows-local-path() : VerticalLayout {
-                spacing: Theme.spacing-4;
-
-                Text { text: root.local-label(); color: Theme.text-secondary; font-size: Theme.font-body; }
-                WinTextInput {
-                    text <=> root.local-path-text;
-                    placeholder-text: "/local/path";
-                }
-            }
-
-            // 操作区：右对齐、主操作在右（§5.10），全部用自绘 WinButton
-            HorizontalLayout {
-                alignment: end;
-                spacing: Theme.spacing-8;
-
-                WinButton {
-                    text: @tr("Cancel");
-                    clicked => { root.canceled(); }
+                    conflicts-text := Text {
+                        x: Theme.spacing-8;
+                        y: Theme.spacing-8;
+                        width: parent.width - 2 * Theme.spacing-8;
+                        text: root.conflict-paths-text;
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-caption;
+                        wrap: word-wrap;
+                    }
                 }
 
-                WinButton {
-                    text: root.primary-label();
-                    accent: true;
-                    enabled: root.primary-enabled();
-                    clicked => { root.confirm(); }
+                Text {
+                    text: @tr("Overwrite replaces them, Rename keeps both by adding a number, Skip leaves them untouched.");
+                    color: Theme.text-tertiary;
+                    font-size: Theme.font-caption;
+                    wrap: word-wrap;
+                }
+
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: Theme.spacing-8;
+
+                    WinButton {
+                        text: @tr("Cancel");
+                        clicked => { root.canceled(); }
+                    }
+                    WinButton {
+                        text: @tr("Skip");
+                        clicked => { root.resolve("skip"); }
+                    }
+                    WinButton {
+                        text: @tr("Rename");
+                        clicked => { root.resolve("rename"); }
+                    }
+                    WinButton {
+                        text: @tr("Overwrite");
+                        accent: true;
+                        clicked => { root.resolve("overwrite"); }
+                    }
                 }
             }
+        }
+    }
+
+    public function focus-dialog() {
+        dialog_scope.focus();
+    }
+
+    changed open => {
+        if (root.open) {
+            dialog_scope.focus();
+        }
+    }
+}
+
+// ---------------------------------------------------------------- 属性弹窗
+
+/// 条目属性（Permissions/Modified 在窄宽列表里隐藏后从这里查看）。
+export component SftpPropertiesDialog inherits Rectangle {
+    in property <bool> open: false;
+    in property <string> name-text: "";
+    in property <string> path-text: "";
+    in property <string> kind-text: "";
+    in property <string> size-text: "";
+    in property <string> modified-text: "";
+    in property <string> permissions-text: "";
+
+    callback copy-path();
+    callback canceled();
+
+    visible: self.open;
+    background: Theme.scrim;
+
+    dialog_scope := FocusScope {
+        width: parent.width;
+        height: parent.height;
+
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.canceled();
+                return accept;
+            }
+            return reject;
+        }
+
+        TouchArea {
+            clicked => { root.canceled(); }
+        }
+
+        Rectangle {
+            x: (parent.width - 480px) / 2;
+            y: max((parent.height - self.height) / 2, 40px);
+            width: 480px;
+            height: body.preferred-height;
+            background: Theme.panel-background;
+            border-radius: Theme.radius-panel;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
+
+            TouchArea { }
+
+            body := VerticalLayout {
+                padding: Theme.spacing-20;
+                spacing: 10px;
+
+                Text {
+                    text: @tr("Properties");
+                    color: Theme.text-primary;
+                    font-size: Theme.font-subtitle;
+                    font-weight: Theme.weight-semibold;
+                }
+
+                GridLayout {
+                    spacing: Theme.spacing-8;
+
+                    Text { text: @tr("Name"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                    Text { text: root.name-text; color: Theme.text-primary; font-size: Theme.font-body; wrap: no-wrap; overflow: elide; }
+
+                    Text { text: @tr("Path"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                    Text { text: root.path-text; color: Theme.text-primary; font-size: Theme.font-body; wrap: word-wrap; }
+
+                    Text { text: @tr("Kind"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                    Text { text: root.kind-text; color: Theme.text-primary; font-size: Theme.font-body; }
+
+                    Text { text: @tr("Size"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                    Text { text: root.size-text; color: Theme.text-primary; font-size: Theme.font-body; }
+
+                    Text { text: @tr("Modified"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                    Text { text: root.modified-text; color: Theme.text-primary; font-size: Theme.font-body; }
+
+                    Text { text: @tr("Permissions"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                    Text { text: root.permissions-text; color: Theme.text-primary; font-size: Theme.font-body; }
+                }
+
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: Theme.spacing-8;
+
+                    WinButton {
+                        text: @tr("Copy Path");
+                        clicked => { root.copy-path(); }
+                    }
+                    WinButton {
+                        text: @tr("Close");
+                        accent: true;
+                        clicked => { root.canceled(); }
+                    }
+                }
+            }
+        }
+    }
+
+    public function focus-dialog() {
+        dialog_scope.focus();
+    }
+
+    changed open => {
+        if (root.open) {
+            dialog_scope.focus();
         }
     }
 }

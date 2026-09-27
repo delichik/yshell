@@ -1,10 +1,18 @@
 //! SFTP client lifecycle and backend adapters.
 
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::Path,
+    sync::atomic::AtomicBool,
+};
 
 use crate::error::{SftpError, SftpErrorKind, SftpResult};
 use crate::fs_entry::{DirectoryListing, FsEntry, FsEntryKind};
 use crate::real::RealSftpBackend;
+use crate::tree::{
+    BatchOpResult, TransferProgress, TreeTransferOptions, TreeTransferReport,
+};
 
 pub trait SftpBackend {
     fn list_dir(&self, path: &str) -> SftpResult<DirectoryListing>;
@@ -14,6 +22,49 @@ pub trait SftpBackend {
     fn mkdir(&mut self, path: &str) -> SftpResult<()>;
     fn upload_file(&mut self, local_path: &Path, remote_path: &str) -> SftpResult<()>;
     fn download_file(&self, remote_path: &str, local_path: &Path) -> SftpResult<()>;
+    /// Remove an **empty** remote directory. Recursive deletion is orchestrated
+    /// by the caller (for example with [`SftpBackend::delete_many`]).
+    fn remove_dir(&mut self, path: &str) -> SftpResult<()>;
+
+    /// Upload a local directory tree below `remote_root`.
+    ///
+    /// Single item failures never stop the transfer; see [`TreeTransferReport`].
+    fn upload_tree(
+        &mut self,
+        local_root: &Path,
+        remote_root: &str,
+        options: TreeTransferOptions,
+        progress: &mut dyn FnMut(TransferProgress),
+        cancel: &AtomicBool,
+    ) -> SftpResult<TreeTransferReport> {
+        crate::tree::upload_tree(self, local_root, remote_root, options, progress, cancel)
+    }
+
+    /// Download a remote directory tree below `local_root`.
+    ///
+    /// Single item failures never stop the transfer; see [`TreeTransferReport`].
+    fn download_tree(
+        &mut self,
+        remote_root: &str,
+        local_root: &Path,
+        options: TreeTransferOptions,
+        progress: &mut dyn FnMut(TransferProgress),
+        cancel: &AtomicBool,
+    ) -> SftpResult<TreeTransferReport> {
+        crate::tree::download_tree(self, remote_root, local_root, options, progress, cancel)
+    }
+
+    /// Delete many remote paths, returning one result per path without
+    /// stopping on failures.
+    fn delete_many(&mut self, paths: &[String]) -> Vec<BatchOpResult> {
+        crate::tree::delete_many(self, paths)
+    }
+
+    /// Apply `permissions` to many remote paths, returning one result per path
+    /// without stopping on failures.
+    fn chmod_many(&mut self, paths: &[String], permissions: u32) -> Vec<BatchOpResult> {
+        crate::tree::chmod_many(self, paths, permissions)
+    }
 }
 
 #[derive(Debug, Default)]
@@ -70,6 +121,42 @@ where
     pub fn download_file(&self, remote_path: &str, local_path: &Path) -> SftpResult<()> {
         self.backend.download_file(remote_path, local_path)
     }
+
+    pub fn remove_dir(&mut self, path: &str) -> SftpResult<()> {
+        self.backend.remove_dir(path)
+    }
+
+    pub fn upload_tree(
+        &mut self,
+        local_root: &Path,
+        remote_root: &str,
+        options: TreeTransferOptions,
+        progress: &mut dyn FnMut(TransferProgress),
+        cancel: &AtomicBool,
+    ) -> SftpResult<TreeTransferReport> {
+        self.backend
+            .upload_tree(local_root, remote_root, options, progress, cancel)
+    }
+
+    pub fn download_tree(
+        &mut self,
+        remote_root: &str,
+        local_root: &Path,
+        options: TreeTransferOptions,
+        progress: &mut dyn FnMut(TransferProgress),
+        cancel: &AtomicBool,
+    ) -> SftpResult<TreeTransferReport> {
+        self.backend
+            .download_tree(remote_root, local_root, options, progress, cancel)
+    }
+
+    pub fn delete_many(&mut self, paths: &[String]) -> Vec<BatchOpResult> {
+        self.backend.delete_many(paths)
+    }
+
+    pub fn chmod_many(&mut self, paths: &[String], permissions: u32) -> Vec<BatchOpResult> {
+        self.backend.chmod_many(paths, permissions)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,6 +179,37 @@ impl Default for FakeSftpBackend {
 impl FakeSftpBackend {
     pub fn insert(&mut self, entry: FsEntry) {
         self.entries.insert(entry.path.clone(), entry);
+    }
+
+    /// Test/diagnostic accessor: the entry stored at `path`.
+    pub fn entry(&self, path: &str) -> Option<&FsEntry> {
+        self.entries.get(path)
+    }
+
+    /// Test/diagnostic accessor: the content stored for a fake file.
+    pub fn file_contents(&self, path: &str) -> Option<&[u8]> {
+        self.contents.get(path).map(Vec::as_slice)
+    }
+
+    fn ensure_not_root(&self, path: &str) -> SftpResult<()> {
+        if path == "/" {
+            return Err(SftpError::new(
+                SftpErrorKind::InvalidPath,
+                "cannot delete root",
+            ));
+        }
+        Ok(())
+    }
+
+    fn has_children(&self, path: &str) -> bool {
+        let prefix = if path == "/" {
+            "/".to_owned()
+        } else {
+            format!("{}/", path.trim_end_matches('/'))
+        };
+        self.entries
+            .keys()
+            .any(|candidate| candidate != path && candidate.starts_with(&prefix))
     }
 }
 
@@ -134,16 +252,41 @@ impl SftpBackend for FakeSftpBackend {
     }
 
     fn delete(&mut self, path: &str) -> SftpResult<()> {
-        if path == "/" {
+        self.ensure_not_root(path)?;
+        let entry = self
+            .entries
+            .get(path)
+            .ok_or_else(|| SftpError::new(SftpErrorKind::NotFound, format!("{path} not found")))?;
+        if entry.kind == FsEntryKind::Directory && self.has_children(path) {
             return Err(SftpError::new(
-                SftpErrorKind::InvalidPath,
-                "cannot delete root",
+                SftpErrorKind::Backend,
+                format!("directory {path} is not empty"),
             ));
         }
-        self.entries
-            .remove(path)
-            .ok_or_else(|| SftpError::new(SftpErrorKind::NotFound, format!("{path} not found")))?;
+        self.entries.remove(path);
         self.contents.remove(path);
+        Ok(())
+    }
+
+    fn remove_dir(&mut self, path: &str) -> SftpResult<()> {
+        self.ensure_not_root(path)?;
+        let entry = self
+            .entries
+            .get(path)
+            .ok_or_else(|| SftpError::new(SftpErrorKind::NotFound, format!("{path} not found")))?;
+        if entry.kind != FsEntryKind::Directory {
+            return Err(SftpError::new(
+                SftpErrorKind::InvalidPath,
+                format!("{path} is not a directory"),
+            ));
+        }
+        if self.has_children(path) {
+            return Err(SftpError::new(
+                SftpErrorKind::Backend,
+                format!("directory {path} is not empty"),
+            ));
+        }
+        self.entries.remove(path);
         Ok(())
     }
 
@@ -254,5 +397,39 @@ mod tests {
         backend.download_file("/upload.txt", &download_path).unwrap();
 
         assert_eq!(fs::read(&download_path).unwrap(), b"hello fake sftp");
+        assert_eq!(backend.file_contents("/upload.txt"), Some(&b"hello fake sftp"[..]));
+        assert_eq!(
+            backend.entry("/upload.txt").map(|entry| entry.size_bytes),
+            Some(15)
+        );
+    }
+
+    #[test]
+    fn fake_backend_delete_and_remove_dir_align_with_the_real_backend() {
+        let mut backend = FakeSftpBackend::default();
+        backend.mkdir("/srv").unwrap();
+        backend.mkdir("/srv/sub").unwrap();
+        backend.insert(FsEntry::file("/srv/sub/a.txt", 1));
+
+        assert_eq!(
+            backend.delete("/srv/sub").unwrap_err().kind,
+            SftpErrorKind::Backend
+        );
+        assert_eq!(
+            backend.remove_dir("/srv/sub").unwrap_err().kind,
+            SftpErrorKind::Backend
+        );
+        assert_eq!(
+            backend.remove_dir("/srv/sub/a.txt").unwrap_err().kind,
+            SftpErrorKind::InvalidPath
+        );
+        assert_eq!(
+            backend.remove_dir("/missing").unwrap_err().kind,
+            SftpErrorKind::NotFound
+        );
+
+        backend.delete("/srv/sub/a.txt").unwrap();
+        backend.remove_dir("/srv/sub").unwrap();
+        assert!(backend.list_dir("/srv").unwrap().entries.is_empty());
     }
 }

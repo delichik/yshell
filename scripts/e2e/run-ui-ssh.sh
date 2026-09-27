@@ -23,6 +23,9 @@
 #   YSHELL_TEST_SSH_USER / YSHELL_TEST_SSH_PASSWORD / YSHELL_TEST_SSH_PORT / YSHELL_TEST_SSH_KEY
 #   YSHELL_TEST_SSH_CONTAINER（状态检查用）
 #   YSHELL_E2E_BIN（默认 target/debug/yshell）；YSHELL_E2E_DISPLAY（默认 :99）
+#   E2E_SCREEN（Xvfb 几何，默认 1920x1200x24）；E2E_WINIT_SCALE（设备缩放，默认 1.0）
+#   说明：Xvfb 几何固定 + WINIT_X11_SCALE_FACTOR=1，保证终端/UI 位图 1:1，像素断言可复现；
+#        若 :99 已被其它几何的 Xvfb 占用，脚本会自动改用空闲 display。
 #
 # 输出：截图到 dist/ui-checks/<prefix>-<theme>-<lang>-NN-<step>.png；
 #       结尾打印断言汇总表；任一断言失败 → 退出码 1。
@@ -111,7 +114,7 @@ fi
 e2e_log "配置：theme=$theme lang=$lang stage=$stage outdir=$outdir"
 e2e_log "目标：root(key)@$ssh_host:$ssh_port / $ssh_user(password)@$ssh_host:$ssh_port"
 
-e2e_ensure_xvfb "$display"
+e2e_ensure_xvfb "$display" || exit 1
 
 # ---------------------------------------------------------------- 配置与文件状态
 write_config() {
@@ -268,14 +271,16 @@ stage_pass_wrong() {
 
   e2e_submit_until 30 e2e_password_failed
   local failed=0
-  # 失败判定：弹窗关闭 且 未出现 SFTP 列表（状态栏错误文案由截图留证）。
+  # 失败判定：未出现 SFTP 列表（N4 后认证弹窗保留并内联错误提示以便重试，
+  # 状态栏错误文案由截图留证；这里只断言"未连接"）。
   if e2e_password_failed; then failed=1; fi
-  e2e_check "pass-wrong/认证失败" "未连接（弹窗关闭、无 SFTP 列表）" "$failed" "$([ "$failed" = 1 ] && echo 未连接 || echo "仍连接/仍可见")"
+  e2e_check "pass-wrong/认证失败" "未连接（无 SFTP 列表；弹窗内联错误）" "$failed" "$([ "$failed" = 1 ] && echo 未连接 || echo "仍连接/仍可见")"
   e2e_check_shot "$outdir" "08-pass-wrong-result" "pass-wrong/结果截图（状态栏错误文案）"
 }
 
 e2e_password_failed() {
-  ! e2e_password_dialog_open && ! e2e_session_connected
+  # N4：认证失败后弹窗保留（内联错误 + 重试），因此不再要求弹窗关闭。
+  ! e2e_session_connected
 }
 
 stage_pass_cancel() {
@@ -297,6 +302,7 @@ stage_pass_cancel() {
 }
 
 e2e_password_cancelled() {
+  # 取消路径必须关闭弹窗且不连接（错误路径见 e2e_password_failed）。
   ! e2e_password_dialog_open && ! e2e_session_connected
 }
 

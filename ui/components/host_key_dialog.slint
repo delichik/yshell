@@ -10,12 +10,19 @@
 //   * 信息文本由 Rust 投影（多行），等宽展示，最多 8 行后内部滚动。
 //   * changed 模式必须输入 REPLACE；Rust 侧 `replace_host_key_and_connect`
 //     同样校验 `trim() == "REPLACE"`，这里同步禁用按钮，避免无谓的错误状态。
+//
+// L2（对话框 Esc / 遮罩点击关闭）：
+//   * `open` 由宿主投影驱动（`visible: self.open`，与其它模态弹窗一致）。
+//   * `Esc` / 遮罩点击 = Cancel（`cancel()`，Rust 侧同时清空 REPLACE 确认词）；
+//     面板内空白处点击由面板 TouchArea 吞掉，不会穿透到遮罩误触取消。
+//   * 危险操作默认焦点在根 FocusScope（不是 Replace Key 按钮），Enter 不误确认。
 
 import { Theme } from "../theme.slint";
 import { WinButton, WinIconButton } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 
 export component HostKeyDialog inherits Rectangle {
+    in property <bool> open: false;
     /// 主机密钥信息（Rust 投影的多行文本，原样展示）
     in property <string> prompt-text: "";
     /// "first-trust" | "changed"
@@ -31,111 +38,144 @@ export component HostKeyDialog inherits Rectangle {
     /// 右上角 × 关闭，语义与 cancel() 相同（宿主自行决定处理方式）
     callback dismissed();
 
+    visible: self.open;
     background: Theme.scrim;
 
-    // 阻止背后内容的交互
-    TouchArea { }
+    // L2：根 FocusScope 包住整个弹窗；Esc 沿焦点链冒泡到这里 → `cancel()`。
+    dialog_scope := FocusScope {
+        width: parent.width;
+        height: parent.height;
 
-    Rectangle {
-        x: (parent.width - 520px) / 2;
-        y: max((parent.height - self.height) / 2, 40px);
-        width: 520px;
-        height: body.preferred-height;
-        background: Theme.panel-background;
-        border-radius: Theme.radius-panel;
-        border-width: 1px;
-        border-color: Theme.control-stroke;
-
-        body := VerticalLayout {
-            padding: Theme.spacing-20;
-            spacing: Theme.spacing-12;
-
-            // 标题行（固定）：右侧统一关闭按钮
-            HorizontalLayout {
-                spacing: Theme.spacing-8;
-
-                Text {
-                    text: @tr("Host Key Confirmation");
-                    color: Theme.text-primary;
-                    font-size: Theme.font-subtitle;
-                    font-weight: Theme.weight-semibold;
-                    vertical-alignment: center;
-                    horizontal-stretch: 1;
-                }
-
-                WinIconButton {
-                    icon: "close";
-                    accessible-name: @tr("Close");
-                    clicked => { root.dismissed(); }
-                }
+        key-pressed(event) => {
+            // Esc 键码按 `event.text` 比较（与 session_tree 判 Enter 的做法一致）。
+            if (event.text == "\u{001b}") {
+                root.cancel();
+                return accept;
             }
+            return reject;
+        }
 
-            // 主机密钥信息（Rust 投影的多行文本）：最多 8 行，超出后内部滚动
-            Rectangle {
-                height: min(prompt.preferred-height, 8 * Theme.line-body);
-                clip: true;
-                background: transparent;
+        // 遮罩：点击 = 取消（与 Cancel 按钮同一路径）。
+        TouchArea {
+            clicked => { root.cancel(); }
+        }
 
-                prompt-scroll := Flickable {
-                    width: parent.width;
-                    height: parent.height;
-                    interactive: true;
-                    viewport-width: self.width;
-                    viewport-height: prompt.preferred-height;
+        Rectangle {
+            x: (parent.width - 520px) / 2;
+            y: max((parent.height - self.height) / 2, 40px);
+            width: 520px;
+            height: body.preferred-height;
+            background: Theme.panel-background;
+            border-radius: Theme.radius-panel;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
 
-                    prompt := Text {
-                        width: prompt-scroll.width;
-                        text: root.prompt-text;
-                        color: Theme.text-secondary;
-                        font-family: Theme.font-mono;
-                        font-size: Theme.font-body;
-                        wrap: word-wrap;
+            // 吞掉面板空白处的点击，避免穿透到遮罩触发取消。
+            TouchArea { }
+
+            body := VerticalLayout {
+                padding: Theme.spacing-20;
+                spacing: Theme.spacing-12;
+
+                // 标题行（固定）：右侧统一关闭按钮
+                HorizontalLayout {
+                    spacing: Theme.spacing-8;
+
+                    Text {
+                        text: @tr("Host Key Confirmation");
+                        color: Theme.text-primary;
+                        font-size: Theme.font-subtitle;
+                        font-weight: Theme.weight-semibold;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
+
+                    WinIconButton {
+                        icon: "close";
+                        accessible-name: @tr("Close");
+                        clicked => { root.dismissed(); }
+                    }
+                }
+
+                // 主机密钥信息（Rust 投影的多行文本）：最多 8 行，超出后内部滚动
+                Rectangle {
+                    height: min(prompt.preferred-height, 8 * Theme.line-body);
+                    clip: true;
+                    background: transparent;
+
+                    prompt-scroll := Flickable {
+                        width: parent.width;
+                        height: parent.height;
+                        interactive: true;
+                        content-width: self.width;
+                        content-height: prompt.preferred-height;
+
+                        prompt := Text {
+                            width: prompt-scroll.width;
+                            text: root.prompt-text;
+                            color: Theme.text-secondary;
+                            font-family: Theme.font-mono;
+                            font-size: Theme.font-body;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+
+                // changed 模式：警示文案 + REPLACE 确认输入
+                if root.mode-text == "changed" : Text {
+                    text: @tr("The presented key does not match the stored key. This may indicate a man-in-the-middle attack; replace it only if you verified the new key elsewhere.");
+                    color: Theme.critical;
+                    wrap: word-wrap;
+                }
+
+                if root.mode-text == "changed" : WinTextInput {
+                    placeholder-text: @tr("Type REPLACE");
+                    text <=> root.confirmation-text;
+                    edited => { root.confirmation-edited(self.text); }
+                }
+
+                // 操作区：右对齐，主操作在最右
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: Theme.spacing-8;
+
+                    WinButton {
+                        text: @tr("Cancel");
+                        clicked => { root.cancel(); }
+                    }
+
+                    if root.mode-text == "first-trust" : WinButton {
+                        text: @tr("Trust Once");
+                        clicked => { root.trust-once(); }
+                    }
+
+                    if root.mode-text == "first-trust" : WinButton {
+                        text: @tr("Trust and Save");
+                        accent: true;
+                        clicked => { root.trust-and-save(); }
+                    }
+
+                    if root.mode-text == "changed" : WinButton {
+                        text: @tr("Replace Key");
+                        // 破坏性操作：critical 文案色（不做红色实底），且需输入 REPLACE
+                        critical: true;
+                        enabled: root.confirmation-text == "REPLACE";
+                        clicked => { root.replace-key(); }
                     }
                 }
             }
+        }
+    }
 
-            // changed 模式：警示文案 + REPLACE 确认输入
-            if root.mode-text == "changed" : Text {
-                text: @tr("The presented key does not match the stored key. This may indicate a man-in-the-middle attack; replace it only if you verified the new key elsewhere.");
-                color: Theme.critical;
-                wrap: word-wrap;
-            }
+    /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
+    public function focus-dialog() {
+        dialog_scope.focus();
+    }
 
-            if root.mode-text == "changed" : WinTextInput {
-                placeholder-text: @tr("Type REPLACE");
-                text <=> root.confirmation-text;
-                edited => { root.confirmation-edited(self.text); }
-            }
-
-            // 操作区：右对齐，主操作在最右
-            HorizontalLayout {
-                alignment: end;
-                spacing: Theme.spacing-8;
-
-                WinButton {
-                    text: @tr("Cancel");
-                    clicked => { root.cancel(); }
-                }
-
-                if root.mode-text == "first-trust" : WinButton {
-                    text: @tr("Trust Once");
-                    clicked => { root.trust-once(); }
-                }
-
-                if root.mode-text == "first-trust" : WinButton {
-                    text: @tr("Trust and Save");
-                    accent: true;
-                    clicked => { root.trust-and-save(); }
-                }
-
-                if root.mode-text == "changed" : WinButton {
-                    text: @tr("Replace Key");
-                    // 破坏性操作：critical 文案色（不做红色实底），且需输入 REPLACE
-                    critical: true;
-                    enabled: root.confirmation-text == "REPLACE";
-                    clicked => { root.replace-key(); }
-                }
-            }
+    // 打开时聚焦弹窗（Esc 需要焦点在弹窗内）。
+    changed open => {
+        if (root.open) {
+            dialog_scope.focus();
         }
     }
 }

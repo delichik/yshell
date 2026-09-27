@@ -1,0 +1,436 @@
+// 本地栏（N1 §2 / D9）：SFTP 面板内的可折叠本地目录栏。
+//
+// 纯展示组件：路径/排序/显隐/选择/错误等状态全部由外层（Rust 投影或 Phase 2
+// 的 sftp_panel）注入，交互只发回调；不内嵌任何文件系统逻辑。
+//
+// 结构（自上而下）：头部（折叠 + 上级/刷新/根 + 路径输入 + 显隐）→ 列头
+//                  → 内联错误条 → 文件列表 → 汇总行。
+// 规范：docs/product/ui-winui3-design-language.md §5.2 / §5.5 / §5.11
+// 说明：列宽与 sftp_panel 保持同一套 token 之外的局部常量；窄宽时按
+//       Modified → Permissions 的顺序隐藏，Name 始终保留。
+
+import { ListView } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { Icon } from "basic/icons.slint";
+import { WinButton, WinIconButton, WinToggle } from "basic/controls.slint";
+import { WinTextInput } from "basic/text_input.slint";
+
+// Slint-facing mirror of the runtime local row/crumb data.
+
+export struct LocalRow {
+    name: string,
+    path-text: string,
+    kind-text: string,
+    size-text: string,
+    modified-text: string,
+    permissions-text: string,
+    is-dir: bool,
+    is-symlink: bool,
+    /// 伪 `..` 行：图标用 up，双击由外层映射到上级目录。
+    is-parent: bool,
+    /// 多选高亮（外层按 Ctrl/Shift 计算；selected-index 只是焦点行）。
+    selected: bool,
+}
+
+// 可点击排序的列头（与 sftp_panel 的列头同形态；本文件内私有，避免依赖被禁用改动的组件）。
+component LocalColumnHeader inherits Rectangle {
+    in property <string> label: "";
+    in property <bool> active: false;
+    in property <bool> ascending: true;
+    in property <bool> right-aligned: false;
+    callback activated();
+
+    height: Theme.row-height-tree;
+    border-radius: Theme.radius-control;
+    background: header-touch.has-hover ? Theme.subtle-hover : transparent;
+
+    Text {
+        text: root.active
+            ? (root.ascending ? @tr("{0} ↑", root.label) : @tr("{0} ↓", root.label))
+            : root.label;
+        color: root.active ? Theme.text-primary : Theme.text-tertiary;
+        font-size: Theme.font-caption;
+        font-weight: root.active ? Theme.weight-semibold : 400;
+        x: 0;
+        width: parent.width;
+        height: parent.height;
+        vertical-alignment: center;
+        horizontal-alignment: root.right-aligned ? right : left;
+        wrap: no-wrap;
+        overflow: elide;
+    }
+
+    header_touch := TouchArea {
+        clicked => { root.activated(); }
+    }
+}
+
+export component LocalPane inherits Rectangle {
+    in property <[LocalRow]> rows;
+    in property <int> selected-index: -1;
+    in property <bool> show-hidden: false;
+    in property <string> sort-column: "name";
+    in property <bool> sort-ascending: true;
+    in property <string> sort-text: "Name ↑";
+    /// 汇总行计数（Rust 只投影数字；单复数与句子由下方 item-summary-display 组装）。
+    in property <int> item-count: 0;
+    in property <int> dir-count: 0;
+    in property <string> empty-text: "";
+    /// 内联错误条：非空即显示；retry-visible 控制"重试"按钮。
+    in property <string> error-text: "";
+    in property <bool> retry-visible: true;
+    /// 折叠态（D9）：只保留头部一行。
+    in property <bool> collapsed: false;
+    /// 头部标题（外层注入，例如 "Local"）。
+    in property <string> title-text: "";
+    in property <string> selected-name-text: "";
+    /// 当前本地路径；输入框可直接编辑，回车发 open-path。
+    in-out property <string> path-text: "";
+
+    callback toggle-collapsed();
+    callback up();
+    callback home();
+    callback refresh();
+    callback open-path(string);
+    callback sort-by(string);
+    callback toggle-hidden();
+    /// 单击选择：index、Ctrl（含 Meta）、Shift 修饰键原样上报，外层决定选择语义。
+    callback select-row(int, bool, bool);
+    callback activate-row(int);
+    callback context-menu-requested(int, length, length);
+    callback retry();
+
+    // 窄宽降级：280px 下 Mod(116+8) 与 Perm(56+8) 合计 188px 会挤掉 Name。
+    private property <bool> shows-modified: root.width >= 300px;
+    private property <bool> shows-permissions: root.width >= 430px;
+    private property <length> column-gap: Theme.spacing-8;
+    private property <length> column-size-width: 56px;
+    // 116px：`2026-09-27 21:14`（12px caption）刚好完整显示，96px 会省略号截断。
+    private property <length> column-modified-width: 116px;
+    private property <length> column-permissions-width: 56px;
+    // 元数据区总宽 = 可见列（Size 恒显）之和 + 列间距。
+    private property <length> meta-width: root.column-size-width
+        + (root.shows-modified ? root.column-gap + root.column-modified-width : 0px)
+        + (root.shows-permissions ? root.column-gap + root.column-permissions-width : 0px);
+
+    // 汇总行："{n} item(s) · {m} dir(s)"；Rust 只投影计数，禁止在 Slint 拼句（§7.2）。
+    private property <string> item-summary-display:
+        @tr("{0} · {1}",
+            @tr("{n} item" | "{n} items" % root.item-count),
+            @tr("{n} dir" | "{n} dirs" % root.dir-count));
+
+    // 卡片外壳（main_window / sftp_panel）已提供表面，本组件不叠底色。
+    background: transparent;
+
+    // 面板空白处右键：保持选择，交给外层弹空白菜单。
+    TouchArea {
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                root.context-menu-requested(
+                    -1,
+                    self.absolute-position.x + self.mouse-x,
+                    self.absolute-position.y + self.mouse-y
+                );
+            }
+        }
+    }
+
+    VerticalLayout {
+        // 与 sftp_panel 对齐：左右 4px 内边距，让列表行与卡片标题行齐平。
+        padding-left: Theme.spacing-4;
+        padding-right: Theme.spacing-4;
+        padding-top: Theme.spacing-8;
+        padding-bottom: Theme.spacing-8;
+        spacing: Theme.spacing-4;
+
+        // --- 头部第 1 行：折叠开关 + 导航 + 显隐 ---------------------------
+        // 路径输入单独一行：280px 下与 5 个按钮同排会被输入框的首选宽度撑爆
+        // （右侧控件被裁掉），拆行后与 sftp_panel 的"工具行 + 路径行"结构一致。
+        HorizontalLayout {
+            height: Theme.control-height;
+            spacing: Theme.spacing-4;
+
+            WinIconButton {
+                icon: root.collapsed ? "chevron-right" : "chevron-down";
+                accessible-name: root.collapsed ? @tr("Expand local pane") : @tr("Collapse local pane");
+                clicked => { root.toggle-collapsed(); }
+            }
+
+            if root.collapsed : Text {
+                text: root.title-text;
+                color: Theme.text-primary;
+                font-size: Theme.font-body;
+                font-weight: Theme.weight-semibold;
+                vertical-alignment: center;
+                wrap: no-wrap;
+            }
+
+            if !root.collapsed : WinIconButton {
+                icon: "up";
+                accessible-name: @tr("Parent directory");
+                clicked => { root.up(); }
+            }
+            if !root.collapsed : WinIconButton {
+                icon: "refresh";
+                accessible-name: @tr("Refresh");
+                clicked => { root.refresh(); }
+            }
+            if !root.collapsed : WinIconButton {
+                icon: "home";
+                accessible-name: @tr("Home directory");
+                clicked => { root.home(); }
+            }
+
+            // 折叠态：单行显示当前路径（省略号截断）。
+            if root.collapsed : Text {
+                text: root.path-text;
+                color: Theme.text-tertiary;
+                font-size: Theme.font-caption;
+                vertical-alignment: center;
+                wrap: no-wrap;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+
+            // 展开态：弹簧把显隐开关推到最右。
+            if !root.collapsed : Rectangle { horizontal-stretch: 1; }
+
+            if !root.collapsed : WinToggle {
+                text: "";
+                icon: "eye";
+                checked: root.show-hidden;
+                accessible-name: @tr("Show hidden files");
+                toggled => { root.toggle-hidden(); }
+            }
+        }
+
+        // --- 头部第 2 行：路径输入（回车打开）-------------------------------
+        if !root.collapsed : WinTextInput {
+            text <=> root.path-text;
+            placeholder-text: "/local/path";
+            font-family: Theme.font-mono;
+            accepted => { root.open-path(self.text); }
+        }
+
+        // --- 内联错误条：错误文本 + 重试（不弹连续弹窗）-------------------
+        if !root.collapsed && root.error-text != "" : Rectangle {
+            height: Theme.row-height-tree;
+            background: Theme.attention-background;
+            border-radius: Theme.radius-control;
+            border-width: 1px;
+            border-color: Theme.attention-stroke;
+
+            HorizontalLayout {
+                padding-left: Theme.spacing-8;
+                padding-right: Theme.spacing-4;
+                spacing: Theme.spacing-8;
+
+                Text {
+                    text: root.error-text;
+                    color: Theme.attention-text;
+                    font-size: Theme.font-caption;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                    overflow: elide;
+                    horizontal-stretch: 1;
+                }
+
+                if root.retry-visible : WinButton {
+                    text: @tr("Retry");
+                    subtle: true;
+                    clicked => { root.retry(); }
+                }
+            }
+        }
+
+        // --- 列头（点击排序）-----------------------------------------------
+        if !root.collapsed : Rectangle {
+            height: Theme.row-height-tree;
+            background: transparent;
+
+            LocalColumnHeader {
+                x: 0;
+                width: parent.width - root.meta-width;
+                height: parent.height;
+                label: @tr("Name");
+                active: root.sort-column == "name";
+                ascending: root.sort-ascending;
+                activated => { root.sort-by("name"); }
+            }
+
+            LocalColumnHeader {
+                x: parent.width - root.meta-width;
+                width: root.column-size-width;
+                height: parent.height;
+                label: @tr("Size");
+                active: root.sort-column == "size";
+                ascending: root.sort-ascending;
+                right-aligned: true;
+                activated => { root.sort-by("size"); }
+            }
+
+            if root.shows-modified : LocalColumnHeader {
+                x: parent.width - root.meta-width + root.column-size-width + root.column-gap;
+                width: root.column-modified-width;
+                height: parent.height;
+                label: @tr("Modified");
+                active: root.sort-column == "modified";
+                ascending: root.sort-ascending;
+                right-aligned: true;
+                activated => { root.sort-by("modified"); }
+            }
+
+            if root.shows-permissions : LocalColumnHeader {
+                x: parent.width - root.column-permissions-width;
+                width: root.column-permissions-width;
+                height: parent.height;
+                label: @tr("Perm");
+                active: root.sort-column == "permissions";
+                ascending: root.sort-ascending;
+                right-aligned: true;
+                activated => { root.sort-by("permissions"); }
+            }
+
+            Rectangle {
+                x: 0;
+                y: parent.height - 1px;
+                width: parent.width;
+                height: 1px;
+                background: Theme.divider;
+            }
+        }
+
+        // --- 文件列表（ListView 虚拟化，空态居中提示）-----------------------
+        if !root.collapsed : Rectangle {
+            clip: true;
+            vertical-stretch: 1;
+
+            Text {
+                visible: root.rows.length == 0 && root.error-text == "";
+                text: root.empty-text;
+                color: Theme.text-tertiary;
+                font-size: Theme.font-caption;
+                x: Theme.spacing-8;
+                width: parent.width - 2 * Theme.spacing-8;
+                height: parent.height;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+            }
+
+            ListView {
+                for row[index] in root.rows : Rectangle {
+                    height: Theme.row-height-list;
+                    border-radius: Theme.radius-control;
+                    background: row.selected || index == root.selected-index ? Theme.subtle-selected
+                        : row_hit.has-hover ? Theme.subtle-hover
+                        : transparent;
+
+                    // 行图标：`..`/目录/符号链接/文件（选中转强调色）
+                    Icon {
+                        name: row.is-parent ? "up"
+                            : row.is-symlink ? "link"
+                            : row.is-dir ? "folder"
+                            : "file";
+                        icon-color: row.selected || index == root.selected-index ? Theme.accent : Theme.text-secondary;
+                        icon-size: Theme.icon-size-small;
+                        x: 0;
+                        y: (parent.height - self.height) / 2;
+                    }
+
+                    // 文件名：省略号截断；左起于图标之后，右止于元数据列之前。
+                    Text {
+                        x: Theme.icon-size-small + Theme.spacing-8;
+                        y: 0;
+                        width: parent.width - root.meta-width - Theme.icon-size-small - 2 * Theme.spacing-8;
+                        height: parent.height;
+                        text: row.name;
+                        // 伪 `..` 行用次文本色，真实条目用主文本色
+                        color: row.is-parent ? Theme.text-secondary : Theme.text-primary;
+                        font-size: Theme.font-body;
+                        vertical-alignment: center;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    // 右侧元数据列：与列头共用 x / 宽度与右对齐方式。
+                    Text {
+                        x: parent.width - root.meta-width;
+                        width: root.column-size-width;
+                        height: parent.height;
+                        text: row.size-text;
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        horizontal-alignment: right;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    if root.shows-modified : Text {
+                        x: parent.width - root.meta-width + root.column-size-width + root.column-gap;
+                        width: root.column-modified-width;
+                        height: parent.height;
+                        text: row.modified-text;
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        horizontal-alignment: right;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    if root.shows-permissions : Text {
+                        x: parent.width - root.column-permissions-width;
+                        width: root.column-permissions-width;
+                        height: parent.height;
+                        text: row.permissions-text;
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        horizontal-alignment: right;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    // 整行命中区：单击（带 Ctrl/Shift）选择 / 双击激活 / 右键先选后弹菜单。
+                    row_hit := TouchArea {
+                        pointer-event(event) => {
+                            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                                root.select-row(index, false, false);
+                                root.context-menu-requested(
+                                    index,
+                                    self.absolute-position.x + self.mouse-x,
+                                    self.absolute-position.y + self.mouse-y
+                                );
+                            } else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.up) {
+                                root.select-row(
+                                    index,
+                                    event.modifiers.control || event.modifiers.meta,
+                                    event.modifiers.shift
+                                );
+                            }
+                        }
+                        double-clicked => { root.activate-row(index); }
+                    }
+                }
+            }
+        }
+
+        // --- 汇总行：计数 + 选中名 + 排序列 ---------------------------------
+        // 窄宽（280px）下只留计数：完整句子会以省略号结尾，反而读不出信息；
+        // 排序列在列头 `Name ↑` 处仍有可见反馈。
+        if !root.collapsed : Text {
+            text: root.width < 340px
+                ? root.item-summary-display
+                : (root.selected-name-text != ""
+                    ? @tr("{0} · selected: {1} · {2}", root.item-summary-display, root.selected-name-text, root.sort-text)
+                    : @tr("{0} · {1}", root.item-summary-display, root.sort-text));
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+    }
+}

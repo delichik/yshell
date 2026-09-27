@@ -205,6 +205,8 @@
 | Collapse All | 有展开 folder | 折叠全部。 |
 | Refresh | 始终启用 | 重新加载配置。 |
 
+> 实现状态（2026-09-27，S1+S2）：空白区菜单已实现（`New Session` / `New Folder…` / `Refresh`）；`Import Config…`、`Expand All`、`Collapse All` 暂为 disabled（tooltip 说明"本版本暂不支持"）。会话栏常驻 `+` / `…` 按钮已移除，相关动作统一走本菜单；图标条模式提供最小菜单（`New Session` / 展开会话栏）。
+
 ## 6. 传输队列右键菜单
 
 触发区域：Transfer Queue 任务行。

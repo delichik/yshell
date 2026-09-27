@@ -12,9 +12,14 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::path::Path;
 use std::time::Duration;
 
-use ssh2::{Channel, KeyboardInteractivePrompt, Prompt, Session};
+use ssh2::{Channel, KeyboardInteractivePrompt, Session};
 
 use crate::{
+    auth::{
+        AuthAttempt, AuthAttemptKind, AuthMethods, AuthProblemKind, KeyboardInteractiveChallenge,
+        KeyboardInteractivePrompter, KeyboardInteractiveResponse, Prompt, ScriptedPrompter,
+        SingleSecretPrompter,
+    },
     channel::ShellSession,
     client::{ExecOutput, ShellAdapter, SshAdapter, SshConnectionConfig},
     error::{SshError, SshErrorKind, SshResult},
@@ -131,6 +136,9 @@ pub struct RealConnectionAttempt {
     pub stage: RealConnectionStage,
     pub history: Vec<RealConnectionSnapshot>,
     pub action_log: Vec<RealTransportActionRecord>,
+    /// Server advertised authentication methods learned after the handshake
+    /// (`None` = not queried yet or the server did not return a list).
+    pub auth_methods: Option<AuthMethods>,
 }
 
 #[derive(Debug)]
@@ -201,60 +209,294 @@ impl RealAuthStrategy {
     }
 }
 
-#[derive(Debug, Clone)]
-struct SecretOnlyKeyboardInteractivePrompt {
-    secret: String,
-    prompt_log: Vec<String>,
+/// Bridges the public [`KeyboardInteractivePrompter`] to the ssh2 callback.
+///
+/// libssh2 calls this once per `SSH_MSG_USERAUTH_INFO_REQUEST` round within a
+/// single `userauth_keyboard_interactive` call, so multi-round challenges work
+/// through repeated `respond` calls.
+struct Ssh2KeyboardInteractivePrompter<'a> {
+    inner: &'a mut dyn KeyboardInteractivePrompter,
+    cancelled: bool,
+    challenges: Vec<KeyboardInteractiveChallenge>,
 }
 
-impl SecretOnlyKeyboardInteractivePrompt {
-    fn new(secret: String) -> Self {
+impl<'a> Ssh2KeyboardInteractivePrompter<'a> {
+    fn new(inner: &'a mut dyn KeyboardInteractivePrompter) -> Self {
         Self {
-            secret,
-            prompt_log: Vec::new(),
+            inner,
+            cancelled: false,
+            challenges: Vec::new(),
         }
     }
 
-    fn describe_prompts(&self) -> String {
-        if self.prompt_log.is_empty() {
-            "none".to_owned()
-        } else {
-            self.prompt_log.join(" | ")
+    fn was_cancelled(&self) -> bool {
+        self.cancelled
+    }
+
+    fn challenges(&self) -> &[KeyboardInteractiveChallenge] {
+        &self.challenges
+    }
+}
+
+impl KeyboardInteractivePrompt for Ssh2KeyboardInteractivePrompter<'_> {
+    fn prompt<'a>(
+        &mut self,
+        name: &str,
+        instructions: &str,
+        prompts: &[ssh2::Prompt<'a>],
+    ) -> Vec<String> {
+        let challenge = KeyboardInteractiveChallenge::new(
+            name,
+            instructions,
+            prompts
+                .iter()
+                .map(|prompt| Prompt {
+                    text: prompt.text.to_string(),
+                    echo: prompt.echo,
+                })
+                .collect(),
+        );
+        let prompt_count = challenge.prompt_count();
+        match self.inner.respond(&challenge) {
+            KeyboardInteractiveResponse::Answers(answers) => {
+                self.challenges.push(challenge);
+                normalize_prompt_answers(answers, prompt_count)
+            }
+            KeyboardInteractiveResponse::Cancelled => {
+                self.challenges.push(challenge);
+                self.cancelled = true;
+                vec![String::new(); prompt_count]
+            }
         }
     }
 }
 
-impl KeyboardInteractivePrompt for SecretOnlyKeyboardInteractivePrompt {
-    fn prompt<'a>(&mut self, username: &str, instructions: &str, prompts: &[Prompt<'a>]) -> Vec<String> {
-        self.prompt_log.clear();
-        if !instructions.trim().is_empty() {
-            self.prompt_log
-                .push(format!("instructions={}", instructions.trim()));
+fn normalize_prompt_answers(answers: Vec<String>, prompt_count: usize) -> Vec<String> {
+    let mut answers = answers;
+    answers.truncate(prompt_count);
+    answers.resize(prompt_count, String::new());
+    answers
+}
+
+fn describe_challenges(challenges: &[KeyboardInteractiveChallenge]) -> String {
+    if challenges.is_empty() {
+        return "none".to_owned();
+    }
+    challenges
+        .iter()
+        .map(|challenge| {
+            let name = challenge.name.trim();
+            let instruction = challenge.instruction.trim();
+            let prompts = challenge
+                .prompts
+                .iter()
+                .map(|prompt| format!("`{}` echo={}", prompt.text.trim(), prompt.echo))
+                .collect::<Vec<_>>()
+                .join("; ");
+            if name.is_empty() && instruction.is_empty() {
+                format!("round[prompts={prompts}]")
+            } else {
+                format!("round[name={name} instruction={instruction} prompts={prompts}]")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
+
+/// Outcome of one raw native authentication call (before classification).
+struct NativeAuthCall {
+    outcome: Result<(), ssh2::Error>,
+    cancelled: bool,
+    prompt_log: Option<String>,
+}
+
+impl NativeAuthCall {
+    fn new(outcome: Result<(), ssh2::Error>) -> Self {
+        Self {
+            outcome,
+            cancelled: false,
+            prompt_log: None,
         }
-        self.prompt_log.extend(prompts.iter().map(|prompt| {
-            format!("user={username} prompt=`{}` echo={}", prompt.text.trim(), prompt.echo)
-        }));
-        prompts
-            .iter()
-            .enumerate()
-            .map(|(index, prompt)| {
-                if index == 0 || (!prompt.echo && looks_like_secret_prompt(&prompt.text)) {
-                    self.secret.clone()
-                } else {
-                    String::new()
-                }
-            })
-            .collect()
     }
 }
 
-fn looks_like_secret_prompt(text: &str) -> bool {
-    let normalized = text.trim().to_ascii_lowercase();
-    normalized.contains("password")
-        || normalized.contains("passcode")
-        || normalized.contains("otp")
-        || normalized.contains("token")
-        || normalized.contains("verification code")
+fn native_keyboard_interactive_call(
+    session: &Session,
+    username: &str,
+    prompter: &mut dyn KeyboardInteractivePrompter,
+) -> NativeAuthCall {
+    let mut adapter = Ssh2KeyboardInteractivePrompter::new(prompter);
+    let outcome = session.userauth_keyboard_interactive(username, &mut adapter);
+    NativeAuthCall {
+        outcome,
+        cancelled: adapter.was_cancelled(),
+        prompt_log: Some(describe_challenges(adapter.challenges())),
+    }
+}
+
+fn run_configured_native_auth(session: &Session, auth: &AuthMethod) -> NativeAuthCall {
+    match auth {
+        AuthMethod::Password { username, password } => {
+            NativeAuthCall::new(session.userauth_password(username, password))
+        }
+        AuthMethod::PrivateKey {
+            username,
+            key_path,
+            passphrase,
+        } => NativeAuthCall::new(session.userauth_pubkey_file(
+            username,
+            None,
+            Path::new(key_path),
+            passphrase.as_deref(),
+        )),
+        AuthMethod::Agent { username } => NativeAuthCall::new(session.userauth_agent(username)),
+        AuthMethod::KeyboardInteractive { username, secret } => native_keyboard_interactive_call(
+            session,
+            username,
+            &mut SingleSecretPrompter::new(secret.clone()),
+        ),
+    }
+}
+
+fn run_native_auth_attempt(session: &Session, attempt: &AuthAttempt) -> NativeAuthCall {
+    match attempt {
+        AuthAttempt::Password { username, password } => {
+            NativeAuthCall::new(session.userauth_password(username, password))
+        }
+        AuthAttempt::PublicKey {
+            username,
+            key_path,
+            passphrase,
+        } => NativeAuthCall::new(session.userauth_pubkey_file(
+            username,
+            None,
+            Path::new(key_path),
+            passphrase.as_deref(),
+        )),
+        AuthAttempt::Agent { username } => NativeAuthCall::new(session.userauth_agent(username)),
+        AuthAttempt::KeyboardInteractive {
+            username,
+            responses,
+        } => native_keyboard_interactive_call(
+            session,
+            username,
+            &mut ScriptedPrompter::new(responses.clone()),
+        ),
+    }
+}
+
+fn strategy_from_attempt(attempt: &AuthAttempt) -> RealAuthStrategy {
+    match attempt {
+        AuthAttempt::Password { .. } => RealAuthStrategy::Password,
+        AuthAttempt::PublicKey {
+            key_path,
+            passphrase,
+            ..
+        } => RealAuthStrategy::PrivateKey {
+            key_path: key_path.clone(),
+            has_passphrase: passphrase.is_some(),
+        },
+        AuthAttempt::Agent { .. } => RealAuthStrategy::Agent,
+        AuthAttempt::KeyboardInteractive { .. } => RealAuthStrategy::KeyboardInteractive,
+    }
+}
+
+/// libssh2 error codes relevant to authentication (`libssh2.h`).
+const LIBSSH2_ERROR_PASSWORD_EXPIRED: i32 = -15;
+const LIBSSH2_ERROR_METHOD_NONE: i32 = -17;
+const LIBSSH2_ERROR_AUTHENTICATION_FAILED: i32 = -18;
+const LIBSSH2_ERROR_PUBLICKEY_UNVERIFIED: i32 = -19;
+const LIBSSH2_ERROR_METHOD_NOT_SUPPORTED: i32 = -33;
+
+fn ssh2_error_code(error: &ssh2::Error) -> Option<i32> {
+    match error.code() {
+        ssh2::ErrorCode::Session(code) => Some(code),
+        ssh2::ErrorCode::SFTP(_) => None,
+    }
+}
+
+/// Classify a failed native authentication call.
+///
+/// `method_allowed` is `Some(false)` when the server advertised a method list
+/// that does not contain the attempted method; it wins over the error code.
+fn classify_native_auth_problem(
+    code: Option<i32>,
+    method_allowed: Option<bool>,
+) -> AuthProblemKind {
+    if method_allowed == Some(false) {
+        return AuthProblemKind::MethodNotAllowed;
+    }
+    match code {
+        Some(LIBSSH2_ERROR_METHOD_NOT_SUPPORTED) => AuthProblemKind::MethodNotAllowed,
+        Some(LIBSSH2_ERROR_METHOD_NONE) => AuthProblemKind::OtherMethodRequired,
+        Some(LIBSSH2_ERROR_PASSWORD_EXPIRED)
+        | Some(LIBSSH2_ERROR_AUTHENTICATION_FAILED)
+        | Some(LIBSSH2_ERROR_PUBLICKEY_UNVERIFIED) => AuthProblemKind::InvalidCredentials,
+        _ => AuthProblemKind::OtherMethodRequired,
+    }
+}
+
+/// Best-effort query of the server advertised auth methods.
+///
+/// A missing list (empty result) or a query failure is reported as `None`, so
+/// the caller falls back to "try the configured method + manual choice".
+fn query_native_auth_methods(session: &Session, username: &str) -> Option<AuthMethods> {
+    match session.auth_methods(username) {
+        Ok(list) => AuthMethods::parse(list),
+        Err(_) => None,
+    }
+}
+
+/// Record the outcome of one native authentication call and classify failures.
+fn finish_native_auth_call(
+    session: &Session,
+    attempt: &mut RealConnectionAttempt,
+    action: RealTransportAction,
+    kind: AuthAttemptKind,
+    call: NativeAuthCall,
+    success_detail: String,
+) -> SshResult<()> {
+    if session.authenticated() {
+        attempt.record_action(
+            action,
+            RealTransportActionOutcome::Completed,
+            success_detail,
+        );
+        return Ok(());
+    }
+
+    let NativeAuthCall {
+        outcome,
+        cancelled,
+        prompt_log,
+    } = call;
+    let detail = if cancelled {
+        "native keyboard-interactive authentication was cancelled by the user".to_owned()
+    } else {
+        let mut detail = match &outcome {
+            Ok(()) => format!(
+                "native `{}` authentication did not complete: the session is still unauthenticated",
+                kind.label()
+            ),
+            Err(error) => format!("native `{}` authentication failed: {error}", kind.label()),
+        };
+        if let Some(prompts) = &prompt_log {
+            detail.push_str(&format!("; prompts={prompts}"));
+        }
+        detail
+    };
+    let problem = if cancelled {
+        AuthProblemKind::Cancelled
+    } else {
+        classify_native_auth_problem(
+            outcome.as_ref().err().and_then(ssh2_error_code),
+            attempt.auth_methods.map(|methods| methods.allows(kind)),
+        )
+    };
+    let methods = attempt.auth_methods;
+    attempt.record_action(action, RealTransportActionOutcome::Failed, detail.clone());
+    attempt.mark_failed(detail.clone());
+    Err(SshError::new(SshErrorKind::Authentication, detail).with_auth_context(methods, problem))
 }
 
 impl SshAdapter for RealSshAdapter {
@@ -278,6 +520,103 @@ impl SshAdapter for RealSshAdapter {
     fn disconnect(&self, mut session: Self::Session) -> SshResult<()> {
         session.mark_disconnected("Connection attempt was closed before live transport existed.");
         Ok(())
+    }
+
+    fn auth_methods(&self, session: &Self::Session) -> SshResult<Option<AuthMethods>> {
+        Ok(session.auth_methods)
+    }
+
+    /// Perform one authentication attempt against a freshly established native
+    /// transport (TCP connect + handshake + host key verification), then
+    /// release it.
+    ///
+    /// This is the per-attempt primitive for N4 retries: on failure the error
+    /// carries [`SshError::auth_problem`] and [`SshError::auth_methods`]. The
+    /// default `exec` / `open_shell` paths keep performing their own automatic
+    /// authentication and are not affected.
+    fn authenticate_with(
+        &self,
+        session: &mut Self::Session,
+        attempt: AuthAttempt,
+    ) -> SshResult<()> {
+        ensure_single_attempt_supported(session)?;
+        if attempt.username().trim().is_empty() {
+            return Err(SshError::configuration("ssh username must not be empty"));
+        }
+        let native_session = establish_native_session(session)?;
+        if attempt.username() != session.plan.username {
+            // The method list is per-username; refresh it when the attempt
+            // targets a different account than the connection plan.
+            session.auth_methods = query_native_auth_methods(&native_session, attempt.username());
+        }
+        let call = run_native_auth_attempt(&native_session, &attempt);
+        let kind = attempt.kind();
+        let username = attempt.username().to_owned();
+        finish_native_auth_call(
+            &native_session,
+            session,
+            RealTransportAction::Authenticate {
+                username: username.clone(),
+                strategy: strategy_from_attempt(&attempt),
+            },
+            kind,
+            call,
+            format!(
+                "native `{}` authentication succeeded as `{username}`",
+                kind.label()
+            ),
+        )?;
+        session.mark_disconnected(
+            "Single-attempt native authentication completed; the native transport was released.",
+        );
+        Ok(())
+    }
+
+    /// Keyboard-interactive authentication with an interactive prompter
+    /// (multi-round, cancellable) against a freshly established native
+    /// transport, which is released after the attempt.
+    fn authenticate_keyboard_interactive(
+        &self,
+        session: &mut Self::Session,
+        username: &str,
+        prompter: &mut dyn KeyboardInteractivePrompter,
+    ) -> SshResult<()> {
+        ensure_single_attempt_supported(session)?;
+        if username.trim().is_empty() {
+            return Err(SshError::configuration("ssh username must not be empty"));
+        }
+        let native_session = establish_native_session(session)?;
+        if username != session.plan.username {
+            // The method list is per-username; refresh it for the prompted account.
+            session.auth_methods = query_native_auth_methods(&native_session, username);
+        }
+        let call = native_keyboard_interactive_call(&native_session, username, prompter);
+        finish_native_auth_call(
+            &native_session,
+            session,
+            RealTransportAction::Authenticate {
+                username: username.to_owned(),
+                strategy: RealAuthStrategy::KeyboardInteractive,
+            },
+            AuthAttemptKind::KeyboardInteractive,
+            call,
+            format!("native keyboard-interactive authentication succeeded as `{username}`"),
+        )?;
+        session.mark_disconnected(
+            "Single-attempt native authentication completed; the native transport was released.",
+        );
+        Ok(())
+    }
+}
+
+fn ensure_single_attempt_supported(session: &RealConnectionAttempt) -> SshResult<()> {
+    if matches!(session.plan.proxy, ProxyConfig::None) {
+        Ok(())
+    } else {
+        Err(SshError::new(
+            SshErrorKind::Proxy,
+            "single-attempt authentication does not support proxy negotiation yet",
+        ))
     }
 }
 
@@ -541,6 +880,7 @@ impl RealConnectionAttempt {
             stage: RealConnectionStage::Prepared,
             history: Vec::new(),
             action_log: Vec::new(),
+            auth_methods: None,
         };
         attempt.record_snapshot(
             RealConnectionStage::Prepared,
@@ -1029,19 +1369,44 @@ impl RealNativeShellSession {
     }
 
     fn write_input(&mut self, bytes: &[u8]) -> SshResult<()> {
-        self.session.set_blocking(true);
-        let result = self
-            .channel
-            .write_all(bytes)
-            .and_then(|_| self.channel.flush())
-            .map_err(|error| {
-                SshError::new(
-                    SshErrorKind::Io,
-                    format!("failed to write bytes into native SSH shell: {error}"),
-                )
-            });
-        self.session.set_blocking(false);
-        result
+        // 会话始终是非阻塞的（`open_shell` 里 `set_blocking(false)`）。这里不要
+        // 临时切到 `set_blocking(true)`：底层 socket 仍是非阻塞，libssh2 在"阻塞
+        // 模式"下排空 incoming 时会直接失败（`Failure while draining incoming flow`），
+        // 表现为交互输入第二个字符就断流。改为 WouldBlock 重试，保持全非阻塞。
+        let mut remaining = bytes;
+        let mut retries = 0u32;
+        while !remaining.is_empty() {
+            match self.channel.write(remaining) {
+                Ok(0) => {
+                    return Err(SshError::new(
+                        SshErrorKind::Io,
+                        "native SSH shell accepted zero bytes while writing input".to_owned(),
+                    ));
+                }
+                Ok(written) => {
+                    remaining = &remaining[written..];
+                    retries = 0;
+                }
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                    retries += 1;
+                    if retries > 500 {
+                        return Err(SshError::new(
+                            SshErrorKind::Io,
+                            "native SSH shell input stalled while waiting for backpressure to clear"
+                                .to_owned(),
+                        ));
+                    }
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+                Err(error) => {
+                    return Err(SshError::new(
+                        SshErrorKind::Io,
+                        format!("failed to write bytes into native SSH shell: {error}"),
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
 
     fn resize_pty(&mut self, size: PtySize) -> SshResult<()> {
@@ -1096,6 +1461,13 @@ impl RealNativeShellSession {
 }
 
 fn connect_authenticated_native_session(attempt: &mut RealConnectionAttempt) -> SshResult<Session> {
+    let session = establish_native_session(attempt)?;
+    authenticate_native_session(&session, attempt)?;
+    Ok(session)
+}
+
+/// TCP connect + SSH handshake + host key verification + auth-method discovery.
+fn establish_native_session(attempt: &mut RealConnectionAttempt) -> SshResult<Session> {
     let stream = connect_native_stream(&attempt.plan)?;
     let mut session = Session::new().map_err(|error| {
         SshError::new(
@@ -1128,12 +1500,20 @@ fn connect_authenticated_native_session(attempt: &mut RealConnectionAttempt) -> 
     );
 
     verify_native_host_key(&session, attempt)?;
-    attempt.advance_to(
-        RealConnectionStage::Authentication,
-        "Host key accepted. Native SSH authentication is next.",
-    );
 
-    authenticate_native_session(&session, attempt)?;
+    // A0: query the server advertised auth methods right after the handshake
+    // (before any credential is sent) so the runtime can present the auth
+    // window; the query is best effort and never fails the connection.
+    let methods = query_native_auth_methods(&session, &attempt.plan.username);
+    let auth_note = match methods {
+        Some(methods) => format!(
+            "Host key accepted. Native SSH authentication is next. Server auth methods: {}.",
+            methods.describe()
+        ),
+        None => "Host key accepted. Native SSH authentication is next. The server did not return an auth-method list.".to_owned(),
+    };
+    attempt.auth_methods = methods;
+    attempt.advance_to(RealConnectionStage::Authentication, auth_note);
     Ok(session)
 }
 
@@ -1361,79 +1741,20 @@ fn authenticate_native_session(session: &Session, attempt: &mut RealConnectionAt
             "native keyboard-interactive authentication succeeded".to_owned()
         }
     };
-    match &attempt.plan.auth {
-        AuthMethod::Password { username, password } => {
-            session.userauth_password(username, password).map_err(|error| {
-                native_stage_error(
-                    attempt,
-                    RealConnectionStage::Authentication,
-                    SshErrorKind::Authentication,
-                    format!("native password authentication failed: {error}"),
-                )
-            })?;
-        }
-        AuthMethod::PrivateKey {
-            username,
-            key_path,
-            passphrase,
-        } => {
-            session
-                .userauth_pubkey_file(username, None, Path::new(key_path), passphrase.as_deref())
-                .map_err(|error| {
-                    native_stage_error(
-                        attempt,
-                        RealConnectionStage::Authentication,
-                        SshErrorKind::Authentication,
-                        format!("native private-key authentication failed: {error}"),
-                    )
-                })?;
-        }
-        AuthMethod::Agent { username } => {
-            session
-                .userauth_agent(username)
-                .map_err(|error| {
-                    native_stage_error(
-                        attempt,
-                        RealConnectionStage::Authentication,
-                        SshErrorKind::Authentication,
-                        format!("native ssh-agent authentication failed: {error}"),
-                    )
-                })?;
-        }
-        AuthMethod::KeyboardInteractive { username, secret } => {
-            let mut prompter = SecretOnlyKeyboardInteractivePrompt::new(secret.clone());
-            session
-                .userauth_keyboard_interactive(username, &mut prompter)
-                .map_err(|error| {
-                    native_stage_error(
-                        attempt,
-                        RealConnectionStage::Authentication,
-                        SshErrorKind::Authentication,
-                        format!(
-                            "native keyboard-interactive authentication failed: {error}; prompts={}",
-                            prompter.describe_prompts()
-                        ),
-                    )
-                })?;
-        }
-    }
-    if !session.authenticated() {
-        return Err(native_stage_error(
-            attempt,
-            RealConnectionStage::Authentication,
-            SshErrorKind::Authentication,
-            "native SSH session is still unauthenticated after auth attempt".to_owned(),
-        ));
-    }
-    attempt.record_action(
+    let auth = attempt.plan.auth.clone();
+    let kind = auth.kind();
+    let call = run_configured_native_auth(session, &auth);
+    finish_native_auth_call(
+        session,
+        attempt,
         RealTransportAction::Authenticate {
             username: attempt.plan.username.clone(),
             strategy: attempt.plan.auth_strategy.clone(),
         },
-        RealTransportActionOutcome::Completed,
+        kind,
+        call,
         detail,
-    );
-    Ok(())
+    )
 }
 
 fn drain_channel_stream(channel: &mut Channel, queue: &mut VecDeque<Vec<u8>>) -> SshResult<()> {
@@ -1507,7 +1828,13 @@ fn native_stage_error(
     };
     attempt.record_action(action, RealTransportActionOutcome::Failed, message.clone());
     attempt.mark_failed(message.clone());
-    SshError::new(kind, message)
+    let mut error = SshError::new(kind, message);
+    if matches!(stage, RealConnectionStage::Authentication) {
+        // A0: authentication failures carry the server method list so the
+        // runtime can open / update the auth window without reconnecting.
+        error.auth_methods = attempt.auth_methods;
+    }
+    error
 }
 
 #[cfg(test)]
@@ -1517,13 +1844,15 @@ mod tests {
     use std::time::Duration;
 
     use crate::{
-        AuthMethod, ForwardingKind, ProxyConfig, ShellClient, ShellSession, SshAdapter, SshClient,
-        SshConnectionConfig, SshErrorKind, TunnelConfig,
+        AuthAttempt, AuthMethod, AuthMethods, AuthProblemKind, ForwardingKind,
+        KeyboardInteractiveChallenge, Prompt, ProxyConfig, ShellClient, ShellSession, SshAdapter,
+        SshClient, SshConnectionConfig, SshErrorKind, TunnelConfig,
     };
 
     use super::{
-        native_host_key_problem, RealAuthStrategy, RealConnectionAttempt, RealConnectionStage,
-        RealSshAdapter, RealTransportActionOutcome,
+        classify_native_auth_problem, describe_challenges, native_host_key_problem,
+        native_stage_error, ssh2_error_code, strategy_from_attempt, RealAuthStrategy,
+        RealConnectionAttempt, RealConnectionStage, RealSshAdapter, RealTransportActionOutcome,
     };
 
     #[test]
@@ -2044,6 +2373,208 @@ mod tests {
         assert_eq!(output.exit_status, 0);
         assert!(String::from_utf8_lossy(&output.stdout).contains("__YSHELL_EXEC_OK__"));
         assert!(output.stderr.is_empty());
+    }
+
+    #[test]
+    fn native_auth_problem_classification_covers_credentials_and_methods() {
+        assert_eq!(
+            classify_native_auth_problem(Some(-18), None),
+            AuthProblemKind::InvalidCredentials
+        );
+        assert_eq!(
+            classify_native_auth_problem(Some(-19), Some(true)),
+            AuthProblemKind::InvalidCredentials
+        );
+        assert_eq!(
+            classify_native_auth_problem(Some(-15), Some(true)),
+            AuthProblemKind::InvalidCredentials
+        );
+        assert_eq!(
+            classify_native_auth_problem(Some(-18), Some(false)),
+            AuthProblemKind::MethodNotAllowed,
+            "a method missing from the server list wins over the error code"
+        );
+        assert_eq!(
+            classify_native_auth_problem(Some(-33), None),
+            AuthProblemKind::MethodNotAllowed
+        );
+        assert_eq!(
+            classify_native_auth_problem(Some(-17), None),
+            AuthProblemKind::OtherMethodRequired
+        );
+        assert_eq!(
+            classify_native_auth_problem(None, Some(true)),
+            AuthProblemKind::OtherMethodRequired
+        );
+        assert_eq!(
+            classify_native_auth_problem(Some(-2), None),
+            AuthProblemKind::OtherMethodRequired
+        );
+    }
+
+    #[test]
+    fn parses_ssh2_error_codes() {
+        let session_error = ssh2::Error::from_errno(ssh2::ErrorCode::Session(-18));
+        assert_eq!(ssh2_error_code(&session_error), Some(-18));
+        let sftp_error = ssh2::Error::from_errno(ssh2::ErrorCode::SFTP(-1));
+        assert_eq!(ssh2_error_code(&sftp_error), None);
+    }
+
+    #[test]
+    fn authentication_stage_errors_carry_server_auth_methods() {
+        let adapter = RealSshAdapter;
+        let config = localhost_agent_config(22);
+        let mut attempt =
+            RealConnectionAttempt::prepared(adapter.plan_connection(&config).expect("plan"));
+        attempt.auth_methods = AuthMethods::parse("publickey,keyboard-interactive");
+
+        let error = native_stage_error(
+            &mut attempt,
+            RealConnectionStage::Authentication,
+            SshErrorKind::Authentication,
+            "synthetic auth failure".to_owned(),
+        );
+
+        assert_eq!(
+            error.auth_methods,
+            AuthMethods::parse("publickey,keyboard-interactive"),
+            "auth failures must carry the server method list for the runtime"
+        );
+        assert_eq!(attempt.stage, RealConnectionStage::Failed);
+    }
+
+    #[test]
+    fn single_attempt_authentication_rejects_proxy_plans_before_transport() {
+        let adapter = RealSshAdapter;
+        let mut config = localhost_agent_config(22);
+        config.proxy = ProxyConfig::Socks5 {
+            address: "127.0.0.1:1080".to_owned(),
+            username: None,
+            password: None,
+            resolve_dns_by_proxy: true,
+        };
+        let mut attempt =
+            RealConnectionAttempt::prepared(adapter.plan_connection(&config).expect("plan"));
+
+        let error = adapter
+            .authenticate_with(
+                &mut attempt,
+                AuthAttempt::Agent {
+                    username: "alice".to_owned(),
+                },
+            )
+            .expect_err("proxy negotiation is not wired for single-attempt auth");
+
+        assert_eq!(error.kind, SshErrorKind::Proxy);
+    }
+
+    #[test]
+    fn single_attempt_authentication_rejects_empty_username_before_transport() {
+        let adapter = RealSshAdapter;
+        let config = localhost_agent_config(22);
+        let mut attempt =
+            RealConnectionAttempt::prepared(adapter.plan_connection(&config).expect("plan"));
+
+        let error = adapter
+            .authenticate_with(
+                &mut attempt,
+                AuthAttempt::Password {
+                    username: "   ".to_owned(),
+                    password: "secret".to_owned(),
+                },
+            )
+            .expect_err("empty username is a configuration error");
+
+        assert_eq!(error.kind, SshErrorKind::Configuration);
+    }
+
+    #[test]
+    fn real_auth_strategy_is_derived_from_the_attempt() {
+        assert_eq!(
+            strategy_from_attempt(&AuthAttempt::Password {
+                username: "alice".to_owned(),
+                password: "secret".to_owned(),
+            }),
+            RealAuthStrategy::Password
+        );
+        assert_eq!(
+            strategy_from_attempt(&AuthAttempt::PublicKey {
+                username: "alice".to_owned(),
+                key_path: "/tmp/id_ed25519".to_owned(),
+                passphrase: Some("secret".to_owned()),
+            }),
+            RealAuthStrategy::PrivateKey {
+                key_path: "/tmp/id_ed25519".to_owned(),
+                has_passphrase: true,
+            }
+        );
+        assert_eq!(
+            strategy_from_attempt(&AuthAttempt::Agent {
+                username: "alice".to_owned(),
+            }),
+            RealAuthStrategy::Agent
+        );
+        assert_eq!(
+            strategy_from_attempt(&AuthAttempt::KeyboardInteractive {
+                username: "alice".to_owned(),
+                responses: vec!["otp".to_owned()],
+            }),
+            RealAuthStrategy::KeyboardInteractive
+        );
+    }
+
+    #[test]
+    fn describes_keyboard_interactive_rounds_for_error_messages() {
+        assert_eq!(describe_challenges(&[]), "none");
+
+        let challenges = vec![KeyboardInteractiveChallenge::new(
+            "SSH Server",
+            "Two factor",
+            vec![
+                Prompt::new("Verification code: ", false),
+                Prompt::new("Trust this device? ", true),
+            ],
+        )];
+        let description = describe_challenges(&challenges);
+        assert!(description.contains("name=SSH Server"));
+        assert!(description.contains("instruction=Two factor"));
+        assert!(description.contains("`Verification code:` echo=false"));
+        assert!(description.contains("`Trust this device?` echo=true"));
+    }
+
+    #[test]
+    fn live_native_single_attempt_auth_smoke_when_env_target_is_set() {
+        let Some(target) = std::env::var("YSHELL_LIVE_SSH_TARGET").ok() else {
+            return;
+        };
+        let (username, host, port) = parse_live_ssh_target(&target);
+        let client = SshClient::with_real_backend();
+        let mut config = SshConnectionConfig::new(
+            host,
+            port,
+            AuthMethod::Agent {
+                username: username.clone(),
+            },
+        );
+        config.host_key_policy = crate::host_key::HostKeyPolicy::AcceptAnyForTesting;
+
+        let mut attempt = client.connect(&config).expect("real connect");
+        client
+            .authenticate_with(
+                &mut attempt,
+                AuthAttempt::Agent {
+                    username: username.clone(),
+                },
+            )
+            .expect("single native auth attempt");
+        assert_eq!(attempt.stage, RealConnectionStage::Disconnected);
+        assert!(
+            attempt.history.iter().any(|snapshot| {
+                snapshot.note.contains("Server auth methods")
+                    || snapshot.note.contains("did not return an auth-method list")
+            }),
+            "the auth-method query must run during the single-attempt flow"
+        );
     }
 
     fn localhost_agent_config(port: u16) -> SshConnectionConfig {

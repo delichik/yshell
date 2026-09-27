@@ -8,6 +8,13 @@ import { WinTextInput } from "basic/text_input.slint";
 // before the primary button becomes enabled (dangerous operations).
 // 形态：WinUI 3 ContentDialog（§5.10）——panel-background 面板、subtitle 标题、
 // 右对齐操作区（主操作在右）与全屏 scrim。
+//
+// L2（对话框 Esc / 遮罩点击关闭）：
+//   * `Esc` 与遮罩点击走与 Cancel 按钮完全相同的 `canceled()` 路径（含宿主清空
+//     确认词等敏感输入）；面板内空白处的点击由面板自身的 TouchArea 吞掉，不会
+//     穿透到遮罩误触取消。
+//   * 危险确认仍无键盘默认确认：弹窗打开后焦点在根 FocusScope（不是确认按钮），
+//     `Enter` 不会触发 `confirmed()`（E-064 语义不变）。
 
 export component ConfirmDialog inherits Rectangle {
     in property <bool> open: false;
@@ -25,63 +32,96 @@ export component ConfirmDialog inherits Rectangle {
     visible: self.open;
     background: Theme.scrim;
 
-    // Block interaction with the content behind the modal.
-    TouchArea { }
+    // L2：根 FocusScope 包住整个弹窗 —— 打开时聚焦它（或弹窗内的输入框），
+    // Esc 沿焦点链冒泡到这里并转成 `canceled()`；其余按键 reject 继续冒泡。
+    dialog_scope := FocusScope {
+        width: parent.width;
+        height: parent.height;
 
-    Rectangle {
-        x: (parent.width - 460px) / 2;
-        y: max((parent.height - self.height) / 2, 40px);
-        width: 460px;
-        height: body.preferred-height;
-        background: Theme.panel-background;
-        border-radius: Theme.radius-panel;
-        border-width: 1px;
-        border-color: Theme.control-stroke;
-
-        body := VerticalLayout {
-            padding: Theme.spacing-20;
-            spacing: Theme.spacing-12;
-
-            Text {
-                text: root.title-text;
-                color: Theme.text-primary;
-                font-size: Theme.font-subtitle;
-                font-weight: Theme.weight-semibold;
-                wrap: word-wrap;
+        key-pressed(event) => {
+            // Esc 键码按 `event.text` 比较（与 session_tree 判 Enter 的做法一致）。
+            if (event.text == "\u{001b}") {
+                root.canceled();
+                return accept;
             }
+            return reject;
+        }
 
-            // 危险操作（需要输入确认词）的正文用 critical 文案色
-            Text {
-                text: root.message-text;
-                color: root.confirmation-token != "" ? Theme.critical : Theme.text-secondary;
-                wrap: word-wrap;
-            }
+        // 遮罩：点击 = 取消（与 Cancel 按钮同一路径）。
+        TouchArea {
+            clicked => { root.canceled(); }
+        }
 
-            // 确认词输入（WinTextInput 自带 control-fill 底 + control-stroke 描边 + 聚焦强调条）
-            if root.confirmation-token != "" : WinTextInput {
-                text <=> root.confirmation-text;
-                placeholder-text: root.confirmation-placeholder;
-            }
+        Rectangle {
+            x: (parent.width - 460px) / 2;
+            y: max((parent.height - self.height) / 2, 40px);
+            width: 460px;
+            height: body.preferred-height;
+            background: Theme.panel-background;
+            border-radius: Theme.radius-panel;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
 
-            // 操作区：右对齐，主操作（确认）在最右
-            HorizontalLayout {
-                alignment: end;
-                spacing: Theme.spacing-8;
+            // 吞掉面板空白处的点击，避免穿透到遮罩触发取消。
+            TouchArea { }
 
-                WinButton {
-                    text: root.cancel-label;
-                    clicked => { root.canceled(); }
+            body := VerticalLayout {
+                padding: Theme.spacing-20;
+                spacing: Theme.spacing-12;
+
+                Text {
+                    text: root.title-text;
+                    color: Theme.text-primary;
+                    font-size: Theme.font-subtitle;
+                    font-weight: Theme.weight-semibold;
+                    wrap: word-wrap;
                 }
 
-                WinButton {
-                    text: root.confirm-label;
-                    // 需要输入确认词的破坏性操作：critical 文案色，不用强调色实底
-                    accent: root.confirmation-token == "";
-                    critical: root.confirmation-token != "";
-                    enabled: root.confirmation-token == "" || root.confirmation-text == root.confirmation-token;
-                    clicked => { root.confirmed(); }
+                // 危险操作（需要输入确认词）的正文用 critical 文案色
+                Text {
+                    text: root.message-text;
+                    color: root.confirmation-token != "" ? Theme.critical : Theme.text-secondary;
+                    wrap: word-wrap;
+                }
+
+                // 确认词输入（WinTextInput 自带 control-fill 底 + control-stroke 描边 + 聚焦强调条）
+                if root.confirmation-token != "" : WinTextInput {
+                    text <=> root.confirmation-text;
+                    placeholder-text: root.confirmation-placeholder;
+                }
+
+                // 操作区：右对齐，主操作（确认）在最右
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: Theme.spacing-8;
+
+                    WinButton {
+                        text: root.cancel-label;
+                        clicked => { root.canceled(); }
+                    }
+
+                    WinButton {
+                        text: root.confirm-label;
+                        // 需要输入确认词的破坏性操作：critical 文案色，不用强调色实底
+                        accent: root.confirmation-token == "";
+                        critical: root.confirmation-token != "";
+                        enabled: root.confirmation-token == "" || root.confirmation-text == root.confirmation-token;
+                        clicked => { root.confirmed(); }
+                    }
                 }
             }
+        }
+    }
+
+    /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
+    public function focus-dialog() {
+        dialog_scope.focus();
+    }
+
+    // 打开时聚焦弹窗（Esc 需要焦点在弹窗内；点输入框后按键仍沿父链冒泡到这里）。
+    changed open => {
+        if (root.open) {
+            dialog_scope.focus();
         }
     }
 }

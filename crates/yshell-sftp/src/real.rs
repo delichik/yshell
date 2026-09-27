@@ -103,6 +103,14 @@ impl SftpBackend for RealSftpBackend {
         })
     }
 
+    fn remove_dir(&mut self, path: &str) -> SftpResult<()> {
+        self.with_sftp_client("remove_dir", |sftp| {
+            sftp.rmdir(Path::new(path))
+                .map_err(|error| map_sftp_error(path, error, "remove directory"))?;
+            Ok(())
+        })
+    }
+
     fn rename(&mut self, from: &str, to: &str) -> SftpResult<()> {
         self.with_sftp_client("rename", |sftp| {
             sftp.rename(Path::new(from), Path::new(to), Some(RenameFlags::OVERWRITE))
@@ -585,9 +593,57 @@ mod tests {
             fs::read(&local_download_path).expect("read download"),
             b"yshell live sftp"
         );
+
+        // Tree transfer round trip (covers the shared tree engine on the real
+        // backend, including `remove_dir`).
+        let tree_source = temp.path().join("tree-src");
+        fs::create_dir_all(tree_source.join("nested")).expect("create tree source");
+        fs::write(tree_source.join("a.txt"), b"tree-a").expect("write tree a");
+        fs::write(tree_source.join("nested/b.txt"), b"tree-b").expect("write tree b");
+        let remote_tree_root = format!("{remote_root}/tree");
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        let mut progress = |_event: crate::TransferProgress| {};
+        let upload_report = client
+            .upload_tree(
+                &tree_source,
+                &remote_tree_root,
+                crate::TreeTransferOptions::default(),
+                &mut progress,
+                &cancel,
+            )
+            .expect("upload tree");
+        assert!(upload_report.failed.is_empty(), "{upload_report:?}");
+        assert_eq!(upload_report.completed, 4);
+
+        let tree_target = temp.path().join("tree-out");
+        let download_report = client
+            .download_tree(
+                &remote_tree_root,
+                &tree_target,
+                crate::TreeTransferOptions::default(),
+                &mut progress,
+                &cancel,
+            )
+            .expect("download tree");
+        assert!(download_report.failed.is_empty(), "{download_report:?}");
+        assert_eq!(
+            fs::read(tree_target.join("nested/b.txt")).expect("read tree b"),
+            b"tree-b"
+        );
+
+        let results = client.delete_many(&[
+            format!("{remote_tree_root}/a.txt"),
+            format!("{remote_tree_root}/nested/b.txt"),
+        ]);
+        assert!(results.iter().all(crate::BatchOpResult::is_ok), "{results:?}");
+        client
+            .remove_dir(&format!("{remote_tree_root}/nested"))
+            .expect("remove nested");
+        client.remove_dir(&remote_tree_root).expect("remove tree root");
+
         client.delete(&remote_renamed).expect("delete file");
-        client.delete(&remote_dir).expect("delete dir");
-        client.delete(&remote_root).expect("delete root");
+        client.remove_dir(&remote_dir).expect("delete dir");
+        client.remove_dir(&remote_root).expect("delete root");
     }
 
     fn parse_live_target(target: &str) -> (String, String, u16) {

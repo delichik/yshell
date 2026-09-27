@@ -15,6 +15,9 @@ export struct MenuEntry {
     enabled: bool,
     checked: bool,
     separator: bool,
+    /// 禁用项的原因说明：hover 该行时由内置 Tooltip 显示（空串 = 不显示）。
+    /// 带默认值，既有条目无需逐条填写（S1 会话树空白区菜单的 disabled + tooltip 契约）。
+    tooltip: string = "",
 }
 
 component MenuPopupRow inherits Rectangle {
@@ -83,6 +86,13 @@ component MenuPopupRow inherits Rectangle {
     row-touch := TouchArea {
         enabled: root.entry.enabled && !root.entry.separator;
         clicked => { root.selected(); }
+    }
+
+    // 禁用项：hover 时用内置 Tooltip 说明原因（S1 空白区菜单的 Import/Expand/Collapse）。
+    // 只对带 tooltip 的条目生成 TooltipArea/PopupWindow（空串不生成）。
+    // `Tooltip.text` 是 styled-text：@markdown 里用 `\{...}` 插值（未转义的花括号是字面量）。
+    if root.entry.tooltip != "" : Tooltip {
+        text: @markdown("\{root.entry.tooltip}");
     }
 }
 

@@ -1,0 +1,128 @@
+// 命令栏（CommandBar，48px）：新建会话、面板开关与查找/设置/更多入口。
+//
+// 拆分自 `ui/main_window.slint`（R1 结构重构）：只搬代码，不改布局/文案/行为。
+// 约定：
+//   * 面板开关的"右栏自动折叠时顺带展开"副作用由宿主完成（`expand-dock()`），
+//     判定用的 `dock-auto-collapsed` 由宿主传入。
+//   * `@tr` 文案搬移后显式带上原组件上下文（`@tr("MainWindow" => ...)`），
+//     保证 gettext 的 (msgctxt, msgid) 与拆分前完全一致。
+//
+// N2 Phase 1：快速连接输入框与"连接"按钮已移除（连接入口改到 QuickConnectPage，
+// 见 `ui/pages/quick_connect.slint` 设计 §2/§3）。`quick-connect` 回调与
+// `focus-quick-connect()` 暂时保留，宿主接线（forward 到 QC 页）在 Phase 2 完成，
+// 以保证本阶段 `ui/main_window.slint` 无需改动即可编译。
+import { Theme } from "../theme.slint";
+import { WinButton, WinIconButton, WinToggle } from "basic/controls.slint";
+
+export component CommandBar inherits Rectangle {
+    in property <bool> sftp-visible: true;
+    in property <bool> tunnels-visible: true;
+    in property <bool> commands-visible: true;
+    /// 窄窗口下显示右栏展开/收起按钮（§4.2：<1120px）
+    in property <bool> dock-toggle-visible: false;
+    in property <bool> dock-user-expanded: false;
+    /// 右栏因窗口过窄而自动折叠：开关面板时据此决定是否顺带展开
+    in property <bool> dock-auto-collapsed: false;
+
+    callback new-session();
+    callback toggle-sftp();
+    callback toggle-tunnels();
+    callback toggle-commands();
+    /// 关闭自动折叠：把右栏临时展开（dock_user_expanded = true）
+    callback expand-dock();
+    /// 右栏临时展开/收起切换（窄窗口的 chevron 按钮）
+    callback toggle-dock-expanded();
+    callback open-find();
+    callback open-settings();
+    /// "更多"入口：把锚点（窗口绝对坐标）交给宿主打开 Help 菜单。
+    callback open-more-menu(length, length);
+
+    height: Theme.bar-height-commandbar;
+    background: Theme.layer-fill;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 8px;
+
+        WinButton {
+            text: @tr("MainWindow" => "New Session");
+            icon: "plus";
+            accent: true;
+            // Slint 1.18 起 *-stretch 默认值是 1：不显式归零的话，
+            // 按钮会和尾部 spacer 瓜分剩余宽度被撑开（原来的快速连接输入框
+            // 有 max-width，遮蔽了这个问题）。
+            horizontal-stretch: 0;
+            clicked => { root.new-session(); }
+        }
+
+        separator := Rectangle {
+            width: 1px;
+            height: 20px;
+            background: Theme.control-stroke;
+        }
+
+        WinToggle {
+            text: "";
+            icon: "folder";
+            accessible-name: @tr("MainWindow" => "SFTP panel");
+            checked: root.sftp-visible;
+            toggled => {
+                // 右栏折叠时打开面板要顺带展开，否则点了没反应
+                if (root.dock-auto-collapsed && !root.sftp-visible) { root.expand-dock(); }
+                root.toggle-sftp();
+            }
+        }
+        WinToggle {
+            text: "";
+            icon: "globe";
+            accessible-name: @tr("MainWindow" => "Tunnels panel");
+            checked: root.tunnels-visible;
+            toggled => {
+                if (root.dock-auto-collapsed && !root.tunnels-visible) { root.expand-dock(); }
+                root.toggle-tunnels();
+            }
+        }
+        WinToggle {
+            text: "";
+            icon: "code";
+            accessible-name: @tr("MainWindow" => "Quick commands panel");
+            checked: root.commands-visible;
+            toggled => {
+                if (root.dock-auto-collapsed && !root.commands-visible) { root.expand-dock(); }
+                root.toggle-commands();
+            }
+        }
+
+        // N2 Phase 1：原先由快速连接输入框（horizontal-stretch: 1）吸收剩余宽度；
+        // 移除输入后由尾部这个 spacer 承担（唯一可增长项）。
+        spacer := Rectangle { horizontal-stretch: 1; }
+
+        // 右栏自动折叠时的展开/收起入口（§4.2：<1120px）
+        if root.dock-toggle-visible : WinIconButton {
+            icon: root.dock-user-expanded ? "chevron-right" : "chevron-left";
+            accessible-name: root.dock-user-expanded ? @tr("MainWindow" => "Collapse tool panels") : @tr("MainWindow" => "Expand tool panels");
+            clicked => { root.expand-dock(); }
+        }
+
+        WinIconButton {
+            icon: "search";
+            accessible-name: @tr("MainWindow" => "Find in terminal");
+            clicked => { root.open-find(); }
+        }
+        WinIconButton {
+            icon: "settings";
+            accessible-name: @tr("MainWindow" => "Settings");
+            clicked => { root.open-settings(); }
+        }
+        WinIconButton {
+            icon: "more";
+            accessible-name: @tr("MainWindow" => "More");
+            clicked => {
+                root.open-more-menu(self.absolute-position.x, Theme.bar-height-menubar + Theme.bar-height-commandbar);
+            }
+        }
+    }
+}

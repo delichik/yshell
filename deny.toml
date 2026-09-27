@@ -3,6 +3,13 @@ version = 2
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "warn"
+# N4/D0c：`ssh-key` 的弱可选依赖会把 `rsa 0.9.10` 带进 Cargo.lock，其命中
+# RUSTSEC-2023-0071（Marvin 计时侧信道，patched=[]）。但 cargo-deny 按 **crate
+# graph** 检查：本 feature 集（std/encryption/ecdsa）未启用 `ssh-key/rsa`，
+# `rsa` 不参与编译、没有任何 RSA 私钥运算路径，因此该公告不会命中
+# （`cargo deny check` 输出 `advisory-not-detected`，实测 2026-09-28）。
+# 若将来启用 `ssh-key/rsa`，cargo-deny 会重新命中——届时应在此处评估后显式
+# ignore 并注明理由，而不是提前放行。
 ignore = []
 
 [licenses]
@@ -10,6 +17,8 @@ version = 2
 confidence-threshold = 0.8
 allow = [
     "Apache-2.0",
+    # N4：rfd 的 GTK3 后端经 gtk-sys/system-deps/cfg-expr 引入 target-lexicon。
+    "Apache-2.0 WITH LLVM-exception",
     "BSD-2-Clause",
     "BSD-3-Clause",
     "ISC",

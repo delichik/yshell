@@ -1,0 +1,193 @@
+// 菜单栏（WinUI 3 MenuBar 形态）：32px 行高的一级菜单 + 5 个 MenuPopup。
+//
+// 拆分自 `ui/main_window.slint`（R1 结构重构）：只搬代码，不改布局/文案/行为。
+// 约定：
+//   * 一级菜单的点击/悬停只上报 index + 锚点 x（`absolute-position` 在组件内取），
+//     展开态与"悬停切换"的判定仍由 main_window 持有（`open-index`/`menu-open`）。
+//   * Popup 实例放在 `MenuBarPopups` 里，但必须在 main_window 的
+//     "内容之后、模态弹窗之前"实例化，保持原有绘制层级。
+//   * `@tr` 文案搬移后显式带上原组件上下文（`@tr("MainWindow" => ...)`），
+//     保证 gettext 的 (msgctxt, msgid) 与拆分前完全一致；`MenuBar` 上下文的
+//     文案本来就是显式写法（`@tr("MenuBar" => ...)`）。
+import { Theme } from "../theme.slint";
+import { MenuEntry, MenuPopup } from "menu_popup.slint";
+
+// 菜单栏项（WinUI 3 MenuBar 形态）：24px 行高、4px 圆角、展开态高亮
+component MenuTitle inherits Rectangle {
+    in property <string> label: @tr("MenuBar" => "File");
+    in property <bool> open: false;
+    /// 是否已有任一菜单展开（`root.open_menu_index >= 0`）：展开态下悬停到另一个
+    /// 一级菜单要直接切换（标准 MenuBar 行为），未展开时悬停不动作。
+    in property <bool> menu-open: false;
+    callback activated();
+    /// 菜单已展开且指针悬停到本项：由 main_window 切换到本项对应的菜单。
+    callback hovered();
+
+    height: Theme.control-height-compact;
+    width: title-text.preferred-width + 20px;
+    border-radius: Theme.radius-control;
+    background: root.open ? Theme.subtle-selected : title-touch.has-hover ? Theme.subtle-hover : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    title-text := Text {
+        text: root.label;
+        color: Theme.text-primary;
+        font-size: Theme.font-body;
+        x: 10px;
+        height: parent.height;
+        vertical-alignment: center;
+    }
+
+    title-touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.activated(); }
+        // 悬停切换：仅在已有菜单展开时生效；PointerEventKind.move 覆盖指针移入本项的过渡。
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.move && root.menu-open) {
+                root.hovered();
+            }
+        }
+    }
+}
+
+// 菜单栏行（32px）：渲染 5 个一级菜单，并把点击/悬停（含锚点 x）上报给宿主。
+export component MenuBar inherits Rectangle {
+    in property <int> open-index: -1;
+
+    /// 点击一级菜单：index = 0..4，anchor-x = 该项的窗口绝对 x。
+    callback menu-activated(int, length);
+    /// 菜单已展开时悬停到另一项：index = 0..4，anchor-x = 该项的窗口绝对 x。
+    callback menu-hovered(int, length);
+
+    height: Theme.bar-height-menubar;
+    background: Theme.window-background;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+        spacing: 2px;
+
+        file_menu_title := MenuTitle {
+            label: @tr("MenuBar" => "File");
+            open: root.open-index == 0;
+            menu-open: root.open-index >= 0;
+            hovered => { root.menu-hovered(0, file_menu_title.absolute-position.x); }
+            activated => { root.menu-activated(0, file_menu_title.absolute-position.x); }
+        }
+        edit_menu_title := MenuTitle {
+            label: @tr("MenuBar" => "Edit");
+            open: root.open-index == 1;
+            menu-open: root.open-index >= 0;
+            hovered => { root.menu-hovered(1, edit_menu_title.absolute-position.x); }
+            activated => { root.menu-activated(1, edit_menu_title.absolute-position.x); }
+        }
+        session_menu_title := MenuTitle {
+            label: @tr("MenuBar" => "Session");
+            open: root.open-index == 2;
+            menu-open: root.open-index >= 0;
+            hovered => { root.menu-hovered(2, session_menu_title.absolute-position.x); }
+            activated => { root.menu-activated(2, session_menu_title.absolute-position.x); }
+        }
+        view_menu_title := MenuTitle {
+            label: @tr("MenuBar" => "View");
+            open: root.open-index == 3;
+            menu-open: root.open-index >= 0;
+            hovered => { root.menu-hovered(3, view_menu_title.absolute-position.x); }
+            activated => { root.menu-activated(3, view_menu_title.absolute-position.x); }
+        }
+        help_menu_title := MenuTitle {
+            label: @tr("MenuBar" => "Help");
+            open: root.open-index == 4;
+            menu-open: root.open-index >= 0;
+            hovered => { root.menu-hovered(4, help_menu_title.absolute-position.x); }
+            activated => { root.menu-activated(4, help_menu_title.absolute-position.x); }
+        }
+        // 菜单栏右侧的弹性空白：让菜单栏的布局信息 max 无界。
+        // 菜单项都是固定宽度，若菜单栏只有固定宽度的子项，Slint 会把整窗内容
+        // 的 max-width 推导成这些子项之和（有限值），从而把窗口的 max_inner_size
+        // 钉死（表现为拖大窗口被弹回），见 main_window Window 的尺寸约束说明。
+        menu_bar_spacer := Rectangle { horizontal-stretch: 1; }
+    }
+}
+
+// 5 个一级菜单的 MenuPopup（模型数组仍由 main_window 持有并传入）。
+// 宿主在窗口层级实例化本组件（内容之后、模态弹窗之前）。
+export component MenuBarPopups inherits Rectangle {
+    in property <int> open-index: -1;
+    in property <length> anchor-x: 0px;
+    in property <length> anchor-y: 0px;
+    in property <[MenuEntry]> file-entries: [];
+    in property <[MenuEntry]> edit-entries: [];
+    in property <[MenuEntry]> session-entries: [];
+    in property <[MenuEntry]> view-entries: [];
+    in property <[MenuEntry]> help-entries: [];
+
+    /// (菜单序号 0..4, 条目序号)；点击后的动作由宿主执行（保持原 dispatch 位置）。
+    callback selected(int, int);
+    callback dismissed();
+
+    // 作为 Window 直接子项（与拆分前的 MenuPopup 相同）：root 由 Slint 自动铺满
+    // 窗口，内层 Popup 显式取父尺寸，保持锚点钳制与全屏 scrim 与拆分前一致。
+    background: transparent;
+
+    file_menu_popup := MenuPopup {
+        width: parent.width;
+        height: parent.height;
+        open: root.open-index == 0;
+        entries: root.file-entries;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        panel-width: 230px;
+        dismissed => { root.dismissed(); }
+        selected(index) => { root.selected(0, index); }
+    }
+
+    edit_menu_popup := MenuPopup {
+        width: parent.width;
+        height: parent.height;
+        open: root.open-index == 1;
+        entries: root.edit-entries;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        panel-width: 210px;
+        dismissed => { root.dismissed(); }
+        selected(index) => { root.selected(1, index); }
+    }
+
+    session_menu_popup := MenuPopup {
+        width: parent.width;
+        height: parent.height;
+        open: root.open-index == 2;
+        entries: root.session-entries;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        panel-width: 260px;
+        dismissed => { root.dismissed(); }
+        selected(index) => { root.selected(2, index); }
+    }
+
+    view_menu_popup := MenuPopup {
+        width: parent.width;
+        height: parent.height;
+        open: root.open-index == 3;
+        entries: root.view-entries;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        panel-width: 250px;
+        dismissed => { root.dismissed(); }
+        selected(index) => { root.selected(3, index); }
+    }
+
+    help_menu_popup := MenuPopup {
+        width: parent.width;
+        height: parent.height;
+        open: root.open-index == 4;
+        entries: root.help-entries;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        panel-width: 210px;
+        dismissed => { root.dismissed(); }
+        selected(index) => { root.selected(4, index); }
+    }
+}

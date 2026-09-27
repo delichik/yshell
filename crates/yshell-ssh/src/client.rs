@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use crate::auth::AuthMethod;
+use crate::auth::{AuthAttempt, AuthMethod, AuthMethods, KeyboardInteractivePrompter};
 use crate::channel::ShellSession;
 use crate::error::{SshError, SshResult};
 use crate::fake::FakeSshAdapter;
@@ -73,6 +73,28 @@ pub trait SshAdapter {
     fn connect(&self, config: &SshConnectionConfig) -> SshResult<Self::Session>;
     fn exec(&self, session: &mut Self::Session, command: &str) -> SshResult<ExecOutput>;
     fn disconnect(&self, session: Self::Session) -> SshResult<()>;
+
+    /// Server advertised authentication methods learned for this session
+    /// (`None` = the server did not return a list).
+    fn auth_methods(&self, session: &Self::Session) -> SshResult<Option<AuthMethods>>;
+
+    /// Perform one authentication attempt.
+    ///
+    /// Failures are classified via [`SshError::auth_problem`] and carry the
+    /// server method list via [`SshError::auth_methods`], so the caller can
+    /// retry with another method inside one auth window.
+    fn authenticate_with(&self, session: &mut Self::Session, attempt: AuthAttempt)
+        -> SshResult<()>;
+
+    /// Run keyboard-interactive authentication driven by an interactive
+    /// prompter; the prompter is invoked once per server challenge round and
+    /// may cancel.
+    fn authenticate_keyboard_interactive(
+        &self,
+        session: &mut Self::Session,
+        username: &str,
+        prompter: &mut dyn KeyboardInteractivePrompter,
+    ) -> SshResult<()>;
 }
 
 pub trait ShellAdapter {
@@ -137,6 +159,33 @@ where
 
     pub fn disconnect(&self, session: A::Session) -> SshResult<()> {
         self.adapter.disconnect(session)
+    }
+
+    /// Server advertised authentication methods learned for this session.
+    pub fn auth_methods(&self, session: &A::Session) -> SshResult<Option<AuthMethods>> {
+        self.adapter.auth_methods(session)
+    }
+
+    /// Perform one authentication attempt; failures carry `auth_problem` and
+    /// `auth_methods` for in-window retries.
+    pub fn authenticate_with(
+        &self,
+        session: &mut A::Session,
+        attempt: AuthAttempt,
+    ) -> SshResult<()> {
+        self.adapter.authenticate_with(session, attempt)
+    }
+
+    /// Keyboard-interactive authentication with an interactive prompter
+    /// (multi-round, cancellable).
+    pub fn authenticate_keyboard_interactive(
+        &self,
+        session: &mut A::Session,
+        username: &str,
+        prompter: &mut dyn KeyboardInteractivePrompter,
+    ) -> SshResult<()> {
+        self.adapter
+            .authenticate_keyboard_interactive(session, username, prompter)
     }
 }
 

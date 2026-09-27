@@ -15,7 +15,13 @@ path = "src/main.rs"
 
 [dependencies]
 copypasta = "0.10.2"
-slint = { version = "=1.9.2", default-features = false, features = ["std", "compat-1-2", "backend-winit-x11", "renderer-software"] }
+slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "backend-winit-x11", "renderer-software"] }
+# N4：D0c 已入库的工作区依赖；私钥解析/公钥派生/指纹（features 依据见 D0c §4）。
+ssh-key.workspace = true
+# N4：文件选择（rfd spike 报告 §5.1）。gtk3 与 xdg-portal 在 rfd 里编译期互斥，
+# 故只提供 gtk3 透传（`--all-features` 的 lint 门禁不能同时开两个后端）；
+# portal 变体留待打包侧需要时用独立 feature 选择 + 调整 lint 调用。
+rfd.workspace = true
 yshell-config = { path = "../yshell-config" }
 yshell-core = { path = "../yshell-core" }
 yshell-logging = { path = "../yshell-logging" }
@@ -26,7 +32,12 @@ yshell-terminal = { path = "../yshell-terminal" }
 yshell-ui = { path = "../yshell-ui" }
 
 [build-dependencies]
-slint-build = "=1.9.2"
+slint-build = "=1.18.1"
+
+[features]
+# N4：默认 GTK3 文件对话框（桌面发行版 / WSLg / 便携包）。
+default = ["dialog-gtk3"]
+dialog-gtk3 = ["rfd/gtk3"]
 
 [dev-dependencies]
 tempfile.workspace = true
@@ -43,7 +54,8 @@ manager, terminal tabs, SFTP browser, tunnels and quick commands."""
 section = "net"
 priority = "optional"
 # The GUI libraries are loaded with dlopen, so `$auto` cannot see them.
-depends = "$auto, libx11-6, libx11-xcb1, libxcursor1, libxrandr2, libxi6, libxinerama1, libxrender1, libxfixes3, libxkbcommon0, libxkbcommon-x11-0, libfontconfig1"
+# N4：rfd 的 GTK3 后端是直接链接（非 dlopen），显式声明运行期依赖。
+depends = "$auto, libx11-6, libx11-xcb1, libxcursor1, libxrandr2, libxi6, libxinerama1, libxrender1, libxfixes3, libxkbcommon0, libxkbcommon-x11-0, libfontconfig1, libgtk-3-0"
 assets = [
     ["target/release/yshell", "usr/bin/", "755"],
     ["../../packaging/linux/yshell.desktop", "usr/share/applications/", "644"],

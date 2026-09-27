@@ -13,6 +13,7 @@
 
 mod cli;
 mod context;
+mod contrast;
 mod dist;
 mod installers;
 mod tasks;
@@ -58,5 +59,6 @@ fn run() -> Result<()> {
         Command::Ci => tasks::ci(&ctx),
         Command::Dist(options) => dist::run(&ctx, &options),
         Command::Checksums(options) => dist::checksums(&ctx, &options),
+        Command::Contrast(options) => contrast::run(&ctx, &options),
     }
 }

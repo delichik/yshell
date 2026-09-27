@@ -1,0 +1,352 @@
+// 终端工作区：标签条（N0：多标签 + 横向滚动）+ TerminalView + 内边距
+// + 终端/标签右键菜单 Popup。
+//
+// 拆分自 `ui/main_window.slint`（R1 结构重构），N0 重写标签条内部：
+//   * 根继承 `VerticalLayout`：与拆分前主区的那个 VerticalLayout 完全同形
+//     （默认间距、同样的两个子块），避免组件化引入布局差异。
+//   * 终端投影全部由宿主传入；终端回调原样透传给宿主回调。
+//   * 标签条改为 `for tab in root.tabs` 的 repeater + Flickable 横向滚动
+//     （滚轮/按住拖动，见 N0 设计 §5）；标签本体复刻 `WinTab` 的视觉，
+//     额外提供右键菜单与关闭回调。
+//   * Popup 实例放在 `TerminalWorkspacePopups` / `TabBarPopups` 里，必须在
+//     main_window 的"内容之后、模态弹窗之前"实例化，保持原有绘制层级。
+//   * `@tr` 文案搬移后显式带上原组件上下文（`@tr("MainWindow" => ...)`）。
+import { Theme } from "../theme.slint";
+import { WinIconButton } from "basic/controls.slint";
+import { Icon } from "basic/icons.slint";
+import { MenuEntry, MenuPopup } from "menu_popup.slint";
+import { TerminalView } from "terminal_view.slint";
+
+/// N0：标签条单元（Rust `TabData` 投影；`id` 回传给 activate/close/右键菜单）。
+/// N2：`kind_text == "quick-connect"` 时标题用 @tr 渲染（快速连接页标签）。
+export struct WorkspaceTab {
+    id: string,
+    title: string,
+    state_text: string,
+    connected: bool,
+    active: bool,
+    kind_text: string,
+    /// N6：该会话正在写日志（标签角标 REC）。
+    logging: bool,
+}
+
+// 单个标签：复刻 `WinTab` 的视觉（32px 行高、活动标签底部强调条、右内边距 4 的
+// 18×18 关闭按钮 + 32×32 命中区），额外支持右键菜单。左键点击激活；标签整体
+// 位于外层 Flickable 内，按住拖动由 Flickable 处理（N0 设计 §5）。
+component WorkspaceTabItem inherits Rectangle {
+    in property <string> tab-id: "";
+    in property <string> tab-title: "";
+    in property <string> tab-state-text: "";
+    in property <bool> tab-active: false;
+    /// N2：标签种类（`quick-connect` = 快速连接页；空 = 终端）。
+    in property <string> tab-kind-text: "";
+    /// N6：该会话正在写日志（REC 圆点）。
+    in property <bool> tab-logging: false;
+
+    callback activate();
+    callback close-requested();
+    callback context-menu-requested(length, length);
+
+    height: Theme.bar-height-tabs;
+    horizontal-stretch: 0;
+    border-radius: Theme.radius-control;
+    background: tab-active ? Theme.layer-fill : tab-hover.has-hover ? Theme.subtle-hover : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    // 活动标签底部强调条
+    Rectangle {
+        visible: root.tab-active;
+        x: 0;
+        y: parent.height - 2px;
+        width: parent.width;
+        height: 2px;
+        border-radius: 1px;
+        background: Theme.accent;
+    }
+
+    HorizontalLayout {
+        // 与 WinTab 相同：文本左 10；有关闭按钮时右 4，关闭按钮 18×18、间距 8
+        padding-left: 10px;
+        padding-right: 4px;
+        spacing: Theme.spacing-8;
+        alignment: center;
+
+        Rectangle {
+            width: Theme.icon-size-small;
+            vertical-stretch: 1;
+            background: transparent;
+
+            Icon {
+                // N2：快速连接页用 link 图标，终端标签保持 terminal。
+                name: root.tab-kind-text == "quick-connect" ? "link" : "terminal";
+                icon-color: root.tab-active ? Theme.text-primary : Theme.text-secondary;
+                icon-size: Theme.icon-size-small;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        Text {
+            // N2：快速连接页标签标题走 @tr（Rust 侧只给 kind_text，不给显示名）。
+            text: root.tab-kind-text == "quick-connect"
+                ? @tr("Quick Connect")
+                : root.tab-title + "  " + root.tab-state-text;
+            color: root.tab-active ? Theme.text-primary : Theme.text-secondary;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        // N6：REC 角标（记录中才占位，避免影响未记录标签的布局）。
+        if root.tab-logging : Rectangle {
+            width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            background: Theme.critical;
+        }
+
+        Rectangle {
+            width: 18px;
+            height: 18px;
+            // 布局不设纵向 padding：显式居中，避免关闭按钮贴顶
+            y: (parent.height - self.height) / 2;
+            border-radius: 3px;
+            background: close-touch.has-hover ? Theme.control-fill-hover : transparent;
+
+            Icon {
+                name: "close";
+                icon-color: Theme.text-secondary;
+                icon-size: 12px;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+
+            close-touch := TouchArea {
+                // 命中区 32×32（§8 最小点击目标），与 WinTab 的偏移规则一致。
+                width: Theme.control-height;
+                height: Theme.control-height;
+                x: parent.width + Theme.spacing-4 - self.width;
+                y: (parent.height - self.height) / 2;
+                clicked => { root.close-requested(); }
+            }
+        }
+    }
+
+    tab-hover := TouchArea {
+        // 关闭命中区（右 32px）让给 close-touch：整标签命中区声明在布局之后，
+        // 输入遍历会先命中它，否则关闭点击会被标签本体抢走。
+        width: parent.width - Theme.control-height;
+        clicked => { root.activate(); }
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                root.context-menu-requested(
+                    self.absolute-position.x + self.mouse-x,
+                    self.absolute-position.y + self.mouse-y
+                );
+            }
+        }
+    }
+}
+
+export component TerminalWorkspace inherits VerticalLayout {
+    in property <[WorkspaceTab]> tabs: [];
+    in property <string> title-text: "YShell terminal";
+    in property <string> body-text: "";
+    /// N2：活动标签是 Quick Connect 页时隐藏终端视图，内容区交给宿主注入的页面
+    /// （`@children`），标签条保持可见（标签本身仍是标签）。
+    in property <bool> terminal-visible: true;
+    in property <image> terminal-image;
+    in property <int> cursor-column: 0;
+    in property <int> cursor-row: 0;
+    in property <int> scroll-offset: 0;
+    in property <bool> selection-active: false;
+    in property <string> search-summary-text: "Find in terminal";
+    in property <string> status-text: "Ready";
+    in property <bool> find-visible: false;
+    /// 可见行与查找词与宿主双向绑定（终端内部会写回查找词）。
+    in-out property <[string]> visible-lines: [];
+    in-out property <string> search-query-text: "";
+
+    out property <float> terminal-viewport-width-px: terminal_view.terminal-viewport-width-px;
+    out property <float> terminal-viewport-height-px: terminal_view.terminal-viewport-height-px;
+    /// W5-A2：终端是否持有键盘焦点（模态弹窗关闭后的焦点恢复据此避让终端）。
+    out property <bool> terminal-focused: terminal_view.terminal-focused;
+
+    callback new-session();
+    callback open-find();
+    callback activate-tab(string);
+    callback close-tab(string);
+    callback tab-context-menu-requested(string, length, length);
+    callback context-menu-requested(length, length);
+    callback terminal-key(string, bool, bool, bool, bool);
+    callback terminal-scroll(int);
+    callback terminal-scroll-to-bottom();
+    callback terminal-selection-begin(float, float);
+    callback terminal-selection-update(float, float);
+    callback terminal-selection-end(float, float);
+    callback terminal-select-word-at(float, float);
+    callback copy-visible();
+    callback paste-clipboard();
+    callback clear-terminal();
+    callback find-text(string);
+    callback find-next();
+    callback find-prev();
+    callback dismiss-find();
+
+    // 标签条（唯一容器；阶段 B 自绘标题栏时整体上移）
+    Rectangle {
+        height: 36px;
+        background: Theme.window-background;
+        HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            padding-top: 2px;
+            padding-bottom: 2px;
+            spacing: 4px;
+
+            // N0：标签横向滚动区（滚轮/按住拖动）；`+`/查找按钮钉在右侧始终可见。
+            tabs-flickable := Flickable {
+                horizontal-stretch: 1;
+                vertical-stretch: 1;
+                interactive: true;
+                mouse-drag-pan-enabled: true;
+                content-width: tabs-strip.width;
+                content-height: self.height;
+
+                tabs-strip := Rectangle {
+                    width: tabs-row.preferred-width;
+                    height: parent.height;
+                    background: transparent;
+
+                    tabs-row := HorizontalLayout {
+                        width: parent.width;
+                        height: parent.height;
+                        spacing: 4px;
+
+                        for tab in root.tabs : WorkspaceTabItem {
+                            tab-id: tab.id;
+                            tab-title: tab.title;
+                            tab-state-text: tab.state_text;
+                            tab-active: tab.active;
+                            tab-kind-text: tab.kind_text;
+                            tab-logging: tab.logging;
+                            activate() => { root.activate-tab(tab.id); }
+                            close-requested() => { root.close-tab(tab.id); }
+                            context-menu-requested(x, y) => {
+                                root.tab-context-menu-requested(tab.id, x, y);
+                            }
+                        }
+                    }
+                }
+            }
+            WinIconButton {
+                icon: "plus";
+                accessible-name: @tr("MainWindow" => "New session");
+                clicked => { root.new-session(); }
+            }
+            WinIconButton {
+                icon: "search";
+                accessible-name: @tr("MainWindow" => "Find in terminal");
+                clicked => { root.open-find(); }
+            }
+        }
+    }
+    // N2：活动标签是 QC 页时把终端视图压成 0 高（Slint 1.18 里 invisible 元素
+    // 仍占布局空间，所以用 max-height 折叠而不是 visible），
+    // 但保持实例存在——`terminal_view` 的 out 属性仍被宿主引用。
+    Rectangle {
+        // min-height 显式归零：否则内容（终端视图）的隐式 min 会顶住折叠。
+        min-height: 0px;
+        max-height: root.terminal-visible ? 100000px : 0px;
+        background: Theme.window-background;
+        VerticalLayout {
+            padding: 12px;
+            terminal_view := TerminalView {
+                title: root.title-text;
+                log-output: root.body-text;
+                visible-lines <=> root.visible-lines;
+                terminal-image: root.terminal-image;
+                cursor-column: root.cursor-column;
+                cursor-row: root.cursor-row;
+                scroll-offset: root.scroll-offset;
+                selection-active: root.selection-active;
+                search-query <=> root.search-query-text;
+                search-summary: root.search-summary-text;
+                footer-status: root.status-text;
+                find-visible: root.find-visible;
+                key-pressed(text, ctrl, alt, shift, meta) => { root.terminal-key(text, ctrl, alt, shift, meta); }
+                scroll-lines(delta) => { root.terminal-scroll(delta); }
+                scroll-to-bottom() => { root.terminal-scroll-to-bottom(); }
+                selection-begin(x, y) => { root.terminal-selection-begin(x, y); }
+                selection-update(x, y) => { root.terminal-selection-update(x, y); }
+                selection-end(x, y) => { root.terminal-selection-end(x, y); }
+                select-word-at(x, y) => { root.terminal-select-word-at(x, y); }
+                copy-visible() => { root.copy-visible(); }
+                paste-clipboard() => { root.paste-clipboard(); }
+                clear-terminal() => { root.clear-terminal(); }
+                find-text(query) => { root.find-text(query); }
+                find-next() => { root.find-next(); }
+                find-prev() => { root.find-prev(); }
+                dismiss-find() => { root.dismiss-find(); }
+                context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
+            }
+        }
+    }
+
+    // N2：非终端标签的内容（QuickConnectPage）由宿主作为子项注入；
+    // 作为布局单元放在终端块之后，由宿主控制显隐与拉伸。
+    @children
+}
+
+// 终端右键菜单 Popup（宿主在窗口层级实例化）。
+export component TerminalWorkspacePopups inherits Rectangle {
+    in property <bool> open: false;
+    in property <length> anchor-x: 0px;
+    in property <length> anchor-y: 0px;
+    in property <[MenuEntry]> entries: [];
+
+    callback selected(int);
+    callback dismissed();
+
+    // 作为 Window 直接子项（与拆分前的 MenuPopup 相同）：root 由 Slint 自动铺满
+    // 窗口，内层 Popup 显式取父尺寸，保持锚点钳制与全屏 scrim 与拆分前一致。
+    background: transparent;
+
+    terminal_context_menu := MenuPopup {
+        width: parent.width;
+        height: parent.height;
+        open: root.open;
+        entries: root.entries;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        panel-width: 200px;
+        dismissed => { root.dismissed(); }
+        selected(index) => { root.selected(index); }
+    }
+}
+
+// N0：标签右键菜单 Popup（与终端菜单同层级，宿主在窗口层级实例化）。
+export component TabBarPopups inherits Rectangle {
+    in property <bool> open: false;
+    in property <length> anchor-x: 0px;
+    in property <length> anchor-y: 0px;
+    in property <[MenuEntry]> entries: [];
+
+    callback selected(int);
+    callback dismissed();
+
+    background: transparent;
+
+    tab_context_menu := MenuPopup {
+        width: parent.width;
+        height: parent.height;
+        open: root.open;
+        entries: root.entries;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        panel-width: 240px;
+        dismissed => { root.dismissed(); }
+        selected(index) => { root.selected(index); }
+    }
+}

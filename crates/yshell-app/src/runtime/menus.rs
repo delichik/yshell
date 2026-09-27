@@ -1,0 +1,57 @@
+//! Menu flags: tab context-menu preparation and close-scope menu state.
+
+use std::path::Path;
+
+use super::*;
+
+impl AppRuntime {
+    pub fn prepare_tab_context_menu(&mut self, tab_id: &str) -> AppProjection {
+        self.tab_menu_tab_id = if self.tab_index(tab_id).is_some() {
+            Some(tab_id.to_owned())
+        } else {
+            None
+        };
+        self.projection()
+    }
+
+    pub(crate) fn tab_menu_flags(&self) -> (bool, bool, bool, bool, bool) {
+        let index = self
+            .tab_menu_tab_id
+            .as_deref()
+            .and_then(|tab_id| self.tab_index(tab_id));
+        let count = self.tabs.len();
+        (
+            count > 1,
+            index.is_some_and(|index| index > 0),
+            index.is_some_and(|index| index + 1 < count),
+            count > 0,
+            self.has_disconnected_tabs(),
+        )
+    }
+
+    /// N6：终端日志菜单/状态栏入口的启用旗标（针对活动会话）。
+    ///
+    /// 返回 `(start, stop, open_file, open_folder)`：
+    /// * `start`：有活动会话（弹窗会按当前状态显示开启表单或停止提示）。
+    /// * `stop`：活动会话正在写日志（手动或自动）。
+    /// * `open_file` / `open_folder`：最近一次日志文件存在 / 其目录存在。
+    ///
+    /// 在生成投影时调用（`projection()` → `terminal_logging_menu_flags`）。
+    pub(crate) fn terminal_logging_menu_flags(&self) -> (bool, bool, bool, bool) {
+        let session_key = self.active_session_id.as_deref();
+        let logging_active = session_key.is_some_and(|key| self.session_logging_active(key));
+        let path_text = session_key
+            .map(|key| self.session_logging_path_text(key))
+            .unwrap_or_default();
+        let path = Path::new(&path_text);
+        let open_file = !path_text.is_empty() && path.is_file();
+        let open_folder =
+            !path_text.is_empty() && path.parent().is_some_and(|directory| directory.is_dir());
+        (
+            session_key.is_some(),
+            logging_active,
+            open_file,
+            open_folder,
+        )
+    }
+}

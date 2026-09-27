@@ -1,13 +1,14 @@
 //! Runtime-owned session state for one live or pending shell session.
 
 use std::borrow::Cow;
+use std::io;
 use std::path::{Path, PathBuf};
 
 use yshell_config::{LoggingProfile, QuickConnectTarget, SessionProfile, TerminalProfile};
 use yshell_core::{SessionId, SessionState, TabId};
 use yshell_logging::{
-    LogPathContext, PathTemplate, Redactor, RotationPolicy, SessionLogger, TranscriptDirection,
-    TranscriptFormat, TransferLogger,
+    LogPathContext, PathTemplate, Redactor, RotationPolicy, SessionLogOptions, SessionLogger,
+    TranscriptDirection, TranscriptFormat, TransferLogger,
 };
 use yshell_ssh::{AuthMethod, PtySize, ShellSession, SshConnectionConfig, TransportBackend};
 use yshell_terminal::{
@@ -18,7 +19,12 @@ use yshell_terminal::{
 #[derive(Debug)]
 pub enum SessionSource {
     QuickConnect,
-    SavedSession { profile_id: String },
+    SavedSession {
+        profile_id: String,
+    },
+    /// 草稿会话（旧 `+` 行为）。N2 起 `+` 走 Quick Connect 页 / Session Editor，
+    /// 暂无可达 UI 入口；保留变体以维持既有生命周期代码与测试（后续可整体清理）。
+    #[allow(dead_code)]
     Draft,
 }
 
@@ -31,6 +37,37 @@ pub struct TerminalViewportMetrics {
     pub top_absolute_row: usize,
     /// Lines scrolled back from the bottom (0 = live view).
     pub viewport_offset: usize,
+}
+
+/// N6：会话日志输出类型（REC 指示与菜单启用条件）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SessionLoggingMode {
+    /// 没有日志输出。
+    #[default]
+    Off,
+    /// 配置驱动的自动日志（`configure_logging` 打开）。
+    Auto,
+    /// 运行时手动开启到指定文件（弹窗 → [`SessionRuntime::start_logging`]）。
+    Manual,
+}
+
+impl SessionLoggingMode {
+    /// N6：投影/状态文案用的稳定 id（`off`/`auto`/`manual`）。
+    #[must_use]
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Auto => "auto",
+            Self::Manual => "manual",
+        }
+    }
+}
+
+/// N6：运行时手动日志选项。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ManualLoggingOptions {
+    /// 勾选"记录本地输入"时，输入按 [`TranscriptDirection::Input`] 写入日志。
+    pub include_input: bool,
 }
 
 #[derive(Debug)]
@@ -48,6 +85,14 @@ pub struct SessionRuntime {
     session_logger: Option<SessionLogger>,
     transfer_logger: Option<TransferLogger>,
     logging_notice: Option<String>,
+    /// N6：手动日志选项；`Some` = 当前 `session_logger` 由运行时手动开启。
+    ///
+    /// 手动日志优先：开启时暂停配置驱动的自动日志，且本会话内不再自动恢复。
+    manual_logging: Option<ManualLoggingOptions>,
+    /// N6：手动日志开启过（含停止后）就不再自动打开配置驱动的自动日志。
+    auto_logging_suppressed: bool,
+    /// N6：最近一次日志文件路径（停止/写失败后仍可用于"打开日志文件"）。
+    last_logging_path: Option<PathBuf>,
     terminal_limits: (usize, usize),
     viewport_offset: usize,
     selection: Option<SelectionRange>,
@@ -82,6 +127,9 @@ impl SessionRuntime {
             session_logger: None,
             transfer_logger: None,
             logging_notice: None,
+            manual_logging: None,
+            auto_logging_suppressed: false,
+            last_logging_path: None,
             terminal_limits: (DEFAULT_SCROLLBACK_LINES, DEFAULT_SCROLLBACK_MAX_CELLS),
             viewport_offset: 0,
             selection: None,
@@ -102,7 +150,10 @@ impl SessionRuntime {
             AuthMethod::Agent { username },
         );
         let mut runtime = Self {
-            session_id: SessionId::new(profile.id.clone()),
+            // N0：同一 saved session 允许重复打开（重复连接），因此每个运行时实例
+            // 都必须有唯一 session id（日志目录、dispatcher、SFTP 状态都按 id 归属）；
+            // profile id 仍保存在 `SessionSource::SavedSession` 里。
+            session_id: SessionId::new(format!("{}-{ordinal}", profile.id)),
             tab_id: TabId::new(format!("tab-saved-{ordinal}")),
             display_name: profile.name.clone(),
             source: SessionSource::SavedSession {
@@ -117,6 +168,9 @@ impl SessionRuntime {
             session_logger: None,
             transfer_logger: None,
             logging_notice: None,
+            manual_logging: None,
+            auto_logging_suppressed: false,
+            last_logging_path: None,
             terminal_limits: (DEFAULT_SCROLLBACK_LINES, DEFAULT_SCROLLBACK_MAX_CELLS),
             viewport_offset: 0,
             selection: None,
@@ -126,6 +180,11 @@ impl SessionRuntime {
         runtime
     }
 
+    /// 旧 `+` 行为：新建一个草稿终端标签。
+    ///
+    /// N2 起 `+` 走 `handle_new_tab_default()`（Quick Connect 页 / Session Editor），
+    /// 草稿标签暂无可达 UI 入口；保留实现与测试覆盖，便于后续恢复"临时会话"入口。
+    #[allow(dead_code)]
     pub fn draft(ordinal: usize) -> Self {
         let mut runtime = Self {
             session_id: SessionId::new(format!("draft-{ordinal}")),
@@ -147,6 +206,9 @@ impl SessionRuntime {
             session_logger: None,
             transfer_logger: None,
             logging_notice: None,
+            manual_logging: None,
+            auto_logging_suppressed: false,
+            last_logging_path: None,
             terminal_limits: (DEFAULT_SCROLLBACK_LINES, DEFAULT_SCROLLBACK_MAX_CELLS),
             viewport_offset: 0,
             selection: None,
@@ -465,6 +527,11 @@ impl SessionRuntime {
     }
 
     pub fn configure_logging(&mut self, config_dir: &Path, logging: &LoggingProfile) {
+        // N6：手动日志优先。手动日志开启过（含已停止）后，本会话不再自动打开
+        // 配置驱动的自动日志，保持当前输出不变（避免与手动输出抢占同一文件）。
+        if self.auto_logging_suppressed {
+            return;
+        }
         self.session_logger = None;
         self.transfer_logger = None;
         self.logging_notice = None;
@@ -551,6 +618,9 @@ impl SessionRuntime {
             return Ok(Vec::new());
         };
         shell_session.write_input(bytes)?;
+        // N6：勾选"记录本地输入"的手动日志按 Input 方向记录（自动日志不记输入，
+        // 沿用 G0 语义）。
+        self.record_transcript_chunk(TranscriptDirection::Input, bytes);
         self.poll_shell_output()
     }
 
@@ -629,22 +699,144 @@ impl SessionRuntime {
     }
 
     fn record_transcript_chunk(&mut self, direction: TranscriptDirection, bytes: &[u8]) {
-        if direction == TranscriptDirection::Input {
+        // 输出始终写入当前日志；输入只在手动日志勾选"记录本地输入"时写入。
+        if direction == TranscriptDirection::Input && !self.manual_logging_includes_input() {
             return;
         }
-        let result = if let Some(logger) = self.session_logger.as_mut() {
-            logger.record(direction, bytes).err()
-        } else {
-            None
+        let failed = match self.session_logger.as_mut() {
+            Some(logger) => logger.record(direction, bytes).is_err(),
+            None => false,
         };
-        if let Some(error) = result {
-            self.set_logging_notice(format!("session transcript logging failed: {error}"));
+        if failed {
+            self.stop_logging_after_write_failure();
         }
+    }
+
+    /// N6：写失败 → 自动停止日志（保留已写内容），并把 `last_error` 折进日志
+    /// 提示（状态栏在下一个 tick 折叠显示）。
+    fn stop_logging_after_write_failure(&mut self) {
+        let (path_text, last_error) = match self.session_logger.as_ref() {
+            Some(logger) => (
+                logger.path().display().to_string(),
+                logger.last_error().map(ToString::to_string),
+            ),
+            None => (String::new(), None),
+        };
+        // 释放失败的文件句柄；写入内容已在每次 record 时 flush 落盘。
+        self.session_logger = None;
+        self.manual_logging = None;
+        if !path_text.is_empty() {
+            self.last_logging_path = Some(PathBuf::from(&path_text));
+        }
+        let detail = last_error.unwrap_or_else(|| "unknown write failure".to_owned());
+        // 写失败是当前最需要反馈的信息：覆盖可能存在的旧提示。
+        self.logging_notice = Some(format!(
+            "session logging stopped after a write failure at `{path_text}`: {detail}"
+        ));
     }
 
     fn set_logging_notice(&mut self, notice: String) {
         if self.logging_notice.is_none() {
             self.logging_notice = Some(notice);
+        }
+    }
+}
+
+/// N6：运行时手动日志开关（弹窗 → 会话；右键菜单/状态栏/REC 接线在 Phase 2）。
+///
+/// 设计：`docs/product/yshell-next-n6-logging-ui.md` §3。手动日志优先——同一
+/// 会话同一时刻只有一个 [`SessionLogger`] 输出，开启手动日志会暂停自动日志，
+/// 且停止后不自动恢复（见 `auto_logging_suppressed`）。
+///
+/// Phase 1 只交付模块与单测，接线前该 impl 允许 dead_code（Phase 2 接线完成
+/// 后删除此属性）。
+#[allow(dead_code)]
+impl SessionRuntime {
+    /// N6：运行时开启到指定文件的手动日志。
+    ///
+    /// 新文件先打开、成功后再替换当前输出，因此打开失败时既有的（自动）日志
+    /// 不受影响。返回实际打开的日志文件路径。
+    pub fn start_logging(
+        &mut self,
+        options: SessionLogOptions,
+        include_input: bool,
+    ) -> io::Result<PathBuf> {
+        let logger = SessionLogger::open_with(options)?;
+        let path = logger.path().clone();
+        if let Some(previous) = self.session_logger.take() {
+            if let Err(error) = previous.close() {
+                self.set_logging_notice(format!(
+                    "previous logging output could not be closed cleanly: {error}"
+                ));
+            }
+        }
+        self.manual_logging = Some(ManualLoggingOptions { include_input });
+        self.auto_logging_suppressed = true;
+        self.last_logging_path = Some(path.clone());
+        self.session_logger = Some(logger);
+        Ok(path)
+    }
+
+    /// N6：停止当前日志输出（手动或自动）并 flush。
+    ///
+    /// * `Ok(None)`：当前没有活动日志输出。
+    /// * `Ok(Some(path))`：已 flush 并关闭，返回日志文件路径。
+    /// * `Err(error)`：flush/关闭失败；已写内容保留，文件路径见
+    ///   [`Self::last_logging_path`]。
+    pub fn stop_logging(&mut self) -> io::Result<Option<PathBuf>> {
+        self.manual_logging = None;
+        let Some(logger) = self.session_logger.take() else {
+            return Ok(None);
+        };
+        let path = logger.path().clone();
+        self.last_logging_path = Some(path.clone());
+        logger.close().map(|()| Some(path))
+    }
+
+    /// N6：当前是否有日志输出（自动或手动）。
+    #[must_use]
+    pub const fn logging_active(&self) -> bool {
+        self.session_logger.is_some()
+    }
+
+    /// N6：当前输出是否由手动日志开启。
+    #[must_use]
+    pub const fn manual_logging_active(&self) -> bool {
+        self.manual_logging.is_some()
+    }
+
+    /// N6：当前输出类型（REC 指示 / 菜单启用条件）。
+    #[must_use]
+    pub const fn logging_mode(&self) -> SessionLoggingMode {
+        if self.manual_logging.is_some() {
+            SessionLoggingMode::Manual
+        } else if self.session_logger.is_some() {
+            SessionLoggingMode::Auto
+        } else {
+            SessionLoggingMode::Off
+        }
+    }
+
+    /// N6：活动日志文件路径。
+    #[must_use]
+    pub fn logging_path(&self) -> Option<&Path> {
+        self.session_logger
+            .as_ref()
+            .map(|logger| logger.path().as_path())
+    }
+
+    /// N6：最近一次日志文件路径（停止/写失败后保留）。
+    #[must_use]
+    pub fn last_logging_path(&self) -> Option<&Path> {
+        self.last_logging_path.as_deref()
+    }
+
+    /// N6：手动日志期间是否记录本地输入（R-106）。
+    #[must_use]
+    pub const fn manual_logging_includes_input(&self) -> bool {
+        match &self.manual_logging {
+            Some(options) => options.include_input,
+            None => false,
         }
     }
 }
@@ -826,6 +1018,7 @@ mod tests {
         runtime.configure_terminal_limits(&TerminalProfile {
             scrollback_lines: 2,
             scrollback_max_cells: 100_000,
+            ..TerminalProfile::default()
         });
 
         let mut output = String::new();

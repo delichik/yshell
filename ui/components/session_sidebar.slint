@@ -1,0 +1,347 @@
+// 左导航（NavigationView 形态）：会话栏主体 + 窄窗口图标条 + 宽度拖拽把手 +
+// 三个右键菜单 Popup + New Folder 弹窗。
+//
+// 拆分自 `ui/main_window.slint`（R1 结构重构）：只搬代码，不改布局/文案/行为。
+// 约定：
+//   * 显隐/宽度/图标条判定（`nav-column-visible`/`nav-rail-visible`/
+//     `nav-effective-width`）与拖拽状态仍由 main_window 持有，由宿主传入/回调上报。
+//   * Popup 实例放在 `SessionSidebarPopups` 里，必须在 main_window 的
+//     "内容之后、模态弹窗之前"实例化，保持原有绘制层级；open 判定用宿主的
+//     `context_menu_token`（同一时刻只有一个右键菜单展开，与拆分前一致）。
+//   * `@tr` 文案搬移后显式带上原组件上下文（`@tr("MainWindow" => ...)` /
+//     `@tr("NewFolderDialog" => ...)`），保证 gettext 的 (msgctxt, msgid) 不变。
+import { Theme } from "../theme.slint";
+import { WinButton, WinIconButton } from "basic/controls.slint";
+import { WinTextInput } from "basic/text_input.slint";
+import { MenuEntry, MenuPopup } from "menu_popup.slint";
+import { SessionTree, SessionTreeRow } from "session_tree.slint";
+
+// S1：会话树空白区菜单的 `New Folder…` 弹窗 —— 只负责取名，创建在会话树根目录。
+// 形态与 `ConfirmDialog`（§5.10）一致：panel-background 面板 + 右对齐操作区 + 全屏 scrim。
+//
+// L2（对话框 Esc / 遮罩点击关闭）：`Esc` 与遮罩点击 = Cancel（`canceled()` 的同一
+// 路径，宿主据此清空名称）；面板内空白处点击由面板 TouchArea 吞掉，不会穿透到遮罩。
+export component NewFolderDialog inherits Rectangle {
+    in property <bool> open: false;
+    in property <string> title-text: @tr("New Folder");
+    in property <string> message-text: @tr("Create a folder in the session tree root.");
+    in-out property <string> name-text: "";
+    in property <string> confirm-label: @tr("Create");
+    in property <string> cancel-label: @tr("Cancel");
+
+    callback confirmed(string);
+    callback canceled();
+
+    visible: self.open;
+    background: Theme.scrim;
+
+    // L2：根 FocusScope 包住整个弹窗；打开时聚焦，Esc 沿焦点链冒泡到这里 → `canceled()`。
+    dialog_scope := FocusScope {
+        width: parent.width;
+        height: parent.height;
+
+        key-pressed(event) => {
+            // Esc 键码按 `event.text` 比较（与 session_tree 判 Enter 的做法一致）。
+            if (event.text == "\u{001b}") {
+                root.canceled();
+                return accept;
+            }
+            return reject;
+        }
+
+        // 遮罩：点击 = 取消（与 Cancel 按钮同一路径）。
+        TouchArea {
+            clicked => { root.canceled(); }
+        }
+
+        Rectangle {
+            x: (parent.width - 400px) / 2;
+            y: max((parent.height - self.height) / 2, 40px);
+            width: 400px;
+            height: body.preferred-height;
+            background: Theme.panel-background;
+            border-radius: Theme.radius-panel;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
+
+            // 吞掉面板空白处的点击，避免穿透到遮罩触发取消。
+            TouchArea { }
+
+            body := VerticalLayout {
+                padding: Theme.spacing-20;
+                spacing: Theme.spacing-12;
+
+                Text {
+                    text: root.title-text;
+                    color: Theme.text-primary;
+                    font-size: Theme.font-subtitle;
+                    font-weight: Theme.weight-semibold;
+                    wrap: word-wrap;
+                }
+
+                Text {
+                    text: root.message-text;
+                    color: Theme.text-secondary;
+                    wrap: word-wrap;
+                }
+
+                WinTextInput {
+                    text <=> root.name-text;
+                    placeholder-text: @tr("Folder name");
+                }
+
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: Theme.spacing-8;
+
+                    WinButton {
+                        text: root.cancel-label;
+                        clicked => { root.canceled(); }
+                    }
+
+                    WinButton {
+                        text: root.confirm-label;
+                        accent: true;
+                        enabled: root.name-text != "";
+                        clicked => { root.confirmed(root.name-text); }
+                    }
+                }
+            }
+        }
+    }
+
+    /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
+    public function focus-dialog() {
+        dialog_scope.focus();
+    }
+
+    // 打开时聚焦弹窗（Esc 需要焦点在弹窗内）。
+    changed open => {
+        if (root.open) {
+            dialog_scope.focus();
+        }
+    }
+}
+
+// 会话栏主体（全宽列）。宽度/显隐由宿主决定（宿主设置 width 与 if 条件）。
+export component SessionSidebar inherits Rectangle {
+    /// 搜索词：与宿主窗口属性双向绑定（`<=>`）。
+    in-out property <string> search-text: "";
+    in property <[SessionTreeRow]> tree-rows: [];
+    in property <string> selected-id: "";
+    in property <string> empty-text: "";
+    /// 是否显示"收回图标条"按钮（仅 <960px 有意义）
+    in property <bool> collapse-available: false;
+
+    callback update-search(string);
+    callback select-row(string);
+    callback activate-row(string);
+    callback toggle-folder(string);
+    /// 会话树行右键：宿主负责"先选中再弹菜单"
+    callback row-context-menu-requested(string, length, length);
+    /// 会话树空白区/侧栏背景右键（S1）
+    callback blank-menu-requested(length, length);
+    callback collapse-navigation();
+
+    background: Theme.layer-fill;
+
+    // S1：左栏背景右键 = 会话树空白区菜单（树内空白处由 SessionTree
+    // 自己上报；这里兜住树下方/侧栏其余空白）。
+    TouchArea {
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                root.blank-menu-requested(
+                    self.absolute-position.x + self.mouse-x,
+                    self.absolute-position.y + self.mouse-y
+                );
+            }
+        }
+    }
+
+    // 侧栏节奏（§5.4）：内边距 8、条目间距 8；分组标题前再加 4（合计 12）呼吸。
+    VerticalLayout {
+        padding: Theme.spacing-8;
+        spacing: Theme.spacing-8;
+        alignment: start;
+
+        // 头部：标题 + 折叠按钮（S1：`+` 已收敛到右键菜单/其它入口）
+        HorizontalLayout {
+            height: 40px;
+            padding-left: 8px;
+            padding-right: 4px;
+            padding-top: 4px;
+            padding-bottom: 4px;
+            spacing: 8px;
+            Text {
+                text: @tr("MainWindow" => "Sessions");
+                color: Theme.text-primary;
+                font-size: Theme.font-body-large;
+                font-weight: Theme.weight-semibold;
+                vertical-alignment: center;
+            }
+            nav_head_spacer := Rectangle { }
+            if root.collapse-available : WinIconButton {
+                icon: "chevron-left";
+                accessible-name: @tr("MainWindow" => "Collapse navigation");
+                clicked => { root.collapse-navigation(); }
+            }
+        }
+
+        WinTextInput {
+            text <=> root.search-text;
+            placeholder-text: @tr("MainWindow" => "Search sessions");
+            edited => { root.update-search(self.text); }
+        }
+
+        // 已保存会话：完整树结构（展开/折叠、单击选中、双击打开、
+        // 右键菜单、搜索过滤都在组件内完成；旧的多行文本投影不再渲染）
+        Text {
+            text: @tr("MainWindow" => "SAVED");
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+        }
+
+        SessionTree {
+            rows: root.tree-rows;
+            selected-id: root.selected-id;
+            empty-text: root.empty-text;
+            select(id) => { root.select-row(id); }
+            activate(id) => { root.activate-row(id); }
+            toggle-folder(id) => { root.toggle-folder(id); }
+            context-menu-requested(id, x, y) => {
+                root.row-context-menu-requested(id, x, y);
+            }
+            blank-context-menu-requested(x, y) => {
+                root.blank-menu-requested(x, y);
+            }
+        }
+    }
+}
+
+// 左导航图标条（§4.2：<960px 折叠为 48px，可点按钮展开）。
+export component SessionSidebarRail inherits Rectangle {
+    /// 图标条空白处右键 → 最小菜单（New Session / 展开会话栏）
+    callback rail-menu-requested(length, length);
+    callback expand-navigation();
+
+    width: Theme.nav-rail-width;
+    background: Theme.layer-fill;
+
+    // S1：图标条空白处右键 → 最小菜单（New Session / 展开会话栏）。
+    TouchArea {
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                root.rail-menu-requested(
+                    self.absolute-position.x + self.mouse-x,
+                    self.absolute-position.y + self.mouse-y
+                );
+            }
+        }
+    }
+
+    VerticalLayout {
+        padding: 8px;
+        spacing: Theme.spacing-4;
+        alignment: start;
+
+        WinIconButton {
+            icon: "chevron-right";
+            accessible-name: @tr("MainWindow" => "Expand navigation");
+            clicked => { root.expand-navigation(); }
+        }
+    }
+}
+
+// 左导航拖拽把手（4px，悬停变色）；拖拽状态与宽度钳制仍在 main_window。
+export component SessionSidebarHandle inherits Rectangle {
+    in property <bool> dragging: false;
+
+    /// 按下：上报指针窗口绝对 x（宿主记录锚点与起始宽度）
+    callback drag-started(length);
+    /// 拖动：上报指针窗口绝对 x（宿主换算新宽度）
+    callback drag-moved(length);
+    callback drag-finished();
+
+    width: Theme.resize-handle-width;
+    background: root.dragging || nav_resize_touch.has-hover ? Theme.accent : transparent;
+    // 拖拽改变宽度即时生效（无动画）；只有悬停变色的 100ms 过渡
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    nav_resize_touch := TouchArea {
+        mouse-cursor: col-resize;
+
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.left) {
+                if (event.kind == PointerEventKind.down) {
+                    root.drag-started(self.absolute-position.x + self.mouse-x);
+                } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
+                    root.drag-finished();
+                }
+            }
+        }
+        moved => {
+            if (root.dragging) {
+                root.drag-moved(self.absolute-position.x + self.mouse-x);
+            }
+        }
+    }
+}
+
+// 左导航的三个右键菜单 Popup（会话树行 / 空白区 / 图标条）。
+// 宿主在窗口层级实例化本组件；`selected(which, index)` 交给宿主 dispatch
+// （which：0 = 行菜单、1 = 空白区菜单、2 = 图标条菜单）。
+export component SessionSidebarPopups inherits Rectangle {
+    in property <bool> row-menu-open: false;
+    in property <bool> blank-menu-open: false;
+    in property <bool> rail-menu-open: false;
+    in property <length> anchor-x: 0px;
+    in property <length> anchor-y: 0px;
+    in property <[MenuEntry]> row-entries: [];
+    in property <[MenuEntry]> blank-entries: [];
+    in property <[MenuEntry]> rail-entries: [];
+
+    callback selected(int, int);
+    callback dismissed();
+
+    // 作为 Window 直接子项（与拆分前的 MenuPopup 相同）：root 由 Slint 自动铺满
+    // 窗口，内层 Popup 显式取父尺寸，保持锚点钳制与全屏 scrim 与拆分前一致。
+    background: transparent;
+
+    saved_session_context_menu := MenuPopup {
+        width: parent.width;
+        height: parent.height;
+        open: root.row-menu-open;
+        entries: root.row-entries;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        panel-width: 230px;
+        dismissed => { root.dismissed(); }
+        selected(index) => { root.selected(0, index); }
+    }
+
+    // S1：会话树空白区菜单（New Session / New Folder… / Refresh + 三个 disabled 项）。
+    saved_session_blank_context_menu := MenuPopup {
+        width: parent.width;
+        height: parent.height;
+        open: root.blank-menu-open;
+        entries: root.blank-entries;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        panel-width: 250px;
+        dismissed => { root.dismissed(); }
+        selected(index) => { root.selected(1, index); }
+    }
+
+    // S1：图标条最小菜单（New Session / 展开会话栏）。
+    nav_rail_context_menu := MenuPopup {
+        width: parent.width;
+        height: parent.height;
+        open: root.rail-menu-open;
+        entries: root.rail-entries;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        panel-width: 220px;
+        dismissed => { root.dismissed(); }
+        selected(index) => { root.selected(2, index); }
+    }
+}

@@ -1,0 +1,247 @@
+// N3 工具面板框（PanelFrame）：可停靠面板的通用外壳、折叠态与 4px 分栏把手。
+//
+// 设计：docs/product/yshell-next-n3-panels.md §2。
+// 导出：
+//   * PanelFrame       —— 卡片外壳：标题条（图标 + 标题 + ⋯ 菜单入口）、折叠态
+//                         （仅标题条，默认 32px）、内容槽（`@children`）。
+//   * PanelSplitHandle —— 同栏上下分栏的 4px 拖拽把手（复用 nav/dock 的 resize 模式：
+//                         拖拽状态在宿主，组件只上报指针窗口绝对坐标）。
+//   * PanelMenuPopup   —— ⋯ 菜单本体（Move to Left/Right、Collapse/Expand、Hide）。
+//                         与 ToolDockPopups/SessionSidebarPopups 一致，由宿主在窗口
+//                         层级实例化（避免被面板/栏裁剪；绘制层级：内容之后、模态前）。
+//
+// 纯组件约定：本文件只做呈现与用户意图上报，不判定落位/顺序/显隐/持久化；
+// 面板的位置、折叠状态、栏宽与分栏比例都由宿主传入并消费（Phase 2 由 Rust 投影下发）。
+import { Theme } from "../theme.slint";
+import { Icon } from "basic/icons.slint";
+import { WinIconButton } from "basic/controls.slint";
+import { MenuEntry, MenuPopup } from "menu_popup.slint";
+
+/// 面板落位（⋯ 菜单据此禁用"移动到当前侧"）。
+export enum PanelPlacement {
+    Left,
+    Right,
+    Hidden,
+}
+
+/// ⋯ 菜单条目对应的语义动作。
+export enum PanelMenuAction {
+    MoveLeft,
+    MoveRight,
+    Collapse,
+    Expand,
+    Hide,
+}
+
+/// 面板外壳：标题条 + 可折叠内容槽。
+///
+/// 折叠态由 `collapsed` 驱动：min/max-height 都被钉到 `header-height`，
+/// 内容槽高度归零但仍保留实例（不重建 SFTP/终端等子内容）。
+export component PanelFrame inherits Rectangle {
+    /// 面板标题（`icon` 取 icons.slint 的名字，空串 = 不显示图标）。
+    in property <string> title-text: "";
+    in property <string> icon: "";
+    /// 折叠态：只保留标题条（总高 = header-height）。
+    in property <bool> collapsed: false;
+    /// 标题条高度（也是折叠态总高；设计 28–32px）。
+    in property <length> header-height: Theme.control-height;
+    /// 内容槽内边距（默认与 WinCard 的 12px 对齐）。
+    in property <length> content-padding: Theme.spacing-12;
+
+    /// ⋯ 按钮：上报菜单锚点（窗口绝对坐标），由宿主打开 `PanelMenuPopup`。
+    callback menu-requested(length, length);
+    /// 菜单 Collapse/Expand。
+    callback collapse-toggled();
+    /// 菜单 Hide。
+    callback hide-requested();
+
+    min-height: root.collapsed ? root.header-height : 0px;
+    max-height: root.collapsed ? root.header-height : 100000px;
+    background: Theme.card-fill;
+    border-width: 1px;
+    border-color: Theme.card-stroke;
+    border-radius: Theme.radius-panel;
+    clip: true;
+
+    // 标题条：图标 16 + 标题（吃剩余宽度、超长省略）+ ⋯ 按钮。
+    HorizontalLayout {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: root.header-height;
+        padding-left: Theme.spacing-12;
+        padding-right: Theme.spacing-4;
+        spacing: Theme.spacing-8;
+
+        if root.icon != "" : Rectangle {
+            width: Theme.icon-size-small;
+            vertical-stretch: 1;
+            background: transparent;
+
+            Icon {
+                name: root.icon;
+                icon-color: Theme.text-secondary;
+                icon-size: Theme.icon-size-small;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        Text {
+            text: root.title-text;
+            color: Theme.text-primary;
+            font-size: Theme.font-body;
+            font-weight: Theme.weight-semibold;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+            // Slint 1.18 的 `*-stretch` 默认值是 1：显式让标题吃掉剩余宽度，
+            // ⋯ 按钮才会钉在右缘（不额外放 spacer，避免空间被三等分）。
+            horizontal-stretch: 1;
+        }
+
+        WinIconButton {
+            icon: "more";
+            accessible-name: @tr("PanelFrame" => "Panel options");
+            clicked => {
+                root.menu-requested(
+                    self.absolute-position.x,
+                    self.absolute-position.y + self.height
+                );
+            }
+        }
+    }
+
+    // 展开态标题条底部分隔线（折叠态不画，避免与卡片描边重叠）。
+    Rectangle {
+        visible: !root.collapsed;
+        x: Theme.spacing-12;
+        y: root.header-height;
+        width: parent.width - 2 * Theme.spacing-12;
+        height: 1px;
+        background: Theme.layer-stroke;
+    }
+
+    // 内容槽：折叠时高度为 0（clip 裁剪；子内容保留实例与状态）。
+    Rectangle {
+        x: 0px;
+        y: root.header-height;
+        width: parent.width;
+        height: max(0px, parent.height - root.header-height);
+        clip: true;
+
+        VerticalLayout {
+            padding: root.content-padding;
+            spacing: Theme.spacing-8;
+            @children
+        }
+    }
+}
+
+/// 同栏上下分栏的 4px 拖拽把手。
+///
+/// 与 nav/dock 的把手一致：组件只上报指针的窗口绝对 y（`drag-started/moved`），
+/// 宽高钳制与比例换算在宿主；`dragging` 由宿主回传用于高亮。
+export component PanelSplitHandle inherits Rectangle {
+    in property <bool> dragging: false;
+
+    callback drag-started(length);
+    callback drag-moved(length);
+    callback drag-finished();
+
+    height: Theme.resize-handle-width;
+    background: root.dragging || split_touch.has-hover ? Theme.accent : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    split_touch := TouchArea {
+        mouse-cursor: row-resize;
+
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.left) {
+                if (event.kind == PointerEventKind.down) {
+                    root.drag-started(self.absolute-position.y + self.mouse-y);
+                } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
+                    root.drag-finished();
+                }
+            }
+        }
+        moved => {
+            if (root.dragging) {
+                root.drag-moved(self.absolute-position.y + self.mouse-y);
+            }
+        }
+    }
+}
+
+/// ⋯ 菜单本体（Move to Left/Right、Collapse/Expand、Hide）。
+///
+/// 用法（宿主）：在窗口层级实例化，`open` 由 `PanelFrame.menu-requested` 的锚点驱动；
+/// `placement`/`collapsed` 传入被操作面板的当前状态；`selected` 映射到
+/// `AppRuntime::{move_panel,toggle_panel_collapsed,hide_panel}`。
+export component PanelMenuPopup inherits Rectangle {
+    in property <bool> open: false;
+    in property <length> anchor-x: 0px;
+    in property <length> anchor-y: 0px;
+    /// 被操作面板的落位。
+    in property <PanelPlacement> placement: PanelPlacement.Hidden;
+    /// 被操作面板的折叠状态（决定第三项显示 Collapse 还是 Expand）。
+    in property <bool> collapsed: false;
+    /// 是否允许折叠/展开（宿主可按面板策略禁用）。
+    in property <bool> collapse-enabled: true;
+    /// 是否允许隐藏（宿主可按面板策略禁用，例如必须保留入口的面板）。
+    in property <bool> hide-enabled: true;
+
+    callback selected(PanelMenuAction);
+    callback dismissed();
+
+    visible: self.open;
+    background: transparent;
+
+    menu := MenuPopup {
+        width: parent.width;
+        height: parent.height;
+        open: root.open;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        panel-width: 220px;
+        entries: [
+            {
+                label: @tr("PanelFrame" => "Move to Left"),
+                shortcut: "",
+                enabled: root.placement != PanelPlacement.Left,
+                checked: false,
+                separator: false,
+            },
+            {
+                label: @tr("PanelFrame" => "Move to Right"),
+                shortcut: "",
+                enabled: root.placement != PanelPlacement.Right,
+                checked: false,
+                separator: false,
+            },
+            {
+                label: root.collapsed ? @tr("PanelFrame" => "Expand") : @tr("PanelFrame" => "Collapse"),
+                shortcut: "",
+                enabled: root.collapse-enabled,
+                checked: false,
+                separator: false,
+            },
+            {
+                label: @tr("PanelFrame" => "Hide"),
+                shortcut: "",
+                enabled: root.hide-enabled,
+                checked: false,
+                separator: false,
+            },
+        ];
+        selected(index) => {
+            root.selected(
+                index == 0 ? PanelMenuAction.MoveLeft
+                : index == 1 ? PanelMenuAction.MoveRight
+                : index == 2 ? (root.collapsed ? PanelMenuAction.Expand : PanelMenuAction.Collapse)
+                : PanelMenuAction.Hide
+            );
+        }
+        dismissed => { root.dismissed(); }
+    }
+}

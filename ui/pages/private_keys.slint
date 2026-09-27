@@ -1,0 +1,661 @@
+// 私钥管理页（N4 设计 §1）：托管私钥清单（名称/算法/指纹/口令状态/被哪些会话
+// 使用）+ 导入 + 删除（被引用告警）+ "测试" + 派生公钥（查看/复制/导出/部署）。
+//
+// 与宿主（Rust / main_window）的约定：
+//   * `open` 由宿主投影驱动；`close`（Esc / 遮罩点击 / Close 按钮）走同一条路径。
+//   * `keys` 是按显示顺序排好的行模型；`selected-index` 是宿主与页面共享的选择。
+//   * 文本输入属性由页面编辑、经 `update-*` 回调写回宿主，宿主决定何时清空。
+//   * 破坏性操作（删除 / 部署）都需要页面内的二次确认：
+//       request-delete → remove-confirm-visible；confirm-delete/cancel-delete。
+//   * "部署公钥"在 Phase 2 由宿主持有远端会话执行（命令文本由宿主投影）。
+//
+// 规范：docs/product/ui-winui3-design-language.md §5.10（ContentDialog 形态）。
+
+import { Theme } from "../theme.slint";
+import { WinButton, WinCard, WinCardHeader, WinIconButton, WinToggle } from "../components/basic/controls.slint";
+import { WinTextInput } from "../components/basic/text_input.slint";
+
+/// 托管私钥清单行（Rust `PrivateKeyEntryInfo` 的 Slint 镜像）。
+export struct PrivateKeyRow {
+    id: string,
+    label: string,
+    algorithm: string,
+    fingerprint: string,
+    passphrase-stored: bool,
+    material-present: bool,
+    /// 预格式化的引用会话名（"Prod, Staging" / "no saved session"）
+    used-by: string,
+    selected: bool,
+}
+
+/// 清单行：名称 + 算法/指纹 + 使用方/口令状态（三行 56px）。
+component PrivateKeyListItem inherits Rectangle {
+    in property <PrivateKeyRow> node;
+    in property <bool> selected: false;
+    callback clicked();
+
+    height: 56px;
+    border-radius: Theme.radius-control;
+    background: selected ? Theme.subtle-selected
+        : touch.has-hover ? Theme.subtle-hover
+        : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    VerticalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+        spacing: 2px;
+
+        Text {
+            text: node.label;
+            color: Theme.text-primary;
+            font-size: Theme.font-body;
+            font-weight: node.selected ? Theme.weight-semibold : 400;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        Text {
+            text: node.algorithm + " · " + node.fingerprint;
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            font-family: Theme.font-mono;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        Text {
+            text: (node.passphrase-stored ? "passphrase saved" : "passphrase not saved")
+                + " · " + node.used-by
+                + (node.material-present ? "" : " · material missing");
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+export component PrivateKeysPage inherits Rectangle {
+    in property <bool> open: false;
+    in property <[PrivateKeyRow]> keys: [];
+    in property <string> list-summary-text: "";
+    in property <string> empty-text: @tr("No managed private keys yet. Import an OpenSSH private key below.");
+    in property <string> details-text: "";
+    in property <string> public-key-text: "";
+    in property <string> test-result-text: "";
+    in property <string> status-text: "";
+    in property <bool> busy: false;
+
+    in-out property <int> selected-index: -1;
+    in-out property <bool> remove-confirm-visible: false;
+    in-out property <bool> deploy-confirm-visible: false;
+    in property <string> deploy-command-text: "";
+    in property <string> deploy-summary-text: "";
+    in property <string> remove-warning-text: "";
+
+    // 导入表单
+    in-out property <string> import-label-text: "";
+    in-out property <string> import-path-text: "";
+    in-out property <string> import-passphrase-text: "";
+    in-out property <bool> remember-import-passphrase: false;
+    in property <bool> import-enabled: false;
+    // 口令管理（选中密钥）
+    in-out property <string> passphrase-text: "";
+    in property <bool> passphrase-stored: false;
+    in property <bool> passphrase-manage-enabled: false;
+
+    callback close();
+    callback select-key(int);
+    callback import-key();
+    callback browse-import-file();
+    callback update-import-label(string);
+    callback update-import-path(string);
+    callback update-import-passphrase(string);
+    callback toggle-remember-import-passphrase(bool);
+    callback test-key();
+    callback copy-public-key();
+    callback export-public-key();
+    callback request-remove();
+    callback confirm-remove();
+    callback cancel-remove();
+    callback request-deploy();
+    callback confirm-deploy();
+    callback cancel-deploy();
+    callback update-passphrase(string);
+    callback save-passphrase();
+    callback forget-passphrase();
+    callback rename-key(string);
+
+    visible: self.open;
+    background: Theme.scrim;
+
+    private property <string> selected-label:
+        root.selected-index >= 0 && root.selected-index < root.keys.length
+            ? root.keys[root.selected-index].label
+            : "";
+
+    dialog_scope := FocusScope {
+        width: parent.width;
+        height: parent.height;
+
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.close();
+                return accept;
+            }
+            return reject;
+        }
+
+        TouchArea {
+            clicked => { root.close(); }
+        }
+
+        Rectangle {
+            x: (parent.width - 840px) / 2;
+            y: 44px;
+            width: 840px;
+            height: parent.height - 88px;
+            background: Theme.panel-background;
+            border-radius: Theme.radius-panel;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
+            clip: true;
+
+            TouchArea { }
+
+            VerticalLayout {
+                padding: Theme.spacing-20;
+                spacing: Theme.spacing-12;
+
+                // 标题行
+                HorizontalLayout {
+                    spacing: Theme.spacing-12;
+
+                    Text {
+                        text: @tr("Private Keys");
+                        color: Theme.text-primary;
+                        font-size: Theme.font-subtitle;
+                        font-weight: Theme.weight-semibold;
+                        vertical-alignment: center;
+                    }
+
+                    Text {
+                        text: root.list-summary-text;
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-body;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    WinIconButton {
+                        icon: "close";
+                        accessible-name: @tr("Close");
+                        clicked => { root.close(); }
+                    }
+                }
+
+                Rectangle {
+                    height: 1px;
+                    background: Theme.divider;
+                }
+
+                HorizontalLayout {
+                    spacing: Theme.spacing-16;
+
+                    // --- 左：清单 + 导入（内容超出时整列滚动）---------------------
+                    Rectangle {
+                        width: 320px;
+                        clip: true;
+                        background: transparent;
+
+                        left-scroll := Flickable {
+                            width: parent.width;
+                            height: parent.height;
+                            interactive: true;
+                            content-width: self.width;
+                            content-height: left-column.preferred-height;
+
+                            left-column := VerticalLayout {
+                                spacing: Theme.spacing-12;
+
+                                WinCard {
+                            vertical-stretch: 0;
+
+                            WinCardHeader {
+                                title: @tr("Managed Keys");
+                                icon: "shield";
+                            }
+
+                            Rectangle {
+                                height: max(96px, min(root.keys.length * 56px + 4px, 224px));
+                                clip: true;
+                                background: Theme.panel-background;
+                                border-radius: Theme.radius-control;
+                                border-width: 1px;
+                                border-color: Theme.divider;
+
+                                keys-list := Flickable {
+                                    width: parent.width;
+                                    height: parent.height;
+                                    interactive: true;
+                                    content-width: self.width;
+                                    content-height: rows.preferred-height;
+
+                                    rows := VerticalLayout {
+                                        padding: 2px;
+                                        spacing: 2px;
+
+                                        for row[i] in root.keys : PrivateKeyListItem {
+                                            node: row;
+                                            selected: i == root.selected-index;
+                                            clicked => {
+                                                root.selected-index = i;
+                                                root.select-key(i);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    visible: root.keys.length == 0;
+                                    x: 12px;
+                                    y: 12px;
+                                    width: parent.width - 24px;
+                                    text: root.empty-text;
+                                    color: Theme.text-tertiary;
+                                    font-size: Theme.font-caption;
+                                    wrap: word-wrap;
+                                }
+                            }
+
+                            HorizontalLayout {
+                                spacing: Theme.spacing-8;
+                                vertical-stretch: 0;
+
+                                WinButton {
+                                    text: @tr("Remove");
+                                    icon: "trash";
+                                    critical: true;
+                                    enabled: root.selected-index >= 0 && !root.busy;
+                                    clicked => { root.request-remove(); }
+                                }
+
+                                WinButton {
+                                    text: @tr("Test");
+                                    icon: "check";
+                                    enabled: root.selected-index >= 0 && !root.busy;
+                                    clicked => { root.test-key(); }
+                                }
+                            }
+                        }
+
+                        WinCard {
+                            vertical-stretch: 0;
+
+                            WinCardHeader {
+                                title: @tr("Import Private Key");
+                                icon: "upload";
+                            }
+
+                            Text {
+                                text: @tr("Stored in the secret store; only metadata is written to config.toml.");
+                                color: Theme.text-tertiary;
+                                font-size: Theme.font-caption;
+                                wrap: word-wrap;
+                            }
+
+                            WinTextInput {
+                                text <=> root.import-label-text;
+                                placeholder-text: @tr("Label (optional)");
+                                edited => { root.update-import-label(self.text); }
+                            }
+
+                            HorizontalLayout {
+                                spacing: Theme.spacing-8;
+
+                                WinTextInput {
+                                    text <=> root.import-path-text;
+                                    placeholder-text: @tr("Path to key file");
+                                    font-family: Theme.font-mono;
+                                    font-size: Theme.font-caption;
+                                    horizontal-stretch: 1;
+                                    edited => { root.update-import-path(self.text); }
+                                }
+
+                                WinButton {
+                                    text: @tr("Browse…");
+                                    icon: "file";
+                                    clicked => { root.browse-import-file(); }
+                                }
+                            }
+
+                            WinTextInput {
+                                text <=> root.import-passphrase-text;
+                                placeholder-text: @tr("Passphrase (optional)");
+                                input-type: password;
+                                edited => { root.update-import-passphrase(self.text); }
+                            }
+
+                            WinToggle {
+                                text: @tr("Remember passphrase");
+                                checked: root.remember-import-passphrase;
+                                toggled => { root.toggle-remember-import-passphrase(self.checked); }
+                            }
+
+                            HorizontalLayout {
+                                alignment: end;
+
+                                WinButton {
+                                    text: @tr("Import");
+                                    icon: "plus";
+                                    accent: true;
+                                    enabled: root.import-enabled && !root.busy;
+                                    clicked => { root.import-key(); }
+                                }
+                            }
+                        }
+                            }
+                        }
+                    }
+
+                    // --- 右：详情 / 口令 / 部署确认 / 危险区 ------------------------
+                    Rectangle {
+                        clip: true;
+                        background: transparent;
+
+                        scroll := Flickable {
+                            width: parent.width;
+                            height: parent.height;
+                            interactive: true;
+                            content-width: self.width;
+                            content-height: sections.preferred-height;
+
+                            sections := VerticalLayout {
+                                spacing: Theme.spacing-12;
+
+                                // 部署确认（追加 authorized_keys，幂等 + 权限修正）
+                                if root.deploy-confirm-visible : WinCard {
+                                    WinCardHeader {
+                                        title: @tr("Deploy Public Key");
+                                        icon: "upload";
+                                    }
+
+                                    Text {
+                                        text: root.deploy-summary-text;
+                                        color: Theme.text-secondary;
+                                        font-size: Theme.font-body;
+                                        wrap: word-wrap;
+                                    }
+
+                                    Rectangle {
+                                        height: 62px;
+                                        clip: true;
+                                        background: Theme.panel-background;
+                                        border-radius: Theme.radius-control;
+                                        border-width: 1px;
+                                        border-color: Theme.divider;
+
+                                        Text {
+                                            x: 10px;
+                                            y: 10px;
+                                            width: parent.width - 20px;
+                                            text: root.deploy-command-text;
+                                            color: Theme.text-secondary;
+                                            font-size: Theme.font-caption;
+                                            font-family: Theme.font-mono;
+                                            wrap: word-wrap;
+                                        }
+                                    }
+
+                                    HorizontalLayout {
+                                        alignment: end;
+                                        spacing: Theme.spacing-8;
+
+                                        WinButton {
+                                            text: @tr("Cancel");
+                                            clicked => { root.cancel-deploy(); }
+                                        }
+
+                                        WinButton {
+                                            text: @tr("Deploy");
+                                            accent: true;
+                                            enabled: !root.busy;
+                                            clicked => { root.confirm-deploy(); }
+                                        }
+                                    }
+                                }
+
+                                // 详情 + 派生公钥
+                                WinCard {
+                                    WinCardHeader {
+                                        title: @tr("Key Details");
+                                        icon: "shield";
+                                    }
+
+                                    Rectangle {
+                                        height: 150px;
+                                        clip: true;
+                                        background: Theme.panel-background;
+                                        border-radius: Theme.radius-control;
+                                        border-width: 1px;
+                                        border-color: Theme.divider;
+
+                                        Text {
+                                            x: 10px;
+                                            y: 10px;
+                                            width: parent.width - 20px;
+                                            text: root.details-text;
+                                            color: Theme.text-secondary;
+                                            font-size: Theme.font-caption;
+                                            font-family: Theme.font-mono;
+                                            wrap: word-wrap;
+                                        }
+                                    }
+
+                                    if root.status-text != "" : Text {
+                                        text: root.status-text;
+                                        color: Theme.text-secondary;
+                                        font-size: Theme.font-caption;
+                                        wrap: word-wrap;
+                                    }
+
+                                    if root.test-result-text != "" : Text {
+                                        text: root.test-result-text;
+                                        color: Theme.text-secondary;
+                                        font-size: Theme.font-caption;
+                                        font-family: Theme.font-mono;
+                                        wrap: word-wrap;
+                                    }
+
+                                    // 派生公钥（可复制/导出；等宽显示）
+                                    if root.public-key-text != "" : Rectangle {
+                                        height: 56px;
+                                        clip: true;
+                                        background: Theme.panel-background;
+                                        border-radius: Theme.radius-control;
+                                        border-width: 1px;
+                                        border-color: Theme.divider;
+
+                                        Text {
+                                            x: 10px;
+                                            y: 10px;
+                                            width: parent.width - 20px;
+                                            text: root.public-key-text;
+                                            color: Theme.text-secondary;
+                                            font-size: Theme.font-caption;
+                                            font-family: Theme.font-mono;
+                                            wrap: word-wrap;
+                                        }
+                                    }
+
+                                    HorizontalLayout {
+                                        spacing: Theme.spacing-8;
+
+                                        WinButton {
+                                            text: @tr("Copy");
+                                            icon: "copy";
+                                            enabled: root.public-key-text != "";
+                                            clicked => { root.copy-public-key(); }
+                                        }
+
+                                        WinButton {
+                                            text: @tr("Export");
+                                            icon: "download";
+                                            enabled: root.public-key-text != "";
+                                            clicked => { root.export-public-key(); }
+                                        }
+
+                                        WinButton {
+                                            text: @tr("Deploy");
+                                            icon: "upload";
+                                            enabled: root.public-key-text != "";
+                                            clicked => { root.request-deploy(); }
+                                        }
+                                    }
+
+                                    // 重命名（label 就地编辑）
+                                    HorizontalLayout {
+                                        spacing: Theme.spacing-8;
+
+                                        rename-input := WinTextInput {
+                                            text: root.selected-label;
+                                            placeholder-text: @tr("Label");
+                                            horizontal-stretch: 1;
+                                            accepted => { root.rename-key(self.text); }
+                                        }
+
+                                        WinButton {
+                                            text: @tr("Rename");
+                                            enabled: root.selected-index >= 0 && !root.busy;
+                                            clicked => { root.rename-key(rename-input.text); }
+                                        }
+                                    }
+                                }
+
+                                // 口令管理
+                                WinCard {
+                                    WinCardHeader {
+                                        title: @tr("Passphrase");
+                                        icon: "shield";
+                                    }
+
+                                    Text {
+                                        text: root.passphrase-stored
+                                            ? @tr("A passphrase is saved for this key.")
+                                            : @tr("No passphrase is saved for this key.");
+                                        color: Theme.text-tertiary;
+                                        font-size: Theme.font-caption;
+                                        wrap: word-wrap;
+                                    }
+
+                                    HorizontalLayout {
+                                        spacing: Theme.spacing-8;
+
+                                        WinTextInput {
+                                            text <=> root.passphrase-text;
+                                            placeholder-text: @tr("Passphrase");
+                                            input-type: password;
+                                            enabled: root.passphrase-manage-enabled;
+                                            horizontal-stretch: 1;
+                                            accepted => { root.save-passphrase(); }
+                                        }
+
+                                        WinButton {
+                                            text: @tr("Remember");
+                                            icon: "check";
+                                            enabled: root.passphrase-manage-enabled && root.passphrase-text != "" && !root.busy;
+                                            clicked => { root.save-passphrase(); }
+                                        }
+
+                                        WinButton {
+                                            text: @tr("Forget");
+                                            icon: "clear";
+                                            critical: true;
+                                            enabled: root.passphrase-manage-enabled && root.passphrase-stored && !root.busy;
+                                            clicked => { root.forget-passphrase(); }
+                                        }
+                                    }
+                                }
+
+                                // 危险区：删除确认（确认态用同一行替换警告文案，避免面板被顶出视口）
+                                WinCard {
+                                    WinCardHeader {
+                                        title: @tr("Danger Zone");
+                                        icon: "warning";
+                                    }
+
+                                    if root.remove-confirm-visible : HorizontalLayout {
+                                        spacing: Theme.spacing-8;
+
+                                        Text {
+                                            text: @tr("Remove this managed key permanently?");
+                                            color: Theme.critical;
+                                            font-size: Theme.font-caption;
+                                            vertical-alignment: center;
+                                            horizontal-stretch: 1;
+                                            wrap: word-wrap;
+                                        }
+
+                                        WinButton {
+                                            text: @tr("Cancel");
+                                            clicked => { root.cancel-remove(); }
+                                        }
+
+                                        WinButton {
+                                            text: @tr("Remove Key");
+                                            accent: true;
+                                            critical: true;
+                                            enabled: !root.busy;
+                                            clicked => { root.confirm-remove(); }
+                                        }
+                                    }
+
+                                    if !root.remove-confirm-visible : Text {
+                                        text: root.remove-warning-text;
+                                        color: Theme.critical;
+                                        font-size: Theme.font-caption;
+                                        wrap: word-wrap;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    height: 1px;
+                    background: Theme.divider;
+                }
+
+                HorizontalLayout {
+                    alignment: end;
+
+                    WinButton {
+                        text: @tr("Close");
+                        clicked => { root.close(); }
+                    }
+                }
+            }
+        }
+    }
+
+    /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
+    public function focus-dialog() {
+        dialog_scope.focus();
+    }
+
+    changed open => {
+        if (root.open) {
+            dialog_scope.focus();
+        }
+    }
+}

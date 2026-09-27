@@ -55,6 +55,9 @@ pub enum TransferDirection {
 pub enum TransferStatus {
     Queued,
     Running,
+    /// Explicitly paused by the user; `start_next` skips paused tasks and
+    /// `resume` puts them back into the queue.
+    Paused,
     Completed,
     Failed,
     Cancelled,

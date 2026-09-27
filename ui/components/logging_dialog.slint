@@ -1,0 +1,391 @@
+// N6：终端日志开启/停止弹窗（`docs/product/yshell-next-n6-logging-ui.md` §2/§7.3）。
+//
+// 纯展示 + 回调：本组件不访问文件系统、不做 rfd 调用，只把字段值与语义回调交给
+// 宿主（Rust）：
+//   * 保存位置（目录）：`directory-text` 可编辑；"Browse…" 发 `browse-requested()`，
+//     宿主用 rfd 选择目录后写回（WSLg 降级为直接输入路径，`browse-enabled` 控制）。
+//   * 文件名：默认 `{session}-{timestamp}.log`；非法字符/空值由宿主校验并回填
+//     `file-name-error-text`；已存在时 `file-exists` + `overwrite-confirmed` 确认覆盖。
+//   * 格式 raw/sanitized（默认 sanitized）、行首时间戳（默认开）、记录本地输入
+//     （默认关；开启需 `input-confirmed` 单独确认，R-106）。
+//   * `logging-active` = 该会话已在记录：视图切换为"停止提示"（路径 + 打开文件/
+//     文件夹 + Stop Logging），停止走 `stop-requested()`。
+//
+// 宿主约定：打开前写入字段默认值（含 `raw-format`/`sanitized-format` 互斥对），
+// `start-requested()` 时读取全部字段；打开失败回填 `path-error-text` 并保持打开。
+//
+// 形态与 Esc/遮罩语义与 ConfirmDialog 一致（ContentDialog + scrim；Esc 与遮罩点击
+// 都走 `cancel()`）。
+
+import { Theme } from "../theme.slint";
+import { WinButton, WinToggle, WinInfoBar } from "basic/controls.slint";
+import { WinTextInput } from "basic/text_input.slint";
+import { Icon } from "basic/icons.slint";
+
+// 表单行：左侧固定宽度标签 + 右侧控件列（与 session_editor 的 FormRow 同形）。
+component LoggingFormRow inherits HorizontalLayout {
+    in property <string> label: "";
+    spacing: Theme.spacing-12;
+
+    Text {
+        text: root.label;
+        color: Theme.text-secondary;
+        font-size: Theme.font-body;
+        width: Theme.form-label-width;
+        vertical-alignment: center;
+        wrap: no-wrap;
+        overflow: elide;
+    }
+
+    VerticalLayout {
+        horizontal-stretch: 1;
+        spacing: Theme.spacing-4;
+        @children
+    }
+}
+
+export component LoggingDialog inherits Rectangle {
+    in property <bool> open: false;
+    /// 触发会话的显示名（标题副文案："Session: {0}"）。
+    in property <string> session-name-text: "";
+    /// true = 该会话正在记录日志：显示停止提示视图而不是开启表单。
+    in property <bool> logging-active: false;
+    /// 活动/最近的日志文件路径（停止提示与打开入口用）。
+    in property <string> active-path-text: "";
+    /// WSLg 降级等场景关闭目录选择器（仍可直接编辑路径）。
+    in property <bool> browse-enabled: true;
+
+    /// 保存位置（目录，可编辑）。
+    in-out property <string> directory-text: "logs";
+    /// 文件名（默认 `{session}-{timestamp}.log`）。
+    in-out property <string> file-name-text: "";
+    /// 宿主校验结果：非空时显示并阻止开启。
+    in property <string> file-name-error-text: "";
+    /// 宿主回填：目标文件已存在。
+    in property <bool> file-exists: false;
+    /// 宿主回填：上次开启失败的原因（非法路径/写失败等），保持弹窗打开。
+    in property <string> path-error-text: "";
+    /// 格式：raw（保留 ANSI）/ sanitized（纯文本，默认）。两者由宿主保证互斥。
+    in-out property <bool> raw-format: false;
+    in-out property <bool> sanitized-format: true;
+    /// 行首本地 `[HH:MM:SS]` 时间戳（默认开）。
+    in-out property <bool> timestamps: true;
+    /// 记录本地输入（默认关；开启需单独确认）。
+    in-out property <bool> include-input: false;
+    /// "记录本地输入"的单独确认（include-input 为 true 时必须勾选）。
+    in-out property <bool> input-confirmed: false;
+    /// 覆盖已存在文件的确认（file-exists 为 true 时必须勾选）。
+    in-out property <bool> overwrite-confirmed: false;
+
+    callback browse-requested();
+    callback directory-changed(string);
+    callback file-name-changed(string);
+    callback start-requested();
+    callback stop-requested();
+    callback open-file-requested();
+    callback open-folder-requested();
+    callback cancel();
+    /// N6：开关快照（raw / timestamps / include-input / input-confirmed /
+    /// overwrite-confirmed）；任一开关变化时发出，宿主写回运行时并重新投影。
+    callback options-changed(bool, bool, bool, bool, bool);
+
+    visible: self.open;
+    background: Theme.scrim;
+
+    // 开关变化 → 一次性回传全部选项（避免逐个回调的中间态）。
+    function notify-options() {
+        root.options-changed(
+            root.raw-format,
+            root.timestamps,
+            root.include-input,
+            root.input-confirmed,
+            root.overwrite-confirmed,
+        );
+    }
+
+    // 开启条件：文件名通过校验、已存在需确认覆盖、记录输入需单独确认。
+    private property <bool> can-start:
+        root.file-name-text != ""
+        && root.file-name-error-text == ""
+        && (!root.file-exists || root.overwrite-confirmed)
+        && (!root.include-input || root.input-confirmed);
+
+    dialog_scope := FocusScope {
+        width: parent.width;
+        height: parent.height;
+
+        key-pressed(event) => {
+            // Esc 键码按 `event.text` 比较（与 ConfirmDialog/password_prompt 一致）。
+            if (event.text == "\u{001b}") {
+                root.cancel();
+                return accept;
+            }
+            return reject;
+        }
+
+        // 遮罩：点击 = 取消（与 Cancel 按钮同一路径）。
+        TouchArea {
+            clicked => { root.cancel(); }
+        }
+
+        Rectangle {
+            x: (parent.width - 540px) / 2;
+            y: max((parent.height - self.height) / 2, 32px);
+            width: 540px;
+            height: body.preferred-height;
+            background: Theme.panel-background;
+            border-radius: Theme.radius-panel;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
+
+            // 吞掉面板空白处的点击，避免穿透到遮罩触发取消。
+            TouchArea { }
+
+            body := VerticalLayout {
+                padding: Theme.spacing-20;
+                spacing: Theme.spacing-12;
+
+                Text {
+                    text: @tr("Terminal Logging");
+                    color: Theme.text-primary;
+                    font-size: Theme.font-subtitle;
+                    font-weight: Theme.weight-semibold;
+                    wrap: word-wrap;
+                }
+
+                Text {
+                    text: @tr("Session: {0}", root.session-name-text);
+                    color: Theme.text-secondary;
+                    wrap: no-wrap;
+                    overflow: elide;
+                }
+
+                // ------------------------------------------------- 停止提示视图
+                if root.logging-active : VerticalLayout {
+                    spacing: Theme.spacing-12;
+
+                    HorizontalLayout {
+                        spacing: Theme.spacing-8;
+                        alignment: start;
+
+                        Icon {
+                            name: "check";
+                            icon-color: Theme.success;
+                        }
+
+                        Text {
+                            text: @tr("Recording terminal output to this file:");
+                            color: Theme.text-primary;
+                            vertical-alignment: center;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    Rectangle {
+                        background: Theme.control-fill;
+                        border-radius: Theme.radius-control;
+                        border-width: 1px;
+                        border-color: Theme.control-stroke;
+                        height: path_active.preferred-height + Theme.spacing-16;
+
+                        path_active := Text {
+                            x: Theme.spacing-12;
+                            width: parent.width - 2 * Theme.spacing-12;
+                            y: Theme.spacing-8;
+                            text: root.active-path-text;
+                            color: Theme.text-primary;
+                            font-family: Theme.font-mono;
+                            font-size: Theme.font-caption;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: Theme.spacing-8;
+
+                        WinButton {
+                            text: @tr("Open File");
+                            icon: "file";
+                            subtle: true;
+                            enabled: root.active-path-text != "";
+                            clicked => { root.open-file-requested(); }
+                        }
+
+                        WinButton {
+                            text: @tr("Open Folder");
+                            icon: "folder";
+                            subtle: true;
+                            enabled: root.active-path-text != "";
+                            clicked => { root.open-folder-requested(); }
+                        }
+                    }
+                }
+
+                // ------------------------------------------------- 开启表单视图
+                if !root.logging-active : VerticalLayout {
+                    spacing: Theme.spacing-12;
+
+                    LoggingFormRow {
+                        label: @tr("Save to");
+
+                        HorizontalLayout {
+                            spacing: Theme.spacing-8;
+
+                            WinTextInput {
+                                text <=> root.directory-text;
+                                font-family: Theme.font-mono;
+                                font-size: Theme.font-caption;
+                                placeholder-text: @tr("Log folder");
+                                edited(text) => { root.directory-changed(text); }
+                            }
+
+                            WinButton {
+                                text: @tr("Browse\u{2026}");
+                                icon: "folder";
+                                enabled: root.browse-enabled;
+                                clicked => { root.browse-requested(); }
+                            }
+                        }
+
+                        Text {
+                            text: @tr("Default: the last used folder, or the configured logs directory.");
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    LoggingFormRow {
+                        label: @tr("File name");
+
+                        WinTextInput {
+                            text <=> root.file-name-text;
+                            font-family: Theme.font-mono;
+                            font-size: Theme.font-caption;
+                            placeholder-text: @tr("session-{{timestamp}}.log");
+                            edited(text) => { root.file-name-changed(text); }
+                        }
+
+                        if root.file-name-error-text != "" : Text {
+                            text: root.file-name-error-text;
+                            color: Theme.critical;
+                            font-size: Theme.font-caption;
+                            wrap: word-wrap;
+                        }
+
+                        if root.file-exists && root.file-name-error-text == "" : Text {
+                            text: @tr("This file already exists. Confirm to overwrite it, or choose another name.");
+                            color: Theme.caution;
+                            font-size: Theme.font-caption;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    if root.file-exists : WinToggle {
+                        text: @tr("Overwrite the existing file");
+                        checked <=> root.overwrite-confirmed;
+                        toggled => { root.notify-options(); }
+                    }
+
+                    LoggingFormRow {
+                        label: @tr("Format");
+
+                        HorizontalLayout {
+                            spacing: Theme.spacing-8;
+
+                            WinToggle {
+                                text: @tr("Sanitized (plain text)");
+                                checked <=> root.sanitized-format;
+                                // 单选语义：点击总是选中本项（不能取消）。
+                                toggled => { root.sanitized-format = true; root.raw-format = false; root.notify-options(); }
+                            }
+
+                            WinToggle {
+                                text: @tr("Raw (with ANSI escapes)");
+                                checked <=> root.raw-format;
+                                toggled => { root.raw-format = true; root.sanitized-format = false; root.notify-options(); }
+                            }
+                        }
+                    }
+
+                    WinToggle {
+                        text: @tr("Timestamp each line with the local [HH:MM:SS]");
+                        checked <=> root.timestamps;
+                        toggled => { root.notify-options(); }
+                    }
+
+                    WinToggle {
+                        text: @tr("Also record local input (commands you type)");
+                        checked <=> root.include-input;
+                        toggled => {
+                            if (!root.include-input) {
+                                root.input-confirmed = false;
+                            }
+                            root.notify-options();
+                        }
+                    }
+
+                    if root.include-input : WinInfoBar {
+                        severity: "warning";
+                        text: @tr("Local input is written to the log in plain text, including passwords you type interactively. Confirm before enabling.");
+
+                        WinToggle {
+                            text: @tr("I understand local input will be recorded");
+                            checked <=> root.input-confirmed;
+                            toggled => { root.notify-options(); }
+                        }
+                    }
+
+                    if root.path-error-text != "" : Text {
+                        text: root.path-error-text;
+                        color: Theme.critical;
+                        font-size: Theme.font-caption;
+                        wrap: word-wrap;
+                    }
+
+                    Text {
+                        text: @tr("Logging starts now: existing scrollback is not written; new output is recorded.");
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        wrap: word-wrap;
+                    }
+                }
+
+                // ------------------------------------------------------- 操作区
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: Theme.spacing-8;
+
+                    WinButton {
+                        text: root.logging-active ? @tr("Close") : @tr("Cancel");
+                        clicked => { root.cancel(); }
+                    }
+
+                    if root.logging-active : WinButton {
+                        text: @tr("Stop Logging");
+                        critical: true;
+                        clicked => { root.stop-requested(); }
+                    }
+
+                    if !root.logging-active : WinButton {
+                        text: @tr("Start Logging");
+                        accent: true;
+                        enabled: root.can-start;
+                        clicked => { root.start-requested(); }
+                    }
+                }
+            }
+        }
+    }
+
+    /// 宿主在打开弹窗后把键盘焦点交给弹窗（Esc / 点输入框后按键沿父链冒泡）。
+    public function focus-dialog() {
+        dialog_scope.focus();
+    }
+
+    changed open => {
+        if (root.open) {
+            dialog_scope.focus();
+        }
+    }
+}

@@ -30,7 +30,7 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 license = "MIT OR Apache-2.0"
-rust-version = "1.89"
+rust-version = "1.92"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
@@ -39,3 +39,7 @@ unsafe_code = "deny"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tempfile = "3"
+time = { version = "0.3.47", features = ["local-offset", "formatting", "macros"] }
+swash = "0.2.10"
+rfd = { version = "0.17.2", default-features = false }
+ssh-key = { version = "0.6.7", default-features = false, features = ["std", "encryption", "ecdsa"] }

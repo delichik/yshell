@@ -9,6 +9,7 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
+time.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

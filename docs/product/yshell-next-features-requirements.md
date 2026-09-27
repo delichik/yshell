@@ -2,7 +2,7 @@
 
 更新时间：2026-09-27
 文档性质：**需求与可行性分析**（不含实现代码、不做排期承诺）
-决策状态：**2026-09-27 已全部拍板，见 §12；§12 优先于各节"开放问题"**
+决策状态：**2026-09-27 已全部拍板（含第二轮追加，见 §12.5）；§12 优先于各节"开放问题"，补充需求见 §14**
 输入来源：产品负责人提出的 9 项功能设想 + 仓库现状核对（本文 §0）
 关联文档：`yshell-progress-tracker.md`、`context-menu-design.md`、`ui-redesign-remaining-work.md`（F1/F5/F6/F7、C1–C3、D1–D2、E-018~E-023、E-029~E-038、P-001~P-016、R-039~R-041、R-096~R-106）
 
@@ -85,7 +85,8 @@
 | N2 | 移除顶部连接栏 + 快速连接页（最近会话/快速链接） | N0 | M | U-003~004、R-019 |
 | N3 | 工具面板：左/右停靠 + 上下分栏 + 占比可调 | 可与 N0 并行 | L | E-029~E-038、P-017、A1/A5 |
 | N4 | 密钥管理 + 按服务端能力的认证弹窗 | SSH 层 `auth_methods`、rfd、secret store 解锁体验 | L | R-039~R-041、U-050~U-053 |
-| N5 | 终端主题（全局/文件夹/会话继承 + 内置配色 + 字体字号） | 文件夹覆盖字段、Folder Editor、字体加载方案 | L | P-001~P-016、B1–B8、D2 |
+| N5 | 终端主题（全局/文件夹/会话继承 + 内置配色 + 字体字号） | N5a（字体链路）、文件夹覆盖字段、Folder Editor | L | P-001~P-016、B8、D2 |
+| N5a | **终端字形质量**：按物理像素光栅（B5）+ CJK 回退 + 真粗体/斜体 + e2e 缩放固定 | T0（Slint 升级） | M | B1、B2、B5、B8 |
 | N6 | 终端日志：右键开启到指定文件 | rfd、日志运行时开关 | M | R-099~R-106、E-010 |
 | N7 | 多窗口：标签移出成新窗口（状态保留） | N0、窗口管理器重构 | XL（探索性；首版仅菜单） | E-031、P-031~P-033 |
 | N8 | 标签批量关闭（Other/Left/Right/All） | N0 | S | E-018~E-022 |
@@ -655,12 +656,166 @@
 | D23 | 同步发送按键：不弹确认，仅状态栏提示 + 一键停止（偏离 `context-menu-design.md` E-052，需回写设计文档）；作用域=当前窗口；`Send to Current` = 取消同步 |
 | D24 | 实现默认：关闭标签或退出应用时强制停止日志并 flush；同一会话同一时刻只有一个 transcript 输出（手动日志优先，期间暂停自动日志）；IME 组合提交后才同步；不做同步临时暂停键。如有异议可改 |
 
+### 12.5 追加决策（2026-09-27 第二轮）
+
+| # | 决策 |
+|---|---|
+| D25 | 会话栏简化：删除 `RECENT` / `ACTIVE` 区块；删除标题栏 `+`、列表下方 `…` 按钮以及 48px 图标条里的 `+`；新建/管理动作全部走上下文菜单（节点菜单 + 空白区菜单，空白区至少含 New Session / New Folder / Refresh，其余契约项分批） |
+| D26 | 后端：View 菜单移除 Fake/Native SSH 切换项，状态栏不再显示当前后端与指示点；桌面启动**默认使用原生 SSH**；`YSHELL_SSH_BACKEND` 仅保留为测试/开发环境开关，不出现在 UI |
+| D27 | 将其他 agent 遗留项纳入本轮：状态栏文案 i18n（P1 安全+错误兜底 → P2 会话生命周期 → P3 SFTP/传输 → P4 终端与设置）、对话框 Esc/遮罩点击关闭、对比度自动检查脚本（`ui-winui3-design-language.md` §8/§9 与验收 #6）、`cargo fmt --all` 债单独一轮收敛。各遗留项约定与验收见 §14 |
+| D28 | 字体清晰度：调研（`yshell-font-clarity-findings.md`）确认 UI 文字 Thin 变量字体问题随 T0 解决；终端字形质量独立成 **N5a**（T0 后开工，含物理像素光栅/CJK 回退/真粗斜体/字体选择链路），**e2e 的 Xvfb 缩放固定为 1.0 并入 N5a**；N5 依赖 N5a |
+| D29 | 对比度：**修正浅色 `text-tertiary` token**（alpha `0x72→0x8B`，使浅色 57/57 通过），由 L3 owner 在 T0 释放 UI 后执行（L3b）；对比度脚本**只保留本地入口**，暂不接 CI |
+| D30 | 日志：**保留 `direction` 前缀**（N6 需要记录 input）；时间戳改**本地时区**（D0 统一引入 `time` crate，G0 随后切换，记 G0-tz） |
+| D31 | N5a-W0 选型：D0 引入 **`swash 0.2.10`（hint=true）** 替换 fontdue 光栅；保留额外的 BoldOblique 资产；CJK 子集（Noto Sans Mono CJK SC；一级约 995KiB / 全量约 1800KiB）方案在 CJK 阶段定点 |
+| D32 | 构建环境：仓库已迁至 WSL ext4 **`/root/yshell`**（Windows 经 `\\wsl.localhost\debian\root\yshell` 访问，旧 `D:\NewSpace\yshell` 留作备份不再使用）；所有构建统一共享 `CARGO_TARGET_DIR=/root/yshell-target`；脚本/任务书必须显式 `PATH="$HOME/.cargo/bin:$PATH"`（非登录 shell 会拿到 Debian rustc 1.85，不满足 MSRV 1.92）。收口任务 **E0**（`yshell-next-e0-build-env.md`）待分配 |
+
 ---
 
 ## 13. 下一步动作（文档侧）
 
 1. 按 D1 立 Slint 升级任务：`slint = "=1.18.1"`、MSRV 1.92、UI 回归清单 + 截图。
-2. 回写 `context-menu-design.md`：E-052（改为状态栏提示+一键停止）、E-054、终端 Logging 菜单项、SFTP 菜单项、标签菜单（含 Move to New Window）。
-3. 按 N0 起新迭代设计文档（`ui-redesign-iteration-4-*` 或独立 `next-*` 系列），先落地多标签模型与 `[ui]` 配置节。
-4. 在 `yshell-progress-tracker.md` 中登记 N0–N9 条目与本文决策。
+2. 回写 `context-menu-design.md`：E-052（改为状态栏提示+一键停止）、E-054、终端 Logging 菜单项、SFTP 菜单项、标签菜单（含 Move to New Window）、会话栏空白区菜单（§5.3 与 D25）。
+3. 按 N0 起新迭代设计文档（`ui-redesign-iteration-4-*` 或独立 `next-*` 系列），先落地多标签模型与 `[ui]` 配置节；S1/S2（§14.1/§14.2）可与 N0/N2 合流。
+4. 在 `yshell-progress-tracker.md` 中登记 N0–N9、S1/S2、L1–L4 条目与本文决策。
 5. 跟踪上游解锁条件：winit 0.31.0 正式发布 → Slint 跟进版本（届时启动 OS 拖放/真·拖出接入）。
+6. 确认 `ui-winui3-status-i18n-plan.md` 的最新位置（本会话开始时在 `docs/product/` 下、当前工作树未找到，可能被并行任务移动），核对后按 §14.3 排 P1。
+7. 为 §14.5 对比度脚本定实现载体（建议 `cargo xtask contrast` 或 `scripts/contrast-check.*`）。
+8. §14.6 fmt 收敛与并行 agent 冻结窗口协调后执行（避免与 `main_window.slint` 等单写者文件的大 diff 冲突）。
+
+---
+
+## 14. 追加需求与遗留项（2026-09-27 第二轮）
+
+### 14.1 S1 会话栏收敛
+
+- 目标：会话栏只承担"会话树"职责，不再有常驻按钮和最近/活动信息。
+- **删除**（`ui/main_window.slint`）：
+  - `SAVED` 之外的 `RECENT`、`ACTIVE` 两个区块（含其标题、最近会话文本、活动会话卡片）。
+  - 标题栏 `+`（`New session`）。
+  - 会话树下方 `…`（`Session actions`）按钮。
+  - 窄窗口 48px 图标条中的 `+`。
+- **新增空白区右键菜单**（`context-menu-design.md` §5.3）：
+  - 首版必做：`New Session`、`New Folder`（在根/当前文件夹下创建）、`Refresh`。
+  - 后续分批（先 disabled + tooltip 说明原因）：`Import Config...`、`Expand All`、`Collapse All`。
+- 图标条模式：右键图标条弹出同一菜单的最小版（`New Session` / 展开会话栏）。
+- 其他入口保持：CommandBar `New Session`、File 菜单、Ctrl+N、终端标签条 `+`（N2 后进入快速连接页）。
+- 最近会话信息只在快速连接页（N2）出现。
+- 验收：
+  - 会话栏内不存在 `+` / `…` 图标按钮；
+  - 右键节点/空白区/图标条都能完成新建会话与新建文件夹；
+  - `context-menu-design.md` §5 与本项同步更新。
+
+### 14.2 S2 后端 UI 与默认值
+
+- 现状：View 菜单有 `Fake Backend` / `Native SSH Backend` 两项切换；状态栏有后端色点与 `Backend: {0}` 文案；桌面启动默认 fake（`prepare_desktop_startup_projection` → `TransportBackend::Fake`）。
+- 变更：
+  - View 菜单删除两项后端切换（`view_menu_entries`）。
+  - 状态栏删除后端色点与 `Backend: ...` 文案；`transport_backend_text` 不再投影到 UI。
+  - 桌面启动默认 **native SSH**；仅 `YSHELL_SSH_BACKEND=fake`（或等价测试开关）时切到 fake，用于 e2e/离线测试。
+  - `AppRuntime::select_fake/native_ssh_transport_backend` 保留给测试与内部使用，但不再有 UI 入口。
+- 验收：
+  - 无环境变量启动即走真实 SSH（无 fake-shell 行为）；
+  - 菜单与状态栏无任何后端字样/指示；
+  - `YSHELL_SSH_BACKEND=fake` 仍可让 e2e 在无网络下跑通；
+  - 相关 UI/投影测试同步更新。
+
+### 14.3 L1 状态栏文案 i18n
+
+- 目标：状态栏（及同源状态提示）文案全部走 i18n，消灭"英文兜底"残留。
+- 方案：按已成文的 `ui-winui3-status-i18n-plan.md`（本会话开始时存在于 `docs/product/`，当前工作树未找到，实施前先确认最新版）执行四阶段：
+  - P1 安全 + 错误兜底
+  - P2 会话生命周期
+  - P3 SFTP/传输
+  - P4 终端与设置
+- 验收：每阶段可独立验收；`status_kind_text` 覆盖率达到方案目标；中英切换后状态栏无残留英文；未覆盖的 kind 仍允许英文兜底，但不再存在"应迁移而未迁移"的生产者。
+
+### 14.4 L2 对话框 Esc / 遮罩点击关闭
+
+- 目标：所有模态弹窗支持 `Esc` 取消；点击遮罩（scrim）等同取消（安全动作）；验收脚本无需反复重启进程。
+- 范围：`ConfirmDialog`、`HostKeyDialog`、`PasswordPromptDialog`、`SettingsDialog`、`SessionEditor`、`KnownHostsPage`、`AboutDialog`、Quit/Delete 确认、SFTP 各操作弹窗。
+- 规则：
+  - `Esc` / 遮罩点击 → 触发与 `Cancel` 按钮完全相同的取消路径（含清空敏感输入，如密码）。
+  - 危险确认弹窗（删除、Quit、host key 变更）同样允许取消，默认焦点保持在安全按钮（E-064）。
+  - 弹窗嵌套时 `Esc` 只关闭最上层；打开弹窗时全局快捷键让位（现有 `global-shortcuts-blocked` 逻辑）。
+- 验收：任一弹窗按 `Esc` 或点遮罩后回到原界面，焦点恢复（`restore_shortcut_focus_after_modal`）；密码弹窗取消后 `password_prompt_value_text` 清空；`context-menu-design.md`/交互契约同步记录。
+
+### 14.5 L3 对比度自动检查脚本
+
+- 来源：`ui-winui3-design-language.md` §8/§9 与 §11 验收 #6（正文 ≥4.5:1，大字号/图标 ≥3:1）。
+- 实现方向：脚本读取 `ui/theme.slint` 的 token（深/浅两套）与关键组合（text-primary/secondary/tertiary × window/layer/card 背景、accent 文字、状态色），按 WCAG 相对亮度公式计算并断言阈值；先提供本地一键入口，再接入 CI/`xtask`。
+- 验收：运行后可输出失败组合明细；修改主题 token 越界时脚本失败；载体在实施设计中确定（建议 `cargo xtask contrast` 或 `scripts/contrast-check.*`）。
+
+### 14.6 L4 fmt 债收敛
+
+- 现状：`cargo fmt --all --check` 有 180+ hunk（`runtime.rs` / `real.rs` 等历史文件）；`ui-redesign-remaining-work.md` E2 已登记。
+- 变更：单独一轮只做 `cargo fmt --all` 提交，不夹带功能改动；完成后 CI 恢复 fmt 门槛（`cargo xtask check`）。
+- 协调：与并行 agent 的单写者文件（`main_window.slint` 等）冻结窗口后再执行，避免大 diff 冲突；期间新代码保持 fmt 干净。
+- 验收：该提交为纯格式变更；后续 PR fmt 检查全绿。
+- 追加（2026-09-28）：`cargo xtask deny` **存量失败**需一并处理——15 条 slint 1.18 新许可（`GPL-3.0-only OR LicenseRef-Slint-*`、`BSL-1.0`、`Zlib`）+ 2 条公告（`anyhow 1.0.102`、`crossbeam-epoch 0.9.18`，后者与 E1 相关）；N4 依赖链零命中。归属 L4 冻结窗口。
+
+### 14.7 N5a 终端字形质量（由字体调研派生，待设计）
+
+- 来源：`yshell-font-clarity-findings.md`（2026-09-27，调研验收通过）。
+- 范围：
+  1. 按窗口 `scale-factor` 用**物理像素**光栅终端位图（替代 1x 光栅 + Slint 最近邻放大）；显示端避免再次缩放。
+  2. CJK 回退链（无 CJK 字形时按回退字体渲染，消除 `.notdef` 灰框与宽字符半角空白）。
+  3. 真粗体/斜体（加载 Bold/Italic 字面或明确降级策略）；字形缓存键纳入 bold/italic。
+  4. 光栅质量选型（fontdue 无 hinting 的替代：swash / 其他光栅栈 / 高分辨率降采样），以"1px 竖笔不再拆两列、≥90% 覆盖率墨点占比显著提升"为指标。
+  5. e2e 修复：`scripts/e2e/run-ui-ssh.sh` 固定 Xvfb 几何 / `WINIT_X11_SCALE_FACTOR=1`，避免 1.0833 缩放污染截图对比。
+- 依赖：T0 完成后开工；N5 依赖 N5a。
+- 验收基线（调研实测）：终端墨迹平均覆盖率 0.52、≥0.9 覆盖率占 24%；`printf '\u4f60\u597d'` 中文可读；`\033[1m` 粗体可见；scale=1.25/2.0 截图无 12/13px 交替。
+- 状态：**待我出设计**（T0 验收通过后）。
+
+---
+
+## 15. 任务台账（2026-09-27）
+
+| 任务 | 状态 | 唯一 owner（session） | 备注 |
+|---|---|---|---|
+| T0 Slint 升级 | **已完成（验收通过 2026-09-27）** | `ses_f1e83b6b0ffexQs70KHJUkHfz7` | lint 通过、371 测试全绿、dist 产物正常、e2e 双主题 34/34、UI 字重对比通过；技术债：main_window 18 条 binding-loop 告警、文本变宽导致个别标签提前省略 |
+| C0 配置地基 | 已完成（验收通过） | `ses_f1e2e0945ffeUVZtr6eYUOL4dm` | 37 测试全绿；含 C0-F 修复 app 编译（5 处） |
+| F0 SFTP 后端能力 | 已完成（验收通过） | `ses_f1e2e0944ffel7e5Y1NuZTilYK` | 26 测试全绿；含 F0-F 修复 `Paused` match |
+| A0 SSH 认证层 | 已完成（验收通过） | `ses_f1e2e0943ffeTkJm8rDXo29B59` | 53 单测 + 1 doctest 全绿 |
+| G0 日志核心 | 已完成（验收通过） | `ses_f1e2e0942ffeYUnsYWd8gyZVuJ` | 26 测试全绿；direction 保留、待 G0-tz 本地时间 |
+| L3 对比度脚本 | 已完成（验收通过） | `ses_f1e2e0941ffegKB8wn9EFBxH0O` | 12 测试全绿；发现浅色 tertiary，待 L3b 修正 |
+| N5a-W0 终端字形（renderer） | 已完成（验收通过） | `ses_f1e2e0941ffdGGtVQywUnI1xNF` | 63 测试全绿；e2e 缩放修复完成；UI 接线/CJK/swash 待 T0/D0 |
+| 字体清晰度调研 | 已完成（验收通过） | `ses_f1e7a6c1affeKoKAwnx8E14YGK` | 报告：`yshell-font-clarity-findings.md` |
+| E0 构建环境收口 | 已完成（验收通过 2026-09-27） | `ses_f1d93f6edffeGRq2efIbzcNL2e` | `wsl-env.sh` + README/scripts 路径规范；业务面旧路径零命中；`yt-*` 清理为空操作（已不存在） |
+| D0 依赖入库（time/swash） | 已完成（验收通过 2026-09-27，含 D0-F） | `ses_f1d93f6ecffeEZBXqe7SQyaM1s` | `time` 下限 `0.3.47`（RUSTSEC-2026-0009）、`swash 0.2.10`；lock 无净变化（未被引用）；`rfd` 选型并入 N1 |
+| L3b 浅色 tertiary 修正 | 已完成（验收通过 2026-09-27） | `ses_f1e2e0941ffegKB8wn9EFBxH0O` | contrast 114/114；浅色 tertiary 4.53–4.67:1；含截图与像素证据 |
+| S1+S2 会话栏 / 后端默认 native | **已完成（验收通过 2026-09-27）** | `ses_f1d93f6ebffeCS60SiWKijpoX6` | lint 通过、373 测试全绿、e2e 34/34、10 张截图；`Session actions/RECENT/Backend/Fake Backend` 静态零命中 |
+| R1 main_window 拆分 | **已完成（验收通过 2026-09-27）** | `ses_f1d6684ebffemBTJ0xVHtw8n9x` | 2376→1423 行 + 新增 7 文件；373 测试、e2e 34/34×2、非终端区域像素 AE=0；死组件 5 个已删；告警 18→21 转 N3 |
+| N0+N8 多标签 / 批量关闭 | **已完成（验收通过 2026-09-27）** | `ses_f1d23e1f8ffexVR71k4oVIk3ML` | 392 测试、e2e 34/34×2 + 标签 25/25×2；含 `real.rs::write_input` 非阻塞修复；10 标签性能抽查 ~28% 单核 / 90MB |
+| G0-tz 日志本地时间 | **已完成（验收通过 2026-09-27）** | `ses_f1e2e0942ffeYUnsYWd8gyZVuJ` | 28 测试；`time 0.3.55`（≥0.3.47）；本地时间 + UTC 回退 |
+| N5a-B 终端字形（swash + CJK） | **已完成（验收通过 2026-09-27）** | `ses_f1e2e0941ffdGGtVQywUnI1xNF` | 70 测试；ge90 25.9%→55.7%、`|` 单列、CJK 1.8MB 子集（OFL）+ 可复现脚本；fontdue 已剪除 |
+| N5a-UI 渲染接线（scale/1:1） | **已完成（验收通过 2026-09-28）** | `ses_f1e2e0941ffdGGtVQywUnI1xNF` | 1.0/1.25/2.0 逐字节与渲染器一致、字距漂移 0px、选区坐标精确；终端不再模糊 |
+| L2 对话框 Esc/遮罩关闭 | **已完成（验收通过 2026-09-27）** | `ses_f1cc28cd2ffeG6JskdbR1EDRgM` | 394 测试；dialogs e2e 74/74×2；Settings→KnownHosts 改为嵌套；敏感词清理沿用现有 Close 语义（后续安全项） |
+| R2 runtime 模块化 | **已完成（验收通过 2026-09-28）** | `ses_f1c92bbdfffeE6a15zYTD5t9Gr` | 509 项纯搬迁校验 OK；394 测试、e2e 34/34×2；15 域模块 + tests/12 |
+| rfd 选型 spike + D0b 入库 | 已完成（验收通过 2026-09-27） | `ses_f1c92bbdeffegDnzc4VnBz5c3e` | 报告：`yshell-next-rfd-spike-report.md`；`rfd 0.17.2` 工作区依赖（GTK3 透传，未接线；lock 零变化） |
+| ssh-key 入库（D0c） | 已完成（验收通过 2026-09-28） | `ses_f1d93f6ecffeEZBXqe7SQyaM1s` | `ssh-key 0.6.7` 最小特性集（std/encryption/ecdsa）实测定版；lock 零变化；`RUSTSEC-2023-0071` 首次消费时 `deny.toml` ignore |
+| N2 快速连接页 | **已完成（验收通过 2026-09-28）** | `ses_f1c601f0bffeH3DdW5WMfU1oaD` | 快速连接/历史/快速链接/`+` 行为/Ctrl+O；clippy、189+3 测试、tabs e2e 25/25、12 张截图；QC 页兼作空态页 |
+| N4 密钥/认证 | **已完成（验收通过 2026-09-28）** | `ses_f1b935b62ffeBkZspWMmVYt8Oa`（接管） | 认证弹窗三态/私钥导入测试部署/主机密钥页；rfd 配套（CI/deb/rpm/deny 注释）；491 测试全绿、e2e 74/74（冻结二进制 `17148e36…`）；遗留：真实服务端 kbd 多 prompt 桥（fake 已满足） |
+| N6 日志 UI | **已完成（验收通过 2026-09-28）** | `ses_f1c3ad8b1ffe3jqB4ZmYkr0tpr` | 右键菜单/REC/状态栏/弹窗/关闭退出 flush/rfd 目录；497 测试、e2e 74/74（冻结 `c25b1ede…`）；遗留：R-107 与大小上限待办 |
+| N3 面板停靠 | **Phase 1 已完成（随批验收）；Phase 2 排队（N1 后）** | `ses_f1bb42d9dffeOCLRk3ezBjFXUH` | 13 单测；`panels.rs` 模型/断点纯函数 + `panel_frame` 组件 |
+| N1 SFTP | **Phase 2 接线执行中（shared-file 持有者）** | `ses_f1bb42d9cffe1c1dXC0c6rcTjR` | `sftp_panel` 重写 + 双栏 + 拖动 + rfd + 队列抽屉；完成后 N3 接棒 |
+| N5 终端主题 | **Phase 1 已完成（随批验收）；Phase 2 排队（N3 后）** | `ses_f1bb42d9bffeFL2GiTHEfPOuAs` | `palette.rs` + `apply_appearance` + 8 套配色 + `folder_editor` 三态页；83 测试、像素证据 |
+| N9 / N7 | 待 N1/N3/N5 让出共享文件 | 待分配 | — |
+| L1 / L4 | L1 待方案文档定位；L4 fmt 等待独占冻结窗口 | — | — |
+
+---
+
+## 16. 并行计划（2026-09-28 更新）
+
+规则：**接线段同一时刻只有 1 个 shared-file 持有者**；其它任务做"模块段/组件段"并行；模块落位见 `yshell-next-r2-runtime-split.md` §5；总方针见 `yshell-next-parallel-execution-plan.md`。
+
+| 状态 | 并行线 | 内容 |
+|---|---|---|
+| 执行中 | **N2 Phase 2（接线段）** | 快速连接页接线（`tabs/sessions/menus/projection` + `main_window/command_bar/bootstrap` + 翻译） |
+| 执行中 | **N4 模块段** | `auth.rs`/`connection.rs` + 密钥页/认证弹窗 + ssh-key 单测 |
+| 执行中 | **N6 模块段** | `logging.rs` + `logging_dialog` + 单测 |
+| 排队 | N3 / N5 / N1 / N9 / N7 | 接线段让出后依次进入；N3 顺带清理 21 条 binding-loop 告警 |
+| 排队 | L1 / L4 | L1 待 `ui-winui3-status-i18n-plan.md` 定位；L4（fmt）需独占冻结窗口 |
+| 已完成 | T0/W0/W1/W2 全部 + N0+N8 + R1/R2 | 见 §15 台账 |
+| 跟踪 | winit 0.31 正式版 | OS 拖放 / 真·拖出解锁后插入 N1/N7 |
+
+> 旧版 W0–W4 波次表已由本表取代。

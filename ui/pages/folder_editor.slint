@@ -1,0 +1,566 @@
+import { Theme } from "../theme.slint";
+import { Icon } from "../components/basic/icons.slint";
+import { WinButton, WinIconButton, WinToggle } from "../components/basic/controls.slint";
+import { WinTextInput } from "../components/basic/text_input.slint";
+
+// Folder Editor（最小版）：文件夹级 Appearance / Terminal / Logging 默认值。
+//
+// 设计：docs/product/yshell-next-n5-terminal-theme.md §3（P-014~P-016）。
+//   * 每个字段三态：继承（清除本层覆盖，显示 resolved 值与来源）/ 显式（本层覆盖值）/
+//     Reset（清除覆盖，回到继承路径）。
+//   * 本页纯展示 + 回调：不读写配置、不解析继承；值、来源与状态全部由运行时写入
+//     （Rust 侧组装 `TriStateField` 列表），控件只上报 key 与动作。
+//   * 「生效时机」由运行时保证：改动只影响之后新开的终端（D17）。
+
+// 字段三态数据。`key` 是稳定的配置键（如 "appearance.foreground"），回调按 key
+// 上报，运行时据此写回对应层级。
+export struct TriStateField {
+    /// 稳定配置键："appearance.color_scheme" / "terminal.scrollback_lines" / …
+    key: string,
+    /// 行标签。
+    label: string,
+    /// 行下方的补充说明（可空）。
+    hint: string,
+    /// 编辑器类型："text" | "number" | "hex" | "toggle" | "choice"。
+    kind: string,
+    /// 三态："inherit"（无本层覆盖）| "explicit"（本层显式值）。
+    state: string,
+    /// 显式值；继承态下由运行时写入 resolved 值用于展示。
+    value: string,
+    /// 来源提示，如 "From folder: prod" / "Global" / "Built-in default"。
+    source: string,
+    /// choice 类型的候选项（空 = 无候选项，退化为文本输入）。
+    options: [string],
+    /// choice 类型的当前选中索引。
+    selected: int,
+    /// 可选的色块预览（方案/颜色行），空 = 不显示。
+    swatches: [color],
+}
+
+// 分段按钮：三态控件的一段。
+component SegmentButton inherits Rectangle {
+    in property <string> label: "";
+    in property <bool> active: false;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    width: 56px;
+    height: 100%;
+    background: !root.enabled ? Theme.control-fill-disabled
+        : active ? Theme.accent
+        : touch.pressed ? Theme.control-fill-pressed
+        : touch.has-hover ? Theme.control-fill-hover
+        : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    Text {
+        text: root.label;
+        color: !root.enabled ? Theme.text-disabled : root.active ? Theme.accent-text : Theme.text-secondary;
+        font-size: Theme.font-caption;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+/// 字段三态控件：Inherit / Explicit / Reset（P-014~P-016）。
+///
+/// `state == "inherit"` 时 Reset 禁用（已经没有本层覆盖可清除）；点击 Reset 与点击
+/// Inherit 走同一去向（清除覆盖），但语义不同：Inherit 表达「不使用本层值」，
+/// Reset 表达「撤销刚才写的值」，运行时可以据此给出不同的状态文案。
+export component TriStateControl inherits Rectangle {
+    in property <string> state: "inherit";
+    in property <bool> reset-enabled: state == "explicit";
+    callback set-inherit();
+    callback set-explicit();
+    callback reset();
+
+    height: 24px;
+    width: 168px;
+    border-radius: Theme.radius-control;
+    border-width: 1px;
+    border-color: Theme.control-stroke;
+    clip: true;
+    background: Theme.control-fill;
+
+    HorizontalLayout {
+        spacing: 0px;
+
+        SegmentButton {
+            label: @tr("Inherit");
+            active: root.state == "inherit";
+            clicked => { root.set-inherit(); }
+        }
+
+        Rectangle { width: 1px; background: Theme.control-stroke; }
+
+        SegmentButton {
+            label: @tr("Explicit");
+            active: root.state == "explicit";
+            clicked => { root.set-explicit(); }
+        }
+
+        Rectangle { width: 1px; background: Theme.control-stroke; }
+
+        SegmentButton {
+            label: @tr("Reset");
+            enabled: root.reset-enabled;
+            clicked => { root.reset(); }
+        }
+    }
+}
+
+// 色块预览：方案行的 4–8 个角色色。
+component SwatchStrip inherits Rectangle {
+    in property <[color]> swatches: [];
+    visible: root.swatches.length > 0;
+    width: content.preferred-width;
+    height: Theme.control-height;
+    background: transparent;
+
+    content := HorizontalLayout {
+        spacing: 4px;
+        alignment: center;
+
+        for swatch in root.swatches : Rectangle {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
+            background: swatch;
+        }
+    }
+}
+
+// 一行字段：标签/说明 + 值区 + 三态控件。
+component FieldRow inherits Rectangle {
+    in property <TriStateField> data;
+    callback set-inherit();
+    callback set-explicit();
+    callback reset();
+    callback edited(string);
+    callback toggled();
+    callback selected(int);
+
+    height: max(44px, body.preferred-height);
+    background: transparent;
+
+    body := HorizontalLayout {
+        spacing: Theme.spacing-12;
+
+        // 标签 + 说明
+        VerticalLayout {
+            width: 190px;
+            spacing: 2px;
+            alignment: center;
+
+            Text {
+                text: root.data.label;
+                color: Theme.text-secondary;
+                font-size: Theme.font-body;
+                wrap: no-wrap;
+                overflow: elide;
+            }
+
+            Text {
+                visible: root.data.hint != "";
+                text: root.data.hint;
+                color: Theme.text-tertiary;
+                font-size: Theme.font-caption;
+                wrap: no-wrap;
+                overflow: elide;
+            }
+        }
+
+        // 值区：继承 → resolved 值 + 来源；显式 → 编辑控件；右侧可选色块预览
+        Rectangle {
+            horizontal-stretch: 1;
+            background: transparent;
+
+            HorizontalLayout {
+                spacing: Theme.spacing-8;
+
+                Rectangle {
+                    horizontal-stretch: 1;
+                    background: transparent;
+
+                    if root.data.state == "inherit" : VerticalLayout {
+                        spacing: 2px;
+                        alignment: center;
+
+                        Text {
+                            text: root.data.value == "" ? @tr("(not set)") : root.data.value;
+                            color: Theme.text-primary;
+                            font-size: Theme.font-body;
+                            wrap: no-wrap;
+                            overflow: elide;
+                        }
+
+                        Text {
+                            text: root.data.source;
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            wrap: no-wrap;
+                            overflow: elide;
+                        }
+                    }
+
+                    if root.data.state == "explicit" : HorizontalLayout {
+                        spacing: Theme.spacing-8;
+
+                        if root.data.kind == "toggle" : WinToggle {
+                            text: root.data.value == "on" ? @tr("Enabled") : @tr("Disabled");
+                            checked: root.data.value == "on";
+                            toggled => { root.toggled(); }
+                        }
+
+                        if root.data.kind == "choice" && root.data.options.length > 0 : HorizontalLayout {
+                            spacing: Theme.spacing-4;
+                            alignment: start;
+
+                            WinIconButton {
+                                icon: "chevron-left";
+                                accessible-name: @tr("Previous option");
+                                enabled: root.data.selected > 0;
+                                clicked => { root.selected(root.data.selected - 1); }
+                            }
+
+                            Rectangle {
+                                width: 168px;
+                                height: Theme.control-height;
+                                border-radius: Theme.radius-control;
+                                border-width: 1px;
+                                border-color: Theme.control-stroke;
+                                background: Theme.control-fill;
+
+                                Text {
+                                    text: root.data.value;
+                                    color: Theme.text-primary;
+                                    font-size: Theme.font-body;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                    wrap: no-wrap;
+                                    overflow: elide;
+                                }
+                            }
+
+                            WinIconButton {
+                                icon: "chevron-right";
+                                accessible-name: @tr("Next option");
+                                enabled: root.data.selected < root.data.options.length - 1;
+                                clicked => { root.selected(root.data.selected + 1); }
+                            }
+                        }
+
+                        if (root.data.kind == "text" || root.data.kind == "number" || root.data.kind == "hex"
+                            || (root.data.kind == "choice" && root.data.options.length == 0)) : WinTextInput {
+                            horizontal-stretch: 1;
+                            text: root.data.value;
+                            font-family: root.data.kind == "hex" ? Theme.font-mono : Theme.font-ui;
+                            edited => { root.edited(self.text); }
+                        }
+                    }
+                }
+
+                SwatchStrip {
+                    swatches: root.data.swatches;
+                }
+            }
+        }
+
+        TriStateControl {
+            state: root.data.state;
+            set-inherit => { root.set-inherit(); }
+            set-explicit => { root.set-explicit(); }
+            reset => { root.reset(); }
+        }
+    }
+}
+
+// 小节：标题 + 说明 + 字段列表
+component Section inherits Rectangle {
+    in property <string> heading: "";
+    in property <string> hint: "";
+    in property <[TriStateField]> fields: [];
+    callback field-set-inherit(string);
+    callback field-set-explicit(string);
+    callback field-reset(string);
+    callback field-edited(string, string);
+    callback field-toggled(string);
+    callback field-selected(string, int);
+
+    height: content.preferred-height;
+    background: transparent;
+
+    content := VerticalLayout {
+        spacing: Theme.spacing-8;
+        alignment: start;
+
+        Text {
+            text: root.heading;
+            color: Theme.text-primary;
+            font-size: Theme.font-body-large;
+            font-weight: Theme.weight-semibold;
+        }
+
+        Text {
+            visible: root.hint != "";
+            text: root.hint;
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            wrap: word-wrap;
+        }
+
+        for entry[index] in root.fields : FieldRow {
+            data: entry;
+            set-inherit => { root.field-set-inherit(entry.key); }
+            set-explicit => { root.field-set-explicit(entry.key); }
+            reset => { root.field-reset(entry.key); }
+            edited(text) => { root.field-edited(entry.key, text); }
+            toggled => { root.field-toggled(entry.key); }
+            selected(option-index) => { root.field-selected(entry.key, option-index); }
+        }
+    }
+}
+
+// 文件夹默认值编辑页：文件夹右键 → "Edit Folder Defaults…"（N5 §3）。
+export component FolderEditor inherits Rectangle {
+    in property <bool> open: false;
+    in property <string> folder-name: "";
+    in property <string> folder-path: "";
+    in property <string> summary-text: "";
+    in property <string> status-text: "";
+    in property <[TriStateField]> appearance-fields: [];
+    in property <[TriStateField]> terminal-fields: [];
+    in property <[TriStateField]> logging-fields: [];
+
+    callback close();
+    callback save();
+    callback reset-all();
+    callback field-set-inherit(string);
+    callback field-set-explicit(string);
+    callback field-reset(string);
+    callback field-edited(string, string);
+    callback field-toggled(string);
+    callback field-selected(string, int);
+
+    // 内容理想高度：标题行 + 说明 + 三块 + 操作区 + 间距/分割线/内边距
+    private property <length> panel-height:
+        header-row.preferred-height
+        + summary.preferred-height
+        + sections.preferred-height
+        + action-row.preferred-height
+        + 5 * Theme.spacing-12
+        + 2 * 1px
+        + 2 * Theme.spacing-20;
+
+    visible: self.open;
+    background: Theme.scrim;
+
+    // Esc / 遮罩点击关闭；焦点在弹窗内（与 Settings / Session Editor 的 L2 行为一致）。
+    dialog-scope := FocusScope {
+        width: parent.width;
+        height: parent.height;
+
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.close();
+                return accept;
+            }
+            return reject;
+        }
+
+        TouchArea {
+            clicked => { root.close(); }
+        }
+
+        panel := Rectangle {
+            x: (parent.width - 820px) / 2;
+            y: max((parent.height - self.height) / 2, Theme.spacing-24);
+            width: 820px;
+            height: min(root.panel-height, parent.height - 2 * Theme.spacing-24);
+            background: Theme.panel-background;
+            border-radius: Theme.radius-panel;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
+
+            // 吞掉面板空白处的点击。
+            TouchArea { }
+
+            panel-body := VerticalLayout {
+                padding: Theme.spacing-20;
+                spacing: Theme.spacing-12;
+
+                // --- 标题行 ---------------------------------------------------
+                header-row := HorizontalLayout {
+                    spacing: Theme.spacing-12;
+
+                    Rectangle {
+                        width: Theme.icon-size + 2 * Theme.spacing-8;
+                        height: self.width;
+                        border-radius: Theme.radius-control;
+                        background: Theme.accent-soft;
+
+                        Icon {
+                            name: "folder";
+                            icon-color: Theme.accent;
+                            icon-size: Theme.icon-size;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        spacing: 2px;
+                        alignment: start;
+
+                        Text {
+                            text: root.folder-name == "" ? @tr("Folder Defaults") : @tr("Folder Defaults — {0}", root.folder-name);
+                            color: Theme.text-primary;
+                            font-size: Theme.font-subtitle;
+                            font-weight: Theme.weight-semibold;
+                            wrap: no-wrap;
+                            overflow: elide;
+                        }
+
+                        Text {
+                            text: root.folder-path;
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            wrap: no-wrap;
+                            overflow: elide;
+                        }
+                    }
+
+                    WinIconButton {
+                        icon: "close";
+                        accessible-name: @tr("Close");
+                        clicked => { root.close(); }
+                    }
+                }
+
+                Rectangle { height: 1px; background: Theme.layer-stroke; }
+
+                summary := Text {
+                    visible: root.summary-text != "";
+                    text: root.summary-text;
+                    color: Theme.text-secondary;
+                    font-size: Theme.font-caption;
+                    wrap: word-wrap;
+                }
+
+                // --- 主体（三块，超出高度时滚动） ------------------------------
+                Rectangle {
+                    vertical-stretch: 1;
+                    clip: true;
+                    background: transparent;
+
+                    scroll := Flickable {
+                        width: parent.width;
+                        height: parent.height;
+                        interactive: true;
+                        content-width: self.width;
+                        content-height: sections.preferred-height;
+
+                        sections := VerticalLayout {
+                            alignment: start;
+                            spacing: Theme.spacing-16;
+
+                            Section {
+                                heading: @tr("Appearance");
+                                hint: @tr("Colors and font for new terminals opened in this folder and its subfolders.");
+                                fields: root.appearance-fields;
+                                field-set-inherit(key) => { root.field-set-inherit(key); }
+                                field-set-explicit(key) => { root.field-set-explicit(key); }
+                                field-reset(key) => { root.field-reset(key); }
+                                field-edited(key, text) => { root.field-edited(key, text); }
+                                field-toggled(key) => { root.field-toggled(key); }
+                                field-selected(key, index) => { root.field-selected(key, index); }
+                            }
+
+                            Section {
+                                heading: @tr("Terminal");
+                                hint: @tr("Scrollback limits applied when a terminal is created for this folder.");
+                                fields: root.terminal-fields;
+                                field-set-inherit(key) => { root.field-set-inherit(key); }
+                                field-set-explicit(key) => { root.field-set-explicit(key); }
+                                field-reset(key) => { root.field-reset(key); }
+                                field-edited(key, text) => { root.field-edited(key, text); }
+                                field-toggled(key) => { root.field-toggled(key); }
+                                field-selected(key, index) => { root.field-selected(key, index); }
+                            }
+
+                            Section {
+                                heading: @tr("Logging");
+                                hint: @tr("Session logging defaults for this folder.");
+                                fields: root.logging-fields;
+                                field-set-inherit(key) => { root.field-set-inherit(key); }
+                                field-set-explicit(key) => { root.field-set-explicit(key); }
+                                field-reset(key) => { root.field-reset(key); }
+                                field-edited(key, text) => { root.field-edited(key, text); }
+                                field-toggled(key) => { root.field-toggled(key); }
+                                field-selected(key, index) => { root.field-selected(key, index); }
+                            }
+                        }
+                    }
+
+                    // 简易滚动指示（Flickable 无内建滚动条）。
+                    Rectangle {
+                        visible: sections.preferred-height > scroll.height;
+                        width: 4px;
+                        height: max(24px, scroll.height * (scroll.height / max(1px, sections.preferred-height)));
+                        x: scroll.width - self.width - 2px;
+                        y: -scroll.content-y * ((scroll.height - self.height) / max(1px, sections.preferred-height - scroll.height));
+                        border-radius: 2px;
+                        background: Theme.text-tertiary;
+                    }
+                }
+
+                Rectangle { height: 1px; background: Theme.divider; }
+
+                // --- 操作区 ---------------------------------------------------
+                action-row := HorizontalLayout {
+                    spacing: Theme.spacing-8;
+
+                    Text {
+                        text: root.status-text;
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    WinButton {
+                        text: @tr("Reset All");
+                        clicked => { root.reset-all(); }
+                    }
+
+                    WinButton {
+                        text: @tr("Save");
+                        accent: true;
+                        clicked => { root.save(); }
+                    }
+                }
+            }
+        }
+    }
+
+    // 打开时聚焦弹窗（Esc 需要焦点在弹窗内）。
+    public function focus-dialog() {
+        dialog-scope.focus();
+    }
+
+    changed open => {
+        if (root.open) {
+            dialog-scope.focus();
+        }
+    }
+}
