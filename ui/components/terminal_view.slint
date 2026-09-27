@@ -1,13 +1,339 @@
-export component TerminalView inherits Rectangle {
-    in property <string> log-output: "YShell terminal placeholder";
+import { Theme } from "../theme.slint";
+import { WinButton, WinIconButton } from "basic/controls.slint";
+import { WinTextInput } from "basic/text_input.slint";
 
-    background: #0f1117;
-    Text {
-        text: root.log-output;
-        color: #d7e0ef;
-        x: 16px;
-        y: 16px;
-        width: parent.width - 32px;
-        wrap: word-wrap;
+// 终端滚动条数据通道（§5.17）：Rust 投影写入总行数/视口行数，滚动条把
+// 点击/拖拽换算成"距顶部行号"后回调（bootstrap 里绑定到 runtime）。
+// 声明在本文件而不是 main_window.slint：终端视图自身就能读写，
+// 宿主（main_window.slint）无需再转发一层；如需窗口级属性，可把
+// TerminalView 的 scrollback-lines / viewport-rows 覆盖绑定即可。
+export global TerminalScrollInfo {
+    in-out property <int> scrollback-lines: 0;
+    in-out property <int> viewport-rows: 0;
+    callback scroll-to-line(int);
+}
+
+// 终端表面（§5.17）：8px 圆角 + 1px 描边（聚焦 accent）+ 内边距 12。
+// 表面内不再有标题条与底栏；滚动/选择反馈改为覆盖在表面右上角的小浮层。
+export component TerminalView inherits Rectangle {
+    // title / log-output / visible-lines / search-summary / footer-status 的默认值每次启动都由
+    // Rust 投影覆盖、永不显示（W4 迁移清单 A），故不标 @tr。
+    in property <string> title: "YShell terminal";
+    in property <string> log-output: "YShell terminal placeholder";
+    in property <[string]> visible-lines: ["YShell terminal placeholder"];
+    in property <image> terminal-image;
+    in property <int> cursor-column: 0;
+    in property <int> cursor-row: 0;
+    in property <int> scroll-offset: 0;
+    // 滚动条数据：默认取全局投影（TerminalScrollInfo），宿主可覆盖绑定。
+    in property <int> scrollback-lines: TerminalScrollInfo.scrollback-lines;
+    in property <int> viewport-rows: TerminalScrollInfo.viewport-rows;
+    in property <bool> selection-active: false;
+    in-out property <string> search-query: "";
+    in property <string> search-summary: "Find in terminal";
+    // 状态已由窗口状态栏承载，这里只保留属性（不再渲染底栏）
+    in property <string> footer-status: "Ready";
+    in property <bool> find-visible: false;
+    out property <bool> terminal-focused: terminal_focus.has-focus;
+    out property <float> terminal-viewport-width-px: terminal_surface.width / 1px - 24;
+    out property <float> terminal-viewport-height-px: terminal_surface.height / 1px - 24;
+
+    callback key-pressed(string, bool, bool, bool, bool);
+    callback scroll-lines(int);
+    callback scroll-to-bottom();
+    callback selection-begin(float, float);
+    callback selection-update(float, float);
+    callback selection-end(float, float);
+    callback select-word-at(float, float);
+    callback copy-visible();
+    callback paste-clipboard();
+    callback clear-terminal();
+    callback find-text(string);
+    callback find-next();
+    callback find-prev();
+    callback dismiss-find();
+    callback context-menu-requested(length, length);
+
+    // --- 滚动条几何（§5.17）：4px 细条、覆盖式，不影响终端内容宽度 -------------
+    // 可回翻行数 = 总行数 - 视口行数；只有 >0 时才显示滚动条。
+    property <int> scroll-max-offset: Math.max(root.scrollback-lines - root.viewport-rows, 0);
+    property <bool> scrollbar-visible: root.scroll-max-offset > 0;
+    // 滑块长度比例 = 视口行数 / 总行数。
+    property <float> scroll-thumb-ratio: root.scrollback-lines > 0 ? root.viewport-rows * 1.0 / root.scrollback-lines : 1.0;
+    // 0 = 贴底（live 视图），1 = 贴顶（最旧一行）。
+    property <float> scroll-fraction: root.scroll-max-offset > 0 ? root.scroll-offset * 1.0 / root.scroll-max-offset : 0.0;
+    // 轨道 y（相对轨道顶部）→ 距顶部行号：0 = 最旧一行，scroll-max-offset = live 底部。
+    // Rust 侧把行号换算成 scroll offset，并把越界值 clamp 到可达范围。
+    pure function scroll-line-at-y(y: float, travel-px: float) -> int {
+        if (travel-px <= 0 || root.scroll-max-offset <= 0) { return 0; }
+        return Math.min(
+            root.scroll-max-offset,
+            Math.max(0, Math.round(root.scroll-max-offset * (y / travel-px)))
+        );
+    }
+
+    // 根容器只做布局承载（§5.17 的唯一视觉容器是 terminal_surface）：
+    // 这里保持透明、无边框，避免和 terminal_surface 形成两层圆角描边；
+    // 聚焦态只在 terminal_surface 的描边上体现（terminal-focused 由它读取）。
+    background: transparent;
+
+    VerticalLayout {
+        padding: Theme.spacing-12;
+        spacing: Theme.spacing-8;
+
+        terminal_surface := Rectangle {
+            background: Theme.terminal-surface;
+            border-color: root.terminal-focused ? Theme.accent : Theme.terminal-border;
+            border-width: 1px;
+            border-radius: Theme.radius-panel;
+            // 可收缩下限：窗口 880×600 时终端区仍能放下（含查找栏），不把状态栏挤出可视区。
+            min-height: 320px;
+            clip: true;
+
+            // 表面内边距 12px（§5.17）
+            terminal_focus := FocusScope {
+                x: Theme.spacing-12;
+                y: Theme.spacing-12;
+                width: parent.width - 24px;
+                height: parent.height - 24px;
+
+                key-pressed(event) => {
+                    root.key-pressed(
+                        event.text,
+                        event.modifiers.control,
+                        event.modifiers.alt,
+                        event.modifiers.shift,
+                        event.modifiers.meta
+                    );
+                    return accept;
+                }
+
+                terminal_image := Image {
+                    source: root.terminal-image;
+                    image-fit: fill;
+                    // 图像由 Rust 按视口尺寸渲染；显式跟随表面尺寸，避免窗口尺寸变化时
+                    // 位图保持旧宽度、超出表面被裁切（内容"溢出"观感）。
+                    width: parent.width;
+                    height: parent.height;
+                }
+
+                surface_touch := TouchArea {
+                    // 终端文本区可做选择：I 形光标（桌面控件规则里仅文本类使用）
+                    mouse-cursor: MouseCursor.text;
+                    pointer-event(event) => {
+                        if (event.button == PointerEventButton.left) {
+                            if (event.kind == PointerEventKind.down) {
+                                terminal_focus.focus();
+                                root.selection-begin(self.mouse-x / 1px, self.mouse-y / 1px);
+                            } else if (event.kind == PointerEventKind.move) {
+                                if (self.pressed) {
+                                    root.selection-update(self.mouse-x / 1px, self.mouse-y / 1px);
+                                }
+                            } else if (event.kind == PointerEventKind.up) {
+                                root.selection-end(self.mouse-x / 1px, self.mouse-y / 1px);
+                            }
+                        } else if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                            root.context-menu-requested(
+                                self.absolute-position.x + self.mouse-x,
+                                self.absolute-position.y + self.mouse-y
+                            );
+                        }
+                    }
+                    clicked => { terminal_focus.focus(); }
+                    double-clicked => {
+                        root.select-word-at(self.mouse-x / 1px, self.mouse-y / 1px);
+                    }
+                    scroll-event(event) => {
+                        if (event.delta-y != 0) {
+                            root.scroll-lines(event.delta-y > 0 ? 3 : -3);
+                            return accept;
+                        }
+                        reject
+                    }
+                }
+            }
+
+            // 滚动 / 选择反馈：右上角小浮层（半透明 chrome 底 + 4px 圆角），不占整行
+            if (root.scroll-offset > 0 || root.selection-active) : Rectangle {
+                x: parent.width - self.width - Theme.spacing-12;
+                y: Theme.spacing-12;
+                width: feedback_row.preferred-width;
+                height: feedback_row.preferred-height;
+                background: Theme.terminal-chrome-fill;
+                border-radius: Theme.radius-control;
+                border-width: 1px;
+                border-color: Theme.terminal-border;
+
+                feedback_row := HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 8px;
+                    padding-top: 4px;
+                    padding-bottom: 4px;
+                    spacing: 8px;
+                    alignment: center;
+
+                    if root.scroll-offset > 0 : Text {
+                        text: @tr("scrolled back {n} line" | "scrolled back {n} lines" % root.scroll-offset);
+                        color: Theme.caution;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        wrap: no-wrap;
+                    }
+
+                    if root.selection-active : Text {
+                        text: @tr("selection");
+                        color: Theme.accent;
+                        font-size: Theme.font-caption;
+                        font-weight: Theme.weight-semibold;
+                        vertical-alignment: center;
+                        wrap: no-wrap;
+                    }
+
+                    if root.scroll-offset > 0 : WinButton {
+                        text: @tr("Bottom");
+                        clicked => { root.scroll-to-bottom(); }
+                    }
+                }
+            }
+
+            // --- 滚动条（§5.17）：4px 细条 + 圆角，覆盖在表面右侧内缘，不占内容宽度 ---
+            // 仅当存在可回翻行时出现；常态 40% 不透明度，悬停（滑块或轨道）/拖拽中 60%。
+            if (root.scrollbar-visible) : Rectangle {
+                x: parent.width - self.width - Theme.spacing-4;
+                y: Theme.spacing-4;
+                width: Theme.spacing-4;
+                height: parent.height - 2 * Theme.spacing-4;
+                background: transparent;
+                clip: true;
+
+                // 滑块长度 = 视口行数 / 总行数 × 轨道高度，最小 24px 保证可抓取。
+                property <float> track-px: self.height / 1px;
+                property <float> thumb-px: Math.max(self.track-px * root.scroll-thumb-ratio, 24.0);
+                property <float> travel-px: Math.max(self.track-px - self.thumb-px, 0.0);
+
+                scroll_thumb := Rectangle {
+                    width: parent.width;
+                    height: parent.thumb-px * 1px;
+                    // scroll-fraction = 0 时贴底（live），= 1 时贴顶（最旧一行）
+                    y: (parent.travel-px * (1.0 - root.scroll-fraction)) * 1px;
+                    border-radius: self.width / 2;
+                    background: Theme.text-tertiary;
+                    opacity: scroll_bar_touch.dragging || scroll_bar_touch.has-hover ? 0.6 : 0.4;
+                    animate opacity { duration: Theme.duration-faster; easing: ease-out; }
+                }
+
+                // Slint 1.9 的 TouchArea 没有 pressed 回调，pointer-event 也没有返回值
+                //（无法 reject），拖拽状态自建：down 抓取滑块 → move 跟随鼠标 → up/cancel 释放。
+                scroll_bar_touch := TouchArea {
+                    property <bool> dragging: false;
+                    // 按下时抓取点在滑块内的偏移：拖拽期间保持不变，滑块不会跳变。
+                    property <length> drag-anchor: 0px;
+                    property <bool> over-thumb: self.has-hover
+                        && self.mouse-y >= scroll_thumb.y
+                        && self.mouse-y <= scroll_thumb.y + scroll_thumb.height;
+
+                    mouse-cursor: self.dragging || self.over-thumb ? MouseCursor.pointer : MouseCursor.default;
+
+                    // 条带上的滚轮与终端内容一致（3 行/格）：条带位于表面内边距上，
+                    // 若不接手就会成为"滚轮死区"。
+                    scroll-event(event) => {
+                        if (event.delta-y != 0) {
+                            root.scroll-lines(event.delta-y > 0 ? 3 : -3);
+                            return accept;
+                        }
+                        reject
+                    }
+
+                    pointer-event(event) => {
+                        // 注意：Slint 的 move 事件 button 是 `other`（不是 left），
+                        // 所以按 kind 分派、只有 down 才看 button。
+                        if (event.kind == PointerEventKind.down) {
+                            if (event.button == PointerEventButton.left) {
+                                // 点滚动条也把键盘焦点留在终端（与点终端内容一致）。
+                                terminal_focus.focus();
+                                if (self.over-thumb) {
+                                    self.dragging = true;
+                                    self.drag-anchor = self.mouse-y - scroll_thumb.y;
+                                } else {
+                                    // 点击轨道：滑块跳到点击位置对应的行。
+                                    TerminalScrollInfo.scroll-to-line(
+                                        root.scroll-line-at-y(self.mouse-y / 1px, parent.travel-px)
+                                    );
+                                }
+                            }
+                        } else if (event.kind == PointerEventKind.move) {
+                            if (self.dragging) {
+                                TerminalScrollInfo.scroll-to-line(
+                                    root.scroll-line-at-y(
+                                        (self.mouse-y - self.drag-anchor) / 1px,
+                                        parent.travel-px
+                                    )
+                                );
+                            }
+                        } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
+                            self.dragging = false;
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- 查找栏 ---------------------------------------------------------
+        if root.find-visible : Rectangle {
+            height: 40px;
+            background: Theme.terminal-chrome-fill;
+            border-radius: Theme.radius-control;
+            border-width: 1px;
+            border-color: Theme.terminal-border;
+
+            HorizontalLayout {
+                // 文本左 10；右侧以 32×32 关闭按钮收尾，右 4（图标视觉内缩 10，与左对齐）
+                // 纵向 4：让 32px 固定高度的按钮/输入框在 40px 条内垂直居中
+                padding-left: 10px;
+                padding-right: Theme.spacing-4;
+                padding-top: Theme.spacing-4;
+                padding-bottom: Theme.spacing-4;
+                spacing: Theme.spacing-8;
+
+                Text {
+                    text: @tr("Find");
+                    color: Theme.text-secondary;
+                    font-weight: Theme.weight-semibold;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                }
+
+                // 搜索框：WinTextInput 自带 control-fill 底 + control-stroke 描边 + 聚焦强调条
+                search_input := WinTextInput {
+                    horizontal-stretch: 1;
+                    min-width: 160px;
+                    text <=> root.search-query;
+                    placeholder-text: @tr("Search visible terminal text");
+                    accepted => { root.find-text(self.text); }
+                }
+
+                WinButton {
+                    text: @tr("Find");
+                    clicked => { root.find-text(search_input.text); }
+                }
+                WinButton { text: @tr("Prev"); clicked => { root.find-prev(); } }
+                WinButton { text: @tr("Next"); clicked => { root.find-next(); } }
+
+                Text {
+                    text: root.search-summary;
+                    color: Theme.text-tertiary;
+                    font-size: Theme.font-caption;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                    overflow: elide;
+                }
+
+                WinIconButton {
+                    icon: "close";
+                    accessible-name: @tr("Close find bar");
+                    clicked => { root.dismiss-find(); }
+                }
+            }
+        }
     }
 }

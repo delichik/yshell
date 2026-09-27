@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=YShell
+GenericName=SSH terminal
+Comment=SSH terminal and SFTP client
+Exec=yshell
+Icon=yshell
+Terminal=false
+Categories=Network;Utility;TerminalEmulator;
+Keywords=ssh;sftp;scp;terminal;
+StartupNotify=true
+StartupWMClass=yshell

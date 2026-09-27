@@ -20,7 +20,7 @@ pub use client::{
     ExecOutput, ShellAdapter, ShellClient, SshAdapter, SshClient, SshConnectionConfig,
     TransportBackend,
 };
-pub use error::{SshError, SshErrorKind, SshResult};
+pub use error::{HostKeyProblem, SshError, SshErrorKind, SshResult};
 pub use fake::{FakeShellSession, FakeSshAdapter, FakeSshSession};
 pub use forwarding::{ForwardingKind, TunnelConfig, TunnelState};
 pub use host_key::{HostKeyDecision, HostKeyFingerprint, HostKeyPolicy, KnownHosts};
@@ -28,5 +28,6 @@ pub use proxy::{ProxyConfig, ProxyState};
 pub use pty::{PtyConfig, PtySize};
 pub use real::{
     RealAuthStrategy, RealConnectionAttempt, RealConnectionPlan, RealConnectionSnapshot,
-    RealConnectionStage, RealShellSessionPlaceholder, RealSshAdapter,
+    RealConnectionStage, RealShellSessionPlaceholder, RealSshAdapter, RealTransportAction,
+    RealTransportActionOutcome, RealTransportActionRecord, RealTransportExecutionReport,
 };

@@ -60,7 +60,8 @@ impl TerminalParser {
             },
             TerminalInputEvent::Paste { bytes, .. } => self.advance(grid, bytes),
             TerminalInputEvent::Resize { columns, rows } => {
-                *grid = TerminalGrid::new(*columns, *rows)
+                let (line_limit, cell_limit) = grid.scrollback_limits();
+                *grid = TerminalGrid::with_limits(*columns, *rows, line_limit, cell_limit)
             }
             TerminalInputEvent::NavigationKey { .. }
             | TerminalInputEvent::FunctionKey { .. }
@@ -109,10 +110,8 @@ impl TerminalParser {
     fn apply_csi(&mut self, grid: &mut TerminalGrid, params: &str, final_byte: char) {
         match final_byte {
             'm' => self.apply_sgr(params),
-            'J' => {
-                if params.is_empty() || params == "0" || params == "2" || params == "3" {
-                    grid.clear_screen(&self.style);
-                }
+            'J' if params.is_empty() || params == "0" || params == "2" || params == "3" => {
+                grid.clear_screen(&self.style);
             }
             _ => {}
         }
@@ -179,7 +178,7 @@ mod tests {
 
         parser.advance(&mut grid, b"abcd\nef\rg\x08h\nijkl");
 
-        assert_eq!(grid.scrollback_rows().len(), 1);
+        assert_eq!(grid.scrollback_len(), 1);
         assert_eq!(grid.line_text(0), "hf");
         assert_eq!(grid.line_text(1), "ijkl");
     }

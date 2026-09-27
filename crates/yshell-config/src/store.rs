@@ -1,14 +1,18 @@
 //! TOML configuration persistence with damaged-file backup recovery.
 
 use std::{
+    collections::BTreeMap,
     fs, io,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use serde::{Deserialize, Serialize};
 use crate::schema::{ConfigDocument, ConfigSchemaError};
+use yshell_ssh::{HostKeyFingerprint, KnownHosts};
 
 const CONFIG_FILE_NAME: &str = "config.toml";
+const KNOWN_HOSTS_FILE_NAME: &str = "known_hosts.toml";
 
 /// File-backed configuration store rooted at the YShell config directory.
 #[derive(Debug, Clone)]
@@ -40,6 +44,11 @@ impl ConfigStore {
     #[must_use]
     pub fn config_file(&self) -> PathBuf {
         self.root.join(CONFIG_FILE_NAME)
+    }
+
+    #[must_use]
+    pub fn known_hosts_file(&self) -> PathBuf {
+        self.root.join(KNOWN_HOSTS_FILE_NAME)
     }
 
     /// Loads the document, creating a default file when missing.
@@ -82,6 +91,30 @@ impl ConfigStore {
         Ok(())
     }
 
+    pub fn load_known_hosts(&self) -> Result<KnownHosts, ConfigStoreError> {
+        fs::create_dir_all(&self.root)?;
+        let path = self.known_hosts_file();
+        if !path.exists() {
+            self.save_known_hosts(&KnownHosts::new())?;
+            return Ok(KnownHosts::new());
+        }
+        let input = fs::read_to_string(&path)?;
+        let document: KnownHostsDocument = toml::from_str(&input)
+            .map_err(|error| ConfigStoreError::KnownHostsSchema(error.to_string()))?;
+        Ok(document.into_known_hosts())
+    }
+
+    pub fn save_known_hosts(&self, known_hosts: &KnownHosts) -> Result<(), ConfigStoreError> {
+        fs::create_dir_all(&self.root)?;
+        let path = self.known_hosts_file();
+        let tmp_path = path.with_extension("toml.tmp");
+        let toml = toml::to_string_pretty(&KnownHostsDocument::from_known_hosts(known_hosts))
+            .map_err(ConfigStoreError::Serialize)?;
+        fs::write(&tmp_path, toml)?;
+        fs::rename(tmp_path, path)?;
+        Ok(())
+    }
+
     fn backup_and_reset(
         &self,
         path: PathBuf,
@@ -111,6 +144,7 @@ impl ConfigStore {
 pub enum ConfigStoreError {
     Io(io::Error),
     Schema(ConfigSchemaError),
+    KnownHostsSchema(String),
     Serialize(toml::ser::Error),
 }
 
@@ -119,6 +153,7 @@ impl std::fmt::Display for ConfigStoreError {
         match self {
             Self::Io(error) => write!(f, "configuration I/O error: {error}"),
             Self::Schema(error) => write!(f, "configuration schema error: {error}"),
+            Self::KnownHostsSchema(error) => write!(f, "known_hosts schema error: {error}"),
             Self::Serialize(error) => write!(f, "configuration serialization error: {error}"),
         }
     }
@@ -136,6 +171,55 @@ impl From<toml::ser::Error> for ConfigStoreError {
     fn from(value: toml::ser::Error) -> Self {
         Self::Serialize(value)
     }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+struct KnownHostsDocument {
+    #[serde(default)]
+    entries: BTreeMap<String, KnownHostFingerprintRecord>,
+}
+
+impl KnownHostsDocument {
+    fn from_known_hosts(known_hosts: &KnownHosts) -> Self {
+        Self {
+            entries: known_hosts
+                .snapshot()
+                .into_iter()
+                .map(|(key, value)| {
+                    (
+                        key,
+                        KnownHostFingerprintRecord {
+                            algorithm: value.algorithm,
+                            fingerprint: value.fingerprint,
+                        },
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    fn into_known_hosts(self) -> KnownHosts {
+        KnownHosts::from_snapshot(
+            self.entries
+                .into_iter()
+                .map(|(key, value)| {
+                    (
+                        key,
+                        HostKeyFingerprint {
+                            algorithm: value.algorithm,
+                            fingerprint: value.fingerprint,
+                        },
+                    )
+                })
+                .collect(),
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct KnownHostFingerprintRecord {
+    algorithm: String,
+    fingerprint: String,
 }
 
 #[cfg(test)]
@@ -168,5 +252,25 @@ mod tests {
         let backup = outcome.recovered_from_backup.expect("backup");
         assert!(backup.exists());
         assert!(store.config_file().exists());
+    }
+
+    #[test]
+    fn saves_and_loads_known_hosts() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = ConfigStore::new(temp.path());
+        let mut known_hosts = KnownHosts::new();
+        known_hosts.pin(
+            "example.test",
+            22,
+            HostKeyFingerprint {
+                algorithm: "ssh-ed25519".to_owned(),
+                fingerprint: "abc123".to_owned(),
+            },
+        );
+
+        store.save_known_hosts(&known_hosts).expect("save known_hosts");
+        let loaded = store.load_known_hosts().expect("load known_hosts");
+
+        assert_eq!(loaded, known_hosts);
     }
 }

@@ -17,6 +17,7 @@ pub enum AuthMethod {
     },
     KeyboardInteractive {
         username: String,
+        secret: String,
     },
 }
 
@@ -26,7 +27,7 @@ impl AuthMethod {
             Self::Password { username, .. }
             | Self::PrivateKey { username, .. }
             | Self::Agent { username }
-            | Self::KeyboardInteractive { username } => username,
+            | Self::KeyboardInteractive { username, .. } => username,
         }
     }
 }

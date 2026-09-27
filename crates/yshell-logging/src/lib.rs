@@ -337,6 +337,11 @@ impl TransferLogger {
         })
     }
 
+    #[must_use]
+    pub const fn path(&self) -> &PathBuf {
+        self.inner.path()
+    }
+
     pub fn record_transfer(
         &mut self,
         operation: &str,

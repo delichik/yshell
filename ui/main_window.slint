@@ -1,167 +1,2271 @@
-import { Button, LineEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+export { Theme } from "theme.slint";
+// 导出 std-widgets 的色板，供 Rust 在"显式浅色/深色"时同步覆盖（W3 替换 std-widgets 后可移除）
+export { Palette } from "std-widgets.slint";
+// 终端滚动条数据通道（terminal_view.slint 声明）：Rust 投影写总行数/视口行数、收 scroll-to-line。
+// 与 Theme/Palette 一样必须在此再导出，生成的 Rust API 才能访问该 global。
+export { TerminalScrollInfo } from "components/terminal_view.slint";
+import { Icon } from "components/basic/icons.slint";
+import { WinButton, WinCard, WinCardHeader, WinIconButton, WinListRow, WinNavItem, WinPivotBar, WinTab, WinToggle, PivotItem } from "components/basic/controls.slint";
+import { WinTextInput } from "components/basic/text_input.slint";
+import { MenuEntry, MenuPopup } from "components/menu_popup.slint";
+import { TerminalView } from "components/terminal_view.slint";
+import { TransferQueue } from "components/transfer_queue.slint";
+import { ConfirmDialog } from "components/confirm_dialog.slint";
+import { PasswordPromptDialog } from "components/password_prompt_dialog.slint";
+import { HostKeyDialog } from "components/host_key_dialog.slint";
+import { SftpCrumb, SftpEntryDialog, SftpPanel, SftpRow } from "components/sftp_panel.slint";
+import { SessionTree, SessionTreeRow } from "components/session_tree.slint";
+import { AboutDialog } from "pages/about.slint";
+import { SettingsDialog } from "pages/settings.slint";
+import { SessionEditor } from "pages/session_editor.slint";
+import { KnownHostsPage } from "pages/known_hosts.slint";
+
+// 菜单栏项（WinUI 3 MenuBar 形态）：24px 行高、4px 圆角、展开态高亮
+component MenuTitle inherits Rectangle {
+    in property <string> label: @tr("MenuBar" => "File");
+    in property <bool> open: false;
+    /// 是否已有任一菜单展开（`root.open_menu_index >= 0`）：展开态下悬停到另一个
+    /// 一级菜单要直接切换（标准 MenuBar 行为），未展开时悬停不动作。
+    in property <bool> menu-open: false;
+    callback activated();
+    /// 菜单已展开且指针悬停到本项：由 main_window 切换到本项对应的菜单。
+    callback hovered();
+
+    height: Theme.control-height-compact;
+    width: title-text.preferred-width + 20px;
+    border-radius: Theme.radius-control;
+    background: root.open ? Theme.subtle-selected : title-touch.has-hover ? Theme.subtle-hover : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    title-text := Text {
+        text: root.label;
+        color: Theme.text-primary;
+        font-size: Theme.font-body;
+        x: 10px;
+        height: parent.height;
+        vertical-alignment: center;
+    }
+
+    title-touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.activated(); }
+        // 悬停切换：仅在已有菜单展开时生效；PointerEventKind.move 覆盖指针移入本项的过渡。
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.move && root.menu-open) {
+                root.hovered();
+            }
+        }
+    }
+}
 
 export component MainWindow inherits Window {
     title: "YShell";
-    preferred-width: 1280px;
-    preferred-height: 800px;
+    // §4.2 / §12：默认 1440×900，最小 880×600
+    // （<1120 自动折叠右栏，<960 左导航变 48px 图标条，因此 880×600 是安全下限）
+    //
+    // 注意：Slint 会把根内容的 layout info.max 作为窗口的 max_inner_size（见
+    // i-slint-core `min_max_size_for_layout_constraints`）。若根内容里存在
+    // "只有固定宽度子项"的横向布局（例如菜单栏的 5 个固定宽 MenuTitle），
+    // 推导出的 max 会是这些宽度之和（有限值），窗口的 max 就会被钉死在这个
+    // 值上（表现为拖大窗口被弹回）。因此菜单栏末尾放了一个弹性空白
+    // （menu_bar_spacer），保证根内容的 max 无界，窗口可自由拉伸。
+    preferred-width: 1440px;
+    preferred-height: 900px;
+    min-width: 880px;
+    min-height: 600px;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
 
     in-out property <string> status_text: "Ready";
     in-out property <string> config_dir: "";
+    in-out property <string> secret_store_status_text: "Secret store disabled.";
+    in-out property <string> secret_reset_confirmation_text: "";
+    in-out property <string> editor_folder_text: "Saved Sessions (saved-sessions)";
+    in-out property <string> new_folder_name_text: "";
+    in-out property <string> editor_name_text: "";
+    in-out property <string> editor_host_text: "";
+    in-out property <string> editor_port_text: "22";
+    in-out property <string> editor_username_text: "";
+    in-out property <string> editor_auth_method_text: "agent";
+    in-out property <string> editor_host_key_policy_text: "strict";
+    in-out property <string> editor_password_text: "";
+    in-out property <string> editor_key_path_text: "";
+    in-out property <string> editor_passphrase_text: "";
+    in-out property <string> editor_target_text: "Creating new saved session";
+    in-out property <bool> editor_modal_visible: false;
+    in-out property <string> editor_section_text: "general";
+    in-out property <string> editor_auth_test_status_text: "Run Auth Test to validate the current editor fields without saving.";
+    in-out property <bool> known_hosts_modal_visible: false;
+    in-out property <string> known_hosts_inventory_text: "No persisted known hosts yet.";
+    in-out property <string> known_hosts_selection_text: "No persisted known hosts are available.";
+    in-out property <string> known_hosts_details_text: "";
+    in-out property <string> known_hosts_path_text: "";
+    in-out property <string> known_hosts_clear_confirmation_text: "";
+    in-out property <string> editor_proxy_mode_text: "none";
+    in-out property <string> editor_proxy_protocol_text: "socks5";
+    in-out property <string> editor_proxy_host_text: "";
+    in-out property <string> editor_proxy_port_text: "";
+    in-out property <string> editor_proxy_username_text: "";
+    in-out property <string> editor_proxy_password_text: "";
+    in-out property <bool> editor_proxy_dns_by_proxy: true;
+    in-out property <string> editor_proxy_summary_text: "Proxy disabled for this editor session.";
+    in-out property <string> editor_tunnel_kind_text: "local";
+    in-out property <string> editor_tunnel_bind_host_text: "127.0.0.1";
+    in-out property <string> editor_tunnel_bind_port_text: "";
+    in-out property <string> editor_tunnel_target_host_text: "";
+    in-out property <string> editor_tunnel_target_port_text: "";
+    in-out property <string> editor_tunnel_summary_text: "No tunnel forwards configured.";
+    in-out property <string> logging_enabled_text: "disabled";
+    in-out property <string> logging_format_text: "sanitized";
+    in-out property <string> logging_directory_text: "";
+    in-out property <string> logging_summary_text: "global=disabled format=sanitized directory=logs";
+    in-out property <string> settings_scrollback_lines_text: "10000";
+    in-out property <string> settings_scrollback_max_cells_text: "2000000";
+    in-out property <string> settings_terminal_status_text: "Save terminal settings to apply the scrollback limits to existing sessions.";
     in-out property <string> active_session: "Welcome";
     in-out property <string> session_summary_text: "No runtime sessions yet.";
+    in-out property <string> session_search_text: "";
+    in-out property <string> saved_session_selection_text: "No saved session selected";
+    in-out property <string> saved_session_inventory_text: "No saved sessions yet.";
+    in-out property <string> recent_sessions_text: "No recent runtime sessions yet.";
+    in-out property <bool> host_key_prompt_visible: false;
+    in-out property <string> host_key_prompt_text: "";
+    in-out property <string> host_key_prompt_mode_text: "";
+    in-out property <string> host_key_prompt_confirmation_text: "";
     in-out property <string> tab_text: "Welcome  idle";
     in-out property <string> terminal_title_text: "YShell terminal";
     in-out property <string> terminal_body_text: "Runtime is ready. Open a Quick Connect target or create a draft session.";
+    in-out property <[string]> terminal_visible_lines: ["Runtime is ready. Open a Quick Connect target or create a draft session."];
+    in-out property <image> terminal_image;
+    in-out property <int> terminal_cursor_column: 0;
+    in-out property <int> terminal_cursor_row: 0;
+    in-out property <int> terminal_scroll_offset: 0;
+    in-out property <bool> terminal_selection_active: false;
+    // W5-A3：终端 Edit 菜单（Copy/清屏等）的状态开关；与上者同源。
+    in-out property <bool> terminal_has_selection: false;
+    in-out property <string> terminal_search_query_text: "";
+    in-out property <string> terminal_search_summary_text: "Find in terminal";
+    in-out property <string> sftp_path_text: "/";
+    in-out property <string> sftp_listing_text: "Fake backend selected. Switch to native SSH to validate the embedded SSH and SFTP paths.";
+    in-out property <string> sftp_local_path_text: "";
+    in-out property <string> sftp_remote_target_text: "";
+    in-out property <string> sftp_secondary_target_text: "";
+    in-out property <string> sftp_permissions_text: "644";
+    in-out property <string> sftp_session_status_text: "SFTP session disconnected. Connect a runtime session first.";
+    in-out property <string> sftp_remote_edit_text: "No active remote edit session";
+    in-out property <[SftpRow]> sftp_rows;
+    in-out property <[SftpCrumb]> sftp_crumbs;
+    in-out property <int> sftp_selected_index: -1;
+    in-out property <string> sftp_sort_text: "Name ↑";
+    in-out property <string> sftp_sort_column_text: "name";
+    in-out property <bool> sftp_sort_ascending: true;
+    in-out property <bool> sftp_show_hidden: false;
+    in-out property <string> sftp_item_summary_text: "";
+    // W4 收尾：SFTP 汇总行只投影计数，句子/复数由 SftpPanel 用 @tr 组装。
+    in-out property <int> sftp_item_count: 0;
+    in-out property <int> sftp_dir_count: 0;
+    in-out property <string> sftp_empty_text: "";
+    in-out property <string> sftp_selected_name_text: "";
+    in-out property <string> sftp_selected_path_text: "";
+    in-out property <string> sftp_selected_permissions_text: "";
+    in-out property <bool> sftp_remote_edit_active: false;
+    // W5-A3：SFTP 生命周期就绪（ready）时才允许 SFTP 操作菜单项。
+    in-out property <bool> sftp_available: false;
+    in-out property <string> transfer_queue_text: "No active transfers";
+    in-out property <string> tunnels_summary_text: "Tunnels\nNo active tunnels";
     in-out property <string> transport_backend_text: "fake";
+    out property <float> terminal_viewport_width_px: terminal_view.terminal-viewport-width-px;
+    out property <float> terminal_viewport_height_px: terminal_view.terminal-viewport-height-px;
+    /// W5-A2：终端是否持有键盘焦点（模态弹窗关闭后的焦点恢复据此避让终端）。
+    out property <bool> terminal_focused: terminal_view.terminal-focused;
     in-out property <bool> sftp_visible: true;
     in-out property <bool> tunnels_visible: true;
     in-out property <bool> commands_visible: true;
+    in-out property <string> app_version_text: "";
+
+    // --- W5：连接密码弹窗（仅本次连接使用；不写密钥库/磁盘）------------------
+    // 认证方式为 password / keyboard-interactive 的已保存会话在密钥库里找不到密码时，
+    // Rust 挂起连接并置 `password_prompt_visible`；输入后 `submit_password` 用该密码
+    // 重试一次。`password_prompt_host_text` 是文案里的 `user@host:port`。
+    in-out property <bool> password_prompt_visible: false;
+    in-out property <string> password_prompt_title_text: @tr("Password required");
+    in-out property <string> password_prompt_host_text: "";
+    in-out property <string> password_prompt_message_text:
+        root.password_prompt_host_text == ""
+            ? @tr("Enter the password to continue.")
+            : @tr("Enter the password for {0} to connect.", root.password_prompt_host_text);
+    // in-out：弹窗内编辑；宿主（Rust）在弹窗关闭后清空，避免残留上一次的密码。
+    in-out property <string> password_prompt_value_text: "";
+
+    // --- W4 i18n：Rust 只投影值；句子模板在下方 display 属性/函数里用 @tr 渲染 ----
+    // 旧的 *_text 句子属性保留声明（Rust 绑定兼容），但界面不再读取它们。
+    in-out property <string> secret_store_kind_text: "disabled";
+    in-out property <string> secret_store_path_text: "";
+    in-out property <string> editor_folder_label_text: "";
+    in-out property <string> editor_folder_id_text: "";
+    in-out property <bool> editor_folder_known: false;
+    in-out property <string> editor_target_session_id_text: "";
+    in-out property <bool> editor_target_editing: false;
+    in-out property <string> editor_auth_test_kind_text: "hint";
+    in-out property <string> editor_auth_test_host_text: "";
+    in-out property <string> editor_auth_test_backend_text: "";
+    in-out property <string> editor_auth_test_startup_text: "";
+    in-out property <string> editor_auth_test_error_text: "";
+    in-out property <string> editor_proxy_summary_kind_text: "none";
+    in-out property <string> editor_proxy_summary_address_text: "";
+    in-out property <string> editor_proxy_summary_user_text: "";
+    in-out property <string> editor_tunnel_summary_kind_text: "none";
+    in-out property <string> editor_tunnel_summary_rows_text: "";
+    in-out property <int> editor_tunnel_summary_count: 0;
+    in-out property <string> logging_directory_display_text: "logs";
+    in-out property <string> settings_terminal_status_kind_text: "hint";
+    in-out property <string> settings_terminal_status_field_text: "";
+    in-out property <string> settings_terminal_status_value_text: "";
+    in-out property <string> settings_terminal_status_limit_text: "";
+    in-out property <string> known_hosts_inventory_rows_text: "";
+    in-out property <bool> known_hosts_inventory_empty: true;
+    in-out property <string> known_hosts_selection_kind_text: "empty";
+    in-out property <string> known_hosts_selection_host_text: "";
+    in-out property <string> known_hosts_selection_port_text: "";
+    in-out property <int> known_hosts_selection_index: 0;
+    in-out property <int> known_hosts_selection_total: 0;
+    in-out property <string> active_session_kind_text: "welcome";
+    in-out property <string> active_session_name_text: "";
+    in-out property <string> active_session_state_text: "";
+    // --- W5-A3：菜单/按钮状态感知（纯布尔量，由 runtime.rs 投影；见 `AppProjection`）---
+    in-out property <bool> has_active_session: false;
+    in-out property <bool> active_session_connected: false;
+    in-out property <bool> has_saved_selection: false;
+    in-out property <int> saved_session_count: 0;
+    in-out property <string> session_summary_rows_text: "";
+    in-out property <int> session_summary_count: 0;
+    in-out property <int> session_summary_hidden_count: 0;
+    in-out property <string> saved_session_selection_kind_text: "none";
+    in-out property <string> saved_session_selection_name_text: "";
+    in-out property <string> saved_session_selection_host_text: "";
+    in-out property <string> saved_session_selection_id_text: "";
+    in-out property <string> saved_session_inventory_rows_text: "";
+    in-out property <string> saved_session_inventory_query_text: "";
+    in-out property <bool> saved_session_inventory_empty: true;
+    // 会话树：Rust 侧按显示顺序压平的行模型 + 当前选中节点 id（旧文本投影保留但不再渲染）
+    in-out property <[SessionTreeRow]> session_tree_rows: [];
+    in-out property <string> saved_session_tree_selected_id: "";
+    in-out property <string> recent_sessions_rows_text: "";
+    in-out property <bool> recent_sessions_empty: true;
+    in-out property <string> tab_name_text: "";
+    in-out property <string> tab_state_text: "idle";
+    in-out property <bool> tab_has_session: false;
+    in-out property <string> terminal_title_name_text: "";
+    in-out property <bool> terminal_title_has_session: false;
+    in-out property <string> terminal_body_kind_text: "ready";
+    in-out property <string> terminal_search_kind_text: "prompt";
+    in-out property <int> terminal_search_match_count: 0;
+    in-out property <int> terminal_search_current_index: 0;
+    in-out property <string> sftp_listing_kind_text: "connect-real";
+    in-out property <string> sftp_listing_rows_text: "";
+    in-out property <string> sftp_listing_session_key_text: "";
+    in-out property <string> sftp_listing_path_text: "";
+    in-out property <string> sftp_listing_error_text: "";
+    in-out property <string> sftp_session_status_kind_text: "disconnected";
+    in-out property <string> sftp_session_status_reason_text: "";
+    in-out property <string> sftp_session_status_detail_text: "";
+    in-out property <string> sftp_session_status_session_key_text: "";
+    in-out property <string> sftp_remote_edit_remote_path_text: "";
+    in-out property <string> sftp_remote_edit_local_path_text: "";
+    in-out property <string> transfer_queue_rows_text: "";
+    in-out property <bool> transfer_queue_empty: true;
+    in-out property <string> tunnels_summary_kind_text: "no-active";
+    in-out property <string> tunnels_summary_rows_text: "";
+    // W4 收尾：status_text 的 i18n 覆盖（kind="" 时状态栏回退英文 status_text）。
+    in-out property <string> status_kind_text: "";
+    in-out property <string> status_param_1_text: "";
+    in-out property <string> status_param_2_text: "";
+
+    // --- W4 i18n：显示串（全部经 @tr 模板渲染；译者只翻这里出现的句子）--------
+    property <string> secret_store_status_display:
+        secret-store-status(root.secret_store_kind_text, root.secret_store_path_text);
+    property <string> editor_folder_display:
+        root.editor_folder_known
+            ? @tr("{0} ({1})", root.editor_folder_label_text, root.editor_folder_id_text)
+            : @tr("Unknown folder ({0})", root.editor_folder_id_text);
+    property <string> editor_target_display:
+        root.editor_target_editing
+            ? @tr("Editing {0}", root.editor_target_session_id_text)
+            : @tr("Creating new saved session");
+    property <string> editor_auth_test_status_display:
+        editor-auth-test-status(
+            root.editor_auth_test_kind_text,
+            root.editor_auth_test_host_text,
+            root.editor_auth_test_backend_text,
+            root.editor_auth_test_startup_text,
+            root.editor_auth_test_error_text
+        );
+    property <string> editor_proxy_summary_display:
+        proxy-summary-text(
+            root.editor_proxy_summary_kind_text,
+            root.editor_proxy_protocol_text,
+            root.editor_proxy_summary_address_text,
+            root.editor_proxy_summary_user_text,
+            root.editor_proxy_dns_by_proxy
+        );
+    property <string> editor_tunnel_summary_display:
+        root.editor_tunnel_summary_count == 0
+            ? @tr("No tunnel forwards configured.")
+            : root.editor_tunnel_summary_rows_text;
+    property <string> logging_summary_display:
+        @tr("global={0} format={1} directory={2}",
+            root.logging_enabled_text,
+            root.logging_format_text,
+            root.logging_directory_display_text);
+    property <string> settings_terminal_status_display:
+        settings-terminal-status(
+            root.settings_terminal_status_kind_text,
+            root.settings_terminal_status_field_text,
+            root.settings_terminal_status_value_text,
+            root.settings_terminal_status_limit_text
+        );
+    property <string> known_hosts_inventory_display:
+        root.known_hosts_inventory_empty
+            ? @tr("No persisted known hosts yet.")
+            : root.known_hosts_inventory_rows_text;
+    property <string> known_hosts_selection_display:
+        known-hosts-selection(
+            root.known_hosts_selection_kind_text,
+            root.known_hosts_selection_host_text,
+            root.known_hosts_selection_port_text,
+            root.known_hosts_selection_index,
+            root.known_hosts_selection_total
+        );
+    property <string> active_session_display:
+        root.active_session_kind_text == "session"
+            ? root.active_session_name_text + "  " + root.active_session_state_text
+            : (root.active_session_kind_text == "saved-sessions"
+                ? @tr("Saved Sessions ({0})", root.saved_session_count)
+                : @tr("Welcome"));
+    property <string> session_summary_display:
+        root.session_summary_count == 0
+            ? @tr("No runtime sessions yet.")
+            : (root.session_summary_hidden_count > 0
+                ? root.session_summary_rows_text + "\n" + @tr("... and {0} more", root.session_summary_hidden_count)
+                : root.session_summary_rows_text);
+    property <string> saved_session_selection_display:
+        saved-session-selection(
+            root.saved_session_selection_kind_text,
+            root.saved_session_selection_name_text,
+            root.saved_session_selection_host_text,
+            root.saved_session_selection_id_text
+        );
+    property <string> saved_session_inventory_display:
+        root.saved_session_inventory_empty
+            ? (root.saved_session_inventory_query_text == ""
+                ? @tr("No saved sessions yet.")
+                : @tr("No saved sessions matched `{0}`.", root.saved_session_inventory_query_text))
+            : root.saved_session_inventory_rows_text;
+    property <string> recent_sessions_display:
+        root.recent_sessions_empty
+            ? @tr("No recent runtime sessions yet.")
+            : root.recent_sessions_rows_text;
+    property <string> tab_display:
+        (root.tab_has_session ? root.tab_name_text + "  " : @tr("Welcome") + "  ") + root.tab_state_text;
+    property <string> terminal_title_display:
+        root.terminal_title_has_session
+            ? @tr("Terminal: {0}", root.terminal_title_name_text)
+            : @tr("YShell terminal");
+    property <string> terminal_body_display:
+        root.terminal_body_kind_text == "ready"
+            ? @tr("Runtime is ready. Open a Quick Connect target or create a draft session.")
+            : (root.terminal_body_kind_text == "no-output"
+                ? @tr("Terminal runtime is initialized but no output is available yet.")
+                : root.terminal_body_text);
+    property <string> terminal_search_summary_display:
+        terminal-search-summary(
+            root.terminal_search_kind_text,
+            root.terminal_search_query_text,
+            root.terminal_search_match_count,
+            root.terminal_search_current_index
+        );
+    property <string> sftp_listing_display:
+        sftp-listing-summary(
+            root.sftp_listing_kind_text,
+            root.sftp_listing_rows_text,
+            root.sftp_listing_session_key_text,
+            root.sftp_listing_path_text,
+            root.sftp_listing_error_text
+        );
+    property <string> sftp_empty_display:
+        root.sftp_empty_text != "" ? root.sftp_empty_text : root.sftp_listing_display;
+    property <string> sftp_session_status_display:
+        sftp-session-status(
+            root.sftp_session_status_kind_text,
+            root.sftp_session_status_reason_text,
+            root.sftp_session_status_detail_text,
+            root.sftp_session_status_session_key_text
+        );
+    property <string> sftp_remote_edit_display:
+        root.sftp_remote_edit_active
+            ? @tr("Remote edit: {0} <-> {1}", root.sftp_remote_edit_remote_path_text, root.sftp_remote_edit_local_path_text)
+            : @tr("No active remote edit session");
+    property <string> sftp_sort_display:
+        sftp-sort-summary(root.sftp_sort_column_text, root.sftp_sort_ascending);
+    property <string> transfer_queue_display:
+        root.transfer_queue_empty
+            ? @tr("No active transfers")
+            : root.transfer_queue_rows_text;
+    property <string> tunnels_summary_display:
+        root.tunnels_summary_kind_text == "none"
+            ? @tr("No configured tunnels for the active session.")
+            : (root.tunnels_summary_kind_text == "no-active"
+                ? @tr("No active tunnels")
+                : root.tunnels_summary_rows_text);
+    property <string> status_display:
+        status-message(
+            root.status_kind_text,
+            root.status_param_1_text,
+            root.status_param_2_text,
+            root.status_text
+        );
+
+    // Local UI state (iteration 1): panels, menus and dialogs are Slint-local.
+    in-out property <bool> session_manager_visible: true;
+    in-out property <bool> terminal_find_visible: false;
+    in-out property <int> open_menu_index: -1;
+    in-out property <length> menu_anchor_x: 0px;
+    in-out property <length> menu_anchor_y: 0px;
+    in-out property <bool> terminal_context_menu_open: false;
+    in-out property <length> terminal_context_menu_x: 0px;
+    in-out property <length> terminal_context_menu_y: 0px;
+    in-out property <bool> saved_session_context_menu_open: false;
+    in-out property <length> saved_session_context_menu_x: 0px;
+    in-out property <length> saved_session_context_menu_y: 0px;
+    in-out property <bool> sftp_context_menu_open: false;
+    in-out property <length> sftp_context_menu_x: 0px;
+    in-out property <length> sftp_context_menu_y: 0px;
+    in-out property <bool> about_dialog_visible: false;
+    in-out property <bool> settings_dialog_visible: false;
+    in-out property <bool> delete_session_dialog_visible: false;
+    in-out property <string> delete_session_confirmation_text: "";
+    in-out property <bool> quit_dialog_visible: false;
+    in-out property <bool> sftp_operation_dialog_visible: false;
+    in-out property <string> sftp_operation_text: "none";
+    in-out property <string> sftp_dialog_kind: "none";
+    in-out property <string> sftp_dialog_name_text: "";
+    in-out property <string> sftp_dialog_permissions_text: "644";
+    in-out property <string> sftp_dialog_local_text: "";
+
+    // --- W5-④ 面板宽度与自适应（§4.2；宽度为内存态，不持久化）----------------
+    /// 左导航期望宽度：拖拽结果，钳制在 200–420px（默认沿用 Theme.nav-width）
+    in-out property <length> nav_panel_width: Theme.nav-width;
+    /// 右工具面板期望宽度：拖拽结果，钳制在 280–560px（默认沿用 Theme.dock-width）
+    in-out property <length> dock_panel_width: Theme.dock-width;
+    /// 窗口 <1120px 时用户手动展开右栏（覆盖自动折叠；仅内存态）
+    in-out property <bool> dock_user_expanded: false;
+    /// 窗口 <960px 时用户手动展开左导航（覆盖 48px 图标条；仅内存态）
+    in-out property <bool> nav_user_expanded: false;
+
+    // 断点与拖拽边界（布局行为参数，不进 Theme token）
+    property <length> breakpoint_full_layout: 1280px;
+    property <length> breakpoint_dock_collapse: 1120px;
+    property <length> breakpoint_nav_rail: 960px;
+    property <length> nav_width_min: 200px;
+    property <length> nav_width_max: 420px;
+    property <length> dock_width_min: 280px;
+    property <length> dock_width_max: 560px;
+
+    /// 线性收缩系数：窗口 ≤1120px 为 0，≥1280px 为 1（§4.2 的 1120–1280 档）
+    property <float> layout_squeeze_ratio:
+        clamp((root.width - root.breakpoint_dock_collapse) / (root.breakpoint_full_layout - root.breakpoint_dock_collapse), 0.0, 1.0);
+    /// 拖拽换算系数：收缩档内指针 1px 对应目标宽度 1/ratio px，保证把手跟手
+    property <float> layout_drag_scale:
+        (root.width >= root.breakpoint_full_layout || root.width < root.breakpoint_dock_collapse) ? 1.0
+        : max(0.0001, root.layout_squeeze_ratio);
+
+    /// 右栏因窗口过窄而自动折叠（§4.2：<1120px）；用户手动展开后不再折叠
+    property <bool> dock_auto_collapsed:
+        root.width < root.breakpoint_dock_collapse && !root.dock_user_expanded;
+    /// 右栏最终宽度（0 = 折叠）；1120–1280px 按可用空间线性收缩
+    property <length> dock_effective_width:
+        root.dock_auto_collapsed ? 0px
+        : (root.width >= root.breakpoint_full_layout) ? root.dock_panel_width
+        : (root.width >= root.breakpoint_dock_collapse) ? (root.dock_width_min + (root.dock_panel_width - root.dock_width_min) * root.layout_squeeze_ratio)
+        : root.dock_panel_width;
+    property <bool> dock_visible: root.dock_effective_width > 0px;
+    /// 窄窗口下在命令栏右侧显示右栏展开/收起按钮
+    property <bool> dock_toggle_visible: root.width < root.breakpoint_dock_collapse;
+
+    /// 左导航是否折叠为 48px 图标条（§4.2：<960px）
+    property <bool> nav_rail_active:
+        root.width < root.breakpoint_nav_rail && !root.nav_user_expanded;
+    /// 是否显示"收回图标条"按钮（仅 <960px 有意义）
+    property <bool> nav_rail_available: root.width < root.breakpoint_nav_rail;
+    /// 全宽左导航列是否可见（图标条模式下由图标条取代）
+    property <bool> nav_column_visible:
+        root.session_manager_visible && !root.nav_rail_active;
+    /// 左导航图标条是否可见
+    property <bool> nav_rail_visible:
+        root.session_manager_visible && root.nav_rail_active;
+    /// 左导航最终宽度
+    property <length> nav_effective_width:
+        root.nav_rail_active ? Theme.nav-rail-width
+        : (root.width >= root.breakpoint_full_layout || root.width < root.breakpoint_dock_collapse) ? root.nav_panel_width
+        : (root.nav_width_min + (root.nav_panel_width - root.nav_width_min) * root.layout_squeeze_ratio);
+
+    // 拖拽锚点（按下时记录指针绝对位置与起始宽度；用绝对坐标避免把手随宽度移动产生抖动）
+    property <bool> nav_resize_dragging: false;
+    property <length> nav_drag_anchor_x: 0px;
+    property <length> nav_drag_start_width: 0px;
+    property <bool> dock_resize_dragging: false;
+    property <length> dock_drag_anchor_x: 0px;
+    property <length> dock_drag_start_width: 0px;
 
     callback quick_connect(string);
     callback new_session();
     callback save_session();
+    callback update_session_search(string);
     callback open_saved_session();
+    callback open_selected_saved_session();
+    callback update_selected_saved_session();
+    callback delete_selected_saved_session();
+    callback select_previous_saved_session();
+    callback select_next_saved_session();
+    // 会话树（树形投影）：按 id 选中 / 按 id 激活（双击、回车）/ 展开折叠
+    callback select_saved_session(string);
+    callback activate_saved_session_tree_node(string);
+    callback toggle_saved_folder(string);
+    /// 右键菜单前的选中：不参与"重复点击 = 激活"的双击兜底
+    callback select_saved_session_for_menu(string);
     callback send_demo_input();
+    callback send_terminal_input(string);
+    callback terminal_key(string, bool, bool, bool, bool);
+    callback terminal_scroll(int);
+    callback terminal_scroll_to_bottom();
+    callback terminal_selection_begin(float, float);
+    callback terminal_selection_update(float, float);
+    callback terminal_selection_end(float, float);
+    callback terminal_select_word_at(float, float);
+    callback terminal_select_all();
+    callback copy_terminal_selection();
+    callback copy_terminal_visible();
+    callback paste_terminal_clipboard();
+    callback clear_terminal();
+    callback find_terminal_text(string);
+    callback find_terminal_next();
+    callback find_terminal_prev();
+    callback refresh_sftp();
+    callback open_sftp_path(string);
+    callback open_sftp_parent();
+    callback upload_sftp(string, string, string, string);
+    callback download_sftp(string, string, string, string);
+    callback create_sftp_directory(string, string, string, string);
+    callback rename_sftp_path(string, string, string, string);
+    callback chmod_sftp_path(string, string, string, string);
+    callback start_sftp_remote_edit(string, string, string, string);
+    callback save_sftp_remote_edit();
+    callback cancel_sftp_remote_edit();
+    callback select_sftp_entry(int);
+    callback activate_sftp_entry();
+    callback sort_sftp(string);
+    callback toggle_sftp_hidden();
+    callback open_sftp_crumb(int);
+    callback create_sftp_folder(string);
+    callback rename_sftp_selected(string);
+    callback delete_sftp_selected();
+    callback chmod_sftp_selected(string);
+    callback upload_sftp_into_current(string);
+    callback download_sftp_selected(string);
+    callback edit_sftp_selected();
     callback disconnect_session();
     callback reconnect_session();
     callback select_fake_backend();
-    callback select_real_backend();
+    callback select_native_ssh_backend();
     callback toggle_sftp();
     callback toggle_tunnels();
     callback toggle_commands();
+    callback update_secret_reset_confirmation(string);
+    callback reset_secrets();
+    callback open_known_hosts_manager();
+    callback close_known_hosts_manager();
+    callback select_previous_known_host();
+    callback select_next_known_host();
+    callback remove_selected_known_host();
+    callback update_known_hosts_clear_confirmation(string);
+    callback clear_all_known_hosts();
+    callback cancel_host_key_prompt();
+    callback trust_host_key_once();
+    callback trust_host_key_and_save();
+    callback update_host_key_replace_confirmation(string);
+    callback replace_host_key_and_connect();
+    callback start_new_saved_session_editor();
+    callback close_session_editor_modal();
+    callback update_new_folder_name(string);
+    callback create_folder_under_editor_target();
+    callback load_selected_saved_session_into_editor();
+    callback select_session_editor_general();
+    callback select_session_editor_authentication();
+    callback select_session_editor_terminal();
+    callback select_session_editor_sftp();
+    callback select_session_editor_tunnels();
+    callback select_session_editor_proxy();
+    callback select_session_editor_logging();
+    callback select_session_editor_advanced();
+    callback select_session_editor_appearance();
+    callback select_previous_editor_folder();
+    callback select_next_editor_folder();
+    callback update_editor_name(string);
+    callback update_editor_host(string);
+    callback update_editor_port(string);
+    callback update_editor_username(string);
+    callback set_editor_auth_method_agent();
+    callback set_editor_auth_method_password();
+    callback set_editor_auth_method_keyboard_interactive();
+    callback set_editor_auth_method_private_key();
+    callback set_editor_host_key_policy_strict();
+    callback set_editor_host_key_policy_trust_on_first_use();
+    callback set_editor_host_key_policy_accept_any_for_testing();
+    callback update_editor_password(string);
+    callback update_editor_key_path(string);
+    callback update_editor_passphrase(string);
+    callback set_editor_proxy_mode_none();
+    callback set_editor_proxy_mode_custom();
+    callback set_editor_proxy_protocol_socks4();
+    callback set_editor_proxy_protocol_socks4a();
+    callback set_editor_proxy_protocol_socks5();
+    callback set_editor_proxy_protocol_http_connect();
+    callback update_editor_proxy_host(string);
+    callback update_editor_proxy_port(string);
+    callback update_editor_proxy_username(string);
+    callback update_editor_proxy_password(string);
+    callback toggle_editor_proxy_dns_by_proxy();
+    callback set_editor_tunnel_kind_local();
+    callback set_editor_tunnel_kind_remote();
+    callback set_editor_tunnel_kind_dynamic();
+    callback update_editor_tunnel_bind_host(string);
+    callback update_editor_tunnel_bind_port(string);
+    callback update_editor_tunnel_target_host(string);
+    callback update_editor_tunnel_target_port(string);
+    callback add_editor_tunnel_forward();
+    callback clear_editor_tunnels();
+    callback toggle_global_logging_enabled();
+    callback set_global_logging_format_raw();
+    callback set_global_logging_format_sanitized();
+    callback update_global_logging_directory(string);
+    callback save_global_logging_settings();
+    callback update_settings_scrollback_lines(string);
+    callback update_settings_scrollback_max_cells(string);
+    callback reset_settings_terminal_defaults();
+    callback save_settings_terminal();
+    callback test_editor_auth();
+    callback save_editor_to_saved_session();
+    callback save_editor_and_connect();
+    callback quit_app();
+    // W5：连接密码弹窗 —— `submit_password` 携带用户输入的密码（仅本次连接使用）。
+    callback submit_password(string);
+    callback cancel_password_prompt();
 
-    background: #0f1117;
+    // --- W5-A2：全局快捷键 ---------------------------------------------------
+    // 组合键字符串只在这里定义一次：菜单项的 `MenuEntry.shortcut` 显示文本与按键处理
+    // （`dispatch-global-shortcut`）引用同一份常量。快捷键显示文本按惯例不翻译。
+    property <string> shortcut-new-session: "Ctrl+N";
+    property <string> shortcut-quick-connect: "Ctrl+O";
+    property <string> shortcut-save-session: "Ctrl+S";
+    property <string> shortcut-find: "Ctrl+F";
+    property <string> shortcut-clear-terminal: "Ctrl+K";
+    property <string> shortcut-toggle-sidebar: "Ctrl+B";
+    property <string> shortcut-quit: "Ctrl+Q";
+    property <string> shortcut-reconnect: "F5";
+    property <string> shortcut-settings: "Ctrl+,";
+    // 终端里已实现的复制/粘贴组合键（由 bootstrap.rs 的终端按键处理分发）。
+    property <string> shortcut-copy: "Ctrl+Shift+C";
+    property <string> shortcut-paste: "Ctrl+V";
 
-    VerticalLayout {
-        spacing: 0px;
+    // F5 在 Slint 里是特殊键码（见 i-slint-common `key_codes.rs`）；Slint 1.9 的
+    // KeyEvent 没有 `key`，只能按 `event.text` 的键码比较。
+    property <string> key-code-f5: "\u{F708}";
 
-        Rectangle {
-            height: 32px;
-            background: #20242d;
-            HorizontalLayout {
-                padding-left: 12px;
-                spacing: 18px;
-                Text { text: "File"; color: #f4f7fb; vertical-alignment: center; }
-                Text { text: "Edit"; color: #f4f7fb; vertical-alignment: center; }
-                Text { text: "View"; color: #f4f7fb; vertical-alignment: center; }
-                Text { text: "Session"; color: #f4f7fb; vertical-alignment: center; }
-                Text { text: "Help"; color: #f4f7fb; vertical-alignment: center; }
-            }
+    // 模态弹窗打开时全局快捷键让位给弹窗（弹窗内输入框自行处理按键）。
+    property <bool> global-shortcuts-blocked:
+        root.editor_modal_visible
+        || root.settings_dialog_visible
+        || root.about_dialog_visible
+        || root.known_hosts_modal_visible
+        || root.password_prompt_visible
+        || root.host_key_prompt_visible
+        || root.quit_dialog_visible
+        || root.delete_session_dialog_visible
+        || root.sftp_dialog_kind != "none";
+
+    /// W5-A2：Ctrl+O / Ctrl+L —— 聚焦快速连接输入框并全选（File > Quick Connect 同路径）。
+    public function focus-quick-connect() {
+        quick_input.focus-input();
+        quick_input.select-all();
+    }
+
+    /// W5-A2：把键盘焦点交给窗口级快捷键 FocusScope。
+    /// 启动时由 bootstrap.rs 调用；模态弹窗关闭后再次调用（见 `restore_shortcut_focus_after_modal`）。
+    public function focus-global-shortcuts() {
+        shortcut_scope.focus();
+    }
+
+    /// W5-A2：Slint 1.9 没有 to-lowercase()，且 CapsLock / Shift 都会把 `event.text`
+    /// 变成大写，因此每个字母都按小写/大写两种写法匹配。
+    function shortcut-key(text: string, lower: string, upper: string) -> bool {
+        return text == lower || text == upper;
+    }
+
+    /// W5-A2：窗口级快捷键的唯一映射表。
+    ///
+    /// 返回 `true` 表示组合键已被消费（窗口根 FocusScope 据此 accept，bootstrap.rs 的
+    /// 终端按键兜底不再把该键编码成终端输入）；返回 `false` 时按键继续走原本的焦点链路。
+    /// 命中的组合即使对应动作当前不可用（例如无活动会话时的 Ctrl+S / F5），也返回
+    /// `true`：否则 ^S/^Q 一类控制码会落进 shell，留下 XOFF 之类的终端流控状态。
+    /// 注意：终端聚焦时 `Ctrl+L`（shell 清屏）也会命中快速连接，取舍见任务说明。
+    public function dispatch-global-shortcut(text: string, ctrl: bool, shift: bool, alt: bool, meta: bool) -> bool {
+        if (alt || meta || root.global-shortcuts-blocked) {
+            return false;
         }
-
-        Rectangle {
-            height: 52px;
-            background: #2c3340;
-            HorizontalLayout {
-                padding-left: 12px;
-                padding-right: 12px;
-                padding-top: 8px;
-                padding-bottom: 8px;
-                spacing: 8px;
-
-                quick_input := LineEdit {
-                    placeholder-text: "ssh://user@host:22";
-                    text: "";
-                    accepted => { root.quick_connect(self.text); }
+        if (!ctrl) {
+            // F5：重连（与 Session > Reconnect 同一回调与状态门限）
+            if (!shift && text == root.key-code-f5) {
+                if (root.has_active_session && !root.active_session_connected) {
+                    root.reconnect_session();
                 }
-                Button { text: "Connect"; clicked => { root.quick_connect(quick_input.text); } }
-                Button { text: "New"; clicked => { root.new_session(); } }
-                Button { text: "Save"; clicked => { root.save_session(); } }
-                Button { text: "Open Saved"; clicked => { root.open_saved_session(); } }
-                Button { text: "Send pwd"; clicked => { root.send_demo_input(); } }
-                Button { text: "Disconnect"; clicked => { root.disconnect_session(); } }
-                Button { text: "Reconnect"; clicked => { root.reconnect_session(); } }
-                Button { text: "Use Fake"; clicked => { root.select_fake_backend(); } }
-                Button { text: "Use Real"; clicked => { root.select_real_backend(); } }
-                Button { text: "Split"; enabled: false; }
-                Button { text: root.sftp_visible ? "Hide SFTP" : "SFTP"; clicked => { root.toggle_sftp(); } }
-                Button { text: root.tunnels_visible ? "Hide Tunnels" : "Tunnels"; clicked => { root.toggle_tunnels(); } }
-                Button { text: root.commands_visible ? "Hide Commands" : "Commands"; clicked => { root.toggle_commands(); } }
-                Button { text: "Log"; enabled: false; }
-                Button { text: "Search"; enabled: false; }
+                return true;
             }
+            return false;
+        }
+        if (shift) {
+            // Ctrl+Shift+K：清屏（Ctrl+Shift+C / Ctrl+Shift+V 留给终端复制、粘贴，不拦截）
+            if (shortcut-key(text, "k", "K")) {
+                if (root.has_active_session) {
+                    root.clear_terminal();
+                }
+                return true;
+            }
+            return false;
+        }
+        // Ctrl+N：新建会话（与 File > New Session 同一回调：打开 Session Editor）
+        if (shortcut-key(text, "n", "N")) {
+            root.start_new_saved_session_editor();
+            return true;
+        }
+        // Ctrl+O / Ctrl+L：聚焦快速连接
+        if (shortcut-key(text, "o", "O") || shortcut-key(text, "l", "L")) {
+            root.focus-quick-connect();
+            return true;
+        }
+        // Ctrl+S：保存活动会话（与 File > Save Active Session 同一状态门限；
+        // 组合键始终消费掉，避免 ^S/^Q 一类的控制码下发给 shell）
+        if (shortcut-key(text, "s", "S")) {
+            if (root.has_active_session) {
+                root.save_session();
+            }
+            return true;
+        }
+        // Ctrl+F：终端查找
+        if (shortcut-key(text, "f", "F")) {
+            root.terminal_find_visible = true;
+            return true;
+        }
+        // Ctrl+K：清屏（与 Edit > Clear Terminal 同一状态门限）
+        if (shortcut-key(text, "k", "K")) {
+            if (root.has_active_session) {
+                root.clear_terminal();
+            }
+            return true;
+        }
+        // Ctrl+B：切换左栏
+        if (shortcut-key(text, "b", "B")) {
+            root.session_manager_visible = !root.session_manager_visible;
+            return true;
+        }
+        // Ctrl+Q：退出（走现有确认弹窗）
+        if (shortcut-key(text, "q", "Q")) {
+            root.quit_dialog_visible = true;
+            return true;
+        }
+        // Ctrl+,：设置
+        if (text == ",") {
+            root.settings_dialog_visible = true;
+            return true;
+        }
+        return false;
+    }
+
+    // --- Menu models ---------------------------------------------------------
+    property <[MenuEntry]> file_menu_entries: [
+        { label: @tr("New Session"), shortcut: root.shortcut-new-session, enabled: true, checked: false, separator: false },
+        { label: @tr("Quick Connect"), shortcut: root.shortcut-quick-connect, enabled: true, checked: false, separator: false },
+        // W5-A3：没有活动会话时无处保存。
+        { label: @tr("Save Active Session"), shortcut: root.shortcut-save-session, enabled: root.has_active_session, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Settings..."), shortcut: root.shortcut-settings, enabled: true, checked: false, separator: false },
+        { label: @tr("Quit"), shortcut: root.shortcut-quit, enabled: true, checked: false, separator: false }
+    ];
+    property <[MenuEntry]> edit_menu_entries: [
+        // W5-A3：无选区 / 无活动会话时禁用。
+        { label: @tr("Copy"), shortcut: root.shortcut-copy, enabled: root.terminal_has_selection, checked: false, separator: false },
+        { label: @tr("Paste"), shortcut: root.shortcut-paste, enabled: true, checked: false, separator: false },
+        { label: @tr("Clear Terminal"), shortcut: root.shortcut-clear-terminal, enabled: root.has_active_session, checked: false, separator: false },
+        { label: @tr("Find..."), shortcut: root.shortcut-find, enabled: true, checked: false, separator: false }
+    ];
+    property <[MenuEntry]> session_menu_entries: [
+        // W5-A3：已连接才能断开；有活动会话（且未连接）才能重连。
+        { label: @tr("Disconnect"), shortcut: "", enabled: root.active_session_connected, checked: false, separator: false },
+        { label: @tr("Reconnect"), shortcut: root.shortcut-reconnect, enabled: root.has_active_session && !root.active_session_connected, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        // W5-A3：Edit / Delete 需要选中的已保存会话；Update 还需要活动会话作为来源。
+        { label: @tr("Edit Selected Session..."), shortcut: "", enabled: root.has_saved_selection, checked: false, separator: false },
+        { label: @tr("Update Selected From Active"), shortcut: "", enabled: root.has_saved_selection && root.has_active_session, checked: false, separator: false },
+        { label: @tr("Delete Selected Session..."), shortcut: "", enabled: root.has_saved_selection, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Known Hosts..."), shortcut: "", enabled: true, checked: false, separator: false }
+    ];
+    property <[MenuEntry]> view_menu_entries: [
+        { label: @tr("Session Manager"), shortcut: root.shortcut-toggle-sidebar, enabled: true, checked: root.session_manager_visible, separator: false },
+        { label: @tr("SFTP Panel"), shortcut: "", enabled: true, checked: root.sftp_visible, separator: false },
+        { label: @tr("Tunnels"), shortcut: "", enabled: true, checked: root.tunnels_visible, separator: false },
+        { label: @tr("Quick Commands"), shortcut: "", enabled: true, checked: root.commands_visible, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Fake Backend"), shortcut: "", enabled: true, checked: root.transport_backend_text == "fake", separator: false },
+        { label: @tr("Native SSH Backend"), shortcut: "", enabled: true, checked: root.transport_backend_text == "native-ssh", separator: false }
+    ];
+    property <[MenuEntry]> help_menu_entries: [
+        { label: @tr("About YShell"), shortcut: "", enabled: true, checked: false, separator: false }
+    ];
+    property <[MenuEntry]> terminal_context_menu_entries: [
+        // W5-A3：无选区时 Copy 禁用（其余项需要活动会话）。
+        { label: @tr("Copy"), shortcut: root.shortcut-copy, enabled: root.terminal_has_selection, checked: false, separator: false },
+        { label: @tr("Paste"), shortcut: root.shortcut-paste, enabled: true, checked: false, separator: false },
+        { label: @tr("Select All"), shortcut: "", enabled: root.has_active_session, checked: false, separator: false },
+        { label: @tr("Clear Terminal"), shortcut: root.shortcut-clear-terminal, enabled: root.has_active_session, checked: false, separator: false },
+        { label: @tr("Find..."), shortcut: root.shortcut-find, enabled: root.has_active_session, checked: false, separator: false }
+    ];
+    property <[MenuEntry]> saved_session_context_menu_entries: [
+        // W5-A3：没有选中的已保存会话时，各项操作禁用。
+        { label: @tr("Session" => "Open"), shortcut: "", enabled: root.has_saved_selection, checked: false, separator: false },
+        { label: @tr("Edit..."), shortcut: "", enabled: root.has_saved_selection, checked: false, separator: false },
+        { label: @tr("Update From Active"), shortcut: "", enabled: root.has_saved_selection && root.has_active_session, checked: false, separator: false },
+        { label: @tr("Delete..."), shortcut: "", enabled: root.has_saved_selection, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("New Session"), shortcut: root.shortcut-new-session, enabled: true, checked: false, separator: false }
+    ];
+    property <[MenuEntry]> sftp_context_menu_entries: [
+        // W5-A3：SFTP 操作需要选中项，且 SFTP 生命周期处于 ready。
+        { label: @tr("Sftp" => "Open"), shortcut: "", enabled: root.sftp_available && root.sftp_selected_index >= 0, checked: false, separator: false },
+        { label: @tr("Download..."), shortcut: "", enabled: root.sftp_available && root.sftp_selected_index >= 0, checked: false, separator: false },
+        { label: @tr("Edit Remote File"), shortcut: "", enabled: root.sftp_available && root.sftp_selected_index >= 0, checked: false, separator: false },
+        { label: @tr("Rename..."), shortcut: "", enabled: root.sftp_available && root.sftp_selected_index >= 0, checked: false, separator: false },
+        { label: @tr("Delete..."), shortcut: "", enabled: root.sftp_available && root.sftp_selected_index >= 0, checked: false, separator: false },
+        { label: @tr("Chmod..."), shortcut: "", enabled: root.sftp_available && root.sftp_selected_index >= 0, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("New Folder..."), shortcut: "", enabled: root.sftp_available, checked: false, separator: false },
+        { label: @tr("Refresh"), shortcut: "", enabled: root.sftp_available, checked: false, separator: false }
+    ];
+
+    // --- Local helpers -------------------------------------------------------
+    function close_context_menus() {
+        root.terminal_context_menu_open = false;
+        root.saved_session_context_menu_open = false;
+        root.sftp_context_menu_open = false;
+    }
+
+    function open_terminal_context_menu(x: length, y: length) {
+        root.close_context_menus();
+        root.open_menu_index = -1;
+        root.terminal_context_menu_x = x;
+        root.terminal_context_menu_y = y;
+        root.terminal_context_menu_open = true;
+    }
+
+    function open_saved_session_context_menu(x: length, y: length) {
+        root.close_context_menus();
+        root.open_menu_index = -1;
+        root.saved_session_context_menu_x = x;
+        root.saved_session_context_menu_y = y;
+        root.saved_session_context_menu_open = true;
+    }
+
+    function open_sftp_context_menu(x: length, y: length) {
+        root.close_context_menus();
+        root.open_menu_index = -1;
+        root.sftp_context_menu_x = x;
+        root.sftp_context_menu_y = y;
+        root.sftp_context_menu_open = true;
+    }
+
+    /// 菜单栏悬停切换：已有菜单展开时，指针移到另一个一级菜单直接切到它的菜单
+    /// （标准 MenuBar 行为）；没有菜单展开时悬停不动作，保持"点击展开"。
+    function hover_menu(index: int, anchor_x: length) {
+        if (root.open_menu_index >= 0 && root.open_menu_index != index) {
+            root.close_context_menus();
+            root.menu_anchor_x = anchor_x;
+            root.menu_anchor_y = Theme.bar-height-menubar;
+            root.open_menu_index = index;
+        }
+    }
+
+    // --- W4 i18n：模板函数（@tr 未写 context 时默认取组件名 MainWindow）--------
+    function secret-store-status(kind: string, path: string) -> string {
+        if kind == "file" {
+            if path == "" {
+                return @tr("Secret store enabled through the local encrypted store.");
+            }
+            return @tr("Secret store enabled at {0}", path);
+        }
+        if kind == "os" {
+            return @tr("Secret store enabled through the operating system keychain.");
+        }
+        if kind == "injected" {
+            return @tr("Secret store enabled through injected runtime keychain");
+        }
+        return @tr("Secret store disabled. Set YSHELL_MASTER_PASSWORD to enable the local encrypted store or use the operating system keychain.");
+    }
+
+    function editor-auth-test-status(kind: string, host: string, backend: string, startup: string, error: string) -> string {
+        if kind == "hint" {
+            return @tr("Run Auth Test to validate the current editor fields without saving.");
+        }
+        if kind == "loaded" {
+            return @tr("Loaded saved session into the editor. Run Auth Test before saving if you want to validate the current form.");
+        }
+        if kind == "failed" {
+            return @tr("Auth test failed: {0}", error);
+        }
+        if startup == "" {
+            return @tr("Auth test succeeded for {0} using the `{1}` backend.", host, backend);
+        }
+        return @tr("Auth test succeeded for {0} using the `{1}` backend. Startup: {2}", host, backend, startup);
+    }
+
+    function proxy-summary-text(kind: string, protocol: string, address: string, user: string, dns: bool) -> string {
+        if kind == "none" {
+            return @tr("Proxy disabled for this editor session.");
+        }
+        if kind == "incomplete" {
+            return @tr("Custom proxy draft: {0} (address incomplete).", protocol);
+        }
+        return @tr("Custom proxy draft: {0} {1} user={2} dns-by-proxy={3}", protocol, address, user, dns ? "on" : "off");
+    }
+
+    function settings-terminal-field-label(field: string) -> string {
+        if field == "scrollback-max-cells" {
+            return @tr("Scrollback memory cap");
+        }
+        return @tr("Scrollback lines");
+    }
+
+    function settings-terminal-status(kind: string, field: string, value: string, limit: string) -> string {
+        if kind == "hint" {
+            return @tr("Save terminal settings to apply the scrollback limits to existing sessions.");
+        }
+        if kind == "defaults-loaded" {
+            return @tr("Defaults loaded. Click Save to apply.");
+        }
+        if kind == "saved" {
+            return @tr("Saved terminal settings: scrollback={0} lines, cap={1} cells.", value, limit);
+        }
+        if kind == "empty" {
+            return @tr("{0} must not be empty.", settings-terminal-field-label(field));
+        }
+        if kind == "not-number" {
+            return @tr("{0} must be a whole number.", settings-terminal-field-label(field));
+        }
+        return @tr("{0} must be between {1} and {2}.", settings-terminal-field-label(field), value, limit);
+    }
+
+    function known-hosts-selection(kind: string, host: string, port: string, index: int, total: int) -> string {
+        if kind == "selected" {
+            return @tr("Selected known host {0}:{1} ({2} of {3}).", host, port, index, total);
+        }
+        if kind == "loaded" {
+            return @tr("Known hosts manager loaded {n} entry." | "Known hosts manager loaded {n} entries." % total);
+        }
+        return @tr("No persisted known hosts are available.");
+    }
+
+    function saved-session-selection(kind: string, name: string, host: string, id: string) -> string {
+        if kind == "profile" {
+            return @tr("{0} ({1})", name, host);
+        }
+        if kind == "missing" {
+            return @tr("{0} (missing)", id);
+        }
+        return @tr("No saved session selected");
+    }
+
+    function terminal-search-summary(kind: string, query: string, count: int, current: int) -> string {
+        if kind == "empty" {
+            return @tr("No matches for `{0}` in the visible terminal.", query);
+        }
+        if kind == "found" {
+            return @tr("Found {n} match for `{0}` in the visible terminal." | "Found {n} matches for `{0}` in the visible terminal." % count, query)
+                + " " + @tr("Showing {0}/{1}.", current, count);
+        }
+        return @tr("Find in terminal");
+    }
+
+    function sftp-listing-summary(kind: string, rows: string, session_key: string, path: string, error: string) -> string {
+        if kind == "connect-real" {
+            return @tr("Connect a real session and refresh SFTP to browse remote files.");
+        }
+        if kind == "draft-disconnected" {
+            return @tr("SFTP session is disconnected. Connect the draft before browsing remote files.");
+        }
+        if kind == "refresh-needs-session" {
+            return @tr("Connect a runtime session before refreshing the SFTP panel.");
+        }
+        if kind == "desktop-startup" {
+            return @tr("Desktop startup stays on the fake backend. Switch to `native-ssh` for the embedded SSH shell and SFTP paths.");
+        }
+        if kind == "fake-backend-selected" {
+            return @tr("Fake backend selected. Switch to `native-ssh` when you want to validate the embedded SSH and SFTP paths.");
+        }
+        if kind == "native-ssh-selected" {
+            return @tr("Native SSH selected. Connect a session to open the managed SFTP lifecycle.");
+        }
+        if kind == "empty-directory" {
+            return @tr("Current directory is empty.");
+        }
+        if kind == "reconnect-failed" {
+            return @tr("SFTP session failed because the native SSH session is not connected.");
+        }
+        if kind == "sync-fake-backend" {
+            return @tr("SFTP is unavailable on the fake backend. Switch to `native-ssh` first.");
+        }
+        if kind == "sync-missing-session" {
+            return @tr("SFTP lifecycle failed because the active runtime session is missing.");
+        }
+        if kind == "sync-disconnected" {
+            return @tr("SFTP session is disconnected. Connect or reconnect the runtime session first.");
+        }
+        if kind == "sync-reconnect-native" {
+            return @tr("SFTP session is disconnected. Reconnect this runtime session with `native-ssh` before using SFTP.");
+        }
+        if kind == "sync-failed" {
+            return @tr("SFTP session is attached to `{0}`, but listing `{1}` failed: {2}", session_key, path, error);
+        }
+        return rows;
+    }
+
+    function sftp-session-status(kind: string, reason: string, detail: string, session_key: string) -> string {
+        if kind == "unavailable" {
+            if reason == "fake-backend" {
+                return @tr("SFTP unavailable: fake transport backend is selected");
+            }
+            if reason == "desktop-startup-fake" {
+                return @tr("SFTP unavailable: desktop startup uses the fake backend");
+            }
+            return @tr("SFTP unavailable: select the native-ssh backend before using SFTP");
+        }
+        if kind == "disconnected" {
+            if session_key == "" {
+                return @tr("SFTP session disconnected. Connect a runtime session first.");
+            }
+            return @tr("SFTP session disconnected for runtime session `{0}`.", session_key);
+        }
+        if kind == "ready" {
+            return @tr("SFTP session ready for runtime session `{0}`.", session_key);
+        }
+        if session_key == "" {
+            return @tr("SFTP session failed: {0}", detail);
+        }
+        return @tr("SFTP session failed for runtime session `{0}`: {1}", session_key, detail);
+    }
+
+    function sftp-sort-summary(column: string, ascending: bool) -> string {
+        if column == "size" {
+            return @tr("Sftp" => "Size") + (ascending ? " ↑" : " ↓");
+        }
+        if column == "modified" {
+            return @tr("Sftp" => "Modified") + (ascending ? " ↑" : " ↓");
+        }
+        if column == "permissions" {
+            return @tr("Sftp" => "Permissions") + (ascending ? " ↑" : " ↓");
+        }
+        return @tr("Sftp" => "Name") + (ascending ? " ↑" : " ↓");
+    }
+
+    // --- W4 收尾：状态栏模板（覆盖最常见的 kind；未覆盖的 kind 回退英文 status_text）---
+    // Rust 侧 `AppProjection::status_kind` 只在覆盖的生产者处设置，其余赋值路径
+    // 保持 kind 为空（见 runtime.rs 的 status_i18n_parts）。
+    function status-message(kind: string, param_1: string, param_2: string, fallback: string) -> string {
+        if kind == "sftp-sorted" {
+            return @tr("Sorted SFTP entries by {0}.", sftp-sort-summary(param_1, param_2 == "ascending"));
+        }
+        if kind == "sftp-ready" {
+            // param_2 为空 = 仅生命周期就绪；否则为 "SFTP session ready. Loaded N ..."（N 存字符串）。
+            if param_2 == "" {
+                return @tr("SFTP session ready for runtime session `{0}`.", param_1);
+            }
+            return @tr("SFTP session ready. Loaded {n} SFTP entry from `{0}`." | "SFTP session ready. Loaded {n} SFTP entries from `{0}`." % round(param_2.to-float()), param_1);
+        }
+        if kind == "sftp-failed" {
+            if param_1 == "" {
+                return @tr("SFTP session failed: {0}", param_2);
+            }
+            return @tr("SFTP session failed for runtime session `{0}`: {1}", param_1, param_2);
+        }
+        if kind == "logging-saved" {
+            return @tr("Saved global logging policy: {0}.", param_1);
+        }
+        if kind == "secrets-reset" {
+            if param_2 == "master-password-missing" {
+                return @tr("Deleted `{0}` and left the secret store disabled because YSHELL_MASTER_PASSWORD is not set.", param_1);
+            }
+            if param_2 == "master-password-empty" {
+                return @tr("Deleted `{0}` and left the secret store disabled because YSHELL_MASTER_PASSWORD is empty.", param_1);
+            }
+            return @tr("Reset the local secret store at `{0}`.", param_1);
+        }
+        if kind == "quick-connect-error" {
+            return @tr("Quick Connect error: {0}", param_1);
+        }
+        if kind == "session-saved" {
+            return @tr("Saved active runtime session as profile `{0}`. Config now contains {1} saved session(s).", param_1, param_2);
+        }
+        if kind == "session-deleted" {
+            return @tr("Deleted saved session `{0}` and persisted the updated config.", param_1);
+        }
+        return fallback;
+    }
+
+    background: Theme.window-background;
+
+    // --- W5-A2：窗口级全局快捷键 FocusScope ---------------------------------
+    // 包住主内容：终端/输入框先拿到按键，被它们 reject 的组合沿父链冒泡到这里；
+    // 命中的组合 accept 并执行动作，其余 reject（不消费按键，继续走原本的焦点链路）。
+    // 终端 FocusScope 会 accept 全部按键（见 ui/components/terminal_view.slint），
+    // 所以终端聚焦时由 bootstrap.rs 的终端按键兜底调用同一份 `dispatch-global-shortcut`。
+    shortcut_scope := FocusScope {
+        key-pressed(event) => {
+            if (root.dispatch-global-shortcut(
+                event.text,
+                event.modifiers.control,
+                event.modifiers.shift,
+                event.modifiers.alt,
+                event.modifiers.meta
+            )) {
+                return accept;
+            }
+            return reject;
         }
 
-        HorizontalLayout {
+        VerticalLayout {
+            // FocusScope 不是布局容器：显式撑满窗口，保持内容区几何与之前一致。
+            width: parent.width;
+            height: parent.height;
             spacing: 0px;
 
+            // --- MenuBar（32px，低频/全局入口）----------------------------------
             Rectangle {
-                width: 280px;
-                background: #252b36;
-                VerticalLayout {
-                    padding: 12px;
+                height: Theme.bar-height-menubar;
+                background: Theme.window-background;
+                HorizontalLayout {
+                    padding-left: 8px;
+                    padding-top: 4px;
+                    padding-bottom: 4px;
+                    spacing: 2px;
+
+                    file_menu_title := MenuTitle {
+                        label: @tr("MenuBar" => "File");
+                        open: root.open_menu_index == 0;
+                        menu-open: root.open_menu_index >= 0;
+                        hovered => { root.hover_menu(0, file_menu_title.absolute-position.x); }
+                        activated => {
+                            if (root.open_menu_index == 0) {
+                                root.open_menu_index = -1;
+                            } else {
+                                root.close_context_menus();
+                                root.menu_anchor_x = file_menu_title.absolute-position.x;
+                                root.menu_anchor_y = Theme.bar-height-menubar;
+                                root.open_menu_index = 0;
+                            }
+                        }
+                    }
+                    edit_menu_title := MenuTitle {
+                        label: @tr("MenuBar" => "Edit");
+                        open: root.open_menu_index == 1;
+                        menu-open: root.open_menu_index >= 0;
+                        hovered => { root.hover_menu(1, edit_menu_title.absolute-position.x); }
+                        activated => {
+                            if (root.open_menu_index == 1) {
+                                root.open_menu_index = -1;
+                            } else {
+                                root.close_context_menus();
+                                root.menu_anchor_x = edit_menu_title.absolute-position.x;
+                                root.menu_anchor_y = Theme.bar-height-menubar;
+                                root.open_menu_index = 1;
+                            }
+                        }
+                    }
+                    session_menu_title := MenuTitle {
+                        label: @tr("MenuBar" => "Session");
+                        open: root.open_menu_index == 2;
+                        menu-open: root.open_menu_index >= 0;
+                        hovered => { root.hover_menu(2, session_menu_title.absolute-position.x); }
+                        activated => {
+                            if (root.open_menu_index == 2) {
+                                root.open_menu_index = -1;
+                            } else {
+                                root.close_context_menus();
+                                root.menu_anchor_x = session_menu_title.absolute-position.x;
+                                root.menu_anchor_y = Theme.bar-height-menubar;
+                                root.open_menu_index = 2;
+                            }
+                        }
+                    }
+                    view_menu_title := MenuTitle {
+                        label: @tr("MenuBar" => "View");
+                        open: root.open_menu_index == 3;
+                        menu-open: root.open_menu_index >= 0;
+                        hovered => { root.hover_menu(3, view_menu_title.absolute-position.x); }
+                        activated => {
+                            if (root.open_menu_index == 3) {
+                                root.open_menu_index = -1;
+                            } else {
+                                root.close_context_menus();
+                                root.menu_anchor_x = view_menu_title.absolute-position.x;
+                                root.menu_anchor_y = Theme.bar-height-menubar;
+                                root.open_menu_index = 3;
+                            }
+                        }
+                    }
+                    help_menu_title := MenuTitle {
+                        label: @tr("MenuBar" => "Help");
+                        open: root.open_menu_index == 4;
+                        menu-open: root.open_menu_index >= 0;
+                        hovered => { root.hover_menu(4, help_menu_title.absolute-position.x); }
+                        activated => {
+                            if (root.open_menu_index == 4) {
+                                root.open_menu_index = -1;
+                            } else {
+                                root.close_context_menus();
+                                root.menu_anchor_x = help_menu_title.absolute-position.x;
+                                root.menu_anchor_y = Theme.bar-height-menubar;
+                                root.open_menu_index = 4;
+                            }
+                        }
+                    }
+                    // 菜单栏右侧的弹性空白：让菜单栏的布局信息 max 无界。
+                    // 菜单项都是固定宽度，若菜单栏只有固定宽度的子项，Slint 会把整窗内容
+                    // 的 max-width 推导成这些子项之和（有限值），从而把窗口的 max_inner_size
+                    // 钉死（表现为拖大窗口被弹回），见本文件 Window 的尺寸约束说明。
+                    menu_bar_spacer := Rectangle { horizontal-stretch: 1; }
+                }
+            }
+
+            // --- CommandBar（48px，高频动作）-----------------------------------
+            Rectangle {
+                height: Theme.bar-height-commandbar;
+                background: Theme.layer-fill;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    padding-top: 8px;
+                    padding-bottom: 8px;
                     spacing: 8px;
-                    HorizontalLayout {
-                        Text { text: "Session Manager"; color: #f4f7fb; font-weight: 700; vertical-alignment: center; }
-                        Button { text: "+"; clicked => { root.new_session(); } }
+
+                    WinButton {
+                        text: @tr("New Session");
+                        icon: "plus";
+                        accent: true;
+                        clicked => { root.start_new_saved_session_editor(); }
                     }
-                    LineEdit { placeholder-text: "Search sessions"; }
-                    Text { text: "Favorites"; color: #a8b3c7; }
-                    Rectangle {
-                        height: 30px;
-                        background: #313948;
-                        border-radius: 4px;
-                        Text { text: root.active_session; color: #f4f7fb; x: 8px; y: 6px; }
+
+                    separator := Rectangle {
+                        width: 1px;
+                        height: 20px;
+                        background: Theme.control-stroke;
                     }
-                    Text { text: "Recent"; color: #a8b3c7; }
-                    Text { text: "Backend: " + root.transport_backend_text; color: #7dd3fc; }
-                    Text { text: root.session_summary_text; color: #cdd6e3; wrap: word-wrap; }
-                    Text { text: root.config_dir; color: #69758b; wrap: word-wrap; }
+
+                    quick_input := WinTextInput {
+                        placeholder-text: "ssh://user@host:22";
+                        min-width: 200px;
+                        max-width: 360px;
+                        horizontal-stretch: 1;
+                        accepted => { root.quick_connect(self.text); }
+                    }
+                    WinButton {
+                        text: @tr("Connect");
+                        icon: "connect";
+                        // W5-A3：输入为空时没有可解析的目标（契约 §4 `toolbar.quick_connect.button`）。
+                        enabled: quick_input.text != "";
+                        clicked => { root.quick_connect(quick_input.text); }
+                    }
+
+                    separator2 := Rectangle {
+                        width: 1px;
+                        height: 20px;
+                        background: Theme.control-stroke;
+                    }
+
+                    WinToggle {
+                        text: "";
+                        icon: "folder";
+                        accessible-name: @tr("SFTP panel");
+                        checked: root.sftp_visible;
+                        toggled => {
+                            // 右栏折叠时打开面板要顺带展开，否则点了没反应
+                            if (root.dock_auto_collapsed && !root.sftp_visible) { root.dock_user_expanded = true; }
+                            root.toggle_sftp();
+                        }
+                    }
+                    WinToggle {
+                        text: "";
+                        icon: "globe";
+                        accessible-name: @tr("Tunnels panel");
+                        checked: root.tunnels_visible;
+                        toggled => {
+                            if (root.dock_auto_collapsed && !root.tunnels_visible) { root.dock_user_expanded = true; }
+                            root.toggle_tunnels();
+                        }
+                    }
+                    WinToggle {
+                        text: "";
+                        icon: "code";
+                        accessible-name: @tr("Quick commands panel");
+                        checked: root.commands_visible;
+                        toggled => {
+                            if (root.dock_auto_collapsed && !root.commands_visible) { root.dock_user_expanded = true; }
+                            root.toggle_commands();
+                        }
+                    }
+
+                    spacer := Rectangle { }
+
+                    // 右栏自动折叠时的展开/收起入口（§4.2：<1120px）
+                    if root.dock_toggle_visible : WinIconButton {
+                        icon: root.dock_user_expanded ? "chevron-right" : "chevron-left";
+                        accessible-name: root.dock_user_expanded ? @tr("Collapse tool panels") : @tr("Expand tool panels");
+                        clicked => { root.dock_user_expanded = !root.dock_user_expanded; }
+                    }
+
+                    WinIconButton {
+                        icon: "search";
+                        accessible-name: @tr("Find in terminal");
+                        clicked => { root.terminal_find_visible = true; }
+                    }
+                    WinIconButton {
+                        icon: "settings";
+                        accessible-name: @tr("Settings");
+                        clicked => { root.settings_dialog_visible = true; }
+                    }
+                    WinIconButton {
+                        icon: "more";
+                        accessible-name: @tr("More");
+                        clicked => { root.open_menu_index = 4; root.menu_anchor_x = self.absolute-position.x; root.menu_anchor_y = Theme.bar-height-menubar + Theme.bar-height-commandbar; }
+                    }
                 }
             }
 
-            VerticalLayout {
-                Rectangle {
-                    height: 36px;
-                    background: #1b1f27;
-                    HorizontalLayout {
-                        padding-left: 8px;
-                        spacing: 6px;
-                        Button { text: root.tab_text; }
-                        Button { text: "+"; clicked => { root.new_session(); } }
-                    }
-                }
-                Rectangle {
-                    background: #0f1117;
+            // --- 主机密钥确认：已改为模态弹窗 HostKeyDialog（见文件末尾）------
+            // 旧的内嵌 InfoBar 横幅整块移除：属性/回调（host_key_prompt_visible、
+            // host_key_prompt_text、host_key_prompt_mode_text、
+            // host_key_prompt_confirmation_text、cancel_host_key_prompt、
+            // trust_host_key_once、trust_host_key_and_save、
+            // replace_host_key_and_connect、update_host_key_replace_confirmation）
+            // 全部保留，由 HostKeyDialog 复用。
+
+            HorizontalLayout {
+                spacing: 0px;
+
+                // --- SessionSidebar（NavigationView 形态；W5-④ 宽度可拖拽）---------
+                if root.nav_column_visible : Rectangle {
+                    width: root.nav_effective_width;
+                    background: Theme.layer-fill;
+
+                    // 侧栏节奏（§5.4）：内边距 8、条目间距 8；分组标题前再加 4（合计 12）呼吸。
                     VerticalLayout {
-                        padding: 16px;
-                        spacing: 12px;
-                        Text { text: root.terminal_title_text; color: #d7e0ef; font-size: 20px; }
-                        Text { text: root.terminal_body_text; color: #a8b3c7; wrap: word-wrap; }
-                        Text { text: root.status_text; color: #7dd3fc; wrap: word-wrap; }
+                        padding: Theme.spacing-8;
+                        spacing: Theme.spacing-8;
+                        alignment: start;
+
+                        // 头部：标题 + 新建会话
+                        HorizontalLayout {
+                            height: 40px;
+                            padding-left: 8px;
+                            padding-right: 4px;
+                            padding-top: 4px;
+                            padding-bottom: 4px;
+                            spacing: 8px;
+                            Text {
+                                text: @tr("Sessions");
+                                color: Theme.text-primary;
+                                font-size: Theme.font-body-large;
+                                font-weight: Theme.weight-semibold;
+                                vertical-alignment: center;
+                            }
+                            nav_head_spacer := Rectangle { }
+                            if root.nav_rail_available : WinIconButton {
+                                icon: "chevron-left";
+                                accessible-name: @tr("Collapse navigation");
+                                clicked => { root.nav_user_expanded = false; }
+                            }
+                            WinIconButton {
+                                icon: "plus";
+                                accessible-name: @tr("New session");
+                                clicked => { root.new_session(); }
+                            }
+                        }
+
+                        WinTextInput {
+                            text <=> root.session_search_text;
+                            placeholder-text: @tr("Search sessions");
+                            edited => { root.update_session_search(self.text); }
+                        }
+
+                        // 已保存会话：完整树结构（展开/折叠、单击选中、双击打开、
+                        // 右键菜单、搜索过滤都在组件内完成；旧的多行文本投影不再渲染）
+                        Text {
+                            text: @tr("SAVED");
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            padding-left: Theme.spacing-8;
+                            // 上间距 = 条目间距 8 + 4 = 12（§5.4 分组标题）
+                            padding-top: Theme.spacing-4;
+                        }
+
+                        SessionTree {
+                            rows: root.session_tree_rows;
+                            selected-id: root.saved_session_tree_selected_id;
+                            empty-text: root.saved_session_inventory_display;
+                            select(id) => { root.select_saved_session(id); }
+                            activate(id) => { root.activate_saved_session_tree_node(id); }
+                            toggle-folder(id) => { root.toggle_saved_folder(id); }
+                            context-menu-requested(id, x, y) => {
+                                // 右键先选中再弹菜单；这条路径不算"点击"，
+                                // 否则会喂给"重复点击 = 激活"兜底。
+                                root.select_saved_session_for_menu(id);
+                                root.open_saved_session_context_menu(x, y);
+                            }
+                        }
+
+                        HorizontalLayout {
+                            padding-left: Theme.spacing-4;
+                            spacing: Theme.spacing-4;
+                            alignment: center;
+                            WinIconButton {
+                                icon: "more";
+                                accessible-name: @tr("Session actions");
+                                clicked => {
+                                    root.open_saved_session_context_menu(
+                                        self.absolute-position.x,
+                                        self.absolute-position.y + self.height
+                                    );
+                                }
+                            }
+                        }
+
+                        Text {
+                            text: @tr("RECENT");
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            padding-left: Theme.spacing-8;
+                            // 上间距 = 条目间距 8 + 4 = 12（§5.4 分组标题）
+                            padding-top: Theme.spacing-4;
+                        }
+                        Text {
+                            text: root.recent_sessions_display;
+                            color: Theme.text-secondary;
+                            font-size: Theme.font-caption;
+                            padding-left: Theme.spacing-8;
+                            padding-right: Theme.spacing-8;
+                            wrap: word-wrap;
+                        }
+
+                        Text {
+                            text: @tr("ACTIVE");
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            padding-left: Theme.spacing-8;
+                            // 上间距 = 条目间距 8 + 4 = 12（§5.4 分组标题）
+                            padding-top: Theme.spacing-4;
+                        }
+                        Rectangle {
+                            height: Theme.row-height-list;
+                            background: Theme.control-fill;
+                            border-radius: Theme.radius-control;
+                            border-width: 1px;
+                            border-color: Theme.control-stroke;
+                            Text {
+                                text: root.active_session_display;
+                                color: Theme.text-primary;
+                                x: 10px;
+                                width: parent.width - 20px;
+                                height: parent.height;
+                                vertical-alignment: center;
+                                wrap: no-wrap;
+                                overflow: elide;
+                            }
+                        }
                     }
                 }
-            }
 
-            Rectangle {
-                width: 340px;
-                background: #20242d;
+                // --- 左导航图标条（§4.2：<960px 折叠为 48px，可点按钮展开）---------
+                if root.nav_rail_visible : Rectangle {
+                    width: Theme.nav-rail-width;
+                    background: Theme.layer-fill;
+
+                    VerticalLayout {
+                        padding: 8px;
+                        spacing: Theme.spacing-4;
+                        alignment: start;
+
+                        WinIconButton {
+                            icon: "chevron-right";
+                            accessible-name: @tr("Expand navigation");
+                            clicked => { root.nav_user_expanded = true; }
+                        }
+                        WinIconButton {
+                            icon: "plus";
+                            accessible-name: @tr("New session");
+                            clicked => { root.new_session(); }
+                        }
+                    }
+                }
+
+                // --- 左导航拖拽把手（4px，悬停变色；隐藏/图标条模式不提供）----------
+                if root.nav_column_visible : Rectangle {
+                    width: Theme.resize-handle-width;
+                    background: root.nav_resize_dragging || nav_resize_touch.has_hover ? Theme.accent : transparent;
+                    // 拖拽改变宽度即时生效（无动画）；只有悬停变色的 100ms 过渡
+                    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+                    nav_resize_touch := TouchArea {
+                        mouse-cursor: col-resize;
+
+                        pointer-event(event) => {
+                            if (event.button == PointerEventButton.left) {
+                                if (event.kind == PointerEventKind.down) {
+                                    root.nav_resize_dragging = true;
+                                    root.nav_drag_anchor_x = self.absolute-position.x + self.mouse-x;
+                                    root.nav_drag_start_width = root.nav_panel_width;
+                                } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
+                                    root.nav_resize_dragging = false;
+                                }
+                            }
+                        }
+                        moved => {
+                            if (root.nav_resize_dragging) {
+                                root.nav_panel_width = clamp(
+                                    root.nav_drag_start_width + (self.absolute-position.x + self.mouse-x - root.nav_drag_anchor_x) / root.layout_drag_scale,
+                                    root.nav_width_min,
+                                    root.nav_width_max
+                                );
+                            }
+                        }
+                    }
+                }
+
+                // --- TerminalWorkspace --------------------------------------------
                 VerticalLayout {
-                    padding: 10px;
-                    spacing: 10px;
+                    // 标签条（唯一容器；阶段 B 自绘标题栏时整体上移）
                     Rectangle {
-                        height: root.sftp_visible ? 150px : 0px;
-                        background: #252b36;
-                        Text { text: "SFTP\nConnect a session to browse remote files."; color: #f4f7fb; x: 10px; y: 10px; }
+                        height: 36px;
+                        background: Theme.window-background;
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            padding-top: 2px;
+                            padding-bottom: 2px;
+                            spacing: 4px;
+
+                            WinTab {
+                                text: root.tab_display;
+                                icon: "terminal";
+                                active: true;
+                                closable: false;
+                            }
+                            WinIconButton {
+                                icon: "plus";
+                                accessible-name: @tr("New session");
+                                clicked => { root.new_session(); }
+                            }
+                            workspace_spacer := Rectangle { }
+                            WinIconButton {
+                                icon: "search";
+                                accessible-name: @tr("Find in terminal");
+                                clicked => { root.terminal_find_visible = true; }
+                            }
+                        }
                     }
                     Rectangle {
-                        height: root.tunnels_visible ? 130px : 0px;
-                        background: #252b36;
-                        Text { text: "Tunnels\nNo active tunnels"; color: #f4f7fb; x: 10px; y: 10px; }
+                        background: Theme.window-background;
+                        VerticalLayout {
+                            padding: 12px;
+                            terminal_view := TerminalView {
+                                title: root.terminal_title_display;
+                                log-output: root.terminal_body_display;
+                                visible-lines <=> root.terminal_visible_lines;
+                                terminal-image: root.terminal_image;
+                                cursor-column: root.terminal_cursor_column;
+                                cursor-row: root.terminal_cursor_row;
+                                scroll-offset: root.terminal_scroll_offset;
+                                selection-active: root.terminal_selection_active;
+                                search-query <=> root.terminal_search_query_text;
+                                search-summary: root.terminal_search_summary_display;
+                                footer-status: root.status_text;
+                                find-visible: root.terminal_find_visible;
+                                key-pressed(text, ctrl, alt, shift, meta) => { root.terminal_key(text, ctrl, alt, shift, meta); }
+                                scroll-lines(delta) => { root.terminal_scroll(delta); }
+                                scroll-to-bottom() => { root.terminal_scroll_to_bottom(); }
+                                selection-begin(x, y) => { root.terminal_selection_begin(x, y); }
+                                selection-update(x, y) => { root.terminal_selection_update(x, y); }
+                                selection-end(x, y) => { root.terminal_selection_end(x, y); }
+                                select-word-at(x, y) => { root.terminal_select_word_at(x, y); }
+                                copy-visible() => { root.copy_terminal_visible(); }
+                                paste-clipboard() => { root.paste_terminal_clipboard(); }
+                                clear-terminal() => { root.clear_terminal(); }
+                                find-text(query) => { root.find_terminal_text(query); }
+                                find-next() => { root.find_terminal_next(); }
+                                find-prev() => { root.find_terminal_prev(); }
+                                dismiss-find() => { root.terminal_find_visible = false; }
+                                context-menu-requested(x, y) => { root.open_terminal_context_menu(x, y); }
+                            }
+                        }
                     }
+                }
+
+                // --- 右栏拖拽把手（4px，悬停变色；折叠时不显示）--------------------
+                if root.dock_visible : Rectangle {
+                    width: Theme.resize-handle-width;
+                    background: root.dock_resize_dragging || dock_resize_touch.has_hover ? Theme.accent : transparent;
+                    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+                    dock_resize_touch := TouchArea {
+                        mouse-cursor: col-resize;
+
+                        pointer-event(event) => {
+                            if (event.button == PointerEventButton.left) {
+                                if (event.kind == PointerEventKind.down) {
+                                    root.dock_resize_dragging = true;
+                                    root.dock_drag_anchor_x = self.absolute-position.x + self.mouse-x;
+                                    root.dock_drag_start_width = root.dock_panel_width;
+                                } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
+                                    root.dock_resize_dragging = false;
+                                }
+                            }
+                        }
+                        moved => {
+                            if (root.dock_resize_dragging) {
+                                root.dock_panel_width = clamp(
+                                    root.dock_drag_start_width - (self.absolute-position.x + self.mouse-x - root.dock_drag_anchor_x) / root.layout_drag_scale,
+                                    root.dock_width_min,
+                                    root.dock_width_max
+                                );
+                            }
+                        }
+                    }
+                }
+
+                // --- RightDock（卡片式工具面板；W5-④ 宽度可拖拽/自动折叠）----------
+                Rectangle {
+                    width: root.dock_effective_width;
+                    visible: root.dock_visible;
+                    background: Theme.window-background;
+                    // 卡片总高可能超过可用高度（例如 1600×1000 时右栏自动展开）：
+                    // 裁剪在右栏内，避免卡片画到状态栏上（溢出）。
+                    clip: true;
+
                     Rectangle {
-                        height: root.commands_visible ? 130px : 0px;
-                        background: #252b36;
-                        Text { text: "Quick Commands\nCommand presets will appear here."; color: #f4f7fb; x: 10px; y: 10px; }
+                        x: 0;
+                        width: 1px;
+                        height: parent.height;
+                        background: Theme.layer-stroke;
+                    }
+
+                    // 面板内容只在右栏可见时才参与布局：Slint 的 `visible: false`
+                    // 不会把元素移出布局，若内容常驻，折叠状态下卡片的最小高度仍会
+                    // 顶起主区最小高度（窗口变矮时把状态栏挤出可视区）。
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 12px;
+                        alignment: start;
+
+                        if root.dock_visible && root.sftp_visible : Rectangle {
+                            height: 420px;
+                            background: Theme.card-fill;
+                            border-radius: Theme.radius-panel;
+                            border-width: 1px;
+                            border-color: Theme.card-stroke;
+
+                            Rectangle {
+                                x: 12px;
+                                y: 8px;
+                                width: parent.width - 24px;
+                                height: Theme.control-height;
+                                background: transparent;
+
+                                WinCardHeader {
+                                    width: parent.width;
+                                    height: parent.height;
+                                    title: @tr("SFTP");
+                                    icon: "folder";
+                                    dock_header_spacer := Rectangle { horizontal-stretch: 1; }
+                                    WinIconButton {
+                                        icon: "more";
+                                        accessible-name: @tr("SFTP operations");
+                                        clicked => {
+                                            root.open_sftp_context_menu(
+                                                self.absolute-position.x,
+                                                self.absolute-position.y + self.height
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+
+                            SftpPanel {
+                                x: 8px;
+                                y: 44px;
+                                width: parent.width - 16px;
+                                height: parent.height - 52px;
+                                rows: root.sftp_rows;
+                                crumbs: root.sftp_crumbs;
+                                selected-index: root.sftp_selected_index;
+                                session-status-text: root.sftp_session_status_display;
+                                sort-column: root.sftp_sort_column_text;
+                                sort-ascending: root.sftp_sort_ascending;
+                                sort-text: root.sftp_sort_display;
+                                show-hidden: root.sftp_show_hidden;
+                                item-summary-text: root.sftp_item_summary_text;
+                            item-count: root.sftp_item_count;
+                            dir-count: root.sftp_dir_count;
+                                empty-text: root.sftp_empty_display;
+                                selected-name-text: root.sftp_selected_name_text;
+                                remote-edit-text: root.sftp_remote_edit_display;
+                                remote-edit-active: root.sftp_remote_edit_active;
+                                path-text <=> root.sftp_path_text;
+
+                                refresh() => { root.refresh_sftp(); }
+                                up() => { root.open_sftp_parent(); }
+                                home() => { root.open_sftp_path("/"); }
+                                open-path(path) => { root.open_sftp_path(path); }
+                                open-crumb(index) => { root.open_sftp_crumb(index); }
+                                sort-by(column) => { root.sort_sftp(column); }
+                                toggle-hidden() => { root.toggle_sftp_hidden(); }
+                                select-row(index) => { root.select_sftp_entry(index); }
+                                activate-row(index) => {
+                                    root.select_sftp_entry(index);
+                                    root.activate_sftp_entry();
+                                }
+                                context-menu-requested(index, x, y) => {
+                                    root.open_sftp_context_menu(x, y);
+                                }
+                                new-folder() => {
+                                    root.sftp_dialog_name_text = "";
+                                    root.sftp_dialog_kind = "new-folder";
+                                }
+                                upload() => {
+                                    root.sftp_dialog_local_text = root.sftp_local_path_text;
+                                    root.sftp_dialog_kind = "upload";
+                                }
+                                download() => {
+                                    root.sftp_dialog_local_text = root.sftp_local_path_text;
+                                    root.sftp_dialog_kind = "download";
+                                }
+                                edit-remote() => { root.edit_sftp_selected(); }
+                                rename() => {
+                                    root.sftp_dialog_name_text = root.sftp_selected_name_text;
+                                    root.sftp_dialog_kind = "rename";
+                                }
+                                delete() => { root.sftp_dialog_kind = "delete"; }
+                                chmod() => {
+                                    root.sftp_dialog_permissions_text = root.sftp_selected_permissions_text;
+                                    root.sftp_dialog_kind = "chmod";
+                                }
+                                save-edit() => { root.save_sftp_remote_edit(); }
+                                cancel-edit() => { root.cancel_sftp_remote_edit(); }
+                            }
+                        }
+                        if root.dock_visible && root.tunnels_visible : WinCard {
+                            WinCardHeader {
+                                title: @tr("Tunnels");
+                                icon: "globe";
+                            }
+                            Text {
+                                text: root.tunnels_summary_display;
+                                color: Theme.text-secondary;
+                                font-size: Theme.font-caption;
+                                wrap: word-wrap;
+                            }
+                        }
+
+                        if root.dock_visible : WinCard {
+                            WinCardHeader {
+                                title: @tr("Transfers");
+                                icon: "download";
+                            }
+                            TransferQueue {
+                                height: 88px;
+                                summary_text: root.transfer_queue_display;
+                            }
+                        }
+
+                        if root.dock_visible && root.commands_visible : WinCard {
+                            WinCardHeader {
+                                title: @tr("Quick Commands");
+                                icon: "code";
+                            }
+                            Text {
+                                text: @tr("Command presets will appear here.");
+                                color: Theme.text-tertiary;
+                                font-size: Theme.font-caption;
+                                wrap: word-wrap;
+                            }
+                        }
+
+                        // 常驻空白（首选高度 0，不改变渲染）：保证右栏布局任何时候都至少有一个
+                        // cell。空布局的 layout info 是 { min: 0, max: 0 }（见 i-slint-core
+                        // `box_layout_info` 的 count < 1 分支），而主区 cross 轴取各 cell 的
+                        // min(max)，随后 `fold.max = fold.max.max(fold.min)` 会把主区最大高度
+                        // 钉成"各 cell 最小高度里的最大值"——表现就是窗口高度被封顶、
+                        // 且根内容撑不满窗口（底部死区）。有 cell 在时 max 无界。
+                        dock_layout_spacer := Rectangle { vertical-stretch: 1; }
+                    }
+                }
+            }
+
+            // --- StatusBar（26px）------------------------------------------------
+            Rectangle {
+                height: Theme.bar-height-status;
+                background: Theme.layer-fill;
+
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    spacing: 8px;
+
+                    Rectangle {
+                        width: 8px;
+                        vertical-stretch: 1;
+                        background: transparent;
+
+                        Rectangle {
+                            width: 8px;
+                            height: 8px;
+                            border-radius: 4px;
+                            y: (parent.height - self.height) / 2;
+                            background: root.transport_backend_text == "native-ssh" ? Theme.success : Theme.text-tertiary;
+                        }
+                    }
+
+                    Text {
+                        text: root.status_display;
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    status_spacer := Rectangle { }
+
+                    Text {
+                        text: @tr("Backend: {0}", root.transport_backend_text);
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        wrap: no-wrap;
                     }
                 }
             }
         }
+    }
 
-        Rectangle {
-            height: 28px;
-            background: #20242d;
-            Text { text: root.status_text; color: #cdd6e3; x: 10px; vertical-alignment: center; }
+    // --- Menus and context menus (above content, below modal dialogs) --------
+    file_menu_popup := MenuPopup {
+        open: root.open_menu_index == 0;
+        entries: root.file_menu_entries;
+        anchor-x: root.menu_anchor_x;
+        anchor-y: root.menu_anchor_y;
+        panel-width: 230px;
+        dismissed => { root.open_menu_index = -1; }
+        selected(index) => {
+            if (index == 0) { root.start_new_saved_session_editor(); }
+            else if (index == 1) { root.focus-quick-connect(); }
+            else if (index == 2) { root.save_session(); }
+            else if (index == 4) { root.settings_dialog_visible = true; }
+            else if (index == 5) { root.quit_dialog_visible = true; }
+            root.open_menu_index = -1;
         }
+    }
+
+    edit_menu_popup := MenuPopup {
+        open: root.open_menu_index == 1;
+        entries: root.edit_menu_entries;
+        anchor-x: root.menu_anchor_x;
+        anchor-y: root.menu_anchor_y;
+        panel-width: 210px;
+        dismissed => { root.open_menu_index = -1; }
+        selected(index) => {
+            if (index == 0) { root.copy_terminal_visible(); }
+            else if (index == 1) { root.paste_terminal_clipboard(); }
+            else if (index == 2) { root.clear_terminal(); }
+            else if (index == 3) { root.terminal_find_visible = true; }
+            root.open_menu_index = -1;
+        }
+    }
+
+    session_menu_popup := MenuPopup {
+        open: root.open_menu_index == 2;
+        entries: root.session_menu_entries;
+        anchor-x: root.menu_anchor_x;
+        anchor-y: root.menu_anchor_y;
+        panel-width: 260px;
+        dismissed => { root.open_menu_index = -1; }
+        selected(index) => {
+            if (index == 0) { root.disconnect_session(); }
+            else if (index == 1) { root.reconnect_session(); }
+            else if (index == 3) { root.load_selected_saved_session_into_editor(); }
+            else if (index == 4) { root.update_selected_saved_session(); }
+            else if (index == 5) {
+                root.delete_session_confirmation_text = "";
+                root.delete_session_dialog_visible = true;
+            }
+            else if (index == 7) { root.open_known_hosts_manager(); }
+            root.open_menu_index = -1;
+        }
+    }
+
+    view_menu_popup := MenuPopup {
+        open: root.open_menu_index == 3;
+        entries: root.view_menu_entries;
+        anchor-x: root.menu_anchor_x;
+        anchor-y: root.menu_anchor_y;
+        panel-width: 250px;
+        dismissed => { root.open_menu_index = -1; }
+        selected(index) => {
+            if (index == 0) { root.session_manager_visible = !root.session_manager_visible; }
+            else if (index == 1) {
+                if (root.dock_auto_collapsed && !root.sftp_visible) { root.dock_user_expanded = true; }
+                root.toggle_sftp();
+            }
+            else if (index == 2) {
+                if (root.dock_auto_collapsed && !root.tunnels_visible) { root.dock_user_expanded = true; }
+                root.toggle_tunnels();
+            }
+            else if (index == 3) {
+                if (root.dock_auto_collapsed && !root.commands_visible) { root.dock_user_expanded = true; }
+                root.toggle_commands();
+            }
+            else if (index == 5) { root.select_fake_backend(); }
+            else if (index == 6) { root.select_native_ssh_backend(); }
+            root.open_menu_index = -1;
+        }
+    }
+
+    help_menu_popup := MenuPopup {
+        open: root.open_menu_index == 4;
+        entries: root.help_menu_entries;
+        anchor-x: root.menu_anchor_x;
+        anchor-y: root.menu_anchor_y;
+        panel-width: 210px;
+        dismissed => { root.open_menu_index = -1; }
+        selected(index) => {
+            if (index == 0) { root.about_dialog_visible = true; }
+            root.open_menu_index = -1;
+        }
+    }
+
+    terminal_context_menu := MenuPopup {
+        open: root.terminal_context_menu_open;
+        entries: root.terminal_context_menu_entries;
+        anchor-x: root.terminal_context_menu_x;
+        anchor-y: root.terminal_context_menu_y;
+        panel-width: 200px;
+        dismissed => { root.terminal_context_menu_open = false; }
+        selected(index) => {
+            if (index == 0) { root.copy_terminal_selection(); }
+            else if (index == 1) { root.paste_terminal_clipboard(); }
+            else if (index == 2) { root.terminal_select_all(); }
+            else if (index == 3) { root.clear_terminal(); }
+            else if (index == 4) { root.terminal_find_visible = true; }
+            root.terminal_context_menu_open = false;
+        }
+    }
+
+    saved_session_context_menu := MenuPopup {
+        open: root.saved_session_context_menu_open;
+        entries: root.saved_session_context_menu_entries;
+        anchor-x: root.saved_session_context_menu_x;
+        anchor-y: root.saved_session_context_menu_y;
+        panel-width: 230px;
+        dismissed => { root.saved_session_context_menu_open = false; }
+        selected(index) => {
+            if (index == 0) { root.open_selected_saved_session(); }
+            else if (index == 1) { root.load_selected_saved_session_into_editor(); }
+            else if (index == 2) { root.update_selected_saved_session(); }
+            else if (index == 3) {
+                root.delete_session_confirmation_text = "";
+                root.delete_session_dialog_visible = true;
+            }
+            else if (index == 5) { root.start_new_saved_session_editor(); }
+            root.saved_session_context_menu_open = false;
+        }
+    }
+
+    sftp_context_menu := MenuPopup {
+        open: root.sftp_context_menu_open;
+        entries: root.sftp_context_menu_entries;
+        anchor-x: root.sftp_context_menu_x;
+        anchor-y: root.sftp_context_menu_y;
+        panel-width: 240px;
+        dismissed => { root.sftp_context_menu_open = false; }
+        selected(index) => {
+            if (index == 0) { root.activate_sftp_entry(); }
+            else if (index == 1) {
+                root.sftp_dialog_local_text = root.sftp_local_path_text;
+                root.sftp_dialog_kind = "download";
+            }
+            else if (index == 2) { root.edit_sftp_selected(); }
+            else if (index == 3) {
+                root.sftp_dialog_name_text = root.sftp_selected_name_text;
+                root.sftp_dialog_kind = "rename";
+            }
+            else if (index == 4) { root.sftp_dialog_kind = "delete"; }
+            else if (index == 5) {
+                root.sftp_dialog_permissions_text = root.sftp_selected_permissions_text;
+                root.sftp_dialog_kind = "chmod";
+            }
+            else if (index == 7) {
+                root.sftp_dialog_name_text = "";
+                root.sftp_dialog_kind = "new-folder";
+            }
+            else if (index == 8) { root.refresh_sftp(); }
+            root.sftp_context_menu_open = false;
+        }
+    }
+
+    // --- Modal dialogs -------------------------------------------------------
+    AboutDialog {
+        open: root.about_dialog_visible;
+        version-text: root.app_version_text;
+        config-dir-text: root.config_dir;
+        close() => { root.about_dialog_visible = false; }
+    }
+
+    SettingsDialog {
+        open: root.settings_dialog_visible;
+        config-dir-text: root.config_dir;
+        secret-store-status-text: root.secret_store_status_display;
+        secret-reset-confirmation-text: root.secret_reset_confirmation_text;
+        scrollback-lines-text <=> root.settings_scrollback_lines_text;
+        scrollback-max-cells-text <=> root.settings_scrollback_max_cells_text;
+        terminal-status-text: root.settings_terminal_status_display;
+        close() => { root.settings_dialog_visible = false; }
+        open-known-hosts() => {
+            root.settings_dialog_visible = false;
+            root.open_known_hosts_manager();
+        }
+        update-secret-reset-confirmation(value) => { root.update_secret_reset_confirmation(value); }
+        reset-secrets() => { root.reset_secrets(); }
+        update-scrollback-lines(value) => { root.update_settings_scrollback_lines(value); }
+        update-scrollback-max-cells(value) => { root.update_settings_scrollback_max_cells(value); }
+        reset-terminal-defaults() => { root.reset_settings_terminal_defaults(); }
+        save-terminal-settings() => { root.save_settings_terminal(); }
+    }
+
+    ConfirmDialog {
+        open: root.delete_session_dialog_visible;
+        title-text: @tr("Delete Saved Session");
+        message-text: @tr("This permanently removes the selected saved session from disk. Type DELETE to confirm.");
+        confirmation-token: "DELETE";
+        confirmation-placeholder: @tr("Type DELETE");
+        confirmation-text <=> root.delete_session_confirmation_text;
+        confirm-label: @tr("Delete");
+        confirmed() => {
+            root.delete_selected_saved_session();
+            root.delete_session_dialog_visible = false;
+            root.delete_session_confirmation_text = "";
+        }
+        canceled() => {
+            root.delete_session_dialog_visible = false;
+            root.delete_session_confirmation_text = "";
+        }
+    }
+
+    ConfirmDialog {
+        open: root.quit_dialog_visible;
+        title-text: @tr("Quit YShell");
+        message-text: @tr("Quit YShell now? Active runtime sessions will be disconnected.");
+        confirm-label: @tr("Quit");
+        confirmed() => { root.quit_app(); }
+        canceled() => { root.quit_dialog_visible = false; }
+    }
+
+    // W5：连接密码弹窗。密码只用于这一次连接尝试（不写密钥库/磁盘）；
+    // 空密码由 `connect-enabled` 在 UI 层禁用主按钮，Rust 侧再校验兜底。
+    PasswordPromptDialog {
+        open: root.password_prompt_visible;
+        title-text: root.password_prompt_title_text;
+        message-text: root.password_prompt_message_text;
+        password-text <=> root.password_prompt_value_text;
+        connect-enabled: root.password_prompt_value_text != "";
+        cancel() => { root.cancel_password_prompt(); }
+        submit() => { root.submit_password(root.password_prompt_value_text); }
+    }
+
+    SftpEntryDialog {
+        open: root.sftp_dialog_kind != "none";
+        kind: root.sftp_dialog_kind;
+        selected-name-text: root.sftp_selected_name_text;
+        selected-path-text: root.sftp_selected_path_text;
+        name-text <=> root.sftp_dialog_name_text;
+        permissions-text <=> root.sftp_dialog_permissions_text;
+        local-path-text <=> root.sftp_dialog_local_text;
+        create-folder(name) => {
+            root.create_sftp_folder(name);
+            root.sftp_dialog_kind = "none";
+        }
+        rename-selected(name) => {
+            root.rename_sftp_selected(name);
+            root.sftp_dialog_kind = "none";
+        }
+        delete-selected() => {
+            root.delete_sftp_selected();
+            root.sftp_dialog_kind = "none";
+        }
+        chmod-selected(permissions) => {
+            root.chmod_sftp_selected(permissions);
+            root.sftp_dialog_kind = "none";
+        }
+        upload-selected(path) => {
+            root.upload_sftp_into_current(path);
+            root.sftp_dialog_kind = "none";
+        }
+        download-selected(path) => {
+            root.download_sftp_selected(path);
+            root.sftp_dialog_kind = "none";
+        }
+        canceled() => { root.sftp_dialog_kind = "none"; }
+    }
+
+    SessionEditor {
+        open: root.editor_modal_visible;
+        section: root.editor_section_text;
+        target-text: root.editor_target_display;
+        folder-text: root.editor_folder_display;
+        new-folder-name <=> root.new_folder_name_text;
+        name-text <=> root.editor_name_text;
+        host-text <=> root.editor_host_text;
+        port-text <=> root.editor_port_text;
+        username-text <=> root.editor_username_text;
+        auth-method-text: root.editor_auth_method_text;
+        host-key-policy-text: root.editor_host_key_policy_text;
+        password-text <=> root.editor_password_text;
+        key-path-text <=> root.editor_key_path_text;
+        passphrase-text <=> root.editor_passphrase_text;
+        auth-test-status-text: root.editor_auth_test_status_display;
+        proxy-mode-text: root.editor_proxy_mode_text;
+        proxy-protocol-text: root.editor_proxy_protocol_text;
+        proxy-host-text <=> root.editor_proxy_host_text;
+        proxy-port-text <=> root.editor_proxy_port_text;
+        proxy-username-text <=> root.editor_proxy_username_text;
+        proxy-password-text <=> root.editor_proxy_password_text;
+        proxy-dns-by-proxy: root.editor_proxy_dns_by_proxy;
+        proxy-summary-text: root.editor_proxy_summary_display;
+        tunnel-kind-text: root.editor_tunnel_kind_text;
+        tunnel-bind-host-text <=> root.editor_tunnel_bind_host_text;
+        tunnel-bind-port-text <=> root.editor_tunnel_bind_port_text;
+        tunnel-target-host-text <=> root.editor_tunnel_target_host_text;
+        tunnel-target-port-text <=> root.editor_tunnel_target_port_text;
+        tunnel-summary-text: root.editor_tunnel_summary_display;
+        logging-enabled-text: root.logging_enabled_text;
+        logging-format-text: root.logging_format_text;
+        logging-directory-text <=> root.logging_directory_text;
+        logging-summary-text: root.logging_summary_display;
+        secret-store-status-text: root.secret_store_status_display;
+        secret-reset-confirmation-text <=> root.secret_reset_confirmation_text;
+        config-dir-text: root.config_dir;
+        close() => { root.close_session_editor_modal(); }
+        select-general() => { root.select_session_editor_general(); }
+        select-authentication() => { root.select_session_editor_authentication(); }
+        select-terminal() => { root.select_session_editor_terminal(); }
+        select-sftp() => { root.select_session_editor_sftp(); }
+        select-tunnels() => { root.select_session_editor_tunnels(); }
+        select-proxy() => { root.select_session_editor_proxy(); }
+        select-logging() => { root.select_session_editor_logging(); }
+        select-advanced() => { root.select_session_editor_advanced(); }
+        select-appearance() => { root.select_session_editor_appearance(); }
+        select-folder-prev() => { root.select_previous_editor_folder(); }
+        select-folder-next() => { root.select_next_editor_folder(); }
+        update-new-folder-name(value) => { root.update_new_folder_name(value); }
+        create-folder() => { root.create_folder_under_editor_target(); }
+        update-name(value) => { root.update_editor_name(value); }
+        update-host(value) => { root.update_editor_host(value); }
+        update-port(value) => { root.update_editor_port(value); }
+        update-username(value) => { root.update_editor_username(value); }
+        set-auth-method-agent() => { root.set_editor_auth_method_agent(); }
+        set-auth-method-password() => { root.set_editor_auth_method_password(); }
+        set-auth-method-keyboard-interactive() => { root.set_editor_auth_method_keyboard_interactive(); }
+        set-auth-method-private-key() => { root.set_editor_auth_method_private_key(); }
+        set-host-key-policy-strict() => { root.set_editor_host_key_policy_strict(); }
+        set-host-key-policy-trust-on-first-use() => { root.set_editor_host_key_policy_trust_on_first_use(); }
+        set-host-key-policy-accept-any-for-testing() => { root.set_editor_host_key_policy_accept_any_for_testing(); }
+        update-password(value) => { root.update_editor_password(value); }
+        update-key-path(value) => { root.update_editor_key_path(value); }
+        update-passphrase(value) => { root.update_editor_passphrase(value); }
+        test-auth() => { root.test_editor_auth(); }
+        set-proxy-mode-none() => { root.set_editor_proxy_mode_none(); }
+        set-proxy-mode-custom() => { root.set_editor_proxy_mode_custom(); }
+        set-proxy-protocol-socks4() => { root.set_editor_proxy_protocol_socks4(); }
+        set-proxy-protocol-socks4a() => { root.set_editor_proxy_protocol_socks4a(); }
+        set-proxy-protocol-socks5() => { root.set_editor_proxy_protocol_socks5(); }
+        set-proxy-protocol-http-connect() => { root.set_editor_proxy_protocol_http_connect(); }
+        update-proxy-host(value) => { root.update_editor_proxy_host(value); }
+        update-proxy-port(value) => { root.update_editor_proxy_port(value); }
+        update-proxy-username(value) => { root.update_editor_proxy_username(value); }
+        update-proxy-password(value) => { root.update_editor_proxy_password(value); }
+        toggle-proxy-dns-by-proxy() => { root.toggle_editor_proxy_dns_by_proxy(); }
+        set-tunnel-kind-local() => { root.set_editor_tunnel_kind_local(); }
+        set-tunnel-kind-remote() => { root.set_editor_tunnel_kind_remote(); }
+        set-tunnel-kind-dynamic() => { root.set_editor_tunnel_kind_dynamic(); }
+        update-tunnel-bind-host(value) => { root.update_editor_tunnel_bind_host(value); }
+        update-tunnel-bind-port(value) => { root.update_editor_tunnel_bind_port(value); }
+        update-tunnel-target-host(value) => { root.update_editor_tunnel_target_host(value); }
+        update-tunnel-target-port(value) => { root.update_editor_tunnel_target_port(value); }
+        add-tunnel() => { root.add_editor_tunnel_forward(); }
+        clear-tunnels() => { root.clear_editor_tunnels(); }
+        toggle-logging-enabled() => { root.toggle_global_logging_enabled(); }
+        set-logging-format-raw() => { root.set_global_logging_format_raw(); }
+        set-logging-format-sanitized() => { root.set_global_logging_format_sanitized(); }
+        update-logging-directory(value) => { root.update_global_logging_directory(value); }
+        save-logging-settings() => { root.save_global_logging_settings(); }
+        reset-secrets() => { root.reset_secrets(); }
+        update-secret-reset-confirmation(value) => { root.update_secret_reset_confirmation(value); }
+        save() => { root.save_editor_to_saved_session(); }
+        save-connect() => { root.save_editor_and_connect(); }
+    }
+
+    KnownHostsPage {
+        open: root.known_hosts_modal_visible;
+        inventory-text: root.known_hosts_inventory_display;
+        selection-text: root.known_hosts_selection_display;
+        details-text: root.known_hosts_details_text;
+        path-text: root.known_hosts_path_text;
+        clear-confirmation-text <=> root.known_hosts_clear_confirmation_text;
+        close() => { root.close_known_hosts_manager(); }
+        select-prev() => { root.select_previous_known_host(); }
+        select-next() => { root.select_next_known_host(); }
+        remove-selected() => { root.remove_selected_known_host(); }
+        update-clear-confirmation(value) => { root.update_known_hosts_clear_confirmation(value); }
+        clear-all() => { root.clear_all_known_hosts(); }
+    }
+
+    // 主机密钥确认：与其它模态弹窗同一层，放在最后以保证绘制在最上层
+    // （安全确认不应被其它模态遮挡）。属性/回调沿用 main_window 的
+    // host_key_prompt_* API，Rust 侧无需改动。
+    HostKeyDialog {
+        visible: root.host_key_prompt_visible;
+        prompt-text: root.host_key_prompt_text;
+        mode-text: root.host_key_prompt_mode_text;
+        confirmation-text <=> root.host_key_prompt_confirmation_text;
+        cancel() => { root.cancel_host_key_prompt(); }
+        trust-once() => { root.trust_host_key_once(); }
+        trust-and-save() => { root.trust_host_key_and_save(); }
+        replace-key() => { root.replace_host_key_and_connect(); }
+        confirmation-edited(value) => { root.update_host_key_replace_confirmation(value); }
+        dismissed() => { root.cancel_host_key_prompt(); }
     }
 }

@@ -33,6 +33,9 @@ pub struct ConfigDocument {
     /// Default logging behavior inherited by sessions.
     #[serde(default)]
     pub logging: LoggingProfile,
+    /// Default terminal scrollback behavior inherited by sessions.
+    #[serde(default)]
+    pub terminal: TerminalProfile,
 }
 
 impl Default for ConfigDocument {
@@ -46,6 +49,7 @@ impl Default for ConfigDocument {
             tunnel: TunnelProfile::default(),
             appearance: AppearanceProfile::default(),
             logging: LoggingProfile::default(),
+            terminal: TerminalProfile::default(),
         }
     }
 }
@@ -94,6 +98,37 @@ impl FolderProfile {
             .iter_mut()
             .find_map(|folder| folder.find_session_mut(id))
     }
+
+    /// Recursively finds an immutable folder by id.
+    #[must_use]
+    pub fn find_folder(&self, id: &str) -> Option<&FolderProfile> {
+        if self.id == id {
+            return Some(self);
+        }
+        self.folders
+            .iter()
+            .find_map(|folder| folder.find_folder(id))
+    }
+
+    /// Recursively finds a mutable folder by id.
+    pub fn find_folder_mut(&mut self, id: &str) -> Option<&mut FolderProfile> {
+        if self.id == id {
+            return Some(self);
+        }
+        self.folders
+            .iter_mut()
+            .find_map(|folder| folder.find_folder_mut(id))
+    }
+
+    /// Recursively removes a session by id and returns it when found.
+    pub fn remove_session(&mut self, id: &str) -> Option<SessionProfile> {
+        if let Some(index) = self.sessions.iter().position(|session| session.id == id) {
+            return Some(self.sessions.remove(index));
+        }
+        self.folders
+            .iter_mut()
+            .find_map(|folder| folder.remove_session(id))
+    }
 }
 
 /// Saved SSH/SFTP session profile.
@@ -111,6 +146,8 @@ pub struct SessionProfile {
     #[serde(default)]
     pub proxy_profile_id: Option<String>,
     #[serde(default)]
+    pub host_key_policy: Option<HostKeyPolicy>,
+    #[serde(default)]
     pub sftp: Option<SftpProfile>,
     #[serde(default)]
     pub tunnel: Option<TunnelProfile>,
@@ -118,6 +155,8 @@ pub struct SessionProfile {
     pub appearance: Option<AppearanceProfile>,
     #[serde(default)]
     pub logging: Option<LoggingProfile>,
+    #[serde(default)]
+    pub terminal: Option<TerminalProfile>,
     #[serde(default)]
     pub tags: Vec<String>,
 }
@@ -133,10 +172,12 @@ impl SessionProfile {
             username: None,
             auth_profile_id: None,
             proxy_profile_id: None,
+            host_key_policy: None,
             sftp: None,
             tunnel: None,
             appearance: None,
             logging: None,
+            terminal: None,
             tags: Vec::new(),
         }
     }
@@ -187,6 +228,9 @@ pub enum AuthMethod {
     Password {
         secret_key: String,
     },
+    KeyboardInteractive {
+        secret_key: String,
+    },
     PrivateKey {
         path: String,
         #[serde(default)]
@@ -200,11 +244,35 @@ pub enum AuthMethod {
 pub struct ProxyProfile {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub protocol: ProxyProtocol,
     pub host: String,
     #[serde(default = "default_ssh_port")]
     pub port: u16,
     #[serde(default)]
     pub username: Option<String>,
+    #[serde(default = "default_true")]
+    pub resolve_dns_by_proxy: bool,
+    #[serde(default)]
+    pub password_secret_key: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ProxyProtocol {
+    Socks4,
+    Socks4a,
+    #[default]
+    Socks5,
+    HttpConnect,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostKeyPolicy {
+    Strict,
+    TrustOnFirstUse,
+    AcceptAnyForTesting,
 }
 
 /// SFTP defaults or session override.
@@ -288,6 +356,26 @@ impl Default for LoggingProfile {
     }
 }
 
+/// Terminal scrollback defaults or session override.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TerminalProfile {
+    /// Maximum number of scrollback lines kept per session.
+    #[serde(default = "default_scrollback_lines")]
+    pub scrollback_lines: usize,
+    /// Maximum number of cells (`columns` summed over lines) kept in scrollback.
+    #[serde(default = "default_scrollback_max_cells")]
+    pub scrollback_max_cells: usize,
+}
+
+impl Default for TerminalProfile {
+    fn default() -> Self {
+        Self {
+            scrollback_lines: default_scrollback_lines(),
+            scrollback_max_cells: default_scrollback_max_cells(),
+        }
+    }
+}
+
 /// A session with all inheritable defaults resolved.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedSessionProfile {
@@ -298,6 +386,7 @@ pub struct ResolvedSessionProfile {
     pub tunnel: TunnelProfile,
     pub appearance: AppearanceProfile,
     pub logging: LoggingProfile,
+    pub terminal: TerminalProfile,
 }
 
 impl ConfigDocument {
@@ -327,6 +416,19 @@ impl ConfigDocument {
             .find_map(|folder| folder.find_session_mut(id))
     }
 
+    /// Finds a folder anywhere in the folder tree.
+    #[must_use]
+    pub fn find_folder(&self, id: &str) -> Option<&FolderProfile> {
+        self.folders.iter().find_map(|folder| folder.find_folder(id))
+    }
+
+    /// Finds a mutable folder anywhere in the folder tree.
+    pub fn find_folder_mut(&mut self, id: &str) -> Option<&mut FolderProfile> {
+        self.folders
+            .iter_mut()
+            .find_map(|folder| folder.find_folder_mut(id))
+    }
+
     /// Applies a basic edit to every matching session id and returns the count updated.
     pub fn batch_edit_basic<'a>(
         &mut self,
@@ -340,6 +442,13 @@ impl ConfigDocument {
                     .is_some()
             })
             .count()
+    }
+
+    /// Removes a session anywhere in the folder tree.
+    pub fn remove_session(&mut self, id: &str) -> Option<SessionProfile> {
+        self.folders
+            .iter_mut()
+            .find_map(|folder| folder.remove_session(id))
     }
 
     /// Resolves a session against document-level defaults and referenced profiles.
@@ -370,6 +479,10 @@ impl ConfigDocument {
                 .logging
                 .clone()
                 .unwrap_or_else(|| self.logging.clone()),
+            terminal: session
+                .terminal
+                .clone()
+                .unwrap_or_else(|| self.terminal.clone()),
             session,
         })
     }
@@ -436,6 +549,14 @@ fn default_log_format() -> String {
     "text".to_owned()
 }
 
+const fn default_scrollback_lines() -> usize {
+    10_000
+}
+
+const fn default_scrollback_max_cells() -> usize {
+    2_000_000
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -487,6 +608,66 @@ mod tests {
     }
 
     #[test]
+    fn terminal_profile_defaults_and_overrides_resolve() {
+        let mut document = sample_document();
+        assert_eq!(document.terminal.scrollback_lines, 10_000);
+        assert_eq!(document.terminal.scrollback_max_cells, 2_000_000);
+        assert_eq!(
+            document
+                .resolve_session("session-1")
+                .expect("resolve")
+                .terminal,
+            TerminalProfile::default()
+        );
+
+        document.terminal.scrollback_lines = 500;
+        document.terminal.scrollback_max_cells = 50_000;
+        document
+            .find_session_mut("session-1")
+            .expect("session")
+            .terminal = Some(TerminalProfile {
+            scrollback_lines: 42,
+            scrollback_max_cells: 4_200,
+        });
+
+        let resolved = document.resolve_session("session-1").expect("resolve");
+        assert_eq!(resolved.terminal.scrollback_lines, 42);
+        assert_eq!(resolved.terminal.scrollback_max_cells, 4_200);
+
+        let toml = document.to_toml_string().expect("serialize");
+        let reparsed = ConfigDocument::from_toml_str(&toml).expect("parse");
+        assert_eq!(reparsed, document);
+    }
+
+    #[test]
+    fn terminal_profile_defaults_fill_missing_toml_keys() {
+        let parsed = ConfigDocument::from_toml_str("schema_version = 1\n").expect("parse");
+        assert_eq!(parsed.terminal, TerminalProfile::default());
+    }
+
+    #[test]
+    fn keyboard_interactive_auth_profile_round_trips() {
+        let document = ConfigDocument {
+            auth_profiles: BTreeMap::from([(
+                "auth-kbdint".to_owned(),
+                AuthProfile {
+                    id: "auth-kbdint".to_owned(),
+                    name: "Keyboard Interactive".to_owned(),
+                    method: AuthMethod::KeyboardInteractive {
+                        secret_key: "local://yshell/auth-kbdint/keyboard-interactive".to_owned(),
+                    },
+                },
+            )]),
+            ..ConfigDocument::default()
+        };
+
+        let toml = document.to_toml_string().expect("serialize");
+        let parsed = ConfigDocument::from_toml_str(&toml).expect("parse");
+
+        assert_eq!(parsed, document);
+    }
+
+    #[test]
     fn batch_edits_basic_fields() {
         let mut document = sample_document();
         let edit = SessionBasicEdit {
@@ -503,6 +684,16 @@ mod tests {
         let session = document.find_session("session-1").expect("edited");
         assert_eq!(session.port, 2200);
         assert_eq!(session.username.as_deref(), Some("deploy"));
+    }
+
+    #[test]
+    fn removes_session_from_folder_tree() {
+        let mut document = sample_document();
+
+        let removed = document.remove_session("session-1").expect("removed session");
+
+        assert_eq!(removed.id, "session-1");
+        assert!(document.find_session("session-1").is_none());
     }
 
     #[test]

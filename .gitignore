@@ -1,0 +1,9 @@
+# Rust build output
+/target/
+
+# Dev build artifacts produced by scripts/wsl-dev.sh dist
+/dist/
+
+# IDE / local tooling data
+/.idea/
+/.codegraph/

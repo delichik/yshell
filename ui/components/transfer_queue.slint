@@ -1,9 +1,39 @@
+import { Theme } from "../theme.slint";
+import { Icon } from "basic/icons.slint";
+
+// 传输队列（§5.13）：方向图标 + 摘要；嵌在右侧工具的 WinCard 内，底透明。
+// 卡片标题由外层 WinCardHeader（`Transfers`）提供，这里不再重复标题行。
 export component TransferQueue inherits Rectangle {
-    height: 140px;
-    background: #20242d;
-    VerticalLayout {
-        padding: 10px;
-        Text { text: "Transfer Queue"; color: #f4f7fb; }
-        Text { text: "No active transfers"; color: #a8b3c7; }
+    in property <string> summary_text: "No active transfers";
+
+    height: 110px;
+    background: transparent;
+
+    HorizontalLayout {
+        padding: Theme.spacing-8;
+        spacing: Theme.spacing-8;
+
+        Rectangle {
+            width: Theme.icon-size-small;
+            vertical-stretch: 1;
+            background: transparent;
+
+            Icon {
+                name: "download";
+                icon-color: Theme.text-secondary;
+                icon-size: Theme.icon-size-small;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        Text {
+            text: root.summary_text;
+            color: Theme.text-secondary;
+            font-size: Theme.font-caption;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            wrap: word-wrap;
+        }
     }
 }

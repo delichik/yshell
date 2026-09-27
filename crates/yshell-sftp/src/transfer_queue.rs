@@ -44,6 +44,16 @@ impl TransferQueue {
         Ok(())
     }
 
+    pub fn complete(&mut self, id: &str, bytes_done: u64) -> SftpResult<()> {
+        let task = self.task_mut(id)?;
+        task.bytes_done = match task.total_bytes {
+            Some(total) => bytes_done.min(total),
+            None => bytes_done,
+        };
+        task.status = TransferStatus::Completed;
+        Ok(())
+    }
+
     pub fn retry(&mut self, id: &str) -> SftpResult<bool> {
         let task = self.task_mut(id)?;
         if task.status != TransferStatus::Failed || task.retry_count >= task.max_retries {
@@ -89,6 +99,8 @@ mod tests {
         queue.start_next();
         queue.update_progress("t1", 5).unwrap();
         assert_eq!(queue.tasks[0].progress_percent(), Some(50));
+        queue.complete("t1", 10).unwrap();
+        assert_eq!(queue.tasks[0].status, TransferStatus::Completed);
         queue.fail("t1", "network").unwrap();
         assert!(queue.retry("t1").unwrap());
         queue.cancel("t1").unwrap();

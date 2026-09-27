@@ -1,0 +1,583 @@
+// YShell 基础控件（WinUI 3 / Fluent 2 形态）。
+//
+// 规范：docs/product/ui-winui3-design-language.md §5
+// 所有控件只用 Theme token 表达颜色与尺寸；状态：默认 / 悬停 / 按下 / 选中 / 禁用。
+
+import { Theme } from "../../theme.slint";
+import { Icon } from "icons.slint";
+
+// ---------------------------------------------------------------- 按钮
+export component WinButton inherits Rectangle {
+    in property <string> text: "";
+    /// 图标名（空字符串 = 无图标），见 icons.slint
+    in property <string> icon: "";
+    /// 主操作（强调色实底，每屏建议 ≤1）
+    in property <bool> accent: false;
+    /// 次级操作（无底无描边，悬停才出现底色）
+    in property <bool> subtle: false;
+    /// 破坏性操作：文字用 `critical` 色（不做红色实底）
+    in property <bool> critical: false;
+    in property <bool> enabled <=> touch.enabled;
+    callback clicked();
+
+    height: Theme.control-height;
+    border-radius: Theme.radius-control;
+    border-width: 1px;
+    border-color: !enabled ? Theme.control-stroke
+        : (accent || subtle) ? transparent : Theme.control-stroke;
+    background: !enabled ? Theme.control-fill-disabled
+        : accent ? (touch.pressed ? Theme.accent-pressed : touch.has-hover ? Theme.accent-hover : Theme.accent)
+        : subtle ? (touch.pressed ? Theme.subtle-pressed : touch.has-hover ? Theme.subtle-hover : transparent)
+        : (touch.pressed ? Theme.control-fill-pressed : touch.has-hover ? Theme.control-fill-hover : Theme.control-fill);
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+    animate border-color { duration: Theme.duration-faster; easing: ease-out; }
+
+    accessible-role: button;
+    accessible-enabled: root.enabled;
+    accessible-label: root.text;
+
+    // 统一规则（§5.1）：水平内边距一律 12，图标↔文字 8；不再按 accent/subtle/有无图标分支
+    HorizontalLayout {
+        padding-left: Theme.spacing-12;
+        padding-right: Theme.spacing-12;
+        spacing: Theme.spacing-8;
+        alignment: center;
+
+        if root.icon != "" : Rectangle {
+            width: Theme.icon-size-small;
+            vertical-stretch: 1;
+            background: transparent;
+
+            Icon {
+                name: root.icon;
+                icon-color: root.text-color;
+                icon-size: Theme.icon-size-small;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        label := Text {
+            text: root.text;
+            color: root.text-color;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+            animate color { duration: Theme.duration-faster; easing: ease-out; }
+        }
+    }
+
+    private property <brush> text-color: !root.enabled ? Theme.text-disabled
+        : root.accent ? Theme.accent-text
+        : root.critical ? Theme.critical
+        : Theme.text-primary;
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+// 图标按钮：32×32 方形，默认无底
+export component WinIconButton inherits Rectangle {
+    in property <string> icon: "more";
+    in property <string> accessible-name: "";
+    in property <bool> enabled <=> touch.enabled;
+    callback clicked();
+
+    width: Theme.control-height;
+    height: Theme.control-height;
+    border-radius: Theme.radius-control;
+    background: touch.pressed ? Theme.subtle-pressed : touch.has-hover ? Theme.subtle-hover : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    accessible-role: button;
+    accessible-enabled: root.enabled;
+    accessible-label: root.accessible-name;
+
+    Icon {
+        name: root.icon;
+        icon-color: root.enabled ? Theme.text-primary : Theme.text-disabled;
+        // 纯图标按钮：32×32 命中区，图标 20 由 x/y 居中（不用 padding）
+        icon-size: Theme.icon-size;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+// 开关型按钮（如 SFTP / 隧道 / 命令面板开关）
+export component WinToggle inherits Rectangle {
+    in property <string> text: "";
+    in property <string> icon: "";
+    /// 纯图标模式下的无障碍名称
+    in property <string> accessible-name: "";
+    in-out property <bool> checked: false;
+    in property <bool> enabled <=> touch.enabled;
+    callback toggled();
+
+    height: Theme.control-height;
+    width: root.text == "" ? Theme.control-height : content.preferred-width;
+    border-radius: Theme.radius-control;
+    border-width: 1px;
+    border-color: checked ? transparent : Theme.control-stroke;
+    background: !enabled ? Theme.control-fill-disabled
+        : checked ? (touch.pressed ? Theme.accent-pressed : touch.has-hover ? Theme.accent-hover : Theme.accent)
+        : (touch.pressed ? Theme.control-fill-pressed : touch.has-hover ? Theme.control-fill-hover : Theme.control-fill);
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    accessible-role: checkbox;
+    accessible-enabled: root.enabled;
+    accessible-checkable: true;
+    accessible-checked: root.checked;
+    accessible-label: root.text == "" ? root.accessible-name : root.text;
+
+    content := HorizontalLayout {
+        // 文本模式 12/12；纯图标模式（text==""）无内边距，20px 图标在 32×32 命中区里居中。
+        // 注意：Text 必须随 text=="" 一起从布局中移除——空文本仍是 0 宽单元格，
+        // 其 spacing 会参与 alignment: center 的计算，把图标挤偏 4px。
+        padding-left: root.text == "" ? 0px : Theme.spacing-12;
+        padding-right: root.text == "" ? 0px : Theme.spacing-12;
+        spacing: Theme.spacing-8;
+        alignment: center;
+
+        if root.icon != "" : Rectangle {
+            width: root.text == "" ? Theme.icon-size : Theme.icon-size-small;
+            vertical-stretch: 1;
+            background: transparent;
+
+            Icon {
+                name: root.icon;
+                icon-color: root.text-color;
+                icon-size: root.text == "" ? Theme.icon-size : Theme.icon-size-small;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        if root.text != "" : Text {
+            text: root.text;
+            color: root.text-color;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            wrap: no-wrap;
+        }
+    }
+
+    private property <brush> text-color: !root.enabled ? Theme.text-disabled
+        : root.checked ? Theme.accent-text : Theme.text-primary;
+
+    touch := TouchArea {
+        clicked => { root.checked = !root.checked; root.toggled(); }
+    }
+}
+
+// ---------------------------------------------------------------- 卡片
+/// 卡片容器：调用方通过 `@children` 提供内容（列布局）
+export component WinCard inherits Rectangle {
+    background: Theme.card-fill;
+    border-radius: Theme.radius-panel;
+    border-width: 1px;
+    border-color: Theme.card-stroke;
+
+    VerticalLayout {
+        padding: Theme.spacing-12;
+        spacing: Theme.spacing-8;
+        @children
+    }
+}
+
+/// 卡片标题行：可选图标 + 标题 + 右侧操作（`@children`）
+export component WinCardHeader inherits Rectangle {
+    in property <string> title: "";
+    in property <string> icon: "";
+    height: Theme.control-height;
+    background: transparent;
+
+    HorizontalLayout {
+        // 卡片头本身无内边距（外层卡片提供 12）：图标 16 ↔ 文字 8
+        spacing: Theme.spacing-8;
+
+        if root.icon != "" : Rectangle {
+            width: Theme.icon-size-small;
+            vertical-stretch: 1;
+
+            Icon {
+                name: root.icon;
+                icon-color: Theme.text-secondary;
+                icon-size: Theme.icon-size-small;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        Text {
+            text: root.title;
+            color: Theme.text-primary;
+            font-size: Theme.font-body;
+            font-weight: Theme.weight-semibold;
+            vertical-alignment: center;
+            wrap: no-wrap;
+        }
+
+        @children
+    }
+}
+
+// ---------------------------------------------------------------- 列表 / 导航
+/// 导航项（NavigationView 形态）：40px 行高，选中态带 3×16 强调条
+export component WinNavItem inherits Rectangle {
+    in property <string> icon: "terminal";
+    in property <string> text: "";
+    /// 右侧次要信息（如用户名 / 状态）
+    in property <string> detail: "";
+    in property <bool> selected: false;
+    in property <bool> enabled: true;
+    /// 二级缩进（会话树子项）
+    in property <bool> indented: false;
+    callback clicked();
+
+    height: Theme.row-height-nav;
+    border-radius: Theme.radius-control;
+    background: !enabled ? transparent
+        : selected ? Theme.subtle-selected
+        : touch.has-hover ? Theme.subtle-hover : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    // 选中指示条
+    Rectangle {
+        visible: root.selected;
+        x: 0;
+        y: (parent.height - 16px) / 2;
+        width: 3px;
+        height: 16px;
+        border-radius: 2px;
+        background: Theme.accent;
+    }
+
+    HorizontalLayout {
+        padding-left: root.indented ? 32px : 8px;
+        padding-right: 8px;
+        spacing: 12px;
+
+        Rectangle {
+            width: Theme.icon-size;
+            vertical-stretch: 1;
+            background: transparent;
+
+            Icon {
+                name: root.icon;
+                icon-color: root.enabled ? Theme.text-primary : Theme.text-disabled;
+                // 与包裹容器同源：容器宽 = Theme.icon-size，图标也显式取同一 token
+                icon-size: Theme.icon-size;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        Text {
+            text: root.text;
+            color: root.enabled ? Theme.text-primary : Theme.text-disabled;
+            font-size: Theme.font-body;
+            font-weight: root.selected ? Theme.weight-semibold : 400;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        if root.detail != "" : Text {
+            text: root.detail;
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            vertical-alignment: center;
+            wrap: no-wrap;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { if (root.enabled) { root.clicked(); } }
+    }
+}
+
+/// 列表行（文件列表 / 传输队列）
+export component WinListRow inherits Rectangle {
+    in property <string> icon: "";
+    in property <string> text: "";
+    in property <string> detail: "";
+    in property <bool> selected: false;
+    in property <bool> enabled: true;
+    in property <bool> alternate: false;
+    callback clicked();
+    callback double-clicked();
+
+    height: Theme.row-height-list;
+    border-radius: Theme.radius-control;
+    background: !enabled ? transparent
+        : selected ? Theme.subtle-selected
+        : touch.has-hover ? Theme.subtle-hover
+        : alternate ? Theme.card-fill : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 8px;
+
+        if root.icon != "" : Rectangle {
+            width: Theme.icon-size-small;
+            vertical-stretch: 1;
+            background: transparent;
+
+            Icon {
+                name: root.icon;
+                icon-color: root.selected ? Theme.accent : Theme.text-secondary;
+                icon-size: Theme.icon-size-small;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        Text {
+            text: root.text;
+            color: root.enabled ? Theme.text-primary : Theme.text-disabled;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        if root.detail != "" : Text {
+            text: root.detail;
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            vertical-alignment: center;
+            wrap: no-wrap;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+        double-clicked => { root.double-clicked(); }
+    }
+}
+
+// ---------------------------------------------------------------- 标签页 / Pivot
+/// 工作区标签（TabView 形态，32px 行高，可关闭）
+export component WinTab inherits Rectangle {
+    in property <string> text: "";
+    in property <string> icon: "";
+    in property <bool> active: false;
+    in property <bool> closable: true;
+    callback clicked();
+    callback close-requested();
+
+    height: Theme.bar-height-tabs;
+    horizontal-stretch: 0;
+    border-radius: Theme.radius-control;
+    background: active ? Theme.layer-fill : tab-hover.has-hover ? Theme.subtle-hover : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    // 活动标签底部强调条
+    Rectangle {
+        visible: root.active;
+        x: 0;
+        y: parent.height - 2px;
+        width: parent.width;
+        height: 2px;
+        border-radius: 1px;
+        background: Theme.accent;
+    }
+
+    HorizontalLayout {
+        // 标签页例外（审计规则）：文本左 10；有关闭按钮时右 4，关闭按钮 18×18、间距 8
+        padding-left: 10px;
+        padding-right: root.closable ? 4px : 10px;
+        spacing: Theme.spacing-8;
+        alignment: center;
+
+        if root.icon != "" : Rectangle {
+            width: Theme.icon-size-small;
+            vertical-stretch: 1;
+            background: transparent;
+
+            Icon {
+                name: root.icon;
+                icon-color: root.active ? Theme.text-primary : Theme.text-secondary;
+                icon-size: Theme.icon-size-small;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        Text {
+            text: root.text;
+            color: root.active ? Theme.text-primary : Theme.text-secondary;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        if root.closable : Rectangle {
+            width: 18px;
+            height: 18px;
+            // 布局不设纵向 padding：显式居中，避免关闭按钮贴顶
+            y: (parent.height - self.height) / 2;
+            border-radius: 3px;
+            background: close-touch.has-hover ? Theme.control-fill-hover : transparent;
+
+            Icon {
+                name: "close";
+                icon-color: Theme.text-secondary;
+                icon-size: 12px;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+
+            close-touch := TouchArea {
+                // 命中区 32×32（§8 最小点击目标）：视觉盒仍 18×18、图标 12 不变。
+                // 相对视觉盒偏移：x = 18 + 4 − 32 = −10（右缘落在标签右内边距 4px 处 = 标签右缘），
+                // y = (18 − 32) / 2 = −7（纵向覆盖 0..32，正好是 32px 标签高度）。
+                // 命中区不参与布局，不撑大标签；左/上/下超出视觉盒但完整落在标签内。
+                width: Theme.control-height;
+                height: Theme.control-height;
+                x: parent.width + Theme.spacing-4 - self.width;
+                y: (parent.height - self.height) / 2;
+                clicked => { root.close-requested(); }
+            }
+        }
+    }
+
+    tab-hover := TouchArea {
+        // 关闭命中区（右 32px）让给 close-touch：整标签命中区声明在布局之后，
+        // 输入遍历会先命中它，否则关闭点击会被标签本体抢走。
+        width: root.closable ? parent.width - Theme.control-height : parent.width;
+        clicked => { root.clicked(); }
+    }
+}
+
+/// Pivot / 分段切换项（右侧工具面板顶部）
+export struct PivotItem {
+    title: string,
+    icon: string,
+}
+
+export component WinPivotBar inherits Rectangle {
+    in property <[PivotItem]> items: [];
+    in-out property <int> current: 0;
+    callback selected(int);
+
+    height: Theme.control-height;
+    background: transparent;
+
+    HorizontalLayout {
+        padding: 2px;
+        spacing: 4px;
+
+        for item[i] in root.items : Rectangle {
+            height: Theme.control-height - Theme.spacing-4;
+            border-radius: Theme.radius-control;
+            background: i == root.current ? Theme.layer-fill : pivot-touch.has-hover ? Theme.subtle-hover : transparent;
+            animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+            HorizontalLayout {
+                padding-left: Theme.spacing-12;
+                padding-right: Theme.spacing-12;
+                spacing: Theme.spacing-8;
+                alignment: center;
+
+                Rectangle {
+                    width: Theme.icon-size-small;
+                    vertical-stretch: 1;
+                    background: transparent;
+
+                    Icon {
+                        name: item.icon;
+                        icon-color: i == root.current ? Theme.text-primary : Theme.text-secondary;
+                        icon-size: Theme.icon-size-small;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+
+                Text {
+                    text: item.title;
+                    color: i == root.current ? Theme.text-primary : Theme.text-secondary;
+                    font-size: Theme.font-body;
+                    font-weight: i == root.current ? Theme.weight-semibold : 400;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                }
+            }
+
+            pivot-touch := TouchArea {
+                clicked => { root.current = i; root.selected(i); }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- 提示条
+/// InfoBar：安全提示 / 连接告警（warning 用于主机密钥变更）
+export component WinInfoBar inherits Rectangle {
+    /// "info" | "success" | "warning" | "error"
+    in property <string> severity: "warning";
+    in property <string> title: "";
+    in property <string> text: "";
+    callback dismissed();
+
+    // 图标按 severity 选择：现有图标集没有 info / error 专用图标，
+    // info 用 shield、error 用 warning（语义最接近）；未知 severity 回退 warning。
+    private property <string> severity-icon:
+        root.severity == "success" ? "check"
+        : root.severity == "error" ? "warning"
+        : root.severity == "info" ? "shield"
+        : "warning";
+    // 图标语义色（背景/描边沿用 attention-*，缺 per-severity banner token，见回复建议）
+    private property <brush> severity-icon-color:
+        root.severity == "success" ? Theme.success
+        : root.severity == "error" ? Theme.critical
+        : root.severity == "info" ? Theme.text-secondary
+        : Theme.caution;
+
+    background: Theme.attention-background;
+    border-radius: Theme.radius-panel;
+    border-width: 1px;
+    border-color: Theme.attention-stroke;
+
+    HorizontalLayout {
+        padding: Theme.spacing-12;
+        spacing: Theme.spacing-12;
+        alignment: start;
+
+        Icon {
+            name: root.severity-icon;
+            icon-color: root.severity-icon-color;
+        }
+
+        VerticalLayout {
+            spacing: 4px;
+            alignment: start;
+
+            if root.title != "" : Text {
+                text: root.title;
+                color: Theme.attention-text;
+                font-size: Theme.font-body;
+                font-weight: Theme.weight-semibold;
+                wrap: word-wrap;
+            }
+
+            if root.text != "" : Text {
+                text: root.text;
+                color: Theme.attention-text;
+                font-size: Theme.font-body;
+                wrap: word-wrap;
+            }
+
+            @children
+        }
+    }
+}

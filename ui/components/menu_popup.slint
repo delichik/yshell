@@ -1,0 +1,138 @@
+import { Theme } from "../theme.slint";
+import { Icon } from "basic/icons.slint";
+// Self-drawn menu popup used for the app menu bar and the context menus.
+//
+// The popup fills the window: a transparent scrim captures clicks outside the
+// panel and the panel is positioned at the requested window coordinates.
+// Drawing order matters: instantiate popups after the main content and before
+// the modal dialogs so they stay above the content and below the dialogs.
+// 形态：WinUI 3 Flyout / MenuFlyout（§5.11）——8px 圆角、32px 行高、16px 勾选列、
+// 右侧 caption 快捷键、禁用项 36% 不透明、单层阴影。
+
+export struct MenuEntry {
+    label: string,
+    shortcut: string,
+    enabled: bool,
+    checked: bool,
+    separator: bool,
+}
+
+component MenuPopupRow inherits Rectangle {
+    in property <MenuEntry> entry: {
+        label: "",
+        shortcut: "",
+        enabled: false,
+        checked: false,
+        separator: false,
+    };
+    callback selected();
+
+    height: root.entry.separator ? 9px : Theme.row-height-list;
+    // 禁用项：整行 36% 不透明（颜色不再额外套 text-disabled，避免双重变暗）
+    opacity: (root.entry.enabled || root.entry.separator) ? 1.0 : 0.36;
+    border-radius: Theme.radius-control;
+    background: (row-touch.has-hover && root.entry.enabled && !root.entry.separator) ? Theme.subtle-hover : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    // 分隔线（上下各留 4px）
+    // 浮层底上 layer-stroke 对比不足（截图里几乎看不见），改用 divider token
+    Rectangle {
+        visible: root.entry.separator;
+        x: Theme.spacing-8;
+        y: (parent.height - 1px) / 2;
+        width: parent.width - 2 * Theme.spacing-8;
+        height: 1px;
+        background: Theme.divider;
+    }
+
+    // 勾选列：16px，勾选色 accent；左内边距 8
+    Icon {
+        visible: !root.entry.separator && root.entry.checked;
+        name: "check";
+        icon-color: Theme.accent;
+        icon-size: Theme.icon-size-small;
+        x: Theme.spacing-8;
+        y: (parent.height - self.height) / 2;
+    }
+
+    Text {
+        visible: !root.entry.separator;
+        text: root.entry.label;
+        // 缩进 = 内边距 8 + 勾选列 16 + 间距 8 = 32（§5.11）
+        x: Theme.spacing-8 + Theme.icon-size-small + Theme.spacing-8;
+        width: parent.width - self.x - Theme.spacing-8;
+        height: parent.height;
+        color: Theme.text-primary;
+        font-size: Theme.font-body;
+        vertical-alignment: center;
+        wrap: no-wrap;
+        overflow: elide;
+    }
+
+    Text {
+        visible: !root.entry.separator && root.entry.shortcut != "";
+        text: root.entry.shortcut;
+        x: parent.width - self.width - Theme.spacing-8;
+        height: parent.height;
+        color: Theme.text-tertiary;
+        font-size: Theme.font-caption;
+        vertical-alignment: center;
+        wrap: no-wrap;
+    }
+
+    row-touch := TouchArea {
+        enabled: root.entry.enabled && !root.entry.separator;
+        clicked => { root.selected(); }
+    }
+}
+
+export component MenuPopup inherits Rectangle {
+    in property <bool> open: false;
+    in property <[MenuEntry]> entries: [];
+    in property <length> anchor-x: 0px;
+    in property <length> anchor-y: 0px;
+    in property <length> panel-width: 230px;
+
+    callback selected(int);
+    callback dismissed();
+
+    visible: self.open;
+    background: transparent;
+
+    // Scrim: captures any click outside of the panel and dismisses the popup.
+    TouchArea {
+        clicked => { root.dismissed(); }
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                root.dismissed();
+            }
+        }
+    }
+
+    panel := Rectangle {
+        x: min(max(root.anchor-x, 4px), max(root.width - root.panel-width - 4px, 4px));
+        y: min(max(root.anchor-y, 4px), max(root.height - self.height - 4px, 4px));
+        width: root.panel-width;
+        height: entries-layout.preferred-height;
+        background: Theme.flyout-background;
+        border-width: 1px;
+        border-color: Theme.layer-stroke;
+        border-radius: Theme.radius-panel;
+        drop-shadow-blur: Theme.shadow-blur;
+        drop-shadow-color: Theme.shadow-color;
+        drop-shadow-offset-y: Theme.shadow-offset-y;
+
+        // Swallow clicks on the panel background so they do not reach the scrim.
+        TouchArea { }
+
+        entries-layout := VerticalLayout {
+            padding: 4px;
+            spacing: 0px;
+
+            for entry[i] in root.entries : MenuPopupRow {
+                entry: entry;
+                selected => { root.selected(i); }
+            }
+        }
+    }
+}

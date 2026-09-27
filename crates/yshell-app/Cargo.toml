@@ -1,6 +1,7 @@
 [package]
 name = "yshell-app"
 version = "0.1.0"
+description = "Native cross-platform SSH terminal and SFTP client"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -13,10 +14,13 @@ name = "yshell"
 path = "src/main.rs"
 
 [dependencies]
+copypasta = "0.10.2"
 slint = { version = "=1.9.2", default-features = false, features = ["std", "compat-1-2", "backend-winit-x11", "renderer-software"] }
 yshell-config = { path = "../yshell-config" }
 yshell-core = { path = "../yshell-core" }
 yshell-logging = { path = "../yshell-logging" }
+yshell-secret = { path = "../yshell-secret" }
+yshell-sftp = { path = "../yshell-sftp" }
 yshell-ssh = { path = "../yshell-ssh" }
 yshell-terminal = { path = "../yshell-terminal" }
 yshell-ui = { path = "../yshell-ui" }
@@ -26,3 +30,22 @@ slint-build = "=1.9.2"
 
 [dev-dependencies]
 tempfile.workspace = true
+
+# Metadata for `cargo xtask dist --formats deb` (cargo-deb).
+[package.metadata.deb]
+name = "yshell"
+maintainer = "YShell contributors"
+copyright = "2026, YShell contributors"
+license-file = ["../../LICENSE", "4"]
+extended-description = """\
+YShell is a native, cross-platform SSH terminal and SFTP client with a session \
+manager, terminal tabs, SFTP browser, tunnels and quick commands."""
+section = "net"
+priority = "optional"
+# The GUI libraries are loaded with dlopen, so `$auto` cannot see them.
+depends = "$auto, libx11-6, libx11-xcb1, libxcursor1, libxrandr2, libxi6, libxinerama1, libxrender1, libxfixes3, libxkbcommon0, libxkbcommon-x11-0, libfontconfig1"
+assets = [
+    ["target/release/yshell", "usr/bin/", "755"],
+    ["../../packaging/linux/yshell.desktop", "usr/share/applications/", "644"],
+    ["../../README.md", "usr/share/doc/yshell/README.md", "644"],
+]

@@ -1,4 +1,131 @@
-export component AboutPage inherits Rectangle {
-    background: #f7f9fc;
-    Text { text: "About YShell"; color: #20242d; }
+import { Theme } from "../theme.slint";
+import { WinButton, WinCard, WinIconButton } from "../components/basic/controls.slint";
+
+// About 对话框：ContentDialog 形态（§5.10）：标题 → 正文 → 操作区（右对齐）。
+export component AboutDialog inherits Rectangle {
+    in property <bool> open: false;
+    in property <string> version-text: "";
+    in property <string> config-dir-text: "";
+
+    callback close();
+
+    visible: self.open;
+    background: Theme.scrim;
+
+    // 阻挡模态层下方的交互
+    TouchArea { }
+
+    Rectangle {
+        x: (parent.width - 480px) / 2;
+        y: max((parent.height - self.height) / 2, Theme.spacing-24);
+        width: 480px;
+        height: min(body.preferred-height, parent.height - 2 * Theme.spacing-24);
+        background: Theme.panel-background;
+        border-radius: Theme.radius-panel;
+        border-width: 1px;
+        border-color: Theme.control-stroke;
+
+        body := VerticalLayout {
+            padding: Theme.spacing-20;
+            spacing: Theme.spacing-12;
+
+            // 标题行：右侧统一关闭按钮
+            HorizontalLayout {
+                spacing: Theme.spacing-8;
+
+                Text {
+                    text: @tr("About YShell");
+                    color: Theme.text-primary;
+                    font-size: Theme.font-subtitle;
+                    font-weight: Theme.weight-semibold;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+
+                WinIconButton {
+                    icon: "close";
+                    accessible-name: @tr("Close");
+                    clicked => { root.close(); }
+                }
+            }
+
+            Rectangle {
+                height: 1px;
+                background: Theme.divider;
+            }
+
+            Text {
+                text: @tr("YShell {0}", root.version-text);
+                color: Theme.text-secondary;
+                font-size: Theme.font-body;
+            }
+
+            Text {
+                text: @tr("A Slint desktop shell for SSH, SFTP, tunnels and terminal workflows.");
+                color: Theme.text-secondary;
+                font-size: Theme.font-body;
+                wrap: word-wrap;
+            }
+
+            // 元信息：标签列按内容宽度收紧，值列紧随其后并左对齐
+            WinCard {
+                GridLayout {
+                    spacing: Theme.spacing-16;
+
+                    Text {
+                        row: 0;
+                        col: 0;
+                        text: @tr("Config directory");
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: top;
+                    }
+
+                    Text {
+                        row: 0;
+                        col: 1;
+                        text: root.config-dir-text;
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: top;
+                        wrap: word-wrap;
+                    }
+
+                    Text {
+                        row: 1;
+                        col: 0;
+                        text: @tr("License");
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: top;
+                    }
+
+                    Text {
+                        row: 1;
+                        col: 1;
+                        text: "MIT OR Apache-2.0";
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: top;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+
+            Rectangle {
+                height: 1px;
+                background: Theme.divider;
+            }
+
+            // 操作区：右对齐；关闭是常规动作，不用强调色
+            HorizontalLayout {
+                alignment: end;
+
+                WinButton {
+                    text: @tr("Close");
+                    clicked => { root.close(); }
+                }
+            }
+        }
+    }
 }

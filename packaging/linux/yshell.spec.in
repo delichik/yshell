@@ -1,0 +1,48 @@
+# RPM spec template for the prebuilt YShell binary.
+#
+# Rendered by `cargo xtask dist --formats rpm` (see xtask/src/installers.rs):
+# @VERSION@/@RELEASE@ come from the release label and @ARCH@ is the RPM
+# architecture (x86_64, aarch64, ...). The binary, desktop entry, LICENSE and
+# README are placed in <topdir>/SOURCES by the build tool.
+%global debug_package %{nil}
+
+Name:           yshell
+Version:        @VERSION@
+Release:        @RELEASE@
+Summary:        SSH terminal and SFTP client
+License:        MIT OR Apache-2.0
+URL:            https://github.com/delichik/yshell
+BuildArch:      @ARCH@
+
+# The GUI libraries are loaded at runtime (dlopen), so rpm cannot detect them.
+Requires:       libX11
+Requires:       libX11-xcb
+Requires:       libXcursor
+Requires:       libXrandr
+Requires:       libXi
+Requires:       libXinerama
+Requires:       libXrender
+Requires:       libXfixes
+Requires:       libxkbcommon
+Requires:       libxkbcommon-x11
+Requires:       fontconfig
+
+%description
+YShell is a native, cross-platform SSH terminal and SFTP client with a session
+manager, terminal tabs, SFTP browser, tunnels and quick commands.
+
+%install
+install -D -m 0755 %{_sourcedir}/yshell %{buildroot}/usr/bin/yshell
+install -D -m 0644 %{_sourcedir}/yshell.desktop %{buildroot}/usr/share/applications/yshell.desktop
+install -D -m 0644 %{_sourcedir}/LICENSE %{buildroot}/usr/share/licenses/yshell/LICENSE
+install -D -m 0644 %{_sourcedir}/README.md %{buildroot}/usr/share/doc/yshell/README.md
+
+%files
+/usr/bin/yshell
+/usr/share/applications/yshell.desktop
+%license /usr/share/licenses/yshell/LICENSE
+%doc /usr/share/doc/yshell/README.md
+
+%changelog
+* Thu Jan 01 2026 YShell maintainers - @VERSION@-@RELEASE@
+- Automated release build.

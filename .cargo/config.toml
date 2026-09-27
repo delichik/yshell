@@ -1,0 +1,3 @@
+# Cargo aliases; the build tool lives in xtask/.
+[alias]
+xtask = "run --package xtask --"

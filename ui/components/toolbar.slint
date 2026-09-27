@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 export component Toolbar inherits Rectangle {
     callback quick-connect(string);
     callback new-session();
@@ -6,7 +7,7 @@ export component Toolbar inherits Rectangle {
     callback toggle-commands();
 
     height: 44px;
-    background: #2c3340;
+    background: Theme.subtle-hover;
 
     HorizontalLayout {
         padding-left: 12px;

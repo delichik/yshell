@@ -1,10 +1,11 @@
+import { Theme } from "../theme.slint";
 export component StatusBar inherits Rectangle {
     in property <string> message: "Ready";
     height: 28px;
-    background: #20242d;
+    background: Theme.layer-fill;
     Text {
         text: root.message;
-        color: #cdd6e3;
+        color: Theme.text-secondary;
         vertical-alignment: center;
     }
 }

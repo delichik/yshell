@@ -10,13 +10,27 @@ members = [
     "crates/yshell-secret",
     "crates/yshell-logging",
     "crates/yshell-test-support",
+    "xtask",
+]
+# Keep the build tool out of plain `cargo build`/`cargo test` runs.
+default-members = [
+    "crates/yshell-app",
+    "crates/yshell-ui",
+    "crates/yshell-core",
+    "crates/yshell-ssh",
+    "crates/yshell-sftp",
+    "crates/yshell-terminal",
+    "crates/yshell-config",
+    "crates/yshell-secret",
+    "crates/yshell-logging",
+    "crates/yshell-test-support",
 ]
 resolver = "2"
 
 [workspace.package]
 edition = "2021"
 license = "MIT OR Apache-2.0"
-rust-version = "1.80"
+rust-version = "1.89"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

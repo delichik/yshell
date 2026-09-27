@@ -5,6 +5,7 @@ mod bootstrap;
 mod error;
 mod runtime;
 mod session_runtime;
+mod sftp_view;
 
 use std::env;
 
@@ -80,7 +81,7 @@ impl CliCommand {
 
 fn print_help() {
     println!(
-        "YShell\n\nUSAGE:\n    yshell [OPTIONS]\n\nOPTIONS:\n    --check-config            Validate configuration discovery\n    --print-config-dir        Print the configuration directory\n    --quick-connect <input>   Run the runtime quick-connect path without launching UI\n    --version                 Print version\n    --help                    Print help"
+        "YShell\n\nUSAGE:\n    yshell [OPTIONS]\n\nOPTIONS:\n    --check-config            Validate configuration discovery\n    --print-config-dir        Print the configuration directory\n    --quick-connect <input>   Run the runtime quick-connect path without launching UI\n    --version                 Print version\n    --help                    Print help\n\nENVIRONMENT:\n    YSHELL_MASTER_PASSWORD    Enables the local encrypted secret store at <config>/secret-store.toml"
     );
 }
 

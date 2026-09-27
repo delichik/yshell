@@ -1,4 +1,341 @@
-export component SettingsPage inherits Rectangle {
-    background: #f7f9fc;
-    Text { text: "Settings"; color: #20242d; }
+import { Theme } from "../theme.slint";
+import { Icon } from "../components/basic/icons.slint";
+import { WinButton, WinCard, WinIconButton } from "../components/basic/controls.slint";
+import { WinTextInput } from "../components/basic/text_input.slint";
+
+// Settings dialog (iteration 1): config directory, secret store status and the
+// reset-secrets flow, plus the Known Hosts entry point. The reset confirmation
+// stays runtime-gated: the runtime only resets when the text matches exactly.
+//
+// WinUI 3 重排：ContentDialog 形态（§5.10）：标题 → 分区 → 操作区。
+// 标题行与底部操作区固定在面板两端；中部内容在窗口高度不足时滚动（Flickable），
+// 保证任何窗口尺寸下都能关闭弹窗。
+
+export component SettingsDialog inherits Rectangle {
+    in property <bool> open: false;
+    in property <string> config-dir-text: "";
+    in property <string> secret-store-status-text: "";
+    in property <string> secret-reset-confirmation-text: "";
+    in-out property <string> scrollback-lines-text: "";
+    in-out property <string> scrollback-max-cells-text: "";
+    in property <string> terminal-status-text: "";
+
+    callback close();
+    callback open-known-hosts();
+    callback update-secret-reset-confirmation(string);
+    callback reset-secrets();
+    callback update-scrollback-lines(string);
+    callback update-scrollback-max-cells(string);
+    callback reset-terminal-defaults();
+    callback save-terminal-settings();
+
+    // 内容理想高度：标题行 + 中部 + 操作区 + 间距/分割线/内边距
+    private property <length> dialog-content-height:
+        title-row.preferred-height
+        + sections.preferred-height
+        + action-row.preferred-height
+        + 4 * Theme.spacing-12
+        + 2 * 1px
+        + 2 * Theme.spacing-20;
+
+    visible: self.open;
+    background: Theme.scrim;
+
+    // Block interaction with the content behind the modal.
+    TouchArea { }
+
+    Rectangle {
+        x: (parent.width - 560px) / 2;
+        y: max((parent.height - self.height) / 2, Theme.spacing-24);
+        width: 560px;
+        // 内容高于窗口时收缩，标题行与操作区始终可见
+        height: min(root.dialog-content-height, parent.height - 2 * Theme.spacing-24);
+        background: Theme.panel-background;
+        border-radius: Theme.radius-panel;
+        border-width: 1px;
+        border-color: Theme.control-stroke;
+
+        body := VerticalLayout {
+            padding: Theme.spacing-20;
+            spacing: Theme.spacing-12;
+
+            // 标题行（固定）：右侧统一关闭按钮
+            title-row := HorizontalLayout {
+                spacing: Theme.spacing-8;
+
+                Text {
+                    text: @tr("Settings");
+                    color: Theme.text-primary;
+                    font-size: Theme.font-subtitle;
+                    font-weight: Theme.weight-semibold;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+
+                WinIconButton {
+                    icon: "close";
+                    accessible-name: @tr("Close");
+                    clicked => { root.close(); }
+                }
+            }
+
+            Rectangle {
+                height: 1px;
+                background: Theme.divider;
+            }
+
+            // 中部：内容高于窗口时滚动
+            Rectangle {
+                vertical-stretch: 1;
+                clip: true;
+                background: transparent;
+
+                scroll := Flickable {
+                    width: parent.width;
+                    height: parent.height;
+                    interactive: true;
+                    viewport-width: self.width;
+                    viewport-height: sections.preferred-height;
+
+                    sections := VerticalLayout {
+                        alignment: start;
+                        spacing: Theme.spacing-12;
+
+                        // --- 安全 ---------------------------------------------
+                        Text {
+                            text: @tr("Security");
+                            color: Theme.text-primary;
+                            font-size: Theme.font-body-large;
+                            font-weight: Theme.weight-semibold;
+                        }
+
+                        Text {
+                            text: root.secret-store-status-text;
+                            color: Theme.text-secondary;
+                            font-size: Theme.font-body;
+                            wrap: word-wrap;
+                        }
+
+                        Text {
+                            text: @tr("Config directory: {0}", root.config-dir-text);
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            wrap: word-wrap;
+                        }
+
+                        Rectangle {
+                            height: 1px;
+                            background: Theme.divider;
+                        }
+
+                        // --- 终端 ---------------------------------------------
+                        Text {
+                            text: @tr("Terminal");
+                            color: Theme.text-primary;
+                            font-size: Theme.font-body-large;
+                            font-weight: Theme.weight-semibold;
+                        }
+
+                        HorizontalLayout {
+                            spacing: Theme.spacing-12;
+
+                            Text {
+                                text: @tr("Scrollback lines");
+                                width: 220px;
+                                color: Theme.text-secondary;
+                                font-size: Theme.font-body;
+                                vertical-alignment: center;
+                            }
+
+                            // 输入框：WinTextInput 自带 control-fill 底 + control-stroke 描边 + 聚焦强调条（§5.2）
+                            scrollback-lines-input := WinTextInput {
+                                horizontal-stretch: 1;
+                                text <=> root.scrollback-lines-text;
+                                placeholder-text: "10000";
+                                edited => { root.update-scrollback-lines(self.text); }
+                            }
+                        }
+
+                        HorizontalLayout {
+                            spacing: Theme.spacing-12;
+
+                            Text {
+                                text: @tr("Scrollback memory cap (cells)");
+                                width: 220px;
+                                color: Theme.text-secondary;
+                                font-size: Theme.font-body;
+                                vertical-alignment: center;
+                            }
+
+                            // 输入框：同上
+                            scrollback-cells-input := WinTextInput {
+                                horizontal-stretch: 1;
+                                text <=> root.scrollback-max-cells-text;
+                                placeholder-text: "2000000";
+                                edited => { root.update-scrollback-max-cells(self.text); }
+                            }
+                        }
+
+                        Text {
+                            text: @tr("Scrollback is stored compressed (about 3 MB per session at the defaults). Both the line count and the total cell count are enforced.");
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            wrap: word-wrap;
+                        }
+
+                        Text {
+                            text: @tr("Allowed range: 100-1000000 lines, 100000-100000000 cells.");
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            wrap: word-wrap;
+                        }
+
+                        HorizontalLayout {
+                            spacing: Theme.spacing-8;
+                            alignment: end;
+
+                            WinButton {
+                                text: @tr("Reset Defaults");
+                                clicked => { root.reset-terminal-defaults(); }
+                            }
+
+                            WinButton {
+                                text: @tr("Save Terminal Settings");
+                                accent: true;
+                                clicked => { root.save-terminal-settings(); }
+                            }
+                        }
+
+                        Text {
+                            text: root.terminal-status-text;
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            wrap: word-wrap;
+                        }
+
+                        Rectangle {
+                            height: 1px;
+                            background: Theme.divider;
+                        }
+
+                        // --- 已知主机 -----------------------------------------
+                        Text {
+                            text: @tr("Known Hosts");
+                            color: Theme.text-primary;
+                            font-size: Theme.font-body-large;
+                            font-weight: Theme.weight-semibold;
+                        }
+
+                        Text {
+                            text: @tr("Review, remove or clear persisted SSH host keys.");
+                            color: Theme.text-secondary;
+                            font-size: Theme.font-body;
+                            wrap: word-wrap;
+                        }
+
+                        HorizontalLayout {
+                            alignment: end;
+
+                            WinButton {
+                                text: @tr("Open Known Hosts Manager");
+                                clicked => { root.open-known-hosts(); }
+                            }
+                        }
+
+                        Rectangle {
+                            height: 1px;
+                            background: Theme.divider;
+                        }
+
+                        // --- 危险区：WinCard + critical 文案色 -----------------
+                        WinCard {
+                            // 卡片内容自适应高度（单层纵向容器，避免高度被外层布局拉伸）
+                            VerticalLayout {
+                                alignment: start;
+                                spacing: Theme.spacing-8;
+
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-8;
+
+                                    Rectangle {
+                                        width: Theme.icon-size-small;
+                                        vertical-stretch: 1;
+                                        background: transparent;
+
+                                        Icon {
+                                            name: "warning";
+                                            icon-color: Theme.critical;
+                                            icon-size: Theme.icon-size-small;
+                                            x: (parent.width - self.width) / 2;
+                                            y: (parent.height - self.height) / 2;
+                                        }
+                                    }
+
+                                    Text {
+                                        text: @tr("Danger Zone");
+                                        color: Theme.critical;
+                                        font-size: Theme.font-body-large;
+                                        font-weight: Theme.weight-semibold;
+                                        vertical-alignment: center;
+                                        horizontal-stretch: 1;
+                                    }
+                                }
+
+                                Text {
+                                    text: @tr("Type RESET SECRETS to delete the local secret store. Saved passwords and passphrases stored in it are removed.");
+                                    color: Theme.critical;
+                                    font-size: Theme.font-body;
+                                    wrap: word-wrap;
+                                }
+
+                                // 输入框：WinTextInput 自带 control-fill 底 + control-stroke 描边 + 聚焦强调条（§5.2）
+                                reset-confirmation-input := WinTextInput {
+                                    text: root.secret-reset-confirmation-text;
+                                    placeholder-text: @tr("Type RESET SECRETS");
+                                    edited => { root.update-secret-reset-confirmation(self.text); }
+                                }
+
+                                HorizontalLayout {
+                                    alignment: end;
+
+                                    WinButton {
+                                        text: "RESET SECRETS";
+                                        critical: true;
+                                        enabled: root.secret-reset-confirmation-text != "";
+                                        clicked => { root.reset-secrets(); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 简易滚动指示（Flickable 无内建滚动条）
+                Rectangle {
+                    visible: sections.preferred-height > scroll.height;
+                    width: 4px;
+                    height: max(24px, scroll.height * (scroll.height / max(1px, sections.preferred-height)));
+                    x: scroll.width - self.width - 2px;
+                    y: -scroll.viewport-y * ((scroll.height - self.height) / max(1px, sections.preferred-height - scroll.height));
+                    border-radius: 2px;
+                    background: Theme.text-tertiary;
+                }
+            }
+
+            Rectangle {
+                height: 1px;
+                background: Theme.divider;
+            }
+
+            // 操作区（固定）：右对齐
+            action-row := HorizontalLayout {
+                alignment: end;
+
+                WinButton {
+                    text: @tr("Close");
+                    clicked => { root.close(); }
+                }
+            }
+        }
+    }
 }

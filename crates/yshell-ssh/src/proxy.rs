@@ -1,9 +1,14 @@
 //! Proxy configuration and state for SSH transports.
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum ProxyConfig {
+    #[default]
     None,
     Socks4 {
+        address: String,
+        username: Option<String>,
+    },
+    Socks4a {
         address: String,
         username: Option<String>,
     },
@@ -11,18 +16,13 @@ pub enum ProxyConfig {
         address: String,
         username: Option<String>,
         password: Option<String>,
+        resolve_dns_by_proxy: bool,
     },
     HttpConnect {
         address: String,
         username: Option<String>,
         password: Option<String>,
     },
-}
-
-impl Default for ProxyConfig {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,6 +38,7 @@ impl ProxyConfig {
         match self {
             Self::None => None,
             Self::Socks4 { address, .. }
+            | Self::Socks4a { address, .. }
             | Self::Socks5 { address, .. }
             | Self::HttpConnect { address, .. } => Some(address),
         }

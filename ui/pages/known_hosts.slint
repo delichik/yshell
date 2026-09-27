@@ -1,4 +1,252 @@
+import { Theme } from "../theme.slint";
+import { Icon } from "../components/basic/icons.slint";
+import { WinButton, WinCard, WinCardHeader, WinIconButton } from "../components/basic/controls.slint";
+import { WinTextInput } from "../components/basic/text_input.slint";
+
+// 已知主机管理器：ContentDialog 形态（§5.10）：标题行 → 双栏（清单 / 详情）→ 危险区。
 export component KnownHostsPage inherits Rectangle {
-    background: #f7f9fc;
-    Text { text: "Known Hosts"; color: #20242d; }
+    in property <bool> open: false;
+    in property <string> inventory-text: "";
+    in property <string> selection-text: "";
+    in property <string> details-text: "";
+    in property <string> path-text: "";
+    in-out property <string> clear-confirmation-text: "";
+
+    callback close();
+    callback select-prev();
+    callback select-next();
+    callback remove-selected();
+    callback update-clear-confirmation(string);
+    callback clear-all();
+
+    visible: self.open;
+    background: Theme.scrim;
+
+    // 阻挡模态层下方的交互
+    TouchArea { }
+
+    Rectangle {
+        x: (parent.width - 760px) / 2;
+        y: 52px;
+        width: 760px;
+        height: parent.height - 104px;
+        background: Theme.panel-background;
+        border-radius: Theme.radius-panel;
+        border-width: 1px;
+        border-color: Theme.control-stroke;
+        clip: true;
+
+        VerticalLayout {
+            padding: Theme.spacing-20;
+            spacing: Theme.spacing-12;
+
+            // 标题行：右侧统一关闭按钮
+            HorizontalLayout {
+                spacing: Theme.spacing-12;
+
+                Text {
+                    text: @tr("Known Hosts");
+                    color: Theme.text-primary;
+                    font-size: Theme.font-subtitle;
+                    font-weight: Theme.weight-semibold;
+                    vertical-alignment: center;
+                }
+
+                Text {
+                    text: root.selection-text;
+                    color: Theme.text-secondary;
+                    font-size: Theme.font-body;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                    overflow: elide;
+                    horizontal-stretch: 1;
+                }
+
+                WinIconButton {
+                    icon: "close";
+                    accessible-name: @tr("Close");
+                    clicked => { root.close(); }
+                }
+            }
+
+            Rectangle {
+                height: 1px;
+                background: Theme.divider;
+            }
+
+            HorizontalLayout {
+                spacing: Theme.spacing-16;
+
+                // --- 左：持久化条目 -------------------------------------------
+                WinCard {
+                    width: 320px;
+
+                    WinCardHeader {
+                        title: @tr("Persisted Entries");
+                        icon: "globe";
+                    }
+
+                    // 清单表面：Rust 侧给出预格式化文本，行首 ">" 标记当前选中项
+                    Rectangle {
+                        vertical-stretch: 1;
+                        clip: true;
+                        background: Theme.panel-background;
+                        border-radius: Theme.radius-control;
+                        border-width: 1px;
+                        border-color: Theme.divider;
+
+                        Text {
+                            x: 10px;
+                            y: 10px;
+                            width: parent.width - 20px;
+                            text: root.inventory-text;
+                            color: Theme.text-secondary;
+                            font-size: Theme.font-caption;
+                            font-family: Theme.font-mono;
+                            wrap: no-wrap;
+                        }
+                    }
+
+                    // 操作区：右对齐
+                    HorizontalLayout {
+                        spacing: Theme.spacing-8;
+                        alignment: end;
+                        vertical-stretch: 0;
+
+                        WinButton {
+                            text: @tr("Prev");
+                            clicked => { root.select-prev(); }
+                        }
+
+                        WinButton {
+                            text: @tr("Next");
+                            clicked => { root.select-next(); }
+                        }
+
+                        WinButton {
+                            text: @tr("Remove Selected");
+                            icon: "trash";
+                            critical: true;
+                            clicked => { root.remove-selected(); }
+                        }
+                    }
+                }
+
+                // --- 右：详情 + 危险区 -----------------------------------------
+                VerticalLayout {
+                    spacing: Theme.spacing-12;
+
+                    WinCard {
+                        vertical-stretch: 1;
+
+                        WinCardHeader {
+                            title: @tr("Host Key Details");
+                            icon: "shield";
+                        }
+
+                        Text {
+                            text: @tr("Path: {0}", root.path-text);
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            wrap: word-wrap;
+                        }
+
+                        // 详情表面：等宽 caption，指纹对齐显示
+                        Rectangle {
+                            vertical-stretch: 1;
+                            clip: true;
+                            background: Theme.panel-background;
+                            border-radius: Theme.radius-control;
+                            border-width: 1px;
+                            border-color: Theme.divider;
+
+                            Text {
+                                x: 10px;
+                                y: 10px;
+                                width: parent.width - 20px;
+                                text: root.details-text;
+                                color: Theme.text-secondary;
+                                font-size: Theme.font-caption;
+                                font-family: Theme.font-mono;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+
+                    // 危险区：WinCard + critical 文案色
+                    WinCard {
+                        vertical-stretch: 0;
+
+                        HorizontalLayout {
+                            spacing: Theme.spacing-8;
+
+                            Rectangle {
+                                width: Theme.icon-size-small;
+                                vertical-stretch: 1;
+                                background: transparent;
+
+                                Icon {
+                                    name: "warning";
+                                    icon-color: Theme.critical;
+                                    icon-size: Theme.icon-size-small;
+                                    x: (parent.width - self.width) / 2;
+                                    y: (parent.height - self.height) / 2;
+                                }
+                            }
+
+                            Text {
+                                text: @tr("Danger Zone");
+                                color: Theme.critical;
+                                font-size: Theme.font-body-large;
+                                font-weight: Theme.weight-semibold;
+                                vertical-alignment: center;
+                                horizontal-stretch: 1;
+                            }
+                        }
+
+                        Text {
+                            // CLEAR 是机器比对令牌：译文必须保留英文原词
+                            text: @tr("Type CLEAR to remove every persisted known host entry from disk.");
+                            color: Theme.critical;
+                            font-size: Theme.font-body;
+                            wrap: word-wrap;
+                        }
+
+                        // 确认输入：WinTextInput 自带 control-fill 底 + control-stroke 描边 + 聚焦强调条（§5.2）。
+                        // placeholder 中的 CLEAR 是机器比对令牌，译文必须保留英文原词。
+                        WinTextInput {
+                            text <=> root.clear-confirmation-text;
+                            placeholder-text: @tr("Type CLEAR");
+                            edited => { root.update-clear-confirmation(self.text); }
+                        }
+
+                        HorizontalLayout {
+                            alignment: end;
+
+                            WinButton {
+                                text: @tr("Clear All Known Hosts");
+                                critical: true;
+                                clicked => { root.clear-all(); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                height: 1px;
+                background: Theme.divider;
+            }
+
+            // 操作区：右对齐
+            HorizontalLayout {
+                alignment: end;
+
+                WinButton {
+                    text: @tr("Close");
+                    clicked => { root.close(); }
+                }
+            }
+        }
+    }
 }

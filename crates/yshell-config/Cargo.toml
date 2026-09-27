@@ -11,6 +11,7 @@ workspace = true
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
+yshell-ssh = { path = "../yshell-ssh" }
 
 [dev-dependencies]
 tempfile.workspace = true

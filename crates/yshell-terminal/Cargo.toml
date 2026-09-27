@@ -12,4 +12,5 @@ workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+fontdue = "0.9"
 unicode-width = "0.1"

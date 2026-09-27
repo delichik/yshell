@@ -1,9 +1,10 @@
+import { Theme } from "../theme.slint";
 export component TunnelPanel inherits Rectangle {
     height: 180px;
-    background: #20242d;
+    background: Theme.layer-fill;
     VerticalLayout {
         padding: 10px;
-        Text { text: "Tunnels"; color: #f4f7fb; }
-        Text { text: "No active tunnels"; color: #a8b3c7; }
+        Text { text: "Tunnels"; color: Theme.text-primary; }
+        Text { text: "No active tunnels"; color: Theme.text-secondary; }
     }
 }

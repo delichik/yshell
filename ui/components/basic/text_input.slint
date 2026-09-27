@@ -1,0 +1,98 @@
+// WinUI 3 形态的文本输入框（TextBox）。
+//
+// 规范：docs/product/ui-winui3-design-language.md §5.2
+// 形态：32px 高、圆角 4、`control-fill` 底 + `control-stroke` 描边；聚焦时描边转
+// `accent` 并在底部显示 2px 强调条（Fluent 2 的输入框形态）。
+//
+// 用途：替换主窗口里剩余的 std-widgets `LineEdit`（std 控件只能跟随系统明暗，
+// 无法随 `Theme` 深浅切换）。LineEdit 的文本编辑能力由 `TextInput` 提供。
+
+import { Theme } from "../../theme.slint";
+
+export component WinTextInput inherits Rectangle {
+    in property <string> placeholder-text: "";
+    in-out property <string> text <=> input.text;
+    /// 禁用：以 read-only + 弱化配色表达（TextInput 没有独立的 enabled）
+    in property <bool> enabled: true;
+    in property <InputType> input-type <=> input.input-type;
+    in property <bool> read-only: false;
+    /// 字体族覆盖：默认与窗口一致；等宽场景（终端查找栏 / 路径类输入）传 `Theme.font-mono`
+    in property <string> font-family: Theme.font-ui;
+    /// 字号覆盖：默认 body（14/20）
+    in property <length> font-size: Theme.font-body;
+    out property <bool> has-focus: input.has-focus;
+
+    callback accepted();
+    callback edited(string);
+
+    height: Theme.control-height;
+    border-radius: Theme.radius-control;
+    border-width: 1px;
+    border-color: root.has-focus ? Theme.accent : Theme.control-stroke;
+    background: Theme.control-fill;
+    animate border-color { duration: Theme.duration-faster; easing: ease-out; }
+
+    // 聚焦时底部 2px 强调条
+    Rectangle {
+        visible: root.has-focus && root.enabled;
+        x: 1px;
+        y: parent.height - 2px;
+        width: parent.width - 2px;
+        height: 2px;
+        border-radius: 1px;
+        background: Theme.accent;
+    }
+
+    // 占位符（空文本时显示；不占用布局空间）
+    Text {
+        visible: root.text == "";
+        text: root.placeholder-text;
+        color: Theme.text-tertiary;
+        font-family: root.font-family;
+        font-size: root.font-size;
+        x: 12px;
+        width: parent.width - 24px;
+        height: parent.height;
+        vertical-alignment: center;
+        wrap: no-wrap;
+        overflow: elide;
+    }
+
+    // 空白区域点击也能聚焦（在输入控件下层，不抢文本选择/光标事件）
+    padding_touch := TouchArea {
+        mouse-cursor: root.enabled ? MouseCursor.text : MouseCursor.default;
+        clicked => { if (root.enabled) { input.focus(); } }
+    }
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+
+        input := TextInput {
+            vertical-alignment: center;
+            single-line: true;
+            color: root.enabled ? Theme.text-primary : Theme.text-disabled;
+            font-family: root.font-family;
+            font-size: root.font-size;
+            read-only: root.read-only || !root.enabled;
+            selection-background-color: Theme.selection-fill;
+            selection-foreground-color: Theme.text-primary;
+            text-cursor-width: 1px;
+            edited => { root.edited(self.text); }
+            accepted => { root.accepted(); }
+        }
+    }
+
+    /// 供调用方聚焦（例如菜单里的"快速连接"；不能叫 focus，那是内建函数名）
+    public function focus-input() {
+        input.focus();
+    }
+
+    public function select-all() {
+        input.select-all();
+    }
+
+    public function clear-input-focus() {
+        input.clear-focus();
+    }
+}

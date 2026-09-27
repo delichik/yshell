@@ -1,9 +1,10 @@
+import { Theme } from "../theme.slint";
 export component QuickCommands inherits Rectangle {
     height: 180px;
-    background: #252b36;
+    background: Theme.layer-fill;
     VerticalLayout {
         padding: 10px;
-        Text { text: "Quick Commands"; color: #f4f7fb; }
-        Text { text: "Command presets will appear here."; color: #a8b3c7; }
+        Text { text: "Quick Commands"; color: Theme.text-primary; }
+        Text { text: "Command presets will appear here."; color: Theme.text-secondary; }
     }
 }

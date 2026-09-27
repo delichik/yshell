@@ -12,7 +12,8 @@ pub use paths::{discover_config_dir, ConfigPathError, ConfigPathResolver, Operat
 pub use quick_connect::{parse_quick_connect, QuickConnectError, QuickConnectTarget};
 pub use schema::{
     migrate_value, AppearanceProfile, AuthMethod, AuthProfile, ConfigDocument, ConfigSchemaError,
-    FolderProfile, LoggingProfile, ProxyProfile, ResolvedSessionProfile, SessionBasicEdit,
-    SessionProfile, SftpProfile, TunnelForward, TunnelForwardKind, TunnelProfile, SCHEMA_VERSION,
+    FolderProfile, HostKeyPolicy, LoggingProfile, ProxyProfile, ProxyProtocol,
+    ResolvedSessionProfile, SessionBasicEdit, SessionProfile, SftpProfile, TerminalProfile,
+    TunnelForward, TunnelForwardKind, TunnelProfile, SCHEMA_VERSION,
 };
 pub use store::{ConfigStore, ConfigStoreError, LoadOutcome};

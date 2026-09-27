@@ -1,0 +1,161 @@
+// YShell 设计 token —— WinUI 3 / Fluent 2
+//
+// 规范：docs/product/ui-winui3-design-language.md §3
+// 原则：
+//   1. 所有界面颜色/尺寸/字号/动效必须引用本文件的 token，禁止在别处写死字面量。
+//   2. 深浅两套值都写在这里，通过 `Theme.dark` 选择；`Theme.dark` 默认跟随系统。
+//   3. 强调色由 Rust 侧按预设写入 light/dark 两组值（见 crates/yshell-ui appearance 模块）。
+//
+// 两个必须遵守的约定：
+//   * 8 位色值格式是 `#RRGGBBAA`（alpha 在最后），不是 `#AARRGGBB`。
+//   * Slint 的 `SlintInternal` 不可访问；系统明暗通过 std-widgets 的
+//     `Palette.color-scheme` 读取，并在覆盖 std-widgets 色板之前由 Rust 快照到
+//     `Theme.system-dark`（否则会与覆盖形成循环绑定）。
+
+import { Palette } from "std-widgets.slint";
+
+export global Theme {
+    // ---------------------------------------------------------------- 主题模式
+    /// 系统明暗（只读，来自 std-widgets 的色板；应用不覆盖它）
+    out property <ColorScheme> system-scheme: Palette.color-scheme;
+    /// 主题模式：0 = 跟随系统（默认）、1 = 浅色、2 = 深色。
+    ///
+    /// 用 int 而不是 Slint 枚举，避免 Rust 侧依赖非公开的 `ColorScheme` 类型。
+    /// 注意（W1 已知限制）：显式指定 1/2 时，尚未替换的 std-widgets 控件仍跟随
+    /// 系统明暗；W3 用自绘控件替换后此限制消失（见设计规范 §9 W3）。
+    in-out property <int> mode: 0;
+    /// 解析后的明暗状态（后续所有 token 的唯一依据）
+    out property <bool> dark: mode == 2 || (mode == 0 && system-scheme == ColorScheme.dark);
+    /// 动效总开关（"减少动画"设置；关闭后所有动画时长为 0）
+    in-out property <bool> animations-enabled: true;
+
+    // ------------------------------------------------------------------ 强调色
+    // 由 Rust 按预设写入；默认 Windows 蓝
+    in-out property <color> accent-light: #005FB8;
+    in-out property <color> accent-dark: #60CDFF;
+    in-out property <color> accent-hover-light: #0067C0;
+    in-out property <color> accent-hover-dark: #7EDEFF;
+    in-out property <color> accent-pressed-light: #003E92;
+    in-out property <color> accent-pressed-dark: #4FB8E8;
+    in-out property <color> accent-text-light: #FFFFFF;
+    in-out property <color> accent-text-dark: #000000;
+    in-out property <color> accent-soft-light: #D7E7F4;
+    in-out property <color> accent-soft-dark: #2A4556;
+
+    out property <color> accent: dark ? accent-dark : accent-light;
+    out property <color> accent-hover: dark ? accent-hover-dark : accent-hover-light;
+    out property <color> accent-pressed: dark ? accent-pressed-dark : accent-pressed-light;
+    /// 强调色上的文字色
+    out property <color> accent-text: dark ? accent-text-dark : accent-text-light;
+    /// 强调色的浅底（选中项/开关底）
+    out property <color> accent-soft: dark ? accent-soft-dark : accent-soft-light;
+
+    // -------------------------------------------------------------- 表面与层次
+    /// 窗口底色（代替 Mica 的实色）
+    out property <color> window-background: dark ? #202020 : #F3F3F3;
+    /// 内容层（命令栏/菜单栏/导航栏/状态栏等）
+    out property <color> layer-fill: dark ? #FFFFFF0F : #FFFFFFB3;
+    /// 内容层描边/分隔线
+    out property <color> layer-stroke: dark ? #FFFFFF0F : #0000000F;
+    /// 浮层内分隔线（比 layer-stroke 强一档，用于弹窗分区线/菜单分隔符/列表表头下沿）
+    out property <color> divider: dark ? #FFFFFF1F : #00000014;
+    /// 窗口内的卡片（右侧工具面板等）
+    out property <color> card-fill: dark ? #FFFFFF0D : #FFFFFFB3;
+    out property <color> card-stroke: dark ? #FFFFFF0F : #0000000F;
+    /// 不透明浮层/对话框底（菜单、ContentDialog）
+    out property <color> panel-background: dark ? #2C2C2C : #FFFFFF;
+    /// 菜单/下拉浮层底（规范 §5.11：比卡片再"亮"一级）
+    out property <color> flyout-background: dark ? #2C2C2C : #FFFFFF;
+    /// 模态遮罩
+    out property <color> scrim: #00000088;
+    /// 浮层阴影
+    out property <color> shadow-color: dark ? #00000055 : #00000033;
+    out property <length> shadow-blur: 10px;
+    out property <length> shadow-offset-y: 3px;
+
+    // ---------------------------------------------------------------- 控件状态
+    out property <color> control-fill: dark ? #FFFFFF0F : #FFFFFFB3;
+    out property <color> control-fill-hover: dark ? #FFFFFF17 : #FFFFFF80;
+    out property <color> control-fill-pressed: dark ? #FFFFFF0A : #FFFFFF4D;
+    out property <color> control-fill-disabled: dark ? #FFFFFF0A : #FFFFFFF0;
+    out property <color> control-stroke: dark ? #FFFFFF14 : #0000000F;
+    /// 列表/导航项悬停
+    out property <color> subtle-hover: dark ? #FFFFFF0F : #0000000F;
+    out property <color> subtle-pressed: dark ? #FFFFFF0A : #0000000A;
+    out property <color> subtle-selected: dark ? #FFFFFF0F : #0000000F;
+    /// 文本选区
+    out property <color> selection-fill: dark ? #60CDFF33 : #005FB833;
+
+    // -------------------------------------------------------------------- 文本
+    out property <color> text-primary: dark ? #FFFFFF : #000000E4;
+    out property <color> text-secondary: dark ? #FFFFFFC5 : #0000009E;
+    out property <color> text-tertiary: dark ? #FFFFFF87 : #00000072;
+    out property <color> text-disabled: dark ? #FFFFFF5D : #0000005C;
+
+    // ---------------------------------------------------------------- 系统语义
+    out property <color> success: dark ? #6CCB5F : #0F7B0F;
+    out property <color> caution: dark ? #FCE100 : #9D5D00;
+    out property <color> critical: dark ? #FF99A4 : #C42B1C;
+    /// 安全提示条（InfoBar warning）
+    out property <color> attention-background: dark ? #433519 : #FFF4CE;
+    out property <color> attention-stroke: dark ? #FCE10055 : #9D5D0055;
+    out property <color> attention-text: dark ? #FFF3D6 : #5C4200;
+
+    // -------------------------------------------------------------------- 终端
+    out property <color> terminal-background: dark ? #0C0C0C : #FAFAFA;
+    out property <color> terminal-surface: dark ? #050505 : #FFFFFF;
+    out property <color> terminal-chrome-fill: dark ? #FFFFFF0A : #00000005;
+    out property <color> terminal-border: dark ? #FFFFFF14 : #0000000F;
+
+    // -------------------------------------------------------------------- 字阶
+    out property <length> font-caption: 12px;
+    out property <length> font-body: 14px;
+    out property <length> font-body-large: 16px;
+    out property <length> font-subtitle: 20px;
+    out property <length> font-title: 28px;
+    out property <length> line-caption: 16px;
+    out property <length> line-body: 20px;
+    /// 标题/强调字重（WinUI Semibold）
+    out property <int> weight-semibold: 600;
+    /// UI 字体族（由 Rust 按平台写入；必须同时覆盖拉丁与 CJK——Slint 1.9 不支持字体列表/逐字形回退）
+    in-out property <string> font-ui: "Noto Sans SC";
+    /// 等宽字体族（路径/指纹/权限/端口等技术信息）
+    out property <string> font-mono: "monospace";
+    /// 表单标签列宽（对话框里的「标签 + 控件」两列布局）
+    out property <length> form-label-width: 116px;
+
+    // -------------------------------------------------------------------- 尺寸
+    out property <length> icon-size: 20px;
+    out property <length> icon-size-small: 16px;
+    out property <length> control-height: 32px;
+    out property <length> control-height-compact: 24px;
+    out property <length> row-height-nav: 40px;
+    out property <length> row-height-list: 32px;
+    out property <length> row-height-tree: 28px;
+    out property <length> bar-height-menubar: 32px;
+    out property <length> bar-height-commandbar: 48px;
+    out property <length> bar-height-status: 26px;
+    out property <length> bar-height-tabs: 32px;
+    out property <length> nav-width: 240px;
+    out property <length> dock-width: 340px;
+    /// 面板拖拽把手宽度（§4.2：4px，悬停变色）
+    out property <length> resize-handle-width: 4px;
+    /// 窗口 <960px 时左导航折叠成的图标条宽度（§4.2）
+    out property <length> nav-rail-width: 48px;
+
+    // ---------------------------------------------------------------- 间距/圆角
+    out property <length> spacing-4: 4px;
+    out property <length> spacing-8: 8px;
+    out property <length> spacing-12: 12px;
+    out property <length> spacing-16: 16px;
+    out property <length> spacing-20: 20px;
+    out property <length> spacing-24: 24px;
+    out property <length> radius-control: 4px;
+    out property <length> radius-panel: 8px;
+
+    // -------------------------------------------------------------------- 动效
+    // 时长在"减少动画"下统一为 0，动画声明处直接绑定这些 token
+    out property <duration> duration-faster: animations-enabled ? 100ms : 0ms;
+    out property <duration> duration-fast: animations-enabled ? 167ms : 0ms;
+    out property <duration> duration-normal: animations-enabled ? 250ms : 0ms;
+}

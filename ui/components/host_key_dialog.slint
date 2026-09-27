@@ -1,0 +1,141 @@
+// 主机密钥确认（ContentDialog 形态的模态弹窗）
+//
+// 承载原来挂在主界面里的主机密钥提示条：first-trust（首次信任）与 changed
+// （主机密钥变化）两种模式共用一个弹窗，由 `mode-text` 切换。
+// 形态：WinUI 3 ContentDialog（§5.10）——scrim 遮罩、panel-background 面板、
+// subtitle 标题、右对齐操作区（主操作在右），右上角统一关闭按钮。
+//
+// 与 Rust 侧的约定：
+//   * `mode-text` 取 "first-trust" / "changed"（无待确认提示时为空串）。
+//   * 信息文本由 Rust 投影（多行），等宽展示，最多 8 行后内部滚动。
+//   * changed 模式必须输入 REPLACE；Rust 侧 `replace_host_key_and_connect`
+//     同样校验 `trim() == "REPLACE"`，这里同步禁用按钮，避免无谓的错误状态。
+
+import { Theme } from "../theme.slint";
+import { WinButton, WinIconButton } from "basic/controls.slint";
+import { WinTextInput } from "basic/text_input.slint";
+
+export component HostKeyDialog inherits Rectangle {
+    /// 主机密钥信息（Rust 投影的多行文本，原样展示）
+    in property <string> prompt-text: "";
+    /// "first-trust" | "changed"
+    in property <string> mode-text: "";
+    /// changed 模式的确认词（in-out：弹窗内编辑，宿主可读写）
+    in-out property <string> confirmation-text: "";
+
+    callback cancel();
+    callback trust-once();
+    callback trust-and-save();
+    callback replace-key();
+    callback confirmation-edited(string);
+    /// 右上角 × 关闭，语义与 cancel() 相同（宿主自行决定处理方式）
+    callback dismissed();
+
+    background: Theme.scrim;
+
+    // 阻止背后内容的交互
+    TouchArea { }
+
+    Rectangle {
+        x: (parent.width - 520px) / 2;
+        y: max((parent.height - self.height) / 2, 40px);
+        width: 520px;
+        height: body.preferred-height;
+        background: Theme.panel-background;
+        border-radius: Theme.radius-panel;
+        border-width: 1px;
+        border-color: Theme.control-stroke;
+
+        body := VerticalLayout {
+            padding: Theme.spacing-20;
+            spacing: Theme.spacing-12;
+
+            // 标题行（固定）：右侧统一关闭按钮
+            HorizontalLayout {
+                spacing: Theme.spacing-8;
+
+                Text {
+                    text: @tr("Host Key Confirmation");
+                    color: Theme.text-primary;
+                    font-size: Theme.font-subtitle;
+                    font-weight: Theme.weight-semibold;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+
+                WinIconButton {
+                    icon: "close";
+                    accessible-name: @tr("Close");
+                    clicked => { root.dismissed(); }
+                }
+            }
+
+            // 主机密钥信息（Rust 投影的多行文本）：最多 8 行，超出后内部滚动
+            Rectangle {
+                height: min(prompt.preferred-height, 8 * Theme.line-body);
+                clip: true;
+                background: transparent;
+
+                prompt-scroll := Flickable {
+                    width: parent.width;
+                    height: parent.height;
+                    interactive: true;
+                    viewport-width: self.width;
+                    viewport-height: prompt.preferred-height;
+
+                    prompt := Text {
+                        width: prompt-scroll.width;
+                        text: root.prompt-text;
+                        color: Theme.text-secondary;
+                        font-family: Theme.font-mono;
+                        font-size: Theme.font-body;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+
+            // changed 模式：警示文案 + REPLACE 确认输入
+            if root.mode-text == "changed" : Text {
+                text: @tr("The presented key does not match the stored key. This may indicate a man-in-the-middle attack; replace it only if you verified the new key elsewhere.");
+                color: Theme.critical;
+                wrap: word-wrap;
+            }
+
+            if root.mode-text == "changed" : WinTextInput {
+                placeholder-text: @tr("Type REPLACE");
+                text <=> root.confirmation-text;
+                edited => { root.confirmation-edited(self.text); }
+            }
+
+            // 操作区：右对齐，主操作在最右
+            HorizontalLayout {
+                alignment: end;
+                spacing: Theme.spacing-8;
+
+                WinButton {
+                    text: @tr("Cancel");
+                    clicked => { root.cancel(); }
+                }
+
+                if root.mode-text == "first-trust" : WinButton {
+                    text: @tr("Trust Once");
+                    clicked => { root.trust-once(); }
+                }
+
+                if root.mode-text == "first-trust" : WinButton {
+                    text: @tr("Trust and Save");
+                    accent: true;
+                    clicked => { root.trust-and-save(); }
+                }
+
+                if root.mode-text == "changed" : WinButton {
+                    text: @tr("Replace Key");
+                    // 破坏性操作：critical 文案色（不做红色实底），且需输入 REPLACE
+                    critical: true;
+                    enabled: root.confirmation-text == "REPLACE";
+                    clicked => { root.replace-key(); }
+                }
+            }
+        }
+    }
+}

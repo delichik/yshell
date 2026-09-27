@@ -1,16 +1,264 @@
-export component SessionTree inherits Rectangle {
-    background: #252b36;
-    VerticalLayout {
-        padding: 12px;
-        spacing: 8px;
-        HorizontalLayout {
-            Text { text: "Session Manager"; color: #f4f7fb; }
-            Button { text: "+"; }
-            Button { text: "..."; }
+// 保存会话树（左侧导航）。
+//
+// 结构：Rust 侧把会话树按显示顺序压成一维行模型（folder / session），本组件
+//       顺序渲染即可，不做嵌套 model；行数多时由 Flickable 竖向滚动，不分页。
+// 行形态：28px 行高、按 depth 每级缩进 16px、文件夹行带展开箭头与子树计数，
+//       选中态沿用 WinNavItem 的 subtle-selected + 3×16 强调条。
+// 交互：整行一个 TouchArea（单击选中 / 双击激活 / 右键菜单）；单击文件夹的
+//       箭头区域切换展开折叠。
+// 规范：docs/product/ui-winui3-design-language.md §5.2 / §5.5；颜色与尺寸只引用
+//       Theme token。导出的属性/回调是主窗口与 Rust 的契约，名字与类型保持稳定。
+import { Theme } from "../theme.slint";
+import { Icon } from "basic/icons.slint";
+
+/// Rust 侧 `yshell_app::SessionTreeRow` 的 Slint 镜像（字段一一对应）。
+export struct SessionTreeRow {
+    kind: string,
+    depth: int,
+    label: string,
+    detail: string,
+    id: string,
+    expanded: bool,
+    selected: bool,
+}
+
+/// 单行：整行命中区（单击选中 / 双击激活 / 右键菜单）。
+component SessionTreeRowItem inherits Rectangle {
+    in property <SessionTreeRow> node;
+    in property <bool> selected: false;
+    /// 每级缩进宽度
+    in property <length> indent-step: Theme.spacing-16;
+    /// 右侧次要信息至少要有这么宽才显示
+    in property <length> detail-min-width: 64px;
+    callback select();
+    callback activate();
+    callback toggle();
+    callback context-menu-requested(x: length, y: length);
+
+    height: Theme.row-height-tree;
+    border-radius: Theme.radius-control;
+    background: root.selected ? Theme.subtle-selected
+        : row_touch.has-hover ? Theme.subtle-hover
+        : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    /// 文件夹展开箭头的命中区宽度（左内边距 + 缩进 + 箭头宽度 + 少量余量）：
+    /// 整行只有一个 TouchArea，箭头区域靠 mouse-x 判定。
+    property <length> chevron-hit-width:
+        Theme.spacing-8 + root.node.depth * root.indent-step + Theme.icon-size-small + 6px;
+
+    /// 名称与次要信息共用的横向空间（行宽 - 行内边距 - 箭头/图标列及间距）。
+    /// 宽度显式分配而不是靠 stretch 抢：窄侧栏下名称永远优先，次要信息留不下
+    /// 就整体不显示（不会出现半个 "d…"）。
+    property <length> text-space:
+        max(0px, self.width - Theme.spacing-16 - Theme.icon-size-small * 3);
+    /// 名称完整显示后仍留得下 detail-min-width 才显示次要信息
+    property <bool> detail-visible:
+        root.node.detail != ""
+            && root.text-space - label_text.preferred-width >= root.detail-min-width;
+    /// 次要信息宽度：最多占一半文字空间
+    property <length> detail-width:
+        root.detail-visible ? min(detail_text.preferred-width, root.text-space / 2) : 0px;
+    property <length> label-width:
+        max(
+            0px,
+            root.text-space
+                - (root.detail-visible ? root.detail-width + Theme.spacing-8 : 0px)
+        );
+
+    // 选中指示条（与 WinNavItem 一致：3×16 强调色）
+    Rectangle {
+        visible: root.selected;
+        x: 0;
+        y: (parent.height - 16px) / 2;
+        width: 3px;
+        height: 16px;
+        border-radius: 2px;
+        background: Theme.accent;
+    }
+
+    // 覆盖整行的命中区（参考 sftp_panel 的做法：整行一个 TouchArea，
+    // 悬停/选中底由行容器绘制）。先声明让它位于行内容之下，箭头判定用 mouse-x。
+    row_touch := TouchArea {
+        clicked => {
+            if (root.node.kind == "folder" && self.mouse-x <= root.chevron-hit-width) {
+                root.toggle();
+            } else {
+                root.select();
+            }
         }
-        TextInput { placeholder-text: "Search sessions"; }
-        Text { text: "Favorites"; color: #a8b3c7; }
-        Text { text: "Welcome"; color: #f4f7fb; }
-        Text { text: "Recent"; color: #a8b3c7; }
+        double-clicked => { root.activate(); }
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                // 右键只上报坐标：选中由宿主（main_window 的
+                // context-menu-requested 处理器）负责，避免同一次右键触发两次
+                // select 而被"重复点击 = 激活"兜底误判成双击。
+                root.context-menu-requested(
+                    self.absolute-position.x + self.mouse-x,
+                    self.absolute-position.y + self.mouse-y
+                );
+            }
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-8 + root.node.depth * root.indent-step;
+        padding-right: Theme.spacing-8;
+        spacing: Theme.spacing-8;
+
+        // 展开箭头（仅文件夹；会话行用等宽占位保持图标列对齐）
+        if root.node.kind == "folder" : Rectangle {
+            width: Theme.icon-size-small;
+            vertical-stretch: 1;
+            background: transparent;
+
+            Icon {
+                name: root.node.expanded ? "chevron-down" : "chevron-right";
+                icon-size: Theme.icon-size-small;
+                icon-color: Theme.text-secondary;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+        if root.node.kind != "folder" : Rectangle {
+            width: Theme.icon-size-small;
+            background: transparent;
+        }
+
+        // 图标：文件夹 / 终端会话
+        Rectangle {
+            width: Theme.icon-size-small;
+            vertical-stretch: 1;
+            background: transparent;
+
+            Icon {
+                name: root.node.kind == "folder" ? "folder" : "terminal";
+                icon-size: Theme.icon-size-small;
+                icon-color: root.selected ? Theme.accent : Theme.text-secondary;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        // 名称：显式宽度 + 省略号
+        label_text := Text {
+            text: root.node.label;
+            color: Theme.text-primary;
+            font-size: Theme.font-body;
+            font-weight: root.selected ? Theme.weight-semibold : 400;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+            width: root.label-width;
+        }
+
+        // 右侧次要信息：会话 = user@host；文件夹 = 子树可见会话数（右对齐）。
+        // 放不下时 visible=false + 宽度 0，不占布局空间。
+        detail_text := Text {
+            visible: root.detail-visible;
+            text: root.node.detail;
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+            wrap: no-wrap;
+            overflow: elide;
+            width: root.detail-width;
+        }
+    }
+}
+
+/// 保存会话树：扁平行模型 + 竖向滚动；空态文案由宿主传入（沿用现有 i18n 模板）。
+export component SessionTree inherits Rectangle {
+    in property <[SessionTreeRow]> rows: [];
+    /// 当前选中节点的 id（与 `rows.selected` 同源，宿主读回用）。
+    in property <string> selected-id: "";
+    /// 树为空时的提示文案（宿主用现有 i18n 模板生成）。
+    in property <string> empty-text: "";
+    /// 内容高度上限：超过后由 Flickable 滚动，不分页。
+    in property <length> list-max-height: 320px;
+    in property <length> row-height: Theme.row-height-tree;
+
+    callback select(string);
+    callback activate(string);
+    callback toggle-folder(string);
+    callback context-menu-requested(string, length, length);
+
+    /// 内容高度（行数 × 行高）；宿主可用来判断占位。
+    out property <length> content-height: root.rows.length * root.row-height;
+
+    // 键盘兜底：树持有焦点时回车激活选中行（等价于双击）。只消费回车，其余键
+    // reject 继续沿父链冒泡（窗口级快捷键在祖先 FocusScope 上）。
+    //
+    // FocusScope 必须**包住行区域**：Slint 在鼠标点击时把焦点交给离点击处最近的
+    // FocusScope 祖先，兄弟节点不会拿到焦点（否则回车到不了这里的 key-pressed）。
+    tree_focus := FocusScope {
+        width: parent.width;
+        height: parent.height;
+
+        key-pressed(event) => {
+            // Slint 1.9 的 KeyEvent 没有 `key`，回车按 `event.text` 的键码比较
+            // （与 crates/yshell-terminal/src/keys.rs 的 RETURN 一致）。
+            if (event.text == "\u{000a}" || event.text == "\u{000d}") {
+                if (root.selected-id != "") {
+                    root.activate(root.selected-id);
+                }
+                return accept;
+            }
+            return reject;
+        }
+
+        Flickable {
+            visible: root.rows.length > 0;
+            x: 0;
+            y: 0;
+            width: parent.width;
+            height: parent.height;
+            viewport-width: self.width;
+            viewport-height: rows_layout.preferred-height;
+
+            rows_layout := VerticalLayout {
+                spacing: 1px;
+
+                for entry in root.rows : SessionTreeRowItem {
+                    node: entry;
+                    // 选中态只由 `selected-id` 这个标量属性计算（行数据里的
+                    // `selected` 仅作信息）：单击只改这一个属性，不会替换行模型。
+                    // 若单击替换模型，Slint 会重建行实例并重置双击计数
+                    // （i-slint-core window.rs 在"光标下 item 变化"时 click_state.reset()），
+                    // 双击就会退化成两次单击。
+                    selected: entry.id == root.selected-id;
+                    select() => {
+                        tree_focus.focus();
+                        root.select(entry.id);
+                    }
+                    activate() => { root.activate(entry.id); }
+                    toggle() => {
+                        tree_focus.focus();
+                        root.toggle-folder(entry.id);
+                    }
+                    context-menu-requested(x, y) => {
+                        root.context-menu-requested(entry.id, x, y);
+                    }
+                }
+            }
+        }
+    }
+
+    background: transparent;
+    // 行少时贴合内容，行多时到上限为止并滚动。
+    height: clamp(
+        root.content-height + 2px,
+        root.row-height * 2,
+        root.list-max-height
+    );
+
+    if root.rows.length == 0 : Text {
+        text: root.empty-text;
+        color: Theme.text-tertiary;
+        font-size: Theme.font-caption;
+        x: Theme.spacing-8;
+        width: parent.width - 2 * Theme.spacing-8;
+        height: parent.height;
+        vertical-alignment: center;
+        wrap: word-wrap;
     }
 }

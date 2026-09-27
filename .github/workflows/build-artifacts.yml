@@ -1,0 +1,133 @@
+name: Build artifacts
+
+# Reusable workflow: build the portable archives and installers for every
+# supported platform and aggregate SHA256SUMS.txt. Called by ci.yml (packaging
+# smoke test) and release.yml (publish).
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: >-
+          Version label used in artifact names. Leave empty to use the tag
+          name, YSHELL_RELEASE_VERSION or a dev label derived from the commit.
+        required: false
+        type: string
+        default: ""
+      retention-days:
+        description: How long the uploaded artifacts are kept.
+        required: false
+        type: number
+        default: 90
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            platform: windows-x86_64
+            formats: portable,msi
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            platform: macos-x86_64
+            formats: portable,dmg
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            platform: macos-aarch64
+            formats: portable,dmg
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            platform: linux-x86_64
+            formats: portable,deb,rpm
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          targets: ${{ matrix.target }}
+          cache-key: package-${{ matrix.platform }}
+          # rpmbuild for the rpm package; deb uses cargo-deb below.
+          extra-linux-packages: ${{ runner.os == 'Linux' && 'rpm' || '' }}
+
+      - name: Install cargo-deb
+        if: runner.os == 'Linux'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deb
+
+      - name: Verify Cargo.lock is up to date
+        shell: bash
+        run: cargo metadata --locked --format-version 1 > /dev/null
+
+      - name: Build portable archive and installers
+        id: dist
+        env:
+          YSHELL_RELEASE_VERSION: ${{ inputs.version }}
+        run: >-
+          cargo xtask dist
+          --target ${{ matrix.target }}
+          --platform ${{ matrix.platform }}
+          --formats ${{ matrix.formats }}
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.dist.outputs.package }}
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/*.msi
+            dist/*.dmg
+            dist/*.deb
+            dist/*.rpm
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+
+  checksums:
+    name: SHA256SUMS
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v8
+        with:
+          path: packages
+
+      - name: Generate SHA256SUMS.txt
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd packages
+          find . -type f -name '*.sha256' -exec cat {} + | LC_ALL=C sort -k2 > SHA256SUMS.txt
+          expected=$(find . -type f \
+            \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.msi' -o -name '*.dmg' \
+               -o -name '*.deb' -o -name '*.rpm' \) | wc -l)
+          actual=$(wc -l < SHA256SUMS.txt)
+          echo "packages: $expected, checksums: $actual"
+          test "$expected" -eq "$actual"
+          cat SHA256SUMS.txt
+
+      - name: Upload checksums
+        uses: actions/upload-artifact@v7
+        with:
+          name: SHA256SUMS
+          path: packages/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}

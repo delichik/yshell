@@ -4,10 +4,10 @@ use std::time::Duration;
 
 use crate::auth::AuthMethod;
 use crate::channel::ShellSession;
-use crate::error::{SshError, SshErrorKind, SshResult};
+use crate::error::{SshError, SshResult};
 use crate::fake::FakeSshAdapter;
 use crate::forwarding::TunnelConfig;
-use crate::host_key::HostKeyPolicy;
+use crate::host_key::{HostKeyPolicy, KnownHosts};
 use crate::proxy::ProxyConfig;
 use crate::pty::PtyConfig;
 use crate::real::RealSshAdapter;
@@ -18,6 +18,7 @@ pub struct SshConnectionConfig {
     pub port: u16,
     pub auth: AuthMethod,
     pub host_key_policy: HostKeyPolicy,
+    pub known_hosts: KnownHosts,
     pub proxy: ProxyConfig,
     pub pty: PtyConfig,
     pub tunnels: Vec<TunnelConfig>,
@@ -31,6 +32,7 @@ impl SshConnectionConfig {
             port,
             auth,
             host_key_policy: HostKeyPolicy::Strict,
+            known_hosts: KnownHosts::new(),
             proxy: ProxyConfig::None,
             pty: PtyConfig::default(),
             tunnels: Vec::new(),
@@ -89,7 +91,7 @@ impl TransportBackend {
     pub const fn label(self) -> &'static str {
         match self {
             Self::Fake => "fake",
-            Self::Real => "real",
+            Self::Real => "native-ssh",
         }
     }
 }
@@ -186,6 +188,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::SshErrorKind;
 
     #[test]
     fn validates_required_connection_fields() {

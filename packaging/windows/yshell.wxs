@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WiX v3 source for the YShell MSI, rendered by `cargo xtask dist` with the
+  msi format selected (see xtask/src/installers.rs). @VERSION@ is a three part
+  numeric version, @BINARY@/@README@/@LICENSE@/@LICENSE_RTF@ are absolute
+  paths.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*"
+           Name="YShell"
+           Language="1033"
+           Version="@VERSION@"
+           Manufacturer="YShell"
+           UpgradeCode="{483C68E0-EEEA-47BE-A2A9-8E99A73012BF}">
+    <Package InstallerVersion="500"
+             Compressed="yes"
+             InstallScope="perMachine"
+             Description="YShell SSH terminal and SFTP client"
+             Comments="https://github.com/delichik/yshell" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of YShell is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <UIRef Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="@LICENSE_RTF@" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="YShell">
+          <Component Id="YShellExecutable" Guid="{B454BD78-5C13-41FB-A1B4-5ACB11EEC51D}">
+            <File Id="YShellExe" Source="@BINARY@" KeyPath="yes" />
+          </Component>
+          <Component Id="YShellDocs" Guid="{81F67662-0FCB-4E83-BBFA-58D5237D52E3}">
+            <File Id="YShellReadme" Source="@README@" />
+            <File Id="YShellLicense" Source="@LICENSE@" />
+          </Component>
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="YShell" />
+      </Directory>
+    </Directory>
+
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="YShellShortcut" Guid="{C37B2301-F921-4F1B-9DF1-0D651972933A}">
+        <Shortcut Id="StartMenuShortcut"
+                  Name="YShell"
+                  Description="YShell SSH terminal and SFTP client"
+                  Target="[INSTALLFOLDER]yshell.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="CleanUpShortcut" Directory="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\YShell"
+                       Name="installed"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <Feature Id="YShellFeature" Title="YShell" Level="1">
+      <ComponentRef Id="YShellExecutable" />
+      <ComponentRef Id="YShellDocs" />
+      <ComponentRef Id="YShellShortcut" />
+    </Feature>
+  </Product>
+</Wix>

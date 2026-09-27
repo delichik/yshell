@@ -3,10 +3,15 @@
 //! This crate intentionally keeps UI state separate from SSH, SFTP, terminal,
 //! configuration, and secret-handling implementation details.
 
+pub mod appearance;
 pub mod models;
 pub mod view_commands;
 pub mod view_events;
 
+pub use appearance::{
+    preset, resolve_accent, AccentColors, AccentPreset, RgbColor, ThemeMode, ACCENT_PRESETS,
+    DEFAULT_ACCENT_ID,
+};
 pub use models::{
     LoggingModel, QuickCommandModel, SearchModel, SessionTreeModel, SftpModel, StatusModel,
     TabModel, TunnelModel,

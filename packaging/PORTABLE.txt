@@ -1,0 +1,38 @@
+YShell portable build
+=====================
+
+This archive is a portable build: there is no installer, no registry writes,
+and no system-wide files. Extract it anywhere and run the binary.
+
+Contents
+  yshell / yshell.exe   Main application binary.
+  yshell-portable.cmd   Windows launcher that keeps YShell data in .\data next
+                        to this file (green/portable mode).
+  yshell-portable.sh    Linux/macOS launcher that keeps YShell data in ./data.
+  README.md, LICENSE    Project documentation and license.
+  PORTABLE.txt          This file.
+  BUILD.txt             Version, target, toolchain and commit of this build.
+
+Run without a launcher
+  Windows:   yshell.exe
+  Linux:     chmod +x ./yshell && ./yshell
+  macOS:     chmod +x ./yshell && ./yshell
+
+Data locations
+  Default (non-portable):
+    Windows  %APPDATA%\YShell
+    macOS    ~/Library/Application Support/YShell
+    Linux    $XDG_CONFIG_HOME/yshell or ~/.config/yshell
+  Portable launcher:
+    <this folder>/data (set via the YSHELL_CONFIG_DIR environment variable)
+
+Notes
+  - Secrets are stored in the OS keychain by default. To use the local
+    encrypted file store instead, set YSHELL_MASTER_PASSWORD before launching.
+  - macOS: unsigned binaries are quarantined after download. Remove the
+    quarantine flag with: xattr -d com.apple.quarantine ./yshell
+  - Linux: requires the X11/XCB runtime libraries (libx11, libxcb).
+  - Verify your download against the SHA256SUMS.txt published next to this
+    archive.
+  - Prefer an installer? The same release also publishes an MSI (Windows),
+    a DMG (macOS) and deb/rpm packages (Linux).

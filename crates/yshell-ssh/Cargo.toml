@@ -12,3 +12,4 @@ workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+ssh2 = { version = "0.9.5", features = ["vendored-openssl"] }

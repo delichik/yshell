@@ -1,0 +1,87 @@
+import { Theme } from "../theme.slint";
+import { WinButton } from "basic/controls.slint";
+import { WinTextInput } from "basic/text_input.slint";
+
+// Reusable modal confirmation dialog.
+//
+// When `confirmation-token` is non-empty the user has to type that exact text
+// before the primary button becomes enabled (dangerous operations).
+// 形态：WinUI 3 ContentDialog（§5.10）——panel-background 面板、subtitle 标题、
+// 右对齐操作区（主操作在右）与全屏 scrim。
+
+export component ConfirmDialog inherits Rectangle {
+    in property <bool> open: false;
+    in property <string> title-text: @tr("Confirm");
+    in property <string> message-text: "";
+    in property <string> confirmation-token: "";
+    in property <string> confirmation-placeholder: "";
+    in-out property <string> confirmation-text: "";
+    in property <string> confirm-label: @tr("Confirm");
+    in property <string> cancel-label: @tr("Cancel");
+
+    callback confirmed();
+    callback canceled();
+
+    visible: self.open;
+    background: Theme.scrim;
+
+    // Block interaction with the content behind the modal.
+    TouchArea { }
+
+    Rectangle {
+        x: (parent.width - 460px) / 2;
+        y: max((parent.height - self.height) / 2, 40px);
+        width: 460px;
+        height: body.preferred-height;
+        background: Theme.panel-background;
+        border-radius: Theme.radius-panel;
+        border-width: 1px;
+        border-color: Theme.control-stroke;
+
+        body := VerticalLayout {
+            padding: Theme.spacing-20;
+            spacing: Theme.spacing-12;
+
+            Text {
+                text: root.title-text;
+                color: Theme.text-primary;
+                font-size: Theme.font-subtitle;
+                font-weight: Theme.weight-semibold;
+                wrap: word-wrap;
+            }
+
+            // 危险操作（需要输入确认词）的正文用 critical 文案色
+            Text {
+                text: root.message-text;
+                color: root.confirmation-token != "" ? Theme.critical : Theme.text-secondary;
+                wrap: word-wrap;
+            }
+
+            // 确认词输入（WinTextInput 自带 control-fill 底 + control-stroke 描边 + 聚焦强调条）
+            if root.confirmation-token != "" : WinTextInput {
+                text <=> root.confirmation-text;
+                placeholder-text: root.confirmation-placeholder;
+            }
+
+            // 操作区：右对齐，主操作（确认）在最右
+            HorizontalLayout {
+                alignment: end;
+                spacing: Theme.spacing-8;
+
+                WinButton {
+                    text: root.cancel-label;
+                    clicked => { root.canceled(); }
+                }
+
+                WinButton {
+                    text: root.confirm-label;
+                    // 需要输入确认词的破坏性操作：critical 文案色，不用强调色实底
+                    accent: root.confirmation-token == "";
+                    critical: root.confirmation-token != "";
+                    enabled: root.confirmation-token == "" || root.confirmation-text == root.confirmation-token;
+                    clicked => { root.confirmed(); }
+                }
+            }
+        }
+    }
+}

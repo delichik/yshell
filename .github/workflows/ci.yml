@@ -3,63 +3,67 @@ name: CI
 on:
   push:
     branches:
-      - master
       - main
+      - master
       - "release/**"
   pull_request:
     branches:
-      - master
       - main
+      - master
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-D warnings"
+  CARGO_INCREMENTAL: "0"
 
 jobs:
   fmt:
-    name: Format
+    name: Rustfmt
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions/checkout@v7
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build-env
         with:
           components: rustfmt
-      - name: Check formatting
-        run: cargo fmt --all --check
+          cache-key: fmt
 
-  clippy:
+      - name: Verify Cargo.lock is up to date
+        shell: bash
+        run: cargo metadata --locked --format-version 1 > /dev/null
+
+      - name: Check formatting
+        run: cargo xtask fmt
+
+  lint:
     name: Clippy
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install Linux UI dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libx11-dev \
-            libxcb1-dev \
-            libxcb-render0-dev \
-            libxcb-shape0-dev \
-            libxcb-xfixes0-dev \
-            libssl-dev \
-            pkg-config
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions/checkout@v7
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build-env
         with:
           components: clippy
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+          cache-key: lint
+
       - name: Run clippy
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        run: cargo xtask lint
 
   test:
-    name: Test
+    name: Test (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -68,35 +72,62 @@ jobs:
           - windows-latest
           - macos-latest
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install Linux UI dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libx11-dev \
-            libxcb1-dev \
-            libxcb-render0-dev \
-            libxcb-shape0-dev \
-            libxcb-xfixes0-dev \
-            libssl-dev \
-            pkg-config
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: actions/checkout@v7
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          cache-key: test-${{ matrix.os }}
+
       - name: Run tests
-        run: cargo test --workspace --all-features
+        run: cargo xtask test
+
+  live-ssh:
+    name: Live SSH/SFTP smoke tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          cache-key: live-ssh
+
+      - name: Run live tests against a disposable sshd container
+        run: bash scripts/test-ssh/run.sh test
 
   deny:
-    name: License and advisory check
+    name: Licenses and advisories
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          cache-key: deny
+
       - name: Install cargo-deny
-        uses: taiki-e/install-action@cargo-deny
-      - name: Run cargo deny
-        run: cargo deny check
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      - name: Run cargo-deny
+        run: cargo xtask deny
+
+  # Same packaging code path as release.yml, so a broken installer or archive
+  # is caught on the next push instead of at tag time. Skipped for PRs to keep
+  # review feedback fast.
+  package:
+    name: Package
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/build-artifacts.yml
+    with:
+      retention-days: 7

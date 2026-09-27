@@ -1,9 +1,10 @@
 //! SFTP client lifecycle and backend adapters.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fs, path::Path};
 
 use crate::error::{SftpError, SftpErrorKind, SftpResult};
 use crate::fs_entry::{DirectoryListing, FsEntry, FsEntryKind};
+use crate::real::RealSftpBackend;
 
 pub trait SftpBackend {
     fn list_dir(&self, path: &str) -> SftpResult<DirectoryListing>;
@@ -11,6 +12,8 @@ pub trait SftpBackend {
     fn delete(&mut self, path: &str) -> SftpResult<()>;
     fn rename(&mut self, from: &str, to: &str) -> SftpResult<()>;
     fn mkdir(&mut self, path: &str) -> SftpResult<()>;
+    fn upload_file(&mut self, local_path: &Path, remote_path: &str) -> SftpResult<()>;
+    fn download_file(&self, remote_path: &str, local_path: &Path) -> SftpResult<()>;
 }
 
 #[derive(Debug, Default)]
@@ -21,6 +24,14 @@ pub struct SftpClient<B = FakeSftpBackend> {
 impl SftpClient<FakeSftpBackend> {
     pub fn new() -> Self {
         Self::default()
+    }
+}
+
+impl SftpClient<RealSftpBackend> {
+    pub fn with_real_backend(config: yshell_ssh::SshConnectionConfig) -> Self {
+        Self {
+            backend: RealSftpBackend::new(config),
+        }
     }
 }
 
@@ -51,18 +62,30 @@ where
     pub fn mkdir(&mut self, path: &str) -> SftpResult<()> {
         self.backend.mkdir(path)
     }
+
+    pub fn upload_file(&mut self, local_path: &Path, remote_path: &str) -> SftpResult<()> {
+        self.backend.upload_file(local_path, remote_path)
+    }
+
+    pub fn download_file(&self, remote_path: &str, local_path: &Path) -> SftpResult<()> {
+        self.backend.download_file(remote_path, local_path)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FakeSftpBackend {
     entries: BTreeMap<String, FsEntry>,
+    contents: BTreeMap<String, Vec<u8>>,
 }
 
 impl Default for FakeSftpBackend {
     fn default() -> Self {
         let mut entries = BTreeMap::new();
         entries.insert("/".to_owned(), FsEntry::directory("/"));
-        Self { entries }
+        Self {
+            entries,
+            contents: BTreeMap::new(),
+        }
     }
 }
 
@@ -120,6 +143,7 @@ impl SftpBackend for FakeSftpBackend {
         self.entries
             .remove(path)
             .ok_or_else(|| SftpError::new(SftpErrorKind::NotFound, format!("{path} not found")))?;
+        self.contents.remove(path);
         Ok(())
     }
 
@@ -134,9 +158,13 @@ impl SftpBackend for FakeSftpBackend {
             .entries
             .remove(from)
             .ok_or_else(|| SftpError::new(SftpErrorKind::NotFound, format!("{from} not found")))?;
+        let contents = self.contents.remove(from);
         entry.path = to.to_owned();
         entry.name = to.rsplit('/').next().unwrap_or(to).to_owned();
         self.entries.insert(to.to_owned(), entry);
+        if let Some(contents) = contents {
+            self.contents.insert(to.to_owned(), contents);
+        }
         Ok(())
     }
 
@@ -150,6 +178,42 @@ impl SftpBackend for FakeSftpBackend {
         self.entries
             .insert(path.to_owned(), FsEntry::directory(path));
         Ok(())
+    }
+
+    fn upload_file(&mut self, local_path: &Path, remote_path: &str) -> SftpResult<()> {
+        let bytes = fs::read(local_path).map_err(|error| {
+            SftpError::new(
+                SftpErrorKind::Backend,
+                format!(
+                    "failed to read local upload source `{}`: {error}",
+                    local_path.display()
+                ),
+            )
+        })?;
+        self.entries.insert(
+            remote_path.to_owned(),
+            FsEntry::file(remote_path, bytes.len() as u64),
+        );
+        self.contents.insert(remote_path.to_owned(), bytes);
+        Ok(())
+    }
+
+    fn download_file(&self, remote_path: &str, local_path: &Path) -> SftpResult<()> {
+        let bytes = self.contents.get(remote_path).ok_or_else(|| {
+            SftpError::new(
+                SftpErrorKind::NotFound,
+                format!("remote file `{remote_path}` has no stored fake content"),
+            )
+        })?;
+        fs::write(local_path, bytes).map_err(|error| {
+            SftpError::new(
+                SftpErrorKind::Backend,
+                format!(
+                    "failed to write fake download target `{}`: {error}",
+                    local_path.display()
+                ),
+            )
+        })
     }
 }
 
@@ -176,5 +240,19 @@ mod tests {
         backend.rename("/tmp/a.txt", "/tmp/b.txt").unwrap();
         backend.delete("/tmp/b.txt").unwrap();
         assert!(backend.list_dir("/tmp").unwrap().entries.is_empty());
+    }
+
+    #[test]
+    fn fake_backend_round_trips_upload_and_download() {
+        let temp = tempfile::tempdir().unwrap();
+        let upload_path = temp.path().join("upload.txt");
+        let download_path = temp.path().join("download.txt");
+        fs::write(&upload_path, b"hello fake sftp").unwrap();
+
+        let mut backend = FakeSftpBackend::default();
+        backend.upload_file(&upload_path, "/upload.txt").unwrap();
+        backend.download_file("/upload.txt", &download_path).unwrap();
+
+        assert_eq!(fs::read(&download_path).unwrap(), b"hello fake sftp");
     }
 }
