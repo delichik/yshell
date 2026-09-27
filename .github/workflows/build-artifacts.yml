@@ -2,7 +2,7 @@ name: Build artifacts
 
 # Reusable workflow: build the portable archives and installers for every
 # supported platform and aggregate SHA256SUMS.txt. Called by ci.yml (packaging
-# smoke test) and release.yml (publish).
+# smoke test), release.yml (publish) and dev-build.yml (dev draft).
 
 on:
   workflow_call:

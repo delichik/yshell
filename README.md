@@ -70,6 +70,9 @@ local toolchain is required:
   release, `portable-*` a prerelease, both with portable archives, installers
   and `SHA256SUMS.txt`; `workflow_dispatch` builds the artifacts without
   publishing.
+- **Dev build** (`dev-build.yml`): pushes to `dev` compile the same artifacts
+  but only refresh a draft release (no tag, nothing published), so `dev`
+  installers can be tested before tagging.
 
 See [docs/product/github-actions-release.md](docs/product/github-actions-release.md) for details.
 

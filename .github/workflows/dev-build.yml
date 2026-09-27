@@ -1,0 +1,81 @@
+name: Dev build
+
+# Push to `dev` compiles the same artifacts as a release, but never publishes
+# anything and never creates a tag: the packages land in the run's artifacts and
+# in a single draft release that a maintainer has to publish by hand.
+
+on:
+  push:
+    branches:
+      - dev
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dev-build-${{ github.ref }}
+  # A newer push supersedes an in-flight build.
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    uses: ./.github/workflows/build-artifacts.yml
+    with:
+      retention-days: 90
+
+  draft:
+    name: Draft release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v8
+        with:
+          path: release-artifacts
+
+      - name: Collect release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p upload
+          find release-artifacts -type f \
+            \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.msi' -o -name '*.dmg' \
+               -o -name '*.deb' -o -name '*.rpm' -o -name 'SHA256SUMS.txt' \) \
+            -exec cp {} upload/ \;
+          ls -l upload
+
+      # Keep exactly one dev draft: drop the previous one (and its assets)
+      # before recreating it from this run, so old builds cannot pile up.
+      - name: Drop previous dev draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          previous_id=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" \
+            --jq '.[] | select(.draft and .tag_name == "dev") | .id' | sed -n '1p')
+          if [ -z "$previous_id" ]; then
+            echo "No previous dev draft release."
+            exit 0
+          fi
+          gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/${previous_id}"
+          echo "Deleted previous dev draft release ${previous_id}."
+
+      # `dev` is only a proposed tag name: GitHub creates that tag when the
+      # draft is published, which stays a manual decision.
+      - name: Create dev draft release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: dev
+          name: Dev build (draft)
+          target_commitish: ${{ github.sha }}
+          draft: true
+          body: |
+            Automatic build of `dev` at ${{ github.sha }}.
+
+            This release is a **draft**: no tag exists for it and nothing was
+            published. Publishing it by hand is what turns it into a real
+            release.
+          files: upload/*

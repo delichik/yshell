@@ -3,8 +3,9 @@
 本文档说明仓库的 CI、打包和发布流程。实际配置以这些文件为准：
 
 - `.github/workflows/ci.yml`：CI 门禁 + 打包冒烟
-- `.github/workflows/_build-artifacts.yml`：可复用的产物构建流程
+- `.github/workflows/build-artifacts.yml`：可复用的产物构建流程
 - `.github/workflows/release.yml`：打 tag 后发布 Release
+- `.github/workflows/dev-build.yml`：push `dev` 时构建并刷新 draft release（不发布、不打 tag）
 - `.github/actions/setup-build-env/action.yml`：统一的运行器环境准备
 - `xtask/`：构建工具（`cargo xtask ...`），本地与 CI 共用同一套逻辑
 - `deny.toml`、`packaging/`：依赖检查配置与安装包模板
@@ -41,7 +42,7 @@ cargo xtask doctor    # 当前机器有哪些工具、能出哪些格式
   `SHA256SUMS.txt` 一并发布。
 - 便携包内含 `yshell`/`yshell.exe`、`yshell-portable.sh`/`.cmd` 启动器、
   `PORTABLE.txt`、`README.md`、`LICENSE`、`BUILD.txt`（版本/目标/rustc/commit）。
-- 安装包不做签名（见第 6 节）。
+- 安装包不做签名（见第 7 节）。
 
 ## 3. `ci.yml`
 
@@ -91,7 +92,27 @@ cargo xtask dist --target <triple> --platform <slug> --formats <list>
 
 发布任务会把便携包、安装包和 `SHA256SUMS.txt` 一起附加到 Release。
 
-## 6. 本地构建与已知限制
+## 6. `dev-build.yml`
+
+触发：push 到 `dev`（`cancel-in-progress: true`，新 push 会取消上一次仍在跑的构建）。
+
+任务：
+
+| 任务 | 内容 |
+|---|---|
+| `build` | 复用 `build-artifacts.yml`，构建全部目标平台的产物（`retention-days: 90`） |
+| `draft` | 汇总产物后刷新名为 `Dev build (draft)` 的 draft release |
+
+行为要点：
+
+- **不发布、不打 tag**：`dev` 只是「拟用 tag 名」，GitHub 只有在手动 Publish 该
+  draft 时才真正创建这个 tag，日常 push 不会产生任何 tag；
+- 每次 push 先删掉上一个 `dev` draft（连同其资产）再重建，所以草稿里始终只有最新
+  一次构建的产物，不会随提交累积；
+- 产物同时保留为本次 Actions run 的 artifact，可直接在 Actions 页面下载；
+- 想转成正式发布：在 Releases 页面编辑该 draft、确认 tag 名与说明后手动 Publish。
+
+## 7. 本地构建与已知限制
 
 ```bash
 cargo xtask doctor                                   # 先看工具是否齐全
@@ -110,7 +131,7 @@ cargo xtask checksums --dir dist                     # 汇总 SHA256SUMS.txt
   `packaging/macos/Info.plist` 已支持 `assets/icons/yshell.icns`，补上图标即可生效。
 - AppImage 暂不提供（需要图标与 FUSE），Linux 用 deb/rpm 覆盖。
 
-## 7. 后续计划
+## 8. 后续计划
 
 - Windows：代码签名（EV 证书）、可选 Inno Setup `setup.exe`。
 - macOS：Developer ID 签名与 notarization，让 DMG 免 Gatekeeper 提示。
