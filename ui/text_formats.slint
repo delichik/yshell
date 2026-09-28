@@ -309,6 +309,55 @@ export global TextFormats {
         return @tr("MainWindow" => "REC · {0} · {1}", logging-mode-label(mode), file_name);
     }
 
+    // --- N9：同步发送按键（状态栏 chip / 一次性提示 / 标签菜单禁用原因）--------
+    /// 状态栏 chip 文案（`SYNC → n targets`；非同步态宿主不渲染文本）。
+    public pure function input-sync-chip(count: int) -> string {
+        return @tr("MainWindow" => "SYNC → {n} target" | "SYNC → {n} targets" % count);
+    }
+
+    /// chip 区域的一次性提示（kind 由 Rust 投影：control-broadcast / target-removed /
+    /// source-closed / source-disconnected / stopped）。
+    public pure function input-sync-notice(kind: string, param: string, count: int) -> string {
+        if kind == "control-broadcast" {
+            return @tr("MainWindow" => "{0} sent to {n} target." | "{0} sent to {n} targets." % count, param);
+        }
+        if kind == "target-removed" {
+            return @tr("MainWindow" => "`{0}` left key input sync (disconnected).", param);
+        }
+        if kind == "source-closed" {
+            return @tr("MainWindow" => "Key input sync stopped: the source tab was closed.");
+        }
+        if kind == "source-disconnected" {
+            return @tr("MainWindow" => "Key input sync stopped: the source session disconnected.");
+        }
+        if kind == "stopped" {
+            return @tr("MainWindow" => "Key input sync stopped.");
+        }
+        return "";
+    }
+
+    /// `Visible` 目标模式的 UI 说明（分屏落地前等同 `All`，菜单 tooltip / 状态文案用）。
+    public pure function input-sync-visible-note() -> string {
+        return @tr("MainWindow" => "Until split view lands, Visible matches All connected tabs in this window.");
+    }
+
+    /// 标签右键"接收键输入"禁用原因（Rust 投影的 reason id → 用户可读句子）。
+    public pure function receive-key-input-reason(reason: string) -> string {
+        if reason == "no-sync" {
+            return @tr("MainWindow" => "Start key input sync from another terminal first.");
+        }
+        if reason == "source" {
+            return @tr("MainWindow" => "This tab is the key input source.");
+        }
+        if reason == "not-connected" {
+            return @tr("MainWindow" => "Connect this tab before it can receive key input.");
+        }
+        if reason == "no-session" {
+            return @tr("MainWindow" => "This tab has no terminal session.");
+        }
+        return "";
+    }
+
     // --- W4 收尾：状态栏模板（覆盖最常见的 kind；未覆盖的 kind 回退英文 status_text）---
     // Rust 侧 `AppProjection::status_kind` 只在覆盖的生产者处设置，其余赋值路径
     // 保持 kind 为空（见 runtime.rs 的 status_i18n_parts）。
@@ -415,6 +464,23 @@ export global TextFormats {
         }
         if kind == "local-dir-loaded" {
             return @tr("MainWindow" => "Loaded local directory `{0}` ({1} items).", param_1, param_2);
+        }
+        // --- N9：同步发送按键的状态栏文案 -------------------------------------
+        if kind == "input-sync-started" {
+            return @tr("MainWindow" => "Sending key input to {n} tab." | "Sending key input to {n} tabs." % round(param_1.to-float()))
+                + (param_2 == "visible" ? " " + input-sync-visible-note() : "");
+        }
+        if kind == "input-sync-stopped" {
+            return @tr("MainWindow" => "Stopped sending key input.");
+        }
+        if kind == "input-sync-no-targets" {
+            return @tr("MainWindow" => "No other connected terminal tab can receive key input.");
+        }
+        if kind == "input-sync-receive-toggled" {
+            if param_2 == "on" {
+                return @tr("MainWindow" => "`{0}` now receives key input.", param_1);
+            }
+            return @tr("MainWindow" => "`{0}` no longer receives key input.", param_1);
         }
         return fallback;
     }

@@ -5,6 +5,7 @@
 // 用 `TextFormats.logging-status-display` 渲染，点击打开与终端右键菜单相同的日志
 // 菜单（Start/Stop/Open File/Open Folder）。
 import { Theme } from "../theme.slint";
+import { Icon } from "basic/icons.slint";
 
 export component StatusBar inherits Rectangle {
     // A32（D14）：默认空（宿主投影启动时写入，避免闪现英文 "Ready"）。
@@ -15,8 +16,20 @@ export component StatusBar inherits Rectangle {
     in property <bool> logging-active: false;
     /// N6：日志区文案（宿主渲染；空 = 只显示入口标签）。
     in property <string> logging-text: "";
+    // --- N9：同步发送按键（chip + 一键停止 + 一次性提示）------------------------
+    /// 是否正在同步发送按键。
+    in property <bool> sync-active: false;
+    /// 同步目标数（宿主渲染 `SYNC → n targets` 的输入）。
+    in property <int> sync-target-count: 0;
+    /// 目标选择模式 id（`all`/`visible`/`selected`；供 accessible label/说明）。
+    in property <string> sync-mode-text: "all";
+    /// chip 文案（宿主用 @tr 模板渲染；空 = 无同步）。
+    in property <string> sync-text: "";
+    /// 一次性提示（目标断开移除 / 控制键广播 / 源关闭；空 = 无）。
+    in property <string> sync-notice-text: "";
 
     callback logging-clicked();
+    callback sync-stop-clicked();
 
     height: Theme.bar-height-status;
     background: Theme.layer-fill;
@@ -38,6 +51,56 @@ export component StatusBar inherits Rectangle {
         // A10：弹性空白显式吃掉剩余宽度（Slint 1.18 起 *-stretch 默认是 1，
         // 不声明的话消息文本会和它平分空间）；日志入口在最后，因此钉在右缘。
         Rectangle { horizontal-stretch: 1; }
+
+        // N9：同步发送按键 chip（`SYNC → n targets` + 一键停止）与一次性提示。
+        // 整条 chip 是命中区：点击 = 停止同步（非同步态 = 清除残留提示）。
+        if root.sync-active || root.sync-notice-text != "" : Rectangle {
+            min-width: 32px;
+            border-radius: Theme.radius-control;
+            background: sync-touch.has-hover
+                ? Theme.subtle-hover
+                : (root.sync-notice-text != "" ? Theme.attention-background : transparent);
+            animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+            HorizontalLayout {
+                padding-left: Theme.spacing-8;
+                padding-right: Theme.spacing-8;
+                spacing: 6px;
+                alignment: center;
+
+                if root.sync-active : Text {
+                    text: root.sync-text;
+                    color: Theme.accent;
+                    font-size: Theme.font-caption;
+                    font-weight: Theme.weight-semibold;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                }
+
+                if root.sync-notice-text != "" : Text {
+                    text: root.sync-notice-text;
+                    color: Theme.caution;
+                    font-size: Theme.font-caption;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                }
+
+                // 一键停止的可点提示（步进/键盘可操作：整条 chip 是 button 角色的命中区）。
+                if root.sync-active : Icon {
+                    name: "close";
+                    icon-color: Theme.accent;
+                    icon-size: 12px;
+                }
+            }
+
+            sync-touch := TouchArea {
+                accessible-role: button;
+                accessible-label: root.sync-active
+                    ? @tr("StatusBar" => "Stop sending key input")
+                    : @tr("StatusBar" => "Dismiss key input sync notice");
+                clicked => { root.sync-stop-clicked(); }
+            }
+        }
 
         // N6：日志入口（REC 指示 + 文案；点击 = 日志菜单，与终端右键菜单同一入口）。
         if root.logging-usable : Rectangle {

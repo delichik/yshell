@@ -33,6 +33,8 @@
 | Save Output As... | scrollback 非空 | 打开保存文件对话框。 | 保存 sanitized text。 |
 | Logging Settings... | 当前 session 可编辑 | 打开 Session Editor 的 Logging section。 | |
 
+> 实现状态（2026-09-28，N9）：终端右键为「发送按键到全部标签 / 发送按键到可见标签 / 停止发送按键」；**不弹确认**（D23，替代 E-052 的 KEYS 确认流），改为状态栏 chip（`SYNC → n targets`）+ 一键停止；`Visible` 在分屏落地前等同「当前窗口全部已连接标签」（菜单 tooltip 已注明）。标签右键提供「接收按键输入」勾选；源/目标标签角标 `SRC`/`RCV`。控制键广播在 chip 上显示非阻塞警示（替代 E-054 的确认流）。
+
 ### 2.2 终端有选区
 
 触发区域：SSH terminal viewport，当前存在文本选区。

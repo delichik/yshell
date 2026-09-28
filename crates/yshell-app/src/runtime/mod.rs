@@ -168,6 +168,7 @@ impl AppRuntime {
             terminal_poll_cursor: 0,
             pending_close_tabs: None,
             tab_menu_tab_id: None,
+            input_sync: tabs::InputSyncState::default(),
             selected_saved_session_id: None,
             selected_saved_folder_id: None,
             collapsed_saved_folders: BTreeSet::new(),
@@ -396,6 +397,8 @@ pub struct AppRuntime {
     pub(crate) pending_close_tabs: Option<PendingCloseTabs>,
     /// N0：右键菜单针对的标签 id（`prepare_tab_context_menu` 设置）。
     pub(crate) tab_menu_tab_id: Option<String>,
+    /// N9：同步发送按键状态（内存态；源/目标标签与 chip 提示）。
+    pub(crate) input_sync: tabs::InputSyncState,
     pub(crate) selected_saved_session_id: Option<String>,
     /// Selected folder in the sidebar tree (folder ids are not profile ids, so
     /// the tree keeps a separate selection slot). Selecting a folder clears the

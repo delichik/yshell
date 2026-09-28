@@ -85,6 +85,20 @@ impl AppRuntime {
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
+        // N9：同步发送按键（终端/标签菜单旗标 + 状态栏 chip / 标签角标数据）。
+        let (terminal_sync_all_enabled, terminal_sync_visible_enabled, terminal_sync_stop_enabled) =
+            self.input_sync_menu_flags();
+        let (
+            tab_menu_receive_key_input_enabled,
+            tab_menu_receives_key_input_checked,
+            tab_menu_receive_key_input_reason_text,
+        ) = self.tab_menu_receive_key_input_flags();
+        let input_sync_active = self.input_sync.is_active();
+        let input_sync_mode_text = self.input_sync.mode.id().to_owned();
+        let input_sync_target_count = i32::try_from(self.input_sync.targets.len()).unwrap_or(i32::MAX);
+        let input_sync_source_name_text = self.input_sync_source_name();
+        let input_sync_notice_kind_text = self.input_sync.notice_kind.clone();
+        let input_sync_notice_param_text = self.input_sync.notice_param.clone();
         let (quick_connect_rows, quick_links_rows, quick_connect_summary_text) = (
             self.quick_connect_row_data(),
             self.quick_link_row_data(),
@@ -291,6 +305,19 @@ impl AppRuntime {
             tab_menu_close_disconnected_enabled,
             tab_menu_reconnect_enabled,
             tab_menu_disconnect_enabled,
+            // N9：同步发送按键。
+            terminal_sync_all_enabled,
+            terminal_sync_visible_enabled,
+            terminal_sync_stop_enabled,
+            tab_menu_receive_key_input_enabled,
+            tab_menu_receives_key_input_checked,
+            tab_menu_receive_key_input_reason_text,
+            input_sync_active,
+            input_sync_mode_text,
+            input_sync_target_count,
+            input_sync_source_name_text,
+            input_sync_notice_kind_text,
+            input_sync_notice_param_text,
             terminal_title_name_text,
             terminal_title_has_session,
             terminal_body_text,
@@ -1271,6 +1298,26 @@ pub struct AppProjection {
     /// D18：被右键标签的 Reconnect/Disconnect 启用条件。
     pub tab_menu_reconnect_enabled: bool,
     pub tab_menu_disconnect_enabled: bool,
+    // --- N9：同步发送按键（终端/标签菜单 + 状态栏 chip + 标签角标）-------------
+    /// 终端右键菜单：`Send Key Input to All Tabs` / `… to Visible Tabs` 可用性。
+    pub terminal_sync_all_enabled: bool,
+    pub terminal_sync_visible_enabled: bool,
+    /// 终端右键菜单：`Stop Sending Key Input` 可用性（同步进行中）。
+    pub terminal_sync_stop_enabled: bool,
+    /// 标签右键菜单：`Receive Key Input` 的启用/勾选/禁用原因。
+    pub tab_menu_receive_key_input_enabled: bool,
+    pub tab_menu_receives_key_input_checked: bool,
+    pub tab_menu_receive_key_input_reason_text: String,
+    /// 是否正在同步发送按键（状态栏 chip / 标签角标）。
+    pub input_sync_active: bool,
+    /// 目标选择模式 id（`all`/`visible`/`selected`）。
+    pub input_sync_mode_text: String,
+    pub input_sync_target_count: i32,
+    /// 同步源标签的显示名（chip 的 accessible label 用）。
+    pub input_sync_source_name_text: String,
+    /// chip 的一次性提示（kind + 参数；kind 空 = 无提示）。
+    pub input_sync_notice_kind_text: String,
+    pub input_sync_notice_param_text: String,
     pub terminal_title_name_text: String,
     pub terminal_title_has_session: bool,
     pub terminal_body_text: String,

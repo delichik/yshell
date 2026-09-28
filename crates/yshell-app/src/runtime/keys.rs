@@ -23,7 +23,13 @@ impl AppRuntime {
         meta: bool,
     ) -> AppResult<AppProjection> {
         let bytes = yshell_terminal::encode_key(text, ctrl, alt, shift, meta);
-        self.send_active_terminal_bytes(&bytes)
+        let projection = self.send_active_terminal_bytes(&bytes)?;
+        // N9：控制键（Ctrl+C 等）广播后给状态栏 chip 一次非阻塞提示（不弹窗）。
+        // IME 组合在提交前不会到达这里，因此只有提交后的文本才会触发。
+        if self.note_input_sync_control_broadcast(text, ctrl, alt, shift, meta, &bytes) {
+            return Ok(self.projection());
+        }
+        Ok(projection)
     }
 
     pub fn send_active_terminal_bytes(&mut self, bytes: &[u8]) -> AppResult<AppProjection> {
@@ -49,6 +55,9 @@ impl AppRuntime {
         let _ = runtime
             .write_terminal_input(bytes)
             .map_err(AppError::from_error)?;
+        // N9：唯一汇聚点的扇出——源写成功后把同一批字节按稳定顺序写入目标
+        // （目标只写输入；目标回显由各自轮询进各自网格，不再回灌）。
+        self.broadcast_synced_input(bytes);
         // D4：正常按键/输入不写状态栏（此前每个字符都刷成 "Sent N bytes…"）。
         self.fold_logging_notice_from_session(&session_key);
         Ok(self.projection())

@@ -657,6 +657,56 @@ fn wire_callbacks(
         }
     });
 
+    // N9：同步发送按键（终端右键 `Send Key Input to …` / 标签右键"接收键输入" /
+    // 状态栏 chip 一键停止）。
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_send_key_input_to(move |mode| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        match runtime_ref.borrow_mut().start_input_sync_mode(mode.as_ref()) {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not start sending key input.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_stop_input_sync(move || {
+        if let Some(window) = weak.upgrade() {
+            let projection = runtime_ref.borrow_mut().stop_input_sync_command();
+            apply_projection(&window, &projection);
+            surface.refresh(&window);
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_toggle_tab_receive_key_input(move |tab_id| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        match runtime_ref
+            .borrow_mut()
+            .toggle_tab_receives_key_input(tab_id.as_ref())
+        {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => {
+                set_error_status(&window, "Could not change key input receiving.", &error)
+            }
+        }
+    });
+
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
     window.on_tab_context_menu_requested(move |tab_id, _x, _y| {
@@ -4810,6 +4860,7 @@ fn workspace_tab_from(tab: &TabData) -> WorkspaceTab {
         active: tab.active,
         kind_text: tab.kind_text.clone().into(),
         logging: tab.logging,
+        sync_role_text: tab.sync_role_text.clone().into(),
     }
 }
 
@@ -4821,6 +4872,7 @@ fn workspace_tab_matches(current: &WorkspaceTab, next: &TabData) -> bool {
         && current.active == next.active
         && current.kind_text.as_str() == next.kind_text
         && current.logging == next.logging
+        && current.sync_role_text.as_str() == next.sync_role_text
 }
 
 /// Replaces the tab model only when the projected tabs changed, so that a
@@ -5633,6 +5685,21 @@ fn apply_projection(window: &MainWindow, projection: &AppProjection) {
     // D18：标签右键菜单的 Reconnect/Disconnect 状态（针对被右键标签）。
     window.set_tab_menu_reconnect_enabled(projection.tab_menu_reconnect_enabled);
     window.set_tab_menu_disconnect_enabled(projection.tab_menu_disconnect_enabled);
+    // N9：同步发送按键（终端/标签菜单 + 状态栏 chip + 标签角标）。
+    window.set_terminal_sync_all_enabled(projection.terminal_sync_all_enabled);
+    window.set_terminal_sync_visible_enabled(projection.terminal_sync_visible_enabled);
+    window.set_terminal_sync_stop_enabled(projection.terminal_sync_stop_enabled);
+    window.set_tab_menu_receive_key_input_enabled(projection.tab_menu_receive_key_input_enabled);
+    window.set_tab_menu_receives_key_input_checked(projection.tab_menu_receives_key_input_checked);
+    window.set_tab_menu_receive_key_input_reason_text(
+        projection.tab_menu_receive_key_input_reason_text.clone().into(),
+    );
+    window.set_input_sync_active(projection.input_sync_active);
+    window.set_input_sync_mode_text(projection.input_sync_mode_text.clone().into());
+    window.set_input_sync_target_count(projection.input_sync_target_count);
+    window.set_input_sync_source_name_text(projection.input_sync_source_name_text.clone().into());
+    window.set_input_sync_notice_kind_text(projection.input_sync_notice_kind_text.clone().into());
+    window.set_input_sync_notice_param_text(projection.input_sync_notice_param_text.clone().into());
     // W5-A2 的终端位图缓存按"活动标签"判断是否需要重绘：标签 id 变化必须使
     // 缓存失效（同 frame_id 的不同会话切回来也要重绘）。
     window.set_active_session(projection.active_tab_id.clone().into());

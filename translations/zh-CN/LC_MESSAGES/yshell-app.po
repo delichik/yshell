@@ -3853,3 +3853,119 @@ msgctxt "MainWindow"
 msgid "{0} recorded target(s); keep up to {1}."
 msgstr "已记录 {0} 个目标；最多保留 {1} 个。"
 
+
+# --- N9：同步发送按键（新增条目）---
+msgctxt "MainWindow"
+msgid "Connect a terminal session first."
+msgstr "请先连接一个终端会话。"
+
+msgctxt "MainWindow"
+msgid "Connect this tab before it can receive key input."
+msgstr "请先连接该标签，才能接收按键输入。"
+
+msgctxt "MainWindow"
+msgid "Key input sync is not active."
+msgstr "按键同步未在进行。"
+
+msgctxt "MainWindow"
+msgid "Key input sync stopped."
+msgstr "按键同步已停止。"
+
+msgctxt "MainWindow"
+msgid "Key input sync stopped: the source session disconnected."
+msgstr "按键同步已停止：源会话已断开。"
+
+msgctxt "MainWindow"
+msgid "Key input sync stopped: the source tab was closed."
+msgstr "按键同步已停止：源标签已关闭。"
+
+msgctxt "MainWindow"
+msgid "No other connected terminal tab can receive key input."
+msgstr "没有其它已连接的终端标签可以接收按键输入。"
+
+msgctxt "MainWindow"
+msgid "Receive Key Input"
+msgstr "接收按键输入"
+
+msgctxt "MainWindow"
+msgid "SYNC → {n} target"
+msgid_plural "SYNC → {n} targets"
+msgstr[0] "SYNC → {n} 个目标"
+
+msgctxt "MainWindow"
+msgid "Send Key Input to All Tabs"
+msgstr "发送按键到全部标签"
+
+msgctxt "MainWindow"
+msgid "Send Key Input to Visible Tabs"
+msgstr "发送按键到可见标签"
+
+msgctxt "MainWindow"
+msgid "Sending key input to {n} tab."
+msgid_plural "Sending key input to {n} tabs."
+msgstr[0] "正在向 {n} 个标签发送按键输入。"
+
+msgctxt "MainWindow"
+msgid "Start key input sync from another terminal first."
+msgstr "请先从另一个终端开始按键同步。"
+
+msgctxt "MainWindow"
+msgid "Stop Sending Key Input"
+msgstr "停止发送按键"
+
+msgctxt "MainWindow"
+msgid "Stopped sending key input."
+msgstr "已停止发送按键输入。"
+
+msgctxt "MainWindow"
+msgid "This tab has no terminal session."
+msgstr "该标签没有终端会话。"
+
+msgctxt "MainWindow"
+msgid "This tab is the key input source."
+msgstr "该标签是按键输入源。"
+
+msgctxt "MainWindow"
+msgid "Until split view lands, Visible matches All connected tabs in this window."
+msgstr "分屏功能落地前，“可见”等同于当前窗口的全部已连接标签。"
+
+msgctxt "MainWindow"
+msgid "`{0}` left key input sync (disconnected)."
+msgstr "`{0}` 已退出按键同步（连接断开）。"
+
+msgctxt "MainWindow"
+msgid "`{0}` no longer receives key input."
+msgstr "`{0}` 不再接收按键输入。"
+
+msgctxt "MainWindow"
+msgid "`{0}` now receives key input."
+msgstr "`{0}` 现在接收按键输入。"
+
+msgctxt "MainWindow"
+msgid "{0} sent to {n} target."
+msgid_plural "{0} sent to {n} targets."
+msgstr[0] "{0} 已发送到 {n} 个目标。"
+
+msgctxt "StatusBar"
+msgid "Dismiss key input sync notice"
+msgstr "关闭按键同步提示"
+
+msgctxt "StatusBar"
+msgid "Stop sending key input"
+msgstr "停止发送按键输入"
+
+msgctxt "WorkspaceTabItem"
+msgid "Key input source"
+msgstr "按键输入源"
+
+msgctxt "WorkspaceTabItem"
+msgid "RCV"
+msgstr "收"
+
+msgctxt "WorkspaceTabItem"
+msgid "Receiving key input"
+msgstr "正在接收按键输入"
+
+msgctxt "WorkspaceTabItem"
+msgid "SRC"
+msgstr "源"

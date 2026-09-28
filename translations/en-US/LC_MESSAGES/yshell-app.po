@@ -3874,3 +3874,122 @@ msgctxt "MainWindow"
 msgid "{0} recorded target(s); keep up to {1}."
 msgstr "{0} recorded target(s); keep up to {1}."
 
+
+# --- N9：同步发送按键（新增条目）---
+msgctxt "MainWindow"
+msgid "Connect a terminal session first."
+msgstr "Connect a terminal session first."
+
+msgctxt "MainWindow"
+msgid "Connect this tab before it can receive key input."
+msgstr "Connect this tab before it can receive key input."
+
+msgctxt "MainWindow"
+msgid "Key input sync is not active."
+msgstr "Key input sync is not active."
+
+msgctxt "MainWindow"
+msgid "Key input sync stopped."
+msgstr "Key input sync stopped."
+
+msgctxt "MainWindow"
+msgid "Key input sync stopped: the source session disconnected."
+msgstr "Key input sync stopped: the source session disconnected."
+
+msgctxt "MainWindow"
+msgid "Key input sync stopped: the source tab was closed."
+msgstr "Key input sync stopped: the source tab was closed."
+
+msgctxt "MainWindow"
+msgid "No other connected terminal tab can receive key input."
+msgstr "No other connected terminal tab can receive key input."
+
+msgctxt "MainWindow"
+msgid "Receive Key Input"
+msgstr "Receive Key Input"
+
+msgctxt "MainWindow"
+msgid "SYNC → {n} target"
+msgid_plural "SYNC → {n} targets"
+msgstr[0] "SYNC → {n} target"
+msgstr[1] "SYNC → {n} targets"
+
+msgctxt "MainWindow"
+msgid "Send Key Input to All Tabs"
+msgstr "Send Key Input to All Tabs"
+
+msgctxt "MainWindow"
+msgid "Send Key Input to Visible Tabs"
+msgstr "Send Key Input to Visible Tabs"
+
+msgctxt "MainWindow"
+msgid "Sending key input to {n} tab."
+msgid_plural "Sending key input to {n} tabs."
+msgstr[0] "Sending key input to {n} tab."
+msgstr[1] "Sending key input to {n} tabs."
+
+msgctxt "MainWindow"
+msgid "Start key input sync from another terminal first."
+msgstr "Start key input sync from another terminal first."
+
+msgctxt "MainWindow"
+msgid "Stop Sending Key Input"
+msgstr "Stop Sending Key Input"
+
+msgctxt "MainWindow"
+msgid "Stopped sending key input."
+msgstr "Stopped sending key input."
+
+msgctxt "MainWindow"
+msgid "This tab has no terminal session."
+msgstr "This tab has no terminal session."
+
+msgctxt "MainWindow"
+msgid "This tab is the key input source."
+msgstr "This tab is the key input source."
+
+msgctxt "MainWindow"
+msgid "Until split view lands, Visible matches All connected tabs in this window."
+msgstr "Until split view lands, Visible matches All connected tabs in this window."
+
+msgctxt "MainWindow"
+msgid "`{0}` left key input sync (disconnected)."
+msgstr "`{0}` left key input sync (disconnected)."
+
+msgctxt "MainWindow"
+msgid "`{0}` no longer receives key input."
+msgstr "`{0}` no longer receives key input."
+
+msgctxt "MainWindow"
+msgid "`{0}` now receives key input."
+msgstr "`{0}` now receives key input."
+
+msgctxt "MainWindow"
+msgid "{0} sent to {n} target."
+msgid_plural "{0} sent to {n} targets."
+msgstr[0] "{0} sent to {n} target."
+msgstr[1] "{0} sent to {n} targets."
+
+msgctxt "StatusBar"
+msgid "Dismiss key input sync notice"
+msgstr "Dismiss key input sync notice"
+
+msgctxt "StatusBar"
+msgid "Stop sending key input"
+msgstr "Stop sending key input"
+
+msgctxt "WorkspaceTabItem"
+msgid "Key input source"
+msgstr "Key input source"
+
+msgctxt "WorkspaceTabItem"
+msgid "RCV"
+msgstr "RCV"
+
+msgctxt "WorkspaceTabItem"
+msgid "Receiving key input"
+msgstr "Receiving key input"
+
+msgctxt "WorkspaceTabItem"
+msgid "SRC"
+msgstr "SRC"

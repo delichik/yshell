@@ -799,7 +799,9 @@
 | N3 面板停靠 | **已完成（验收通过 2026-09-28）** | `ses_f1bb42d9dffeOCLRk3ezBjFXUH` | 左右停靠/上下分栏/比例持久化/拖拽换边；**绑定环 21→0**；521 测试、e2e 34/34+25/25+74/74（冻结 `68602112…`） |
 | N1 SFTP | **已完成（验收通过 2026-09-28）** | `ses_f1bb42d9cffe1c1dXC0c6rcTjR` | 双栏/拖动/队列/冲突/批量删除；512 测试、e2e 74/74（冻结 `82a6ba70…`）；待办：远端→远端与队列动作 e2e 覆盖、Properties、批量下载/chmod、rfd 驱动、OS DropArea |
 | N5 终端主题 | **已完成（验收通过 2026-09-28；e2e 校准转 E2E-fix）** | `ses_f1819e1b6ffe0rha7bgJW1EOcj`（接管） | 544 测试、lint 0 警告、i18n 对账、5 张截图（Dracula vs 默认证明 D17）；12 项 e2e 失败为累积坐标/焦点漂移 |
-| N9 / N7 | 待 N5 让出共享文件 | 待分配 | — |
+| E2E-fix 校准与回归 | **已完成（验收通过 2026-09-28）** | `ses_f17ceca17ffeGCtZKyD1PB2wYy` | 四套全绿：tabs 25/25×2、ssh 34/34、dialogs 76/76×2（冻结 `2bf02a19…`）；4 项判定为 live-audit 刻意变更（E1 Tab 焦点、B23 破坏性弹窗不响应 Esc），脚本侧修复 |
+| N9 同步发送按键 | **已完成（验收通过 2026-09-28）** | `ses_f17aa8904ffev8RnU2kDGw4SxV` | 557 测试、lint 干净、N9 场景 25/25×2、标签回归 25/25（冻结 `614b24c3…`）；43 张截图；契约已回写（E-052/E-054 → chip + 一键停止） |
+| **N7 多窗口（Phase 1）** | **执行中（队列最后一站）** | `ses_f177187c3ffe2QVpoL55phqt4V` | 设计：`yshell-next-n7-multi-window.md`；WindowManager + show/run_event_loop + Move to New Window + 关闭断开；真拖出等 winit 0.31 |
 | L1 / L4 | L1 待方案文档定位；L4 fmt 等待独占冻结窗口 | — | — |
 
 ---

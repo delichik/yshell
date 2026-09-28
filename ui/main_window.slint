@@ -556,6 +556,27 @@ export component MainWindow inherits Window {
     in-out property <bool> logging_dialog_input_confirmed: false;
     in-out property <bool> logging_dialog_overwrite_confirmed: false;
 
+    // --- N9：同步发送按键（终端/标签右键菜单 + 状态栏 chip + 标签角标）--------
+    /// 是否正在把源终端的按键同步发送给目标标签。
+    in-out property <bool> input_sync_active: false;
+    /// 目标选择模式 id（`all`/`visible`/`selected`）。
+    in-out property <string> input_sync_mode_text: "all";
+    /// 同步目标数（chip 文案）。
+    in-out property <int> input_sync_target_count: 0;
+    /// 同步源标签显示名（chip 的 accessible label）。
+    in-out property <string> input_sync_source_name_text: "";
+    /// chip 一次性提示（kind + 参数；kind 空 = 无提示）。
+    in-out property <string> input_sync_notice_kind_text: "";
+    in-out property <string> input_sync_notice_param_text: "";
+    /// 终端右键菜单启用条件（Rust 计算）。
+    in-out property <bool> terminal_sync_all_enabled: false;
+    in-out property <bool> terminal_sync_visible_enabled: false;
+    in-out property <bool> terminal_sync_stop_enabled: false;
+    /// 标签右键"接收键输入"启用/勾选/禁用原因（Rust 计算）。
+    in-out property <bool> tab_menu_receive_key_input_enabled: false;
+    in-out property <bool> tab_menu_receives_key_input_checked: false;
+    in-out property <string> tab_menu_receive_key_input_reason_text: "";
+
     callback new_session();
     // --- N6：终端日志回调（菜单/状态栏入口 + 弹窗）----------------------------
     /// Start Logging…：打开日志弹窗（无活动会话/已在记录时只更新状态）。
@@ -632,6 +653,10 @@ export component MainWindow inherits Window {
     // A28（D18）：标签右键菜单的 Reconnect/Disconnect（bootstrap 由 WS-D Part 2 接线）。
     callback reconnect_tab(string);
     callback disconnect_tab(string);
+    // --- N9：同步发送按键（模式 id `all`/`visible`；停止走 chip/菜单）-------------
+    callback send_key_input_to(string);
+    callback stop_input_sync();
+    callback toggle_tab_receive_key_input(string);
     callback confirm_close_tabs();
     callback cancel_close_tabs();
     callback send_demo_input();
@@ -1199,6 +1224,25 @@ export component MainWindow inherits Window {
             label: @tr("Open Log Folder"), shortcut: "", enabled: root.terminal_logging_open_folder_enabled,
             checked: false, separator: false,
             tooltip: root.terminal_logging_open_folder_enabled ? "" : @tr("No log folder is available yet.")
+        },
+        // N9：同步发送按键（索引 11 All / 12 Visible / 13 Stop；见 dispatch_menu which==4）。
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        {
+            label: @tr("Send Key Input to All Tabs"), shortcut: "",
+            enabled: root.terminal_sync_all_enabled, checked: false, separator: false,
+            tooltip: root.terminal_sync_all_enabled ? "" : @tr("Connect a terminal session first.")
+        },
+        {
+            label: @tr("Send Key Input to Visible Tabs"), shortcut: "",
+            enabled: root.terminal_sync_visible_enabled, checked: false, separator: false,
+            tooltip: root.terminal_sync_visible_enabled
+                ? TextFormats.input-sync-visible-note()
+                : @tr("Connect a terminal session first.")
+        },
+        {
+            label: @tr("Stop Sending Key Input"), shortcut: "",
+            enabled: root.terminal_sync_stop_enabled, checked: false, separator: false,
+            tooltip: root.terminal_sync_stop_enabled ? "" : @tr("Key input sync is not active.")
         }
     ];
     // N6：状态栏日志入口复用同一组日志项（无分隔符；索引 0..3）。
@@ -1269,6 +1313,16 @@ export component MainWindow inherits Window {
             label: @tr("Disconnect"), shortcut: "",
             enabled: root.tab_menu_disconnect_enabled, checked: false, separator: false,
             tooltip: root.tab_menu_disconnect_enabled ? "" : @tr("This tab is already disconnected.")
+        },
+        // N9：接收键输入勾选（索引 10；未同步/源标签/未连接时禁用并给出原因）。
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        {
+            label: @tr("Receive Key Input"), shortcut: "",
+            enabled: root.tab_menu_receive_key_input_enabled,
+            checked: root.tab_menu_receives_key_input_checked, separator: false,
+            tooltip: root.tab_menu_receive_key_input_enabled
+                ? ""
+                : TextFormats.receive-key-input-reason(root.tab_menu_receive_key_input_reason_text)
         }
     ];
     property <[MenuEntry]> saved_session_context_menu_entries: [
@@ -1592,6 +1646,10 @@ export component MainWindow inherits Window {
             else if (index == 7) { root.terminal_logging_stop(); }
             else if (index == 8) { root.terminal_logging_open_file(); }
             else if (index == 9) { root.terminal_logging_open_folder(); }
+            // N9：同步发送按键（All / Visible / Stop；Stop 即"Send to Current"语义）。
+            else if (index == 11) { root.send_key_input_to("all"); }
+            else if (index == 12) { root.send_key_input_to("visible"); }
+            else if (index == 13) { root.stop_input_sync(); }
         } else if (which == 7) {
             // N6：状态栏日志菜单（与终端菜单同一组语义动作）。
             if (index == 0) { root.terminal_logging_start(); }
@@ -1609,6 +1667,8 @@ export component MainWindow inherits Window {
             // A28（D18）：Reconnect/Disconnect（索引见 `tab_context_menu_entries`）。
             else if (index == 7) { root.reconnect_tab(root.tab_menu_id); }
             else if (index == 8) { root.disconnect_tab(root.tab_menu_id); }
+            // N9：接收键输入勾选（索引 10；see `tab_context_menu_entries`）。
+            else if (index == 10) { root.toggle_tab_receive_key_input(root.tab_menu_id); }
         }
         root.close_context_menus();
         root.restore-focus-after-menu();
@@ -2054,6 +2114,13 @@ export component MainWindow inherits Window {
                 logging-usable: root.has_active_session;
                 logging-active: root.logging_active;
                 logging-text: TextFormats.logging-status-display(root.logging_active, root.logging_mode_text, root.logging_file_name_text);
+                // N9：同步发送按键 chip（`SYNC → n targets` + 一键停止 + 一次性提示）。
+                sync-active: root.input_sync_active;
+                sync-target-count: root.input_sync_target_count;
+                sync-mode-text: root.input_sync_mode_text;
+                sync-text: TextFormats.input-sync-chip(root.input_sync_target_count);
+                sync-notice-text: TextFormats.input-sync-notice(root.input_sync_notice_kind_text, root.input_sync_notice_param_text, root.input_sync_target_count);
+                sync-stop-clicked() => { root.stop_input_sync(); }
                 logging-clicked() => {
                     // A23（muse 轮1 中#37）：锚点按弹层实际宽度（logging-menu-width）
                     // 对齐到状态栏右内边距 12px，并夹在窗口内 —— 不再用写死的

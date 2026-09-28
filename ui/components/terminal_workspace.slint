@@ -28,6 +28,8 @@ export struct WorkspaceTab {
     kind_text: string,
     /// N6：该会话正在写日志（标签角标 REC）。
     logging: bool,
+    /// N9：同步发送按键角色（空 / `source` / `target`；标签角标 SRC/RCV）。
+    sync_role_text: string,
 }
 
 // 单个标签：复刻 `WinTab` 的视觉（32px 行高、活动标签底部强调条、右内边距 4 的
@@ -42,12 +44,19 @@ component WorkspaceTabItem inherits Rectangle {
     in property <string> tab-kind-text: "";
     /// N6：该会话正在写日志（REC 圆点）。
     in property <bool> tab-logging: false;
+    /// N9：同步发送按键角色（空 / `source` / `target`）。
+    in property <string> tab-sync-role-text: "";
     /// E11：在标签左缘之后画 1px 分隔线（位于 4px 标签间距中央）。
     in property <bool> show-divider: false;
 
     callback activate();
     callback close-requested();
     callback context-menu-requested(length, length);
+
+    /// N9：角标悬停提示（源/接收的完整说明；@markdown 插值用）。
+    property <string> tab-sync-tooltip: root.tab-sync-role-text == "source"
+        ? @tr("Key input source")
+        : @tr("Receiving key input");
 
     height: Theme.bar-height-tabs;
     horizontal-stretch: 0;
@@ -125,6 +134,31 @@ component WorkspaceTabItem inherits Rectangle {
             vertical-alignment: center;
             wrap: no-wrap;
             overflow: elide;
+        }
+
+        // N9：同步发送按键角标（源 = accent 实底；目标 = accent-soft 底 + accent 描边）。
+        if root.tab-sync-role-text != "" : Rectangle {
+            height: 16px;
+            width: sync-badge-text.preferred-width + 10px;
+            border-radius: 8px;
+            background: root.tab-sync-role-text == "source" ? Theme.accent : Theme.accent-soft;
+            border-width: root.tab-sync-role-text == "source" ? 0px : 1px;
+            border-color: Theme.accent;
+
+            sync-badge-text := Text {
+                text: root.tab-sync-role-text == "source" ? @tr("SRC") : @tr("RCV");
+                color: root.tab-sync-role-text == "source" ? Theme.accent-text : Theme.text-primary;
+                font-size: Theme.font-caption;
+                font-weight: Theme.weight-semibold;
+                vertical-alignment: center;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                wrap: no-wrap;
+            }
+
+            Tooltip {
+                text: @markdown("\{root.tab-sync-tooltip}");
+            }
         }
 
         // N6：REC 角标（记录中才占位，避免影响未记录标签的布局）。
@@ -283,6 +317,7 @@ export component TerminalWorkspace inherits VerticalLayout {
                                 tab-active: tab.active;
                                 tab-kind-text: tab.kind_text;
                                 tab-logging: tab.logging;
+                                tab-sync-role-text: tab.sync_role_text;
                                 // E11：相邻标签之间 1px 分隔线；紧邻活动标签时不画
                                 show-divider: i > 0 && !tab.active && !root.tabs[i - 1].active;
                                 activate() => { root.activate-tab(tab.id); }

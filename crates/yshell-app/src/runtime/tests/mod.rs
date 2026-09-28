@@ -11,6 +11,7 @@ use super::*;
 
 mod connection;
 mod editor;
+mod input_sync;
 mod live;
 mod logging_and_settings;
 mod projection;

@@ -47,7 +47,10 @@ impl AppRuntime {
             }
         }
 
-        if active_changed || background_state_changed {
+        // N9：掉线/关闭的源或目标在这里自动收敛（标签级状态机只读标签与会话表）。
+        let sync_changed = self.reconcile_input_sync();
+
+        if active_changed || background_state_changed || sync_changed {
             Ok(Some(self.projection()))
         } else {
             Ok(None)
@@ -315,9 +318,18 @@ impl AppRuntime {
     }
 
     /// D18：断开被右键的标签（复用会话级 disconnect）。
+    ///
+    /// N9：断开后立即收敛同步发送按键状态（源断开 → 停止；目标断开 → 移出），
+    /// 状态栏 chip 与角标随投影一起更新。
     pub fn disconnect_tab_session(&mut self, tab_id: &str) -> AppResult<AppProjection> {
         let session_key = self.tab_session_key(tab_id)?;
-        self.disconnect_session_by_key(&session_key)
+        match self.disconnect_session_by_key(&session_key) {
+            Ok(_) => {
+                self.reconcile_input_sync();
+                Ok(self.projection())
+            }
+            Err(error) => Err(error),
+        }
     }
 
     /// 标签对应的会话 key（QC 页/未知标签报错）。
@@ -347,6 +359,8 @@ impl AppRuntime {
             .iter()
             .map(|tab| {
                 let active = self.active_tab_id.as_deref() == Some(tab.tab_id.as_str());
+                // N9：同步发送按键的源/目标角标（源不在 targets 内，两者互斥）。
+                let sync_role_text = self.tab_sync_role_text(&tab.tab_id);
                 if tab.kind.is_quick_connect() {
                     return TabData {
                         id: tab.tab_id.clone(),
@@ -356,6 +370,7 @@ impl AppRuntime {
                         active,
                         kind_text: "quick-connect".to_owned(),
                         logging: false,
+                        sync_role_text,
                     };
                 }
                 let (title, state_text, connected) = match tab
@@ -380,6 +395,7 @@ impl AppRuntime {
                     logging: tab
                         .session_id()
                         .is_some_and(|session_id| self.session_logging_active(session_id)),
+                    sync_role_text,
                 }
             })
             .collect()
@@ -460,6 +476,12 @@ impl AppRuntime {
             .as_deref()
             .and_then(|session_id| self.stop_session_logging_for_close(session_id));
         let was_active = self.active_tab_id.as_deref() == Some(tab_id);
+        // N9：被关闭的标签若是同步源/目标，先抓住显示名（移除后就查不到了），
+        // 再让收敛逻辑停/移除并写状态栏提示。
+        let sync_closed_title = self
+            .input_sync
+            .involves(tab_id)
+            .then(|| self.tab_display_title(tab_id));
         self.tabs.remove(index);
         if was_active {
             let neighbor = self
@@ -484,6 +506,9 @@ impl AppRuntime {
         }
         if self.tab_menu_tab_id.as_deref() == Some(tab_id) {
             self.tab_menu_tab_id = None;
+        }
+        if sync_closed_title.is_some() {
+            self.reconcile_input_sync_with(sync_closed_title);
         }
         // N2：快速连接页没有运行时会话，无需回收会话/核心登记。
         let Some(session_id) = session_id else {
@@ -647,6 +672,8 @@ pub struct TabData {
     pub kind_text: String,
     /// N6：该标签的会话是否正在写日志（标签角标 REC）。
     pub logging: bool,
+    /// N9：同步发送按键的角色（空 = 无；`source` = 源；`target` = 接收目标）。
+    pub sync_role_text: String,
 }
 
 /// N0：等待用户确认的关闭请求（单个或批量），确认后按 `tab_ids` 顺序逐个关闭。
@@ -693,4 +720,409 @@ impl AppRuntime {
             "Polled the active terminal, but no new output was available.".to_owned();
         Ok(self.projection())
     }
+}
+
+// --- N9：同步发送按键（Input Sync）-----------------------------------------
+//
+// 设计：`docs/product/yshell-next-n9-sync-input.md`（D23/D24 已确认）。
+// * 源 = 一个终端标签；目标 = 当前窗口内的一批已连接终端标签（不持久化）。
+// * 扇出发生在输入的唯一汇聚点（`runtime/keys.rs::send_active_terminal_bytes`），
+//   目标只写输入，其回显不再回灌到源。
+// * `Visible` 在分屏落地前等同 `All`（UI 侧有说明）；`Selected` = 用户通过标签
+//   右键勾选/取消"接收键输入"手工挑选过的目标集合。
+//
+// 不变量：源不在 targets 内；源关闭/断开 → 停止；目标关闭/断开 → 自动移出
+// （见 `reconcile_input_sync`，由轮询 tick / 关闭 / 断开路径调用）。
+
+/// N9：同步发送按键的运行时会话态（内存态，不落盘）。
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct InputSyncState {
+    /// 源标签 id（`None` = 未在同步）。
+    pub(crate) source: Option<String>,
+    /// 目标标签 id 集合（`BTreeSet`：扇出顺序稳定）。
+    pub(crate) targets: BTreeSet<String>,
+    /// 目标选择模式（All/Visible/Selected）。
+    pub(crate) mode: InputSyncMode,
+    /// 状态栏 chip 的一次性提示：kind（空 = 无提示）+ 参数。
+    pub(crate) notice_kind: String,
+    pub(crate) notice_param: String,
+}
+
+impl InputSyncState {
+    pub(crate) fn is_active(&self) -> bool {
+        self.source.is_some()
+    }
+
+    /// 标签是否参与当前同步（源或目标）。
+    pub(crate) fn involves(&self, tab_id: &str) -> bool {
+        self.source.as_deref() == Some(tab_id) || self.targets.contains(tab_id)
+    }
+
+    pub(crate) fn set_notice(&mut self, kind: &str, param: String) {
+        self.notice_kind = kind.to_owned();
+        self.notice_param = param;
+    }
+
+    pub(crate) fn clear_notice(&mut self) {
+        self.notice_kind.clear();
+        self.notice_param.clear();
+    }
+}
+
+/// N9：目标选择模式（`Send to Current` 是"取消同步"，不是一种模式）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum InputSyncMode {
+    /// 当前窗口内所有已连接的终端标签（排除源）。
+    #[default]
+    All,
+    /// 当前无分屏，暂等同 `All`；分屏落地后收紧为"可见终端"。
+    Visible,
+    /// 用户通过标签右键"接收键输入"手工挑选过的目标集合。
+    Selected,
+}
+
+impl InputSyncMode {
+    pub(crate) const fn id(self) -> &'static str {
+        match self {
+            Self::All => "all",
+            Self::Visible => "visible",
+            Self::Selected => "selected",
+        }
+    }
+
+    fn from_id(id: &str) -> Option<Self> {
+        match id {
+            "all" => Some(Self::All),
+            "visible" => Some(Self::Visible),
+            "selected" => Some(Self::Selected),
+            _ => None,
+        }
+    }
+}
+
+impl AppRuntime {
+    /// N9：从活动终端开始同步发送按键（终端右键菜单 `Send Key Input to …`）。
+    ///
+    /// 目标集合 = 当前窗口内所有已连接、非源的终端标签；没有目标时只写状态栏提示，
+    /// 不进入同步态（避免 `SYNC → 0 targets` 的幽灵状态）。
+    pub fn start_input_sync_mode(&mut self, mode_id: &str) -> AppResult<AppProjection> {
+        let mode = InputSyncMode::from_id(mode_id)
+            .ok_or_else(|| AppError::new(format!("unknown input sync mode `{mode_id}`")))?;
+        let source = self
+            .active_tab_id
+            .clone()
+            .ok_or_else(|| AppError::new("no active terminal to send key input from"))?;
+        if !self.input_sync_tab_connected(&source) {
+            return Err(AppError::new("the active terminal is not connected"));
+        }
+        let targets: BTreeSet<String> = self
+            .tabs
+            .iter()
+            .filter(|tab| tab.tab_id != source && self.input_sync_tab_connected(&tab.tab_id))
+            .map(|tab| tab.tab_id.clone())
+            .collect();
+        self.input_sync.clear_notice();
+        if targets.is_empty() {
+            self.set_status_kind(
+                "input-sync-no-targets",
+                "No other connected terminal tab can receive key input.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+            return Ok(self.projection());
+        }
+        let target_count = targets.len();
+        self.input_sync.source = Some(source);
+        self.input_sync.targets = targets;
+        self.input_sync.mode = mode;
+        self.set_status_kind(
+            "input-sync-started",
+            format!("Sending key input to {target_count} target tab(s)."),
+            target_count.to_string(),
+            mode.id().to_owned(),
+        );
+        Ok(self.projection())
+    }
+
+    /// N9：停止同步（终端右键 `Stop Sending Key Input` / 状态栏 chip 一键停止）。
+    pub fn stop_input_sync_command(&mut self) -> AppProjection {
+        if self.input_sync.is_active() {
+            let target_count = self.input_sync.targets.len();
+            self.input_sync.source = None;
+            self.input_sync.targets.clear();
+            self.input_sync.mode = InputSyncMode::All;
+            self.input_sync.clear_notice();
+            self.set_status_kind(
+                "input-sync-stopped",
+                format!("Stopped sending key input to {target_count} tab(s)."),
+                target_count.to_string(),
+                String::new(),
+            );
+        } else {
+            // 非同步态下的 chip 点击 = 清掉残留提示（错误态可见但可关闭）。
+            self.input_sync.clear_notice();
+        }
+        self.projection()
+    }
+
+    /// N9：标签右键"接收键输入"勾选/取消（仅在同步进行时可用）。
+    pub fn toggle_tab_receives_key_input(&mut self, tab_id: &str) -> AppResult<AppProjection> {
+        if !self.input_sync.is_active() {
+            return Err(AppError::new("key input sync is not active"));
+        }
+        if self.input_sync.source.as_deref() == Some(tab_id) {
+            return Err(AppError::new("the source tab cannot receive its own key input"));
+        }
+        if !self.input_sync_tab_connected(tab_id) {
+            return Err(AppError::new("the tab is not a connected terminal"));
+        }
+        let receiving = if self.input_sync.targets.remove(tab_id) {
+            false
+        } else {
+            self.input_sync.targets.insert(tab_id.to_owned());
+            true
+        };
+        self.input_sync.mode = InputSyncMode::Selected;
+        self.input_sync.clear_notice();
+        let title = self.tab_display_title(tab_id);
+        self.set_status_kind(
+            "input-sync-receive-toggled",
+            if receiving {
+                format!("`{title}` now receives key input.")
+            } else {
+                format!("`{title}` no longer receives key input.")
+            },
+            title,
+            if receiving { "on" } else { "off" }.to_owned(),
+        );
+        Ok(self.projection())
+    }
+
+    /// N9：把源输入同步写入全部目标（在 `send_active_terminal_bytes` 成功写源之后调用）。
+    ///
+    /// 顺序 = `targets`（BTreeSet）顺序；单个目标失败只移出该目标并写提示，
+    /// 不影响源与其它目标。目标只写输入——它的回显由轮询进它自己的网格，
+    /// 不会经过这里回灌。
+    pub(crate) fn broadcast_synced_input(&mut self, bytes: &[u8]) {
+        if bytes.is_empty() || !self.input_sync.is_active() {
+            return;
+        }
+        // 只有源标签持有活动终端时输入才广播：切到目标标签上打字 = 只写给该标签
+        // （源语义锚定在标签，而不是"任意活动输入"）。
+        if self.active_tab_id.as_deref() != self.input_sync.source.as_deref() {
+            return;
+        }
+        let targets: Vec<String> = self.input_sync.targets.iter().cloned().collect();
+        for tab_id in targets {
+            let Some(session_key) = self
+                .tab_index(&tab_id)
+                .and_then(|index| self.tabs[index].session_id().map(str::to_owned))
+            else {
+                self.drop_input_sync_target(&tab_id, "target-removed");
+                continue;
+            };
+            if !self.input_sync_tab_connected(&tab_id) {
+                self.drop_input_sync_target(&tab_id, "target-removed");
+                continue;
+            }
+            let session_id = self
+                .sessions
+                .get(&session_key)
+                .map(|session| session.session_id().clone());
+            let dispatched = session_id.is_some_and(|session_id| {
+                self.dispatcher
+                    .dispatch(SessionCommand::SendTerminalInput {
+                        session_id,
+                        bytes: bytes.to_vec(),
+                    })
+                    .is_ok()
+            });
+            let written = dispatched
+                && self
+                    .sessions
+                    .get_mut(&session_key)
+                    .is_some_and(|runtime| runtime.write_terminal_input(bytes).is_ok());
+            if !written {
+                self.drop_input_sync_target(&tab_id, "target-removed");
+            }
+        }
+    }
+
+    /// N9：控制键（Ctrl/Alt/Meta 组合或控制字符）广播时的一次性非阻塞提示。
+    ///
+    /// 返回 `true` 表示提示有更新（调用方据此重投影刷新状态栏 chip）。
+    pub(crate) fn note_input_sync_control_broadcast(
+        &mut self,
+        text: &str,
+        ctrl: bool,
+        alt: bool,
+        shift: bool,
+        meta: bool,
+        bytes: &[u8],
+    ) -> bool {
+        if !self.input_sync.is_active() || bytes.is_empty() {
+            return false;
+        }
+        if !input_sync_is_control_key(text, ctrl, alt, shift, meta, bytes) {
+            return false;
+        }
+        let label = input_sync_control_label(text, ctrl, alt, meta, bytes);
+        self.input_sync.set_notice("control-broadcast", label);
+        true
+    }
+
+    /// N9：收敛同步状态（源/目标关闭、断开、shell 掉线）。
+    ///
+    /// 返回 `true` 表示状态有变化（需要重投影）。只改运行时状态与 chip 提示，
+    /// 不改 `status_text`（断开/关闭自己的状态文案优先保留）。
+    pub(crate) fn reconcile_input_sync(&mut self) -> bool {
+        self.reconcile_input_sync_with(None)
+    }
+
+    /// 同 [`Self::reconcile_input_sync`]，但可为"刚被关闭的标签"提供显示名（标签
+    /// 移除后已查不到标题）。
+    pub(crate) fn reconcile_input_sync_with(&mut self, closed_title: Option<String>) -> bool {
+        if !self.input_sync.is_active() {
+            return false;
+        }
+        let Some(source) = self.input_sync.source.clone() else {
+            return false;
+        };
+        if self.tab_index(&source).is_none() {
+            let param = closed_title.unwrap_or_default();
+            self.stop_input_sync_with_notice("source-closed", param);
+            return true;
+        }
+        if !self.input_sync_tab_connected(&source) {
+            self.stop_input_sync_with_notice("source-disconnected", String::new());
+            return true;
+        }
+        let stale: Vec<String> = self
+            .input_sync
+            .targets
+            .iter()
+            .filter(|tab_id| !self.input_sync_tab_connected(tab_id))
+            .cloned()
+            .collect();
+        let mut changed = false;
+        for tab_id in stale {
+            self.input_sync.targets.remove(&tab_id);
+            let title = self.tab_display_title(&tab_id);
+            let param = if title.is_empty() {
+                closed_title.clone().unwrap_or_else(|| tab_id.clone())
+            } else {
+                title
+            };
+            self.input_sync.set_notice("target-removed", param);
+            changed = true;
+        }
+        changed
+    }
+
+    /// N9：投影用——标签的同步角色（空/`source`/`target`）。
+    pub(crate) fn tab_sync_role_text(&self, tab_id: &str) -> String {
+        if !self.input_sync.is_active() {
+            return String::new();
+        }
+        if self.input_sync.source.as_deref() == Some(tab_id) {
+            return "source".to_owned();
+        }
+        if self.input_sync.targets.contains(tab_id) {
+            return "target".to_owned();
+        }
+        String::new()
+    }
+
+    /// N9：同步源的显示名（状态栏 chip 的 accessible label / 状态文案用）。
+    pub(crate) fn input_sync_source_name(&self) -> String {
+        self.input_sync
+            .source
+            .as_deref()
+            .map(|tab_id| self.tab_display_title(tab_id))
+            .unwrap_or_default()
+    }
+
+    fn stop_input_sync_with_notice(&mut self, kind: &str, param: String) {
+        self.input_sync.source = None;
+        self.input_sync.targets.clear();
+        self.input_sync.mode = InputSyncMode::All;
+        self.input_sync.set_notice(kind, param);
+    }
+
+    fn drop_input_sync_target(&mut self, tab_id: &str, kind: &str) {
+        self.input_sync.targets.remove(tab_id);
+        let title = self.tab_display_title(tab_id);
+        let param = if title.is_empty() {
+            tab_id.to_owned()
+        } else {
+            title
+        };
+        self.input_sync.set_notice(kind, param);
+    }
+
+    /// N9：标签是否是可作为同步源/目标的"已连接终端标签"。
+    pub(crate) fn input_sync_tab_connected(&self, tab_id: &str) -> bool {
+        self.tab_index(tab_id)
+            .and_then(|index| self.tabs[index].session_id())
+            .and_then(|session_id| self.sessions.get(session_id))
+            .is_some_and(|runtime| runtime.state == SessionState::Connected)
+    }
+}
+
+/// N9：按键是否是"控制键广播"（Ctrl/Alt/Meta 组合或单字节控制字符）。
+///
+/// Enter/Tab/Backspace/Esc 属于常规编辑键，不触发提示；Ctrl+C 这类中断广播才行。
+fn input_sync_is_control_key(
+    text: &str,
+    ctrl: bool,
+    alt: bool,
+    shift: bool,
+    meta: bool,
+    bytes: &[u8],
+) -> bool {
+    let _ = shift;
+    if ctrl || alt || meta {
+        return true;
+    }
+    if bytes.len() != 1 {
+        // 组合键（IME 提交/粘贴）走各自的输入路径，这里只提示单字节控制字符。
+        return !text.is_empty() && text.chars().all(|ch| ch.is_ascii_control());
+    }
+    !matches!(bytes[0], b'\t' | b'\n' | b'\r' | 0x1b | 0x7f)
+}
+
+/// N9：控制键的可读标签（"Ctrl+C" 等；作为 i18n 模板的 `{0}` 参数）。
+fn input_sync_control_label(text: &str, ctrl: bool, alt: bool, meta: bool, bytes: &[u8]) -> String {
+    let printable = text
+        .chars()
+        .find(|ch| !ch.is_ascii_control())
+        .map(|ch| ch.to_ascii_uppercase().to_string());
+    let prefix = if ctrl {
+        "Ctrl"
+    } else if alt {
+        "Alt"
+    } else if meta {
+        "Meta"
+    } else {
+        "Ctrl"
+    };
+    if let Some(key) = printable {
+        return format!("{prefix}+{key}");
+    }
+    if bytes.len() == 1 {
+        let byte = bytes[0];
+        if (0x01..=0x1a).contains(&byte) {
+            return format!("Ctrl+{}", (b'A' + byte - 1) as char);
+        }
+        if let Some(key) = match byte {
+            0x1c => Some('\\'),
+            0x1d => Some(']'),
+            0x1e => Some('^'),
+            0x1f => Some('_'),
+            _ => None,
+        } {
+            return format!("Ctrl+{key}");
+        }
+    }
+    "Control key".to_owned()
 }
