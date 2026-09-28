@@ -796,10 +796,10 @@
 | N2 快速连接页 | **已完成（验收通过 2026-09-28）** | `ses_f1c601f0bffeH3DdW5WMfU1oaD` | 快速连接/历史/快速链接/`+` 行为/Ctrl+O；clippy、189+3 测试、tabs e2e 25/25、12 张截图；QC 页兼作空态页 |
 | N4 密钥/认证 | **已完成（验收通过 2026-09-28）** | `ses_f1b935b62ffeBkZspWMmVYt8Oa`（接管） | 认证弹窗三态/私钥导入测试部署/主机密钥页；rfd 配套（CI/deb/rpm/deny 注释）；491 测试全绿、e2e 74/74（冻结二进制 `17148e36…`）；遗留：真实服务端 kbd 多 prompt 桥（fake 已满足） |
 | N6 日志 UI | **已完成（验收通过 2026-09-28）** | `ses_f1c3ad8b1ffe3jqB4ZmYkr0tpr` | 右键菜单/REC/状态栏/弹窗/关闭退出 flush/rfd 目录；497 测试、e2e 74/74（冻结 `c25b1ede…`）；遗留：R-107 与大小上限待办 |
-| N3 面板停靠 | **Phase 1 已完成（随批验收）；Phase 2 排队（N1 后）** | `ses_f1bb42d9dffeOCLRk3ezBjFXUH` | 13 单测；`panels.rs` 模型/断点纯函数 + `panel_frame` 组件 |
+| N3 面板停靠 | **已完成（验收通过 2026-09-28）** | `ses_f1bb42d9dffeOCLRk3ezBjFXUH` | 左右停靠/上下分栏/比例持久化/拖拽换边；**绑定环 21→0**；521 测试、e2e 34/34+25/25+74/74（冻结 `68602112…`） |
 | N1 SFTP | **已完成（验收通过 2026-09-28）** | `ses_f1bb42d9cffe1c1dXC0c6rcTjR` | 双栏/拖动/队列/冲突/批量删除；512 测试、e2e 74/74（冻结 `82a6ba70…`）；待办：远端→远端与队列动作 e2e 覆盖、Properties、批量下载/chmod、rfd 驱动、OS DropArea |
-| N5 终端主题 | **Phase 1 已完成（随批验收）；Phase 2 排队（N3 后）** | `ses_f1bb42d9bffeFL2GiTHEfPOuAs` | `palette.rs` + `apply_appearance` + 8 套配色 + `folder_editor` 三态页；83 测试、像素证据 |
-| N9 / N7 | 待 N1/N3/N5 让出共享文件 | 待分配 | — |
+| N5 终端主题 | **Phase 2 接线执行中（shared-file 持有者）** | `ses_f1bb42d9bffeFL2GiTHEfPOuAs` | Settings 外观区/Session Editor 覆盖/Folder Editor/生效时机接线；完成后 N9 接棒 |
+| N9 / N7 | 待 N5 让出共享文件 | 待分配 | — |
 | L1 / L4 | L1 待方案文档定位；L4 fmt 等待独占冻结窗口 | — | — |
 
 ---

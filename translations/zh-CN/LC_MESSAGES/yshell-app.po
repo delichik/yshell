@@ -280,6 +280,11 @@ msgctxt "MainWindow"
 msgid "Tunnels"
 msgstr "隧道"
 
+#: ui/main_window.slint:1015
+msgctxt "MainWindow"
+msgid "Panels"
+msgstr "面板"
+
 #: ui/main_window.slint:911 ui/main_window.slint:1887
 msgctxt "MainWindow"
 msgid "Quick Commands"

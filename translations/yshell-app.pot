@@ -434,6 +434,11 @@ msgstr ""
 
 #: ui/components/command_bar.slint:70
 msgctxt "MainWindow"
+msgid "Panels"
+msgstr ""
+
+#: ui/components/command_bar.slint:70
+msgctxt "MainWindow"
 msgid "SFTP panel"
 msgstr ""
 

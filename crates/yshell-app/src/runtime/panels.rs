@@ -5,8 +5,6 @@
 //! with Rust-computed values, and the `AppRuntime` read/write path for C0's
 //! `UiProfile.layout`. Unit tests live at the bottom of this file.
 
-#![allow(dead_code)] // N3 Phase 1：布局模型/断点纯函数在 Phase 2 投影接线前仅由单测消费。
-
 use crate::{
     error::AppError, error::AppResult, session_runtime::SessionRuntime,
     session_runtime::SessionSource,
@@ -84,33 +82,26 @@ impl AppRuntime {
     }
 
     pub fn toggle_sftp(&mut self) -> AppProjection {
-        self.sftp_visible = !self.sftp_visible;
-        self.status_text = if self.sftp_visible {
-            "SFTP panel shown".to_owned()
-        } else {
-            "SFTP panel hidden".to_owned()
-        };
-        self.projection()
+        self.toggle_panel_or_status(PanelId::Sftp)
     }
 
     pub fn toggle_tunnels(&mut self) -> AppProjection {
-        self.tunnels_visible = !self.tunnels_visible;
-        self.status_text = if self.tunnels_visible {
-            "Tunnels panel shown".to_owned()
-        } else {
-            "Tunnels panel hidden".to_owned()
-        };
-        self.projection()
+        self.toggle_panel_or_status(PanelId::Tunnels)
     }
 
     pub fn toggle_commands(&mut self) -> AppProjection {
-        self.commands_visible = !self.commands_visible;
-        self.status_text = if self.commands_visible {
-            "Quick Commands panel shown".to_owned()
-        } else {
-            "Quick Commands panel hidden".to_owned()
-        };
-        self.projection()
+        self.toggle_panel_or_status(PanelId::QuickCommands)
+    }
+
+    /// 旧版布尔开关的兼容入口（失败时把错误写进状态栏文本）。
+    fn toggle_panel_or_status(&mut self, panel: PanelId) -> AppProjection {
+        match self.toggle_panel_visible(panel) {
+            Ok(projection) => projection,
+            Err(error) => {
+                self.status_text = format!("Panel layout error: {error}");
+                self.projection()
+            }
+        }
     }
 
     pub(crate) fn tunnels_summary_parts(&self) -> (&'static str, String) {
@@ -346,15 +337,6 @@ pub(crate) enum PanelPlacement {
 }
 
 impl PanelPlacement {
-    /// 对应到 [`PanelSide`]（`Hidden` 为 `None`）。
-    pub(crate) const fn side(self) -> Option<PanelSide> {
-        match self {
-            Self::Left => Some(PanelSide::Left),
-            Self::Right => Some(PanelSide::Right),
-            Self::Hidden => None,
-        }
-    }
-
     /// 稳定的投影 id（供 Slint 侧枚举/字符串使用）。
     pub(crate) const fn id(self) -> &'static str {
         match self {
@@ -385,45 +367,22 @@ pub(crate) const fn default_side(panel: PanelId) -> PanelSide {
 }
 
 // ---------------------------------------------------------------- 断点纯函数
-// 以下函数是 `ui/main_window.slint`（W5-④）同名属性的逐条镜像；Phase 2 把这些
-// 值作为普通属性下发后，Slint 侧不再从 `window.width` 反推布局。
+// 这些判定全部由 Rust 计算后作为普通属性下发；Slint 侧不再从 `window.width`
+// 反推布局（Phase 2 的 `compute_panel_layout` 是唯一消费者）。
 
 /// <960px 且用户未手动展开时，左栏折叠为 48px 图标条。
 pub(crate) fn nav_rail_active(window_width: f32, nav_user_expanded: bool) -> bool {
     window_width < BREAKPOINT_NAV_RAIL && !nav_user_expanded
 }
 
-/// <960px：提供"图标条 ↔ 完整左栏"入口。
+/// <960px：左栏处于图标条断点区间。
 pub(crate) fn nav_rail_available(window_width: f32) -> bool {
     window_width < BREAKPOINT_NAV_RAIL
-}
-
-/// 全宽左导航列是否可见（图标条模式下由图标条取代）。
-pub(crate) fn nav_column_visible(
-    session_manager_visible: bool,
-    window_width: f32,
-    nav_user_expanded: bool,
-) -> bool {
-    session_manager_visible && !nav_rail_active(window_width, nav_user_expanded)
-}
-
-/// 左栏图标条是否可见。
-pub(crate) fn nav_rail_visible(
-    session_manager_visible: bool,
-    window_width: f32,
-    nav_user_expanded: bool,
-) -> bool {
-    session_manager_visible && nav_rail_active(window_width, nav_user_expanded)
 }
 
 /// <1120px：命令栏显示栏展开/收起按钮。
 pub(crate) fn dock_toggle_visible(window_width: f32) -> bool {
     window_width < BREAKPOINT_DOCK_COLLAPSE
-}
-
-/// 栏因窗口过窄而自动折叠（用户手动展开可覆盖，仅内存态）。
-pub(crate) fn dock_auto_collapsed(window_width: f32, dock_user_expanded: bool) -> bool {
-    window_width < BREAKPOINT_DOCK_COLLAPSE && !dock_user_expanded
 }
 
 /// 1120–1280px 档的线性收缩系数（≤1120 为 0，≥1280 为 1）。
@@ -434,36 +393,14 @@ pub(crate) fn layout_squeeze_ratio(window_width: f32) -> f32 {
 }
 
 /// 拖拽换算系数：收缩档内指针 1px 对应目标宽度 `1/ratio` px，保证把手跟手。
+/// 下限取 0.001（而不是 Slint 侧的 0.0001）：投影按千分比取整下发，0 会让
+/// Slint 侧出现除以 0。
 pub(crate) fn layout_drag_scale(window_width: f32) -> f32 {
     if window_width >= BREAKPOINT_FULL_LAYOUT || window_width < BREAKPOINT_DOCK_COLLAPSE {
         1.0
     } else {
-        layout_squeeze_ratio(window_width).max(0.0001)
+        layout_squeeze_ratio(window_width).max(0.001)
     }
-}
-
-/// 左栏最终宽度：图标条 48px；否则全宽/收缩档换算（与 Slint 侧公式一致）。
-pub(crate) fn nav_effective_width(
-    window_width: f32,
-    nav_panel_width: f32,
-    nav_user_expanded: bool,
-) -> f32 {
-    if nav_rail_active(window_width, nav_user_expanded) {
-        return NAV_RAIL_WIDTH;
-    }
-    squeezed_side_width(window_width, nav_panel_width, LEFT_WIDTH_MIN as f32)
-}
-
-/// 右栏最终宽度：0 = 自动折叠；否则全宽/收缩档换算（与 Slint 侧公式一致）。
-pub(crate) fn dock_effective_width(
-    window_width: f32,
-    dock_panel_width: f32,
-    dock_user_expanded: bool,
-) -> f32 {
-    if dock_auto_collapsed(window_width, dock_user_expanded) {
-        return 0.0;
-    }
-    squeezed_side_width(window_width, dock_panel_width, RIGHT_WIDTH_MIN as f32)
 }
 
 fn squeezed_side_width(window_width: f32, panel_width: f32, width_min: f32) -> f32 {
@@ -573,11 +510,6 @@ impl PanelLayoutModel {
         &self.layout
     }
 
-    /// 取出布局（写回配置用）。
-    pub(crate) fn into_layout(self) -> LayoutProfile {
-        self.layout
-    }
-
     /// 面板当前落位。
     pub(crate) fn placement(&self, panel: PanelId) -> PanelPlacement {
         if self.layout.left.iter().any(|slot| slot.panel == panel) {
@@ -603,19 +535,6 @@ impl PanelLayoutModel {
         match side {
             PanelSide::Left => &self.layout.left,
             PanelSide::Right => &self.layout.right,
-        }
-    }
-
-    /// 一侧的面板 id 序列（投影/测试用）。
-    pub(crate) fn panels(&self, side: PanelSide) -> Vec<PanelId> {
-        self.stack(side).iter().map(|slot| slot.panel).collect()
-    }
-
-    /// 一侧记忆的栏宽。
-    pub(crate) fn width(&self, side: PanelSide) -> u32 {
-        match side {
-            PanelSide::Left => self.layout.left_width,
-            PanelSide::Right => self.layout.right_width,
         }
     }
 
@@ -709,47 +628,19 @@ impl PanelLayoutModel {
         resolve_fractions(stored, count).unwrap_or_else(|| even_fractions(count))
     }
 
-    /// 拖动某个分栏边界（0-based，从上往下）；返回是否发生变化。
-    ///
-    /// 比例被夹取在相邻边界之间（含最小间距）；首次拖动会把均分解析为显式比例。
-    pub(crate) fn set_boundary_fraction(
-        &mut self,
-        side: PanelSide,
-        boundary: usize,
-        fraction: f32,
-    ) -> bool {
+    /// 整体写入一侧的边界比例（拖拽用；清洗后落盘）。
+    pub(crate) fn set_boundary_fractions(&mut self, side: PanelSide, fractions: &[f32]) -> bool {
         let count = self.boundary_count(side);
-        if boundary >= count {
+        if count == 0 || fractions.len() != count {
             return false;
         }
-        let mut fractions = self.boundary_fractions(side);
-        let lower = if boundary == 0 {
-            SPLIT_RATIO_MIN
-        } else {
-            fractions[boundary - 1] + SPLIT_RATIO_GAP_MIN
-        };
-        let upper = if boundary + 1 == count {
-            SPLIT_RATIO_MAX
-        } else {
-            fractions[boundary + 1] - SPLIT_RATIO_GAP_MIN
-        };
-        let value = if fraction.is_finite() {
-            fraction.clamp(lower, upper.max(lower))
-        } else {
-            fractions[boundary]
-        };
-        let changed = (fractions[boundary] - value).abs() > f32::EPSILON;
-        fractions[boundary] = value;
+        let values = resolve_fractions(fractions, count).unwrap_or_else(|| even_fractions(count));
+        let changed = values != self.boundary_fractions(side);
         match side {
-            PanelSide::Left => self.layout.left_ratios = fractions,
-            PanelSide::Right => self.layout.right_ratios = fractions,
+            PanelSide::Left => self.layout.left_ratios = values,
+            PanelSide::Right => self.layout.right_ratios = values,
         }
         changed
-    }
-
-    /// 窄窗自动折叠的持久化记忆侧。
-    pub(crate) fn auto_collapsed_side(&self) -> Option<PanelSide> {
-        self.layout.narrow_collapsed_side
     }
 
     /// 记忆窄窗自动折叠的一侧（`None` = 恢复默认：右栏）。
@@ -811,7 +702,7 @@ impl AppRuntime {
 
     /// 布局有变化时落盘并返回新投影（无变化不写盘）。
     fn persist_panel_layout(&mut self, model: PanelLayoutModel) -> AppResult<AppProjection> {
-        let layout = model.into_layout();
+        let layout = model.layout().clone();
         if layout != self.config_document.ui.layout {
             self.config_document.ui.layout = layout;
             self.config_store
@@ -847,36 +738,643 @@ impl AppRuntime {
         self.persist_panel_layout(model)
     }
 
-    /// 栏宽拖拽结束：按侧夹取后落盘。
-    pub fn set_panel_side_width(
+    /// 面板菜单 Collapse/Expand（显式状态，不依赖菜单里读到的旧值）。
+    pub fn set_panel_collapsed(
         &mut self,
-        side: PanelSide,
-        width: f32,
+        panel: PanelId,
+        collapsed: bool,
     ) -> AppResult<AppProjection> {
         let mut model = self.panel_layout();
-        model.set_width(side, width);
+        model.set_collapsed(panel, collapsed);
+        self.persist_panel_layout(model)
+    }
+}
+
+// --- N3 Phase 2：内容区 px 布局（Rust 计算 → 投影下发）------------------------
+//
+// 面板层在 Slint 侧绝对定位：Rust 拿到内容区尺寸、面板栈顺序、折叠态与比例后直接
+// 算出每个面板框的 x/y/宽/高与断点标志。Slint 不再从 `window.width` 反推布局，
+// `nav_effective_width`/`dock_effective_width` 一类的绑定环随之消失。
+
+/// 折叠面板高度（设计 28–32px）。
+pub(crate) const PANEL_COLLAPSED_HEIGHT: f32 = 32.0;
+/// 同栏相邻面板之间的分栏把手高度。
+pub(crate) const PANEL_HANDLE_HEIGHT: f32 = 4.0;
+/// 展开面板最小高度（§4.3：每面板最小高度如 120px）。
+pub(crate) const PANEL_MIN_HEIGHT: f32 = 120.0;
+/// 右栏上下留白（与 W5-④ 的卡片留白一致）。
+pub(crate) const DOCK_TOP_PADDING: f32 = 12.0;
+pub(crate) const DOCK_BOTTOM_PADDING: f32 = 12.0;
+/// 内容区尺寸兜底（Slint 首次布局回调前；1440×900 减去菜单栏/命令栏/状态栏）。
+pub(crate) const DEFAULT_PANEL_AREA: (f32, f32) = (1440.0, 794.0);
+
+/// 窄窗策略的另一侧。
+const fn other_side(side: PanelSide) -> PanelSide {
+    match side {
+        PanelSide::Left => PanelSide::Right,
+        PanelSide::Right => PanelSide::Left,
+    }
+}
+
+/// 非「填充」面板在默认（无显式比例）布局下的内容高度；`None` = 吸收剩余高度。
+/// 与 N1 之前 WinCard 的内容高度对齐（Tunnels/Quick Commands ≈ 89px），保证
+/// 1440×900 默认布局下 SFTP 面板与其内部行位置与旧版一致（e2e 像素基线）。
+fn auto_panel_height(panel: PanelId) -> Option<f32> {
+    match panel {
+        PanelId::Sftp | PanelId::Sessions => None,
+        PanelId::Tunnels | PanelId::QuickCommands => Some(89.0),
+        PanelId::Transfers => Some(120.0),
+    }
+}
+
+/// 单个面板框的 px 几何（相对内容区左上角）。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct PanelFrameView {
+    pub panel: PanelId,
+    pub placement: PanelPlacement,
+    pub collapsed: bool,
+    pub visible: bool,
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+/// 一个分栏手柄的 px 几何（相对内容区左上角）。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct PanelSplitHandleView {
+    pub side: PanelSide,
+    pub boundary: usize,
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+/// 拖拽面板时的插入位置指示线。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct PanelDragIndicatorView {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+/// 拖拽中的面板（内存态）。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct PanelDragState {
+    pub panel: PanelId,
+    pub target: Option<(PanelSide, usize)>,
+}
+
+/// 内容区布局视图（投影给 Slint 的纯数据）。
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct PanelLayoutView {
+    pub frames: Vec<PanelFrameView>,
+    /// 模型记忆的栏宽（拖拽预览时也用于把手换算）。
+    pub left_width: f32,
+    pub right_width: f32,
+    /// 最终栏宽（含图标条/自动折叠/收缩档换算）。
+    pub left_effective_width: f32,
+    pub right_effective_width: f32,
+    pub rail_active: bool,
+    pub rail_available: bool,
+    pub dock_toggle_visible: bool,
+    pub right_collapsed: bool,
+    pub drag_scale: f32,
+    pub split_handles: Vec<PanelSplitHandleView>,
+    pub drag_indicator: Option<PanelDragIndicatorView>,
+}
+
+impl PanelLayoutView {
+    pub(crate) fn frame(&self, panel: PanelId) -> Option<&PanelFrameView> {
+        self.frames.iter().find(|frame| frame.panel == panel)
+    }
+}
+
+/// 计算内容区布局（纯函数；`user_expanded_side` 是窄窗手动展开的内存覆盖）。
+pub(crate) fn compute_panel_layout(
+    layout: &LayoutProfile,
+    area_width: f32,
+    area_height: f32,
+    user_expanded_side: Option<PanelSide>,
+) -> PanelLayoutView {
+    let area_width = if area_width.is_finite() {
+        area_width.max(0.0)
+    } else {
+        DEFAULT_PANEL_AREA.0
+    };
+    let area_height = if area_height.is_finite() {
+        area_height.max(0.0)
+    } else {
+        DEFAULT_PANEL_AREA.1
+    };
+
+    let sessions_in_left = layout
+        .left
+        .iter()
+        .any(|slot| slot.panel == PanelId::Sessions);
+    let left_nonempty = !layout.left.is_empty();
+    let right_nonempty = !layout.right.is_empty();
+
+    let collapsed_side = auto_collapsed_side(area_width, layout.narrow_collapsed_side)
+        .filter(|side| user_expanded_side != Some(*side));
+    let rail_available = nav_rail_available(area_width);
+    let left_user_expanded = user_expanded_side == Some(PanelSide::Left);
+    // 图标条：<960px（`nav_rail_active`），或窄窗策略把左栏定为自动折叠侧。
+    let rail_active = left_nonempty
+        && sessions_in_left
+        && (nav_rail_active(area_width, left_user_expanded)
+            || (collapsed_side == Some(PanelSide::Left) && !left_user_expanded));
+    let left_auto_collapsed =
+        left_nonempty && (rail_available || collapsed_side == Some(PanelSide::Left));
+
+    let left_effective_width = if !left_nonempty {
+        0.0
+    } else if left_auto_collapsed && !left_user_expanded {
+        if rail_active {
+            NAV_RAIL_WIDTH
+        } else {
+            0.0
+        }
+    } else {
+        squeezed_side_width(area_width, layout.left_width as f32, LEFT_WIDTH_MIN as f32)
+    };
+
+    let right_collapsed = right_nonempty && collapsed_side == Some(PanelSide::Right);
+    let right_effective_width = if right_nonempty && !right_collapsed {
+        squeezed_side_width(
+            area_width,
+            layout.right_width as f32,
+            RIGHT_WIDTH_MIN as f32,
+        )
+    } else {
+        0.0
+    };
+
+    let mut frames = Vec::with_capacity(layout.left.len() + layout.right.len());
+    append_stack_frames(
+        &mut frames,
+        layout,
+        PanelSide::Left,
+        area_width,
+        area_height,
+        left_effective_width,
+        left_effective_width > 0.0 && !rail_active,
+    );
+    append_stack_frames(
+        &mut frames,
+        layout,
+        PanelSide::Right,
+        area_width,
+        area_height,
+        right_effective_width,
+        right_effective_width > 0.0,
+    );
+
+    let split_handles = split_handle_views(&frames);
+    PanelLayoutView {
+        frames,
+        left_width: layout.left_width as f32,
+        right_width: layout.right_width as f32,
+        left_effective_width,
+        right_effective_width,
+        rail_active,
+        rail_available,
+        dock_toggle_visible: dock_toggle_visible(area_width),
+        right_collapsed,
+        drag_scale: layout_drag_scale(area_width),
+        split_handles,
+        drag_indicator: None,
+    }
+}
+
+/// 相邻面板之间生成 4px 分栏手柄（位置由面板框决定）。
+fn split_handle_views(frames: &[PanelFrameView]) -> Vec<PanelSplitHandleView> {
+    let mut handles = Vec::new();
+    for side in [PanelSide::Left, PanelSide::Right] {
+        let side_frames: Vec<&PanelFrameView> = frames
+            .iter()
+            .filter(|frame| frame.placement == PanelPlacement::from(side))
+            .collect();
+        for (boundary, pair) in side_frames.windows(2).enumerate() {
+            let top = pair[0];
+            if !top.visible {
+                continue;
+            }
+            handles.push(PanelSplitHandleView {
+                side,
+                boundary,
+                x: top.x,
+                y: top.y + top.height,
+                width: top.width,
+                height: PANEL_HANDLE_HEIGHT,
+            });
+        }
+    }
+    handles
+}
+
+fn append_stack_frames(
+    frames: &mut Vec<PanelFrameView>,
+    layout: &LayoutProfile,
+    side: PanelSide,
+    area_width: f32,
+    area_height: f32,
+    effective_width: f32,
+    column_visible: bool,
+) {
+    let (slots, ratios, top_padding, bottom_padding) = match side {
+        PanelSide::Left => (&layout.left, &layout.left_ratios, 0.0, 0.0),
+        PanelSide::Right => (
+            &layout.right,
+            &layout.right_ratios,
+            DOCK_TOP_PADDING,
+            DOCK_BOTTOM_PADDING,
+        ),
+    };
+    if slots.is_empty() {
+        return;
+    }
+    let heights = stack_heights(slots, ratios, area_height, top_padding, bottom_padding);
+    let x = match side {
+        PanelSide::Left => 0.0,
+        PanelSide::Right => (area_width - effective_width).max(0.0),
+    };
+    let mut y = top_padding;
+    for (slot, height) in slots.iter().zip(heights) {
+        frames.push(PanelFrameView {
+            panel: slot.panel,
+            placement: PanelPlacement::from(side),
+            collapsed: slot.collapsed,
+            visible: column_visible,
+            x,
+            y,
+            width: effective_width.max(0.0),
+            height,
+        });
+        y += height + PANEL_HANDLE_HEIGHT;
+    }
+}
+
+/// 一侧栈内的高度分配：折叠面板钉 32px；显式比例按权重分摊；否则填充面板吸收剩余。
+fn stack_heights(
+    slots: &[PanelSlot],
+    ratios: &[f32],
+    area_height: f32,
+    top_padding: f32,
+    bottom_padding: f32,
+) -> Vec<f32> {
+    let count = slots.len();
+    let handle_total = PANEL_HANDLE_HEIGHT * count.saturating_sub(1) as f32;
+    let available = (area_height - top_padding - bottom_padding - handle_total).max(0.0);
+    let collapsed_total =
+        slots.iter().filter(|slot| slot.collapsed).count() as f32 * PANEL_COLLAPSED_HEIGHT;
+    let flex = (available - collapsed_total).max(0.0);
+
+    let expanded: Vec<usize> = slots
+        .iter()
+        .enumerate()
+        .filter(|(_, slot)| !slot.collapsed)
+        .map(|(index, _)| index)
+        .collect();
+    let mut heights = vec![0.0_f32; count];
+    for (index, slot) in slots.iter().enumerate() {
+        if slot.collapsed {
+            heights[index] = PANEL_COLLAPSED_HEIGHT;
+        }
+    }
+    if expanded.is_empty() {
+        return heights;
+    }
+
+    if let Some(fractions) = resolve_fractions(ratios, count.saturating_sub(1)) {
+        let weights: Vec<f32> = slots
+            .iter()
+            .enumerate()
+            .map(|(index, _)| {
+                let lower = if index == 0 {
+                    0.0
+                } else {
+                    fractions[index - 1]
+                };
+                let upper = if index + 1 == count {
+                    1.0
+                } else {
+                    fractions[index]
+                };
+                (upper - lower).max(0.0)
+            })
+            .collect();
+        let total: f32 = expanded.iter().map(|&index| weights[index]).sum();
+        for &index in &expanded {
+            heights[index] = if total > 0.0 {
+                flex * weights[index] / total
+            } else {
+                flex / expanded.len() as f32
+            };
+        }
+    } else {
+        let fills: Vec<usize> = expanded
+            .iter()
+            .copied()
+            .filter(|&index| auto_panel_height(slots[index].panel).is_none())
+            .collect();
+        if fills.is_empty() {
+            // 没有「填充」面板（例如 SFTP 被折叠/移走）：展开面板等分剩余高度。
+            let share = flex / expanded.len() as f32;
+            for &index in &expanded {
+                heights[index] = share;
+            }
+        } else {
+            let fixed: f32 = expanded
+                .iter()
+                .filter_map(|&index| auto_panel_height(slots[index].panel))
+                .sum();
+            let share = ((flex - fixed).max(0.0)) / fills.len() as f32;
+            for &index in &expanded {
+                heights[index] = auto_panel_height(slots[index].panel).unwrap_or(share);
+            }
+            // 默认布局下内容尺寸面板（Tunnels/Quick Commands）不套 120px 下限，
+            // 保持与旧 WinCard 相同的内容高度；「填充」面板仍受最小高度约束。
+            enforce_min_heights(&mut heights, &fills);
+            return heights;
+        }
+    }
+    enforce_min_heights(&mut heights, &expanded);
+    heights
+}
+
+/// 把低于最小高度的展开面板抬到 120px，并从有富余的面板按比例扣减。
+fn enforce_min_heights(heights: &mut [f32], expanded: &[usize]) {
+    let deficit: f32 = expanded
+        .iter()
+        .map(|&index| (PANEL_MIN_HEIGHT - heights[index]).max(0.0))
+        .sum();
+    if deficit <= 0.0 {
+        return;
+    }
+    let slack_total: f32 = expanded
+        .iter()
+        .map(|&index| (heights[index] - PANEL_MIN_HEIGHT).max(0.0))
+        .sum();
+    for &index in expanded {
+        if heights[index] < PANEL_MIN_HEIGHT {
+            heights[index] = PANEL_MIN_HEIGHT;
+        } else if slack_total > 0.0 {
+            let slack = heights[index] - PANEL_MIN_HEIGHT;
+            heights[index] -= (deficit * slack / slack_total).min(slack);
+        }
+    }
+}
+
+// C0 默认布局不含 Transfers（N1 起转移队列并入 SFTP 面板的队列抽屉；N3 起
+// Transfers 是可停靠的独立面板，默认隐藏、经 Panels/View 菜单按需显示）。
+// 因此「不在左右栈中」= 隐藏，不做启动期迁移：否则"用户隐藏 Transfers"会与
+// 旧默认布局不可区分，导致重启后被自动塞回右栏。
+
+impl AppRuntime {
+    /// Slint 内容区尺寸回调（内存态，不落盘）。
+    pub fn set_panel_area_size(&mut self, width: f32, height: f32) -> AppProjection {
+        self.panel_area_width = if width.is_finite() {
+            width.max(0.0)
+        } else {
+            DEFAULT_PANEL_AREA.0
+        };
+        self.panel_area_height = if height.is_finite() {
+            height.max(0.0)
+        } else {
+            DEFAULT_PANEL_AREA.1
+        };
+        self.projection()
+    }
+
+    /// 当前内容区布局视图（投影用）。
+    pub(crate) fn panel_layout_view(&self) -> PanelLayoutView {
+        let mut view = compute_panel_layout(
+            &self.config_document.ui.layout,
+            self.panel_area_width,
+            self.panel_area_height,
+            self.panel_user_expanded_side,
+        );
+        view.drag_indicator = self.drag_indicator_view(&view);
+        view
+    }
+
+    /// 面板是否可见（在左/右任一栈中）。
+    pub(crate) fn panel_visible(&self, panel: PanelId) -> bool {
+        self.panel_layout().placement(panel) != PanelPlacement::Hidden
+    }
+
+    /// View/Panels 菜单：隐藏的面板按默认侧恢复显示，已显示的隐藏。
+    pub fn toggle_panel_visible(&mut self, panel: PanelId) -> AppResult<AppProjection> {
+        let mut model = self.panel_layout();
+        if model.placement(panel) == PanelPlacement::Hidden {
+            model.move_to(panel, default_side(panel), None);
+        } else {
+            model.hide(panel);
+        }
         self.persist_panel_layout(model)
     }
 
-    /// 分栏拖拽：设置某侧的某个边界比例。
-    pub fn set_panel_split_fraction(
+    /// 栏宽拖拽预览：只改内存布局，不落盘。
+    pub fn preview_panel_side_width(&mut self, side: PanelSide, width: f32) -> AppProjection {
+        let mut model = self.panel_layout();
+        model.set_width(side, width);
+        self.config_document.ui.layout = model.layout().clone();
+        self.projection()
+    }
+
+    /// 拖拽结束：把当前内存布局落盘。
+    pub fn commit_panel_layout(&mut self) -> AppResult<AppProjection> {
+        self.config_store
+            .save(&self.config_document)
+            .map_err(AppError::from_error)?;
+        Ok(self.projection())
+    }
+
+    /// 分栏拖拽（px）：把指针 y（相对内容区顶边）换算成相邻两面板的新高度，
+    /// 再还原为整侧的边界比例。只改内存，拖拽结束由 `commit_panel_layout` 落盘。
+    pub fn preview_panel_split_pixels(
         &mut self,
         side: PanelSide,
         boundary: usize,
-        fraction: f32,
-    ) -> AppResult<AppProjection> {
+        pointer_y: f32,
+    ) -> AppProjection {
+        let view = self.panel_layout_view();
+        let frames: Vec<PanelFrameView> = view
+            .frames
+            .iter()
+            .filter(|frame| frame.placement == PanelPlacement::from(side))
+            .copied()
+            .collect();
+        if boundary + 1 >= frames.len() {
+            return self.projection();
+        }
+        let top = frames[boundary];
+        let bottom = frames[boundary + 1];
+        if !top.visible || !bottom.visible {
+            return self.projection();
+        }
+        let delta = pointer_y - bottom.y;
+        let min_top = if top.collapsed {
+            PANEL_COLLAPSED_HEIGHT
+        } else {
+            PANEL_MIN_HEIGHT
+        };
+        let min_bottom = if bottom.collapsed {
+            PANEL_COLLAPSED_HEIGHT
+        } else {
+            PANEL_MIN_HEIGHT
+        };
+        let mut heights: Vec<f32> = frames.iter().map(|frame| frame.height).collect();
+        match (top.collapsed, bottom.collapsed) {
+            (false, false) => {
+                let total = heights[boundary] + heights[boundary + 1];
+                let new_top =
+                    (heights[boundary] + delta).clamp(min_top, (total - min_bottom).max(min_top));
+                heights[boundary] = new_top;
+                heights[boundary + 1] = (total - new_top).max(min_bottom);
+            }
+            (false, true) => {
+                heights[boundary] = (heights[boundary] + delta).max(min_top);
+            }
+            (true, false) => {
+                heights[boundary + 1] = (heights[boundary + 1] - delta).max(min_bottom);
+            }
+            (true, true) => return self.projection(),
+        }
+        let count = frames.len();
+        let total: f32 = heights.iter().sum();
+        if count < 2 || total <= 0.0 {
+            return self.projection();
+        }
+        let mut cumulative = 0.0_f32;
+        let mut fractions = Vec::with_capacity(count - 1);
+        for height in heights.iter().take(count - 1) {
+            cumulative += height;
+            fractions.push((cumulative / total).clamp(SPLIT_RATIO_MIN, SPLIT_RATIO_MAX));
+        }
         let mut model = self.panel_layout();
-        model.set_boundary_fraction(side, boundary, fraction);
+        model.set_boundary_fractions(side, &fractions);
+        self.config_document.ui.layout = model.layout().clone();
+        self.projection()
+    }
+
+    /// 面板头部开始拖拽（换边/换序）：记录拖拽面板。
+    pub fn panel_drag_start(&mut self, panel: PanelId, _x: f32, _y: f32) -> AppProjection {
+        self.panel_drag = Some(PanelDragState {
+            panel,
+            target: None,
+        });
+        self.projection()
+    }
+
+    /// 拖拽中：计算落点（用于插入指示线）。
+    pub fn panel_drag_move(&mut self, panel: PanelId, x: f32, y: f32) -> AppProjection {
+        let view = self.panel_layout_view();
+        let target = self.panel_drop_target(&view, x, y);
+        self.panel_drag = Some(PanelDragState { panel, target });
+        self.projection()
+    }
+
+    /// 拖拽落下：合法落点则移动面板（落盘），否则保持原样。
+    pub fn panel_drag_drop(&mut self, panel: PanelId, x: f32, y: f32) -> AppResult<AppProjection> {
+        let view = self.panel_layout_view();
+        let target = self.panel_drop_target(&view, x, y);
+        self.panel_drag = None;
+        match target {
+            Some((side, index)) => self.move_panel(panel, side, Some(index)),
+            None => Ok(self.projection()),
+        }
+    }
+
+    /// 拖拽取消（指针取消事件）。
+    pub fn panel_drag_cancel(&mut self) -> AppProjection {
+        self.panel_drag = None;
+        self.projection()
+    }
+
+    /// 窄窗图标条/菜单：显式展开一侧（内存覆盖 + 记忆另一侧折叠）。
+    pub fn expand_panel_side(&mut self, side: PanelSide) -> AppResult<AppProjection> {
+        self.panel_user_expanded_side = Some(side);
+        let mut model = self.panel_layout();
+        model.set_auto_collapsed_side(Some(other_side(side)));
         self.persist_panel_layout(model)
     }
 
-    /// 记忆窄窗自动折叠的一侧（`narrow_collapsed_side`）。
-    pub fn set_panel_auto_collapsed_side(
-        &mut self,
-        side: Option<PanelSide>,
-    ) -> AppResult<AppProjection> {
+    /// 拖拽落点：x 决定栏，y 决定插入序号（相对内容区坐标）。
+    fn panel_drop_target(
+        &self,
+        view: &PanelLayoutView,
+        x: f32,
+        y: f32,
+    ) -> Option<(PanelSide, usize)> {
+        let side = if view.left_effective_width > 0.0 && x < view.left_effective_width {
+            PanelSide::Left
+        } else if view.right_effective_width > 0.0
+            && x > (self.panel_area_width - view.right_effective_width).max(0.0)
+        {
+            PanelSide::Right
+        } else {
+            return None;
+        };
+        let frames: Vec<&PanelFrameView> = view
+            .frames
+            .iter()
+            .filter(|frame| frame.placement == PanelPlacement::from(side))
+            .collect();
+        if frames.is_empty() {
+            return None;
+        }
+        let mut index = frames.len();
+        for (position, frame) in frames.iter().enumerate() {
+            if y < frame.y + frame.height / 2.0 {
+                index = position;
+                break;
+            }
+        }
+        Some((side, index))
+    }
+
+    fn drag_indicator_view(&self, view: &PanelLayoutView) -> Option<PanelDragIndicatorView> {
+        let (side, index) = self.panel_drag.as_ref()?.target?;
+        let frames: Vec<&PanelFrameView> = view
+            .frames
+            .iter()
+            .filter(|frame| frame.placement == PanelPlacement::from(side))
+            .collect();
+        let first = frames.first()?;
+        let last = frames.last()?;
+        let y = if index >= frames.len() {
+            (last.y + last.height + 2.0).max(0.0)
+        } else {
+            (frames[index].y - 2.0).max(0.0)
+        };
+        Some(PanelDragIndicatorView {
+            x: first.x,
+            y,
+            width: first.width,
+            height: 2.0,
+        })
+    }
+
+    /// 窄窗栏展开/收起（命令栏 chevron / 图标条菜单）：
+    /// 展开被自动折叠的一侧 → 记忆"另一侧折叠"；收起 → 记忆本侧折叠。
+    pub fn toggle_panel_side_expanded(&mut self, side: PanelSide) -> AppResult<AppProjection> {
+        let view = self.panel_layout_view();
+        let collapsed = match side {
+            PanelSide::Left => view.left_effective_width < LEFT_WIDTH_MIN as f32,
+            PanelSide::Right => view.right_collapsed,
+        };
+        let expanding = collapsed && self.panel_user_expanded_side != Some(side);
+        self.panel_user_expanded_side = if expanding { Some(side) } else { None };
         let mut model = self.panel_layout();
-        model.set_auto_collapsed_side(side);
+        if expanding {
+            model.set_auto_collapsed_side(Some(other_side(side)));
+        } else {
+            model.set_auto_collapsed_side(Some(side));
+        }
         self.persist_panel_layout(model)
     }
 }
@@ -909,6 +1407,17 @@ mod tests {
         }
     }
 
+    fn panels_of(model: &PanelLayoutModel, side: PanelSide) -> Vec<PanelId> {
+        model.stack(side).iter().map(|slot| slot.panel).collect()
+    }
+
+    fn width_of(model: &PanelLayoutModel, side: PanelSide) -> u32 {
+        match side {
+            PanelSide::Left => model.layout().left_width,
+            PanelSide::Right => model.layout().right_width,
+        }
+    }
+
     #[test]
     fn breakpoint_boundaries_match_the_slint_formulas() {
         // 960 / 1120 / 1280 三个断点的两侧取值。
@@ -917,12 +1426,8 @@ mod tests {
         assert!(!nav_rail_active(400.0, true));
         assert!(nav_rail_available(959.0));
         assert!(!nav_rail_available(960.0));
-
         assert!(dock_toggle_visible(1119.0));
         assert!(!dock_toggle_visible(1120.0));
-        assert!(dock_auto_collapsed(1119.0, false));
-        assert!(!dock_auto_collapsed(1119.0, true));
-        assert!(!dock_auto_collapsed(1120.0, false));
 
         assert_eq!(layout_squeeze_ratio(1119.0), 0.0);
         assert_eq!(layout_squeeze_ratio(1120.0), 0.0);
@@ -932,20 +1437,47 @@ mod tests {
         assert_eq!(layout_drag_scale(1000.0), 1.0);
         assert!(layout_drag_scale(1200.0) > 0.0);
 
-        assert_eq!(nav_effective_width(940.0, 300.0, false), NAV_RAIL_WIDTH);
-        assert_eq!(nav_effective_width(940.0, 300.0, true), 300.0);
-        assert_eq!(nav_effective_width(1200.0, 300.0, false), 250.0);
-        assert_eq!(nav_effective_width(1300.0, 300.0, false), 300.0);
+        // 断点语义经由唯一消费者（布局视图）验证：
+        // 940px → 图标条 48；960px 起恢复完整左栏。
+        let rail = compute_panel_layout(&LayoutProfile::default(), 940.0, 600.0, None);
+        assert!(rail.rail_active);
+        assert_eq!(rail.left_effective_width, NAV_RAIL_WIDTH);
+        assert!(rail.rail_available);
+        let full = compute_panel_layout(&LayoutProfile::default(), 960.0, 600.0, None);
+        assert!(!full.rail_active);
+        assert!(!full.rail_available);
+        assert_eq!(full.left_effective_width, DEFAULT_LEFT_WIDTH as f32);
+        // 用户在 940px 手动展开左栏 → 完整左栏。
+        let expanded = compute_panel_layout(
+            &LayoutProfile::default(),
+            940.0,
+            600.0,
+            Some(PanelSide::Left),
+        );
+        assert!(!expanded.rail_active);
+        assert_eq!(expanded.left_effective_width, DEFAULT_LEFT_WIDTH as f32);
 
-        assert_eq!(dock_effective_width(1100.0, 340.0, false), 0.0);
-        assert_eq!(dock_effective_width(1100.0, 340.0, true), 340.0);
-        assert_eq!(dock_effective_width(1140.0, 340.0, false), 287.5);
-        assert_eq!(dock_effective_width(1400.0, 340.0, false), 340.0);
+        // 1120px 是右栏自动折叠边界（默认折叠侧 Right）；恰好 1120 时进入收缩档下限 280。
+        let collapsed = compute_panel_layout(&LayoutProfile::default(), 1119.0, 600.0, None);
+        assert!(collapsed.right_collapsed);
+        assert_eq!(collapsed.right_effective_width, 0.0);
+        let visible = compute_panel_layout(&LayoutProfile::default(), 1120.0, 600.0, None);
+        assert!(!visible.right_collapsed);
+        assert_eq!(visible.right_effective_width, RIGHT_WIDTH_MIN as f32);
 
-        assert!(!nav_column_visible(true, 940.0, false));
-        assert!(nav_column_visible(true, 940.0, true));
-        assert!(nav_rail_visible(true, 940.0, false));
-        assert!(!nav_rail_visible(false, 940.0, false));
+        // 1120–1280 收缩档：左 300 → 250，右 340 → 287.5。
+        let squeeze = LayoutProfile {
+            left_width: 300,
+            right_width: 340,
+            narrow_collapsed_side: None,
+            ..LayoutProfile::default()
+        };
+        let mid = compute_panel_layout(&squeeze, 1200.0, 600.0, None);
+        assert_eq!(mid.left_effective_width, 250.0);
+        assert_eq!(mid.right_effective_width, 310.0);
+        let wide = compute_panel_layout(&squeeze, 1300.0, 600.0, None);
+        assert_eq!(wide.left_effective_width, 300.0);
+        assert_eq!(wide.right_effective_width, 340.0);
     }
 
     #[test]
@@ -982,17 +1514,17 @@ mod tests {
             narrow_collapsed_side: Some(PanelSide::Left),
         };
         let model = PanelLayoutModel::from_layout(&dirty);
-        assert_eq!(model.panels(PanelSide::Left), vec![PanelId::Sftp]);
+        assert_eq!(panels_of(&model, PanelSide::Left), vec![PanelId::Sftp]);
         assert_eq!(
-            model.panels(PanelSide::Right),
+            panels_of(&model, PanelSide::Right),
             vec![PanelId::Tunnels, PanelId::Transfers]
         );
         // 左栈只剩 1 个面板（0 个边界）→ 比例被清空；右栈 1 个边界 → 夹取到上限。
         assert!(model.layout().left_ratios.is_empty());
         assert_eq!(model.layout().right_ratios, vec![SPLIT_RATIO_MAX]);
-        assert_eq!(model.width(PanelSide::Left), LEFT_WIDTH_MAX);
-        assert_eq!(model.width(PanelSide::Right), RIGHT_WIDTH_MIN);
-        assert_eq!(model.auto_collapsed_side(), Some(PanelSide::Left));
+        assert_eq!(width_of(&model, PanelSide::Left), LEFT_WIDTH_MAX);
+        assert_eq!(width_of(&model, PanelSide::Right), RIGHT_WIDTH_MIN);
+        assert_eq!(model.layout().narrow_collapsed_side, Some(PanelSide::Left));
         assert!(model.collapsed(PanelId::Sftp));
         assert!(!model.collapsed(PanelId::Tunnels));
         assert_eq!(model.placement(PanelId::Sftp), PanelPlacement::Left);
@@ -1005,10 +1537,10 @@ mod tests {
         assert!(model.set_collapsed(PanelId::Sessions, true));
         assert!(model.move_to(PanelId::Sessions, PanelSide::Right, Some(0)));
         assert_eq!(
-            model.panels(PanelSide::Right),
+            panels_of(&model, PanelSide::Right),
             vec![PanelId::Sessions, PanelId::Sftp, PanelId::QuickCommands]
         );
-        assert_eq!(model.panels(PanelSide::Left), vec![PanelId::Tunnels]);
+        assert_eq!(panels_of(&model, PanelSide::Left), vec![PanelId::Tunnels]);
         assert!(model.collapsed(PanelId::Sessions));
         assert!(model.layout().right_ratios.is_empty());
         assert!(model.boundary_fractions(PanelSide::Left).is_empty());
@@ -1018,7 +1550,7 @@ mod tests {
         assert_eq!(model.placement(PanelId::Sessions), PanelPlacement::Left);
         assert!(model.collapsed(PanelId::Sessions));
         assert_eq!(
-            model.panels(PanelSide::Left),
+            panels_of(&model, PanelSide::Left),
             vec![PanelId::Tunnels, PanelId::Sessions]
         );
     }
@@ -1029,7 +1561,7 @@ mod tests {
         let before = model.boundary_fractions(PanelSide::Left);
         assert!(model.move_to(PanelId::Sessions, PanelSide::Left, Some(1)));
         assert_eq!(
-            model.panels(PanelSide::Left),
+            panels_of(&model, PanelSide::Left),
             vec![PanelId::Tunnels, PanelId::Sessions]
         );
         assert_eq!(model.layout().left_ratios, vec![0.4]);
@@ -1049,7 +1581,7 @@ mod tests {
         // 显式显示：追加到指定栈尾。
         assert!(model.move_to(PanelId::Sftp, PanelSide::Left, None));
         assert_eq!(
-            model.panels(PanelSide::Left),
+            panels_of(&model, PanelSide::Left),
             vec![PanelId::Sessions, PanelId::Tunnels, PanelId::Sftp]
         );
         assert_eq!(model.placement(PanelId::Sftp), PanelPlacement::Left);
@@ -1073,18 +1605,19 @@ mod tests {
             model.boundary_fractions(PanelSide::Left),
             vec![SPLIT_RATIO_MIN, SPLIT_RATIO_MAX]
         );
-        // 向下拖第一个边界：被第二个边界（含间距）压住。
-        assert!(model.set_boundary_fraction(PanelSide::Left, 0, 0.8));
+        // 向下拖第一个边界：被第二个边界（含间距）压住（整侧写入，逐值夹取）。
+        assert!(model.set_boundary_fractions(PanelSide::Left, &[0.8, SPLIT_RATIO_MAX]));
         assert_eq!(model.layout().left_ratios, vec![0.8, SPLIT_RATIO_MAX]);
-        assert!(model.set_boundary_fraction(PanelSide::Left, 1, 0.5));
+        assert!(model.set_boundary_fractions(PanelSide::Left, &[0.8, 0.8 + SPLIT_RATIO_GAP_MIN]));
         assert_eq!(
             model.layout().left_ratios,
             vec![0.8, 0.8 + SPLIT_RATIO_GAP_MIN]
         );
-        assert!(!model.set_boundary_fraction(PanelSide::Left, 2, 0.5));
+        // 长度不符（越界边界）拒绝写入。
+        assert!(!model.set_boundary_fractions(PanelSide::Left, &[0.1, 0.2, 0.3]));
         // 单面板（0 个边界）无比例可设。
         assert_eq!(model.boundary_count(PanelSide::Right), 0);
-        assert!(!model.set_boundary_fraction(PanelSide::Right, 0, -1.0));
+        assert!(!model.set_boundary_fractions(PanelSide::Right, &[-1.0]));
         assert!(model.boundary_fractions(PanelSide::Right).is_empty());
         assert!(model.layout().right_ratios.is_empty());
     }
@@ -1125,9 +1658,9 @@ mod tests {
     fn widths_and_collapse_toggle_roundtrip() {
         let mut model = PanelLayoutModel::from_layout(&sample_layout());
         model.set_width(PanelSide::Right, 1000.0);
-        assert_eq!(model.width(PanelSide::Right), RIGHT_WIDTH_MAX);
+        assert_eq!(width_of(&model, PanelSide::Right), RIGHT_WIDTH_MAX);
         model.set_width(PanelSide::Left, 250.0);
-        assert_eq!(model.width(PanelSide::Left), 250);
+        assert_eq!(width_of(&model, PanelSide::Left), 250);
         assert!(model.set_collapsed(PanelId::Sftp, true));
         assert!(!model.set_collapsed(PanelId::Sftp, true));
         assert!(!model.toggle_collapsed(PanelId::Sftp));
@@ -1154,7 +1687,7 @@ mod tests {
                 let mut model = PanelLayoutModel::from_layout(&LayoutProfile::default());
                 model.move_to(panel, side, None);
                 assert_eq!(model.placement(panel), PanelPlacement::from(side));
-                assert!(model.panels(side).contains(&panel));
+                assert!(panels_of(&model, side).contains(&panel));
             }
         }
         assert_eq!(default_side(PanelId::Sessions), PanelSide::Left);
@@ -1176,8 +1709,6 @@ mod tests {
             auto_collapsed_side(1000.0, Some(PanelSide::Left)),
             Some(PanelSide::Left)
         );
-        assert_eq!(PanelPlacement::Hidden.side(), None);
-        assert_eq!(PanelPlacement::Left.side(), Some(PanelSide::Left));
         assert_eq!(PanelPlacement::Right.id(), "right");
         assert_eq!(PanelPlacement::Hidden.id(), "hidden");
     }
@@ -1212,27 +1743,277 @@ mod tests {
         runtime
             .toggle_panel_collapsed(PanelId::Sftp)
             .expect("collapse");
+        runtime.set_panel_area_size(1440.0, 794.0);
+        // 栏宽拖拽预览 + 分栏拖拽预览，结束时一起落盘（Phase 2 的拖拽路径）。
+        runtime.preview_panel_side_width(PanelSide::Left, 260.0);
+        // 左栈 = [Sessions, Sftp(折叠 32px)]；把边界拖到 Sessions 高 ≈ 400px 处。
+        runtime.preview_panel_split_pixels(PanelSide::Left, 0, 400.0);
+        runtime.commit_panel_layout().expect("commit");
         runtime
-            .set_panel_side_width(PanelSide::Left, 260.0)
-            .expect("width");
-        runtime
-            .set_panel_split_fraction(PanelSide::Left, 0, 0.35)
-            .expect("fraction");
-        runtime
-            .set_panel_auto_collapsed_side(Some(PanelSide::Left))
-            .expect("pin");
+            .expand_panel_side(PanelSide::Left)
+            .expect("pin left expanded");
 
         let reloaded =
             AppRuntime::new_with_keychain(dir.path().to_path_buf(), None).expect("reload");
         let model = reloaded.panel_layout();
         assert_eq!(model.placement(PanelId::Sftp), PanelPlacement::Left);
         assert!(model.collapsed(PanelId::Sftp));
-        assert_eq!(model.width(PanelSide::Left), 260);
-        assert_eq!(model.layout().left_ratios, vec![0.35]);
-        assert_eq!(model.layout().narrow_collapsed_side, Some(PanelSide::Left));
+        assert_eq!(width_of(&model, PanelSide::Left), 260);
+        // 边界比例被夹取在 [MIN, MAX] 且显式落盘。
+        let fractions = model.boundary_fractions(PanelSide::Left);
+        assert_eq!(fractions.len(), 1);
+        assert!((SPLIT_RATIO_MIN..=SPLIT_RATIO_MAX).contains(&fractions[0]));
+        assert!(!model.layout().left_ratios.is_empty());
+        assert_eq!(model.layout().narrow_collapsed_side, Some(PanelSide::Right));
         assert_eq!(
-            model.panels(PanelSide::Left),
+            panels_of(&model, PanelSide::Left),
             vec![PanelId::Sessions, PanelId::Sftp]
+        );
+    }
+
+    // --- N3 Phase 2：px 布局引擎 ---------------------------------------------
+
+    fn approx(left: f32, right: f32) -> bool {
+        (left - right).abs() < 0.01
+    }
+
+    #[test]
+    fn layout_view_keeps_legacy_geometry_at_1440x900() {
+        let layout = LayoutProfile::default();
+        let view = compute_panel_layout(&layout, 1440.0, 794.0, None);
+        assert_eq!(view.left_width, 240.0);
+        assert_eq!(view.right_width, 340.0);
+        assert_eq!(view.left_effective_width, 240.0);
+        assert_eq!(view.right_effective_width, 340.0);
+        assert!(!view.rail_active);
+        assert!(!view.dock_toggle_visible);
+        assert!(!view.right_collapsed);
+
+        let sessions = *view.frame(PanelId::Sessions).expect("sessions");
+        assert_eq!(sessions.placement, PanelPlacement::Left);
+        assert!(sessions.visible);
+        assert_eq!(
+            (sessions.x, sessions.y, sessions.width, sessions.height),
+            (0.0, 0.0, 240.0, 794.0)
+        );
+
+        let sftp = *view.frame(PanelId::Sftp).expect("sftp");
+        assert_eq!((sftp.x, sftp.y, sftp.width), (1100.0, 12.0, 340.0));
+        // 12 上留白 + 2×4 把手 + 89/89 内容高度 → SFTP 吸收剩余 584px（与旧卡片一致）。
+        assert!(approx(sftp.height, 584.0), "sftp height = {}", sftp.height);
+        let tunnels = *view.frame(PanelId::Tunnels).expect("tunnels");
+        assert!(approx(tunnels.y, 600.0), "tunnels y = {}", tunnels.y);
+        assert!(
+            approx(tunnels.height, 89.0),
+            "tunnels height = {}",
+            tunnels.height
+        );
+        let commands = *view.frame(PanelId::QuickCommands).expect("commands");
+        assert!(approx(commands.y, 693.0), "commands y = {}", commands.y);
+        assert!(approx(commands.y + commands.height + 12.0, 794.0));
+        // C0 默认不含 Transfers：默认隐藏，等 Panels 菜单恢复。
+        assert!(view.frame(PanelId::Transfers).is_none());
+    }
+
+    #[test]
+    fn narrow_window_collapses_side_and_rails_left() {
+        let layout = LayoutProfile::default();
+        // 1120 以下：默认折叠右栏。
+        let view = compute_panel_layout(&layout, 1000.0, 600.0, None);
+        assert!(view.dock_toggle_visible);
+        assert!(view.right_collapsed);
+        assert_eq!(view.right_effective_width, 0.0);
+        assert!(!view.frame(PanelId::Sftp).expect("sftp").visible);
+        assert!(view.frame(PanelId::Sessions).expect("sessions").visible);
+        assert_eq!(view.left_effective_width, 240.0);
+
+        // 960 以下：左栏收成 48px 图标条。
+        let view = compute_panel_layout(&layout, 900.0, 600.0, None);
+        assert!(view.rail_available);
+        assert!(view.rail_active);
+        assert_eq!(view.left_effective_width, NAV_RAIL_WIDTH);
+        assert!(!view.frame(PanelId::Sessions).expect("sessions").visible);
+
+        // 用户在 900px 手动展开左栏：图标条让位给完整左栏。
+        let view = compute_panel_layout(&layout, 900.0, 600.0, Some(PanelSide::Left));
+        assert!(!view.rail_active);
+        assert_eq!(view.left_effective_width, 240.0);
+        assert!(view.frame(PanelId::Sessions).expect("sessions").visible);
+
+        // 用户在 1000px 手动展开右栏：右栏恢复。
+        let view = compute_panel_layout(&layout, 1000.0, 600.0, Some(PanelSide::Right));
+        assert!(!view.right_collapsed);
+        assert_eq!(view.right_effective_width, 340.0);
+        assert!(view.frame(PanelId::Sftp).expect("sftp").visible);
+    }
+
+    #[test]
+    fn explicit_ratios_drive_stack_heights() {
+        let layout = LayoutProfile {
+            left: vec![slot(PanelId::Sessions, false)],
+            right: vec![slot(PanelId::Sftp, false), slot(PanelId::Tunnels, false)],
+            right_ratios: vec![0.5],
+            ..LayoutProfile::default()
+        };
+        let view = compute_panel_layout(&layout, 1200.0, 500.0, None);
+        let sftp = *view.frame(PanelId::Sftp).expect("sftp");
+        let tunnels = *view.frame(PanelId::Tunnels).expect("tunnels");
+        // available = 500 − 24 留白 − 4 把手 = 472，对半 = 236。
+        assert!(approx(sftp.height, 236.0), "sftp = {}", sftp.height);
+        assert!(
+            approx(tunnels.height, 236.0),
+            "tunnels = {}",
+            tunnels.height
+        );
+        assert!(approx(tunnels.y, 12.0 + 236.0 + 4.0));
+    }
+
+    #[test]
+    fn min_height_is_enforced_by_rebalancing() {
+        let layout = LayoutProfile {
+            left: vec![slot(PanelId::Sessions, false)],
+            right: vec![slot(PanelId::Sftp, false), slot(PanelId::Tunnels, false)],
+            right_ratios: vec![0.05],
+            ..LayoutProfile::default()
+        };
+        let view = compute_panel_layout(&layout, 1200.0, 500.0, None);
+        let sftp = *view.frame(PanelId::Sftp).expect("sftp");
+        let tunnels = *view.frame(PanelId::Tunnels).expect("tunnels");
+        assert!(approx(sftp.height, PANEL_MIN_HEIGHT));
+        assert!(approx(tunnels.height, 472.0 - PANEL_MIN_HEIGHT));
+    }
+
+    #[test]
+    fn collapsed_panel_pins_to_32px() {
+        let layout = LayoutProfile {
+            left: vec![slot(PanelId::Sessions, false)],
+            right: vec![slot(PanelId::Sftp, true), slot(PanelId::Tunnels, false)],
+            ..LayoutProfile::default()
+        };
+        let view = compute_panel_layout(&layout, 1200.0, 500.0, None);
+        let sftp = *view.frame(PanelId::Sftp).expect("sftp");
+        let tunnels = *view.frame(PanelId::Tunnels).expect("tunnels");
+        assert!(sftp.collapsed);
+        assert!(approx(sftp.height, PANEL_COLLAPSED_HEIGHT));
+        assert!(approx(tunnels.y, 12.0 + PANEL_COLLAPSED_HEIGHT + 4.0));
+        // 唯一展开的面板吸收全部剩余高度（没有填充面板时等分）。
+        assert!(approx(
+            tunnels.height,
+            500.0 - 12.0 - 12.0 - 4.0 - PANEL_COLLAPSED_HEIGHT
+        ));
+    }
+
+    #[test]
+    fn runtime_view_and_panel_visibility() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut runtime =
+            AppRuntime::new_with_keychain(dir.path().to_path_buf(), None).expect("runtime");
+        runtime.set_panel_area_size(1440.0, 794.0);
+        let view = runtime.panel_layout_view();
+        // C0 默认布局：Transfers 不在栈中（默认隐藏），其余四个面板全部可见。
+        assert_eq!(view.frames.len(), 4);
+        assert!(view.frames.iter().all(|frame| frame.visible));
+        assert!(!runtime.panel_visible(PanelId::Transfers));
+        let projection = runtime.projection();
+        assert!(projection.sessions_visible);
+        assert!(projection.sftp_visible);
+        assert!(projection.tunnels_visible);
+        assert!(projection.commands_visible);
+        assert!(!projection.transfers_visible);
+
+        // Panels 菜单显示 / 隐藏（Transfers 按默认侧追加到右栏栈尾）。
+        let shown = runtime
+            .toggle_panel_visible(PanelId::Transfers)
+            .expect("show");
+        assert!(shown.transfers_visible);
+        assert_eq!(
+            runtime.panel_layout().placement(PanelId::Transfers),
+            PanelPlacement::Right
+        );
+        assert!(
+            runtime
+                .panel_layout_view()
+                .frame(PanelId::Transfers)
+                .expect("frame")
+                .visible
+        );
+        let hidden = runtime
+            .toggle_panel_visible(PanelId::Transfers)
+            .expect("hide");
+        assert!(!hidden.transfers_visible);
+        assert!(!runtime.panel_visible(PanelId::Transfers));
+    }
+
+    #[test]
+    fn preview_split_is_memory_only_until_commit() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut runtime =
+            AppRuntime::new_with_keychain(dir.path().to_path_buf(), None).expect("runtime");
+        runtime
+            .move_panel(PanelId::QuickCommands, PanelSide::Left, None)
+            .expect("move");
+        let config_path = dir.path().join("config.toml");
+        let before = std::fs::read_to_string(&config_path).expect("config before");
+
+        runtime.set_panel_area_size(1200.0, 500.0);
+        // 左栈 = [Sessions, QuickCommands]（初始 407/89）；把把手拖到等高（248/248）处。
+        runtime.preview_panel_split_pixels(PanelSide::Left, 0, 252.0);
+        let after_preview = std::fs::read_to_string(&config_path).expect("config after preview");
+        assert_eq!(before, after_preview, "preview 不应落盘");
+        let view = runtime.panel_layout_view();
+        let sessions = *view.frame(PanelId::Sessions).expect("sessions");
+        let commands = *view.frame(PanelId::QuickCommands).expect("commands");
+        assert!(
+            approx(sessions.height, commands.height),
+            "sessions={} commands={}",
+            sessions.height,
+            commands.height
+        );
+
+        runtime.commit_panel_layout().expect("commit");
+        let reloaded =
+            AppRuntime::new_with_keychain(dir.path().to_path_buf(), None).expect("reload");
+        let fractions = reloaded.panel_layout().layout().left_ratios.clone();
+        assert_eq!(fractions.len(), 1);
+        assert!(approx(fractions[0], 0.5), "fraction = {}", fractions[0]);
+    }
+
+    #[test]
+    fn toggle_side_expanded_updates_memory_and_persisted_side() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut runtime =
+            AppRuntime::new_with_keychain(dir.path().to_path_buf(), None).expect("runtime");
+        runtime.set_panel_area_size(1000.0, 600.0);
+        assert!(runtime.panel_layout_view().right_collapsed);
+
+        runtime
+            .toggle_panel_side_expanded(PanelSide::Right)
+            .expect("expand");
+        assert!(!runtime.panel_layout_view().right_collapsed);
+        assert_eq!(
+            runtime.panel_layout().layout().narrow_collapsed_side,
+            Some(PanelSide::Left)
+        );
+
+        runtime
+            .toggle_panel_side_expanded(PanelSide::Right)
+            .expect("collapse");
+        assert!(runtime.panel_layout_view().right_collapsed);
+        assert_eq!(
+            runtime.panel_layout().layout().narrow_collapsed_side,
+            Some(PanelSide::Right)
+        );
+    }
+
+    #[test]
+    fn panel_area_size_ignores_non_finite_values() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut runtime =
+            AppRuntime::new_with_keychain(dir.path().to_path_buf(), None).expect("runtime");
+        runtime.set_panel_area_size(f32::NAN, f32::INFINITY);
+        assert_eq!(
+            (runtime.panel_area_width, runtime.panel_area_height),
+            DEFAULT_PANEL_AREA
         );
     }
 }

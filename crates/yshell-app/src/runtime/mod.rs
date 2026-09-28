@@ -101,6 +101,8 @@ pub(crate) use editor::SessionEditorDraft;
 pub(crate) use logging::LoggingDialogState;
 pub(crate) use panels::SettingsTerminalStatus;
 pub use projection::AppProjection;
+pub use projection::PanelFrameData;
+pub use projection::SplitHandleData;
 pub use quick_connect::QuickConnectRowData;
 pub use quick_connect::QuickLinkRowData;
 
@@ -111,7 +113,7 @@ use std::{
     collections::BTreeMap, collections::BTreeSet, env, fmt, fs, path::Path, path::PathBuf,
     sync::Arc,
 };
-use yshell_config::{ConfigDocument, ConfigStore, LoadOutcome, QuickLink};
+use yshell_config::{ConfigDocument, ConfigStore, LoadOutcome, PanelSide, QuickLink};
 use yshell_core::CoreCommandDispatcher;
 #[cfg(test)]
 use yshell_core::SessionEvent;
@@ -168,6 +170,10 @@ impl AppRuntime {
             sftp_visible: true,
             tunnels_visible: true,
             commands_visible: true,
+            panel_area_width: panels::DEFAULT_PANEL_AREA.0,
+            panel_area_height: panels::DEFAULT_PANEL_AREA.1,
+            panel_user_expanded_side: None,
+            panel_drag: None,
             secret_store_path,
             secret_store_kind,
             secret_reset_confirmation: String::new(),
@@ -391,6 +397,13 @@ pub struct AppRuntime {
     pub(crate) sftp_visible: bool,
     pub(crate) tunnels_visible: bool,
     pub(crate) commands_visible: bool,
+    /// N3：面板内容区尺寸（内存态；Slint 布局回调写入；非有限值回退默认）。
+    pub(crate) panel_area_width: f32,
+    pub(crate) panel_area_height: f32,
+    /// N3：窄窗下手动展开的一侧（内存态，覆盖自动折叠；不落盘）。
+    pub(crate) panel_user_expanded_side: Option<PanelSide>,
+    /// N3：面板头部拖拽状态（内存态）。
+    pub(crate) panel_drag: Option<panels::PanelDragState>,
     pub(crate) secret_store_path: Option<PathBuf>,
     pub(crate) secret_store_kind: SecretStoreKind,
     pub(crate) secret_reset_confirmation: String,

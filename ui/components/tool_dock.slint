@@ -1,35 +1,158 @@
-// 右栏工具面板（RightDock）：拖拽把手 + 卡片容器（SFTP / Tunnels / Transfers /
-// Quick Commands）+ SFTP 右键菜单 Popup。
+// N3 工具面板停靠容器（ToolDock）：左右两栏的面板栈 + 中间工作区槽 + 尺寸/分栏手柄。
 //
-// 拆分自 `ui/main_window.slint`（R1 结构重构）：只搬代码，不改布局/文案/行为。
-//   * 根继承 `HorizontalLayout`：把手与右栏容器在拆分前就是外层 HorizontalLayout
-//     的两个相邻 cell（间距 0），这里用同形布局承载，几何不变。
-//   * 显隐/宽度仍由 main_window 计算（`dock-effective-width`；宽度 0 = 折叠）。
-//     面板内层用 `if` 控制是否参与布局（与拆分前一致，避免折叠时把状态栏挤出）。
-//   * 需要写宿主弹窗状态的动作（new-folder/rename/…）只上报语义回调，由宿主设置
-//     `sftp_dialog_*` 并打开 `SftpEntryDialog`。
+// 架构（N3 Phase 2）：**几何由 Rust 计算**。内容区尺寸经 `area-resized` 上报后，
+// Rust 直接下发每个面板框的 x/y/宽/高、两侧有效栏宽、图标条/自动折叠标志、分栏
+// 手柄与拖拽插入指示；本文件只做绝对定位渲染与用户意图上报，不再从 `window.width`
+// 反推布局（消除 main_window 里的 binding-loop）。
+//   * 面板壳复用 `panel_frame.slint` 的 PanelFrame / PanelSplitHandle（只读复用）。
+//   * Sessions 内容来自 `session_sidebar.slint` 的 SessionSidebarContent；
+//     SFTP 内容仍是 N1 的 SftpPanel（透传列表保持不变），Transfers 为
+//     TransferQueue 摘要。
+//   * `@children` 是中间工作区槽（main_window 把 TerminalWorkspace 放进来）。
 //   * Popup 实例放在 `ToolDockPopups` 里，必须在 main_window 的
 //     "内容之后、模态弹窗之前"实例化，保持原有绘制层级。
-//   * `@tr` 文案搬移后显式带上原组件上下文（`@tr("MainWindow" => ...)`）。
 import { Theme } from "../theme.slint";
-import { WinCard, WinCardHeader, WinIconButton } from "basic/controls.slint";
 import { MenuEntry, MenuPopup } from "menu_popup.slint";
+import { PanelFrame, PanelSplitHandle } from "panel_frame.slint";
+import { SessionSidebarContent, SessionSidebarHandle, SessionSidebarRail } from "session_sidebar.slint";
+import { SessionTreeRow } from "session_tree.slint";
 import { LocalRow } from "local_pane.slint";
 import { SftpCrumb, SftpPanel, SftpRow, SftpTransferRow } from "sftp_panel.slint";
+import { TransferQueue } from "transfer_queue.slint";
 
-export component ToolDock inherits HorizontalLayout {
-    in property <length> dock-effective-width: 0px;
-    in property <bool> sftp-visible: true;
-    in property <bool> tunnels-visible: true;
-    in property <bool> commands-visible: true;
+/// 单个面板框的 px 几何（Rust `PanelFrameData` 的同构体）。
+export struct PanelFrameData {
+    placement: string = "hidden",
+    collapsed: bool = false,
+    visible: bool = false,
+    x: length = 0px,
+    y: length = 0px,
+    width: length = 0px,
+    height: length = 0px,
+}
 
-    // Tunnels 投影
+/// 一个分栏手柄（Rust 按当前栈序计算位置与边界序号）。
+export struct SplitHandleData {
+    side: string = "left",
+    boundary: int = 0,
+    x: length = 0px,
+    y: length = 0px,
+    width: length = 0px,
+    height: length = 4px,
+}
+
+// 面板头部拖拽区（换边/换序）：留出右侧 40px 给 ⋯ 菜单按钮。
+// 上报窗口绝对坐标，ToolDock 换算成内容区坐标后交给 Rust。
+component PanelDragRegion inherits TouchArea {
+    in property <string> panel-id: "";
+    in property <length> grip-x: 0px;
+    in property <length> grip-y: 0px;
+    in property <length> grip-width: 0px;
+    in property <length> grip-height: 0px;
+
+    callback drag-start(string, length, length);
+    callback drag-move(string, length, length);
+    callback drag-drop(string, length, length);
+    callback drag-cancel();
+
+    x: root.grip-x;
+    y: root.grip-y;
+    width: max(0px, root.grip-width - 40px);
+    height: root.grip-height;
+    property <bool> dragging: false;
+
+    pointer-event(event) => {
+        if (event.button == PointerEventButton.left) {
+            if (event.kind == PointerEventKind.down) {
+                root.dragging = true;
+                root.drag-start(
+                    root.panel-id,
+                    self.absolute-position.x + self.mouse-x,
+                    self.absolute-position.y + self.mouse-y
+                );
+            } else if (event.kind == PointerEventKind.up) {
+                root.dragging = false;
+                root.drag-drop(
+                    root.panel-id,
+                    self.absolute-position.x + self.mouse-x,
+                    self.absolute-position.y + self.mouse-y
+                );
+            } else if (event.kind == PointerEventKind.cancel) {
+                root.dragging = false;
+                root.drag-cancel();
+            }
+        }
+    }
+
+    moved => {
+        if (root.dragging) {
+            root.drag-move(
+                root.panel-id,
+                self.absolute-position.x + self.mouse-x,
+                self.absolute-position.y + self.mouse-y
+            );
+        }
+    }
+}
+
+export component ToolDock inherits Rectangle {
+    // ---- N3：Rust 投影的内容区几何 -----------------------------------------
+    in property <length> left-effective-width: 0px;
+    in property <length> right-effective-width: 0px;
+    /// 模型记忆的期望栏宽（拖拽起点快照用）。
+    in property <length> left-width: 240px;
+    in property <length> right-width: 340px;
+    in property <bool> nav-rail-active: false;
+    in property <float> layout-drag-scale: 1.0;
+    in property <PanelFrameData> sessions-frame;
+    in property <PanelFrameData> sftp-frame;
+    in property <PanelFrameData> tunnels-frame;
+    in property <PanelFrameData> quick-commands-frame;
+    in property <PanelFrameData> transfers-frame;
+    in property <[SplitHandleData]> split-handles: [];
+    in property <bool> drag-indicator-visible: false;
+    in property <length> drag-indicator-x: 0px;
+    in property <length> drag-indicator-y: 0px;
+    in property <length> drag-indicator-width: 0px;
+
+    /// 内容区尺寸变化（Rust 重新计算面板几何）。
+    callback area-resized(length, length);
+    /// 面板 ⋯ 菜单（id + 窗口绝对锚点）。
+    callback panel-menu-requested(string, length, length);
+    callback panel-collapse-requested(string);
+    callback panel-hide-requested(string);
+    /// 面板头部拖拽（窗口绝对坐标）。
+    callback panel-drag-start(string, length, length);
+    callback panel-drag-move(string, length, length);
+    callback panel-drag-drop(string, length, length);
+    callback panel-drag-cancel();
+    /// 分栏拖拽：pointer-y 相对内容区顶边。
+    callback panel-split-preview(string, int, length);
+    callback panel-split-commit();
+    /// 栏宽拖拽（左右侧 id）。
+    callback panel-width-preview(string, length);
+    callback panel-width-commit();
+    /// 图标条右键菜单 / 展开左栏。
+    callback rail-menu-requested(length, length);
+    callback rail-expand-requested();
+
+    // ---- Sessions 面板内容 --------------------------------------------------
+    in-out property <string> session-search-text: "";
+    in property <[SessionTreeRow]> session-tree-rows: [];
+    in property <string> session-selected-id: "";
+    in property <string> session-empty-text: "";
+    callback update-session-search(string);
+    callback select-session-row(string);
+    callback activate-session-row(string);
+    callback toggle-session-folder(string);
+    callback session-row-context-menu-requested(string, length, length);
+    callback session-blank-menu-requested(length, length);
+
+    // ---- Tunnels / Transfers 面板内容 --------------------------------------
     in property <string> tunnels-summary-text: "";
+    in property <string> transfer-queue-text: "No active transfers";
 
-    /// SFTP 面板/表头的右键菜单锚点（窗口绝对坐标）
-    callback sftp-menu-requested(length, length);
-
-    // --- N1：SftpPanel 投影透传（卡片壳只提供弹性高度与标题条）---------------
+    // ---- N1：SftpPanel 投影透传（面板壳只提供弹性高度与标题条）--------------
     in property <[SftpRow]> sftp-rows: [];
     in property <[SftpCrumb]> sftp-crumbs: [];
     in property <int> sftp-selected-index: -1;
@@ -81,6 +204,8 @@ export component ToolDock inherits HorizontalLayout {
     callback select-sftp-row(int, bool, bool);
     callback activate-sftp-row(int);
     callback panel-sftp-menu-requested(length, length);
+    /// N3：远端行右键菜单（带行序号；宿主据此计算 file/dir/multi 目标类型）。
+    callback sftp-row-menu-requested(int, length, length);
     callback save-sftp-remote-edit();
     callback cancel-sftp-remote-edit();
     callback local-toggle-collapsed();
@@ -110,230 +235,372 @@ export component ToolDock inherits HorizontalLayout {
     callback drop-on-remote-blank(data-transfer, DragAction);
     callback drop-on-local(data-transfer, DragAction);
 
-    // --- 拖拽把手（4px，悬停变色；折叠时不显示）------------------------------
-    // 拖拽状态与宽度钳制仍在 main_window：这里只上报指针窗口绝对 x。
-    in property <bool> dragging: false;
-    callback drag-started(length);
-    callback drag-moved(length);
-    callback drag-finished();
+    // 栏宽拖拽的本地锚点（指针绝对 x 与起始宽度）。
+    property <length> side-drag-anchor-x: 0px;
+    property <length> side-drag-start-width: 0px;
+    property <bool> left-side-dragging: false;
+    property <bool> right-side-dragging: false;
+    property <bool> split-dragging: false;
 
-    // 可见性由宿主传入的宽度推导（与拆分前 dock_visible 的定义一致：width > 0px）。
-    if root.dock-effective-width > 0px : Rectangle {
-        width: Theme.resize-handle-width;
-        background: root.dragging || dock_resize_touch.has-hover ? Theme.accent : transparent;
-        animate background { duration: Theme.duration-faster; easing: ease-out; }
+    background: transparent;
 
-        dock_resize_touch := TouchArea {
-            mouse-cursor: col-resize;
+    init => { root.area-resized(self.width, self.height); }
+    changed width => { root.area-resized(self.width, self.height); }
+    changed height => { root.area-resized(self.width, self.height); }
 
-            pointer-event(event) => {
-                if (event.button == PointerEventButton.left) {
-                    if (event.kind == PointerEventKind.down) {
-                        root.drag-started(self.absolute-position.x + self.mouse-x);
-                    } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
-                        root.drag-finished();
-                    }
-                }
+    // --- 中部：三列占位（左栏占位 / @children 工作区 / 右栏占位）--------------
+    // 面板在下方绝对定位覆盖左右占位；占位撑出与旧版一致的几何
+    // （左 240 + 4px 把手 + 工作区 + 4px 把手 + 右 340 @1440×900）。
+    HorizontalLayout {
+        spacing: 0px;
+
+        // 左栏占位（完整左栏或 48px 图标条）
+        Rectangle {
+            width: root.left-effective-width;
+            horizontal-stretch: 0;
+            background: transparent;
+
+            if root.nav-rail-active : SessionSidebarRail {
+                width: parent.width;
+                rail-menu-requested(x, y) => { root.rail-menu-requested(x, y); }
+                expand-navigation() => { root.rail-expand-requested(); }
             }
-            moved => {
-                if (root.dragging) {
-                    root.drag-moved(self.absolute-position.x + self.mouse-x);
-                }
+        }
+
+        // 左栏宽度把手（仅完整左栏可拖）
+        if root.left-effective-width >= 200px : SessionSidebarHandle {
+            dragging: root.left-side-dragging;
+            drag-started(x) => {
+                root.left-side-dragging = true;
+                root.side-drag-anchor-x = x;
+                root.side-drag-start-width = root.left-width;
             }
+            drag-moved(x) => {
+                root.panel-width-preview(
+                    "left",
+                    clamp(
+                        root.side-drag-start-width + (x - root.side-drag-anchor-x) / root.layout-drag-scale,
+                        200px,
+                        420px
+                    )
+                );
+            }
+            drag-finished() => {
+                root.left-side-dragging = false;
+                root.panel-width-commit();
+            }
+        }
+
+        // 中间工作区（宿主注入 TerminalWorkspace）
+        @children
+
+        // 右栏宽度把手（右栏展开时可用）
+        if root.right-effective-width >= 200px : SessionSidebarHandle {
+            dragging: root.right-side-dragging;
+            drag-started(x) => {
+                root.right-side-dragging = true;
+                root.side-drag-anchor-x = x;
+                root.side-drag-start-width = root.right-width;
+            }
+            drag-moved(x) => {
+                root.panel-width-preview(
+                    "right",
+                    clamp(
+                        root.side-drag-start-width - (x - root.side-drag-anchor-x) / root.layout-drag-scale,
+                        280px,
+                        560px
+                    )
+                );
+            }
+            drag-finished() => {
+                root.right-side-dragging = false;
+                root.panel-width-commit();
+            }
+        }
+
+        // 右栏占位
+        Rectangle {
+            width: root.right-effective-width;
+            horizontal-stretch: 0;
+            background: transparent;
         }
     }
 
-    // --- RightDock（卡片式工具面板；W5-④ 宽度可拖拽/自动折叠）------------------
-    Rectangle {
-        width: root.dock-effective-width;
-        visible: root.dock-effective-width > 0px;
-        background: Theme.window-background;
-        // 卡片总高可能超过可用高度（例如 1600×1000 时右栏自动展开）：
-        // 裁剪在右栏内，避免卡片画到状态栏上（溢出）。
-        clip: true;
+    // --- 分栏手柄（Rust 计算位置；拖动只上报指针 y）--------------------------
+    for handle in root.split-handles : PanelSplitHandle {
+        x: handle.x;
+        y: handle.y;
+        width: handle.width;
+        height: handle.height;
+        dragging: root.split-dragging;
+        drag-started(y) => {
+            root.split-dragging = true;
+            root.panel-split-preview(handle.side, handle.boundary, y - root.absolute-position.y);
+        }
+        drag-moved(y) => { root.panel-split-preview(handle.side, handle.boundary, y - root.absolute-position.y); }
+        drag-finished() => {
+            root.split-dragging = false;
+            root.panel-split-commit();
+        }
+    }
 
-        Rectangle {
-            x: 0;
-            width: 1px;
+    // --- 面板层（绝对定位；内容常驻，隐藏时几何归零）------------------------
+    // Sessions
+    PanelFrame {
+        x: root.sessions-frame.x;
+        y: root.sessions-frame.y;
+        width: root.sessions-frame.width;
+        height: root.sessions-frame.height;
+        visible: root.sessions-frame.visible;
+        min-height: 0px;
+        max-height: 100000px;
+        header-height: 40px;
+        content-padding: Theme.spacing-8;
+        title-text: @tr("MainWindow" => "Sessions");
+        icon: "terminal";
+        collapsed: root.sessions-frame.collapsed;
+        menu-requested(x, y) => { root.panel-menu-requested("sessions", x, y); }
+        collapse-toggled() => { root.panel-collapse-requested("sessions"); }
+        hide-requested() => { root.panel-hide-requested("sessions"); }
+
+        SessionSidebarContent {
+            width: parent.width;
             height: parent.height;
-            background: Theme.layer-stroke;
+            search-text <=> root.session-search-text;
+            tree-rows: root.session-tree-rows;
+            selected-id: root.session-selected-id;
+            empty-text: root.session-empty-text;
+            update-search(value) => { root.update-session-search(value); }
+            select-row(id) => { root.select-session-row(id); }
+            activate-row(id) => { root.activate-session-row(id); }
+            toggle-folder(id) => { root.toggle-session-folder(id); }
+            row-context-menu-requested(id, x, y) => { root.session-row-context-menu-requested(id, x, y); }
+            blank-menu-requested(x, y) => { root.session-blank-menu-requested(x, y); }
+        }
+    }
+
+    // SFTP（内容偏移 44 与 N1 一致：标题条 44 + SftpPanel y=0 + 底部 8px 留白）
+    PanelFrame {
+        x: root.sftp-frame.x;
+        y: root.sftp-frame.y;
+        width: root.sftp-frame.width;
+        height: root.sftp-frame.height;
+        visible: root.sftp-frame.visible;
+        min-height: 0px;
+        max-height: 100000px;
+        header-height: 44px;
+        content-padding: 0px;
+        title-text: @tr("MainWindow" => "SFTP");
+        icon: "folder";
+        collapsed: root.sftp-frame.collapsed;
+        menu-requested(x, y) => { root.panel-menu-requested("sftp", x, y); }
+        collapse-toggled() => { root.panel-collapse-requested("sftp"); }
+        hide-requested() => { root.panel-hide-requested("sftp"); }
+    }
+
+    // SftpPanel 是面板框的兄弟元素（绝对定位），偏移与旧卡片一致：
+    // 标题条 44px + 左右 8px + 底部 8px，保证 N1 的行坐标不变。
+    SftpPanel {
+        x: root.sftp-frame.x + 8px;
+        y: root.sftp-frame.y + 44px;
+        width: max(0px, root.sftp-frame.width - 16px);
+        height: max(0px, root.sftp-frame.height - 52px);
+        visible: root.sftp-frame.visible;
+
+        rows: root.sftp-rows;
+            crumbs: root.sftp-crumbs;
+            selected-index: root.sftp-selected-index;
+            sort-column: root.sftp-sort-column-text;
+            sort-ascending: root.sftp-sort-ascending;
+            sort-text: root.sftp-sort-text;
+            show-hidden: root.sftp-show-hidden;
+            item-count: root.sftp-item-count;
+            dir-count: root.sftp-dir-count;
+            selected-count: root.sftp-selected-count;
+            empty-text: root.sftp-empty-text;
+            error-text: root.sftp-error-text;
+            connected: root.sftp-connected;
+            remote-edit-active: root.sftp-remote-edit-active;
+            remote-edit-text: root.sftp-remote-edit-text;
+            path-text <=> root.sftp-path-text;
+            local-rows: root.local-rows;
+            local-path-text: root.local-path-text;
+            local-show-hidden: root.local-show-hidden;
+            local-sort-column: root.local-sort-column-text;
+            local-sort-ascending: root.local-sort-ascending;
+            local-sort-text: root.local-sort-text;
+            local-item-count: root.local-item-count;
+            local-dir-count: root.local-dir-count;
+            local-selected-count: root.local-selected-count;
+            local-empty-text: root.local-empty-text;
+            local-error-text: root.local-error-text;
+            local-retry-visible: root.local-retry-visible;
+            local-collapsed: root.local-collapsed;
+            local-title-text: @tr("MainWindow" => "Local");
+            local-selected-name-text: root.local-selected-name-text;
+            local-selection-key: root.local-selection-key;
+            sftp-selection-key: root.sftp-selection-key;
+            transfer-rows: root.transfer-rows;
+            transfer-expanded: root.transfer-expanded;
+            transfer-total-count: root.transfer-total-count;
+            transfer-active-count: root.transfer-active-count;
+            transfer-paused-count: root.transfer-paused-count;
+            transfer-failed-count: root.transfer-failed-count;
+            transfer-completed-count: root.transfer-completed-count;
+            transfer-retryable-count: root.transfer-retryable-count;
+
+            refresh() => { root.refresh-sftp(); }
+            up() => { root.up-sftp(); }
+            home() => { root.home-sftp(); }
+            open-path(path) => { root.open-sftp-path(path); }
+            open-crumb(index) => { root.open-sftp-crumb(index); }
+            sort-by(column) => { root.sort-sftp(column); }
+            toggle-hidden() => { root.toggle-sftp-hidden(); }
+            select-row(index, ctrl, shift) => { root.select-sftp-row(index, ctrl, shift); }
+            activate-row(index) => { root.activate-sftp-row(index); }
+            context-menu-requested(index, x, y) => { root.sftp-row-menu-requested(index, x, y); }
+            panel-menu-requested(x, y) => { root.panel-sftp-menu-requested(x, y); }
+            save-edit() => { root.save-sftp-remote-edit(); }
+            cancel-edit() => { root.cancel-sftp-remote-edit(); }
+            drag-remote-transfer(key) => { return root.drag-remote-transfer(key); }
+            drag-local-transfer(key) => { return root.drag-local-transfer(key); }
+            drop-on-remote-row(index, data, action) => { root.drop-on-remote-row(index, data, action); }
+            drop-on-remote-blank(data, action) => { root.drop-on-remote-blank(data, action); }
+            drop-on-local(data, action) => { root.drop-on-local(data, action); }
+            local-toggle-collapsed() => { root.local-toggle-collapsed(); }
+            local-up() => { root.local-up(); }
+            local-home() => { root.local-home(); }
+            local-refresh() => { root.local-refresh(); }
+            local-open-path(path) => { root.local-open-path(path); }
+            local-sort-by(column) => { root.local-sort-by(column); }
+            local-toggle-hidden() => { root.local-toggle-hidden(); }
+            local-select-row(index, ctrl, shift) => { root.local-select-row(index, ctrl, shift); }
+            local-activate-row(index) => { root.local-activate-row(index); }
+            local-context-menu-requested(index, x, y) => { root.local-context-menu-requested(index, x, y); }
+            local-redirect-requested() => { }
+            local-retry() => { root.local-retry(); }
+            transfer-toggle-expanded() => { root.transfer-toggle-expanded(); }
+            transfer-pause(id) => { root.transfer-pause(id); }
+            transfer-resume(id) => { root.transfer-resume(id); }
+            transfer-retry(id) => { root.transfer-retry(id); }
+            transfer-cancel(id) => { root.transfer-cancel(id); }
+            transfer-remove(id) => { root.transfer-remove(id); }
+            transfer-clear-completed() => { root.transfer-clear-completed(); }
+            copy-selection() => { root.copy-file-selection(); }
+            cut-selection() => { root.cut-file-selection(); }
+            paste-cross-pane() => { root.paste-cross-pane(); }
         }
 
-        // 面板内容只在右栏可见时才参与布局：Slint 的 `visible: false`
-        // 不会把元素移出布局，若内容常驻，折叠状态下卡片的最小高度仍会
-        // 顶起主区最小高度（窗口变矮时把状态栏挤出可视区）。
-        VerticalLayout {
-            padding: 12px;
-            spacing: 12px;
-            // N1：SFTP 卡片靠 `vertical-stretch: 1` 吸收剩余高度；`alignment: start`
-            // 会把"多余空间"先放到末尾、忽略拉伸项，所以这里不再用 start 对齐。
+    // Tunnels
+    PanelFrame {
+        x: root.tunnels-frame.x;
+        y: root.tunnels-frame.y;
+        width: root.tunnels-frame.width;
+        height: root.tunnels-frame.height;
+        visible: root.tunnels-frame.visible;
+        min-height: 0px;
+        max-height: 100000px;
+        header-height: 44px;
+        content-padding: Theme.spacing-12;
+        title-text: @tr("MainWindow" => "Tunnels");
+        icon: "globe";
+        collapsed: root.tunnels-frame.collapsed;
+        menu-requested(x, y) => { root.panel-menu-requested("tunnels", x, y); }
+        collapse-toggled() => { root.panel-collapse-requested("tunnels"); }
+        hide-requested() => { root.panel-hide-requested("tunnels"); }
 
-            // N1：SFTP 卡片高度弹性（取消 420px 固定值）；面板内容由宿主的
-            // `@children` 槽注入（main_window 里实例化 SftpPanel），队列抽屉已并入面板。
-            if root.dock-effective-width > 0px && root.sftp-visible : Rectangle {
-                vertical-stretch: 1;
-                min-height: 240px;
-                background: Theme.card-fill;
-                border-radius: Theme.radius-panel;
-                border-width: 1px;
-                border-color: Theme.card-stroke;
-                clip: true;
-
-                Rectangle {
-                    x: 12px;
-                    y: 8px;
-                    width: parent.width - 24px;
-                    height: Theme.control-height;
-                    background: transparent;
-
-                    WinCardHeader {
-                        width: parent.width;
-                        height: parent.height;
-                        title: @tr("MainWindow" => "SFTP");
-                        icon: "folder";
-                        dock_header_spacer := Rectangle { horizontal-stretch: 1; }
-                        WinIconButton {
-                            icon: "more";
-                            accessible-name: @tr("MainWindow" => "SFTP operations");
-                            clicked => {
-                                root.sftp-menu-requested(
-                                    self.absolute-position.x,
-                                    self.absolute-position.y + self.height
-                                );
-                            }
-                        }
-                    }
-                }
-
-                SftpPanel {
-                    x: 8px;
-                    y: 44px;
-                    width: parent.width - 16px;
-                    height: parent.height - 52px;
-
-                    rows: root.sftp-rows;
-                    crumbs: root.sftp-crumbs;
-                    selected-index: root.sftp-selected-index;
-                    sort-column: root.sftp-sort-column-text;
-                    sort-ascending: root.sftp-sort-ascending;
-                    sort-text: root.sftp-sort-text;
-                    show-hidden: root.sftp-show-hidden;
-                    item-count: root.sftp-item-count;
-                    dir-count: root.sftp-dir-count;
-                    selected-count: root.sftp-selected-count;
-                    empty-text: root.sftp-empty-text;
-                    error-text: root.sftp-error-text;
-                    connected: root.sftp-connected;
-                    remote-edit-active: root.sftp-remote-edit-active;
-                    remote-edit-text: root.sftp-remote-edit-text;
-                    path-text <=> root.sftp-path-text;
-                    local-rows: root.local-rows;
-                    local-path-text: root.local-path-text;
-                    local-show-hidden: root.local-show-hidden;
-                    local-sort-column: root.local-sort-column-text;
-                    local-sort-ascending: root.local-sort-ascending;
-                    local-sort-text: root.local-sort-text;
-                    local-item-count: root.local-item-count;
-                    local-dir-count: root.local-dir-count;
-                    local-selected-count: root.local-selected-count;
-                    local-empty-text: root.local-empty-text;
-                    local-error-text: root.local-error-text;
-                    local-retry-visible: root.local-retry-visible;
-                    local-collapsed: root.local-collapsed;
-                    local-title-text: @tr("MainWindow" => "Local");
-                    local-selected-name-text: root.local-selected-name-text;
-                    local-selection-key: root.local-selection-key;
-                    sftp-selection-key: root.sftp-selection-key;
-                    transfer-rows: root.transfer-rows;
-                    transfer-expanded: root.transfer-expanded;
-                    transfer-total-count: root.transfer-total-count;
-                    transfer-active-count: root.transfer-active-count;
-                    transfer-paused-count: root.transfer-paused-count;
-                    transfer-failed-count: root.transfer-failed-count;
-                    transfer-completed-count: root.transfer-completed-count;
-                    transfer-retryable-count: root.transfer-retryable-count;
-
-                    refresh() => { root.refresh-sftp(); }
-                    up() => { root.up-sftp(); }
-                    home() => { root.home-sftp(); }
-                    open-path(path) => { root.open-sftp-path(path); }
-                    open-crumb(index) => { root.open-sftp-crumb(index); }
-                    sort-by(column) => { root.sort-sftp(column); }
-                    toggle-hidden() => { root.toggle-sftp-hidden(); }
-                    select-row(index, ctrl, shift) => { root.select-sftp-row(index, ctrl, shift); }
-                    activate-row(index) => { root.activate-sftp-row(index); }
-                    context-menu-requested(index, x, y) => { root.sftp-menu-requested(x, y); }
-                    panel-menu-requested(x, y) => { root.panel-sftp-menu-requested(x, y); }
-                    save-edit() => { root.save-sftp-remote-edit(); }
-                    cancel-edit() => { root.cancel-sftp-remote-edit(); }
-                    drag-remote-transfer(key) => { return root.drag-remote-transfer(key); }
-                    drag-local-transfer(key) => { return root.drag-local-transfer(key); }
-                    drop-on-remote-row(index, data, action) => { root.drop-on-remote-row(index, data, action); }
-                    drop-on-remote-blank(data, action) => { root.drop-on-remote-blank(data, action); }
-                    drop-on-local(data, action) => { root.drop-on-local(data, action); }
-                    local-toggle-collapsed() => { root.local-toggle-collapsed(); }
-                    local-up() => { root.local-up(); }
-                    local-home() => { root.local-home(); }
-                    local-refresh() => { root.local-refresh(); }
-                    local-open-path(path) => { root.local-open-path(path); }
-                    local-sort-by(column) => { root.local-sort-by(column); }
-                    local-toggle-hidden() => { root.local-toggle-hidden(); }
-                    local-select-row(index, ctrl, shift) => { root.local-select-row(index, ctrl, shift); }
-                    local-activate-row(index) => { root.local-activate-row(index); }
-                    local-context-menu-requested(index, x, y) => { root.local-context-menu-requested(index, x, y); }
-                    local-redirect-requested() => { }
-                    local-retry() => { root.local-retry(); }
-                    transfer-toggle-expanded() => { root.transfer-toggle-expanded(); }
-                    transfer-pause(id) => { root.transfer-pause(id); }
-                    transfer-resume(id) => { root.transfer-resume(id); }
-                    transfer-retry(id) => { root.transfer-retry(id); }
-                    transfer-cancel(id) => { root.transfer-cancel(id); }
-                    transfer-remove(id) => { root.transfer-remove(id); }
-                    transfer-clear-completed() => { root.transfer-clear-completed(); }
-                    copy-selection() => { root.copy-file-selection(); }
-                    cut-selection() => { root.cut-file-selection(); }
-                    paste-cross-pane() => { root.paste-cross-pane(); }
-                }
-            }
-            if root.dock-effective-width > 0px && root.tunnels-visible : WinCard {
-                WinCardHeader {
-                    title: @tr("MainWindow" => "Tunnels");
-                    icon: "globe";
-                }
-                Text {
-                    text: root.tunnels-summary-text;
-                    color: Theme.text-secondary;
-                    font-size: Theme.font-caption;
-                    wrap: word-wrap;
-                }
-            }
-
-            if root.dock-effective-width > 0px && root.commands-visible : WinCard {
-                WinCardHeader {
-                    title: @tr("MainWindow" => "Quick Commands");
-                    icon: "code";
-                }
-                Text {
-                    text: @tr("MainWindow" => "Command presets will appear here.");
-                    color: Theme.text-tertiary;
-                    font-size: Theme.font-caption;
-                    wrap: word-wrap;
-                }
-            }
-
-            // 常驻空白（首选高度 0，不参与拉伸）：保证右栏布局任何时候都至少有一个
-            // cell。空布局的 layout info 是 { min: 0, max: 0 }（见 i-slint-core
-            // `box_layout_info` 的 count < 1 分支），而主区 cross 轴取各 cell 的
-            // min(max)，随后 `fold.max = fold.max.max(fold.min)` 会把主区最大高度
-            // 钉成"各 cell 最小高度里的最大值"——表现就是窗口高度被封顶、
-            // 且根内容撑不满窗口（底部死区）。有 cell 在时 max 无界。
-            // N1：SFTP 卡片现在是拉伸项，这里显式不拉伸（避免和面板平分剩余高度）。
-            dock_layout_spacer := Rectangle { height: 0px; vertical-stretch: 0; }
+        Text {
+            text: root.tunnels-summary-text;
+            color: Theme.text-secondary;
+            font-size: Theme.font-caption;
+            wrap: word-wrap;
         }
+    }
+
+    // Quick Commands
+    PanelFrame {
+        x: root.quick-commands-frame.x;
+        y: root.quick-commands-frame.y;
+        width: root.quick-commands-frame.width;
+        height: root.quick-commands-frame.height;
+        visible: root.quick-commands-frame.visible;
+        min-height: 0px;
+        max-height: 100000px;
+        header-height: 44px;
+        content-padding: Theme.spacing-12;
+        title-text: @tr("MainWindow" => "Quick Commands");
+        icon: "code";
+        collapsed: root.quick-commands-frame.collapsed;
+        menu-requested(x, y) => { root.panel-menu-requested("quick_commands", x, y); }
+        collapse-toggled() => { root.panel-collapse-requested("quick_commands"); }
+        hide-requested() => { root.panel-hide-requested("quick_commands"); }
+
+        Text {
+            text: @tr("MainWindow" => "Command presets will appear here.");
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            wrap: word-wrap;
+        }
+    }
+
+    // Transfers（应用级摘要；默认隐藏，经 Panels 菜单显示）
+    PanelFrame {
+        x: root.transfers-frame.x;
+        y: root.transfers-frame.y;
+        width: root.transfers-frame.width;
+        height: root.transfers-frame.height;
+        visible: root.transfers-frame.visible;
+        min-height: 0px;
+        max-height: 100000px;
+        header-height: 44px;
+        content-padding: 0px;
+        title-text: @tr("MainWindow" => "Transfers");
+        icon: "download";
+        collapsed: root.transfers-frame.collapsed;
+        menu-requested(x, y) => { root.panel-menu-requested("transfers", x, y); }
+        collapse-toggled() => { root.panel-collapse-requested("transfers"); }
+        hide-requested() => { root.panel-hide-requested("transfers"); }
+
+        TransferQueue {
+            width: parent.width;
+            summary_text: root.transfer-queue-text;
+        }
+    }
+
+    // --- 面板头部拖拽层（换边/换序）------------------------------------------
+    for frame in [
+        { p: "sessions", f: root.sessions-frame },
+        { p: "sftp", f: root.sftp-frame },
+        { p: "tunnels", f: root.tunnels-frame },
+        { p: "quick_commands", f: root.quick-commands-frame },
+        { p: "transfers", f: root.transfers-frame }
+    ] : PanelDragRegion {
+        panel-id: frame.p;
+        grip-x: frame.f.x;
+        grip-y: frame.f.y;
+        grip-width: frame.f.width;
+        grip-height: 44px;
+        visible: frame.f.visible && !frame.f.collapsed;
+        drag-start(id, x, y) => { root.panel-drag-start(id, x - root.absolute-position.x, y - root.absolute-position.y); }
+        drag-move(id, x, y) => {
+            root.panel-drag-move(id, x - root.absolute-position.x, y - root.absolute-position.y);
+        }
+        drag-drop(id, x, y) => { root.panel-drag-drop(id, x - root.absolute-position.x, y - root.absolute-position.y); }
+        drag-cancel() => { root.panel-drag-cancel(); }
+    }
+
+    // 拖拽插入位置指示（2px 强调线；Rust 计算）
+    Rectangle {
+        visible: root.drag-indicator-visible;
+        x: root.drag-indicator-x;
+        y: root.drag-indicator-y;
+        width: root.drag-indicator-width;
+        height: 2px;
+        background: Theme.accent;
     }
 }
 
-// SFTP 右键菜单 Popup（宿主在窗口层级实例化）。
+// SFTP / Sessions 右键菜单 Popup（宿主在窗口层级实例化）。
 export component ToolDockPopups inherits Rectangle {
     in property <bool> open: false;
     in property <length> anchor-x: 0px;

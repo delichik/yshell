@@ -9,9 +9,10 @@ import { MenuEntry } from "components/menu_popup.slint";
 import { MenuPopup } from "components/menu_popup.slint";
 import { MenuBar, MenuBarPopups } from "components/menu_bar.slint";
 import { CommandBar } from "components/command_bar.slint";
-import { NewFolderDialog, SessionSidebar, SessionSidebarHandle, SessionSidebarPopups, SessionSidebarRail } from "components/session_sidebar.slint";
+import { NewFolderDialog, SessionSidebarPopups } from "components/session_sidebar.slint";
 import { TerminalWorkspace, TerminalWorkspacePopups, TabBarPopups, WorkspaceTab } from "components/terminal_workspace.slint";
-import { ToolDock, ToolDockPopups } from "components/tool_dock.slint";
+import { PanelFrameData, SplitHandleData, ToolDock } from "components/tool_dock.slint";
+import { PanelMenuAction, PanelMenuPopup, PanelPlacement } from "components/panel_frame.slint";
 import { StatusBar } from "components/status_bar.slint";
 import { SftpConflictDialog, SftpContextMenu, SftpCrumb, SftpEntryDialog, SftpPanel, SftpPropertiesDialog, SftpRow, SftpTransferRow } from "components/sftp_panel.slint";
 import { LocalRow } from "components/local_pane.slint";
@@ -407,7 +408,8 @@ export component MainWindow inherits Window {
         TextFormats.sftp-listing-summary(root.sftp_listing_kind_text, root.sftp_listing_rows_text, root.sftp_listing_session_key_text, root.sftp_listing_path_text, root.sftp_listing_error_text);
 
     // Local UI state (iteration 1): panels, menus and dialogs are Slint-local.
-    in-out property <bool> session_manager_visible: true;
+    // N3：Sessions 面板可见性（= 面板在任一栈中）由 Rust 投影（`[ui.layout]`）。
+    in-out property <bool> sessions_visible: true;
     in-out property <bool> terminal_find_visible: false;
     in-out property <int> open_menu_index: -1;
     in-out property <length> menu_anchor_x: 0px;
@@ -431,69 +433,33 @@ export component MainWindow inherits Window {
     in-out property <string> sftp_dialog_permissions_text: "644";
     in-out property <string> sftp_dialog_local_text: "";
 
-    // --- W5-④ 面板宽度与自适应（§4.2；宽度为内存态，不持久化）----------------
-    /// 左导航期望宽度：拖拽结果，钳制在 200–420px（默认沿用 Theme.nav-width）
-    in-out property <length> nav_panel_width: Theme.nav-width;
-    /// 右工具面板期望宽度：拖拽结果，钳制在 280–560px（默认沿用 Theme.dock-width）
-    in-out property <length> dock_panel_width: Theme.dock-width;
-    /// 窗口 <1120px 时用户手动展开右栏（覆盖自动折叠；仅内存态）
-    in-out property <bool> dock_user_expanded: false;
-    /// 窗口 <960px 时用户手动展开左导航（覆盖 48px 图标条；仅内存态）
-    in-out property <bool> nav_user_expanded: false;
-
-    // 断点与拖拽边界（布局行为参数，不进 Theme token）
-    property <length> breakpoint_full_layout: 1280px;
-    property <length> breakpoint_dock_collapse: 1120px;
-    property <length> breakpoint_nav_rail: 960px;
-    property <length> nav_width_min: 200px;
-    property <length> nav_width_max: 420px;
-    property <length> dock_width_min: 280px;
-    property <length> dock_width_max: 560px;
-
-    /// 线性收缩系数：窗口 ≤1120px 为 0，≥1280px 为 1（§4.2 的 1120–1280 档）
-    property <float> layout_squeeze_ratio:
-        clamp((root.width - root.breakpoint_dock_collapse) / (root.breakpoint_full_layout - root.breakpoint_dock_collapse), 0.0, 1.0);
-    /// 拖拽换算系数：收缩档内指针 1px 对应目标宽度 1/ratio px，保证把手跟手
-    property <float> layout_drag_scale:
-        (root.width >= root.breakpoint_full_layout || root.width < root.breakpoint_dock_collapse) ? 1.0
-        : max(0.0001, root.layout_squeeze_ratio);
-
-    /// 右栏因窗口过窄而自动折叠（§4.2：<1120px）；用户手动展开后不再折叠
-    property <bool> dock_auto_collapsed:
-        root.width < root.breakpoint_dock_collapse && !root.dock_user_expanded;
-    /// 右栏最终宽度（0 = 折叠）；1120–1280px 按可用空间线性收缩
-    property <length> dock_effective_width:
-        root.dock_auto_collapsed ? 0px
-        : (root.width >= root.breakpoint_full_layout) ? root.dock_panel_width
-        : (root.width >= root.breakpoint_dock_collapse) ? (root.dock_width_min + (root.dock_panel_width - root.dock_width_min) * root.layout_squeeze_ratio)
-        : root.dock_panel_width;
-    /// 窄窗口下在命令栏右侧显示右栏展开/收起按钮
-    property <bool> dock_toggle_visible: root.width < root.breakpoint_dock_collapse;
-
-    /// 左导航是否折叠为 48px 图标条（§4.2：<960px）
-    property <bool> nav_rail_active:
-        root.width < root.breakpoint_nav_rail && !root.nav_user_expanded;
-    /// 是否显示"收回图标条"按钮（仅 <960px 有意义）
-    property <bool> nav_rail_available: root.width < root.breakpoint_nav_rail;
-    /// 全宽左导航列是否可见（图标条模式下由图标条取代）
-    property <bool> nav_column_visible:
-        root.session_manager_visible && !root.nav_rail_active;
-    /// 左导航图标条是否可见
-    property <bool> nav_rail_visible:
-        root.session_manager_visible && root.nav_rail_active;
-    /// 左导航最终宽度
-    property <length> nav_effective_width:
-        root.nav_rail_active ? Theme.nav-rail-width
-        : (root.width >= root.breakpoint_full_layout || root.width < root.breakpoint_dock_collapse) ? root.nav_panel_width
-        : (root.nav_width_min + (root.nav_panel_width - root.nav_width_min) * root.layout_squeeze_ratio);
-
-    // 拖拽锚点（按下时记录指针绝对位置与起始宽度；用绝对坐标避免把手随宽度移动产生抖动）
-    property <bool> nav_resize_dragging: false;
-    property <length> nav_drag_anchor_x: 0px;
-    property <length> nav_drag_start_width: 0px;
-    property <bool> dock_resize_dragging: false;
-    property <length> dock_drag_anchor_x: 0px;
-    property <length> dock_drag_start_width: 0px;
+    // --- N3：面板停靠布局（全部由 Rust 计算/下发；Slint 只做投影接收）----------
+    // 面板框 px 几何（相对内容区左上角）+ 两侧有效栏宽 + 断点标志。
+    in-out property <length> layout_left_effective_width: 240px;
+    in-out property <length> layout_right_effective_width: 340px;
+    in-out property <length> layout_left_width: 240px;
+    in-out property <length> layout_right_width: 340px;
+    in-out property <bool> layout_rail_active: false;
+    in-out property <bool> layout_rail_available: false;
+    in-out property <bool> layout_dock_toggle_visible: false;
+    in-out property <bool> layout_dock_collapsed: false;
+    in-out property <float> layout_drag_scale: 1.0;
+    in-out property <PanelFrameData> layout_sessions_frame;
+    in-out property <PanelFrameData> layout_sftp_frame;
+    in-out property <PanelFrameData> layout_tunnels_frame;
+    in-out property <PanelFrameData> layout_quick_commands_frame;
+    in-out property <PanelFrameData> layout_transfers_frame;
+    in-out property <[SplitHandleData]> layout_split_handles: [];
+    in-out property <bool> layout_drag_indicator_visible: false;
+    in-out property <length> layout_drag_indicator_x: 0px;
+    in-out property <length> layout_drag_indicator_y: 0px;
+    in-out property <length> layout_drag_indicator_width: 0px;
+    /// Transfers 面板可见性（默认隐藏；View/Panels 菜单显示）。
+    in-out property <bool> transfers_visible: false;
+    /// 面板 ⋯ 菜单（Slint-local：目标 id + 窗口绝对锚点）。
+    in-out property <string> panel_menu_id: "";
+    in-out property <length> panel_menu_x: 0px;
+    in-out property <length> panel_menu_y: 0px;
 
     // --- N6：终端日志（右键菜单 / 状态栏入口 / 弹窗 / REC）-------------------
     /// 活动会话是否有日志输出（状态栏 REC + 标签角标由 tabs 投影单独携带）。
@@ -554,6 +520,28 @@ export component MainWindow inherits Window {
     callback quick_connect_clear_history();
     /// `+` 按钮：按 `ui.new_tab_mode` 打开 QC 页或 Session Editor。
     callback new_tab_default();
+    // --- N3：面板停靠（语义动作全部交给 Rust：布局是全局持久化状态）-----------
+    /// ⋯ 菜单动作：id + "move-left"/"move-right"/"collapse"/"expand"/"hide"。
+    callback panel_action(string, string);
+    /// View/Panels 菜单：显示/隐藏面板（按默认侧恢复）。
+    callback toggle_panel(string);
+    /// 窄窗左栏图标条展开。
+    callback panel_side_expand(string);
+    /// 窄窗右栏 chevron 展开/收起。
+    callback panel_side_toggle(string);
+    /// 内容区尺寸变化（Rust 重新计算 px 几何）。
+    callback panel_area_resized(length, length);
+    /// 栏宽拖拽预览 / 结束落盘。
+    callback panel_width_preview(string, length);
+    callback panel_width_commit();
+    /// 分栏拖拽预览（pointer-y 相对内容区顶边）/ 结束落盘。
+    callback panel_split_preview(string, int, length);
+    callback panel_split_commit();
+    /// 面板头部拖拽（换边/换序；坐标相对内容区）。
+    callback panel_drag_start(string, length, length);
+    callback panel_drag_move(string, length, length);
+    callback panel_drag_drop(string, length, length);
+    callback panel_drag_cancel();
     callback save_session();
     callback update_session_search(string);
     callback open_saved_session();
@@ -936,9 +924,9 @@ export component MainWindow inherits Window {
             }
             return true;
         }
-        // Ctrl+B：切换左栏
+        // Ctrl+B：切换左栏（Sessions 面板显示/隐藏；与 View > Session Manager 同一路径）
         if (shortcut-key(text, "b", "B")) {
-            root.session_manager_visible = !root.session_manager_visible;
+            root.toggle_panel("sessions");
             return true;
         }
         // Ctrl+Q：退出（走现有确认弹窗）
@@ -986,10 +974,11 @@ export component MainWindow inherits Window {
         { label: @tr("Private Keys..."), shortcut: "", enabled: true, checked: false, separator: false }
     ];
     property <[MenuEntry]> view_menu_entries: [
-        { label: @tr("Session Manager"), shortcut: root.shortcut-toggle-sidebar, enabled: true, checked: root.session_manager_visible, separator: false },
+        { label: @tr("Session Manager"), shortcut: root.shortcut-toggle-sidebar, enabled: true, checked: root.sessions_visible, separator: false },
         { label: @tr("SFTP Panel"), shortcut: "", enabled: true, checked: root.sftp_visible, separator: false },
         { label: @tr("Tunnels"), shortcut: "", enabled: true, checked: root.tunnels_visible, separator: false },
-        { label: @tr("Quick Commands"), shortcut: "", enabled: true, checked: root.commands_visible, separator: false }
+        { label: @tr("Quick Commands"), shortcut: "", enabled: true, checked: root.commands_visible, separator: false },
+        { label: @tr("Transfers"), shortcut: "", enabled: true, checked: root.transfers_visible, separator: false }
     ];
     property <[MenuEntry]> help_menu_entries: [
         { label: @tr("About YShell"), shortcut: "", enabled: true, checked: false, separator: false }
@@ -1184,11 +1173,12 @@ export component MainWindow inherits Window {
             else if (index == 7) { root.open_host_keys_manager(); }
             else if (index == 8) { root.open_private_keys_manager(); }
         } else if (menu == 3) {
-            // View
-            if (index == 0) { root.session_manager_visible = !root.session_manager_visible; }
-            else if (index == 1) { root.toggle_sftp_panel(); }
-            else if (index == 2) { root.toggle_tunnels_panel(); }
-            else if (index == 3) { root.toggle_commands_panel(); }
+            // View：面板可见性/位置统一入口（隐藏过的按默认侧恢复）。
+            if (index == 0) { root.toggle_panel("sessions"); }
+            else if (index == 1) { root.toggle_panel("sftp"); }
+            else if (index == 2) { root.toggle_panel("tunnels"); }
+            else if (index == 3) { root.toggle_panel("quick_commands"); }
+            else if (index == 4) { root.toggle_panel("transfers"); }
         } else if (menu == 4) {
             // Help
             if (index == 0) { root.about_dialog_visible = true; }
@@ -1220,7 +1210,7 @@ export component MainWindow inherits Window {
         } else if (which == 2) {
             // 图标条菜单
             if (index == 0) { root.start_new_saved_session_editor(); }
-            else if (index == 1) { root.nav_user_expanded = true; }
+            else if (index == 1) { root.panel_side_expand("left"); }
         } else if (which == 4) {
             // 终端菜单
             if (index == 0) { root.copy_terminal_selection(); }
@@ -1251,25 +1241,35 @@ export component MainWindow inherits Window {
         root.close_context_menus();
     }
 
-    /// View 菜单的三个面板开关：右栏自动折叠且面板未显示时先临时展开（与拆分前一致）。
-    function toggle_sftp_panel() {
-        if (root.dock_auto_collapsed && !root.sftp_visible) { root.dock_user_expanded = true; }
-        root.toggle_sftp();
+    /// N3：面板 ⋯ 菜单——记录目标面板与锚点，由窗口层级的 PanelMenuPopup 渲染。
+    function open_panel_menu(id: string, x: length, y: length) {
+        root.panel_menu_id = id;
+        root.panel_menu_x = x;
+        root.panel_menu_y = y;
     }
 
-    function toggle_tunnels_panel() {
-        if (root.dock_auto_collapsed && !root.tunnels_visible) { root.dock_user_expanded = true; }
-        root.toggle_tunnels();
+    function close_panel_menu() {
+        root.panel_menu_id = "";
     }
 
-    function toggle_commands_panel() {
-        if (root.dock_auto_collapsed && !root.commands_visible) { root.dock_user_expanded = true; }
-        root.toggle_commands();
+    /// 某个面板框的当前投影（菜单禁用项 / 收起文案用）。
+    function panel_frame_for(id: string) -> PanelFrameData {
+        if (id == "sessions") { return root.layout_sessions_frame; }
+        if (id == "sftp") { return root.layout_sftp_frame; }
+        if (id == "tunnels") { return root.layout_tunnels_frame; }
+        if (id == "quick_commands") { return root.layout_quick_commands_frame; }
+        return root.layout_transfers_frame;
     }
 
-    /// 右栏折叠时的车夫按钮：切换临时展开（覆盖 <1120px 的自动折叠）。
-    function toggle_dock_expanded() {
-        root.dock_user_expanded = !root.dock_user_expanded;
+    /// 面板菜单动作 → Rust（布局持久化在 Rust：move/hide/collapse 全部落盘）。
+    function dispatch_panel_menu(action: PanelMenuAction) {
+        if (root.panel_menu_id == "") { return; }
+        if (action == PanelMenuAction.MoveLeft) { root.panel_action(root.panel_menu_id, "move-left"); }
+        else if (action == PanelMenuAction.MoveRight) { root.panel_action(root.panel_menu_id, "move-right"); }
+        else if (action == PanelMenuAction.Collapse) { root.panel_action(root.panel_menu_id, "collapse"); }
+        else if (action == PanelMenuAction.Expand) { root.panel_action(root.panel_menu_id, "expand"); }
+        else { root.panel_action(root.panel_menu_id, "hide"); }
+        root.close_panel_menu();
     }
 
     /// SFTP 弹窗语义动作：宿主持有 `sftp_dialog_*` 与 SftpEntryDialog 实例。
@@ -1296,6 +1296,18 @@ export component MainWindow inherits Window {
             root.sftp_menu_target_kind_text = "blank";
         } else if (scope == "local") {
             root.sftp_menu_target_kind_text = root.local_selected_count > 0 ? "local" : "local-blank";
+        }
+        root.open_context_menu("sftp", x, y);
+    }
+
+    /// N3：远端行右键 → 按行投影的 kind 选择菜单（多选优先 multi）。
+    function begin_sftp_row_context_menu(index: int, x: length, y: length) {
+        if (root.sftp_selected_count > 1) {
+            root.sftp_menu_target_kind_text = "multi";
+        } else if (index >= 0 && index < root.sftp_rows.length) {
+            root.sftp_menu_target_kind_text = root.sftp_rows[index].is-dir ? "dir" : "file";
+        } else {
+            root.sftp_menu_target_kind_text = "blank";
         }
         root.open_context_menu("sftp", x, y);
     }
@@ -1384,18 +1396,16 @@ export component MainWindow inherits Window {
             // 结构与动作见 components/command_bar.slint；面板开关的"折叠时顺带展开"
             // 副作用、快捷路径（focus-quick-connect）与"更多"菜单锚点由本文件补齐。
             command_bar := CommandBar {
-                sftp-visible: root.sftp_visible;
-                tunnels-visible: root.tunnels_visible;
-                commands-visible: root.commands_visible;
-                dock-toggle-visible: root.dock_toggle_visible;
-                dock-user-expanded: root.dock_user_expanded;
-                dock-auto-collapsed: root.dock_auto_collapsed;
+                dock-toggle-visible: root.layout_dock_toggle_visible;
+                right-collapsed: root.layout_dock_collapsed;
                 new-session() => { root.start_new_saved_session_editor(); }
-                toggle-sftp() => { root.toggle_sftp(); }
-                toggle-tunnels() => { root.toggle_tunnels(); }
-                toggle-commands() => { root.toggle_commands(); }
-                expand-dock() => { root.dock_user_expanded = true; }
-                toggle-dock-expanded() => { root.toggle_dock_expanded(); }
+                open-panels-menu(x, y) => {
+                    // 与 View 菜单同一份面板入口：借用菜单栏的锚点机制。
+                    root.open_menu_index = 3;
+                    root.menu_anchor_x = x;
+                    root.menu_anchor_y = y;
+                }
+                toggle-right-side() => { root.panel_side_toggle("right"); }
                 open-find() => { root.terminal_find_visible = true; }
                 open-settings() => { root.settings_dialog_visible = true; }
                 open-more-menu(x, y) => {
@@ -1413,62 +1423,65 @@ export component MainWindow inherits Window {
             // replace_host_key_and_connect、update_host_key_replace_confirmation）
             // 全部保留，由 HostKeyDialog 复用。
 
-            HorizontalLayout {
-                spacing: 0px;
+            // --- N3：面板停靠容器（左右面板栈 + 工作区槽；几何全部来自 Rust）-----
+            // 面板框绝对定位、内容常驻；中间 `@children` 槽放 TerminalWorkspace。
+            tool_dock := ToolDock {
+                vertical-stretch: 1;
+                left-effective-width: root.layout_left_effective_width;
+                right-effective-width: root.layout_right_effective_width;
+                left-width: root.layout_left_width;
+                right-width: root.layout_right_width;
+                nav-rail-active: root.layout_rail_active;
+                layout-drag-scale: root.layout_drag_scale;
+                sessions-frame: root.layout_sessions_frame;
+                sftp-frame: root.layout_sftp_frame;
+                tunnels-frame: root.layout_tunnels_frame;
+                quick-commands-frame: root.layout_quick_commands_frame;
+                transfers-frame: root.layout_transfers_frame;
+                split-handles: root.layout_split_handles;
+                drag-indicator-visible: root.layout_drag_indicator_visible;
+                drag-indicator-x: root.layout_drag_indicator_x;
+                drag-indicator-y: root.layout_drag_indicator_y;
+                drag-indicator-width: root.layout_drag_indicator_width;
+                area-resized(w, h) => { root.panel_area_resized(w, h); }
+                panel-menu-requested(id, x, y) => { root.open_panel_menu(id, x, y); }
+                panel-collapse-requested(id) => { root.panel_action(id, "collapse-toggle"); }
+                panel-hide-requested(id) => { root.panel_action(id, "hide"); }
+                panel-drag-start(id, x, y) => { root.panel_drag_start(id, x, y); }
+                panel-drag-move(id, x, y) => { root.panel_drag_move(id, x, y); }
+                panel-drag-drop(id, x, y) => { root.panel_drag_drop(id, x, y); }
+                panel-drag-cancel() => { root.panel_drag_cancel(); }
+                panel-split-preview(side, boundary, y) => { root.panel_split_preview(side, boundary, y); }
+                panel-split-commit() => { root.panel_split_commit(); }
+                panel-width-preview(side, width) => { root.panel_width_preview(side, width); }
+                panel-width-commit() => { root.panel_width_commit(); }
+                rail-menu-requested(x, y) => { root.open_context_menu("rail", x, y); }
+                rail-expand-requested() => { root.panel_side_expand("left"); }
 
-                // --- SessionSidebar（NavigationView 形态；W5-④ 宽度可拖拽）---------
-                // 头部/搜索/会话树/空白区右键见 components/session_sidebar.slint；
-                // 显隐（nav_column_visible）与宽度（nav_effective_width）仍在本文件。
-                if root.nav_column_visible : SessionSidebar {
-                    width: root.nav_effective_width;
-                    search-text <=> root.session_search_text;
-                    tree-rows: root.session_tree_rows;
-                    selected-id: root.saved_session_tree_selected_id;
-                    empty-text: TextFormats.saved-session-inventory-display(root.saved_session_inventory_empty, root.saved_session_inventory_query_text, root.saved_session_inventory_rows_text);
-                    collapse-available: root.nav_rail_available;
-                    update-search(value) => { root.update_session_search(value); }
-                    select-row(id) => { root.select_saved_session(id); }
-                    activate-row(id) => { root.activate_saved_session_tree_node(id); }
-                    toggle-folder(id) => { root.toggle_saved_folder(id); }
-                    row-context-menu-requested(id, x, y) => {
-                        // 右键先选中再弹菜单；这条路径不算"点击"，
-                        // 否则会喂给"重复点击 = 激活"兜底。
-                        root.select_saved_session_for_menu(id);
-                        root.open_context_menu("saved-session", x, y);
-                    }
-                    blank-menu-requested(x, y) => { root.open_context_menu("blank", x, y); }
-                    collapse-navigation() => { root.nav_user_expanded = false; }
+                // Sessions 面板内容（搜索/树/空白区右键）
+                session-search-text <=> root.session_search_text;
+                session-tree-rows: root.session_tree_rows;
+                session-selected-id: root.saved_session_tree_selected_id;
+                session-empty-text: TextFormats.saved-session-inventory-display(root.saved_session_inventory_empty, root.saved_session_inventory_query_text, root.saved_session_inventory_rows_text);
+                update-session-search(value) => { root.update_session_search(value); }
+                select-session-row(id) => { root.select_saved_session(id); }
+                activate-session-row(id) => { root.activate_saved_session_tree_node(id); }
+                toggle-session-folder(id) => { root.toggle_saved_folder(id); }
+                session-row-context-menu-requested(id, x, y) => {
+                    // 右键先选中再弹菜单；这条路径不算"点击"，
+                    // 否则会喂给"重复点击 = 激活"兜底。
+                    root.select_saved_session_for_menu(id);
+                    root.open_context_menu("saved-session", x, y);
                 }
-
-                // --- 左导航图标条（§4.2：<960px 折叠为 48px，可点按钮展开）---------
-                if root.nav_rail_visible : SessionSidebarRail {
-                    rail-menu-requested(x, y) => { root.open_context_menu("rail", x, y); }
-                    expand-navigation() => { root.nav_user_expanded = true; }
-                }
-
-                // --- 左导航拖拽把手（4px，悬停变色；隐藏/图标条模式不提供）----------
-                // 拖拽状态（nav_resize_dragging 等）与宽度钳制仍在 main_window。
-                if root.nav_column_visible : SessionSidebarHandle {
-                    dragging: root.nav_resize_dragging;
-                    drag-started(x) => {
-                        root.nav_resize_dragging = true;
-                        root.nav_drag_anchor_x = x;
-                        root.nav_drag_start_width = root.nav_panel_width;
-                    }
-                    drag-moved(x) => {
-                        root.nav_panel_width = clamp(
-                            root.nav_drag_start_width + (x - root.nav_drag_anchor_x) / root.layout_drag_scale,
-                            root.nav_width_min,
-                            root.nav_width_max
-                        );
-                    }
-                    drag-finished() => { root.nav_resize_dragging = false; }
-                }
+                session-blank-menu-requested(x, y) => { root.open_context_menu("blank", x, y); }
+                tunnels-summary-text: TextFormats.tunnels-summary-display(root.tunnels_summary_kind_text, root.tunnels_summary_rows_text);
+                transfer-queue-text: root.transfer_queue_text;
 
                 // --- TerminalWorkspace --------------------------------------------
                 // 标签条 + TerminalView 见 components/terminal_workspace.slint；
                 // 投影与回调由本文件转发，viewport/焦点 out 属性继续对 Rust 暴露。
                 terminal_workspace := TerminalWorkspace {
+                    horizontal-stretch: 1;
                     // N2：活动标签是 QC 页时隐藏终端视图，内容区换成页面实例。
                     terminal-visible: !root.quick_connect_visible;
                     tabs: root.tabs;
@@ -1532,32 +1545,8 @@ export component MainWindow inherits Window {
                     }
                 }
 
-                // --- 右栏拖拽把手 + RightDock（卡片式工具面板，W5-④ 宽度可拖拽/自动折叠）---
-                // 把手、卡片与 SFTP 面板见 components/tool_dock.slint；
-                // 显隐（宽度 = 0 即折叠）、最终宽度（dock_effective_width）与拖拽状态仍在本文件。
-                ToolDock {
-                    dock-effective-width: root.dock_effective_width;
-                    sftp-visible: root.sftp_visible;
-                    tunnels-visible: root.tunnels_visible;
-                    commands-visible: root.commands_visible;
-                    dragging: root.dock_resize_dragging;
-                    drag-started(x) => {
-                        root.dock_resize_dragging = true;
-                        root.dock_drag_anchor_x = x;
-                        root.dock_drag_start_width = root.dock_panel_width;
-                    }
-                    drag-moved(x) => {
-                        root.dock_panel_width = clamp(
-                            root.dock_drag_start_width - (x - root.dock_drag_anchor_x) / root.layout_drag_scale,
-                            root.dock_width_min,
-                            root.dock_width_max
-                        );
-                    }
-                    drag-finished() => { root.dock_resize_dragging = false; }
-                    tunnels-summary-text: TextFormats.tunnels-summary-display(root.tunnels_summary_kind_text, root.tunnels_summary_rows_text);
-                    sftp-menu-requested(x, y) => { root.open_context_menu("sftp", x, y); }
-                    // N1：SftpPanel 投影 + 回调透传（ToolDock 只提供弹性卡片壳）。
-                    sftp-rows: root.sftp_rows;
+                // --- N1：SftpPanel 投影 + 回调透传（ToolDock 提供面板壳与透传）------
+                sftp-rows: root.sftp_rows;
                     sftp-crumbs: root.sftp_crumbs;
                     sftp-selected-index: root.sftp_selected_index;
                     sftp-sort-column-text: root.sftp_sort_column_text;
@@ -1612,6 +1601,9 @@ export component MainWindow inherits Window {
                     panel-sftp-menu-requested(x, y) => {
                         root.begin_sftp_context_menu("remote-blank", x, y);
                     }
+                    sftp-row-menu-requested(index, x, y) => {
+                        root.begin_sftp_row_context_menu(index, x, y);
+                    }
                     save-sftp-remote-edit() => { root.save_sftp_remote_edit(); }
                     cancel-sftp-remote-edit() => { root.cancel_sftp_remote_edit(); }
                     local-toggle-collapsed() => { root.local_toggle_collapsed(); }
@@ -1642,7 +1634,6 @@ export component MainWindow inherits Window {
                     drop-on-remote-row(index, data, action) => { root.drop_on_remote_row(index, data, action); }
                     drop-on-remote-blank(data, action) => { root.drop_on_remote_blank(data, action); }
                     drop-on-local(data, action) => { root.drop_on_local(data, action); }
-                }
             }
 
             // --- StatusBar（26px）------------------------------------------------
@@ -1735,6 +1726,21 @@ export component MainWindow inherits Window {
         entries: root.logging_menu_entries;
         selected(index) => { root.dispatch_context_menu(7, index); }
         dismissed() => { root.close_context_menus(); }
+    }
+
+    // N3：面板 ⋯ 菜单（Move to Left/Right、Collapse/Expand、Hide）。
+    // 与其它 Popup 一样实例在内容之后、模态弹窗之前。
+    panel_menu_popup := PanelMenuPopup {
+        open: root.panel_menu_id != "";
+        anchor-x: root.panel_menu_x;
+        anchor-y: root.panel_menu_y;
+        placement: root.panel_menu_id == "" ? PanelPlacement.Hidden
+            : root.panel_frame_for(root.panel_menu_id).placement == "left" ? PanelPlacement.Left
+            : root.panel_frame_for(root.panel_menu_id).placement == "right" ? PanelPlacement.Right
+            : PanelPlacement.Hidden;
+        collapsed: root.panel_frame_for(root.panel_menu_id).collapsed;
+        selected(action) => { root.dispatch_panel_menu(action); }
+        dismissed() => { root.close_panel_menu(); }
     }
 
 

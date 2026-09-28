@@ -272,6 +272,11 @@ msgctxt "MainWindow"
 msgid "Tunnels"
 msgstr "Tunnels"
 
+#: ui/main_window.slint:1015
+msgctxt "MainWindow"
+msgid "Panels"
+msgstr "Panels"
+
 #: ui/main_window.slint:911 ui/main_window.slint:1887
 msgctxt "MainWindow"
 msgid "Quick Commands"

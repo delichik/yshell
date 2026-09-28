@@ -3,9 +3,11 @@
 use crate::session_runtime::SessionRuntime;
 use crate::sftp_view::{format_sftp_size, sftp_kind_text};
 use std::env;
+use yshell_config::{PanelId, PanelSide};
 use yshell_core::SessionState;
 use yshell_sftp::FsEntryKind;
 
+use super::panels::{PanelFrameView, PanelLayoutView};
 use super::*;
 
 impl AppRuntime {
@@ -84,6 +86,8 @@ impl AppRuntime {
             self.quick_link_row_data(),
             self.quick_connect_summary_text(),
         );
+        // N3：内容区 px 布局（Rust 计算 → 投影下发；Slint 侧不再从 window.width 反推）。
+        let panel_view = self.panel_layout_view();
         let private_keys = self.private_keys_projection_parts();
         let host_keys = self.host_keys_projection_parts();
         let auth_prompt = self.auth_prompt_projection_parts();
@@ -364,9 +368,12 @@ impl AppRuntime {
             status_param_1,
             status_param_2,
             transport_backend_text: self.transport_backend.label().to_owned(),
-            sftp_visible: self.sftp_visible,
-            tunnels_visible: self.tunnels_visible,
-            commands_visible: self.commands_visible,
+            sftp_visible: self.panel_visible(PanelId::Sftp),
+            tunnels_visible: self.panel_visible(PanelId::Tunnels),
+            commands_visible: self.panel_visible(PanelId::QuickCommands),
+            sessions_visible: self.panel_visible(PanelId::Sessions),
+            transfers_visible: self.panel_visible(PanelId::Transfers),
+            layout: layout_projection(&panel_view),
             app_version_text: env!("CARGO_PKG_VERSION").to_owned(),
             quick_connect_visible: self.quick_connect_visible(),
             quick_connect_input_text: self.quick_connect_input.clone(),
@@ -1228,6 +1235,11 @@ pub struct AppProjection {
     pub sftp_visible: bool,
     pub tunnels_visible: bool,
     pub commands_visible: bool,
+    /// N3：Sessions / Transfers 面板可见性（View/Panels 菜单勾选项）。
+    pub sessions_visible: bool,
+    pub transfers_visible: bool,
+    /// N3：内容区布局投影（面板框 px 几何 + 断点标志）。
+    pub layout: LayoutProjection,
     pub app_version_text: String,
     // --- N2：Quick Connect 页（`ui/pages/quick_connect.slint` 的投影）------------
     /// 活动标签是否是 Quick Connect 页（宿主据此切换内容区）。
@@ -1331,6 +1343,150 @@ pub struct AppProjection {
     pub logging_dialog_include_input: bool,
     pub logging_dialog_input_confirmed: bool,
     pub logging_dialog_overwrite_confirmed: bool,
+}
+
+/// 单个面板框的 px 几何（Slint 侧 `PanelFrameData` 的同构体）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PanelFrameData {
+    /// "left" / "right" / "hidden"。
+    pub placement: String,
+    pub collapsed: bool,
+    pub visible: bool,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+impl PanelFrameData {
+    fn hidden() -> Self {
+        Self {
+            placement: "hidden".to_owned(),
+            collapsed: false,
+            visible: false,
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+        }
+    }
+
+    fn from_view(view: &PanelFrameView) -> Self {
+        Self {
+            placement: view.placement.id().to_owned(),
+            collapsed: view.collapsed,
+            visible: view.visible,
+            x: round_px(view.x),
+            y: round_px(view.y),
+            width: round_px(view.width),
+            height: round_px(view.height),
+        }
+    }
+}
+
+/// N3：分栏手柄投影（Slint 侧 `SplitHandleData` 的同构体）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SplitHandleData {
+    /// "left" / "right"。
+    pub side: String,
+    pub boundary: i32,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+/// N3：面板拖拽插入位置指示线。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PanelDragIndicator {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+/// N3：内容区布局投影（断点标志 + 五个面板框 + 分栏手柄 + 拖拽指示）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LayoutProjection {
+    pub left_width_px: i32,
+    pub right_width_px: i32,
+    pub left_effective_width_px: i32,
+    pub right_effective_width_px: i32,
+    pub nav_rail_active: bool,
+    pub nav_rail_available: bool,
+    pub dock_toggle_visible: bool,
+    pub dock_auto_collapsed: bool,
+    pub layout_drag_scale_permille: i32,
+    pub sessions_frame: PanelFrameData,
+    pub sftp_frame: PanelFrameData,
+    pub tunnels_frame: PanelFrameData,
+    pub quick_commands_frame: PanelFrameData,
+    pub transfers_frame: PanelFrameData,
+    pub split_handles: Vec<SplitHandleData>,
+    pub drag_indicator: Option<PanelDragIndicator>,
+}
+
+fn round_px(value: f32) -> i32 {
+    if value.is_finite() {
+        value.round() as i32
+    } else {
+        0
+    }
+}
+
+fn layout_projection(view: &PanelLayoutView) -> LayoutProjection {
+    LayoutProjection {
+        left_width_px: round_px(view.left_width),
+        right_width_px: round_px(view.right_width),
+        left_effective_width_px: round_px(view.left_effective_width),
+        right_effective_width_px: round_px(view.right_effective_width),
+        nav_rail_active: view.rail_active,
+        nav_rail_available: view.rail_available,
+        dock_toggle_visible: view.dock_toggle_visible,
+        dock_auto_collapsed: view.right_collapsed,
+        layout_drag_scale_permille: round_px(view.drag_scale * 1000.0),
+        sessions_frame: view
+            .frame(PanelId::Sessions)
+            .map(PanelFrameData::from_view)
+            .unwrap_or_else(PanelFrameData::hidden),
+        sftp_frame: view
+            .frame(PanelId::Sftp)
+            .map(PanelFrameData::from_view)
+            .unwrap_or_else(PanelFrameData::hidden),
+        tunnels_frame: view
+            .frame(PanelId::Tunnels)
+            .map(PanelFrameData::from_view)
+            .unwrap_or_else(PanelFrameData::hidden),
+        quick_commands_frame: view
+            .frame(PanelId::QuickCommands)
+            .map(PanelFrameData::from_view)
+            .unwrap_or_else(PanelFrameData::hidden),
+        transfers_frame: view
+            .frame(PanelId::Transfers)
+            .map(PanelFrameData::from_view)
+            .unwrap_or_else(PanelFrameData::hidden),
+        split_handles: view
+            .split_handles
+            .iter()
+            .map(|handle| SplitHandleData {
+                side: match handle.side {
+                    PanelSide::Left => "left".to_owned(),
+                    PanelSide::Right => "right".to_owned(),
+                },
+                boundary: i32::try_from(handle.boundary).unwrap_or(i32::MAX),
+                x: round_px(handle.x),
+                y: round_px(handle.y),
+                width: round_px(handle.width),
+                height: round_px(handle.height),
+            })
+            .collect(),
+        drag_indicator: view.drag_indicator.map(|indicator| PanelDragIndicator {
+            x: round_px(indicator.x),
+            y: round_px(indicator.y),
+            width: round_px(indicator.width),
+            height: round_px(indicator.height),
+        }),
+    }
 }
 
 /// N1 Phase 2 sub-projections: Properties fields and the file clipboard.

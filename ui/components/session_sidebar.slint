@@ -123,15 +123,17 @@ export component NewFolderDialog inherits Rectangle {
     }
 }
 
-// 会话栏主体（全宽列）。宽度/显隐由宿主决定（宿主设置 width 与 if 条件）。
-export component SessionSidebar inherits Rectangle {
+// 会话面板内容（N3）：标题条/折叠/⋯ 菜单由通用 `PanelFrame` 承担，本组件只渲染
+// 搜索框 + SAVED + 会话树。
+//
+// 几何节奏与拆分前保持一致（左栏 pad 8；PanelFrame 标题 40 + 内容 pad 8 恰好
+// 取代旧的自绘头部 8+40），保证会话树行坐标不变。
+export component SessionSidebarContent inherits Rectangle {
     /// 搜索词：与宿主窗口属性双向绑定（`<=>`）。
     in-out property <string> search-text: "";
     in property <[SessionTreeRow]> tree-rows: [];
     in property <string> selected-id: "";
     in property <string> empty-text: "";
-    /// 是否显示"收回图标条"按钮（仅 <960px 有意义）
-    in property <bool> collapse-available: false;
 
     callback update-search(string);
     callback select-row(string);
@@ -141,9 +143,8 @@ export component SessionSidebar inherits Rectangle {
     callback row-context-menu-requested(string, length, length);
     /// 会话树空白区/侧栏背景右键（S1）
     callback blank-menu-requested(length, length);
-    callback collapse-navigation();
 
-    background: Theme.layer-fill;
+    background: transparent;
 
     // S1：左栏背景右键 = 会话树空白区菜单（树内空白处由 SessionTree
     // 自己上报；这里兜住树下方/侧栏其余空白）。
@@ -163,29 +164,6 @@ export component SessionSidebar inherits Rectangle {
         padding: Theme.spacing-8;
         spacing: Theme.spacing-8;
         alignment: start;
-
-        // 头部：标题 + 折叠按钮（S1：`+` 已收敛到右键菜单/其它入口）
-        HorizontalLayout {
-            height: 40px;
-            padding-left: 8px;
-            padding-right: 4px;
-            padding-top: 4px;
-            padding-bottom: 4px;
-            spacing: 8px;
-            Text {
-                text: @tr("MainWindow" => "Sessions");
-                color: Theme.text-primary;
-                font-size: Theme.font-body-large;
-                font-weight: Theme.weight-semibold;
-                vertical-alignment: center;
-            }
-            nav_head_spacer := Rectangle { }
-            if root.collapse-available : WinIconButton {
-                icon: "chevron-left";
-                accessible-name: @tr("MainWindow" => "Collapse navigation");
-                clicked => { root.collapse-navigation(); }
-            }
-        }
 
         WinTextInput {
             text <=> root.search-text;

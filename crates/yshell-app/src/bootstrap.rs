@@ -17,6 +17,7 @@ use slint::private_unstable_api::re_exports::DragAction;
 use slint::{
     ComponentHandle, Model, ModelRc, SharedPixelBuffer, SharedString, Timer, TimerMode, VecModel,
 };
+use yshell_config::{PanelId, PanelSide};
 use yshell_ssh::TransportBackend;
 use yshell_terminal::{TerminalRenderer, DEFAULT_FONT_SIZE};
 use yshell_ui::appearance::{self, AccentColors, ThemeMode};
@@ -25,7 +26,8 @@ use crate::app_state::AppState;
 use crate::error::{AppError, AppResult};
 use crate::runtime::{
     AppProjection, AppRuntime, AuthKeyOptionData, AuthPromptQuestionData, HostKeyGroupData,
-    PrivateKeyRowData, SftpCrumbData, SftpRowData, TabData, TransferRowData,
+    PanelFrameData as RuntimePanelFrameData, PrivateKeyRowData, SftpCrumbData, SftpRowData,
+    SplitHandleData as RuntimeSplitHandleData, TabData, TransferRowData,
 };
 
 mod generated_ui {
@@ -35,8 +37,8 @@ mod generated_ui {
 
 use generated_ui::{
     AuthKeyOption, AuthKeyboardPrompt, HostKeyEntry, HostKeyGroup, LocalRow, MainWindow, Palette,
-    PrivateKeyRow, QuickConnectRow, QuickLinkRow, SessionTreeRow, SftpCrumb, SftpRow,
-    SftpTransferRow, TerminalScrollInfo, Theme, WorkspaceTab,
+    PanelFrameData, PrivateKeyRow, QuickConnectRow, QuickLinkRow, SessionTreeRow, SftpCrumb,
+    SftpRow, SftpTransferRow, SplitHandleData, TerminalScrollInfo, Theme, WorkspaceTab,
 };
 
 /// Keeps the pixel-rendered terminal surface in sync with the runtime.
@@ -3200,6 +3202,173 @@ fn wire_callbacks(
         }
     });
 
+    // --- N3：面板停靠（布局由 Rust 计算；拖拽预览只更新投影，不刷新终端）------
+    // 模板：`wire_panel!` 用于无失败路径的预览；`wire_panel_result!` 用于落盘操作。
+    macro_rules! wire_panel {
+        ($setter:ident, |$runtime:ident $(, $arg:ident : $ty:ty)*| $body:expr) => {
+            {
+                let weak = window.as_weak();
+                let runtime_ref = Rc::clone(&runtime);
+                window.$setter(move |$($arg : $ty),*| {
+                    if let Some(window) = weak.upgrade() {
+                        let $runtime = &mut runtime_ref.borrow_mut();
+                        let projection = $body;
+                        apply_projection(&window, &projection);
+                    }
+                });
+            }
+        };
+    }
+    macro_rules! wire_panel_result {
+        ($setter:ident, $error_prefix:expr, |$runtime:ident $(, $arg:ident : $ty:ty)*| $body:expr) => {
+            {
+                let weak = window.as_weak();
+                let runtime_ref = Rc::clone(&runtime);
+                window.$setter(move |$($arg : $ty),*| {
+                    let Some(window) = weak.upgrade() else {
+                        return;
+                    };
+                    let result = {
+                        let $runtime = &mut runtime_ref.borrow_mut();
+                        $body
+                    };
+                    match result {
+                        Ok(projection) => apply_projection(&window, &projection),
+                        Err(error) => {
+                            set_plain_status(&window, format!("{}: {error}", $error_prefix).into());
+                        }
+                    }
+                });
+            }
+        };
+    }
+
+    // 内容区尺寸 → Rust 重新计算 px 几何。
+    wire_panel!(on_panel_area_resized, |runtime, width: f32, height: f32| {
+        runtime.set_panel_area_size(width, height)
+    });
+
+    // View/Panels 菜单：显示/隐藏面板。
+    wire_panel_result!(
+        on_toggle_panel,
+        "Panel layout error",
+        |runtime, id: SharedString| {
+            match panel_id_from_str(id.as_ref()) {
+                Some(panel) => runtime.toggle_panel_visible(panel),
+                None => Ok(runtime.projection()),
+            }
+        }
+    );
+
+    // 面板 ⋯ 菜单动作。
+    wire_panel_result!(
+        on_panel_action,
+        "Panel layout error",
+        |runtime, id: SharedString, action: SharedString| {
+            match panel_id_from_str(id.as_ref()) {
+                None => Ok(runtime.projection()),
+                Some(panel) => match action.as_ref() {
+                    "move-left" => runtime.move_panel(panel, PanelSide::Left, None),
+                    "move-right" => runtime.move_panel(panel, PanelSide::Right, None),
+                    "collapse" => runtime.set_panel_collapsed(panel, true),
+                    "expand" => runtime.set_panel_collapsed(panel, false),
+                    "collapse-toggle" => runtime.toggle_panel_collapsed(panel),
+                    "hide" => runtime.hide_panel(panel),
+                    _ => Ok(runtime.projection()),
+                },
+            }
+        }
+    );
+
+    // 窄窗：图标条展开 / 右栏 chevron。
+    wire_panel_result!(
+        on_panel_side_expand,
+        "Panel layout error",
+        |runtime, side: SharedString| {
+            match panel_side_from_str(side.as_ref()) {
+                Some(side) => runtime.expand_panel_side(side),
+                None => Ok(runtime.projection()),
+            }
+        }
+    );
+    wire_panel_result!(
+        on_panel_side_toggle,
+        "Panel layout error",
+        |runtime, side: SharedString| {
+            match panel_side_from_str(side.as_ref()) {
+                Some(side) => runtime.toggle_panel_side_expanded(side),
+                None => Ok(runtime.projection()),
+            }
+        }
+    );
+
+    // 栏宽拖拽（预览不落盘，结束落盘）。
+    wire_panel!(
+        on_panel_width_preview,
+        |runtime, side: SharedString, width: f32| {
+            match panel_side_from_str(side.as_ref()) {
+                Some(side) => runtime.preview_panel_side_width(side, width),
+                None => runtime.projection(),
+            }
+        }
+    );
+    wire_panel_result!(
+        on_panel_width_commit,
+        "Panel layout save error",
+        |runtime| runtime.commit_panel_layout()
+    );
+
+    // 分栏拖拽（px → 比例）。
+    wire_panel!(
+        on_panel_split_preview,
+        |runtime, side: SharedString, boundary: i32, y: f32| {
+            match panel_side_from_str(side.as_ref()) {
+                Some(side) => runtime.preview_panel_split_pixels(
+                    side,
+                    usize::try_from(boundary).unwrap_or(usize::MAX),
+                    y,
+                ),
+                None => runtime.projection(),
+            }
+        }
+    );
+    wire_panel_result!(
+        on_panel_split_commit,
+        "Panel layout save error",
+        |runtime| runtime.commit_panel_layout()
+    );
+
+    // 面板头部拖拽（换边/换序 + 插入指示）。
+    wire_panel!(
+        on_panel_drag_start,
+        |runtime, id: SharedString, x: f32, y: f32| {
+            match panel_id_from_str(id.as_ref()) {
+                Some(panel) => runtime.panel_drag_start(panel, x, y),
+                None => runtime.projection(),
+            }
+        }
+    );
+    wire_panel!(
+        on_panel_drag_move,
+        |runtime, id: SharedString, x: f32, y: f32| {
+            match panel_id_from_str(id.as_ref()) {
+                Some(panel) => runtime.panel_drag_move(panel, x, y),
+                None => runtime.projection(),
+            }
+        }
+    );
+    wire_panel_result!(
+        on_panel_drag_drop,
+        "Panel layout error",
+        |runtime, id: SharedString, x: f32, y: f32| {
+            match panel_id_from_str(id.as_ref()) {
+                Some(panel) => runtime.panel_drag_drop(panel, x, y),
+                None => Ok(runtime.projection()),
+            }
+        }
+    );
+    wire_panel!(on_panel_drag_cancel, |runtime| runtime.panel_drag_cancel());
+
     // N6：退出前强制停止所有活动日志并 flush（标签关闭路径在 runtime/tabs.rs）。
     let runtime_for_quit = Rc::clone(&runtime);
     window.on_quit_app(move || {
@@ -4747,6 +4916,52 @@ fn set_plain_status(window: &MainWindow, text: SharedString) {
     window.set_status_param_2_text("".into());
 }
 
+/// N3：面板 id 字符串 → `PanelId`（Slint 回调参数）。
+fn panel_id_from_str(id: &str) -> Option<PanelId> {
+    match id {
+        "sessions" => Some(PanelId::Sessions),
+        "sftp" => Some(PanelId::Sftp),
+        "tunnels" => Some(PanelId::Tunnels),
+        "quick_commands" => Some(PanelId::QuickCommands),
+        "transfers" => Some(PanelId::Transfers),
+        _ => None,
+    }
+}
+
+/// N3：侧 id 字符串 → `PanelSide`。
+fn panel_side_from_str(side: &str) -> Option<PanelSide> {
+    match side {
+        "left" => Some(PanelSide::Left),
+        "right" => Some(PanelSide::Right),
+        _ => None,
+    }
+}
+
+/// N3：Rust 面板框投影 → Slint 同构结构体。
+fn panel_frame_data(frame: &RuntimePanelFrameData) -> PanelFrameData {
+    PanelFrameData {
+        placement: frame.placement.clone().into(),
+        collapsed: frame.collapsed,
+        visible: frame.visible,
+        x: frame.x as f32,
+        y: frame.y as f32,
+        width: frame.width as f32,
+        height: frame.height as f32,
+    }
+}
+
+/// N3：Rust 分栏手柄投影 → Slint 同构结构体。
+fn split_handle_data(handle: &RuntimeSplitHandleData) -> SplitHandleData {
+    SplitHandleData {
+        side: handle.side.clone().into(),
+        boundary: handle.boundary,
+        x: handle.x as f32,
+        y: handle.y as f32,
+        width: handle.width as f32,
+        height: handle.height as f32,
+    }
+}
+
 fn apply_projection(window: &MainWindow, projection: &AppProjection) {
     window.set_config_dir(projection.config_dir_text.clone().into());
     window.set_secret_store_kind_text(projection.secret_store_kind_text.clone().into());
@@ -5134,6 +5349,37 @@ fn apply_projection(window: &MainWindow, projection: &AppProjection) {
     window.set_sftp_visible(projection.sftp_visible);
     window.set_tunnels_visible(projection.tunnels_visible);
     window.set_commands_visible(projection.commands_visible);
+    // --- N3：面板停靠布局（Rust px 几何 → Slint 普通属性，无 width 反推）------
+    window.set_sessions_visible(projection.sessions_visible);
+    window.set_transfers_visible(projection.transfers_visible);
+    window.set_layout_left_effective_width(projection.layout.left_effective_width_px as f32);
+    window.set_layout_right_effective_width(projection.layout.right_effective_width_px as f32);
+    window.set_layout_left_width(projection.layout.left_width_px as f32);
+    window.set_layout_right_width(projection.layout.right_width_px as f32);
+    window.set_layout_rail_active(projection.layout.nav_rail_active);
+    window.set_layout_rail_available(projection.layout.nav_rail_available);
+    window.set_layout_dock_toggle_visible(projection.layout.dock_toggle_visible);
+    window.set_layout_dock_collapsed(projection.layout.dock_auto_collapsed);
+    window.set_layout_drag_scale(projection.layout.layout_drag_scale_permille as f32 / 1000.0);
+    window.set_layout_sessions_frame(panel_frame_data(&projection.layout.sessions_frame));
+    window.set_layout_sftp_frame(panel_frame_data(&projection.layout.sftp_frame));
+    window.set_layout_tunnels_frame(panel_frame_data(&projection.layout.tunnels_frame));
+    window
+        .set_layout_quick_commands_frame(panel_frame_data(&projection.layout.quick_commands_frame));
+    window.set_layout_transfers_frame(panel_frame_data(&projection.layout.transfers_frame));
+    let handles = projection
+        .layout
+        .split_handles
+        .iter()
+        .map(split_handle_data)
+        .collect::<Vec<_>>();
+    window.set_layout_split_handles(ModelRc::new(VecModel::from(handles)));
+    window.set_layout_drag_indicator_visible(projection.layout.drag_indicator.is_some());
+    if let Some(indicator) = &projection.layout.drag_indicator {
+        window.set_layout_drag_indicator_x(indicator.x as f32);
+        window.set_layout_drag_indicator_y(indicator.y as f32);
+        window.set_layout_drag_indicator_width(indicator.width as f32);
+    }
     window.set_app_version_text(projection.app_version_text.clone().into());
     // N4：私钥管理页（文本字段只在差异时写回，避免打断输入）。
     window.set_private_keys_modal_visible(projection.private_keys_modal_visible);
