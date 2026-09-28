@@ -72,10 +72,19 @@ SFTP_MENU_DX=50         # SFTP 菜单项相对锚点 x 的点击偏移
 # New Folder = index 5、Delete = index 8（前面 6 个条目 + 一个分隔符 + Rename）。
 SFTP_MENU_NEW_FOLDER_Y=540  # 360 + 4 + 5*32 + 16
 SFTP_MENU_DELETE_Y=613      # 360 + 4 + 6*32 + 9 + 32 + 16
-CHANGED_INPUT_X=520         # HostKey changed 模式的 REPLACE 输入框探测区
-CHANGED_INPUT_Y=546
-CHANGED_INPUT_W=420
-CHANGED_INPUT_H=28
+# HostKey changed 模式的 REPLACE 输入框。
+# E2E-fix 重新校准（2026-09-28，冻结二进制 dist/e2efix-work/yshell-e2efix-verified）：
+# N5 把正文改成结构化行 + 8*line-caption 高度预算后，输入框上移到 y=528..557、
+# x=482..957；旧探测区 y=546..574 只剩输入框下缘，测不到文本。这里改到输入框
+# 左侧文本区（占位符 "Type REPLACE" 与输入后的 "REPLACE" 都完整落在区内）。
+CHANGED_INPUT_X=495
+CHANGED_INPUT_Y=532
+CHANGED_INPUT_W=120
+CHANGED_INPUT_H=22
+# WinTextInput 聚焦时底部 2px 强调条的采样行/点（输入框底缘 557）。
+CHANGED_INPUT_FOCUS_Y=557
+CHANGED_INPUT_FOCUS_X1=600
+CHANGED_INPUT_FOCUS_X2=840
 
 usage() {
   awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"
@@ -210,6 +219,114 @@ e2e_click_scrim() {
   sleep 0.2
   xdotool click 1
   sleep 1.2
+}
+
+# ⑧b：REPLACE 输入框是否已获得键盘焦点（WinTextInput 聚焦时底缘 2px 强调条）。
+# E1 之后 WinIconButton（右上 ×）可 Tab 聚焦，changed 弹窗的首个 Tab 落在 × 上，
+# 第二个 Tab 才进输入框；这里用底部强调条像素判定，避免依赖具体 Tab 次数。
+e2e_changed_input_focused() {
+  local x count=0 r g b
+  for x in "$CHANGED_INPUT_FOCUS_X1" "$CHANGED_INPUT_FOCUS_X2"; do
+    read -r r g b <<<"$(e2e_pixel_rgb "$x" "$CHANGED_INPUT_FOCUS_Y")" || continue
+    case "$E2E_THEME" in
+    light) [ "${b:-0}" -gt 140 ] && [ "${r:-255}" -lt 80 ] && [ "${g:-255}" -lt 150 ] && count=$((count + 1)) ;;
+    *) [ "${b:-0}" -gt 170 ] && [ "${g:-0}" -gt 140 ] && [ "${r:-255}" -lt 170 ] && count=$((count + 1)) ;;
+    esac
+  done
+  [ "$count" -ge 1 ]
+}
+
+# 最多 3 次 Tab，直到 REPLACE 输入框拿到焦点（E1 后关闭按钮先进入 Tab 序）。
+e2e_tab_into_changed_input() {
+  local i
+  for i in 1 2 3; do
+    xdotool key --clearmodifiers Tab
+    sleep 0.4
+    if e2e_changed_input_focused; then
+      e2e_log "Tab ×$i 后 REPLACE 输入框获得焦点"
+      return 0
+    fi
+  done
+  e2e_warn "Tab ×3 后 REPLACE 输入框仍未获得焦点"
+  return 1
+}
+
+# 弹窗底部动作行**左按钮**（Cancel）中心：按文本簇定位，dark/light 通用。
+# 输出 "x y"；失败返回 1。用于 B23 破坏性弹窗（Delete）只能显式 Cancel 关闭的路径。
+e2e_dialog_bottom_left_button_center() {
+  local shot=/tmp/yshell-dlg-left-button.png result
+  import -window "$E2E_APP_WIN" "$shot" 2>/dev/null || return 1
+  result=$(python3 - "$shot" "$E2E_THEME" <<'PY' 2>/dev/null || true
+import sys
+from PIL import Image
+path, theme = sys.argv[1], sys.argv[2]
+img = Image.open(path).convert('RGB')
+px = img.load()
+PANEL = (44, 44, 44) if theme == 'dark' else (255, 255, 255)
+def dp(c): return max(abs(c[i] - PANEL[i]) for i in range(3))
+rows = [y for y in range(100, 890)
+        if sum(1 for x in range(470, 975) if dp(px[x, y]) <= 3) > 320]
+if not rows:
+    sys.exit(1)
+pb = rows[-1]
+cols = [x for x in range(300, 1140)
+        if sum(1 for y in range(rows[0], rows[-1] + 1) if dp(px[x, y]) <= 3) > 60]
+if not cols:
+    sys.exit(1)
+pl, pr = cols[0], cols[-1]
+runs = []
+for y in range(pb - 56, pb - 18):
+    cur = None
+    for x in range(pl + 6, pr - 6):
+        if dp(px[x, y]) > 60:
+            cur = [x, x] if cur is None else [cur[0], x]
+        else:
+            if cur and cur[1] - cur[0] >= 3:
+                runs.append(tuple(cur))
+            cur = None
+    if cur and cur[1] - cur[0] >= 3:
+        runs.append(tuple(cur))
+runs.sort()
+merged = []
+for r in runs:
+    if merged and r[0] - merged[-1][1] <= 12:
+        merged[-1] = (merged[-1][0], max(merged[-1][1], r[1]))
+    else:
+        merged.append(r)
+if not merged:
+    sys.exit(1)
+left = merged[0]
+print((left[0] + left[1]) // 2, pb - 34)
+PY
+)
+  if [ -n "$result" ]; then
+    echo "$result"
+  else
+    return 1
+  fi
+}
+
+# ⑥ About：light 主题下"帮助菜单 → About"点击偶发丢失（N5 实测：失败时截图无 scrim）。
+# 有界重试整个序列（每轮先 Esc 复位浮层），不放宽"弹窗必须出现"的断言语义。
+e2e_open_about_dialog() {
+  local i
+  for i in 1 2 3; do
+    xdotool key --clearmodifiers Escape
+    sleep 0.3
+    xdotool mousemove --sync --window "$E2E_APP_WIN" "$HELP_MENU_X" "$MENUBAR_Y"
+    sleep 0.3
+    xdotool click 1
+    sleep 0.8
+    xdotool mousemove --sync --window "$E2E_APP_WIN" "$HELP_MENU_ITEM_X" "$HELP_MENU_ITEM0_Y"
+    sleep 0.3
+    xdotool click 1
+    sleep 1.2
+    if e2e_wait_until 12 e2e_dialog_open; then
+      return 0
+    fi
+    e2e_warn "第 $i 次打开 About 未出现，重试"
+  done
+  return 1
 }
 
 # 弹窗期间快捷键让位：区域 AE 应接近 0（无变化）。
@@ -416,16 +533,8 @@ if [ "$settings_open" = 1 ]; then
 fi
 
 e2e_log "== ⑥ About：Esc =="
-xdotool mousemove --sync --window "$E2E_APP_WIN" "$HELP_MENU_X" "$MENUBAR_Y"
-sleep 0.3
-xdotool click 1
-sleep 0.8
-xdotool mousemove --sync --window "$E2E_APP_WIN" "$HELP_MENU_ITEM_X" "$HELP_MENU_ITEM0_Y"
-sleep 0.3
-xdotool click 1
-sleep 1.2
 about_open=0
-if e2e_wait_until 20 e2e_dialog_open; then about_open=1; fi
+if e2e_open_about_dialog; then about_open=1; fi
 e2e_check "⑥About" "弹窗出现" "$about_open" "$([ "$about_open" = 1 ] && echo 出现 || echo 未出现)"
 e2e_check_shot "$outdir" "17-about" "⑥About 截图"
 if [ "$about_open" = 1 ]; then
@@ -473,9 +582,9 @@ e2e_check "⑧b changed 弹窗" "changed 模式弹窗出现" "$changed_open" "$(
 e2e_check_shot "$outdir" "20b-host-key-changed" "⑧b changed 模式弹窗截图"
 if [ "$changed_open" = 1 ]; then
   sd_empty=$(e2e_region_stddev "$CHANGED_INPUT_X" "$CHANGED_INPUT_Y" "$CHANGED_INPUT_W" "$CHANGED_INPUT_H")
-  # Tab 从根 FocusScope 进入 REPLACE 输入框（changed 模式首个输入框）。
-  xdotool key --clearmodifiers Tab
-  sleep 0.4
+  # E1 后右上 × 可 Tab 聚焦 → 从根 FocusScope 出发最多 3 次 Tab（通常 × 之后第 2 次）
+  # 进入 REPLACE 输入框；用输入框底部强调条像素确认焦点，不依赖固定 Tab 次数。
+  e2e_tab_into_changed_input || true
   xdotool type --delay 80 "REPLACE"
   sleep 0.6
   sd_typed=$(e2e_region_stddev "$CHANGED_INPUT_X" "$CHANGED_INPUT_Y" "$CHANGED_INPUT_W" "$CHANGED_INPUT_H")
@@ -551,9 +660,27 @@ else
       e2e_check "⑨SFTP Enter 安全" "Enter 不触发删除（弹窗仍可见）" \
         "$(e2e_dialog_open && echo 1 || echo 0)" \
         "$(e2e_dialog_open && echo 仍可见 || echo 已关闭)"
-      escaped=0
-      if e2e_escape_until 20 e2e_dialog_closed; then escaped=1; fi
-      e2e_check "⑨SFTP Esc 取消" "Esc 关闭删除弹窗" "$escaped" "$([ "$escaped" = 1 ] && echo 已关闭 || echo 仍可见)"
+      # B23（live-audit ws-B，设计语言 §5.10 / 契约 §1.2）：Delete 是破坏性弹窗，
+      # 不响应 Esc / 遮罩点击，只能在弹窗内显式选择操作。旧断言"Esc 关闭"与
+      # B23 语义冲突，这里改为：Esc 连按 2 次仍可见（安全）→ 点 Cancel 关闭。
+      xdotool key --clearmodifiers Escape
+      sleep 0.8
+      xdotool key --clearmodifiers Escape
+      sleep 0.8
+      esc_safe=0
+      if e2e_dialog_open; then esc_safe=1; fi
+      e2e_check "⑨SFTP Esc 不关闭（破坏性）" "Esc 后删除弹窗仍可见（安全，不误取消）" "$esc_safe" "$([ "$esc_safe" = 1 ] && echo 仍可见 || echo 已关闭)"
+      e2e_check_shot "$outdir" "23b-sftp-delete-after-esc" "⑨SFTP Esc 后仍可见"
+      cancel_center=$(e2e_dialog_bottom_left_button_center) || cancel_center=""
+      if [ -n "$cancel_center" ]; then
+        set -- $cancel_center
+        e2e_click "$1" "$2" 1.2
+      else
+        e2e_warn "未定位到删除弹窗的 Cancel 按钮（动作行左按钮）"
+      fi
+      closed=0
+      if e2e_wait_until 20 e2e_dialog_closed; then closed=1; fi
+      e2e_check "⑨SFTP Cancel 关闭" "点 Cancel 关闭删除弹窗（B23 显式取消）" "$closed" "$([ "$closed" = 1 ] && echo 已关闭 || echo 仍可见)"
       e2e_check_shot "$outdir" "24-sftp-delete-cancelled" "⑨SFTP 删除取消后截图"
     fi
   fi

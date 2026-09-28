@@ -307,37 +307,40 @@ e2e_password_cancelled() {
 }
 
 stage_tofu_recheck() {
-  e2e_log "== stage tofu-recheck：TOFU 未知主机首次连接必须弹信任弹窗 =="
+  e2e_log "== stage tofu-recheck：D7 先主机密钥后密码（未知主机首次连接必须弹信任弹窗） =="
   reset_config
   e2e_launch_app "$bin" "$config_dir" "$theme" "$lang" "$log_file" "$display" || return 1
 
   e2e_open_saved_session "$pass_row_y"
-  local dialog_ok=0
-  if e2e_wait_until 40 e2e_password_dialog_open; then dialog_ok=1; fi
-  e2e_check "tofu/密码弹窗" "弹窗出现" "$dialog_ok" "$([ "$dialog_ok" = 1 ] && echo 出现 || echo 未出现)"
-  if [ "$dialog_ok" != 1 ]; then
-    return 0
-  fi
 
-  local typed=0
-  if e2e_type_password "$ssh_password"; then typed=1; fi
-  e2e_check "tofu/密码输入生效" "连接按钮变为可用" "$typed" "$([ "$typed" = 1 ] && echo 已启用 || echo 未启用)"
-  if [ "$typed" != 1 ]; then
-    e2e_check_shot "$outdir" "10a-tofu-password-typed" "tofu/输入后截图"
-    return 0
-  fi
-
-  e2e_submit_until 60 e2e_host_key_dialog_open
-  local host_dialog=0
-  if e2e_host_key_dialog_open; then host_dialog=1; fi
-  e2e_check "tofu/首次必弹（回归）" "提交密码后出现主机密钥弹窗（不静默信任）" "$host_dialog" "$([ "$host_dialog" = 1 ] && echo 出现 || echo "未出现（静默信任！）")"
+  # D7（live-audit ws-D）：密码会话在"密钥库缺密码"时先用空凭据探针握手，主机密钥
+  # 校验在认证之前，因此未知主机必须先弹主机密钥弹窗；确认后才恢复密码弹窗。
+  # 旧脚本预期"先密码后主机密钥"，D7 落地后已对账为下面的顺序。
+  local host_dialog=0 pw_first=0
+  if e2e_wait_until 40 e2e_host_key_dialog_open; then host_dialog=1; fi
+  if e2e_password_dialog_open; then pw_first=1; fi
+  e2e_check "tofu/首次必弹主机密钥（D7）" "未知主机先弹主机密钥弹窗（此时无密码弹窗）" \
+    "$([ "$host_dialog" = 1 ] && [ "$pw_first" = 0 ] && echo 1 || echo 0)" \
+    "$([ "$host_dialog" = 1 ] && echo 出现 || echo 未出现)；密码弹窗=$([ "$pw_first" = 1 ] && echo 先出现 || echo 未出现)"
   local kh_before=0
   if known_hosts_has_entry; then kh_before=1; fi
   e2e_check "tofu/信任前不落盘" "known_hosts 无 $ssh_host:$ssh_port 条目" "$([ "$kh_before" = 0 ] && echo 1 || echo 0)" "$([ "$kh_before" = 0 ] && echo 无条目 || echo 已落盘)"
   e2e_check_shot "$outdir" "10-tofu-host-key-prompt" "tofu/信任弹窗截图"
   [ "$host_dialog" = 1 ] || return 0
 
-  e2e_click_until "$trust_save_x" "$dialog_button_y" 60 e2e_session_connected
+  # 确认主机密钥 → 密码弹窗恢复（D7：恢复挂起的密码提示、不重连不丢目标）。
+  e2e_click_until "$trust_save_x" "$dialog_button_y" 60 e2e_password_dialog_open
+  local pw_resumed=0
+  if e2e_password_dialog_open; then pw_resumed=1; fi
+  e2e_check "tofu/信任后恢复密码弹窗" "Trust and Save 后密码弹窗出现（D7 顺序）" "$pw_resumed" "$([ "$pw_resumed" = 1 ] && echo 出现 || echo 未出现)"
+  [ "$pw_resumed" = 1 ] || return 0
+
+  local typed=0
+  if e2e_type_password "$ssh_password"; then typed=1; fi
+  e2e_check "tofu/密码输入生效" "连接按钮变为可用" "$typed" "$([ "$typed" = 1 ] && echo 已启用 || echo 未启用)"
+  [ "$typed" = 1 ] || return 0
+
+  e2e_submit_until 60 e2e_session_connected
   local connected=0
   if e2e_session_connected; then connected=1; fi
   e2e_check "tofu/Trust and Save 后连接" "SFTP 列表 ≥3 行" "$connected" "$(e2e_session_connected && echo "SFTP 行数=$(e2e_sftp_row_bands)" || echo "未连接")"

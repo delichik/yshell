@@ -39,7 +39,10 @@ ssh_port="${YSHELL_TEST_SSH_PORT:-2222}"
 
 # 1440×900 窗口内坐标（标签条/菜单/弹窗）。
 TAB_ROW_Y=100          # 标签条文字行中心
-TAB_ACCENT_Y=112       # 活动标签底部强调条
+# 活动标签底部强调条。E2E-fix 重新校准（2026-09-28，冻结二进制
+# dist/e2efix-work/yshell-e2efix-verified）：dark/light 两主题实测强调条均为
+# y=110..111（2px），旧值 112 已落在强调条下方的标签条底色上 → 误判"非活动"。
+TAB_ACCENT_Y=110
 TAB1_X=330             # 标签 1 中心（宽 156：248..404）
 TAB2_X=480             # 标签 2 中心（408..564）
 PLUS_X=1042            # “+”按钮中心

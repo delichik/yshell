@@ -204,11 +204,15 @@ e2e_open_saved_session() { # $1 = 行 y 坐标
 
 # ---------------------------------------------------------------- 密码弹窗坐标
 # 1440×900 窗口内实测（原点已固定在 (0,0)）：输入框 / 连接 / 取消。
+# E2E-fix 重新校准（2026-09-28，冻结二进制 dist/e2efix-work/yshell-e2efix-verified）：
+# 实测动作行按钮 x 带为 取消 819..868 / 连接 878..929（y 489..520），旧值
+# 取消=814 已落在取消按钮左侧空隙（点击丢失 → pass-cancel 失败），连接=886 虽仍在
+# 连接按钮内但贴近左缘；统一改用两按钮实测中心，给两侧留 ≥20px 余量。
 E2E_PASSWORD_INPUT_X=720
 E2E_PASSWORD_INPUT_Y=460
-E2E_PASSWORD_CONNECT_X=886
+E2E_PASSWORD_CONNECT_X=903
 E2E_PASSWORD_CONNECT_Y=504
-E2E_PASSWORD_CANCEL_X=814
+E2E_PASSWORD_CANCEL_X=843
 E2E_PASSWORD_CANCEL_Y=504
 
 # ---------------------------------------------------------------- 像素探测
