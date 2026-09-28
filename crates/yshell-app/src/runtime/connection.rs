@@ -439,6 +439,8 @@ impl AppRuntime {
         {
             tab.unread = 0;
             let tab_id = tab.tab_id.clone();
+            // N7：重连作用于被右键的标签，激活它所在窗口的活动标签。
+            self.activate_tab_in_window(&tab_id);
             self.active_tab_id = Some(tab_id);
         }
         self.reconnect_active_session()

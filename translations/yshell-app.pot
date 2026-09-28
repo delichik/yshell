@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2026-09-28 14:24+0000\n"
+"POT-Creation-Date: 2026-09-28 16:19+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -28,432 +28,465 @@ msgid "Enter the password for {0} to connect."
 msgstr ""
 
 #. A25：图标条按钮的悬停提示文案（`Tooltip` 走 @markdown 插值）。
-#: ui/main_window.slint:1090 ui/main_window.slint:1355
-#: ui/main_window.slint:1090 ui/main_window.slint:1355 ui/main_window.slint:1416
-#: ui/main_window.slint:1090 ui/main_window.slint:1355 ui/main_window.slint:1416 ui/components/session_sidebar.slint:214
-#: ui/main_window.slint:1090 ui/main_window.slint:1355 ui/main_window.slint:1416 ui/components/session_sidebar.slint:214 ui/components/tool_dock.slint:370
+#: ui/main_window.slint:1108 ui/main_window.slint:1389
+#: ui/main_window.slint:1108 ui/main_window.slint:1389 ui/main_window.slint:1450
+#: ui/main_window.slint:1108 ui/main_window.slint:1389 ui/main_window.slint:1450 ui/components/session_sidebar.slint:214
+#: ui/main_window.slint:1108 ui/main_window.slint:1389 ui/main_window.slint:1450 ui/components/session_sidebar.slint:214 ui/components/tool_dock.slint:370
 msgctxt "MainWindow"
 msgid "New Session"
 msgstr ""
 
-#: ui/main_window.slint:1091
+#: ui/main_window.slint:1109
 msgctxt "MainWindow"
 msgid "Quick Connect"
 msgstr ""
 
-#: ui/main_window.slint:1094
+#: ui/main_window.slint:1112
 msgctxt "MainWindow"
 msgid "Save Active Session"
 msgstr ""
 
 #. A12：禁用项必须有 tooltip 说明原因（契约 §18）。
-#: ui/main_window.slint:1097
+#: ui/main_window.slint:1115
 msgctxt "MainWindow"
 msgid "Open a session before saving it."
 msgstr ""
 
-#: ui/main_window.slint:1100 ui/main_window.slint:1179
+#: ui/main_window.slint:1118 ui/main_window.slint:1197
 msgctxt "MainWindow"
 msgid "Settings..."
 msgstr ""
 
-#: ui/main_window.slint:1101 ui/main_window.slint:1181
-#: ui/main_window.slint:1101 ui/main_window.slint:1181
+#: ui/main_window.slint:1119 ui/main_window.slint:1199
+#: ui/main_window.slint:1119 ui/main_window.slint:1199
 msgctxt "MainWindow"
 msgid "Quit"
 msgstr ""
 
-#: ui/main_window.slint:1106 ui/main_window.slint:1186
+#: ui/main_window.slint:1124 ui/main_window.slint:1204
 msgctxt "MainWindow"
 msgid "Copy"
 msgstr ""
 
-#: ui/main_window.slint:1108 ui/main_window.slint:1188
+#: ui/main_window.slint:1126 ui/main_window.slint:1206
 msgctxt "MainWindow"
 msgid "Select text in the terminal first."
 msgstr ""
 
-#: ui/main_window.slint:1110 ui/main_window.slint:1190
+#: ui/main_window.slint:1128 ui/main_window.slint:1208
 msgctxt "MainWindow"
 msgid "Paste"
 msgstr ""
 
-#: ui/main_window.slint:1112 ui/main_window.slint:1197
+#: ui/main_window.slint:1130 ui/main_window.slint:1215
 msgctxt "MainWindow"
 msgid "Clear Terminal"
 msgstr ""
 
 #. A24：查找入口禁用时的原因说明（默认复用既有 msgid）。
-#: ui/main_window.slint:1114 ui/main_window.slint:1120
-#: ui/main_window.slint:1114 ui/main_window.slint:1120 ui/main_window.slint:1194
-#: ui/main_window.slint:1114 ui/main_window.slint:1120 ui/main_window.slint:1194 ui/main_window.slint:1204
-#: ui/main_window.slint:1114 ui/main_window.slint:1120 ui/main_window.slint:1194 ui/main_window.slint:1204 ui/components/command_bar.slint:108
+#: ui/main_window.slint:1132 ui/main_window.slint:1138
+#: ui/main_window.slint:1132 ui/main_window.slint:1138 ui/main_window.slint:1212
+#: ui/main_window.slint:1132 ui/main_window.slint:1138 ui/main_window.slint:1212 ui/main_window.slint:1222
+#: ui/main_window.slint:1132 ui/main_window.slint:1138 ui/main_window.slint:1212 ui/main_window.slint:1222 ui/components/command_bar.slint:108
 msgctxt "MainWindow"
 msgid "Open a session first."
 msgstr ""
 
-#: ui/main_window.slint:1118 ui/main_window.slint:1202
+#: ui/main_window.slint:1136 ui/main_window.slint:1220
 msgctxt "MainWindow"
 msgid "Find..."
 msgstr ""
 
-#: ui/main_window.slint:1126 ui/main_window.slint:1313
+#: ui/main_window.slint:1144 ui/main_window.slint:1331
 msgctxt "MainWindow"
 msgid "Disconnect"
 msgstr ""
 
-#: ui/main_window.slint:1128
+#: ui/main_window.slint:1146
 msgctxt "MainWindow"
 msgid "The active session is not connected."
 msgstr ""
 
-#: ui/main_window.slint:1131 ui/main_window.slint:1308
+#: ui/main_window.slint:1149 ui/main_window.slint:1326
 msgctxt "MainWindow"
 msgid "Reconnect"
 msgstr ""
 
-#: ui/main_window.slint:1134
+#: ui/main_window.slint:1152
 msgctxt "MainWindow"
 msgid "The active session is already connected."
 msgstr ""
 
-#: ui/main_window.slint:1140
+#: ui/main_window.slint:1158
 msgctxt "MainWindow"
 msgid "Edit Selected Session..."
 msgstr ""
 
-#: ui/main_window.slint:1142 ui/main_window.slint:1149
-#: ui/main_window.slint:1142 ui/main_window.slint:1149 ui/main_window.slint:1335
-#: ui/main_window.slint:1142 ui/main_window.slint:1149 ui/main_window.slint:1335 ui/main_window.slint:1347
-#: ui/main_window.slint:1142 ui/main_window.slint:1149 ui/main_window.slint:1335 ui/main_window.slint:1347
+#: ui/main_window.slint:1160 ui/main_window.slint:1167
+#: ui/main_window.slint:1160 ui/main_window.slint:1167 ui/main_window.slint:1369
+#: ui/main_window.slint:1160 ui/main_window.slint:1167 ui/main_window.slint:1369 ui/main_window.slint:1381
+#: ui/main_window.slint:1160 ui/main_window.slint:1167 ui/main_window.slint:1369 ui/main_window.slint:1381
 msgctxt "MainWindow"
 msgid "Select a saved session first."
 msgstr ""
 
-#: ui/main_window.slint:1145
+#: ui/main_window.slint:1163
 msgctxt "MainWindow"
 msgid "Update Selected From Active"
 msgstr ""
 
-#: ui/main_window.slint:1148 ui/main_window.slint:1346
+#: ui/main_window.slint:1166 ui/main_window.slint:1380
 msgctxt "MainWindow"
 msgid "Open the active session first."
 msgstr ""
 
-#: ui/main_window.slint:1152
+#: ui/main_window.slint:1170
 msgctxt "MainWindow"
 msgid "Delete Selected Session..."
 msgstr ""
 
 #. N4：两个同级、独立入口（私钥页 / 主机密钥页）。
-#: ui/main_window.slint:1158
+#: ui/main_window.slint:1176
 msgctxt "MainWindow"
 msgid "Host Keys..."
 msgstr ""
 
-#: ui/main_window.slint:1159
+#: ui/main_window.slint:1177
 msgctxt "MainWindow"
 msgid "Private Keys..."
 msgstr ""
 
-#: ui/main_window.slint:1162
+#: ui/main_window.slint:1180
 msgctxt "MainWindow"
 msgid "Session Manager"
 msgstr ""
 
-#: ui/main_window.slint:1163
+#: ui/main_window.slint:1181
 msgctxt "MainWindow"
 msgid "SFTP Panel"
 msgstr ""
 
-#: ui/main_window.slint:1164 ui/components/tool_dock.slint:516
+#: ui/main_window.slint:1182 ui/components/tool_dock.slint:516
 msgctxt "MainWindow"
 msgid "Tunnels"
 msgstr ""
 
-#: ui/main_window.slint:1165 ui/components/tool_dock.slint:542
+#: ui/main_window.slint:1183 ui/components/tool_dock.slint:542
 msgctxt "MainWindow"
 msgid "Quick Commands"
 msgstr ""
 
-#: ui/main_window.slint:1166 ui/components/tool_dock.slint:570
+#: ui/main_window.slint:1184 ui/components/tool_dock.slint:570
 msgctxt "MainWindow"
 msgid "Transfers"
 msgstr ""
 
-#: ui/main_window.slint:1169 ui/main_window.slint:1177
+#: ui/main_window.slint:1187 ui/main_window.slint:1195
 msgctxt "MainWindow"
 msgid "About YShell"
 msgstr ""
 
-#: ui/main_window.slint:1192
+#: ui/main_window.slint:1210
 msgctxt "MainWindow"
 msgid "Select All"
 msgstr ""
 
-#: ui/main_window.slint:1209 ui/main_window.slint:1253
+#: ui/main_window.slint:1227 ui/main_window.slint:1271
 msgctxt "MainWindow"
 msgid "Start Logging..."
 msgstr ""
 
-#: ui/main_window.slint:1211 ui/main_window.slint:1255
+#: ui/main_window.slint:1229 ui/main_window.slint:1273
 msgctxt "MainWindow"
 msgid "Open a session that is not logging yet."
 msgstr ""
 
-#: ui/main_window.slint:1214 ui/main_window.slint:1258
+#: ui/main_window.slint:1232 ui/main_window.slint:1276
 msgctxt "MainWindow"
 msgid "Stop Logging"
 msgstr ""
 
-#: ui/main_window.slint:1216 ui/main_window.slint:1260
+#: ui/main_window.slint:1234 ui/main_window.slint:1278
 msgctxt "MainWindow"
 msgid "This session is not logging."
 msgstr ""
 
-#: ui/main_window.slint:1219 ui/main_window.slint:1263
+#: ui/main_window.slint:1237 ui/main_window.slint:1281
 msgctxt "MainWindow"
 msgid "Open Log File"
 msgstr ""
 
-#: ui/main_window.slint:1221 ui/main_window.slint:1265
+#: ui/main_window.slint:1239 ui/main_window.slint:1283
 msgctxt "MainWindow"
 msgid "No log file has been written yet."
 msgstr ""
 
-#: ui/main_window.slint:1224 ui/main_window.slint:1268
+#: ui/main_window.slint:1242 ui/main_window.slint:1286
 msgctxt "MainWindow"
 msgid "Open Log Folder"
 msgstr ""
 
-#: ui/main_window.slint:1226 ui/main_window.slint:1270
+#: ui/main_window.slint:1244 ui/main_window.slint:1288
 msgctxt "MainWindow"
 msgid "No log folder is available yet."
 msgstr ""
 
-#: ui/main_window.slint:1231
+#: ui/main_window.slint:1249
 msgctxt "MainWindow"
 msgid "Send Key Input to All Tabs"
 msgstr ""
 
-#: ui/main_window.slint:1233 ui/main_window.slint:1240
+#: ui/main_window.slint:1251 ui/main_window.slint:1258
 msgctxt "MainWindow"
 msgid "Connect a terminal session first."
 msgstr ""
 
-#: ui/main_window.slint:1236
+#: ui/main_window.slint:1254
 msgctxt "MainWindow"
 msgid "Send Key Input to Visible Tabs"
 msgstr ""
 
-#: ui/main_window.slint:1243
+#: ui/main_window.slint:1261
 msgctxt "MainWindow"
 msgid "Stop Sending Key Input"
 msgstr ""
 
-#: ui/main_window.slint:1245
+#: ui/main_window.slint:1263
 msgctxt "MainWindow"
 msgid "Key input sync is not active."
 msgstr ""
 
-#: ui/main_window.slint:1276 ui/main_window.slint:2417
+#: ui/main_window.slint:1294 ui/main_window.slint:2465
+#: ui/main_window.slint:1294 ui/main_window.slint:2465
 msgctxt "MainWindow"
 msgid "Close"
 msgstr ""
 
-#: ui/main_window.slint:1279
+#: ui/main_window.slint:1297
 msgctxt "MainWindow"
 msgid "Close Others"
 msgstr ""
 
-#: ui/main_window.slint:1281
+#: ui/main_window.slint:1299
 msgctxt "MainWindow"
 msgid "Only one tab is open."
 msgstr ""
 
-#: ui/main_window.slint:1284
+#: ui/main_window.slint:1302
 msgctxt "MainWindow"
 msgid "Close Tabs to Left"
 msgstr ""
 
-#: ui/main_window.slint:1286
+#: ui/main_window.slint:1304
 msgctxt "MainWindow"
 msgid "There are no tabs to the left."
 msgstr ""
 
-#: ui/main_window.slint:1289
+#: ui/main_window.slint:1307
 msgctxt "MainWindow"
 msgid "Close Tabs to Right"
 msgstr ""
 
-#: ui/main_window.slint:1291
+#: ui/main_window.slint:1309
 msgctxt "MainWindow"
 msgid "There are no tabs to the right."
 msgstr ""
 
-#: ui/main_window.slint:1294
+#: ui/main_window.slint:1312
 msgctxt "MainWindow"
 msgid "Close All"
 msgstr ""
 
-#: ui/main_window.slint:1296
+#: ui/main_window.slint:1314
 msgctxt "MainWindow"
 msgid "No tabs are open."
 msgstr ""
 
-#: ui/main_window.slint:1299
+#: ui/main_window.slint:1317
 msgctxt "MainWindow"
 msgid "Close Disconnected Tabs"
 msgstr ""
 
-#: ui/main_window.slint:1301
+#: ui/main_window.slint:1319
 msgctxt "MainWindow"
 msgid "No disconnected or failed tabs to close."
 msgstr ""
 
-#: ui/main_window.slint:1310
+#: ui/main_window.slint:1328
 msgctxt "MainWindow"
 msgid "This tab is already connected."
 msgstr ""
 
-#: ui/main_window.slint:1315
+#: ui/main_window.slint:1333
 msgctxt "MainWindow"
 msgid "This tab is already disconnected."
 msgstr ""
 
-#: ui/main_window.slint:1320
+#: ui/main_window.slint:1338
 msgctxt "MainWindow"
 msgid "Receive Key Input"
 msgstr ""
 
-#: ui/main_window.slint:1333
+#: ui/main_window.slint:1348
+msgctxt "MainWindow"
+msgid "Move to New Window"
+msgstr ""
+
+#: ui/main_window.slint:1352
+msgctxt "MainWindow"
+msgid "Open a tab before moving it to a new window."
+msgstr ""
+
+#: ui/main_window.slint:1355
+msgctxt "MainWindow"
+msgid "Move to Main Window"
+msgstr ""
+
+#: ui/main_window.slint:1359
+msgctxt "MainWindow"
+msgid "This tab is already in the main window."
+msgstr ""
+
+#: ui/main_window.slint:1367
 msgctxt "Session"
 msgid "Open"
 msgstr ""
 
-#: ui/main_window.slint:1338
+#: ui/main_window.slint:1372
 msgctxt "MainWindow"
 msgid "Edit..."
 msgstr ""
 
-#: ui/main_window.slint:1343
+#: ui/main_window.slint:1377
 msgctxt "MainWindow"
 msgid "Update From Active"
 msgstr ""
 
-#: ui/main_window.slint:1350 ui/main_window.slint:1377
+#: ui/main_window.slint:1384 ui/main_window.slint:1411
 msgctxt "MainWindow"
 msgid "Delete..."
 msgstr ""
 
-#: ui/main_window.slint:1364
+#: ui/main_window.slint:1398
 msgctxt "MainWindow"
 msgid "New Session Here"
 msgstr ""
 
-#: ui/main_window.slint:1366 ui/main_window.slint:1387
+#: ui/main_window.slint:1400 ui/main_window.slint:1421
 msgctxt "MainWindow"
 msgid "Right-click a folder first."
 msgstr ""
 
-#: ui/main_window.slint:1369 ui/main_window.slint:1394
+#: ui/main_window.slint:1403 ui/main_window.slint:1428
 msgctxt "MainWindow"
 msgid "New Folder..."
 msgstr ""
 
-#: ui/main_window.slint:1370 ui/main_window.slint:1374
-#: ui/main_window.slint:1370 ui/main_window.slint:1374 ui/main_window.slint:1382
+#: ui/main_window.slint:1404 ui/main_window.slint:1408
+#: ui/main_window.slint:1404 ui/main_window.slint:1408 ui/main_window.slint:1416
 msgctxt "MainWindow"
 msgid "Not available in this version."
 msgstr ""
 
-#: ui/main_window.slint:1373
+#: ui/main_window.slint:1407
 msgctxt "MainWindow"
 msgid "Rename..."
 msgstr ""
 
-#: ui/main_window.slint:1381
+#: ui/main_window.slint:1415
 msgctxt "MainWindow"
 msgid "Connect All"
 msgstr ""
 
-#: ui/main_window.slint:1385
+#: ui/main_window.slint:1419
 msgctxt "MainWindow"
 msgid "Edit Folder Defaults…"
 msgstr ""
 
-#: ui/main_window.slint:1397
+#: ui/main_window.slint:1431
 msgctxt "MainWindow"
 msgid "Import Config..."
 msgstr ""
 
-#: ui/main_window.slint:1399
+#: ui/main_window.slint:1433
 msgctxt "MainWindow"
 msgid "Importing configuration files is not available in this build."
 msgstr ""
 
-#: ui/main_window.slint:1402
+#: ui/main_window.slint:1436
 msgctxt "MainWindow"
 msgid "Expand All"
 msgstr ""
 
-#: ui/main_window.slint:1404
+#: ui/main_window.slint:1438
 msgctxt "MainWindow"
 msgid "Expand All is not available in this build."
 msgstr ""
 
-#: ui/main_window.slint:1407
+#: ui/main_window.slint:1441
 msgctxt "MainWindow"
 msgid "Collapse All"
 msgstr ""
 
-#: ui/main_window.slint:1409
+#: ui/main_window.slint:1443
 msgctxt "MainWindow"
 msgid "Collapse All is not available in this build."
 msgstr ""
 
-#: ui/main_window.slint:1412
+#: ui/main_window.slint:1446
 msgctxt "MainWindow"
 msgid "Refresh"
 msgstr ""
 
-#: ui/main_window.slint:1417 ui/components/session_sidebar.slint:215
-#: ui/main_window.slint:1417 ui/components/session_sidebar.slint:215
+#: ui/main_window.slint:1451 ui/components/session_sidebar.slint:215
+#: ui/main_window.slint:1451 ui/components/session_sidebar.slint:215
 msgctxt "MainWindow"
 msgid "Expand navigation"
 msgstr ""
 
-#: ui/main_window.slint:2370
+#: ui/main_window.slint:2418
 msgctxt "MainWindow"
 msgid "Delete Saved Session"
 msgstr ""
 
-#: ui/main_window.slint:2371
+#: ui/main_window.slint:2419
 msgctxt "MainWindow"
 msgid ""
 "This permanently removes the selected saved session from disk. Type DELETE "
 "to confirm."
 msgstr ""
 
-#: ui/main_window.slint:2373
+#: ui/main_window.slint:2421
 msgctxt "MainWindow"
 msgid "Type DELETE"
 msgstr ""
 
-#: ui/main_window.slint:2375
+#: ui/main_window.slint:2423
 msgctxt "MainWindow"
 msgid "Delete"
 msgstr ""
 
-#: ui/main_window.slint:2393
+#: ui/main_window.slint:2441
 msgctxt "MainWindow"
 msgid "Quit YShell"
 msgstr ""
 
-#: ui/main_window.slint:2394
+#: ui/main_window.slint:2442
 msgctxt "MainWindow"
 msgid "Quit YShell now? Active runtime sessions will be disconnected."
 msgstr ""
+
+#: ui/main_window.slint:2482
+msgctxt "MainWindow"
+msgid "Close Window"
+msgstr ""
+
+#: ui/main_window.slint:2483
+msgctxt "MainWindow"
+msgid "Close this window? {n} active session will be disconnected."
+msgid_plural "Close this window? {n} active sessions will be disconnected."
+msgstr[0] ""
+msgstr[1] ""
 
 #: ui/components/auth_prompt_dialog.slint:214
 msgctxt "AuthPromptDialog"
@@ -1634,7 +1667,7 @@ msgctxt "WorkspaceTabItem"
 msgid "RCV"
 msgstr ""
 
-#: ui/components/terminal_workspace.slint:345
+#: ui/components/terminal_workspace.slint:357
 msgctxt "MainWindow"
 msgid "New session"
 msgstr ""

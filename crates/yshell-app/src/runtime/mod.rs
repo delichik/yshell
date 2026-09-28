@@ -116,17 +116,20 @@ use crate::{
     error::AppError, error::AppResult, session_runtime::SessionRuntime, sftp_view::SftpSortColumn,
 };
 use std::{
-    cell::RefCell, collections::BTreeMap, collections::BTreeSet, env, fmt, fs, path::Path,
-    path::PathBuf, sync::Arc,
+    cell::Cell, cell::RefCell, collections::BTreeMap, collections::BTreeSet, env, fmt, fs,
+    path::Path, path::PathBuf, sync::Arc,
 };
 use yshell_config::{ConfigDocument, ConfigStore, LoadOutcome, PanelSide, QuickLink};
+use yshell_core::CommandDispatcher;
 use yshell_core::CoreCommandDispatcher;
+use yshell_core::SessionCommand;
 #[cfg(test)]
 use yshell_core::SessionEvent;
 use yshell_secret::{FileKeychain, Keychain, OsKeychain};
 use yshell_sftp::{FsEntry, RemoteEditSession, TransferQueue};
 use yshell_ssh::{HostKeyPolicy, KnownHosts, TransportBackend};
 use yshell_terminal::SearchMatch;
+use yshell_terminal::TerminalSnapshot;
 
 impl AppRuntime {
     pub fn new(config_dir: PathBuf) -> AppResult<Self> {
@@ -165,6 +168,11 @@ impl AppRuntime {
             active_session_id: None,
             tabs: Vec::new(),
             active_tab_id: None,
+            windows: BTreeMap::new(),
+            focused_window: None,
+            projection_window: Cell::new(None),
+            pending_close_windows: BTreeSet::new(),
+            ui_dirty: false,
             terminal_poll_cursor: 0,
             pending_close_tabs: None,
             tab_menu_tab_id: None,
@@ -391,6 +399,21 @@ pub struct AppRuntime {
     /// N0：标签条顺序 = 显示顺序；`active_tab_id` 必须存在于 `tabs`。
     pub(crate) tabs: Vec<TabEntry>,
     pub(crate) active_tab_id: Option<String>,
+    // --- N7：多窗口（窗口级 UI 归属；`AppRuntime` 仍单实例共享）------------------
+    /// 窗口 id → 该窗口的标签集合（显示顺序）与活动标签。
+    ///
+    /// `tabs` 仍是所有标签的运行时登记表（轮询/会话回收按它遍历）；本表只回答
+    /// "这个标签现在显示在哪个窗口"，以及每个窗口自己的活动标签。
+    pub(crate) windows: BTreeMap<u64, WindowTabs>,
+    /// 最近交互的窗口（键盘/菜单/终端回调会更新；决定 `active_tab_id`/`active_session_id` 指向）。
+    pub(crate) focused_window: Option<u64>,
+    /// `projection_for_window` 期间的窗口覆盖：让投影里的终端/标签字段解析到
+    /// 目标窗口的活动标签，而不是聚焦窗口的（`Cell` 由单线程 UI 使用）。
+    pub(crate) projection_window: Cell<Option<u64>>,
+    /// N7：等待"关闭窗口 = 断开连接"确认的窗口集合。
+    pub(crate) pending_close_windows: BTreeSet<u64>,
+    /// N7：UI 脏标记（窗口回调的任何变更置位；应用级定时器消费后广播所有窗口）。
+    pub(crate) ui_dirty: bool,
     /// N0 轮询游标：非活动标签轮转的起点（对 `tabs` 顺序取模）。
     pub(crate) terminal_poll_cursor: usize,
     /// N0：等待确认的关闭请求（单关/批量复用同一个确认弹窗）。
@@ -541,6 +564,15 @@ pub struct AppRuntime {
     pub(crate) folder_editor: folder_editor::FolderEditorState,
 }
 
+/// N7：单个窗口持有的标签 UI 归属（标签本身仍在 `AppRuntime::tabs` 登记）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct WindowTabs {
+    /// 该窗口的标签 id（显示顺序）。
+    pub(crate) tabs: Vec<String>,
+    /// 该窗口的活动标签 id（必须存在于 `tabs`）。
+    pub(crate) active_tab: Option<String>,
+}
+
 #[derive(Clone)]
 pub(crate) struct RuntimeKeychain(Arc<dyn Keychain>);
 
@@ -645,6 +677,143 @@ impl fmt::Debug for AppRuntime {
             .field("host_keys_modal_visible", &self.host_keys_modal_visible)
             .field("pending_auth_prompt", &self.pending_auth_prompt)
             .finish()
+    }
+}
+
+// --- N7：窗口级终端解析 / 尺寸同步 -----------------------------------------
+//
+// 这些 helper 放在运行时组合层（而不是 `keys.rs` 的活动终端 API 里）：`keys.rs`
+// 的动作仍作用于"聚焦窗口"的 `active_session_id`，这里只回答"某个窗口自己的
+// 活动终端是什么"，供每窗口投影、渲染与轮询尺寸同步使用。
+
+impl AppRuntime {
+    /// N7：投影/渲染解析用的焦点会话 key。
+    ///
+    /// `projection_for_window` 期间（`projection_window` 有值）解析到目标窗口的活动
+    /// 标签；否则是聚焦窗口的 `active_session_id`（单窗口/测试路径）。
+    pub(crate) fn focus_session_key(&self) -> Option<&str> {
+        if let Some(window_id) = self.projection_window.get() {
+            return self.window_active_session(window_id);
+        }
+        self.active_session_id.as_deref()
+    }
+
+    /// N7：焦点会话的运行时（窗口感知；投影与渲染共用）。
+    pub(crate) fn focus_terminal_runtime(&self) -> Option<&SessionRuntime> {
+        self.focus_session_key()
+            .and_then(|session_key| self.sessions.get(session_key))
+    }
+
+    /// N7：指定窗口活动会话的终端外观（每窗口渲染器各自同步 N5 外观）。
+    ///
+    /// 聚焦窗口直接走 `active_terminal_appearance()`（同一份数据；单窗口语义不变）。
+    pub(crate) fn window_terminal_appearance(&self, window_id: u64) -> Option<TerminalAppearance> {
+        if self.focused_window == Some(window_id) {
+            return self.active_terminal_appearance();
+        }
+        self.window_active_session(window_id)
+            .and_then(|session_key| self.sessions.get(session_key))
+            .map(|runtime| runtime.appearance().clone())
+    }
+
+    /// N7：指定窗口活动会话的帧号（终端位图缓存键）。
+    ///
+    /// 聚焦窗口走 `active_terminal_frame_id()`，保证单窗口路径与旧行为一致。
+    #[must_use]
+    pub fn window_terminal_frame_id(&self, window_id: u64) -> u64 {
+        if self.focused_window == Some(window_id) {
+            return self.active_terminal_frame_id();
+        }
+        self.window_active_session(window_id)
+            .and_then(|session_key| self.sessions.get(session_key))
+            .map(SessionRuntime::frame_id)
+            .unwrap_or(0)
+    }
+
+    /// N7：指定窗口活动会话的渲染快照。
+    #[must_use]
+    pub fn window_terminal_render_snapshot(&self, window_id: u64) -> Option<TerminalSnapshot<'_>> {
+        if self.focused_window == Some(window_id) {
+            return self.active_terminal_render_snapshot();
+        }
+        self.window_active_session(window_id)
+            .and_then(|session_key| self.sessions.get(session_key))
+            .and_then(SessionRuntime::terminal_render_snapshot)
+    }
+
+    /// N7：按窗口视口同步该窗口活动会话的 PTY 尺寸。
+    ///
+    /// 返回是否真的发生了 resize（调用方据此决定是否重投影）。`status` 控制是否
+    /// 写状态栏（多窗口轮询对非聚焦窗口不写，避免状态文案抖动）。
+    pub(crate) fn sync_window_terminal_size(
+        &mut self,
+        window_id: u64,
+        columns: u16,
+        rows: u16,
+        status: bool,
+    ) -> AppResult<bool> {
+        let Some(session_key) = self.window_active_session(window_id).map(str::to_owned) else {
+            return Ok(false);
+        };
+        let Some(current_size) = self
+            .sessions
+            .get(&session_key)
+            .map(SessionRuntime::current_pty_size)
+        else {
+            return Ok(false);
+        };
+        if current_size.columns == columns && current_size.rows == rows {
+            return Ok(false);
+        }
+        self.resize_terminal_session(&session_key, columns, rows, status)?;
+        Ok(true)
+    }
+
+    /// N7：给指定会话挂 PTY resize（状态栏文案由 `status` 控制）。
+    ///
+    /// 与 `keys.rs::resize_active_terminal` 同一路径，但允许显式指定会话：
+    /// 多窗口轮询要为每个窗口自己的活动会话同步尺寸。
+    pub(crate) fn resize_terminal_session(
+        &mut self,
+        session_key: &str,
+        columns: u16,
+        rows: u16,
+        status: bool,
+    ) -> AppResult<()> {
+        let session_id = self
+            .sessions
+            .get(session_key)
+            .map(|session| session.session_id().clone())
+            .ok_or_else(|| AppError::new("runtime session is missing"))?;
+        self.dispatcher
+            .dispatch(SessionCommand::ResizeTerminal {
+                session_id,
+                columns,
+                rows,
+            })
+            .map_err(AppError::from_error)?;
+        let runtime = self
+            .sessions
+            .get_mut(session_key)
+            .ok_or_else(|| AppError::new("runtime session is missing"))?;
+        let _ = runtime
+            .resize_shell_pty(columns, rows)
+            .map_err(AppError::from_error)?;
+        // 只有已连接的会话才用"已调整终端尺寸"更新状态栏：断开/失败的会话
+        // （例如密码错误的连接失败）需要把失败原因留在状态栏直到用户下一步操作。
+        let session_connected = self
+            .sessions
+            .get(session_key)
+            .is_some_and(|session| session.state == yshell_core::SessionState::Connected);
+        if status && session_connected {
+            self.set_status_kind(
+                "terminal-resized",
+                format!("Resized runtime terminal to {}x{}.", columns, rows),
+                format!("{columns}x{rows}"),
+                String::new(),
+            );
+        }
+        Ok(())
     }
 }
 

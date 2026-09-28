@@ -14,12 +14,10 @@ use slint::language::ColorScheme;
 // Slint 1.18 只在私有 re-export 里暴露 `DragAction`（官方测试同样如此引用）；
 // `data-transfer` 走公开的 `slint::DataTransfer`。
 use slint::private_unstable_api::re_exports::DragAction;
-use slint::{
-    ComponentHandle, Model, ModelRc, SharedPixelBuffer, SharedString, Timer, TimerMode, VecModel,
-};
+use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, SharedString, VecModel};
 use yshell_config::{PanelId, PanelSide};
 use yshell_ssh::TransportBackend;
-use yshell_terminal::{TerminalRenderer, DEFAULT_FONT_SIZE};
+use yshell_terminal::TerminalRenderer;
 use yshell_ui::appearance::{self, AccentColors, ThemeMode};
 
 use crate::app_state::AppState;
@@ -31,7 +29,7 @@ use crate::runtime::{
     TransferRowData, TriStateFieldData,
 };
 
-mod generated_ui {
+pub(crate) mod generated_ui {
     #![allow(dead_code)]
     slint::include_modules!();
 }
@@ -54,18 +52,25 @@ use generated_ui::{
 /// renderer (`terminal_view.slint` sizes the bitmap with `phx`, i.e. it also
 /// resolves the scale itself).
 #[derive(Clone)]
-struct TerminalSurface {
+pub(crate) struct TerminalSurface {
     runtime: Rc<RefCell<AppRuntime>>,
+    /// N7：该表面所属窗口（解析"这个窗口自己的活动会话"，而不是全局活动会话）。
+    window_id: u64,
     renderer: Rc<RefCell<TerminalRenderer>>,
     last_frame: Rc<RefCell<Option<(String, u64)>>>,
     scale_factor: Rc<Cell<f32>>,
 }
 
 impl TerminalSurface {
-    fn new(runtime: Rc<RefCell<AppRuntime>>, renderer: Rc<RefCell<TerminalRenderer>>) -> Self {
+    pub(crate) fn new(
+        runtime: Rc<RefCell<AppRuntime>>,
+        window_id: u64,
+        renderer: Rc<RefCell<TerminalRenderer>>,
+    ) -> Self {
         let scale_factor = renderer.borrow().scale_factor();
         Self {
             runtime,
+            window_id,
             renderer,
             last_frame: Rc::new(RefCell::new(None)),
             scale_factor: Rc::new(Cell::new(sanitize_scale_factor(scale_factor))),
@@ -73,11 +78,11 @@ impl TerminalSurface {
     }
 
     /// Physical-pixel size of one cell (the renderer measures at `scale`).
-    fn cell_size(&self) -> (u32, u32) {
+    pub(crate) fn cell_size(&self) -> (u32, u32) {
         self.renderer.borrow().cell_size()
     }
 
-    fn scale_factor(&self) -> f32 {
+    pub(crate) fn scale_factor(&self) -> f32 {
         self.scale_factor.get()
     }
 
@@ -86,8 +91,8 @@ impl TerminalSurface {
     /// Returns `true` when it changed: the renderer re-measures its physical
     /// cell metrics and drops its glyph cache, and the next `refresh` re-renders
     /// the frame (the cached frame revision is invalidated). The PTY grid is
-    /// re-synced by the terminal poll timer, which runs every 120 ms.
-    fn sync_scale_factor(&self, window: &MainWindow) -> bool {
+    /// re-synced by the application-level poll timer, which runs every 120 ms.
+    pub(crate) fn sync_scale_factor(&self, window: &MainWindow) -> bool {
         let scale_factor = sanitize_scale_factor(window.window().scale_factor());
         if scale_factor == self.scale_factor.get() {
             return false;
@@ -98,7 +103,7 @@ impl TerminalSurface {
         true
     }
 
-    /// Applies the active session's frozen appearance (D17) to the renderer.
+    /// Applies the window's active session frozen appearance (D17) to the renderer.
     ///
     /// Returns `true` when the renderer appearance changed: the cached frame is
     /// invalidated so the next `refresh` repaints with the new palette/font.
@@ -107,7 +112,7 @@ impl TerminalSurface {
             let Ok(runtime) = self.runtime.try_borrow() else {
                 return false;
             };
-            runtime.active_terminal_appearance()
+            runtime.window_terminal_appearance(self.window_id)
         };
         let Some(appearance) = appearance else {
             return false;
@@ -131,15 +136,15 @@ impl TerminalSurface {
         true
     }
 
-    /// Re-render the terminal image when the active session's frame changed.
-    fn refresh(&self, window: &MainWindow) {
+    /// Re-render the terminal image when this window's active session frame changed.
+    pub(crate) fn refresh(&self, window: &MainWindow) {
         self.sync_appearance();
         let session = window.get_active_session().to_string();
         let frame_id = {
             let Ok(runtime) = self.runtime.try_borrow() else {
                 return;
             };
-            runtime.active_terminal_frame_id()
+            runtime.window_terminal_frame_id(self.window_id)
         };
         if let Some((last_session, last_frame)) = self.last_frame.borrow().as_ref() {
             if *last_session == session && *last_frame == frame_id {
@@ -149,7 +154,7 @@ impl TerminalSurface {
         let Ok(runtime) = self.runtime.try_borrow() else {
             return;
         };
-        let Some(snapshot) = runtime.active_terminal_render_snapshot() else {
+        let Some(snapshot) = runtime.window_terminal_render_snapshot(self.window_id) else {
             return;
         };
         let frame = self.renderer.borrow_mut().render(&snapshot);
@@ -165,48 +170,44 @@ impl TerminalSurface {
     }
 }
 
-#[derive(Debug)]
 pub struct YShellApp {
-    pub state: AppState,
+    /// 单实例共享的运行时（窗口只持有它的 `Rc`）。
+    runtime: Rc<RefCell<AppRuntime>>,
+    /// N7：`show()` 创建、`run()`/`run_event_loop()` 期间保持存活。
+    manager: Option<Rc<RefCell<crate::windows::WindowManager>>>,
 }
 
 impl YShellApp {
-    pub fn run(self) -> AppResult<()> {
-        let window = MainWindow::new().map_err(AppError::from_error)?;
-        apply_appearance(&window);
-        apply_fonts(&window);
-        apply_language();
-        // W5-A2：窗口级快捷键依赖 root FocusScope 持有键盘焦点（终端/弹窗会接管焦点，
-        // 终端聚焦时的组合键由 `dispatch_global_shortcut` 兜底）。
-        window.invoke_focus_global_shortcuts();
-        let runtime = Rc::new(RefCell::new(self.state.runtime));
-        // `window.window().scale_factor()` is the best value available before the
-        // window is mapped; `sync_scale_factor` after `show()` picks up the final
-        // winit scale (Xft.dpi / WINIT_X11_SCALE_FACTOR) and re-renders.
-        let renderer = Rc::new(RefCell::new(TerminalRenderer::with_scale_factor(
-            DEFAULT_FONT_SIZE,
-            window.window().scale_factor(),
-        )));
-        let surface = TerminalSurface::new(Rc::clone(&runtime), renderer);
+    pub fn new(runtime: AppRuntime) -> Self {
+        Self {
+            runtime: Rc::new(RefCell::new(runtime)),
+            manager: None,
+        }
+    }
+
+    /// N7：创建所有窗口（初始窗口 + 启动投影）但不进入事件循环。
+    ///
+    /// 语言在 `WindowManager::open_window` 里、首个组件创建之后选择（bundled
+    /// translations 依赖全局上下文），这里不再重复。
+    pub fn show(&mut self) -> AppResult<()> {
         // N2：启动落点 = Quick Connect 页（无标签时内容区显示 QC 页，不新建标签，
         // 见 `AppRuntime::quick_connect_visible`）。
-        let initial_projection = resolve_startup_ssh_backend(&mut runtime.borrow_mut());
-        apply_projection(&window, &initial_projection);
-        surface.refresh(&window);
-        // N1：SFTP 传输 worker（worker 线程 + mpsc，120ms UI 定时器 drain）。
-        let (sftp_job_tx, sftp_job_rx) = crate::sftp_jobs::start_sftp_job_worker();
-        runtime.borrow_mut().sftp_jobs = Some(crate::sftp_jobs::SftpJobHandle::new(sftp_job_tx));
+        resolve_startup_ssh_backend(&mut self.runtime.borrow_mut());
         // 本地栏首次列出（默认 home 目录）。
-        let local_projection = runtime.borrow_mut().refresh_local_pane();
-        apply_projection(&window, &local_projection);
-        let dialog_rx = wire_callbacks(&window, Rc::clone(&runtime), surface.clone());
-        let _terminal_poll_timer =
-            start_terminal_poll_timer(&window, runtime, surface.clone(), dialog_rx, sftp_job_rx);
-        window.show().map_err(AppError::from_error)?;
-        if surface.sync_scale_factor(&window) {
-            surface.refresh(&window);
-        }
-        window.run().map_err(AppError::from_error)
+        self.runtime.borrow_mut().refresh_local_pane();
+        let manager = crate::windows::WindowManager::new(Rc::clone(&self.runtime))?;
+        self.manager = Some(manager);
+        Ok(())
+    }
+
+    /// N7：进入 Slint 事件循环（直到最后一个窗口关闭 / Quit）。
+    pub fn run_event_loop(&self) -> AppResult<()> {
+        slint::run_event_loop().map_err(AppError::from_error)
+    }
+
+    pub fn run(mut self) -> AppResult<()> {
+        self.show()?;
+        self.run_event_loop()
     }
 }
 
@@ -251,7 +252,7 @@ fn resolve_appearance(
 ///
 /// 明暗的"跟随系统"由 Slint 侧处理（`Theme.mode = unknown` 时读取
 /// std-widgets 的 `Palette.color-scheme`），Rust 只负责用户显式选择的模式。
-fn apply_appearance(window: &MainWindow) {
+pub(crate) fn apply_appearance(window: &MainWindow) {
     let (mode, accent) = resolve_appearance(
         std::env::var("YSHELL_THEME").ok().as_deref(),
         std::env::var("YSHELL_ACCENT").ok().as_deref(),
@@ -316,7 +317,7 @@ fn resolve_ui_font(env_override: Option<&str>) -> String {
 }
 
 /// 把 UI 字体族写入 `Theme` 全局（须在窗口创建后、`run()` 前调用）。
-fn apply_fonts(window: &MainWindow) {
+pub(crate) fn apply_fonts(window: &MainWindow) {
     let font = resolve_ui_font(std::env::var("YSHELL_UI_FONT").ok().as_deref());
     window.global::<Theme>().set_font_ui(font.into());
 }
@@ -340,7 +341,7 @@ fn resolve_language(requested: &str, system_locale: Option<&str>) -> &'static st
 
 /// 应用界面语言（W4：`YSHELL_LANG=system|zh-CN|en-US` 作为验收开关；
 /// 设置页下拉在 W5 接线到同一函数）。
-fn apply_language() {
+pub(crate) fn apply_language() {
     let requested = std::env::var("YSHELL_LANG").unwrap_or_default();
     let system_locale = std::env::var("LC_ALL")
         .or_else(|_| std::env::var("LANG"))
@@ -351,16 +352,19 @@ fn apply_language() {
     }
 }
 
-fn wire_callbacks(
+pub(crate) fn wire_callbacks(
     window: &MainWindow,
-    runtime: Rc<RefCell<AppRuntime>>,
+    window_id: u64,
+    runtime: Rc<crate::windows::WindowRuntime>,
+    manager: Rc<RefCell<crate::windows::WindowManager>>,
     surface: TerminalSurface,
-) -> std::sync::mpsc::Receiver<FileDialogOutcome> {
+    // N4：rfd 文件对话框结果（worker 线程 → mpsc → 应用级轮询定时器 drain）。
+    dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
+) {
     // Never shadow this binding: each callback clones a fresh handle.
     let surface_source = surface;
     let clipboard = Rc::new(RefCell::new(ClipboardContext::new().ok()));
-    // N4：rfd 文件对话框结果（worker 线程 → mpsc → 终端轮询定时器 drain）。
-    let (dialog_tx, dialog_rx) = std::sync::mpsc::channel::<FileDialogOutcome>();
+    let manager_weak = Rc::downgrade(&manager);
 
     // N4：投影型回调的样板（每次回调克隆 weak/runtime/surface 并应用投影）。
     macro_rules! wire_n4 {
@@ -3640,16 +3644,82 @@ fn wire_callbacks(
         let _ = slint::quit_event_loop();
     });
 
-    wire_n1_sftp_callbacks(window, &runtime, &surface_source, &clipboard, &dialog_tx);
+    // --- N7：窗口/标签迁移生命周期 ------------------------------------------
+    // 只由 manager 处理：需要换 UI 所有权/开新窗口，闭包里不能长时间持有 manager。
+    {
+        let manager_weak = manager_weak.clone();
+        window.on_move_tab_to_new_window(move |tab_id| {
+            let Some(manager) = manager_weak.upgrade() else {
+                return;
+            };
+            if let Err(error) =
+                crate::windows::WindowManager::move_tab_to_new_window(&manager, tab_id.as_ref())
+            {
+                tracing::warn!(target: "yshell::app", "could not move tab to a new window: {error}");
+                if let Ok(manager) = manager.try_borrow() {
+                    manager.set_window_status(
+                        window_id,
+                        "Could not move the tab into a new window.",
+                    );
+                }
+            }
+        });
+    }
+    {
+        let manager_weak = manager_weak.clone();
+        window.on_move_tab_to_main_window(move |tab_id| {
+            let Some(manager) = manager_weak.upgrade() else {
+                return;
+            };
+            let Ok(mut manager) = manager.try_borrow_mut() else {
+                return;
+            };
+            if let Err(error) = manager.move_tab_to_main_window(tab_id.as_ref()) {
+                tracing::warn!(target: "yshell::app", "could not move tab to the main window: {error}");
+            }
+        });
+    }
+    {
+        let manager_weak = manager_weak.clone();
+        window.on_confirm_close_window(move || {
+            if let Some(manager) = manager_weak.upgrade() {
+                if let Ok(mut manager) = manager.try_borrow_mut() {
+                    manager.confirm_close_window(window_id);
+                }
+            }
+        });
+    }
+    {
+        let manager_weak = manager_weak.clone();
+        window.on_cancel_close_window(move || {
+            if let Some(manager) = manager_weak.upgrade() {
+                if let Ok(mut manager) = manager.try_borrow_mut() {
+                    manager.cancel_close_window(window_id);
+                }
+            }
+        });
+    }
+    // 窗口激活（终端 FocusScope 的 has-focus 翻转 / 快捷键 FocusScope 的
+    // window-activation 原因）：把该窗口标记为交互窗口。
+    {
+        let manager_weak = manager_weak.clone();
+        window.on_window_activated(move || {
+            if let Some(manager) = manager_weak.upgrade() {
+                if let Ok(mut manager) = manager.try_borrow_mut() {
+                    manager.note_window_activation(window_id);
+                }
+            }
+        });
+    }
 
-    dialog_rx
+    wire_n1_sftp_callbacks(window, &runtime, &surface_source, &clipboard, &dialog_tx);
 }
 
 /// N1 Phase 2：本地栏 / 双击多选 / 队列抽屉 / 拖动落点 / 剪贴板 / 冲突与属性。
 #[allow(clippy::too_many_arguments)]
 fn wire_n1_sftp_callbacks(
     window: &MainWindow,
-    runtime: &Rc<RefCell<AppRuntime>>,
+    runtime: &Rc<crate::windows::WindowRuntime>,
     surface_source: &TerminalSurface,
     clipboard: &Rc<RefCell<Option<ClipboardContext>>>,
     dialog_tx: &std::sync::mpsc::Sender<FileDialogOutcome>,
@@ -4296,7 +4366,10 @@ fn dispatch_sftp_menu_action(
 }
 
 /// N4：把对话框结果回填到运行时（在 UI 线程的定时器里调用）。
-fn apply_dialog_outcome(runtime: &mut AppRuntime, outcome: FileDialogOutcome) -> AppProjection {
+pub(crate) fn apply_dialog_outcome(
+    runtime: &mut AppRuntime,
+    outcome: FileDialogOutcome,
+) -> AppProjection {
     match outcome {
         FileDialogOutcome::Picked { kind, path } => match kind {
             DialogKind::PrivateKeyImport => runtime.update_private_keys_import_path(&path),
@@ -4348,70 +4421,8 @@ fn apply_dialog_outcome(runtime: &mut AppRuntime, outcome: FileDialogOutcome) ->
     }
 }
 
-fn start_terminal_poll_timer(
-    window: &MainWindow,
-    runtime: Rc<RefCell<AppRuntime>>,
-    surface: TerminalSurface,
-    dialog_rx: std::sync::mpsc::Receiver<FileDialogOutcome>,
-    sftp_job_rx: std::sync::mpsc::Receiver<crate::sftp_jobs::SftpJobMessage>,
-) -> Timer {
-    let timer = Timer::default();
-    let weak = window.as_weak();
-    timer.start(TimerMode::Repeated, Duration::from_millis(120), move || {
-        let Some(window) = weak.upgrade() else {
-            return;
-        };
-        // N4：rfd 对话框结果回填（worker 线程 → mpsc → 本次 drain）。
-        {
-            let Ok(mut runtime) = runtime.try_borrow_mut() else {
-                return;
-            };
-            let mut last_projection = None;
-            while let Ok(outcome) = dialog_rx.try_recv() {
-                last_projection = Some(apply_dialog_outcome(&mut runtime, outcome));
-            }
-            // N1：SFTP 传输 worker 消息（进度/完成/冲突）。
-            while let Ok(message) = sftp_job_rx.try_recv() {
-                last_projection = Some(runtime.apply_sftp_job_message(message));
-            }
-            if let Some(projection) = last_projection {
-                apply_projection(&window, &projection);
-            }
-        }
-        surface.sync_scale_factor(&window);
-        let (columns, rows) = terminal_size_from_viewport(
-            window.get_terminal_viewport_width_px(),
-            window.get_terminal_viewport_height_px(),
-            surface.cell_size(),
-            surface.scale_factor(),
-        );
-        let projection = {
-            let Ok(mut runtime) = runtime.try_borrow_mut() else {
-                return;
-            };
-            let mut projection = None;
-            match runtime.sync_active_terminal_size_passive(columns, rows) {
-                Ok(Some(updated)) => projection = Some(updated),
-                Ok(None) => {}
-                Err(error) => set_error_status(&window, "Could not resize the terminal.", &error),
-            }
-            match runtime.poll_all_terminal_outputs() {
-                Ok(Some(updated)) => projection = Some(updated),
-                Ok(None) => {}
-                Err(error) => set_error_status(&window, "Terminal output polling failed.", &error),
-            }
-            projection
-        };
-        if let Some(projection) = projection {
-            apply_projection(&window, &projection);
-        }
-        surface.refresh(&window);
-    });
-    timer
-}
-
 /// Coerce a window scale factor into a usable value.
-fn sanitize_scale_factor(scale_factor: f32) -> f32 {
+pub(crate) fn sanitize_scale_factor(scale_factor: f32) -> f32 {
     if scale_factor.is_finite() && scale_factor > 0.0 {
         scale_factor
     } else {
@@ -4501,7 +4512,7 @@ fn frame_image(frame: &yshell_terminal::TerminalFrame) -> slint::Image {
 /// viewport and is displayed 1:1 in physical pixels, anchored at the bitmap
 /// origin; the overflowing last column/row is clipped by the terminal surface
 /// (a partially visible cell instead of a stretched bitmap or a blank strip).
-fn terminal_size_from_viewport(
+pub(crate) fn terminal_size_from_viewport(
     width_px: f32,
     height_px: f32,
     cell_size: (u32, u32),
@@ -4528,7 +4539,7 @@ fn terminal_size_from_viewport(
 /// `TouchArea`.
 fn terminal_grid_point(
     surface: &TerminalSurface,
-    runtime: &Rc<RefCell<AppRuntime>>,
+    runtime: &Rc<crate::windows::WindowRuntime>,
     x: f32,
     y: f32,
 ) -> Option<(u16, u16)> {
@@ -4575,7 +4586,7 @@ fn terminal_grid_cell(
 
 /// Copy the active terminal selection into the OS clipboard.
 fn copy_selection_to_clipboard(
-    runtime: &Rc<RefCell<AppRuntime>>,
+    runtime: &Rc<crate::windows::WindowRuntime>,
     clipboard: &Rc<RefCell<Option<ClipboardContext>>>,
 ) -> AppResult<AppProjection> {
     let projection = runtime.borrow_mut().copy_active_terminal_selection()?;
@@ -4588,7 +4599,7 @@ fn copy_selection_to_clipboard(
 /// Paste the OS clipboard into the active terminal (falls back to the app
 /// clipboard buffer when the OS clipboard is unavailable).
 fn paste_clipboard_into_terminal(
-    runtime: &Rc<RefCell<AppRuntime>>,
+    runtime: &Rc<crate::windows::WindowRuntime>,
     clipboard: &Rc<RefCell<Option<ClipboardContext>>>,
 ) -> AppResult<AppProjection> {
     let clipboard_text = clipboard
@@ -4635,7 +4646,7 @@ enum ScrollRequest {
 /// shortcuts first, then the VT key encoding. The returned projection must be
 /// applied to the window so scroll indicators and status text stay in sync.
 fn handle_terminal_key(
-    runtime: &Rc<RefCell<AppRuntime>>,
+    runtime: &Rc<crate::windows::WindowRuntime>,
     clipboard: &Rc<RefCell<Option<ClipboardContext>>>,
     key: TerminalKeyPress<'_>,
 ) -> AppResult<AppProjection> {
@@ -5240,7 +5251,7 @@ fn session_tree_claim_activation(state: &Rc<RefCell<SessionTreeInput>>, id: &str
 /// 激活一个会话树节点；被去重窗口拦下时返回 `None`（调用方直接跳过）。
 fn session_tree_activate(
     state: &Rc<RefCell<SessionTreeInput>>,
-    runtime: &Rc<RefCell<AppRuntime>>,
+    runtime: &Rc<crate::windows::WindowRuntime>,
     id: &str,
 ) -> Option<AppResult<AppProjection>> {
     if !session_tree_claim_activation(state, id) {
@@ -5252,7 +5263,7 @@ fn session_tree_activate(
 /// Sets a plain (not-yet-migrated) status line and clears the i18n kind, so the
 /// status bar falls back to the English `status_text` after error paths that
 /// bypass [`apply_projection`] (which always re-applies kind + params).
-fn set_plain_status(window: &MainWindow, text: SharedString) {
+pub(crate) fn set_plain_status(window: &MainWindow, text: SharedString) {
     window.set_status_text(text);
     window.set_status_kind_text("".into());
     window.set_status_param_1_text("".into());
@@ -5314,7 +5325,7 @@ fn split_handle_data(handle: &RuntimeSplitHandleData) -> SplitHandleData {
     }
 }
 
-fn apply_projection(window: &MainWindow, projection: &AppProjection) {
+pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) {
     window.set_config_dir(projection.config_dir_text.clone().into());
     window.set_secret_store_kind_text(projection.secret_store_kind_text.clone().into());
     window.set_secret_store_path_text(projection.secret_store_path_text.clone().into());
@@ -5685,6 +5696,12 @@ fn apply_projection(window: &MainWindow, projection: &AppProjection) {
     // D18：标签右键菜单的 Reconnect/Disconnect 状态（针对被右键标签）。
     window.set_tab_menu_reconnect_enabled(projection.tab_menu_reconnect_enabled);
     window.set_tab_menu_disconnect_enabled(projection.tab_menu_disconnect_enabled);
+    // N7：标签右键"移动到新窗口 / 移动到主窗口" + 关闭窗口确认（D7）。
+    window.set_tab_menu_move_to_new_window_enabled(projection.tab_menu_move_to_new_window_enabled);
+    window
+        .set_tab_menu_move_to_main_window_enabled(projection.tab_menu_move_to_main_window_enabled);
+    window.set_close_window_confirm_visible(projection.close_window_confirm_visible);
+    window.set_close_window_confirm_active_count(projection.close_window_confirm_active_count);
     // N9：同步发送按键（终端/标签菜单 + 状态栏 chip + 标签角标）。
     window.set_terminal_sync_all_enabled(projection.terminal_sync_all_enabled);
     window.set_terminal_sync_visible_enabled(projection.terminal_sync_visible_enabled);
@@ -6028,9 +6045,7 @@ fn restore_shortcut_focus_after_modal(window: &MainWindow, projection: &AppProje
 pub fn bootstrap_app() -> AppResult<YShellApp> {
     init_logging()?;
     let config_dir = yshell_config::discover_config_dir().map_err(AppError::from_error)?;
-    Ok(YShellApp {
-        state: AppState::new(config_dir)?,
-    })
+    Ok(YShellApp::new(AppState::new(config_dir)?.runtime))
 }
 
 pub fn init_logging() -> AppResult<()> {

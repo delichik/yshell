@@ -419,12 +419,18 @@ export component MainWindow inherits Window {
     // A28（D18）：针对"被右键标签"的重连/断开可用性（Rust `tab_menu_connection_flags`）。
     in-out property <bool> tab_menu_reconnect_enabled: false;
     in-out property <bool> tab_menu_disconnect_enabled: false;
+    // N7：标签右键"移动到新窗口 / 移动到主窗口"（Rust 按标签所在窗口计算）。
+    in-out property <bool> tab_menu_move_to_new_window_enabled: false;
+    in-out property <bool> tab_menu_move_to_main_window_enabled: false;
     // 关闭确认弹窗（单关显示会话名；批量显示数量与活动连接数）。
     in-out property <bool> close_tabs_confirm_visible: false;
     in-out property <bool> close_tabs_confirm_single: false;
     in-out property <string> close_tabs_confirm_name_text: "";
     in-out property <int> close_tabs_confirm_count: 0;
     in-out property <int> close_tabs_confirm_active_count: 0;
+    // N7：关闭窗口确认（带活动连接的非最后一个窗口；D7）。
+    in-out property <bool> close_window_confirm_visible: false;
+    in-out property <int> close_window_confirm_active_count: 0;
     in-out property <string> terminal_title_name_text: "";
     in-out property <bool> terminal_title_has_session: false;
     in-out property <string> terminal_body_kind_text: "ready";
@@ -659,6 +665,16 @@ export component MainWindow inherits Window {
     callback toggle_tab_receive_key_input(string);
     callback confirm_close_tabs();
     callback cancel_close_tabs();
+    // --- N7：多窗口（标签迁移 / 窗口关闭确认 / 窗口激活）------------------------
+    /// 标签右键：把标签移动到新窗口（只换 UI 所有权）。
+    callback move_tab_to_new_window(string);
+    /// 标签右键：把标签移动回主窗口。
+    callback move_tab_to_main_window(string);
+    /// 关闭带活动连接窗口的确认弹窗（D7：确认后断开）。
+    callback confirm_close_window();
+    callback cancel_close_window();
+    /// 窗口被激活（OS 焦点）：把该窗口标记为交互窗口。
+    callback window_activated();
     callback send_demo_input();
     callback send_terminal_input(string);
     callback terminal_key(string, bool, bool, bool, bool);
@@ -936,6 +952,7 @@ export component MainWindow inherits Window {
         || root.host_key_prompt_visible
         || root.quit_dialog_visible
         || root.delete_session_dialog_visible
+        || root.close_window_confirm_visible
         || root.sftp_dialog_kind != "none"
         || root.private_keys_modal_visible
         || root.host_keys_modal_visible
@@ -957,6 +974,7 @@ export component MainWindow inherits Window {
         || root.delete_session_dialog_visible
         || root.new_folder_dialog_visible
         || root.close_tabs_confirm_visible
+        || root.close_window_confirm_visible
         || root.sftp_dialog_kind != "none"
         || root.private_keys_modal_visible
         || root.host_keys_modal_visible
@@ -1323,6 +1341,22 @@ export component MainWindow inherits Window {
             tooltip: root.tab_menu_receive_key_input_enabled
                 ? ""
                 : TextFormats.receive-key-input-reason(root.tab_menu_receive_key_input_reason_text)
+        },
+        // N7：跨窗口迁移（索引 12/13；只换 UI 所有权，会话不重建）。
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        {
+            label: @tr("Move to New Window"), shortcut: "",
+            enabled: root.tab_menu_move_to_new_window_enabled, checked: false, separator: false,
+            tooltip: root.tab_menu_move_to_new_window_enabled
+                ? ""
+                : @tr("Open a tab before moving it to a new window.")
+        },
+        {
+            label: @tr("Move to Main Window"), shortcut: "",
+            enabled: root.tab_menu_move_to_main_window_enabled, checked: false, separator: false,
+            tooltip: root.tab_menu_move_to_main_window_enabled
+                ? ""
+                : @tr("This tab is already in the main window.")
         }
     ];
     property <[MenuEntry]> saved_session_context_menu_entries: [
@@ -1669,6 +1703,9 @@ export component MainWindow inherits Window {
             else if (index == 8) { root.disconnect_tab(root.tab_menu_id); }
             // N9：接收键输入勾选（索引 10；see `tab_context_menu_entries`）。
             else if (index == 10) { root.toggle_tab_receive_key_input(root.tab_menu_id); }
+            // N7：跨窗口迁移（索引 12/13；只换 UI 所有权）。
+            else if (index == 12) { root.move_tab_to_new_window(root.tab_menu_id); }
+            else if (index == 13) { root.move_tab_to_main_window(root.tab_menu_id); }
         }
         root.close_context_menus();
         root.restore-focus-after-menu();
@@ -1750,7 +1787,7 @@ export component MainWindow inherits Window {
     /// 顺序与下方弹窗实例的声明顺序相反（最后声明 = 绘制/交互最上层）。没有弹窗
     /// 剩余时把焦点还给窗口级快捷键 FocusScope（等价于 bootstrap 的
     /// `restore_shortcut_focus_after_modal`；本地弹窗关闭不产生投影事件，需在此补位）。
-    function focus-top-dialog() {
+    public function focus-top-dialog() {
         if (root.logging_dialog_visible) {
             logging_dialog.focus-dialog();
         } else if (root.terminal_appearance_dialog_visible) {
@@ -1781,6 +1818,8 @@ export component MainWindow inherits Window {
             new_folder_dialog.focus-dialog();
         } else if (root.close_tabs_confirm_visible) {
             close_tabs_dialog.focus-dialog();
+        } else if (root.close_window_confirm_visible) {
+            close_window_dialog.focus-dialog();
         } else if (root.quit_dialog_visible) {
             quit_dialog.focus-dialog();
         } else if (root.delete_session_dialog_visible) {
@@ -1802,6 +1841,13 @@ export component MainWindow inherits Window {
     // 终端 FocusScope 会 accept 全部按键（见 ui/components/terminal_view.slint），
     // 所以终端聚焦时由 bootstrap.rs 的终端按键兜底调用同一份 `dispatch-global-shortcut`。
     shortcut_scope := FocusScope {
+        // N7：窗口获得 OS 焦点（window-activation 原因）→ 标记交互窗口（终端聚焦
+        // 的场景由 TerminalWorkspace 的 terminal-focused 变化转发同一回调）。
+        focus-gained(reason) => {
+            if (reason == FocusReason.window-activation) {
+                root.window_activated();
+            }
+        }
         key-pressed(event) => {
             // A2：浮层（一级菜单 / 右键菜单 / 面板 ⋯ / 溢出菜单）打开时，Esc 只关浮层。
             // 终端聚焦时按键到不了这里（终端 FocusScope 消费全部按键）——Rust 侧的
@@ -1971,6 +2017,8 @@ export component MainWindow inherits Window {
                         root.open_context_menu("tab", x, y);
                     }
                     context-menu-requested(x, y) => { root.open_context_menu("terminal", x, y); }
+                    // N7：终端 FocusScope 拿到焦点（窗口激活 / 点击终端）→ 标记交互窗口。
+                    window-activated() => { root.window_activated(); }
                     terminal-key(text, ctrl, alt, shift, meta) => { root.terminal_key(text, ctrl, alt, shift, meta); }
                     terminal-scroll(delta) => { root.terminal_scroll(delta); }
                     terminal-scroll-to-bottom() => { root.terminal_scroll_to_bottom(); }
@@ -2421,6 +2469,25 @@ export component MainWindow inherits Window {
         }
         canceled() => {
             root.cancel_close_tabs();
+            root.focus-top-dialog();
+        }
+    }
+
+    // N7：关闭窗口确认（带活动连接的非最后一个窗口；D7 = 确认后断开）。
+    // 最后一个窗口的关闭沿用上面的 Quit 确认（设计 §1）。
+    close_window_dialog := ConfirmDialog {
+        open: root.close_window_confirm_visible;
+        // A29（C24）：破坏性确认（关闭窗口会断开其中的活动连接）。
+        destructive: true;
+        title-text: @tr("Close Window");
+        message-text: @tr("Close this window? {n} active session will be disconnected." | "Close this window? {n} active sessions will be disconnected." % root.close_window_confirm_active_count, root.close_window_confirm_active_count);
+        confirm-label: @tr("Close");
+        confirmed() => {
+            root.confirm_close_window();
+            root.focus-top-dialog();
+        }
+        canceled() => {
+            root.cancel_close_window();
             root.focus-top-dialog();
         }
     }

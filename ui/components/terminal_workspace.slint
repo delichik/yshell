@@ -245,6 +245,15 @@ export component TerminalWorkspace inherits VerticalLayout {
         }
     }
 
+    // N7：terminal-focused 由 TerminalView 的 FocusScope.has-focus 驱动。窗口失去
+    // OS 焦点时它翻 false、重新激活时翻 true —— 后者即"该窗口被激活"的信号
+    // （终端持有焦点时 focus-gained 事件到不了窗口级 shortcut_scope）。
+    changed terminal-focused => {
+        if (root.terminal-focused) {
+            root.window-activated();
+        }
+    }
+
     /// A2/E23：宿主在菜单/弹层关闭后把键盘焦点还给终端（WS-A 的焦点回退请求）。
     /// 终端不可见（Quick Connect 页）时不动焦点，避免抢 QC 输入框。
     public function focus-terminal() {
@@ -253,6 +262,9 @@ export component TerminalWorkspace inherits VerticalLayout {
         }
     }
 
+    /// N7：终端 FocusScope 刚拿到焦点（窗口激活 / 点击终端）。宿主据此把该窗口
+    /// 标记为交互窗口（多窗口下键盘/终端动作要作用到正确窗口的活动会话）。
+    callback window-activated();
     callback new-session();
     callback open-find();
     callback activate-tab(string);

@@ -72,11 +72,19 @@ impl AppRuntime {
     /// 返回是否新建了标签。
     pub(crate) fn activate_quick_connect_tab_inner(&mut self) -> bool {
         let created = if let Some(tab_id) = self.quick_connect_tab_id() {
-            self.active_tab_id = Some(tab_id);
+            // N7：已有 QC 标签可能在别的窗口——激活它所在窗口的标签并聚焦该窗口。
+            let window_id = self.window_of_tab(&tab_id);
+            self.activate_tab_in_window(&tab_id);
+            if window_id.is_none_or(|id| self.focused_window == Some(id)) {
+                self.active_tab_id = Some(tab_id);
+            } else if let Some(window_id) = window_id {
+                self.focus_window(window_id);
+            }
             false
         } else {
             let tab_id = format!("tab-quick-connect-{}", self.allocate_runtime_ordinal());
             self.tabs.push(TabEntry::quick_connect(tab_id.clone()));
+            self.register_tab_in_focused_window(&tab_id);
             self.active_tab_id = Some(tab_id);
             true
         };

@@ -849,6 +849,18 @@ msgctxt "MainWindow"
 msgid "Quit YShell now? Active runtime sessions will be disconnected."
 msgstr "Quit YShell now? Active runtime sessions will be disconnected."
 
+#: ui/main_window.slint:2482
+msgctxt "MainWindow"
+msgid "Close Window"
+msgstr "Close Window"
+
+#: ui/main_window.slint:2483
+msgctxt "MainWindow"
+msgid "Close this window? {n} active session will be disconnected."
+msgid_plural "Close this window? {n} active sessions will be disconnected."
+msgstr[0] "Close this window? {n} active session will be disconnected."
+msgstr[1] "Close this window? {n} active sessions will be disconnected."
+
 #: ui/components/confirm_dialog.slint:14 ui/components/confirm_dialog.slint:19
 msgctxt "ConfirmDialog"
 msgid "Confirm"
@@ -3907,6 +3919,26 @@ msgstr "No other connected terminal tab can receive key input."
 msgctxt "MainWindow"
 msgid "Receive Key Input"
 msgstr "Receive Key Input"
+
+#: ui/main_window.slint:1348
+msgctxt "MainWindow"
+msgid "Move to New Window"
+msgstr "Move to New Window"
+
+#: ui/main_window.slint:1352
+msgctxt "MainWindow"
+msgid "Open a tab before moving it to a new window."
+msgstr "Open a tab before moving it to a new window."
+
+#: ui/main_window.slint:1355
+msgctxt "MainWindow"
+msgid "Move to Main Window"
+msgstr "Move to Main Window"
+
+#: ui/main_window.slint:1359
+msgctxt "MainWindow"
+msgid "This tab is already in the main window."
+msgstr "This tab is already in the main window."
 
 msgctxt "MainWindow"
 msgid "SYNC → {n} target"

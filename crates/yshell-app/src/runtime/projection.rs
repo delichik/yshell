@@ -12,6 +12,31 @@ use super::theme::palette_parts;
 use super::*;
 
 impl AppRuntime {
+    /// N7：为指定窗口组装投影（终端/标签字段解析到该窗口的活动标签）。
+    ///
+    /// 只临时覆盖投影解析的窗口指针，不改聚焦窗口——多窗口轮询会对每个窗口各调用
+    /// 一次。`AppRuntime` 单实例共享，调用方负责把结果应用到对应的 `MainWindow`。
+    pub fn projection_for_window(&self, window_id: u64) -> AppProjection {
+        let previous = self.projection_window.replace(Some(window_id));
+        let projection = self.projection();
+        self.projection_window.set(previous);
+        projection
+    }
+
+    /// N7：投影窗口是否显示 Quick Connect 页（窗口自己的标签集合决定）。
+    ///
+    /// 无窗口登记（单窗口/测试）时沿用 `quick_connect_visible()` 的全局语义。
+    fn projection_quick_connect_visible(&self) -> bool {
+        let Some(window_id) = self.projection_window_id() else {
+            return self.quick_connect_visible();
+        };
+        if self.window_tab_ids(window_id).is_empty() {
+            return true;
+        }
+        self.window_active_tab(window_id)
+            .is_some_and(|tab_id| self.tab_kind_is_quick_connect(tab_id))
+    }
+
     pub fn projection(&self) -> AppProjection {
         let (editor_folder_label_text, editor_folder_id_text, editor_folder_known) =
             self.editor_folder_parts();
@@ -30,8 +55,12 @@ impl AppRuntime {
         let (tab_has_session, tab_name_text, tab_state_text) = self.tab_parts();
         let (terminal_title_has_session, terminal_title_name_text) = self.terminal_title_parts();
         let (terminal_body_kind_text, terminal_body_text) = self.terminal_body_parts();
-        let tabs = self.tab_data();
+        // N7：标签条只投影"当前投影窗口"的标签（`projection_window` 未设置时 =
+        // 聚焦窗口；无窗口登记时 = 全部标签）。
+        let tabs = self.tab_data_for_projection();
         let tab_has_disconnected = self.has_disconnected_tabs();
+        let projection_window_active_tab = self.projection_active_tab_id();
+        let projection_window = self.projection_window_id();
         let (
             tab_menu_close_others_enabled,
             tab_menu_close_left_enabled,
@@ -42,6 +71,9 @@ impl AppRuntime {
         // D18：标签右键菜单的 Reconnect/Disconnect 启用条件（针对被右键标签）。
         let (tab_menu_reconnect_enabled, tab_menu_disconnect_enabled) =
             self.tab_menu_connection_flags();
+        // N7：标签右键"移动到新窗口 / 移动到主窗口"的启用条件。
+        let (tab_menu_move_to_new_window_enabled, tab_menu_move_to_main_window_enabled) =
+            self.tab_menu_move_flags();
         let pending_close = self.pending_close_tabs.as_ref();
         let (terminal_search_kind_text, terminal_search_match_count, terminal_search_current_index) =
             self.terminal_search_summary_parts();
@@ -59,8 +91,26 @@ impl AppRuntime {
             self.sftp_properties_parts();
         let (clipboard_side_text, clipboard_count, clipboard_cut) = self.clipboard_parts();
         let (status_kind, status_param_1, status_param_2) = self.status_i18n_parts();
-        let (terminal_scrollback_lines, terminal_viewport_rows) =
-            self.active_terminal_scroll_geometry();
+        // N7：终端滚动/帧数据解析"投影窗口"自己的活动会话（不再是全局活动会话）。
+        // 无窗口覆盖（`projection_window` 为空 = 聚焦窗口投影）时沿用 keys.rs 的
+        // 活动终端 API，保持单窗口路径的语义与测试不变。
+        let focus_terminal = self.focus_terminal_runtime();
+        let (terminal_scrollback_lines, terminal_viewport_rows) = match self.projection_window.get()
+        {
+            Some(_) => focus_terminal
+                .map(|runtime| {
+                    let metrics = runtime.terminal_viewport_metrics();
+                    (
+                        metrics
+                            .top_absolute_row
+                            .saturating_add(metrics.viewport_offset)
+                            .saturating_add(usize::from(metrics.rows)),
+                        usize::from(metrics.rows),
+                    )
+                })
+                .unwrap_or((0, 0)),
+            None => self.active_terminal_scroll_geometry(),
+        };
         // N6：终端日志（菜单/状态栏入口、REC 指示、弹窗字段）。
         let (
             terminal_logging_start_enabled,
@@ -68,7 +118,7 @@ impl AppRuntime {
             terminal_logging_open_file_enabled,
             terminal_logging_open_folder_enabled,
         ) = self.terminal_logging_menu_flags();
-        let logging_session_key = self.active_session_id.clone();
+        let logging_session_key = self.focus_session_key().map(str::to_owned);
         let logging_active = logging_session_key
             .as_deref()
             .is_some_and(|session_key| self.session_logging_active(session_key));
@@ -244,9 +294,9 @@ impl AppRuntime {
             active_session_kind_text: active_kind_text.to_owned(),
             active_session_name_text: active_name_text,
             active_session_state_text: active_state_text,
-            has_active_session: self.active_terminal_runtime().is_some(),
+            has_active_session: self.focus_terminal_runtime().is_some(),
             active_session_connected: self
-                .active_terminal_runtime()
+                .focus_terminal_runtime()
                 .is_some_and(|session| session.state == SessionState::Connected),
             has_saved_selection: self.selected_saved_session_id.is_some(),
             saved_session_count: i32::try_from(self.saved_session_count()).unwrap_or(i32::MAX),
@@ -281,9 +331,9 @@ impl AppRuntime {
             tab_name_text,
             tab_state_text,
             tab_has_session,
+            tab_count: i32::try_from(tabs.len()).unwrap_or(i32::MAX),
             tabs,
-            active_tab_id: self.active_tab_id.clone().unwrap_or_default(),
-            tab_count: i32::try_from(self.tabs.len()).unwrap_or(i32::MAX),
+            active_tab_id: projection_window_active_tab,
             tab_has_disconnected,
             close_tabs_confirm_visible: pending_close.is_some(),
             close_tabs_confirm_single: pending_close.is_some_and(|pending| pending.single),
@@ -305,6 +355,16 @@ impl AppRuntime {
             tab_menu_close_disconnected_enabled,
             tab_menu_reconnect_enabled,
             tab_menu_disconnect_enabled,
+            tab_menu_move_to_new_window_enabled,
+            tab_menu_move_to_main_window_enabled,
+            // N7：窗口关闭确认（投影窗口的挂起状态；无窗口登记时不可见）。
+            close_window_confirm_visible: projection_window
+                .is_some_and(|window_id| self.window_close_pending(window_id)),
+            close_window_confirm_active_count: projection_window
+                .map(|window_id| {
+                    i32::try_from(self.active_connections_in_window(window_id)).unwrap_or(i32::MAX)
+                })
+                .unwrap_or(0),
             // N9：同步发送按键。
             terminal_sync_all_enabled,
             terminal_sync_visible_enabled,
@@ -325,12 +385,24 @@ impl AppRuntime {
             terminal_visible_lines: self.terminal_visible_lines(),
             terminal_cursor_column: self.terminal_cursor_column(),
             terminal_cursor_row: self.terminal_cursor_row(),
-            terminal_frame_id: self.active_terminal_frame_id(),
-            terminal_scroll_offset: self.active_terminal_scroll_offset(),
+            terminal_frame_id: if self.projection_window.get().is_some() {
+                focus_terminal.map(SessionRuntime::frame_id).unwrap_or(0)
+            } else {
+                self.active_terminal_frame_id()
+            },
+            terminal_scroll_offset: if self.projection_window.get().is_some() {
+                focus_terminal
+                    .map(|runtime| runtime.viewport_offset() as u64)
+                    .unwrap_or(0)
+            } else {
+                self.active_terminal_scroll_offset()
+            },
             terminal_scrollback_lines: i32::try_from(terminal_scrollback_lines).unwrap_or(i32::MAX),
             terminal_viewport_rows: i32::try_from(terminal_viewport_rows).unwrap_or(i32::MAX),
-            terminal_selection_active: self.active_terminal_selection_active(),
-            terminal_has_selection: self.active_terminal_selection_active(),
+            terminal_selection_active: focus_terminal
+                .is_some_and(SessionRuntime::terminal_selection_active),
+            terminal_has_selection: focus_terminal
+                .is_some_and(SessionRuntime::terminal_selection_active),
             terminal_search_query_text: self.terminal_search_query.clone(),
             terminal_search_kind_text: terminal_search_kind_text.to_owned(),
             terminal_search_match_count,
@@ -464,7 +536,7 @@ impl AppRuntime {
             transfers_visible: self.panel_visible(PanelId::Transfers),
             layout: layout_projection(&panel_view),
             app_version_text: env!("CARGO_PKG_VERSION").to_owned(),
-            quick_connect_visible: self.quick_connect_visible(),
+            quick_connect_visible: self.projection_quick_connect_visible(),
             quick_connect_input_text: self.quick_connect_input.clone(),
             quick_connect_error_text: self.quick_connect_error_text.clone(),
             quick_connect_last_target_text: self.quick_connect_last_target.clone(),
@@ -582,8 +654,7 @@ impl AppRuntime {
 
     pub(crate) fn active_session_parts(&self) -> (&'static str, String, String) {
         match self
-            .active_session_id
-            .as_ref()
+            .focus_session_key()
             .and_then(|id| self.sessions.get(id))
         {
             Some(session) => (
@@ -681,8 +752,7 @@ impl AppRuntime {
 
     pub(crate) fn terminal_title_parts(&self) -> (bool, String) {
         match self
-            .active_session_id
-            .as_ref()
+            .focus_session_key()
             .and_then(|id| self.sessions.get(id))
         {
             Some(session) => (true, session.display_name.clone()),
@@ -692,8 +762,7 @@ impl AppRuntime {
 
     pub(crate) fn terminal_body_parts(&self) -> (&'static str, String) {
         match self
-            .active_session_id
-            .as_ref()
+            .focus_session_key()
             .and_then(|id| self.sessions.get(id))
         {
             Some(session) => {
@@ -709,8 +778,7 @@ impl AppRuntime {
     }
 
     pub(crate) fn terminal_visible_lines(&self) -> Vec<String> {
-        self.active_session_id
-            .as_ref()
+        self.focus_session_key()
             .and_then(|id| self.sessions.get(id))
             .map(|session| {
                 let lines = session.visible_lines();
@@ -732,16 +800,14 @@ impl AppRuntime {
     }
 
     pub(crate) fn terminal_cursor_column(&self) -> i32 {
-        self.active_session_id
-            .as_ref()
+        self.focus_session_key()
             .and_then(|id| self.sessions.get(id))
             .map(|session| i32::from(session.cursor_position().0))
             .unwrap_or(0)
     }
 
     pub(crate) fn terminal_cursor_row(&self) -> i32 {
-        self.active_session_id
-            .as_ref()
+        self.focus_session_key()
             .and_then(|id| self.sessions.get(id))
             .map(|session| i32::from(session.cursor_position().1))
             .unwrap_or(0)
@@ -991,7 +1057,7 @@ impl AppRuntime {
     }
 
     fn active_deploy_target(&self) -> Option<String> {
-        let session_key = self.active_session_id.as_ref()?;
+        let session_key = self.focus_session_key()?;
         let session = self.sessions.get(session_key)?;
         Some(format!(
             "{}@{}:{}",
@@ -1298,6 +1364,15 @@ pub struct AppProjection {
     /// D18：被右键标签的 Reconnect/Disconnect 启用条件。
     pub tab_menu_reconnect_enabled: bool,
     pub tab_menu_disconnect_enabled: bool,
+    /// N7：标签右键"移动到新窗口 / 移动到主窗口"的启用条件。
+    pub tab_menu_move_to_new_window_enabled: bool,
+    pub tab_menu_move_to_main_window_enabled: bool,
+    // --- N7：窗口关闭确认（关闭带活动连接的窗口时）--------------------------------
+    /// 该窗口正在等待"关闭并断开"确认。
+    pub close_window_confirm_visible: bool,
+    /// 窗口内处于 connected/connecting 的标签数。
+    pub close_window_confirm_active_count: i32,
+
     // --- N9：同步发送按键（终端/标签菜单 + 状态栏 chip + 标签角标）-------------
     /// 终端右键菜单：`Send Key Input to All Tabs` / `… to Visible Tabs` 可用性。
     pub terminal_sync_all_enabled: bool,

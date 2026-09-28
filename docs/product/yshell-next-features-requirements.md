@@ -801,8 +801,10 @@
 | N5 终端主题 | **已完成（验收通过 2026-09-28；e2e 校准转 E2E-fix）** | `ses_f1819e1b6ffe0rha7bgJW1EOcj`（接管） | 544 测试、lint 0 警告、i18n 对账、5 张截图（Dracula vs 默认证明 D17）；12 项 e2e 失败为累积坐标/焦点漂移 |
 | E2E-fix 校准与回归 | **已完成（验收通过 2026-09-28）** | `ses_f17ceca17ffeGCtZKyD1PB2wYy` | 四套全绿：tabs 25/25×2、ssh 34/34、dialogs 76/76×2（冻结 `2bf02a19…`）；4 项判定为 live-audit 刻意变更（E1 Tab 焦点、B23 破坏性弹窗不响应 Esc），脚本侧修复 |
 | N9 同步发送按键 | **已完成（验收通过 2026-09-28）** | `ses_f17aa8904ffev8RnU2kDGw4SxV` | 557 测试、lint 干净、N9 场景 25/25×2、标签回归 25/25（冻结 `614b24c3…`）；43 张截图；契约已回写（E-052/E-054 → chip + 一键停止） |
-| **N7 多窗口（Phase 1）** | **执行中（队列最后一站）** | `ses_f177187c3ffe2QVpoL55phqt4V` | 设计：`yshell-next-n7-multi-window.md`；WindowManager + show/run_event_loop + Move to New Window + 关闭断开；真拖出等 winit 0.31 |
+| **N7 多窗口（Phase 1）** | **已完成（验收通过 2026-09-29）** | `ses_f177187c3ffe2QVpoL55phqt4V` | WindowManager + 每窗口渲染面 + 标签迁移 + 关窗确认；563 测试、N7 26/26×2、回归四套全绿（冻结 `4e8907b3…`）；待办：真拖出/窗口几何/按窗口弹窗 |
 | L1 / L4 | L1 待方案文档定位；L4 fmt 等待独占冻结窗口 | — | — |
+
+> **队列已清空（2026-09-29）**：N0–N9、S1/S2、L2/L3、T0、R1/R2、E0/D0、N5a 全部完成并验收；剩余为 L1（`ui-winui3-status-i18n-plan.md` 方案文档定位）、L4（fmt + cargo-deny 基线冻结窗口）与各任务报告中的"待办清单"（N1/N4/N6/N7 的增强项、真·拖出等 winit 0.31）。
 
 ---
 

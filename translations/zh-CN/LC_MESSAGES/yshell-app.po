@@ -854,6 +854,17 @@ msgctxt "MainWindow"
 msgid "Quit YShell now? Active runtime sessions will be disconnected."
 msgstr "立即退出 YShell？活动运行时会话将被断开。"
 
+#: ui/main_window.slint:2482
+msgctxt "MainWindow"
+msgid "Close Window"
+msgstr "关闭窗口"
+
+#: ui/main_window.slint:2483
+msgctxt "MainWindow"
+msgid "Close this window? {n} active session will be disconnected."
+msgid_plural "Close this window? {n} active sessions will be disconnected."
+msgstr[0] "关闭此窗口？{n} 个活动会话将被断开。"
+
 #: ui/components/confirm_dialog.slint:14 ui/components/confirm_dialog.slint:19
 msgctxt "ConfirmDialog"
 msgid "Confirm"
@@ -3886,6 +3897,26 @@ msgstr "没有其它已连接的终端标签可以接收按键输入。"
 msgctxt "MainWindow"
 msgid "Receive Key Input"
 msgstr "接收按键输入"
+
+#: ui/main_window.slint:1348
+msgctxt "MainWindow"
+msgid "Move to New Window"
+msgstr "移动到新窗口"
+
+#: ui/main_window.slint:1352
+msgctxt "MainWindow"
+msgid "Open a tab before moving it to a new window."
+msgstr "请先打开一个标签再移动到新窗口。"
+
+#: ui/main_window.slint:1355
+msgctxt "MainWindow"
+msgid "Move to Main Window"
+msgstr "移动到主窗口"
+
+#: ui/main_window.slint:1359
+msgctxt "MainWindow"
+msgid "This tab is already in the main window."
+msgstr "此标签已在主窗口中。"
 
 msgctxt "MainWindow"
 msgid "SYNC → {n} target"

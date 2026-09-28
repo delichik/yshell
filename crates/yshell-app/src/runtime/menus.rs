@@ -15,11 +15,13 @@ impl AppRuntime {
     }
 
     pub(crate) fn tab_menu_flags(&self) -> (bool, bool, bool, bool, bool) {
+        // N7：关闭 scope 在右键标签所属窗口内计算（无窗口登记 = 全部标签）。
+        let window_tabs = self.menu_anchor_window_tab_ids();
         let index = self
             .tab_menu_tab_id
             .as_deref()
-            .and_then(|tab_id| self.tab_index(tab_id));
-        let count = self.tabs.len();
+            .and_then(|tab_id| window_tabs.iter().position(|id| id == tab_id));
+        let count = window_tabs.len();
         (
             count > 1,
             index.is_some_and(|index| index > 0),
@@ -27,6 +29,26 @@ impl AppRuntime {
             count > 0,
             self.has_disconnected_tabs(),
         )
+    }
+
+    /// N7：标签右键"移动到新窗口 / 移动到主窗口"的启用态。
+    ///
+    /// 返回 `(move_to_new_window, move_to_main_window)`：已经有主窗口之外的窗口时
+    /// 才能"移到主窗口"；没有窗口登记（单窗口/测试）时两项都不可用。
+    pub(crate) fn tab_menu_move_flags(&self) -> (bool, bool) {
+        let Some(tab_id) = self.tab_menu_tab_id.as_deref() else {
+            return (false, false);
+        };
+        if self.tab_index(tab_id).is_none() {
+            return (false, false);
+        }
+        let Some(current) = self.window_of_tab(tab_id) else {
+            return (false, false);
+        };
+        let Some(main_window) = self.main_window_id() else {
+            return (false, false);
+        };
+        (true, current != main_window)
     }
 
     /// N6：终端日志菜单/状态栏入口的启用旗标（针对活动会话）。
