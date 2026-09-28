@@ -5,6 +5,115 @@ use tempfile::tempdir;
 use super::*;
 
 #[test]
+fn fingerprints_are_grouped_in_user_facing_text() {
+    // D9：裸 hex 指纹按 4 位分组；SHA256:… 形式原样保留。
+    assert_eq!(
+        format_fingerprint_groups("00112233445566"),
+        "0011 2233 4455 66"
+    );
+    assert_eq!(format_fingerprint_groups(""), "");
+    assert_eq!(
+        format_fingerprint_groups("SHA256:AbCd/Ef+Gh"),
+        "SHA256:AbCd/Ef+Gh"
+    );
+
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), None)
+        .expect("runtime without keychain");
+    runtime.pending_host_key_prompt = Some(PendingHostKeyPrompt {
+        session_key: "session-1".to_owned(),
+        host: "example.com".to_owned(),
+        port: 2222,
+        username: "alice".to_owned(),
+        presented: yshell_ssh::HostKeyFingerprint {
+            algorithm: "ssh-ed25519".to_owned(),
+            fingerprint: "aabbccddeeff0011".to_owned(),
+        },
+        expected: None,
+        known_hosts_path: runtime.config_store.known_hosts_file(),
+        resume_password: None,
+    });
+    let text = runtime.projection().host_key_prompt_text;
+    assert!(
+        text.contains("Presented: ssh-ed25519 aabb ccdd eeff 0011"),
+        "fingerprint should be grouped: {text}"
+    );
+}
+
+#[test]
+fn host_key_prompt_split_fields_track_prompt_state() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), None)
+        .expect("runtime without keychain");
+
+    // 无挂起提示：拆分字段全为空串（弹窗打开前 UI 保持空布局）。
+    let idle = runtime.projection();
+    assert!(!idle.host_key_prompt_visible);
+    assert_eq!(idle.host_key_prompt_target_text, "");
+    assert_eq!(idle.host_key_prompt_known_hosts_path_text, "");
+    assert_eq!(idle.host_key_prompt_algorithm_text, "");
+    assert_eq!(idle.host_key_prompt_fingerprint_text, "");
+    assert_eq!(idle.host_key_prompt_expected_algorithm_text, "");
+    assert_eq!(idle.host_key_prompt_expected_fingerprint_text, "");
+
+    let known_hosts_path = runtime.config_store.known_hosts_file();
+    runtime.pending_host_key_prompt = Some(PendingHostKeyPrompt {
+        session_key: "session-1".to_owned(),
+        host: "example.com".to_owned(),
+        port: 2222,
+        username: "alice".to_owned(),
+        presented: yshell_ssh::HostKeyFingerprint {
+            algorithm: "ecdsa-sha2-nistp256".to_owned(),
+            fingerprint: "aabbccddeeff0011".to_owned(),
+        },
+        expected: Some(yshell_ssh::HostKeyFingerprint {
+            algorithm: "ssh-ed25519".to_owned(),
+            fingerprint: "0011223344556677".to_owned(),
+        }),
+        known_hosts_path: known_hosts_path.clone(),
+        resume_password: None,
+    });
+
+    // changed 模式：expected 侧非空，指纹均按 4 位分组。
+    let changed = runtime.projection();
+    assert!(changed.host_key_prompt_visible);
+    assert_eq!(
+        changed.host_key_prompt_target_text,
+        "alice@example.com:2222"
+    );
+    assert_eq!(
+        changed.host_key_prompt_known_hosts_path_text,
+        known_hosts_path.display().to_string()
+    );
+    assert_eq!(
+        changed.host_key_prompt_algorithm_text,
+        "ecdsa-sha2-nistp256"
+    );
+    assert_eq!(
+        changed.host_key_prompt_fingerprint_text,
+        "aabb ccdd eeff 0011"
+    );
+    assert_eq!(
+        changed.host_key_prompt_expected_algorithm_text,
+        "ssh-ed25519"
+    );
+    assert_eq!(
+        changed.host_key_prompt_expected_fingerprint_text,
+        "0011 2233 4455 6677"
+    );
+
+    // first-trust：expected 侧为空（空值行在弹窗里不占位）。
+    runtime
+        .pending_host_key_prompt
+        .as_mut()
+        .expect("pending prompt")
+        .expected = None;
+    let first_trust = runtime.projection();
+    assert_eq!(first_trust.host_key_prompt_expected_algorithm_text, "");
+    assert_eq!(first_trust.host_key_prompt_expected_fingerprint_text, "");
+}
+
+#[test]
 fn secret_store_status_projects_kind_and_path_values() {
     let temp = tempdir().expect("tempdir");
     let runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");

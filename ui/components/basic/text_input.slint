@@ -12,7 +12,8 @@ import { Theme } from "../../theme.slint";
 export component WinTextInput inherits Rectangle {
     in property <string> placeholder-text: "";
     in-out property <string> text <=> input.text;
-    /// 禁用：以 read-only + 弱化配色表达（TextInput 没有独立的 enabled）
+    /// 禁用：不可聚焦、不可输入、弱化配色（Slint 1.18 的 `TextInput.enabled` 语义）。
+    /// 只读（可选择/复制但不可编辑）请用 `read-only`。
     in property <bool> enabled: true;
     in property <InputType> input-type <=> input.input-type;
     in property <bool> read-only: false;
@@ -47,11 +48,11 @@ export component WinTextInput inherits Rectangle {
     Text {
         visible: root.text == "";
         text: root.placeholder-text;
-        color: Theme.text-tertiary;
+        color: root.enabled ? Theme.text-tertiary : Theme.text-disabled;
         font-family: root.font-family;
         font-size: root.font-size;
-        x: 12px;
-        width: parent.width - 24px;
+        x: Theme.spacing-12;
+        width: parent.width - 2 * Theme.spacing-12;
         height: parent.height;
         vertical-alignment: center;
         wrap: no-wrap;
@@ -65,16 +66,18 @@ export component WinTextInput inherits Rectangle {
     }
 
     HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 12px;
+        padding-left: Theme.spacing-12;
+        padding-right: Theme.spacing-12;
 
         input := TextInput {
             vertical-alignment: center;
             single-line: true;
+            // E2：禁用 = 不可聚焦 + 不可输入（不再退化成"只读但仍可 Tab 聚焦"）
+            enabled: root.enabled;
             color: root.enabled ? Theme.text-primary : Theme.text-disabled;
             font-family: root.font-family;
             font-size: root.font-size;
-            read-only: root.read-only || !root.enabled;
+            read-only: root.read-only;
             selection-background-color: Theme.selection-fill;
             selection-foreground-color: Theme.text-primary;
             text-cursor-width: 1px;

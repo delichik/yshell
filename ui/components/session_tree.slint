@@ -47,24 +47,48 @@ component SessionTreeRowItem inherits Rectangle {
     property <length> chevron-hit-width:
         Theme.spacing-8 + root.node.depth * root.indent-step + Theme.icon-size-small + 6px;
 
-    /// 名称与次要信息共用的横向空间（行宽 - 行内边距 - 箭头/图标列及间距）。
+    /// 名称与次要信息共用的横向空间（行宽 - 行内边距 - 图标列及间距）。
+    /// A5：必须计入 `padding-left: spacing-8 + depth × indent-step`（此前漏算缩进，
+    /// 深层行因此被右侧硬裁）、右内边距、两个 16px 图标列与两处 8px 间距。
     /// 宽度显式分配而不是靠 stretch 抢：窄侧栏下名称永远优先，次要信息留不下
     /// 就整体不显示（不会出现半个 "d…"）。
     property <length> text-space:
-        max(0px, self.width - Theme.spacing-16 - Theme.icon-size-small * 3);
-    /// 名称完整显示后仍留得下 detail-min-width 才显示次要信息
+        max(
+            0px,
+            self.width
+                - (Theme.spacing-8 + root.node.depth * root.indent-step)
+                - Theme.spacing-8
+                - Theme.icon-size-small * 2
+                - Theme.spacing-8 * 2
+        );
+    /// 名称完整显示后仍留得下 detail-min-width（含一档间距）才显示次要信息
     property <bool> detail-visible:
         root.node.detail != ""
-            && root.text-space - label_text.preferred-width >= root.detail-min-width;
-    /// 次要信息宽度：最多占一半文字空间
+            && root.text-space - label_text.preferred-width - Theme.spacing-8 >= root.detail-min-width;
+    /// 次要信息宽度：名称优先，余量（扣掉间距）都给副信息，不够就省略号
     property <length> detail-width:
-        root.detail-visible ? min(detail_text.preferred-width, root.text-space / 2) : 0px;
+        root.detail-visible
+            ? min(
+                detail_text.preferred-width,
+                max(0px, root.text-space - label_text.preferred-width - Theme.spacing-8)
+            )
+            : 0px;
+    /// 名称宽度：优先满足完整名称（上限是 text-space 减去副信息实际占位）
     property <length> label-width:
         max(
             0px,
-            root.text-space
-                - (root.detail-visible ? root.detail-width + Theme.spacing-8 : 0px)
+            min(
+                label_text.preferred-width,
+                root.text-space - (root.detail-visible ? root.detail-width + Theme.spacing-8 : 0px)
+            )
         );
+
+    /// A5：悬停提示 —— 名称被省略时给出完整名称，并附副信息（副信息也可能被省略）。
+    property <string> tooltip-text:
+        root.node.detail == "" ? root.node.label : root.node.label + " · " + root.node.detail;
+    if root.tooltip-text != "" : Tooltip {
+        text: @markdown("\{root.tooltip-text}");
+    }
 
     // 选中指示条（与 WinNavItem 一致：3×16 强调色）
     Rectangle {
@@ -173,8 +197,6 @@ export component SessionTree inherits Rectangle {
     in property <string> selected-id: "";
     /// 树为空时的提示文案（宿主用现有 i18n 模板生成）。
     in property <string> empty-text: "";
-    /// 内容高度上限：超过后由 Flickable 滚动，不分页。
-    in property <length> list-max-height: 320px;
     in property <length> row-height: Theme.row-height-tree;
 
     callback select(string);
@@ -183,6 +205,8 @@ export component SessionTree inherits Rectangle {
     callback context-menu-requested(string, length, length);
     /// S1：会话树空白区（行以外/空树）右键 —— 只上报窗口坐标，由宿主打开空白区菜单。
     callback blank-context-menu-requested(length, length);
+    /// A9：会话树空白区左键 —— 宿主据此清空选中（契约 §5.2）。
+    callback blank-clicked();
 
     /// 内容高度（行数 × 行高）；宿主可用来判断占位。
     out property <length> content-height: root.rows.length * root.row-height;
@@ -211,11 +235,13 @@ export component SessionTree inherits Rectangle {
         // S1：会话树空白区右键。声明在 Flickable 之前（下层）：行的命中区在上层先拿
         // 事件，只有没落到任何行上的右键才会到这里；同时因为是 FocusScope 的子元素，
         // 它先于 FocusScope 自身的 focus-on-click 拿到事件，不被抢焦点吞掉。
+        // A9：空白区左键 = 清空选中。
         blank_touch := TouchArea {
             x: 0;
             y: 0;
             width: parent.width;
             height: parent.height;
+            clicked => { root.blank-clicked(); }
             pointer-event(event) => {
                 if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
                     root.blank-context-menu-requested(
@@ -234,6 +260,17 @@ export component SessionTree inherits Rectangle {
             height: parent.height;
             content-width: self.width;
             content-height: rows_layout.preferred-height;
+
+            // A9：列表视口内的空白处左键 = 清空选中。声明在行布局之前 = 位于行下层，
+            // 行自己的命中区优先；高度取 `max(视口, 内容)` 以便滚动到底部时仍覆盖
+            // 可见空白区。滚轮/滚动条由 Flickable 继续处理（滚轮事件沿祖先冒泡）。
+            TouchArea {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: max(parent.height, rows_layout.preferred-height);
+                clicked => { root.blank-clicked(); }
+            }
 
             rows_layout := VerticalLayout {
                 spacing: 1px;
@@ -264,12 +301,9 @@ export component SessionTree inherits Rectangle {
     }
 
     background: transparent;
-    // 行少时贴合内容，行多时到上限为止并滚动。
-    height: clamp(
-        root.content-height + 2px,
-        root.row-height * 2,
-        root.list-max-height
-    );
+    // A7：行少时贴合内容，行多时由宿主给的 `vertical-stretch: 1` 占满面板
+    // 剩余高度（不再是 320px 硬上限 + 树外死区）；内部 Flickable 负责滚动。
+    height: max(root.row-height * 2, root.content-height + 2px);
 
     if root.rows.length == 0 : Text {
         text: root.empty-text;

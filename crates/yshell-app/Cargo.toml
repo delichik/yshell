@@ -30,6 +30,8 @@ yshell-sftp = { path = "../yshell-sftp" }
 yshell-ssh = { path = "../yshell-ssh" }
 yshell-terminal = { path = "../yshell-terminal" }
 yshell-ui = { path = "../yshell-ui" }
+# D1：运行时内部诊断只进 tracing 日志，不再写进终端网格。
+tracing.workspace = true
 
 [build-dependencies]
 slint-build = "=1.18.1"

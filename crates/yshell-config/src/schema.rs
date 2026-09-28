@@ -118,7 +118,11 @@ impl FolderProfile {
         self.sessions
             .iter()
             .find(|session| session.id == id)
-            .or_else(|| self.folders.iter().find_map(|folder| folder.find_session(id)))
+            .or_else(|| {
+                self.folders
+                    .iter()
+                    .find_map(|folder| folder.find_session(id))
+            })
     }
 
     /// Recursively finds a mutable session by id.
@@ -137,7 +141,9 @@ impl FolderProfile {
         if self.id == id {
             return Some(self);
         }
-        self.folders.iter().find_map(|folder| folder.find_folder(id))
+        self.folders
+            .iter()
+            .find_map(|folder| folder.find_folder(id))
     }
 
     /// Recursively finds a mutable folder by id.
@@ -478,9 +484,7 @@ impl TerminalProfile {
     /// not the profile was explicitly configured.
     #[must_use]
     pub fn inherit_from(mut self, fallback: &Self) -> Self {
-        self.color_scheme = self
-            .color_scheme
-            .or_else(|| fallback.color_scheme.clone());
+        self.color_scheme = self.color_scheme.or_else(|| fallback.color_scheme.clone());
         self.foreground = self.foreground.or_else(|| fallback.foreground.clone());
         self.background = self.background.or_else(|| fallback.background.clone());
         self.cursor = self.cursor.or_else(|| fallback.cursor.clone());
@@ -779,7 +783,9 @@ impl ConfigDocument {
     /// Finds a folder anywhere in the folder tree.
     #[must_use]
     pub fn find_folder(&self, id: &str) -> Option<&FolderProfile> {
-        self.folders.iter().find_map(|folder| folder.find_folder(id))
+        self.folders
+            .iter()
+            .find_map(|folder| folder.find_folder(id))
     }
 
     /// Finds a mutable folder anywhere in the folder tree.
@@ -843,8 +849,29 @@ impl ConfigDocument {
     #[must_use]
     pub fn resolve_session(&self, id: &str) -> Option<ResolvedSessionProfile> {
         let (session, folder_chain) = self.find_session_with_folder_chain(id)?;
-        let session = session.clone();
+        Some(self.resolve_session_parts(session, &folder_chain))
+    }
 
+    /// Resolves a not-yet-saved session that is being edited for `folder_id`
+    /// (Session Editor previews: the draft's explicit fields win, then the
+    /// target folder chain, then the document defaults and built-in defaults).
+    #[must_use]
+    pub fn resolve_session_draft(
+        &self,
+        session: &SessionProfile,
+        folder_id: &str,
+    ) -> ResolvedSessionProfile {
+        let folder_chain = self.folder_chain_to(folder_id);
+        self.resolve_session_parts(session, &folder_chain)
+    }
+
+    /// Merges a session (or draft) over its nearest-first folder chain and the
+    /// document defaults.
+    fn resolve_session_parts(
+        &self,
+        session: &SessionProfile,
+        folder_chain: &[&FolderProfile],
+    ) -> ResolvedSessionProfile {
         let appearance = nearest_or(
             std::iter::once(session.appearance.as_ref())
                 .chain(folder_chain.iter().map(|folder| folder.appearance.as_ref())),
@@ -857,10 +884,9 @@ impl ConfigDocument {
             &self.logging,
         )
         .clone();
-        let terminal =
-            resolve_terminal_profile(&session, &folder_chain, &self.terminal);
+        let terminal = resolve_terminal_profile(session, folder_chain, &self.terminal);
 
-        Some(ResolvedSessionProfile {
+        ResolvedSessionProfile {
             auth: session
                 .auth_profile_id
                 .as_deref()
@@ -879,8 +905,42 @@ impl ConfigDocument {
             appearance,
             logging,
             terminal,
-            session,
-        })
+            session: session.clone(),
+        }
+    }
+
+    /// Folder chain to `folder_id`, nearest ancestor (the folder itself) first.
+    ///
+    /// Unknown ids resolve to an empty chain, so callers fall back to the
+    /// document defaults instead of failing.
+    #[must_use]
+    pub fn folder_chain_to(&self, folder_id: &str) -> Vec<&FolderProfile> {
+        fn path<'a>(
+            folder: &'a FolderProfile,
+            id: &str,
+            chain: &mut Vec<&'a FolderProfile>,
+        ) -> bool {
+            chain.push(folder);
+            if folder.id == id {
+                return true;
+            }
+            for child in &folder.folders {
+                if path(child, id, chain) {
+                    return true;
+                }
+            }
+            chain.pop();
+            false
+        }
+
+        let mut chain = Vec::new();
+        for folder in &self.folders {
+            if path(folder, folder_id, &mut chain) {
+                chain.reverse();
+                return chain;
+            }
+        }
+        Vec::new()
     }
 
     /// Drops invalid Quick Connect/quick-link entries and clears invalid theme
@@ -893,8 +953,9 @@ impl ConfigDocument {
     pub fn sanitize(&mut self) -> Vec<ConfigWarning> {
         let mut warnings = Vec::new();
 
-        self.quick_connect.history.retain_mut(|entry| {
-            match parse_quick_connect(&entry.target) {
+        self.quick_connect
+            .history
+            .retain_mut(|entry| match parse_quick_connect(&entry.target) {
                 Ok(target) => {
                     entry.target = target.canonical();
                     true
@@ -906,23 +967,23 @@ impl ConfigDocument {
                     });
                     false
                 }
-            }
-        });
+            });
 
-        self.quick_links.retain_mut(|link| match parse_quick_connect(&link.target) {
-            Ok(target) => {
-                link.target = target.canonical();
-                true
-            }
-            Err(error) => {
-                warnings.push(ConfigWarning::InvalidQuickLinkTarget {
-                    id: std::mem::take(&mut link.id),
-                    target: std::mem::take(&mut link.target),
-                    error,
-                });
-                false
-            }
-        });
+        self.quick_links
+            .retain_mut(|link| match parse_quick_connect(&link.target) {
+                Ok(target) => {
+                    link.target = target.canonical();
+                    true
+                }
+                Err(error) => {
+                    warnings.push(ConfigWarning::InvalidQuickLinkTarget {
+                        id: std::mem::take(&mut link.id),
+                        target: std::mem::take(&mut link.target),
+                        error,
+                    });
+                    false
+                }
+            });
 
         sanitize_terminal_colors(&mut self.terminal, "terminal", &mut warnings);
         for folder in &mut self.folders {
@@ -1166,11 +1227,7 @@ fn sanitize_terminal_colors(
 }
 
 /// Recursively sanitizes a folder and every session/descendant folder.
-fn sanitize_folder(
-    folder: &mut FolderProfile,
-    prefix: &str,
-    warnings: &mut Vec<ConfigWarning>,
-) {
+fn sanitize_folder(folder: &mut FolderProfile, prefix: &str, warnings: &mut Vec<ConfigWarning>) {
     if let Some(section) = folder.terminal.as_mut() {
         let location = format!("{prefix}.terminal");
         sanitize_terminal_colors(section, &location, warnings);
@@ -1247,17 +1304,13 @@ fn default_left_panels() -> Vec<PanelSlot> {
 }
 
 fn default_right_panels() -> Vec<PanelSlot> {
-    [
-        PanelId::Sftp,
-        PanelId::Tunnels,
-        PanelId::QuickCommands,
-    ]
-    .into_iter()
-    .map(|panel| PanelSlot {
-        panel,
-        collapsed: false,
-    })
-    .collect()
+    [PanelId::Sftp, PanelId::Tunnels, PanelId::QuickCommands]
+        .into_iter()
+        .map(|panel| PanelSlot {
+            panel,
+            collapsed: false,
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -1420,11 +1473,84 @@ mod tests {
         assert_eq!(resolved.terminal.scrollback_max_cells, 4_200);
         assert_eq!(resolved.terminal.font_size, Some(16));
         // A nearer level that omits an optional field inherits it.
-        assert_eq!(resolved.terminal.font_family.as_deref(), Some("Global Mono"));
+        assert_eq!(
+            resolved.terminal.font_family.as_deref(),
+            Some("Global Mono")
+        );
 
         let toml = document.to_toml_string().expect("serialize");
         let reparsed = ConfigDocument::from_toml_str(&toml).expect("parse");
         assert_eq!(reparsed, document);
+    }
+
+    #[test]
+    fn draft_resolution_uses_target_folder_chain_and_document_defaults() {
+        let mut document = sample_document();
+        // root folder -> child folder, both with terminal overrides.
+        document
+            .find_folder_mut("folder-1")
+            .expect("folder")
+            .terminal = Some(TerminalProfile {
+            color_scheme: Some("nord".to_owned()),
+            font_size: Some(13),
+            ..TerminalProfile::default()
+        });
+        document
+            .find_folder_mut("folder-1")
+            .expect("folder")
+            .folders
+            .push(FolderProfile {
+                terminal: Some(TerminalProfile {
+                    color_scheme: Some("dracula".to_owned()),
+                    ..TerminalProfile::default()
+                }),
+                ..FolderProfile::new("folder-2", "Nested")
+            });
+        document.terminal.font_family = Some("Global Mono".to_owned());
+
+        let chain: Vec<&str> = document
+            .folder_chain_to("folder-2")
+            .iter()
+            .map(|folder| folder.id.as_str())
+            .collect();
+        assert_eq!(chain, ["folder-2", "folder-1"], "nearest ancestor first");
+
+        let draft = SessionProfile::new("draft", "Draft", "example.com");
+        let resolved = document.resolve_session_draft(&draft, "folder-2");
+        assert_eq!(resolved.terminal.color_scheme.as_deref(), Some("dracula"));
+        // The draft inherits the nested chain: folder-2 -> folder-1 -> global.
+        assert_eq!(resolved.terminal.font_size, Some(13));
+        assert_eq!(
+            resolved.terminal.font_family.as_deref(),
+            Some("Global Mono"),
+            "the draft inherits document defaults"
+        );
+
+        // A draft override wins over the whole chain but keeps the other fields.
+        let mut draft = draft;
+        draft.terminal = Some(TerminalProfile {
+            color_scheme: Some("one-dark".to_owned()),
+            ..TerminalProfile::default()
+        });
+        let resolved = document.resolve_session_draft(&draft, "folder-2");
+        assert_eq!(resolved.terminal.color_scheme.as_deref(), Some("one-dark"));
+        assert_eq!(resolved.terminal.font_size, Some(13));
+
+        // Unknown target folder: the draft still resolves against the document.
+        let resolved = document.resolve_session_draft(&draft, "missing-folder");
+        assert_eq!(resolved.terminal.color_scheme.as_deref(), Some("one-dark"));
+        assert_eq!(
+            resolved.terminal.font_family.as_deref(),
+            Some("Global Mono")
+        );
+        assert!(document.folder_chain_to("missing-folder").is_empty());
+    }
+
+    #[test]
+    fn folder_chain_to_returns_empty_for_unknown_ids() {
+        let document = sample_document();
+        assert!(document.folder_chain_to("nope").is_empty());
+        assert_eq!(document.folder_chain_to("folder-1").len(), 1);
     }
 
     #[test]
@@ -1478,7 +1604,9 @@ mod tests {
     fn removes_session_from_folder_tree() {
         let mut document = sample_document();
 
-        let removed = document.remove_session("session-1").expect("removed session");
+        let removed = document
+            .remove_session("session-1")
+            .expect("removed session");
 
         assert_eq!(removed.id, "session-1");
         assert!(document.find_session("session-1").is_none());
@@ -1529,7 +1657,11 @@ path = "/home/me/.ssh/id_ed25519"
         let session = parsed.find_session("legacy").expect("session survives");
         assert_eq!(session.host, "example.test");
         assert_eq!(
-            session.terminal.as_ref().expect("override").scrollback_lines,
+            session
+                .terminal
+                .as_ref()
+                .expect("override")
+                .scrollback_lines,
             500
         );
         assert_eq!(parsed.ui, UiProfile::default());
@@ -1706,11 +1838,13 @@ label = "Bad"
 target = "bad host"
 "#;
 
-        let (parsed, warnings) =
-            ConfigDocument::from_toml_str_with_warnings(input).expect("parse");
+        let (parsed, warnings) = ConfigDocument::from_toml_str_with_warnings(input).expect("parse");
 
         assert_eq!(parsed.quick_connect.history.len(), 1);
-        assert_eq!(parsed.quick_connect.history[0].target, "bob@example.com:2222");
+        assert_eq!(
+            parsed.quick_connect.history[0].target,
+            "bob@example.com:2222"
+        );
         assert_eq!(parsed.quick_links.len(), 1);
         assert_eq!(parsed.quick_links[0].target, "example.com:22");
         assert!(warnings.iter().any(|warning| matches!(
@@ -1791,12 +1925,12 @@ host = "example.test"
         // Session level wins over the folder levels.
         assert_eq!(nested.terminal.font_size, Some(18));
         assert_eq!(nested.terminal.background.as_deref(), Some("#101010"));
-        assert_eq!(nested.terminal.color_scheme.as_deref(), Some("Child Scheme"));
-        // Unset at every nearer level, so the global value survives.
         assert_eq!(
-            nested.terminal.font_family.as_deref(),
-            Some("Global Mono")
+            nested.terminal.color_scheme.as_deref(),
+            Some("Child Scheme")
         );
+        // Unset at every nearer level, so the global value survives.
+        assert_eq!(nested.terminal.font_family.as_deref(), Some("Global Mono"));
         // Appearance/logging resolve to the nearest ancestor section that sets
         // the profile at all (child), not the global section.
         assert_eq!(nested.appearance.theme, "light");
@@ -1876,8 +2010,7 @@ background = "#12345"
 ansi = ["#000000", "#111111", "#222222", "#333333", "#444444", "#555555", "#666666", "#777777", "#888888", "#999999", "#aaaaaa", "#bbbbbb", "#cccccc", "#dddddd", "#eeeeee", "not-a-color"]
 "##;
 
-        let (parsed, warnings) =
-            ConfigDocument::from_toml_str_with_warnings(input).expect("parse");
+        let (parsed, warnings) = ConfigDocument::from_toml_str_with_warnings(input).expect("parse");
 
         assert_eq!(parsed.terminal.foreground, None);
         assert_eq!(parsed.terminal.font_size, None);
@@ -1887,16 +2020,17 @@ ansi = ["#000000", "#111111", "#222222", "#333333", "#444444", "#555555", "#6666
         assert_eq!(terminal.ansi, None);
         assert!(warnings.iter().any(|warning| matches!(
             warning,
-            ConfigWarning::InvalidColor { field: "foreground", .. }
+            ConfigWarning::InvalidColor {
+                field: "foreground",
+                ..
+            }
         )));
-        assert!(warnings.iter().any(|warning| matches!(
-            warning,
-            ConfigWarning::InvalidAnsiColor { index: 15, .. }
-        )));
-        assert!(warnings.iter().any(|warning| matches!(
-            warning,
-            ConfigWarning::InvalidFontSize { .. }
-        )));
+        assert!(warnings
+            .iter()
+            .any(|warning| matches!(warning, ConfigWarning::InvalidAnsiColor { index: 15, .. })));
+        assert!(warnings
+            .iter()
+            .any(|warning| matches!(warning, ConfigWarning::InvalidFontSize { .. })));
 
         // The cleared values fall back to the next level during resolution.
         let resolved = parsed.resolve_session("s1").expect("resolve");
@@ -1924,7 +2058,9 @@ ansi = ["#000000", "#111111", "#222222", "#333333", "#444444", "#555555", "#6666
                     method: AuthMethod::PrivateKey {
                         key_id: Some("key-1".to_owned()),
                         path: String::new(),
-                        passphrase_secret_key: Some("local://yshell/keys/key-1/passphrase".to_owned()),
+                        passphrase_secret_key: Some(
+                            "local://yshell/keys/key-1/passphrase".to_owned(),
+                        ),
                     },
                 },
             )]),

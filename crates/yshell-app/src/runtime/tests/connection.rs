@@ -40,10 +40,10 @@ fn native_ssh_backend_marks_failed_when_non_ssh_target_rejects_native_handshake(
     accept_handle.join().expect("accept thread");
 
     assert_eq!(projection.tab_state_text, "failed");
-    assert!(projection
-        .status_text
-        .contains("live shell was not reached"));
-    assert!(projection
+    // D15：失败文案用户向（后端错误细节只进日志）。
+    assert!(projection.status_text.contains("Could not connect"));
+    // D1：内部失败诊断不再写进终端网格。
+    assert!(!projection
         .terminal_body_text
         .contains("Shell runtime failed"));
 }

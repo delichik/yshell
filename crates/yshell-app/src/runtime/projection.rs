@@ -8,6 +8,7 @@ use yshell_core::SessionState;
 use yshell_sftp::FsEntryKind;
 
 use super::panels::{PanelFrameView, PanelLayoutView};
+use super::theme::palette_parts;
 use super::*;
 
 impl AppRuntime {
@@ -38,6 +39,9 @@ impl AppRuntime {
             tab_menu_close_all_enabled,
             tab_menu_close_disconnected_enabled,
         ) = self.tab_menu_flags();
+        // D18：标签右键菜单的 Reconnect/Disconnect 启用条件（针对被右键标签）。
+        let (tab_menu_reconnect_enabled, tab_menu_disconnect_enabled) =
+            self.tab_menu_connection_flags();
         let pending_close = self.pending_close_tabs.as_ref();
         let (terminal_search_kind_text, terminal_search_match_count, terminal_search_current_index) =
             self.terminal_search_summary_parts();
@@ -86,11 +90,29 @@ impl AppRuntime {
             self.quick_link_row_data(),
             self.quick_connect_summary_text(),
         );
+        // D37：QC 摘要的 kind/参数（页面走 `TextFormats.status-message`；文本留作回退）。
+        let (
+            quick_connect_summary_kind_text,
+            quick_connect_summary_param_1_text,
+            quick_connect_summary_param_2_text,
+        ) = self.quick_connect_summary_parts();
+        // D36：主机密钥弹窗正文拆分字段（与 `host_key_prompt_text()` 同源）。
+        let host_key_prompt = self.host_key_prompt_parts();
         // N3：内容区 px 布局（Rust 计算 → 投影下发；Slint 侧不再从 window.width 反推）。
         let panel_view = self.panel_layout_view();
         let private_keys = self.private_keys_projection_parts();
         let host_keys = self.host_keys_projection_parts();
         let auth_prompt = self.auth_prompt_projection_parts();
+        // N5：终端外观（Settings 外观弹窗 / Folder Editor / Session Editor）。
+        let settings_appearance_preview = self.settings_appearance_preview_frame();
+        let settings_appearance_status_text = self.settings_appearance_status.display_text();
+        let settings_appearance_schemes = theme::scheme_options();
+        let settings_appearance_palette = palette_parts(self.settings_appearance_palette());
+        let folder_editor_appearance_fields = self.folder_editor_appearance_fields();
+        let folder_editor_terminal_fields = self.folder_editor_terminal_fields();
+        let folder_editor_logging_fields = self.folder_editor_logging_fields();
+        let editor_appearance_fields = self.editor_appearance_fields();
+        let editor_terminal_fields = self.editor_terminal_fields();
 
         AppProjection {
             config_dir_text: self.config_dir.display().to_string(),
@@ -161,6 +183,32 @@ impl AppRuntime {
                 .to_owned(),
             settings_terminal_status_value_text: self.settings_terminal_status.value_text(),
             settings_terminal_status_limit_text: self.settings_terminal_status.limit_text(),
+            settings_appearance_visible: self.settings_appearance_visible,
+            settings_appearance_color_scheme_text: self.settings_appearance.color_scheme.clone(),
+            settings_appearance_foreground_text: self.settings_appearance.foreground.clone(),
+            settings_appearance_background_text: self.settings_appearance.background.clone(),
+            settings_appearance_cursor_text: self.settings_appearance.cursor.clone(),
+            settings_appearance_selection_text: self.settings_appearance.selection.clone(),
+            settings_appearance_font_family_text: self.settings_appearance.font_family.clone(),
+            settings_appearance_font_size_text: self.settings_appearance.font_size_text.clone(),
+            settings_appearance_fallback_fonts_text: self
+                .settings_appearance
+                .fallback_fonts_text
+                .clone(),
+            settings_appearance_status_text,
+            settings_appearance_schemes,
+            settings_appearance_palette_swatches: settings_appearance_palette,
+            settings_appearance_preview,
+            folder_editor_visible: self.folder_editor.visible,
+            folder_editor_name_text: self.folder_editor.folder_name.clone(),
+            folder_editor_path_text: self.folder_editor.folder_path.clone(),
+            folder_editor_status_text: self.folder_editor.status_text.clone(),
+            folder_editor_appearance_fields,
+            folder_editor_terminal_fields,
+            folder_editor_logging_fields,
+            saved_folder_selected: self.selected_saved_folder_id.is_some(),
+            editor_appearance_fields,
+            editor_terminal_fields,
             editor_modal_visible: self.editor_modal_visible,
             editor_section_text: self.editor_section.label().to_owned(),
             known_hosts_modal_visible: self.known_hosts_modal_visible,
@@ -172,6 +220,11 @@ impl AppRuntime {
             known_hosts_selection_index: self.known_hosts_selection_index(),
             known_hosts_selection_total: self.known_hosts_selection_total(),
             known_hosts_details_text: self.known_hosts_details_text(),
+            known_hosts_detail_host_text: self.known_hosts_detail_host_text(),
+            known_hosts_detail_port_text: self.known_hosts_detail_port_text(),
+            known_hosts_detail_algorithm_text: self.known_hosts_detail_algorithm_text(),
+            known_hosts_detail_fingerprint_text: self.known_hosts_detail_fingerprint_text(),
+            known_hosts_detail_path_text: self.known_hosts_detail_path_text(),
             known_hosts_path_text: self.config_store.known_hosts_file().display().to_string(),
             known_hosts_clear_confirmation_text: self.known_hosts_clear_confirmation.clone(),
             active_session_kind_text: active_kind_text.to_owned(),
@@ -200,6 +253,13 @@ impl AppRuntime {
             recent_sessions_empty: recent_empty,
             host_key_prompt_visible: self.pending_host_key_prompt.is_some(),
             host_key_prompt_text: self.host_key_prompt_text(),
+            // D36：弹窗正文拆分字段（WS-C 的 HostKeyDialog 逐行渲染；空值行不占位）。
+            host_key_prompt_target_text: host_key_prompt.target,
+            host_key_prompt_known_hosts_path_text: host_key_prompt.known_hosts_path,
+            host_key_prompt_algorithm_text: host_key_prompt.algorithm,
+            host_key_prompt_fingerprint_text: host_key_prompt.fingerprint,
+            host_key_prompt_expected_algorithm_text: host_key_prompt.expected_algorithm,
+            host_key_prompt_expected_fingerprint_text: host_key_prompt.expected_fingerprint,
             host_key_prompt_mode_text: self.host_key_prompt_mode_text().to_owned(),
             host_key_prompt_confirmation_text: self.host_key_replace_confirmation.clone(),
             password_prompt_visible: self.pending_password_prompt.is_some(),
@@ -229,6 +289,8 @@ impl AppRuntime {
             tab_menu_close_right_enabled,
             tab_menu_close_all_enabled,
             tab_menu_close_disconnected_enabled,
+            tab_menu_reconnect_enabled,
+            tab_menu_disconnect_enabled,
             terminal_title_name_text,
             terminal_title_has_session,
             terminal_body_text,
@@ -381,6 +443,9 @@ impl AppRuntime {
             quick_connect_last_target_text: self.quick_connect_last_target.clone(),
             quick_connect_history_enabled: self.config_document.quick_connect.enabled,
             quick_connect_summary_text,
+            quick_connect_summary_kind_text,
+            quick_connect_summary_param_1_text,
+            quick_connect_summary_param_2_text,
             quick_connect_rows,
             quick_links_rows,
             private_keys_modal_visible: private_keys.visible,
@@ -409,6 +474,10 @@ impl AppRuntime {
             host_keys_selected_group: host_keys.selected_group,
             host_keys_selected_entry: host_keys.selected_entry,
             host_keys_details_text: host_keys.details_text,
+            host_keys_detail_host_text: host_keys.detail_host_text,
+            host_keys_detail_algorithm_text: host_keys.detail_algorithm_text,
+            host_keys_detail_fingerprint_text: host_keys.detail_fingerprint_text,
+            host_keys_detail_path_text: host_keys.detail_path_text,
             host_keys_path_text: host_keys.path_text,
             host_keys_status_text: host_keys.status_text,
             host_keys_import_visible: host_keys.import_visible,
@@ -663,9 +732,9 @@ impl AppRuntime {
                 prompt.port,
                 prompt.known_hosts_path.display(),
                 expected.algorithm,
-                expected.fingerprint,
+                format_fingerprint_groups(&expected.fingerprint),
                 prompt.presented.algorithm,
-                prompt.presented.fingerprint
+                format_fingerprint_groups(&prompt.presented.fingerprint)
             ),
             None => format!(
                 "First-time host key for {}@{}:{}.\nKnown hosts: {}\nPresented: {} {}\nChoose Trust Once or Trust and Save.",
@@ -674,8 +743,32 @@ impl AppRuntime {
                 prompt.port,
                 prompt.known_hosts_path.display(),
                 prompt.presented.algorithm,
-                prompt.presented.fingerprint
+                format_fingerprint_groups(&prompt.presented.fingerprint)
             ),
+        }
+    }
+
+    /// D36：主机密钥弹窗的结构化正文字段（与 `host_key_prompt_text()` 同源：都读取
+    /// `pending_host_key_prompt`；指纹同样走 D9 的 4 位分组）。无挂起提示时全为空串。
+    fn host_key_prompt_parts(&self) -> HostKeyPromptParts {
+        let Some(prompt) = &self.pending_host_key_prompt else {
+            return HostKeyPromptParts::default();
+        };
+        HostKeyPromptParts {
+            target: format!("{}@{}:{}", prompt.username, prompt.host, prompt.port),
+            known_hosts_path: prompt.known_hosts_path.display().to_string(),
+            algorithm: prompt.presented.algorithm.clone(),
+            fingerprint: format_fingerprint_groups(&prompt.presented.fingerprint),
+            expected_algorithm: prompt
+                .expected
+                .as_ref()
+                .map(|expected| expected.algorithm.clone())
+                .unwrap_or_default(),
+            expected_fingerprint: prompt
+                .expected
+                .as_ref()
+                .map(|expected| format_fingerprint_groups(&expected.fingerprint))
+                .unwrap_or_default(),
         }
     }
 
@@ -697,6 +790,20 @@ impl AppRuntime {
             .map(PendingPasswordPrompt::host_text)
             .unwrap_or_default()
     }
+}
+
+/// D36：主机密钥弹窗结构化正文字段（`projection()` 用；与 `host_key_prompt_text()` 同源）。
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct HostKeyPromptParts {
+    /// `user@host:port`
+    target: String,
+    known_hosts_path: String,
+    /// 本次提供的算法 / 指纹（已分组）。
+    algorithm: String,
+    fingerprint: String,
+    /// changed 模式：已保存的算法 / 指纹（已分组）；first-trust 为空串。
+    expected_algorithm: String,
+    expected_fingerprint: String,
 }
 
 /// N4：私钥页投影（`projection()` 的分段组装）。
@@ -731,6 +838,11 @@ struct HostKeysProjectionParts {
     selected_group: i32,
     selected_entry: i32,
     details_text: String,
+    /// D20：详情拆分字段（标签由 UI 侧 `@tr` 渲染；指纹为 D9 分组格式）。
+    detail_host_text: String,
+    detail_algorithm_text: String,
+    detail_fingerprint_text: String,
+    detail_path_text: String,
     path_text: String,
     status_text: String,
     import_visible: bool,
@@ -876,6 +988,10 @@ impl AppRuntime {
                 .map(|index| i32::try_from(index).unwrap_or(i32::MAX))
                 .unwrap_or(-1),
             details_text: self.host_keys_details_text(),
+            detail_host_text: self.host_keys_detail_host_text(),
+            detail_algorithm_text: self.host_keys_detail_algorithm_text(),
+            detail_fingerprint_text: self.host_keys_detail_fingerprint_text(),
+            detail_path_text: self.host_keys_detail_path_text(),
             path_text: self.config_store.known_hosts_file().display().to_string(),
             status_text: self.host_keys_status_text.clone(),
             import_visible: self.host_keys_import_visible,
@@ -1042,6 +1158,33 @@ pub struct AppProjection {
     pub settings_terminal_status_field_text: String,
     pub settings_terminal_status_value_text: String,
     pub settings_terminal_status_limit_text: String,
+    // --- N5：Settings 外观弹窗 ---------------------------------------------------
+    pub settings_appearance_visible: bool,
+    pub settings_appearance_color_scheme_text: String,
+    pub settings_appearance_foreground_text: String,
+    pub settings_appearance_background_text: String,
+    pub settings_appearance_cursor_text: String,
+    pub settings_appearance_selection_text: String,
+    pub settings_appearance_font_family_text: String,
+    pub settings_appearance_font_size_text: String,
+    pub settings_appearance_fallback_fonts_text: String,
+    pub settings_appearance_status_text: String,
+    pub settings_appearance_schemes: Vec<theme::ThemeSchemeOption>,
+    pub settings_appearance_palette_swatches: Vec<[u8; 3]>,
+    pub settings_appearance_preview: Option<yshell_terminal::TerminalFrame>,
+    // --- N5：Folder Editor ------------------------------------------------------
+    pub folder_editor_visible: bool,
+    pub folder_editor_name_text: String,
+    pub folder_editor_path_text: String,
+    pub folder_editor_status_text: String,
+    pub folder_editor_appearance_fields: Vec<TriStateFieldData>,
+    pub folder_editor_terminal_fields: Vec<TriStateFieldData>,
+    pub folder_editor_logging_fields: Vec<TriStateFieldData>,
+    /// Selected saved-session tree node is a folder (menu entry enabling).
+    pub saved_folder_selected: bool,
+    // --- N5：Session Editor 外观/终端覆盖 ----------------------------------------
+    pub editor_appearance_fields: Vec<TriStateFieldData>,
+    pub editor_terminal_fields: Vec<TriStateFieldData>,
     pub editor_modal_visible: bool,
     pub editor_section_text: String,
     pub known_hosts_modal_visible: bool,
@@ -1053,6 +1196,12 @@ pub struct AppProjection {
     pub known_hosts_selection_index: i32,
     pub known_hosts_selection_total: i32,
     pub known_hosts_details_text: String,
+    /// D17：已知主机详情拆分字段（标签由 UI 侧 `@tr` 渲染；指纹为 D9 分组格式）。
+    pub known_hosts_detail_host_text: String,
+    pub known_hosts_detail_port_text: String,
+    pub known_hosts_detail_algorithm_text: String,
+    pub known_hosts_detail_fingerprint_text: String,
+    pub known_hosts_detail_path_text: String,
     pub known_hosts_path_text: String,
     pub known_hosts_clear_confirmation_text: String,
     pub active_session_kind_text: String,
@@ -1083,6 +1232,14 @@ pub struct AppProjection {
     pub recent_sessions_empty: bool,
     pub host_key_prompt_visible: bool,
     pub host_key_prompt_text: String,
+    /// D36：弹窗正文拆分字段（标签由 UI 侧 `@tr` 渲染；指纹已按 4 位分组）。
+    /// 无挂起提示时为空串；changed 模式的 expected 侧仅在该模式下非空。
+    pub host_key_prompt_target_text: String,
+    pub host_key_prompt_known_hosts_path_text: String,
+    pub host_key_prompt_algorithm_text: String,
+    pub host_key_prompt_fingerprint_text: String,
+    pub host_key_prompt_expected_algorithm_text: String,
+    pub host_key_prompt_expected_fingerprint_text: String,
     pub host_key_prompt_mode_text: String,
     pub host_key_prompt_confirmation_text: String,
     /// W5：连接需要密码而密钥库无法提供时挂起输入（仅本次连接使用，不落盘）。
@@ -1111,6 +1268,9 @@ pub struct AppProjection {
     pub tab_menu_close_right_enabled: bool,
     pub tab_menu_close_all_enabled: bool,
     pub tab_menu_close_disconnected_enabled: bool,
+    /// D18：被右键标签的 Reconnect/Disconnect 启用条件。
+    pub tab_menu_reconnect_enabled: bool,
+    pub tab_menu_disconnect_enabled: bool,
     pub terminal_title_name_text: String,
     pub terminal_title_has_session: bool,
     pub terminal_body_text: String,
@@ -1254,6 +1414,11 @@ pub struct AppProjection {
     pub quick_connect_history_enabled: bool,
     /// 输入框下方的摘要（历史条数/上限；历史关闭时提示去设置里开启）。
     pub quick_connect_summary_text: String,
+    /// D37：QC 摘要的 `TextFormats.status-message` kind/参数（页面按此渲染；
+    /// `quick_connect_summary_text` 保留为回退文案）。
+    pub quick_connect_summary_kind_text: String,
+    pub quick_connect_summary_param_1_text: String,
+    pub quick_connect_summary_param_2_text: String,
     /// "最近连接"行（历史 + 已保存会话最近使用，已去重排序）。
     pub quick_connect_rows: Vec<QuickConnectRowData>,
     /// "快速链接"行（已按 sort_order 排序）。
@@ -1286,6 +1451,11 @@ pub struct AppProjection {
     pub host_keys_selected_group: i32,
     pub host_keys_selected_entry: i32,
     pub host_keys_details_text: String,
+    /// D20：主机密钥页详情拆分字段（标签由 UI 侧 `@tr` 渲染；指纹为 D9 分组格式）。
+    pub host_keys_detail_host_text: String,
+    pub host_keys_detail_algorithm_text: String,
+    pub host_keys_detail_fingerprint_text: String,
+    pub host_keys_detail_path_text: String,
     pub host_keys_path_text: String,
     pub host_keys_status_text: String,
     pub host_keys_import_visible: bool,

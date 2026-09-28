@@ -55,13 +55,14 @@ export global Theme {
     out property <color> window-background: dark ? #202020 : #F3F3F3;
     /// 内容层（命令栏/菜单栏/导航栏/状态栏等）
     out property <color> layer-fill: dark ? #FFFFFF0F : #FFFFFFB3;
-    /// 内容层描边/分隔线
-    out property <color> layer-stroke: dark ? #FFFFFF0F : #0000000F;
+    /// 内容层描边/分隔线（B 轮4：原 6% 的 1px 线实测只有 1.14:1，几乎不可见；
+    /// 提到 light 14% / dark 16%，既保住"发丝线"观感又让面板边界可辨）
+    out property <color> layer-stroke: dark ? #FFFFFF29 : #00000024;
     /// 浮层内分隔线（比 layer-stroke 强一档，用于弹窗分区线/菜单分隔符/列表表头下沿）
-    out property <color> divider: dark ? #FFFFFF1F : #00000014;
+    out property <color> divider: dark ? #FFFFFF33 : #00000029;
     /// 窗口内的卡片（右侧工具面板等）
     out property <color> card-fill: dark ? #FFFFFF0D : #FFFFFFB3;
-    out property <color> card-stroke: dark ? #FFFFFF0F : #0000000F;
+    out property <color> card-stroke: dark ? #FFFFFF29 : #00000024;
     /// 不透明浮层/对话框底（菜单、ContentDialog）
     out property <color> panel-background: dark ? #2C2C2C : #FFFFFF;
     /// 菜单/下拉浮层底（规范 §5.11：比卡片再"亮"一级）
@@ -89,19 +90,45 @@ export global Theme {
     // -------------------------------------------------------------------- 文本
     out property <color> text-primary: dark ? #FFFFFF : #000000E4;
     out property <color> text-secondary: dark ? #FFFFFFC5 : #0000009E;
-    out property <color> text-tertiary: dark ? #FFFFFF87 : #0000008B;
+    /// 第三级文本（辅助信息/汇总行）。B 轮5：light 原 54.5% 在 12px caption 上余量过小，
+    /// 提到 60%（白底合成 ~#666666，约 5.7:1），dark 侧余量充足保持不变。
+    out property <color> text-tertiary: dark ? #FFFFFF87 : #00000099;
     out property <color> text-disabled: dark ? #FFFFFF5D : #0000005C;
 
     // ---------------------------------------------------------------- 系统语义
     out property <color> success: dark ? #6CCB5F : #0F7B0F;
     out property <color> caution: dark ? #FCE100 : #9D5D00;
     out property <color> critical: dark ? #FF99A4 : #C42B1C;
-    /// 安全提示条（InfoBar warning）
+    /// 安全提示条（InfoBar warning）—— warning 档保留原黄色语义
     out property <color> attention-background: dark ? #433519 : #FFF4CE;
     out property <color> attention-stroke: dark ? #FCE10055 : #9D5D0055;
     out property <color> attention-text: dark ? #FFF3D6 : #5C4200;
 
+    // InfoBar 按 severity 的背景/描边/文字（§5.9）：warning 沿用上面的 attention-*，
+    // 其余三档用语义色浅底 + 深字，避免"失败/成功都渲染成黄色警告"。
+    out property <color> banner-info-background: dark ? #FFFFFF0F : #F0F0F0;
+    out property <color> banner-info-stroke: dark ? #FFFFFF1F : #00000014;
+    out property <color> banner-info-text: dark ? #FFFFFFC5 : #0000009E;
+    out property <color> banner-success-background: dark ? #393D1B : #DFF6DD;
+    out property <color> banner-success-stroke: dark ? #6CCB5F55 : #0F7B0F55;
+    out property <color> banner-success-text: dark ? #E4F5DF : #0B5A0B;
+    out property <color> banner-warning-background: attention-background;
+    out property <color> banner-warning-stroke: attention-stroke;
+    out property <color> banner-warning-text: attention-text;
+    out property <color> banner-error-background: dark ? #442726 : #FDE7E9;
+    out property <color> banner-error-stroke: dark ? #FF99A455 : #C42B1C55;
+    out property <color> banner-error-text: dark ? #FFE5E9 : #8E1B12;
+
+    // ------------------------------------------------------------ 焦点环（§3.5）
+    /// 键盘焦点环外圈（任何底色上可见）
+    out property <color> focus-outer: dark ? #FFFFFF : #000000;
+    /// 键盘焦点环内圈
+    out property <color> focus-inner: dark ? #000000 : #FFFFFF;
+
     // -------------------------------------------------------------------- 终端
+    // E18（记录不改）：UI 主题的终端底色随深浅切换，但终端内的 16 色配色由
+    // Rust 侧按 TerminalColorScheme（默认 Campbell，深色）单独选择；light 模式下
+    // 终端仍是深色块属有意设计（终端可读性优先），如需"跟随主题"另开设计项。
     out property <color> terminal-background: dark ? #0C0C0C : #FAFAFA;
     out property <color> terminal-surface: dark ? #050505 : #FFFFFF;
     out property <color> terminal-chrome-fill: dark ? #FFFFFF0A : #00000005;
@@ -117,10 +144,17 @@ export global Theme {
     out property <length> line-body: 20px;
     /// 标题/强调字重（WinUI Semibold）
     out property <int> weight-semibold: 600;
-    /// UI 字体族（由 Rust 按平台写入；必须同时覆盖拉丁与 CJK——Slint 1.9 不支持字体列表/逐字形回退）
+    /// UI 字体族（E20：由 Rust 按平台写入，见 bootstrap.rs `platform_default_ui_font()`；
+    /// Slint 1.18 只接受**单个 Named 家族名**——逗号列表会整体失配并回退，切勿写字体链。
+    /// 默认值是本机实际存在的 "Noto Sans SC"，缺字时由 Slint 的字体后端兜底。）
     in-out property <string> font-ui: "Noto Sans SC";
     /// 等宽字体族（路径/指纹/权限/端口等技术信息）
-    out property <string> font-mono: "monospace";
+    ///
+    /// 必须写具体族名：Slint 只按"字体族名"精确查找，不解析 CSS 通用别名
+    ///（`monospace` 会静默回退到 UI 字体，B 轮5 的主机密钥指纹即因此不是等宽）。
+    /// 这里给 Linux 常见族名；Windows/macOS 由 Rust 侧按平台写入（与 `font-ui` 同机制，
+    /// 见 crates/yshell-app/src/bootstrap.rs 的 `platform_default_ui_font`）。
+    in-out property <string> font-mono: "DejaVu Sans Mono";
     /// 表单标签列宽（对话框里的「标签 + 控件」两列布局）
     out property <length> form-label-width: 116px;
 

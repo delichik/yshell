@@ -3,8 +3,18 @@
 
 use crate::{error::AppError, error::AppResult};
 use yshell_config::{
-    FolderProfile, HostKeyPolicy as ConfigHostKeyPolicy, ProxyProtocol, SessionProfile,
-    TunnelForward, TunnelForwardKind, TunnelProfile,
+    FolderProfile, HostKeyPolicy as ConfigHostKeyPolicy, LoggingProfile, ProxyProtocol,
+    SessionProfile, TerminalProfile, TunnelForward, TunnelForwardKind, TunnelProfile,
+};
+
+use super::panels::{
+    SETTINGS_SCROLLBACK_LINES_MAX, SETTINGS_SCROLLBACK_LINES_MIN,
+    SETTINGS_SCROLLBACK_MAX_CELLS_MAX, SETTINGS_SCROLLBACK_MAX_CELLS_MIN,
+};
+use super::theme::{
+    color_scheme_id_at, parse_scrollback, resolve_palette, theme_field_rows, ThemeDraft,
+    ThemeFieldAction, ThemeFieldDraft, ThemeFieldError, ThemeSources, TriStateFieldData,
+    KEY_SCROLLBACK_LINES, KEY_SCROLLBACK_MAX_CELLS,
 };
 
 use super::*;
@@ -16,6 +26,7 @@ impl AppRuntime {
         self.editor_modal_visible = true;
         self.editor_section = EditorSection::General;
         self.editor_auth_test_status = EditorAuthTestStatus::Hint;
+        self.editor_set_theme_baseline(None);
         self.status_text =
             "Session editor cleared. Fill in the fields to create a saved session.".to_owned();
         self.projection()
@@ -96,12 +107,14 @@ impl AppRuntime {
 
     pub fn select_next_editor_folder(&mut self) -> AppProjection {
         self.rotate_editor_folder(true);
+        self.editor_refresh_theme_for_folder();
         self.status_text = format!("Editor target folder: {}", self.editor_folder_legacy_text());
         self.projection()
     }
 
     pub fn select_previous_editor_folder(&mut self) -> AppProjection {
         self.rotate_editor_folder(false);
+        self.editor_refresh_theme_for_folder();
         self.status_text = format!("Editor target folder: {}", self.editor_folder_legacy_text());
         self.projection()
     }
@@ -361,6 +374,12 @@ impl AppRuntime {
                 forwards: self.editor.tunnels.clone(),
             })
         };
+        profile.terminal = match self.editor_terminal_override() {
+            Ok(terminal) => terminal,
+            Err(error) => {
+                return Err(AppError::new(format!("{}: {}", error.field, error.message)));
+            }
+        };
 
         self.config_document
             .auth_profiles
@@ -509,6 +528,279 @@ impl AppRuntime {
     }
 }
 
+/// N5：Session Editor 的 Appearance/Terminal 覆盖草稿（含继承来源）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SessionThemeDraft {
+    pub(crate) theme: ThemeDraft,
+    pub(crate) scrollback_lines: ThemeFieldDraft,
+    pub(crate) scrollback_max_cells: ThemeFieldDraft,
+    /// Parent resolution (target folder chain + global) for inherited fields.
+    pub(crate) parent: TerminalProfile,
+    pub(crate) sources: ThemeSources,
+}
+
+impl Default for SessionThemeDraft {
+    fn default() -> Self {
+        let parent = TerminalProfile::default();
+        Self {
+            theme: ThemeDraft::from_resolved(&parent, None),
+            scrollback_lines: ThemeFieldDraft {
+                text: parent.scrollback_lines.to_string(),
+                explicit: false,
+            },
+            scrollback_max_cells: ThemeFieldDraft {
+                text: parent.scrollback_max_cells.to_string(),
+                explicit: false,
+            },
+            sources: ThemeSources::resolve(&[], &parent, &LoggingProfile::default()),
+            parent,
+        }
+    }
+}
+
+impl SessionThemeDraft {
+    pub(crate) fn new(
+        parent: TerminalProfile,
+        sources: ThemeSources,
+        own: Option<&TerminalProfile>,
+    ) -> Self {
+        let current = own.unwrap_or(&parent);
+        Self {
+            theme: ThemeDraft::from_resolved(&parent, own),
+            scrollback_lines: ThemeFieldDraft {
+                text: current.scrollback_lines.to_string(),
+                explicit: own.is_some(),
+            },
+            scrollback_max_cells: ThemeFieldDraft {
+                text: current.scrollback_max_cells.to_string(),
+                explicit: own.is_some(),
+            },
+            sources,
+            parent,
+        }
+    }
+
+    fn has_explicit_field(&self) -> bool {
+        self.theme.has_explicit_field()
+            || self.scrollback_lines.explicit
+            || self.scrollback_max_cells.explicit
+    }
+
+    fn refresh_sources(&mut self, parent: TerminalProfile, sources: ThemeSources) {
+        self.theme.refresh_inherited(&parent);
+        if !self.scrollback_lines.explicit {
+            self.scrollback_lines.text = parent.scrollback_lines.to_string();
+        }
+        if !self.scrollback_max_cells.explicit {
+            self.scrollback_max_cells.text = parent.scrollback_max_cells.to_string();
+        }
+        self.parent = parent;
+        self.sources = sources;
+    }
+}
+
+impl AppRuntime {
+    /// Recomputes the editor theme baseline for its target folder.
+    ///
+    /// `own` is the edited session's own terminal override (None for a new
+    /// session); explicit flags are taken from it.
+    pub(crate) fn editor_set_theme_baseline(&mut self, own: Option<&TerminalProfile>) {
+        let folder_id = self.editor.target_folder_id.clone();
+        let parent = self.terminal_profile_for_draft(Some(&folder_id));
+        let chain = self.config_document.folder_chain_to(&folder_id);
+        let sources = ThemeSources::resolve(
+            &chain,
+            &self.config_document.terminal,
+            &self.config_document.logging,
+        );
+        self.editor.theme = SessionThemeDraft::new(parent, sources, own);
+    }
+
+    /// Recomputes inherit sources after the target folder changed, keeping the
+    /// explicit values the user already typed.
+    pub(crate) fn editor_refresh_theme_for_folder(&mut self) {
+        let folder_id = self.editor.target_folder_id.clone();
+        let parent = self.terminal_profile_for_draft(Some(&folder_id));
+        let chain = self.config_document.folder_chain_to(&folder_id);
+        let sources = ThemeSources::resolve(
+            &chain,
+            &self.config_document.terminal,
+            &self.config_document.logging,
+        );
+        self.editor.theme.refresh_sources(parent, sources);
+    }
+
+    /// Applies a three-state action to one editor theme field.
+    pub fn editor_theme_field_action(
+        &mut self,
+        key: &str,
+        action: ThemeFieldAction,
+    ) -> AppProjection {
+        let explicit = matches!(action, ThemeFieldAction::SetExplicit);
+        let parent = self.editor.theme.parent.clone();
+        if let Some(field) = self.editor.theme.theme.field_mut(key) {
+            field.explicit = explicit;
+        }
+        match key {
+            KEY_SCROLLBACK_LINES => {
+                let field = &mut self.editor.theme.scrollback_lines;
+                field.explicit = explicit;
+                if !explicit {
+                    field.text = parent.scrollback_lines.to_string();
+                }
+            }
+            KEY_SCROLLBACK_MAX_CELLS => {
+                let field = &mut self.editor.theme.scrollback_max_cells;
+                field.explicit = explicit;
+                if !explicit {
+                    field.text = parent.scrollback_max_cells.to_string();
+                }
+            }
+            _ => {}
+        }
+        self.projection()
+    }
+
+    /// Updates the draft text of one editor theme field (typing implies an
+    /// explicit override at the session level).
+    pub fn update_editor_theme_field(&mut self, key: &str, value: &str) -> AppProjection {
+        if let Some(field) = self.editor.theme.theme.field_mut(key) {
+            field.text = value.to_owned();
+            field.explicit = true;
+        } else {
+            match key {
+                KEY_SCROLLBACK_LINES => {
+                    self.editor.theme.scrollback_lines.text = value.to_owned();
+                    self.editor.theme.scrollback_lines.explicit = true;
+                }
+                KEY_SCROLLBACK_MAX_CELLS => {
+                    self.editor.theme.scrollback_max_cells.text = value.to_owned();
+                    self.editor.theme.scrollback_max_cells.explicit = true;
+                }
+                _ => {}
+            }
+        }
+        self.projection()
+    }
+
+    /// Picks a color scheme for the edited session (index into `COLOR_SCHEMES`).
+    pub fn select_editor_scheme_index(&mut self, index: i32) -> AppProjection {
+        if let Some(id) = color_scheme_id_at(index) {
+            let field = &mut self.editor.theme.theme.color_scheme;
+            field.text = id.to_owned();
+            field.explicit = true;
+            if let Some(scheme) = yshell_terminal::color_scheme(id) {
+                let theme = &mut self.editor.theme.theme;
+                theme.foreground.text = scheme.palette.foreground.to_hex();
+                theme.background.text = scheme.palette.background.to_hex();
+                theme.cursor.text = scheme.palette.cursor.to_hex();
+                theme.selection.text = scheme.palette.selection.to_hex();
+            }
+        }
+        self.projection()
+    }
+
+    /// Drops every theme override of the edited session.
+    pub fn reset_all_editor_theme(&mut self) -> AppProjection {
+        let parent = self.editor.theme.parent.clone();
+        let sources = self.editor.theme.sources.clone();
+        self.editor.theme = SessionThemeDraft {
+            theme: ThemeDraft::from_resolved(&parent, None),
+            scrollback_lines: ThemeFieldDraft {
+                text: parent.scrollback_lines.to_string(),
+                explicit: false,
+            },
+            scrollback_max_cells: ThemeFieldDraft {
+                text: parent.scrollback_max_cells.to_string(),
+                explicit: false,
+            },
+            sources,
+            parent,
+        };
+        self.projection()
+    }
+
+    /// Appearance rows of the Session Editor.
+    pub(crate) fn editor_appearance_fields(&self) -> Vec<TriStateFieldData> {
+        let draft = &self.editor.theme;
+        let resolved = self.editor_theme_resolved_terminal();
+        let palette = resolve_palette(&resolved);
+        let scheme_label = resolved
+            .color_scheme
+            .as_deref()
+            .and_then(yshell_terminal::color_scheme)
+            .map_or("YShell Default", |scheme| scheme.name)
+            .to_owned();
+        theme_field_rows(
+            &draft.theme,
+            &draft.sources,
+            "local-session",
+            palette,
+            scheme_label,
+        )
+    }
+
+    /// Terminal rows of the Session Editor (scrollback).
+    pub(crate) fn editor_terminal_fields(&self) -> Vec<TriStateFieldData> {
+        let draft = &self.editor.theme;
+        vec![
+            TriStateFieldData::new(
+                KEY_SCROLLBACK_LINES,
+                "Scrollback lines",
+                "Per session",
+                "number",
+                &draft.scrollback_lines,
+                &draft.sources.scrollback_lines,
+                "local-session",
+            ),
+            TriStateFieldData::new(
+                KEY_SCROLLBACK_MAX_CELLS,
+                "Scrollback memory cap",
+                "Cells kept per session",
+                "number",
+                &draft.scrollback_max_cells,
+                &draft.sources.scrollback_max_cells,
+                "local-session",
+            ),
+        ]
+    }
+
+    /// Terminal profile the editor is currently showing (draft applied over
+    /// the parent resolution).
+    pub(crate) fn editor_theme_resolved_terminal(&self) -> TerminalProfile {
+        let draft = &self.editor.theme;
+        let mut terminal = draft.parent.clone();
+        let _ = draft.theme.write_into(&mut terminal, &draft.parent);
+        terminal
+    }
+
+    /// Validates the theme draft and returns the session terminal override.
+    pub(crate) fn editor_terminal_override(
+        &self,
+    ) -> Result<Option<TerminalProfile>, ThemeFieldError> {
+        let draft = &self.editor.theme;
+        if !draft.has_explicit_field() {
+            return Ok(None);
+        }
+        let mut terminal = draft.parent.clone();
+        draft.theme.write_into(&mut terminal, &draft.parent)?;
+        terminal.scrollback_lines = parse_scrollback(
+            &draft.scrollback_lines,
+            draft.parent.scrollback_lines,
+            SETTINGS_SCROLLBACK_LINES_MIN,
+            SETTINGS_SCROLLBACK_LINES_MAX,
+            KEY_SCROLLBACK_LINES,
+        )?;
+        terminal.scrollback_max_cells = parse_scrollback(
+            &draft.scrollback_max_cells,
+            draft.parent.scrollback_max_cells,
+            SETTINGS_SCROLLBACK_MAX_CELLS_MIN,
+            SETTINGS_SCROLLBACK_MAX_CELLS_MAX,
+            KEY_SCROLLBACK_MAX_CELLS,
+        )?;
+        Ok(Some(terminal))
+    }
+}
 /// Value-only auth-test result for the session editor.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum EditorAuthTestStatus {
@@ -683,6 +975,8 @@ pub(crate) struct SessionEditorDraft {
     pub(crate) tunnel_target_host: String,
     pub(crate) tunnel_target_port_text: String,
     pub(crate) tunnels: Vec<TunnelForward>,
+    /// N5：Appearance/Terminal 覆盖草稿（三态）。
+    pub(crate) theme: SessionThemeDraft,
 }
 
 impl Default for SessionEditorDraft {
@@ -712,6 +1006,7 @@ impl Default for SessionEditorDraft {
             tunnel_target_host: String::new(),
             tunnel_target_port_text: String::new(),
             tunnels: Vec::new(),
+            theme: SessionThemeDraft::default(),
         }
     }
 }

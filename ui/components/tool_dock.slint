@@ -41,7 +41,8 @@ export struct SplitHandleData {
     height: length = 4px,
 }
 
-// 面板头部拖拽区（换边/换序）：留出右侧 40px 给 ⋯ 菜单按钮。
+// 面板头部拖拽区（换边/换序）：右侧留出 `grip-inset` 给头部按钮
+// （默认 40px = ⋯ 菜单；带 header-action 的面板传 76px = ⋯ + 32px 动作 + 间距）。
 // 上报窗口绝对坐标，ToolDock 换算成内容区坐标后交给 Rust。
 component PanelDragRegion inherits TouchArea {
     in property <string> panel-id: "";
@@ -49,6 +50,7 @@ component PanelDragRegion inherits TouchArea {
     in property <length> grip-y: 0px;
     in property <length> grip-width: 0px;
     in property <length> grip-height: 0px;
+    in property <length> grip-inset: 40px;
 
     callback drag-start(string, length, length);
     callback drag-move(string, length, length);
@@ -57,7 +59,7 @@ component PanelDragRegion inherits TouchArea {
 
     x: root.grip-x;
     y: root.grip-y;
-    width: max(0px, root.grip-width - 40px);
+    width: max(0px, root.grip-width - root.grip-inset);
     height: root.grip-height;
     property <bool> dragging: false;
 
@@ -147,10 +149,15 @@ export component ToolDock inherits Rectangle {
     callback toggle-session-folder(string);
     callback session-row-context-menu-requested(string, length, length);
     callback session-blank-menu-requested(length, length);
+    /// A8：Sessions 面板头部的「新建会话」入口。
+    callback session-new-requested();
+    /// A9：会话栏空白处左键（清空选择）。
+    callback session-clear-selection-requested();
 
     // ---- Tunnels / Transfers 面板内容 --------------------------------------
     in property <string> tunnels-summary-text: "";
-    in property <string> transfer-queue-text: "No active transfers";
+    /// E21：默认置空（宿主投影必覆盖），避免更新前闪现英文。
+    in property <string> transfer-queue-text: "";
 
     // ---- N1：SftpPanel 投影透传（面板壳只提供弹性高度与标题条）--------------
     in property <[SftpRow]> sftp-rows: [];
@@ -359,6 +366,9 @@ export component ToolDock inherits Rectangle {
         title-text: @tr("MainWindow" => "Sessions");
         icon: "terminal";
         collapsed: root.sessions-frame.collapsed;
+        header-action-icon: "plus";
+        header-action-label: @tr("MainWindow" => "New Session");
+        header-action() => { root.session-new-requested(); }
         menu-requested(x, y) => { root.panel-menu-requested("sessions", x, y); }
         collapse-toggled() => { root.panel-collapse-requested("sessions"); }
         hide-requested() => { root.panel-hide-requested("sessions"); }
@@ -376,6 +386,7 @@ export component ToolDock inherits Rectangle {
             toggle-folder(id) => { root.toggle-session-folder(id); }
             row-context-menu-requested(id, x, y) => { root.session-row-context-menu-requested(id, x, y); }
             blank-menu-requested(x, y) => { root.session-blank-menu-requested(x, y); }
+            clear-selection() => { root.session-clear-selection-requested(); }
         }
     }
 
@@ -535,9 +546,11 @@ export component ToolDock inherits Rectangle {
         collapse-toggled() => { root.panel-collapse-requested("quick_commands"); }
         hide-requested() => { root.panel-hide-requested("quick_commands"); }
 
+        // B15：卡片尚未实现内容，用明确的"本版本未提供"空态替代会让人误以为
+        // 正在加载的占位文案；不新造入口（Tunnels 同理由 Rust 空态文案承载）。
         Text {
-            text: @tr("MainWindow" => "Command presets will appear here.");
-            color: Theme.text-tertiary;
+            text: @tr("MainWindow" => "Command presets are not available in this build yet.");
+            color: Theme.text-secondary;
             font-size: Theme.font-caption;
             wrap: word-wrap;
         }
@@ -580,6 +593,9 @@ export component ToolDock inherits Rectangle {
         grip-y: frame.f.y;
         grip-width: frame.f.width;
         grip-height: 44px;
+        // Sessions 头部有 `+` 主操作：拖拽区要为「32px 按钮 + 8px 间距 + 36px ⋯」
+        // 让位，否则点击 `+` 会被拖拽层吞掉。
+        grip-inset: frame.p == "sessions" ? 76px : 40px;
         visible: frame.f.visible && !frame.f.collapsed;
         drag-start(id, x, y) => { root.panel-drag-start(id, x - root.absolute-position.x, y - root.absolute-position.y); }
         drag-move(id, x, y) => {
@@ -614,7 +630,8 @@ export component ToolDockPopups inherits Rectangle {
     // 窗口，内层 Popup 显式取父尺寸，保持锚点钳制与全屏 scrim 与拆分前一致。
     background: transparent;
 
-    sftp_context_menu := MenuPopup {
+    // SFTP 行/空白右键菜单（布局占位，无需 id；打开状态由宿主驱动）。
+    MenuPopup {
         width: parent.width;
         height: parent.height;
         open: root.open;

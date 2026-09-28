@@ -22,7 +22,7 @@ import { ConfirmDialog } from "components/confirm_dialog.slint";
 import { PasswordPromptDialog } from "components/password_prompt_dialog.slint";
 import { HostKeyDialog } from "components/host_key_dialog.slint";
 import { AboutDialog } from "pages/about.slint";
-import { SettingsDialog } from "pages/settings.slint";
+import { SettingsDialog, SettingsSchemeOption, TerminalAppearanceDialog } from "pages/settings.slint";
 import { SessionEditor } from "pages/session_editor.slint";
 import { KnownHostsPage } from "pages/known_hosts.slint";
 import { QuickConnectPage, QuickConnectRow, QuickLinkRow } from "pages/quick_connect.slint";
@@ -30,6 +30,7 @@ import { PrivateKeysPage, PrivateKeyRow } from "pages/private_keys.slint";
 import { HostKeysPage, HostKeyGroup, HostKeyEntry } from "pages/host_keys.slint";
 import { AuthPromptDialog, AuthKeyOption, AuthKeyboardPrompt } from "components/auth_prompt_dialog.slint";
 import { LoggingDialog } from "components/logging_dialog.slint";
+import { FolderEditor, TriStateField } from "pages/folder_editor.slint";
 
 // 一级菜单（MenuTitle/MenuBar 行）已搬到 components/menu_bar.slint；
 // NewFolderDialog 已搬到 components/session_sidebar.slint（弹窗实例仍在下方）。
@@ -44,7 +45,7 @@ export component MainWindow inherits Window {
     // "只有固定宽度子项"的横向布局（例如菜单栏的 5 个固定宽 MenuTitle），
     // 推导出的 max 会是这些宽度之和（有限值），窗口的 max 就会被钉死在这个
     // 值上（表现为拖大窗口被弹回）。因此菜单栏末尾放了一个弹性空白
-    // （menu_bar_spacer），保证根内容的 max 无界，窗口可自由拉伸。
+    // （menu_bar.slint 的菜单栏弹性占位），保证根内容的 max 无界，窗口可自由拉伸。
     preferred-width: 1440px;
     preferred-height: 900px;
     min-width: 880px;
@@ -52,7 +53,8 @@ export component MainWindow inherits Window {
     default-font-size: Theme.font-body;
     default-font-family: Theme.font-ui;
 
-    in-out property <string> status_text: "Ready";
+    // A32（D14）：默认空（Rust 投影在启动时写入；避免闪现英文 "Ready"）。
+    in-out property <string> status_text: "";
     in-out property <string> config_dir: "";
     in-out property <string> secret_store_status_text: "Secret store disabled.";
     in-out property <string> secret_reset_confirmation_text: "";
@@ -77,6 +79,12 @@ export component MainWindow inherits Window {
     in-out property <string> known_hosts_details_text: "";
     in-out property <string> known_hosts_path_text: "";
     in-out property <string> known_hosts_clear_confirmation_text: "";
+    // A30（D17）：主机详情字段拆分（Rust 投影；页面用 @tr 标签渲染，替代英文拼接串）。
+    in-out property <string> known_hosts_detail_host_text: "";
+    in-out property <string> known_hosts_detail_port_text: "";
+    in-out property <string> known_hosts_detail_algorithm_text: "";
+    in-out property <string> known_hosts_detail_fingerprint_text: "";
+    in-out property <string> known_hosts_detail_path_text: "";
     // --- N4：私钥管理页 -----------------------------------------------------
     in-out property <bool> private_keys_modal_visible: false;
     in-out property <[PrivateKeyRow]> private_keys_rows: [];
@@ -110,6 +118,11 @@ export component MainWindow inherits Window {
     in-out property <bool> host_keys_import_visible: false;
     in-out property <string> host_keys_import_text: "";
     in-out property <string> host_keys_clear_confirmation_text: "";
+    // A30（D20）：主机密钥详情字段拆分（Rust 投影；页面用 @tr 标签渲染）。
+    in-out property <string> host_keys_detail_host_text: "";
+    in-out property <string> host_keys_detail_algorithm_text: "";
+    in-out property <string> host_keys_detail_fingerprint_text: "";
+    in-out property <string> host_keys_detail_path_text: "";
     // --- N4：认证弹窗（服务端能力驱动）--------------------------------------
     in-out property <bool> auth_prompt_visible: false;
     in-out property <string> auth_prompt_host_text: "";
@@ -166,6 +179,15 @@ export component MainWindow inherits Window {
     in-out property <string> host_key_prompt_text: "";
     in-out property <string> host_key_prompt_mode_text: "";
     in-out property <string> host_key_prompt_confirmation_text: "";
+    // A35：主机密钥弹窗的拆分字段（WS-D 投影 → WS-C 的 HostKeyDialog 渲染）。
+    // 全部 `in-out`（与既有 host_key_prompt_* 一致），Rust 未投影时保持空串，
+    // 弹窗回退到上面的一体化 `host_key_prompt_text`。
+    in-out property <string> host_key_prompt_target_text: "";
+    in-out property <string> host_key_prompt_known_hosts_path_text: "";
+    in-out property <string> host_key_prompt_algorithm_text: "";
+    in-out property <string> host_key_prompt_fingerprint_text: "";
+    in-out property <string> host_key_prompt_expected_algorithm_text: "";
+    in-out property <string> host_key_prompt_expected_fingerprint_text: "";
     in-out property <string> tab_text: "Welcome  idle";
     in-out property <string> terminal_title_text: "YShell terminal";
     in-out property <string> terminal_body_text: "Runtime is ready. Open a Quick Connect target or create a draft session.";
@@ -297,6 +319,36 @@ export component MainWindow inherits Window {
     in-out property <string> settings_terminal_status_field_text: "";
     in-out property <string> settings_terminal_status_value_text: "";
     in-out property <string> settings_terminal_status_limit_text: "";
+    // N5：Settings → Terminal Appearance（嵌套弹窗；入口在 Settings 的 Terminal 区）
+    in-out property <bool> terminal_appearance_dialog_visible: false;
+    in-out property <string> settings_appearance_color_scheme_text: "";
+    in-out property <string> settings_appearance_foreground_text: "";
+    in-out property <string> settings_appearance_background_text: "";
+    in-out property <string> settings_appearance_cursor_text: "";
+    in-out property <string> settings_appearance_selection_text: "";
+    in-out property <string> settings_appearance_font_family_text: "";
+    in-out property <string> settings_appearance_font_size_text: "";
+    in-out property <string> settings_appearance_fallback_fonts_text: "";
+    in property <string> settings_appearance_status_text: "";
+    in property <[SettingsSchemeOption]> settings_appearance_schemes: [];
+    in property <[color]> settings_appearance_palette_swatches: [];
+    in property <image> settings_appearance_preview;
+    // N5：Folder Editor（会话树文件夹右键 → Edit Folder Defaults…）
+    in-out property <bool> folder_editor_visible: false;
+    in property <string> folder_editor_name_text: "";
+    in property <string> folder_editor_path_text: "";
+    in property <string> folder_editor_status_text: "";
+    in property <[TriStateField]> folder_editor_appearance_fields: [];
+    in property <[TriStateField]> folder_editor_terminal_fields: [];
+    in property <[TriStateField]> folder_editor_logging_fields: [];
+    // N5：会话树选中项是文件夹（菜单项启用条件）。
+    in property <bool> saved_folder_selected: false;
+    // A27（D12）：最近一次会话树行右键的节点类型（folder / session / none，空 = 未右键）。
+    // SessionSidebarPopups 据此在会话菜单/文件夹菜单两套模型之间选择。
+    in-out property <string> saved_tree_menu_kind_text: "";
+    // N5：Session Editor 的 Appearance/Terminal 三态字段。
+    in property <[TriStateField]> editor_appearance_fields: [];
+    in property <[TriStateField]> editor_terminal_fields: [];
     in-out property <string> known_hosts_inventory_rows_text: "";
     in-out property <bool> known_hosts_inventory_empty: true;
     in-out property <string> known_hosts_selection_kind_text: "empty";
@@ -343,6 +395,11 @@ export component MainWindow inherits Window {
     in-out property <string> quick_connect_error_text: "";
     /// 输入框下方的摘要（历史条数/上限）。
     in-out property <string> quick_connect_summary_text: "";
+    // A36（WS-D D37）：QC 摘要的 i18n 三元（kind/param_1/param_2），与状态栏同一套
+    // `TextFormats.status-message` 模板；Rust 只投影值，句子在 Slint 侧渲染。
+    in-out property <string> quick_connect_summary_kind_text: "";
+    in-out property <string> quick_connect_summary_param_1_text: "";
+    in-out property <string> quick_connect_summary_param_2_text: "";
     /// 最近一次连接成功的目标（非空时显示"保存为会话…"）。
     in-out property <string> quick_connect_last_target_text: "";
     /// D12：连接历史是否开启。
@@ -359,6 +416,9 @@ export component MainWindow inherits Window {
     in-out property <bool> tab_menu_close_right_enabled: false;
     in-out property <bool> tab_menu_close_all_enabled: false;
     in-out property <bool> tab_menu_close_disconnected_enabled: false;
+    // A28（D18）：针对"被右键标签"的重连/断开可用性（Rust `tab_menu_connection_flags`）。
+    in-out property <bool> tab_menu_reconnect_enabled: false;
+    in-out property <bool> tab_menu_disconnect_enabled: false;
     // 关闭确认弹窗（单关显示会话名；批量显示数量与活动连接数）。
     in-out property <bool> close_tabs_confirm_visible: false;
     in-out property <bool> close_tabs_confirm_single: false;
@@ -414,6 +474,14 @@ export component MainWindow inherits Window {
     in-out property <int> open_menu_index: -1;
     in-out property <length> menu_anchor_x: 0px;
     in-out property <length> menu_anchor_y: 0px;
+    /// A34：当前弹层是"悬停切换"打开的（= 紧随其后的 click 与 hover 同帧到达）。
+    /// 该标志为 true 时，点同一个一级菜单标题保持展开（只清标志），再点一次才收起；
+    /// 点击打开时为 false（维持"点击打开/点击收起"的原有语义）。
+    property <bool> menu-opened-by-hover: false;
+    // --- A3：命令栏 "更多(⋯)" 的独立溢出菜单（不再借用一级菜单的 open-menu-index）--
+    in-out property <bool> more_menu_open: false;
+    in-out property <length> more_menu_x: 0px;
+    in-out property <length> more_menu_y: 0px;
     // 右键菜单：同一时刻只有一个展开（与拆分前一致），用 token + 共享锚点表示。
     // 取值："none" / "terminal" / "saved-session" / "blank" / "rail" / "sftp"。
     in-out property <string> context_menu_token: "none";
@@ -561,6 +629,9 @@ export component MainWindow inherits Window {
     callback close_tab(string);
     callback close_tabs(string);
     callback tab_context_menu_requested(string, length, length);
+    // A28（D18）：标签右键菜单的 Reconnect/Disconnect（bootstrap 由 WS-D Part 2 接线）。
+    callback reconnect_tab(string);
+    callback disconnect_tab(string);
     callback confirm_close_tabs();
     callback cancel_close_tabs();
     callback send_demo_input();
@@ -708,12 +779,17 @@ export component MainWindow inherits Window {
     callback update_host_key_replace_confirmation(string);
     callback replace_host_key_and_connect();
     callback start_new_saved_session_editor();
+    // A27（D12）：文件夹右键 "New Session Here"（bootstrap 由 WS-D Part 2 接线）。
+    callback start_new_saved_session_editor_in_folder(string);
     callback close_session_editor_modal();
     callback update_new_folder_name(string);
     callback create_folder_under_editor_target();
     // S1：会话树空白区菜单 —— 根目录建文件夹（一次性传入弹窗名称）与刷新会话树。
     callback create_root_saved_folder(string);
     callback refresh_saved_sessions();
+    /// A9：会话树/侧栏空白区左键 —— 清空已保存会话选中（需要 Rust 处理分支，
+    /// 见 WS-A 报告的跨组请求；未接线前该点击不产生任何动作）。
+    callback clear_saved_session_selection();
     callback load_selected_saved_session_into_editor();
     callback select_session_editor_general();
     callback select_session_editor_authentication();
@@ -769,6 +845,32 @@ export component MainWindow inherits Window {
     callback update_settings_scrollback_max_cells(string);
     callback reset_settings_terminal_defaults();
     callback save_settings_terminal();
+    // N5：终端外观（Settings 嵌套弹窗 / Folder Editor / Session Editor 覆盖）
+    callback open_terminal_appearance();
+    callback close_terminal_appearance();
+    callback select_settings_scheme(string);
+    callback update_settings_appearance_color(string, string);
+    callback update_settings_appearance_font_family(string);
+    callback update_settings_appearance_font_size(string);
+    callback update_settings_appearance_fallback_fonts(string);
+    callback browse_settings_appearance_font_file();
+    callback browse_settings_appearance_fallback_font();
+    callback clear_settings_appearance_fallbacks();
+    callback reset_settings_appearance_defaults();
+    callback save_settings_appearance();
+    callback edit_folder_defaults();
+    callback close_folder_editor();
+    callback folder_editor_field_action(string, string);
+    callback update_folder_editor_field(string, string);
+    callback folder_editor_select_scheme(int);
+    callback folder_editor_select_log_format(int);
+    callback toggle_folder_editor_logging();
+    callback reset_all_folder_editor();
+    callback save_folder_editor();
+    callback editor_theme_field_action(string, string);
+    callback update_editor_theme_field(string, string);
+    callback editor_select_scheme(int);
+    callback reset_all_editor_theme();
     callback test_editor_auth();
     callback save_editor_to_saved_session();
     callback save_editor_and_connect();
@@ -812,7 +914,10 @@ export component MainWindow inherits Window {
         || root.sftp_dialog_kind != "none"
         || root.private_keys_modal_visible
         || root.host_keys_modal_visible
-        || root.auth_prompt_visible;
+        || root.auth_prompt_visible
+        // N5 的两个嵌套弹窗（WS-A 补齐让位条件；与 `focus-top-dialog` 一致）
+        || root.terminal_appearance_dialog_visible
+        || root.folder_editor_visible;
 
     /// L2：是否有任一模态弹窗可见（焦点恢复/让位用；比 `global-shortcuts-blocked`
     /// 更完整，含 NewFolderDialog 与关闭标签确认）。
@@ -830,7 +935,10 @@ export component MainWindow inherits Window {
         || root.sftp_dialog_kind != "none"
         || root.private_keys_modal_visible
         || root.host_keys_modal_visible
-        || root.auth_prompt_visible;
+        || root.auth_prompt_visible
+        // N5：终端外观 / Folder Editor（焦点恢复与 Esc 让位都要看到它们）
+        || root.terminal_appearance_dialog_visible
+        || root.folder_editor_visible;
 
     /// W5-A2 / N2：Ctrl+O、Ctrl+L 与 File > Quick Connect —— 打开/激活 QC 页并聚焦输入框。
     public function focus-quick-connect() {
@@ -842,6 +950,14 @@ export component MainWindow inherits Window {
     changed quick_connect_visible => {
         if (root.quick_connect_visible) {
             quick_connect_page.focus-quick-connect();
+        }
+    }
+
+    // A24：活动会话消失（关闭/切到 QC 标签等）时清掉查找栏状态，
+    // 避免它残留并在下一个会话里"莫名弹出"。
+    changed has_active_session => {
+        if (!root.has_active_session) {
+            root.terminal_find_visible = false;
         }
     }
 
@@ -912,9 +1028,11 @@ export component MainWindow inherits Window {
             }
             return true;
         }
-        // Ctrl+F：终端查找
+        // Ctrl+F：终端查找（A24：无活动会话时不置位，避免状态残留到下一个会话）
         if (shortcut-key(text, "f", "F")) {
-            root.terminal_find_visible = true;
+            if (root.has_active_session) {
+                root.terminal_find_visible = true;
+            }
             return true;
         }
         // Ctrl+K：清屏（与 Edit > Clear Terminal 同一状态门限）
@@ -947,27 +1065,69 @@ export component MainWindow inherits Window {
         { label: @tr("New Session"), shortcut: root.shortcut-new-session, enabled: true, checked: false, separator: false },
         { label: @tr("Quick Connect"), shortcut: root.shortcut-quick-connect, enabled: true, checked: false, separator: false },
         // W5-A3：没有活动会话时无处保存。
-        { label: @tr("Save Active Session"), shortcut: root.shortcut-save-session, enabled: root.has_active_session, checked: false, separator: false },
+        {
+            label: @tr("Save Active Session"), shortcut: root.shortcut-save-session,
+            enabled: root.has_active_session, checked: false, separator: false,
+            // A12：禁用项必须有 tooltip 说明原因（契约 §18）。
+            tooltip: root.has_active_session ? "" : @tr("Open a session before saving it.")
+        },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         { label: @tr("Settings..."), shortcut: root.shortcut-settings, enabled: true, checked: false, separator: false },
         { label: @tr("Quit"), shortcut: root.shortcut-quit, enabled: true, checked: false, separator: false }
     ];
     property <[MenuEntry]> edit_menu_entries: [
         // W5-A3：无选区 / 无活动会话时禁用。
-        { label: @tr("Copy"), shortcut: root.shortcut-copy, enabled: root.terminal_has_selection, checked: false, separator: false },
+        {
+            label: @tr("Copy"), shortcut: root.shortcut-copy,
+            enabled: root.terminal_has_selection, checked: false, separator: false,
+            tooltip: root.terminal_has_selection ? "" : @tr("Select text in the terminal first.")
+        },
         { label: @tr("Paste"), shortcut: root.shortcut-paste, enabled: true, checked: false, separator: false },
-        { label: @tr("Clear Terminal"), shortcut: root.shortcut-clear-terminal, enabled: root.has_active_session, checked: false, separator: false },
-        { label: @tr("Find..."), shortcut: root.shortcut-find, enabled: true, checked: false, separator: false }
+        {
+            label: @tr("Clear Terminal"), shortcut: root.shortcut-clear-terminal,
+            enabled: root.has_active_session, checked: false, separator: false,
+            tooltip: root.has_active_session ? "" : @tr("Open a session first.")
+        },
+        // A24：无活动会话时查找不可用（此前 enabled: true 会静默置位查找栏状态）。
+        {
+            label: @tr("Find..."), shortcut: root.shortcut-find,
+            enabled: root.has_active_session, checked: false, separator: false,
+            tooltip: root.has_active_session ? "" : @tr("Open a session first.")
+        }
     ];
     property <[MenuEntry]> session_menu_entries: [
         // W5-A3：已连接才能断开；有活动会话（且未连接）才能重连。
-        { label: @tr("Disconnect"), shortcut: "", enabled: root.active_session_connected, checked: false, separator: false },
-        { label: @tr("Reconnect"), shortcut: root.shortcut-reconnect, enabled: root.has_active_session && !root.active_session_connected, checked: false, separator: false },
+        {
+            label: @tr("Disconnect"), shortcut: "",
+            enabled: root.active_session_connected, checked: false, separator: false,
+            tooltip: root.active_session_connected ? "" : @tr("The active session is not connected.")
+        },
+        {
+            label: @tr("Reconnect"), shortcut: root.shortcut-reconnect,
+            enabled: root.has_active_session && !root.active_session_connected, checked: false, separator: false,
+            tooltip: root.has_active_session
+                ? @tr("The active session is already connected.")
+                : @tr("Open a session first.")
+        },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         // W5-A3：Edit / Delete 需要选中的已保存会话；Update 还需要活动会话作为来源。
-        { label: @tr("Edit Selected Session..."), shortcut: "", enabled: root.has_saved_selection, checked: false, separator: false },
-        { label: @tr("Update Selected From Active"), shortcut: "", enabled: root.has_saved_selection && root.has_active_session, checked: false, separator: false },
-        { label: @tr("Delete Selected Session..."), shortcut: "", enabled: root.has_saved_selection, checked: false, separator: false },
+        {
+            label: @tr("Edit Selected Session..."), shortcut: "",
+            enabled: root.has_saved_selection, checked: false, separator: false,
+            tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
+        },
+        {
+            label: @tr("Update Selected From Active"), shortcut: "",
+            enabled: root.has_saved_selection && root.has_active_session, checked: false, separator: false,
+            tooltip: root.has_saved_selection
+                ? @tr("Open the active session first.")
+                : @tr("Select a saved session first.")
+        },
+        {
+            label: @tr("Delete Selected Session..."), shortcut: "",
+            enabled: root.has_saved_selection, checked: false, separator: false,
+            tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
+        },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         // N4：两个同级、独立入口（私钥页 / 主机密钥页）。
         { label: @tr("Host Keys..."), shortcut: "", enabled: true, checked: false, separator: false },
@@ -983,13 +1143,41 @@ export component MainWindow inherits Window {
     property <[MenuEntry]> help_menu_entries: [
         { label: @tr("About YShell"), shortcut: "", enabled: true, checked: false, separator: false }
     ];
+    // --- A3：命令栏 "更多(⋯)" 的独立溢出菜单 ---------------------------------
+    // B 轮2 #39 / 轮3 #12：此前 `open-more-menu` 直接设 `open_menu_index = 4`，
+    // 点"更多"打开的是帮助菜单、并把菜单栏的"帮助"点亮。这里改为独立模型 +
+    // 独立 popup（`more_menu_*`），与一级菜单完全解耦。
+    // 内容按 §5.7："次级操作溢出进 ⋯"（不重复命令栏已有按钮的动作）。
+    property <[MenuEntry]> overflow_menu_entries: [
+        { label: @tr("About YShell"), shortcut: "", enabled: true, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Settings..."), shortcut: root.shortcut-settings, enabled: true, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Quit"), shortcut: root.shortcut-quit, enabled: true, checked: false, separator: false }
+    ];
     property <[MenuEntry]> terminal_context_menu_entries: [
         // W5-A3：无选区时 Copy 禁用（其余项需要活动会话）。
-        { label: @tr("Copy"), shortcut: root.shortcut-copy, enabled: root.terminal_has_selection, checked: false, separator: false },
+        {
+            label: @tr("Copy"), shortcut: root.shortcut-copy,
+            enabled: root.terminal_has_selection, checked: false, separator: false,
+            tooltip: root.terminal_has_selection ? "" : @tr("Select text in the terminal first.")
+        },
         { label: @tr("Paste"), shortcut: root.shortcut-paste, enabled: true, checked: false, separator: false },
-        { label: @tr("Select All"), shortcut: "", enabled: root.has_active_session, checked: false, separator: false },
-        { label: @tr("Clear Terminal"), shortcut: root.shortcut-clear-terminal, enabled: root.has_active_session, checked: false, separator: false },
-        { label: @tr("Find..."), shortcut: root.shortcut-find, enabled: root.has_active_session, checked: false, separator: false },
+        {
+            label: @tr("Select All"), shortcut: "",
+            enabled: root.has_active_session, checked: false, separator: false,
+            tooltip: root.has_active_session ? "" : @tr("Open a session first.")
+        },
+        {
+            label: @tr("Clear Terminal"), shortcut: root.shortcut-clear-terminal,
+            enabled: root.has_active_session, checked: false, separator: false,
+            tooltip: root.has_active_session ? "" : @tr("Open a session first.")
+        },
+        {
+            label: @tr("Find..."), shortcut: root.shortcut-find,
+            enabled: root.has_active_session, checked: false, separator: false,
+            tooltip: root.has_active_session ? "" : @tr("Open a session first.")
+        },
         // N6：终端日志（顺序与索引：6 Start / 7 Stop / 8 Open File / 9 Open Folder）。
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         {
@@ -1014,6 +1202,8 @@ export component MainWindow inherits Window {
         }
     ];
     // N6：状态栏日志入口复用同一组日志项（无分隔符；索引 0..3）。
+    // A23：日志菜单弹层的面板宽度（锚点按它计算，避免 250px 硬编码 + 窄窗溢出）。
+    property <length> logging-menu-width: 230px;
     property <[MenuEntry]> logging_menu_entries: [
         {
             label: @tr("Start Logging..."), shortcut: "", enabled: root.terminal_logging_start_enabled,
@@ -1065,16 +1255,83 @@ export component MainWindow inherits Window {
             label: @tr("Close Disconnected Tabs"), shortcut: "",
             enabled: root.tab_menu_close_disconnected_enabled, checked: false, separator: false,
             tooltip: root.tab_menu_close_disconnected_enabled ? "" : @tr("No disconnected or failed tabs to close.")
+        },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        // A28（D18）：标签级 Reconnect/Disconnect 的启用态来自 Rust 对"被右键标签"的
+        // 投影（`tab_menu_reconnect_enabled` / `tab_menu_disconnect_enabled`）。
+        // 断开的标签才可 Reconnect；已连接的标签才可 Disconnect。
+        {
+            label: @tr("Reconnect"), shortcut: root.shortcut-reconnect,
+            enabled: root.tab_menu_reconnect_enabled, checked: false, separator: false,
+            tooltip: root.tab_menu_reconnect_enabled ? "" : @tr("This tab is already connected.")
+        },
+        {
+            label: @tr("Disconnect"), shortcut: "",
+            enabled: root.tab_menu_disconnect_enabled, checked: false, separator: false,
+            tooltip: root.tab_menu_disconnect_enabled ? "" : @tr("This tab is already disconnected.")
         }
     ];
     property <[MenuEntry]> saved_session_context_menu_entries: [
-        // W5-A3：没有选中的已保存会话时，各项操作禁用。
-        { label: @tr("Session" => "Open"), shortcut: "", enabled: root.has_saved_selection, checked: false, separator: false },
-        { label: @tr("Edit..."), shortcut: "", enabled: root.has_saved_selection, checked: false, separator: false },
-        { label: @tr("Update From Active"), shortcut: "", enabled: root.has_saved_selection && root.has_active_session, checked: false, separator: false },
-        { label: @tr("Delete..."), shortcut: "", enabled: root.has_saved_selection, checked: false, separator: false },
+        // W5-A3：没有选中的已保存会话时，各项操作禁用；A12：禁用必须给出原因。
+        // A13：右键目标是文件夹时本套菜单不适用（New Session 也不是在该文件夹下创建）——
+        // 按 kind 分流需要 Rust 投影"被右键节点类型"，见 WS-A 报告的跨组请求。
+        {
+            label: @tr("Session" => "Open"), shortcut: "",
+            enabled: root.has_saved_selection, checked: false, separator: false,
+            tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
+        },
+        {
+            label: @tr("Edit..."), shortcut: "",
+            enabled: root.has_saved_selection, checked: false, separator: false,
+            tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
+        },
+        {
+            label: @tr("Update From Active"), shortcut: "",
+            enabled: root.has_saved_selection && root.has_active_session, checked: false, separator: false,
+            tooltip: root.has_saved_selection
+                ? @tr("Open the active session first.")
+                : @tr("Select a saved session first.")
+        },
+        {
+            label: @tr("Delete..."), shortcut: "",
+            enabled: root.has_saved_selection, checked: false, separator: false,
+            tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
+        },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         { label: @tr("New Session"), shortcut: root.shortcut-new-session, enabled: true, checked: false, separator: false }
+    ];
+    // A27（D12）：会话树"文件夹行"右键菜单。与 `saved_session_context_menu_entries`
+    // 共用 `dispatch_context_menu(which = 0)`，由 `saved_tree_menu_kind_text` 分流。
+    // 索引与 dispatch 对齐：0 New Session Here / 1 New Folder… / 2 Rename… /
+    // 3 Delete… / 4 Connect All / 5 Edit Folder Defaults…。
+    // 无 Rust 动作的项 disabled + tooltip 说明原因（不静默缺失）。
+    property <[MenuEntry]> saved_folder_context_menu_entries: [
+        {
+            label: @tr("New Session Here"), shortcut: "",
+            enabled: root.saved_tree_menu_kind_text == "folder", checked: false, separator: false,
+            tooltip: root.saved_tree_menu_kind_text == "folder" ? "" : @tr("Right-click a folder first.")
+        },
+        {
+            label: @tr("New Folder..."), shortcut: "", enabled: false, checked: false, separator: false,
+            tooltip: @tr("Not available in this version.")
+        },
+        {
+            label: @tr("Rename..."), shortcut: "", enabled: false, checked: false, separator: false,
+            tooltip: @tr("Not available in this version.")
+        },
+        {
+            label: @tr("Delete..."), shortcut: "", enabled: false, checked: false, separator: false,
+            tooltip: @tr("Not available in this version.")
+        },
+        {
+            label: @tr("Connect All"), shortcut: "", enabled: false, checked: false, separator: false,
+            tooltip: @tr("Not available in this version.")
+        },
+        {
+            label: @tr("Edit Folder Defaults…"), shortcut: "",
+            enabled: root.saved_tree_menu_kind_text == "folder", checked: false, separator: false,
+            tooltip: root.saved_tree_menu_kind_text == "folder" ? "" : @tr("Right-click a folder first.")
+        }
     ];
     // S1（§14.1 / context-menu-design §5.3）：会话树空白区菜单。
     // Import/Expand All/Collapse All 本版不实现：disabled + tooltip 说明原因。
@@ -1112,35 +1369,106 @@ export component MainWindow inherits Window {
         root.context_menu_token = "none";
     }
 
+    /// A2：菜单/右键菜单/溢出菜单关闭后把键盘焦点交还（弹层打开时自己拿了焦点）。
+    /// 与 L2 弹窗同一优先级：仍有模态弹窗 → 交给最上层弹窗；否则 A33（E23）：
+    /// 有活动会话且终端可见时优先还给终端（菜单打开前终端是否聚焦没有可靠信号，
+    /// 采用"有活动会话即回终端"的简单策略，取舍见 ws-A.md A33）；否则回到窗口级
+    /// 快捷键 FocusScope。
+    function restore-focus-after-menu() {
+        if (root.any_modal_visible) {
+            root.focus-top-dialog();
+        } else if (root.has_active_session && !root.quick_connect_visible) {
+            terminal_workspace.focus-terminal();
+        } else {
+            root.focus-global-shortcuts();
+        }
+    }
+
+    /// A3：关闭命令栏溢出菜单（由 dismissed / 其它入口调用）。
+    function close_more_menu() {
+        if (root.more_menu_open) {
+            root.more_menu_open = false;
+            root.restore-focus-after-menu();
+        }
+    }
+
+    /// A2 / WS-D 接口：关闭当前展开的浮层（菜单栏下拉 / 右键菜单 / 面板 ⋯ /
+    /// 溢出菜单）。返回 `true` 表示确实关掉了一层。
+    ///
+    /// 终端聚焦时按键不会到达窗口级 `shortcut_scope`（终端 FocusScope accept
+    /// 全部按键），所以 Rust 的终端按键兜底需要在 Esc 上调用这里：
+    /// ```rust
+    /// // crates/yshell-app/src/bootstrap.rs（WS-D）：
+    /// if text.as_ref() == "\u{1b}" && window.invoke_dismiss_overlays() {
+    ///     return;   // Esc 只关浮层，不下发进 PTY
+    /// }
+    /// ```
+    public function dismiss-overlays() -> bool {
+        if (root.open_menu_index >= 0) {
+            root.open_menu_index = -1;
+            root.menu-opened-by-hover = false;
+            root.restore-focus-after-menu();
+            return true;
+        }
+        if (root.more_menu_open) {
+            root.more_menu_open = false;
+            root.restore-focus-after-menu();
+            return true;
+        }
+        if (root.panel_menu_id != "") {
+            root.close_panel_menu();
+            return true;
+        }
+        if (root.context_menu_token != "none") {
+            root.close_context_menus();
+            root.restore-focus-after-menu();
+            return true;
+        }
+        return false;
+    }
+
     /// 打开指定右键菜单：先关掉其它右键菜单与一级菜单，再记录锚点（回调传 x/y）。
     function open_context_menu(token: string, x: length, y: length) {
         root.close_context_menus();
         root.open_menu_index = -1;
+        root.menu-opened-by-hover = false;
+        root.more_menu_open = false;
         root.context_menu_x = x;
         root.context_menu_y = y;
         root.context_menu_token = token;
     }
 
-    /// 一级菜单点击：已展开则收起；否则切换到本项（并关掉右键菜单）。
+    /// 一级菜单点击：已展开则收起；否则切换到本项（并关掉右键菜单/溢出菜单）。
+    /// A34：若当前弹层是"悬停切换"打开的，第一次 click 只确认（保持展开、清标志），
+    /// 第二次 click 才收起 —— 修复"hover 切过去后紧接着的 click 把弹层立刻关掉"。
     function toggle_menu(index: int, anchor_x: length) {
         if (root.open_menu_index == index) {
-            root.open_menu_index = -1;
+            if (root.menu-opened-by-hover) {
+                root.menu-opened-by-hover = false;
+            } else {
+                root.open_menu_index = -1;
+                root.restore-focus-after-menu();
+            }
         } else {
             root.close_context_menus();
+            root.close_more_menu();
             root.menu_anchor_x = anchor_x;
             root.menu_anchor_y = Theme.bar-height-menubar;
             root.open_menu_index = index;
+            root.menu-opened-by-hover = false;
         }
     }
 
     /// 一级菜单悬停切换：已有菜单展开时，指针移到另一个一级菜单直接切到它的菜单
     /// （标准 MenuBar 行为）；没有菜单展开时悬停不动作，保持"点击展开"。
+    /// A34：切换成功后置 `menu-opened-by-hover`，让紧随的 click 不误关弹层。
     function hover_menu(index: int, anchor_x: length) {
         if (root.open_menu_index >= 0 && root.open_menu_index != index) {
             root.close_context_menus();
             root.menu_anchor_x = anchor_x;
             root.menu_anchor_y = Theme.bar-height-menubar;
             root.open_menu_index = index;
+            root.menu-opened-by-hover = true;
         }
     }
 
@@ -1156,10 +1484,17 @@ export component MainWindow inherits Window {
             else if (index == 5) { root.quit_dialog_visible = true; }
         } else if (menu == 1) {
             // Edit
-            if (index == 0) { root.copy_terminal_visible(); }
+            // A22（B 轮2 高#1）：Edit > Copy 必须复制**选区**（与终端右键菜单同源回调），
+            // 此前调的是 `copy_terminal_visible()`（整屏可见内容），静默给错结果。
+            if (index == 0) { root.copy_terminal_selection(); }
             else if (index == 1) { root.paste_terminal_clipboard(); }
             else if (index == 2) { root.clear_terminal(); }
-            else if (index == 3) { root.terminal_find_visible = true; }
+            // A24：无活动会话时不置位（避免"状态残留 → 之后打开终端莫名弹出查找栏"）。
+            else if (index == 3) {
+                if (root.has_active_session) {
+                    root.terminal_find_visible = true;
+                }
+            }
         } else if (menu == 2) {
             // Session
             if (index == 0) { root.disconnect_session(); }
@@ -1184,6 +1519,32 @@ export component MainWindow inherits Window {
             if (index == 0) { root.about_dialog_visible = true; }
         }
         root.open_menu_index = -1;
+        root.menu-opened-by-hover = false;
+        root.restore-focus-after-menu();
+    }
+
+    /// A3：命令栏溢出菜单选中（0 = About / 2 = Settings / 4 = Quit，奇数位是分隔符）。
+    function dispatch_overflow_menu(index: int) {
+        if (index == 0) { root.about_dialog_visible = true; }
+        else if (index == 2) { root.settings_dialog_visible = true; }
+        else if (index == 4) { root.quit_dialog_visible = true; }
+        root.more_menu_open = false;
+        root.restore-focus-after-menu();
+    }
+
+    /// A27（D12）：判断被右键节点的 kind（folder / session / none）。
+    /// 说明：Slint 1.18 的 `find-index`/闭包仍是实验特性（非实验构建不可用），函数里
+    /// 无法按 id 遍历 `session_tree_rows`；这里改用"右键先选中"路径中**同步更新**的
+    /// 投影：`saved_session_tree_selected_id`（被选中行的 id，文件夹会话都在内）与
+    /// `saved_folder_selected`（该选中行是否为文件夹）。未知 id 选中不变 → "none"。
+    function saved_tree_menu_kind_for_id(id: string) -> string {
+        if (root.saved_session_tree_selected_id != id) {
+            return "none";
+        }
+        if (root.saved_folder_selected) {
+            return "folder";
+        }
+        return "session";
     }
 
     /// 右键菜单选中：which 0..2 = 会话树行/空白区/图标条（左栏），4 = 终端，5 = SFTP，6 = 标签。
@@ -1191,14 +1552,22 @@ export component MainWindow inherits Window {
     function dispatch_context_menu(which: int, index: int) {
         if (which == 0) {
             // 会话树行菜单
-            if (index == 0) { root.open_selected_saved_session(); }
-            else if (index == 1) { root.load_selected_saved_session_into_editor(); }
-            else if (index == 2) { root.update_selected_saved_session(); }
-            else if (index == 3) {
-                root.delete_session_confirmation_text = "";
-                root.delete_session_dialog_visible = true;
+            if (root.saved_tree_menu_kind_text == "folder") {
+                // A27（D12）：文件夹行菜单（索引见 `saved_folder_context_menu_entries`）。
+                if (index == 0) {
+                    root.start_new_saved_session_editor_in_folder(root.saved_session_tree_selected_id);
+                }
+                else if (index == 5) { root.edit_folder_defaults(); }
+            } else {
+                if (index == 0) { root.open_selected_saved_session(); }
+                else if (index == 1) { root.load_selected_saved_session_into_editor(); }
+                else if (index == 2) { root.update_selected_saved_session(); }
+                else if (index == 3) {
+                    root.delete_session_confirmation_text = "";
+                    root.delete_session_dialog_visible = true;
+                }
+                else if (index == 5) { root.start_new_saved_session_editor(); }
             }
-            else if (index == 5) { root.start_new_saved_session_editor(); }
         } else if (which == 1) {
             // 会话树空白区菜单
             if (index == 0) { root.start_new_saved_session_editor(); }
@@ -1237,8 +1606,12 @@ export component MainWindow inherits Window {
             else if (index == 3) { root.close_tabs("right:" + root.tab_menu_id); }
             else if (index == 4) { root.close_tabs("all"); }
             else if (index == 5) { root.close_tabs("disconnected"); }
+            // A28（D18）：Reconnect/Disconnect（索引见 `tab_context_menu_entries`）。
+            else if (index == 7) { root.reconnect_tab(root.tab_menu_id); }
+            else if (index == 8) { root.disconnect_tab(root.tab_menu_id); }
         }
         root.close_context_menus();
+        root.restore-focus-after-menu();
     }
 
     /// N3：面板 ⋯ 菜单——记录目标面板与锚点，由窗口层级的 PanelMenuPopup 渲染。
@@ -1250,6 +1623,7 @@ export component MainWindow inherits Window {
 
     function close_panel_menu() {
         root.panel_menu_id = "";
+        root.restore-focus-after-menu();
     }
 
     /// 某个面板框的当前投影（菜单禁用项 / 收起文案用）。
@@ -1319,6 +1693,10 @@ export component MainWindow inherits Window {
     function focus-top-dialog() {
         if (root.logging_dialog_visible) {
             logging_dialog.focus-dialog();
+        } else if (root.terminal_appearance_dialog_visible) {
+            terminal_appearance_dialog.focus-dialog();
+        } else if (root.folder_editor_visible) {
+            folder_editor.focus-dialog();
         } else if (root.auth_prompt_visible) {
             auth_prompt_dialog.focus-dialog();
         } else if (root.host_key_prompt_visible) {
@@ -1365,6 +1743,12 @@ export component MainWindow inherits Window {
     // 所以终端聚焦时由 bootstrap.rs 的终端按键兜底调用同一份 `dispatch-global-shortcut`。
     shortcut_scope := FocusScope {
         key-pressed(event) => {
+            // A2：浮层（一级菜单 / 右键菜单 / 面板 ⋯ / 溢出菜单）打开时，Esc 只关浮层。
+            // 终端聚焦时按键到不了这里（终端 FocusScope 消费全部按键）——Rust 侧的
+            // 终端按键兜底请调用 `dismiss-overlays()`，见其文档注释。
+            if (event.text == "\u{001b}" && root.dismiss-overlays()) {
+                return accept;
+            }
             if (root.dispatch-global-shortcut(
                 event.text,
                 event.modifiers.control,
@@ -1406,12 +1790,22 @@ export component MainWindow inherits Window {
                     root.menu_anchor_y = y;
                 }
                 toggle-right-side() => { root.panel_side_toggle("right"); }
-                open-find() => { root.terminal_find_visible = true; }
+                // A24：无活动会话时命令栏查找按钮禁用（禁用态带 tooltip 说明原因），
+                // 点击不再静默置位 `terminal_find_visible`。
+                find-enabled: root.has_active_session;
+                open-find() => {
+                    if (root.has_active_session) {
+                        root.terminal_find_visible = true;
+                    }
+                }
                 open-settings() => { root.settings_dialog_visible = true; }
                 open-more-menu(x, y) => {
-                    root.open_menu_index = 4;
-                    root.menu_anchor_x = x;
-                    root.menu_anchor_y = y;
+                    // A3：独立溢出菜单（不再复用一级菜单索引，帮助标题不会被点亮）。
+                    root.open_menu_index = -1;
+                    root.close_context_menus();
+                    root.more_menu_x = x;
+                    root.more_menu_y = y;
+                    root.more_menu_open = true;
                 }
             }
 
@@ -1457,6 +1851,9 @@ export component MainWindow inherits Window {
                 panel-width-commit() => { root.panel_width_commit(); }
                 rail-menu-requested(x, y) => { root.open_context_menu("rail", x, y); }
                 rail-expand-requested() => { root.panel_side_expand("left"); }
+                // A31（B24/B25）：SessionSidebarContent 头部 `+` / 空白区左键 → 宿主回调。
+                session-new-requested() => { root.start_new_saved_session_editor(); }
+                session-clear-selection-requested() => { root.clear_saved_session_selection(); }
 
                 // Sessions 面板内容（搜索/树/空白区右键）
                 session-search-text <=> root.session_search_text;
@@ -1471,6 +1868,8 @@ export component MainWindow inherits Window {
                     // 右键先选中再弹菜单；这条路径不算"点击"，
                     // 否则会喂给"重复点击 = 激活"兜底。
                     root.select_saved_session_for_menu(id);
+                    // A27（D12）：记录被右键节点类型，供文件夹/会话菜单分流。
+                    root.saved_tree_menu_kind_text = root.saved_tree_menu_kind_for_id(id);
                     root.open_context_menu("saved-session", x, y);
                 }
                 session-blank-menu-requested(x, y) => { root.open_context_menu("blank", x, y); }
@@ -1498,7 +1897,12 @@ export component MainWindow inherits Window {
                     status-text: root.status_text;
                     find-visible: root.terminal_find_visible;
                     new-session() => { root.new_tab_default(); }
-                    open-find() => { root.terminal_find_visible = true; }
+                    // A24：标签条的查找入口同样只在有活动会话时置位（WS-E 会移除这个重复入口）。
+                    open-find() => {
+                        if (root.has_active_session) {
+                            root.terminal_find_visible = true;
+                        }
+                    }
                     activate-tab(id) => { root.activate_tab(id); }
                     close-tab(id) => { root.close_tab(id); }
                     tab-context-menu-requested(id, x, y) => {
@@ -1529,7 +1933,13 @@ export component MainWindow inherits Window {
                         max-height: root.quick_connect_visible ? 100000px : 0px;
                         input-text <=> root.quick_connect_input_text;
                         input-error-text: root.quick_connect_error_text;
-                        summary-text: root.quick_connect_summary_text;
+                        // A36（WS-D D37）：kind 为空时回退到 Rust 的一体化文案（现状兼容）。
+                        summary-text: TextFormats.status-message(
+                            root.quick_connect_summary_kind_text,
+                            root.quick_connect_summary_param_1_text,
+                            root.quick_connect_summary_param_2_text,
+                            root.quick_connect_summary_text
+                        );
                         history-enabled: root.quick_connect_history_enabled;
                         last-target-text: root.quick_connect_last_target_text;
                         recent-rows: root.quick_connect_rows;
@@ -1645,7 +2055,14 @@ export component MainWindow inherits Window {
                 logging-active: root.logging_active;
                 logging-text: TextFormats.logging-status-display(root.logging_active, root.logging_mode_text, root.logging_file_name_text);
                 logging-clicked() => {
-                    root.open_context_menu("logging", root.width - 250px, root.height);
+                    // A23（muse 轮1 中#37）：锚点按弹层实际宽度（logging-menu-width）
+                    // 对齐到状态栏右内边距 12px，并夹在窗口内 —— 不再用写死的
+                    // `root.width - 250px`（窄窗下会把锚点算到窗口外/贴边）。
+                    root.open_context_menu(
+                        "logging",
+                        max(8px, root.width - root.logging-menu-width - Theme.spacing-12),
+                        root.height
+                    );
                 }
             }
         }
@@ -1664,7 +2081,24 @@ export component MainWindow inherits Window {
         view-entries: root.view_menu_entries;
         help-entries: root.help_menu_entries;
         selected(menu, index) => { root.dispatch_menu(menu, index); }
-        dismissed() => { root.open_menu_index = -1; }
+        dismissed() => {
+            root.open_menu_index = -1;
+            root.menu-opened-by-hover = false;
+            root.restore-focus-after-menu();
+        }
+    }
+
+    // A3：命令栏 "更多(⋯)" 的溢出菜单（独立于一级菜单；绘制层级与其它 Popup 一致）。
+    more_menu_popup := MenuPopup {
+        open: root.more_menu_open;
+        anchor-x: root.more_menu_x;
+        anchor-y: root.more_menu_y;
+        panel-width: 210px;
+        // 与一级菜单一致：遮罩不盖菜单栏，点一级菜单可直接切换。
+        scrim-top: Theme.bar-height-menubar;
+        entries: root.overflow_menu_entries;
+        selected(index) => { root.dispatch_overflow_menu(index); }
+        dismissed() => { root.close_more_menu(); }
     }
 
     SessionSidebarPopups {
@@ -1673,11 +2107,17 @@ export component MainWindow inherits Window {
         rail-menu-open: root.context_menu_token == "rail";
         anchor-x: root.context_menu_x;
         anchor-y: root.context_menu_y;
-        row-entries: root.saved_session_context_menu_entries;
+        // A27（D12）：按被右键节点类型选择文件夹/会话两套菜单模型（索引与 dispatch 对齐）。
+        row-entries: root.saved_tree_menu_kind_text == "folder"
+            ? root.saved_folder_context_menu_entries
+            : root.saved_session_context_menu_entries;
         blank-entries: root.saved_session_blank_menu_entries;
         rail-entries: root.nav_rail_menu_entries;
         selected(which, index) => { root.dispatch_context_menu(which, index); }
-        dismissed() => { root.close_context_menus(); }
+        dismissed() => {
+            root.close_context_menus();
+            root.restore-focus-after-menu();
+        }
     }
 
     TerminalWorkspacePopups {
@@ -1686,7 +2126,10 @@ export component MainWindow inherits Window {
         anchor-y: root.context_menu_y;
         entries: root.terminal_context_menu_entries;
         selected(index) => { root.dispatch_context_menu(4, index); }
-        dismissed() => { root.close_context_menus(); }
+        dismissed() => {
+            root.close_context_menus();
+            root.restore-focus-after-menu();
+        }
     }
 
     TabBarPopups {
@@ -1695,7 +2138,10 @@ export component MainWindow inherits Window {
         anchor-y: root.context_menu_y;
         entries: root.tab_context_menu_entries;
         selected(index) => { root.dispatch_context_menu(6, index); }
-        dismissed() => { root.close_context_menus(); }
+        dismissed() => {
+            root.close_context_menus();
+            root.restore-focus-after-menu();
+        }
     }
 
     // N1：SFTP 行/空白/本地四套上下文菜单（file/dir/multi/blank/local）。
@@ -1715,7 +2161,10 @@ export component MainWindow inherits Window {
             : root.sftp_show_hidden;
         remote-edit-active: root.sftp_remote_edit_active;
         selected(action) => { root.sftp_menu_action(action); }
-        dismissed() => { root.close_context_menus(); }
+        dismissed() => {
+            root.close_context_menus();
+            root.restore-focus-after-menu();
+        }
     }
 
     // N6：状态栏日志入口的菜单（与终端右键菜单同一组日志动作；索引 0..3）。
@@ -1723,9 +2172,14 @@ export component MainWindow inherits Window {
         open: root.context_menu_token == "logging";
         anchor-x: root.context_menu_x;
         anchor-y: root.context_menu_y;
+        // A23：与 host 的锚点计算共用同一个宽度来源。
+        panel-width: root.logging-menu-width;
         entries: root.logging_menu_entries;
         selected(index) => { root.dispatch_context_menu(7, index); }
-        dismissed() => { root.close_context_menus(); }
+        dismissed() => {
+            root.close_context_menus();
+            root.restore-focus-after-menu();
+        }
     }
 
     // N3：面板 ⋯ 菜单（Move to Left/Right、Collapse/Expand、Hide）。
@@ -1781,10 +2235,71 @@ export component MainWindow inherits Window {
         update-scrollback-max-cells(value) => { root.update_settings_scrollback_max_cells(value); }
         reset-terminal-defaults() => { root.reset_settings_terminal_defaults(); }
         save-terminal-settings() => { root.save_settings_terminal(); }
+        open-terminal-appearance() => { root.open_terminal_appearance(); }
+    }
+
+    // N5：Settings → Terminal Appearance（嵌套在 Settings 之上的独立弹窗；
+    // 入口按钮在 Settings 的 Terminal 区，保持 Settings 本体几何不变）。
+    terminal_appearance_dialog := TerminalAppearanceDialog {
+        open: root.terminal_appearance_dialog_visible;
+        color-scheme-text: root.settings_appearance_color_scheme_text;
+        schemes: root.settings_appearance_schemes;
+        palette-swatches: root.settings_appearance_palette_swatches;
+        foreground-text <=> root.settings_appearance_foreground_text;
+        background-text <=> root.settings_appearance_background_text;
+        cursor-text <=> root.settings_appearance_cursor_text;
+        selection-text <=> root.settings_appearance_selection_text;
+        font-family-text <=> root.settings_appearance_font_family_text;
+        font-size-text <=> root.settings_appearance_font_size_text;
+        fallback-fonts-text <=> root.settings_appearance_fallback_fonts_text;
+        status-text: root.settings_appearance_status_text;
+        preview: root.settings_appearance_preview;
+        select-scheme(id) => { root.select_settings_scheme(id); }
+        update-color(field, value) => { root.update_settings_appearance_color(field, value); }
+        update-font-family(value) => { root.update_settings_appearance_font_family(value); }
+        update-font-size(value) => { root.update_settings_appearance_font_size(value); }
+        update-fallback-fonts(value) => { root.update_settings_appearance_fallback_fonts(value); }
+        browse-font-file() => { root.browse_settings_appearance_font_file(); }
+        browse-fallback-font() => { root.browse_settings_appearance_fallback_font(); }
+        clear-fallbacks() => { root.clear_settings_appearance_fallbacks(); }
+        reset-defaults() => { root.reset_settings_appearance_defaults(); }
+        save() => { root.save_settings_appearance(); }
+        close() => {
+            root.close_terminal_appearance();
+            root.focus-top-dialog();
+        }
+    }
+
+    // N5：Folder Editor（会话树文件夹右键 → Edit Folder Defaults…）。
+    folder_editor := FolderEditor {
+        open: root.folder_editor_visible;
+        folder-name: root.folder_editor_name_text;
+        folder-path: root.folder_editor_path_text;
+        status-text: root.folder_editor_status_text;
+        appearance-fields: root.folder_editor_appearance_fields;
+        terminal-fields: root.folder_editor_terminal_fields;
+        logging-fields: root.folder_editor_logging_fields;
+        close() => {
+            root.close_folder_editor();
+            root.focus-top-dialog();
+        }
+        save() => { root.save_folder_editor(); }
+        reset-all() => { root.reset_all_folder_editor(); }
+        field-set-inherit(key) => { root.folder_editor_field_action(key, "inherit"); }
+        field-set-explicit(key) => { root.folder_editor_field_action(key, "explicit"); }
+        field-reset(key) => { root.folder_editor_field_action(key, "reset"); }
+        field-edited(key, value) => { root.update_folder_editor_field(key, value); }
+        field-toggled(key) => { root.toggle_folder_editor_logging(); }
+        field-selected(key, index) => {
+            if (key == "appearance.color_scheme") { root.folder_editor_select_scheme(index); }
+            else if (key == "logging.format") { root.folder_editor_select_log_format(index); }
+        }
     }
 
     delete_dialog := ConfirmDialog {
         open: root.delete_session_dialog_visible;
+        // A29（C24）：破坏性确认 → 主按钮用 critical 语义（WS-C 已落地 `destructive`）。
+        destructive: true;
         title-text: @tr("Delete Saved Session");
         message-text: @tr("This permanently removes the selected saved session from disk. Type DELETE to confirm.");
         confirmation-token: "DELETE";
@@ -1806,6 +2321,8 @@ export component MainWindow inherits Window {
 
     quit_dialog := ConfirmDialog {
         open: root.quit_dialog_visible;
+        // A29（C24）：破坏性确认（断开所有运行时会话）。
+        destructive: true;
         title-text: @tr("Quit YShell");
         message-text: @tr("Quit YShell now? Active runtime sessions will be disconnected.");
         confirm-label: @tr("Quit");
@@ -1821,6 +2338,8 @@ export component MainWindow inherits Window {
     // 取消即 `cancel_close_tabs()`（默认焦点安全按钮，见 E-057）。
     close_tabs_dialog := ConfirmDialog {
         open: root.close_tabs_confirm_visible;
+        // A29（C24）：破坏性确认（关闭标签会断开活动连接）。
+        destructive: true;
         title-text: TextFormats.close-tabs-confirm-title(root.close_tabs_confirm_single);
         message-text: TextFormats.close-tabs-confirm-message(
             root.close_tabs_confirm_single,
@@ -1995,6 +2514,12 @@ export component MainWindow inherits Window {
         select-general() => { root.select_session_editor_general(); }
         select-authentication() => { root.select_session_editor_authentication(); }
         select-terminal() => { root.select_session_editor_terminal(); }
+        editor-appearance-fields: root.editor_appearance_fields;
+        editor-terminal-fields: root.editor_terminal_fields;
+        editor-theme-field-action(key, action) => { root.editor_theme_field_action(key, action); }
+        update-editor-theme-field(key, value) => { root.update_editor_theme_field(key, value); }
+        editor-select-scheme(index) => { root.editor_select_scheme(index); }
+        reset-all-editor-theme() => { root.reset_all_editor_theme(); }
         select-sftp() => { root.select_session_editor_sftp(); }
         select-tunnels() => { root.select_session_editor_tunnels(); }
         select-proxy() => { root.select_session_editor_proxy(); }
@@ -2057,6 +2582,12 @@ export component MainWindow inherits Window {
         selection-text: TextFormats.known-hosts-selection(root.known_hosts_selection_kind_text, root.known_hosts_selection_host_text, root.known_hosts_selection_port_text, root.known_hosts_selection_index, root.known_hosts_selection_total);
         details-text: root.known_hosts_details_text;
         path-text: root.known_hosts_path_text;
+        // A30（D17）：详情拆分字段透传给页面（WS-C 在页面内用 @tr 标签渲染）。
+        detail-host-text: root.known_hosts_detail_host_text;
+        detail-port-text: root.known_hosts_detail_port_text;
+        detail-algorithm-text: root.known_hosts_detail_algorithm_text;
+        detail-fingerprint-text: root.known_hosts_detail_fingerprint_text;
+        detail-path-text: root.known_hosts_detail_path_text;
         clear-confirmation-text <=> root.known_hosts_clear_confirmation_text;
         close() => {
             root.close_known_hosts_manager();
@@ -2128,6 +2659,11 @@ export component MainWindow inherits Window {
         selected-entry <=> root.host_keys_selected_entry;
         path-text: root.host_keys_path_text;
         details-text: root.host_keys_details_text;
+        // A30（D20）：详情拆分字段透传给页面（与 KnownHostsPage 同款，无 port 字段）。
+        detail-host-text: root.host_keys_detail_host_text;
+        detail-algorithm-text: root.host_keys_detail_algorithm_text;
+        detail-fingerprint-text: root.host_keys_detail_fingerprint_text;
+        detail-path-text: root.host_keys_detail_path_text;
         status-text: root.host_keys_status_text;
         import-visible <=> root.host_keys_import_visible;
         import-text <=> root.host_keys_import_text;
@@ -2182,6 +2718,8 @@ export component MainWindow inherits Window {
         toggle-remember-password(checked) => { root.toggle_auth_prompt_remember_password(checked); }
         select-key(index) => { root.select_auth_prompt_key(index); }
         update-passphrase(value) => { root.update_auth_prompt_passphrase(value); }
+        // A31（C31）：密码逐键回传宿主投影，避免未提交的输入与投影脱节。
+        update-password(value) => { root.update_auth_prompt_password(value); }
         toggle-use-agent(checked) => { root.toggle_auth_prompt_use_agent(checked); }
         browse-key-file() => { root.browse_auth_prompt_key_file(); }
         update-challenge-answer(index, value) => {
@@ -2197,6 +2735,13 @@ export component MainWindow inherits Window {
         open: root.host_key_prompt_visible;
         prompt-text: root.host_key_prompt_text;
         mode-text: root.host_key_prompt_mode_text;
+        // A35：拆分字段透传（Rust 投影 → WS-C 的 HostKeyDialog）。
+        target-text: root.host_key_prompt_target_text;
+        known-hosts-path-text: root.host_key_prompt_known_hosts_path_text;
+        algorithm-text: root.host_key_prompt_algorithm_text;
+        fingerprint-text: root.host_key_prompt_fingerprint_text;
+        expected-algorithm-text: root.host_key_prompt_expected_algorithm_text;
+        expected-fingerprint-text: root.host_key_prompt_expected_fingerprint_text;
         confirmation-text <=> root.host_key_prompt_confirmation_text;
         cancel() => {
             root.cancel_host_key_prompt();

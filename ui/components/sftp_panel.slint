@@ -17,7 +17,7 @@ import { Icon } from "basic/icons.slint";
 import { WinButton, WinIconButton, WinToggle } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 import { MenuEntry, MenuPopup } from "menu_popup.slint";
-import { LocalPane, LocalRow } from "local_pane.slint";
+import { LocalPane, LocalRow, ListScrollBar } from "local_pane.slint";
 
 // ---------------------------------------------------------------- 数据结构
 
@@ -121,6 +121,8 @@ component SftpRemotePane inherits Rectangle {
     in property <string> empty-text: "";
     in property <string> error-text: "";
     in property <bool> connected: false;
+    /// 栏标题（展开态也显示，与本地栏区分，B10）。
+    in property <string> title-text: @tr("Remote");
     in property <bool> remote-edit-active: false;
     in property <string> remote-edit-text: "";
     in-out property <string> path-text: "/";
@@ -160,6 +162,16 @@ component SftpRemotePane inherits Rectangle {
         + (root.shows-permissions ? root.column-gap + root.column-permissions-width : 0px);
     // 窄宽（右栏 280px 级别）只保留最后两段面包屑。
     private property <bool> compact-crumbs: root.available-width < 360px;
+    // 列表视口顶部固定偏移（头部 32 + 间距 4 + 路径输入 32 + 间距 4
+    // [+ 错误条 28 + 间距 4] + 列头 28 + 间距 4）。
+    private property <length> list-top: 104px + (root.error-text != "" ? 32px : 0px);
+    // 列表底部固定占用（间距 4 + 汇总行 16 [+ 远程编辑行 32 + 间距 4]）。
+    private property <length> list-footer: Theme.spacing-4 + Theme.line-caption
+        + (root.remote-edit-active ? Theme.control-height + Theme.spacing-4 : 0px);
+    // 视口高度向下取整到行高的整数倍：底部不出现被腰斩的半行（B7）。
+    private property <length> list-height: max(0px,
+        floor(max(0px, root.height - root.list-top - root.list-footer) / Theme.row-height-list)
+        * Theme.row-height-list);
 
     /// 面包屑分隔符：前一段不是根 `/` 时显示。
     pure function shows-crumb-separator(index: int) -> bool {
@@ -180,10 +192,20 @@ component SftpRemotePane inherits Rectangle {
     VerticalLayout {
         spacing: Theme.spacing-4;
 
-        // --- 头部第 1 行：面包屑 + 导航 + 显隐 + ⋯ -----------------------
+        // --- 头部第 1 行：标题 + 面包屑 + 导航 + 显隐 + ⋯ -----------------
         HorizontalLayout {
             height: Theme.control-height;
             spacing: Theme.spacing-4;
+
+            // 展开态也显示「远端」标题，与本地栏在视觉上区分（B10）。
+            Text {
+                text: root.title-text;
+                color: Theme.text-primary;
+                font-size: Theme.font-body;
+                font-weight: Theme.weight-semibold;
+                vertical-alignment: center;
+                wrap: no-wrap;
+            }
 
             // 面包屑容器：吃掉剩余宽度，内部横向排布。
             Rectangle {
@@ -201,7 +223,7 @@ component SftpRemotePane inherits Rectangle {
                     spacing: 0;
 
                     if root.compact-crumbs : Text {
-                        text: "…";
+                        text: @tr("…");
                         color: Theme.text-tertiary;
                         font-size: Theme.font-caption;
                         vertical-alignment: center;
@@ -218,7 +240,8 @@ component SftpRemotePane inherits Rectangle {
                             vertical-alignment: center;
                         }
 
-                        crumb_hit := Rectangle {
+                        // 单个面包屑段（布局占位，无需 id）
+                        Rectangle {
                             border-radius: Theme.radius-control;
                             background: crumb_hit_touch.has-hover ? Theme.subtle-hover : transparent;
 
@@ -232,6 +255,8 @@ component SftpRemotePane inherits Rectangle {
                                     font-size: Theme.font-caption;
                                     vertical-alignment: center;
                                     wrap: no-wrap;
+                                    // 长路径段省略号截断，而不是被容器硬裁（B11）。
+                                    overflow: elide;
                                 }
                             }
 
@@ -241,7 +266,8 @@ component SftpRemotePane inherits Rectangle {
                         }
                     }
 
-                    crumbs_spacer := Rectangle { horizontal-stretch: 1; }
+                    // 弹簧：把面包屑顶到左侧、吃掉多余宽度（无 id 的布局占位）。
+                    Rectangle { horizontal-stretch: 1; }
                 }
             }
 
@@ -319,8 +345,9 @@ component SftpRemotePane inherits Rectangle {
             background: transparent;
 
             SftpColumnHeader {
-                x: 0;
-                width: parent.width - root.meta-width;
+                // 与行内文件名共用同一组 x/width（图标 16 + 间距 8），B6。
+                x: Theme.icon-size-small + Theme.spacing-8;
+                width: parent.width - root.meta-width - Theme.icon-size-small - 2 * Theme.spacing-8;
                 height: parent.height;
                 label: @tr("Name");
                 active: root.sort-column == "name";
@@ -370,7 +397,9 @@ component SftpRemotePane inherits Rectangle {
         // --- 列表（ListView 虚拟化 + 空态 + 行拖动/放置）------------------
         Rectangle {
             clip: true;
-            vertical-stretch: 1;
+            // 高度取行高的整数倍（B7）：底部不出现被腰斩的半行。面板在两个
+            // 布局分支里都给本组件显式高度，因此这里的绑定不会形成布局回环。
+            height: root.list-height;
 
             // 列表级 DropArea：空白处落下 = 移动到当前目录 / 外部文件导入。
             // 注意：`dropped` 的 `event.proposed-action` 已经是 can-drop 的协商结果，
@@ -401,6 +430,9 @@ component SftpRemotePane inherits Rectangle {
             }
 
             list := ListView {
+                // std-widgets 的滑块只有 2px、对比度 1.26:1；这里改用自绘滚动条（B8）。
+                vertical-scrollbar-policy: ScrollBarPolicy.always-off;
+
                 for row[index] in root.rows : Rectangle {
                     height: Theme.row-height-list;
                     border-radius: Theme.radius-control;
@@ -494,7 +526,11 @@ component SftpRemotePane inherits Rectangle {
                         row_hit := TouchArea {
                             pointer-event(event) => {
                                 if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
-                                    root.select-row(index, false, false);
+                                    // 右键落在已选中的行上时保留多选（B18），
+                                    // 否则先切换为单行选择再弹菜单。
+                                    if (!(row.selected || index == root.selected-index)) {
+                                        root.select-row(index, false, false);
+                                    }
                                     root.context-menu-requested(
                                         index,
                                         self.absolute-position.x + self.mouse-x,
@@ -513,6 +549,17 @@ component SftpRemotePane inherits Rectangle {
                         }
                     }
                 }
+            }
+
+            // 自绘滚动条（B8）：叠在列表右缘，双向绑定滚动位置。
+            ListScrollBar {
+                x: parent.width - self.width;
+                y: 0;
+                height: parent.height;
+                content-height: list.content-height;
+                visible-height: list.visible-height;
+                content-y <=> list.content-y;
+                scroll-enabled: list.enabled;
             }
         }
 
@@ -542,12 +589,14 @@ component SftpRemotePane inherits Rectangle {
         }
 
         // --- 汇总行：计数 + 选中 + 排序 ----------------------------------
+        // 行高固定为 line-caption：列表视口按整数行对齐时用它算底部占用（B7）。
         Text {
             text: root.selected-count > 0
                 ? @tr("{0} · {1} selected · {2}", root.item-summary-display(), root.selected-count, root.sort-text)
                 : @tr("{0} · {1}", root.item-summary-display(), root.sort-text);
             color: Theme.text-tertiary;
             font-size: Theme.font-caption;
+            height: Theme.line-caption;
             vertical-alignment: center;
             wrap: no-wrap;
             overflow: elide;
@@ -639,9 +688,12 @@ component SftpTransferDrawer inherits Rectangle {
                 horizontal-stretch: 1;
             }
 
-            if root.completed-count > 0 : WinButton {
-                text: @tr("Clear completed");
-                subtle: true;
+            // 图标按钮而非文字按钮：文字按钮（≈96px）会把摘要挤到只剩
+            // "N 个任务 · N 进行中 · …"，丢掉「已暂停/失败/已完成」（B4）。
+            // 用 `clear` 而非 `trash`，与行内「移除任务」区分。
+            if root.completed-count > 0 : WinIconButton {
+                icon: "clear";
+                accessible-name: @tr("Clear completed");
                 clicked => { root.clear-completed(); }
             }
         }
@@ -649,188 +701,26 @@ component SftpTransferDrawer inherits Rectangle {
         // --- 展开的任务列表 ----------------------------------------------
         if root.expanded : Rectangle {
             clip: true;
-            height: min(root.rows.length * Theme.row-height-list + Theme.spacing-4, 240px);
+            // 空队列展开也要有明确反馈（B3）：0 条时固定 96px 的空态区，
+            // 而不是旧的 `min(0*32+4, 240) = 4px`；有条目时按行数取高。
+            height: root.rows.length == 0 ? 96px
+                : min(root.rows.length * Theme.row-height-list + Theme.spacing-4, 240px);
 
-            ListView {
-                for row[index] in root.rows : Rectangle {
-                    height: Theme.row-height-list;
-                    border-radius: Theme.radius-control;
-                    background: row.is-failed ? Theme.attention-background
-                        : Math.mod(index, 2) == 0 ? transparent : Theme.card-fill;
-
-                    Text {
-                        x: Theme.spacing-8;
-                        y: 0;
-                        width: 90px;
-                        height: parent.height;
-                        text: row.direction-text;
-                        color: Theme.text-secondary;
-                        font-size: Theme.font-caption;
-                        vertical-alignment: center;
-                        wrap: no-wrap;
-                        overflow: elide;
-                    }
-
-                    Text {
-                        x: 98px;
-                        y: 0;
-                        width: parent.width - 98px - root.action-width() - Theme.spacing-8;
-                        height: parent.height;
-                        text: row.file-name-text;
-                        color: Theme.text-primary;
-                        font-size: Theme.font-caption;
-                        vertical-alignment: center;
-                        wrap: no-wrap;
-                        overflow: elide;
-                    }
-
-                    Text {
-                        x: parent.width - root.action-width() - 72px - Theme.spacing-8;
-                        y: 0;
-                        width: 72px;
-                        height: parent.height;
-                        text: row.is-failed ? row.status-text : row.progress-text;
-                        color: row.is-failed ? Theme.critical : Theme.text-tertiary;
-                        font-size: Theme.font-caption;
-                        vertical-alignment: center;
-                        horizontal-alignment: right;
-                        wrap: no-wrap;
-                        overflow: elide;
-                    }
-
-                    // 行内动作：按状态显示可用的队列操作。
-                    HorizontalLayout {
-                        x: parent.width - root.action-width();
-                        y: 0;
-                        width: root.action-width();
-                        height: parent.height;
-                        spacing: 0;
-                        alignment: end;
-
-                        if row.can-pause : WinIconButton {
-                            icon: "pause";
-                            accessible-name: @tr("Pause transfer");
-                            clicked => { root.pause(row.id); }
-                        }
-                        if row.can-resume : WinIconButton {
-                            icon: "play";
-                            accessible-name: @tr("Resume transfer");
-                            clicked => { root.resume(row.id); }
-                        }
-                        if row.can-retry : WinIconButton {
-                            icon: "refresh";
-                            accessible-name: @tr("Retry transfer");
-                            clicked => { root.retry(row.id); }
-                        }
-                        if row.can-cancel : WinIconButton {
-                            icon: "close";
-                            accessible-name: @tr("Cancel transfer");
-                            clicked => { root.cancel(row.id); }
-                        }
-                        if row.can-remove : WinIconButton {
-                            icon: "trash";
-                            accessible-name: @tr("Remove transfer");
-                            clicked => { root.remove(row.id); }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /// 动作列宽按行内容固定为 3 个按钮（最多同时显示 3 个动作）。
-    pure function action-width() -> length {
-        return 3 * Theme.control-height;
-    }
-
-    pure function summary-text() -> string {
-        return @tr("{0} transfer(s) · {1} active · {2} paused · {3} failed · {4} completed",
-            root.total-count, root.active-count, root.paused-count, root.failed-count, root.completed-count);
-    }
-}
-
-// ---------------------------------------------------------------- 本地栏
-
-/// 本地栏：LocalPane（只读接线）+ 图标拖动槽 + 整栏 DropArea。
-// ---------------------------------------------------------------- 队列抽屉
-
-/// 传输抽屉：摘要一行 + 展开后的任务列表（行内 pause/resume/retry/cancel/remove）。
-component SftpTransferDrawer inherits Rectangle {
-    in property <[SftpTransferRow]> rows;
-    in property <bool> expanded: false;
-    in property <int> total-count: 0;
-    in property <int> active-count: 0;
-    in property <int> paused-count: 0;
-    in property <int> failed-count: 0;
-    in property <int> completed-count: 0;
-    in property <int> retryable-count: 0;
-
-    callback toggle-expanded();
-    callback pause(string);
-    callback resume(string);
-    callback retry(string);
-    callback cancel(string);
-    callback remove(string);
-    callback clear-completed();
-
-    background: Theme.layer-fill;
-    border-radius: Theme.radius-control;
-
-    VerticalLayout {
-        spacing: 0;
-
-        // --- 摘要行 ------------------------------------------------------
-        HorizontalLayout {
-            height: Theme.control-height;
-            padding-left: Theme.spacing-8;
-            padding-right: Theme.spacing-4;
-            spacing: Theme.spacing-4;
-
-            WinIconButton {
-                icon: root.expanded ? "chevron-down" : "chevron-right";
-                accessible-name: root.expanded ? @tr("Hide transfers") : @tr("Show transfers");
-                clicked => { root.toggle-expanded(); }
-            }
-
-            // 固定尺寸容器：Icon 直接放在布局里会被布局改成 0 宽，软件渲染器
-            // 对 0 尺寸图片会算出 NaN 并 panic（与 WinIconButton 同形）。
-            Rectangle {
-                width: Theme.icon-size-small;
-                vertical-stretch: 1;
-                background: transparent;
-
-                Icon {
-                    name: "download";
-                    icon-color: Theme.text-secondary;
-                    icon-size: Theme.icon-size-small;
-                    x: (parent.width - self.width) / 2;
-                    y: (parent.height - self.height) / 2;
-                }
-            }
-
-            Text {
-                text: root.summary-text();
-                color: Theme.text-secondary;
+            if root.rows.length == 0 : Text {
+                text: @tr("No transfer tasks yet");
+                color: Theme.text-tertiary;
                 font-size: Theme.font-caption;
+                x: Theme.spacing-8;
+                width: parent.width - 2 * Theme.spacing-8;
+                height: parent.height;
                 vertical-alignment: center;
-                wrap: no-wrap;
-                overflow: elide;
-                horizontal-stretch: 1;
+                horizontal-alignment: center;
+                wrap: word-wrap;
             }
 
-            if root.completed-count > 0 : WinButton {
-                text: @tr("Clear completed");
-                subtle: true;
-                clicked => { root.clear-completed(); }
-            }
-        }
+            transfer_list := ListView {
+                vertical-scrollbar-policy: ScrollBarPolicy.always-off;
 
-        // --- 展开的任务列表 ----------------------------------------------
-        if root.expanded : Rectangle {
-            clip: true;
-            height: min(root.rows.length * Theme.row-height-list + Theme.spacing-4, 240px);
-
-            ListView {
                 for row[index] in root.rows : Rectangle {
                     height: Theme.row-height-list;
                     border-radius: Theme.radius-control;
@@ -850,10 +740,12 @@ component SftpTransferDrawer inherits Rectangle {
                         overflow: elide;
                     }
 
+                    // 文件名盒的右边界 = 进度列左边界 - 间距，两盒不再相交（B1）。
                     Text {
                         x: 98px;
                         y: 0;
-                        width: parent.width - 98px - root.action-width() - Theme.spacing-8;
+                        width: max(0px, parent.width - 98px - root.action-width(row)
+                            - root.progress-column-width - 2 * Theme.spacing-8);
                         height: parent.height;
                         text: row.file-name-text;
                         color: Theme.text-primary;
@@ -864,9 +756,9 @@ component SftpTransferDrawer inherits Rectangle {
                     }
 
                     Text {
-                        x: parent.width - root.action-width() - 72px - Theme.spacing-8;
+                        x: parent.width - root.action-width(row) - root.progress-column-width - Theme.spacing-8;
                         y: 0;
-                        width: 72px;
+                        width: root.progress-column-width;
                         height: parent.height;
                         text: row.is-failed ? row.status-text : row.progress-text;
                         color: row.is-failed ? Theme.critical : Theme.text-tertiary;
@@ -879,9 +771,9 @@ component SftpTransferDrawer inherits Rectangle {
 
                     // 行内动作：按状态显示可用的队列操作。
                     HorizontalLayout {
-                        x: parent.width - root.action-width();
+                        x: parent.width - root.action-width(row);
                         y: 0;
-                        width: root.action-width();
+                        width: root.action-width(row);
                         height: parent.height;
                         spacing: 0;
                         alignment: end;
@@ -914,23 +806,49 @@ component SftpTransferDrawer inherits Rectangle {
                     }
                 }
             }
+
+            // 自绘滚动条（B8）：与文件列表同一形态。
+            ListScrollBar {
+                x: parent.width - self.width;
+                y: 0;
+                height: parent.height;
+                content-height: transfer_list.content-height;
+                visible-height: transfer_list.visible-height;
+                content-y <=> transfer_list.content-y;
+                scroll-enabled: transfer_list.enabled;
+            }
         }
     }
 
-    /// 动作列宽按行内容固定为 3 个按钮（最多同时显示 3 个动作）。
-    pure function action-width() -> length {
-        return 3 * Theme.control-height;
+    /// 进度/状态列宽（固定的文案列）。
+    private property <length> progress-column-width: 72px;
+
+    /// 该行实际可见的动作按钮数（最多 3 个：pause/retry/cancel 等互斥组合）。
+    pure function action-count(row: SftpTransferRow) -> int {
+        return (row.can-pause ? 1 : 0) + (row.can-resume ? 1 : 0) + (row.can-retry ? 1 : 0)
+             + (row.can-cancel ? 1 : 0) + (row.can-remove ? 1 : 0);
     }
 
+    /// 动作列宽按该行实际可见的按钮数计算（1/2/3 个 → 32/64/96px，B2）：
+    /// 不再恒定预留 3×32，1 个按钮时右侧不留 64px 死区。
+    pure function action-width(row: SftpTransferRow) -> length {
+        return root.action-count(row) * Theme.control-height;
+    }
+
+    /// 摘要只列非零字段：字段全列时在 340px 面板里必然被省略号截掉
+    /// 「已暂停/失败/已完成」（B4）。零任务时退化为 "0 transfer(s)"。
     pure function summary-text() -> string {
-        return @tr("{0} transfer(s) · {1} active · {2} paused · {3} failed · {4} completed",
-            root.total-count, root.active-count, root.paused-count, root.failed-count, root.completed-count);
+        return @tr("{0} transfer(s)", root.total-count)
+            + (root.active-count > 0 ? @tr(" · {0} active", root.active-count) : "")
+            + (root.paused-count > 0 ? @tr(" · {0} paused", root.paused-count) : "")
+            + (root.failed-count > 0 ? @tr(" · {0} failed", root.failed-count) : "")
+            + (root.completed-count > 0 ? @tr(" · {0} completed", root.completed-count) : "");
     }
 }
 
 // ---------------------------------------------------------------- 本地栏
 
-/// 本地栏：LocalPane（只读接线）+ 图标拖动槽 + 整栏 DropArea。
+/// 本地栏：LocalPane（只读接线，行内 DragArea）+ 整栏 DropArea。
 component SftpLocalSection inherits Rectangle {
     in property <[LocalRow]> rows;
     in property <string> path-text: "/";
@@ -945,6 +863,8 @@ component SftpLocalSection inherits Rectangle {
     in property <string> error-text: "";
     in property <bool> retry-visible: true;
     in property <bool> collapsed: false;
+    /// 折叠/展开开关是否可用（可用高度不足时由面板置 false）。
+    in property <bool> toggle-enabled: true;
     in property <string> title-text: "";
     in property <string> selected-name-text: "";
 
@@ -969,10 +889,10 @@ component SftpLocalSection inherits Rectangle {
 
     background: transparent;
 
-    // LocalPane 内部布局（padding-top 8 + 头部 32 + 间距 4 + 路径输入 32 + 间距 4
-    // [+ 错误条 28 + 间距 4] + 列头 28 + 间距 4）→ 列表顶部的固定偏移。
-    private property <length> list-top: 112px + (root.error-text != "" ? 32px : 0px);
-    private property <length> list-height: max(0px, root.height - root.list-top);
+    // 列表几何直接取 LocalPane 的实际值（含 32px 整数行对齐与错误条偏移），
+    // 让外层 DropArea 与列表视口严格重合。
+    private property <length> list-top: pane.list-top;
+    private property <length> list-height: pane.list-height;
 
     pane := LocalPane {
         x: 0;
@@ -992,9 +912,11 @@ component SftpLocalSection inherits Rectangle {
         error-text: root.error-text;
         retry-visible: root.retry-visible;
         collapsed: root.collapsed;
+        toggle-enabled: root.toggle-enabled;
         title-text: root.title-text;
         selected-name-text: root.selected-name-text;
         path-text: root.path-text;
+        selection-key: root.selection-key;
 
         toggle-collapsed => { root.toggle-collapsed(); }
         up => { root.up(); }
@@ -1010,11 +932,13 @@ component SftpLocalSection inherits Rectangle {
         activate-row(index) => { root.activate-row(index); }
         context-menu-requested(index, x, y) => { root.context-menu-requested(index, x, y); }
         retry => { root.retry(); }
+        drag-payload(key) => { return root.drag-payload(key); }
     }
 
     // 整栏 DropArea（远端 → 本地 / 系统文件）：声明在 LocalPane 之后（同层里
-    // 靠后 = 在上层），点击会向下转发给 LocalPane。折叠时几何归零 + 禁用。
-    drop_overlay := DropArea {
+    // 靠后 = 在上层），点击会向下转发给 LocalPane（DropArea 只处理拖放事件）。
+    // 折叠时几何归零 + 禁用。（布局占位，无需 id）
+    DropArea {
         x: 0px;
         y: root.list-top;
         width: parent.width;
@@ -1024,31 +948,6 @@ component SftpLocalSection inherits Rectangle {
         dropped(event) => {
             root.drop-received(event.data, event.proposed-action);
             return event.proposed-action;
-        }
-    }
-
-    // 图标槽 DragArea：LocalPane 属 N6/共享件不可改，行内没有 DragArea；
-    // 这里在图标列覆盖一条 34px 宽的拖动槽（图标 16 + 名称前两字符），
-    // 名称列其余部分的选择/双击不受影响。
-    //
-    // 宽度必须大于拖拽阈值（约 8px）：否则按下后横向移动会先触发 Exit
-    // （DragArea 收到 Exit 会复位 pressed），拖动永远开始不了。
-    // 载荷 = 宿主按当前本地选择生成（先点名称列选中，再拖图标槽）。
-    drag_handle := Rectangle {
-        x: 4px;
-        y: root.list-top;
-        width: root.collapsed ? 0px : 34px;
-        height: root.collapsed ? 0px : root.list-height;
-        background: transparent;
-
-        DragArea {
-            x: 0px;
-            y: 0px;
-            width: parent.width;
-            height: parent.height;
-            data: root.drag-payload(root.selection-key);
-            allow-copy: true;
-            allow-move: true;
         }
     }
 
@@ -1160,14 +1059,59 @@ export component SftpPanel inherits Rectangle {
     callback paste-cross-pane();
 
     background: transparent;
+    // 内容按可用高度分配；极端窄高时不再画到卡片外（B9）。
+    clip: true;
 
     /// 宽面板（并排）阈值：两栏各 ≥ 280px。
     private property <bool> side-by-side: root.width >= 600px;
     private property <length> local-column-width: max(240px, root.width * 0.42);
-    /// 折叠后只剩一行头部（8 + 32 + 8 + 卡片内边距）。
-    private property <length> local-section-height: root.local-collapsed
-        ? 64px
-        : max(150px, root.height * 0.34);
+    /// 传输抽屉占位高度（与 SftpTransferDrawer 内部公式一致；空队列固定 96px）。
+    private property <length> drawer-reserve-height: root.transfer-expanded
+        ? Theme.control-height + (root.transfer-rows.length == 0 ? 96px
+            : min(root.transfer-rows.length * Theme.row-height-list + Theme.spacing-4, 240px))
+        : Theme.control-height;
+    /// 面板内容区高度（扣掉上下内边距）。
+    private property <length> content-space: max(0px, root.height - 2 * Theme.spacing-8);
+    /// 叠放模式可分配给子块的总高度（再扣两个 4px 间隔）。
+    private property <length> stacked-space: max(0px, root.content-space - 2 * Theme.spacing-4);
+    /// 并排模式可分配的总高度（再扣一个 4px 间隔）。
+    private property <length> side-space: max(0px, root.content-space - Theme.spacing-4);
+    /// 远端栏压缩下限：面包屑/路径/列头/汇总 + 两行列表。
+    private property <length> remote-min-height: 124px + 2 * Theme.row-height-list;
+    /// 本地栏展开态下限：头部/路径/列头/汇总 + 一行列表。
+    private property <length> local-min-height: 140px + Theme.row-height-list;
+    /// 极端矮高：远端栏最小内容（124px）+ 抽屉 + 48px 紧凑条都放不下时，
+    /// 本地栏让位（高度归零），避免远端栏内容画到抽屉/本地栏上（B9）。
+    private property <bool> stacked-remote-fits: root.stacked-space - root.drawer-reserve-height
+        >= 124px + 48px;
+    /// 可用高度不足时本地栏退化为 48px 紧凑条（保留标题/当前路径/折叠入口），
+    /// 而不是被挤到卡片外或静默消失（B9）。
+    private property <bool> local-compact: root.local-collapsed
+        || !root.stacked-remote-fits
+        || root.stacked-space - root.drawer-reserve-height - root.remote-min-height < root.local-min-height;
+    /// 折叠态只剩一行头部：padding 8 + 头部 32 + padding 8。
+    private property <length> local-min-block: root.local-compact ? 48px : root.local-min-height;
+    /// 本地栏展开时的期望高度（原 1/3 比例）。
+    private property <length> local-preferred-block: root.local-compact
+        ? 48px
+        : max(root.local-min-height, root.height * 0.34);
+    /// 远端栏先按「固定内容 + 整数行列表」取整高度（空间紧张时可 0 行，
+    /// 下限是 124px 的固定内容），本地栏吃剩余高度；余量（<32px）落在本地栏
+    /// 内部底部，不会出现在远端汇总行与传输条之间。
+    private property <int> stacked-remote-rows: clamp(
+        round(floor((root.stacked-space - root.drawer-reserve-height - root.local-preferred-block - 124px) / Theme.row-height-list)),
+        0, 24);
+    /// 叠放时远端栏高度。
+    private property <length> stacked-remote-height: 124px + Theme.row-height-list * root.stacked-remote-rows;
+    /// 本地栏高度 = 剩余高度（紧凑态下限 48px；放不下时归零，见 stacked-remote-fits）。
+    private property <length> local-section-height: !root.stacked-remote-fits ? 0px
+        : max(root.local-min-block,
+              root.stacked-space - root.drawer-reserve-height - root.stacked-remote-height);
+    /// 并排两栏的高度（扣掉抽屉）。
+    private property <length> column-height: max(0px, root.side-space - root.drawer-reserve-height);
+    /// 本地栏折叠开关：仅当展开空间足够时可用（避免点了没反应的死开关）。
+    private property <bool> local-toggle-enabled: root.side-by-side
+        || root.stacked-space - root.drawer-reserve-height - root.remote-min-height >= root.local-min-height;
 
     // 键盘剪贴板：Ctrl+C/X/V（跨栏语义见 runtime::clipboard）。
     pane_scope := FocusScope {
@@ -1206,10 +1150,14 @@ export component SftpPanel inherits Rectangle {
             spacing: Theme.spacing-4;
 
             if root.side-by-side : HorizontalLayout {
+                height: root.column-height;
                 spacing: Theme.spacing-8;
 
                 SftpRemotePane {
                     horizontal-stretch: 1;
+                    // 高度由面板显式给出（而非布局反推）：栏内列表按整数行对齐时
+                    // 不会形成布局回环（B7/B9）。
+                    height: root.column-height;
                     available-width: max(120px, root.width - root.local-column-width - Theme.spacing-16);
                     rows: root.rows;
                     crumbs: root.crumbs;
@@ -1249,6 +1197,7 @@ export component SftpPanel inherits Rectangle {
 
                 SftpLocalSection {
                     width: root.local-column-width;
+                    height: root.column-height;
                     rows: root.local-rows;
                     path-text: root.local-path-text;
                     show-hidden: root.local-show-hidden;
@@ -1262,6 +1211,7 @@ export component SftpPanel inherits Rectangle {
                     error-text: root.local-error-text;
                     retry-visible: root.local-retry-visible;
                     collapsed: root.local-collapsed;
+                    toggle-enabled: root.local-toggle-enabled;
                     title-text: root.local-title-text;
                     selected-name-text: root.local-selected-name-text;
                     toggle-collapsed => { root.local-toggle-collapsed(); }
@@ -1283,7 +1233,7 @@ export component SftpPanel inherits Rectangle {
             }
 
             if !root.side-by-side : SftpRemotePane {
-                vertical-stretch: 1;
+                height: root.stacked-remote-height;
                 available-width: max(120px, root.width - Theme.spacing-8);
                 rows: root.rows;
                 crumbs: root.crumbs;
@@ -1353,7 +1303,8 @@ export component SftpPanel inherits Rectangle {
                 empty-text: root.local-empty-text;
                 error-text: root.local-error-text;
                 retry-visible: root.local-retry-visible;
-                collapsed: root.local-collapsed;
+                collapsed: root.local-compact;
+                toggle-enabled: root.local-toggle-enabled;
                 title-text: root.local-title-text;
                 selected-name-text: root.local-selected-name-text;
                 toggle-collapsed => { root.local-toggle-collapsed(); }
@@ -1447,7 +1398,8 @@ export component SftpContextMenu inherits Rectangle {
         { label: @tr("Paste"), shortcut: "", enabled: root.clipboard-has-local, checked: false, separator: false },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         { label: @tr("Parent directory"), shortcut: "", enabled: root.connected, checked: false, separator: false },
-        { label: @tr("Home directory"), shortcut: "", enabled: true, checked: false, separator: false }
+        // 行为是 `open_sftp_path("/")`（远端根），不是登录用户家目录，文案如实描述（B12）。
+        { label: @tr("Root directory (/)"), shortcut: "", enabled: true, checked: false, separator: false }
     ];
 
     private property <[MenuEntry]> multi-entries: [
@@ -1680,15 +1632,25 @@ export component SftpEntryDialog inherits Rectangle {
         height: parent.height;
 
         key-pressed(event) => {
+            // 破坏性弹窗（删除）不响应 Esc：只能在弹窗内显式选择操作（B23，
+            // 设计语言 §5.10 / 契约 §1.2）。Esc 被吞掉，不冒泡给窗口。
             if (event.text == "\u{001b}") {
-                root.canceled();
+                if (root.kind != "delete") {
+                    root.canceled();
+                }
                 return accept;
             }
             return reject;
         }
 
+        // 遮罩点击关闭：仅非破坏性弹窗（B23）；同时保留命中层，吃掉点击，
+        // 避免点穿到弹窗后面的面板。
         TouchArea {
-            clicked => { root.canceled(); }
+            clicked => {
+                if (root.kind != "delete") {
+                    root.canceled();
+                }
+            }
         }
 
         Rectangle {
@@ -1783,7 +1745,10 @@ export component SftpEntryDialog inherits Rectangle {
 
                     WinButton {
                         text: root.primary-label();
-                        accent: true;
+                        // 破坏性主按钮（Delete）用 critical 文案色 + 常态底，
+                        // 不用蓝色强调实底（设计语言 §5.1 / B 轮2 #46，B22）；
+                        // 与 ConfirmDialog 的 destructive 判定同形（critical 优先）。
+                        accent: root.kind != "delete";
                         critical: root.kind == "delete";
                         enabled: root.primary-enabled();
                         clicked => { root.confirm(); }
@@ -1825,16 +1790,17 @@ export component SftpConflictDialog inherits Rectangle {
         height: parent.height;
 
         key-pressed(event) => {
+            // 覆盖冲突弹窗属于破坏性确认（Overwrite 会替换目标文件）：
+            // 不响应 Esc，只能点按钮显式选择策略或取消（B23）。
             if (event.text == "\u{001b}") {
-                root.canceled();
                 return accept;
             }
             return reject;
         }
 
-        TouchArea {
-            clicked => { root.canceled(); }
-        }
+        // 遮罩点击不关闭冲突弹窗（设计语言 §5.10：遮罩点击仅非破坏性弹窗，B23）；
+        // 空 TouchArea 仍吃掉点击，避免点穿到下面的面板。
+        TouchArea { }
 
         Rectangle {
             x: (parent.width - 560px) / 2;

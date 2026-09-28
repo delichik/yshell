@@ -12,7 +12,7 @@
 // 规范：docs/product/ui-winui3-design-language.md §5.10（ContentDialog 形态）。
 
 import { Theme } from "../theme.slint";
-import { WinButton, WinCard, WinCardHeader, WinIconButton, WinToggle } from "../components/basic/controls.slint";
+import { WinButton, WinCard, WinCardHeader, WinIconButton, WinToggle, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 
 /// 托管私钥清单行（Rust `PrivateKeyEntryInfo` 的 Slint 镜像）。
@@ -158,10 +158,13 @@ export component PrivateKeysPage inherits Rectangle {
         }
 
         Rectangle {
-            x: (parent.width - 840px) / 2;
-            y: 44px;
-            width: 840px;
-            height: parent.height - 88px;
+            // B 轮2 #68 / 轮5：840px 在最小窗口（880px）下左右只剩 20px 内边距；整块面板固定
+            // 全高（880/900 窗口下 812px）而正文只到 ~636px，底部留下 154–180px 死区。
+            // 这里把宽度收到 720px、高度按内容封顶，面板整体居中（与其兄弟弹窗一致）。
+            x: (parent.width - 720px) / 2;
+            y: max((parent.height - self.height) / 2, 44px);
+            width: 720px;
+            height: min(parent.height - 88px, 660px);
             background: Theme.panel-background;
             border-radius: Theme.radius-panel;
             border-width: 1px;
@@ -265,6 +268,17 @@ export component PrivateKeysPage inherits Rectangle {
                                     }
                                 }
 
+                                // 滚动指示：E22 可复用组件（`content-y` ≤ 0，组件内部取负）
+                                WinScrollIndicator {
+                                    x: parent.width - self.width - Theme.spacing-4;
+                                    y: Theme.spacing-4;
+                                    height: parent.height - 2 * Theme.spacing-4;
+                                    viewport-position: keys-list.content-y;
+                                    content-extent: keys-list.content-height;
+                                    viewport-extent: keys-list.height;
+                                    thumb-min-length: 24px;
+                                }
+
                                 Text {
                                     visible: root.keys.length == 0;
                                     x: 12px;
@@ -363,6 +377,17 @@ export component PrivateKeysPage inherits Rectangle {
                                 }
                             }
                         }
+                            }
+
+                            // 滚动指示（左列整体；面板高度不足时才出现）
+                            WinScrollIndicator {
+                                x: parent.width - self.width - Theme.spacing-4;
+                                y: Theme.spacing-4;
+                                height: parent.height - 2 * Theme.spacing-4;
+                                viewport-position: left-scroll.content-y;
+                                content-extent: left-scroll.content-height;
+                                viewport-extent: left-scroll.height;
+                                thumb-min-length: 24px;
                             }
                         }
                     }
@@ -627,6 +652,17 @@ export component PrivateKeysPage inherits Rectangle {
                                     }
                                 }
                             }
+                        }
+
+                        // 滚动指示（右列详情/口令/危险区）
+                        WinScrollIndicator {
+                            x: parent.width - self.width - Theme.spacing-4;
+                            y: Theme.spacing-4;
+                            height: parent.height - 2 * Theme.spacing-4;
+                            viewport-position: scroll.content-y;
+                            content-extent: scroll.content-height;
+                            viewport-extent: scroll.height;
+                            thumb-min-length: 24px;
                         }
                     }
                 }

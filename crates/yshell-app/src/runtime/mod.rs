@@ -23,6 +23,7 @@ mod auth;
 mod clipboard;
 mod connection;
 mod editor;
+mod folder_editor;
 mod keys;
 mod local_pane;
 mod logging;
@@ -35,6 +36,7 @@ mod sftp;
 mod sftp_ops;
 mod ssh_config;
 mod tabs;
+mod theme;
 mod transfer;
 
 #[cfg(test)]
@@ -105,13 +107,17 @@ pub use projection::PanelFrameData;
 pub use projection::SplitHandleData;
 pub use quick_connect::QuickConnectRowData;
 pub use quick_connect::QuickLinkRowData;
+// N5：外观/文件夹默认值（session_runtime、bootstrap、projection 消费）。
+pub(crate) use theme::TerminalAppearance;
+pub(crate) use theme::{SettingsAppearanceDraft, SettingsAppearanceStatus};
+pub(crate) use theme::{ThemeFieldAction, ThemeSchemeOption, TriStateFieldData};
 
 use crate::{
     error::AppError, error::AppResult, session_runtime::SessionRuntime, sftp_view::SftpSortColumn,
 };
 use std::{
-    collections::BTreeMap, collections::BTreeSet, env, fmt, fs, path::Path, path::PathBuf,
-    sync::Arc,
+    cell::RefCell, collections::BTreeMap, collections::BTreeSet, env, fmt, fs, path::Path,
+    path::PathBuf, sync::Arc,
 };
 use yshell_config::{ConfigDocument, ConfigStore, LoadOutcome, PanelSide, QuickLink};
 use yshell_core::CoreCommandDispatcher;
@@ -261,6 +267,11 @@ impl AppRuntime {
                 .ok()
                 .filter(|value| !value.trim().is_empty()),
             fake_auth_failure_injected: false,
+            settings_appearance: SettingsAppearanceDraft::default(),
+            settings_appearance_status: SettingsAppearanceStatus::Hint,
+            settings_appearance_visible: false,
+            settings_preview_renderer: RefCell::new(None),
+            folder_editor: folder_editor::FolderEditorState::default(),
         };
         runtime.status_text = runtime.startup_status();
         runtime.hydrate_saved_sessions();
@@ -516,6 +527,15 @@ pub struct AppRuntime {
     pub(crate) fake_auth_scenario: Option<String>,
     /// 上述场景是否已注入（重试放行）。
     pub(crate) fake_auth_failure_injected: bool,
+    // --- N5：终端外观（Settings 外观弹窗 / Folder Editor）------------------------
+    /// Settings 外观弹窗的表单草稿。
+    pub(crate) settings_appearance: SettingsAppearanceDraft,
+    pub(crate) settings_appearance_status: SettingsAppearanceStatus,
+    pub(crate) settings_appearance_visible: bool,
+    /// 预览专用渲染器（与活动终端渲染器分离，避免抢占 glyph 缓存）。
+    pub(crate) settings_preview_renderer: RefCell<Option<yshell_terminal::TerminalRenderer>>,
+    /// Folder Editor 表单状态。
+    pub(crate) folder_editor: folder_editor::FolderEditorState,
 }
 
 #[derive(Clone)]
@@ -623,6 +643,21 @@ impl fmt::Debug for AppRuntime {
             .field("pending_auth_prompt", &self.pending_auth_prompt)
             .finish()
     }
+}
+
+/// D9：指纹按 4 位分组输出（`aabb ccdd …`），便于逐段核对。
+///
+/// 只处理裸 hex 指纹（原生主机密钥）；`SHA256:…`/含分隔符的文本原样返回。
+pub(crate) fn format_fingerprint_groups(fingerprint: &str) -> String {
+    if fingerprint.is_empty() || !fingerprint.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return fingerprint.to_owned();
+    }
+    fingerprint
+        .as_bytes()
+        .chunks(4)
+        .map(|chunk| std::str::from_utf8(chunk).unwrap_or_default())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 pub(crate) struct DefaultRuntimeKeychainSelection {

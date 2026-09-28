@@ -87,6 +87,7 @@ fn trust_host_key_and_save_persists_known_hosts_and_reconnects() {
         },
         expected: None,
         known_hosts_path: runtime.config_store.known_hosts_file(),
+        resume_password: None,
     });
 
     let projection = runtime
@@ -126,6 +127,7 @@ fn replace_host_key_requires_confirmation_text() {
             fingerprint: "sha256:old".to_owned(),
         }),
         known_hosts_path: runtime.config_store.known_hosts_file(),
+        resume_password: None,
     });
 
     let error = runtime
@@ -172,6 +174,19 @@ fn known_hosts_manager_lists_and_removes_persisted_entries() {
         .contains("beta.example.test:2200"));
     assert!(!opened.known_hosts_inventory_empty);
     assert!(opened.known_hosts_details_text.contains("Fingerprint:"));
+    // D17：详情拆分字段（无英文标签，指纹分组/原样）。
+    assert_eq!(opened.known_hosts_detail_host_text, "alpha.example.test");
+    assert_eq!(opened.known_hosts_detail_port_text, "22");
+    assert_eq!(opened.known_hosts_detail_algorithm_text, "ssh-ed25519");
+    assert_eq!(opened.known_hosts_detail_fingerprint_text, "sha256:alpha");
+    assert_eq!(
+        opened.known_hosts_detail_path_text,
+        runtime
+            .config_store
+            .known_hosts_file()
+            .display()
+            .to_string()
+    );
 
     let _ = runtime.select_next_known_host();
     let removed = runtime
@@ -183,6 +198,43 @@ fn known_hosts_manager_lists_and_removes_persisted_entries() {
         .load_known_hosts()
         .expect("reload known hosts");
     assert!(persisted.snapshot().len() == 1);
+}
+
+#[test]
+fn host_keys_manager_detail_fields_match_selected_entry() {
+    let temp = tempdir().expect("tempdir");
+    let store = ConfigStore::new(temp.path());
+    let mut known_hosts = KnownHosts::new();
+    known_hosts.pin(
+        "gamma.example.test",
+        22,
+        HostKeyFingerprint {
+            algorithm: "ssh-ed25519".to_owned(),
+            fingerprint: "aabbccddeeff00112233445566778899".to_owned(),
+        },
+    );
+    store
+        .save_known_hosts(&known_hosts)
+        .expect("save known_hosts");
+
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    let opened = runtime.open_host_keys_manager();
+    assert!(opened.host_keys_modal_visible);
+    // D20：详情拆分字段（无英文标签；纯 hex 指纹走 D9 分组）。
+    assert_eq!(opened.host_keys_detail_host_text, "gamma.example.test");
+    assert_eq!(opened.host_keys_detail_algorithm_text, "ssh-ed25519");
+    assert_eq!(
+        opened.host_keys_detail_fingerprint_text,
+        "aabb ccdd eeff 0011 2233 4455 6677 8899"
+    );
+    assert_eq!(
+        opened.host_keys_detail_path_text,
+        runtime
+            .config_store
+            .known_hosts_file()
+            .display()
+            .to_string()
+    );
 }
 
 #[test]
@@ -221,6 +273,59 @@ fn known_hosts_manager_clear_requires_confirmation_and_persists_empty_store() {
         .expect("reload known hosts")
         .snapshot()
         .is_empty());
+}
+
+/// D7：TOFU 顺序——密码型会话的主机密钥确认完成后回到密码弹窗（而不是直接重连：
+/// 探针路径下运行时实例尚未建立）。
+#[test]
+fn host_key_trust_resumes_password_prompt_for_password_sessions() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), None)
+        .expect("runtime without keychain");
+    let resume = PendingPasswordPrompt {
+        profile_id: "saved-password".to_owned(),
+        host: "example.com".to_owned(),
+        port: 2200,
+        username: "alice".to_owned(),
+        auth_method: PendingPasswordAuthMethod::Password,
+    };
+    runtime.pending_host_key_prompt = Some(PendingHostKeyPrompt {
+        session_key: "saved-password-1".to_owned(),
+        host: "example.com".to_owned(),
+        port: 2200,
+        username: "alice".to_owned(),
+        presented: HostKeyFingerprint {
+            algorithm: "ssh-ed25519".to_owned(),
+            fingerprint: "sha256:resume".to_owned(),
+        },
+        expected: None,
+        known_hosts_path: runtime.config_store.known_hosts_file(),
+        resume_password: Some(resume.clone()),
+    });
+
+    let projection = runtime
+        .trust_host_key_and_save()
+        .expect("trust host key with a password session waiting");
+
+    assert!(!projection.host_key_prompt_visible);
+    assert!(projection.password_prompt_visible);
+    assert_eq!(
+        projection.password_prompt_host_text,
+        "alice@example.com:2200"
+    );
+    // D37：状态栏走 kind 模板（`TextFormats.status-message`），host_text 作为参数。
+    assert_eq!(projection.status_kind, "session-hostkey-confirmed-password");
+    assert_eq!(projection.status_param_1, "alice@example.com:2200");
+    assert_eq!(projection.status_param_2, "");
+    assert!(runtime.pending_host_key_prompt.is_none());
+    assert_eq!(runtime.pending_password_prompt.as_ref(), Some(&resume));
+    // 主机密钥已经持久化：确认后的密码重试不会再弹 host key 窗口。
+    assert!(runtime
+        .config_store
+        .load_known_hosts()
+        .expect("load known hosts")
+        .get("example.com", 2200)
+        .is_some());
 }
 
 #[test]

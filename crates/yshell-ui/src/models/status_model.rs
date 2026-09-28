@@ -11,7 +11,8 @@ pub struct StatusModel {
 impl Default for StatusModel {
     fn default() -> Self {
         Self {
-            message: "Ready".to_owned(),
+            // D14：默认空串；"就绪"文案由启动投影写入（含 i18n）。
+            message: String::new(),
             connection_state: "Disconnected".to_owned(),
             active_session_id: None,
             busy: false,

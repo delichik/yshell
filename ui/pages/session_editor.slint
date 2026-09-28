@@ -1,11 +1,13 @@
 import { Theme } from "../theme.slint";
-import { WinButton, WinIconButton, WinNavItem } from "../components/basic/controls.slint";
+import { WinButton, WinIconButton, WinNavItem, WinToggle, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
+import { TriStateField, TriStateFieldSection } from "./folder_editor.slint";
 
 // 表单行：左侧固定宽度标签 + 右侧控件（子元素放进右侧横向布局）
 component FormRow inherits Rectangle {
     in property <string> label: "";
-    in property <length> label-width: 116px;
+    // 与 Theme.form-label-width 同源（禁止在别处再写一份字面量）
+    in property <length> label-width: Theme.form-label-width;
 
     height: Theme.control-height;
     background: transparent;
@@ -63,6 +65,35 @@ component HintText inherits Text {
     wrap: word-wrap;
 }
 
+// 分区导航项：WinNavItem + 可选的禁用说明 tooltip。
+// （基础控件 WinNavItem 不属本文件；Tooltip 必须声明在其直接父元素下，故包一层薄壳。）
+component EditorNavItem inherits Rectangle {
+    in property <string> text: "";
+    in property <string> icon: "settings";
+    in property <bool> selected: false;
+    in property <bool> enabled: true;
+    /// 非空且禁用时，hover 显示"本版本未提供"一类说明（契约 §18：disabled 必须有 tooltip）
+    in property <string> hint: "";
+    callback clicked();
+
+    height: Theme.row-height-nav;
+    background: transparent;
+
+    WinNavItem {
+        width: parent.width;
+        height: parent.height;
+        text: root.text;
+        icon: root.icon;
+        selected: root.selected;
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+
+    if !root.enabled && root.hint != "" : Tooltip {
+        text: @markdown("\{root.hint}");
+    }
+}
+
 export component SessionEditor inherits Rectangle {
     in property <bool> open: false;
     in property <string> section: "general";
@@ -100,6 +131,9 @@ export component SessionEditor inherits Rectangle {
     in property <string> secret-store-status-text: "";
     in-out property <string> secret-reset-confirmation-text: "";
     in property <string> config-dir-text: "";
+    // N5：Appearance/Terminal 三态覆盖字段（Rust 组装 TriStateField 模型）。
+    in property <[TriStateField]> editor-appearance-fields: [];
+    in property <[TriStateField]> editor-terminal-fields: [];
 
     callback close();
     callback select-general();
@@ -159,6 +193,22 @@ export component SessionEditor inherits Rectangle {
     callback update-secret-reset-confirmation(string);
     callback save();
     callback save-connect();
+    // N5：Appearance/Terminal 三态字段动作。
+    callback editor-theme-field-action(string, string);
+    callback update-editor-theme-field(string, string);
+    callback editor-select-scheme(int);
+    callback reset-all-editor-theme();
+
+    // 面板高度固定（B 轮3 #13）：原实现按各分区内容收缩，切换分区时整块面板（含左侧导航）
+    // 上下跳动、鼠标下的导航项会移位。现在取最高分区所需高度并给伪本地化留余量，
+    // 表单区改为内部滚动（B 轮2 高#3），矮窗口下再收缩到窗口内。
+    private property <length> dialog-height: min(self.height - 80px, 640px);
+    // 面板宽度（宽度归一见 WS-C 报告；此处集中定义便于后续统一到 560/640）
+    private property <length> dialog-width: 760px;
+
+    // 保存校验（B 轮3 #16）：运行时要求会话名与主机非空；这里同步禁用并用就地提示替代
+    // 只写在状态栏的英文错误（状态栏文案的本地化由 WS-D 处理）。
+    private property <bool> save-blocked: root.name-text == "" || root.host-text == "";
 
     visible: self.open;
     background: Theme.scrim;
@@ -184,11 +234,11 @@ export component SessionEditor inherits Rectangle {
         }
 
         panel := Rectangle {
-            x: (parent.width - 760px) / 2;
+            x: (parent.width - root.dialog-width) / 2;
             y: max((parent.height - self.height) / 2, 40px);
-            width: 760px;
-            // 高度随内容收缩，上限保持原视觉高度（屏幕 85% 以内）
-            height: min(parent.height - 80px, panel-body.preferred-height);
+            width: root.dialog-width;
+            // 固定高度：不随分区内容变化（B 轮3 #13）
+            height: root.dialog-height;
             background: Theme.panel-background;
             border-radius: Theme.radius-panel;
             border-width: 1px;
@@ -254,15 +304,16 @@ export component SessionEditor inherits Rectangle {
                             spacing: 2px;
                             alignment: start;
 
-                            WinNavItem { text: @tr("General"); icon: "settings"; selected: root.section == "general"; clicked => { root.select-general(); } }
-                            WinNavItem { text: @tr("Authentication"); icon: "shield"; selected: root.section == "authentication"; clicked => { root.select-authentication(); } }
-                            WinNavItem { text: @tr("Terminal"); icon: "terminal"; selected: root.section == "terminal"; clicked => { root.select-terminal(); } }
-                            WinNavItem { text: @tr("SFTP"); icon: "folder"; selected: root.section == "sftp"; clicked => { root.select-sftp(); } }
-                            WinNavItem { text: @tr("Tunnels"); icon: "connect"; selected: root.section == "tunnels"; clicked => { root.select-tunnels(); } }
-                            WinNavItem { text: @tr("Proxy"); icon: "globe"; selected: root.section == "proxy"; clicked => { root.select-proxy(); } }
-                            WinNavItem { text: @tr("Logging"); icon: "file"; selected: root.section == "logging"; clicked => { root.select-logging(); } }
-                            WinNavItem { text: @tr("Advanced"); icon: "code"; selected: root.section == "advanced"; clicked => { root.select-advanced(); } }
-                            WinNavItem { text: @tr("Appearance"); icon: "eye"; selected: root.section == "appearance"; clicked => { root.select-appearance(); } }
+                            EditorNavItem { text: @tr("General"); icon: "settings"; selected: root.section == "general"; clicked => { root.select-general(); } }
+                            EditorNavItem { text: @tr("Authentication"); icon: "shield"; selected: root.section == "authentication"; clicked => { root.select-authentication(); } }
+                            // N5：终端 / 外观分区有字段模型（三态覆盖）；SFTP / 高级本版本无字段。
+                            EditorNavItem { text: @tr("Terminal"); icon: "terminal"; selected: root.section == "terminal"; clicked => { root.select-terminal(); } }
+                            EditorNavItem { text: @tr("SFTP"); icon: "folder"; enabled: false; hint: @tr("Not available in this version."); }
+                            EditorNavItem { text: @tr("Tunnels"); icon: "connect"; selected: root.section == "tunnels"; clicked => { root.select-tunnels(); } }
+                            EditorNavItem { text: @tr("Proxy"); icon: "globe"; selected: root.section == "proxy"; clicked => { root.select-proxy(); } }
+                            EditorNavItem { text: @tr("Logging"); icon: "file"; selected: root.section == "logging"; clicked => { root.select-logging(); } }
+                            EditorNavItem { text: @tr("Advanced"); icon: "code"; enabled: false; hint: @tr("Not available in this version."); }
+                            EditorNavItem { text: @tr("Appearance"); icon: "eye"; selected: root.section == "appearance"; clicked => { root.select-appearance(); } }
                         }
                     }
 
@@ -277,399 +328,473 @@ export component SessionEditor inherits Rectangle {
                         VerticalLayout {
                             padding: Theme.spacing-16;
                             spacing: Theme.spacing-12;
-                            alignment: start;
 
-                            if root.section == "general" : VerticalLayout {
-                                alignment: start;
-                                spacing: Theme.spacing-12;
+                            // 表单区：内容高于面板时在卡片内滚动（左侧导航与底部操作区固定不动）
+                            Rectangle {
+                                vertical-stretch: 1;
+                                clip: true;
+                                background: transparent;
 
-                                SectionTitle { heading: @tr("General"); }
+                                form-scroll := Flickable {
+                                    width: parent.width;
+                                    height: parent.height;
+                                    interactive: true;
+                                    content-width: self.width;
+                                    content-height: form-content.preferred-height;
 
-                                FormRow {
-                                    label: @tr("Folder");
+                                    form-content := VerticalLayout {
+                                        alignment: start;
+                                        spacing: Theme.spacing-12;
 
-                                    Text {
-                                        text: root.folder-text;
-                                        color: Theme.text-secondary;
-                                        font-size: Theme.font-body;
-                                        horizontal-stretch: 1;
-                                        height: Theme.control-height;
-                                        vertical-alignment: center;
-                                        wrap: no-wrap;
-                                        overflow: elide;
+                                        if root.section == "general" : VerticalLayout {
+                                            alignment: start;
+                                            spacing: Theme.spacing-12;
+            
+                                            SectionTitle { heading: @tr("General"); }
+            
+                                            FormRow {
+                                                label: @tr("Folder");
+            
+                                                Text {
+                                                    text: root.folder-text;
+                                                    color: Theme.text-secondary;
+                                                    font-size: Theme.font-body;
+                                                    horizontal-stretch: 1;
+                                                    height: Theme.control-height;
+                                                    vertical-alignment: center;
+                                                    wrap: no-wrap;
+                                                    overflow: elide;
+                                                }
+                                            }
+            
+                                            FormRow {
+                                                label: "";
+
+                                                WinButton { text: @tr("Folder Prev"); clicked => { root.select-folder-prev(); } }
+                                                WinButton { text: @tr("Folder Next"); clicked => { root.select-folder-next(); } }
+                                            }
+            
+                                            FormRow {
+                                                label: @tr("New folder");
+            
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.new-folder-name;
+                                                    placeholder-text: @tr("New folder name");
+                                                    edited => { root.update-new-folder-name(self.text); }
+                                                }
+            
+                                                WinButton { text: @tr("New Folder"); icon: "plus"; clicked => { root.create-folder(); } }
+                                            }
+            
+                                            FormRow {
+                                                label: @tr("Session name");
+            
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.name-text;
+                                                    placeholder-text: @tr("Session name");
+                                                    edited => { root.update-name(self.text); }
+                                                }
+                                            }
+            
+                                            FormRow {
+                                                label: @tr("Host");
+            
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.host-text;
+                                                    placeholder-text: @tr("Host");
+                                                    edited => { root.update-host(self.text); }
+                                                }
+                                            }
+            
+                                            FormRow {
+                                                label: @tr("Port");
+            
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.port-text;
+                                                    placeholder-text: "22";
+                                                    edited => { root.update-port(self.text); }
+                                                }
+                                            }
+            
+                                            FormRow {
+                                                label: @tr("Username");
+
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.username-text;
+                                                    placeholder-text: @tr("Username");
+                                                    edited => { root.update-username(self.text); }
+                                                }
+                                            }
+
+                                            // B 轮3 #16：保存前就地校验（运行时仍会兜底校验；
+                                            // 状态栏错误文案的本地化归 WS-D）。
+                                            if root.save-blocked : Text {
+                                                text: @tr("A session name and a host are required before saving.");
+                                                color: Theme.critical;
+                                                font-size: Theme.font-caption;
+                                                wrap: word-wrap;
+                                            }
+                                        }
+                                        if root.section == "authentication" : VerticalLayout {
+                                            alignment: start;
+                                            spacing: Theme.spacing-12;
+            
+                                            SectionTitle { heading: @tr("Authentication"); }
+            
+                                            FormRow {
+                                                label: @tr("Method");
+
+                                                // 分段控件统一切到 accent/常态按钮（B 轮2 #55）：用 check 图标会让
+                                                // 选中项宽度 +24px、整行抖动；未选中项保留常态描边以表达分组边界。
+                                                WinButton { text: @tr("Agent"); accent: root.auth-method-text == "agent"; clicked => { root.set-auth-method-agent(); } }
+                                                WinButton { text: @tr("Password"); accent: root.auth-method-text == "password"; clicked => { root.set-auth-method-password(); } }
+                                                WinButton { text: @tr("KbdInt"); accent: root.auth-method-text == "keyboard_interactive"; clicked => { root.set-auth-method-keyboard-interactive(); } }
+                                                WinButton { text: @tr("Key"); accent: root.auth-method-text == "private_key"; clicked => { root.set-auth-method-private-key(); } }
+                                            }
+
+                                            FormRow {
+                                                label: @tr("Host key");
+
+                                                WinButton { text: @tr("Strict"); accent: root.host-key-policy-text == "strict"; clicked => { root.set-host-key-policy-strict(); } }
+                                                WinButton { text: @tr("TOFU"); accent: root.host-key-policy-text == "trust-on-first-use"; clicked => { root.set-host-key-policy-trust-on-first-use(); } }
+                                                WinButton { text: @tr("Accept Any"); accent: root.host-key-policy-text == "accept-any-for-testing"; clicked => { root.set-host-key-policy-accept-any-for-testing(); } }
+                                            }
+            
+                                            FormRow {
+                                                label: @tr("Password");
+            
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.password-text;
+                                                    placeholder-text: @tr("Password / keyboard-interactive secret");
+                                                    edited => { root.update-password(self.text); }
+                                                }
+                                            }
+            
+                                            FormRow {
+                                                label: @tr("Private key");
+            
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.key-path-text;
+                                                    placeholder-text: @tr("Private key path");
+                                                    edited => { root.update-key-path(self.text); }
+                                                }
+                                            }
+            
+                                            FormRow {
+                                                label: @tr("Passphrase");
+            
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.passphrase-text;
+                                                    placeholder-text: @tr("Private key passphrase");
+                                                    edited => { root.update-passphrase(self.text); }
+                                                }
+                                            }
+            
+                                            FormRow {
+                                                label: "";
+
+                                                WinButton { text: @tr("Test Connection"); icon: "refresh"; clicked => { root.test-auth(); } }
+                                            }
+            
+                                            HintText { hint: root.auth-test-status-text; }
+                                        }
+                                        if root.section == "proxy" : VerticalLayout {
+                                            alignment: start;
+                                            spacing: Theme.spacing-12;
+            
+                                            SectionTitle { heading: @tr("Proxy"); }
+            
+                                            FormRow {
+                                                label: @tr("Mode");
+
+                                                WinButton { text: @tr("No Proxy"); accent: root.proxy-mode-text == "none"; clicked => { root.set-proxy-mode-none(); } }
+                                                WinButton { text: @tr("Custom"); accent: root.proxy-mode-text == "custom"; clicked => { root.set-proxy-mode-custom(); } }
+                                            }
+
+                                            FormRow {
+                                                label: @tr("Protocol");
+
+                                                WinButton { text: @tr("SOCKS4"); accent: root.proxy-protocol-text == "socks4"; clicked => { root.set-proxy-protocol-socks4(); } }
+                                                WinButton { text: @tr("SOCKS4a"); accent: root.proxy-protocol-text == "socks4a"; clicked => { root.set-proxy-protocol-socks4a(); } }
+                                                WinButton { text: @tr("SOCKS5"); accent: root.proxy-protocol-text == "socks5"; clicked => { root.set-proxy-protocol-socks5(); } }
+                                                WinButton { text: @tr("HTTP"); accent: root.proxy-protocol-text == "http-connect"; clicked => { root.set-proxy-protocol-http-connect(); } }
+                                            }
+            
+                                            FormRow {
+                                                label: @tr("Proxy host");
+            
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.proxy-host-text;
+                                                    placeholder-text: @tr("Proxy host");
+                                                    edited => { root.update-proxy-host(self.text); }
+                                                }
+                                            }
+            
+                                            FormRow {
+                                                label: @tr("Proxy port");
+            
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.proxy-port-text;
+                                                    placeholder-text: @tr("Proxy port");
+                                                    edited => { root.update-proxy-port(self.text); }
+                                                }
+                                            }
+            
+                                            FormRow {
+                                                label: @tr("Username");
+            
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.proxy-username-text;
+                                                    placeholder-text: @tr("Proxy username");
+                                                    edited => { root.update-proxy-username(self.text); }
+                                                }
+                                            }
+            
+                                            FormRow {
+                                                label: @tr("Password");
+            
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.proxy-password-text;
+                                                    placeholder-text: @tr("Proxy password");
+                                                    edited => { root.update-proxy-password(self.text); }
+                                                }
+                                            }
+            
+                                            // 开关语义：WinToggle 的 checked 与文案同步（不再用 check 图标改变按钮宽度）
+                                            WinToggle {
+                                                text: root.proxy-dns-by-proxy ? @tr("DNS via Proxy: On") : @tr("DNS via Proxy: Off");
+                                                checked: root.proxy-dns-by-proxy;
+                                                toggled => { root.toggle-proxy-dns-by-proxy(); }
+                                            }
+            
+                                            HintText { hint: root.proxy-summary-text; }
+                                        }
+                                        if root.section == "tunnels" : VerticalLayout {
+                                            alignment: start;
+                                            spacing: Theme.spacing-12;
+            
+                                            SectionTitle { heading: @tr("Tunnels"); }
+            
+                                            FormRow {
+                                                label: @tr("Kind");
+
+                                                WinButton { text: @tr("Local"); accent: root.tunnel-kind-text == "local"; clicked => { root.set-tunnel-kind-local(); } }
+                                                WinButton { text: @tr("Remote"); accent: root.tunnel-kind-text == "remote"; clicked => { root.set-tunnel-kind-remote(); } }
+                                                WinButton { text: @tr("Dynamic"); accent: root.tunnel-kind-text == "dynamic"; clicked => { root.set-tunnel-kind-dynamic(); } }
+                                            }
+            
+                                            FormRow {
+                                                label: @tr("Listen host");
+            
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.tunnel-bind-host-text;
+                                                    placeholder-text: "127.0.0.1";
+                                                    edited => { root.update-tunnel-bind-host(self.text); }
+                                                }
+                                            }
+            
+                                            FormRow {
+                                                label: @tr("Listen port");
+            
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.tunnel-bind-port-text;
+                                                    placeholder-text: @tr("Listen port");
+                                                    edited => { root.update-tunnel-bind-port(self.text); }
+                                                }
+                                            }
+            
+                                            FormRow {
+                                                label: @tr("Target host");
+            
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.tunnel-target-host-text;
+                                                    placeholder-text: @tr("Target host");
+                                                    edited => { root.update-tunnel-target-host(self.text); }
+                                                }
+                                            }
+            
+                                            FormRow {
+                                                label: @tr("Target port");
+            
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.tunnel-target-port-text;
+                                                    placeholder-text: @tr("Target port");
+                                                    edited => { root.update-tunnel-target-port(self.text); }
+                                                }
+                                            }
+            
+                                            FormRow {
+                                                label: "";
+
+                                                WinButton { text: @tr("Add Tunnel"); icon: "plus"; clicked => { root.add-tunnel(); } }
+                                                WinButton { text: @tr("Clear Tunnels"); icon: "trash"; subtle: true; clicked => { root.clear-tunnels(); } }
+                                            }
+            
+                                            HintText { hint: root.tunnel-summary-text; }
+                                        }
+                                        if root.section == "logging" : VerticalLayout {
+                                            alignment: start;
+                                            spacing: Theme.spacing-12;
+            
+                                            SectionTitle { heading: @tr("Logging"); }
+            
+                                            GroupTitle { heading: @tr("Global Logging Policy"); }
+
+                                            FormRow {
+                                                label: @tr("Toggle");
+
+                                                WinButton {
+                                                    text: root.logging-enabled-text == "enabled" ? @tr("Disable Logging") : @tr("Enable Logging");
+                                                    icon: root.logging-enabled-text == "enabled" ? "pause" : "play";
+                                                    clicked => { root.toggle-logging-enabled(); }
+                                                }
+                                                WinButton { text: @tr("Raw"); accent: root.logging-format-text == "raw"; clicked => { root.set-logging-format-raw(); } }
+                                                WinButton { text: @tr("Sanitized"); accent: root.logging-format-text == "sanitized"; clicked => { root.set-logging-format-sanitized(); } }
+                                            }
+
+                                            FormRow {
+                                                label: @tr("Directory");
+            
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.logging-directory-text;
+                                                    placeholder-text: "logs";
+                                                    edited => { root.update-logging-directory(self.text); }
+                                                }
+            
+                                                WinButton { text: @tr("Save Logging"); icon: "check"; clicked => { root.save-logging-settings(); } }
+                                            }
+            
+                                            Rectangle { height: 1px; background: Theme.layer-stroke; }
+            
+                                            GroupTitle { heading: @tr("Secret Store"); }
+            
+                                            HintText { hint: root.secret-store-status-text; }
+            
+                                            // 危险操作提示
+                                            Text {
+                                                text: @tr("Destructive: resetting the secret store permanently deletes the saved passwords and passphrases.");
+                                                color: Theme.critical;
+                                                font-size: Theme.font-caption;
+                                                wrap: word-wrap;
+                                            }
+            
+                                            FormRow {
+                                                label: @tr("Confirmation");
+            
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.secret-reset-confirmation-text;
+                                                    placeholder-text: @tr("Type RESET SECRETS");
+                                                    edited => { root.update-secret-reset-confirmation(self.text); }
+                                                }
+                                            }
+            
+                                            FormRow {
+                                                label: "";
+
+                                                // B 轮2 #58：与 settings 同一门限 —— 只有精确输入确认词才可点击
+                                                // （原文案未走 @tr，这里同时补上；CLEAR 类令牌不在本分区使用）
+                                                WinButton {
+                                                    text: @tr("Reset Secrets");
+                                                    icon: "warning";
+                                                    critical: true;
+                                                    enabled: root.secret-reset-confirmation-text == "RESET SECRETS";
+                                                    clicked => { root.reset-secrets(); }
+                                                }
+                                            }
+            
+                                            HintText { hint: @tr("Config Dir: {0}", root.config-dir-text); }
+                                        }
+                                        if root.section == "terminal" : VerticalLayout {
+                                            alignment: start;
+                                            spacing: Theme.spacing-12;
+
+                                            SectionTitle { heading: @tr("Terminal"); }
+
+                                            HintText { hint: @tr("Scrollback limits for this session. `Inherit` follows the folder and global defaults; `Explicit` stores an override here."); }
+
+                                            TriStateFieldSection {
+                                                fields: root.editor-terminal-fields;
+                                                label-width: 150px;
+                                                field-set-inherit(key) => { root.editor-theme-field-action(key, "inherit"); }
+                                                field-set-explicit(key) => { root.editor-theme-field-action(key, "explicit"); }
+                                                field-reset(key) => { root.editor-theme-field-action(key, "reset"); }
+                                                field-edited(key, value) => { root.update-editor-theme-field(key, value); }
+                                                field-toggled(key) => { }
+                                                field-selected(key, index) => { }
+                                            }
+                                        }
+                                        if root.section == "appearance" : VerticalLayout {
+                                            alignment: start;
+                                            spacing: Theme.spacing-12;
+
+                                            SectionTitle { heading: @tr("Appearance"); }
+
+                                            HintText { hint: @tr("Per-field overrides for this session. Inherited rows show the resolved value and where it comes from."); }
+
+                                            TriStateFieldSection {
+                                                fields: root.editor-appearance-fields;
+                                                label-width: 150px;
+                                                field-set-inherit(key) => { root.editor-theme-field-action(key, "inherit"); }
+                                                field-set-explicit(key) => { root.editor-theme-field-action(key, "explicit"); }
+                                                field-reset(key) => { root.editor-theme-field-action(key, "reset"); }
+                                                field-edited(key, value) => { root.update-editor-theme-field(key, value); }
+                                                field-toggled(key) => { }
+                                                field-selected(key, index) => { root.editor-select-scheme(index); }
+                                            }
+
+                                            HorizontalLayout {
+                                                alignment: end;
+                                                WinButton {
+                                                    text: @tr("Reset All");
+                                                    clicked => { root.reset-all-editor-theme(); }
+                                                }
+                                            }
+                                        }
+                                        if root.section == "sftp" || root.section == "advanced" : VerticalLayout {
+                                            alignment: start;
+                                            spacing: Theme.spacing-12;
+
+                                            SectionTitle {
+                                                heading: root.section == "sftp" ? @tr("SFTP") : @tr("Advanced");
+                                            }
+
+                                            Text {
+                                                text: @tr("This section is not configurable in this version.");
+                                                color: Theme.text-secondary;
+                                                wrap: word-wrap;
+                                            }
+                                        }
                                     }
                                 }
 
-                                HorizontalLayout {
-                                    alignment: start;
-                                    spacing: Theme.spacing-8;
-
-                                    WinButton { text: @tr("Folder Prev"); clicked => { root.select-folder-prev(); } }
-                                    WinButton { text: @tr("Folder Next"); clicked => { root.select-folder-next(); } }
-                                }
-
-                                FormRow {
-                                    label: @tr("New folder");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.new-folder-name;
-                                        placeholder-text: @tr("New folder name");
-                                        edited => { root.update-new-folder-name(self.text); }
-                                    }
-
-                                    WinButton { text: @tr("New Folder"); icon: "plus"; clicked => { root.create-folder(); } }
-                                }
-
-                                FormRow {
-                                    label: @tr("Session name");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.name-text;
-                                        placeholder-text: @tr("Session name");
-                                        edited => { root.update-name(self.text); }
-                                    }
-                                }
-
-                                FormRow {
-                                    label: @tr("Host");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.host-text;
-                                        placeholder-text: @tr("Host");
-                                        edited => { root.update-host(self.text); }
-                                    }
-                                }
-
-                                FormRow {
-                                    label: @tr("Port");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.port-text;
-                                        placeholder-text: "22";
-                                        edited => { root.update-port(self.text); }
-                                    }
-                                }
-
-                                FormRow {
-                                    label: @tr("Username");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.username-text;
-                                        placeholder-text: @tr("Username");
-                                        edited => { root.update-username(self.text); }
-                                    }
-                                }
-                            }
-                            if root.section == "authentication" : VerticalLayout {
-                                alignment: start;
-                                spacing: Theme.spacing-12;
-
-                                SectionTitle { heading: @tr("Authentication"); }
-
-                                FormRow {
-                                    label: @tr("Method");
-
-                                    WinButton { text: @tr("Agent"); icon: root.auth-method-text == "agent" ? "check" : ""; clicked => { root.set-auth-method-agent(); } }
-                                    WinButton { text: @tr("Password"); icon: root.auth-method-text == "password" ? "check" : ""; clicked => { root.set-auth-method-password(); } }
-                                    WinButton { text: @tr("KbdInt"); icon: root.auth-method-text == "keyboard_interactive" ? "check" : ""; clicked => { root.set-auth-method-keyboard-interactive(); } }
-                                    WinButton { text: @tr("Key"); icon: root.auth-method-text == "private_key" ? "check" : ""; clicked => { root.set-auth-method-private-key(); } }
-                                }
-
-                                HintText { hint: @tr("Method: {0}", root.auth-method-text); }
-
-                                FormRow {
-                                    label: @tr("Host key");
-
-                                    WinButton { text: @tr("Strict"); icon: root.host-key-policy-text == "strict" ? "check" : ""; clicked => { root.set-host-key-policy-strict(); } }
-                                    WinButton { text: @tr("TOFU"); icon: root.host-key-policy-text == "trust-on-first-use" ? "check" : ""; clicked => { root.set-host-key-policy-trust-on-first-use(); } }
-                                    WinButton { text: @tr("Accept Any"); icon: root.host-key-policy-text == "accept-any-for-testing" ? "check" : ""; clicked => { root.set-host-key-policy-accept-any-for-testing(); } }
-                                }
-
-                                HintText { hint: @tr("Host Key: {0}", root.host-key-policy-text); }
-
-                                FormRow {
-                                    label: @tr("Password");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.password-text;
-                                        placeholder-text: @tr("Password / keyboard-interactive secret");
-                                        edited => { root.update-password(self.text); }
-                                    }
-                                }
-
-                                FormRow {
-                                    label: @tr("Private key");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.key-path-text;
-                                        placeholder-text: @tr("Private key path");
-                                        edited => { root.update-key-path(self.text); }
-                                    }
-                                }
-
-                                FormRow {
-                                    label: @tr("Passphrase");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.passphrase-text;
-                                        placeholder-text: @tr("Private key passphrase");
-                                        edited => { root.update-passphrase(self.text); }
-                                    }
-                                }
-
-                                HorizontalLayout {
-                                    alignment: start;
-                                    spacing: Theme.spacing-8;
-
-                                    WinButton { text: @tr("Test Connection"); icon: "refresh"; clicked => { root.test-auth(); } }
-                                }
-
-                                HintText { hint: root.auth-test-status-text; }
-                            }
-                            if root.section == "proxy" : VerticalLayout {
-                                alignment: start;
-                                spacing: Theme.spacing-12;
-
-                                SectionTitle { heading: @tr("Proxy"); }
-
-                                FormRow {
-                                    label: @tr("Mode");
-
-                                    WinButton { text: @tr("No Proxy"); icon: root.proxy-mode-text == "none" ? "check" : ""; clicked => { root.set-proxy-mode-none(); } }
-                                    WinButton { text: @tr("Custom"); icon: root.proxy-mode-text == "custom" ? "check" : ""; clicked => { root.set-proxy-mode-custom(); } }
-                                }
-
-                                HintText { hint: @tr("Mode: {0}", root.proxy-mode-text); }
-
-                                FormRow {
-                                    label: @tr("Protocol");
-
-                                    WinButton { text: @tr("SOCKS4"); icon: root.proxy-protocol-text == "socks4" ? "check" : ""; clicked => { root.set-proxy-protocol-socks4(); } }
-                                    WinButton { text: @tr("SOCKS4a"); icon: root.proxy-protocol-text == "socks4a" ? "check" : ""; clicked => { root.set-proxy-protocol-socks4a(); } }
-                                    WinButton { text: @tr("SOCKS5"); icon: root.proxy-protocol-text == "socks5" ? "check" : ""; clicked => { root.set-proxy-protocol-socks5(); } }
-                                    WinButton { text: @tr("HTTP"); icon: root.proxy-protocol-text == "http-connect" ? "check" : ""; clicked => { root.set-proxy-protocol-http-connect(); } }
-                                }
-
-                                HintText { hint: @tr("Protocol: {0}", root.proxy-protocol-text); }
-
-                                FormRow {
-                                    label: @tr("Proxy host");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.proxy-host-text;
-                                        placeholder-text: @tr("Proxy host");
-                                        edited => { root.update-proxy-host(self.text); }
-                                    }
-                                }
-
-                                FormRow {
-                                    label: @tr("Proxy port");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.proxy-port-text;
-                                        placeholder-text: @tr("Proxy port");
-                                        edited => { root.update-proxy-port(self.text); }
-                                    }
-                                }
-
-                                FormRow {
-                                    label: @tr("Username");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.proxy-username-text;
-                                        placeholder-text: @tr("Proxy username");
-                                        edited => { root.update-proxy-username(self.text); }
-                                    }
-                                }
-
-                                FormRow {
-                                    label: @tr("Password");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.proxy-password-text;
-                                        placeholder-text: @tr("Proxy password");
-                                        edited => { root.update-proxy-password(self.text); }
-                                    }
-                                }
-
-                                HorizontalLayout {
-                                    alignment: start;
-                                    spacing: Theme.spacing-8;
-
-                                    WinButton {
-                                        text: root.proxy-dns-by-proxy ? @tr("DNS via Proxy: On") : @tr("DNS via Proxy: Off");
-                                        icon: root.proxy-dns-by-proxy ? "check" : "";
-                                        clicked => { root.toggle-proxy-dns-by-proxy(); }
-                                    }
-                                }
-
-                                HintText { hint: root.proxy-summary-text; }
-                            }
-                            if root.section == "tunnels" : VerticalLayout {
-                                alignment: start;
-                                spacing: Theme.spacing-12;
-
-                                SectionTitle { heading: @tr("Tunnels"); }
-
-                                FormRow {
-                                    label: @tr("Kind");
-
-                                    WinButton { text: @tr("Local"); icon: root.tunnel-kind-text == "local" ? "check" : ""; clicked => { root.set-tunnel-kind-local(); } }
-                                    WinButton { text: @tr("Remote"); icon: root.tunnel-kind-text == "remote" ? "check" : ""; clicked => { root.set-tunnel-kind-remote(); } }
-                                    WinButton { text: @tr("Dynamic"); icon: root.tunnel-kind-text == "dynamic" ? "check" : ""; clicked => { root.set-tunnel-kind-dynamic(); } }
-                                }
-
-                                HintText { hint: @tr("Draft Kind: {0}", root.tunnel-kind-text); }
-
-                                FormRow {
-                                    label: @tr("Listen host");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.tunnel-bind-host-text;
-                                        placeholder-text: "127.0.0.1";
-                                        edited => { root.update-tunnel-bind-host(self.text); }
-                                    }
-                                }
-
-                                FormRow {
-                                    label: @tr("Listen port");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.tunnel-bind-port-text;
-                                        placeholder-text: @tr("Listen port");
-                                        edited => { root.update-tunnel-bind-port(self.text); }
-                                    }
-                                }
-
-                                FormRow {
-                                    label: @tr("Target host");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.tunnel-target-host-text;
-                                        placeholder-text: @tr("Target host");
-                                        edited => { root.update-tunnel-target-host(self.text); }
-                                    }
-                                }
-
-                                FormRow {
-                                    label: @tr("Target port");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.tunnel-target-port-text;
-                                        placeholder-text: @tr("Target port");
-                                        edited => { root.update-tunnel-target-port(self.text); }
-                                    }
-                                }
-
-                                HorizontalLayout {
-                                    alignment: start;
-                                    spacing: Theme.spacing-8;
-
-                                    WinButton { text: @tr("Add Tunnel"); icon: "plus"; clicked => { root.add-tunnel(); } }
-                                    WinButton { text: @tr("Clear Tunnels"); icon: "trash"; subtle: true; clicked => { root.clear-tunnels(); } }
-                                }
-
-                                HintText { hint: root.tunnel-summary-text; }
-                            }
-                            if root.section == "logging" : VerticalLayout {
-                                alignment: start;
-                                spacing: Theme.spacing-12;
-
-                                SectionTitle { heading: @tr("Logging"); }
-
-                                GroupTitle { heading: @tr("Global Logging Policy"); }
-
-                                HintText { hint: root.logging-summary-text; }
-
-                                FormRow {
-                                    label: @tr("Toggle");
-
-                                    WinButton {
-                                        text: root.logging-enabled-text == "enabled" ? @tr("Disable Logging") : @tr("Enable Logging");
-                                        icon: root.logging-enabled-text == "enabled" ? "pause" : "play";
-                                        clicked => { root.toggle-logging-enabled(); }
-                                    }
-                                    WinButton { text: @tr("Raw"); icon: root.logging-format-text == "raw" ? "check" : ""; clicked => { root.set-logging-format-raw(); } }
-                                    WinButton { text: @tr("Sanitized"); icon: root.logging-format-text == "sanitized" ? "check" : ""; clicked => { root.set-logging-format-sanitized(); } }
-                                }
-
-                                HintText { hint: @tr("Format: {0}", root.logging-format-text); }
-
-                                FormRow {
-                                    label: @tr("Directory");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.logging-directory-text;
-                                        placeholder-text: "logs";
-                                        edited => { root.update-logging-directory(self.text); }
-                                    }
-
-                                    WinButton { text: @tr("Save Logging"); icon: "check"; clicked => { root.save-logging-settings(); } }
-                                }
-
-                                Rectangle { height: 1px; background: Theme.layer-stroke; }
-
-                                GroupTitle { heading: @tr("Secret Store"); }
-
-                                HintText { hint: root.secret-store-status-text; }
-
-                                // 危险操作提示
-                                Text {
-                                    text: @tr("Destructive: resetting the secret store permanently deletes the saved passwords and passphrases.");
-                                    color: Theme.critical;
-                                    font-size: Theme.font-caption;
-                                    wrap: word-wrap;
-                                }
-
-                                FormRow {
-                                    label: @tr("Confirmation");
-
-                                    WinTextInput {
-                                        horizontal-stretch: 1;
-                                        text <=> root.secret-reset-confirmation-text;
-                                        placeholder-text: @tr("Type RESET SECRETS");
-                                        edited => { root.update-secret-reset-confirmation(self.text); }
-                                    }
-                                }
-
-                                HorizontalLayout {
-                                    alignment: start;
-                                    spacing: Theme.spacing-8;
-
-                                    WinButton { text: @tr("Reset Secrets"); icon: "warning"; clicked => { root.reset-secrets(); } }
-                                }
-
-                                HintText { hint: @tr("Config Dir: {0}", root.config-dir-text); }
-                            }
-                            if root.section == "terminal" || root.section == "sftp" || root.section == "advanced" || root.section == "appearance" : VerticalLayout {
-                                alignment: start;
-                                spacing: Theme.spacing-12;
-
-                                SectionTitle {
-                                    heading: root.section == "terminal" ? @tr("Terminal") : root.section == "sftp" ? @tr("SFTP") : root.section == "advanced" ? @tr("Advanced") : @tr("Appearance");
-                                }
-
-                                Text {
-                                    text: @tr("This modal section shell is now present, but its richer field model is still tracked by later Session Editor items in the progress document.");
-                                    color: Theme.text-secondary;
-                                    wrap: word-wrap;
+                                // 滚动指示：E22 可复用组件（内部按 `-content-y` 计算进度）。
+                                // 更正 C8：`content-y` 向下滚动为负值，原"去负号"是反向修改。
+                                WinScrollIndicator {
+                                    x: form-scroll.width - self.width - Theme.spacing-4;
+                                    y: Theme.spacing-4;
+                                    height: parent.height - 2 * Theme.spacing-4;
+                                    viewport-position: form-scroll.content-y;
+                                    content-extent: form-scroll.content-height;
+                                    viewport-extent: form-scroll.height;
+                                    thumb-min-length: 24px;
                                 }
                             }
                         }
@@ -684,8 +809,10 @@ export component SessionEditor inherits Rectangle {
                     spacing: Theme.spacing-8;
 
                     WinButton { text: @tr("Cancel"); subtle: true; clicked => { root.close(); } }
-                    WinButton { text: @tr("Save"); clicked => { root.save(); } }
-                    WinButton { text: @tr("Save and Connect"); icon: "connect"; accent: true; clicked => { root.save-connect(); } }
+                    // B 轮3 #16：运行时要求会话名与主机非空；这里同步门限，避免只留一条
+                    // 被模态遮住的状态栏英文错误。
+                    WinButton { text: @tr("Save"); enabled: !root.save-blocked; clicked => { root.save(); } }
+                    WinButton { text: @tr("Save and Connect"); icon: "connect"; accent: true; enabled: !root.save-blocked; clicked => { root.save-connect(); } }
                 }
             }
         }

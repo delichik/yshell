@@ -12,7 +12,7 @@
 //     main_window 的"内容之后、模态弹窗之前"实例化，保持原有绘制层级。
 //   * `@tr` 文案搬移后显式带上原组件上下文（`@tr("MainWindow" => ...)`）。
 import { Theme } from "../theme.slint";
-import { WinIconButton } from "basic/controls.slint";
+import { WinIconButton, WinScrollIndicator } from "basic/controls.slint";
 import { Icon } from "basic/icons.slint";
 import { MenuEntry, MenuPopup } from "menu_popup.slint";
 import { TerminalView } from "terminal_view.slint";
@@ -42,6 +42,8 @@ component WorkspaceTabItem inherits Rectangle {
     in property <string> tab-kind-text: "";
     /// N6：该会话正在写日志（REC 圆点）。
     in property <bool> tab-logging: false;
+    /// E11：在标签左缘之后画 1px 分隔线（位于 4px 标签间距中央）。
+    in property <bool> show-divider: false;
 
     callback activate();
     callback close-requested();
@@ -52,6 +54,22 @@ component WorkspaceTabItem inherits Rectangle {
     border-radius: Theme.radius-control;
     background: tab-active ? Theme.layer-fill : tab-hover.has-hover ? Theme.subtle-hover : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    // E19：标签语义（与 WinTab 一致）
+    accessible-role: tab;
+    accessible-label: root.tab-kind-text == "quick-connect" ? @tr("Quick Connect") : root.tab-title;
+    accessible-item-selectable: true;
+    accessible-item-selected: root.tab-active;
+
+    // E11：标签之间的 1px 分隔线（上下各留 7px；画在间距中央，需要越过自身左缘 2px）
+    Rectangle {
+        visible: root.show-divider;
+        x: -2px;
+        y: (parent.height - 18px) / 2;
+        width: 1px;
+        height: 18px;
+        background: Theme.divider;
+    }
 
     // 活动标签底部强调条
     Rectangle {
@@ -90,9 +108,20 @@ component WorkspaceTabItem inherits Rectangle {
             // N2：快速连接页标签标题走 @tr（Rust 侧只给 kind_text，不给显示名）。
             text: root.tab-kind-text == "quick-connect"
                 ? @tr("Quick Connect")
-                : root.tab-title + "  " + root.tab-state-text;
+                : root.tab-title;
             color: root.tab-active ? Theme.text-primary : Theme.text-secondary;
             font-size: Theme.font-body;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        // E11：状态独立成段（8px spacing + text-tertiary），不再用两个字面空格拼接
+        //（B 轮4：实测两个字面空格会留出约 19px 空洞）。
+        if root.tab-kind-text != "quick-connect" && root.tab-state-text != "" : Text {
+            text: root.tab-state-text;
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
             vertical-alignment: center;
             wrap: no-wrap;
             overflow: elide;
@@ -151,7 +180,8 @@ component WorkspaceTabItem inherits Rectangle {
 
 export component TerminalWorkspace inherits VerticalLayout {
     in property <[WorkspaceTab]> tabs: [];
-    in property <string> title-text: "YShell terminal";
+    // E21：这些默认值都会被宿主投影覆盖；置空避免投影到达前闪现英文（muse 轮1 中#35）
+    in property <string> title-text: "";
     in property <string> body-text: "";
     /// N2：活动标签是 Quick Connect 页时隐藏终端视图，内容区交给宿主注入的页面
     /// （`@children`），标签条保持可见（标签本身仍是标签）。
@@ -161,8 +191,8 @@ export component TerminalWorkspace inherits VerticalLayout {
     in property <int> cursor-row: 0;
     in property <int> scroll-offset: 0;
     in property <bool> selection-active: false;
-    in property <string> search-summary-text: "Find in terminal";
-    in property <string> status-text: "Ready";
+    in property <string> search-summary-text: "";
+    in property <string> status-text: "";
     in property <bool> find-visible: false;
     /// 可见行与查找词与宿主双向绑定（终端内部会写回查找词）。
     in-out property <[string]> visible-lines: [];
@@ -172,6 +202,22 @@ export component TerminalWorkspace inherits VerticalLayout {
     out property <float> terminal-viewport-height-px: terminal_view.terminal-viewport-height-px;
     /// W5-A2：终端是否持有键盘焦点（模态弹窗关闭后的焦点恢复据此避让终端）。
     out property <bool> terminal-focused: terminal_view.terminal-focused;
+
+    // E10：查找栏关闭后把焦点交还终端（打开时的聚焦由 TerminalView 内的 Timer 负责，
+    // 这里不碰条件元素）。终端不可见（Quick Connect 页）时不动焦点。
+    changed find-visible => {
+        if (!root.find-visible && root.terminal-visible) {
+            terminal_view.focus-terminal();
+        }
+    }
+
+    /// A2/E23：宿主在菜单/弹层关闭后把键盘焦点还给终端（WS-A 的焦点回退请求）。
+    /// 终端不可见（Quick Connect 页）时不动焦点，避免抢 QC 输入框。
+    public function focus-terminal() {
+        if (root.terminal-visible) {
+            terminal_view.focus-terminal();
+        }
+    }
 
     callback new-session();
     callback open-find();
@@ -196,48 +242,67 @@ export component TerminalWorkspace inherits VerticalLayout {
 
     // 标签条（唯一容器；阶段 B 自绘标题栏时整体上移）
     Rectangle {
-        height: 36px;
+        height: Theme.bar-height-tabs;
         background: Theme.window-background;
         HorizontalLayout {
-            padding-left: 8px;
-            padding-right: 8px;
-            padding-top: 2px;
-            padding-bottom: 2px;
-            spacing: 4px;
+            // E12：与终端内容区左缘（12px）统一
+            padding-left: Theme.spacing-12;
+            padding-right: Theme.spacing-12;
+            spacing: Theme.spacing-4;
 
-            // N0：标签横向滚动区（滚轮/按住拖动）；`+`/查找按钮钉在右侧始终可见。
-            tabs-flickable := Flickable {
+            // N0：标签横向滚动区（滚轮/按住拖动）；`+` 钉在右侧始终可见。
+            // E11：查找入口已按设计语言 §4.1 归命令栏，这里不再重复放放大镜。
+            // E22：滚动区外包一层透明容器，叠加 4px 自绘滚动提示（不占布局、不吞事件）。
+            Rectangle {
                 horizontal-stretch: 1;
                 vertical-stretch: 1;
-                interactive: true;
-                mouse-drag-pan-enabled: true;
-                content-width: tabs-strip.width;
-                content-height: self.height;
+                background: transparent;
 
-                tabs-strip := Rectangle {
-                    width: tabs-row.preferred-width;
+                tabs-flickable := Flickable {
+                    width: parent.width;
                     height: parent.height;
-                    background: transparent;
+                    interactive: true;
+                    mouse-drag-pan-enabled: true;
+                    content-width: tabs-strip.width;
+                    content-height: self.height;
 
-                    tabs-row := HorizontalLayout {
-                        width: parent.width;
+                    tabs-strip := Rectangle {
+                        width: tabs-row.preferred-width;
                         height: parent.height;
-                        spacing: 4px;
+                        background: transparent;
 
-                        for tab in root.tabs : WorkspaceTabItem {
-                            tab-id: tab.id;
-                            tab-title: tab.title;
-                            tab-state-text: tab.state_text;
-                            tab-active: tab.active;
-                            tab-kind-text: tab.kind_text;
-                            tab-logging: tab.logging;
-                            activate() => { root.activate-tab(tab.id); }
-                            close-requested() => { root.close-tab(tab.id); }
-                            context-menu-requested(x, y) => {
-                                root.tab-context-menu-requested(tab.id, x, y);
+                        tabs-row := HorizontalLayout {
+                            width: parent.width;
+                            height: parent.height;
+                            spacing: Theme.spacing-4;
+
+                            for tab[i] in root.tabs : WorkspaceTabItem {
+                                tab-id: tab.id;
+                                tab-title: tab.title;
+                                tab-state-text: tab.state_text;
+                                tab-active: tab.active;
+                                tab-kind-text: tab.kind_text;
+                                tab-logging: tab.logging;
+                                // E11：相邻标签之间 1px 分隔线；紧邻活动标签时不画
+                                show-divider: i > 0 && !tab.active && !root.tabs[i - 1].active;
+                                activate() => { root.activate-tab(tab.id); }
+                                close-requested() => { root.close-tab(tab.id); }
+                                context-menu-requested(x, y) => {
+                                    root.tab-context-menu-requested(tab.id, x, y);
+                                }
                             }
                         }
                     }
+                }
+
+                // E22：标签超出视口时才出现；横向滚动传宽而不是高
+                WinScrollIndicator {
+                    x: parent.width - self.width - Theme.spacing-4;
+                    y: Theme.spacing-4;
+                    height: parent.height - 2 * Theme.spacing-4;
+                    viewport-position: tabs-flickable.content-x;
+                    content-extent: tabs-strip.width;
+                    viewport-extent: tabs-flickable.width;
                 }
             }
             WinIconButton {
@@ -245,16 +310,14 @@ export component TerminalWorkspace inherits VerticalLayout {
                 accessible-name: @tr("MainWindow" => "New session");
                 clicked => { root.new-session(); }
             }
-            WinIconButton {
-                icon: "search";
-                accessible-name: @tr("MainWindow" => "Find in terminal");
-                clicked => { root.open-find(); }
-            }
         }
     }
     // N2：活动标签是 QC 页时把终端视图压成 0 高（Slint 1.18 里 invisible 元素
     // 仍占布局空间，所以用 max-height 折叠而不是 visible），
     // 但保持实例存在——`terminal_view` 的 out 属性仍被宿主引用。
+    // E13：`100000px` 是"无上限"哨兵。改成 `root.height` 会与父布局形成绑定环，
+    // 改成 `visible` 会让隐藏期间的 viewport 宽高读数归零（PTY 尺寸依赖它），
+    // 故保留哨兵并在此记录（见 ws-E.md 遗留）。
     Rectangle {
         // min-height 显式归零：否则内容（终端视图）的隐式 min 会顶住折叠。
         min-height: 0px;
@@ -263,6 +326,7 @@ export component TerminalWorkspace inherits VerticalLayout {
         VerticalLayout {
             padding: 12px;
             terminal_view := TerminalView {
+                view-visible: root.terminal-visible;
                 title: root.title-text;
                 log-output: root.body-text;
                 visible-lines <=> root.visible-lines;

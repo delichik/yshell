@@ -10,7 +10,7 @@
 
 import { Theme } from "../theme.slint";
 import { Icon } from "../components/basic/icons.slint";
-import { WinButton, WinCard, WinCardHeader, WinIconButton } from "../components/basic/controls.slint";
+import { WinButton, WinCard, WinCardHeader, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 
 /// 一条已保存的主机密钥（SHA256 指纹 + 公钥行）。
@@ -71,11 +71,27 @@ component HostKeyListItem inherits Rectangle {
     }
 }
 
+// 详情行（等宽 caption；与详情块原有整段文本同一形态）。
+// 注意：同一文件内的局部组件必须先声明后使用。
+component DetailLine inherits Text {
+    in property <string> hint: "";
+    text: root.hint;
+    color: Theme.text-secondary;
+    font-size: Theme.font-caption;
+    font-family: Theme.font-mono;
+    wrap: word-wrap;
+}
+
 export component HostKeysPage inherits Rectangle {
     in property <bool> open: false;
     in property <[HostKeyGroup]> groups: [];
     in property <string> path-text: "";
     in property <string> details-text: "";
+    /// WS-D/WS-A 拆分的详情字段（标签在页面内本地化）。全部为空时回退到 `details-text`。
+    in property <string> detail-host-text: "";
+    in property <string> detail-algorithm-text: "";
+    in property <string> detail-fingerprint-text: "";
+    in property <string> detail-path-text: "";
     in property <string> status-text: "";
     in property <string> empty-text: @tr("No host keys have been saved yet. They are recorded when you trust a host.");
     in property <bool> busy: false;
@@ -110,6 +126,11 @@ export component HostKeysPage inherits Rectangle {
         root.selected-group >= 0 && root.selected-group < root.groups.length
             ? root.groups[root.selected-group].entries.length
             : 0;
+
+    // 详情区：拆分字段可用时逐行渲染（标签本地化）；否则回退整段 `details-text`。
+    private property <bool> detail-split-visible:
+        root.detail-host-text != "" || root.detail-algorithm-text != ""
+        || root.detail-fingerprint-text != "" || root.detail-path-text != "";
 
     dialog_scope := FocusScope {
         width: parent.width;
@@ -157,7 +178,8 @@ export component HostKeysPage inherits Rectangle {
                     }
 
                     Text {
-                        text: @tr("{0} host(s), {1} key(s)", root.group-count, root.entry-count);
+                        // B 轮3 #30：中文里不用半角逗号，改用 `·` 分隔
+                        text: @tr("{0} host(s) · {1} key(s)", root.group-count, root.entry-count);
                         color: Theme.text-secondary;
                         font-size: Theme.font-body;
                         vertical-alignment: center;
@@ -253,14 +275,27 @@ export component HostKeysPage inherits Rectangle {
                                 }
                             }
 
+                            // 滚动指示：E22 可复用组件（主机密钥多于一屏时出现）
+                            WinScrollIndicator {
+                                x: parent.width - self.width - Theme.spacing-4;
+                                y: Theme.spacing-4;
+                                height: parent.height - 2 * Theme.spacing-4;
+                                viewport-position: groups-list.content-y;
+                                content-extent: groups-list.content-height;
+                                viewport-extent: groups-list.height;
+                                thumb-min-length: 24px;
+                            }
+
+                            // 空态：居中（B 轮3 #24：原实现顶左对齐，与快速连接页的空态风格不一致）
                             Text {
                                 visible: root.groups.length == 0;
-                                x: 12px;
-                                y: 12px;
-                                width: parent.width - 24px;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                                width: min(parent.width - 2 * Theme.spacing-12, 300px);
                                 text: root.empty-text;
                                 color: Theme.text-tertiary;
                                 font-size: Theme.font-caption;
+                                horizontal-alignment: center;
                                 wrap: word-wrap;
                             }
                         }
@@ -328,15 +363,37 @@ export component HostKeysPage inherits Rectangle {
                                         border-width: 1px;
                                         border-color: Theme.divider;
 
-                                        Text {
+                                        VerticalLayout {
                                             x: 10px;
-                                            y: 10px;
+                                            y: Theme.spacing-8;
                                             width: parent.width - 20px;
-                                            text: root.details-text;
-                                            color: Theme.text-secondary;
-                                            font-size: Theme.font-caption;
-                                            font-family: Theme.font-mono;
-                                            wrap: word-wrap;
+                                            spacing: Theme.spacing-4;
+
+                                            // 逐行渲染拆分字段（标签本地化；空值行不占位）
+                                            if root.detail-host-text != "" : DetailLine {
+                                                hint: @tr("Host: {0}", root.detail-host-text);
+                                            }
+
+                                            if root.detail-algorithm-text != "" : DetailLine {
+                                                hint: @tr("Algorithm: {0}", root.detail-algorithm-text);
+                                            }
+
+                                            if root.detail-fingerprint-text != "" : DetailLine {
+                                                hint: @tr("Fingerprint: {0}", root.detail-fingerprint-text);
+                                            }
+
+                                            if root.detail-path-text != "" : DetailLine {
+                                                hint: @tr("Host keys path: {0}", root.detail-path-text);
+                                            }
+
+                                            if root.detail-path-text != "" && root.detail-host-text == "" : DetailLine {
+                                                hint: @tr("Temporary trust entries are not persisted here.");
+                                            }
+
+                                            // 兼容回退：宿主尚未提供拆分字段时，继续显示原来的整段文本
+                                            if !root.detail-split-visible && root.details-text != "" : DetailLine {
+                                                hint: root.details-text;
+                                            }
                                         }
                                     }
 
@@ -435,6 +492,17 @@ export component HostKeysPage inherits Rectangle {
                                     }
                                 }
                             }
+                        }
+
+                        // 滚动指示（右列：详情 / 导入 / 危险区）
+                        WinScrollIndicator {
+                            x: parent.width - self.width - Theme.spacing-4;
+                            y: Theme.spacing-4;
+                            height: parent.height - 2 * Theme.spacing-4;
+                            viewport-position: scroll.content-y;
+                            content-extent: scroll.content-height;
+                            viewport-extent: scroll.height;
+                            thumb-min-length: 24px;
                         }
                     }
                 }

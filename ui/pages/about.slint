@@ -87,7 +87,7 @@ export component AboutDialog inherits Rectangle {
                     wrap: word-wrap;
                 }
 
-                // 元信息：标签列按内容宽度收紧，值列紧随其后并左对齐
+                // 元信息：标签列按内容宽度收紧（下限 96px），值列紧随其后并左对齐
                 WinCard {
                     GridLayout {
                         spacing: Theme.spacing-16;
@@ -99,6 +99,8 @@ export component AboutDialog inherits Rectangle {
                             color: Theme.text-tertiary;
                             font-size: Theme.font-caption;
                             vertical-alignment: top;
+                            // M 轮4 低#4：不给列宽时列 0 会吸收剩余宽度，值列被推到 ~63px 之外
+                            width: max(96px, self.preferred-width);
                         }
 
                         Text {
@@ -118,6 +120,7 @@ export component AboutDialog inherits Rectangle {
                             color: Theme.text-tertiary;
                             font-size: Theme.font-caption;
                             vertical-alignment: top;
+                            width: max(96px, self.preferred-width);
                         }
 
                         Text {

@@ -25,10 +25,12 @@ fn quick_connect_enters_runtime_pipeline() {
     assert!(projection
         .active_session_name_text
         .contains("alice@example.com:2200"));
+    assert_eq!(projection.tab_state_text, "connected");
+    // D15：连接成功写用户向文案（kind 供 Slint @tr 模板映射）。
+    assert_eq!(projection.status_kind, "session-connected");
     assert!(projection
         .status_text
-        .contains("The shell boundary is live"));
-    assert_eq!(projection.tab_state_text, "connected");
+        .contains("Connected to alice@example.com:2200"));
     assert!(projection.tab_name_text.contains("alice@example.com:2200"));
     assert!(projection
         .terminal_body_text
@@ -139,6 +141,34 @@ fn saved_session_host_key_policy_is_applied_to_runtime_shell_config() {
     assert_eq!(
         runtime_session.ssh_config.host_key_policy,
         HostKeyPolicy::TrustOnFirstUse
+    );
+}
+
+#[test]
+fn runtime_shell_config_carries_host_key_policy_before_connect() {
+    // D7：密码挂起前的主机密钥探针读取 `runtime.ssh_config`（activate 之后才被
+    // resolved 配置覆盖），所以 `from_profile` 必须先把会话策略装进运行时配置，
+    // 否则探针退回 Strict，对 accept_any_for_testing 会话错误地弹确认框。
+    let temp = tempdir().expect("tempdir");
+    let store = ConfigStore::new(temp.path());
+    let mut document = ConfigDocument::default();
+    let mut profile = QuickConnectTarget {
+        username: Some("ops".to_owned()),
+        host: "probe.example.test".to_owned(),
+        port: 22,
+    }
+    .into_session_profile("saved-probe");
+    profile.host_key_policy = Some(ConfigHostKeyPolicy::AcceptAnyForTesting);
+    let mut folder = FolderProfile::new("saved-sessions", "Saved Sessions");
+    folder.sessions.push(profile);
+    document.folders.push(folder);
+    store.save(&document).expect("save config");
+
+    let profile = document.find_session("saved-probe").expect("session");
+    let runtime_session = SessionRuntime::from_profile(profile, 0);
+    assert_eq!(
+        runtime_session.ssh_config.host_key_policy,
+        HostKeyPolicy::AcceptAnyForTesting
     );
 }
 
@@ -480,9 +510,7 @@ fn submit_password_reports_failure_and_closes_prompt_when_target_is_gone() {
         .expect("failure is reported through the projection");
     assert!(!projection.password_prompt_visible);
     assert!(!projection.has_active_session);
-    assert!(projection
-        .status_text
-        .contains("Password connection failed"));
+    assert!(projection.status_text.contains("Could not connect"));
     assert!(runtime.pending_password_prompt.is_none());
 }
 
@@ -531,10 +559,9 @@ fn submit_password_reports_auth_failure_from_native_backend() {
 
     assert!(!projection.password_prompt_visible);
     assert_eq!(projection.tab_state_text, "failed");
-    assert!(projection
-        .status_text
-        .contains("Password connection failed"));
-    assert!(projection
+    assert!(projection.status_text.contains("Could not connect"));
+    // D1：内部失败诊断不再写进终端网格。
+    assert!(!projection
         .terminal_body_text
         .contains("Shell runtime failed"));
     assert!(runtime.pending_password_prompt.is_none());
@@ -612,4 +639,45 @@ fn saved_session_keyboard_interactive_auth_prompts_without_keychain() {
             .map(|prompt| prompt.auth_method),
         Some(PendingPasswordAuthMethod::KeyboardInteractive)
     );
+}
+
+/// D6：认证弹窗副标题 `user@host:port` 只允许出现一次端口（回归 B 轮5 高：
+/// `tester@127.0.0.1:2222:2222`）。
+#[test]
+fn auth_prompt_host_shows_port_once() {
+    use crate::runtime::connection::AuthPromptContext;
+    use yshell_ssh::{AuthMethods, AuthProblemKind, SshError, SshErrorKind};
+
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), None)
+        .expect("runtime without keychain");
+    let _ = runtime
+        .handle_quick_connect("alice@example.com:2200")
+        .expect("quick connect");
+    let session_key = runtime.active_session_key().expect("active session");
+    let session = runtime.sessions.get(&session_key).expect("runtime session");
+
+    // D6：生产路径与测试共用 `AuthPromptContext::for_runtime`（host 只放裸主机），
+    // 合成认证错误驱动弹窗，副标题只应出现一次端口。
+    let context = AuthPromptContext::for_runtime(&session_key, session);
+    assert_eq!(context.host, "example.com");
+    let error = SshError::new(SshErrorKind::Authentication, "denied").with_auth_context(
+        Some(AuthMethods::parse("password").expect("methods")),
+        AuthProblemKind::InvalidCredentials,
+    );
+    assert!(runtime.apply_auth_prompt_from_error(context, &error));
+
+    let projection = runtime.projection();
+    assert!(projection.auth_prompt_visible);
+    assert_eq!(projection.auth_prompt_host_text, "alice@example.com:2200");
+
+    // 密码挂起路径同样只拼一次端口。
+    let prompt = PendingPasswordPrompt {
+        profile_id: "saved-password".to_owned(),
+        host: "example.com".to_owned(),
+        port: 2200,
+        username: "alice".to_owned(),
+        auth_method: PendingPasswordAuthMethod::Password,
+    };
+    assert_eq!(prompt.host_text(), "alice@example.com:2200");
 }

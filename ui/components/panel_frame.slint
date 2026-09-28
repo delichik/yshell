@@ -47,7 +47,14 @@ export component PanelFrame inherits Rectangle {
     in property <length> header-height: Theme.control-height;
     /// 内容槽内边距（默认与 WinCard 的 12px 对齐）。
     in property <length> content-padding: Theme.spacing-12;
+    /// 可选头部主操作（如 Sessions 的「新建会话」`+`）：仅 `header-action-icon`
+    /// 非空时在 `⋯` 之前渲染。
+    in property <string> header-action-icon: "";
+    /// 头部主操作的无障碍名/提示文案。
+    in property <string> header-action-label: "";
 
+    /// 头部主操作被点击（A8：Sessions 面板的 `+` 等常驻入口）。
+    callback header-action();
     /// ⋯ 按钮：上报菜单锚点（窗口绝对坐标），由宿主打开 `PanelMenuPopup`。
     callback menu-requested(length, length);
     /// 菜单 Collapse/Expand。
@@ -63,7 +70,7 @@ export component PanelFrame inherits Rectangle {
     border-radius: Theme.radius-panel;
     clip: true;
 
-    // 标题条：图标 16 + 标题（吃剩余宽度、超长省略）+ ⋯ 按钮。
+    // 标题条：图标 16 + 标题（吃剩余宽度、超长省略）+ [可选头部主操作] + ⋯ 按钮。
     HorizontalLayout {
         x: 0px;
         y: 0px;
@@ -98,6 +105,13 @@ export component PanelFrame inherits Rectangle {
             // Slint 1.18 的 `*-stretch` 默认值是 1：显式让标题吃掉剩余宽度，
             // ⋯ 按钮才会钉在右缘（不额外放 spacer，避免空间被三等分）。
             horizontal-stretch: 1;
+        }
+
+        // 可选头部主操作（仅 icon 非空时渲染，位于 ⋯ 之前）。
+        if root.header-action-icon != "" : WinIconButton {
+            icon: root.header-action-icon;
+            accessible-name: root.header-action-label;
+            clicked => { root.header-action(); }
         }
 
         WinIconButton {
@@ -197,7 +211,8 @@ export component PanelMenuPopup inherits Rectangle {
     visible: self.open;
     background: transparent;
 
-    menu := MenuPopup {
+    // 面板操作菜单（布局占位，无需 id；打开状态由宿主驱动）。
+    MenuPopup {
         width: parent.width;
         height: parent.height;
         open: root.open;

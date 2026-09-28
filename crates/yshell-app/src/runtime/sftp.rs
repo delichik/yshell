@@ -533,6 +533,19 @@ impl AppRuntime {
         }
     }
 
+    /// D16：清空 SFTP 面板视图状态（切换会话/切到无会话标签时调用）。
+    ///
+    /// 只清"上一个会话的目录"这类残留；生命周期由调用方随后用
+    /// [`Self::sync_sftp_lifecycle_for_session`] 重建。
+    pub(crate) fn reset_sftp_view_state(&mut self) {
+        self.sftp_entries.clear();
+        self.sftp_selection.clear();
+        self.sftp_selection_anchor = None;
+        self.sftp_selected_index = None;
+        self.sftp_path = "/".to_owned();
+        self.sftp_listing = SftpListingState::ConnectReal;
+    }
+
     pub(crate) fn sftp_ready_session_key(&self) -> Option<&str> {
         match &self.sftp_session {
             SftpSessionLifecycle::Ready { session_key } => Some(session_key.as_str()),

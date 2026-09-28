@@ -50,7 +50,7 @@ impl AppRuntime {
         }) {
             Self::apply_session_events(&core_session_id, &mut runtime, state_events);
         }
-        runtime.append_status_line("This draft is runtime-owned but not yet connected.");
+        runtime.log_runtime_event("This draft is runtime-owned but not yet connected.");
         self.sftp_session = SftpSessionLifecycle::Disconnected {
             session_key: Some(session_id.clone()),
         };
@@ -105,7 +105,20 @@ impl AppRuntime {
         match result {
             Ok(projection) => Ok(projection),
             Err(error) => {
-                self.status_text = format!("Password connection failed: {error}");
+                tracing::warn!(
+                    target: "yshell::runtime",
+                    "password connection for {} failed: {error}",
+                    prompt.host_text()
+                );
+                self.set_status_kind(
+                    "session-password-failed",
+                    format!(
+                        "Could not connect to {} with the supplied password.",
+                        prompt.host_text()
+                    ),
+                    prompt.host_text(),
+                    String::new(),
+                );
                 Ok(self.projection())
             }
         }
@@ -132,6 +145,9 @@ impl AppRuntime {
             .pin(&prompt.host, prompt.port, prompt.presented.clone());
         self.pending_host_key_prompt = None;
         self.host_key_replace_confirmation.clear();
+        if let Some(resumed) = self.resume_password_prompt_after_host_key(&prompt) {
+            return resumed;
+        }
         self.status_text = format!(
             "Trusted the presented host key for {}:{} once. Reconnecting.",
             prompt.host, prompt.port
@@ -156,6 +172,9 @@ impl AppRuntime {
             .map_err(AppError::from_error)?;
         self.pending_host_key_prompt = None;
         self.host_key_replace_confirmation.clear();
+        if let Some(resumed) = self.resume_password_prompt_after_host_key(&prompt) {
+            return resumed;
+        }
         self.status_text = format!(
             "Saved the presented host key for {}:{} to `{}` and reconnecting.",
             prompt.host,
@@ -187,6 +206,9 @@ impl AppRuntime {
             .map_err(AppError::from_error)?;
         self.pending_host_key_prompt = None;
         self.host_key_replace_confirmation.clear();
+        if let Some(resumed) = self.resume_password_prompt_after_host_key(&prompt) {
+            return resumed;
+        }
         self.status_text = format!(
             "Replaced the stored host key for {}:{} in `{}` and reconnecting.",
             prompt.host,
@@ -198,15 +220,23 @@ impl AppRuntime {
 
     pub fn disconnect_active_session(&mut self) -> AppResult<AppProjection> {
         let session_key = self.active_session_key()?;
+        self.disconnect_session_by_key(&session_key)
+    }
+
+    /// D18：按会话 key 断开（活动会话菜单与标签右键菜单复用同一动作）。
+    pub(crate) fn disconnect_session_by_key(
+        &mut self,
+        session_key: &str,
+    ) -> AppResult<AppProjection> {
         let session_id = self
             .sessions
-            .get(&session_key)
+            .get(session_key)
             .map(|session| session.session_id().clone())
             .ok_or_else(|| AppError::new("active runtime session is missing"))?;
         {
             let runtime = self
                 .sessions
-                .get_mut(&session_key)
+                .get_mut(session_key)
                 .ok_or_else(|| AppError::new("active runtime session is missing"))?;
             runtime.disconnect_shell().map_err(AppError::from_error)?;
         }
@@ -219,11 +249,11 @@ impl AppRuntime {
             .map_err(AppError::from_error)?;
         let runtime = self
             .sessions
-            .get_mut(&session_key)
+            .get_mut(session_key)
             .ok_or_else(|| AppError::new("active runtime session is missing"))?;
         Self::apply_session_events(&session_id, runtime, events);
-        let sftp_status = self.sync_sftp_lifecycle_for_session(&session_key, false);
-        self.status_text = format!("Disconnected the active runtime session. {sftp_status}");
+        let sftp_status = self.sync_sftp_lifecycle_for_session(session_key, false);
+        self.status_text = format!("Disconnected the runtime session. {sftp_status}");
         Ok(self.projection())
     }
 
@@ -245,7 +275,7 @@ impl AppRuntime {
                 .sessions
                 .get_mut(&session_key)
                 .ok_or_else(|| AppError::new("active runtime session is missing"))?;
-            runtime.append_status_line("Reconnecting runtime shell session.");
+            runtime.log_runtime_event("Reconnecting runtime shell session.");
             runtime.transport_backend = self.transport_backend;
         }
         let connecting_events = self
@@ -278,7 +308,7 @@ impl AppRuntime {
             runtime.attach_shell_session(shell_session);
             let _ = runtime.poll_shell_output().map_err(AppError::from_error)?;
             if !shell_connected {
-                runtime.append_status_line(
+                runtime.log_runtime_event(
                         "Shell runtime reopened a non-live backend path. Either later SSH stages are still scaffolded, or the live shell has already exited.",
                     );
             }
@@ -311,17 +341,37 @@ impl AppRuntime {
                 self.pending_auth_prompt = None;
             }
         }
-        self.status_text = format!(
-            "{} the active runtime session through the `{}` shell backend.",
-            if shell_connected {
-                "Reconnected"
-            } else {
-                "Reopened"
-            },
-            self.transport_backend.label()
-        );
         let sftp_status = self.sync_sftp_lifecycle_for_session(&session_key, shell_connected);
-        self.status_text = format!("{} {}", self.status_text, sftp_status);
+        // D15：用户向文案；后端细节（fake/native-ssh）不再进状态栏。
+        let host_text = self
+            .sessions
+            .get(&session_key)
+            .map(|session| {
+                format!(
+                    "{}@{}:{}",
+                    session.username_label(),
+                    session.ssh_config.host,
+                    session.ssh_config.port
+                )
+            })
+            .unwrap_or_default();
+        let (kind, base_text) = if shell_connected {
+            (
+                "session-reconnected",
+                format!("Reconnected to {host_text}."),
+            )
+        } else {
+            (
+                "session-reopened",
+                format!("Reopened the session for {host_text}, but the shell is not live."),
+            )
+        };
+        self.set_status_kind(
+            kind,
+            format!("{base_text} {sftp_status}"),
+            host_text,
+            String::new(),
+        );
         self.fold_logging_notice_from_session(&session_key);
         Ok(self.projection())
     }
@@ -412,16 +462,7 @@ impl AppRuntime {
         let auth_context = self
             .sessions
             .get(session_key)
-            .map(|session| AuthPromptContext {
-                session_key: session_key.to_owned(),
-                profile_id: match &session.source {
-                    SessionSource::SavedSession { profile_id } => Some(profile_id.clone()),
-                    _ => None,
-                },
-                host: session.host_label(),
-                port: session.ssh_config.port,
-                username: session.username_label().to_owned(),
-            });
+            .map(|session| AuthPromptContext::for_runtime(session_key, session));
         let handled_auth = !handled
             && auth_context
                 .is_some_and(|context| self.apply_auth_prompt_from_error(context, &error));
@@ -437,8 +478,7 @@ impl AppRuntime {
             self.pending_auth_prompt = None;
         }
         if let Some(runtime) = self.sessions.get_mut(session_key) {
-            runtime
-                .append_status_line(&format!("Shell runtime failed while reconnecting: {error}"));
+            runtime.log_runtime_event(&format!("Shell runtime failed while reconnecting: {error}"));
         }
         let failed_events = self
             .dispatcher
@@ -450,23 +490,37 @@ impl AppRuntime {
         if let Some(runtime) = self.sessions.get_mut(session_key) {
             Self::apply_session_events(session_id, runtime, failed_events);
         }
-        self.status_text = if handled {
-            "Host key confirmation is required before reconnecting the native SSH session."
-                .to_owned()
-        } else if handled_auth {
-            "Authentication requires input before the native SSH session can continue.".to_owned()
-        } else {
-            format!("Reconnect failed: {error}")
-        };
         self.sftp_session = SftpSessionLifecycle::Failed {
             session_key: Some(session_key.to_owned()),
             reason: "shell reconnect failed before SFTP could attach".to_owned(),
         };
         self.sftp_listing = SftpListingState::ReconnectFailed;
-        self.status_text = format!(
-            "{} {}",
-            self.status_text,
-            self.sftp_session.legacy_status_text()
+        // D15：用户向文案；错误细节已进日志/会话日志。
+        let (kind, base_text) = if handled {
+            (
+                "session-hostkey-required",
+                "Host key confirmation is required before reconnecting.".to_owned(),
+            )
+        } else if handled_auth {
+            (
+                "session-auth-required",
+                "Authentication requires input before reconnecting.".to_owned(),
+            )
+        } else {
+            tracing::warn!(
+                target: "yshell::runtime",
+                "shell reconnect for {session_key} failed: {error}"
+            );
+            (
+                "session-reconnect-failed",
+                "Could not reconnect the session.".to_owned(),
+            )
+        };
+        self.set_status_kind(
+            kind,
+            format!("{base_text} {}", self.sftp_session.legacy_status_text()),
+            String::new(),
+            String::new(),
         );
         Ok(self.projection())
     }
@@ -493,6 +547,7 @@ impl AppRuntime {
                 presented: presented.clone(),
                 expected: None,
                 known_hosts_path: self.config_store.known_hosts_file(),
+                resume_password: None,
             },
             HostKeyProblem::Changed {
                 host,
@@ -507,6 +562,7 @@ impl AppRuntime {
                 presented: presented.clone(),
                 expected: Some(expected.clone()),
                 known_hosts_path: self.config_store.known_hosts_file(),
+                resume_password: None,
             },
         };
         self.pending_host_key_prompt = Some(prompt);
@@ -601,15 +657,98 @@ impl AppRuntime {
         // W5：密码型认证在密钥库里找不到密码时不报错，改为挂起并让 UI 弹输入框；
         // 用户 `submit_password` 后走 `activate_runtime_session_with_ssh_config` 重试。
         if let Some(prompt) = self.pending_password_prompt_for_runtime(&runtime) {
+            // D7：TOFU 顺序——密码之前先完成主机密钥确认。只有原生后端才会
+            // 探测（fake 后端没有握手，无从取得指纹）。
+            if self.probe_host_key_before_password(&runtime, &prompt)? {
+                return Ok(self.projection());
+            }
             let host_text = prompt.host_text();
             self.pending_password_prompt = Some(prompt);
-            self.status_text = format!(
-                "Password required for {host_text}. The password is used for this connection only and is not saved."
+            self.set_status_kind(
+                "session-password-required",
+                format!("Password required for {host_text}."),
+                host_text,
+                String::new(),
             );
             return Ok(self.projection());
         }
         let ssh_config = self.resolve_runtime_ssh_config(&runtime)?;
         self.activate_runtime_session_with_ssh_config(runtime, ssh_config)
+    }
+
+    /// D7：主机密钥确认完成后的续接。
+    ///
+    /// 探针路径里运行时实例尚未建立（也不需要重连），确认完成后回到密码弹窗；
+    /// 返回 `Some` 表示已接管本次调用的返回投影。
+    fn resume_password_prompt_after_host_key(
+        &mut self,
+        prompt: &PendingHostKeyPrompt,
+    ) -> Option<AppResult<AppProjection>> {
+        let resume = prompt.resume_password.clone()?;
+        let host_text = resume.host_text();
+        self.pending_password_prompt = Some(resume);
+        // D37：状态栏走 kind 模板（`TextFormats.status-message`），host_text 作为参数。
+        self.set_status_kind(
+            "session-hostkey-confirmed-password",
+            format!("Host key confirmed for {host_text}. Enter the password to continue."),
+            host_text,
+            String::new(),
+        );
+        Some(Ok(self.projection()))
+    }
+
+    /// D7：密码挂起前的主机密钥探针。
+    ///
+    /// 用"不存在的私钥"配置打开一次 shell：SSH 握手与主机密钥校验发生在认证
+    /// 之前，因此未知/变更的主机密钥会先以 [`HostKeyProblem`] 返回；认证阶段
+    /// 在本地读不到密钥文件即失败，不会把任何凭据送到服务端。返回 `true` 表示
+    /// 已经弹出主机密钥确认（密码框等确认完成后再弹），`false` 表示主机密钥已
+    /// 可信/无法探测，继续走原有密码挂起路径。
+    fn probe_host_key_before_password(
+        &mut self,
+        runtime: &SessionRuntime,
+        prompt: &PendingPasswordPrompt,
+    ) -> AppResult<bool> {
+        if self.transport_backend != TransportBackend::Real {
+            return Ok(false);
+        }
+        let mut probe_config = runtime.ssh_config.clone();
+        probe_config.auth = AuthMethod::PrivateKey {
+            username: prompt.username.clone(),
+            // 空路径：libssh2 在本地读取失败，探针绝不提交凭据。
+            key_path: String::new(),
+            passphrase: None,
+        };
+        match self.open_shell_for_runtime(&probe_config) {
+            Ok(_) => Ok(false),
+            Err(error) => {
+                if error.host_key_problem.is_none() {
+                    return Ok(false);
+                }
+                let handled = self.apply_host_key_prompt_from_error(
+                    runtime.session_id().as_str(),
+                    prompt.username.clone(),
+                    &error,
+                );
+                if !handled {
+                    return Ok(false);
+                }
+                if let Some(pending) = self.pending_host_key_prompt.as_mut() {
+                    pending.resume_password = Some(prompt.clone());
+                }
+                // D37：状态栏走 kind 模板（`TextFormats.status-message`）。
+                let host_text = prompt.host_text();
+                self.set_status_kind(
+                    "session-hostkey-required-password",
+                    format!(
+                        "Host key confirmation is required for {host_text} before the password prompt."
+                    ),
+                    host_text,
+                    String::new(),
+                );
+                Ok(true)
+            }
+        }
     }
 
     pub(crate) fn activate_runtime_session_with_ssh_config(
@@ -635,6 +774,8 @@ impl AppRuntime {
         password_retry: bool,
     ) -> AppResult<AppProjection> {
         let session_id = runtime.session_id().clone();
+        // N5/D17：创建时冻结外观（之后的主题改动不影响本会话）。
+        self.capture_runtime_appearance(&mut runtime);
         if let SessionSource::SavedSession { profile_id } = &runtime.source {
             self.selected_saved_session_id = Some(profile_id.clone());
         }
@@ -660,9 +801,11 @@ impl AppRuntime {
         runtime.transport_backend = self.transport_backend;
         self.configure_runtime_logging(&mut runtime);
         self.configure_runtime_terminal_limits(&mut runtime);
-        runtime.append_status_line("Core session entry created. Opening shell runtime boundary.");
-        // W5：密码重试失败时把 shell 的真实错误带进状态栏（普通路径保持原中性文案）。
+        runtime.log_runtime_event("Core session entry created. Opening shell runtime boundary.");
+        // 密码重试失败时把 shell 的真实错误带进状态栏（普通路径保持原中性文案）。
         let mut shell_open_error: Option<String> = None;
+        // D15：连接挂起在主机密钥/认证确认时，状态栏给用户向提示。
+        let mut prompt_pending = false;
         match self.open_shell_for_runtime(&runtime.ssh_config) {
             Ok(shell_session) => {
                 let shell_connected = shell_session.is_connected();
@@ -686,7 +829,7 @@ impl AppRuntime {
                         })
                         .map_err(AppError::from_error)?;
                     Self::apply_session_events(&session_id, &mut runtime, connecting_events);
-                    runtime.append_status_line(
+                    runtime.log_runtime_event(
                         "Shell runtime opened a non-live backend path. Either later SSH stages remain scaffolded, or the spawned shell is not yet connected.",
                     );
                 }
@@ -700,21 +843,10 @@ impl AppRuntime {
                 // N4：host key 之后才是认证弹窗（host key 仍在认证之前）。
                 let handled_auth = !handled
                     && self.apply_auth_prompt_from_error(
-                        AuthPromptContext {
-                            session_key: session_id.as_str().to_owned(),
-                            profile_id: match &runtime.source {
-                                SessionSource::SavedSession { profile_id } => {
-                                    Some(profile_id.clone())
-                                }
-                                _ => None,
-                            },
-                            host: runtime.host_label(),
-                            port: runtime.ssh_config.port,
-                            username: runtime.username_label().to_owned(),
-                        },
+                        AuthPromptContext::for_runtime(session_id.as_str(), &runtime),
                         &error,
                     );
-                runtime.append_status_line(&format!(
+                runtime.log_runtime_event(&format!(
                     "Shell runtime failed during real shell startup: {error}"
                 ));
                 let failed_events = self
@@ -726,9 +858,13 @@ impl AppRuntime {
                     .map_err(AppError::from_error)?;
                 Self::apply_session_events(&session_id, &mut runtime, failed_events);
                 if handled {
-                    runtime.append_status_line("Host key confirmation is required before the native SSH session can continue.");
+                    prompt_pending = true;
+                    runtime.log_runtime_event(
+                        "Host key confirmation is required before the native SSH session can continue.",
+                    );
                 } else if handled_auth {
-                    runtime.append_status_line(
+                    prompt_pending = true;
+                    runtime.log_runtime_event(
                         "Authentication requires input before the native SSH session can continue.",
                     );
                 } else {
@@ -742,27 +878,57 @@ impl AppRuntime {
         // N2：shell 是否在本函数内连上（用于插入会话后触发连接成功钩子）。
         let connected_now = runtime.state == yshell_core::SessionState::Connected;
         self.record_recent_session(&session_key);
-        self.status_text = match (&shell_open_error, password_retry) {
-            (Some(error), true) => format!("Password connection failed: {error}"),
-            _ => format!(
-                "Runtime session created for {} (user={}) using the `{}` shell backend. {}",
-                runtime.host_label(),
-                runtime.username_label(),
-                self.transport_backend.label(),
-                if runtime.state == yshell_core::SessionState::Connected {
-                    "The shell boundary is live."
-                } else {
-                    "The backend path exists, but a live shell was not reached."
-                }
-            ),
-        };
-        if let Some(notice) = runtime.take_logging_notice() {
-            self.fold_logging_notice_into_status(notice);
+        let host_text = format!(
+            "{}@{}:{}",
+            runtime.username_label(),
+            runtime.ssh_config.host,
+            runtime.ssh_config.port
+        );
+        if let Some(error) = &shell_open_error {
+            tracing::warn!(
+                target: "yshell::runtime",
+                "connection to {host_text} failed: {error}"
+            );
         }
+        let logging_notice = runtime.take_logging_notice();
         self.sessions.insert(session_key.clone(), runtime);
         self.attach_tab(&tab_id_text, &session_key);
         let sftp_status = self.sync_sftp_lifecycle_for_session(&session_key, true);
-        self.status_text = format!("{} {}", self.status_text, sftp_status);
+        // D15：用户向的连接状态文案（kind 供 Slint 侧 @tr 模板映射）。
+        let (kind, base_text) = if shell_open_error.is_some() {
+            if password_retry {
+                (
+                    "session-password-failed",
+                    format!("Could not connect to {host_text} with the supplied password."),
+                )
+            } else {
+                (
+                    "session-connect-failed",
+                    format!("Could not connect to {host_text}."),
+                )
+            }
+        } else if connected_now {
+            ("session-connected", format!("Connected to {host_text}."))
+        } else if prompt_pending {
+            (
+                "session-pending-confirmation",
+                format!("Waiting for confirmation to continue the connection to {host_text}."),
+            )
+        } else {
+            (
+                "session-connecting",
+                format!("Connecting to {host_text} ..."),
+            )
+        };
+        self.set_status_kind(
+            kind,
+            format!("{base_text} {sftp_status}"),
+            host_text,
+            String::new(),
+        );
+        if let Some(notice) = logging_notice {
+            self.fold_logging_notice_into_status(notice);
+        }
         // N2：连接成功钩子（QC 历史 / 已保存会话最近使用）；失败/挂起不触发。
         // W5 密码重试路径（`password_retry`）明确不写任何配置文件（密码绝不落盘，
         // 见 `session_auth::submit_password_retries_saved_session_and_connects`），
@@ -783,6 +949,9 @@ pub(crate) struct PendingHostKeyPrompt {
     pub(crate) presented: HostKeyFingerprint,
     pub(crate) expected: Option<HostKeyFingerprint>,
     pub(crate) known_hosts_path: PathBuf,
+    /// D7：TOFU 顺序——密码型会话先做主机密钥确认，确认完成后再弹密码框。
+    /// 该字段保存"确认完成后继续的密码挂起目标"；`None` = 常规 host key 流程。
+    pub(crate) resume_password: Option<PendingPasswordPrompt>,
 }
 
 /// W5：密码弹窗挂起的目标（仅内存，重试连接时据此重建运行时会话）。
@@ -1320,6 +1489,23 @@ pub(crate) struct AuthPromptContext {
     pub(crate) host: String,
     pub(crate) port: u16,
     pub(crate) username: String,
+}
+
+impl AuthPromptContext {
+    /// D6：从运行时会话构建弹窗上下文（`host` 只放裸主机；端口由
+    /// `PendingAuthPrompt::host_text()` 拼一次，避免 `host:port:port`）。
+    pub(crate) fn for_runtime(session_key: &str, session: &SessionRuntime) -> Self {
+        Self {
+            session_key: session_key.to_owned(),
+            profile_id: match &session.source {
+                SessionSource::SavedSession { profile_id } => Some(profile_id.clone()),
+                _ => None,
+            },
+            host: session.ssh_config.host.clone(),
+            port: session.ssh_config.port,
+            username: session.username_label().to_owned(),
+        }
+    }
 }
 
 impl AppRuntime {

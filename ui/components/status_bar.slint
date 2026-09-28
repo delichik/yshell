@@ -7,7 +7,8 @@
 import { Theme } from "../theme.slint";
 
 export component StatusBar inherits Rectangle {
-    in property <string> message: "Ready";
+    // A32（D14）：默认空（宿主投影启动时写入，避免闪现英文 "Ready"）。
+    in property <string> message: "";
     /// N6：日志区是否可用（有活动会话）。
     in property <bool> logging-usable: false;
     /// N6：活动会话是否正在记录（REC 圆点）。
@@ -34,10 +35,15 @@ export component StatusBar inherits Rectangle {
             overflow: elide;
         }
 
-        status_spacer := Rectangle { }
+        // A10：弹性空白显式吃掉剩余宽度（Slint 1.18 起 *-stretch 默认是 1，
+        // 不声明的话消息文本会和它平分空间）；日志入口在最后，因此钉在右缘。
+        Rectangle { horizontal-stretch: 1; }
 
         // N6：日志入口（REC 指示 + 文案；点击 = 日志菜单，与终端右键菜单同一入口）。
         if root.logging-usable : Rectangle {
+            // A10：命中区至少 32px 宽（§8）。状态栏本身只有 26px 高，纵向命中
+            // 受 bar-height-status token 限制（详见 WS-A 报告遗留）。
+            min-width: 32px;
             border-radius: Theme.radius-control;
             background: logging-touch.has-hover ? Theme.subtle-hover : transparent;
             animate background { duration: Theme.duration-faster; easing: ease-out; }
@@ -49,6 +55,8 @@ export component StatusBar inherits Rectangle {
                 alignment: center;
 
                 // REC 圆点：仅在记录中显示（避免静态元素占位）。
+                // 文本等价物：`logging-text` 已渲染 "REC · 模式 · 文件"，下面的
+                // accessible-label 同时覆盖"正在记录"与入口语义。
                 if root.logging-active : Rectangle {
                     width: 8px;
                     height: 8px;
@@ -66,6 +74,10 @@ export component StatusBar inherits Rectangle {
             }
 
             logging-touch := TouchArea {
+                accessible-role: button;
+                accessible-label: root.logging-active
+                    ? @tr("StatusBar" => "Recording — open logging menu")
+                    : @tr("StatusBar" => "Logging — open logging menu");
                 clicked => { root.logging-clicked(); }
             }
         }

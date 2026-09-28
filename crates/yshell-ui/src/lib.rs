@@ -44,7 +44,8 @@ impl Default for AppViewModel {
             logging: LoggingModel::default(),
             search: SearchModel::default(),
             status: StatusModel::default(),
-            status_message: "Ready".to_owned(),
+            // D14：默认状态为空串，避免启动瞬间闪现英文占位（由投影写入）。
+            status_message: String::new(),
         }
     }
 }

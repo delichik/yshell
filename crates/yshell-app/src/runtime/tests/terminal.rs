@@ -16,7 +16,8 @@ fn active_terminal_input_flows_through_shell_boundary() {
         .send_active_terminal_input("pwd\n")
         .expect("send input");
 
-    assert!(projection.status_text.contains("Sent"));
+    // D4：正常输入不再刷新状态栏。
+    assert!(!projection.status_text.contains("Sent"));
     assert!(projection
         .terminal_body_text
         .contains("fake-shell received input"));
@@ -88,7 +89,8 @@ fn terminal_key_input_flows_through_the_shell_boundary() {
     let typed = runtime
         .send_active_terminal_key("x", false, false, false, false)
         .expect("send key");
-    assert!(typed.status_text.contains("Sent 1 bytes"));
+    // D4：按键不写状态栏。
+    assert!(!typed.status_text.contains("Sent"));
     assert!(typed
         .terminal_body_text
         .contains("fake-shell received input: x"));
@@ -103,7 +105,7 @@ fn terminal_key_input_flows_through_the_shell_boundary() {
     let control = runtime
         .send_active_terminal_key("c", true, false, false, false)
         .expect("send ctrl+c");
-    assert!(control.status_text.contains("Sent 1 bytes"));
+    assert!(!control.status_text.contains("Sent"));
 }
 
 #[test]
@@ -290,9 +292,10 @@ fn copy_paste_clear_and_find_work_on_visible_terminal_text() {
 
     let cleared = runtime.clear_active_terminal().expect("clear terminal");
     assert!(cleared.status_text.contains("Cleared"));
-    assert!(cleared.terminal_body_text.contains("Terminal view cleared"));
+    // D1：清屏不再把应用内文案写进网格。
+    assert!(!cleared.terminal_body_text.contains("Terminal view cleared"));
 
     let pasted = runtime.paste_terminal_clipboard().expect("paste clipboard");
-    assert!(pasted.status_text.contains("Sent"));
+    // D4：粘贴走同一条输入路径，不写状态栏；内容确实到达 shell。
     assert!(pasted.terminal_body_text.contains("echo secret"));
 }

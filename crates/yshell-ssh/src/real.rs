@@ -653,16 +653,12 @@ impl ShellSession for RealShellSessionPlaceholder {
         match &mut self.transport {
             RealShellTransport::Scaffold => {
                 let printable = String::from_utf8_lossy(bytes).replace('\r', "\\r");
-                self.pending_output.push_back(
-                    format!(
-                        "real-shell scaffold buffered input at stage `{}`: {printable}\n",
-                        self.attempt.stage.label()
-                    )
-                    .into_bytes(),
-                );
-                self.pending_output.push_back(
-                    b"Network transport is not implemented yet, so input was not sent to a remote host.\n"
-                        .to_vec(),
+                // D1：脚手架回显只进日志，不再写终端网格（pending_output 只承载远端数据）。
+                tracing::debug!(
+                    target: "yshell::ssh",
+                    stage = self.attempt.stage.label(),
+                    input = %printable,
+                    "real-shell scaffold buffered local input; no remote transport is wired yet"
                 );
                 Ok(())
             }
@@ -673,14 +669,12 @@ impl ShellSession for RealShellSessionPlaceholder {
     fn resize_pty(&mut self, size: PtySize) -> SshResult<()> {
         self.attempt.plan.pty.size = size;
         match &mut self.transport {
-            RealShellTransport::Scaffold => self.pending_output.push_back(
-                format!(
-                    "real-shell scaffold updated planned PTY to {}x{} while waiting at stage `{}`.\n",
-                    size.columns,
-                    size.rows,
-                    self.attempt.stage.label()
-                )
-                .into_bytes(),
+            RealShellTransport::Scaffold => tracing::debug!(
+                target: "yshell::ssh",
+                stage = self.attempt.stage.label(),
+                columns = size.columns,
+                rows = size.rows,
+                "real-shell scaffold updated the planned PTY"
             ),
             RealShellTransport::Native(session) => session.resize_pty(size)?,
         }
@@ -692,9 +686,9 @@ impl ShellSession for RealShellSessionPlaceholder {
             RealShellTransport::Scaffold => {
                 self.attempt
                     .mark_disconnected("Shell scaffold was closed before any live transport existed.");
-                self.pending_output.push_back(
-                    b"real-shell scaffold marked the session as disconnected before any live transport existed.\n"
-                        .to_vec(),
+                tracing::debug!(
+                    target: "yshell::ssh",
+                    "real-shell scaffold marked the session as disconnected before any live transport existed"
                 );
                 Ok(())
             }
@@ -702,8 +696,11 @@ impl ShellSession for RealShellSessionPlaceholder {
                 session.disconnect()?;
                 self.attempt
                     .mark_disconnected("Native SSH shell session was explicitly disconnected by the runtime.");
-                self.pending_output
-                    .push_back(b"native SSH shell session was disconnected by the runtime.\n".to_vec());
+                // D1：运行时诊断只进日志；真实会话状态由 refresh_transport_state 播报。
+                tracing::debug!(
+                    target: "yshell::ssh",
+                    "native SSH shell session was disconnected by the runtime"
+                );
                 Ok(())
             }
         }
@@ -712,21 +709,22 @@ impl ShellSession for RealShellSessionPlaceholder {
 
 impl RealShellSessionPlaceholder {
     fn begin_connection_attempt(&mut self) -> SshResult<()> {
+        // D1：连接计划/阶段推进属于内部诊断，只进日志，不写终端网格。
         for line in self.attempt.begin_transcript_lines() {
-            let mut bytes = line.into_bytes();
-            bytes.push(b'\n');
-            self.pending_output.push_back(bytes);
+            tracing::debug!(target: "yshell::ssh", "real transport scaffold: {line}");
         }
         let report = self.attempt.execute_current_action()?;
-        self.pending_output.push_back(format!("Transport action: {}\n", report.summary()).into_bytes());
+        tracing::debug!(
+            target: "yshell::ssh",
+            action = %report.summary(),
+            "real transport executed the current scaffold action"
+        );
         if self.attempt.stage != report.stage {
-            self.pending_output.push_back(
-                format!(
-                    "Real transport is now waiting at stage `{}`. {}\n",
-                    self.attempt.stage.label(),
-                    self.attempt.stage_note(self.attempt.stage)
-                )
-                .into_bytes(),
+            tracing::debug!(
+                target: "yshell::ssh",
+                stage = self.attempt.stage.label(),
+                note = self.attempt.stage_note(self.attempt.stage),
+                "real transport scaffold advanced"
             );
         }
         self.try_start_live_shell()?;
@@ -738,31 +736,27 @@ impl RealShellSessionPlaceholder {
             return Ok(());
         }
         if !matches!(self.attempt.plan.proxy, ProxyConfig::None) {
-            self.pending_output.push_back(
-                b"Live shell handoff is not available while proxy negotiation is still scaffold-only.\n"
-                    .to_vec(),
+            tracing::debug!(
+                target: "yshell::ssh",
+                "live shell handoff is not available while proxy negotiation is still scaffold-only"
             );
             return Ok(());
         }
         if !self.attempt.plan.tunnels.is_empty() {
-            self.pending_output.push_back(
-                b"Native SSH shell startup does not yet provision tunnel forwards. Remove tunnel config or stay on the fake backend for now.\n"
-                    .to_vec(),
+            tracing::debug!(
+                target: "yshell::ssh",
+                "native SSH shell startup does not provision tunnel forwards yet; the session stays on the scaffold path"
             );
             return Ok(());
         }
 
-        self.pending_output.push_back(
-            b"Opening a native SSH session inside yshell-ssh.\n".to_vec(),
-        );
+        tracing::info!(target: "yshell::ssh", "opening a native SSH session inside yshell-ssh");
         let session = RealNativeShellSession::connect(&mut self.attempt)?;
-        self.pending_output.push_back(
-            format!(
-                "Real transport is now waiting at stage `{}`. {}\n",
-                self.attempt.stage.label(),
-                self.attempt.stage_note(self.attempt.stage)
-            )
-            .into_bytes(),
+        tracing::debug!(
+            target: "yshell::ssh",
+            stage = self.attempt.stage.label(),
+            note = self.attempt.stage_note(self.attempt.stage),
+            "native transport is live"
         );
         self.transport = RealShellTransport::Native(session);
         Ok(())
@@ -1151,6 +1145,12 @@ impl RealConnectionAttempt {
                         detail,
                     };
                     self.action_log.push(record.clone());
+                    // D1：执行细节只进日志；报告不再写进终端网格。
+                    tracing::debug!(
+                        target: "yshell::ssh",
+                        detail = record.detail.as_str(),
+                        "tcp connect action completed"
+                    );
                     self.advance_to(
                         RealConnectionStage::SshHandshake,
                         format!(
@@ -1183,6 +1183,11 @@ impl RealConnectionAttempt {
             detail: detail.clone(),
         };
         self.action_log.push(record.clone());
+        tracing::debug!(
+            target: "yshell::ssh",
+            detail = detail.as_str(),
+            "tcp connect action failed"
+        );
         self.mark_failed(format!("TCP connect failed for `{address}`: {error}"));
         Err(SshError::new(kind, detail))
     }
@@ -1984,9 +1989,9 @@ mod tests {
             .expect("real shell scaffold");
         shell.disconnect().expect("disconnect scaffold");
         assert_eq!(shell.attempt.stage, RealConnectionStage::Disconnected);
+        // D1：脚手架诊断只进 tracing 日志，pending_output 不得再产生终端字节。
         let disconnect_bytes = shell.poll_output().expect("disconnect chunk");
-        let disconnect_chunk = String::from_utf8_lossy(&disconnect_bytes);
-        assert!(disconnect_chunk.contains("disconnected"));
+        assert!(disconnect_bytes.is_empty());
     }
 
     #[test]
@@ -2008,13 +2013,18 @@ mod tests {
 
         let mut shell = client.open_shell(&config).expect("real shell scaffold");
         assert_eq!(shell.attempt.stage, RealConnectionStage::ProxyNegotiation);
-        let _ = shell.poll_output().expect("banner");
-        let plan_bytes = shell.poll_output().expect("plan");
-        let stage_bytes = shell.poll_output().expect("stage");
-        let plan_chunk = String::from_utf8_lossy(&plan_bytes);
-        let stage_chunk = String::from_utf8_lossy(&stage_bytes);
-        assert!(plan_chunk.contains("proxy=socks5"));
-        assert!(stage_chunk.contains("proxy-negotiation"));
+        // D1：连接计划/阶段推进只进 tracing 日志，不再经 poll_output 进入终端。
+        assert!(shell.poll_output().expect("prepared output").is_empty());
+        assert!(shell.poll_output().expect("plan output").is_empty());
+        assert_eq!(
+            shell
+                .attempt
+                .latest_action_record()
+                .expect("action record")
+                .action
+                .summary(),
+            "proxy:socks5@127.0.0.1:1080"
+        );
     }
 
     #[test]

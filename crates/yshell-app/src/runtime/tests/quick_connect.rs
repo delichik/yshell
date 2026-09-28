@@ -54,6 +54,33 @@ fn submit_records_history_on_success_and_clears_input() {
 }
 
 #[test]
+fn failed_submit_clears_stale_last_target() {
+    // 与设置 YSHELL_FAKE_AUTH_FAILURE 的测试串行，避免读到别的场景。
+    let _guard = lock_env();
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 0);
+    let _ = runtime
+        .submit_quick_connect("ssh://root@example.com:2200")
+        .expect("successful submit");
+    assert_eq!(
+        runtime.projection().quick_connect_last_target_text,
+        "root@example.com:2200"
+    );
+
+    // D10：新的失败尝试不得让页面继续显示"Connected to …"。
+    let (port, accept_handle) = start_tcp_probe_target();
+    let _ = runtime.select_native_ssh_transport_backend();
+    let projection = runtime
+        .submit_quick_connect(&format!("root@127.0.0.1:{port}"))
+        .expect("failing submit is reported through the projection");
+    accept_handle.join().expect("accept thread");
+
+    assert_eq!(projection.tab_state_text, "failed");
+    assert_eq!(projection.quick_connect_last_target_text, "");
+    assert!(runtime.config_document.quick_connect.history.len() == 1);
+}
+
+#[test]
 fn submit_invalid_target_sets_inline_error_without_tab() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 0);
@@ -124,8 +151,36 @@ fn disabled_history_is_not_recorded() {
     assert!(runtime.config_document.quick_connect.history.is_empty());
     assert!(!projection.quick_connect_history_enabled);
     assert!(projection.quick_connect_summary_text.contains("disabled"));
+    // D37：历史关闭态没有模板（kind 为空 → UI 回退 `quick_connect_summary_text`）。
+    assert_eq!(projection.quick_connect_summary_kind_text, "");
     // 连接本身不受影响。
     assert!(runtime.tabs[0].session_id().is_some());
+}
+
+#[test]
+fn history_summary_projects_kind_and_params() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 0);
+    runtime.config_document.quick_connect.limit = 3;
+
+    for host in ["a.example.test", "b.example.test"] {
+        runtime
+            .submit_quick_connect(&format!("ops@{host}:22"))
+            .expect("connect");
+    }
+
+    // D37：启用态由 `TextFormats.status-message` 按 kind + 条数/上限渲染。
+    let projection = runtime.projection();
+    assert_eq!(
+        projection.quick_connect_summary_kind_text,
+        "quick-connect-history"
+    );
+    assert_eq!(projection.quick_connect_summary_param_1_text, "2");
+    assert_eq!(projection.quick_connect_summary_param_2_text, "3");
+    assert_eq!(
+        projection.quick_connect_summary_text,
+        "2 recorded target(s); keep up to 3."
+    );
 }
 
 #[test]

@@ -13,3 +13,5 @@ path = "src/lib.rs"
 
 [dependencies]
 ssh2 = { version = "0.9.5", features = ["vendored-openssl"] }
+# D1：脚手架/传输诊断只进 tracing 日志，不再写进终端网格（pending_output）。
+tracing.workspace = true

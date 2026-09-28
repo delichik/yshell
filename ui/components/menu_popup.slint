@@ -63,7 +63,9 @@ component MenuPopupRow inherits Rectangle {
         text: root.entry.label;
         // 缩进 = 内边距 8 + 勾选列 16 + 间距 8 = 32（§5.11）
         x: Theme.spacing-8 + Theme.icon-size-small + Theme.spacing-8;
-        width: parent.width - self.x - Theme.spacing-8;
+        // A11：标签宽度再扣掉右侧快捷键的实际宽度 + 间距，长文案不会再压到快捷键上。
+        width: parent.width - self.x - Theme.spacing-8
+            - (root.entry.shortcut != "" ? shortcut_text.width + Theme.spacing-8 : 0px);
         height: parent.height;
         color: Theme.text-primary;
         font-size: Theme.font-body;
@@ -72,7 +74,7 @@ component MenuPopupRow inherits Rectangle {
         overflow: elide;
     }
 
-    Text {
+    shortcut_text := Text {
         visible: !root.entry.separator && root.entry.shortcut != "";
         text: root.entry.shortcut;
         x: parent.width - self.width - Theme.spacing-8;
@@ -102,6 +104,10 @@ export component MenuPopup inherits Rectangle {
     in property <length> anchor-x: 0px;
     in property <length> anchor-y: 0px;
     in property <length> panel-width: 230px;
+    /// A1：遮罩顶部内缩。菜单栏的下拉菜单把它设为菜单栏高度，让菜单栏区域的
+    /// 点击落回菜单栏本身——否则展开菜单后点另一个一级菜单会被遮罩吃掉，
+    /// 表现为"切菜单只留下标题高亮、弹层不渲染"。右键菜单保持 0（全窗遮罩）。
+    in property <length> scrim-top: 0px;
 
     callback selected(int);
     callback dismissed();
@@ -109,40 +115,73 @@ export component MenuPopup inherits Rectangle {
     visible: self.open;
     background: transparent;
 
-    // Scrim: captures any click outside of the panel and dismisses the popup.
-    TouchArea {
-        clicked => { root.dismissed(); }
-        pointer-event(event) => {
-            if (event.kind == PointerEventKind.down) {
+    // A2：弹层根 FocusScope —— 打开时聚焦，`Esc` = dismissed()（与 L2 弹窗同一套
+    // 语义，但只消费 Esc，其余按键继续冒泡）。关闭后的焦点回交由宿主负责
+    // （main_window 的 restore-focus-after-menu）。
+    popup_scope := FocusScope {
+        width: parent.width;
+        height: parent.height;
+
+        key-pressed(event) => {
+            // Esc 键码按 `event.text` 比较（与各弹窗/session_tree 的写法一致）。
+            if (event.text == "\u{001b}") {
                 root.dismissed();
+                return accept;
+            }
+            return reject;
+        }
+
+        // Scrim: captures any click outside of the panel and dismisses the popup.
+        TouchArea {
+            // A1：菜单栏下拉菜单的遮罩从菜单栏下方开始，菜单栏自身仍可点击/悬停切换。
+            y: root.scrim-top;
+            height: parent.height - root.scrim-top;
+            clicked => { root.dismissed(); }
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down) {
+                    root.dismissed();
+                }
+            }
+        }
+
+        panel := Rectangle {
+            // A15：贴边留 8px（窗口右/下缘不再只剩 4–5px，圆角与描边不被裁）。
+            x: min(max(root.anchor-x, 8px), max(root.width - root.panel-width - 8px, 8px));
+            y: min(max(root.anchor-y, 8px), max(root.height - self.height - 8px, 8px));
+            width: root.panel-width;
+            height: entries-layout.preferred-height;
+            background: Theme.flyout-background;
+            border-width: 1px;
+            border-color: Theme.layer-stroke;
+            border-radius: Theme.radius-panel;
+            drop-shadow-blur: Theme.shadow-blur;
+            drop-shadow-color: Theme.shadow-color;
+            drop-shadow-offset-y: Theme.shadow-offset-y;
+
+            // Swallow clicks on the panel background so they do not reach the scrim.
+            TouchArea { }
+
+            entries-layout := VerticalLayout {
+                padding: 4px;
+                spacing: 0px;
+
+                for entry[i] in root.entries : MenuPopupRow {
+                    entry: entry;
+                    selected => { root.selected(i); }
+                }
             }
         }
     }
 
-    panel := Rectangle {
-        x: min(max(root.anchor-x, 4px), max(root.width - root.panel-width - 4px, 4px));
-        y: min(max(root.anchor-y, 4px), max(root.height - self.height - 4px, 4px));
-        width: root.panel-width;
-        height: entries-layout.preferred-height;
-        background: Theme.flyout-background;
-        border-width: 1px;
-        border-color: Theme.layer-stroke;
-        border-radius: Theme.radius-panel;
-        drop-shadow-blur: Theme.shadow-blur;
-        drop-shadow-color: Theme.shadow-color;
-        drop-shadow-offset-y: Theme.shadow-offset-y;
+    /// A2：宿主把键盘焦点交给弹层（例如从终端按键兜底路径调用，见 WS-D 报告）。
+    public function focus-popup() {
+        popup_scope.focus();
+    }
 
-        // Swallow clicks on the panel background so they do not reach the scrim.
-        TouchArea { }
-
-        entries-layout := VerticalLayout {
-            padding: 4px;
-            spacing: 0px;
-
-            for entry[i] in root.entries : MenuPopupRow {
-                entry: entry;
-                selected => { root.selected(i); }
-            }
+    // A2：打开时弹层持有焦点，Esc 才能被上面的 key-pressed 捕获。
+    changed open => {
+        if (root.open) {
+            popup_scope.focus();
         }
     }
 }

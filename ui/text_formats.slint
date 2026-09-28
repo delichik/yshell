@@ -365,6 +365,57 @@ export global TextFormats {
         if kind == "session-deleted" {
             return @tr("MainWindow" => "Deleted saved session `{0}` and persisted the updated config.", param_1);
         }
+        // --- A26（WS-D / D5 + D15 + D19）：连接生命周期 / 终端尺寸 / 本地目录状态文案 -----
+        // kind 与参数来自 Rust `set_status_kind(...)`（详情的英文错误只进 tracing 日志）。
+        if kind == "session-connected" {
+            return @tr("MainWindow" => "Connected to {0}.", param_1);
+        }
+        if kind == "session-connecting" {
+            return @tr("MainWindow" => "Connecting to {0} ...", param_1);
+        }
+        if kind == "session-pending-confirmation" {
+            return @tr("MainWindow" => "Waiting for confirmation to continue the connection to {0}.", param_1);
+        }
+        if kind == "session-connect-failed" {
+            return @tr("MainWindow" => "Could not connect to {0}.", param_1);
+        }
+        if kind == "session-password-required" {
+            return @tr("MainWindow" => "Password required for {0}.", param_1);
+        }
+        if kind == "session-password-failed" {
+            return @tr("MainWindow" => "Could not connect to {0} with the supplied password.", param_1);
+        }
+        if kind == "session-reconnected" {
+            return @tr("MainWindow" => "Reconnected to {0}.", param_1);
+        }
+        if kind == "session-reopened" {
+            return @tr("MainWindow" => "Reopened the session for {0}, but the shell is not live.", param_1);
+        }
+        if kind == "session-reconnect-failed" {
+            return @tr("MainWindow" => "Could not reconnect the session.");
+        }
+        if kind == "session-hostkey-required" {
+            return @tr("MainWindow" => "Host key confirmation is required before reconnecting.");
+        }
+        // --- A35（WS-D 接线）：主机密钥 + 密码提示的顺序/状态文案 -----------------
+        if kind == "session-hostkey-confirmed-password" {
+            return @tr("MainWindow" => "Host key confirmed for {0}. Enter the password to continue.", param_1);
+        }
+        if kind == "session-hostkey-required-password" {
+            return @tr("MainWindow" => "Host key confirmation is required for {0} before the password prompt.", param_1);
+        }
+        if kind == "quick-connect-history" {
+            return @tr("MainWindow" => "{0} recorded target(s); keep up to {1}.", param_1, param_2);
+        }
+        if kind == "session-auth-required" {
+            return @tr("MainWindow" => "Authentication requires input before reconnecting.");
+        }
+        if kind == "terminal-resized" {
+            return @tr("MainWindow" => "Resized runtime terminal to {0}.", param_1);
+        }
+        if kind == "local-dir-loaded" {
+            return @tr("MainWindow" => "Loaded local directory `{0}` ({1} items).", param_1, param_2);
+        }
         return fallback;
     }
 
@@ -382,5 +433,68 @@ export global TextFormats {
         return @tr("MainWindow" => "Close {n} tab" | "Close {n} tabs" % count, count)
             + "  "
             + (@tr("MainWindow" => "{n} of them has an active connection and will be disconnected." | "{n} of them have active connections and will be disconnected." % active_count, active_count));
+    }
+
+    // --- N5：三态字段的来源提示 -----------------------------------------------
+    /// `kind` 由 Rust 投影：builtin / global / folder / local-folder /
+    /// local-session / scheme。`param` 是文件夹名或方案名（其余为空）。
+    public pure function theme-source-display(kind: string, param: string) -> string {
+        if kind == "builtin" {
+            return @tr("MainWindow" => "Built-in default");
+        }
+        if kind == "global" {
+            return @tr("MainWindow" => "From global settings");
+        }
+        if kind == "folder" {
+            return @tr("MainWindow" => "From folder: {0}", param);
+        }
+        if kind == "scheme" {
+            return @tr("MainWindow" => "From color scheme: {0}", param);
+        }
+        if kind == "local-folder" {
+            return @tr("MainWindow" => "Set in this folder");
+        }
+        if kind == "local-session" {
+            return @tr("MainWindow" => "Set for this session");
+        }
+        return "";
+    }
+
+    /// N5：三态字段的标签（按稳定 key 渲染，Folder/Session Editor 复用）。
+    public pure function theme-field-label(key: string) -> string {
+        if key == "appearance.color_scheme" { return @tr("MainWindow" => "Color scheme"); }
+        if key == "appearance.foreground" { return @tr("MainWindow" => "Foreground"); }
+        if key == "appearance.background" { return @tr("MainWindow" => "Background"); }
+        if key == "appearance.cursor" { return @tr("MainWindow" => "Cursor"); }
+        if key == "appearance.selection" { return @tr("MainWindow" => "Selection"); }
+        if key == "appearance.font_family" { return @tr("MainWindow" => "Font family"); }
+        if key == "appearance.font_size" { return @tr("MainWindow" => "Font size"); }
+        if key == "appearance.fallback_fonts" { return @tr("MainWindow" => "Fallback fonts"); }
+        if key == "terminal.scrollback_lines" { return @tr("MainWindow" => "Scrollback lines"); }
+        if key == "terminal.scrollback_max_cells" { return @tr("MainWindow" => "Scrollback memory cap"); }
+        if key == "logging.enabled" { return @tr("MainWindow" => "Session logging"); }
+        if key == "logging.format" { return @tr("MainWindow" => "Format"); }
+        if key == "logging.directory" { return @tr("MainWindow" => "Directory"); }
+        return "";
+    }
+
+    /// N5：三态字段下方的说明（按稳定 key 渲染）。
+    public pure function theme-field-hint(key: string) -> string {
+        if key == "appearance.color_scheme" { return @tr("MainWindow" => "Built-in palette"); }
+        if key == "appearance.foreground"
+            || key == "appearance.background"
+            || key == "appearance.cursor"
+            || key == "appearance.selection" {
+            return @tr("MainWindow" => "Hex color");
+        }
+        if key == "appearance.font_family" { return @tr("MainWindow" => "Bundled DejaVu or an imported file"); }
+        if key == "appearance.font_size" { return @tr("MainWindow" => "Logical pixels"); }
+        if key == "appearance.fallback_fonts" { return @tr("MainWindow" => "Font files tried in order before the bundled CJK face"); }
+        if key == "terminal.scrollback_lines" { return @tr("MainWindow" => "Per session"); }
+        if key == "terminal.scrollback_max_cells" { return @tr("MainWindow" => "Cells kept per session"); }
+        if key == "logging.enabled" { return @tr("MainWindow" => "Write sessions to disk"); }
+        if key == "logging.format" { return @tr("MainWindow" => "Raw keeps escape sequences"); }
+        if key == "logging.directory" { return @tr("MainWindow" => "Log output directory"); }
+        return "";
     }
 }

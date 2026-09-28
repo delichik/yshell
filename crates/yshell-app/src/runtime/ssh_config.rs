@@ -13,6 +13,8 @@ use yshell_ssh::{
     AuthMethod, ForwardingKind, HostKeyPolicy, ProxyConfig, SshConnectionConfig, TunnelConfig,
 };
 
+use super::editor::SessionThemeDraft;
+use super::theme::ThemeSources;
 use super::*;
 
 impl AppRuntime {
@@ -20,13 +22,21 @@ impl AppRuntime {
         &self,
         resolved: &ResolvedSessionProfile,
     ) -> SessionEditorDraft {
+        let target_folder_id =
+            find_session_folder_id(&self.config_document.folders, &resolved.session.id)
+                .unwrap_or_else(|| SAVED_SESSIONS_FOLDER_ID.to_owned());
+        let parent_profile = self.terminal_profile_for_draft(Some(&target_folder_id));
+        let chain = self.config_document.folder_chain_to(&target_folder_id);
+        let sources = ThemeSources::resolve(
+            &chain,
+            &self.config_document.terminal,
+            &self.config_document.logging,
+        );
+        let theme =
+            SessionThemeDraft::new(parent_profile, sources, resolved.session.terminal.as_ref());
         let mut draft = SessionEditorDraft {
             target_session_id: Some(resolved.session.id.clone()),
-            target_folder_id: find_session_folder_id(
-                &self.config_document.folders,
-                &resolved.session.id,
-            )
-            .unwrap_or_else(|| SAVED_SESSIONS_FOLDER_ID.to_owned()),
+            target_folder_id,
             name: resolved.session.name.clone(),
             host: resolved.session.host.clone(),
             port_text: resolved.session.port.to_string(),
@@ -52,6 +62,7 @@ impl AppRuntime {
             tunnel_target_host: String::new(),
             tunnel_target_port_text: String::new(),
             tunnels: resolved.tunnel.forwards.clone(),
+            theme,
         };
         if let Some(auth) = &resolved.auth {
             match &auth.method {

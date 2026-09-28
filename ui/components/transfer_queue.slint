@@ -4,7 +4,8 @@ import { Icon } from "basic/icons.slint";
 // 传输队列（§5.13）：方向图标 + 摘要；嵌在右侧工具的 WinCard 内，底透明。
 // 卡片标题由外层 WinCardHeader（`Transfers`）提供，这里不再重复标题行。
 export component TransferQueue inherits Rectangle {
-    in property <string> summary_text: "No active transfers";
+    // E21：默认值置空（投影必覆盖），避免投影更新前闪现英文。
+    in property <string> summary_text: "";
 
     height: 110px;
     background: transparent;

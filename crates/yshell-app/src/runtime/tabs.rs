@@ -85,7 +85,7 @@ impl AppRuntime {
             if shell_closed {
                 runtime.set_state(yshell_core::SessionState::Disconnected);
                 runtime
-                    .append_status_line("Live shell closed while the app was polling for output.");
+                    .log_runtime_event("Live shell closed while the app was polling for output.");
             }
             (
                 chunks.is_empty(),
@@ -125,6 +125,9 @@ impl AppRuntime {
             self.active_session_id = None;
             self.tabs[index].unread = 0;
             self.refresh_terminal_search_for_active_session();
+            // D16：无会话标签不得残留上一个会话的 SFTP 目录（B 轮3 #19）。
+            self.reset_sftp_view_state();
+            self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
             self.status_text = "Activated the Quick Connect page.".to_owned();
             return Ok(self.projection());
         }
@@ -143,7 +146,12 @@ impl AppRuntime {
         self.tabs[index].unread = 0;
         self.refresh_terminal_search_for_active_session();
         let title = self.tab_display_title(tab_id);
-        let sftp_status = self.sync_sftp_lifecycle_for_session(&session_id, false);
+        // D16：切换会话时清掉上一个会话的目录并重新加载当前会话的 SFTP 视图。
+        let sftp_session_changed = self.sftp_session.status_session_key() != session_id.as_str();
+        if sftp_session_changed {
+            self.reset_sftp_view_state();
+        }
+        let sftp_status = self.sync_sftp_lifecycle_for_session(&session_id, sftp_session_changed);
         self.status_text = format!("Activated tab `{title}`. {sftp_status}");
         Ok(self.projection())
     }
@@ -273,6 +281,50 @@ impl AppRuntime {
     pub(crate) fn tab_kind_is_quick_connect(&self, tab_id: &str) -> bool {
         self.tab_index(tab_id)
             .is_some_and(|index| self.tabs[index].kind.is_quick_connect())
+    }
+
+    /// D18：标签右键菜单的连接状态（针对 `tab_menu_tab_id`）。
+    ///
+    /// 返回 `(reconnect_enabled, disconnect_enabled)`；没有会话（QC 页）时都为
+    /// `false`。WS-A 的标签菜单用这两个旗标启用 Reconnect/Disconnect。
+    pub(crate) fn tab_menu_connection_flags(&self) -> (bool, bool) {
+        let session_key = self
+            .tab_menu_tab_id
+            .as_deref()
+            .and_then(|tab_id| self.tab_index(tab_id))
+            .and_then(|index| self.tabs[index].session_id());
+        match session_key.and_then(|key| self.sessions.get(key)) {
+            Some(runtime) => (
+                matches!(
+                    runtime.state,
+                    SessionState::Idle | SessionState::Disconnected | SessionState::Failed
+                ),
+                matches!(
+                    runtime.state,
+                    SessionState::Connected | SessionState::Connecting
+                ),
+            ),
+            None => (false, false),
+        }
+    }
+
+    /// D18：重连被右键的标签（复用会话级 reconnect）。
+    pub fn reconnect_tab_session(&mut self, tab_id: &str) -> AppResult<AppProjection> {
+        let session_key = self.tab_session_key(tab_id)?;
+        self.reconnect_session_by_key(&session_key)
+    }
+
+    /// D18：断开被右键的标签（复用会话级 disconnect）。
+    pub fn disconnect_tab_session(&mut self, tab_id: &str) -> AppResult<AppProjection> {
+        let session_key = self.tab_session_key(tab_id)?;
+        self.disconnect_session_by_key(&session_key)
+    }
+
+    /// 标签对应的会话 key（QC 页/未知标签报错）。
+    fn tab_session_key(&self, tab_id: &str) -> AppResult<String> {
+        self.tab_index(tab_id)
+            .and_then(|index| self.tabs[index].session_id().map(str::to_owned))
+            .ok_or_else(|| AppError::new(format!("tab `{tab_id}` does not have a runtime session")))
     }
 
     pub(crate) fn tab_display_title(&self, tab_id: &str) -> String {

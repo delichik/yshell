@@ -25,9 +25,17 @@ export component ConfirmDialog inherits Rectangle {
     in-out property <string> confirmation-text: "";
     in property <string> confirm-label: @tr("Confirm");
     in property <string> cancel-label: @tr("Cancel");
+    /// B 轮2 #48：不需要输入确认词的破坏性确认（关闭标签 / 退出 / 删除会话）也应使用
+    /// `critical` 文案色而不是强调色实底；由宿主对破坏性动作传 true（WS-A 接线）。
+    in property <bool> destructive: false;
 
     callback confirmed();
     callback canceled();
+
+    // 面板宽度与正文列宽（显式宽度同时避免自动换行正文导致面板高度少算一行）
+    private property <length> dialog-width: 460px;
+    private property <length> content-width:
+        root.dialog-width - 2 * 1px - 2 * Theme.spacing-20;
 
     visible: self.open;
     background: Theme.scrim;
@@ -53,10 +61,10 @@ export component ConfirmDialog inherits Rectangle {
         }
 
         Rectangle {
-            x: (parent.width - 460px) / 2;
+            x: (parent.width - root.dialog-width) / 2;
             y: max((parent.height - self.height) / 2, 40px);
-            width: 460px;
-            height: body.preferred-height;
+            width: root.dialog-width;
+            height: min(body.preferred-height, parent.height - 2 * Theme.spacing-24);
             background: Theme.panel-background;
             border-radius: Theme.radius-panel;
             border-width: 1px;
@@ -82,6 +90,7 @@ export component ConfirmDialog inherits Rectangle {
                     text: root.message-text;
                     color: root.confirmation-token != "" ? Theme.critical : Theme.text-secondary;
                     wrap: word-wrap;
+                    width: root.content-width;
                 }
 
                 // 确认词输入（WinTextInput 自带 control-fill 底 + control-stroke 描边 + 聚焦强调条）
@@ -102,9 +111,11 @@ export component ConfirmDialog inherits Rectangle {
 
                     WinButton {
                         text: root.confirm-label;
-                        // 需要输入确认词的破坏性操作：critical 文案色，不用强调色实底
-                        accent: root.confirmation-token == "";
-                        critical: root.confirmation-token != "";
+                        // 需要输入确认词的破坏性操作：critical 文案色，不用强调色实底。
+                        // B 轮2 #48：不需要确认词的破坏性确认由宿主传 `destructive: true`
+                        // （关闭标签 / 退出 / 删除会话），同样改用 critical 文案色。
+                        accent: !root.destructive && root.confirmation-token == "";
+                        critical: root.destructive || root.confirmation-token != "";
                         enabled: root.confirmation-token == "" || root.confirmation-text == root.confirmation-token;
                         clicked => { root.confirmed(); }
                     }

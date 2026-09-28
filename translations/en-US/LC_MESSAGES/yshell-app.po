@@ -10,7 +10,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: yshell\n"
-"POT-Creation-Date: 2026-09-27 19:53+0000\n"
+"POT-Creation-Date: 2026-09-28 10:24+0000\n"
 "PO-Revision-Date: 2026-09-27 00:00+0000\n"
 "Last-Translator: YShell\n"
 "Language-Team: YShell\n"
@@ -254,8 +254,6 @@ msgstr "Update Selected From Active"
 msgctxt "MainWindow"
 msgid "Delete Selected Session..."
 msgstr "Delete Selected Session..."
-
-
 
 #: ui/main_window.slint:908
 msgctxt "MainWindow"
@@ -2792,7 +2790,6 @@ msgctxt "MainWindow"
 msgid "Open a session before starting terminal logging."
 msgstr "Open a session before starting terminal logging."
 
-
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
 msgctxt "SftpRemotePane"
 msgid "Parent directory"
@@ -2861,12 +2858,16 @@ msgstr "{0} · {1}"
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
 msgctxt "SftpRemotePane"
 msgid "{n} item"
-msgstr "{n} item"
+msgid_plural "{n} items"
+msgstr[0] "{n} item"
+msgstr[1] "{n} items"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
 msgctxt "SftpRemotePane"
 msgid "{n} dir"
-msgstr "{n} dir"
+msgid_plural "{n} dirs"
+msgstr[0] "{n} dir"
+msgstr[1] "{n} dirs"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
 msgctxt "SftpTransferDrawer"
@@ -3167,3 +3168,709 @@ msgstr "Copy Path"
 msgctxt "SftpPropertiesDialog"
 msgid "Close"
 msgstr "Close"
+
+#: ui/main_window.slint:1015
+msgctxt "MainWindow"
+msgid "Open a session before saving it."
+msgstr "Open a session before saving it."
+
+#: ui/main_window.slint:1026 ui/main_window.slint:1101
+msgctxt "MainWindow"
+msgid "Select text in the terminal first."
+msgstr "Select text in the terminal first."
+
+#: ui/main_window.slint:1032 ui/main_window.slint:1048
+#: ui/main_window.slint:1032 ui/main_window.slint:1048 ui/main_window.slint:1112
+#: ui/main_window.slint:1032 ui/main_window.slint:1048 ui/main_window.slint:1112
+msgctxt "MainWindow"
+msgid "Open a session first."
+msgstr "Open a session first."
+
+#: ui/main_window.slint:1041
+msgctxt "MainWindow"
+msgid "The active session is not connected."
+msgstr "The active session is not connected."
+
+#: ui/main_window.slint:1047
+msgctxt "MainWindow"
+msgid "The active session is already connected."
+msgstr "The active session is already connected."
+
+#: ui/main_window.slint:1055 ui/main_window.slint:1062
+#: ui/main_window.slint:1055 ui/main_window.slint:1062 ui/main_window.slint:1217
+#: ui/main_window.slint:1055 ui/main_window.slint:1062 ui/main_window.slint:1217 ui/main_window.slint:1229
+#: ui/main_window.slint:1055 ui/main_window.slint:1062 ui/main_window.slint:1217 ui/main_window.slint:1229
+msgctxt "MainWindow"
+msgid "Select a saved session first."
+msgstr "Select a saved session first."
+
+#: ui/main_window.slint:1061 ui/main_window.slint:1228
+msgctxt "MainWindow"
+msgid "Open the active session first."
+msgstr "Open the active session first."
+
+#: ui/main_window.slint:1202
+msgctxt "MainWindow"
+msgid "Per-tab reconnect is not available in this build; press F5 for the "
+"active session."
+msgstr "Per-tab reconnect is not available in this build; press F5 for the "
+"active session."
+
+#: ui/main_window.slint:1207
+msgctxt "MainWindow"
+msgid "Per-tab disconnect is not available in this build."
+msgstr "Per-tab disconnect is not available in this build."
+
+#: ui/main_window.slint:1241
+msgctxt "MainWindow"
+msgid "Edit Folder Defaults…"
+msgstr "Edit Folder Defaults…"
+
+#: ui/main_window.slint:1243
+msgctxt "MainWindow"
+msgid "Right-click a folder to edit its defaults."
+msgstr "Right-click a folder to edit its defaults."
+
+#: ui/components/local_pane.slint:239
+msgctxt "LocalPane"
+msgid "Window is too short to expand the local pane"
+msgstr "Window is too short to expand the local pane"
+
+#: ui/components/sftp_panel.slint:125
+msgctxt "SftpRemotePane"
+msgid "Remote"
+msgstr "Remote"
+
+#: ui/components/sftp_panel.slint:226
+msgctxt "SftpRemotePane"
+msgid "…"
+msgstr "…"
+
+#: ui/components/sftp_panel.slint:709
+msgctxt "SftpTransferDrawer"
+msgid "No transfer tasks yet"
+msgstr "No transfer tasks yet"
+
+#: ui/components/sftp_panel.slint:840
+msgctxt "SftpTransferDrawer"
+msgid "{0} transfer(s)"
+msgstr "{0} transfer(s)"
+
+#: ui/components/sftp_panel.slint:841
+msgctxt "SftpTransferDrawer"
+msgid " · {0} active"
+msgstr " · {0} active"
+
+#: ui/components/sftp_panel.slint:842
+msgctxt "SftpTransferDrawer"
+msgid " · {0} paused"
+msgstr " · {0} paused"
+
+#: ui/components/sftp_panel.slint:843
+msgctxt "SftpTransferDrawer"
+msgid " · {0} failed"
+msgstr " · {0} failed"
+
+#: ui/components/sftp_panel.slint:844
+msgctxt "SftpTransferDrawer"
+msgid " · {0} completed"
+msgstr " · {0} completed"
+
+#: ui/components/sftp_panel.slint:1389
+msgctxt "SftpContextMenu"
+msgid "Root directory (/)"
+msgstr "Root directory (/)"
+
+#: ui/components/sftp_panel.slint:1566
+msgctxt "SftpEntryDialog"
+msgid "This permanently removes the {0} selected remote entries, directories "
+"recursively."
+msgstr "This permanently removes the {0} selected remote entries, directories "
+"recursively."
+
+#: ui/components/sftp_panel.slint:1569
+msgctxt "SftpEntryDialog"
+msgid "Uploads the local file or directory into the current remote directory "
+"using its name."
+msgstr "Uploads the local file or directory into the current remote directory "
+"using its name."
+
+#: ui/components/sftp_panel.slint:1834
+msgctxt "SftpConflictDialog"
+msgid "Overwrite replaces them, Rename keeps both by adding a number, Skip "
+"leaves them untouched."
+msgstr "Overwrite replaces them, Rename keeps both by adding a number, Skip "
+"leaves them untouched."
+
+#: ui/components/status_bar.slint:78
+msgctxt "StatusBar"
+msgid "Recording — open logging menu"
+msgstr "Recording — open logging menu"
+
+#: ui/components/status_bar.slint:79
+msgctxt "StatusBar"
+msgid "Logging — open logging menu"
+msgstr "Logging — open logging menu"
+
+#: ui/components/tool_dock.slint:154
+msgctxt "ToolDock"
+msgid "No active transfers"
+msgstr "No active transfers"
+
+#: ui/components/tool_dock.slint:440
+msgctxt "MainWindow"
+msgid "Local"
+msgstr "Local"
+
+#: ui/components/tool_dock.slint:542
+msgctxt "MainWindow"
+msgid "Command presets are not available in this build yet."
+msgstr "Command presets are not available in this build yet."
+
+#: ui/components/transfer_queue.slint:8
+msgctxt "TransferQueue"
+msgid "No active transfers"
+msgstr "No active transfers"
+
+#: ui/pages/host_keys.slint:161
+msgctxt "HostKeysPage"
+msgid "{0} host(s) · {1} key(s)"
+msgstr "{0} host(s) · {1} key(s)"
+
+#: ui/pages/session_editor.slint:311 ui/pages/session_editor.slint:312
+#: ui/pages/session_editor.slint:311 ui/pages/session_editor.slint:312 ui/pages/session_editor.slint:317
+msgctxt "SessionEditor"
+msgid "Not available in this version."
+msgstr "Not available in this version."
+
+#: ui/pages/session_editor.slint:439
+msgctxt "SessionEditor"
+msgid "A session name and a host are required before saving."
+msgstr "A session name and a host are required before saving."
+
+#: ui/pages/session_editor.slint:733
+msgctxt "SessionEditor"
+msgid "Scrollback limits for this session. `Inherit` follows the folder and "
+"global defaults; `Explicit` stores an override here."
+msgstr "Scrollback limits for this session. `Inherit` follows the folder and "
+"global defaults; `Explicit` stores an override here."
+
+#: ui/pages/session_editor.slint:751
+msgctxt "SessionEditor"
+msgid "Per-field overrides for this session. Inherited rows show the resolved "
+"value and where it comes from."
+msgstr "Per-field overrides for this session. Inherited rows show the resolved "
+"value and where it comes from."
+
+#: ui/pages/session_editor.slint:766
+msgctxt "SessionEditor"
+msgid "Reset All"
+msgstr "Reset All"
+
+#: ui/pages/session_editor.slint:780
+msgctxt "SessionEditor"
+msgid "This section is not configurable in this version."
+msgstr "This section is not configurable in this version."
+
+#: ui/pages/settings.slint:232
+msgctxt "SettingsDialog"
+msgid "Terminal Appearance…"
+msgstr "Terminal Appearance…"
+
+#: ui/pages/settings.slint:343
+msgctxt "SettingsDialog"
+msgid "RESET SECRETS"
+msgstr "RESET SECRETS"
+
+#: ui/pages/settings.slint:569 ui/pages/settings.slint:981
+msgctxt "TerminalAppearanceDialog"
+msgid "Terminal Appearance"
+msgstr "Terminal Appearance"
+
+#: ui/pages/settings.slint:581 ui/pages/settings.slint:997
+msgctxt "TerminalAppearanceDialog"
+msgid "Close"
+msgstr "Close"
+
+#: ui/pages/settings.slint:607 ui/pages/settings.slint:1018
+msgctxt "TerminalAppearanceDialog"
+msgid "Color scheme"
+msgstr "Color scheme"
+
+#: ui/pages/settings.slint:645
+msgctxt "TerminalAppearanceDialog"
+msgid "No color schemes are available."
+msgstr "No color schemes are available."
+
+#: ui/pages/settings.slint:672 ui/pages/settings.slint:1073
+msgctxt "TerminalAppearanceDialog"
+msgid "Color overrides"
+msgstr "Color overrides"
+
+#: ui/pages/settings.slint:679 ui/pages/settings.slint:1096
+msgctxt "TerminalAppearanceDialog"
+msgid "Foreground"
+msgstr "Foreground"
+
+#: ui/pages/settings.slint:691 ui/pages/settings.slint:1109
+msgctxt "TerminalAppearanceDialog"
+msgid "Background"
+msgstr "Background"
+
+#: ui/pages/settings.slint:703 ui/pages/settings.slint:1122
+msgctxt "TerminalAppearanceDialog"
+msgid "Cursor"
+msgstr "Cursor"
+
+#: ui/pages/settings.slint:715 ui/pages/settings.slint:1135
+msgctxt "TerminalAppearanceDialog"
+msgid "Selection"
+msgstr "Selection"
+
+#: ui/pages/settings.slint:728 ui/pages/settings.slint:1148
+msgctxt "TerminalAppearanceDialog"
+msgid "Font"
+msgstr "Font"
+
+#: ui/pages/settings.slint:735
+msgctxt "TerminalAppearanceDialog"
+msgid "Font family"
+msgstr "Font family"
+
+#: ui/pages/settings.slint:743
+msgctxt "TerminalAppearanceDialog"
+msgid "Bundled font"
+msgstr "Bundled font"
+
+#: ui/pages/settings.slint:750 ui/pages/settings.slint:793
+msgctxt "TerminalAppearanceDialog"
+msgid "Browse…"
+msgstr "Browse…"
+
+#: ui/pages/settings.slint:757
+msgctxt "TerminalAppearanceDialog"
+msgid "Leave empty to use the bundled font."
+msgstr "Leave empty to use the bundled font."
+
+#: ui/pages/settings.slint:766 ui/pages/settings.slint:1172
+msgctxt "TerminalAppearanceDialog"
+msgid "Font size"
+msgstr "Font size"
+
+#: ui/pages/settings.slint:778
+msgctxt "TerminalAppearanceDialog"
+msgid "Fallback fonts"
+msgstr "Fallback fonts"
+
+#: ui/pages/settings.slint:786
+msgctxt "TerminalAppearanceDialog"
+msgid "One font file per line"
+msgstr "One font file per line"
+
+#: ui/pages/settings.slint:799 ui/pages/settings.slint:1196
+msgctxt "TerminalAppearanceDialog"
+msgid "Clear"
+msgstr "Clear"
+
+#: ui/pages/settings.slint:806
+msgctxt "TerminalAppearanceDialog"
+msgid "One font file path per line. CJK glyphs always fall back to the "
+"bundled font."
+msgstr "One font file path per line. CJK glyphs always fall back to the "
+"bundled font."
+
+#: ui/pages/settings.slint:816
+msgctxt "TerminalAppearanceDialog"
+msgid "Preview"
+msgstr "Preview"
+
+#: ui/pages/settings.slint:871 ui/pages/settings.slint:1264
+msgctxt "TerminalAppearanceDialog"
+msgid "Reset Defaults"
+msgstr "Reset Defaults"
+
+#: ui/pages/settings.slint:876 ui/pages/settings.slint:1269
+msgctxt "TerminalAppearanceDialog"
+msgid "Save"
+msgstr "Save"
+
+#: ui/pages/settings.slint:988
+msgctxt "TerminalAppearanceDialog"
+msgid "Global defaults for terminals opened after saving. Open terminals keep "
+"their theme."
+msgstr "Global defaults for terminals opened after saving. Open terminals keep "
+"their theme."
+
+#: ui/pages/settings.slint:1160
+msgctxt "TerminalAppearanceDialog"
+msgid "DejaVu Sans Mono"
+msgstr "DejaVu Sans Mono"
+
+#: ui/pages/settings.slint:1164
+msgctxt "TerminalAppearanceDialog"
+msgid "Add Font File…"
+msgstr "Add Font File…"
+
+#: ui/pages/settings.slint:1179
+msgctxt "TerminalAppearanceDialog"
+msgid "Logical pixels (6-72)"
+msgstr "Logical pixels (6-72)"
+
+#: ui/pages/settings.slint:1188
+msgctxt "TerminalAppearanceDialog"
+msgid "Fallback font files, separated by ;"
+msgstr "Fallback font files, separated by ;"
+
+#: ui/pages/settings.slint:1192
+msgctxt "TerminalAppearanceDialog"
+msgid "Add Fallback…"
+msgstr "Add Fallback…"
+
+#: ui/pages/settings.slint:1215
+msgctxt "TerminalAppearanceDialog"
+msgid "Live preview"
+msgstr "Live preview"
+
+#: ui/pages/settings.slint:1254
+msgctxt "TerminalAppearanceDialog"
+msgid "The preview updates while you edit; Save writes the defaults to "
+"config."
+msgstr "The preview updates while you edit; Save writes the defaults to "
+"config."
+
+#: ui/text_formats.slint:392
+msgctxt "MainWindow"
+msgid "Built-in default"
+msgstr "Built-in default"
+
+#: ui/text_formats.slint:395
+msgctxt "MainWindow"
+msgid "From global settings"
+msgstr "From global settings"
+
+#: ui/text_formats.slint:398
+msgctxt "MainWindow"
+msgid "From folder: {0}"
+msgstr "From folder: {0}"
+
+#: ui/text_formats.slint:401
+msgctxt "MainWindow"
+msgid "From color scheme: {0}"
+msgstr "From color scheme: {0}"
+
+#: ui/text_formats.slint:404
+msgctxt "MainWindow"
+msgid "Set in this folder"
+msgstr "Set in this folder"
+
+#: ui/text_formats.slint:407
+msgctxt "MainWindow"
+msgid "Set for this session"
+msgstr "Set for this session"
+
+#: ui/main_window.slint:1248
+msgctxt "MainWindow"
+msgid "This tab is already connected."
+msgstr "This tab is already connected."
+
+#: ui/main_window.slint:1253
+msgctxt "MainWindow"
+msgid "This tab is already disconnected."
+msgstr "This tab is already disconnected."
+
+#: ui/main_window.slint:1292
+msgctxt "MainWindow"
+msgid "New Session Here"
+msgstr "New Session Here"
+
+#: ui/main_window.slint:1294 ui/main_window.slint:1315
+msgctxt "MainWindow"
+msgid "Right-click a folder first."
+msgstr "Right-click a folder first."
+
+#: ui/main_window.slint:1298 ui/main_window.slint:1302
+#: ui/main_window.slint:1298 ui/main_window.slint:1302 ui/main_window.slint:1310
+msgctxt "MainWindow"
+msgid "Not available in this version."
+msgstr "Not available in this version."
+
+#: ui/main_window.slint:1309
+msgctxt "MainWindow"
+msgid "Connect All"
+msgstr "Connect All"
+
+#: ui/pages/host_keys.slint:374
+msgctxt "HostKeysPage"
+msgid "Host: {0}"
+msgstr "Host: {0}"
+
+#: ui/pages/host_keys.slint:378
+msgctxt "HostKeysPage"
+msgid "Algorithm: {0}"
+msgstr "Algorithm: {0}"
+
+#: ui/pages/host_keys.slint:382
+msgctxt "HostKeysPage"
+msgid "Fingerprint: {0}"
+msgstr "Fingerprint: {0}"
+
+#: ui/pages/host_keys.slint:386
+msgctxt "HostKeysPage"
+msgid "Host keys path: {0}"
+msgstr "Host keys path: {0}"
+
+#: ui/pages/host_keys.slint:390
+msgctxt "HostKeysPage"
+msgid "Temporary trust entries are not persisted here."
+msgstr "Temporary trust entries are not persisted here."
+
+#: ui/pages/known_hosts.slint:247
+msgctxt "KnownHostsPage"
+msgid "Host: {0}"
+msgstr "Host: {0}"
+
+#: ui/pages/known_hosts.slint:248
+msgctxt "KnownHostsPage"
+msgid "Port: {0}"
+msgstr "Port: {0}"
+
+#: ui/pages/known_hosts.slint:249
+msgctxt "KnownHostsPage"
+msgid "Algorithm: {0}"
+msgstr "Algorithm: {0}"
+
+#: ui/pages/known_hosts.slint:250
+msgctxt "KnownHostsPage"
+msgid "Fingerprint: {0}"
+msgstr "Fingerprint: {0}"
+
+#: ui/pages/known_hosts.slint:254
+msgctxt "KnownHostsPage"
+msgid "Known hosts path: {0}"
+msgstr "Known hosts path: {0}"
+
+#: ui/pages/known_hosts.slint:259
+msgctxt "KnownHostsPage"
+msgid "Temporary trust entries are not persisted here."
+msgstr "Temporary trust entries are not persisted here."
+
+#: ui/text_formats.slint:371
+msgctxt "MainWindow"
+msgid "Connected to {0}."
+msgstr "Connected to {0}."
+
+#: ui/text_formats.slint:374
+msgctxt "MainWindow"
+msgid "Connecting to {0} ..."
+msgstr "Connecting to {0} ..."
+
+#: ui/text_formats.slint:377
+msgctxt "MainWindow"
+msgid "Waiting for confirmation to continue the connection to {0}."
+msgstr "Waiting for confirmation to continue the connection to {0}."
+
+#: ui/text_formats.slint:380
+msgctxt "MainWindow"
+msgid "Could not connect to {0}."
+msgstr "Could not connect to {0}."
+
+#: ui/text_formats.slint:383
+msgctxt "MainWindow"
+msgid "Password required for {0}."
+msgstr "Password required for {0}."
+
+#: ui/text_formats.slint:386
+msgctxt "MainWindow"
+msgid "Could not connect to {0} with the supplied password."
+msgstr "Could not connect to {0} with the supplied password."
+
+#: ui/text_formats.slint:389
+msgctxt "MainWindow"
+msgid "Reconnected to {0}."
+msgstr "Reconnected to {0}."
+
+#: ui/text_formats.slint:392
+msgctxt "MainWindow"
+msgid "Reopened the session for {0}, but the shell is not live."
+msgstr "Reopened the session for {0}, but the shell is not live."
+
+#: ui/text_formats.slint:395
+msgctxt "MainWindow"
+msgid "Could not reconnect the session."
+msgstr "Could not reconnect the session."
+
+#: ui/text_formats.slint:398
+msgctxt "MainWindow"
+msgid "Host key confirmation is required before reconnecting."
+msgstr "Host key confirmation is required before reconnecting."
+
+#: ui/text_formats.slint:401
+msgctxt "MainWindow"
+msgid "Authentication requires input before reconnecting."
+msgstr "Authentication requires input before reconnecting."
+
+#: ui/text_formats.slint:404
+msgctxt "MainWindow"
+msgid "Resized runtime terminal to {0}."
+msgstr "Resized runtime terminal to {0}."
+
+#: ui/text_formats.slint:407
+msgctxt "MainWindow"
+msgid "Loaded local directory `{0}` ({1} items)."
+msgstr "Loaded local directory `{0}` ({1} items)."
+
+#: ui/text_formats.slint:455
+msgctxt "MainWindow"
+msgid "Color scheme"
+msgstr "Color scheme"
+
+#: ui/text_formats.slint:456
+msgctxt "MainWindow"
+msgid "Foreground"
+msgstr "Foreground"
+
+#: ui/text_formats.slint:457
+msgctxt "MainWindow"
+msgid "Background"
+msgstr "Background"
+
+#: ui/text_formats.slint:458
+msgctxt "MainWindow"
+msgid "Cursor"
+msgstr "Cursor"
+
+#: ui/text_formats.slint:459
+msgctxt "MainWindow"
+msgid "Selection"
+msgstr "Selection"
+
+#: ui/text_formats.slint:460
+msgctxt "MainWindow"
+msgid "Font family"
+msgstr "Font family"
+
+#: ui/text_formats.slint:461
+msgctxt "MainWindow"
+msgid "Font size"
+msgstr "Font size"
+
+#: ui/text_formats.slint:462
+msgctxt "MainWindow"
+msgid "Fallback fonts"
+msgstr "Fallback fonts"
+
+#: ui/text_formats.slint:465
+msgctxt "MainWindow"
+msgid "Session logging"
+msgstr "Session logging"
+
+#: ui/text_formats.slint:466
+msgctxt "MainWindow"
+msgid "Format"
+msgstr "Format"
+
+#: ui/text_formats.slint:467
+msgctxt "MainWindow"
+msgid "Directory"
+msgstr "Directory"
+
+#: ui/text_formats.slint:473
+msgctxt "MainWindow"
+msgid "Built-in palette"
+msgstr "Built-in palette"
+
+#: ui/text_formats.slint:478
+msgctxt "MainWindow"
+msgid "Hex color"
+msgstr "Hex color"
+
+#: ui/text_formats.slint:480
+msgctxt "MainWindow"
+msgid "Bundled DejaVu or an imported file"
+msgstr "Bundled DejaVu or an imported file"
+
+#: ui/text_formats.slint:481
+msgctxt "MainWindow"
+msgid "Logical pixels"
+msgstr "Logical pixels"
+
+#: ui/text_formats.slint:482
+msgctxt "MainWindow"
+msgid "Font files tried in order before the bundled CJK face"
+msgstr "Font files tried in order before the bundled CJK face"
+
+#: ui/text_formats.slint:483
+msgctxt "MainWindow"
+msgid "Per session"
+msgstr "Per session"
+
+#: ui/text_formats.slint:484
+msgctxt "MainWindow"
+msgid "Cells kept per session"
+msgstr "Cells kept per session"
+
+#: ui/text_formats.slint:485
+msgctxt "MainWindow"
+msgid "Write sessions to disk"
+msgstr "Write sessions to disk"
+
+#: ui/text_formats.slint:486
+msgctxt "MainWindow"
+msgid "Raw keeps escape sequences"
+msgstr "Raw keeps escape sequences"
+
+#: ui/text_formats.slint:487
+msgctxt "MainWindow"
+msgid "Log output directory"
+msgstr "Log output directory"
+
+#: ui/components/host_key_dialog.slint:151
+msgctxt "HostKeyDialog"
+msgid "Host key changed for {0}."
+msgstr "Host key changed for {0}."
+
+#: ui/components/host_key_dialog.slint:152
+msgctxt "HostKeyDialog"
+msgid "First-time host key for {0}."
+msgstr "First-time host key for {0}."
+
+#: ui/components/host_key_dialog.slint:156
+msgctxt "HostKeyDialog"
+msgid "Known hosts: {0}"
+msgstr "Known hosts: {0}"
+
+#: ui/components/host_key_dialog.slint:161
+msgctxt "HostKeyDialog"
+msgid "Expected: {0} {1}"
+msgstr "Expected: {0} {1}"
+
+#: ui/components/host_key_dialog.slint:165
+msgctxt "HostKeyDialog"
+msgid "Presented: {0} {1}"
+msgstr "Presented: {0} {1}"
+
+#: ui/components/host_key_dialog.slint:169
+msgctxt "HostKeyDialog"
+msgid "Type REPLACE to enable replacement."
+msgstr "Type REPLACE to enable replacement."
+
+#: ui/components/host_key_dialog.slint:173
+msgctxt "HostKeyDialog"
+msgid "Choose Trust Once or Trust and Save."
+msgstr "Choose Trust Once or Trust and Save."
+
+#: ui/text_formats.slint:402
+msgctxt "MainWindow"
+msgid "Host key confirmed for {0}. Enter the password to continue."
+msgstr "Host key confirmed for {0}. Enter the password to continue."
+
+#: ui/text_formats.slint:405
+msgctxt "MainWindow"
+msgid "Host key confirmation is required for {0} before the password prompt."
+msgstr "Host key confirmation is required for {0} before the password prompt."
+
+#: ui/text_formats.slint:408
+msgctxt "MainWindow"
+msgid "{0} recorded target(s); keep up to {1}."
+msgstr "{0} recorded target(s); keep up to {1}."
+

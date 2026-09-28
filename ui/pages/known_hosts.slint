@@ -1,7 +1,18 @@
 import { Theme } from "../theme.slint";
 import { Icon } from "../components/basic/icons.slint";
-import { WinButton, WinCard, WinCardHeader, WinIconButton } from "../components/basic/controls.slint";
+import { WinButton, WinCard, WinCardHeader, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
+
+// 详情行（等宽 caption；与详情块原有整段文本同一形态）。
+// 注意：同一文件内的局部组件必须先声明后使用。
+component DetailLine inherits Text {
+    in property <string> hint: "";
+    text: root.hint;
+    color: Theme.text-secondary;
+    font-size: Theme.font-caption;
+    font-family: Theme.font-mono;
+    wrap: word-wrap;
+}
 
 // 已知主机管理器：ContentDialog 形态（§5.10）：标题行 → 双栏（清单 / 详情）→ 危险区。
 export component KnownHostsPage inherits Rectangle {
@@ -9,6 +20,12 @@ export component KnownHostsPage inherits Rectangle {
     in property <string> inventory-text: "";
     in property <string> selection-text: "";
     in property <string> details-text: "";
+    /// WS-D/WS-A 拆分的详情字段（标签在页面内本地化）。全部为空时回退到 `details-text`。
+    in property <string> detail-host-text: "";
+    in property <string> detail-port-text: "";
+    in property <string> detail-algorithm-text: "";
+    in property <string> detail-fingerprint-text: "";
+    in property <string> detail-path-text: "";
     in property <string> path-text: "";
     in-out property <string> clear-confirmation-text: "";
 
@@ -19,8 +36,18 @@ export component KnownHostsPage inherits Rectangle {
     callback update-clear-confirmation(string);
     callback clear-all();
 
+    // 详情区：拆分字段可用时逐行渲染（标签本地化）；否则回退整段 `details-text`。
+    private property <bool> detail-entry-visible: root.detail-host-text != "";
+    private property <bool> detail-split-visible:
+        root.detail-entry-visible || root.detail-path-text != "";
+
     visible: self.open;
-    background: Theme.scrim;
+    // B 轮3 #32：本弹窗**只**从 Settings 内部打开（`open_known_hosts_manager()` 唯一调用点
+    // 在 settings 的「打开已知主机管理器」按钮），此时 Settings 自己的 scrim 已经压暗全窗；
+    // 再叠一层会让遮罩明显更深（实测 45→9，其它弹窗 45→21）。这里不再画第二层遮罩，
+    // 视觉与其它单层弹窗一致；点击"面板外"仍由 dialog_scope 的全窗 TouchArea 关闭本弹窗。
+    // （若将来新增独立入口，需要恢复 `background: Theme.scrim;`。）
+    background: transparent;
 
     // L2（对话框 Esc / 遮罩点击关闭）：根 FocusScope 包住整个弹窗；打开时聚焦，
     // Esc 沿焦点链冒泡到这里 → 与关闭按钮完全相同的 `root.close()` 路径；其余按键 reject。
@@ -106,7 +133,8 @@ export component KnownHostsPage inherits Rectangle {
                             icon: "globe";
                         }
 
-                        // 清单表面：Rust 侧给出预格式化文本，行首 ">" 标记当前选中项
+                        // 清单表面：Rust 侧给出预格式化文本，行首 ">" 标记当前选中项。
+                        // 原先是"裁剪的 Text"，条目多时下半部分不可达（E22）→ 改为可滚动 + 指示条。
                         Rectangle {
                             vertical-stretch: 1;
                             clip: true;
@@ -115,15 +143,34 @@ export component KnownHostsPage inherits Rectangle {
                             border-width: 1px;
                             border-color: Theme.divider;
 
-                            Text {
-                                x: 10px;
-                                y: 10px;
-                                width: parent.width - 20px;
-                                text: root.inventory-text;
-                                color: Theme.text-secondary;
-                                font-size: Theme.font-caption;
-                                font-family: Theme.font-mono;
-                                wrap: no-wrap;
+                            inventory-scroll := Flickable {
+                                width: parent.width;
+                                height: parent.height;
+                                interactive: true;
+                                content-width: self.width;
+                                content-height: inventory-text.preferred-height + 2 * Theme.spacing-8;
+
+                                inventory-text := Text {
+                                    x: 10px;
+                                    y: Theme.spacing-8;
+                                    width: inventory-scroll.width - 20px;
+                                    text: root.inventory-text;
+                                    color: Theme.text-secondary;
+                                    font-size: Theme.font-caption;
+                                    font-family: Theme.font-mono;
+                                    wrap: no-wrap;
+                                }
+                            }
+
+                            // 滚动指示：E22 可复用组件（`content-y` ≤ 0，组件内部取负）
+                            WinScrollIndicator {
+                                x: parent.width - self.width - Theme.spacing-4;
+                                y: Theme.spacing-4;
+                                height: parent.height - 2 * Theme.spacing-4;
+                                viewport-position: inventory-scroll.content-y;
+                                content-extent: inventory-scroll.content-height;
+                                viewport-extent: inventory-scroll.height;
+                                thumb-min-length: 24px;
                             }
                         }
 
@@ -171,7 +218,7 @@ export component KnownHostsPage inherits Rectangle {
                                 wrap: word-wrap;
                             }
 
-                            // 详情表面：等宽 caption，指纹对齐显示
+                            // 详情表面：等宽 caption，指纹对齐显示（可滚动 + 指示条，E22）
                             Rectangle {
                                 vertical-stretch: 1;
                                 clip: true;
@@ -180,15 +227,53 @@ export component KnownHostsPage inherits Rectangle {
                                 border-width: 1px;
                                 border-color: Theme.divider;
 
-                                Text {
-                                    x: 10px;
-                                    y: 10px;
-                                    width: parent.width - 20px;
-                                    text: root.details-text;
-                                    color: Theme.text-secondary;
-                                    font-size: Theme.font-caption;
-                                    font-family: Theme.font-mono;
-                                    wrap: word-wrap;
+                                details-scroll := Flickable {
+                                    width: parent.width;
+                                    height: parent.height;
+                                    interactive: true;
+                                    content-width: self.width;
+                                    content-height: detail-body.preferred-height + 2 * Theme.spacing-8;
+
+                                    detail-body := VerticalLayout {
+                                        x: 10px;
+                                        y: Theme.spacing-8;
+                                        width: details-scroll.width - 20px;
+                                        spacing: Theme.spacing-4;
+
+                                        // 已选条目：四条字段行（标签本地化；空值行也保留，与原整段文本行数一致）
+                                        if root.detail-entry-visible : VerticalLayout {
+                                            spacing: Theme.spacing-4;
+
+                                            DetailLine { hint: @tr("Host: {0}", root.detail-host-text); }
+                                            DetailLine { hint: @tr("Port: {0}", root.detail-port-text); }
+                                            DetailLine { hint: @tr("Algorithm: {0}", root.detail-algorithm-text); }
+                                            DetailLine { hint: @tr("Fingerprint: {0}", root.detail-fingerprint-text); }
+                                        }
+
+                                        if root.detail-path-text != "" : DetailLine {
+                                            hint: @tr("Known hosts path: {0}", root.detail-path-text);
+                                        }
+
+                                        // 未选中条目（仅路径）时的说明，替代原整段文本里的英文句
+                                        if root.detail-path-text != "" && !root.detail-entry-visible : DetailLine {
+                                            hint: @tr("Temporary trust entries are not persisted here.");
+                                        }
+
+                                        // 兼容回退：宿主尚未提供拆分字段时，继续显示原来的整段文本
+                                        if !root.detail-split-visible && root.details-text != "" : DetailLine {
+                                            hint: root.details-text;
+                                        }
+                                    }
+                                }
+
+                                WinScrollIndicator {
+                                    x: parent.width - self.width - Theme.spacing-4;
+                                    y: Theme.spacing-4;
+                                    height: parent.height - 2 * Theme.spacing-4;
+                                    viewport-position: details-scroll.content-y;
+                                    content-extent: details-scroll.content-height;
+                                    viewport-extent: details-scroll.height;
+                                    thumb-min-length: 24px;
                                 }
                             }
                         }

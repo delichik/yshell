@@ -257,13 +257,54 @@ impl AppRuntime {
         match self.selected_known_host_entry() {
             Some(entry) => format!(
                 "Host: {}\nPort: {}\nAlgorithm: {}\nFingerprint: {}",
-                entry.host, entry.port, entry.algorithm, entry.fingerprint
+                entry.host,
+                entry.port,
+                entry.algorithm,
+                format_fingerprint_groups(&entry.fingerprint)
             ),
             None => format!(
                 "Known hosts path: {}\nTemporary trust entries are not persisted here.",
                 self.config_store.known_hosts_file().display()
             ),
         }
+    }
+
+    /// D17：已知主机详情拆分字段（不含英文标签；指纹沿用 D9 的分组格式）。
+    #[must_use]
+    pub(crate) fn known_hosts_detail_host_text(&self) -> String {
+        self.selected_known_host_entry()
+            .map(|entry| entry.host)
+            .unwrap_or_default()
+    }
+
+    /// D17：已知主机详情端口（无选中时为空串）。
+    #[must_use]
+    pub(crate) fn known_hosts_detail_port_text(&self) -> String {
+        self.selected_known_host_entry()
+            .map(|entry| entry.port.to_string())
+            .unwrap_or_default()
+    }
+
+    /// D17：已知主机详情算法（无选中时为空串）。
+    #[must_use]
+    pub(crate) fn known_hosts_detail_algorithm_text(&self) -> String {
+        self.selected_known_host_entry()
+            .map(|entry| entry.algorithm)
+            .unwrap_or_default()
+    }
+
+    /// D17：已知主机详情指纹（D9 分组格式；无选中时为空串）。
+    #[must_use]
+    pub(crate) fn known_hosts_detail_fingerprint_text(&self) -> String {
+        self.selected_known_host_entry()
+            .map(|entry| format_fingerprint_groups(&entry.fingerprint))
+            .unwrap_or_default()
+    }
+
+    /// D17：已知主机文件路径（始终可用）。
+    #[must_use]
+    pub(crate) fn known_hosts_detail_path_text(&self) -> String {
+        self.config_store.known_hosts_file().display().to_string()
     }
 
     pub(crate) fn resolve_secret_value(&self, secret_key: &str) -> AppResult<String> {
@@ -1757,13 +1798,46 @@ impl AppRuntime {
         match self.selected_host_key_entry() {
             Some(entry) => format!(
                 "Host: {}\nPort: {}\nAlgorithm: {}\nFingerprint: {}",
-                entry.host, entry.port, entry.algorithm, entry.fingerprint
+                entry.host,
+                entry.port,
+                entry.algorithm,
+                format_fingerprint_groups(&entry.fingerprint)
             ),
             None => format!(
                 "Host keys path: {}\nTemporary trust entries are not persisted here.",
                 self.config_store.known_hosts_file().display()
             ),
         }
+    }
+
+    /// D20：主机密钥页详情拆分字段（不含英文标签；指纹沿用 D9 的分组格式）。
+    #[must_use]
+    pub(crate) fn host_keys_detail_host_text(&self) -> String {
+        self.selected_host_key_entry()
+            .map(|entry| entry.host)
+            .unwrap_or_default()
+    }
+
+    /// D20：主机密钥页详情算法（无选中时为空串）。
+    #[must_use]
+    pub(crate) fn host_keys_detail_algorithm_text(&self) -> String {
+        self.selected_host_key_entry()
+            .map(|entry| entry.algorithm)
+            .unwrap_or_default()
+    }
+
+    /// D20：主机密钥页详情指纹（D9 分组格式；无选中时为空串）。
+    #[must_use]
+    pub(crate) fn host_keys_detail_fingerprint_text(&self) -> String {
+        self.selected_host_key_entry()
+            .map(|entry| format_fingerprint_groups(&entry.fingerprint))
+            .unwrap_or_default()
+    }
+
+    /// D20：主机密钥文件路径（始终可用）。
+    #[must_use]
+    pub(crate) fn host_keys_detail_path_text(&self) -> String {
+        self.config_store.known_hosts_file().display().to_string()
     }
 }
 

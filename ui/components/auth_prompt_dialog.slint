@@ -15,7 +15,7 @@
 
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
-import { WinButton, WinIconButton, WinToggle } from "basic/controls.slint";
+import { WinButton, WinIconButton, WinToggle, WinScrollIndicator } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 
 /// 私钥下拉的一行（来自托管私钥清单；`detail` = 算法 + 指纹）。
@@ -121,6 +121,11 @@ export component AuthPromptDialog inherits Rectangle {
     callback cancel();
     callback select-method(int);
     callback submit-password();
+    /// N4：密码输入回传宿主。宿主的 `PendingAuthPrompt::password_text` 只由该回调更新，
+    /// 缺了它会导致：① `submit_auth_prompt()` 永远拿到空密码（"Password must not be
+    /// empty."、连接按钮不可用）；② 任何投影往返（如点"记住密码"）都把窗口属性写回空串，
+    /// 吞掉用户尚未提交的输入（M 轮5）。
+    callback update-password(string);
     callback toggle-remember-password(bool);
     callback select-key(int);
     callback update-passphrase(string);
@@ -128,6 +133,13 @@ export component AuthPromptDialog inherits Rectangle {
     callback browse-key-file();
     callback update-challenge-answer(int, string);
     callback submit-keyboard-round();
+
+    // 面板宽度与正文列宽集中定义（宽度归一见 WS-C 报告）。正文类文本显式给宽度：
+    // B 轮5 实测面板底部内边距塌成 2px（按钮行贴住下边框），根因是自动换行的正文在
+    // 布局宽度未定时估算 preferred-height，少算了一行。
+    private property <length> dialog-width: 460px;
+    private property <length> content-width:
+        root.dialog-width - 2 * 1px - 2 * Theme.spacing-20;
 
     visible: self.open;
     background: Theme.scrim;
@@ -161,10 +173,11 @@ export component AuthPromptDialog inherits Rectangle {
         }
 
         Rectangle {
-            x: (parent.width - 460px) / 2;
+            x: (parent.width - root.dialog-width) / 2;
             y: max((parent.height - self.height) / 2, Theme.spacing-24);
-            width: 460px;
-            height: body.preferred-height;
+            width: root.dialog-width;
+            // 内容高于窗口时收缩，标题与操作区始终可见
+            height: min(body.preferred-height, parent.height - 2 * Theme.spacing-24);
             background: Theme.panel-background;
             border-radius: Theme.radius-panel;
             border-width: 1px;
@@ -244,7 +257,9 @@ export component AuthPromptDialog inherits Rectangle {
                             color: Theme.attention-text;
                             font-size: Theme.font-body;
                             wrap: word-wrap;
-                            horizontal-stretch: 1;
+                            // 显式宽度（= 布局本应分配的宽度）：见 content-width 注释
+                            width: root.content-width - 2 * Theme.spacing-12
+                                - Theme.icon-size-small - Theme.spacing-8;
                         }
                     }
                 }
@@ -254,30 +269,31 @@ export component AuthPromptDialog inherits Rectangle {
                     color: Theme.critical;
                     font-size: Theme.font-body;
                     wrap: word-wrap;
+                    // 显式宽度：见 content-width 注释（避免面板高度少算一行）
+                    width: root.content-width;
                 }
 
-                // 方式切换：随服务端能力显隐（设计 §2）；只有一种可用方式时整行不渲染
+                // 方式切换：随服务端能力显隐（设计 §2）；只有一种可用方式时整行不渲染。
+                // B 轮5：未选中项给常态按钮形态（control-fill + 描边），此前用 subtle
+                // 导致未选中项完全没有边界，用户看不出可点范围与分组关系。
                 if root.has-usable-method && root.method-chooser-visible : HorizontalLayout {
                     spacing: Theme.spacing-8;
 
                     if root.password-visible : WinButton {
                         text: @tr("Password");
                         accent: root.selected-method == 0;
-                        subtle: root.selected-method != 0;
                         clicked => { root.select-method(0); }
                     }
 
                     if root.publickey-visible : WinButton {
                         text: @tr("Public key");
                         accent: root.selected-method == 1;
-                        subtle: root.selected-method != 1;
                         clicked => { root.select-method(1); }
                     }
 
                     if root.keyboard-visible : WinButton {
                         text: @tr("Keyboard interactive");
                         accent: root.selected-method == 2;
-                        subtle: root.selected-method != 2;
                         clicked => { root.select-method(2); }
                     }
                 }
@@ -290,6 +306,9 @@ export component AuthPromptDialog inherits Rectangle {
                         text <=> root.password-text;
                         placeholder-text: @tr("Password");
                         input-type: password;
+                        // 逐键回传宿主（见 update-password 注释）：宿主的投影不含未提交的
+                        // 密码，必须由 UI 主动同步，否则重试路径与"记住密码"往返都会丢输入。
+                        edited(text) => { root.update-password(text); }
                         accepted => { if root.submit-enabled { root.submit-password(); } }
                     }
 
@@ -335,7 +354,7 @@ export component AuthPromptDialog inherits Rectangle {
                         border-color: Theme.divider;
                         clip: true;
 
-                        Flickable {
+                        key-scroll := Flickable {
                             width: parent.width;
                             height: parent.height;
                             interactive: true;
@@ -356,6 +375,17 @@ export component AuthPromptDialog inherits Rectangle {
                                 }
                             }
                         }
+
+                        // 滚动指示：E22 可复用组件（列表超过 3 行时出现）
+                        WinScrollIndicator {
+                            x: parent.width - self.width - Theme.spacing-4;
+                            y: Theme.spacing-4;
+                            height: parent.height - 2 * Theme.spacing-4;
+                            viewport-position: key-scroll.content-y;
+                            content-extent: key-scroll.content-height;
+                            viewport-extent: key-scroll.height;
+                            thumb-min-length: 16px;
+                        }
                     }
 
                     if root.key-options.length == 0 : Text {
@@ -363,6 +393,7 @@ export component AuthPromptDialog inherits Rectangle {
                         color: Theme.text-tertiary;
                         font-size: Theme.font-caption;
                         wrap: word-wrap;
+                        width: root.content-width;
                     }
 
                     HorizontalLayout {
@@ -428,6 +459,7 @@ export component AuthPromptDialog inherits Rectangle {
                         font-size: Theme.font-body;
                         font-weight: Theme.weight-semibold;
                         wrap: word-wrap;
+                        width: root.content-width;
                     }
 
                     if root.challenge-instruction != "" : Text {
@@ -435,6 +467,7 @@ export component AuthPromptDialog inherits Rectangle {
                         color: Theme.text-secondary;
                         font-size: Theme.font-body;
                         wrap: word-wrap;
+                        width: root.content-width;
                     }
 
                     if root.challenge-round-total > 1 : Text {
@@ -457,6 +490,7 @@ export component AuthPromptDialog inherits Rectangle {
                             color: Theme.text-secondary;
                             font-size: Theme.font-body;
                             wrap: word-wrap;
+                            width: root.content-width;
                         }
 
                         WinTextInput {

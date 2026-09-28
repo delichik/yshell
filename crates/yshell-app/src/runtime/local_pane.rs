@@ -71,10 +71,15 @@ impl AppRuntime {
                 self.local_pane.dir = listing.dir.clone();
                 self.local_pane.error = None;
                 self.prune_local_selection(&listing);
-                self.status_text = format!(
-                    "Loaded local directory `{}` ({} items).",
-                    listing.dir.display(),
-                    listing.item_count
+                self.set_status_kind(
+                    "local-dir-loaded",
+                    format!(
+                        "Loaded local directory `{}` ({} items).",
+                        listing.dir.display(),
+                        listing.item_count
+                    ),
+                    listing.dir.display().to_string(),
+                    listing.item_count.to_string(),
                 );
                 self.local_pane.listing = Some(listing);
             }

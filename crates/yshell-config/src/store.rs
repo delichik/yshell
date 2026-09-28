@@ -7,8 +7,8 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use serde::{Deserialize, Serialize};
 use crate::schema::{ConfigDocument, ConfigSchemaError, ConfigWarning};
+use serde::{Deserialize, Serialize};
 use yshell_ssh::{HostKeyFingerprint, KnownHosts};
 
 const CONFIG_FILE_NAME: &str = "config.toml";
@@ -90,8 +90,7 @@ impl ConfigStore {
                     Ok((outcome, warnings))
                 }
                 Err(error) => {
-                    let outcome =
-                        self.backup_and_reset(path, ConfigStoreError::Schema(error))?;
+                    let outcome = self.backup_and_reset(path, ConfigStoreError::Schema(error))?;
                     Ok((outcome, Vec::new()))
                 }
             },
@@ -318,7 +317,9 @@ target = "not a host"
             },
         );
 
-        store.save_known_hosts(&known_hosts).expect("save known_hosts");
+        store
+            .save_known_hosts(&known_hosts)
+            .expect("save known_hosts");
         let loaded = store.load_known_hosts().expect("load known_hosts");
 
         assert_eq!(loaded, known_hosts);

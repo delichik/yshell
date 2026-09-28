@@ -132,6 +132,9 @@ impl AppRuntime {
         let canonical = target.canonical();
         self.quick_connect_input = input.to_owned();
         self.quick_connect_error_text.clear();
+        // D10："已连接目标"只由成功钩子写入；新的尝试先清掉上一次的标记，
+        // 失败时页面不会再显示"Connected to …"（B 轮3 #15）。
+        self.quick_connect_last_target.clear();
         self.handle_quick_connect(input)?;
         if let Some(session_key) = self.active_session_id.clone() {
             self.pending_quick_connect_targets
@@ -206,7 +209,9 @@ impl AppRuntime {
         }
         let limit = self.config_document.quick_connect.limit.max(1);
         history.truncate(limit);
-        self.persist_config_with_status("quick-connect-history");
+        // D37：`quick-connect-history` 现被摘要模板占用（`TextFormats.status-message`），
+        // 持久化失败改用独立 kind，避免被套进 "{0} recorded target(s)…" 模板。
+        self.persist_config_with_status("quick-connect-history-persist-failed");
     }
 
     fn mark_saved_session_used(&mut self, profile_id: &str) {
@@ -372,7 +377,7 @@ impl AppRuntime {
             .collect()
     }
 
-    /// 输入框下方的摘要（历史开关/条数/上限）。
+    /// 输入框下方的摘要（历史开关/条数/上限；回退文案，正式渲染走 `parts`）。
     pub(crate) fn quick_connect_summary_text(&self) -> String {
         let profile = &self.config_document.quick_connect;
         if !profile.enabled {
@@ -382,6 +387,23 @@ impl AppRuntime {
             "{} recorded target(s); keep up to {}.",
             profile.history.len(),
             profile.limit
+        )
+    }
+
+    /// D37：QC 摘要的结构化 kind/参数（页面经 `TextFormats.status-message` 渲染）。
+    ///
+    /// 启用态：`("quick-connect-history", 条数, 上限)`；历史关闭态没有模板，
+    /// 返回空 kind 让 UI 回退 `quick_connect_summary_text()`（页面本身已有
+    /// `@tr("Connection history is disabled.")` 空态提示）。
+    pub(crate) fn quick_connect_summary_parts(&self) -> (String, String, String) {
+        let profile = &self.config_document.quick_connect;
+        if !profile.enabled {
+            return (String::new(), String::new(), String::new());
+        }
+        (
+            "quick-connect-history".to_owned(),
+            profile.history.len().to_string(),
+            profile.limit.to_string(),
         )
     }
 

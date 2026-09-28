@@ -6,6 +6,39 @@
 import { Theme } from "../../theme.slint";
 import { Icon } from "icons.slint";
 
+// ---------------------------------------------------------------- 焦点
+/// §3.5 键盘焦点环：2px 双色环（focus-outer 外 + focus-inner 内），贴合控件圆角 +2px。
+/// 环画在控件外缘 2px 处，可能被外层 `clip` 裁掉；只在键盘聚焦时显示（鼠标点击不闪环）。
+component FocusRing inherits Rectangle {
+    in property <bool> visible-ring: false;
+    in property <length> radius: Theme.radius-control;
+    /// 被装饰控件的尺寸（组件根元素不能引用 `parent`，由调用方传入）
+    in property <length> target-width: 0px;
+    in property <length> target-height: 0px;
+
+    x: -2px;
+    y: -2px;
+    width: root.target-width + 4px;
+    height: root.target-height + 4px;
+    border-radius: root.radius + 2px;
+    border-width: 1px;
+    border-color: Theme.focus-outer;
+    background: transparent;
+    opacity: root.visible-ring ? 1 : 0;
+    animate opacity { duration: Theme.duration-faster; easing: ease-out; }
+
+    Rectangle {
+        x: 1px;
+        y: 1px;
+        width: parent.width - 2px;
+        height: parent.height - 2px;
+        border-radius: root.radius + 1px;
+        border-width: 1px;
+        border-color: Theme.focus-inner;
+        background: transparent;
+    }
+}
+
 // ---------------------------------------------------------------- 按钮
 export component WinButton inherits Rectangle {
     in property <string> text: "";
@@ -19,6 +52,8 @@ export component WinButton inherits Rectangle {
     in property <bool> critical: false;
     in property <bool> enabled <=> touch.enabled;
     callback clicked();
+    /// 键盘焦点（调用方可用它做弹窗默认焦点/焦点链断言）
+    out property <bool> has-focus: button_focus.has-focus;
 
     height: Theme.control-height;
     border-radius: Theme.radius-control;
@@ -35,6 +70,33 @@ export component WinButton inherits Rectangle {
     accessible-role: button;
     accessible-enabled: root.enabled;
     accessible-label: root.text;
+    accessible-action-default => { root.clicked(); }
+
+    // E1：键盘焦点环（仅键盘聚焦时可见）
+    FocusRing {
+        visible-ring: root.keyboard-focus && root.enabled;
+        radius: root.border-radius;
+        target-width: root.width;
+        target-height: root.height;
+    }
+
+    // E1：键盘可达性 —— FocusScope 承载 Tab 焦点与 Enter/Space 触发；禁用时不可聚焦。
+    // `focus-on-click: false`：不抢 TouchArea 的按下事件，鼠标点击的聚焦由 TouchArea 显式调用。
+    button_focus := FocusScope {
+        enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (root.enabled && (event.text == Key.Space || event.text == Key.Return)) {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+        focus-gained(reason) => { root.keyboard-focus = reason != FocusReason.pointer-click; }
+        focus-lost(reason) => { root.keyboard-focus = false; }
+    }
+
+    private property <bool> keyboard-focus: false;
 
     // 统一规则（§5.1）：水平内边距一律 12，图标↔文字 8；不再按 accent/subtle/有无图标分支
     HorizontalLayout {
@@ -74,7 +136,18 @@ export component WinButton inherits Rectangle {
         : Theme.text-primary;
 
     touch := TouchArea {
+        // 鼠标按下即把焦点移入按钮（§3.5：点击聚焦但焦点环只在键盘路径显示）
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                button_focus.focus();
+            }
+        }
         clicked => { root.clicked(); }
+    }
+
+    /// 供宿主/弹窗把键盘焦点移入本按钮（`focus` 是内建函数名，不能直接复用）
+    public function focus-button() {
+        button_focus.focus();
     }
 }
 
@@ -84,6 +157,8 @@ export component WinIconButton inherits Rectangle {
     in property <string> accessible-name: "";
     in property <bool> enabled <=> touch.enabled;
     callback clicked();
+    /// 键盘焦点（E1）
+    out property <bool> has-focus: button_focus.has-focus;
 
     width: Theme.control-height;
     height: Theme.control-height;
@@ -94,6 +169,31 @@ export component WinIconButton inherits Rectangle {
     accessible-role: button;
     accessible-enabled: root.enabled;
     accessible-label: root.accessible-name;
+    accessible-action-default => { root.clicked(); }
+
+    FocusRing {
+        visible-ring: root.keyboard-focus && root.enabled;
+        radius: root.border-radius;
+        target-width: root.width;
+        target-height: root.height;
+    }
+
+    // E1：与 WinButton 同款键盘壳（Tab 可达 + Enter/Space 触发 + 禁用不可聚焦）
+    button_focus := FocusScope {
+        enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (root.enabled && (event.text == Key.Space || event.text == Key.Return)) {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+        focus-gained(reason) => { root.keyboard-focus = reason != FocusReason.pointer-click; }
+        focus-lost(reason) => { root.keyboard-focus = false; }
+    }
+
+    private property <bool> keyboard-focus: false;
 
     Icon {
         name: root.icon;
@@ -105,7 +205,17 @@ export component WinIconButton inherits Rectangle {
     }
 
     touch := TouchArea {
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                button_focus.focus();
+            }
+        }
         clicked => { root.clicked(); }
+    }
+
+    /// 供宿主把键盘焦点移入本按钮
+    public function focus-button() {
+        button_focus.focus();
     }
 }
 
@@ -118,22 +228,57 @@ export component WinToggle inherits Rectangle {
     in-out property <bool> checked: false;
     in property <bool> enabled <=> touch.enabled;
     callback toggled();
+    /// 键盘焦点（E1）
+    out property <bool> has-focus: toggle_focus.has-focus;
 
     height: Theme.control-height;
-    width: root.text == "" ? Theme.control-height : content.preferred-width;
+    // 文本模式宽度随内容，但封顶避免长文案无限撑宽（配合下面的 `overflow: elide`）。
+    width: root.text == "" ? Theme.control-height : min(content.preferred-width, Theme.nav-width * 2);
     border-radius: Theme.radius-control;
-    border-width: 1px;
-    border-color: checked ? transparent : Theme.control-stroke;
-    background: !enabled ? Theme.control-fill-disabled
-        : checked ? (touch.pressed ? Theme.accent-pressed : touch.has-hover ? Theme.accent-hover : Theme.accent)
-        : (touch.pressed ? Theme.control-fill-pressed : touch.has-hover ? Theme.control-fill-hover : Theme.control-fill);
+    // 文本模式是"复选框 + 标签"（无按钮外框）；纯图标模式保留 32×32 图标按钮形态。
+    border-width: root.text == "" ? 1px : 0px;
+    border-color: !root.enabled ? Theme.control-stroke
+        : root.text == "" ? (root.checked ? Theme.accent : Theme.control-stroke)
+        : transparent;
+    background: !root.enabled ? (root.text == "" ? Theme.control-fill-disabled : transparent)
+        : root.text == "" ? (root.checked ? Theme.accent-soft
+            : touch.pressed ? Theme.control-fill-pressed
+            : touch.has-hover ? Theme.control-fill-hover
+            : Theme.control-fill)
+        : (touch.pressed ? Theme.subtle-pressed : touch.has-hover ? Theme.subtle-hover : transparent);
     animate background { duration: Theme.duration-faster; easing: ease-out; }
+    animate border-color { duration: Theme.duration-faster; easing: ease-out; }
 
     accessible-role: checkbox;
     accessible-enabled: root.enabled;
     accessible-checkable: true;
     accessible-checked: root.checked;
     accessible-label: root.text == "" ? root.accessible-name : root.text;
+    accessible-action-default => { if (root.enabled) { root.toggle(); } }
+
+    FocusRing {
+        visible-ring: root.keyboard-focus && root.enabled;
+        radius: root.border-radius;
+        target-width: root.width;
+        target-height: root.height;
+    }
+
+    // E1：键盘壳（Tab 可达 + Enter/Space 切换 + 禁用不可聚焦）
+    toggle_focus := FocusScope {
+        enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (root.enabled && (event.text == Key.Space || event.text == Key.Return)) {
+                root.toggle();
+                return accept;
+            }
+            return reject;
+        }
+        focus-gained(reason) => { root.keyboard-focus = reason != FocusReason.pointer-click; }
+        focus-lost(reason) => { root.keyboard-focus = false; }
+    }
+
+    private property <bool> keyboard-focus: false;
 
     content := HorizontalLayout {
         // 文本模式 12/12；纯图标模式（text==""）无内边距，20px 图标在 32×32 命中区里居中。
@@ -144,6 +289,26 @@ export component WinToggle inherits Rectangle {
         spacing: Theme.spacing-8;
         alignment: center;
 
+        // 文本模式的勾选框（三态：选中 accent 实底 + 勾 / 未选描边 / 禁用弱化）
+        if root.text != "" : Rectangle {
+            width: Theme.icon-size-small;
+            height: Theme.icon-size-small;
+            border-radius: 3px;
+            border-width: 1px;
+            border-color: !root.enabled ? Theme.text-disabled : root.checked ? Theme.accent : Theme.text-secondary;
+            background: root.checked ? (root.enabled ? Theme.accent : Theme.control-fill-disabled) : transparent;
+            animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+            Icon {
+                visible: root.checked;
+                name: "check";
+                icon-color: root.enabled ? Theme.accent-text : Theme.text-disabled;
+                icon-size: 12px;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
         if root.icon != "" : Rectangle {
             width: root.text == "" ? Theme.icon-size : Theme.icon-size-small;
             vertical-stretch: 1;
@@ -151,7 +316,7 @@ export component WinToggle inherits Rectangle {
 
             Icon {
                 name: root.icon;
-                icon-color: root.text-color;
+                icon-color: root.icon-tint;
                 icon-size: root.text == "" ? Theme.icon-size : Theme.icon-size-small;
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
@@ -164,14 +329,33 @@ export component WinToggle inherits Rectangle {
             font-size: Theme.font-body;
             vertical-alignment: center;
             wrap: no-wrap;
+            overflow: elide;
         }
     }
 
-    private property <brush> text-color: !root.enabled ? Theme.text-disabled
-        : root.checked ? Theme.accent-text : Theme.text-primary;
+    // 文本模式：选中不加亮文字（勾选框表达状态）；纯图标模式选中用 accent 前景 + accent-soft 底。
+    private property <brush> text-color: !root.enabled ? Theme.text-disabled : Theme.text-primary;
+    private property <brush> icon-tint: !root.enabled ? Theme.text-disabled
+        : root.text == "" ? (root.checked ? Theme.accent : Theme.text-primary)
+        : root.text-color;
 
     touch := TouchArea {
-        clicked => { root.checked = !root.checked; root.toggled(); }
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                toggle_focus.focus();
+            }
+        }
+        clicked => { root.toggle(); }
+    }
+
+    function toggle() {
+        root.checked = !root.checked;
+        root.toggled();
+    }
+
+    /// 供宿主把键盘焦点移入本控件
+    public function focus-toggle() {
+        toggle_focus.focus();
     }
 }
 
@@ -221,6 +405,9 @@ export component WinCardHeader inherits Rectangle {
             font-weight: Theme.weight-semibold;
             vertical-alignment: center;
             wrap: no-wrap;
+            // E3：标题让位于右侧操作区，长标题省略而不是撑破卡片
+            overflow: elide;
+            horizontal-stretch: 1;
         }
 
         @children
@@ -246,6 +433,14 @@ export component WinNavItem inherits Rectangle {
         : selected ? Theme.subtle-selected
         : touch.has-hover ? Theme.subtle-hover : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    // E19：读屏可读的列表项语义（选中态用 item-selected 表达）
+    accessible-role: list-item;
+    accessible-enabled: root.enabled;
+    accessible-label: root.text;
+    accessible-description: root.detail;
+    accessible-item-selectable: true;
+    accessible-item-selected: root.selected;
 
     // 选中指示条
     Rectangle {
@@ -286,6 +481,7 @@ export component WinNavItem inherits Rectangle {
             vertical-alignment: center;
             wrap: no-wrap;
             overflow: elide;
+            horizontal-stretch: 1;
         }
 
         if root.detail != "" : Text {
@@ -294,6 +490,10 @@ export component WinNavItem inherits Rectangle {
             font-size: Theme.font-caption;
             vertical-alignment: center;
             wrap: no-wrap;
+            // E3：次要信息不能让主文本被挤没，也不能溢出容器
+            overflow: elide;
+            horizontal-stretch: 0;
+            max-width: Theme.nav-width / 2;
         }
     }
 
@@ -321,6 +521,14 @@ export component WinListRow inherits Rectangle {
         : alternate ? Theme.card-fill : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
+    // E19：读屏可读的列表项语义
+    accessible-role: list-item;
+    accessible-enabled: root.enabled;
+    accessible-label: root.text;
+    accessible-description: root.detail;
+    accessible-item-selectable: true;
+    accessible-item-selected: root.selected;
+
     HorizontalLayout {
         padding-left: 8px;
         padding-right: 8px;
@@ -347,6 +555,7 @@ export component WinListRow inherits Rectangle {
             vertical-alignment: center;
             wrap: no-wrap;
             overflow: elide;
+            horizontal-stretch: 1;
         }
 
         if root.detail != "" : Text {
@@ -355,6 +564,10 @@ export component WinListRow inherits Rectangle {
             font-size: Theme.font-caption;
             vertical-alignment: center;
             wrap: no-wrap;
+            // E3：次要信息不能溢出容器
+            overflow: elide;
+            horizontal-stretch: 0;
+            max-width: Theme.nav-width / 2;
         }
     }
 
@@ -379,6 +592,12 @@ export component WinTab inherits Rectangle {
     border-radius: Theme.radius-control;
     background: active ? Theme.layer-fill : tab-hover.has-hover ? Theme.subtle-hover : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    // E19：标签语义（参考 1.18 内建 Tab 的实现：tab + item-selected）
+    accessible-role: tab;
+    accessible-label: root.text;
+    accessible-item-selectable: true;
+    accessible-item-selected: root.active;
 
     // 活动标签底部强调条
     Rectangle {
@@ -510,6 +729,8 @@ export component WinPivotBar inherits Rectangle {
                     font-weight: i == root.current ? Theme.weight-semibold : 400;
                     vertical-alignment: center;
                     wrap: no-wrap;
+                    // E3：长标题省略，不撑破分段条
+                    overflow: elide;
                 }
             }
 
@@ -536,17 +757,33 @@ export component WinInfoBar inherits Rectangle {
         : root.severity == "error" ? "warning"
         : root.severity == "info" ? "shield"
         : "warning";
-    // 图标语义色（背景/描边沿用 attention-*，缺 per-severity banner token，见回复建议）
+    // 图标语义色（E4：背景/描边/文字按 severity 分档，见下方 banner-* token）
     private property <brush> severity-icon-color:
         root.severity == "success" ? Theme.success
         : root.severity == "error" ? Theme.critical
         : root.severity == "info" ? Theme.text-secondary
         : Theme.caution;
+    // E4：不再让 success/error 共用 warning 的黄底
+    private property <brush> severity-background:
+        root.severity == "success" ? Theme.banner-success-background
+        : root.severity == "error" ? Theme.banner-error-background
+        : root.severity == "info" ? Theme.banner-info-background
+        : Theme.banner-warning-background;
+    private property <brush> severity-stroke:
+        root.severity == "success" ? Theme.banner-success-stroke
+        : root.severity == "error" ? Theme.banner-error-stroke
+        : root.severity == "info" ? Theme.banner-info-stroke
+        : Theme.banner-warning-stroke;
+    private property <brush> severity-text:
+        root.severity == "success" ? Theme.banner-success-text
+        : root.severity == "error" ? Theme.banner-error-text
+        : root.severity == "info" ? Theme.banner-info-text
+        : Theme.banner-warning-text;
 
-    background: Theme.attention-background;
+    background: root.severity-background;
     border-radius: Theme.radius-panel;
     border-width: 1px;
-    border-color: Theme.attention-stroke;
+    border-color: root.severity-stroke;
 
     HorizontalLayout {
         padding: Theme.spacing-12;
@@ -564,7 +801,7 @@ export component WinInfoBar inherits Rectangle {
 
             if root.title != "" : Text {
                 text: root.title;
-                color: Theme.attention-text;
+                color: root.severity-text;
                 font-size: Theme.font-body;
                 font-weight: Theme.weight-semibold;
                 wrap: word-wrap;
@@ -572,12 +809,59 @@ export component WinInfoBar inherits Rectangle {
 
             if root.text != "" : Text {
                 text: root.text;
-                color: Theme.attention-text;
+                color: root.severity-text;
                 font-size: Theme.font-body;
                 wrap: word-wrap;
             }
 
             @children
         }
+    }
+}
+
+// ---------------------------------------------------------------- 滚动提示
+/// 可滚动区域的 4px 自绘滚动提示（E22）：不参与布局、不吞鼠标事件，
+/// 由调用方叠加在滚动区右/下缘；形态与 settings 的自绘条一致（4px 圆角条）。
+///
+/// 用法：
+///   WinScrollIndicator {
+///       x: scroll-area.width - self.width - Theme.spacing-4;   // 垂直滚动时贴右缘
+///       height: scroll-area.height - 2 * Theme.spacing-4;
+///       viewport-position: flick.content-y;   // 绑 Flickable.content-x/-y（≤0）
+///       content-extent: flick.content-height; // 绑 content-width/-height
+///       viewport-extent: flick.height;        // 绑 Flickable 自身宽/高
+///   }
+export component WinScrollIndicator inherits Rectangle {
+    /// 滚动位置：`Flickable.content-x/-y`（0 = 起点，负值 = 已滚动）
+    in property <length> viewport-position: 0px;
+    /// 内容总尺寸：`Flickable.content-width/-height`
+    in property <length> content-extent: 0px;
+    /// 视口尺寸：Flickable 自身宽/高
+    in property <length> viewport-extent: 0px;
+    in property <length> track-width: Theme.spacing-4;
+    /// 滑块长度下限（settings 的竖向列表用 24px；标签条这类 24–28px 短轨道应传更小值）
+    in property <length> thumb-min-length: 16px;
+
+    width: track-width;
+    visible: root.content-extent > root.viewport-extent + 0.5px;
+    background: transparent;
+
+    // 滑块长度 = 视口/内容，下限保证可辨
+    private property <float> thumb-extent: Math.max(
+        self.height / 1px * Math.min(1.0, root.viewport-extent / Math.max(1px, root.content-extent)),
+        root.thumb-min-length / 1px
+    );
+    // 进度：0 = 起点，1 = 终点。viewport-position ≤ 0，取负才是前进量。
+    private property <float> progress: Math.max(
+        0.0,
+        Math.min(1.0, -root.viewport-position / Math.max(1px, root.content-extent - root.viewport-extent))
+    );
+
+    Rectangle {
+        width: parent.width;
+        height: root.thumb-extent * 1px;
+        y: (parent.height - self.height) * root.progress;
+        border-radius: self.width / 2;
+        background: Theme.text-tertiary;
     }
 }

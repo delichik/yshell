@@ -23,6 +23,10 @@ component MenuTitle inherits Rectangle {
     /// 菜单已展开且指针悬停到本项：由 main_window 切换到本项对应的菜单。
     callback hovered();
 
+    // E19：Slint 没有 menu-item 角色，用 button 语义 + 菜单名作为可访问标签。
+    accessible-role: button;
+    accessible-label: root.label;
+
     height: Theme.control-height-compact;
     width: title-text.preferred-width + 20px;
     border-radius: Theme.radius-control;
@@ -39,7 +43,8 @@ component MenuTitle inherits Rectangle {
     }
 
     title-touch := TouchArea {
-        mouse-cursor: pointer;
+        // A14（B 轮2 #62 / M 轮2 中#11）：设计语言 §5 要求菜单/按钮保持默认箭头，
+        // 这里不再设 mouse-cursor: pointer。
         clicked => { root.activated(); }
         // 悬停切换：仅在已有菜单展开时生效；PointerEventKind.move 覆盖指针移入本项的过渡。
         pointer-event(event) => {
@@ -107,7 +112,8 @@ export component MenuBar inherits Rectangle {
         // 菜单项都是固定宽度，若菜单栏只有固定宽度的子项，Slint 会把整窗内容
         // 的 max-width 推导成这些子项之和（有限值），从而把窗口的 max_inner_size
         // 钉死（表现为拖大窗口被弹回），见 main_window Window 的尺寸约束说明。
-        menu_bar_spacer := Rectangle { horizontal-stretch: 1; }
+        // （A19：纯布局占位，不需要标识符。）
+        Rectangle { horizontal-stretch: 1; }
     }
 }
 
@@ -139,6 +145,8 @@ export component MenuBarPopups inherits Rectangle {
         anchor-x: root.anchor-x;
         anchor-y: root.anchor-y;
         panel-width: 230px;
+        // A1：遮罩从菜单栏下方开始，点击其它一级菜单不再被遮罩吞掉。
+        scrim-top: Theme.bar-height-menubar;
         dismissed => { root.dismissed(); }
         selected(index) => { root.selected(0, index); }
     }
@@ -151,6 +159,7 @@ export component MenuBarPopups inherits Rectangle {
         anchor-x: root.anchor-x;
         anchor-y: root.anchor-y;
         panel-width: 210px;
+        scrim-top: Theme.bar-height-menubar;
         dismissed => { root.dismissed(); }
         selected(index) => { root.selected(1, index); }
     }
@@ -163,6 +172,7 @@ export component MenuBarPopups inherits Rectangle {
         anchor-x: root.anchor-x;
         anchor-y: root.anchor-y;
         panel-width: 260px;
+        scrim-top: Theme.bar-height-menubar;
         dismissed => { root.dismissed(); }
         selected(index) => { root.selected(2, index); }
     }
@@ -175,6 +185,7 @@ export component MenuBarPopups inherits Rectangle {
         anchor-x: root.anchor-x;
         anchor-y: root.anchor-y;
         panel-width: 250px;
+        scrim-top: Theme.bar-height-menubar;
         dismissed => { root.dismissed(); }
         selected(index) => { root.selected(3, index); }
     }
@@ -187,6 +198,7 @@ export component MenuBarPopups inherits Rectangle {
         anchor-x: root.anchor-x;
         anchor-y: root.anchor-y;
         panel-width: 210px;
+        scrim-top: Theme.bar-height-menubar;
         dismissed => { root.dismissed(); }
         selected(index) => { root.selected(4, index); }
     }

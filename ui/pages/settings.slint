@@ -1,7 +1,14 @@
 import { Theme } from "../theme.slint";
 import { Icon } from "../components/basic/icons.slint";
-import { WinButton, WinCard, WinIconButton } from "../components/basic/controls.slint";
+import { WinButton, WinCard, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
+
+// N5：配色方案选项（Settings 外观弹窗的方案卡片）。
+export struct SettingsSchemeOption {
+    id: string,
+    name: string,
+    swatches: [color],
+}
 
 // Settings dialog (iteration 1): config directory, secret store status and the
 // reset-secrets flow, plus the Known Hosts entry point. The reset confirmation
@@ -28,6 +35,8 @@ export component SettingsDialog inherits Rectangle {
     callback update-scrollback-max-cells(string);
     callback reset-terminal-defaults();
     callback save-terminal-settings();
+    /// N5：打开嵌套的 Terminal Appearance 弹窗。
+    callback open-terminal-appearance();
 
     // 内容理想高度：标题行 + 中部 + 操作区 + 间距/分割线/内边距
     private property <length> dialog-content-height:
@@ -159,9 +168,13 @@ export component SettingsDialog inherits Rectangle {
                             HorizontalLayout {
                                 spacing: Theme.spacing-12;
 
+                                // 标签列：右对齐（B 轮2 #72 / 轮5 低：左对齐 + 220px 会在标签与输入框
+                                // 之间留下 147px 空洞）。列宽不用 Theme.form-label-width（116px）——
+                                // 这条 CJK 标签最长约 180px；后续如需统一，应由 Theme 增加宽标签 token。
                                 Text {
                                     text: @tr("Scrollback lines");
                                     width: 220px;
+                                    horizontal-alignment: right;
                                     color: Theme.text-secondary;
                                     font-size: Theme.font-body;
                                     vertical-alignment: center;
@@ -182,6 +195,7 @@ export component SettingsDialog inherits Rectangle {
                                 Text {
                                     text: @tr("Scrollback memory cap (cells)");
                                     width: 220px;
+                                    horizontal-alignment: right;
                                     color: Theme.text-secondary;
                                     font-size: Theme.font-body;
                                     vertical-alignment: center;
@@ -213,6 +227,12 @@ export component SettingsDialog inherits Rectangle {
                             HorizontalLayout {
                                 spacing: Theme.spacing-8;
                                 alignment: end;
+
+                                WinButton {
+                                    text: @tr("Terminal Appearance…");
+                                    icon: "eye";
+                                    clicked => { root.open-terminal-appearance(); }
+                                }
 
                                 WinButton {
                                     text: @tr("Reset Defaults");
@@ -319,9 +339,11 @@ export component SettingsDialog inherits Rectangle {
                                         alignment: end;
 
                                         WinButton {
-                                            text: "RESET SECRETS";
+                                            // 机器比对令牌：译文必须保留英文原词（与运行时精确匹配）
+                                            text: @tr("RESET SECRETS");
                                             critical: true;
-                                            enabled: root.secret-reset-confirmation-text != "";
+                                            // B 轮2 #58：任意非空即点亮会误导用户；改为精确匹配
+                                            enabled: root.secret-reset-confirmation-text == "RESET SECRETS";
                                             clicked => { root.reset-secrets(); }
                                         }
                                     }
@@ -330,15 +352,17 @@ export component SettingsDialog inherits Rectangle {
                         }
                     }
 
-                    // 简易滚动指示（Flickable 无内建滚动条）
-                    Rectangle {
-                        visible: sections.preferred-height > scroll.height;
-                        width: 4px;
-                        height: max(24px, scroll.height * (scroll.height / max(1px, sections.preferred-height)));
-                        x: scroll.width - self.width - 2px;
-                        y: -scroll.content-y * ((scroll.height - self.height) / max(1px, sections.preferred-height - scroll.height));
-                        border-radius: 2px;
-                        background: Theme.text-tertiary;
+                    // 滚动指示：E22 可复用组件（内部按 `-content-y` 计算进度）。
+                    // 更正 C8：原审计前提"content-y ≥ 0"不成立（Slint 内建文档：content-y 通常为负），
+                    // 带负号的原始公式才是正确的，这里直接采用已验证的组件。
+                    WinScrollIndicator {
+                        x: scroll.width - self.width - Theme.spacing-4;
+                        y: Theme.spacing-4;
+                        height: parent.height - 2 * Theme.spacing-4;
+                        viewport-position: scroll.content-y;
+                        content-extent: scroll.content-height;
+                        viewport-extent: scroll.height;
+                        thumb-min-length: 24px;
                     }
                 }
 
@@ -372,3 +396,411 @@ export component SettingsDialog inherits Rectangle {
         }
     }
 }
+
+// ===========================================================================
+// N5：Terminal Appearance（Settings 的嵌套弹窗）
+// ===========================================================================
+//
+// 设计 §3：方案选择（色块预览）、单色覆盖（十六进制输入）、主字体（捆绑 DejaVu /
+// 导入文件路径）、fallback 字体列表、字号、实时预览小窗、恢复默认。所有值由 Rust
+// 投影写入，编辑只回调；Save 才落盘（D17：只对新开终端生效）。
+//
+// 为什么是嵌套弹窗而不是 Settings 内联区：Settings 面板几何保持不变，冻结 e2e 的
+// 坐标（Known Hosts 按钮 903,573）继续有效；入口按钮在 Settings 的 Terminal 区。
+
+// 行内小字提示（弹窗内部使用）。本文件内的局部组件必须先声明后使用，故放在弹窗之前；
+// 属性不能命名为 `text`（会覆盖继承的 Text.text）。
+component HintInline inherits Text {
+    in property <string> hint: "";
+    text: root.hint;
+    color: Theme.text-tertiary;
+    font-size: Theme.font-caption;
+    vertical-alignment: center;
+    wrap: no-wrap;
+}
+
+export component TerminalAppearanceDialog inherits Rectangle {
+    in property <bool> open: false;
+    in property <string> color-scheme-text: "";
+    in property <[SettingsSchemeOption]> schemes: [];
+    in property <[color]> palette-swatches: [];
+    in-out property <string> foreground-text: "";
+    in-out property <string> background-text: "";
+    in-out property <string> cursor-text: "";
+    in-out property <string> selection-text: "";
+    in-out property <string> font-family-text: "";
+    in-out property <string> font-size-text: "";
+    in-out property <string> fallback-fonts-text: "";
+    in property <string> status-text: "";
+    in property <image> preview;
+
+    callback close();
+    callback select-scheme(string);
+    callback update-color(string, string);
+    callback update-font-family(string);
+    callback update-font-size(string);
+    callback update-fallback-fonts(string);
+    callback browse-font-file();
+    callback browse-fallback-font();
+    callback clear-fallbacks();
+    callback reset-defaults();
+    callback save();
+
+    visible: self.open;
+    background: Theme.scrim;
+
+    // L2：Esc / 遮罩点击关闭；焦点在弹窗内（与 Settings / Known Hosts 一致）。
+    dialog-scope := FocusScope {
+        width: parent.width;
+        height: parent.height;
+
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.close();
+                return accept;
+            }
+            return reject;
+        }
+
+        TouchArea {
+            clicked => { root.close(); }
+        }
+
+        panel := Rectangle {
+            x: (parent.width - 760px) / 2;
+            y: max((parent.height - self.height) / 2, Theme.spacing-24);
+            width: 760px;
+            height: min(parent.height - 2 * Theme.spacing-24, body.preferred-height);
+            background: Theme.panel-background;
+            border-radius: Theme.radius-panel;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
+
+            TouchArea { }
+
+            body := VerticalLayout {
+                padding: Theme.spacing-20;
+                spacing: Theme.spacing-12;
+
+                // --- 标题行 -----------------------------------------------------
+                HorizontalLayout {
+                    spacing: Theme.spacing-12;
+
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        spacing: 2px;
+                        alignment: start;
+
+                        Text {
+                            text: @tr("Terminal Appearance");
+                            color: Theme.text-primary;
+                            font-size: Theme.font-subtitle;
+                            font-weight: Theme.weight-semibold;
+                        }
+
+                        Text {
+                            text: @tr("Global defaults for terminals opened after saving. Open terminals keep their theme.");
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    WinIconButton {
+                        icon: "close";
+                        accessible-name: @tr("Close");
+                        clicked => { root.close(); }
+                    }
+                }
+
+                Rectangle { height: 1px; background: Theme.layer-stroke; }
+
+                // --- 主体：左列（方案 + 颜色 + 字体） / 右列（预览） --------------
+                HorizontalLayout {
+                    spacing: Theme.spacing-16;
+
+                    // ---- 左列 ---------------------------------------------------
+                    Rectangle {
+                        width: 400px;
+                        background: transparent;
+
+                        VerticalLayout {
+                            spacing: Theme.spacing-12;
+                            alignment: start;
+
+                            Text {
+                                text: @tr("Color scheme");
+                                color: Theme.text-primary;
+                                font-size: Theme.font-body-large;
+                                font-weight: Theme.weight-semibold;
+                            }
+
+                            GridLayout {
+                                spacing: Theme.spacing-8;
+
+                                for option[index] in root.schemes : Rectangle {
+                                    height: 34px;
+                                    row: index / 2;
+                                    col: Math.mod(index, 2);
+                                    border-radius: Theme.radius-control;
+                                    border-width: 1px;
+                                    border-color: root.color-scheme-text == option.id ? Theme.accent : Theme.control-stroke;
+                                    background: root.color-scheme-text == option.id ? Theme.accent-soft : Theme.control-fill;
+
+                                    HorizontalLayout {
+                                        padding-left: Theme.spacing-8;
+                                        padding-right: Theme.spacing-8;
+                                        spacing: Theme.spacing-8;
+
+                                        Text {
+                                            text: option.name;
+                                            color: Theme.text-primary;
+                                            font-size: Theme.font-caption;
+                                            vertical-alignment: center;
+                                            horizontal-stretch: 1;
+                                            wrap: no-wrap;
+                                            overflow: elide;
+                                        }
+
+                                        HorizontalLayout {
+                                            spacing: 3px;
+                                            alignment: end;
+
+                                            for swatch in option.swatches : Rectangle {
+                                                width: 12px;
+                                                height: 12px;
+                                                border-radius: 2px;
+                                                border-width: 1px;
+                                                border-color: Theme.control-stroke;
+                                                background: swatch;
+                                            }
+                                        }
+                                    }
+
+                                    TouchArea {
+                                        clicked => { root.select-scheme(option.id); }
+                                    }
+                                }
+                            }
+
+                            Rectangle { height: 1px; background: Theme.divider; }
+
+                            Text {
+                                text: @tr("Color overrides");
+                                color: Theme.text-primary;
+                                font-size: Theme.font-body-large;
+                                font-weight: Theme.weight-semibold;
+                            }
+
+                            HorizontalLayout {
+                                spacing: Theme.spacing-8;
+
+                                for swatch in root.palette-swatches : Rectangle {
+                                    width: 14px;
+                                    height: 14px;
+                                    border-radius: 3px;
+                                    border-width: 1px;
+                                    border-color: Theme.control-stroke;
+                                    background: swatch;
+                                    vertical-stretch: 0;
+                                }
+                            }
+
+                            HorizontalLayout {
+                                spacing: Theme.spacing-8;
+
+                                Text { text: @tr("Foreground"); width: 96px; color: Theme.text-secondary; font-size: Theme.font-body; vertical-alignment: center; }
+                                WinTextInput {
+                                    horizontal-stretch: 1;
+                                    font-family: Theme.font-mono;
+                                    text <=> root.foreground-text;
+                                    placeholder-text: "#RRGGBB";
+                                    edited => { root.update-color("foreground", self.text); }
+                                }
+                            }
+
+                            HorizontalLayout {
+                                spacing: Theme.spacing-8;
+
+                                Text { text: @tr("Background"); width: 96px; color: Theme.text-secondary; font-size: Theme.font-body; vertical-alignment: center; }
+                                WinTextInput {
+                                    horizontal-stretch: 1;
+                                    font-family: Theme.font-mono;
+                                    text <=> root.background-text;
+                                    placeholder-text: "#RRGGBB";
+                                    edited => { root.update-color("background", self.text); }
+                                }
+                            }
+
+                            HorizontalLayout {
+                                spacing: Theme.spacing-8;
+
+                                Text { text: @tr("Cursor"); width: 96px; color: Theme.text-secondary; font-size: Theme.font-body; vertical-alignment: center; }
+                                WinTextInput {
+                                    horizontal-stretch: 1;
+                                    font-family: Theme.font-mono;
+                                    text <=> root.cursor-text;
+                                    placeholder-text: "#RRGGBB";
+                                    edited => { root.update-color("cursor", self.text); }
+                                }
+                            }
+
+                            HorizontalLayout {
+                                spacing: Theme.spacing-8;
+
+                                Text { text: @tr("Selection"); width: 96px; color: Theme.text-secondary; font-size: Theme.font-body; vertical-alignment: center; }
+                                WinTextInput {
+                                    horizontal-stretch: 1;
+                                    font-family: Theme.font-mono;
+                                    text <=> root.selection-text;
+                                    placeholder-text: "#RRGGBB";
+                                    edited => { root.update-color("selection", self.text); }
+                                }
+                            }
+
+                            Rectangle { height: 1px; background: Theme.divider; }
+
+                            Text {
+                                text: @tr("Font");
+                                color: Theme.text-primary;
+                                font-size: Theme.font-body-large;
+                                font-weight: Theme.weight-semibold;
+                            }
+
+                            HorizontalLayout {
+                                spacing: Theme.spacing-8;
+
+                                WinTextInput {
+                                    horizontal-stretch: 1;
+                                    text <=> root.font-family-text;
+                                    placeholder-text: @tr("DejaVu Sans Mono");
+                                    edited => { root.update-font-family(self.text); }
+                                }
+                                WinButton {
+                                    text: @tr("Add Font File…");
+                                    clicked => { root.browse-font-file(); }
+                                }
+                            }
+
+                            HorizontalLayout {
+                                spacing: Theme.spacing-8;
+
+                                Text { text: @tr("Font size"); width: 96px; color: Theme.text-secondary; font-size: Theme.font-body; vertical-alignment: center; }
+                                WinTextInput {
+                                    width: 80px;
+                                    text <=> root.font-size-text;
+                                    placeholder-text: "16";
+                                    edited => { root.update-font-size(self.text); }
+                                }
+                                HintInline { hint: @tr("Logical pixels (6-72)"); }
+                            }
+
+                            HorizontalLayout {
+                                spacing: Theme.spacing-8;
+
+                                WinTextInput {
+                                    horizontal-stretch: 1;
+                                    text <=> root.fallback-fonts-text;
+                                    placeholder-text: @tr("One font file per line");
+                                    edited => { root.update-fallback-fonts(self.text); }
+                                }
+                                WinButton {
+                                    text: @tr("Add Fallback…");
+                                    clicked => { root.browse-fallback-font(); }
+                                }
+                                WinButton {
+                                    text: @tr("Clear");
+                                    clicked => { root.clear-fallbacks(); }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle { width: 1px; background: Theme.divider; }
+
+                    // ---- 右列：实时预览 ------------------------------------------
+                    Rectangle {
+                        horizontal-stretch: 1;
+                        background: transparent;
+
+                        VerticalLayout {
+                            spacing: Theme.spacing-8;
+                            alignment: start;
+
+                            Text {
+                                text: @tr("Live preview");
+                                color: Theme.text-primary;
+                                font-size: Theme.font-body-large;
+                                font-weight: Theme.weight-semibold;
+                            }
+
+                            Rectangle {
+                                background: Theme.terminal-surface;
+                                border-radius: Theme.radius-control;
+                                border-width: 1px;
+                                border-color: Theme.terminal-border;
+                                height: 190px;
+
+                                Image {
+                                    source: root.preview;
+                                    width: parent.width - 16px;
+                                    height: parent.height - 16px;
+                                    x: 8px;
+                                    y: 8px;
+                                }
+                            }
+
+                            Text {
+                                text: root.status-text;
+                                color: Theme.text-tertiary;
+                                font-size: Theme.font-caption;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                }
+
+                Rectangle { height: 1px; background: Theme.divider; }
+
+                // --- 操作区 -----------------------------------------------------
+                HorizontalLayout {
+                    spacing: Theme.spacing-8;
+
+                    Text {
+                        text: @tr("The preview updates while you edit; Save writes the defaults to config.");
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    WinButton {
+                        text: @tr("Reset Defaults");
+                        clicked => { root.reset-defaults(); }
+                    }
+
+                    WinButton {
+                        text: @tr("Save");
+                        accent: true;
+                        clicked => { root.save(); }
+                    }
+                }
+            }
+        }
+    }
+
+    /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗。
+    public function focus-dialog() {
+        dialog_scope.focus();
+    }
+
+    changed open => {
+        if (root.open) {
+            dialog_scope.focus();
+        }
+    }
+}
+
+// 行内小字提示：见 N5 弹窗之前的定义（局部组件必须先声明后使用）。

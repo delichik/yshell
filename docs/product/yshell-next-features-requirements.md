@@ -798,7 +798,7 @@
 | N6 日志 UI | **已完成（验收通过 2026-09-28）** | `ses_f1c3ad8b1ffe3jqB4ZmYkr0tpr` | 右键菜单/REC/状态栏/弹窗/关闭退出 flush/rfd 目录；497 测试、e2e 74/74（冻结 `c25b1ede…`）；遗留：R-107 与大小上限待办 |
 | N3 面板停靠 | **已完成（验收通过 2026-09-28）** | `ses_f1bb42d9dffeOCLRk3ezBjFXUH` | 左右停靠/上下分栏/比例持久化/拖拽换边；**绑定环 21→0**；521 测试、e2e 34/34+25/25+74/74（冻结 `68602112…`） |
 | N1 SFTP | **已完成（验收通过 2026-09-28）** | `ses_f1bb42d9cffe1c1dXC0c6rcTjR` | 双栏/拖动/队列/冲突/批量删除；512 测试、e2e 74/74（冻结 `82a6ba70…`）；待办：远端→远端与队列动作 e2e 覆盖、Properties、批量下载/chmod、rfd 驱动、OS DropArea |
-| N5 终端主题 | **Phase 2 接线执行中（shared-file 持有者）** | `ses_f1bb42d9bffeFL2GiTHEfPOuAs` | Settings 外观区/Session Editor 覆盖/Folder Editor/生效时机接线；完成后 N9 接棒 |
+| N5 终端主题 | **已完成（验收通过 2026-09-28；e2e 校准转 E2E-fix）** | `ses_f1819e1b6ffe0rha7bgJW1EOcj`（接管） | 544 测试、lint 0 警告、i18n 对账、5 张截图（Dracula vs 默认证明 D17）；12 项 e2e 失败为累积坐标/焦点漂移 |
 | N9 / N7 | 待 N5 让出共享文件 | 待分配 | — |
 | L1 / L4 | L1 待方案文档定位；L4 fmt 等待独占冻结窗口 | — | — |
 

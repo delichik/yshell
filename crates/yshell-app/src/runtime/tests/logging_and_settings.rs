@@ -113,7 +113,11 @@ fn settings_terminal_save_applies_to_existing_sessions() {
             (DEFAULT_SCROLLBACK_LINES, DEFAULT_SCROLLBACK_MAX_CELLS)
         );
         for index in 0..200 {
-            session.append_status_line(&format!("scrollback sample line {index}"));
+            // D1：应用内诊断不再写终端网格；这里直接以"远端输出"方式喂数据。
+            let line = format!("scrollback sample line {index}\n");
+            session
+                .terminal_parser
+                .advance(&mut session.terminal_grid, line.as_bytes());
         }
     }
 

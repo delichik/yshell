@@ -1,3 +1,7 @@
+// ⚠️ 未使用（E17 复核）：全仓零 import/实例化，且仅为 5 个不可交互的静态 Text
+//（无 TouchArea/回调，文案硬编码英文）。菜单栏已由 `menu_bar.slint` + MenuPopup 实现，
+// 本文件保留只为历史参考；若要删除请确认 `git grep app_menu` 仍为零引用。
+// 参见 dist/live-audit/bunny/FINDINGS.md 轮次2 #85、muse 轮次2 中#10。
 import { Theme } from "../theme.slint";
 export component AppMenu inherits Rectangle {
     height: 32px;

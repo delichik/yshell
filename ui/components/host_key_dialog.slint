@@ -18,15 +18,36 @@
 //   * 危险操作默认焦点在根 FocusScope（不是 Replace Key 按钮），Enter 不误确认。
 
 import { Theme } from "../theme.slint";
-import { WinButton, WinIconButton } from "basic/controls.slint";
+import { WinButton, WinIconButton, WinScrollIndicator } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
+
+// 正文行（等宽；与 Rust 拆分字段一一对应）。
+// 注意：同一文件内的局部组件必须先声明后使用。
+component PromptLine inherits Text {
+    in property <string> hint: "";
+    text: root.hint;
+    color: Theme.text-secondary;
+    font-family: Theme.font-mono;
+    font-size: Theme.font-body;
+    wrap: word-wrap;
+}
 
 export component HostKeyDialog inherits Rectangle {
     in property <bool> open: false;
-    /// 主机密钥信息（Rust 投影的多行文本，原样展示）
+    /// 主机密钥信息（Rust 投影的多行文本；**过渡期回退用**，拆分字段齐全后不再显示）
     in property <string> prompt-text: "";
     /// "first-trust" | "changed"
     in property <string> mode-text: "";
+    /// 拆分的正文字段（WS-D 投影、WS-A 绑定）：目标 `user@host:port`
+    in property <string> target-text: "";
+    /// known_hosts 文件路径
+    in property <string> known-hosts-path-text: "";
+    /// 本次提供的算法 / 指纹
+    in property <string> algorithm-text: "";
+    in property <string> fingerprint-text: "";
+    /// changed 模式：已保存的算法 / 指纹（其它模式为空）
+    in property <string> expected-algorithm-text: "";
+    in property <string> expected-fingerprint-text: "";
     /// changed 模式的确认词（in-out：弹窗内编辑，宿主可读写）
     in-out property <string> confirmation-text: "";
 
@@ -37,6 +58,12 @@ export component HostKeyDialog inherits Rectangle {
     callback confirmation-edited(string);
     /// 右上角 × 关闭，语义与 cancel() 相同（宿主自行决定处理方式）
     callback dismissed();
+
+    // 正文：拆分字段任一非空即逐行渲染；否则回退到 `prompt-text`
+    private property <bool> detail-visible:
+        root.target-text != "" || root.known-hosts-path-text != ""
+        || root.algorithm-text != "" || root.fingerprint-text != ""
+        || root.expected-algorithm-text != "" || root.expected-fingerprint-text != "";
 
     visible: self.open;
     background: Theme.scrim;
@@ -64,7 +91,8 @@ export component HostKeyDialog inherits Rectangle {
             x: (parent.width - 520px) / 2;
             y: max((parent.height - self.height) / 2, 40px);
             width: 520px;
-            height: body.preferred-height;
+            // 内容高于窗口时收缩（与同族弹窗一致）
+            height: min(body.preferred-height, parent.height - 2 * Theme.spacing-24);
             background: Theme.panel-background;
             border-radius: Theme.radius-panel;
             border-width: 1px;
@@ -97,9 +125,12 @@ export component HostKeyDialog inherits Rectangle {
                     }
                 }
 
-                // 主机密钥信息（Rust 投影的多行文本）：最多 8 行，超出后内部滚动
-                Rectangle {
-                    height: min(prompt.preferred-height, 8 * Theme.line-body);
+                // 主机密钥信息：逐行结构化渲染（标签本地化）。约 8 行后内部滚动。
+                // B 轮5：原上限写 `8 * Theme.line-body`(20px)=160px，而 14px 正文在本字体栈下
+                // 的实测行高是 16px（`Theme.line-caption`），导致面板比内容高约 19px、
+                // 操作行被推到底部；这里改成与实测行高同源的像素预算。
+                prompt-box := Rectangle {
+                    height: min(prompt.preferred-height, 8 * Theme.line-caption);
                     clip: true;
                     background: transparent;
 
@@ -110,14 +141,54 @@ export component HostKeyDialog inherits Rectangle {
                         content-width: self.width;
                         content-height: prompt.preferred-height;
 
-                        prompt := Text {
+                        prompt := VerticalLayout {
                             width: prompt-scroll.width;
-                            text: root.prompt-text;
-                            color: Theme.text-secondary;
-                            font-family: Theme.font-mono;
-                            font-size: Theme.font-body;
-                            wrap: word-wrap;
+                            spacing: 2px;
+
+                            // 首行：改动 / 首次
+                            if root.detail-visible && root.target-text != "" : PromptLine {
+                                hint: root.mode-text == "changed"
+                                    ? @tr("Host key changed for {0}.", root.target-text)
+                                    : @tr("First-time host key for {0}.", root.target-text);
+                            }
+
+                            if root.detail-visible && root.known-hosts-path-text != "" : PromptLine {
+                                hint: @tr("Known hosts: {0}", root.known-hosts-path-text);
+                            }
+
+                            // 已保存的密钥只在 changed 模式显示（空值行不占位）
+                            if root.detail-visible && root.mode-text == "changed" && root.expected-algorithm-text != "" : PromptLine {
+                                hint: @tr("Expected: {0} {1}", root.expected-algorithm-text, root.expected-fingerprint-text);
+                            }
+
+                            if root.detail-visible && root.algorithm-text != "" : PromptLine {
+                                hint: @tr("Presented: {0} {1}", root.algorithm-text, root.fingerprint-text);
+                            }
+
+                            if root.detail-visible && root.mode-text == "changed" : PromptLine {
+                                hint: @tr("Type REPLACE to enable replacement.");
+                            }
+
+                            if root.detail-visible && root.mode-text != "changed" : PromptLine {
+                                hint: @tr("Choose Trust Once or Trust and Save.");
+                            }
+
+                            // 兼容回退：宿主尚未提供拆分字段时显示原来的整段文本
+                            if !root.detail-visible && root.prompt-text != "" : PromptLine {
+                                hint: root.prompt-text;
+                            }
                         }
+                    }
+
+                    // 滚动指示：E22 可复用组件（`content-y` 向下滚动为负值，组件内部取负）
+                    WinScrollIndicator {
+                        x: prompt-scroll.width - self.width - Theme.spacing-4;
+                        y: Theme.spacing-4;
+                        height: parent.height - 2 * Theme.spacing-4;
+                        viewport-position: prompt-scroll.content-y;
+                        content-extent: prompt-scroll.content-height;
+                        viewport-extent: prompt-scroll.height;
+                        thumb-min-length: 24px;
                     }
                 }
 

@@ -89,6 +89,14 @@ export component LoggingDialog inherits Rectangle {
     /// overwrite-confirmed）；任一开关变化时发出，宿主写回运行时并重新投影。
     callback options-changed(bool, bool, bool, bool, bool);
 
+    // 面板宽度、正文列宽与表单控件列宽：给自动换行的正文显式宽度，避免布局在宽度未定时
+    // 估算 preferred-height（同族问题见 B 轮5 认证弹窗：面板少算一行、操作行贴底）。
+    private property <length> dialog-width: 540px;
+    private property <length> content-width:
+        root.dialog-width - 2 * 1px - 2 * Theme.spacing-20;
+    private property <length> field-width:
+        root.content-width - Theme.form-label-width - Theme.spacing-12;
+
     visible: self.open;
     background: Theme.scrim;
 
@@ -129,10 +137,10 @@ export component LoggingDialog inherits Rectangle {
         }
 
         Rectangle {
-            x: (parent.width - 540px) / 2;
+            x: (parent.width - root.dialog-width) / 2;
             y: max((parent.height - self.height) / 2, 32px);
-            width: 540px;
-            height: body.preferred-height;
+            width: root.dialog-width;
+            height: min(body.preferred-height, parent.height - 2 * Theme.spacing-24);
             background: Theme.panel-background;
             border-radius: Theme.radius-panel;
             border-width: 1px;
@@ -151,6 +159,7 @@ export component LoggingDialog inherits Rectangle {
                     font-size: Theme.font-subtitle;
                     font-weight: Theme.weight-semibold;
                     wrap: word-wrap;
+                    width: root.content-width;
                 }
 
                 Text {
@@ -252,6 +261,7 @@ export component LoggingDialog inherits Rectangle {
                             color: Theme.text-tertiary;
                             font-size: Theme.font-caption;
                             wrap: word-wrap;
+                            width: root.field-width;
                         }
                     }
 
@@ -271,6 +281,7 @@ export component LoggingDialog inherits Rectangle {
                             color: Theme.critical;
                             font-size: Theme.font-caption;
                             wrap: word-wrap;
+                            width: root.field-width;
                         }
 
                         if root.file-exists && root.file-name-error-text == "" : Text {
@@ -278,6 +289,7 @@ export component LoggingDialog inherits Rectangle {
                             color: Theme.caution;
                             font-size: Theme.font-caption;
                             wrap: word-wrap;
+                            width: root.field-width;
                         }
                     }
 
@@ -341,6 +353,7 @@ export component LoggingDialog inherits Rectangle {
                         color: Theme.critical;
                         font-size: Theme.font-caption;
                         wrap: word-wrap;
+                        width: root.content-width;
                     }
 
                     Text {
@@ -348,6 +361,7 @@ export component LoggingDialog inherits Rectangle {
                         color: Theme.text-tertiary;
                         font-size: Theme.font-caption;
                         wrap: word-wrap;
+                        width: root.content-width;
                     }
                 }
 

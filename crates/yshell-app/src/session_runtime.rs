@@ -10,11 +10,15 @@ use yshell_logging::{
     LogPathContext, PathTemplate, Redactor, RotationPolicy, SessionLogOptions, SessionLogger,
     TranscriptDirection, TranscriptFormat, TransferLogger,
 };
-use yshell_ssh::{AuthMethod, PtySize, ShellSession, SshConnectionConfig, TransportBackend};
+use yshell_ssh::{
+    AuthMethod, HostKeyPolicy, PtySize, ShellSession, SshConnectionConfig, TransportBackend,
+};
 use yshell_terminal::{
     GridPoint, SearchMatch, SearchQuery, SelectionRange, TerminalGrid, TerminalParser,
     TerminalSnapshot, DEFAULT_SCROLLBACK_LINES, DEFAULT_SCROLLBACK_MAX_CELLS,
 };
+
+use crate::runtime::{config_host_key_policy_to_runtime, TerminalAppearance};
 
 #[derive(Debug)]
 pub enum SessionSource {
@@ -97,6 +101,8 @@ pub struct SessionRuntime {
     viewport_offset: usize,
     selection: Option<SelectionRange>,
     frame_id: u64,
+    /// N5/D17：创建时冻结的外观（调色板 + 字体 + 字号）。
+    appearance: TerminalAppearance,
 }
 
 impl SessionRuntime {
@@ -113,7 +119,7 @@ impl SessionRuntime {
             target.port,
             AuthMethod::Agent { username },
         );
-        let mut runtime = Self {
+        let runtime = Self {
             session_id: SessionId::new(format!("quick-connect-{ordinal}")),
             tab_id: TabId::new(format!("tab-quick-connect-{ordinal}")),
             display_name,
@@ -134,8 +140,9 @@ impl SessionRuntime {
             viewport_offset: 0,
             selection: None,
             frame_id: 0,
+            appearance: TerminalAppearance::default(),
         };
-        runtime.append_status_line("Quick Connect accepted. Preparing runtime session.");
+        runtime.log_runtime_event("Quick Connect accepted. Preparing runtime session.");
         runtime
     }
 
@@ -144,12 +151,19 @@ impl SessionRuntime {
             .username
             .clone()
             .unwrap_or_else(|| "user".to_owned());
-        let ssh_config = SshConnectionConfig::new(
+        let mut ssh_config = SshConnectionConfig::new(
             profile.host.clone(),
             profile.port,
             AuthMethod::Agent { username },
         );
-        let mut runtime = Self {
+        // D7：会话级主机密钥策略必须进入运行时配置，否则密码挂起前的主机密钥
+        // 探针 `probe_host_key_before_password`（它读取 `runtime.ssh_config`）会退回
+        // 默认的 Strict，对 `accept_any_for_testing` / TOFU 会话错误地弹出确认框。
+        ssh_config.host_key_policy = profile
+            .host_key_policy
+            .map(config_host_key_policy_to_runtime)
+            .unwrap_or(HostKeyPolicy::Strict);
+        let runtime = Self {
             // N0：同一 saved session 允许重复打开（重复连接），因此每个运行时实例
             // 都必须有唯一 session id（日志目录、dispatcher、SFTP 状态都按 id 归属）；
             // profile id 仍保存在 `SessionSource::SavedSession` 里。
@@ -175,8 +189,9 @@ impl SessionRuntime {
             viewport_offset: 0,
             selection: None,
             frame_id: 0,
+            appearance: TerminalAppearance::default(),
         };
-        runtime.append_status_line("Saved session loaded into runtime inventory.");
+        runtime.log_runtime_event("Saved session loaded into runtime inventory.");
         runtime
     }
 
@@ -186,7 +201,7 @@ impl SessionRuntime {
     /// 草稿标签暂无可达 UI 入口；保留实现与测试覆盖，便于后续恢复"临时会话"入口。
     #[allow(dead_code)]
     pub fn draft(ordinal: usize) -> Self {
-        let mut runtime = Self {
+        let runtime = Self {
             session_id: SessionId::new(format!("draft-{ordinal}")),
             tab_id: TabId::new(format!("tab-draft-{ordinal}")),
             display_name: "New Session".to_owned(),
@@ -213,8 +228,9 @@ impl SessionRuntime {
             viewport_offset: 0,
             selection: None,
             frame_id: 0,
+            appearance: TerminalAppearance::default(),
         };
-        runtime.append_status_line("Draft session created. Waiting for connection details.");
+        runtime.log_runtime_event("Draft session created. Waiting for connection details.");
         runtime
     }
 
@@ -248,12 +264,16 @@ impl SessionRuntime {
         self.state = state;
     }
 
-    pub fn append_status_line(&mut self, message: &str) {
-        let mut line = String::from(message);
-        line.push('\n');
-        self.terminal_parser
-            .advance(&mut self.terminal_grid, line.as_bytes());
-        self.frame_id = self.frame_id.wrapping_add(1);
+    /// D1/D2：运行时内部诊断只进 tracing 日志，不再写进终端网格。
+    ///
+    /// 终端网格只承载远端 shell 的字节流；此前的 `append_status_line` 会把
+    /// 连接状态机文案与远端输出混排（审计 B 轮3 #3/#4）。
+    pub fn log_runtime_event(&self, message: &str) {
+        tracing::debug!(
+            target: "yshell::runtime",
+            session = self.session_id.as_str(),
+            "{message}"
+        );
     }
 
     pub fn visible_text(&self) -> String {
@@ -289,7 +309,7 @@ impl SessionRuntime {
         self.viewport_offset = 0;
         self.selection = None;
         self.frame_id = self.frame_id.wrapping_add(1);
-        self.append_status_line("Terminal view cleared. Live shell remains attached.");
+        self.log_runtime_event("Terminal view cleared. Live shell remains attached.");
     }
 
     /// Current frame revision used by the app to decide when to re-render.
@@ -518,6 +538,17 @@ impl SessionRuntime {
     ///
     /// The caps are remembered so grid rebuilds (clearing the view or future
     /// PTY rebuild paths) keep the configured scrollback limits.
+    /// N5/D17：把创建时解析出的外观冻结到本会话（之后的外观改动不影响它）。
+    pub(crate) fn configure_appearance(&mut self, appearance: TerminalAppearance) {
+        self.appearance = appearance;
+        self.frame_id = self.frame_id.wrapping_add(1);
+    }
+
+    /// N5：本会话冻结的外观（渲染器同步用）。
+    pub(crate) const fn appearance(&self) -> &TerminalAppearance {
+        &self.appearance
+    }
+
     pub fn configure_terminal_limits(&mut self, terminal: &TerminalProfile) {
         self.terminal_limits = (terminal.scrollback_lines, terminal.scrollback_max_cells);
         self.terminal_grid
@@ -913,12 +944,9 @@ mod tests {
 
         assert_eq!(runtime.terminal_grid.columns, 140);
         assert_eq!(runtime.terminal_grid.rows, 40);
-        assert!(runtime
-            .terminal_grid
-            .line_text(0)
-            .contains("Draft session created"));
-        assert_eq!(runtime.terminal_grid.line_text(1), "hello");
-        assert_eq!(runtime.terminal_grid.line_text(2), "world");
+        // D1：应用内状态不再写终端网格，只有远端输出留在网格里。
+        assert_eq!(runtime.terminal_grid.line_text(0), "hello");
+        assert_eq!(runtime.terminal_grid.line_text(1), "world");
         assert!(runtime.frame_id() > before);
         assert_eq!(runtime.current_pty_size().columns, 140);
         assert_eq!(runtime.current_pty_size().rows, 40);

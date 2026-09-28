@@ -6607,6 +6607,7 @@ dependencies = [
  "slint-build",
  "ssh-key",
  "tempfile",
+ "tracing",
  "yshell-config",
  "yshell-core",
  "yshell-logging",
@@ -6665,6 +6666,7 @@ name = "yshell-ssh"
 version = "0.1.0"
 dependencies = [
  "ssh2",
+ "tracing",
 ]
 
 [[package]]

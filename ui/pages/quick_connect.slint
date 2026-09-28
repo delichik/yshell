@@ -12,7 +12,7 @@
 //   "保存为会话…"入口（连接成功后由宿主写 `last-target-text` 显示）。
 import { Theme } from "../theme.slint";
 import { Icon } from "../components/basic/icons.slint";
-import { WinButton, WinCard, WinCardHeader, WinIconButton } from "../components/basic/controls.slint";
+import { WinButton, WinCard, WinCardHeader, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 
 /// 最近连接行：运行时对"QC 历史 + 已保存会话最近使用"去重排序后的展示投影。
@@ -76,8 +76,11 @@ component QuickConnectRowItem inherits Rectangle {
     background: row-hover.has-hover ? Theme.subtle-hover : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
-    // 悬停高亮：声明在内容之前（下层），不与行内按钮的命中区抢事件。
-    row-hover := TouchArea { }
+    // 悬停高亮 + 整行可点（B 轮2 #8 / M 轮2 中#8：原来整行是"空命中区"，
+    // 看着可点却没反应）。声明在内容之前（下层），不与行内按钮的命中区抢事件。
+    row-hover := TouchArea {
+        clicked => { root.connect(); }
+    }
 
     HorizontalLayout {
         padding-left: Theme.spacing-8;
@@ -134,6 +137,9 @@ component QuickConnectRowItem inherits Rectangle {
             horizontal-alignment: left;
             vertical-alignment: center;
             wrap: no-wrap;
+            // M 轮2 中#8：原先既无 elide 也无宽度上限，长时间戳会挤占其它列
+            overflow: elide;
+            width: min(160px, self.preferred-width);
         }
 
         WinButton {
@@ -170,8 +176,10 @@ component QuickLinkRowItem inherits Rectangle {
     background: row-hover.has-hover ? Theme.subtle-hover : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
-    // 悬停高亮：同 QuickConnectRowItem（下层，避免抢按钮事件）。
-    row-hover := TouchArea { }
+    // 悬停高亮 + 整行可点：同 QuickConnectRowItem（下层，避免抢按钮事件）。
+    row-hover := TouchArea {
+        clicked => { root.connect(); }
+    }
 
     HorizontalLayout {
         padding-left: Theme.spacing-8;
@@ -277,12 +285,20 @@ export component QuickConnectPage inherits Rectangle {
 
     background: Theme.window-background;
 
-    Flickable {
+    // E22：整页可滚动 + 右缘滚动指示。Flickable 自身不能承载"贴在它右边"的兄弟元素，
+    // 故包一层透明裁剪容器；布局/外观与原先一致（容器撑满、Flickable 撑满容器）。
+    Rectangle {
         width: parent.width;
         height: parent.height;
-        interactive: true;
-        content-width: self.width;
-        content-height: max(column.preferred-height + 2 * Theme.spacing-24, self.height);
+        background: transparent;
+        clip: true;
+
+        page-scroll := Flickable {
+            width: parent.width;
+            height: parent.height;
+            interactive: true;
+            content-width: self.width;
+            content-height: max(column.preferred-height + 2 * Theme.spacing-24, self.height);
 
         column := VerticalLayout {
             // 内容列：居中、最大 720px，窄窗口左右各留 24px。
@@ -458,6 +474,18 @@ export component QuickConnectPage inherits Rectangle {
                     }
                 }
             }
+        }
+    }
+
+        // 滚动指示：E22 可复用组件（内容超过一屏时出现）
+        WinScrollIndicator {
+            x: parent.width - self.width - Theme.spacing-8;
+            y: Theme.spacing-4;
+            height: parent.height - 2 * Theme.spacing-4;
+            viewport-position: page-scroll.content-y;
+            content-extent: page-scroll.content-height;
+            viewport-extent: page-scroll.height;
+            thumb-min-length: 24px;
         }
     }
 }

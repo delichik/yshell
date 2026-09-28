@@ -14,6 +14,10 @@ export component CommandBar inherits Rectangle {
     in property <bool> dock-toggle-visible: false;
     /// 右栏当前是否被自动折叠（决定 chevron 方向）。
     in property <bool> right-collapsed: false;
+    /// A24：查找入口是否可用（无活动会话时禁用 + tooltip 说明原因）。
+    in property <bool> find-enabled: true;
+    /// A24：查找入口禁用时的原因说明（默认复用既有 msgid）。
+    private property <string> find-disabled-tooltip: @tr("MainWindow" => "Open a session first.");
 
     callback new-session();
     /// "Panels" 入口：把锚点（窗口绝对坐标）交给宿主打开 View 菜单。
@@ -22,7 +26,8 @@ export component CommandBar inherits Rectangle {
     callback toggle-right-side();
     callback open-find();
     callback open-settings();
-    /// "更多"入口：把锚点（窗口绝对坐标）交给宿主打开 Help 菜单。
+    /// "更多"入口：把锚点（窗口绝对坐标）交给宿主打开**溢出菜单**。
+    /// A3：溢出菜单是独立模型（不再复用一级菜单的 open-index，因此"帮助"不再被点亮）。
     callback open-more-menu(length, length);
 
     height: Theme.bar-height-commandbar;
@@ -45,10 +50,19 @@ export component CommandBar inherits Rectangle {
             clicked => { root.new-session(); }
         }
 
-        separator := Rectangle {
+        // 竖向居中：布局子项默认顶对齐，1px 分隔条会贴着按钮顶边（muse 轮4）；
+        // 用可拉伸容器 + 绝对居中的实条固定到行中线。
+        Rectangle {
             width: 1px;
-            height: 20px;
-            background: Theme.control-stroke;
+            vertical-stretch: 1;
+            background: transparent;
+
+            Rectangle {
+                width: 1px;
+                height: 20px;
+                y: (parent.height - self.height) / 2;
+                background: Theme.control-stroke;
+            }
         }
 
         // N3：面板可见性/位置统一入口（与 View 菜单同步）。
@@ -64,8 +78,8 @@ export component CommandBar inherits Rectangle {
             }
         }
 
-        // 吸收剩余宽度（唯一可增长项）。
-        spacer := Rectangle { horizontal-stretch: 1; }
+        // 吸收剩余宽度（唯一可增长项）。A19：纯布局占位，不需要标识符。
+        Rectangle { horizontal-stretch: 1; }
 
         // 右栏自动折叠时的展开/收起入口（§4.2：<1120px）
         if root.dock-toggle-visible : WinIconButton {
@@ -76,10 +90,28 @@ export component CommandBar inherits Rectangle {
             clicked => { root.toggle-right-side(); }
         }
 
-        WinIconButton {
-            icon: "search";
-            accessible-name: @tr("MainWindow" => "Find in terminal");
-            clicked => { root.open-find(); }
+        // A24：查找入口在有活动会话时才可用（禁用态用 tooltip 说明原因，点击不再
+        // 静默置位 `terminal_find_visible`）。Tooltip 必须是"被悬停元素"的子元素，
+        // 因此包一层同尺寸容器（WinIconButton 没有 @children 槽）。
+        Rectangle {
+            width: Theme.control-height;
+            height: Theme.control-height;
+            background: transparent;
+
+            WinIconButton {
+                width: parent.width;
+                height: parent.height;
+                icon: "search";
+                enabled: root.find-enabled;
+                accessible-name: root.find-enabled
+                    ? @tr("MainWindow" => "Find in terminal")
+                    : @tr("MainWindow" => "Open a session first.");
+                clicked => { root.open-find(); }
+            }
+
+            if !root.find-enabled : Tooltip {
+                text: @markdown("\{root.find-disabled-tooltip}");
+            }
         }
         WinIconButton {
             icon: "settings";

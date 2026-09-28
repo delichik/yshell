@@ -865,6 +865,24 @@ impl TerminalRenderer {
         &self.font_selection
     }
 
+    /// Change the logical font size, re-measuring the cells and dropping the
+    /// cached glyphs. Non-finite or non-positive sizes fall back to
+    /// [`DEFAULT_FONT_SIZE`].
+    pub fn set_font_size(&mut self, font_size: f32) {
+        let font_size = sanitize_font_size(font_size);
+        if font_size == self.font_size {
+            return;
+        }
+        self.font_size = font_size;
+        self.physical_font_size = font_size * self.scale_factor;
+        let (cell_width, cell_height, ascent) =
+            measure_layout(self.fonts.metrics_face(), self.physical_font_size);
+        self.cell_width = cell_width;
+        self.cell_height = cell_height;
+        self.ascent = ascent;
+        self.glyph_cache.clear();
+    }
+
     /// Change the device scale factor, re-measuring cells and dropping cached glyphs.
     pub fn set_scale_factor(&mut self, scale_factor: f32) {
         let scale_factor = sanitize_scale_factor(scale_factor);
@@ -1092,6 +1110,14 @@ fn sanitize_scale_factor(scale_factor: f32) -> f32 {
         scale_factor
     } else {
         DEFAULT_SCALE_FACTOR
+    }
+}
+
+fn sanitize_font_size(font_size: f32) -> f32 {
+    if font_size.is_finite() && font_size > 0.0 {
+        font_size
+    } else {
+        DEFAULT_FONT_SIZE
     }
 }
 
@@ -2448,6 +2474,39 @@ mod tests {
             );
             write_frame_evidence(&format!("n5-scheme-{id}"), &renderer, &frame);
         }
+    }
+
+    #[test]
+    fn set_font_size_re_measures_cells_and_drops_cached_glyphs() {
+        let mut renderer = TerminalRenderer::new();
+        let _ = render_lines(&mut renderer, vec![vec![cell_of("H")]], None, None);
+        let cached = renderer.glyph_cache_len();
+        assert!(cached >= 1);
+        let default_size = renderer.font_size();
+
+        renderer.set_font_size(24.0);
+        assert_eq!(renderer.font_size(), 24.0);
+        assert_eq!(renderer.physical_font_size(), 24.0);
+        assert_eq!(
+            renderer.glyph_cache_len(),
+            0,
+            "font size change drops glyphs"
+        );
+        let frame = render_lines(&mut renderer, vec![vec![cell_of("H")]], None, None);
+        assert_eq!(frame.cell_width, renderer.cell_size().0);
+        assert!(
+            frame.cell_width > 10,
+            "24px cells are wider than 16px cells"
+        );
+        assert_eq!(renderer.glyph_cache_len(), cached);
+
+        // Same size is a no-op; invalid sizes fall back to the default.
+        renderer.set_font_size(24.0);
+        assert_eq!(renderer.font_size(), 24.0);
+        renderer.set_font_size(f32::NAN);
+        assert_eq!(renderer.font_size(), default_size);
+        renderer.set_font_size(0.0);
+        assert_eq!(renderer.font_size(), default_size);
     }
 
     #[test]

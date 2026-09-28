@@ -143,12 +143,17 @@ export component SessionSidebarContent inherits Rectangle {
     callback row-context-menu-requested(string, length, length);
     /// 会话树空白区/侧栏背景右键（S1）
     callback blank-menu-requested(length, length);
+    /// A9：空白区左键 = 清空选中（契约 §5.2）。当前未接线：
+    /// 需 `tool_dock.slint` 转发 → `main_window.clear_saved_session_selection()` → Rust。
+    callback clear-selection();
 
     background: transparent;
 
     // S1：左栏背景右键 = 会话树空白区菜单（树内空白处由 SessionTree
     // 自己上报；这里兜住树下方/侧栏其余空白）。
+    // A9：左键 = 清空选中（与右键菜单同一片命中区）。
     TouchArea {
+        clicked => { root.clear-selection(); }
         pointer-event(event) => {
             if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
                 root.blank-menu-requested(
@@ -159,9 +164,9 @@ export component SessionSidebarContent inherits Rectangle {
         }
     }
 
-    // 侧栏节奏（§5.4）：内边距 8、条目间距 8；分组标题前再加 4（合计 12）呼吸。
+    // 侧栏节奏（§5.4）：内边距由 PanelFrame 的 `content-padding: 8` 提供；
+    // A6：这里此前又加了一层 8px，实际内缩 16px，比其它面板深一格，去掉。
     VerticalLayout {
-        padding: Theme.spacing-8;
         spacing: Theme.spacing-8;
         alignment: start;
 
@@ -180,12 +185,15 @@ export component SessionSidebarContent inherits Rectangle {
         }
 
         SessionTree {
+            // A7：吃掉面板剩余高度（不再有 320px 硬上限与树下死区）。
+            vertical-stretch: 1;
             rows: root.tree-rows;
             selected-id: root.selected-id;
             empty-text: root.empty-text;
             select(id) => { root.select-row(id); }
             activate(id) => { root.activate-row(id); }
             toggle-folder(id) => { root.toggle-folder(id); }
+            blank-clicked => { root.clear-selection(); }
             context-menu-requested(id, x, y) => {
                 root.row-context-menu-requested(id, x, y);
             }
@@ -201,6 +209,10 @@ export component SessionSidebarRail inherits Rectangle {
     /// 图标条空白处右键 → 最小菜单（New Session / 展开会话栏）
     callback rail-menu-requested(length, length);
     callback expand-navigation();
+
+    // A25：图标条按钮的悬停提示文案（`Tooltip` 走 @markdown 插值）。
+    private property <string> new-session-tooltip: @tr("MainWindow" => "New Session");
+    private property <string> expand-navigation-tooltip: @tr("MainWindow" => "Expand navigation");
 
     width: Theme.nav-rail-width;
     background: Theme.layer-fill;
@@ -222,10 +234,51 @@ export component SessionSidebarRail inherits Rectangle {
         spacing: Theme.spacing-4;
         alignment: start;
 
-        WinIconButton {
-            icon: "chevron-right";
-            accessible-name: @tr("MainWindow" => "Expand navigation");
-            clicked => { root.expand-navigation(); }
+        // A25（B 轮2 #54）：<960px 折叠成图标条后不再只剩一个 chevron ——
+        // 这里至少给"新建会话"入口。按任务要求复用既有回调路径：`+` 打开图标条菜单
+        // （第一项即 New Session），零跨组接线；一键直达的改动见 WS-A 报告请求。
+        // Tooltip 必须挂在被悬停元素的子级，故用同尺寸容器包一层。
+        Rectangle {
+            width: Theme.control-height;
+            height: Theme.control-height;
+            background: transparent;
+
+            WinIconButton {
+                width: parent.width;
+                height: parent.height;
+                icon: "plus";
+                accessible-name: @tr("MainWindow" => "New Session");
+                clicked => {
+                    // 菜单锚在按钮下方 4px，与图标条左缘对齐。
+                    root.rail-menu-requested(
+                        self.absolute-position.x,
+                        self.absolute-position.y + self.height + Theme.spacing-4
+                    );
+                }
+            }
+
+            Tooltip {
+                text: @markdown("\{root.new-session-tooltip}");
+            }
+        }
+
+        // 展开会话栏（已有入口，A25 补 tooltip）
+        Rectangle {
+            width: Theme.control-height;
+            height: Theme.control-height;
+            background: transparent;
+
+            WinIconButton {
+                width: parent.width;
+                height: parent.height;
+                icon: "chevron-right";
+                accessible-name: @tr("MainWindow" => "Expand navigation");
+                clicked => { root.expand-navigation(); }
+            }
+
+            Tooltip {
+                text: @markdown("\{root.expand-navigation-tooltip}");
+            }
         }
     }
 }

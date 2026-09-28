@@ -1,4 +1,4 @@
-// Fluent 风格线性图标（20×20 viewBox，1.5px 描边，PNG 40×40 资源）。
+// Fluent 风格线性图标（20×20 viewBox，1.5px 描边，PNG 分档：24/32/40）。
 //
 // 规范：docs/product/ui-winui3-design-language.md §5.16
 // 用法：Icon { name: "plus"; icon-color: Theme.text-primary; }
@@ -6,6 +6,8 @@
 // 为什么是位图而不是矢量 Path：Slint 的软件渲染器不实现 Path（draw_path 为空），
 // 矢量图标会完全不可见。资源由 scripts/ui-icons/generate.sh 从 SVG 源生成，
 // 通过 Image.colorize 跟随主题着色（悬停/选中/禁用状态都能变色）。
+//
+// 本文件由 scripts/ui-icons/generate-icons-slint.sh 生成，请改生成脚本后重跑。
 
 import { Theme } from "../../theme.slint";
 
@@ -19,38 +21,121 @@ export component Icon inherits Image {
     image-fit: contain;
     colorize: icon-color;
 
+    // E14：按显示尺寸选最近的 2× 资源（12→24、16→32、20→40），
+    // 避免最近邻采样在非整数比（40/12≈3.33）下发虚。
     source:
-        name == "check" ? @image-url("../../icons/check.png")
-        : name == "chevron-down" ? @image-url("../../icons/chevron-down.png")
-        : name == "chevron-left" ? @image-url("../../icons/chevron-left.png")
-        : name == "chevron-right" ? @image-url("../../icons/chevron-right.png")
-        : name == "clear" ? @image-url("../../icons/clear.png")
-        : name == "close" ? @image-url("../../icons/close.png")
-        : name == "code" ? @image-url("../../icons/code.png")
-        : name == "connect" ? @image-url("../../icons/connect.png")
-        : name == "copy" ? @image-url("../../icons/copy.png")
-        : name == "download" ? @image-url("../../icons/download.png")
-        : name == "edit" ? @image-url("../../icons/edit.png")
-        : name == "eye" ? @image-url("../../icons/eye.png")
-        : name == "file" ? @image-url("../../icons/file.png")
-        : name == "folder" ? @image-url("../../icons/folder.png")
-        : name == "globe" ? @image-url("../../icons/globe.png")
-        : name == "home" ? @image-url("../../icons/home.png")
-        : name == "link" ? @image-url("../../icons/link.png")
-        : name == "minus" ? @image-url("../../icons/minus.png")
-        : name == "more" ? @image-url("../../icons/more.png")
-        : name == "paste" ? @image-url("../../icons/paste.png")
-        : name == "pause" ? @image-url("../../icons/pause.png")
-        : name == "play" ? @image-url("../../icons/play.png")
-        : name == "plus" ? @image-url("../../icons/plus.png")
-        : name == "refresh" ? @image-url("../../icons/refresh.png")
-        : name == "search" ? @image-url("../../icons/search.png")
-        : name == "settings" ? @image-url("../../icons/settings.png")
-        : name == "shield" ? @image-url("../../icons/shield.png")
-        : name == "terminal" ? @image-url("../../icons/terminal.png")
-        : name == "trash" ? @image-url("../../icons/trash.png")
-        : name == "up" ? @image-url("../../icons/up.png")
-        : name == "upload" ? @image-url("../../icons/upload.png")
-        : name == "warning" ? @image-url("../../icons/warning.png")
-        : @image-url("../../icons/plus.png");
+        icon-size <= 12px ? (
+            name == "blank" ? @image-url("../../icons/24/blank.png")
+            : name == "check" ? @image-url("../../icons/24/check.png")
+            : name == "chevron-down" ? @image-url("../../icons/24/chevron-down.png")
+            : name == "chevron-left" ? @image-url("../../icons/24/chevron-left.png")
+            : name == "chevron-right" ? @image-url("../../icons/24/chevron-right.png")
+            : name == "clear" ? @image-url("../../icons/24/clear.png")
+            : name == "close" ? @image-url("../../icons/24/close.png")
+            : name == "code" ? @image-url("../../icons/24/code.png")
+            : name == "connect" ? @image-url("../../icons/24/connect.png")
+            : name == "copy" ? @image-url("../../icons/24/copy.png")
+            : name == "download" ? @image-url("../../icons/24/download.png")
+            : name == "edit" ? @image-url("../../icons/24/edit.png")
+            : name == "eye" ? @image-url("../../icons/24/eye.png")
+            : name == "file" ? @image-url("../../icons/24/file.png")
+            : name == "folder" ? @image-url("../../icons/24/folder.png")
+            : name == "globe" ? @image-url("../../icons/24/globe.png")
+            : name == "home" ? @image-url("../../icons/24/home.png")
+            : name == "link" ? @image-url("../../icons/24/link.png")
+            : name == "minus" ? @image-url("../../icons/24/minus.png")
+            : name == "more" ? @image-url("../../icons/24/more.png")
+            : name == "paste" ? @image-url("../../icons/24/paste.png")
+            : name == "pause" ? @image-url("../../icons/24/pause.png")
+            : name == "play" ? @image-url("../../icons/24/play.png")
+            : name == "plus" ? @image-url("../../icons/24/plus.png")
+            : name == "refresh" ? @image-url("../../icons/24/refresh.png")
+            : name == "search" ? @image-url("../../icons/24/search.png")
+            : name == "settings" ? @image-url("../../icons/24/settings.png")
+            : name == "shield" ? @image-url("../../icons/24/shield.png")
+            : name == "terminal" ? @image-url("../../icons/24/terminal.png")
+            : name == "trash" ? @image-url("../../icons/24/trash.png")
+            : name == "up" ? @image-url("../../icons/24/up.png")
+            : name == "upload" ? @image-url("../../icons/24/upload.png")
+            : name == "warning" ? @image-url("../../icons/24/warning.png")
+            : @image-url("../../icons/24/blank.png"))
+        : icon-size <= 16px ? (
+            name == "blank" ? @image-url("../../icons/32/blank.png")
+            : name == "check" ? @image-url("../../icons/32/check.png")
+            : name == "chevron-down" ? @image-url("../../icons/32/chevron-down.png")
+            : name == "chevron-left" ? @image-url("../../icons/32/chevron-left.png")
+            : name == "chevron-right" ? @image-url("../../icons/32/chevron-right.png")
+            : name == "clear" ? @image-url("../../icons/32/clear.png")
+            : name == "close" ? @image-url("../../icons/32/close.png")
+            : name == "code" ? @image-url("../../icons/32/code.png")
+            : name == "connect" ? @image-url("../../icons/32/connect.png")
+            : name == "copy" ? @image-url("../../icons/32/copy.png")
+            : name == "download" ? @image-url("../../icons/32/download.png")
+            : name == "edit" ? @image-url("../../icons/32/edit.png")
+            : name == "eye" ? @image-url("../../icons/32/eye.png")
+            : name == "file" ? @image-url("../../icons/32/file.png")
+            : name == "folder" ? @image-url("../../icons/32/folder.png")
+            : name == "globe" ? @image-url("../../icons/32/globe.png")
+            : name == "home" ? @image-url("../../icons/32/home.png")
+            : name == "link" ? @image-url("../../icons/32/link.png")
+            : name == "minus" ? @image-url("../../icons/32/minus.png")
+            : name == "more" ? @image-url("../../icons/32/more.png")
+            : name == "paste" ? @image-url("../../icons/32/paste.png")
+            : name == "pause" ? @image-url("../../icons/32/pause.png")
+            : name == "play" ? @image-url("../../icons/32/play.png")
+            : name == "plus" ? @image-url("../../icons/32/plus.png")
+            : name == "refresh" ? @image-url("../../icons/32/refresh.png")
+            : name == "search" ? @image-url("../../icons/32/search.png")
+            : name == "settings" ? @image-url("../../icons/32/settings.png")
+            : name == "shield" ? @image-url("../../icons/32/shield.png")
+            : name == "terminal" ? @image-url("../../icons/32/terminal.png")
+            : name == "trash" ? @image-url("../../icons/32/trash.png")
+            : name == "up" ? @image-url("../../icons/32/up.png")
+            : name == "upload" ? @image-url("../../icons/32/upload.png")
+            : name == "warning" ? @image-url("../../icons/32/warning.png")
+            : @image-url("../../icons/32/blank.png"))
+        : (
+            name == "blank" ? @image-url("../../icons/40/blank.png")
+            : name == "check" ? @image-url("../../icons/40/check.png")
+            : name == "chevron-down" ? @image-url("../../icons/40/chevron-down.png")
+            : name == "chevron-left" ? @image-url("../../icons/40/chevron-left.png")
+            : name == "chevron-right" ? @image-url("../../icons/40/chevron-right.png")
+            : name == "clear" ? @image-url("../../icons/40/clear.png")
+            : name == "close" ? @image-url("../../icons/40/close.png")
+            : name == "code" ? @image-url("../../icons/40/code.png")
+            : name == "connect" ? @image-url("../../icons/40/connect.png")
+            : name == "copy" ? @image-url("../../icons/40/copy.png")
+            : name == "download" ? @image-url("../../icons/40/download.png")
+            : name == "edit" ? @image-url("../../icons/40/edit.png")
+            : name == "eye" ? @image-url("../../icons/40/eye.png")
+            : name == "file" ? @image-url("../../icons/40/file.png")
+            : name == "folder" ? @image-url("../../icons/40/folder.png")
+            : name == "globe" ? @image-url("../../icons/40/globe.png")
+            : name == "home" ? @image-url("../../icons/40/home.png")
+            : name == "link" ? @image-url("../../icons/40/link.png")
+            : name == "minus" ? @image-url("../../icons/40/minus.png")
+            : name == "more" ? @image-url("../../icons/40/more.png")
+            : name == "paste" ? @image-url("../../icons/40/paste.png")
+            : name == "pause" ? @image-url("../../icons/40/pause.png")
+            : name == "play" ? @image-url("../../icons/40/play.png")
+            : name == "plus" ? @image-url("../../icons/40/plus.png")
+            : name == "refresh" ? @image-url("../../icons/40/refresh.png")
+            : name == "search" ? @image-url("../../icons/40/search.png")
+            : name == "settings" ? @image-url("../../icons/40/settings.png")
+            : name == "shield" ? @image-url("../../icons/40/shield.png")
+            : name == "terminal" ? @image-url("../../icons/40/terminal.png")
+            : name == "trash" ? @image-url("../../icons/40/trash.png")
+            : name == "up" ? @image-url("../../icons/40/up.png")
+            : name == "upload" ? @image-url("../../icons/40/upload.png")
+            : name == "warning" ? @image-url("../../icons/40/warning.png")
+            : @image-url("../../icons/40/blank.png"));
+
+    // E15：未知图标名回退到透明占位（不再凭空显示一个"+"），debug 构建打告警。
+    private property <bool> name-known: name == "blank" || name == "check" || name == "chevron-down" || name == "chevron-left" || name == "chevron-right" || name == "clear" || name == "close" || name == "code" || name == "connect" || name == "copy" || name == "download" || name == "edit" || name == "eye" || name == "file" || name == "folder" || name == "globe" || name == "home" || name == "link" || name == "minus" || name == "more" || name == "paste" || name == "pause" || name == "play" || name == "plus" || name == "refresh" || name == "search" || name == "settings" || name == "shield" || name == "terminal" || name == "trash" || name == "up" || name == "upload" || name == "warning";
+
+    changed name => {
+        if (!root.name-known) {
+            debug("Icon: unknown icon name '" + root.name + "'");
+        }
+    }
 }

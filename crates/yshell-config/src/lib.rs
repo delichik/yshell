@@ -14,8 +14,8 @@ pub use schema::{
     migrate_value, migrate_value_with_warnings, AppearanceProfile, AuthMethod, AuthProfile,
     ConfigDocument, ConfigSchemaError, ConfigWarning, FolderProfile, HostKeyPolicy, KeyProfile,
     LayoutProfile, LoggingProfile, NewTabMode, PanelId, PanelSide, PanelSlot, PrivateKeySource,
-    ProxyProfile, ProxyProtocol, QuickConnectEntry, QuickConnectProfile, QuickLink, ResolvedSessionProfile,
-    SessionBasicEdit, SessionProfile, SftpProfile, TerminalProfile, TunnelForward,
-    TunnelForwardKind, TunnelProfile, UiProfile, SCHEMA_VERSION,
+    ProxyProfile, ProxyProtocol, QuickConnectEntry, QuickConnectProfile, QuickLink,
+    ResolvedSessionProfile, SessionBasicEdit, SessionProfile, SftpProfile, TerminalProfile,
+    TunnelForward, TunnelForwardKind, TunnelProfile, UiProfile, SCHEMA_VERSION,
 };
 pub use store::{ConfigStore, ConfigStoreError, LoadOutcome};

@@ -88,6 +88,39 @@ impl AppRuntime {
         Ok(self.projection())
     }
 
+    /// D12：在指定文件夹下打开"新建会话"编辑器（文件夹右键菜单 New Session Here）。
+    pub fn start_new_saved_session_editor_in_folder(
+        &mut self,
+        folder_id: &str,
+    ) -> AppResult<AppProjection> {
+        if self.config_document.find_folder(folder_id).is_none() {
+            return Err(AppError::new(format!(
+                "saved-session folder `{folder_id}` was not found"
+            )));
+        }
+        // 复用编辑器初始化（主题基线等），只改目标文件夹。
+        let projection = self.start_new_saved_session_editor();
+        self.editor.target_folder_id = folder_id.to_owned();
+        self.status_text = "New session will be saved into the selected folder.".to_owned();
+        Ok(projection)
+    }
+
+    /// D12：会话树右键菜单目标类型（`session` / `folder` / `none`）。
+    ///
+    /// WS-A 的右键菜单目前在 Slint 侧用树行 `kind` 分流，本方法保留给宿主/
+    /// 测试使用（无生产调用）。
+    #[allow(dead_code)]
+    #[must_use]
+    pub fn saved_tree_context_kind_text(&self) -> &'static str {
+        if self.selected_saved_session_id.is_some() {
+            "session"
+        } else if self.selected_saved_folder_id.is_some() {
+            "folder"
+        } else {
+            "none"
+        }
+    }
+
     pub fn refresh_saved_sessions(&mut self) -> AppResult<AppProjection> {
         let LoadOutcome {
             document,
@@ -289,6 +322,18 @@ impl AppRuntime {
             format!("Expanded saved-session folder `{folder_id}`.")
         };
         Ok(self.projection())
+    }
+
+    /// D12/A9：清空已保存会话树的选择（会话/文件夹）。
+    pub fn clear_saved_selection(&mut self) -> AppProjection {
+        let had_selection =
+            self.selected_saved_session_id.is_some() || self.selected_saved_folder_id.is_some();
+        self.selected_saved_session_id = None;
+        self.selected_saved_folder_id = None;
+        if had_selection {
+            self.status_text = "Cleared the saved-session selection.".to_owned();
+        }
+        self.projection()
     }
 
     pub fn select_saved_session_by_id(&mut self, id: &str) -> AppProjection {
@@ -531,34 +576,34 @@ impl AppRuntime {
                 SessionEvent::TabOpened { session_id, .. }
                     if &session_id == expected_session_id =>
                 {
-                    runtime.append_status_line("Core tab opened for session.");
+                    runtime.log_runtime_event("Core tab opened for session.");
                 }
                 SessionEvent::StateChanged { session_id, state }
                     if &session_id == expected_session_id =>
                 {
                     runtime.set_state(state);
-                    runtime.append_status_line(&format!(
+                    runtime.log_runtime_event(&format!(
                         "Core state updated: {}",
                         runtime.state_label()
                     ));
                 }
                 SessionEvent::Connecting { session_id } if &session_id == expected_session_id => {
                     runtime.set_state(yshell_core::SessionState::Connecting);
-                    runtime.append_status_line("Connection entering connecting state.");
+                    runtime.log_runtime_event("Connection entering connecting state.");
                 }
                 SessionEvent::Connected { session_id } if &session_id == expected_session_id => {
                     runtime.set_state(yshell_core::SessionState::Connected);
-                    runtime.append_status_line("Connection established.");
+                    runtime.log_runtime_event("Connection established.");
                 }
                 SessionEvent::Disconnected { session_id, reason }
                     if &session_id == expected_session_id =>
                 {
                     runtime.set_state(yshell_core::SessionState::Disconnected);
-                    runtime.append_status_line(&format!("Disconnected: {reason}"));
+                    runtime.log_runtime_event(&format!("Disconnected: {reason}"));
                 }
                 SessionEvent::Error { session_id, error } if &session_id == expected_session_id => {
                     runtime.set_state(yshell_core::SessionState::Failed);
-                    runtime.append_status_line(&format!("Session error: {error}"));
+                    runtime.log_runtime_event(&format!("Session error: {error}"));
                 }
                 SessionEvent::TerminalOutput { session_id, bytes }
                     if &session_id == expected_session_id =>

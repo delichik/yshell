@@ -49,10 +49,7 @@ impl AppRuntime {
         let _ = runtime
             .write_terminal_input(bytes)
             .map_err(AppError::from_error)?;
-        self.status_text = format!(
-            "Sent {} bytes through the runtime terminal pipeline.",
-            bytes.len()
-        );
+        // D4：正常按键/输入不写状态栏（此前每个字符都刷成 "Sent N bytes…"）。
         self.fold_logging_notice_from_session(&session_key);
         Ok(self.projection())
     }
@@ -385,7 +382,12 @@ impl AppRuntime {
             .get(&session_key)
             .is_some_and(|session| session.state == yshell_core::SessionState::Connected);
         if session_connected {
-            self.status_text = format!("Resized runtime terminal to {}x{}.", columns, rows);
+            self.set_status_kind(
+                "terminal-resized",
+                format!("Resized runtime terminal to {}x{}.", columns, rows),
+                format!("{columns}x{rows}"),
+                String::new(),
+            );
         }
         Ok(self.projection())
     }

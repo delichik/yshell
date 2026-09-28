@@ -284,6 +284,56 @@ fn session_tree_selection_switches_between_folder_and_session() {
     assert!(missing.message.contains("was not found"));
 }
 
+/// A9：清空会话树选择（会话/文件夹都回到无选中）。
+#[test]
+fn clear_saved_selection_drops_session_and_folder_selection() {
+    let temp = tempdir().expect("tempdir");
+    let _store = saved_session_tree_store(temp.path());
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+
+    let session_selected = runtime.select_saved_session_by_id("saved-prod-db");
+    assert!(session_selected.has_saved_selection);
+    let cleared = runtime.clear_saved_selection();
+    assert!(!cleared.has_saved_selection);
+    assert!(cleared.session_tree_rows.iter().all(|row| !row.selected));
+    assert_eq!(runtime.saved_tree_context_kind_text(), "none");
+
+    let folder_selected = runtime.select_saved_session_by_id("folder-prod");
+    assert!(folder_selected
+        .session_tree_rows
+        .iter()
+        .any(|row| row.kind == "folder" && row.selected));
+    let cleared = runtime.clear_saved_selection();
+    assert!(cleared.session_tree_rows.iter().all(|row| !row.selected));
+    assert!(!cleared.has_saved_selection);
+    assert_eq!(runtime.saved_tree_context_kind_text(), "none");
+}
+
+/// D12：会话树右键目标类型 + "在该文件夹下新建会话"。
+#[test]
+fn folder_context_menu_kind_and_new_session_in_folder() {
+    let temp = tempdir().expect("tempdir");
+    let _store = saved_session_tree_store(temp.path());
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+
+    assert_eq!(runtime.saved_tree_context_kind_text(), "session");
+    let _ = runtime.select_saved_session_by_id("folder-prod");
+    assert_eq!(runtime.saved_tree_context_kind_text(), "folder");
+    let _ = runtime.select_saved_session_by_id("saved-one");
+    assert_eq!(runtime.saved_tree_context_kind_text(), "session");
+
+    let editor = runtime
+        .start_new_saved_session_editor_in_folder("folder-prod")
+        .expect("open editor in folder");
+    assert!(editor.editor_modal_visible);
+    assert_eq!(runtime.editor.target_folder_id, "folder-prod");
+
+    let missing = runtime
+        .start_new_saved_session_editor_in_folder("folder-missing")
+        .expect_err("missing folder is rejected");
+    assert!(missing.message.contains("was not found"));
+}
+
 #[test]
 fn selected_saved_session_can_be_updated_and_deleted() {
     let temp = tempdir().expect("tempdir");

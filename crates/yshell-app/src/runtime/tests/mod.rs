@@ -20,6 +20,7 @@ mod sessions;
 mod sftp;
 mod tabs;
 mod terminal;
+mod theme;
 mod trust_and_secrets;
 
 pub(crate) fn demo_file(path: &str, size_bytes: u64) -> FsEntry {

@@ -27,7 +27,8 @@ use crate::error::{AppError, AppResult};
 use crate::runtime::{
     AppProjection, AppRuntime, AuthKeyOptionData, AuthPromptQuestionData, HostKeyGroupData,
     PanelFrameData as RuntimePanelFrameData, PrivateKeyRowData, SftpCrumbData, SftpRowData,
-    SplitHandleData as RuntimeSplitHandleData, TabData, TransferRowData,
+    SplitHandleData as RuntimeSplitHandleData, TabData, ThemeFieldAction, ThemeSchemeOption,
+    TransferRowData, TriStateFieldData,
 };
 
 mod generated_ui {
@@ -37,8 +38,9 @@ mod generated_ui {
 
 use generated_ui::{
     AuthKeyOption, AuthKeyboardPrompt, HostKeyEntry, HostKeyGroup, LocalRow, MainWindow, Palette,
-    PanelFrameData, PrivateKeyRow, QuickConnectRow, QuickLinkRow, SessionTreeRow, SftpCrumb,
-    SftpRow, SftpTransferRow, SplitHandleData, TerminalScrollInfo, Theme, WorkspaceTab,
+    PanelFrameData, PrivateKeyRow, QuickConnectRow, QuickLinkRow, SessionTreeRow,
+    SettingsSchemeOption, SftpCrumb, SftpRow, SftpTransferRow, SplitHandleData, TerminalScrollInfo,
+    Theme, TriStateField, WorkspaceTab,
 };
 
 /// Keeps the pixel-rendered terminal surface in sync with the runtime.
@@ -96,8 +98,42 @@ impl TerminalSurface {
         true
     }
 
+    /// Applies the active session's frozen appearance (D17) to the renderer.
+    ///
+    /// Returns `true` when the renderer appearance changed: the cached frame is
+    /// invalidated so the next `refresh` repaints with the new palette/font.
+    fn sync_appearance(&self) -> bool {
+        let appearance = {
+            let Ok(runtime) = self.runtime.try_borrow() else {
+                return false;
+            };
+            runtime.active_terminal_appearance()
+        };
+        let Some(appearance) = appearance else {
+            return false;
+        };
+        {
+            let renderer = self.renderer.borrow();
+            if renderer.palette() == appearance.palette
+                && renderer.font_selection() == &appearance.font
+                && (renderer.font_size() - appearance.font_size).abs() < f32::EPSILON
+            {
+                return false;
+            }
+        }
+        let mut renderer = self.renderer.borrow_mut();
+        renderer.set_font_size(appearance.font_size);
+        // Rejected font files fall back to the bundled faces (validated in the
+        // editors; hand-edited configs stay usable).
+        let _ = renderer.apply_appearance(appearance.palette, appearance.font);
+        drop(renderer);
+        *self.last_frame.borrow_mut() = None;
+        true
+    }
+
     /// Re-render the terminal image when the active session's frame changed.
     fn refresh(&self, window: &MainWindow) {
+        self.sync_appearance();
         let session = window.get_active_session().to_string();
         let frame_id = {
             let Ok(runtime) = self.runtime.try_borrow() else {
@@ -365,7 +401,16 @@ fn wire_callbacks(
                             surface.refresh(&window);
                         }
                         Err(error) => {
-                            set_plain_status(&window, format!("{}: {error}", $error_prefix).into());
+                            // D5：开发者前缀只进日志，状态栏给用户向短句。
+                            tracing::warn!(
+                                target: "yshell::app",
+                                "{}: {error}",
+                                $error_prefix
+                            );
+                            set_plain_status(
+                                &window,
+                                format!("{} failed.", $error_prefix).into(),
+                            );
                         }
                     }
                 });
@@ -416,12 +461,11 @@ fn wire_callbacks(
                     window.invoke_focus_quick_connect();
                 }
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Quick Connect error: {error}").into());
-                window.set_status_kind_text("quick-connect-error".into());
-                window.set_status_param_1_text(error.to_string().into());
-                window.set_status_param_2_text("".into());
-            }
+            Err(error) => set_error_status(
+                &window,
+                "Could not connect. Check the target and try again.",
+                &error,
+            ),
         }
     });
 
@@ -437,9 +481,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Pin quick link error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Could not pin the quick link.", &error),
         }
     });
 
@@ -455,9 +497,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Remove quick link error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Could not remove the quick link.", &error),
         }
     });
 
@@ -494,9 +534,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Save as session error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Could not save the session.", &error),
         }
     });
 
@@ -512,7 +550,11 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Clear history error: {error}").into()),
+            Err(error) => set_error_status(
+                &window,
+                "Could not clear the quick connect history.",
+                &error,
+            ),
         }
     });
 
@@ -539,7 +581,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Activate tab error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not activate the tab.", &error),
         }
     });
 
@@ -555,7 +597,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Close tab error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not close the tab.", &error),
         }
     });
 
@@ -571,7 +613,47 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Close tabs error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not close the tabs.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_reconnect_tab(move |tab_id| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        match runtime_ref
+            .borrow_mut()
+            .reconnect_tab_session(tab_id.as_ref())
+        {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not reconnect the tab session.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_disconnect_tab(move |tab_id| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        match runtime_ref
+            .borrow_mut()
+            .disconnect_tab_session(tab_id.as_ref())
+        {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => {
+                set_error_status(&window, "Could not disconnect the tab session.", &error)
+            }
         }
     });
 
@@ -598,9 +680,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Confirm close tabs error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Could not confirm closing the tabs.", &error),
         }
     });
 
@@ -628,7 +708,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Save session error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not save the session.", &error),
         }
     });
 
@@ -645,9 +725,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Open saved session error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Could not open the saved session.", &error),
         }
     });
 
@@ -677,10 +755,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(
-                &window,
-                format!("Open selected saved session error: {error}").into(),
-            ),
+            Err(error) => set_error_status(&window, "Could not open the saved session.", &error),
         }
     });
 
@@ -699,10 +774,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(
-                &window,
-                format!("Update selected saved session error: {error}").into(),
-            ),
+            Err(error) => set_error_status(&window, "Could not update the saved session.", &error),
         }
     });
 
@@ -719,10 +791,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(
-                &window,
-                format!("Delete selected saved session error: {error}").into(),
-            ),
+            Err(error) => set_error_status(&window, "Could not delete the saved session.", &error),
         }
     });
 
@@ -743,6 +812,18 @@ fn wire_callbacks(
     window.on_select_next_saved_session(move || {
         if let Some(window) = weak.upgrade() {
             let projection = runtime_ref.borrow_mut().select_next_saved_session();
+            apply_projection(&window, &projection);
+            surface.refresh(&window);
+        }
+    });
+
+    // D12/A9：会话树/侧栏空白区左键清空选择。
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_clear_saved_session_selection(move || {
+        if let Some(window) = weak.upgrade() {
+            let projection = runtime_ref.borrow_mut().clear_saved_selection();
             apply_projection(&window, &projection);
             surface.refresh(&window);
         }
@@ -777,9 +858,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Open saved session error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Could not open the saved session.", &error),
         }
     });
 
@@ -810,7 +889,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Toggle folder error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not toggle the folder.", &error),
         }
     });
 
@@ -831,9 +910,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Open saved session error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Could not open the saved session.", &error),
         }
     });
 
@@ -850,9 +927,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Terminal input error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Terminal input could not be sent.", &error),
         }
     });
 
@@ -880,9 +955,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Terminal input error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Terminal input could not be sent.", &error),
         }
     });
 
@@ -904,7 +977,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Copy terminal error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not copy from the terminal.", &error),
         }
     });
 
@@ -921,9 +994,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Copy selection error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Could not copy the selection.", &error),
         }
     });
 
@@ -940,7 +1011,9 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Select all error: {error}").into()),
+            Err(error) => {
+                set_error_status(&window, "Could not select the terminal content.", &error)
+            }
         }
     });
 
@@ -957,9 +1030,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Paste terminal error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Could not paste into the terminal.", &error),
         }
     });
 
@@ -993,7 +1064,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Terminal key error: {error}").into()),
+            Err(error) => set_error_status(&window, "Terminal could not send the key.", &error),
         }
     });
 
@@ -1010,9 +1081,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Terminal scroll error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Terminal could not scroll.", &error),
         }
     });
 
@@ -1029,9 +1098,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Terminal scroll error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Terminal could not scroll.", &error),
         }
     });
 
@@ -1056,9 +1123,7 @@ fn wire_callbacks(
                     apply_projection(&window, &projection);
                     surface.refresh(&window);
                 }
-                Err(error) => {
-                    set_plain_status(&window, format!("Terminal scroll error: {error}").into())
-                }
+                Err(error) => set_error_status(&window, "Terminal could not scroll.", &error),
             }
         });
 
@@ -1082,9 +1147,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Terminal selection error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Terminal selection failed.", &error),
         }
     });
 
@@ -1128,9 +1191,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Terminal selection error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Terminal selection failed.", &error),
         }
     });
 
@@ -1156,9 +1217,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Terminal selection error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Terminal selection failed.", &error),
         }
     });
 
@@ -1175,9 +1234,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Clear terminal error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Could not clear the terminal.", &error),
         }
     });
 
@@ -1196,7 +1253,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Find terminal error: {error}").into()),
+            Err(error) => set_error_status(&window, "Find failed.", &error),
         }
     });
 
@@ -1213,7 +1270,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Find next error: {error}").into()),
+            Err(error) => set_error_status(&window, "Find failed.", &error),
         }
     });
 
@@ -1230,7 +1287,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Find previous error: {error}").into()),
+            Err(error) => set_error_status(&window, "Find failed.", &error),
         }
     });
 
@@ -1247,7 +1304,9 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("SFTP refresh error: {error}").into()),
+            Err(error) => {
+                set_error_status(&window, "Could not refresh the remote directory.", &error)
+            }
         }
     });
 
@@ -1264,9 +1323,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("Open SFTP path error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Could not open the remote path.", &error),
         }
     });
 
@@ -1283,7 +1340,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("SFTP up error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not open the parent directory.", &error),
         }
     });
 
@@ -1311,9 +1368,7 @@ fn wire_callbacks(
                     apply_projection(&window, &projection);
                     surface.refresh(&window);
                 }
-                Err(error) => {
-                    set_plain_status(&window, format!("SFTP upload error: {error}").into())
-                }
+                Err(error) => set_error_status(&window, "Upload failed.", &error),
             }
         },
     );
@@ -1342,9 +1397,7 @@ fn wire_callbacks(
                     apply_projection(&window, &projection);
                     surface.refresh(&window);
                 }
-                Err(error) => {
-                    set_plain_status(&window, format!("SFTP download error: {error}").into())
-                }
+                Err(error) => set_error_status(&window, "Download failed.", &error),
             }
         },
     );
@@ -1374,7 +1427,7 @@ fn wire_callbacks(
                     surface.refresh(&window);
                 }
                 Err(error) => {
-                    set_plain_status(&window, format!("SFTP mkdir error: {error}").into())
+                    set_error_status(&window, "Could not create the remote folder.", &error)
                 }
             }
         },
@@ -1405,7 +1458,7 @@ fn wire_callbacks(
                     surface.refresh(&window);
                 }
                 Err(error) => {
-                    set_plain_status(&window, format!("SFTP rename error: {error}").into())
+                    set_error_status(&window, "Could not rename the remote entry.", &error)
                 }
             }
         },
@@ -1435,9 +1488,7 @@ fn wire_callbacks(
                     apply_projection(&window, &projection);
                     surface.refresh(&window);
                 }
-                Err(error) => {
-                    set_plain_status(&window, format!("SFTP chmod error: {error}").into())
-                }
+                Err(error) => set_error_status(&window, "Could not change permissions.", &error),
             }
         },
     );
@@ -1466,9 +1517,7 @@ fn wire_callbacks(
                     apply_projection(&window, &projection);
                     surface.refresh(&window);
                 }
-                Err(error) => {
-                    set_plain_status(&window, format!("SFTP remote edit error: {error}").into())
-                }
+                Err(error) => set_error_status(&window, "Remote edit failed.", &error),
             }
         },
     );
@@ -1486,10 +1535,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(
-                &window,
-                format!("SFTP remote edit save error: {error}").into(),
-            ),
+            Err(error) => set_error_status(&window, "Could not save the remote file.", &error),
         }
     });
 
@@ -1506,10 +1552,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(
-                &window,
-                format!("SFTP remote edit cancel error: {error}").into(),
-            ),
+            Err(error) => set_error_status(&window, "Could not cancel the remote edit.", &error),
         }
     });
 
@@ -1536,7 +1579,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("SFTP open error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not open the remote entry.", &error),
         }
     });
 
@@ -1573,9 +1616,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("SFTP breadcrumb error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Could not open the remote path.", &error),
         }
     });
 
@@ -1594,7 +1635,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("SFTP mkdir error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not create the remote folder.", &error),
         }
     });
 
@@ -1613,7 +1654,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("SFTP rename error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not rename the remote entry.", &error),
         }
     });
 
@@ -1630,7 +1671,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("SFTP delete error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not delete the remote entry.", &error),
         }
     });
 
@@ -1649,7 +1690,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("SFTP chmod error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not change permissions.", &error),
         }
     });
 
@@ -1668,7 +1709,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("SFTP upload error: {error}").into()),
+            Err(error) => set_error_status(&window, "Upload failed.", &error),
         }
     });
 
@@ -1687,7 +1728,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("SFTP download error: {error}").into()),
+            Err(error) => set_error_status(&window, "Download failed.", &error),
         }
     });
 
@@ -1704,9 +1745,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_plain_status(&window, format!("SFTP remote edit error: {error}").into())
-            }
+            Err(error) => set_error_status(&window, "Remote edit failed.", &error),
         }
     });
 
@@ -1723,7 +1762,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Disconnect error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not disconnect the session.", &error),
         }
     });
 
@@ -1740,7 +1779,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Reconnect error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not reconnect the session.", &error),
         }
     });
 
@@ -1770,7 +1809,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Reset secrets error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not reset the secret store.", &error),
         }
     });
 
@@ -1831,7 +1870,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Known hosts error: {error}").into()),
+            Err(error) => set_error_status(&window, "Known hosts operation failed.", &error),
         }
     });
 
@@ -1861,7 +1900,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Known hosts error: {error}").into()),
+            Err(error) => set_error_status(&window, "Known hosts operation failed.", &error),
         }
     });
 
@@ -2101,7 +2140,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Host key error: {error}").into()),
+            Err(error) => set_error_status(&window, "Host key operation failed.", &error),
         }
     });
 
@@ -2118,7 +2157,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Host key error: {error}").into()),
+            Err(error) => set_error_status(&window, "Host key operation failed.", &error),
         }
     });
 
@@ -2148,7 +2187,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Host key error: {error}").into()),
+            Err(error) => set_error_status(&window, "Host key operation failed.", &error),
         }
     });
 
@@ -2178,7 +2217,7 @@ fn wire_callbacks(
                 surface.refresh(&window);
             }
             Err(error) => {
-                set_plain_status(&window, format!("Password prompt error: {error}").into());
+                set_error_status(&window, "Could not open the password prompt.", &error);
             }
         }
     });
@@ -2191,6 +2230,26 @@ fn wire_callbacks(
             let projection = runtime_ref.borrow_mut().start_new_saved_session_editor();
             apply_projection(&window, &projection);
             surface.refresh(&window);
+        }
+    });
+
+    // D12：会话树文件夹右键菜单 —— 在所选文件夹下新建会话。
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_start_new_saved_session_editor_in_folder(move |folder_id| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        match runtime_ref
+            .borrow_mut()
+            .start_new_saved_session_editor_in_folder(folder_id.as_ref())
+        {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not open the session editor.", &error),
         }
     });
 
@@ -2231,7 +2290,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Create folder error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not create the folder.", &error),
         }
     });
 
@@ -2251,7 +2310,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Create folder error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not create the folder.", &error),
         }
     });
 
@@ -2269,7 +2328,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Refresh error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not refresh.", &error),
         }
     });
 
@@ -2288,7 +2347,11 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Load editor error: {error}").into()),
+            Err(error) => set_error_status(
+                &window,
+                "Could not load the session into the editor.",
+                &error,
+            ),
         }
     });
 
@@ -2729,7 +2792,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Add tunnel error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not add the tunnel forward.", &error),
         }
     });
 
@@ -2805,7 +2868,7 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Save logging error: {error}").into()),
+            Err(error) => set_error_status(&window, "Could not save the logging settings.", &error),
         }
     });
 
@@ -3035,9 +3098,141 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Save terminal error: {error}").into()),
+            Err(error) => {
+                set_error_status(&window, "Could not save the terminal settings.", &error)
+            }
         }
     });
+
+    // --- N5：终端外观（Settings 外观弹窗 / Folder Editor / Session Editor 覆盖）--
+    wire_n4!(on_open_terminal_appearance, |runtime| runtime
+        .open_settings_appearance());
+    wire_n4!(on_close_terminal_appearance, |runtime| runtime
+        .close_settings_appearance());
+    wire_n4!(on_select_settings_scheme, |runtime, id: SharedString| {
+        runtime.select_settings_appearance_scheme(id.as_ref())
+    });
+    wire_n4!(
+        on_update_settings_appearance_color,
+        |runtime, field: SharedString, value: SharedString| runtime
+            .update_settings_appearance_color(field.as_ref(), value.as_ref())
+    );
+    wire_n4!(
+        on_update_settings_appearance_font_family,
+        |runtime, value: SharedString| runtime
+            .update_settings_appearance_font_family(value.as_ref())
+    );
+    wire_n4!(
+        on_update_settings_appearance_font_size,
+        |runtime, value: SharedString| runtime.update_settings_appearance_font_size(value.as_ref())
+    );
+    wire_n4!(
+        on_update_settings_appearance_fallback_fonts,
+        |runtime, value: SharedString| runtime
+            .update_settings_appearance_fallback_fonts(value.as_ref())
+    );
+    wire_n4!(on_clear_settings_appearance_fallbacks, |runtime| runtime
+        .clear_settings_appearance_fallback_fonts());
+    wire_n4!(on_reset_settings_appearance_defaults, |runtime| runtime
+        .reset_settings_appearance_defaults());
+    wire_n4_result!(
+        on_save_settings_appearance,
+        "Save terminal appearance",
+        |runtime| runtime.save_settings_appearance()
+    );
+
+    wire_n4_result!(on_edit_folder_defaults, "Open folder defaults", |runtime| {
+        let folder_id = runtime.selected_saved_folder_id.clone().unwrap_or_default();
+        runtime.open_folder_editor(&folder_id)
+    });
+    wire_n4!(on_close_folder_editor, |runtime| runtime
+        .close_folder_editor());
+    wire_n4!(
+        on_folder_editor_field_action,
+        |runtime, key: SharedString, action: SharedString| runtime
+            .folder_editor_field_action(key.as_ref(), theme_field_action(action.as_ref()))
+    );
+    wire_n4!(
+        on_update_folder_editor_field,
+        |runtime, key: SharedString, value: SharedString| runtime
+            .update_folder_editor_field(key.as_ref(), value.as_ref())
+    );
+    wire_n4!(on_folder_editor_select_scheme, |runtime, index: i32| {
+        runtime.select_folder_editor_scheme_index(index)
+    });
+    wire_n4!(on_folder_editor_select_log_format, |runtime, index: i32| {
+        runtime.select_folder_editor_log_format_index(index)
+    });
+    wire_n4!(on_toggle_folder_editor_logging, |runtime| runtime
+        .toggle_folder_editor_logging());
+    wire_n4!(on_reset_all_folder_editor, |runtime| runtime
+        .reset_all_folder_editor());
+    wire_n4_result!(on_save_folder_editor, "Save folder defaults", |runtime| {
+        runtime.save_folder_editor()
+    });
+
+    wire_n4!(
+        on_editor_theme_field_action,
+        |runtime, key: SharedString, action: SharedString| runtime
+            .editor_theme_field_action(key.as_ref(), theme_field_action(action.as_ref()))
+    );
+    wire_n4!(
+        on_update_editor_theme_field,
+        |runtime, key: SharedString, value: SharedString| runtime
+            .update_editor_theme_field(key.as_ref(), value.as_ref())
+    );
+    wire_n4!(on_editor_select_scheme, |runtime, index: i32| runtime
+        .select_editor_scheme_index(index));
+    wire_n4!(on_reset_all_editor_theme, |runtime| runtime
+        .reset_all_editor_theme());
+
+    // N5：字体文件选择（rfd，worker 线程；无显示服务器时保留路径输入）。
+    {
+        let weak = window.as_weak();
+        let runtime_ref = Rc::clone(&runtime);
+        let dialog_tx = dialog_tx.clone();
+        window.on_browse_settings_appearance_font_file(move || {
+            let Some(window) = weak.upgrade() else {
+                return;
+            };
+            if !file_dialogs_available() {
+                let mut runtime = runtime_ref.borrow_mut();
+                runtime.status_text =
+                    "No display server was found; type the font file path instead.".to_owned();
+                let projection = runtime.projection();
+                apply_projection(&window, &projection);
+                return;
+            }
+            spawn_pick_file(
+                dialog_tx.clone(),
+                DialogKind::TerminalFontPrimary,
+                "Select a terminal font file",
+            );
+        });
+    }
+    {
+        let weak = window.as_weak();
+        let runtime_ref = Rc::clone(&runtime);
+        let dialog_tx = dialog_tx.clone();
+        window.on_browse_settings_appearance_fallback_font(move || {
+            let Some(window) = weak.upgrade() else {
+                return;
+            };
+            if !file_dialogs_available() {
+                let mut runtime = runtime_ref.borrow_mut();
+                runtime.status_text =
+                    "No display server was found; type the fallback font path instead.".to_owned();
+                let projection = runtime.projection();
+                apply_projection(&window, &projection);
+                return;
+            }
+            spawn_pick_file(
+                dialog_tx.clone(),
+                DialogKind::TerminalFontFallback,
+                "Select a fallback font file",
+            );
+        });
+    }
 
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
@@ -3148,7 +3343,11 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Save editor error: {error}").into()),
+            Err(error) => set_error_status(
+                &window,
+                "Could not save the session. Check the fields.",
+                &error,
+            ),
         }
     });
 
@@ -3165,7 +3364,11 @@ fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_plain_status(&window, format!("Save+Connect error: {error}").into()),
+            Err(error) => set_error_status(
+                &window,
+                "Could not save and connect. Check the session fields.",
+                &error,
+            ),
         }
     });
 
@@ -3235,7 +3438,16 @@ fn wire_callbacks(
                     match result {
                         Ok(projection) => apply_projection(&window, &projection),
                         Err(error) => {
-                            set_plain_status(&window, format!("{}: {error}", $error_prefix).into());
+                            // D5：开发者前缀只进日志，状态栏给用户向短句。
+                            tracing::warn!(
+                                target: "yshell::app",
+                                "{}: {error}",
+                                $error_prefix
+                            );
+                            set_plain_status(
+                                &window,
+                                format!("{} failed.", $error_prefix).into(),
+                            );
                         }
                     }
                 });
@@ -3648,6 +3860,10 @@ pub(crate) enum DialogKind {
     SftpUploadFile,
     /// N1：SFTP 下载目标目录（pick_folder）→ 下载当前远端选择。
     SftpDownloadFolder,
+    /// N5：终端外观的主字体文件（pick_file）。
+    TerminalFontPrimary,
+    /// N5：终端外观的备用字体文件（pick_file）。
+    TerminalFontFallback,
 }
 
 /// rfd 的 GTK 后端是单个全局线程：并发/重复调用会在同一 GTK 主循环上嵌套对话框。
@@ -4052,6 +4268,13 @@ fn apply_dialog_outcome(runtime: &mut AppRuntime, outcome: FileDialogOutcome) ->
                 }),
             // 保存类对话框不会产生 Picked。
             DialogKind::PublicKeyExport | DialogKind::HostKeysExport => runtime.projection(),
+            // N5：终端外观的字体文件（主字体 / 备用字体）。
+            DialogKind::TerminalFontPrimary => {
+                runtime.update_settings_appearance_font_family(&path)
+            }
+            DialogKind::TerminalFontFallback => {
+                runtime.add_settings_appearance_fallback_font(&path)
+            }
         },
         FileDialogOutcome::Saved { kind, path, error } => {
             let detail = match (&error, kind) {
@@ -4120,16 +4343,12 @@ fn start_terminal_poll_timer(
             match runtime.sync_active_terminal_size_passive(columns, rows) {
                 Ok(Some(updated)) => projection = Some(updated),
                 Ok(None) => {}
-                Err(error) => {
-                    set_plain_status(&window, format!("Terminal resize error: {error}").into())
-                }
+                Err(error) => set_error_status(&window, "Could not resize the terminal.", &error),
             }
             match runtime.poll_all_terminal_outputs() {
                 Ok(Some(updated)) => projection = Some(updated),
                 Ok(None) => {}
-                Err(error) => {
-                    set_plain_status(&window, format!("Terminal poll error: {error}").into())
-                }
+                Err(error) => set_error_status(&window, "Terminal output polling failed.", &error),
             }
             projection
         };
@@ -4148,6 +4367,78 @@ fn sanitize_scale_factor(scale_factor: f32) -> f32 {
     } else {
         1.0
     }
+}
+
+// ---------------------------------------------------------------------------
+// N5：终端外观投影辅助（Rust 纯数据 → Slint 模型/图像）
+// ---------------------------------------------------------------------------
+
+/// Maps a three-state action id from the UI to the runtime enum.
+fn theme_field_action(action: &str) -> ThemeFieldAction {
+    match action {
+        "inherit" => ThemeFieldAction::SetInherit,
+        "explicit" => ThemeFieldAction::SetExplicit,
+        _ => ThemeFieldAction::Reset,
+    }
+}
+
+/// `[TriStateFieldData]` → Slint model.
+fn tri_state_field_model(fields: &[TriStateFieldData]) -> ModelRc<TriStateField> {
+    let rows: Vec<TriStateField> = fields
+        .iter()
+        .map(|field| TriStateField {
+            key: field.key.clone().into(),
+            label: field.label.clone().into(),
+            hint: field.hint.clone().into(),
+            kind: field.kind.into(),
+            state: field.state.into(),
+            value: field.value.clone().into(),
+            source_kind: field.source_kind.into(),
+            source_param: field.source_param.clone().into(),
+            options: ModelRc::new(VecModel::from(
+                field
+                    .options
+                    .iter()
+                    .map(|option| SharedString::from(option.as_str()))
+                    .collect::<Vec<_>>(),
+            )),
+            selected: field.selected,
+            swatches: swatch_model(&field.swatches),
+        })
+        .collect();
+    ModelRc::new(VecModel::from(rows))
+}
+
+/// `[ThemeSchemeOption]` → Slint model.
+fn settings_scheme_model(schemes: &[ThemeSchemeOption]) -> ModelRc<SettingsSchemeOption> {
+    let rows: Vec<SettingsSchemeOption> = schemes
+        .iter()
+        .map(|scheme| SettingsSchemeOption {
+            id: scheme.id.clone().into(),
+            name: scheme.name.clone().into(),
+            swatches: swatch_model(&scheme.swatches),
+        })
+        .collect();
+    ModelRc::new(VecModel::from(rows))
+}
+
+/// `[u8; 3]` swatches → Slint color model.
+fn swatch_model(swatches: &[[u8; 3]]) -> ModelRc<slint::Color> {
+    ModelRc::new(VecModel::from(
+        swatches
+            .iter()
+            .map(|[red, green, blue]| slint::Color::from_rgb_u8(*red, *green, *blue))
+            .collect::<Vec<_>>(),
+    ))
+}
+
+/// Rasterized terminal frame → Slint image.
+fn frame_image(frame: &yshell_terminal::TerminalFrame) -> slint::Image {
+    slint::Image::from_rgba8(SharedPixelBuffer::clone_from_slice(
+        &frame.rgba,
+        frame.width,
+        frame.height,
+    ))
 }
 
 /// Map a logical-pixel viewport onto terminal columns/rows.
@@ -4916,6 +5207,15 @@ fn set_plain_status(window: &MainWindow, text: SharedString) {
     window.set_status_param_2_text("".into());
 }
 
+/// D5：用户向状态文案 + 详细错误进 tracing 日志。
+///
+/// 状态栏只展示可理解的短句，不再出现 `Terminal input error: <内部错误>`
+/// 这类开发者口吻；细节可在日志里查。
+fn set_error_status(window: &MainWindow, user_message: &str, error: &dyn std::fmt::Display) {
+    tracing::warn!(target: "yshell::app", "{user_message}: {error}");
+    set_plain_status(window, user_message.to_owned().into());
+}
+
 /// N3：面板 id 字符串 → `PanelId`（Slint 回调参数）。
 fn panel_id_from_str(id: &str) -> Option<PanelId> {
     match id {
@@ -5011,6 +5311,19 @@ fn apply_projection(window: &MainWindow, projection: &AppProjection) {
     window.set_known_hosts_selection_index(projection.known_hosts_selection_index);
     window.set_known_hosts_selection_total(projection.known_hosts_selection_total);
     window.set_known_hosts_details_text(projection.known_hosts_details_text.clone().into());
+    // D17：详情拆分字段（标签由 UI 侧 @tr 渲染）。
+    window.set_known_hosts_detail_host_text(projection.known_hosts_detail_host_text.clone().into());
+    window.set_known_hosts_detail_port_text(projection.known_hosts_detail_port_text.clone().into());
+    window.set_known_hosts_detail_algorithm_text(
+        projection.known_hosts_detail_algorithm_text.clone().into(),
+    );
+    window.set_known_hosts_detail_fingerprint_text(
+        projection
+            .known_hosts_detail_fingerprint_text
+            .clone()
+            .into(),
+    );
+    window.set_known_hosts_detail_path_text(projection.known_hosts_detail_path_text.clone().into());
     window.set_known_hosts_path_text(projection.known_hosts_path_text.clone().into());
     window.set_known_hosts_clear_confirmation_text(
         projection
@@ -5083,6 +5396,76 @@ fn apply_projection(window: &MainWindow, projection: &AppProjection) {
             .clone()
             .into(),
     );
+    // --- N5：终端外观 / Folder Editor / Session Editor 覆盖 --------------------
+    window.set_terminal_appearance_dialog_visible(projection.settings_appearance_visible);
+    window.set_settings_appearance_color_scheme_text(
+        projection
+            .settings_appearance_color_scheme_text
+            .clone()
+            .into(),
+    );
+    window.set_settings_appearance_foreground_text(
+        projection
+            .settings_appearance_foreground_text
+            .clone()
+            .into(),
+    );
+    window.set_settings_appearance_background_text(
+        projection
+            .settings_appearance_background_text
+            .clone()
+            .into(),
+    );
+    window.set_settings_appearance_cursor_text(
+        projection.settings_appearance_cursor_text.clone().into(),
+    );
+    window.set_settings_appearance_selection_text(
+        projection.settings_appearance_selection_text.clone().into(),
+    );
+    window.set_settings_appearance_font_family_text(
+        projection
+            .settings_appearance_font_family_text
+            .clone()
+            .into(),
+    );
+    window.set_settings_appearance_font_size_text(
+        projection.settings_appearance_font_size_text.clone().into(),
+    );
+    window.set_settings_appearance_fallback_fonts_text(
+        projection
+            .settings_appearance_fallback_fonts_text
+            .clone()
+            .into(),
+    );
+    window.set_settings_appearance_status_text(
+        projection.settings_appearance_status_text.clone().into(),
+    );
+    window.set_settings_appearance_schemes(settings_scheme_model(
+        &projection.settings_appearance_schemes,
+    ));
+    window.set_settings_appearance_palette_swatches(swatch_model(
+        &projection.settings_appearance_palette_swatches,
+    ));
+    if let Some(preview) = projection.settings_appearance_preview.as_ref() {
+        window.set_settings_appearance_preview(frame_image(preview));
+    }
+    window.set_folder_editor_visible(projection.folder_editor_visible);
+    window.set_folder_editor_name_text(projection.folder_editor_name_text.clone().into());
+    window.set_folder_editor_path_text(projection.folder_editor_path_text.clone().into());
+    window.set_folder_editor_status_text(projection.folder_editor_status_text.clone().into());
+    window.set_folder_editor_appearance_fields(tri_state_field_model(
+        &projection.folder_editor_appearance_fields,
+    ));
+    window.set_folder_editor_terminal_fields(tri_state_field_model(
+        &projection.folder_editor_terminal_fields,
+    ));
+    window.set_folder_editor_logging_fields(tri_state_field_model(
+        &projection.folder_editor_logging_fields,
+    ));
+    window.set_saved_folder_selected(projection.saved_folder_selected);
+    window
+        .set_editor_appearance_fields(tri_state_field_model(&projection.editor_appearance_fields));
+    window.set_editor_terminal_fields(tri_state_field_model(&projection.editor_terminal_fields));
     window.set_active_session_kind_text(projection.active_session_kind_text.clone().into());
     window.set_active_session_name_text(projection.active_session_name_text.clone().into());
     window.set_active_session_state_text(projection.active_session_state_text.clone().into());
@@ -5129,6 +5512,32 @@ fn apply_projection(window: &MainWindow, projection: &AppProjection) {
     window.set_host_key_prompt_visible(projection.host_key_prompt_visible);
     window.set_host_key_prompt_text(projection.host_key_prompt_text.clone().into());
     window.set_host_key_prompt_mode_text(projection.host_key_prompt_mode_text.clone().into());
+    // D36：弹窗正文拆分字段（WS-C 的 HostKeyDialog 逐行渲染；空值行不占位）。
+    window.set_host_key_prompt_target_text(projection.host_key_prompt_target_text.clone().into());
+    window.set_host_key_prompt_known_hosts_path_text(
+        projection
+            .host_key_prompt_known_hosts_path_text
+            .clone()
+            .into(),
+    );
+    window.set_host_key_prompt_algorithm_text(
+        projection.host_key_prompt_algorithm_text.clone().into(),
+    );
+    window.set_host_key_prompt_fingerprint_text(
+        projection.host_key_prompt_fingerprint_text.clone().into(),
+    );
+    window.set_host_key_prompt_expected_algorithm_text(
+        projection
+            .host_key_prompt_expected_algorithm_text
+            .clone()
+            .into(),
+    );
+    window.set_host_key_prompt_expected_fingerprint_text(
+        projection
+            .host_key_prompt_expected_fingerprint_text
+            .clone()
+            .into(),
+    );
     window.set_host_key_prompt_confirmation_text(
         projection.host_key_prompt_confirmation_text.clone().into(),
     );
@@ -5195,6 +5604,16 @@ fn apply_projection(window: &MainWindow, projection: &AppProjection) {
     }
     window.set_quick_connect_error_text(projection.quick_connect_error_text.clone().into());
     window.set_quick_connect_summary_text(projection.quick_connect_summary_text.clone().into());
+    // D37：摘要的 kind/参数（`TextFormats.status-message` 用；文本是回退）。
+    window.set_quick_connect_summary_kind_text(
+        projection.quick_connect_summary_kind_text.clone().into(),
+    );
+    window.set_quick_connect_summary_param_1_text(
+        projection.quick_connect_summary_param_1_text.clone().into(),
+    );
+    window.set_quick_connect_summary_param_2_text(
+        projection.quick_connect_summary_param_2_text.clone().into(),
+    );
     window.set_quick_connect_last_target_text(
         projection.quick_connect_last_target_text.clone().into(),
     );
@@ -5211,6 +5630,9 @@ fn apply_projection(window: &MainWindow, projection: &AppProjection) {
     window.set_tab_menu_close_right_enabled(projection.tab_menu_close_right_enabled);
     window.set_tab_menu_close_all_enabled(projection.tab_menu_close_all_enabled);
     window.set_tab_menu_close_disconnected_enabled(projection.tab_menu_close_disconnected_enabled);
+    // D18：标签右键菜单的 Reconnect/Disconnect 状态（针对被右键标签）。
+    window.set_tab_menu_reconnect_enabled(projection.tab_menu_reconnect_enabled);
+    window.set_tab_menu_disconnect_enabled(projection.tab_menu_disconnect_enabled);
     // W5-A2 的终端位图缓存按"活动标签"判断是否需要重绘：标签 id 变化必须使
     // 缓存失效（同 frame_id 的不同会话切回来也要重绘）。
     window.set_active_session(projection.active_tab_id.clone().into());
@@ -5446,6 +5868,15 @@ fn apply_projection(window: &MainWindow, projection: &AppProjection) {
     window.set_host_keys_selected_group(projection.host_keys_selected_group);
     window.set_host_keys_selected_entry(projection.host_keys_selected_entry);
     window.set_host_keys_details_text(projection.host_keys_details_text.clone().into());
+    // D20：详情拆分字段（标签由 UI 侧 @tr 渲染）。
+    window.set_host_keys_detail_host_text(projection.host_keys_detail_host_text.clone().into());
+    window.set_host_keys_detail_algorithm_text(
+        projection.host_keys_detail_algorithm_text.clone().into(),
+    );
+    window.set_host_keys_detail_fingerprint_text(
+        projection.host_keys_detail_fingerprint_text.clone().into(),
+    );
+    window.set_host_keys_detail_path_text(projection.host_keys_detail_path_text.clone().into());
     window.set_host_keys_path_text(projection.host_keys_path_text.clone().into());
     window.set_host_keys_status_text(projection.host_keys_status_text.clone().into());
     window.set_host_keys_import_visible(projection.host_keys_import_visible);

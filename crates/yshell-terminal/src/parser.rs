@@ -19,6 +19,11 @@ enum ParserState {
     Ground,
     Escape,
     Csi(String),
+    /// OSC/DCS/PM/APC 字符串序列：消费到 BEL (`0x07`) 或 ST (`ESC \`) 为止。
+    /// D3：窗口标题等序列不得作为明文回显到网格。
+    StringSequence,
+    /// 字符串序列里读到 `ESC`，等待 `\`（ST）或重新回到序列内容。
+    StringSequenceEscape,
 }
 
 impl Default for TerminalParser {
@@ -91,10 +96,23 @@ impl TerminalParser {
             ParserState::Escape => {
                 if character == '[' {
                     self.state = ParserState::Csi(String::new());
+                } else if matches!(character, ']' | 'P' | '^' | '_') {
+                    // OSC / DCS / PM / APC：整段消费，不写入网格。
+                    self.state = ParserState::StringSequence;
                 } else {
                     self.state = ParserState::Ground;
                 }
             }
+            ParserState::StringSequence => match character {
+                '\x07' => self.state = ParserState::Ground,
+                '\x1b' => self.state = ParserState::StringSequenceEscape,
+                _ => {}
+            },
+            ParserState::StringSequenceEscape => match character {
+                '\\' | '\x07' => self.state = ParserState::Ground,
+                '\x1b' => {}
+                _ => self.state = ParserState::StringSequence,
+            },
             ParserState::Csi(buffer) => {
                 if character.is_ascii_digit() || matches!(character, ';' | '?' | ':') {
                     buffer.push(character);
@@ -202,6 +220,30 @@ mod tests {
 
         parser.advance(&mut grid, b"\x1b[2J");
         assert_eq!(grid.visible_lines(), vec!["", ""]);
+    }
+
+    #[test]
+    fn consumes_osc_window_title_without_printing_it() {
+        let mut grid = TerminalGrid::new(40, 2);
+        let mut parser = TerminalParser::new();
+
+        // D3：OSC 0 标题（BEL 与 ST 两种终止符）不得回显为明文。
+        parser.advance(
+            &mut grid,
+            b"\x1b]0;tester@host: ~\x07prompt$ \x1b]0;second title\x1b\\done",
+        );
+
+        assert_eq!(grid.line_text(0), "prompt$ done");
+    }
+
+    #[test]
+    fn consumes_dcs_and_apc_sequences() {
+        let mut grid = TerminalGrid::new(40, 2);
+        let mut parser = TerminalParser::new();
+
+        parser.advance(&mut grid, b"a\x1bP1$r0m\x1b\\b\x1b_apc payload\x1b\\c");
+
+        assert_eq!(grid.line_text(0), "abc");
     }
 
     #[test]
