@@ -216,6 +216,8 @@ export component MainWindow inherits Window {
     in-out property <int> local_selected_count: 0;
     in-out property <bool> local_collapsed: false;
     in-out property <string> local_selected_name_text: "";
+    in-out property <string> local_selection_key_text: "";
+    in-out property <string> sftp_selection_key_text: "";
     in-out property <[SftpTransferRow]> transfer_rows;
     in-out property <bool> transfer_drawer_expanded: false;
     in-out property <int> transfer_total_count: 0;
@@ -646,8 +648,8 @@ export component MainWindow inherits Window {
     callback sftp_conflict_cancel();
     callback sftp_properties_copy_path();
     callback sftp_properties_close();
-    pure callback drag_local_transfer() -> data-transfer;
-    pure callback drag_remote_transfer() -> data-transfer;
+    pure callback drag_local_transfer(string) -> data-transfer;
+    pure callback drag_remote_transfer(string) -> data-transfer;
     callback drop_on_remote_row(int, data-transfer, DragAction);
     callback drop_on_remote_blank(data-transfer, DragAction);
     callback drop_on_local(data-transfer, DragAction);
@@ -1585,6 +1587,8 @@ export component MainWindow inherits Window {
                     local-retry-visible: root.local_retry_visible;
                     local-collapsed: root.local_collapsed;
                     local-selected-name-text: root.local_selected_name_text;
+                    local-selection-key: root.local_selection_key_text;
+                    sftp-selection-key: root.sftp_selection_key_text;
                     transfer-rows: root.transfer_rows;
                     transfer-expanded: root.transfer_drawer_expanded;
                     transfer-total-count: root.transfer_total_count;
@@ -1633,8 +1637,8 @@ export component MainWindow inherits Window {
                     copy-file-selection() => { root.copy_file_selection(); }
                     cut-file-selection() => { root.cut_file_selection(); }
                     paste-cross-pane() => { root.paste_cross_pane(); }
-                    drag-local-transfer() => { return root.drag_local_transfer(); }
-                    drag-remote-transfer() => { return root.drag_remote_transfer(); }
+                    drag-local-transfer(key) => { return root.drag_local_transfer(key); }
+                    drag-remote-transfer(key) => { return root.drag_remote_transfer(key); }
                     drop-on-remote-row(index, data, action) => { root.drop_on_remote_row(index, data, action); }
                     drop-on-remote-blank(data, action) => { root.drop_on_remote_blank(data, action); }
                     drop-on-local(data, action) => { root.drop_on_local(data, action); }

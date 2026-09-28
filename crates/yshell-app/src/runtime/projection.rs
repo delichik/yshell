@@ -298,6 +298,13 @@ impl AppRuntime {
             local_selected_count: i32::try_from(self.local_selection_count()).unwrap_or(i32::MAX),
             local_collapsed: self.local_pane.collapsed,
             local_selected_name_text: self.local_selected_name_text(),
+            local_selection_key_text: self
+                .local_selected_paths()
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join("\n"),
+            sftp_selection_key_text: self.sftp_selected_paths().join("\n"),
             sftp_selected_count: i32::try_from(self.sftp_selection_count()).unwrap_or(i32::MAX),
             sftp_menu_target_kind_text: self.sftp_menu_target_kind().to_owned(),
             sftp_selection_single_file: self.sftp_selection_is_single_file(),
@@ -1171,6 +1178,11 @@ pub struct AppProjection {
     pub local_collapsed: bool,
     /// Names of up to three selected local entries (summary row).
     pub local_selected_name_text: String,
+    /// Joined selected local paths; only used as the Slint `data` binding
+    /// dependency (the drag payload itself is built by the host).
+    pub local_selection_key_text: String,
+    /// Joined selected remote paths (same purpose as the local key).
+    pub sftp_selection_key_text: String,
     /// Remote multi-selection size (0 = blank-area menu).
     pub sftp_selected_count: i32,
     /// Remote context-menu target kind: `file`/`dir`/`blank`/`multi`.

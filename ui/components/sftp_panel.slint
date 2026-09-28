@@ -140,7 +140,9 @@ component SftpRemotePane inherits Rectangle {
     callback panel-menu-requested(length, length);
     callback save-edit();
     callback cancel-edit();
-    pure callback drag-payload() -> data-transfer;
+    pure callback drag-payload(string) -> data-transfer;
+    /// 选择路径串（仅作为 data 绑定的依赖；载荷由宿主生成）。
+    in property <string> selection-key: "";
     callback drop-on-row(int, data-transfer, DragAction);
     callback drop-on-blank(data-transfer, DragAction);
 
@@ -371,6 +373,8 @@ component SftpRemotePane inherits Rectangle {
             vertical-stretch: 1;
 
             // 列表级 DropArea：空白处落下 = 移动到当前目录 / 外部文件导入。
+            // 注意：`dropped` 的 `event.proposed-action` 已经是 can-drop 的协商结果，
+            // 不能再做一次映射（否则 Copy/Move 会被反转两次）。
             DropArea {
                 x: 0;
                 y: 0;
@@ -378,8 +382,8 @@ component SftpRemotePane inherits Rectangle {
                 height: parent.height;
                 can-drop(event) => { return root.drop-action(event.proposed-action); }
                 dropped(event) => {
-                    root.drop-on-blank(event.data, root.drop-action(event.proposed-action));
-                    return root.drop-action(event.proposed-action);
+                    root.drop-on-blank(event.data, event.proposed-action);
+                    return event.proposed-action;
                 }
             }
 
@@ -463,6 +467,7 @@ component SftpRemotePane inherits Rectangle {
                     }
 
                     // 目录行接住"拖到目录上 = 移动进目录"。
+                    // `dropped` 的 proposed-action 同样是协商结果，直接透传。
                     if row.is-dir : DropArea {
                         x: 0;
                         y: 0;
@@ -470,8 +475,8 @@ component SftpRemotePane inherits Rectangle {
                         height: parent.height;
                         can-drop(event) => { return root.drop-action(event.proposed-action); }
                         dropped(event) => {
-                            root.drop-on-row(index, event.data, root.drop-action(event.proposed-action));
-                            return root.drop-action(event.proposed-action);
+                            root.drop-on-row(index, event.data, event.proposed-action);
+                            return event.proposed-action;
                         }
                     }
 
@@ -482,7 +487,7 @@ component SftpRemotePane inherits Rectangle {
                         y: 0;
                         width: parent.width;
                         height: parent.height;
-                        data: root.drag-payload();
+                        data: root.drag-payload(root.selection-key);
                         allow-copy: true;
                         allow-move: true;
 
@@ -747,6 +752,185 @@ component SftpTransferDrawer inherits Rectangle {
 // ---------------------------------------------------------------- 本地栏
 
 /// 本地栏：LocalPane（只读接线）+ 图标拖动槽 + 整栏 DropArea。
+// ---------------------------------------------------------------- 队列抽屉
+
+/// 传输抽屉：摘要一行 + 展开后的任务列表（行内 pause/resume/retry/cancel/remove）。
+component SftpTransferDrawer inherits Rectangle {
+    in property <[SftpTransferRow]> rows;
+    in property <bool> expanded: false;
+    in property <int> total-count: 0;
+    in property <int> active-count: 0;
+    in property <int> paused-count: 0;
+    in property <int> failed-count: 0;
+    in property <int> completed-count: 0;
+    in property <int> retryable-count: 0;
+
+    callback toggle-expanded();
+    callback pause(string);
+    callback resume(string);
+    callback retry(string);
+    callback cancel(string);
+    callback remove(string);
+    callback clear-completed();
+
+    background: Theme.layer-fill;
+    border-radius: Theme.radius-control;
+
+    VerticalLayout {
+        spacing: 0;
+
+        // --- 摘要行 ------------------------------------------------------
+        HorizontalLayout {
+            height: Theme.control-height;
+            padding-left: Theme.spacing-8;
+            padding-right: Theme.spacing-4;
+            spacing: Theme.spacing-4;
+
+            WinIconButton {
+                icon: root.expanded ? "chevron-down" : "chevron-right";
+                accessible-name: root.expanded ? @tr("Hide transfers") : @tr("Show transfers");
+                clicked => { root.toggle-expanded(); }
+            }
+
+            // 固定尺寸容器：Icon 直接放在布局里会被布局改成 0 宽，软件渲染器
+            // 对 0 尺寸图片会算出 NaN 并 panic（与 WinIconButton 同形）。
+            Rectangle {
+                width: Theme.icon-size-small;
+                vertical-stretch: 1;
+                background: transparent;
+
+                Icon {
+                    name: "download";
+                    icon-color: Theme.text-secondary;
+                    icon-size: Theme.icon-size-small;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+            }
+
+            Text {
+                text: root.summary-text();
+                color: Theme.text-secondary;
+                font-size: Theme.font-caption;
+                vertical-alignment: center;
+                wrap: no-wrap;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+
+            if root.completed-count > 0 : WinButton {
+                text: @tr("Clear completed");
+                subtle: true;
+                clicked => { root.clear-completed(); }
+            }
+        }
+
+        // --- 展开的任务列表 ----------------------------------------------
+        if root.expanded : Rectangle {
+            clip: true;
+            height: min(root.rows.length * Theme.row-height-list + Theme.spacing-4, 240px);
+
+            ListView {
+                for row[index] in root.rows : Rectangle {
+                    height: Theme.row-height-list;
+                    border-radius: Theme.radius-control;
+                    background: row.is-failed ? Theme.attention-background
+                        : Math.mod(index, 2) == 0 ? transparent : Theme.card-fill;
+
+                    Text {
+                        x: Theme.spacing-8;
+                        y: 0;
+                        width: 90px;
+                        height: parent.height;
+                        text: row.direction-text;
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    Text {
+                        x: 98px;
+                        y: 0;
+                        width: parent.width - 98px - root.action-width() - Theme.spacing-8;
+                        height: parent.height;
+                        text: row.file-name-text;
+                        color: Theme.text-primary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    Text {
+                        x: parent.width - root.action-width() - 72px - Theme.spacing-8;
+                        y: 0;
+                        width: 72px;
+                        height: parent.height;
+                        text: row.is-failed ? row.status-text : row.progress-text;
+                        color: row.is-failed ? Theme.critical : Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        horizontal-alignment: right;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    // 行内动作：按状态显示可用的队列操作。
+                    HorizontalLayout {
+                        x: parent.width - root.action-width();
+                        y: 0;
+                        width: root.action-width();
+                        height: parent.height;
+                        spacing: 0;
+                        alignment: end;
+
+                        if row.can-pause : WinIconButton {
+                            icon: "pause";
+                            accessible-name: @tr("Pause transfer");
+                            clicked => { root.pause(row.id); }
+                        }
+                        if row.can-resume : WinIconButton {
+                            icon: "play";
+                            accessible-name: @tr("Resume transfer");
+                            clicked => { root.resume(row.id); }
+                        }
+                        if row.can-retry : WinIconButton {
+                            icon: "refresh";
+                            accessible-name: @tr("Retry transfer");
+                            clicked => { root.retry(row.id); }
+                        }
+                        if row.can-cancel : WinIconButton {
+                            icon: "close";
+                            accessible-name: @tr("Cancel transfer");
+                            clicked => { root.cancel(row.id); }
+                        }
+                        if row.can-remove : WinIconButton {
+                            icon: "trash";
+                            accessible-name: @tr("Remove transfer");
+                            clicked => { root.remove(row.id); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// 动作列宽按行内容固定为 3 个按钮（最多同时显示 3 个动作）。
+    pure function action-width() -> length {
+        return 3 * Theme.control-height;
+    }
+
+    pure function summary-text() -> string {
+        return @tr("{0} transfer(s) · {1} active · {2} paused · {3} failed · {4} completed",
+            root.total-count, root.active-count, root.paused-count, root.failed-count, root.completed-count);
+    }
+}
+
+// ---------------------------------------------------------------- 本地栏
+
+/// 本地栏：LocalPane（只读接线）+ 图标拖动槽 + 整栏 DropArea。
 component SftpLocalSection inherits Rectangle {
     in property <[LocalRow]> rows;
     in property <string> path-text: "/";
@@ -775,7 +959,11 @@ component SftpLocalSection inherits Rectangle {
     callback activate-row(int);
     callback context-menu-requested(int, length, length);
     callback retry();
-    pure callback drag-payload() -> data-transfer;
+    /// 拖动载荷：`selection-key` 是当前选择的路径串（仅用作依赖，载荷由宿主按
+    /// 同一状态生成）。**必须带依赖**：Slint 会缓存无依赖的绑定，第一次求值
+    /// （通常是选中之前）之后 `data` 永远为空，拖动再也起不来。
+    pure callback drag-payload(string) -> data-transfer;
+    in property <string> selection-key: "";
     callback drop-received(data-transfer, DragAction);
     callback focus-requested();
 
@@ -824,31 +1012,44 @@ component SftpLocalSection inherits Rectangle {
         retry => { root.retry(); }
     }
 
-    // 整栏 DropArea（远端 → 本地 / 系统文件）：LocalPane 的点击会向下转发，
-    // 拖动悬停时由本层接管。
-    if !root.collapsed : DropArea {
-        x: 0;
+    // 整栏 DropArea（远端 → 本地 / 系统文件）：声明在 LocalPane 之后（同层里
+    // 靠后 = 在上层），点击会向下转发给 LocalPane。折叠时几何归零 + 禁用。
+    drop_overlay := DropArea {
+        x: 0px;
         y: root.list-top;
         width: parent.width;
-        height: root.list-height;
+        height: root.collapsed ? 0px : root.list-height;
+        enabled: !root.collapsed;
         can-drop(event) => { return root.drop-action(event.proposed-action); }
         dropped(event) => {
-            root.drop-received(event.data, root.drop-action(event.proposed-action));
-            return root.drop-action(event.proposed-action);
+            root.drop-received(event.data, event.proposed-action);
+            return event.proposed-action;
         }
     }
 
     // 图标槽 DragArea：LocalPane 属 N6/共享件不可改，行内没有 DragArea；
-    // 这里在图标列（16px + 2px 余量）覆盖一条拖动槽，名称列的选择/双击不受影响。
-    // 载荷 = 宿主按当前本地选择生成（点击名称列先选、再拖图标）。
-    if !root.collapsed : DragArea {
-        x: Theme.spacing-4;
+    // 这里在图标列覆盖一条 34px 宽的拖动槽（图标 16 + 名称前两字符），
+    // 名称列其余部分的选择/双击不受影响。
+    //
+    // 宽度必须大于拖拽阈值（约 8px）：否则按下后横向移动会先触发 Exit
+    // （DragArea 收到 Exit 会复位 pressed），拖动永远开始不了。
+    // 载荷 = 宿主按当前本地选择生成（先点名称列选中，再拖图标槽）。
+    drag_handle := Rectangle {
+        x: 4px;
         y: root.list-top;
-        width: 18px;
-        height: root.list-height;
-        data: root.drag-payload();
-        allow-copy: true;
-        allow-move: true;
+        width: root.collapsed ? 0px : 34px;
+        height: root.collapsed ? 0px : root.list-height;
+        background: transparent;
+
+        DragArea {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: parent.height;
+            data: root.drag-payload(root.selection-key);
+            allow-copy: true;
+            allow-move: true;
+        }
     }
 
     pure function drop-action(proposed: DragAction) -> DragAction {
@@ -900,6 +1101,9 @@ export component SftpPanel inherits Rectangle {
     in property <bool> local-collapsed: false;
     in property <string> local-title-text: "";
     in property <string> local-selected-name-text: "";
+    /// 本地/远端选择路径串（data 绑定依赖；载荷由宿主生成）。
+    in property <string> local-selection-key: "";
+    in property <string> sftp-selection-key: "";
     // 传输抽屉投影
     in property <[SftpTransferRow]> transfer-rows;
     in property <bool> transfer-expanded: false;
@@ -924,7 +1128,7 @@ export component SftpPanel inherits Rectangle {
     callback panel-menu-requested(length, length);
     callback save-edit();
     callback cancel-edit();
-    pure callback drag-remote-transfer() -> data-transfer;
+    pure callback drag-remote-transfer(string) -> data-transfer;
     callback drop-on-remote-row(int, data-transfer, DragAction);
     callback drop-on-remote-blank(data-transfer, DragAction);
     // --- 本地回调 ---------------------------------------------------------
@@ -940,7 +1144,7 @@ export component SftpPanel inherits Rectangle {
     callback local-context-menu-requested(int, length, length);
     callback local-redirect-requested();
     callback local-retry();
-    pure callback drag-local-transfer() -> data-transfer;
+    pure callback drag-local-transfer(string) -> data-transfer;
     callback drop-on-local(data-transfer, DragAction);
     // --- 队列抽屉 ---------------------------------------------------------
     callback transfer-toggle-expanded();
@@ -1037,7 +1241,8 @@ export component SftpPanel inherits Rectangle {
                     panel-menu-requested(x, y) => { root.panel-menu-requested(x, y); }
                     save-edit => { root.save-edit(); }
                     cancel-edit => { root.cancel-edit(); }
-                    drag-payload => { return root.drag-remote-transfer(); }
+                    selection-key: root.sftp-selection-key;
+                drag-payload(key) => { return root.drag-remote-transfer(key); }
                     drop-on-row(index, data, action) => { root.drop-on-remote-row(index, data, action); }
                     drop-on-blank(data, action) => { root.drop-on-remote-blank(data, action); }
                 }
@@ -1070,7 +1275,8 @@ export component SftpPanel inherits Rectangle {
                     activate-row(index) => { root.local-activate-row(index); }
                     context-menu-requested(index, x, y) => { root.local-context-menu-requested(index, x, y); }
                     retry => { root.local-retry(); }
-                    drag-payload => { return root.drag-local-transfer(); }
+                    selection-key: root.local-selection-key;
+                drag-payload(key) => { return root.drag-local-transfer(key); }
                     drop-received(data, action) => { root.drop-on-local(data, action); }
                     focus-requested => { pane_scope.focus(); }
                 }
@@ -1109,7 +1315,8 @@ export component SftpPanel inherits Rectangle {
                 panel-menu-requested(x, y) => { root.panel-menu-requested(x, y); }
                 save-edit => { root.save-edit(); }
                 cancel-edit => { root.cancel-edit(); }
-                drag-payload => { return root.drag-remote-transfer(); }
+                selection-key: root.sftp-selection-key;
+                drag-payload(key) => { return root.drag-remote-transfer(key); }
                 drop-on-row(index, data, action) => { root.drop-on-remote-row(index, data, action); }
                 drop-on-blank(data, action) => { root.drop-on-remote-blank(data, action); }
             }
@@ -1160,7 +1367,8 @@ export component SftpPanel inherits Rectangle {
                 activate-row(index) => { root.local-activate-row(index); }
                 context-menu-requested(index, x, y) => { root.local-context-menu-requested(index, x, y); }
                 retry => { root.local-retry(); }
-                drag-payload => { return root.drag-local-transfer(); }
+                selection-key: root.local-selection-key;
+                drag-payload(key) => { return root.drag-local-transfer(key); }
                 drop-received(data, action) => { root.drop-on-local(data, action); }
                 focus-requested => { pane_scope.focus(); }
             }
@@ -1254,6 +1462,7 @@ export component SftpContextMenu inherits Rectangle {
 
     private property <[MenuEntry]> local-entries: [
         { label: @tr("Upload to Remote"), shortcut: "", enabled: root.connected && root.has-selection, checked: false, separator: false },
+        { label: @tr("Move to Remote"), shortcut: "", enabled: root.connected && root.has-selection, checked: false, separator: false },
         { label: @tr("Copy"), shortcut: "", enabled: root.has-selection, checked: false, separator: false },
         { label: @tr("Copy Path"), shortcut: "", enabled: root.has-selection, checked: false, separator: false },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
@@ -1340,11 +1549,12 @@ export component SftpContextMenu inherits Rectangle {
 
     pure function local-action(index: int) -> string {
         if (index == 0) { return "upload-selection"; }
-        if (index == 1) { return "copy-local"; }
-        if (index == 2) { return "copy-local-path"; }
-        if (index == 4) { return "paste-into-local"; }
-        if (index == 6) { return "local-refresh"; }
-        if (index == 7) { return "local-toggle-hidden"; }
+        if (index == 1) { return "move-selection"; }
+        if (index == 2) { return "copy-local"; }
+        if (index == 3) { return "copy-local-path"; }
+        if (index == 5) { return "paste-into-local"; }
+        if (index == 7) { return "local-refresh"; }
+        if (index == 8) { return "local-toggle-hidden"; }
         return "";
     }
 

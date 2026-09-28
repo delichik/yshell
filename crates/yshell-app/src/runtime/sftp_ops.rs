@@ -9,14 +9,15 @@ use crate::{
 };
 use std::{fs, path::Path, path::PathBuf};
 use yshell_sftp::{
-    OverwritePolicy, SftpClient, TransferDirection, TreeTransferOptions, prepare_remote_edit_session,
+    prepare_remote_edit_session, OverwritePolicy, SftpClient, TransferDirection,
+    TreeTransferOptions,
 };
 
+use super::*;
 use super::{
     apply_sftp_tree_report, overwrite_policy_from_id, overwrite_policy_id, overwrite_policy_label,
     tree_transfer_status_text, update_sftp_transfer_progress,
 };
-use super::*;
 
 impl AppRuntime {
     pub fn create_sftp_folder_named(&mut self, name: &str) -> AppResult<AppProjection> {
@@ -551,7 +552,10 @@ impl AppRuntime {
         let mut transfer_ids = Vec::new();
         for path in paths {
             let metadata = fs::metadata(path).map_err(|error| {
-                AppError::new(format!("local path `{}` is not readable: {error}", path.display()))
+                AppError::new(format!(
+                    "local path `{}` is not readable: {error}",
+                    path.display()
+                ))
             })?;
             let name = path
                 .file_name()
@@ -820,18 +824,16 @@ impl AppRuntime {
         self.upload_local_paths_to_remote(&paths, policy_id)
     }
 
-    /// Downloads the remote selection (or explicit entries) into a local dir.
-    pub fn download_sftp_entries(
-        &mut self,
-        entries: &[(String, bool)],
-        local_dir: &str,
-        policy_id: &str,
-    ) -> AppResult<AppProjection> {
-        let policy = Self::policy_from_id(policy_id)?;
-        let local_dir =
-            local_fs::normalize_local_dir(local_dir, &self.local_pane.dir).map_err(AppError::from_error)?;
-        self.submit_download_entries(entries, &local_dir, policy)?;
-        Ok(self.projection())
+    /// Local context menu's "Move to Remote": uploads the selection into the
+    /// current remote directory and deletes the local sources on success.
+    pub fn move_local_selection_to_remote(&mut self) -> AppResult<AppProjection> {
+        let paths = self.local_selected_paths();
+        if paths.is_empty() {
+            self.status_text = "Select local entries before moving.".to_owned();
+            return Ok(self.projection());
+        }
+        let target = self.sftp_path.clone();
+        self.drop_local_paths_on_remote(&paths, &target, true)
     }
 
     /// Uploads one local path (dialog/typed input) into the current remote
@@ -871,6 +873,20 @@ impl AppRuntime {
         self.selected_sftp_entry()
             .filter(|entry| matches!(entry.kind, yshell_sftp::FsEntryKind::Directory))
             .map(|entry| entry.path)
+    }
+
+    /// Downloads the remote selection (or explicit entries) into a local dir.
+    pub fn download_sftp_entries(
+        &mut self,
+        entries: &[(String, bool)],
+        local_dir: &str,
+        policy_id: &str,
+    ) -> AppResult<AppProjection> {
+        let policy = Self::policy_from_id(policy_id)?;
+        let local_dir = local_fs::normalize_local_dir(local_dir, &self.local_pane.dir)
+            .map_err(AppError::from_error)?;
+        self.submit_download_entries(entries, &local_dir, policy)?;
+        Ok(self.projection())
     }
 
     /// Batch delete of the current remote selection (recursive).
@@ -921,7 +937,9 @@ impl AppRuntime {
         let Some(policy) = overwrite_policy_from_id(policy_id) else {
             // Put the prompt back so a bad id cannot silently drop it.
             self.pending_sftp_conflict = Some(prompt);
-            return Err(AppError::new(format!("unknown overwrite policy `{policy_id}`")));
+            return Err(AppError::new(format!(
+                "unknown overwrite policy `{policy_id}`"
+            )));
         };
         let spec = (*prompt.spec).with_overwrite(policy);
         let count = prompt.conflicts.len();
@@ -996,8 +1014,9 @@ impl AppRuntime {
                             }
                         }
                         apply_sftp_tree_report(&mut self.transfer_queue, &id, &report);
-                        moved_cleanly =
-                            !report.cancelled && report.failed.is_empty() && report.conflicts.is_empty();
+                        moved_cleanly = !report.cancelled
+                            && report.failed.is_empty()
+                            && report.conflicts.is_empty();
                         self.status_text =
                             tree_transfer_status_text(&report, direction, &destination);
                     }
@@ -1109,7 +1128,8 @@ impl AppRuntime {
         move_source: bool,
     ) -> AppResult<AppProjection> {
         let local_dir = self.local_pane.dir.clone();
-        let transfer_ids = self.submit_download_entries(entries, &local_dir, OverwritePolicy::Ask)?;
+        let transfer_ids =
+            self.submit_download_entries(entries, &local_dir, OverwritePolicy::Ask)?;
         if move_source {
             for transfer_id in transfer_ids {
                 self.pending_move_cleanup
@@ -1192,6 +1212,8 @@ impl AppRuntime {
         };
         match cleanup {
             MoveCleanup::LocalPaths(paths) => {
+                // Refresh first: the pane refresh overwrites the status line.
+                self.refresh_local_pane();
                 let mut removed = 0usize;
                 let mut failures = Vec::new();
                 for path in &paths {
@@ -1206,7 +1228,10 @@ impl AppRuntime {
                     }
                 }
                 if failures.is_empty() {
-                    self.status_text = format!("Moved {removed} local entr{} to the remote pane.", if removed == 1 { "y" } else { "ies" });
+                    self.status_text = format!(
+                        "Moved {removed} local entr{} to the remote pane.",
+                        if removed == 1 { "y" } else { "ies" }
+                    );
                 } else {
                     self.status_text = format!(
                         "Uploaded, but removing {}/{} local source(s) failed: {}",
@@ -1215,11 +1240,11 @@ impl AppRuntime {
                         failures.join("; ")
                     );
                 }
-                self.refresh_local_pane();
             }
             MoveCleanup::RemoteEntries(entries) => {
                 if let Err(error) = self.submit_remote_delete_entries(&entries) {
-                    self.status_text = format!("Uploaded, but the remote source cleanup failed: {error}");
+                    self.status_text =
+                        format!("Uploaded, but the remote source cleanup failed: {error}");
                 }
             }
         }
@@ -1236,5 +1261,79 @@ impl AppRuntime {
                 )
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::tempdir;
+
+    use super::*;
+
+    /// Runtime whose local pane points at `<temp>/pane` and whose config lives
+    /// next to it (so it never shows up in local listings).
+    fn runtime_with_pane(temp: &tempfile::TempDir) -> AppRuntime {
+        let config = temp.path().join("yshell-config");
+        fs::create_dir_all(&config).expect("config dir");
+        let pane = temp.path().join("pane");
+        fs::create_dir_all(&pane).expect("pane dir");
+        let mut runtime = AppRuntime::new(config).expect("runtime");
+        runtime.local_pane.dir = pane;
+        runtime.refresh_local_pane();
+        runtime
+    }
+
+    #[test]
+    fn local_move_cleanup_deletes_the_source_paths() {
+        let temp = tempdir().expect("tempdir");
+        let mut runtime = runtime_with_pane(&temp);
+        let pane = runtime.local_pane.dir.clone();
+        fs::write(pane.join("a.txt"), b"a").expect("write");
+        fs::create_dir(pane.join("dir")).expect("mkdir");
+        fs::write(pane.join("dir/b.txt"), b"b").expect("write");
+        runtime.refresh_local_pane();
+
+        runtime.pending_move_cleanup.insert(
+            "t1".to_owned(),
+            MoveCleanup::LocalPaths(vec![pane.join("a.txt"), pane.join("dir")]),
+        );
+        runtime.run_move_cleanup("t1");
+        assert!(!pane.join("a.txt").exists());
+        assert!(!pane.join("dir").exists());
+        assert!(runtime.pending_move_cleanup.is_empty());
+        assert!(runtime.status_text.contains("Moved 2 local"));
+    }
+
+    #[test]
+    fn dropping_local_paths_on_the_local_pane_moves_them() {
+        let temp = tempdir().expect("tempdir");
+        let mut runtime = runtime_with_pane(&temp);
+        let pane = runtime.local_pane.dir.clone();
+        let source_dir = temp.path().join("source");
+        fs::create_dir_all(&source_dir).expect("mkdir");
+        fs::write(source_dir.join("a.txt"), b"a").expect("write");
+        runtime.refresh_local_pane();
+
+        let projection = runtime.drop_local_paths_on_local(&[source_dir.join("a.txt")], true);
+        assert!(pane.join("a.txt").exists(), "moved into the local pane dir");
+        assert!(!source_dir.join("a.txt").exists(), "source removed");
+        assert!(projection.local_rows.iter().any(|row| row.name == "a.txt"));
+    }
+
+    #[test]
+    fn dropping_local_paths_on_the_local_pane_copies_by_default() {
+        let temp = tempdir().expect("tempdir");
+        let mut runtime = runtime_with_pane(&temp);
+        let pane = runtime.local_pane.dir.clone();
+        let source_dir = temp.path().join("source");
+        fs::create_dir_all(&source_dir).expect("mkdir");
+        fs::write(source_dir.join("c.txt"), b"c").expect("write");
+        runtime.refresh_local_pane();
+
+        runtime.drop_local_paths_on_local(&[source_dir.join("c.txt")], false);
+        assert!(pane.join("c.txt").exists());
+        assert!(source_dir.join("c.txt").exists(), "copy keeps the source");
     }
 }

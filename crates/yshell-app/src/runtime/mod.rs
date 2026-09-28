@@ -71,17 +71,17 @@ pub(crate) use ssh_config::tunnel_config_summary;
 pub(crate) use ssh_config::tunnel_forward_summary;
 pub(crate) use ssh_config::tunnel_kind_label;
 pub(crate) use tabs::PendingCloseTabs;
-pub(crate) use transfer::{
-    apply_sftp_tree_report, overwrite_policy_from_id, overwrite_policy_id, overwrite_policy_label,
-    tree_transfer_status_text, update_sftp_transfer_progress,
-};
-pub use transfer::{SftpConflictPrompt, TransferQueueCounts, TransferRowData};
 pub use tabs::TabData;
 pub(crate) use tabs::TabEntry;
 #[cfg(test)]
 pub(crate) use tabs::CLOSE_SCOPE_ALL;
 #[cfg(test)]
 pub(crate) use tabs::CLOSE_SCOPE_DISCONNECTED;
+pub(crate) use transfer::{
+    apply_sftp_tree_report, overwrite_policy_from_id, overwrite_policy_id, overwrite_policy_label,
+    tree_transfer_status_text, update_sftp_transfer_progress,
+};
+pub use transfer::{SftpConflictPrompt, TransferQueueCounts, TransferRowData};
 // N4 Phase 2：密钥管理页 / 认证弹窗的投影数据类型（bootstrap/projection 消费）。
 pub(crate) use auth::HostKeyEntryData;
 pub(crate) use auth::HostKeyGroupData;

@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2026-09-27 21:57+0000\n"
+"POT-Creation-Date: 2026-09-28 04:11+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -12,353 +12,327 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: ui/main_window.slint:222
+#: ui/main_window.slint:265
 msgctxt "MainWindow"
 msgid "Password required"
 msgstr ""
 
-#: ui/main_window.slint:226
+#: ui/main_window.slint:269
 msgctxt "MainWindow"
 msgid "Enter the password to continue."
 msgstr ""
 
-#: ui/main_window.slint:227
+#: ui/main_window.slint:270
 msgctxt "MainWindow"
 msgid "Enter the password for {0} to connect."
 msgstr ""
 
-#: ui/main_window.slint:877 ui/main_window.slint:1006
-#: ui/main_window.slint:877 ui/main_window.slint:1006 ui/main_window.slint:1046
-#: ui/main_window.slint:877 ui/main_window.slint:1006 ui/main_window.slint:1046
+#: ui/main_window.slint:959 ui/main_window.slint:1088
+#: ui/main_window.slint:959 ui/main_window.slint:1088 ui/main_window.slint:1116
+#: ui/main_window.slint:959 ui/main_window.slint:1088 ui/main_window.slint:1116
 msgctxt "MainWindow"
 msgid "New Session"
 msgstr ""
 
-#: ui/main_window.slint:878
+#: ui/main_window.slint:960
 msgctxt "MainWindow"
 msgid "Quick Connect"
 msgstr ""
 
 #. W5-A3：没有活动会话时无处保存。
-#: ui/main_window.slint:880
+#: ui/main_window.slint:962
 msgctxt "MainWindow"
 msgid "Save Active Session"
 msgstr ""
 
-#: ui/main_window.slint:882
+#: ui/main_window.slint:964
 msgctxt "MainWindow"
 msgid "Settings..."
 msgstr ""
 
-#: ui/main_window.slint:883 ui/main_window.slint:1679
+#: ui/main_window.slint:965 ui/main_window.slint:1805
 msgctxt "MainWindow"
 msgid "Quit"
 msgstr ""
 
 #. W5-A3：无选区 / 无活动会话时禁用。
-#: ui/main_window.slint:887 ui/main_window.slint:917
+#: ui/main_window.slint:969 ui/main_window.slint:999
 msgctxt "MainWindow"
 msgid "Copy"
 msgstr ""
 
-#: ui/main_window.slint:888 ui/main_window.slint:918
+#: ui/main_window.slint:970 ui/main_window.slint:1000
 msgctxt "MainWindow"
 msgid "Paste"
 msgstr ""
 
-#: ui/main_window.slint:889 ui/main_window.slint:920
+#: ui/main_window.slint:971 ui/main_window.slint:1002
 msgctxt "MainWindow"
 msgid "Clear Terminal"
 msgstr ""
 
-#: ui/main_window.slint:890 ui/main_window.slint:921
+#: ui/main_window.slint:972 ui/main_window.slint:1003
 msgctxt "MainWindow"
 msgid "Find..."
 msgstr ""
 
 #. W5-A3：已连接才能断开；有活动会话（且未连接）才能重连。
-#: ui/main_window.slint:894
+#: ui/main_window.slint:976
 msgctxt "MainWindow"
 msgid "Disconnect"
 msgstr ""
 
-#: ui/main_window.slint:895
+#: ui/main_window.slint:977
 msgctxt "MainWindow"
 msgid "Reconnect"
 msgstr ""
 
 #. W5-A3：Edit / Delete 需要选中的已保存会话；Update 还需要活动会话作为来源。
-#: ui/main_window.slint:898
+#: ui/main_window.slint:980
 msgctxt "MainWindow"
 msgid "Edit Selected Session..."
 msgstr ""
 
-#: ui/main_window.slint:899
+#: ui/main_window.slint:981
 msgctxt "MainWindow"
 msgid "Update Selected From Active"
 msgstr ""
 
-#: ui/main_window.slint:900
+#: ui/main_window.slint:982
 msgctxt "MainWindow"
 msgid "Delete Selected Session..."
 msgstr ""
 
 #. N4：两个同级、独立入口（私钥页 / 主机密钥页）。
-#: ui/main_window.slint:903
+#: ui/main_window.slint:985
 msgctxt "MainWindow"
 msgid "Host Keys..."
 msgstr ""
 
-#: ui/main_window.slint:904
+#: ui/main_window.slint:986
 msgctxt "MainWindow"
 msgid "Private Keys..."
 msgstr ""
 
-#: ui/main_window.slint:907
+#: ui/main_window.slint:989
 msgctxt "MainWindow"
 msgid "Session Manager"
 msgstr ""
 
-#: ui/main_window.slint:908
+#: ui/main_window.slint:990
 msgctxt "MainWindow"
 msgid "SFTP Panel"
 msgstr ""
 
-#: ui/main_window.slint:909 ui/components/tool_dock.slint:205
+#: ui/main_window.slint:991 ui/components/tool_dock.slint:300
 msgctxt "MainWindow"
 msgid "Tunnels"
 msgstr ""
 
-#: ui/main_window.slint:910 ui/components/tool_dock.slint:229
+#: ui/main_window.slint:992 ui/components/tool_dock.slint:313
 msgctxt "MainWindow"
 msgid "Quick Commands"
 msgstr ""
 
-#: ui/main_window.slint:913
+#: ui/main_window.slint:995
 msgctxt "MainWindow"
 msgid "About YShell"
 msgstr ""
 
-#: ui/main_window.slint:919
+#: ui/main_window.slint:1001
 msgctxt "MainWindow"
 msgid "Select All"
 msgstr ""
 
-#: ui/main_window.slint:925 ui/main_window.slint:948
+#: ui/main_window.slint:1007 ui/main_window.slint:1030
 msgctxt "MainWindow"
 msgid "Start Logging..."
 msgstr ""
 
-#: ui/main_window.slint:927 ui/main_window.slint:950
+#: ui/main_window.slint:1009 ui/main_window.slint:1032
 msgctxt "MainWindow"
 msgid "Open a session that is not logging yet."
 msgstr ""
 
-#: ui/main_window.slint:930 ui/main_window.slint:953
+#: ui/main_window.slint:1012 ui/main_window.slint:1035
 msgctxt "MainWindow"
 msgid "Stop Logging"
 msgstr ""
 
-#: ui/main_window.slint:932 ui/main_window.slint:955
+#: ui/main_window.slint:1014 ui/main_window.slint:1037
 msgctxt "MainWindow"
 msgid "This session is not logging."
 msgstr ""
 
-#: ui/main_window.slint:935 ui/main_window.slint:958
+#: ui/main_window.slint:1017 ui/main_window.slint:1040
 msgctxt "MainWindow"
 msgid "Open Log File"
 msgstr ""
 
-#: ui/main_window.slint:937 ui/main_window.slint:960
+#: ui/main_window.slint:1019 ui/main_window.slint:1042
 msgctxt "MainWindow"
 msgid "No log file has been written yet."
 msgstr ""
 
-#: ui/main_window.slint:940 ui/main_window.slint:963
+#: ui/main_window.slint:1022 ui/main_window.slint:1045
 msgctxt "MainWindow"
 msgid "Open Log Folder"
 msgstr ""
 
-#: ui/main_window.slint:942 ui/main_window.slint:965
+#: ui/main_window.slint:1024 ui/main_window.slint:1047
 msgctxt "MainWindow"
 msgid "No log folder is available yet."
 msgstr ""
 
-#: ui/main_window.slint:971 ui/main_window.slint:1699
+#: ui/main_window.slint:1053 ui/main_window.slint:1825
 msgctxt "MainWindow"
 msgid "Close"
 msgstr ""
 
-#: ui/main_window.slint:974
+#: ui/main_window.slint:1056
 msgctxt "MainWindow"
 msgid "Close Others"
 msgstr ""
 
-#: ui/main_window.slint:976
+#: ui/main_window.slint:1058
 msgctxt "MainWindow"
 msgid "Only one tab is open."
 msgstr ""
 
-#: ui/main_window.slint:979
+#: ui/main_window.slint:1061
 msgctxt "MainWindow"
 msgid "Close Tabs to Left"
 msgstr ""
 
-#: ui/main_window.slint:981
+#: ui/main_window.slint:1063
 msgctxt "MainWindow"
 msgid "There are no tabs to the left."
 msgstr ""
 
-#: ui/main_window.slint:984
+#: ui/main_window.slint:1066
 msgctxt "MainWindow"
 msgid "Close Tabs to Right"
 msgstr ""
 
-#: ui/main_window.slint:986
+#: ui/main_window.slint:1068
 msgctxt "MainWindow"
 msgid "There are no tabs to the right."
 msgstr ""
 
-#: ui/main_window.slint:989
+#: ui/main_window.slint:1071
 msgctxt "MainWindow"
 msgid "Close All"
 msgstr ""
 
-#: ui/main_window.slint:991
+#: ui/main_window.slint:1073
 msgctxt "MainWindow"
 msgid "No tabs are open."
 msgstr ""
 
-#: ui/main_window.slint:994
+#: ui/main_window.slint:1076
 msgctxt "MainWindow"
 msgid "Close Disconnected Tabs"
 msgstr ""
 
-#: ui/main_window.slint:996
+#: ui/main_window.slint:1078
 msgctxt "MainWindow"
 msgid "No disconnected or failed tabs to close."
 msgstr ""
 
 #. W5-A3：没有选中的已保存会话时，各项操作禁用。
-#: ui/main_window.slint:1001
+#: ui/main_window.slint:1083
 msgctxt "Session"
 msgid "Open"
 msgstr ""
 
-#: ui/main_window.slint:1002
+#: ui/main_window.slint:1084
 msgctxt "MainWindow"
 msgid "Edit..."
 msgstr ""
 
-#: ui/main_window.slint:1003
+#: ui/main_window.slint:1085
 msgctxt "MainWindow"
 msgid "Update From Active"
 msgstr ""
 
-#: ui/main_window.slint:1004 ui/main_window.slint:1014
+#: ui/main_window.slint:1086
 msgctxt "MainWindow"
 msgid "Delete..."
 msgstr ""
 
-#. W5-A3：SFTP 操作需要选中项，且 SFTP 生命周期处于 ready。
-#: ui/main_window.slint:1010
-msgctxt "Sftp"
-msgid "Open"
-msgstr ""
-
-#: ui/main_window.slint:1011
-msgctxt "MainWindow"
-msgid "Download..."
-msgstr ""
-
-#: ui/main_window.slint:1012
-msgctxt "MainWindow"
-msgid "Edit Remote File"
-msgstr ""
-
-#: ui/main_window.slint:1013
-msgctxt "MainWindow"
-msgid "Rename..."
-msgstr ""
-
-#: ui/main_window.slint:1015
-msgctxt "MainWindow"
-msgid "Chmod..."
-msgstr ""
-
-#: ui/main_window.slint:1017 ui/main_window.slint:1024
+#: ui/main_window.slint:1094
 msgctxt "MainWindow"
 msgid "New Folder..."
 msgstr ""
 
-#: ui/main_window.slint:1018 ui/main_window.slint:1042
-msgctxt "MainWindow"
-msgid "Refresh"
-msgstr ""
-
-#: ui/main_window.slint:1027
+#: ui/main_window.slint:1097
 msgctxt "MainWindow"
 msgid "Import Config..."
 msgstr ""
 
-#: ui/main_window.slint:1029
+#: ui/main_window.slint:1099
 msgctxt "MainWindow"
 msgid "Importing configuration files is not available in this build."
 msgstr ""
 
-#: ui/main_window.slint:1032
+#: ui/main_window.slint:1102
 msgctxt "MainWindow"
 msgid "Expand All"
 msgstr ""
 
-#: ui/main_window.slint:1034
+#: ui/main_window.slint:1104
 msgctxt "MainWindow"
 msgid "Expand All is not available in this build."
 msgstr ""
 
-#: ui/main_window.slint:1037
+#: ui/main_window.slint:1107
 msgctxt "MainWindow"
 msgid "Collapse All"
 msgstr ""
 
-#: ui/main_window.slint:1039
+#: ui/main_window.slint:1109
 msgctxt "MainWindow"
 msgid "Collapse All is not available in this build."
 msgstr ""
 
-#: ui/main_window.slint:1047 ui/components/session_sidebar.slint:249
+#: ui/main_window.slint:1112
+msgctxt "MainWindow"
+msgid "Refresh"
+msgstr ""
+
+#: ui/main_window.slint:1117 ui/components/session_sidebar.slint:249
 msgctxt "MainWindow"
 msgid "Expand navigation"
 msgstr ""
 
-#: ui/main_window.slint:1656
+#: ui/main_window.slint:1782
 msgctxt "MainWindow"
 msgid "Delete Saved Session"
 msgstr ""
 
-#: ui/main_window.slint:1657
+#: ui/main_window.slint:1783
 msgctxt "MainWindow"
 msgid ""
 "This permanently removes the selected saved session from disk. Type DELETE "
 "to confirm."
 msgstr ""
 
-#: ui/main_window.slint:1659
+#: ui/main_window.slint:1785
 msgctxt "MainWindow"
 msgid "Type DELETE"
 msgstr ""
 
-#: ui/main_window.slint:1661
+#: ui/main_window.slint:1787
 msgctxt "MainWindow"
 msgid "Delete"
 msgstr ""
 
-#: ui/main_window.slint:1677
+#: ui/main_window.slint:1803
 msgctxt "MainWindow"
 msgid "Quit YShell"
 msgstr ""
 
-#: ui/main_window.slint:1678
+#: ui/main_window.slint:1804
 msgctxt "MainWindow"
 msgid "Quit YShell now? Active runtime sessions will be disconnected."
 msgstr ""
@@ -890,244 +864,511 @@ msgctxt "MainWindow"
 msgid "SAVED"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:45
+#: ui/components/sftp_panel.slint:84
 msgctxt "SftpColumnHeader"
 msgid "{0} ↑"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:45
+#: ui/components/sftp_panel.slint:84
 msgctxt "SftpColumnHeader"
 msgid "{0} ↓"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:125 ui/components/sftp_panel.slint:541
-msgctxt "SftpPanel"
+#: ui/components/sftp_panel.slint:250
+msgctxt "SftpRemotePane"
+msgid "Parent directory"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:255
+msgctxt "SftpRemotePane"
+msgid "Refresh"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:262
+msgctxt "SftpRemotePane"
+msgid "Show hidden files"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:267
+msgctxt "SftpRemotePane"
+msgid "SFTP operations"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:309
+msgctxt "SftpRemotePane"
+msgid "Retry"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:325
+msgctxt "SftpRemotePane"
+msgid "Name"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:334
+msgctxt "SftpRemotePane"
+msgid "Size"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:344
+msgctxt "SftpRemotePane"
+msgid "Modified"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:354
+msgctxt "SftpRemotePane"
+msgid "Perm"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:534
+msgctxt "SftpRemotePane"
+msgid "Save Edit"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:539
+msgctxt "SftpRemotePane"
+msgid "Cancel Edit"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:547
+msgctxt "SftpRemotePane"
+msgid "{0} · {1} selected · {2}"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:548 ui/components/sftp_panel.slint:559
+msgctxt "SftpRemotePane"
 msgid "{0} · {1}"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:126
-msgctxt "SftpPanel"
+#: ui/components/sftp_panel.slint:560
+msgctxt "SftpRemotePane"
 msgid "{n} item"
 msgid_plural "{n} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: ui/components/sftp_panel.slint:127
-msgctxt "SftpPanel"
+#: ui/components/sftp_panel.slint:561
+msgctxt "SftpRemotePane"
 msgid "{n} dir"
 msgid_plural "{n} dirs"
 msgstr[0] ""
 msgstr[1] ""
 
-#: ui/components/sftp_panel.slint:168
-msgctxt "SftpPanel"
-msgid "Parent directory"
+#: ui/components/sftp_panel.slint:612 ui/components/sftp_panel.slint:791
+msgctxt "SftpTransferDrawer"
+msgid "Hide transfers"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:173
-msgctxt "SftpPanel"
+#: ui/components/sftp_panel.slint:612 ui/components/sftp_panel.slint:791
+msgctxt "SftpTransferDrawer"
+msgid "Show transfers"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:643 ui/components/sftp_panel.slint:822
+msgctxt "SftpTransferDrawer"
+msgid "Clear completed"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:712 ui/components/sftp_panel.slint:891
+msgctxt "SftpTransferDrawer"
+msgid "Pause transfer"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:717 ui/components/sftp_panel.slint:896
+msgctxt "SftpTransferDrawer"
+msgid "Resume transfer"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:722 ui/components/sftp_panel.slint:901
+msgctxt "SftpTransferDrawer"
+msgid "Retry transfer"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:727 ui/components/sftp_panel.slint:906
+msgctxt "SftpTransferDrawer"
+msgid "Cancel transfer"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:732 ui/components/sftp_panel.slint:911
+msgctxt "SftpTransferDrawer"
+msgid "Remove transfer"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:747 ui/components/sftp_panel.slint:926
+msgctxt "SftpTransferDrawer"
+msgid "{0} transfer(s) · {1} active · {2} paused · {3} failed · {4} completed"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1405 ui/components/sftp_panel.slint:1422
+msgctxt "SftpContextMenu"
+msgid "Open"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1406
+msgctxt "SftpContextMenu"
+msgid "Edit Remote File"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1407 ui/components/sftp_panel.slint:1423
+msgctxt "SftpContextMenu"
+msgid "Download"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1408 ui/components/sftp_panel.slint:1424
+msgctxt "SftpContextMenu"
+msgid "Download To..."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1409 ui/components/sftp_panel.slint:1425
+#: ui/components/sftp_panel.slint:1409 ui/components/sftp_panel.slint:1425
+msgctxt "SftpContextMenu"
+msgid "Copy To..."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1411 ui/components/sftp_panel.slint:1429
+msgctxt "SftpContextMenu"
+msgid "Rename..."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1412 ui/components/sftp_panel.slint:1430
+msgctxt "SftpContextMenu"
+msgid "Delete..."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1413 ui/components/sftp_panel.slint:1431
+msgctxt "SftpContextMenu"
+msgid "Chmod..."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1415 ui/components/sftp_panel.slint:1433
+#: ui/components/sftp_panel.slint:1415 ui/components/sftp_panel.slint:1433 ui/components/sftp_panel.slint:1466
+msgctxt "SftpContextMenu"
+msgid "Copy"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1416 ui/components/sftp_panel.slint:1434
+msgctxt "SftpContextMenu"
+msgid "Copy Remote Path"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1418 ui/components/sftp_panel.slint:1436
+msgctxt "SftpContextMenu"
+msgid "Properties"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1426
+msgctxt "SftpContextMenu"
+msgid "Upload Here..."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1427 ui/components/sftp_panel.slint:1441
+msgctxt "SftpContextMenu"
+msgid "New Folder"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1440
+msgctxt "SftpContextMenu"
+msgid "Upload Files..."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1443 ui/components/sftp_panel.slint:1471
+msgctxt "SftpContextMenu"
 msgid "Refresh"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:179
-msgctxt "SftpPanel"
-msgid "Remote root directory"
+#: ui/components/sftp_panel.slint:1444 ui/components/sftp_panel.slint:1472
+msgctxt "SftpContextMenu"
+msgid "Show Hidden Files"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:189
-msgctxt "SftpPanel"
-msgid "Hidden: on"
+#: ui/components/sftp_panel.slint:1445
+msgctxt "SftpContextMenu"
+msgid "Copy Current Path"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:189
-msgctxt "SftpPanel"
-msgid "Hidden: off"
+#: ui/components/sftp_panel.slint:1447 ui/components/sftp_panel.slint:1469
+msgctxt "SftpContextMenu"
+msgid "Paste"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:203
-msgctxt "SftpPanel"
-msgid "New folder"
+#: ui/components/sftp_panel.slint:1449
+msgctxt "SftpContextMenu"
+msgid "Parent directory"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:208
-msgctxt "SftpPanel"
-msgid "Upload file"
+#: ui/components/sftp_panel.slint:1450
+msgctxt "SftpContextMenu"
+msgid "Home directory"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:213
-msgctxt "SftpPanel"
-msgid "Download selected entry"
+#: ui/components/sftp_panel.slint:1454
+msgctxt "SftpContextMenu"
+msgid "Download Selected"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:219
-msgctxt "SftpPanel"
-msgid "Edit remote file"
+#: ui/components/sftp_panel.slint:1456
+msgctxt "SftpContextMenu"
+msgid "Delete Selected"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:225
-msgctxt "SftpPanel"
-msgid "Delete selected entry"
+#: ui/components/sftp_panel.slint:1457
+msgctxt "SftpContextMenu"
+msgid "Chmod Selected..."
 msgstr ""
 
-#: ui/components/sftp_panel.slint:231
-msgctxt "SftpPanel"
-msgid "Change permissions"
+#: ui/components/sftp_panel.slint:1460
+msgctxt "SftpContextMenu"
+msgid "Copy Remote Paths"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:309
-msgctxt "SftpPanel"
-msgid "Name"
+#: ui/components/sftp_panel.slint:1464
+msgctxt "SftpContextMenu"
+msgid "Upload to Remote"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:319
-msgctxt "SftpPanel"
-msgid "Size"
+#: ui/components/sftp_panel.slint:1465
+msgctxt "SftpContextMenu"
+msgid "Move to Remote"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:330
-msgctxt "SftpPanel"
-msgid "Modified"
+#: ui/components/sftp_panel.slint:1467
+msgctxt "SftpContextMenu"
+msgid "Copy Path"
 msgstr ""
 
-#. 短标签：56px 列宽放不下 "Permissions"（英文长标签会贴边/省略）
-#: ui/components/sftp_panel.slint:342
-msgctxt "SftpPanel"
-msgid "Perm"
-msgstr ""
-
-#: ui/components/sftp_panel.slint:484
-msgctxt "SftpPanel"
-msgid "Save Edit"
-msgstr ""
-
-#: ui/components/sftp_panel.slint:489
-msgctxt "SftpPanel"
-msgid "Cancel Edit"
-msgstr ""
-
-#: ui/components/sftp_panel.slint:540
-msgctxt "SftpPanel"
-msgid "{0} · selected: {1} · {2}"
-msgstr ""
-
-#: ui/components/sftp_panel.slint:582
+#: ui/components/sftp_panel.slint:1611
 msgctxt "SftpEntryDialog"
 msgid "New Folder"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:583 ui/components/sftp_panel.slint:613
+#: ui/components/sftp_panel.slint:1612 ui/components/sftp_panel.slint:1649
 msgctxt "SftpEntryDialog"
 msgid "Rename"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:584
+#: ui/components/sftp_panel.slint:1613
 msgctxt "SftpEntryDialog"
 msgid "Change Permissions"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:585 ui/components/sftp_panel.slint:615
+#: ui/components/sftp_panel.slint:1614 ui/components/sftp_panel.slint:1651
 msgctxt "SftpEntryDialog"
 msgid "Delete"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:586
+#: ui/components/sftp_panel.slint:1615
 msgctxt "SftpEntryDialog"
 msgid "Upload File"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:587
-msgctxt "SftpEntryDialog"
-msgid "Download File"
-msgstr ""
-
-#: ui/components/sftp_panel.slint:588
-msgctxt "SftpEntryDialog"
-msgid "SFTP"
-msgstr ""
-
-#: ui/components/sftp_panel.slint:592
-msgctxt "SftpEntryDialog"
-msgid "Relative names are created inside the current remote directory."
-msgstr ""
-
-#: ui/components/sftp_panel.slint:593
-msgctxt "SftpEntryDialog"
-msgid "Relative names stay inside the current remote directory."
-msgstr ""
-
-#: ui/components/sftp_panel.slint:594
-msgctxt "SftpEntryDialog"
-msgid "Three-digit octal permissions, for example 644 or 755."
-msgstr ""
-
-#: ui/components/sftp_panel.slint:595
-msgctxt "SftpEntryDialog"
-msgid "This permanently removes the remote entry."
-msgstr ""
-
-#: ui/components/sftp_panel.slint:596
-msgctxt "SftpEntryDialog"
-msgid "Uploads into the current remote directory using the local file name."
-msgstr ""
-
-#: ui/components/sftp_panel.slint:597
-msgctxt "SftpEntryDialog"
-msgid "Downloads the selected remote entry to this local path."
-msgstr ""
-
-#: ui/components/sftp_panel.slint:602
-msgctxt "SftpEntryDialog"
-msgid "Folder name"
-msgstr ""
-
-#: ui/components/sftp_panel.slint:603
-msgctxt "SftpEntryDialog"
-msgid "New name"
-msgstr ""
-
-#: ui/components/sftp_panel.slint:607
-msgctxt "SftpEntryDialog"
-msgid "Local file to upload"
-msgstr ""
-
-#: ui/components/sftp_panel.slint:608
-msgctxt "SftpEntryDialog"
-msgid "Local destination path"
-msgstr ""
-
-#: ui/components/sftp_panel.slint:612
-msgctxt "SftpEntryDialog"
-msgid "Create Folder"
-msgstr ""
-
-#: ui/components/sftp_panel.slint:614
-msgctxt "SftpEntryDialog"
-msgid "Apply"
-msgstr ""
-
-#: ui/components/sftp_panel.slint:616
-msgctxt "SftpEntryDialog"
-msgid "Upload"
-msgstr ""
-
-#: ui/components/sftp_panel.slint:617
+#: ui/components/sftp_panel.slint:1616 ui/components/sftp_panel.slint:1653
 msgctxt "SftpEntryDialog"
 msgid "Download"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:618
+#: ui/components/sftp_panel.slint:1617
+msgctxt "SftpEntryDialog"
+msgid "Copy To..."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1618
+msgctxt "SftpEntryDialog"
+msgid "SFTP"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1622
+msgctxt "SftpEntryDialog"
+msgid "Relative names are created inside the current remote directory."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1623
+msgctxt "SftpEntryDialog"
+msgid "Relative names stay inside the current remote directory."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1624
+msgctxt "SftpEntryDialog"
+msgid "Three-digit octal permissions, for example 644 or 755."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1627
+msgctxt "SftpEntryDialog"
+msgid ""
+"This permanently removes the {0} selected remote entries, directories "
+"recursively."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1628
+msgctxt "SftpEntryDialog"
+msgid "This permanently removes the remote entry."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1630
+msgctxt "SftpEntryDialog"
+msgid ""
+"Uploads the local file or directory into the current remote directory using "
+"its name."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1631
+msgctxt "SftpEntryDialog"
+msgid "Downloads the selected remote entries into this local directory."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1632
+msgctxt "SftpEntryDialog"
+msgid "Downloads to a temporary copy and uploads it into this remote directory."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1637
+msgctxt "SftpEntryDialog"
+msgid "Folder name"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1638
+msgctxt "SftpEntryDialog"
+msgid "New name"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1642
+msgctxt "SftpEntryDialog"
+msgid "Local file or directory"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1643
+msgctxt "SftpEntryDialog"
+msgid "Remote destination directory"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1644
+msgctxt "SftpEntryDialog"
+msgid "Local destination directory"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1648
+msgctxt "SftpEntryDialog"
+msgid "Create Folder"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1650
+msgctxt "SftpEntryDialog"
+msgid "Apply"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1652
+msgctxt "SftpEntryDialog"
+msgid "Upload"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1654
+msgctxt "SftpEntryDialog"
+msgid "Copy"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1655
 msgctxt "SftpEntryDialog"
 msgid "Run"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:724
+#: ui/components/sftp_panel.slint:1728
+msgctxt "SftpEntryDialog"
+msgid "{0} entries"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1757
 msgctxt "SftpEntryDialog"
 msgid "Permissions (octal)"
 msgstr ""
 
-#: ui/components/sftp_panel.slint:747
+#: ui/components/sftp_panel.slint:1780
 msgctxt "SftpEntryDialog"
 msgid "Cancel"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1856
+msgctxt "SftpConflictDialog"
+msgid "Resolve name conflicts"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1863
+msgctxt "SftpConflictDialog"
+msgid "{0} destination path(s) already exist."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1869
+msgctxt "SftpConflictDialog"
+msgid "{0} → {1}"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1895
+msgctxt "SftpConflictDialog"
+msgid ""
+"Overwrite replaces them, Rename keeps both by adding a number, Skip leaves "
+"them untouched."
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1906
+msgctxt "SftpConflictDialog"
+msgid "Cancel"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1910
+msgctxt "SftpConflictDialog"
+msgid "Skip"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1914
+msgctxt "SftpConflictDialog"
+msgid "Rename"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1918
+msgctxt "SftpConflictDialog"
+msgid "Overwrite"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1989
+msgctxt "SftpPropertiesDialog"
+msgid "Properties"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:1998
+msgctxt "SftpPropertiesDialog"
+msgid "Name"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:2001
+msgctxt "SftpPropertiesDialog"
+msgid "Path"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:2004
+msgctxt "SftpPropertiesDialog"
+msgid "Kind"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:2007
+msgctxt "SftpPropertiesDialog"
+msgid "Size"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:2010
+msgctxt "SftpPropertiesDialog"
+msgid "Modified"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:2013
+msgctxt "SftpPropertiesDialog"
+msgid "Permissions"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:2022
+msgctxt "SftpPropertiesDialog"
+msgid "Copy Path"
+msgstr ""
+
+#: ui/components/sftp_panel.slint:2026
+msgctxt "SftpPropertiesDialog"
+msgid "Close"
 msgstr ""
 
 #: ui/components/terminal_view.slint:180
@@ -1182,22 +1423,22 @@ msgctxt "MainWindow"
 msgid "New session"
 msgstr ""
 
-#: ui/components/tool_dock.slint:142
+#: ui/components/tool_dock.slint:192
 msgctxt "MainWindow"
 msgid "SFTP"
 msgstr ""
 
-#: ui/components/tool_dock.slint:147
+#: ui/components/tool_dock.slint:197
 msgctxt "MainWindow"
 msgid "SFTP operations"
 msgstr ""
 
-#: ui/components/tool_dock.slint:218
+#: ui/components/tool_dock.slint:243
 msgctxt "MainWindow"
-msgid "Transfers"
+msgid "Local"
 msgstr ""
 
-#: ui/components/tool_dock.slint:233
+#: ui/components/tool_dock.slint:317
 msgctxt "MainWindow"
 msgid "Command presets will appear here."
 msgstr ""

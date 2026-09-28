@@ -2786,3 +2786,379 @@ msgstr "Terminal logging failed for `{0}`: {1}"
 msgctxt "MainWindow"
 msgid "Open a session before starting terminal logging."
 msgstr "Open a session before starting terminal logging."
+
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Parent directory"
+msgstr "Parent directory"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Refresh"
+msgstr "Refresh"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Show hidden files"
+msgstr "Show hidden files"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "SFTP operations"
+msgstr "SFTP operations"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Retry"
+msgstr "Retry"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Name"
+msgstr "Name"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Size"
+msgstr "Size"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Modified"
+msgstr "Modified"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Perm"
+msgstr "Perm"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Save Edit"
+msgstr "Save Edit"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Cancel Edit"
+msgstr "Cancel Edit"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "{0} · {1} selected · {2}"
+msgstr "{0} · {1} selected · {2}"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "{0} · {1}"
+msgstr "{0} · {1}"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "{n} item"
+msgstr "{n} item"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "{n} dir"
+msgstr "{n} dir"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "Hide transfers"
+msgstr "Hide transfers"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "Show transfers"
+msgstr "Show transfers"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "Clear completed"
+msgstr "Clear completed"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "Pause transfer"
+msgstr "Pause transfer"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "Resume transfer"
+msgstr "Resume transfer"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "Retry transfer"
+msgstr "Retry transfer"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "Cancel transfer"
+msgstr "Cancel transfer"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "Remove transfer"
+msgstr "Remove transfer"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "{0} transfer(s) · {1} active · {2} paused · {3} failed · {4} completed"
+msgstr "{0} transfer(s) · {1} active · {2} paused · {3} failed · {4} completed"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Open"
+msgstr "Open"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Edit Remote File"
+msgstr "Edit Remote File"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Download"
+msgstr "Download"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Download To..."
+msgstr "Download To..."
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Copy To..."
+msgstr "Copy To..."
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Rename..."
+msgstr "Rename..."
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Delete..."
+msgstr "Delete..."
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Chmod..."
+msgstr "Chmod..."
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Copy"
+msgstr "Copy"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Copy Remote Path"
+msgstr "Copy Remote Path"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Properties"
+msgstr "Properties"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Upload Here..."
+msgstr "Upload Here..."
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "New Folder"
+msgstr "New Folder"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Upload Files..."
+msgstr "Upload Files..."
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Refresh"
+msgstr "Refresh"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Show Hidden Files"
+msgstr "Show Hidden Files"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Copy Current Path"
+msgstr "Copy Current Path"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Paste"
+msgstr "Paste"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Parent directory"
+msgstr "Parent directory"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Home directory"
+msgstr "Home directory"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Download Selected"
+msgstr "Download Selected"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Delete Selected"
+msgstr "Delete Selected"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Chmod Selected..."
+msgstr "Chmod Selected..."
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Copy Remote Paths"
+msgstr "Copy Remote Paths"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Upload to Remote"
+msgstr "Upload to Remote"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Move to Remote"
+msgstr "Move to Remote"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Copy Path"
+msgstr "Copy Path"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpEntryDialog"
+msgid "Copy To..."
+msgstr "Copy To..."
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpEntryDialog"
+msgid "Downloads the selected remote entries into this local directory."
+msgstr "Downloads the selected remote entries into this local directory."
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpEntryDialog"
+msgid "Downloads to a temporary copy and uploads it into this remote directory."
+msgstr "Downloads to a temporary copy and uploads it into this remote directory."
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpEntryDialog"
+msgid "Local file or directory"
+msgstr "Local file or directory"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpEntryDialog"
+msgid "Remote destination directory"
+msgstr "Remote destination directory"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpEntryDialog"
+msgid "Local destination directory"
+msgstr "Local destination directory"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpEntryDialog"
+msgid "Copy"
+msgstr "Copy"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpEntryDialog"
+msgid "{0} entries"
+msgstr "{0} entries"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpConflictDialog"
+msgid "Resolve name conflicts"
+msgstr "Resolve name conflicts"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpConflictDialog"
+msgid "{0} destination path(s) already exist."
+msgstr "{0} destination path(s) already exist."
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpConflictDialog"
+msgid "{0} → {1}"
+msgstr "{0} → {1}"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpConflictDialog"
+msgid "Cancel"
+msgstr "Cancel"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpConflictDialog"
+msgid "Skip"
+msgstr "Skip"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpConflictDialog"
+msgid "Rename"
+msgstr "Rename"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpConflictDialog"
+msgid "Overwrite"
+msgstr "Overwrite"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Properties"
+msgstr "Properties"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Name"
+msgstr "Name"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Path"
+msgstr "Path"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Kind"
+msgstr "Kind"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Size"
+msgstr "Size"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Modified"
+msgstr "Modified"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Permissions"
+msgstr "Permissions"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Copy Path"
+msgstr "Copy Path"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Close"
+msgstr "Close"

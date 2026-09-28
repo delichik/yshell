@@ -60,6 +60,8 @@ export component ToolDock inherits HorizontalLayout {
     in property <bool> local-retry-visible: true;
     in property <bool> local-collapsed: false;
     in property <string> local-selected-name-text: "";
+    in property <string> local-selection-key: "";
+    in property <string> sftp-selection-key: "";
     in property <[SftpTransferRow]> transfer-rows: [];
     in property <bool> transfer-expanded: false;
     in property <int> transfer-total-count: 0;
@@ -102,8 +104,8 @@ export component ToolDock inherits HorizontalLayout {
     callback copy-file-selection();
     callback cut-file-selection();
     callback paste-cross-pane();
-    pure callback drag-local-transfer() -> data-transfer;
-    pure callback drag-remote-transfer() -> data-transfer;
+    pure callback drag-local-transfer(string) -> data-transfer;
+    pure callback drag-remote-transfer(string) -> data-transfer;
     callback drop-on-remote-row(int, data-transfer, DragAction);
     callback drop-on-remote-blank(data-transfer, DragAction);
     callback drop-on-local(data-transfer, DragAction);
@@ -240,6 +242,8 @@ export component ToolDock inherits HorizontalLayout {
                     local-collapsed: root.local-collapsed;
                     local-title-text: @tr("MainWindow" => "Local");
                     local-selected-name-text: root.local-selected-name-text;
+                    local-selection-key: root.local-selection-key;
+                    sftp-selection-key: root.sftp-selection-key;
                     transfer-rows: root.transfer-rows;
                     transfer-expanded: root.transfer-expanded;
                     transfer-total-count: root.transfer-total-count;
@@ -262,8 +266,8 @@ export component ToolDock inherits HorizontalLayout {
                     panel-menu-requested(x, y) => { root.panel-sftp-menu-requested(x, y); }
                     save-edit() => { root.save-sftp-remote-edit(); }
                     cancel-edit() => { root.cancel-sftp-remote-edit(); }
-                    drag-remote-transfer() => { return root.drag-remote-transfer(); }
-                    drag-local-transfer() => { return root.drag-local-transfer(); }
+                    drag-remote-transfer(key) => { return root.drag-remote-transfer(key); }
+                    drag-local-transfer(key) => { return root.drag-local-transfer(key); }
                     drop-on-remote-row(index, data, action) => { root.drop-on-remote-row(index, data, action); }
                     drop-on-remote-blank(data, action) => { root.drop-on-remote-blank(data, action); }
                     drop-on-local(data, action) => { root.drop-on-local(data, action); }

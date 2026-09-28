@@ -3293,21 +3293,34 @@ fn wire_n1_sftp_callbacks(
     // ---------------------------------------------------------- 队列抽屉
     wire_projection!(on_transfer_toggle_expanded, |runtime| runtime
         .toggle_transfer_drawer());
-    wire_result!(on_transfer_pause, "SFTP transfer", |runtime, id: SharedString| runtime
-        .pause_sftp_transfer(id.as_ref()));
-    wire_result!(on_transfer_resume, "SFTP transfer", |runtime, id: SharedString| runtime
-        .resume_sftp_transfer(id.as_ref()));
-    wire_result!(on_transfer_retry, "SFTP transfer", |runtime, id: SharedString| runtime
-        .retry_sftp_transfer(id.as_ref()));
-    wire_result!(on_transfer_cancel, "SFTP transfer", |runtime, id: SharedString| runtime
-        .cancel_sftp_transfer(id.as_ref()));
-    wire_result!(on_transfer_remove, "SFTP transfer", |runtime, id: SharedString| runtime
-        .remove_sftp_transfer(id.as_ref()));
     wire_result!(
-        on_transfer_clear_completed,
+        on_transfer_pause,
         "SFTP transfer",
-        |runtime| runtime.clear_completed_sftp_transfers()
+        |runtime, id: SharedString| runtime.pause_sftp_transfer(id.as_ref())
     );
+    wire_result!(
+        on_transfer_resume,
+        "SFTP transfer",
+        |runtime, id: SharedString| runtime.resume_sftp_transfer(id.as_ref())
+    );
+    wire_result!(
+        on_transfer_retry,
+        "SFTP transfer",
+        |runtime, id: SharedString| runtime.retry_sftp_transfer(id.as_ref())
+    );
+    wire_result!(
+        on_transfer_cancel,
+        "SFTP transfer",
+        |runtime, id: SharedString| runtime.cancel_sftp_transfer(id.as_ref())
+    );
+    wire_result!(
+        on_transfer_remove,
+        "SFTP transfer",
+        |runtime, id: SharedString| runtime.remove_sftp_transfer(id.as_ref())
+    );
+    wire_result!(on_transfer_clear_completed, "SFTP transfer", |runtime| {
+        runtime.clear_completed_sftp_transfers()
+    });
 
     // ---------------------------------------------------------- 剪贴板
     // Ctrl+C/X 取"有选择的栏"（远端优先）；Ctrl+V 总是跨栏粘贴。
@@ -3315,8 +3328,7 @@ fn wire_n1_sftp_callbacks(
         .copy_selection_to_clipboard());
     wire_projection!(on_cut_file_selection, |runtime| runtime
         .cut_selection_to_clipboard());
-    wire_projection!(on_paste_cross_pane, |runtime| runtime
-        .paste_cross_pane());
+    wire_projection!(on_paste_cross_pane, |runtime| runtime.paste_cross_pane());
 
     // ---------------------------------------------------------- 弹窗
     wire_result!(
@@ -3346,16 +3358,14 @@ fn wire_n1_sftp_callbacks(
 
     // ---------------------------------------------------------- 拖动载荷
     {
-        let weak = window.as_weak();
+        // `key` 只作为 Slint 端 data 绑定的依赖（选择变化时重新求值）；载荷在
+        // 这里按当前选择重新构建。
         let runtime_ref = Rc::clone(runtime);
-        window.on_drag_local_transfer(move || {
-            let _ = &weak;
+        window.on_drag_local_transfer(move |_key: SharedString| {
             build_drag_transfer(&runtime_ref.borrow(), crate::runtime::ClipboardSide::Local)
         });
-        let weak = window.as_weak();
         let runtime_ref = Rc::clone(runtime);
-        window.on_drag_remote_transfer(move || {
-            let _ = &weak;
+        window.on_drag_remote_transfer(move |_key: SharedString| {
             build_drag_transfer(&runtime_ref.borrow(), crate::runtime::ClipboardSide::Remote)
         });
     }
@@ -3369,13 +3379,21 @@ fn wire_n1_sftp_callbacks(
             handle_remote_drop(runtime, &data, action, &target)
         }
     );
-    wire_result!(on_drop_on_remote_blank, "SFTP drop", |runtime, data: slint::DataTransfer, action: DragAction| {
-        let target = runtime.sftp_path.clone();
-        handle_remote_drop(runtime, &data, action, &target)
-    });
-    wire_result!(on_drop_on_local, "SFTP drop", |runtime, data: slint::DataTransfer, action: DragAction| {
-        handle_local_drop(runtime, &data, action)
-    });
+    wire_result!(
+        on_drop_on_remote_blank,
+        "SFTP drop",
+        |runtime, data: slint::DataTransfer, action: DragAction| {
+            let target = runtime.sftp_path.clone();
+            handle_remote_drop(runtime, &data, action, &target)
+        }
+    );
+    wire_result!(
+        on_drop_on_local,
+        "SFTP drop",
+        |runtime, data: slint::DataTransfer, action: DragAction| {
+            handle_local_drop(runtime, &data, action)
+        }
+    );
 
     // ---------------------------------------------------------- 菜单动作
     {
@@ -3637,11 +3655,13 @@ fn handle_remote_drop(
     match drag_payload(data) {
         Some(payload) => match payload.side {
             crate::runtime::ClipboardSide::Local => {
+                // 本地 → 远端：默认复制，Ctrl（协商为 Move）= 移动。
                 runtime.drop_local_paths_on_remote(&payload.paths, target_dir, move_source)
             }
             crate::runtime::ClipboardSide::Remote => {
+                // 远端内拖动 = 移动到目录（设计 §2），与修饰键无关。
                 let entries = runtime.clipboard_remote_entries(&payload.paths);
-                runtime.drop_remote_entries_on_remote(&entries, target_dir, move_source)
+                runtime.drop_remote_entries_on_remote(&entries, target_dir, true)
             }
         },
         None => {
@@ -3674,10 +3694,7 @@ fn handle_local_drop(
     }
 }
 
-fn copy_text_to_clipboard(
-    clipboard: &Rc<RefCell<Option<ClipboardContext>>>,
-    text: &str,
-) {
+fn copy_text_to_clipboard(clipboard: &Rc<RefCell<Option<ClipboardContext>>>, text: &str) {
     if let Some(context) = clipboard.borrow_mut().as_mut() {
         let _ = context.set_contents(text.to_owned());
     }
@@ -3696,9 +3713,7 @@ fn dispatch_sftp_menu_action(
     match action {
         "open" => runtime.activate_sftp_entry(),
         "edit" => runtime.edit_sftp_selected(),
-        "download" | "download-selection" => {
-            runtime.download_sftp_selection_to(&local_dir, "ask")
-        }
+        "download" | "download-selection" => runtime.download_sftp_selection_to(&local_dir, "ask"),
         "download-to" => {
             if file_dialogs_available() {
                 spawn_pick_folder(
@@ -3772,6 +3787,8 @@ fn dispatch_sftp_menu_action(
             Ok(runtime.projection())
         }
         "properties" => Ok(runtime.open_sftp_properties()),
+        // 本地菜单 "Move to Remote"：上传成功后删除本地源（与 Ctrl 拖动同一路径）。
+        "move-selection" => runtime.move_local_selection_to_remote(),
         "copy" => Ok(if local_scope {
             runtime.copy_local_selection_to_clipboard()
         } else {
@@ -3790,7 +3807,14 @@ fn dispatch_sftp_menu_action(
                 runtime.sftp_selected_paths().join("\n")
             };
             copy_text_to_clipboard(clipboard, &text);
-            runtime.status_text = format!("Copied {} path(s).", if text.is_empty() { 0 } else { text.lines().count() });
+            runtime.status_text = format!(
+                "Copied {} path(s).",
+                if text.is_empty() {
+                    0
+                } else {
+                    text.lines().count()
+                }
+            );
             Ok(runtime.projection())
         }
         "copy-local-path" => {
@@ -4182,7 +4206,10 @@ fn local_row_matches(current: &LocalRow, next: &crate::local_fs::LocalRowData) -
 fn set_local_rows_if_changed(window: &MainWindow, rows: &[crate::local_fs::LocalRowData]) {
     let current = window.get_local_rows();
     if current.row_count() == rows.len()
-        && current.iter().zip(rows.iter()).all(|(current, next)| local_row_matches(&current, next))
+        && current
+            .iter()
+            .zip(rows.iter())
+            .all(|(current, next)| local_row_matches(&current, next))
     {
         return;
     }
@@ -5065,6 +5092,8 @@ fn apply_projection(window: &MainWindow, projection: &AppProjection) {
     window.set_local_selected_count(projection.local_selected_count);
     window.set_local_collapsed(projection.local_collapsed);
     window.set_local_selected_name_text(projection.local_selected_name_text.clone().into());
+    window.set_local_selection_key_text(projection.local_selection_key_text.clone().into());
+    window.set_sftp_selection_key_text(projection.sftp_selection_key_text.clone().into());
     set_transfer_rows_if_changed(window, &projection.transfer_rows);
     window.set_transfer_drawer_expanded(projection.transfer_drawer_expanded);
     window.set_transfer_total_count(projection.transfer_total_count);
@@ -5085,9 +5114,8 @@ fn apply_projection(window: &MainWindow, projection: &AppProjection) {
     window.set_sftp_properties_path_text(projection.sftp_properties_path_text.clone().into());
     window.set_sftp_properties_kind_text(projection.sftp_properties_kind_text.clone().into());
     window.set_sftp_properties_size_text(projection.sftp_properties_size_text.clone().into());
-    window.set_sftp_properties_modified_text(
-        projection.sftp_properties_modified_text.clone().into(),
-    );
+    window
+        .set_sftp_properties_modified_text(projection.sftp_properties_modified_text.clone().into());
     window.set_sftp_properties_permissions_text(
         projection.sftp_properties_permissions_text.clone().into(),
     );

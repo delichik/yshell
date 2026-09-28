@@ -143,11 +143,15 @@ impl SftpJobSpec {
     /// Source path shown in the drawer.
     pub fn source_text(&self) -> String {
         match self {
-            Self::UploadFile { local, .. } | Self::UploadTree { local_root: local, .. } => {
-                local.display().to_string()
-            }
+            Self::UploadFile { local, .. }
+            | Self::UploadTree {
+                local_root: local, ..
+            } => local.display().to_string(),
             Self::DownloadFile { remote, .. }
-            | Self::DownloadTree { remote_root: remote, .. }
+            | Self::DownloadTree {
+                remote_root: remote,
+                ..
+            }
             | Self::RemoteCopyFile { from: remote, .. }
             | Self::RemoteCopyTree { from: remote, .. } => remote.clone(),
             Self::RemoteMove { moves, .. } => moves
@@ -165,17 +169,19 @@ impl SftpJobSpec {
     /// The destination shown as the job's status/drawer text.
     pub fn destination_text(&self) -> String {
         match self {
-            Self::UploadFile { remote, .. } | Self::UploadTree { remote_root: remote, .. } => {
-                remote.clone()
-            }
-            Self::DownloadFile { local, .. } | Self::DownloadTree { local_root: local, .. } => {
-                local.display().to_string()
-            }
+            Self::UploadFile { remote, .. }
+            | Self::UploadTree {
+                remote_root: remote,
+                ..
+            } => remote.clone(),
+            Self::DownloadFile { local, .. }
+            | Self::DownloadTree {
+                local_root: local, ..
+            } => local.display().to_string(),
             Self::RemoteCopyFile { to, .. } | Self::RemoteCopyTree { to, .. } => to.clone(),
-            Self::RemoteMove { moves, .. } => moves
-                .first()
-                .map(|(_, to)| to.clone())
-                .unwrap_or_default(),
+            Self::RemoteMove { moves, .. } => {
+                moves.first().map(|(_, to)| to.clone()).unwrap_or_default()
+            }
             Self::RemoteDelete { entries, .. } => entries
                 .first()
                 .map(|(path, _)| path.clone())
@@ -301,10 +307,7 @@ fn worker_loop(job_rx: Receiver<SftpJob>, msg_tx: Sender<SftpJobMessage>) {
         let id = job.id.clone();
         let outcome = run_job(&job, &msg_tx);
         if msg_tx
-            .send(SftpJobMessage::Finished {
-                id,
-                outcome,
-            })
+            .send(SftpJobMessage::Finished { id, outcome })
             .is_err()
         {
             return;
@@ -341,7 +344,13 @@ fn run_job(job: &SftpJob, msg_tx: &Sender<SftpJobMessage>) -> SftpJobOutcome {
             ..
         } => {
             let mut progress = progress;
-            match client.upload_tree(local_root, remote_root, *options, &mut progress, &job.cancel) {
+            match client.upload_tree(
+                local_root,
+                remote_root,
+                *options,
+                &mut progress,
+                &job.cancel,
+            ) {
                 Ok(report) => finish_tree(report),
                 Err(error) => SftpJobOutcome::Failed {
                     reason: error.to_string(),
@@ -356,8 +365,13 @@ fn run_job(job: &SftpJob, msg_tx: &Sender<SftpJobMessage>) -> SftpJobOutcome {
             ..
         } => {
             let mut progress = progress;
-            match client.download_tree(remote_root, local_root, *options, &mut progress, &job.cancel)
-            {
+            match client.download_tree(
+                remote_root,
+                local_root,
+                *options,
+                &mut progress,
+                &job.cancel,
+            ) {
                 Ok(report) => finish_tree(report),
                 Err(error) => SftpJobOutcome::Failed {
                     reason: error.to_string(),
@@ -366,20 +380,28 @@ fn run_job(job: &SftpJob, msg_tx: &Sender<SftpJobMessage>) -> SftpJobOutcome {
             }
         }
         SftpJobSpec::RemoteCopyFile {
+            from, to, options, ..
+        } => run_remote_copy(
+            &mut client,
+            &job.id,
             from,
             to,
-            options,
-            ..
-        } => run_remote_copy(
-            &mut client, &job.id, from, to, *options, false, &job.cancel, progress,
+            *options,
+            false,
+            &job.cancel,
+            progress,
         ),
         SftpJobSpec::RemoteCopyTree {
+            from, to, options, ..
+        } => run_remote_copy(
+            &mut client,
+            &job.id,
             from,
             to,
-            options,
-            ..
-        } => run_remote_copy(
-            &mut client, &job.id, from, to, *options, true, &job.cancel, progress,
+            *options,
+            true,
+            &job.cancel,
+            progress,
         ),
         SftpJobSpec::RemoteMove { moves, options, .. } => {
             run_remote_move(&mut client, moves, *options)
@@ -516,7 +538,9 @@ fn run_single_file_download(
             report: None,
         };
     }
-    let transferred = fs::metadata(&destination).map(|m| m.len()).unwrap_or_default();
+    let transferred = fs::metadata(&destination)
+        .map(|m| m.len())
+        .unwrap_or_default();
     let report = single_file_report(transferred, false);
     progress(TransferProgress {
         path: remote.to_owned(),
@@ -568,7 +592,10 @@ fn apply_local_policy(destination: &Path, overwrite: OverwritePolicy) -> PolicyD
 
 /// `name.txt` → `name (1).txt` for non-clobbering single-file downloads.
 fn unique_local_path(path: &Path) -> PathBuf {
-    let Some(name) = path.file_name().map(|name| name.to_string_lossy().into_owned()) else {
+    let Some(name) = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+    else {
         return path.to_path_buf();
     };
     let parent = path.parent().unwrap_or_else(|| Path::new(""));
@@ -659,7 +686,9 @@ fn run_remote_copy(
                 report: None,
             };
         }
-        let size = fs::metadata(&temp_file).map(|m| m.len()).unwrap_or_default();
+        let size = fs::metadata(&temp_file)
+            .map(|m| m.len())
+            .unwrap_or_default();
         let upload = client.upload_file(&temp_file, &destination);
         let _ = fs::remove_dir_all(&temp_root);
         match upload {
@@ -703,11 +732,7 @@ fn merge_copy_reports(
                 .into_iter()
                 .chain(upload.skipped_items)
                 .collect(),
-            failed: download
-                .failed
-                .into_iter()
-                .chain(upload.failed)
-                .collect(),
+            failed: download.failed.into_iter().chain(upload.failed).collect(),
             conflicts: download
                 .conflicts
                 .into_iter()
@@ -911,14 +936,24 @@ mod tests {
     fn names_at(client: &SftpClient<FakeSftpBackend>, path: &str) -> Vec<String> {
         client
             .list_dir(path)
-            .map(|listing| listing.entries.into_iter().map(|entry| entry.name).collect())
+            .map(|listing| {
+                listing
+                    .entries
+                    .into_iter()
+                    .map(|entry| entry.name)
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
     fn config() -> SshConnectionConfig {
-        SshConnectionConfig::new("example.test", 22, yshell_ssh::AuthMethod::Agent {
-            username: "alice".to_owned(),
-        })
+        SshConnectionConfig::new(
+            "example.test",
+            22,
+            yshell_ssh::AuthMethod::Agent {
+                username: "alice".to_owned(),
+            },
+        )
     }
 
     #[test]
@@ -927,7 +962,10 @@ mod tests {
             split_remote("/srv/logs/app.log"),
             Some(("/srv/logs".to_owned(), "app.log".to_owned()))
         );
-        assert_eq!(split_remote("/app.log"), Some(("/".to_owned(), "app.log".to_owned())));
+        assert_eq!(
+            split_remote("/app.log"),
+            Some(("/".to_owned(), "app.log".to_owned()))
+        );
         assert_eq!(split_remote("/"), None);
         assert_eq!(join_remote("/", "a"), "/a");
         assert_eq!(join_remote("/srv/", "a"), "/srv/a");
@@ -947,7 +985,9 @@ mod tests {
             spec.overwrite_policy(),
             Some(yshell_sftp::OverwritePolicy::Ask)
         );
-        let renamed = spec.clone().with_overwrite(yshell_sftp::OverwritePolicy::Rename);
+        let renamed = spec
+            .clone()
+            .with_overwrite(yshell_sftp::OverwritePolicy::Rename);
         assert_eq!(
             renamed.overwrite_policy(),
             Some(yshell_sftp::OverwritePolicy::Rename)
@@ -958,7 +998,12 @@ mod tests {
             entries: vec![("/srv/a".to_owned(), false)],
         };
         assert_eq!(delete.overwrite_policy(), None);
-        assert_eq!(delete.clone().with_overwrite(yshell_sftp::OverwritePolicy::Skip), delete);
+        assert_eq!(
+            delete
+                .clone()
+                .with_overwrite(yshell_sftp::OverwritePolicy::Skip),
+            delete
+        );
     }
 
     #[test]

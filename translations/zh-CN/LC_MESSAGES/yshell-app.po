@@ -2776,3 +2776,379 @@ msgstr "终端日志失败（`{0}`）：{1}"
 msgctxt "MainWindow"
 msgid "Open a session before starting terminal logging."
 msgstr "请先打开一个会话再开始终端日志。"
+
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Parent directory"
+msgstr "上级目录"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Refresh"
+msgstr "刷新"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Show hidden files"
+msgstr "显示隐藏文件"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "SFTP operations"
+msgstr "SFTP 操作"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Retry"
+msgstr "重试"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Name"
+msgstr "名称"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Size"
+msgstr "大小"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Modified"
+msgstr "修改时间"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Perm"
+msgstr "权限"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Save Edit"
+msgstr "保存编辑"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "Cancel Edit"
+msgstr "取消编辑"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "{0} · {1} selected · {2}"
+msgstr "{0} · 已选 {1} · {2}"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "{0} · {1}"
+msgstr "{0} · {1}"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "{n} item"
+msgstr "{n} 项"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpRemotePane"
+msgid "{n} dir"
+msgstr "{n} 个目录"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "Hide transfers"
+msgstr "收起传输队列"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "Show transfers"
+msgstr "展开传输队列"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "Clear completed"
+msgstr "清除已完成"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "Pause transfer"
+msgstr "暂停任务"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "Resume transfer"
+msgstr "恢复任务"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "Retry transfer"
+msgstr "重试任务"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "Cancel transfer"
+msgstr "取消任务"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "Remove transfer"
+msgstr "移除任务"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpTransferDrawer"
+msgid "{0} transfer(s) · {1} active · {2} paused · {3} failed · {4} completed"
+msgstr "{0} 个任务 · {1} 进行中 · {2} 已暂停 · {3} 失败 · {4} 已完成"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Open"
+msgstr "打开"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Edit Remote File"
+msgstr "编辑远端文件"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Download"
+msgstr "下载"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Download To..."
+msgstr "下载到…"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Copy To..."
+msgstr "复制到…"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Rename..."
+msgstr "重命名…"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Delete..."
+msgstr "删除…"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Chmod..."
+msgstr "改权限…"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Copy"
+msgstr "复制"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Copy Remote Path"
+msgstr "复制远端路径"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Properties"
+msgstr "属性"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Upload Here..."
+msgstr "上传到此处…"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "New Folder"
+msgstr "新建文件夹"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Upload Files..."
+msgstr "上传文件…"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Refresh"
+msgstr "刷新"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Show Hidden Files"
+msgstr "显示隐藏文件"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Copy Current Path"
+msgstr "复制当前路径"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Paste"
+msgstr "粘贴"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Parent directory"
+msgstr "上级目录"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Home directory"
+msgstr "主目录"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Download Selected"
+msgstr "下载所选"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Delete Selected"
+msgstr "删除所选"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Chmod Selected..."
+msgstr "批量改权限…"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Copy Remote Paths"
+msgstr "复制远端路径"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Upload to Remote"
+msgstr "上传到远端"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Move to Remote"
+msgstr "移动到远端"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpContextMenu"
+msgid "Copy Path"
+msgstr "复制路径"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpEntryDialog"
+msgid "Copy To..."
+msgstr "复制到…"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpEntryDialog"
+msgid "Downloads the selected remote entries into this local directory."
+msgstr "把选中的远端条目下载到该本地目录。"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpEntryDialog"
+msgid "Downloads to a temporary copy and uploads it into this remote directory."
+msgstr "先下载到临时副本，再上传到该远端目录。"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpEntryDialog"
+msgid "Local file or directory"
+msgstr "本地文件或目录"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpEntryDialog"
+msgid "Remote destination directory"
+msgstr "远端目标目录"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpEntryDialog"
+msgid "Local destination directory"
+msgstr "本地目标目录"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpEntryDialog"
+msgid "Copy"
+msgstr "复制"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpEntryDialog"
+msgid "{0} entries"
+msgstr "{0} 个条目"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpConflictDialog"
+msgid "Resolve name conflicts"
+msgstr "解决命名冲突"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpConflictDialog"
+msgid "{0} destination path(s) already exist."
+msgstr "已有 {0} 个目标路径存在。"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpConflictDialog"
+msgid "{0} → {1}"
+msgstr "{0} → {1}"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpConflictDialog"
+msgid "Cancel"
+msgstr ""
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpConflictDialog"
+msgid "Skip"
+msgstr "跳过"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpConflictDialog"
+msgid "Rename"
+msgstr "重命名"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpConflictDialog"
+msgid "Overwrite"
+msgstr "覆盖"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Properties"
+msgstr "属性"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Name"
+msgstr "名称"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Path"
+msgstr "路径"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Kind"
+msgstr "类型"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Size"
+msgstr "大小"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Modified"
+msgstr "修改时间"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Permissions"
+msgstr "权限"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Copy Path"
+msgstr "复制路径"
+
+# N1 Phase 2: sftp_panel.slint / local_pane.slint
+msgctxt "SftpPropertiesDialog"
+msgid "Close"
+msgstr "关闭"

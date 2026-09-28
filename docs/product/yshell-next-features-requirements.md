@@ -797,7 +797,7 @@
 | N4 密钥/认证 | **已完成（验收通过 2026-09-28）** | `ses_f1b935b62ffeBkZspWMmVYt8Oa`（接管） | 认证弹窗三态/私钥导入测试部署/主机密钥页；rfd 配套（CI/deb/rpm/deny 注释）；491 测试全绿、e2e 74/74（冻结二进制 `17148e36…`）；遗留：真实服务端 kbd 多 prompt 桥（fake 已满足） |
 | N6 日志 UI | **已完成（验收通过 2026-09-28）** | `ses_f1c3ad8b1ffe3jqB4ZmYkr0tpr` | 右键菜单/REC/状态栏/弹窗/关闭退出 flush/rfd 目录；497 测试、e2e 74/74（冻结 `c25b1ede…`）；遗留：R-107 与大小上限待办 |
 | N3 面板停靠 | **Phase 1 已完成（随批验收）；Phase 2 排队（N1 后）** | `ses_f1bb42d9dffeOCLRk3ezBjFXUH` | 13 单测；`panels.rs` 模型/断点纯函数 + `panel_frame` 组件 |
-| N1 SFTP | **Phase 2 接线执行中（shared-file 持有者）** | `ses_f1bb42d9cffe1c1dXC0c6rcTjR` | `sftp_panel` 重写 + 双栏 + 拖动 + rfd + 队列抽屉；完成后 N3 接棒 |
+| N1 SFTP | **已完成（验收通过 2026-09-28）** | `ses_f1bb42d9cffe1c1dXC0c6rcTjR` | 双栏/拖动/队列/冲突/批量删除；512 测试、e2e 74/74（冻结 `82a6ba70…`）；待办：远端→远端与队列动作 e2e 覆盖、Properties、批量下载/chmod、rfd 驱动、OS DropArea |
 | N5 终端主题 | **Phase 1 已完成（随批验收）；Phase 2 排队（N3 后）** | `ses_f1bb42d9bffeFL2GiTHEfPOuAs` | `palette.rs` + `apply_appearance` + 8 套配色 + `folder_editor` 三态页；83 测试、像素证据 |
 | N9 / N7 | 待 N1/N3/N5 让出共享文件 | 待分配 | — |
 | L1 / L4 | L1 待方案文档定位；L4 fmt 等待独占冻结窗口 | — | — |

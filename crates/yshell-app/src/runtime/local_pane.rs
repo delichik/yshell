@@ -230,8 +230,8 @@ impl AppRuntime {
             .iter()
             .map(|row| {
                 let mut row = row.clone();
-                row.selected = !row.is_parent
-                    && self.local_pane.selected.contains(Path::new(&row.path_text));
+                row.selected =
+                    !row.is_parent && self.local_pane.selected.contains(Path::new(&row.path_text));
                 row
             })
             .collect()
@@ -303,7 +303,8 @@ impl AppRuntime {
     }
 
     fn prune_local_selection(&mut self, listing: &LocalPaneListing) {
-        let existing: BTreeSet<&PathBuf> = listing.entries.iter().map(|entry| &entry.path).collect();
+        let existing: BTreeSet<&PathBuf> =
+            listing.entries.iter().map(|entry| &entry.path).collect();
         self.local_pane
             .selected
             .retain(|path| existing.contains(path));
@@ -381,7 +382,10 @@ mod tests {
             .position(|row| row.name == "sub")
             .expect("sub row");
         let entered = runtime.activate_local_row(sub_row as i32);
-        assert_eq!(entered.local_path_text, pane.join("sub").display().to_string());
+        assert_eq!(
+            entered.local_path_text,
+            pane.join("sub").display().to_string()
+        );
 
         // Back to the parent through `..`.
         let back = runtime.activate_local_row(0);
@@ -420,7 +424,10 @@ mod tests {
         let second = runtime.select_local_row(2, true, false);
         assert_eq!(second.local_selected_count, 2);
         let range = runtime.select_local_row(3, false, true);
-        assert_eq!(range.local_selected_count, 3, "shift extends from the anchor");
+        assert_eq!(
+            range.local_selected_count, 3,
+            "shift extends from the anchor"
+        );
         assert_eq!(
             runtime
                 .local_selected_paths()

@@ -157,10 +157,8 @@ impl AppRuntime {
                 };
                 if clipboard.cut {
                     for transfer_id in ids {
-                        self.pending_move_cleanup.insert(
-                            transfer_id,
-                            MoveCleanup::LocalPaths(paths.clone()),
-                        );
+                        self.pending_move_cleanup
+                            .insert(transfer_id, MoveCleanup::LocalPaths(paths.clone()));
                     }
                     self.file_clipboard = None;
                 }
@@ -198,21 +196,21 @@ impl AppRuntime {
                     return self.projection();
                 }
                 let destination = self.local_pane.dir.clone();
-                let ids =
-                    match self.submit_download_entries(&entries, &destination, OverwritePolicy::Ask)
-                    {
-                        Ok(ids) => ids,
-                        Err(error) => {
-                            self.status_text = error.to_string();
-                            return self.projection();
-                        }
-                    };
+                let ids = match self.submit_download_entries(
+                    &entries,
+                    &destination,
+                    OverwritePolicy::Ask,
+                ) {
+                    Ok(ids) => ids,
+                    Err(error) => {
+                        self.status_text = error.to_string();
+                        return self.projection();
+                    }
+                };
                 if clipboard.cut {
                     for transfer_id in ids {
-                        self.pending_move_cleanup.insert(
-                            transfer_id,
-                            MoveCleanup::RemoteEntries(entries.clone()),
-                        );
+                        self.pending_move_cleanup
+                            .insert(transfer_id, MoveCleanup::RemoteEntries(entries.clone()));
                     }
                     self.file_clipboard = None;
                 }
@@ -323,7 +321,10 @@ pub(crate) fn copy_local_entry(from: &Path, to: &Path) -> std::io::Result<()> {
 
 /// `name.txt` → `name (1).txt`, used when the paste destination exists.
 pub(crate) fn unique_local_path(path: &Path) -> PathBuf {
-    let Some(name) = path.file_name().map(|name| name.to_string_lossy().into_owned()) else {
+    let Some(name) = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+    else {
         return path.to_path_buf();
     };
     let parent = path.parent().unwrap_or_else(|| Path::new(""));
@@ -378,9 +379,6 @@ mod tests {
         let temp = tempdir().expect("tempdir");
         let file = temp.path().join("report.txt");
         fs::write(&file, b"x").expect("write");
-        assert_eq!(
-            unique_local_path(&file),
-            temp.path().join("report (1).txt")
-        );
+        assert_eq!(unique_local_path(&file), temp.path().join("report (1).txt"));
     }
 }
