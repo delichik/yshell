@@ -295,7 +295,8 @@ export component WorkspaceSplitView inherits Rectangle {
             horizontal-stretch: root.clamped-ratio * 100;
             title-text: root.pane0-title-text;
             empty: root.pane0-empty;
-            focused: root.focused-pane == 0;
+            // 仅当前朝向挂载 TerminalView，避免 H+V 双份同时 focused。
+            focused: root.horizontal && root.focused-pane == 0;
             terminal-image: root.focused-pane == 0 ? root.primary-image : root.secondary-image;
             cursor-column: root.cursor-column;
             cursor-row: root.cursor-row;
@@ -355,7 +356,7 @@ export component WorkspaceSplitView inherits Rectangle {
             horizontal-stretch: (1.0 - root.clamped-ratio) * 100;
             title-text: root.pane1-title-text;
             empty: root.pane1-empty;
-            focused: root.focused-pane == 1;
+            focused: root.horizontal && root.focused-pane == 1;
             terminal-image: root.focused-pane == 1 ? root.primary-image : root.secondary-image;
             cursor-column: root.cursor-column;
             cursor-row: root.cursor-row;
@@ -406,7 +407,7 @@ export component WorkspaceSplitView inherits Rectangle {
             vertical-stretch: root.clamped-ratio * 100;
             title-text: root.pane0-title-text;
             empty: root.pane0-empty;
-            focused: root.focused-pane == 0;
+            focused: !root.horizontal && root.focused-pane == 0;
             terminal-image: root.focused-pane == 0 ? root.primary-image : root.secondary-image;
             cursor-column: root.cursor-column;
             cursor-row: root.cursor-row;
@@ -466,7 +467,7 @@ export component WorkspaceSplitView inherits Rectangle {
             vertical-stretch: (1.0 - root.clamped-ratio) * 100;
             title-text: root.pane1-title-text;
             empty: root.pane1-empty;
-            focused: root.focused-pane == 1;
+            focused: !root.horizontal && root.focused-pane == 1;
             terminal-image: root.focused-pane == 1 ? root.primary-image : root.secondary-image;
             cursor-column: root.cursor-column;
             cursor-row: root.cursor-row;
