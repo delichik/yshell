@@ -480,6 +480,9 @@ export component MainWindow inherits Window {
     in-out property <int> open_menu_index: -1;
     in-out property <length> menu_anchor_x: 0px;
     in-out property <length> menu_anchor_y: 0px;
+    /// 一级菜单遮罩顶部内缩：菜单栏打开时 = menubar；CommandBar「Panels」打开时
+    /// = menubar+commandbar，避免 scrim 盖住命令栏导致再点 Panels 只能 dismiss。
+    property <length> menu_scrim_top: Theme.bar-height-menubar;
     /// A34：当前弹层是"悬停切换"打开的（= 紧随其后的 click 与 hover 同帧到达）。
     /// 该标志为 true 时，点同一个一级菜单标题保持展开（只清标志），再点一次才收起；
     /// 点击打开时为 false（维持"点击打开/点击收起"的原有语义）。
@@ -500,8 +503,6 @@ export component MainWindow inherits Window {
     in-out property <bool> delete_session_dialog_visible: false;
     in-out property <string> delete_session_confirmation_text: "";
     in-out property <bool> quit_dialog_visible: false;
-    in-out property <bool> sftp_operation_dialog_visible: false;
-    in-out property <string> sftp_operation_text: "none";
     in-out property <string> sftp_dialog_kind: "none";
     in-out property <string> sftp_dialog_name_text: "";
     in-out property <string> sftp_dialog_permissions_text: "644";
@@ -943,26 +944,11 @@ export component MainWindow inherits Window {
     property <string> key-code-f5: "\u{F708}";
 
     // 模态弹窗打开时全局快捷键让位给弹窗（弹窗内输入框自行处理按键）。
-    property <bool> global-shortcuts-blocked:
-        root.editor_modal_visible
-        || root.settings_dialog_visible
-        || root.about_dialog_visible
-        || root.known_hosts_modal_visible
-        || root.password_prompt_visible
-        || root.host_key_prompt_visible
-        || root.quit_dialog_visible
-        || root.delete_session_dialog_visible
-        || root.close_window_confirm_visible
-        || root.sftp_dialog_kind != "none"
-        || root.private_keys_modal_visible
-        || root.host_keys_modal_visible
-        || root.auth_prompt_visible
-        // N5 的两个嵌套弹窗（WS-A 补齐让位条件；与 `focus-top-dialog` 一致）
-        || root.terminal_appearance_dialog_visible
-        || root.folder_editor_visible;
+    // 与 `any_modal_visible` / `focus-top-dialog` / Rust `restore_shortcut_focus_after_modal`
+    // 使用同一完整集合，避免日志/冲突/属性等弹窗下快捷键仍能叠层。
+    property <bool> global-shortcuts-blocked: root.any_modal_visible;
 
-    /// L2：是否有任一模态弹窗可见（焦点恢复/让位用；比 `global-shortcuts-blocked`
-    /// 更完整，含 NewFolderDialog 与关闭标签确认）。
+    /// L2：是否有任一模态弹窗可见（快捷键让位、焦点恢复、关菜单后回焦共用）。
     property <bool> any_modal_visible:
         root.editor_modal_visible
         || root.settings_dialog_visible
@@ -976,14 +962,16 @@ export component MainWindow inherits Window {
         || root.close_tabs_confirm_visible
         || root.close_window_confirm_visible
         || root.sftp_dialog_kind != "none"
+        || root.sftp_conflict_visible
+        || root.sftp_properties_visible
         || root.private_keys_modal_visible
         || root.host_keys_modal_visible
         || root.auth_prompt_visible
-        // N5：终端外观 / Folder Editor（焦点恢复与 Esc 让位都要看到它们）
+        || root.logging_dialog_visible
         || root.terminal_appearance_dialog_visible
         || root.folder_editor_visible;
 
-    /// W5-A2 / N2：Ctrl+O、Ctrl+L 与 File > Quick Connect —— 打开/激活 QC 页并聚焦输入框。
+    /// W5-A2 / N2：Ctrl+O（及非终端焦点下的 Ctrl+L）与 File > Quick Connect —— 打开/激活 QC 页并聚焦输入框。
     public function focus-quick-connect() {
         root.open_quick_connect();
         quick_connect_page.focus-quick-connect();
@@ -1028,7 +1016,7 @@ export component MainWindow inherits Window {
     /// 终端按键兜底不再把该键编码成终端输入）；返回 `false` 时按键继续走原本的焦点链路。
     /// 命中的组合即使对应动作当前不可用（例如无活动会话时的 Ctrl+S / F5），也返回
     /// `true`：否则 ^S/^Q 一类控制码会落进 shell，留下 XOFF 之类的终端流控状态。
-    /// 注意：终端聚焦时 `Ctrl+L`（shell 清屏）也会命中快速连接，取舍见任务说明。
+    /// Ctrl+L：终端聚焦时让给 shell 清屏；其它焦点下打开快速连接（菜单快捷键仍是 Ctrl+O）。
     public function dispatch-global-shortcut(text: string, ctrl: bool, shift: bool, alt: bool, meta: bool) -> bool {
         if (alt || meta || root.global-shortcuts-blocked) {
             return false;
@@ -1058,8 +1046,16 @@ export component MainWindow inherits Window {
             root.start_new_saved_session_editor();
             return true;
         }
-        // Ctrl+O / Ctrl+L：聚焦快速连接
-        if (shortcut-key(text, "o", "O") || shortcut-key(text, "l", "L")) {
+        // Ctrl+O：聚焦快速连接（与 File > Quick Connect 菜单快捷键一致）
+        if (shortcut-key(text, "o", "O")) {
+            root.focus-quick-connect();
+            return true;
+        }
+        // Ctrl+L：终端聚焦 → 不消费，留给 PTY 清屏；否则打开快速连接（兼容旧习惯）
+        if (shortcut-key(text, "l", "L")) {
+            if (root.terminal_focused) {
+                return false;
+            }
             root.focus-quick-connect();
             return true;
         }
@@ -1125,7 +1121,11 @@ export component MainWindow inherits Window {
             enabled: root.terminal_has_selection, checked: false, separator: false,
             tooltip: root.terminal_has_selection ? "" : @tr("Select text in the terminal first.")
         },
-        { label: @tr("Paste"), shortcut: root.shortcut-paste, enabled: true, checked: false, separator: false },
+        {
+            label: @tr("Paste"), shortcut: root.shortcut-paste,
+            enabled: root.has_active_session, checked: false, separator: false,
+            tooltip: root.has_active_session ? "" : @tr("Open a session first.")
+        },
         {
             label: @tr("Clear Terminal"), shortcut: root.shortcut-clear-terminal,
             enabled: root.has_active_session, checked: false, separator: false,
@@ -1179,9 +1179,18 @@ export component MainWindow inherits Window {
     property <[MenuEntry]> view_menu_entries: [
         { label: @tr("Session Manager"), shortcut: root.shortcut-toggle-sidebar, enabled: true, checked: root.sessions_visible, separator: false },
         { label: @tr("SFTP Panel"), shortcut: "", enabled: true, checked: root.sftp_visible, separator: false },
-        { label: @tr("Tunnels"), shortcut: "", enabled: true, checked: root.tunnels_visible, separator: false },
-        { label: @tr("Quick Commands"), shortcut: "", enabled: true, checked: root.commands_visible, separator: false },
-        { label: @tr("Transfers"), shortcut: "", enabled: true, checked: root.transfers_visible, separator: false }
+        {
+            label: @tr("Tunnels"), shortcut: "", enabled: true, checked: root.tunnels_visible, separator: false,
+            tooltip: @tr("Summary only in this build; tunnel editing is not available yet.")
+        },
+        {
+            label: @tr("Quick Commands"), shortcut: "", enabled: true, checked: root.commands_visible, separator: false,
+            tooltip: @tr("Command presets are not available in this build yet.")
+        },
+        {
+            label: @tr("Transfers"), shortcut: "", enabled: true, checked: root.transfers_visible, separator: false,
+            tooltip: @tr("Summary panel; pause/resume/retry live in the SFTP transfer drawer.")
+        }
     ];
     property <[MenuEntry]> help_menu_entries: [
         { label: @tr("About YShell"), shortcut: "", enabled: true, checked: false, separator: false }
@@ -1205,7 +1214,11 @@ export component MainWindow inherits Window {
             enabled: root.terminal_has_selection, checked: false, separator: false,
             tooltip: root.terminal_has_selection ? "" : @tr("Select text in the terminal first.")
         },
-        { label: @tr("Paste"), shortcut: root.shortcut-paste, enabled: true, checked: false, separator: false },
+        {
+            label: @tr("Paste"), shortcut: root.shortcut-paste,
+            enabled: root.has_active_session, checked: false, separator: false,
+            tooltip: root.has_active_session ? "" : @tr("Open a session first.")
+        },
         {
             label: @tr("Select All"), shortcut: "",
             enabled: root.has_active_session, checked: false, separator: false,
@@ -1322,8 +1335,9 @@ export component MainWindow inherits Window {
         // A28（D18）：标签级 Reconnect/Disconnect 的启用态来自 Rust 对"被右键标签"的
         // 投影（`tab_menu_reconnect_enabled` / `tab_menu_disconnect_enabled`）。
         // 断开的标签才可 Reconnect；已连接的标签才可 Disconnect。
+        // 不挂 F5：全局 F5 针对活动会话，菜单动作针对右键标签，避免误导。
         {
-            label: @tr("Reconnect"), shortcut: root.shortcut-reconnect,
+            label: @tr("Reconnect"), shortcut: "",
             enabled: root.tab_menu_reconnect_enabled, checked: false, separator: false,
             tooltip: root.tab_menu_reconnect_enabled ? "" : @tr("This tab is already connected.")
         },
@@ -1495,6 +1509,7 @@ export component MainWindow inherits Window {
         if (root.open_menu_index >= 0) {
             root.open_menu_index = -1;
             root.menu-opened-by-hover = false;
+            root.menu_scrim_top = Theme.bar-height-menubar;
             root.restore-focus-after-menu();
             return true;
         }
@@ -1520,6 +1535,7 @@ export component MainWindow inherits Window {
         root.close_context_menus();
         root.open_menu_index = -1;
         root.menu-opened-by-hover = false;
+        root.menu_scrim_top = Theme.bar-height-menubar;
         root.more_menu_open = false;
         root.context_menu_x = x;
         root.context_menu_y = y;
@@ -1535,16 +1551,39 @@ export component MainWindow inherits Window {
                 root.menu-opened-by-hover = false;
             } else {
                 root.open_menu_index = -1;
+                root.menu_scrim_top = Theme.bar-height-menubar;
                 root.restore-focus-after-menu();
             }
         } else {
             root.close_context_menus();
-            root.close_more_menu();
+            if (root.more_menu_open) { root.more_menu_open = false; }
+            if (root.panel_menu_id != "") { root.panel_menu_id = ""; }
             root.menu_anchor_x = anchor_x;
             root.menu_anchor_y = Theme.bar-height-menubar;
+            root.menu_scrim_top = Theme.bar-height-menubar;
             root.open_menu_index = index;
             root.menu-opened-by-hover = false;
         }
+    }
+
+    /// CommandBar「Panels」：打开与 View 同一份菜单；关其它浮层；scrim 让出命令栏。
+    function open_panels_menu(x: length, y: length) {
+        if (root.open_menu_index == 3
+            && root.menu_scrim_top > Theme.bar-height-menubar) {
+            root.open_menu_index = -1;
+            root.menu_scrim_top = Theme.bar-height-menubar;
+            root.menu-opened-by-hover = false;
+            root.restore-focus-after-menu();
+            return;
+        }
+        root.close_context_menus();
+        if (root.more_menu_open) { root.more_menu_open = false; }
+        if (root.panel_menu_id != "") { root.panel_menu_id = ""; }
+        root.menu_anchor_x = x;
+        root.menu_anchor_y = y;
+        root.menu_scrim_top = Theme.bar-height-menubar + Theme.bar-height-commandbar;
+        root.open_menu_index = 3;
+        root.menu-opened-by-hover = false;
     }
 
     /// 一级菜单悬停切换：已有菜单展开时，指针移到另一个一级菜单直接切到它的菜单
@@ -1555,6 +1594,7 @@ export component MainWindow inherits Window {
             root.close_context_menus();
             root.menu_anchor_x = anchor_x;
             root.menu_anchor_y = Theme.bar-height-menubar;
+            root.menu_scrim_top = Theme.bar-height-menubar;
             root.open_menu_index = index;
             root.menu-opened-by-hover = true;
         }
@@ -1575,7 +1615,9 @@ export component MainWindow inherits Window {
             // A22（B 轮2 高#1）：Edit > Copy 必须复制**选区**（与终端右键菜单同源回调），
             // 此前调的是 `copy_terminal_visible()`（整屏可见内容），静默给错结果。
             if (index == 0) { root.copy_terminal_selection(); }
-            else if (index == 1) { root.paste_terminal_clipboard(); }
+            else if (index == 1) {
+                if (root.has_active_session) { root.paste_terminal_clipboard(); }
+            }
             else if (index == 2) { root.clear_terminal(); }
             // A24：无活动会话时不置位（避免"状态残留 → 之后打开终端莫名弹出查找栏"）。
             else if (index == 3) {
@@ -1601,13 +1643,20 @@ export component MainWindow inherits Window {
             else if (index == 1) { root.toggle_panel("sftp"); }
             else if (index == 2) { root.toggle_panel("tunnels"); }
             else if (index == 3) { root.toggle_panel("quick_commands"); }
-            else if (index == 4) { root.toggle_panel("transfers"); }
+            else if (index == 4) {
+                // 打开 Transfers 摘要时顺带展开 SFTP 传输抽屉，便于暂停/恢复/重试。
+                if (!root.transfers_visible && !root.transfer_drawer_expanded) {
+                    root.transfer_toggle_expanded();
+                }
+                root.toggle_panel("transfers");
+            }
         } else if (menu == 4) {
             // Help
             if (index == 0) { root.about_dialog_visible = true; }
         }
         root.open_menu_index = -1;
         root.menu-opened-by-hover = false;
+        root.menu_scrim_top = Theme.bar-height-menubar;
         root.restore-focus-after-menu();
     }
 
@@ -1671,10 +1720,14 @@ export component MainWindow inherits Window {
         } else if (which == 4) {
             // 终端菜单
             if (index == 0) { root.copy_terminal_selection(); }
-            else if (index == 1) { root.paste_terminal_clipboard(); }
+            else if (index == 1) {
+                if (root.has_active_session) { root.paste_terminal_clipboard(); }
+            }
             else if (index == 2) { root.terminal_select_all(); }
             else if (index == 3) { root.clear_terminal(); }
-            else if (index == 4) { root.terminal_find_visible = true; }
+            else if (index == 4) {
+                if (root.has_active_session) { root.terminal_find_visible = true; }
+            }
             // N6：日志项（Start/Stop/Open File/Open Folder）。
             else if (index == 6) { root.terminal_logging_start(); }
             else if (index == 7) { root.terminal_logging_stop(); }
@@ -1890,10 +1943,8 @@ export component MainWindow inherits Window {
                 right-collapsed: root.layout_dock_collapsed;
                 new-session() => { root.start_new_saved_session_editor(); }
                 open-panels-menu(x, y) => {
-                    // 与 View 菜单同一份面板入口：借用菜单栏的锚点机制。
-                    root.open_menu_index = 3;
-                    root.menu_anchor_x = x;
-                    root.menu_anchor_y = y;
+                    // 与 View 菜单同一份面板入口；关其它浮层 + 抬高 scrim。
+                    root.open_panels_menu(x, y);
                 }
                 toggle-right-side() => { root.panel_side_toggle("right"); }
                 // A24：无活动会话时命令栏查找按钮禁用（禁用态带 tooltip 说明原因），
@@ -1908,7 +1959,9 @@ export component MainWindow inherits Window {
                 open-more-menu(x, y) => {
                     // A3：独立溢出菜单（不再复用一级菜单索引，帮助标题不会被点亮）。
                     root.open_menu_index = -1;
+                    root.menu_scrim_top = Theme.bar-height-menubar;
                     root.close_context_menus();
+                    if (root.panel_menu_id != "") { root.panel_menu_id = ""; }
                     root.more_menu_x = x;
                     root.more_menu_y = y;
                     root.more_menu_open = true;
@@ -2190,6 +2243,7 @@ export component MainWindow inherits Window {
         open-index: root.open_menu_index;
         anchor-x: root.menu_anchor_x;
         anchor-y: root.menu_anchor_y;
+        scrim-top: root.menu_scrim_top;
         file-entries: root.file_menu_entries;
         edit-entries: root.edit_menu_entries;
         session-entries: root.session_menu_entries;
@@ -2199,6 +2253,7 @@ export component MainWindow inherits Window {
         dismissed() => {
             root.open_menu_index = -1;
             root.menu-opened-by-hover = false;
+            root.menu_scrim_top = Theme.bar-height-menubar;
             root.restore-focus-after-menu();
         }
     }

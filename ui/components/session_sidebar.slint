@@ -85,7 +85,7 @@ export component NewFolderDialog inherits Rectangle {
                     wrap: word-wrap;
                 }
 
-                WinTextInput {
+                name_input := WinTextInput {
                     text <=> root.name-text;
                     placeholder-text: @tr("Folder name");
                 }
@@ -112,13 +112,13 @@ export component NewFolderDialog inherits Rectangle {
 
     /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
     public function focus-dialog() {
-        dialog_scope.focus();
+        name_input.focus-input();
     }
 
-    // 打开时聚焦弹窗（Esc 需要焦点在弹窗内）。
+    // 打开时聚焦名称框（Esc 仍从输入框沿父链冒泡到 dialog_scope）。
     changed open => {
         if (root.open) {
-            dialog_scope.focus();
+            name_input.focus-input();
         }
     }
 }

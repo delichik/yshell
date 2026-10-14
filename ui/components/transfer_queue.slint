@@ -3,6 +3,7 @@ import { Icon } from "basic/icons.slint";
 
 // 传输队列（§5.13）：方向图标 + 摘要；嵌在右侧工具的 WinCard 内，底透明。
 // 卡片标题由外层 WinCardHeader（`Transfers`）提供，这里不再重复标题行。
+// 暂停/恢复/重试等操作在 SFTP 面板底部传输抽屉里，本面板只做应用级摘要。
 export component TransferQueue inherits Rectangle {
     // E21：默认值置空（投影必覆盖），避免投影更新前闪现英文。
     in property <string> summary_text: "";
@@ -28,13 +29,26 @@ export component TransferQueue inherits Rectangle {
             }
         }
 
-        Text {
-            text: root.summary_text;
-            color: Theme.text-secondary;
-            font-size: Theme.font-caption;
-            vertical-alignment: center;
-            horizontal-stretch: 1;
-            wrap: word-wrap;
+        VerticalLayout {
+            spacing: Theme.spacing-4;
+            vertical-stretch: 1;
+            alignment: center;
+
+            Text {
+                text: root.summary_text;
+                color: Theme.text-secondary;
+                font-size: Theme.font-caption;
+                horizontal-stretch: 1;
+                wrap: word-wrap;
+            }
+
+            Text {
+                text: @tr("Pause, resume, and retry are in the SFTP transfer drawer.");
+                color: Theme.text-tertiary;
+                font-size: Theme.font-caption;
+                horizontal-stretch: 1;
+                wrap: word-wrap;
+            }
         }
     }
 }

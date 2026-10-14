@@ -132,11 +132,11 @@ export component MenuPopup inherits Rectangle {
         }
 
         // Scrim: captures any click outside of the panel and dismisses the popup.
+        // 只在 pointer down 关闭，避免与 clicked 双触发 restore-focus-after-menu。
         TouchArea {
             // A1：菜单栏下拉菜单的遮罩从菜单栏下方开始，菜单栏自身仍可点击/悬停切换。
             y: root.scrim-top;
             height: parent.height - root.scrim-top;
-            clicked => { root.dismissed(); }
             pointer-event(event) => {
                 if (event.kind == PointerEventKind.down) {
                     root.dismissed();

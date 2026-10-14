@@ -4626,7 +4626,8 @@ struct TerminalKeyPress<'a> {
 /// （`MainWindow.dispatch-global-shortcut`，与窗口根 FocusScope 共用同一份映射）。
 ///
 /// 返回 `true` 表示该组合被窗口级快捷键消费，调用方不得再把它编码成终端输入；
-/// 未匹配的组合返回 `false`，按键继续走终端语义（例如 Ctrl+C 中断、Ctrl+L 清屏）。
+/// 未匹配的组合返回 `false`，按键继续走终端语义（例如 Ctrl+C 中断；终端聚焦时
+/// Ctrl+L 清屏也不在此消费，见 Slint `dispatch-global-shortcut`）。
 fn dispatch_global_shortcut(
     window: &MainWindow,
     text: &str,
@@ -6024,16 +6025,26 @@ static MODAL_WAS_VISIBLE: AtomicBool = AtomicBool::new(false);
 /// 且终端没有持有焦点时抢焦点：终端聚焦时它的 FocusScope 会自己保住焦点，
 /// 抢过来只会让终端失去键盘输入。
 fn restore_shortcut_focus_after_modal(window: &MainWindow, projection: &AppProjection) {
+    // Keep in sync with Slint `any_modal_visible` / `focus-top-dialog`.
     let modal_visible = projection.editor_modal_visible
         || projection.known_hosts_modal_visible
         || projection.password_prompt_visible
+        || projection.host_key_prompt_visible
         || projection.private_keys_modal_visible
         || projection.host_keys_modal_visible
         || projection.auth_prompt_visible
+        || projection.logging_dialog_visible
+        || projection.close_tabs_confirm_visible
+        || projection.close_window_confirm_visible
+        || projection.folder_editor_visible
+        || projection.settings_appearance_visible
+        || projection.sftp_conflict_visible
+        || projection.sftp_properties_visible
         || window.get_settings_dialog_visible()
         || window.get_about_dialog_visible()
         || window.get_quit_dialog_visible()
         || window.get_delete_session_dialog_visible()
+        || window.get_new_folder_dialog_visible()
         || window.get_sftp_dialog_kind() != "none";
     if MODAL_WAS_VISIBLE.swap(modal_visible, Ordering::Relaxed)
         && !modal_visible

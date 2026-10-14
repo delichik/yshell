@@ -261,6 +261,7 @@ component SftpRemotePane inherits Rectangle {
                             }
 
                             crumb_hit_touch := TouchArea {
+                                enabled: root.connected;
                                 clicked => { root.open-crumb(i); }
                             }
                         }
@@ -274,11 +275,13 @@ component SftpRemotePane inherits Rectangle {
             WinIconButton {
                 icon: "up";
                 accessible-name: @tr("Parent directory");
+                enabled: root.connected;
                 clicked => { root.up(); }
             }
             WinIconButton {
                 icon: "refresh";
                 accessible-name: @tr("Refresh");
+                enabled: root.connected;
                 clicked => { root.refresh(); }
             }
             WinToggle {
@@ -291,6 +294,7 @@ component SftpRemotePane inherits Rectangle {
             WinIconButton {
                 icon: "more";
                 accessible-name: @tr("SFTP operations");
+                enabled: root.connected;
                 clicked => {
                     root.panel-menu-requested(
                         self.absolute-position.x,
@@ -305,6 +309,7 @@ component SftpRemotePane inherits Rectangle {
             text <=> root.path-text;
             placeholder-text: "/remote/path";
             font-family: Theme.font-mono;
+            enabled: root.connected;
             accepted => { root.open-path(self.text); }
         }
 
@@ -1364,9 +1369,9 @@ export component SftpContextMenu inherits Rectangle {
         { label: @tr("Chmod..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         { label: @tr("Copy"), shortcut: "", enabled: root.connected, checked: false, separator: false },
-        { label: @tr("Copy Remote Path"), shortcut: "", enabled: true, checked: false, separator: false },
+        { label: @tr("Copy Remote Path"), shortcut: "", enabled: root.connected, checked: false, separator: false, tooltip: root.connected ? "" : @tr("Connect to the remote host first.") },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
-        { label: @tr("Properties"), shortcut: "", enabled: true, checked: false, separator: false }
+        { label: @tr("Properties"), shortcut: "", enabled: root.connected, checked: false, separator: false, tooltip: root.connected ? "" : @tr("Connect to the remote host first.") }
     ];
 
     private property <[MenuEntry]> dir-entries: [
@@ -1382,9 +1387,9 @@ export component SftpContextMenu inherits Rectangle {
         { label: @tr("Chmod..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         { label: @tr("Copy"), shortcut: "", enabled: root.connected, checked: false, separator: false },
-        { label: @tr("Copy Remote Path"), shortcut: "", enabled: true, checked: false, separator: false },
+        { label: @tr("Copy Remote Path"), shortcut: "", enabled: root.connected, checked: false, separator: false, tooltip: root.connected ? "" : @tr("Connect to the remote host first.") },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
-        { label: @tr("Properties"), shortcut: "", enabled: true, checked: false, separator: false }
+        { label: @tr("Properties"), shortcut: "", enabled: root.connected, checked: false, separator: false, tooltip: root.connected ? "" : @tr("Connect to the remote host first.") }
     ];
 
     private property <[MenuEntry]> blank-entries: [
@@ -1399,7 +1404,7 @@ export component SftpContextMenu inherits Rectangle {
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         { label: @tr("Parent directory"), shortcut: "", enabled: root.connected, checked: false, separator: false },
         // 行为是 `open_sftp_path("/")`（远端根），不是登录用户家目录，文案如实描述（B12）。
-        { label: @tr("Root directory (/)"), shortcut: "", enabled: true, checked: false, separator: false }
+        { label: @tr("Root directory (/)"), shortcut: "", enabled: root.connected, checked: false, separator: false, tooltip: root.connected ? "" : @tr("Connect to the remote host first.") }
     ];
 
     private property <[MenuEntry]> multi-entries: [
@@ -1409,7 +1414,7 @@ export component SftpContextMenu inherits Rectangle {
         { label: @tr("Chmod Selected..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         { label: @tr("Copy"), shortcut: "", enabled: root.connected, checked: false, separator: false },
-        { label: @tr("Copy Remote Paths"), shortcut: "", enabled: true, checked: false, separator: false }
+        { label: @tr("Copy Remote Paths"), shortcut: "", enabled: root.connected, checked: false, separator: false, tooltip: root.connected ? "" : @tr("Connect to the remote host first.") }
     ];
 
     private property <[MenuEntry]> local-entries: [

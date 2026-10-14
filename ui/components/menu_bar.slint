@@ -123,6 +123,8 @@ export component MenuBarPopups inherits Rectangle {
     in property <int> open-index: -1;
     in property <length> anchor-x: 0px;
     in property <length> anchor-y: 0px;
+    /// 遮罩顶部内缩（菜单栏 = menubar；CommandBar Panels = menubar+commandbar）。
+    in property <length> scrim-top: Theme.bar-height-menubar;
     in property <[MenuEntry]> file-entries: [];
     in property <[MenuEntry]> edit-entries: [];
     in property <[MenuEntry]> session-entries: [];
@@ -146,7 +148,7 @@ export component MenuBarPopups inherits Rectangle {
         anchor-y: root.anchor-y;
         panel-width: 230px;
         // A1：遮罩从菜单栏下方开始，点击其它一级菜单不再被遮罩吞掉。
-        scrim-top: Theme.bar-height-menubar;
+        scrim-top: root.scrim-top;
         dismissed => { root.dismissed(); }
         selected(index) => { root.selected(0, index); }
     }
@@ -159,7 +161,7 @@ export component MenuBarPopups inherits Rectangle {
         anchor-x: root.anchor-x;
         anchor-y: root.anchor-y;
         panel-width: 210px;
-        scrim-top: Theme.bar-height-menubar;
+        scrim-top: root.scrim-top;
         dismissed => { root.dismissed(); }
         selected(index) => { root.selected(1, index); }
     }
@@ -172,7 +174,7 @@ export component MenuBarPopups inherits Rectangle {
         anchor-x: root.anchor-x;
         anchor-y: root.anchor-y;
         panel-width: 260px;
-        scrim-top: Theme.bar-height-menubar;
+        scrim-top: root.scrim-top;
         dismissed => { root.dismissed(); }
         selected(index) => { root.selected(2, index); }
     }
@@ -185,7 +187,7 @@ export component MenuBarPopups inherits Rectangle {
         anchor-x: root.anchor-x;
         anchor-y: root.anchor-y;
         panel-width: 250px;
-        scrim-top: Theme.bar-height-menubar;
+        scrim-top: root.scrim-top;
         dismissed => { root.dismissed(); }
         selected(index) => { root.selected(3, index); }
     }
@@ -198,7 +200,7 @@ export component MenuBarPopups inherits Rectangle {
         anchor-x: root.anchor-x;
         anchor-y: root.anchor-y;
         panel-width: 210px;
-        scrim-top: Theme.bar-height-menubar;
+        scrim-top: root.scrim-top;
         dismissed => { root.dismissed(); }
         selected(index) => { root.selected(4, index); }
     }

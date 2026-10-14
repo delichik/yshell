@@ -226,6 +226,8 @@ export component WinToggle inherits Rectangle {
     /// 纯图标模式下的无障碍名称
     in property <string> accessible-name: "";
     in-out property <bool> checked: false;
+    /// 单选语义：已选中时再点不取消（用于两选一格式等）。
+    in property <bool> radio: false;
     in property <bool> enabled <=> touch.enabled;
     callback toggled();
     /// 键盘焦点（E1）
@@ -349,6 +351,13 @@ export component WinToggle inherits Rectangle {
     }
 
     function toggle() {
+        if (root.radio) {
+            if (!root.checked) {
+                root.checked = true;
+                root.toggled();
+            }
+            return;
+        }
         root.checked = !root.checked;
         root.toggled();
     }
@@ -572,8 +581,8 @@ export component WinListRow inherits Rectangle {
     }
 
     touch := TouchArea {
-        clicked => { root.clicked(); }
-        double-clicked => { root.double-clicked(); }
+        clicked => { if (root.enabled) { root.clicked(); } }
+        double-clicked => { if (root.enabled) { root.double-clicked(); } }
     }
 }
 

@@ -382,17 +382,27 @@ export component TerminalView inherits Rectangle {
                     WinButton {
                         text: @tr("Find");
                         min-width: 56px;
-                        clicked => { root.find-text(search_input.text); }
+                        clicked => {
+                            root.find-text(search_input.text);
+                            // 与 Enter 提交一致：回焦终端，避免后续按键落在查找栏。
+                            terminal_focus.focus();
+                        }
                     }
                     WinButton {
                         text: @tr("Prev");
                         min-width: 72px;
-                        clicked => { root.find-prev(); }
+                        clicked => {
+                            root.find-prev();
+                            terminal_focus.focus();
+                        }
                     }
                     WinButton {
                         text: @tr("Next");
                         min-width: 72px;
-                        clicked => { root.find-next(); }
+                        clicked => {
+                            root.find-next();
+                            terminal_focus.focus();
+                        }
                     }
 
                     Text {

@@ -307,6 +307,7 @@ export component LoggingDialog inherits Rectangle {
 
                             WinToggle {
                                 text: @tr("Sanitized (plain text)");
+                                radio: true;
                                 checked <=> root.sanitized-format;
                                 // 单选语义：点击总是选中本项（不能取消）。
                                 toggled => { root.sanitized-format = true; root.raw-format = false; root.notify-options(); }
@@ -314,6 +315,7 @@ export component LoggingDialog inherits Rectangle {
 
                             WinToggle {
                                 text: @tr("Raw (with ANSI escapes)");
+                                radio: true;
                                 checked <=> root.raw-format;
                                 toggled => { root.raw-format = true; root.sanitized-format = false; root.notify-options(); }
                             }

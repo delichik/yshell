@@ -277,7 +277,7 @@ export component QuickConnectPage inherits Rectangle {
     /// 输入框逐键回传：宿主保存副本，投影回写时不会吃掉用户正在输入的内容。
     callback input-changed(string);
 
-    /// Ctrl+O / Ctrl+L 与 File > Quick Connect：聚焦输入框并全选（设计 §3）。
+    /// Ctrl+O（及非终端焦点下的 Ctrl+L）与 File > Quick Connect：聚焦输入框并全选（设计 §3）。
     public function focus-quick-connect() {
         target-input.focus-input();
         target-input.select-all();

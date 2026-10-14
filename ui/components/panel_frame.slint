@@ -69,6 +69,9 @@ export component PanelFrame inherits Rectangle {
     border-color: Theme.card-stroke;
     border-radius: Theme.radius-panel;
     clip: true;
+    // 折叠/换序时高度与纵坐标由 Rust 投影跳变；用 duration-fast 过渡（减少动画时为 0）。
+    animate height { duration: Theme.duration-fast; easing: ease-out; }
+    animate y { duration: Theme.duration-fast; easing: ease-out; }
 
     // 标题条：图标 16 + 标题（吃剩余宽度、超长省略）+ [可选头部主操作] + ⋯ 按钮。
     HorizontalLayout {
@@ -143,6 +146,8 @@ export component PanelFrame inherits Rectangle {
         width: parent.width;
         height: max(0px, parent.height - root.header-height);
         clip: true;
+        opacity: root.collapsed ? 0.0 : 1.0;
+        animate opacity { duration: Theme.duration-faster; easing: ease-out; }
 
         VerticalLayout {
             padding: root.content-padding;
@@ -226,6 +231,7 @@ export component PanelMenuPopup inherits Rectangle {
                 enabled: root.placement != PanelPlacement.Left,
                 checked: false,
                 separator: false,
+                tooltip: root.placement != PanelPlacement.Left ? "" : @tr("PanelFrame" => "This panel is already on the left."),
             },
             {
                 label: @tr("PanelFrame" => "Move to Right"),
@@ -233,6 +239,7 @@ export component PanelMenuPopup inherits Rectangle {
                 enabled: root.placement != PanelPlacement.Right,
                 checked: false,
                 separator: false,
+                tooltip: root.placement != PanelPlacement.Right ? "" : @tr("PanelFrame" => "This panel is already on the right."),
             },
             {
                 label: root.collapsed ? @tr("PanelFrame" => "Expand") : @tr("PanelFrame" => "Collapse"),
@@ -240,6 +247,7 @@ export component PanelMenuPopup inherits Rectangle {
                 enabled: root.collapse-enabled,
                 checked: false,
                 separator: false,
+                tooltip: root.collapse-enabled ? "" : @tr("PanelFrame" => "This panel cannot be collapsed."),
             },
             {
                 label: @tr("PanelFrame" => "Hide"),
@@ -247,6 +255,7 @@ export component PanelMenuPopup inherits Rectangle {
                 enabled: root.hide-enabled,
                 checked: false,
                 separator: false,
+                tooltip: root.hide-enabled ? "" : @tr("PanelFrame" => "This panel cannot be hidden."),
             },
         ];
         selected(index) => {
