@@ -386,7 +386,8 @@ export component ToolDock inherits Rectangle {
         visible: root.sessions-frame.visible;
         min-height: 0px;
         max-height: 100000px;
-        header-height: 40px;
+        // P3：与其余面板统一 44px 头高，避免 Sessions 视觉矮一截。
+        header-height: 44px;
         content-padding: Theme.spacing-8;
         title-text: @tr("MainWindow" => "Sessions");
         icon: "terminal";

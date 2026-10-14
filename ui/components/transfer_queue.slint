@@ -27,7 +27,8 @@ export component TransferQueue inherits Rectangle {
 
     background: transparent;
 
-    private property <length> progress-column-width: 64px;
+    // P3：进度条 + 文案列（原 64px 纯文字太弱）。
+    private property <length> progress-column-width: 76px;
 
     pure function action-count(row: SftpTransferRow) -> int {
         return (row.can-pause ? 1 : 0) + (row.can-resume ? 1 : 0) + (row.can-retry ? 1 : 0)
@@ -138,18 +139,37 @@ export component TransferQueue inherits Rectangle {
                             overflow: elide;
                         }
 
-                        Text {
+                        // P3：进度条（progress-percent）+ 失败/状态文案。
+                        VerticalLayout {
                             x: parent.width - root.action-width(row) - root.progress-column-width - Theme.spacing-4;
-                            y: 0;
+                            y: (parent.height - self.preferred-height) / 2;
                             width: root.progress-column-width;
-                            height: parent.height;
-                            text: row.is-failed ? row.status-text : row.progress-text;
-                            color: row.is-failed ? Theme.critical : Theme.text-tertiary;
-                            font-size: Theme.font-caption;
-                            vertical-alignment: center;
-                            horizontal-alignment: right;
-                            wrap: no-wrap;
-                            overflow: elide;
+                            spacing: 2px;
+                            alignment: center;
+
+                            if !row.is-failed : Rectangle {
+                                height: 4px;
+                                border-radius: 2px;
+                                background: Theme.control-stroke;
+                                clip: true;
+
+                                Rectangle {
+                                    width: parent.width * max(0, min(100, row.progress-percent)) / 100;
+                                    height: parent.height;
+                                    background: Theme.accent;
+                                    border-radius: 2px;
+                                }
+                            }
+
+                            Text {
+                                text: row.is-failed ? row.status-text : row.progress-text;
+                                color: row.is-failed ? Theme.critical : Theme.text-tertiary;
+                                font-size: Theme.font-caption;
+                                horizontal-alignment: right;
+                                wrap: no-wrap;
+                                overflow: elide;
+                                width: parent.width;
+                            }
                         }
 
                         HorizontalLayout {

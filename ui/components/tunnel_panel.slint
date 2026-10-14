@@ -1,6 +1,6 @@
 import { ListView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
-import { WinButton } from "basic/controls.slint";
+import { WinIconButton } from "basic/controls.slint";
 import { ListScrollBar } from "local_pane.slint";
 
 /// One configured tunnel for the active session (Rust `TunnelRowData` mirror).
@@ -101,16 +101,19 @@ export component TunnelPanel inherits Rectangle {
                             horizontal-stretch: 1;
                         }
 
-                        if row.can-start : WinButton {
-                            text: @tr("Start");
-                            subtle: true;
+                        // P3：与 Transfers 行动作同形（紧凑图标按钮）。
+                        if row.can-start : WinIconButton {
+                            icon: "play";
+                            width: Theme.control-height-compact;
                             height: Theme.control-height-compact;
+                            accessible-name: @tr("Start tunnel");
                             clicked => { root.start-tunnel(row.id); }
                         }
-                        if row.can-stop : WinButton {
-                            text: @tr("Stop");
-                            subtle: true;
+                        if row.can-stop : WinIconButton {
+                            icon: "pause";
+                            width: Theme.control-height-compact;
                             height: Theme.control-height-compact;
+                            accessible-name: @tr("Stop tunnel");
                             clicked => { root.stop-tunnel(row.id); }
                         }
                         if !row.can-start && !row.can-stop : Text {
