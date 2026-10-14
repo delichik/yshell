@@ -420,6 +420,8 @@ export component AuthPromptDialog inherits Rectangle {
                         text <=> root.passphrase-text;
                         placeholder-text: @tr("Key passphrase (optional)");
                         input-type: password;
+                        // P4：与 password 方式一样逐键回传，避免投影往返吞掉未提交口令。
+                        edited(text) => { root.update-passphrase(text); }
                         accepted => {
                             if root.publickey-submit-enabled { root.submit-password(); }
                         }
@@ -526,6 +528,8 @@ export component AuthPromptDialog inherits Rectangle {
     }
 
     /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
+    /// 输入框在 `if` 分支内，无法从外侧直接 focus-input；打开后由用户 Tab/点击进入字段，
+    /// Esc 仍经 dialog_scope（与 PasswordPromptDialog 的 Esc 路径一致）。
     public function focus-dialog() {
         dialog_scope.focus();
     }

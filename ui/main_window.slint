@@ -2796,11 +2796,12 @@ export component MainWindow inherits Window {
     }
 
     // S1：会话树空白区菜单的 `New Folder…`（在根目录创建，名称一次性传给运行时）。
-    // WP4：标签重命名（复用 NewFolderDialog 形态；确认后写内存显示名）。
+    // WP4/P4：标签重命名（NewFolderDialog 壳 + 专用标题/占位/文案）。
     tab_rename_dialog := NewFolderDialog {
         open: root.tab_rename_dialog_visible;
         title-text: @tr("Rename Tab");
-        message-text: @tr("Display name for this tab only (not saved to disk). Applies for this session.");
+        message-text: @tr("Choose a display name for this tab.");
+        placeholder-text: @tr("Tab name");
         name-text <=> root.tab_rename_name_text;
         confirm-label: @tr("Rename");
         confirmed(name) => {

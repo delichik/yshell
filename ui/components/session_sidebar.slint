@@ -26,8 +26,12 @@ export component NewFolderDialog inherits Rectangle {
     in property <string> title-text: @tr("New Folder");
     in property <string> message-text: @tr("Create a folder in the session tree root.");
     in-out property <string> name-text: "";
+    /// P4：可覆盖占位（标签重命名勿再用 "Folder name"）。
+    in property <string> placeholder-text: @tr("Folder name");
     in property <string> confirm-label: @tr("Create");
     in property <string> cancel-label: @tr("Cancel");
+    /// P4：与 ContentDialog 族（密码/认证 460）对齐；文件夹创建也走同一宽度。
+    in property <length> dialog-width: 460px;
 
     callback confirmed(string);
     callback canceled();
@@ -55,9 +59,9 @@ export component NewFolderDialog inherits Rectangle {
         }
 
         Rectangle {
-            x: (parent.width - 400px) / 2;
+            x: (parent.width - root.dialog-width) / 2;
             y: max((parent.height - self.height) / 2, 40px);
-            width: 400px;
+            width: root.dialog-width;
             height: body.preferred-height;
             background: Theme.panel-background;
             border-radius: Theme.radius-panel;
@@ -87,7 +91,13 @@ export component NewFolderDialog inherits Rectangle {
 
                 name_input := WinTextInput {
                     text <=> root.name-text;
-                    placeholder-text: @tr("Folder name");
+                    placeholder-text: root.placeholder-text;
+                    // P4：Enter = 确认（与密码弹窗 accepted 一致）。
+                    accepted => {
+                        if (root.name-text != "") {
+                            root.confirmed(root.name-text);
+                        }
+                    }
                 }
 
                 HorizontalLayout {
