@@ -26,7 +26,7 @@ use crate::runtime::{
     AppProjection, AppRuntime, AuthKeyOptionData, AuthPromptQuestionData, HostKeyGroupData,
     PanelFrameData as RuntimePanelFrameData, PrivateKeyRowData, SftpCrumbData, SftpRowData,
     SplitHandleData as RuntimeSplitHandleData, TabData, ThemeFieldAction, ThemeSchemeOption,
-    TransferRowData, TriStateFieldData,
+    TransferRowData, TriStateFieldData, TunnelRowData,
 };
 
 pub(crate) mod generated_ui {
@@ -38,7 +38,7 @@ use generated_ui::{
     AuthKeyOption, AuthKeyboardPrompt, HostKeyEntry, HostKeyGroup, LocalRow, MainWindow, Palette,
     PanelFrameData, PrivateKeyRow, QuickConnectRow, QuickLinkRow, SessionTreeRow,
     SettingsSchemeOption, SftpCrumb, SftpRow, SftpTransferRow, SplitHandleData, TerminalScrollInfo,
-    Theme, TriStateField, WorkspaceTab,
+    Theme, TriStateField, TunnelRow, WorkspaceTab,
 };
 
 /// Keeps the pixel-rendered terminal surface in sync with the runtime.
@@ -3948,6 +3948,12 @@ fn wire_n1_sftp_callbacks(
     // ---------------------------------------------------------- 队列抽屉
     wire_projection!(on_transfer_toggle_expanded, |runtime| runtime
         .toggle_transfer_drawer());
+    wire_projection!(on_transfer_open_sftp_drawer, |runtime| runtime
+        .open_transfer_drawer());
+    wire_projection!(on_start_tunnel, |runtime, id: SharedString| runtime
+        .start_tunnel(id.as_ref()));
+    wire_projection!(on_stop_tunnel, |runtime, id: SharedString| runtime
+        .stop_tunnel(id.as_ref()));
     wire_result!(
         on_transfer_pause,
         "SFTP transfer",
@@ -4966,6 +4972,44 @@ fn set_transfer_rows_if_changed(window: &MainWindow, rows: &[TransferRowData]) {
     }
     window.set_transfer_rows(ModelRc::new(VecModel::from(
         rows.iter().map(transfer_row_from).collect::<Vec<_>>(),
+    )));
+}
+
+fn tunnel_row_from(row: &TunnelRowData) -> TunnelRow {
+    TunnelRow {
+        id: row.id.clone().into(),
+        name_text: row.name_text.clone().into(),
+        kind_id: row.kind_id.clone().into(),
+        kind_text: row.kind_text.clone().into(),
+        summary_text: row.summary_text.clone().into(),
+        status_id: row.status_id.clone().into(),
+        status_text: row.status_text.clone().into(),
+        can_start: row.can_start,
+        can_stop: row.can_stop,
+    }
+}
+
+fn tunnel_row_matches(current: &TunnelRow, next: &TunnelRowData) -> bool {
+    current.id.as_str() == next.id
+        && current.name_text.as_str() == next.name_text
+        && current.summary_text.as_str() == next.summary_text
+        && current.status_id.as_str() == next.status_id
+        && current.can_start == next.can_start
+        && current.can_stop == next.can_stop
+}
+
+fn set_tunnel_rows_if_changed(window: &MainWindow, rows: &[TunnelRowData]) {
+    let current = window.get_tunnel_rows();
+    if current.row_count() == rows.len()
+        && current
+            .iter()
+            .zip(rows.iter())
+            .all(|(current, next)| tunnel_row_matches(&current, next))
+    {
+        return;
+    }
+    window.set_tunnel_rows(ModelRc::new(VecModel::from(
+        rows.iter().map(tunnel_row_from).collect::<Vec<_>>(),
     )));
 }
 
@@ -6045,6 +6089,7 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_sftp_selection_single_file(projection.sftp_selection_single_file);
     window.set_tunnels_summary_kind_text(projection.tunnels_summary_kind_text.clone().into());
     window.set_tunnels_summary_rows_text(projection.tunnels_summary_rows_text.clone().into());
+    set_tunnel_rows_if_changed(window, &projection.tunnel_rows);
     window.set_status_text(projection.status_text.clone().into());
     window.set_status_kind_text(projection.status_kind.clone().into());
     window.set_status_param_1_text(projection.status_param_1.clone().into());

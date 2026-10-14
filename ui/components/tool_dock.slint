@@ -6,8 +6,8 @@
 // 反推布局（消除 main_window 里的 binding-loop）。
 //   * 面板壳复用 `panel_frame.slint` 的 PanelFrame / PanelSplitHandle（只读复用）。
 //   * Sessions 内容来自 `session_sidebar.slint` 的 SessionSidebarContent；
-//     SFTP 内容仍是 N1 的 SftpPanel（透传列表保持不变），Transfers 为
-//     TransferQueue 摘要。
+//     SFTP 内容仍是 N1 的 SftpPanel（透传列表保持不变），Tunnels 为
+//     TunnelPanel 实况列表，Transfers 为与 SFTP 抽屉共享模型的 TransferQueue。
 //   * `@children` 是中间工作区槽（main_window 把 TerminalWorkspace 放进来）。
 //   * Popup 实例放在 `ToolDockPopups` 里，必须在 main_window 的
 //     "内容之后、模态弹窗之前"实例化，保持原有绘制层级。
@@ -18,7 +18,10 @@ import { SessionSidebarContent, SessionSidebarHandle, SessionSidebarRail } from 
 import { SessionTreeRow } from "session_tree.slint";
 import { LocalRow } from "local_pane.slint";
 import { SftpCrumb, SftpPanel, SftpRow, SftpTransferRow } from "sftp_panel.slint";
+import { TunnelPanel, TunnelRow } from "tunnel_panel.slint";
 import { TransferQueue } from "transfer_queue.slint";
+
+export { TunnelRow } from "tunnel_panel.slint";
 
 /// 单个面板框的 px 几何（Rust `PanelFrameData` 的同构体）。
 export struct PanelFrameData {
@@ -174,9 +177,12 @@ export component ToolDock inherits Rectangle {
     callback session-clear-selection-requested();
 
     // ---- Tunnels / Transfers 面板内容 --------------------------------------
-    in property <string> tunnels-summary-text: "";
-    /// E21：默认置空（宿主投影必覆盖），避免更新前闪现英文。
-    in property <string> transfer-queue-text: "";
+    in property <[TunnelRow]> tunnel-rows: [];
+    in property <string> tunnels-empty-kind: "no-active";
+    callback start-tunnel(string);
+    callback stop-tunnel(string);
+    /// Opens/expands the SFTP transfer drawer (shared transfer model).
+    callback transfer-open-sftp-drawer();
 
     // ---- N1：SftpPanel 投影透传（面板壳只提供弹性高度与标题条）--------------
     in property <[SftpRow]> sftp-rows: [];
@@ -539,11 +545,13 @@ export component ToolDock inherits Rectangle {
         collapse-toggled() => { root.panel-collapse-requested("tunnels"); }
         hide-requested() => { root.panel-hide-requested("tunnels"); }
 
-        Text {
-            text: root.tunnels-summary-text;
-            color: Theme.text-secondary;
-            font-size: Theme.font-caption;
-            wrap: word-wrap;
+        TunnelPanel {
+            width: parent.width;
+            height: parent.height;
+            rows: root.tunnel-rows;
+            empty-kind: root.tunnels-empty-kind;
+            start-tunnel(id) => { root.start-tunnel(id); }
+            stop-tunnel(id) => { root.stop-tunnel(id); }
         }
     }
 
@@ -595,7 +603,20 @@ export component ToolDock inherits Rectangle {
 
         TransferQueue {
             width: parent.width;
-            summary_text: root.transfer-queue-text;
+            height: parent.height;
+            rows: root.transfer-rows;
+            total-count: root.transfer-total-count;
+            active-count: root.transfer-active-count;
+            paused-count: root.transfer-paused-count;
+            failed-count: root.transfer-failed-count;
+            completed-count: root.transfer-completed-count;
+            pause(id) => { root.transfer-pause(id); }
+            resume(id) => { root.transfer-resume(id); }
+            retry(id) => { root.transfer-retry(id); }
+            cancel(id) => { root.transfer-cancel(id); }
+            remove(id) => { root.transfer-remove(id); }
+            clear-completed() => { root.transfer-clear-completed(); }
+            open-sftp-drawer() => { root.transfer-open-sftp-drawer(); }
         }
     }
 

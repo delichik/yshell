@@ -44,6 +44,7 @@ impl AppRuntime {
         let (proxy_summary_kind_text, proxy_summary_address_text, proxy_summary_user_text) =
             self.editor_proxy_summary_parts();
         let (tunnels_summary_kind_text, tunnels_summary_rows_text) = self.tunnels_summary_parts();
+        let tunnel_rows = self.tunnel_rows();
         let (session_summary_rows_text, session_summary_hidden_count) =
             self.session_summary_parts();
         let (selection_kind_text, selection_name_text, selection_host_text, selection_id_text) =
@@ -540,6 +541,7 @@ impl AppRuntime {
             clipboard_cut,
             tunnels_summary_kind_text: tunnels_summary_kind_text.to_owned(),
             tunnels_summary_rows_text,
+            tunnel_rows,
             status_text: self.status_text.clone(),
             status_kind,
             status_param_1,
@@ -1650,6 +1652,8 @@ pub struct AppProjection {
     pub clipboard_cut: bool,
     pub tunnels_summary_kind_text: String,
     pub tunnels_summary_rows_text: String,
+    /// Live dock Tunnels panel rows for the active session.
+    pub tunnel_rows: Vec<crate::runtime::TunnelRowData>,
     pub status_text: String,
     /// 状态栏 i18n 模板：覆盖的生产者填 kind + 参数，其余路径保持空 kind，
     /// Slint 端回退英文 `status_text` 原文。

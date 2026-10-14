@@ -1,53 +1,213 @@
+import { ListView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
+import { WinIconButton } from "basic/controls.slint";
+import { ListScrollBar } from "local_pane.slint";
+import { SftpTransferRow } from "sftp_panel.slint";
 
-// 传输队列（§5.13）：方向图标 + 摘要；嵌在右侧工具的 WinCard 内，底透明。
-// 卡片标题由外层 WinCardHeader（`Transfers`）提供，这里不再重复标题行。
-// 暂停/恢复/重试等操作在 SFTP 面板底部传输抽屉里，本面板只做应用级摘要。
+// Dock Transfers panel: same `SftpTransferRow` model and pause/resume/retry/
+// cancel/remove actions as `SftpTransferDrawer` (shared queue, not a caption).
 export component TransferQueue inherits Rectangle {
-    // E21：默认值置空（投影必覆盖），避免投影更新前闪现英文。
-    in property <string> summary_text: "";
+    in property <[SftpTransferRow]> rows: [];
+    in property <int> total-count: 0;
+    in property <int> active-count: 0;
+    in property <int> paused-count: 0;
+    in property <int> failed-count: 0;
+    in property <int> completed-count: 0;
 
-    height: 110px;
+    callback pause(string);
+    callback resume(string);
+    callback retry(string);
+    callback cancel(string);
+    callback remove(string);
+    callback clear-completed();
+    /// Opens/focuses the SFTP transfer drawer (same model) when the user wants
+    /// the fuller drawer chrome inside the SFTP panel.
+    callback open-sftp-drawer();
+
     background: transparent;
 
-    HorizontalLayout {
-        padding: Theme.spacing-8;
-        spacing: Theme.spacing-8;
+    private property <length> progress-column-width: 64px;
 
-        Rectangle {
-            width: Theme.icon-size-small;
-            vertical-stretch: 1;
-            background: transparent;
+    pure function action-count(row: SftpTransferRow) -> int {
+        return (row.can-pause ? 1 : 0) + (row.can-resume ? 1 : 0) + (row.can-retry ? 1 : 0)
+             + (row.can-cancel ? 1 : 0) + (row.can-remove ? 1 : 0);
+    }
 
-            Icon {
-                name: "download";
-                icon-color: Theme.text-secondary;
-                icon-size: Theme.icon-size-small;
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
+    pure function action-width(row: SftpTransferRow) -> length {
+        return root.action-count(row) * Theme.control-height-compact;
+    }
+
+    pure function summary-text() -> string {
+        return @tr("{0} transfer(s)", root.total-count)
+            + (root.active-count > 0 ? @tr(" · {0} active", root.active-count) : "")
+            + (root.paused-count > 0 ? @tr(" · {0} paused", root.paused-count) : "")
+            + (root.failed-count > 0 ? @tr(" · {0} failed", root.failed-count) : "")
+            + (root.completed-count > 0 ? @tr(" · {0} completed", root.completed-count) : "");
+    }
+
+    VerticalLayout {
+        padding: Theme.spacing-4;
+        spacing: Theme.spacing-4;
+
+        HorizontalLayout {
+            height: Theme.control-height-compact;
+            spacing: Theme.spacing-4;
+
+            Rectangle {
+                width: Theme.icon-size-small;
+                vertical-stretch: 1;
+                background: transparent;
+
+                Icon {
+                    name: "download";
+                    icon-color: Theme.text-secondary;
+                    icon-size: Theme.icon-size-small;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+            }
+
+            Text {
+                text: root.summary-text();
+                color: Theme.text-secondary;
+                font-size: Theme.font-caption;
+                vertical-alignment: center;
+                wrap: no-wrap;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+
+            if root.completed-count > 0 : WinIconButton {
+                icon: "clear";
+                width: Theme.control-height-compact;
+                height: Theme.control-height-compact;
+                accessible-name: @tr("Clear completed");
+                clicked => { root.clear-completed(); }
+            }
+
+            WinIconButton {
+                icon: "chevron-right";
+                width: Theme.control-height-compact;
+                height: Theme.control-height-compact;
+                accessible-name: @tr("Show SFTP transfer drawer");
+                clicked => { root.open-sftp-drawer(); }
             }
         }
 
-        VerticalLayout {
-            spacing: Theme.spacing-4;
+        Rectangle {
             vertical-stretch: 1;
-            alignment: center;
+            clip: true;
+            min-height: 48px;
 
-            Text {
-                text: root.summary_text;
-                color: Theme.text-secondary;
+            if root.rows.length == 0 : Text {
+                text: @tr("No transfer tasks yet");
+                color: Theme.text-tertiary;
                 font-size: Theme.font-caption;
-                horizontal-stretch: 1;
+                width: parent.width;
+                height: parent.height;
+                vertical-alignment: center;
+                horizontal-alignment: center;
                 wrap: word-wrap;
             }
 
-            Text {
-                text: @tr("Pause, resume, and retry are in the SFTP transfer drawer.");
-                color: Theme.text-tertiary;
-                font-size: Theme.font-caption;
-                horizontal-stretch: 1;
-                wrap: word-wrap;
+            if root.rows.length > 0 : Rectangle {
+                width: parent.width;
+                height: parent.height;
+
+                transfer_list := ListView {
+                    vertical-scrollbar-policy: ScrollBarPolicy.always-off;
+
+                    for row[index] in root.rows : Rectangle {
+                        height: Theme.row-height-list;
+                        border-radius: Theme.radius-control;
+                        background: row.is-failed ? Theme.attention-background
+                            : Math.mod(index, 2) == 0 ? transparent : Theme.card-fill;
+
+                        Text {
+                            x: Theme.spacing-4;
+                            y: 0;
+                            width: max(0px, parent.width - root.action-width(row)
+                                - root.progress-column-width - 2 * Theme.spacing-4);
+                            height: parent.height;
+                            text: row.file-name-text;
+                            color: Theme.text-primary;
+                            font-size: Theme.font-caption;
+                            vertical-alignment: center;
+                            wrap: no-wrap;
+                            overflow: elide;
+                        }
+
+                        Text {
+                            x: parent.width - root.action-width(row) - root.progress-column-width - Theme.spacing-4;
+                            y: 0;
+                            width: root.progress-column-width;
+                            height: parent.height;
+                            text: row.is-failed ? row.status-text : row.progress-text;
+                            color: row.is-failed ? Theme.critical : Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            vertical-alignment: center;
+                            horizontal-alignment: right;
+                            wrap: no-wrap;
+                            overflow: elide;
+                        }
+
+                        HorizontalLayout {
+                            x: parent.width - root.action-width(row);
+                            y: 0;
+                            width: root.action-width(row);
+                            height: parent.height;
+                            spacing: 0;
+                            alignment: end;
+
+                            if row.can-pause : WinIconButton {
+                                icon: "pause";
+                                width: Theme.control-height-compact;
+                                height: Theme.control-height-compact;
+                                accessible-name: @tr("Pause transfer");
+                                clicked => { root.pause(row.id); }
+                            }
+                            if row.can-resume : WinIconButton {
+                                icon: "play";
+                                width: Theme.control-height-compact;
+                                height: Theme.control-height-compact;
+                                accessible-name: @tr("Resume transfer");
+                                clicked => { root.resume(row.id); }
+                            }
+                            if row.can-retry : WinIconButton {
+                                icon: "refresh";
+                                width: Theme.control-height-compact;
+                                height: Theme.control-height-compact;
+                                accessible-name: @tr("Retry transfer");
+                                clicked => { root.retry(row.id); }
+                            }
+                            if row.can-cancel : WinIconButton {
+                                icon: "close";
+                                width: Theme.control-height-compact;
+                                height: Theme.control-height-compact;
+                                accessible-name: @tr("Cancel transfer");
+                                clicked => { root.cancel(row.id); }
+                            }
+                            if row.can-remove : WinIconButton {
+                                icon: "trash";
+                                width: Theme.control-height-compact;
+                                height: Theme.control-height-compact;
+                                accessible-name: @tr("Remove transfer");
+                                clicked => { root.remove(row.id); }
+                            }
+                        }
+                    }
+                }
+
+                ListScrollBar {
+                    x: parent.width - self.width;
+                    y: 0;
+                    height: parent.height;
+                    content-height: transfer_list.content-height;
+                    visible-height: transfer_list.visible-height;
+                    content-y <=> transfer_list.content-y;
+                    scroll-enabled: transfer_list.enabled;
+                }
             }
         }
     }

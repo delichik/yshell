@@ -1,0 +1,138 @@
+import { ListView } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { WinButton } from "basic/controls.slint";
+import { ListScrollBar } from "local_pane.slint";
+
+/// One configured tunnel for the active session (Rust `TunnelRowData` mirror).
+export struct TunnelRow {
+    id: string,
+    name-text: string,
+    kind-id: string,
+    kind-text: string,
+    summary-text: string,
+    status-id: string,
+    status-text: string,
+    can-start: bool,
+    can-stop: bool,
+}
+
+/// Live tunnels list for the dock panel (not a summary-only caption).
+export component TunnelPanel inherits Rectangle {
+    in property <[TunnelRow]> rows: [];
+    /// `no-active` | `none` | `rows`
+    in property <string> empty-kind: "no-active";
+
+    callback start-tunnel(string);
+    callback stop-tunnel(string);
+
+    background: transparent;
+
+    if root.rows.length == 0 : Text {
+        text: root.empty-kind == "none"
+            ? @tr("No configured tunnels for the active session.")
+            : @tr("No active session. Open a session with tunnel forwards to manage them here.");
+        color: Theme.text-secondary;
+        font-size: Theme.font-caption;
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        vertical-alignment: center;
+        wrap: word-wrap;
+    }
+
+    if root.rows.length > 0 : Rectangle {
+        width: parent.width;
+        height: parent.height;
+        clip: true;
+
+        tunnel_list := ListView {
+            vertical-scrollbar-policy: ScrollBarPolicy.always-off;
+
+            for row[index] in root.rows : Rectangle {
+                height: Theme.row-height-list + Theme.spacing-8;
+                border-radius: Theme.radius-control;
+                background: Math.mod(index, 2) == 0 ? transparent : Theme.card-fill;
+
+                VerticalLayout {
+                    padding-left: Theme.spacing-4;
+                    padding-right: Theme.spacing-4;
+                    padding-top: Theme.spacing-4;
+                    padding-bottom: Theme.spacing-4;
+                    spacing: 2px;
+
+                    HorizontalLayout {
+                        spacing: Theme.spacing-8;
+                        height: Theme.font-caption + 2px;
+
+                        Text {
+                            text: row.name-text;
+                            color: Theme.text-primary;
+                            font-size: Theme.font-caption;
+                            font-weight: Theme.weight-semibold;
+                            vertical-alignment: center;
+                            wrap: no-wrap;
+                            overflow: elide;
+                            horizontal-stretch: 1;
+                        }
+
+                        Text {
+                            text: row.status-text;
+                            color: row.status-id == "error" ? Theme.critical
+                                : row.status-id == "active" ? Theme.accent
+                                : Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            vertical-alignment: center;
+                            wrap: no-wrap;
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: Theme.spacing-8;
+                        height: Theme.control-height-compact;
+
+                        Text {
+                            text: row.summary-text;
+                            color: Theme.text-secondary;
+                            font-size: Theme.font-caption;
+                            vertical-alignment: center;
+                            wrap: no-wrap;
+                            overflow: elide;
+                            horizontal-stretch: 1;
+                        }
+
+                        if row.can-start : WinButton {
+                            text: @tr("Start");
+                            subtle: true;
+                            height: Theme.control-height-compact;
+                            clicked => { root.start-tunnel(row.id); }
+                        }
+                        if row.can-stop : WinButton {
+                            text: @tr("Stop");
+                            subtle: true;
+                            height: Theme.control-height-compact;
+                            clicked => { root.stop-tunnel(row.id); }
+                        }
+                        if !row.can-start && !row.can-stop : Text {
+                            text: row.kind-text;
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            vertical-alignment: center;
+                            wrap: no-wrap;
+                        }
+                    }
+                }
+            }
+        }
+
+        ListScrollBar {
+            x: parent.width - self.width;
+            y: 0;
+            height: parent.height;
+            content-height: tunnel_list.content-height;
+            visible-height: tunnel_list.visible-height;
+            content-y <=> tunnel_list.content-y;
+            scroll-enabled: tunnel_list.enabled;
+        }
+    }
+}

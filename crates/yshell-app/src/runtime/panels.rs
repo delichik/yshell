@@ -11,6 +11,8 @@ use crate::{
 };
 use std::collections::BTreeSet;
 use yshell_config::{LayoutProfile, PanelId, PanelSide, PanelSlot, TerminalProfile};
+use yshell_core::SessionState;
+use yshell_ssh::{ForwardingKind, TunnelConfig};
 use yshell_terminal::{DEFAULT_SCROLLBACK_LINES, DEFAULT_SCROLLBACK_MAX_CELLS};
 
 use super::*;
@@ -127,6 +129,61 @@ impl AppRuntime {
             }
             None => ("no-active", String::new()),
         }
+    }
+
+    /// Live tunnel rows for the dock Tunnels panel (active session config).
+    pub(crate) fn tunnel_rows(&self) -> Vec<TunnelRowData> {
+        let Some(session) = self
+            .active_session_id
+            .as_ref()
+            .and_then(|id| self.sessions.get(id))
+        else {
+            return Vec::new();
+        };
+        let session_connected = session.state == SessionState::Connected;
+        session
+            .ssh_config
+            .tunnels
+            .iter()
+            .map(|tunnel| tunnel_row_data(tunnel, session_connected))
+            .collect()
+    }
+
+    /// Start/Open a configured tunnel. Runtime does not provision forwards yet;
+    /// surfaces a clear status so the dock action is wired for a future API.
+    pub fn start_tunnel(&mut self, tunnel_id: &str) -> AppProjection {
+        let lookup = self
+            .active_session_id
+            .as_ref()
+            .and_then(|id| self.sessions.get(id))
+            .map(|session| {
+                let summary = session
+                    .ssh_config
+                    .tunnels
+                    .iter()
+                    .find(|tunnel| tunnel.id == tunnel_id)
+                    .map(tunnel_config_summary);
+                (summary, session.state)
+            });
+        self.status_text = match lookup {
+            None => "No active session to start a tunnel on.".to_owned(),
+            Some((None, _)) => format!("Unknown tunnel `{tunnel_id}`."),
+            Some((Some(summary), state)) if state != SessionState::Connected => {
+                format!("Connect the session before starting tunnel `{summary}`.")
+            }
+            Some((Some(summary), _)) => format!(
+                "Tunnel `{summary}` is configured, but SSH port forwarding is not provisioned by the runtime yet."
+            ),
+        };
+        self.projection()
+    }
+
+    /// Stop/Close a tunnel. No live forwarder state exists yet.
+    pub fn stop_tunnel(&mut self, tunnel_id: &str) -> AppProjection {
+        self.status_text = format!(
+            "Tunnel `{tunnel_id}` is not running; port forwarding is not provisioned yet."
+        );
+        self.projection()
     }
 
     pub(crate) fn resolved_terminal_profile_for_runtime(
@@ -782,8 +839,75 @@ const fn other_side(side: PanelSide) -> PanelSide {
 fn auto_panel_height(panel: PanelId) -> Option<f32> {
     match panel {
         PanelId::Sftp | PanelId::Sessions => None,
-        PanelId::Tunnels | PanelId::QuickCommands => Some(89.0),
-        PanelId::Transfers => Some(120.0),
+        // WP3: Tunnels/Transfers need room for live rows + actions (was 89/120).
+        PanelId::Tunnels => Some(200.0),
+        PanelId::QuickCommands => Some(89.0),
+        PanelId::Transfers => Some(200.0),
+    }
+}
+
+/// One dock Tunnels-panel row (Slint `TunnelRow` mirror).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TunnelRowData {
+    pub id: String,
+    pub name_text: String,
+    pub kind_id: String,
+    pub kind_text: String,
+    pub summary_text: String,
+    pub status_id: String,
+    pub status_text: String,
+    pub can_start: bool,
+    pub can_stop: bool,
+}
+
+fn tunnel_kind_id(kind: ForwardingKind) -> &'static str {
+    match kind {
+        ForwardingKind::Local => "local",
+        ForwardingKind::Remote => "remote",
+        ForwardingKind::Dynamic => "dynamic",
+    }
+}
+
+fn tunnel_kind_display(kind: ForwardingKind) -> &'static str {
+    match kind {
+        ForwardingKind::Local => "Local",
+        ForwardingKind::Remote => "Remote",
+        ForwardingKind::Dynamic => "Dynamic",
+    }
+}
+
+fn tunnel_endpoint_summary(config: &TunnelConfig) -> String {
+    match config.kind {
+        ForwardingKind::Dynamic => {
+            format!("{}:{}", config.listen_host, config.listen_port)
+        }
+        ForwardingKind::Local | ForwardingKind::Remote => format!(
+            "{}:{} → {}:{}",
+            config.listen_host, config.listen_port, config.target_host, config.target_port
+        ),
+    }
+}
+
+fn tunnel_row_data(config: &TunnelConfig, session_connected: bool) -> TunnelRowData {
+    let kind_id = tunnel_kind_id(config.kind);
+    let kind_text = tunnel_kind_display(config.kind);
+    // No live TunnelState tracking yet: configured tunnels stay idle until the
+    // SSH layer provisions forwards (see yshell-ssh real shell startup note).
+    let (status_id, status_text, can_start, can_stop) = if session_connected {
+        ("idle", "Idle", true, false)
+    } else {
+        ("idle", "Idle", false, false)
+    };
+    TunnelRowData {
+        id: config.id.clone(),
+        name_text: format!("{kind_text} :{}", config.listen_port),
+        kind_id: kind_id.to_owned(),
+        kind_text: kind_text.to_owned(),
+        summary_text: tunnel_endpoint_summary(config),
+        status_id: status_id.to_owned(),
+        status_text: status_text.to_owned(),
+        can_start,
+        can_stop,
     }
 }
 
@@ -1171,6 +1295,11 @@ impl AppRuntime {
         let mut model = self.panel_layout();
         if model.placement(panel) == PanelPlacement::Hidden {
             model.move_to(panel, default_side(panel), None);
+            // Showing Transfers also expands the SFTP drawer so both surfaces
+            // stay on the same actionable queue model.
+            if panel == PanelId::Transfers {
+                self.transfer_drawer_expanded = true;
+            }
         } else {
             model.hide(panel);
         }
@@ -1799,12 +1928,12 @@ mod tests {
 
         let sftp = *view.frame(PanelId::Sftp).expect("sftp");
         assert_eq!((sftp.x, sftp.y, sftp.width), (1100.0, 12.0, 340.0));
-        // 12 上留白 + 2×4 把手 + 89/89 内容高度 → SFTP 吸收剩余 584px（与旧卡片一致）。
-        assert!(approx(sftp.height, 584.0), "sftp height = {}", sftp.height);
+        // 12 上留白 + 2×4 把手 + 200/89 内容高度 → SFTP 吸收剩余 473px。
+        assert!(approx(sftp.height, 473.0), "sftp height = {}", sftp.height);
         let tunnels = *view.frame(PanelId::Tunnels).expect("tunnels");
-        assert!(approx(tunnels.y, 600.0), "tunnels y = {}", tunnels.y);
+        assert!(approx(tunnels.y, 489.0), "tunnels y = {}", tunnels.y);
         assert!(
-            approx(tunnels.height, 89.0),
+            approx(tunnels.height, 200.0),
             "tunnels height = {}",
             tunnels.height
         );

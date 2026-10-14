@@ -515,8 +515,20 @@ fn saved_session_tunnel_profile_is_applied_to_runtime_shell_config() {
     assert!(projection
         .tunnels_summary_rows_text
         .contains("dynamic 127.0.0.1:19050"));
+    assert_eq!(projection.tunnel_rows.len(), 2);
+    assert_eq!(projection.tunnel_rows[0].kind_id, "local");
+    assert!(projection.tunnel_rows[0]
+        .summary_text
+        .contains("127.0.0.1:18080"));
+    assert_eq!(projection.tunnel_rows[1].kind_id, "dynamic");
+    assert_eq!(projection.tunnel_rows[0].status_id, "idle");
     let session_key = runtime.active_session_id.clone().expect("active session");
     let session = runtime.sessions.get(&session_key).expect("runtime session");
+    assert_eq!(
+        projection.tunnel_rows[0].can_start,
+        session.state == yshell_core::SessionState::Connected
+    );
+    assert!(!projection.tunnel_rows[0].can_stop);
     assert_eq!(session.ssh_config.tunnels.len(), 2);
     assert_eq!(session.ssh_config.tunnels[0].kind, ForwardingKind::Local);
     assert_eq!(session.ssh_config.tunnels[1].kind, ForwardingKind::Dynamic);

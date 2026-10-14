@@ -11,7 +11,7 @@ import { MenuBar, MenuBarPopups } from "components/menu_bar.slint";
 import { CommandBar } from "components/command_bar.slint";
 import { NewFolderDialog, SessionSidebarPopups } from "components/session_sidebar.slint";
 import { TerminalWorkspace, TerminalWorkspacePopups, TabBarPopups, WorkspaceTab } from "components/terminal_workspace.slint";
-import { PanelFrameData, SplitHandleData, ToolDock } from "components/tool_dock.slint";
+import { PanelFrameData, SplitHandleData, ToolDock, TunnelRow } from "components/tool_dock.slint";
 import { PanelMenuAction, PanelMenuPopup, PanelPlacement } from "components/panel_frame.slint";
 import { StatusBar } from "components/status_bar.slint";
 import { SftpConflictDialog, SftpContextMenu, SftpCrumb, SftpEntryDialog, SftpPanel, SftpPropertiesDialog, SftpRow, SftpTransferRow } from "components/sftp_panel.slint";
@@ -278,6 +278,7 @@ export component MainWindow inherits Window {
     in-out property <bool> sftp_available: false;
     in-out property <string> transfer_queue_text: "No active transfers";
     in-out property <string> tunnels_summary_text: "Tunnels\nNo active tunnels";
+    in-out property <[TunnelRow]> tunnel_rows;
     out property <float> terminal_viewport_width_px: terminal_workspace.terminal-viewport-width-px;
     out property <float> terminal_viewport_height_px: terminal_workspace.terminal-viewport-height-px;
     /// W5-A2：终端是否持有键盘焦点（模态弹窗关闭后的焦点恢复据此避让终端）。
@@ -784,6 +785,10 @@ export component MainWindow inherits Window {
     callback copy_connection_overlay_error();
     callback toggle_sftp();
     callback toggle_tunnels();
+    callback start_tunnel(string);
+    callback stop_tunnel(string);
+    /// Expands the SFTP transfer drawer (shared transfer model with Transfers dock).
+    callback transfer_open_sftp_drawer();
     callback toggle_commands();
     callback update_secret_reset_confirmation(string);
     callback reset_secrets();
@@ -1226,7 +1231,7 @@ export component MainWindow inherits Window {
         { label: @tr("SFTP Panel"), shortcut: "", enabled: true, checked: root.sftp_visible, separator: false },
         {
             label: @tr("Tunnels"), shortcut: "", enabled: true, checked: root.tunnels_visible, separator: false,
-            tooltip: @tr("Summary only in this build; tunnel editing is not available yet.")
+            tooltip: @tr("Configured tunnels for the active session.")
         },
         {
             label: @tr("Quick Commands"), shortcut: "", enabled: true, checked: root.commands_visible, separator: false,
@@ -1234,7 +1239,7 @@ export component MainWindow inherits Window {
         },
         {
             label: @tr("Transfers"), shortcut: "", enabled: true, checked: root.transfers_visible, separator: false,
-            tooltip: @tr("Summary panel; pause/resume/retry live in the SFTP transfer drawer.")
+            tooltip: @tr("Transfer queue with pause/resume/retry; shares the SFTP drawer model.")
         }
     ];
     property <[MenuEntry]> help_menu_entries: [
@@ -2144,8 +2149,11 @@ export component MainWindow inherits Window {
                     root.open_context_menu("saved-session", x, y);
                 }
                 session-blank-menu-requested(x, y) => { root.open_context_menu("blank", x, y); }
-                tunnels-summary-text: TextFormats.tunnels-summary-display(root.tunnels_summary_kind_text, root.tunnels_summary_rows_text);
-                transfer-queue-text: root.transfer_queue_text;
+                tunnel-rows: root.tunnel_rows;
+                tunnels-empty-kind: root.tunnels_summary_kind_text;
+                start-tunnel(id) => { root.start_tunnel(id); }
+                stop-tunnel(id) => { root.stop_tunnel(id); }
+                transfer-open-sftp-drawer() => { root.transfer_open_sftp_drawer(); }
 
                 // --- TerminalWorkspace --------------------------------------------
                 // 标签条 + TerminalView 见 components/terminal_workspace.slint；

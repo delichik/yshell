@@ -103,6 +103,7 @@ pub(crate) use editor::SessionEditorDraft;
 // N6 Phase 2：终端日志弹窗状态（mod.rs 字段 / bootstrap 消费）。
 pub(crate) use logging::LoggingDialogState;
 pub(crate) use panels::SettingsTerminalStatus;
+pub use panels::TunnelRowData;
 pub use projection::AppProjection;
 pub use projection::PanelFrameData;
 pub use projection::SplitHandleData;

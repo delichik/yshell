@@ -184,6 +184,12 @@ impl AppRuntime {
         self.projection()
     }
 
+    /// Ensures the SFTP transfer drawer is expanded (shared queue with Transfers dock).
+    pub fn open_transfer_drawer(&mut self) -> AppProjection {
+        self.transfer_drawer_expanded = true;
+        self.projection()
+    }
+
     /// Opens the Properties dialog for the current remote selection.
     pub fn open_sftp_properties(&mut self) -> AppProjection {
         if self.selected_sftp_entry().is_none() {
