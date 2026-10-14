@@ -281,13 +281,16 @@ export component TerminalWorkspace inherits VerticalLayout {
             1.0)
         : terminal_view.terminal-viewport-height-px;
     /// W5-A2：终端是否持有键盘焦点（模态弹窗关闭后的焦点恢复据此避让终端）。
-    out property <bool> terminal-focused: terminal_view.terminal-focused;
+    /// P1：分屏时读聚焦叶子里的 TerminalView。
+    out property <bool> terminal-focused: root.split-active
+        ? split_view.terminal-focused
+        : terminal_view.terminal-focused;
 
     // E10：查找栏关闭后把焦点交还终端（打开时的聚焦由 TerminalView 内的 Timer 负责，
     // 这里不碰条件元素）。终端不可见（Quick Connect 页）时不动焦点。
     changed find-visible => {
         if (!root.find-visible && root.terminal-visible) {
-            terminal_view.focus-terminal();
+            root.focus-terminal();
         }
     }
 
@@ -303,7 +306,12 @@ export component TerminalWorkspace inherits VerticalLayout {
     /// A2/E23：宿主在菜单/弹层关闭后把键盘焦点还给终端（WS-A 的焦点回退请求）。
     /// 终端不可见（Quick Connect 页）时不动焦点，避免抢 QC 输入框。
     public function focus-terminal() {
-        if (root.terminal-visible) {
+        if (!root.terminal-visible) {
+            return;
+        }
+        if (root.split-active) {
+            split_view.focus-terminal();
+        } else {
             terminal_view.focus-terminal();
         }
     }
@@ -491,8 +499,9 @@ export component TerminalWorkspace inherits VerticalLayout {
                 search-summary: root.search-summary-text;
                 search-regex <=> root.search-regex;
                 footer-status: root.status-text;
+                // 单窗格查找；分屏时查找改由聚焦叶子 TerminalView 承接（P1）。
                 find-visible: root.find-visible && !root.split-active;
-                connection-overlay-visible: root.connection-overlay-visible;
+                connection-overlay-visible: root.connection-overlay-visible && !root.split-active;
                 connection-overlay-target: root.connection-overlay-target;
                 connection-overlay-stage: root.connection-overlay-stage;
                 connection-overlay-error: root.connection-overlay-error;
@@ -528,7 +537,7 @@ export component TerminalWorkspace inherits VerticalLayout {
         background: Theme.window-background;
         VerticalLayout {
             padding: 12px;
-            WorkspaceSplitView {
+            split_view := WorkspaceSplitView {
                 vertical-stretch: 1;
                 orientation-text: root.split-orientation-text;
                 ratio: root.split-ratio;
@@ -539,11 +548,44 @@ export component TerminalWorkspace inherits VerticalLayout {
                 pane1-empty: root.split-pane1-empty;
                 primary-image: root.terminal-image;
                 secondary-image: root.terminal-image-secondary;
+                cursor-column: root.cursor-column;
+                cursor-row: root.cursor-row;
+                scroll-offset: root.scroll-offset;
+                selection-active: root.selection-active;
+                search-query <=> root.search-query-text;
+                search-summary: root.search-summary-text;
+                search-regex <=> root.search-regex;
+                find-visible: root.find-visible;
+                connection-overlay-visible: root.connection-overlay-visible;
+                connection-overlay-target: root.connection-overlay-target;
+                connection-overlay-stage: root.connection-overlay-stage;
+                connection-overlay-error: root.connection-overlay-error;
+                connection-overlay-failed: root.connection-overlay-failed;
+                connection-overlay-pending: root.connection-overlay-pending;
+                view-visible: root.terminal-visible && root.split-active;
                 focus-pane(index) => { root.focus-split-pane(index); }
                 close-pane(index) => { root.close-split-pane(index); }
                 terminal-key(text, ctrl, alt, shift, meta) => {
                     root.terminal-key(text, ctrl, alt, shift, meta);
                 }
+                terminal-scroll(delta) => { root.terminal-scroll(delta); }
+                terminal-scroll-to-bottom() => { root.terminal-scroll-to-bottom(); }
+                terminal-selection-begin(x, y) => { root.terminal-selection-begin(x, y); }
+                terminal-selection-update(x, y) => { root.terminal-selection-update(x, y); }
+                terminal-selection-end(x, y) => { root.terminal-selection-end(x, y); }
+                terminal-select-word-at(x, y) => { root.terminal-select-word-at(x, y); }
+                copy-visible() => { root.copy-visible(); }
+                paste-clipboard() => { root.paste-clipboard(); }
+                clear-terminal() => { root.clear-terminal(); }
+                find-text(query) => { root.find-text(query); }
+                find-next() => { root.find-next(); }
+                find-prev() => { root.find-prev(); }
+                find-regex-changed(enabled) => { root.find-regex-changed(enabled); }
+                dismiss-find() => { root.dismiss-find(); }
+                context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
+                connection-retry() => { root.connection-retry(); }
+                connection-cancel() => { root.connection-cancel(); }
+                connection-copy-error() => { root.connection-copy-error(); }
                 ratio-changed(value) => { root.set-split-ratio(value); }
             }
         }

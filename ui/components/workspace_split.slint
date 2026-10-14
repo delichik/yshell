@@ -1,8 +1,10 @@
 // WP4：终端工作区 2-pane 分屏（扩展点：叶子可增至 4）。
-// 聚焦 pane 显示主终端位图 + 键盘焦点；另一片显示次位图，点击切换焦点。
+// P1：聚焦叶子复用 TerminalView（选择/滚动/滚动条/查找/overlay/右键）；
+//     非聚焦叶子用与 TerminalView 相同的 pixelated 物理像素位图（非 letterbox 预览）。
 // 次 pane PTY 尺寸由宿主按主视口 × (1-ratio) 估算（避免双条件布局出参）。
 import { Theme } from "../theme.slint";
 import { WinIconButton } from "basic/controls.slint";
+import { TerminalView } from "terminal_view.slint";
 
 component SplitPaneLeaf inherits Rectangle {
     in property <string> title-text: "";
@@ -11,15 +13,59 @@ component SplitPaneLeaf inherits Rectangle {
     in property <image> terminal-image;
     in property <bool> show-close: true;
 
+    // --- 聚焦叶子的 TerminalView 投影 -----------------------------------------
+    in property <int> cursor-column: 0;
+    in property <int> cursor-row: 0;
+    in property <int> scroll-offset: 0;
+    in property <bool> selection-active: false;
+    in-out property <string> search-query: "";
+    in property <string> search-summary: "";
+    in-out property <bool> search-regex: false;
+    in property <bool> find-visible: false;
+    in property <bool> connection-overlay-visible: false;
+    in property <string> connection-overlay-target: "";
+    in property <string> connection-overlay-stage: "";
+    in property <string> connection-overlay-error: "";
+    in property <bool> connection-overlay-failed: false;
+    in property <bool> connection-overlay-pending: false;
+    in property <bool> view-visible: true;
+
+    // 仅聚焦且非空时挂 TerminalView；用哨兵折叠保持 id 稳定以便 focus-terminal。
+    out property <bool> terminal-focused: root.focused && !root.empty && leaf_tv.terminal-focused;
+
     callback focus-requested();
     callback close-requested();
     callback key-pressed(string, bool, bool, bool, bool);
+    callback scroll-lines(int);
+    callback scroll-to-bottom();
+    callback selection-begin(float, float);
+    callback selection-update(float, float);
+    callback selection-end(float, float);
+    callback select-word-at(float, float);
+    callback copy-visible();
+    callback paste-clipboard();
+    callback clear-terminal();
+    callback find-text(string);
+    callback find-next();
+    callback find-prev();
+    callback find-regex-changed(bool);
+    callback dismiss-find();
+    callback context-menu-requested(length, length);
+    callback connection-retry();
+    callback connection-cancel();
+    callback connection-copy-error();
 
     border-width: root.focused ? 2px : 1px;
     border-color: root.focused ? Theme.accent : Theme.control-stroke;
     border-radius: Theme.radius-control;
     background: Theme.window-background;
     clip: true;
+
+    public function focus-terminal() {
+        if (root.focused && !root.empty) {
+            leaf_tv.focus-terminal();
+        }
+    }
 
     VerticalLayout {
         spacing: 0;
@@ -74,30 +120,73 @@ component SplitPaneLeaf inherits Rectangle {
                 height: parent.height;
             }
 
-            if !root.empty : Image {
+            // P1：非聚焦叶子 —— 与 TerminalView 相同的物理像素 + pixelated（非 contain letterbox）
+            if !root.empty && !root.focused : Image {
                 source: root.terminal-image;
-                width: parent.width;
-                height: parent.height;
-                image-fit: contain;
+                width: root.terminal-image.width * 1phx;
+                height: root.terminal-image.height * 1phx;
+                image-rendering: pixelated;
+                x: Theme.spacing-12;
+                y: Theme.spacing-12;
             }
 
-            TouchArea {
+            if !root.empty && !root.focused : TouchArea {
+                width: parent.width;
+                height: parent.height;
                 clicked => { root.focus-requested(); }
             }
 
-            if root.focused : FocusScope {
+            // P1：聚焦叶子 —— 完整 TerminalView（含查找 / overlay / 滚动条 / 选择）
+            // 始终实例化、用 max-height 折叠，避免条件元素无法 focus-terminal。
+            leaf_tv := TerminalView {
+                x: 0;
+                y: 0;
                 width: parent.width;
                 height: parent.height;
-                key-pressed(event) => {
-                    root.key-pressed(
-                        event.text,
-                        event.modifiers.control,
-                        event.modifiers.alt,
-                        event.modifiers.shift,
-                        event.modifiers.meta
-                    );
-                    return accept;
+                visible: !root.empty && root.focused;
+                // visible 仍占布局时用 clip + 零尺寸避让；Surface 绝对定位在父 Rectangle 上
+                embedded: true;
+                interactive: true;
+                view-visible: root.view-visible && root.focused && !root.empty;
+                title: "";
+                log-output: "";
+                terminal-image: root.terminal-image;
+                cursor-column: root.cursor-column;
+                cursor-row: root.cursor-row;
+                scroll-offset: root.scroll-offset;
+                selection-active: root.selection-active;
+                search-query <=> root.search-query;
+                search-summary: root.search-summary;
+                search-regex <=> root.search-regex;
+                find-visible: root.focused && !root.empty && root.find-visible;
+                connection-overlay-visible: root.focused && !root.empty && root.connection-overlay-visible;
+                connection-overlay-target: root.connection-overlay-target;
+                connection-overlay-stage: root.connection-overlay-stage;
+                connection-overlay-error: root.connection-overlay-error;
+                connection-overlay-failed: root.connection-overlay-failed;
+                connection-overlay-pending: root.connection-overlay-pending;
+                focus-requested() => { root.focus-requested(); }
+                connection-retry() => { root.connection-retry(); }
+                connection-cancel() => { root.connection-cancel(); }
+                connection-copy-error() => { root.connection-copy-error(); }
+                key-pressed(text, ctrl, alt, shift, meta) => {
+                    root.key-pressed(text, ctrl, alt, shift, meta);
                 }
+                scroll-lines(delta) => { root.scroll-lines(delta); }
+                scroll-to-bottom() => { root.scroll-to-bottom(); }
+                selection-begin(x, y) => { root.selection-begin(x, y); }
+                selection-update(x, y) => { root.selection-update(x, y); }
+                selection-end(x, y) => { root.selection-end(x, y); }
+                select-word-at(x, y) => { root.select-word-at(x, y); }
+                copy-visible() => { root.copy-visible(); }
+                paste-clipboard() => { root.paste-clipboard(); }
+                clear-terminal() => { root.clear-terminal(); }
+                find-text(query) => { root.find-text(query); }
+                find-next() => { root.find-next(); }
+                find-prev() => { root.find-prev(); }
+                find-regex-changed(enabled) => { root.find-regex-changed(enabled); }
+                dismiss-find() => { root.dismiss-find(); }
+                context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
             }
         }
     }
@@ -115,13 +204,65 @@ export component WorkspaceSplitView inherits Rectangle {
     in property <image> primary-image;
     in property <image> secondary-image;
 
+    in property <int> cursor-column: 0;
+    in property <int> cursor-row: 0;
+    in property <int> scroll-offset: 0;
+    in property <bool> selection-active: false;
+    in-out property <string> search-query: "";
+    in property <string> search-summary: "";
+    in-out property <bool> search-regex: false;
+    in property <bool> find-visible: false;
+    in property <bool> connection-overlay-visible: false;
+    in property <string> connection-overlay-target: "";
+    in property <string> connection-overlay-stage: "";
+    in property <string> connection-overlay-error: "";
+    in property <bool> connection-overlay-failed: false;
+    in property <bool> connection-overlay-pending: false;
+    in property <bool> view-visible: true;
+
+    out property <bool> terminal-focused: root.horizontal
+        ? (root.focused-pane == 0 ? pane0_h.terminal-focused : pane1_h.terminal-focused)
+        : (root.focused-pane == 0 ? pane0_v.terminal-focused : pane1_v.terminal-focused);
+
     callback focus-pane(int);
     callback close-pane(int);
     callback terminal-key(string, bool, bool, bool, bool);
+    callback terminal-scroll(int);
+    callback terminal-scroll-to-bottom();
+    callback terminal-selection-begin(float, float);
+    callback terminal-selection-update(float, float);
+    callback terminal-selection-end(float, float);
+    callback terminal-select-word-at(float, float);
+    callback copy-visible();
+    callback paste-clipboard();
+    callback clear-terminal();
+    callback find-text(string);
+    callback find-next();
+    callback find-prev();
+    callback find-regex-changed(bool);
+    callback dismiss-find();
+    callback context-menu-requested(length, length);
+    callback connection-retry();
+    callback connection-cancel();
+    callback connection-copy-error();
     callback ratio-changed(float);
 
     property <bool> horizontal: root.orientation-text != "vertical";
     property <float> clamped-ratio: Math.max(0.2, Math.min(0.8, root.ratio));
+
+    public function focus-terminal() {
+        if (root.horizontal) {
+            if (root.focused-pane == 0) {
+                pane0_h.focus-terminal();
+            } else {
+                pane1_h.focus-terminal();
+            }
+        } else if (root.focused-pane == 0) {
+            pane0_v.focus-terminal();
+        } else {
+            pane1_v.focus-terminal();
+        }
+    }
 
     HorizontalLayout {
         width: 100%;
@@ -129,15 +270,48 @@ export component WorkspaceSplitView inherits Rectangle {
         spacing: 0;
         visible: root.horizontal;
 
-        SplitPaneLeaf {
+        pane0_h := SplitPaneLeaf {
             horizontal-stretch: root.clamped-ratio * 100;
             title-text: root.pane0-title-text;
             empty: root.pane0-empty;
             focused: root.focused-pane == 0;
             terminal-image: root.focused-pane == 0 ? root.primary-image : root.secondary-image;
+            cursor-column: root.cursor-column;
+            cursor-row: root.cursor-row;
+            scroll-offset: root.scroll-offset;
+            selection-active: root.selection-active;
+            search-query <=> root.search-query;
+            search-summary: root.search-summary;
+            search-regex <=> root.search-regex;
+            find-visible: root.find-visible;
+            connection-overlay-visible: root.connection-overlay-visible;
+            connection-overlay-target: root.connection-overlay-target;
+            connection-overlay-stage: root.connection-overlay-stage;
+            connection-overlay-error: root.connection-overlay-error;
+            connection-overlay-failed: root.connection-overlay-failed;
+            connection-overlay-pending: root.connection-overlay-pending;
+            view-visible: root.view-visible;
             focus-requested() => { root.focus-pane(0); }
             close-requested() => { root.close-pane(0); }
             key-pressed(t, c, a, s, m) => { root.terminal-key(t, c, a, s, m); }
+            scroll-lines(d) => { root.terminal-scroll(d); }
+            scroll-to-bottom() => { root.terminal-scroll-to-bottom(); }
+            selection-begin(x, y) => { root.terminal-selection-begin(x, y); }
+            selection-update(x, y) => { root.terminal-selection-update(x, y); }
+            selection-end(x, y) => { root.terminal-selection-end(x, y); }
+            select-word-at(x, y) => { root.terminal-select-word-at(x, y); }
+            copy-visible() => { root.copy-visible(); }
+            paste-clipboard() => { root.paste-clipboard(); }
+            clear-terminal() => { root.clear-terminal(); }
+            find-text(q) => { root.find-text(q); }
+            find-next() => { root.find-next(); }
+            find-prev() => { root.find-prev(); }
+            find-regex-changed(e) => { root.find-regex-changed(e); }
+            dismiss-find() => { root.dismiss-find(); }
+            context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
+            connection-retry() => { root.connection-retry(); }
+            connection-cancel() => { root.connection-cancel(); }
+            connection-copy-error() => { root.connection-copy-error(); }
         }
         Rectangle {
             width: 4px;
@@ -156,15 +330,48 @@ export component WorkspaceSplitView inherits Rectangle {
                 }
             }
         }
-        SplitPaneLeaf {
+        pane1_h := SplitPaneLeaf {
             horizontal-stretch: (1.0 - root.clamped-ratio) * 100;
             title-text: root.pane1-title-text;
             empty: root.pane1-empty;
             focused: root.focused-pane == 1;
             terminal-image: root.focused-pane == 1 ? root.primary-image : root.secondary-image;
+            cursor-column: root.cursor-column;
+            cursor-row: root.cursor-row;
+            scroll-offset: root.scroll-offset;
+            selection-active: root.selection-active;
+            search-query <=> root.search-query;
+            search-summary: root.search-summary;
+            search-regex <=> root.search-regex;
+            find-visible: root.find-visible;
+            connection-overlay-visible: root.connection-overlay-visible;
+            connection-overlay-target: root.connection-overlay-target;
+            connection-overlay-stage: root.connection-overlay-stage;
+            connection-overlay-error: root.connection-overlay-error;
+            connection-overlay-failed: root.connection-overlay-failed;
+            connection-overlay-pending: root.connection-overlay-pending;
+            view-visible: root.view-visible;
             focus-requested() => { root.focus-pane(1); }
             close-requested() => { root.close-pane(1); }
             key-pressed(t, c, a, s, m) => { root.terminal-key(t, c, a, s, m); }
+            scroll-lines(d) => { root.terminal-scroll(d); }
+            scroll-to-bottom() => { root.terminal-scroll-to-bottom(); }
+            selection-begin(x, y) => { root.terminal-selection-begin(x, y); }
+            selection-update(x, y) => { root.terminal-selection-update(x, y); }
+            selection-end(x, y) => { root.terminal-selection-end(x, y); }
+            select-word-at(x, y) => { root.terminal-select-word-at(x, y); }
+            copy-visible() => { root.copy-visible(); }
+            paste-clipboard() => { root.paste-clipboard(); }
+            clear-terminal() => { root.clear-terminal(); }
+            find-text(q) => { root.find-text(q); }
+            find-next() => { root.find-next(); }
+            find-prev() => { root.find-prev(); }
+            find-regex-changed(e) => { root.find-regex-changed(e); }
+            dismiss-find() => { root.dismiss-find(); }
+            context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
+            connection-retry() => { root.connection-retry(); }
+            connection-cancel() => { root.connection-cancel(); }
+            connection-copy-error() => { root.connection-copy-error(); }
         }
     }
 
@@ -174,15 +381,48 @@ export component WorkspaceSplitView inherits Rectangle {
         spacing: 0;
         visible: !root.horizontal;
 
-        SplitPaneLeaf {
+        pane0_v := SplitPaneLeaf {
             vertical-stretch: root.clamped-ratio * 100;
             title-text: root.pane0-title-text;
             empty: root.pane0-empty;
             focused: root.focused-pane == 0;
             terminal-image: root.focused-pane == 0 ? root.primary-image : root.secondary-image;
+            cursor-column: root.cursor-column;
+            cursor-row: root.cursor-row;
+            scroll-offset: root.scroll-offset;
+            selection-active: root.selection-active;
+            search-query <=> root.search-query;
+            search-summary: root.search-summary;
+            search-regex <=> root.search-regex;
+            find-visible: root.find-visible;
+            connection-overlay-visible: root.connection-overlay-visible;
+            connection-overlay-target: root.connection-overlay-target;
+            connection-overlay-stage: root.connection-overlay-stage;
+            connection-overlay-error: root.connection-overlay-error;
+            connection-overlay-failed: root.connection-overlay-failed;
+            connection-overlay-pending: root.connection-overlay-pending;
+            view-visible: root.view-visible;
             focus-requested() => { root.focus-pane(0); }
             close-requested() => { root.close-pane(0); }
             key-pressed(t, c, a, s, m) => { root.terminal-key(t, c, a, s, m); }
+            scroll-lines(d) => { root.terminal-scroll(d); }
+            scroll-to-bottom() => { root.terminal-scroll-to-bottom(); }
+            selection-begin(x, y) => { root.terminal-selection-begin(x, y); }
+            selection-update(x, y) => { root.terminal-selection-update(x, y); }
+            selection-end(x, y) => { root.terminal-selection-end(x, y); }
+            select-word-at(x, y) => { root.terminal-select-word-at(x, y); }
+            copy-visible() => { root.copy-visible(); }
+            paste-clipboard() => { root.paste-clipboard(); }
+            clear-terminal() => { root.clear-terminal(); }
+            find-text(q) => { root.find-text(q); }
+            find-next() => { root.find-next(); }
+            find-prev() => { root.find-prev(); }
+            find-regex-changed(e) => { root.find-regex-changed(e); }
+            dismiss-find() => { root.dismiss-find(); }
+            context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
+            connection-retry() => { root.connection-retry(); }
+            connection-cancel() => { root.connection-cancel(); }
+            connection-copy-error() => { root.connection-copy-error(); }
         }
         Rectangle {
             height: 4px;
@@ -201,15 +441,48 @@ export component WorkspaceSplitView inherits Rectangle {
                 }
             }
         }
-        SplitPaneLeaf {
+        pane1_v := SplitPaneLeaf {
             vertical-stretch: (1.0 - root.clamped-ratio) * 100;
             title-text: root.pane1-title-text;
             empty: root.pane1-empty;
             focused: root.focused-pane == 1;
             terminal-image: root.focused-pane == 1 ? root.primary-image : root.secondary-image;
+            cursor-column: root.cursor-column;
+            cursor-row: root.cursor-row;
+            scroll-offset: root.scroll-offset;
+            selection-active: root.selection-active;
+            search-query <=> root.search-query;
+            search-summary: root.search-summary;
+            search-regex <=> root.search-regex;
+            find-visible: root.find-visible;
+            connection-overlay-visible: root.connection-overlay-visible;
+            connection-overlay-target: root.connection-overlay-target;
+            connection-overlay-stage: root.connection-overlay-stage;
+            connection-overlay-error: root.connection-overlay-error;
+            connection-overlay-failed: root.connection-overlay-failed;
+            connection-overlay-pending: root.connection-overlay-pending;
+            view-visible: root.view-visible;
             focus-requested() => { root.focus-pane(1); }
             close-requested() => { root.close-pane(1); }
             key-pressed(t, c, a, s, m) => { root.terminal-key(t, c, a, s, m); }
+            scroll-lines(d) => { root.terminal-scroll(d); }
+            scroll-to-bottom() => { root.terminal-scroll-to-bottom(); }
+            selection-begin(x, y) => { root.terminal-selection-begin(x, y); }
+            selection-update(x, y) => { root.terminal-selection-update(x, y); }
+            selection-end(x, y) => { root.terminal-selection-end(x, y); }
+            select-word-at(x, y) => { root.terminal-select-word-at(x, y); }
+            copy-visible() => { root.copy-visible(); }
+            paste-clipboard() => { root.paste-clipboard(); }
+            clear-terminal() => { root.clear-terminal(); }
+            find-text(q) => { root.find-text(q); }
+            find-next() => { root.find-next(); }
+            find-prev() => { root.find-prev(); }
+            find-regex-changed(e) => { root.find-regex-changed(e); }
+            dismiss-find() => { root.dismiss-find(); }
+            context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
+            connection-retry() => { root.connection-retry(); }
+            connection-cancel() => { root.connection-cancel(); }
+            connection-copy-error() => { root.connection-copy-error(); }
         }
     }
 }
