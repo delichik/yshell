@@ -137,14 +137,24 @@ component SplitPaneLeaf inherits Rectangle {
             }
 
             // P1：聚焦叶子 —— 完整 TerminalView（含查找 / overlay / 滚动条 / 选择）
-            // 始终实例化、用 max-height 折叠，避免条件元素无法 focus-terminal。
-            leaf_tv := TerminalView {
-                x: 0;
-                y: 0;
-                width: parent.width;
-                height: parent.height;
-                visible: !root.empty && root.focused;
-                // visible 仍占布局时用 clip + 零尺寸避让；Surface 绝对定位在父 Rectangle 上
+            // 始终实例化以便 focus-terminal；用 max-height 折叠（Slint 1.18 的 visible
+            // 仍占布局）。禁止 width/height: parent.* —— TerminalView 内含 VerticalLayout
+            // + min-height，会与父 Rectangle 的 layout_info 形成绑定环，在 Windows 默认
+            // ~1MB 主线程栈上直接 stack overflow。
+            leaf_host := VerticalLayout {
+                padding: 0;
+                spacing: 0;
+                width: 100%;
+                height: 100%;
+                min-height: 0px;
+                max-height: !root.empty && root.focused ? 100000px : 0px;
+
+                leaf_tv := TerminalView {
+                vertical-stretch: 1;
+                min-width: 0px;
+                min-height: 0px;
+                preferred-width: 0px;
+                preferred-height: 0px;
                 embedded: true;
                 interactive: true;
                 view-visible: root.view-visible && root.focused && !root.empty;
@@ -187,6 +197,7 @@ component SplitPaneLeaf inherits Rectangle {
                 find-regex-changed(enabled) => { root.find-regex-changed(enabled); }
                 dismiss-find() => { root.dismiss-find(); }
                 context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
+                }
             }
         }
     }
