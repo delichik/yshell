@@ -708,17 +708,17 @@ impl AppRuntime {
             .is_some_and(|prompt| prompt.session_key == session_key);
         let pending_password = self.pending_password_prompt.is_some();
         let pending = pending_host_key || pending_auth || pending_password;
+        // P2：host-key / auth / password 由模态对话框承载，不与终端 overlay 叠层。
+        if pending {
+            return ConnectionOverlayProjection::hidden();
+        }
         let failed = session.state == SessionState::Failed && !session.connection_error.is_empty();
         let connecting = session.state == SessionState::Connecting || session.connection_in_flight;
-        let visible = connecting || failed || pending || session.state == SessionState::Failed;
+        let visible = connecting || failed || session.state == SessionState::Failed;
         if !visible {
             return ConnectionOverlayProjection::hidden();
         }
-        let stage = if pending_host_key {
-            "host-key".to_owned()
-        } else if pending_auth || pending_password {
-            "auth".to_owned()
-        } else if !session.connection_stage.is_empty() {
+        let stage = if !session.connection_stage.is_empty() {
             session.connection_stage.clone()
         } else if connecting {
             "tcp".to_owned()
@@ -730,8 +730,8 @@ impl AppRuntime {
             target: session.connection_target_text(),
             stage,
             error: session.connection_error.clone(),
-            failed: failed || (session.state == SessionState::Failed && !pending),
-            pending,
+            failed: failed || session.state == SessionState::Failed,
+            pending: false,
         }
     }
 
@@ -766,10 +766,13 @@ impl AppRuntime {
                 SessionState::Connecting => "connecting",
             }
         };
+        // P2：连接中 / 等待确认已有呼吸圆点与状态文案，不再叠字面 "Busy"。
+        let connecting_or_pending = state == "connecting" || state == "pending";
         StatusConnectionProjection {
             state: state.to_owned(),
             target: session.connection_target_text(),
-            busy: session.connection_in_flight || session.state == SessionState::Connecting,
+            busy: !connecting_or_pending
+                && (session.connection_in_flight || session.state == SessionState::Connecting),
         }
     }
 

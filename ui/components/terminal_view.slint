@@ -219,11 +219,24 @@ export component TerminalView inherits Rectangle {
                 clicked => { root.focus-requested(); }
             }
 
-            // WP1：连接生命周期 overlay（居中卡片；不挡底层终端位图布局）。
-            if root.interactive && root.connection-overlay-visible : Rectangle {
+            // WP1/P2：连接生命周期 overlay（居中卡片）。不用 `if` 销毁节点，以便 opacity 淡入淡出；
+            // pending 确认由模态对话框承载（投影侧已隐藏 overlay）。
+            if root.interactive : Rectangle {
                 width: parent.width;
                 height: parent.height;
                 background: #00000088;
+                opacity: root.connection-overlay-visible ? 1.0 : 0.0;
+                visible: root.connection-overlay-visible || self.opacity > 0.01;
+                animate opacity {
+                    duration: Theme.duration-normal;
+                    easing: ease-out;
+                }
+
+                // 隐藏时不拦截终端指针。
+                TouchArea {
+                    enabled: root.connection-overlay-visible;
+                    mouse-cursor: MouseCursor.default;
+                }
 
                 Rectangle {
                     width: min(420px, parent.width - 2 * Theme.spacing-24);
@@ -249,11 +262,9 @@ export component TerminalView inherits Rectangle {
                         }
 
                         Text {
-                            text: root.connection-overlay-pending
-                                ? @tr("Waiting for confirmation…")
-                                : root.connection-overlay-failed
-                                    ? @tr("Connection failed")
-                                    : @tr("Connecting…");
+                            text: root.connection-overlay-failed
+                                ? @tr("Connection failed")
+                                : @tr("Connecting…");
                             color: root.connection-overlay-failed ? Theme.critical : Theme.text-secondary;
                             font-size: Theme.font-caption;
                             horizontal-alignment: center;
@@ -281,7 +292,8 @@ export component TerminalView inherits Rectangle {
                             alignment: center;
                             spacing: Theme.spacing-8;
 
-                            if root.connection-overlay-failed || root.connection-overlay-pending : WinButton {
+                            // P2：仅失败可 Retry；pending 确认走 HostKey/Auth 模态，不在此提供 Retry。
+                            if root.connection-overlay-failed : WinButton {
                                 text: @tr("Retry");
                                 accent: true;
                                 clicked => { root.connection-retry(); }

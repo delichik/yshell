@@ -78,9 +78,8 @@ export component StatusBar inherits Rectangle {
             horizontal-stretch: 0;
         }
 
-        // WP1：busy 指示（小圆点脉动，与连接中状态点区分开时仅在 busy 且非 connecting 显示亦可；
-        // 连接中已有呼吸点，这里用细文字标记）。
-        if root.busy : Text {
+        // P2：Busy 仅在非 connecting/pending 时显示（连接中已有呼吸点，避免叠字）。
+        if root.busy && root.connection-state != "connecting" && root.connection-state != "pending" : Text {
             text: @tr("StatusBar" => "Busy");
             color: Theme.caution;
             font-size: Theme.font-caption;
