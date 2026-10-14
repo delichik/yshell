@@ -15,7 +15,6 @@ path = "src/main.rs"
 
 [dependencies]
 copypasta = "0.10.2"
-slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "backend-winit-x11", "renderer-software"] }
 # N4：D0c 已入库的工作区依赖；私钥解析/公钥派生/指纹（features 依据见 D0c §4）。
 ssh-key.workspace = true
 # N4：文件选择（rfd spike 报告 §5.1）。gtk3 与 xdg-portal 在 rfd 里编译期互斥，
@@ -32,6 +31,16 @@ yshell-terminal = { path = "../yshell-terminal" }
 yshell-ui = { path = "../yshell-ui" }
 # D1：运行时内部诊断只进 tracing 日志，不再写进终端网格。
 tracing.workspace = true
+
+# Slint 窗口后端按平台拆分（不要再全局写死 backend-winit-x11）：
+# - Linux：仅 X11。主开发/e2e 在 WSLg + Xvfb；Wayland 会多一套依赖，且当前未验收。
+#   桌面 Linux 若以后要原生 Wayland，再改为 backend-winit（X11+Wayland）或加独立 feature。
+# - Windows / macOS：backend-winit（Win32 / AppKit）。x11 feature 名在这两端易误导，且不应依赖。
+[target.'cfg(target_os = "linux")'.dependencies]
+slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "backend-winit-x11", "renderer-software"] }
+
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-software"] }
 
 [build-dependencies]
 slint-build = "=1.18.1"

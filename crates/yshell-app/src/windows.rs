@@ -449,9 +449,17 @@ impl WindowManager {
         }
 
         // 每窗口视口尺寸 → 该窗口活动会话的 PTY resize。
+        // 必须先 sync_scale_factor：cell 度量按物理像素，网格用 viewport×scale/cell；
+        // 若先算后 sync，DPR 变化当帧会用旧 cell 量新视口，位图与 1phx 显示会错一拍。
         let focused = self.runtime.borrow().focused_window;
         for index in 0..self.windows.len() {
             let window_id = self.windows[index].id;
+            if self.windows[index]
+                .surface
+                .sync_scale_factor(&self.windows[index].window)
+            {
+                dirty = true;
+            }
             let (columns, rows) = {
                 let entry = &self.windows[index];
                 terminal_size_from_viewport(
@@ -484,8 +492,6 @@ impl WindowManager {
             if changed {
                 dirty = true;
             }
-            let entry = &self.windows[index];
-            entry.surface.sync_scale_factor(&entry.window);
         }
 
         if dirty {
