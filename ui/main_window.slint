@@ -193,6 +193,8 @@ export component MainWindow inherits Window {
     in-out property <string> terminal_body_text: "Runtime is ready. Open a Quick Connect target or create a draft session.";
     in-out property <[string]> terminal_visible_lines: ["Runtime is ready. Open a Quick Connect target or create a draft session."];
     in-out property <image> terminal_image;
+    /// WP4：非聚焦 pane 终端位图。
+    in-out property <image> terminal_image_secondary;
     in-out property <int> terminal_cursor_column: 0;
     in-out property <int> terminal_cursor_row: 0;
     in-out property <int> terminal_scroll_offset: 0;
@@ -281,6 +283,9 @@ export component MainWindow inherits Window {
     in-out property <[TunnelRow]> tunnel_rows;
     out property <float> terminal_viewport_width_px: terminal_workspace.terminal-viewport-width-px;
     out property <float> terminal_viewport_height_px: terminal_workspace.terminal-viewport-height-px;
+    /// WP4：次 pane 视口（PTY resize）。
+    out property <float> terminal_viewport_secondary_width_px: terminal_workspace.terminal-viewport-secondary-width-px;
+    out property <float> terminal_viewport_secondary_height_px: terminal_workspace.terminal-viewport-secondary-height-px;
     /// W5-A2：终端是否持有键盘焦点（模态弹窗关闭后的焦点恢复据此避让终端）。
     out property <bool> terminal_focused: terminal_workspace.terminal-focused;
     in-out property <bool> sftp_visible: true;
@@ -428,6 +433,8 @@ export component MainWindow inherits Window {
     in-out property <[QuickLinkRow]> quick_links_rows: [];
     // 标签右键菜单针对的标签 id（scope 编码 = 前缀 + id）。
     in-out property <string> tab_menu_id: "";
+    /// WP4：右键标签的当前显示名（Rename 弹窗预填；避免在 function 里遍历 tabs）。
+    in-out property <string> tab_menu_title_text: "";
     // §7 启用条件由 Rust 对"右键的标签"计算（disabled 时必须带 tooltip）。
     in-out property <bool> tab_menu_close_others_enabled: false;
     in-out property <bool> tab_menu_close_left_enabled: false;
@@ -440,6 +447,23 @@ export component MainWindow inherits Window {
     // N7：标签右键"移动到新窗口 / 移动到主窗口"（Rust 按标签所在窗口计算）。
     in-out property <bool> tab_menu_move_to_new_window_enabled: false;
     in-out property <bool> tab_menu_move_to_main_window_enabled: false;
+    // WP4：分屏菜单启用态 + 布局投影。
+    in-out property <bool> tab_menu_split_enabled: false;
+    in-out property <bool> tab_menu_close_pane_enabled: false;
+    in-out property <bool> workspace_split_active: false;
+    in-out property <string> workspace_split_orientation_text: "horizontal";
+    in-out property <float> workspace_split_ratio: 0.5;
+    in-out property <int> workspace_split_focused_pane: 0;
+    in-out property <string> workspace_split_pane0_tab_id: "";
+    in-out property <string> workspace_split_pane0_title_text: "";
+    in-out property <bool> workspace_split_pane0_empty: false;
+    in-out property <string> workspace_split_pane1_tab_id: "";
+    in-out property <string> workspace_split_pane1_title_text: "";
+    in-out property <bool> workspace_split_pane1_empty: false;
+    // WP4：标签重命名弹窗（显示名仅内存，会话生命周期内有效）。
+    in-out property <bool> tab_rename_dialog_visible: false;
+    in-out property <string> tab_rename_tab_id: "";
+    in-out property <string> tab_rename_name_text: "";
     // 关闭确认弹窗（单关显示会话名；批量显示数量与活动连接数）。
     in-out property <bool> close_tabs_confirm_visible: false;
     in-out property <bool> close_tabs_confirm_single: false;
@@ -672,9 +696,15 @@ export component MainWindow inherits Window {
     callback select_saved_session_for_menu(string);
     // --- N0 标签条：激活/关闭（单关 + 批量 scope）/右键菜单/关闭确认 ----------
     callback activate_tab(string);
+    callback rename_tab(string, string);
+    callback split_workspace(string);
+    callback focus_split_pane(int);
+    callback close_split_pane(int);
+    callback set_split_ratio(float);
     callback close_tab(string);
     callback close_tabs(string);
     callback tab_context_menu_requested(string, length, length);
+    // 注意：Slint→Rust 仍只传 tab id；显示名由 UI 写入 `tab_menu_title_text`。
     // A28（D18）：标签右键菜单的 Reconnect/Disconnect（bootstrap 由 WS-D Part 2 接线）。
     callback reconnect_tab(string);
     callback disconnect_tab(string);
@@ -1000,7 +1030,8 @@ export component MainWindow inherits Window {
         || root.logging_dialog_visible
         || root.terminal_appearance_dialog_visible
         || root.folder_editor_visible
-        || root.clear_scrollback_dialog_visible;
+        || root.clear_scrollback_dialog_visible
+        || root.tab_rename_dialog_visible;
 
     /// W5-A2 / N2：Ctrl+O（及非终端焦点下的 Ctrl+L）与 File > Quick Connect —— 打开/激活 QC 页并聚焦输入框。
     public function focus-quick-connect() {
@@ -1240,6 +1271,23 @@ export component MainWindow inherits Window {
         {
             label: @tr("Transfers"), shortcut: "", enabled: true, checked: root.transfers_visible, separator: false,
             tooltip: @tr("Transfer queue with pause/resume/retry; shares the SFTP drawer model.")
+        },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        // WP4：分屏（索引 6/7/8）。
+        {
+            label: @tr("Split Right"), shortcut: "",
+            enabled: root.tab_menu_split_enabled, checked: false, separator: false,
+            tooltip: root.tab_menu_split_enabled ? "" : @tr("Open a tab before splitting, or close a pane (max 4).")
+        },
+        {
+            label: @tr("Split Down"), shortcut: "",
+            enabled: root.tab_menu_split_enabled, checked: false, separator: false,
+            tooltip: root.tab_menu_split_enabled ? "" : @tr("Open a tab before splitting, or close a pane (max 4).")
+        },
+        {
+            label: @tr("Close Current Pane"), shortcut: "",
+            enabled: root.tab_menu_close_pane_enabled, checked: false, separator: false,
+            tooltip: root.tab_menu_close_pane_enabled ? "" : @tr("Split the workspace first.")
         }
     ];
     property <[MenuEntry]> help_menu_entries: [
@@ -1430,7 +1478,23 @@ export component MainWindow inherits Window {
             enabled: root.tab_menu_disconnect_enabled, checked: false, separator: false,
             tooltip: root.tab_menu_disconnect_enabled ? "" : @tr("This tab is already disconnected.")
         },
-        // N9：接收键输入勾选（索引 10；未同步/源标签/未连接时禁用并给出原因）。
+        // WP4：Rename / Split（索引 10–12）。
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        {
+            label: @tr("Rename..."), shortcut: "",
+            enabled: true, checked: false, separator: false
+        },
+        {
+            label: @tr("Split Right"), shortcut: "",
+            enabled: root.tab_menu_split_enabled, checked: false, separator: false,
+            tooltip: root.tab_menu_split_enabled ? "" : @tr("Open a tab before splitting, or close a pane (max 4).")
+        },
+        {
+            label: @tr("Split Down"), shortcut: "",
+            enabled: root.tab_menu_split_enabled, checked: false, separator: false,
+            tooltip: root.tab_menu_split_enabled ? "" : @tr("Open a tab before splitting, or close a pane (max 4).")
+        },
+        // N9：接收键输入勾选（索引 14；未同步/源标签/未连接时禁用并给出原因）。
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         {
             label: @tr("Receive Key Input"), shortcut: "",
@@ -1440,7 +1504,7 @@ export component MainWindow inherits Window {
                 ? ""
                 : TextFormats.receive-key-input-reason(root.tab_menu_receive_key_input_reason_text)
         },
-        // N7：跨窗口迁移（索引 12/13；只换 UI 所有权，会话不重建）。
+        // N7：跨窗口迁移（索引 16/17；只换 UI 所有权，会话不重建）。
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         {
             label: @tr("Move to New Window"), shortcut: "",
@@ -1626,6 +1690,13 @@ export component MainWindow inherits Window {
         root.context_menu_token = token;
     }
 
+    /// WP4：打开标签重命名弹窗（显示名仅内存，不落盘）。
+    function open_tab_rename_dialog(tab_id: string, current_title: string) {
+        root.tab_rename_tab_id = tab_id;
+        root.tab_rename_name_text = current_title;
+        root.tab_rename_dialog_visible = true;
+    }
+
     /// 一级菜单点击：已展开则收起；否则切换到本项（并关掉右键菜单/溢出菜单）。
     /// A34：若当前弹层是"悬停切换"打开的，第一次 click 只确认（保持展开、清标志），
     /// 第二次 click 才收起 —— 修复"hover 切过去后紧接着的 click 把弹层立刻关掉"。
@@ -1745,6 +1816,10 @@ export component MainWindow inherits Window {
                 }
                 root.toggle_panel("transfers");
             }
+            // WP4：Split Right / Split Down / Close Current Pane。
+            else if (index == 6) { root.split_workspace("right"); }
+            else if (index == 7) { root.split_workspace("down"); }
+            else if (index == 8) { root.close_split_pane(-1); }
         } else if (menu == 4) {
             // Help
             if (index == 0) { root.about_dialog_visible = true; }
@@ -1869,11 +1944,15 @@ export component MainWindow inherits Window {
             // A28（D18）：Reconnect/Disconnect（索引见 `tab_context_menu_entries`）。
             else if (index == 7) { root.reconnect_tab(root.tab_menu_id); }
             else if (index == 8) { root.disconnect_tab(root.tab_menu_id); }
-            // N9：接收键输入勾选（索引 10；see `tab_context_menu_entries`）。
-            else if (index == 10) { root.toggle_tab_receive_key_input(root.tab_menu_id); }
-            // N7：跨窗口迁移（索引 12/13；只换 UI 所有权）。
-            else if (index == 12) { root.move_tab_to_new_window(root.tab_menu_id); }
-            else if (index == 13) { root.move_tab_to_main_window(root.tab_menu_id); }
+            // WP4：Rename / Split Right / Split Down（索引 10–12）。
+            else if (index == 10) { root.open_tab_rename_dialog(root.tab_menu_id, root.tab_menu_title_text); }
+            else if (index == 11) { root.split_workspace("right"); }
+            else if (index == 12) { root.split_workspace("down"); }
+            // N9：接收键输入勾选（索引 14；see `tab_context_menu_entries`）。
+            else if (index == 14) { root.toggle_tab_receive_key_input(root.tab_menu_id); }
+            // N7：跨窗口迁移（索引 16/17；只换 UI 所有权）。
+            else if (index == 16) { root.move_tab_to_new_window(root.tab_menu_id); }
+            else if (index == 17) { root.move_tab_to_main_window(root.tab_menu_id); }
         }
         root.close_context_menus();
         root.restore-focus-after-menu();
@@ -1986,6 +2065,8 @@ export component MainWindow inherits Window {
             password_dialog.focus-dialog();
         } else if (root.new_folder_dialog_visible) {
             new_folder_dialog.focus-dialog();
+        } else if (root.tab_rename_dialog_visible) {
+            tab_rename_dialog.focus-dialog();
         } else if (root.close_tabs_confirm_visible) {
             close_tabs_dialog.focus-dialog();
         } else if (root.close_window_confirm_visible) {
@@ -2196,12 +2277,27 @@ export component MainWindow inherits Window {
                     }
                     activate-tab(id) => { root.activate_tab(id); }
                     close-tab(id) => { root.close_tab(id); }
-                    tab-context-menu-requested(id, x, y) => {
+                    rename-tab-requested(id, title) => { root.open_tab_rename_dialog(id, title); }
+                    tab-context-menu-requested(id, title, x, y) => {
                         root.tab_menu_id = id;
+                        root.tab_menu_title_text = title;
                         root.tab_context_menu_requested(id, x, y);
                         root.open_context_menu("tab", x, y);
                     }
                     context-menu-requested(x, y) => { root.open_context_menu("terminal", x, y); }
+                    // WP4：分屏
+                    split-active: root.workspace_split_active;
+                    split-orientation-text: root.workspace_split_orientation_text;
+                    split-ratio: root.workspace_split_ratio;
+                    split-focused-pane: root.workspace_split_focused_pane;
+                    split-pane0-title-text: root.workspace_split_pane0_title_text;
+                    split-pane0-empty: root.workspace_split_pane0_empty;
+                    split-pane1-title-text: root.workspace_split_pane1_title_text;
+                    split-pane1-empty: root.workspace_split_pane1_empty;
+                    terminal-image-secondary: root.terminal_image_secondary;
+                    focus-split-pane(index) => { root.focus_split_pane(index); }
+                    close-split-pane(index) => { root.close_split_pane(index); }
+                    set-split-ratio(value) => { root.set_split_ratio(value); }
                     // N7：终端 FocusScope 拿到焦点（窗口激活 / 点击终端）→ 标记交互窗口。
                     window-activated() => { root.window_activated(); }
                     terminal-key(text, ctrl, alt, shift, meta) => { root.terminal_key(text, ctrl, alt, shift, meta); }
@@ -2700,6 +2796,24 @@ export component MainWindow inherits Window {
     }
 
     // S1：会话树空白区菜单的 `New Folder…`（在根目录创建，名称一次性传给运行时）。
+    // WP4：标签重命名（复用 NewFolderDialog 形态；确认后写内存显示名）。
+    tab_rename_dialog := NewFolderDialog {
+        open: root.tab_rename_dialog_visible;
+        title-text: @tr("Rename Tab");
+        message-text: @tr("Display name for this tab only (not saved to disk). Applies for this session.");
+        name-text <=> root.tab_rename_name_text;
+        confirm-label: @tr("Rename");
+        confirmed(name) => {
+            root.rename_tab(root.tab_rename_tab_id, name);
+            root.tab_rename_dialog_visible = false;
+            root.focus-top-dialog();
+        }
+        canceled() => {
+            root.tab_rename_dialog_visible = false;
+            root.focus-top-dialog();
+        }
+    }
+
     new_folder_dialog := NewFolderDialog {
         open: root.new_folder_dialog_visible;
         name-text <=> root.new_root_folder_name_text;

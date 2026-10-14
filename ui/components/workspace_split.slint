@@ -1,0 +1,215 @@
+// WP4：终端工作区 2-pane 分屏（扩展点：叶子可增至 4）。
+// 聚焦 pane 显示主终端位图 + 键盘焦点；另一片显示次位图，点击切换焦点。
+// 次 pane PTY 尺寸由宿主按主视口 × (1-ratio) 估算（避免双条件布局出参）。
+import { Theme } from "../theme.slint";
+import { WinIconButton } from "basic/controls.slint";
+
+component SplitPaneLeaf inherits Rectangle {
+    in property <string> title-text: "";
+    in property <bool> empty: false;
+    in property <bool> focused: false;
+    in property <image> terminal-image;
+    in property <bool> show-close: true;
+
+    callback focus-requested();
+    callback close-requested();
+    callback key-pressed(string, bool, bool, bool, bool);
+
+    border-width: root.focused ? 2px : 1px;
+    border-color: root.focused ? Theme.accent : Theme.control-stroke;
+    border-radius: Theme.radius-control;
+    background: Theme.window-background;
+    clip: true;
+
+    VerticalLayout {
+        spacing: 0;
+
+        Rectangle {
+            height: 28px;
+            background: root.focused ? Theme.layer-fill : Theme.window-background;
+
+            HorizontalLayout {
+                padding-left: Theme.spacing-8;
+                padding-right: Theme.spacing-4;
+                spacing: Theme.spacing-8;
+                alignment: center;
+
+                Text {
+                    text: root.empty
+                        ? @tr("Empty pane")
+                        : (root.title-text == "" ? @tr("Terminal") : root.title-text);
+                    color: root.focused ? Theme.text-primary : Theme.text-secondary;
+                    font-size: Theme.font-caption;
+                    font-weight: root.focused ? Theme.weight-semibold : 400;
+                    horizontal-stretch: 1;
+                    overflow: elide;
+                    wrap: no-wrap;
+                    vertical-alignment: center;
+                }
+
+                if root.show-close : WinIconButton {
+                    icon: "close";
+                    accessible-name: @tr("Close pane");
+                    clicked => { root.close-requested(); }
+                }
+            }
+
+            TouchArea {
+                clicked => { root.focus-requested(); }
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+            background: Theme.terminal-background;
+            min-height: 40px;
+
+            if root.empty : Text {
+                text: @tr("Activate a tab for this pane");
+                color: Theme.text-tertiary;
+                font-size: Theme.font-body;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                width: parent.width;
+                height: parent.height;
+            }
+
+            if !root.empty : Image {
+                source: root.terminal-image;
+                width: parent.width;
+                height: parent.height;
+                image-fit: contain;
+            }
+
+            TouchArea {
+                clicked => { root.focus-requested(); }
+            }
+
+            if root.focused : FocusScope {
+                width: parent.width;
+                height: parent.height;
+                key-pressed(event) => {
+                    root.key-pressed(
+                        event.text,
+                        event.modifiers.control,
+                        event.modifiers.alt,
+                        event.modifiers.shift,
+                        event.modifiers.meta
+                    );
+                    return accept;
+                }
+            }
+        }
+    }
+}
+
+/// 两片分屏布局（horizontal = 左右；vertical = 上下）。
+export component WorkspaceSplitView inherits Rectangle {
+    in property <string> orientation-text: "horizontal";
+    in property <float> ratio: 0.5;
+    in property <int> focused-pane: 0;
+    in property <string> pane0-title-text: "";
+    in property <bool> pane0-empty: false;
+    in property <string> pane1-title-text: "";
+    in property <bool> pane1-empty: false;
+    in property <image> primary-image;
+    in property <image> secondary-image;
+
+    callback focus-pane(int);
+    callback close-pane(int);
+    callback terminal-key(string, bool, bool, bool, bool);
+    callback ratio-changed(float);
+
+    property <bool> horizontal: root.orientation-text != "vertical";
+    property <float> clamped-ratio: Math.max(0.2, Math.min(0.8, root.ratio));
+
+    HorizontalLayout {
+        width: 100%;
+        height: 100%;
+        spacing: 0;
+        visible: root.horizontal;
+
+        SplitPaneLeaf {
+            horizontal-stretch: root.clamped-ratio * 100;
+            title-text: root.pane0-title-text;
+            empty: root.pane0-empty;
+            focused: root.focused-pane == 0;
+            terminal-image: root.focused-pane == 0 ? root.primary-image : root.secondary-image;
+            focus-requested() => { root.focus-pane(0); }
+            close-requested() => { root.close-pane(0); }
+            key-pressed(t, c, a, s, m) => { root.terminal-key(t, c, a, s, m); }
+        }
+        Rectangle {
+            width: 4px;
+            background: Theme.divider;
+            TouchArea {
+                width: 8px;
+                x: -2px;
+                mouse-cursor: MouseCursor.col-resize;
+                moved => {
+                    if (self.pressed) {
+                        root.ratio-changed(
+                            ((self.absolute-position.x + self.mouse-x) - root.absolute-position.x) / 1px
+                                / Math.max(root.width / 1px, 1.0)
+                        );
+                    }
+                }
+            }
+        }
+        SplitPaneLeaf {
+            horizontal-stretch: (1.0 - root.clamped-ratio) * 100;
+            title-text: root.pane1-title-text;
+            empty: root.pane1-empty;
+            focused: root.focused-pane == 1;
+            terminal-image: root.focused-pane == 1 ? root.primary-image : root.secondary-image;
+            focus-requested() => { root.focus-pane(1); }
+            close-requested() => { root.close-pane(1); }
+            key-pressed(t, c, a, s, m) => { root.terminal-key(t, c, a, s, m); }
+        }
+    }
+
+    VerticalLayout {
+        width: 100%;
+        height: 100%;
+        spacing: 0;
+        visible: !root.horizontal;
+
+        SplitPaneLeaf {
+            vertical-stretch: root.clamped-ratio * 100;
+            title-text: root.pane0-title-text;
+            empty: root.pane0-empty;
+            focused: root.focused-pane == 0;
+            terminal-image: root.focused-pane == 0 ? root.primary-image : root.secondary-image;
+            focus-requested() => { root.focus-pane(0); }
+            close-requested() => { root.close-pane(0); }
+            key-pressed(t, c, a, s, m) => { root.terminal-key(t, c, a, s, m); }
+        }
+        Rectangle {
+            height: 4px;
+            background: Theme.divider;
+            TouchArea {
+                height: 8px;
+                y: -2px;
+                mouse-cursor: MouseCursor.row-resize;
+                moved => {
+                    if (self.pressed) {
+                        root.ratio-changed(
+                            ((self.absolute-position.y + self.mouse-y) - root.absolute-position.y) / 1px
+                                / Math.max(root.height / 1px, 1.0)
+                        );
+                    }
+                }
+            }
+        }
+        SplitPaneLeaf {
+            vertical-stretch: (1.0 - root.clamped-ratio) * 100;
+            title-text: root.pane1-title-text;
+            empty: root.pane1-empty;
+            focused: root.focused-pane == 1;
+            terminal-image: root.focused-pane == 1 ? root.primary-image : root.secondary-image;
+            focus-requested() => { root.focus-pane(1); }
+            close-requested() => { root.close-pane(1); }
+            key-pressed(t, c, a, s, m) => { root.terminal-key(t, c, a, s, m); }
+        }
+    }
+}

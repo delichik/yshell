@@ -64,6 +64,10 @@ impl AppRuntime {
         let tab_has_disconnected = self.has_disconnected_tabs();
         let projection_window_active_tab = self.projection_active_tab_id();
         let projection_window = self.projection_window_id();
+        let workspace_split = self.workspace_split_projection();
+        let tab_menu_split_enabled =
+            !projection_window_active_tab.is_empty() && (!workspace_split.active || workspace_split.can_split);
+        let tab_menu_close_pane_enabled = workspace_split.can_close_pane;
         let (
             tab_menu_close_others_enabled,
             tab_menu_close_left_enabled,
@@ -377,6 +381,10 @@ impl AppRuntime {
                     i32::try_from(self.active_connections_in_window(window_id)).unwrap_or(i32::MAX)
                 })
                 .unwrap_or(0),
+            // WP4：分屏投影 + 菜单启用态。
+            workspace_split,
+            tab_menu_split_enabled,
+            tab_menu_close_pane_enabled,
             // N9：同步发送按键。
             terminal_sync_all_enabled,
             terminal_sync_visible_enabled,
@@ -1325,7 +1333,8 @@ impl AppRuntime {
 /// Value-only projection for the window. Natural-language templates live in
 /// `ui/main_window.slint` (`@tr`), so every field here is either a raw value
 /// (host/path/count/enum id) or machine data assembled from values.
-#[derive(Debug, Clone, PartialEq, Eq)]
+// WP4：含 `workspace_split.ratio: f32`，故去掉 `Eq`（仍保留 `PartialEq`）。
+#[derive(Debug, Clone, PartialEq)]
 pub struct AppProjection {
     pub config_dir_text: String,
     pub secret_store_kind_text: String,
@@ -1511,6 +1520,12 @@ pub struct AppProjection {
     pub close_window_confirm_visible: bool,
     /// 窗口内处于 connected/connecting 的标签数。
     pub close_window_confirm_active_count: i32,
+    // --- WP4：窗口内分屏 --------------------------------------------------------
+    pub workspace_split: WorkspaceSplitProjection,
+    /// 标签/View 菜单 Split Right/Down 是否可用。
+    pub tab_menu_split_enabled: bool,
+    /// Close Current Pane 是否可用。
+    pub tab_menu_close_pane_enabled: bool,
 
     // --- N9：同步发送按键（终端/标签菜单 + 状态栏 chip + 标签角标）-------------
     /// 终端右键菜单：`Send Key Input to All Tabs` / `… to Visible Tabs` 可用性。

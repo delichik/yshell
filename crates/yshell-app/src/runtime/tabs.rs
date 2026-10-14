@@ -36,10 +36,15 @@ impl AppRuntime {
                     if active_session.as_deref() == Some(session_key.as_str()) {
                         continue;
                     }
-                    // 后台标签只更新 grid/parser；状态变化才需要刷新标签条投影。
+                    // 后台标签只更新 grid/parser；状态/未读变化才需要刷新标签条投影。
                     // 后台会话的瞬时错误不打断整个 tick（活动会话的错误照旧上报）。
                     if let Ok(outcome) = self.poll_session_output(&session_key) {
                         background_state_changed |= outcome.state_changed;
+                        if outcome.output_changed
+                            && self.mark_tab_unread_for_session(&session_key)
+                        {
+                            background_state_changed = true;
+                        }
                     }
                     polled += 1;
                 }
@@ -131,6 +136,7 @@ impl AppRuntime {
                 self.active_session_id = None;
             }
             self.tabs[index].unread = 0;
+            self.assign_tab_to_focused_pane(tab_id);
             self.refresh_terminal_search_for_active_session();
             // D16：无会话标签不得残留上一个会话的 SFTP 目录（B 轮3 #19）。
             self.reset_sftp_view_state();
@@ -155,6 +161,7 @@ impl AppRuntime {
             self.active_session_id = Some(session_id.clone());
         }
         self.tabs[index].unread = 0;
+        self.assign_tab_to_focused_pane(tab_id);
         self.refresh_terminal_search_for_active_session();
         let title = self.tab_display_title(tab_id);
         // D16：切换会话时清掉上一个会话的目录并重新加载当前会话的 SFTP 视图。
@@ -351,6 +358,9 @@ impl AppRuntime {
         let Some(index) = self.tab_index(tab_id) else {
             return String::new();
         };
+        if let Some(custom) = self.tabs[index].custom_title.as_ref() {
+            return custom.clone();
+        }
         if self.tabs[index].kind.is_quick_connect() {
             // 标签条上的 @tr 由 Slint 侧渲染（`kind_text`），这里只给状态栏文案。
             return "Quick Connect".to_owned();
@@ -360,6 +370,363 @@ impl AppRuntime {
             .and_then(|session_id| self.sessions.get(session_id))
             .map(|runtime| runtime.display_name.clone())
             .unwrap_or_default()
+    }
+
+    /// WP4：重命名标签显示名（仅内存；空串清除覆盖、回到会话名）。
+    pub fn rename_tab(&mut self, tab_id: &str, title: &str) -> AppResult<AppProjection> {
+        let Some(index) = self.tab_index(tab_id) else {
+            return Err(AppError::new(format!("tab `{tab_id}` was not found")));
+        };
+        let trimmed = title.trim();
+        self.tabs[index].custom_title = if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_owned())
+        };
+        self.status_text = format!(
+            "Renamed tab to `{}`.",
+            self.tab_display_title(tab_id)
+        );
+        Ok(self.projection())
+    }
+
+    /// WP4：后台会话有输出时给对应标签加未读（已在任一 pane 可见则跳过）。
+    ///
+    /// 返回是否实际递增了未读（调用方据此触发投影）。
+    pub(crate) fn mark_tab_unread_for_session(&mut self, session_key: &str) -> bool {
+        let Some(index) = self
+            .tabs
+            .iter()
+            .position(|tab| tab.session_id() == Some(session_key))
+        else {
+            return false;
+        };
+        let tab_id = self.tabs[index].tab_id.clone();
+        if self.tab_is_visible(&tab_id) {
+            return false;
+        }
+        self.tabs[index].unread = self.tabs[index].unread.saturating_add(1);
+        true
+    }
+
+    /// 标签是否正在窗口的活动位或分屏任一 pane 中显示。
+    pub(crate) fn tab_is_visible(&self, tab_id: &str) -> bool {
+        let Some(window_id) = self.window_of_tab(tab_id) else {
+            return self.active_tab_id.as_deref() == Some(tab_id);
+        };
+        let Some(window) = self.windows.get(&window_id) else {
+            return false;
+        };
+        if let Some(split) = &window.split {
+            return split.shows_tab(tab_id);
+        }
+        window.active_tab.as_deref() == Some(tab_id)
+    }
+
+    /// WP4：把标签绑到聚焦 pane（无分屏时 no-op，活动位已由 `activate_tab_in_window` 处理）。
+    pub(crate) fn assign_tab_to_focused_pane(&mut self, tab_id: &str) {
+        let Some(window_id) = self.window_of_tab(tab_id) else {
+            return;
+        };
+        let Some(window) = self.windows.get_mut(&window_id) else {
+            return;
+        };
+        if window.split.is_none() {
+            return;
+        }
+        let other_tabs: Vec<String> = window
+            .tabs
+            .iter()
+            .filter(|id| id.as_str() != tab_id)
+            .cloned()
+            .collect();
+        let Some(split) = window.split.as_mut() else {
+            return;
+        };
+        let focused = split.focused_pane.min(split.panes.len().saturating_sub(1));
+        // 若另一 pane 正显示同一标签，先把它换到其它标签，避免同一会话双尺寸冲突。
+        let conflict_indices: Vec<usize> = split
+            .panes
+            .iter()
+            .enumerate()
+            .filter(|(index, pane)| {
+                *index != focused && pane.active_tab.as_deref() == Some(tab_id)
+            })
+            .map(|(index, _)| index)
+            .collect();
+        for index in conflict_indices {
+            let taken: Vec<String> = split
+                .panes
+                .iter()
+                .enumerate()
+                .filter_map(|(i, pane)| {
+                    if i == index {
+                        None
+                    } else {
+                        pane.active_tab.clone()
+                    }
+                })
+                .collect();
+            split.panes[index].active_tab = other_tabs
+                .iter()
+                .find(|candidate| !taken.iter().any(|id| id == *candidate))
+                .cloned()
+                .or_else(|| other_tabs.first().cloned());
+        }
+        if let Some(pane) = split.panes.get_mut(focused) {
+            pane.active_tab = Some(tab_id.to_owned());
+        }
+        window.active_tab = Some(tab_id.to_owned());
+    }
+
+    /// WP4：Split Right / Split Down（契约 §6.3；叶子上限 4，v1 先做 2）。
+    pub fn split_workspace(&mut self, direction: &str) -> AppResult<AppProjection> {
+        let orientation = match direction {
+            "right" | "horizontal" => SplitOrientation::Horizontal,
+            "down" | "vertical" => SplitOrientation::Vertical,
+            other => {
+                return Err(AppError::new(format!(
+                    "unknown split direction `{other}` (expected right/down)"
+                )));
+            }
+        };
+        let window_id = self
+            .focused_window
+            .or_else(|| self.main_window_id())
+            .ok_or_else(|| AppError::new("no window is available for split"))?;
+        let active_tab = self
+            .windows
+            .get(&window_id)
+            .and_then(|window| window.active_tab.clone())
+            .or_else(|| self.active_tab_id.clone())
+            .ok_or_else(|| AppError::new("open a tab before splitting the workspace"))?;
+
+        let neighbor = {
+            let window = self
+                .windows
+                .get_mut(&window_id)
+                .ok_or_else(|| AppError::new("window registration is missing"))?;
+
+            if let Some(split) = &window.split {
+                if split.pane_count() >= WorkspaceSplit::MAX_PANES {
+                    return Err(AppError::new("workspace already has the maximum of 4 panes"));
+                }
+                // v1：已有分屏时只支持把聚焦 pane 再拆成 2（总叶子到 4 的扩展点），
+                // 本拍先拒绝 >2，避免无 UI 的递归树。
+                if split.pane_count() >= 2 {
+                    return Err(AppError::new(
+                        "3–4 pane layouts are deferred; close a pane first or use a single 2-pane split",
+                    ));
+                }
+            }
+
+            let neighbor = window
+                .tabs
+                .iter()
+                .rev()
+                .find(|id| id.as_str() != active_tab.as_str())
+                .cloned();
+
+            // 契约：当前 active tab 移入新 pane；原 pane 留下邻接标签（若无则空）。
+            window.split = Some(WorkspaceSplit::two_pane(
+                orientation,
+                neighbor.clone(),
+                Some(active_tab.clone()),
+            ));
+            window.active_tab = Some(active_tab.clone());
+            neighbor
+        };
+        if self.focused_window == Some(window_id) {
+            self.active_tab_id = Some(active_tab.clone());
+            self.active_session_id = self
+                .tab_index(&active_tab)
+                .and_then(|index| self.tabs[index].session_id().map(str::to_owned));
+        }
+        for tab_id in [Some(active_tab.as_str()), neighbor.as_deref()]
+            .into_iter()
+            .flatten()
+        {
+            if let Some(index) = self.tab_index(tab_id) {
+                self.tabs[index].unread = 0;
+            }
+        }
+        self.status_text = format!("Split workspace {}.", orientation.as_str());
+        Ok(self.projection())
+    }
+
+    /// WP4：聚焦指定 pane（0-based）；同步窗口活动标签与未读清除。
+    pub fn focus_split_pane(&mut self, pane_index: i32) -> AppResult<AppProjection> {
+        let window_id = self
+            .focused_window
+            .or_else(|| self.main_window_id())
+            .ok_or_else(|| AppError::new("no window is available"))?;
+        let pane_index = usize::try_from(pane_index).unwrap_or(0);
+        let tab_id = {
+            let window = self
+                .windows
+                .get_mut(&window_id)
+                .ok_or_else(|| AppError::new("window registration is missing"))?;
+            let split = window
+                .split
+                .as_mut()
+                .ok_or_else(|| AppError::new("workspace is not split"))?;
+            if pane_index >= split.panes.len() {
+                return Err(AppError::new(format!(
+                    "pane index {pane_index} is out of range"
+                )));
+            }
+            split.focused_pane = pane_index;
+            let tab_id = split.panes[pane_index].active_tab.clone();
+            if let Some(tab_id) = tab_id.as_ref() {
+                window.active_tab = Some(tab_id.clone());
+            }
+            tab_id
+        };
+        if let Some(tab_id) = tab_id.as_deref() {
+            if let Some(index) = self.tab_index(tab_id) {
+                self.tabs[index].unread = 0;
+            }
+            if self.focused_window == Some(window_id) {
+                self.active_tab_id = Some(tab_id.to_owned());
+                self.active_session_id = self
+                    .tab_index(tab_id)
+                    .and_then(|index| self.tabs[index].session_id().map(str::to_owned));
+            }
+            self.refresh_terminal_search_for_active_session();
+        }
+        self.status_text = format!("Focused pane {}.", pane_index + 1);
+        Ok(self.projection())
+    }
+
+    /// WP4：关闭当前（或指定）pane；剩 1 片时拆掉分屏。
+    pub fn close_split_pane(&mut self, pane_index: Option<i32>) -> AppResult<AppProjection> {
+        let window_id = self
+            .focused_window
+            .or_else(|| self.main_window_id())
+            .ok_or_else(|| AppError::new("no window is available"))?;
+        let (remaining_tab, closed_index) = {
+            let window = self
+                .windows
+                .get_mut(&window_id)
+                .ok_or_else(|| AppError::new("window registration is missing"))?;
+            let Some(mut split) = window.split.take() else {
+                return Err(AppError::new("workspace is not split"));
+            };
+            let index = pane_index
+                .and_then(|value| usize::try_from(value).ok())
+                .unwrap_or(split.focused_pane);
+            if index >= split.panes.len() {
+                window.split = Some(split);
+                return Err(AppError::new(format!(
+                    "pane index {index} is out of range"
+                )));
+            }
+            split.panes.remove(index);
+            if split.panes.is_empty() {
+                let tab = window.active_tab.clone();
+                (tab, index)
+            } else if split.panes.len() == 1 {
+                let tab = split.panes[0].active_tab.clone();
+                window.active_tab = tab.clone();
+                (tab, index)
+            } else {
+                if split.focused_pane >= split.panes.len() {
+                    split.focused_pane = split.panes.len() - 1;
+                } else if index < split.focused_pane {
+                    split.focused_pane -= 1;
+                }
+                let tab = split.focused_tab().map(str::to_owned);
+                window.active_tab = tab.clone();
+                window.split = Some(split);
+                (tab, index)
+            }
+        };
+        if let Some(tab_id) = remaining_tab.as_deref() {
+            if self.focused_window == Some(window_id) {
+                self.active_tab_id = Some(tab_id.to_owned());
+                self.active_session_id = self
+                    .tab_index(tab_id)
+                    .and_then(|index| self.tabs[index].session_id().map(str::to_owned));
+            }
+            if let Some(index) = self.tab_index(tab_id) {
+                self.tabs[index].unread = 0;
+            }
+            self.refresh_terminal_search_for_active_session();
+        }
+        self.status_text = format!("Closed pane {}.", closed_index + 1);
+        Ok(self.projection())
+    }
+
+    /// WP4：调整分屏比例（立即写内存；不落盘）。
+    pub fn set_split_ratio(&mut self, ratio: f32) -> AppResult<AppProjection> {
+        let window_id = self
+            .focused_window
+            .or_else(|| self.main_window_id())
+            .ok_or_else(|| AppError::new("no window is available"))?;
+        let window = self
+            .windows
+            .get_mut(&window_id)
+            .ok_or_else(|| AppError::new("window registration is missing"))?;
+        let split = window
+            .split
+            .as_mut()
+            .ok_or_else(|| AppError::new("workspace is not split"))?;
+        split.ratio = ratio.clamp(0.2, 0.8);
+        Ok(self.projection())
+    }
+
+    /// WP4：投影用分屏快照（无分屏时 active=false）。
+    pub(crate) fn workspace_split_projection(&self) -> WorkspaceSplitProjection {
+        let window_id = self.projection_window_id().or(self.focused_window);
+        let Some(window_id) = window_id else {
+            return WorkspaceSplitProjection::default();
+        };
+        let Some(window) = self.windows.get(&window_id) else {
+            return WorkspaceSplitProjection::default();
+        };
+        let Some(split) = &window.split else {
+            return WorkspaceSplitProjection::default();
+        };
+        let pane0 = split.panes.first();
+        let pane1 = split.panes.get(1);
+        let title0 = pane0
+            .and_then(|pane| pane.active_tab.as_deref())
+            .map(|tab_id| self.tab_display_title(tab_id))
+            .unwrap_or_default();
+        let title1 = pane1
+            .and_then(|pane| pane.active_tab.as_deref())
+            .map(|tab_id| self.tab_display_title(tab_id))
+            .unwrap_or_default();
+        WorkspaceSplitProjection {
+            active: true,
+            orientation_text: split.orientation.as_str().to_owned(),
+            ratio: split.ratio,
+            focused_pane: i32::try_from(split.focused_pane).unwrap_or(0),
+            pane_count: i32::try_from(split.pane_count()).unwrap_or(0),
+            pane0_tab_id: pane0
+                .and_then(|pane| pane.active_tab.clone())
+                .unwrap_or_default(),
+            pane0_title_text: title0,
+            pane0_empty: pane0.is_none_or(|pane| pane.active_tab.is_none()),
+            pane1_tab_id: pane1
+                .and_then(|pane| pane.active_tab.clone())
+                .unwrap_or_default(),
+            pane1_title_text: title1,
+            pane1_empty: pane1.is_none_or(|pane| pane.active_tab.is_none()),
+            // v1：UI 只渲染 2 叶子；`MAX_PANES=4` 留给后续递归树扩展。
+            can_split: split.pane_count() < 2,
+            can_close_pane: split.pane_count() > 1,
+        }
+    }
+
+    /// WP4：非聚焦 pane 的会话 key（双图渲染 / 次视口 resize）。
+    pub(crate) fn window_secondary_session(&self, window_id: u64) -> Option<&str> {
+        let window = self.windows.get(&window_id)?;
+        let split = window.split.as_ref()?;
+        let secondary = split.secondary_pane_index()?;
+        let tab_id = split.panes.get(secondary)?.active_tab.as_deref()?;
+        let index = self.tab_index(tab_id)?;
+        self.tabs[index].session_id()
     }
 
     pub(crate) fn tab_data(&self) -> Vec<TabData> {
@@ -379,16 +746,17 @@ impl AppRuntime {
                 if tab.kind.is_quick_connect() {
                     return TabData {
                         id: tab.tab_id.clone(),
-                        title: String::new(),
+                        title: tab.custom_title.clone().unwrap_or_default(),
                         state_text: String::new(),
                         connected: false,
                         active,
                         kind_text: "quick-connect".to_owned(),
                         logging: false,
                         sync_role_text,
+                        unread: tab.unread,
                     };
                 }
-                let (title, state_text, connected) = match tab
+                let (default_title, state_text, connected) = match tab
                     .session_id()
                     .and_then(|session_id| self.sessions.get(session_id))
                 {
@@ -399,6 +767,10 @@ impl AppRuntime {
                     ),
                     None => (tab.tab_id.clone(), "failed".to_owned(), false),
                 };
+                let title = tab
+                    .custom_title
+                    .clone()
+                    .unwrap_or(default_title);
                 TabData {
                     id: tab.tab_id.clone(),
                     title,
@@ -411,6 +783,7 @@ impl AppRuntime {
                         .session_id()
                         .is_some_and(|session_id| self.session_logging_active(session_id)),
                     sync_role_text,
+                    unread: tab.unread,
                 }
             })
             .collect()
@@ -446,6 +819,7 @@ impl AppRuntime {
                 kind_text: String::new(),
                 logging: false,
                 sync_role_text: String::new(),
+                unread: 0,
             };
         };
         let tab = &self.tabs[index];
@@ -453,16 +827,17 @@ impl AppRuntime {
         if tab.kind.is_quick_connect() {
             return TabData {
                 id: tab.tab_id.clone(),
-                title: String::new(),
+                title: tab.custom_title.clone().unwrap_or_default(),
                 state_text: String::new(),
                 connected: false,
                 active,
                 kind_text: "quick-connect".to_owned(),
                 logging: false,
                 sync_role_text,
+                unread: tab.unread,
             };
         }
-        let (title, state_text, connected) = match tab
+        let (default_title, state_text, connected) = match tab
             .session_id()
             .and_then(|session_id| self.sessions.get(session_id))
         {
@@ -473,6 +848,7 @@ impl AppRuntime {
             ),
             None => (tab.tab_id.clone(), "failed".to_owned(), false),
         };
+        let title = tab.custom_title.clone().unwrap_or(default_title);
         TabData {
             id: tab.tab_id.clone(),
             title,
@@ -484,6 +860,7 @@ impl AppRuntime {
                 .session_id()
                 .is_some_and(|session_id| self.session_logging_active(session_id)),
             sync_role_text,
+            unread: tab.unread,
         }
     }
 
@@ -605,6 +982,43 @@ impl AppRuntime {
                                     .and_then(|previous| window.tabs.get(previous))
                             })
                             .cloned();
+                    }
+                }
+                // WP4：关闭标签后清理分屏引用；只剩 1 片时合并回单 pane。
+                if let Some(mut split) = window.split.take() {
+                    let available = window.tabs.clone();
+                    let conflicted: Vec<usize> = split
+                        .panes
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, pane)| pane.active_tab.as_deref() == Some(tab_id))
+                        .map(|(index, _)| index)
+                        .collect();
+                    for index in conflicted {
+                        let taken: Vec<String> = split
+                            .panes
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(i, pane)| {
+                                if i == index {
+                                    None
+                                } else {
+                                    pane.active_tab.clone()
+                                }
+                            })
+                            .collect();
+                        split.panes[index].active_tab = available
+                            .iter()
+                            .find(|id| !taken.iter().any(|taken_id| taken_id == *id))
+                            .cloned()
+                            .or_else(|| available.first().cloned());
+                    }
+                    if split.panes.len() <= 1 {
+                        if let Some(pane) = split.panes.first() {
+                            window.active_tab = pane.active_tab.clone();
+                        }
+                    } else {
+                        window.split = Some(split);
                     }
                 }
             }
@@ -1002,9 +1416,10 @@ pub(crate) enum TabKind {
 pub(crate) struct TabEntry {
     pub(crate) tab_id: String,
     pub(crate) kind: TabKind,
-    /// V1 恒 0：未读角标延后（N0 设计 §3/§6）。
-    #[allow(dead_code)]
+    /// WP4：后台标签有新输出时递增；激活（或分屏可见）时清零。
     pub(crate) unread: u32,
+    /// WP4：标签显示名覆盖（仅内存，会话生命周期内有效；不落盘）。
+    pub(crate) custom_title: Option<String>,
 }
 
 impl TabEntry {
@@ -1013,6 +1428,7 @@ impl TabEntry {
             tab_id,
             kind: TabKind::Terminal { session_id },
             unread: 0,
+            custom_title: None,
         }
     }
 
@@ -1021,6 +1437,7 @@ impl TabEntry {
             tab_id,
             kind: TabKind::QuickConnect,
             unread: 0,
+            custom_title: None,
         }
     }
 
@@ -1051,11 +1468,14 @@ pub struct TabData {
     pub connected: bool,
     pub active: bool,
     /// N2：标签种类 id（空 = 终端；`quick-connect` = 快速连接页，标题由 Slint 侧 @tr）。
+    /// WP4：若 `title` 非空则优先显示自定义名（含 QC 重命名）。
     pub kind_text: String,
     /// N6：该标签的会话是否正在写日志（标签角标 REC）。
     pub logging: bool,
     /// N9：同步发送按键的角色（空 = 无；`source` = 源；`target` = 接收目标）。
     pub sync_role_text: String,
+    /// WP4：未读输出计数（角标；0 = 不显示）。
+    pub unread: u32,
 }
 
 /// N0：等待用户确认的关闭请求（单个或批量），确认后按 `tab_ids` 顺序逐个关闭。
@@ -1076,6 +1496,24 @@ pub(crate) struct SessionPollOutcome {
     pub(crate) output_changed: bool,
     /// 会话状态变化（含 shell-closed 落到 disconnected）。
     pub(crate) state_changed: bool,
+}
+
+/// WP4：分屏投影（Slint 双 pane 布局）。
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct WorkspaceSplitProjection {
+    pub active: bool,
+    pub orientation_text: String,
+    pub ratio: f32,
+    pub focused_pane: i32,
+    pub pane_count: i32,
+    pub pane0_tab_id: String,
+    pub pane0_title_text: String,
+    pub pane0_empty: bool,
+    pub pane1_tab_id: String,
+    pub pane1_title_text: String,
+    pub pane1_empty: bool,
+    pub can_split: bool,
+    pub can_close_pane: bool,
 }
 
 /// N0 轮询：单个 tick 最多轮询的会话数（活动标签优先，其余按游标轮转）。

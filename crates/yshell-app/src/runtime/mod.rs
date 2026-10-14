@@ -76,6 +76,7 @@ pub(crate) use ssh_config::tunnel_kind_label;
 pub(crate) use tabs::PendingCloseTabs;
 pub use tabs::TabData;
 pub(crate) use tabs::TabEntry;
+pub use tabs::WorkspaceSplitProjection;
 #[cfg(test)]
 pub(crate) use tabs::CLOSE_SCOPE_ALL;
 #[cfg(test)]
@@ -583,12 +584,93 @@ pub struct AppRuntime {
 }
 
 /// N7：单个窗口持有的标签 UI 归属（标签本身仍在 `AppRuntime::tabs` 登记）。
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct WindowTabs {
     /// 该窗口的标签 id（显示顺序）。
     pub(crate) tabs: Vec<String>,
-    /// 该窗口的活动标签 id（必须存在于 `tabs`）。
+    /// 该窗口的活动标签 id（必须存在于 `tabs`；分屏时 = 聚焦 pane 的活动标签）。
     pub(crate) active_tab: Option<String>,
+    /// WP4：窗口内分屏（`None` = 单 pane；叶子最多 4，v1 先落地 2）。
+    pub(crate) split: Option<WorkspaceSplit>,
+}
+
+/// WP4：分屏方向（Split Right = 左右；Split Down = 上下）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SplitOrientation {
+    /// 左右并排（竖分割线）。
+    Horizontal,
+    /// 上下堆叠（横分割线）。
+    Vertical,
+}
+
+impl SplitOrientation {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Horizontal => "horizontal",
+            Self::Vertical => "vertical",
+        }
+    }
+}
+
+/// WP4：一个分屏叶子（绑定窗口内某个标签为该 pane 的活动标签）。
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct SplitPane {
+    pub(crate) active_tab: Option<String>,
+}
+
+/// WP4：窗口内分屏布局（内存态；不落盘）。
+///
+/// 扩展点：`panes` 可增长到 4；v1 UI/动作先保证 2 叶子可用。
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct WorkspaceSplit {
+    pub(crate) orientation: SplitOrientation,
+    /// 第一片 pane 占比（0.2..=0.8）。
+    pub(crate) ratio: f32,
+    pub(crate) focused_pane: usize,
+    pub(crate) panes: Vec<SplitPane>,
+}
+
+impl WorkspaceSplit {
+    pub(crate) const MAX_PANES: usize = 4;
+
+    pub(crate) fn two_pane(orientation: SplitOrientation, first: Option<String>, second: Option<String>) -> Self {
+        Self {
+            orientation,
+            ratio: 0.5,
+            focused_pane: 1,
+            panes: vec![
+                SplitPane {
+                    active_tab: first,
+                },
+                SplitPane {
+                    active_tab: second,
+                },
+            ],
+        }
+    }
+
+    pub(crate) fn pane_count(&self) -> usize {
+        self.panes.len()
+    }
+
+    pub(crate) fn focused_tab(&self) -> Option<&str> {
+        self.panes
+            .get(self.focused_pane)
+            .and_then(|pane| pane.active_tab.as_deref())
+    }
+
+    pub(crate) fn secondary_pane_index(&self) -> Option<usize> {
+        if self.panes.len() < 2 {
+            return None;
+        }
+        Some(if self.focused_pane == 0 { 1 } else { 0 })
+    }
+
+    pub(crate) fn shows_tab(&self, tab_id: &str) -> bool {
+        self.panes
+            .iter()
+            .any(|pane| pane.active_tab.as_deref() == Some(tab_id))
+    }
 }
 
 #[derive(Clone)]
@@ -764,6 +846,58 @@ impl AppRuntime {
         self.window_active_session(window_id)
             .and_then(|session_key| self.sessions.get(session_key))
             .and_then(SessionRuntime::terminal_render_snapshot)
+    }
+
+    /// WP4：非聚焦 pane 会话的外观 / 帧号 / 快照（双图渲染）。
+    pub(crate) fn window_secondary_terminal_appearance(
+        &self,
+        window_id: u64,
+    ) -> Option<TerminalAppearance> {
+        self.window_secondary_session(window_id)
+            .and_then(|session_key| self.sessions.get(session_key))
+            .map(|runtime| runtime.appearance().clone())
+    }
+
+    #[must_use]
+    pub fn window_secondary_terminal_frame_id(&self, window_id: u64) -> u64 {
+        self.window_secondary_session(window_id)
+            .and_then(|session_key| self.sessions.get(session_key))
+            .map(SessionRuntime::frame_id)
+            .unwrap_or(0)
+    }
+
+    #[must_use]
+    pub fn window_secondary_terminal_render_snapshot(
+        &self,
+        window_id: u64,
+    ) -> Option<TerminalSnapshot<'_>> {
+        self.window_secondary_session(window_id)
+            .and_then(|session_key| self.sessions.get(session_key))
+            .and_then(SessionRuntime::terminal_render_snapshot)
+    }
+
+    /// WP4：按窗口次 pane 视口同步次会话 PTY 尺寸。
+    pub(crate) fn sync_window_secondary_terminal_size(
+        &mut self,
+        window_id: u64,
+        columns: u16,
+        rows: u16,
+    ) -> AppResult<bool> {
+        let Some(session_key) = self.window_secondary_session(window_id).map(str::to_owned) else {
+            return Ok(false);
+        };
+        let Some(current_size) = self
+            .sessions
+            .get(&session_key)
+            .map(SessionRuntime::current_pty_size)
+        else {
+            return Ok(false);
+        };
+        if current_size.columns == columns && current_size.rows == rows {
+            return Ok(false);
+        }
+        self.resize_terminal_session(&session_key, columns, rows, false)?;
+        Ok(true)
     }
 
     /// N7：按窗口视口同步该窗口活动会话的 PTY 尺寸。

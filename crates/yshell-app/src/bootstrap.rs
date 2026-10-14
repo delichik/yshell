@@ -58,6 +58,8 @@ pub(crate) struct TerminalSurface {
     window_id: u64,
     renderer: Rc<RefCell<TerminalRenderer>>,
     last_frame: Rc<RefCell<Option<(String, u64)>>>,
+    /// WP4：次 pane 位图缓存键（session + frame）。
+    last_secondary_frame: Rc<RefCell<Option<(String, u64)>>>,
     scale_factor: Rc<Cell<f32>>,
 }
 
@@ -73,6 +75,7 @@ impl TerminalSurface {
             window_id,
             renderer,
             last_frame: Rc::new(RefCell::new(None)),
+            last_secondary_frame: Rc::new(RefCell::new(None)),
             scale_factor: Rc::new(Cell::new(sanitize_scale_factor(scale_factor))),
         }
     }
@@ -100,6 +103,7 @@ impl TerminalSurface {
         self.renderer.borrow_mut().set_scale_factor(scale_factor);
         self.scale_factor.set(scale_factor);
         *self.last_frame.borrow_mut() = None;
+        *self.last_secondary_frame.borrow_mut() = None;
         true
     }
 
@@ -133,6 +137,7 @@ impl TerminalSurface {
         let _ = renderer.apply_appearance(appearance.palette, appearance.font);
         drop(renderer);
         *self.last_frame.borrow_mut() = None;
+        *self.last_secondary_frame.borrow_mut() = None;
         true
     }
 
@@ -146,15 +151,66 @@ impl TerminalSurface {
             };
             runtime.window_terminal_frame_id(self.window_id)
         };
-        if let Some((last_session, last_frame)) = self.last_frame.borrow().as_ref() {
-            if *last_session == session && *last_frame == frame_id {
+        let primary_unchanged = self
+            .last_frame
+            .borrow()
+            .as_ref()
+            .is_some_and(|(last_session, last_frame)| {
+                *last_session == session && *last_frame == frame_id
+            });
+        if !primary_unchanged {
+            let Ok(runtime) = self.runtime.try_borrow() else {
                 return;
+            };
+            if let Some(snapshot) = runtime.window_terminal_render_snapshot(self.window_id) {
+                let frame = self.renderer.borrow_mut().render(&snapshot);
+                drop(snapshot);
+                drop(runtime);
+                let image = slint::Image::from_rgba8(SharedPixelBuffer::clone_from_slice(
+                    &frame.rgba,
+                    frame.width,
+                    frame.height,
+                ));
+                window.set_terminal_image(image);
+                *self.last_frame.borrow_mut() = Some((session, frame_id));
             }
+        }
+        self.refresh_secondary(window);
+    }
+
+    /// WP4：刷新非聚焦 pane 的终端位图（未分屏 / 空 pane 时跳过）。
+    fn refresh_secondary(&self, window: &MainWindow) {
+        if !window.get_workspace_split_active() {
+            *self.last_secondary_frame.borrow_mut() = None;
+            return;
         }
         let Ok(runtime) = self.runtime.try_borrow() else {
             return;
         };
-        let Some(snapshot) = runtime.window_terminal_render_snapshot(self.window_id) else {
+        let Some(session_key) = runtime
+            .window_secondary_session(self.window_id)
+            .map(str::to_owned)
+        else {
+            *self.last_secondary_frame.borrow_mut() = None;
+            return;
+        };
+        let frame_id = runtime.window_secondary_terminal_frame_id(self.window_id);
+        if self
+            .last_secondary_frame
+            .borrow()
+            .as_ref()
+            .is_some_and(|(last_session, last_frame)| {
+                *last_session == session_key && *last_frame == frame_id
+            })
+        {
+            return;
+        }
+        if let Some(appearance) = runtime.window_secondary_terminal_appearance(self.window_id) {
+            let mut renderer = self.renderer.borrow_mut();
+            let _ = renderer.apply_appearance(appearance.palette, appearance.font);
+            renderer.set_font_size(appearance.font_size);
+        }
+        let Some(snapshot) = runtime.window_secondary_terminal_render_snapshot(self.window_id) else {
             return;
         };
         let frame = self.renderer.borrow_mut().render(&snapshot);
@@ -165,8 +221,10 @@ impl TerminalSurface {
             frame.width,
             frame.height,
         ));
-        window.set_terminal_image(image);
-        *self.last_frame.borrow_mut() = Some((session, frame_id));
+        window.set_terminal_image_secondary(image);
+        *self.last_secondary_frame.borrow_mut() = Some((session_key, frame_id));
+        // 次 pane 渲染可能覆盖了渲染器外观；下一帧主 pane 通过 sync_appearance 恢复。
+        let _ = self.sync_appearance();
     }
 }
 
@@ -586,6 +644,99 @@ pub(crate) fn wire_callbacks(
                 surface.refresh(&window);
             }
             Err(error) => set_error_status(&window, "Could not activate the tab.", &error),
+        }
+    });
+
+    // WP4：标签重命名（显示名仅内存）。
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_rename_tab(move |tab_id, title| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        match runtime_ref
+            .borrow_mut()
+            .rename_tab(tab_id.as_ref(), title.as_ref())
+        {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not rename the tab.", &error),
+        }
+    });
+
+    // WP4：分屏。
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_split_workspace(move |direction| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        match runtime_ref
+            .borrow_mut()
+            .split_workspace(direction.as_ref())
+        {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not split the workspace.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_focus_split_pane(move |pane_index| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        match runtime_ref.borrow_mut().focus_split_pane(pane_index) {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not focus the pane.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_close_split_pane(move |pane_index| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let index = if pane_index < 0 {
+            None
+        } else {
+            Some(pane_index)
+        };
+        match runtime_ref.borrow_mut().close_split_pane(index) {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not close the pane.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_set_split_ratio(move |ratio| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        match runtime_ref.borrow_mut().set_split_ratio(ratio) {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not resize the split.", &error),
         }
     });
 
@@ -5092,6 +5243,7 @@ fn workspace_tab_from(tab: &TabData) -> WorkspaceTab {
         kind_text: tab.kind_text.clone().into(),
         logging: tab.logging,
         sync_role_text: tab.sync_role_text.clone().into(),
+        unread: i32::try_from(tab.unread).unwrap_or(i32::MAX),
     }
 }
 
@@ -5104,6 +5256,7 @@ fn workspace_tab_matches(current: &WorkspaceTab, next: &TabData) -> bool {
         && current.kind_text.as_str() == next.kind_text
         && current.logging == next.logging
         && current.sync_role_text.as_str() == next.sync_role_text
+        && current.unread == i32::try_from(next.unread).unwrap_or(i32::MAX)
 }
 
 /// Replaces the tab model only when the projected tabs changed, so that a
@@ -5939,6 +6092,20 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
         .set_tab_menu_move_to_main_window_enabled(projection.tab_menu_move_to_main_window_enabled);
     window.set_close_window_confirm_visible(projection.close_window_confirm_visible);
     window.set_close_window_confirm_active_count(projection.close_window_confirm_active_count);
+    // WP4：分屏投影。
+    window.set_tab_menu_split_enabled(projection.tab_menu_split_enabled);
+    window.set_tab_menu_close_pane_enabled(projection.tab_menu_close_pane_enabled);
+    let split = &projection.workspace_split;
+    window.set_workspace_split_active(split.active);
+    window.set_workspace_split_orientation_text(split.orientation_text.clone().into());
+    window.set_workspace_split_ratio(split.ratio);
+    window.set_workspace_split_focused_pane(split.focused_pane);
+    window.set_workspace_split_pane0_tab_id(split.pane0_tab_id.clone().into());
+    window.set_workspace_split_pane0_title_text(split.pane0_title_text.clone().into());
+    window.set_workspace_split_pane0_empty(split.pane0_empty);
+    window.set_workspace_split_pane1_tab_id(split.pane1_tab_id.clone().into());
+    window.set_workspace_split_pane1_title_text(split.pane1_title_text.clone().into());
+    window.set_workspace_split_pane1_empty(split.pane1_empty);
     // N9：同步发送按键（终端/标签菜单 + 状态栏 chip + 标签角标）。
     window.set_terminal_sync_all_enabled(projection.terminal_sync_all_enabled);
     window.set_terminal_sync_visible_enabled(projection.terminal_sync_visible_enabled);

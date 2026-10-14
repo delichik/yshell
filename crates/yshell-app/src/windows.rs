@@ -93,6 +93,8 @@ struct WindowEntry {
     surface: TerminalSurface,
     /// 最近一次用于 PTY 尺寸同步的视口（列/行；0 = 尚未同步）。
     last_viewport: (u16, u16),
+    /// WP4：次 pane 视口（未分屏时保持 (0,0)）。
+    last_secondary_viewport: (u16, u16),
 }
 
 /// N7：窗口生命周期 + 应用级轮询的管理器。
@@ -237,6 +239,7 @@ impl WindowManager {
                 window,
                 surface,
                 last_viewport: (0, 0),
+                last_secondary_viewport: (0, 0),
             });
         }
         // 首次布局后立刻把视口尺寸同步进 PTY，避免首个 tick 前仍是默认 80×24，
@@ -481,7 +484,33 @@ impl WindowManager {
                     .unwrap_or(false)
             }
         };
-        dirty || changed
+        // WP4：次 pane 视口 → 非聚焦会话 PTY。
+        let secondary_changed = {
+            let entry = &self.windows[index];
+            if !entry.window.get_workspace_split_active() {
+                self.windows[index].last_secondary_viewport = (0, 0);
+                false
+            } else {
+                let (sec_cols, sec_rows) = terminal_size_from_viewport(
+                    entry.window.get_terminal_viewport_secondary_width_px(),
+                    entry.window.get_terminal_viewport_secondary_height_px(),
+                    entry.surface.cell_size(),
+                    entry.surface.scale_factor(),
+                );
+                if self.windows[index].last_secondary_viewport == (sec_cols, sec_rows) {
+                    false
+                } else {
+                    self.windows[index].last_secondary_viewport = (sec_cols, sec_rows);
+                    let Ok(mut runtime) = self.runtime.try_borrow_mut() else {
+                        return dirty || changed;
+                    };
+                    runtime
+                        .sync_window_secondary_terminal_size(window_id, sec_cols, sec_rows)
+                        .unwrap_or(false)
+                }
+            }
+        };
+        dirty || changed || secondary_changed
     }
 
     /// 应用级轮询：消息 drain → 终端轮询 → 各窗口尺寸同步 → 投影 + 重绘。
