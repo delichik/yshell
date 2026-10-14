@@ -35,8 +35,12 @@ use crate::error::{AppError, AppResult};
 use crate::runtime::AppRuntime;
 use crate::sftp_jobs::{SftpJobHandle, SftpJobMessage};
 
-/// 应用级轮询间隔（沿用单窗口时代的 120ms）。
-const POLL_INTERVAL: Duration = Duration::from_millis(120);
+/// 应用级轮询间隔。
+///
+/// 原先 120ms 时，按键虽立即写入 SSH，但远端回显要等下一个 tick 才进网格，
+/// 体感延迟明显高于 Xshell（约 ½ 个周期 ≈ 60ms，最坏 120ms）。16ms ≈ 60Hz，
+/// 与常见终端刷新对齐；drain 文件对话框/SFTP 消息与 PTY 尺寸同步也走同一路径。
+const POLL_INTERVAL: Duration = Duration::from_millis(16);
 
 /// N7：每窗口的运行时句柄。
 ///
@@ -60,7 +64,7 @@ impl WindowRuntime {
     /// 变更用的借用：先标记该窗口为交互窗口，再标记"UI 需要重投影"。
     ///
     /// `ui_dirty` 由应用级定时器消费：任何窗口的交互（含全局状态变更，例如面板
-    /// 显隐/主题/对话框）会在下一个 tick（≤120ms）广播到所有窗口。
+    /// 显隐/主题/对话框）会在下一个 tick（≤16ms）广播到所有窗口。
     pub(crate) fn borrow_mut(&self) -> RefMut<'_, AppRuntime> {
         let mut runtime = self.runtime.borrow_mut();
         runtime.focus_window(self.window_id);
@@ -227,7 +231,13 @@ impl WindowManager {
                 last_viewport: (0, 0),
             });
         }
-        manager.borrow_mut().refresh_all();
+        // 首次布局后立刻把视口尺寸同步进 PTY，避免首个 tick 前仍是默认 80×24，
+        // 导致 htop 等全屏 TUI 按错误网格排版。
+        {
+            let mut this = manager.borrow_mut();
+            let _ = this.sync_window_viewport_size(window_id);
+            this.refresh_all();
+        }
         Ok(())
     }
 
@@ -417,6 +427,55 @@ impl WindowManager {
         }
     }
 
+    /// 把单个窗口的视口尺寸同步到其活动会话的 PTY。
+    ///
+    /// 必须先 `sync_scale_factor`：cell 度量按物理像素，网格用 viewport×scale/cell；
+    /// 若先算后 sync，DPR 变化当帧会用旧 cell 量新视口，位图与 1phx 显示会错一拍。
+    /// 返回 `true` 表示缩放或行列发生了变化（需要重投影/重绘）。
+    fn sync_window_viewport_size(&mut self, window_id: u64) -> bool {
+        let Some(index) = self.windows.iter().position(|entry| entry.id == window_id) else {
+            return false;
+        };
+        let mut dirty = false;
+        if self.windows[index]
+            .surface
+            .sync_scale_factor(&self.windows[index].window)
+        {
+            dirty = true;
+        }
+        let (columns, rows) = {
+            let entry = &self.windows[index];
+            terminal_size_from_viewport(
+                entry.window.get_terminal_viewport_width_px(),
+                entry.window.get_terminal_viewport_height_px(),
+                entry.surface.cell_size(),
+                entry.surface.scale_factor(),
+            )
+        };
+        if self.windows[index].last_viewport != (columns, rows) {
+            self.windows[index].last_viewport = (columns, rows);
+            dirty = true;
+        }
+        let focused = self.runtime.borrow().focused_window;
+        let changed = {
+            let Ok(mut runtime) = self.runtime.try_borrow_mut() else {
+                return dirty;
+            };
+            if focused == Some(window_id) {
+                // 沿用单窗口时代的路径（聚焦窗口的 resize 会写状态栏）。
+                matches!(
+                    runtime.sync_active_terminal_size_passive(columns, rows),
+                    Ok(Some(_))
+                )
+            } else {
+                runtime
+                    .sync_window_terminal_size(window_id, columns, rows, false)
+                    .unwrap_or(false)
+            }
+        };
+        dirty || changed
+    }
+
     /// 应用级轮询：消息 drain → 终端轮询 → 各窗口尺寸同步 → 投影 + 重绘。
     fn tick(&mut self) {
         let mut dirty = false;
@@ -448,48 +507,9 @@ impl WindowManager {
             }
         }
 
-        // 每窗口视口尺寸 → 该窗口活动会话的 PTY resize。
-        // 必须先 sync_scale_factor：cell 度量按物理像素，网格用 viewport×scale/cell；
-        // 若先算后 sync，DPR 变化当帧会用旧 cell 量新视口，位图与 1phx 显示会错一拍。
-        let focused = self.runtime.borrow().focused_window;
-        for index in 0..self.windows.len() {
-            let window_id = self.windows[index].id;
-            if self.windows[index]
-                .surface
-                .sync_scale_factor(&self.windows[index].window)
-            {
-                dirty = true;
-            }
-            let (columns, rows) = {
-                let entry = &self.windows[index];
-                terminal_size_from_viewport(
-                    entry.window.get_terminal_viewport_width_px(),
-                    entry.window.get_terminal_viewport_height_px(),
-                    entry.surface.cell_size(),
-                    entry.surface.scale_factor(),
-                )
-            };
-            if self.windows[index].last_viewport != (columns, rows) {
-                self.windows[index].last_viewport = (columns, rows);
-                dirty = true;
-            }
-            let changed = {
-                let Ok(mut runtime) = self.runtime.try_borrow_mut() else {
-                    return;
-                };
-                if focused == Some(window_id) {
-                    // 沿用单窗口时代的路径（聚焦窗口的 resize 会写状态栏）。
-                    matches!(
-                        runtime.sync_active_terminal_size_passive(columns, rows),
-                        Ok(Some(_))
-                    )
-                } else {
-                    runtime
-                        .sync_window_terminal_size(window_id, columns, rows, false)
-                        .unwrap_or(false)
-                }
-            };
-            if changed {
+        let window_ids: Vec<u64> = self.windows.iter().map(|entry| entry.id).collect();
+        for window_id in window_ids {
+            if self.sync_window_viewport_size(window_id) {
                 dirty = true;
             }
         }

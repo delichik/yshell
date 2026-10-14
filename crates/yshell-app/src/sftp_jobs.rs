@@ -861,13 +861,11 @@ fn run_remote_chmod(
 }
 
 fn remote_exists(client: &mut SftpClient<yshell_sftp::RealSftpBackend>, path: &str) -> bool {
-    let Some((parent, name)) = split_remote(path) else {
-        return false;
-    };
     client
-        .list_dir(&parent)
-        .map(|listing| listing.entries.iter().any(|entry| entry.name == name))
-        .unwrap_or(false)
+        .entry_kind(path)
+        .ok()
+        .flatten()
+        .is_some()
 }
 
 fn unique_remote_path(client: &mut SftpClient<yshell_sftp::RealSftpBackend>, path: &str) -> String {

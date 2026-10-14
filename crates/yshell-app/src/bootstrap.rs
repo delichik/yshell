@@ -91,7 +91,7 @@ impl TerminalSurface {
     /// Returns `true` when it changed: the renderer re-measures its physical
     /// cell metrics and drops its glyph cache, and the next `refresh` re-renders
     /// the frame (the cached frame revision is invalidated). The PTY grid is
-    /// re-synced by the application-level poll timer, which runs every 120 ms.
+    /// re-synced by the application-level poll timer, which runs every 16 ms.
     pub(crate) fn sync_scale_factor(&self, window: &MainWindow) -> bool {
         let scale_factor = sanitize_scale_factor(window.window().scale_factor());
         if scale_factor == self.scale_factor.get() {
@@ -4508,10 +4508,11 @@ fn frame_image(frame: &yshell_terminal::TerminalFrame) -> slint::Image {
 /// `font_size * scale_factor`), while Slint reports the viewport in logical
 /// pixels, so the viewport is scaled up first.
 ///
-/// The grid rounds **up** (`ceil`): the bitmap is then at least as large as the
-/// viewport and is displayed 1:1 in physical pixels, anchored at the bitmap
-/// origin; the overflowing last column/row is clipped by the terminal surface
-/// (a partially visible cell instead of a stretched bitmap or a blank strip).
+/// The grid rounds **down** (`floor`), matching xterm / Alacritty / Windows
+/// Terminal / Xshell: only fully visible cells are reported to the PTY. A
+/// fractional remainder becomes a blank margin instead of a clipped half-cell.
+/// Reporting `ceil` overstated cols/rows, so full-screen TUIs (htop, vim,
+/// less) laid out into clipped columns and looked misaligned.
 pub(crate) fn terminal_size_from_viewport(
     width_px: f32,
     height_px: f32,
@@ -4526,8 +4527,8 @@ pub(crate) fn terminal_size_from_viewport(
     let cell_height = cell_size.1.max(1) as f32;
     let physical_width = width_px.max(0.0) * scale_factor;
     let physical_height = height_px.max(0.0) * scale_factor;
-    let columns = ((physical_width / cell_width).ceil() as u16).max(MIN_COLUMNS);
-    let rows = ((physical_height / cell_height).ceil() as u16).max(MIN_ROWS);
+    let columns = ((physical_width / cell_width).floor() as u16).max(MIN_COLUMNS);
+    let rows = ((physical_height / cell_height).floor() as u16).max(MIN_ROWS);
     (columns, rows)
 }
 
@@ -6145,12 +6146,11 @@ mod tests {
         let renderer = yshell_terminal::TerminalRenderer::new();
         let cell_size = renderer.cell_size();
         let (columns, rows) = terminal_size_from_viewport(900.0, 360.0, cell_size, 1.0);
-        // ceil 网格：位图必须覆盖整个视口（不许出现会被拉伸的空白条），
-        // 且去掉最后一格后不再覆盖。
-        assert!(u32::from(columns) * cell_size.0 >= 900);
-        assert!(u32::from(columns - 1) * cell_size.0 < 900);
-        assert!(u32::from(rows) * cell_size.1 >= 360);
-        assert!(u32::from(rows - 1) * cell_size.1 < 360);
+        // floor 网格：只报告完整可见的单元格；再多一列/行就会超出视口。
+        assert!(u32::from(columns) * cell_size.0 <= 900);
+        assert!(u32::from(columns + 1) * cell_size.0 > 900);
+        assert!(u32::from(rows) * cell_size.1 <= 360);
+        assert!(u32::from(rows + 1) * cell_size.1 > 360);
     }
 
     #[test]
@@ -6161,19 +6161,20 @@ mod tests {
     #[test]
     fn viewport_size_uses_physical_pixels_for_non_unit_scale() {
         // 逻辑 900×360、scale=1.25、物理 cell 12×24 → 物理视口 1125×450。
+        // 1125/12 = 93.75 → floor 93；450/24 = 18.75 → floor 18。
         assert_eq!(
             terminal_size_from_viewport(900.0, 360.0, (12, 24), 1.25),
-            (94, 19)
+            (93, 18)
         );
-        // scale=2.0：物理尺寸翻倍。
+        // scale=2.0：物理尺寸翻倍；720/19 ≈ 37.89 → floor 37。
         assert_eq!(
             terminal_size_from_viewport(900.0, 360.0, (10, 19), 2.0),
-            (180, 38)
+            (180, 37)
         );
         // 非有限/非正 scale 视作 1.0。
         assert_eq!(
             terminal_size_from_viewport(900.0, 360.0, (10, 19), f32::NAN),
-            (90, 19)
+            (90, 18)
         );
     }
 

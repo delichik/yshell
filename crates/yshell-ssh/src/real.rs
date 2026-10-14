@@ -1411,7 +1411,31 @@ impl RealNativeShellSession {
                 }
             }
         }
-        Ok(())
+        // 按键包很小，不 flush 时 libssh2 可能攒在发送缓冲里；配合 Nagle 会把
+        // 交互延迟拉到几十毫秒，体感明显慢于 Xshell。flush 同样按非阻塞重试。
+        retries = 0;
+        loop {
+            match self.channel.flush() {
+                Ok(()) => return Ok(()),
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                    retries += 1;
+                    if retries > 500 {
+                        return Err(SshError::new(
+                            SshErrorKind::Io,
+                            "native SSH shell flush stalled while waiting for backpressure to clear"
+                                .to_owned(),
+                        ));
+                    }
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+                Err(error) => {
+                    return Err(SshError::new(
+                        SshErrorKind::Io,
+                        format!("failed to flush bytes into native SSH shell: {error}"),
+                    ));
+                }
+            }
+        }
     }
 
     fn resize_pty(&mut self, size: PtySize) -> SshResult<()> {
@@ -1614,7 +1638,18 @@ fn connect_native_stream(plan: &RealConnectionPlan) -> SshResult<TcpStream> {
     let mut last_error = None;
     for address in addresses {
         match TcpStream::connect_timeout(&address, plan.connect_timeout) {
-            Ok(stream) => return Ok(stream),
+            Ok(stream) => {
+                // 交互式按键是极小写：关掉 Nagle，避免与未 flush 的 SSH 包叠出
+                // 额外 RTT 延迟（Xshell 等客户端默认也是 TCP_NODELAY）。
+                if let Err(error) = stream.set_nodelay(true) {
+                    tracing::warn!(
+                        target: "yshell::ssh",
+                        %error,
+                        "failed to enable TCP_NODELAY on native SSH stream; interactive typing may feel laggy"
+                    );
+                }
+                return Ok(stream);
+            }
             Err(error) => last_error = Some((address, error)),
         }
     }

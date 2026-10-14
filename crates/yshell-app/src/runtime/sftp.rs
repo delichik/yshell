@@ -7,12 +7,50 @@ use crate::{
     sftp_view::format_sftp_size, sftp_view::sftp_kind_text, sftp_view::visible_entries,
     sftp_view::SftpSortColumn,
 };
-use yshell_sftp::{DirectoryListing, FsEntry, FsEntryKind, SftpClient};
+use yshell_sftp::{DirectoryListing, FsEntry, FsEntryKind, RealSftpBackend, SftpClient};
 use yshell_ssh::TransportBackend;
 
 use super::*;
 
+/// UI-thread live SFTP client bound to one runtime session key.
+pub(crate) struct LiveSftpClient {
+    pub(crate) session_key: String,
+    pub(crate) client: SftpClient<RealSftpBackend>,
+}
+
 impl AppRuntime {
+    /// Drop the cached SFTP TCP/SSH session (next op reconnects once).
+    pub(crate) fn drop_sftp_live_client(&mut self) {
+        self.sftp_live = None;
+    }
+
+    /// Reuse or create the live SFTP client for `session_key`.
+    pub(crate) fn sftp_live_client_mut(
+        &mut self,
+        session_key: &str,
+    ) -> AppResult<&mut SftpClient<RealSftpBackend>> {
+        let needs_new = !self
+            .sftp_live
+            .as_ref()
+            .is_some_and(|live| live.session_key == session_key);
+        if needs_new {
+            let ssh_config = {
+                let runtime = self.sessions.get(session_key).ok_or_else(|| {
+                    AppError::new("active runtime session is missing")
+                })?;
+                self.effective_ssh_config(&runtime.ssh_config)
+            };
+            self.sftp_live = Some(LiveSftpClient {
+                session_key: session_key.to_owned(),
+                client: SftpClient::with_real_backend(ssh_config),
+            });
+        }
+        self.sftp_live
+            .as_mut()
+            .map(|live| &mut live.client)
+            .ok_or_else(|| AppError::new("SFTP live client missing after ensure"))
+    }
+
     pub fn refresh_active_sftp_listing(&mut self) -> AppResult<AppProjection> {
         let Some(session_key) = self.active_session_id.clone() else {
             self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
@@ -456,6 +494,7 @@ impl AppRuntime {
         refresh_listing: bool,
     ) -> String {
         if self.transport_backend != TransportBackend::Real {
+            self.drop_sftp_live_client();
             self.sftp_session = SftpSessionLifecycle::Unavailable {
                 reason: SftpUnavailableReason::SelectNativeSsh,
             };
@@ -463,15 +502,12 @@ impl AppRuntime {
             return self.sftp_session.legacy_status_text();
         }
 
-        let Some((session_state, session_backend, ssh_config)) =
+        let Some((session_state, session_backend)) =
             self.sessions.get(session_key).map(|runtime| {
-                (
-                    runtime.state,
-                    runtime.transport_backend,
-                    runtime.ssh_config.clone(),
-                )
+                (runtime.state, runtime.transport_backend)
             })
         else {
+            self.drop_sftp_live_client();
             self.sftp_session = SftpSessionLifecycle::Failed {
                 session_key: Some(session_key.to_owned()),
                 reason: "runtime session is missing".to_owned(),
@@ -481,6 +517,7 @@ impl AppRuntime {
         };
 
         if session_state != yshell_core::SessionState::Connected {
+            self.drop_sftp_live_client();
             self.sftp_session = SftpSessionLifecycle::Disconnected {
                 session_key: Some(session_key.to_owned()),
             };
@@ -489,6 +526,7 @@ impl AppRuntime {
         }
 
         if session_backend != TransportBackend::Real {
+            self.drop_sftp_live_client();
             self.sftp_session = SftpSessionLifecycle::Disconnected {
                 session_key: Some(session_key.to_owned()),
             };
@@ -503,12 +541,11 @@ impl AppRuntime {
             return self.sftp_session.legacy_status_text();
         }
 
-        let ssh_config = self.effective_ssh_config(&ssh_config);
-        let client = SftpClient::with_real_backend(ssh_config);
-        match client
-            .list_dir(&self.sftp_path)
-            .map_err(AppError::from_error)
-        {
+        let path = self.sftp_path.clone();
+        let list_result = self
+            .sftp_live_client_mut(session_key)
+            .and_then(|client| client.list_dir(&path).map_err(AppError::from_error));
+        match list_result {
             Ok(listing) => {
                 let entry_count = listing.entries.len();
                 let listing_path = listing.path.clone();
@@ -519,6 +556,8 @@ impl AppRuntime {
                 )
             }
             Err(error) => {
+                // Force the next refresh to open a new SSH/SFTP channel.
+                self.drop_sftp_live_client();
                 self.sftp_session = SftpSessionLifecycle::Failed {
                     session_key: Some(session_key.to_owned()),
                     reason: error.to_string(),
@@ -538,6 +577,7 @@ impl AppRuntime {
     /// 只清"上一个会话的目录"这类残留；生命周期由调用方随后用
     /// [`Self::sync_sftp_lifecycle_for_session`] 重建。
     pub(crate) fn reset_sftp_view_state(&mut self) {
+        self.drop_sftp_live_client();
         self.sftp_entries.clear();
         self.sftp_selection.clear();
         self.sftp_selection_anchor = None;

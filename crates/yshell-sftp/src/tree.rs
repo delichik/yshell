@@ -345,16 +345,9 @@ fn split_remote(path: &str) -> Option<(String, String)> {
     Some((parent, name.to_owned()))
 }
 
-/// Remote kind of `path`, or `None` when the parent cannot be listed or the
-/// entry does not exist.
+/// Remote kind of `path`, or `None` when it does not exist / cannot be probed.
 fn remote_kind<B: SftpBackend + ?Sized>(backend: &B, path: &str) -> Option<FsEntryKind> {
-    let (parent, name) = split_remote(path)?;
-    let listing = backend.list_dir(&parent).ok()?;
-    listing
-        .entries
-        .iter()
-        .find(|entry| entry.name == name)
-        .map(|entry| entry.kind)
+    backend.entry_kind(path).ok().flatten()
 }
 
 /// First free sibling of `path`, using the `name (n).ext` scheme.

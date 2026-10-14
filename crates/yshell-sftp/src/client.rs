@@ -16,6 +16,11 @@ use crate::tree::{
 
 pub trait SftpBackend {
     fn list_dir(&self, path: &str) -> SftpResult<DirectoryListing>;
+    /// Kind of `path`, or `Ok(None)` when it does not exist.
+    ///
+    /// Prefer this over listing the parent directory for existence / overwrite
+    /// checks — a single `stat` is far cheaper than `readdir` of a large folder.
+    fn entry_kind(&self, path: &str) -> SftpResult<Option<FsEntryKind>>;
     fn chmod(&mut self, path: &str, permissions: u32) -> SftpResult<()>;
     fn delete(&mut self, path: &str) -> SftpResult<()>;
     fn rename(&mut self, from: &str, to: &str) -> SftpResult<()>;
@@ -96,6 +101,10 @@ where
 
     pub fn list_dir(&self, path: &str) -> SftpResult<DirectoryListing> {
         self.backend.list_dir(path)
+    }
+
+    pub fn entry_kind(&self, path: &str) -> SftpResult<Option<FsEntryKind>> {
+        self.backend.entry_kind(path)
     }
 
     pub fn chmod(&mut self, path: &str, permissions: u32) -> SftpResult<()> {
@@ -243,6 +252,10 @@ impl SftpBackend for FakeSftpBackend {
             path: path.to_owned(),
             entries,
         })
+    }
+
+    fn entry_kind(&self, path: &str) -> SftpResult<Option<FsEntryKind>> {
+        Ok(self.entries.get(path).map(|entry| entry.kind))
     }
 
     fn chmod(&mut self, path: &str, permissions: u32) -> SftpResult<()> {

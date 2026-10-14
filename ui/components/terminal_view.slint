@@ -131,12 +131,14 @@ export component TerminalView inherits Rectangle {
                 // 终端位图由 Rust 按**物理像素**渲染（cell 尺寸 = 物理像素）；
                 // `image.width/height` 是位图像素数，乘 `1phx` 后以精确设备像素尺寸
                 // 显示：1 图像像素 = 1 设备像素，逻辑尺寸自动等于 位图 px / scale。
-                // 位图盒与图像等大，保留默认 image-fit: contain 也不会重采样；
-                // 网格按 ceil 取整，位图 ≥ 视口，多出的最后一列/行由父级 clip 裁掉。
+                // 网格按 floor 取整（只报告完整可见单元格；余数留白，与 xterm 一致）。
+                // `image-rendering: pixelated`：禁止默认的 smooth 线性插值——在
+                // 非整数 DPI / 亚像素对齐时，smooth 会把整幅终端字糊成发虚。
                 terminal_image := Image {
                     source: root.terminal-image;
                     width: root.terminal-image.width * 1phx;
                     height: root.terminal-image.height * 1phx;
+                    image-rendering: pixelated;
                 }
 
                 surface_touch := TouchArea {

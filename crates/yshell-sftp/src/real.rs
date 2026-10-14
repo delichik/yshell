@@ -1,6 +1,7 @@
 //! Real SFTP backend implemented with an embedded ssh2 SFTP session.
 
 use std::{
+    cell::RefCell,
     fs,
     io::{self, Write},
     net::{TcpStream, ToSocketAddrs},
@@ -25,17 +26,50 @@ const FILE_TYPE_FILE: u32 = 0o100000;
 const FILE_TYPE_SYMLINK: u32 = 0o120000;
 const FILE_PERMISSIONS_MASK: u32 = 0o7777;
 
-#[derive(Debug, Clone)]
+/// One authenticated SSH + SFTP channel kept alive across operations.
+///
+/// Previously every `list_dir` / `mkdir` / file transfer opened a fresh TCP
+/// connection, completed a full SSH handshake, and authenticated again — that
+/// made the right-hand SFTP panel feel far slower than Xshell. The session is
+/// reused until a transport-level failure forces a reconnect.
+struct LiveSftp {
+    /// Kept so the ssh2 session outlives the SFTP channel handle.
+    _session: Session,
+    sftp: Sftp,
+}
+
 pub struct RealSftpBackend {
     config: SshConnectionConfig,
+    live: RefCell<Option<LiveSftp>>,
+}
+
+impl std::fmt::Debug for RealSftpBackend {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("RealSftpBackend")
+            .field("config", &self.config)
+            .field("connected", &self.live.borrow().is_some())
+            .finish()
+    }
 }
 
 impl RealSftpBackend {
     pub fn new(config: SshConnectionConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            live: RefCell::new(None),
+        }
     }
 
-    fn with_sftp_client<T>(&self, operation: &str, run: impl FnOnce(&Sftp) -> SftpResult<T>) -> SftpResult<T> {
+    /// Drop the cached session so the next operation reconnects.
+    pub fn invalidate(&self) {
+        *self.live.borrow_mut() = None;
+    }
+
+    fn ensure_connected(&self, operation: &str) -> SftpResult<()> {
+        if self.live.borrow().is_some() {
+            return Ok(());
+        }
         self.config.validate().map_err(map_ssh_error)?;
         if !matches!(self.config.proxy, ProxyConfig::None) {
             return Err(SftpError::new(
@@ -51,7 +85,40 @@ impl RealSftpBackend {
                 format!("failed to open native SFTP channel for {operation}: {error}"),
             )
         })?;
-        run(&sftp)
+        *self.live.borrow_mut() = Some(LiveSftp {
+            _session: session,
+            sftp,
+        });
+        Ok(())
+    }
+
+    fn with_sftp_client<T>(
+        &self,
+        operation: &str,
+        mut run: impl FnMut(&Sftp) -> SftpResult<T>,
+    ) -> SftpResult<T> {
+        let mut attempted_reconnect = false;
+        loop {
+            self.ensure_connected(operation)?;
+            let result = {
+                let live = self.live.borrow();
+                let sftp = &live
+                    .as_ref()
+                    .expect("ensure_connected must populate live SFTP")
+                    .sftp;
+                run(sftp)
+            };
+            match result {
+                Err(error)
+                    if !attempted_reconnect && matches!(error.kind, SftpErrorKind::Backend) =>
+                {
+                    // Stale TCP/SSH session: drop and retry the op once.
+                    self.invalidate();
+                    attempted_reconnect = true;
+                }
+                other => return other,
+            }
+        }
     }
 }
 
@@ -69,6 +136,20 @@ impl SftpBackend for RealSftpBackend {
                 path: path.to_owned(),
                 entries,
             })
+        })
+    }
+
+    fn entry_kind(&self, path: &str) -> SftpResult<Option<FsEntryKind>> {
+        self.with_sftp_client("entry_kind", |sftp| match sftp.stat(Path::new(path)) {
+            Ok(stat) => Ok(Some(entry_kind_from_perm(stat.perm))),
+            Err(error) => {
+                let mapped = map_sftp_error(path, error, "stat");
+                if mapped.kind == SftpErrorKind::NotFound {
+                    Ok(None)
+                } else {
+                    Err(mapped)
+                }
+            }
         })
     }
 
@@ -228,6 +309,9 @@ fn connect_tcp_stream(config: &SshConnectionConfig) -> SftpResult<TcpStream> {
             Ok(stream) => {
                 let _ = stream.set_read_timeout(Some(timeout));
                 let _ = stream.set_write_timeout(Some(timeout));
+                // Interactive listing / small writes: disable Nagle so each
+                // SFTP packet is not delayed waiting to coalesce.
+                let _ = stream.set_nodelay(true);
                 return Ok(stream);
             }
             Err(error) => last_error = Some(error),

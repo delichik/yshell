@@ -9,8 +9,7 @@ use crate::{
 };
 use std::{fs, path::Path, path::PathBuf};
 use yshell_sftp::{
-    prepare_remote_edit_session, OverwritePolicy, SftpClient, TransferDirection,
-    TreeTransferOptions,
+    prepare_remote_edit_session, OverwritePolicy, TransferDirection, TreeTransferOptions,
 };
 
 use super::*;
@@ -59,13 +58,9 @@ impl AppRuntime {
         let Some(session_key) = self.prepare_active_sftp_operation("deleting through SFTP")? else {
             return Ok(self.projection());
         };
-        let runtime = self
-            .sessions
-            .get(&session_key)
-            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
-        let mut client =
-            SftpClient::with_real_backend(self.effective_ssh_config(&runtime.ssh_config));
-        client.delete(&entry.path).map_err(AppError::from_error)?;
+        self.sftp_live_client_mut(&session_key)?
+            .delete(&entry.path)
+            .map_err(AppError::from_error)?;
         self.sftp_remote_target = entry.path.clone();
         let _ = self.refresh_active_sftp_listing()?;
         self.status_text = format!("Deleted `{}` through SFTP.", entry.path);
@@ -155,13 +150,10 @@ impl AppRuntime {
             remote_path.clone(),
             Some(transfer_bytes),
         );
-        let runtime = self
-            .sessions
-            .get(&session_key)
-            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
-        let mut client =
-            SftpClient::with_real_backend(self.effective_ssh_config(&runtime.ssh_config));
-        if let Err(error) = client.upload_file(&local_path, &remote_path) {
+        if let Err(error) = self
+            .sftp_live_client_mut(&session_key)?
+            .upload_file(&local_path, &remote_path)
+        {
             let app_error = AppError::from_error(error);
             self.fail_sftp_transfer(&transfer_id, app_error.to_string());
             self.status_text = format!("SFTP upload error: {app_error}");
@@ -203,12 +195,10 @@ impl AppRuntime {
             local_path.display().to_string(),
             None,
         );
-        let runtime = self
-            .sessions
-            .get(&session_key)
-            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
-        let client = SftpClient::with_real_backend(self.effective_ssh_config(&runtime.ssh_config));
-        if let Err(error) = client.download_file(&remote_path, &local_path) {
+        if let Err(error) = self
+            .sftp_live_client_mut(&session_key)?
+            .download_file(&remote_path, &local_path)
+        {
             let app_error = AppError::from_error(error);
             self.fail_sftp_transfer(&transfer_id, app_error.to_string());
             self.status_text = format!("SFTP download error: {app_error}");
@@ -251,12 +241,10 @@ impl AppRuntime {
             local_path.display().to_string(),
             None,
         );
-        let runtime = self
-            .sessions
-            .get(&session_key)
-            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
-        let client = SftpClient::with_real_backend(self.effective_ssh_config(&runtime.ssh_config));
-        if let Err(error) = client.download_file(&remote_path, &local_path) {
+        if let Err(error) = self
+            .sftp_live_client_mut(&session_key)?
+            .download_file(&remote_path, &local_path)
+        {
             let app_error = AppError::from_error(error);
             self.fail_sftp_transfer(&transfer_id, app_error.to_string());
             self.status_text = format!("SFTP remote edit download error: {app_error}");
@@ -310,13 +298,10 @@ impl AppRuntime {
             edit_session.remote_path.clone(),
             Some(transfer_bytes),
         );
-        let runtime = self
-            .sessions
-            .get(&session_key)
-            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
-        let mut client =
-            SftpClient::with_real_backend(self.effective_ssh_config(&runtime.ssh_config));
-        if let Err(error) = client.upload_file(&local_path, &edit_session.remote_path) {
+        if let Err(error) = self
+            .sftp_live_client_mut(&session_key)?
+            .upload_file(&local_path, &edit_session.remote_path)
+        {
             let app_error = AppError::from_error(error);
             self.fail_sftp_transfer(&transfer_id, app_error.to_string());
             self.status_text = format!("SFTP remote edit upload error: {app_error}");
@@ -378,13 +363,9 @@ impl AppRuntime {
             return Ok(self.projection());
         };
         let remote_path = self.sftp_secondary_target_path("new SFTP directory path is empty")?;
-        let runtime = self
-            .sessions
-            .get(&session_key)
-            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
-        let mut client =
-            SftpClient::with_real_backend(self.effective_ssh_config(&runtime.ssh_config));
-        client.mkdir(&remote_path).map_err(AppError::from_error)?;
+        self.sftp_live_client_mut(&session_key)?
+            .mkdir(&remote_path)
+            .map_err(AppError::from_error)?;
         self.sftp_remote_target = remote_path.clone();
         let _ = self.refresh_active_sftp_listing()?;
         self.status_text = format!("Created remote directory `{remote_path}` through SFTP.");
@@ -399,13 +380,7 @@ impl AppRuntime {
         };
         let from_path = self.sftp_download_target()?;
         let to_path = self.sftp_secondary_target_path("new SFTP path is empty")?;
-        let runtime = self
-            .sessions
-            .get(&session_key)
-            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
-        let mut client =
-            SftpClient::with_real_backend(self.effective_ssh_config(&runtime.ssh_config));
-        client
+        self.sftp_live_client_mut(&session_key)?
             .rename(&from_path, &to_path)
             .map_err(AppError::from_error)?;
         self.sftp_remote_target = to_path.clone();
@@ -422,13 +397,7 @@ impl AppRuntime {
         };
         let remote_path = self.sftp_download_target()?;
         let permissions = parse_sftp_permissions(&self.sftp_permissions)?;
-        let runtime = self
-            .sessions
-            .get(&session_key)
-            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
-        let mut client =
-            SftpClient::with_real_backend(self.effective_ssh_config(&runtime.ssh_config));
-        client
+        self.sftp_live_client_mut(&session_key)?
             .chmod(&remote_path, permissions)
             .map_err(AppError::from_error)?;
         let _ = self.refresh_active_sftp_listing()?;

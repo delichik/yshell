@@ -1287,7 +1287,9 @@ fn blend_pixel(rgba: &mut [u8], frame_width: u32, x: u32, y: u32, color: Termina
     if index * 4 + 4 > rgba.len() {
         return;
     }
-    let coverage = f32::from(alpha) / 255.0;
+    // Mild coverage gamma (>1) pushes mid-tone AA fringes toward transparent so
+    // stems stay crisp on dark backgrounds instead of washing out grey.
+    let coverage = (f32::from(alpha) / 255.0).powf(1.25);
     let pixel = &mut rgba[index * 4..index * 4 + 4];
     pixel[0] = blend_channel(pixel[0], color.red, coverage);
     pixel[1] = blend_channel(pixel[1], color.green, coverage);
