@@ -49,11 +49,17 @@ export component TerminalView inherits Rectangle {
     /// E10：宿主告知终端视图当前是否可见（Quick Connect 页 / 无会话时为 false）——
     /// 查找栏的自动聚焦据此避让，不去抢其他页面输入框的焦点。
     in property <bool> view-visible: true;
-    out property <bool> terminal-focused: terminal_focus.has-focus;
+    /// P1：分屏叶子内嵌时去掉外层 padding、放宽 min-height（标题/描边由 SplitPaneLeaf 承担）。
+    in property <bool> embedded: false;
+    /// P1：非聚焦分屏叶子只做位图预览 + 点击聚焦，不接手选择/滚动/按键/查找/overlay。
+    in property <bool> interactive: true;
+    out property <bool> terminal-focused: root.interactive && terminal_focus.has-focus;
     // E16：内边距统一走 Theme token（表面内边距 = spacing-12，两侧共 2×）
     out property <float> terminal-viewport-width-px: terminal_surface.width / 1px - 2 * Theme.spacing-12 / 1px;
     out property <float> terminal-viewport-height-px: terminal_surface.height / 1px - 2 * Theme.spacing-12 / 1px;
 
+    /// P1：非交互叶子被点击时请求宿主切换焦点（分屏未聚焦 pane）。
+    callback focus-requested();
     callback key-pressed(string, bool, bool, bool, bool);
     callback scroll-lines(int);
     callback scroll-to-bottom();
@@ -95,26 +101,33 @@ export component TerminalView inherits Rectangle {
     background: transparent;
 
     VerticalLayout {
-        padding: Theme.spacing-12;
-        spacing: Theme.spacing-8;
+        padding: root.embedded ? 0px : Theme.spacing-12;
+        spacing: root.embedded ? (root.find-visible ? Theme.spacing-4 : 0px) : Theme.spacing-8;
 
         terminal_surface := Rectangle {
             background: Theme.terminal-surface;
-            border-color: root.terminal-focused ? Theme.accent : Theme.terminal-border;
-            border-width: 1px;
-            border-radius: Theme.radius-panel;
+            border-color: root.embedded
+                ? transparent
+                : (root.terminal-focused ? Theme.accent : Theme.terminal-border);
+            border-width: root.embedded ? 0px : 1px;
+            border-radius: root.embedded ? 0px : Theme.radius-panel;
             // 可收缩下限：窗口 880×600 时终端区仍能放下（含查找栏），不把状态栏挤出可视区。
-            min-height: 320px;
+            // 分屏叶子内嵌时放宽，避免把另一片挤没。
+            min-height: root.embedded ? 40px : 320px;
             clip: true;
 
-            // 表面内边距 12px（§5.17）
+            // 表面内边距 12px（§5.17）；embedded 时仍保留，与单窗格单元格度量一致。
             terminal_focus := FocusScope {
                 x: Theme.spacing-12;
                 y: Theme.spacing-12;
                 width: parent.width - 2 * Theme.spacing-12;
                 height: parent.height - 2 * Theme.spacing-12;
+                enabled: root.interactive;
 
                 key-pressed(event) => {
+                    if (!root.interactive) {
+                        return reject;
+                    }
                     // E10：查找栏可见时 F3/Shift+F3 在匹配间跳转、Esc 关栏；
                     // 其余按键照旧送终端（避免 F3 被编码成远端输入）。
                     if (root.find-visible) {
@@ -156,8 +169,11 @@ export component TerminalView inherits Rectangle {
 
                 surface_touch := TouchArea {
                     // 终端文本区可做选择：I 形光标（桌面控件规则里仅文本类使用）
-                    mouse-cursor: MouseCursor.text;
+                    mouse-cursor: root.interactive ? MouseCursor.text : MouseCursor.default;
                     pointer-event(event) => {
+                        if (!root.interactive) {
+                            return;
+                        }
                         if (event.button == PointerEventButton.left) {
                             if (event.kind == PointerEventKind.down) {
                                 terminal_focus.focus();
@@ -176,12 +192,18 @@ export component TerminalView inherits Rectangle {
                             );
                         }
                     }
-                    clicked => { terminal_focus.focus(); }
+                    clicked => {
+                        if (root.interactive) {
+                            terminal_focus.focus();
+                        }
+                    }
                     double-clicked => {
-                        root.select-word-at(self.mouse-x / 1px, self.mouse-y / 1px);
+                        if (root.interactive) {
+                            root.select-word-at(self.mouse-x / 1px, self.mouse-y / 1px);
+                        }
                     }
                     scroll-event(event) => {
-                        if (event.delta-y != 0) {
+                        if (root.interactive && event.delta-y != 0) {
                             root.scroll-lines(event.delta-y > 0 ? 3 : -3);
                             return accept;
                         }
@@ -190,11 +212,31 @@ export component TerminalView inherits Rectangle {
                 }
             }
 
-            // WP1：连接生命周期 overlay（居中卡片；不挡底层终端位图布局）。
-            if root.connection-overlay-visible : Rectangle {
+            // P1：非交互叶子上的点击落到表面层，交给宿主切换焦点。
+            if !root.interactive : TouchArea {
+                width: parent.width;
+                height: parent.height;
+                clicked => { root.focus-requested(); }
+            }
+
+            // WP1/P2：连接生命周期 overlay（居中卡片）。不用 `if` 销毁节点，以便 opacity 淡入淡出；
+            // pending 确认由模态对话框承载（投影侧已隐藏 overlay）。
+            if root.interactive : Rectangle {
                 width: parent.width;
                 height: parent.height;
                 background: #00000088;
+                opacity: root.connection-overlay-visible ? 1.0 : 0.0;
+                visible: root.connection-overlay-visible || self.opacity > 0.01;
+                animate opacity {
+                    duration: Theme.duration-normal;
+                    easing: ease-out;
+                }
+
+                // 隐藏时不拦截终端指针。
+                TouchArea {
+                    enabled: root.connection-overlay-visible;
+                    mouse-cursor: MouseCursor.default;
+                }
 
                 Rectangle {
                     width: min(420px, parent.width - 2 * Theme.spacing-24);
@@ -220,11 +262,9 @@ export component TerminalView inherits Rectangle {
                         }
 
                         Text {
-                            text: root.connection-overlay-pending
-                                ? @tr("Waiting for confirmation…")
-                                : root.connection-overlay-failed
-                                    ? @tr("Connection failed")
-                                    : @tr("Connecting…");
+                            text: root.connection-overlay-failed
+                                ? @tr("Connection failed")
+                                : @tr("Connecting…");
                             color: root.connection-overlay-failed ? Theme.critical : Theme.text-secondary;
                             font-size: Theme.font-caption;
                             horizontal-alignment: center;
@@ -252,7 +292,8 @@ export component TerminalView inherits Rectangle {
                             alignment: center;
                             spacing: Theme.spacing-8;
 
-                            if root.connection-overlay-failed || root.connection-overlay-pending : WinButton {
+                            // P2：仅失败可 Retry；pending 确认走 HostKey/Auth 模态，不在此提供 Retry。
+                            if root.connection-overlay-failed : WinButton {
                                 text: @tr("Retry");
                                 accent: true;
                                 clicked => { root.connection-retry(); }
@@ -273,7 +314,7 @@ export component TerminalView inherits Rectangle {
             }
 
             // 滚动 / 选择反馈：右上角小浮层（半透明 chrome 底 + 4px 圆角），不占整行
-            if (root.scroll-offset > 0 || root.selection-active) : Rectangle {
+            if root.interactive && (root.scroll-offset > 0 || root.selection-active) : Rectangle {
                 x: parent.width - self.width - Theme.spacing-12;
                 y: Theme.spacing-12;
                 width: feedback_row.preferred-width;
@@ -317,7 +358,7 @@ export component TerminalView inherits Rectangle {
 
             // --- 滚动条（§5.17）：4px 细条 + 圆角，覆盖在表面右侧内缘，不占内容宽度 ---
             // 仅当存在可回翻行时出现；常态 40% 不透明度，悬停（滑块或轨道）/拖拽中 60%。
-            if (root.scrollbar-visible) : Rectangle {
+            if root.interactive && root.scrollbar-visible : Rectangle {
                 x: parent.width - self.width - Theme.spacing-4;
                 y: Theme.spacing-4;
                 width: Theme.spacing-4;
@@ -398,14 +439,15 @@ export component TerminalView inherits Rectangle {
             }
         }
 
-        // --- 查找栏 ---------------------------------------------------------
-        if root.find-visible : Rectangle {
+        // --- 查找栏（P1：窄宽时控件可横向滚动，隐藏次要标签，避免挤成 `…`）---
+        if root.interactive && root.find-visible : Rectangle {
             // 40px = 32px 控件 + 上下各 4px（M 轮5 实测值）
             height: Theme.control-height + 2 * Theme.spacing-4;
             background: Theme.terminal-chrome-fill;
             border-radius: Theme.radius-control;
             border-width: 1px;
             border-color: Theme.terminal-border;
+            clip: true;
 
             // E10：Esc 关栏、F3/Shift+F3 上一个/下一个（输入框聚焦时也能用）。
             // 包住整条是为了让输入框 reject 的按键沿父链冒泡到这里。
@@ -442,93 +484,102 @@ export component TerminalView inherits Rectangle {
                     return reject;
                 }
 
-                HorizontalLayout {
-                    // 文本左 10；右侧以 32×32 关闭按钮收尾，右 4（图标视觉内缩 10，与左对齐）
-                    // 纵向 4：让 32px 固定高度的按钮/输入框在 40px 条内垂直居中
-                    padding-left: 10px;
-                    padding-right: Theme.spacing-4;
-                    padding-top: Theme.spacing-4;
-                    padding-bottom: Theme.spacing-4;
-                    spacing: Theme.spacing-8;
+                find_flick := Flickable {
+                    width: parent.width;
+                    height: parent.height;
+                    interactive: true;
+                    mouse-drag-pan-enabled: true;
+                    content-width: Math.max(find_row.preferred-width, self.width);
+                    content-height: self.height;
 
-                    Text {
-                        text: @tr("Find");
-                        color: Theme.text-secondary;
-                        font-weight: Theme.weight-semibold;
-                        vertical-alignment: center;
-                        wrap: no-wrap;
-                    }
+                    find_row := HorizontalLayout {
+                        // 文本左 8；右侧以 32×32 关闭按钮收尾；纵向 4 垂直居中
+                        padding-left: Theme.spacing-8;
+                        padding-right: Theme.spacing-4;
+                        padding-top: Theme.spacing-4;
+                        padding-bottom: Theme.spacing-4;
+                        spacing: Theme.spacing-4;
 
-                    // 搜索框：WinTextInput 自带 control-fill 底 + control-stroke 描边 + 聚焦强调条
-                    search_input := WinTextInput {
-                        horizontal-stretch: 1;
-                        // E10：窄栏时优先压缩输入框（原 160px 会把三个按钮压成 `…`）
-                        min-width: 96px;
-                        text <=> root.search-query;
-                        placeholder-text: root.search-regex
-                            ? @tr("Regex (Rust syntax)")
-                            : @tr("Search visible terminal text");
-                        accepted => {
-                            root.find-text(self.text);
-                            // 提交后回焦终端，避免后续按键继续落在输入框/直接进 shell 的歧义
-                            terminal_focus.focus();
+                        // P1：宽栏才显示 "Find" 标签；窄栏靠输入框 placeholder 表达语义。
+                        if find_scope.width >= 520px : Text {
+                            text: @tr("Find");
+                            color: Theme.text-secondary;
+                            font-weight: Theme.weight-semibold;
+                            vertical-alignment: center;
+                            wrap: no-wrap;
                         }
-                    }
 
-                    // WP2：正则模式开关（契约 §7.3 `terminal.search.regex`）
-                    WinToggle {
-                        text: @tr("Regex");
-                        checked <=> root.search-regex;
-                        toggled => {
-                            root.find-regex-changed(root.search-regex);
-                            if (search_input.text != "") {
-                                root.find-text(search_input.text);
+                        // 搜索框：WinTextInput 自带 control-fill 底 + control-stroke 描边 + 聚焦强调条
+                        search_input := WinTextInput {
+                            horizontal-stretch: 1;
+                            // P1：再压一点下限，给按钮留位；过窄时 Flickable 横滚
+                            min-width: 72px;
+                            text <=> root.search-query;
+                            placeholder-text: root.search-regex
+                                ? @tr("Regex (Rust syntax)")
+                                : @tr("Search visible terminal text");
+                            accepted => {
+                                root.find-text(self.text);
+                                // 提交后回焦终端，避免后续按键继续落在输入框/直接进 shell 的歧义
+                                terminal_focus.focus();
                             }
                         }
-                    }
 
-                    // E10：三个按钮保底宽，不再被压成 `…`
-                    WinButton {
-                        text: @tr("Find");
-                        min-width: 56px;
-                        clicked => {
-                            root.find-text(search_input.text);
-                            // 与 Enter 提交一致：回焦终端，避免后续按键落在查找栏。
-                            terminal_focus.focus();
+                        // WP2：正则模式开关；窄栏隐藏文字，走纯图标/勾选态
+                        WinToggle {
+                            text: find_scope.width >= 420px ? @tr("Regex") : "";
+                            accessible-name: @tr("Regex");
+                            checked <=> root.search-regex;
+                            toggled => {
+                                root.find-regex-changed(root.search-regex);
+                                if (search_input.text != "") {
+                                    root.find-text(search_input.text);
+                                }
+                            }
                         }
-                    }
-                    WinButton {
-                        text: @tr("Prev");
-                        min-width: 72px;
-                        clicked => {
-                            root.find-prev();
-                            terminal_focus.focus();
-                        }
-                    }
-                    WinButton {
-                        text: @tr("Next");
-                        min-width: 72px;
-                        clicked => {
-                            root.find-next();
-                            terminal_focus.focus();
-                        }
-                    }
 
-                    Text {
-                        text: root.search-summary;
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-caption;
-                        vertical-alignment: center;
-                        wrap: no-wrap;
-                        // E10：摘要先于按钮/输入框被压缩（elide 到 0 宽也不撑栏）
-                        min-width: 0px;
-                        overflow: elide;
-                    }
+                        // E10：按钮保底宽；窄栏用更短标签
+                        WinButton {
+                            text: @tr("Find");
+                            min-width: 48px;
+                            clicked => {
+                                root.find-text(search_input.text);
+                                terminal_focus.focus();
+                            }
+                        }
+                        WinButton {
+                            text: @tr("Prev");
+                            min-width: find_scope.width >= 420px ? 56px : 48px;
+                            clicked => {
+                                root.find-prev();
+                                terminal_focus.focus();
+                            }
+                        }
+                        WinButton {
+                            text: @tr("Next");
+                            min-width: find_scope.width >= 420px ? 56px : 48px;
+                            clicked => {
+                                root.find-next();
+                                terminal_focus.focus();
+                            }
+                        }
 
-                    WinIconButton {
-                        icon: "close";
-                        accessible-name: @tr("Close find bar");
-                        clicked => { root.dismiss-find(); }
+                        // P1：摘要仅在较宽时显示，避免与按钮抢宽
+                        if find_scope.width >= 560px : Text {
+                            text: root.search-summary;
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            vertical-alignment: center;
+                            wrap: no-wrap;
+                            min-width: 0px;
+                            overflow: elide;
+                        }
+
+                        WinIconButton {
+                            icon: "close";
+                            accessible-name: @tr("Close find bar");
+                            clicked => { root.dismiss-find(); }
+                        }
                     }
                 }
             }
@@ -538,6 +589,8 @@ export component TerminalView inherits Rectangle {
     /// A2/E23：把键盘焦点交还终端（菜单/弹层关闭后的焦点回退；查找栏关闭时也走这里）。
     /// 终端不可见时应由宿主自行判断，不要调用。
     public function focus-terminal() {
-        terminal_focus.focus();
+        if (root.interactive) {
+            terminal_focus.focus();
+        }
     }
 }
