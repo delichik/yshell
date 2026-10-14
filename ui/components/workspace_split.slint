@@ -138,55 +138,67 @@ component SplitPaneLeaf inherits Rectangle {
 
             // P1：聚焦叶子 —— 完整 TerminalView（含查找 / overlay / 滚动条 / 选择）
             // 始终实例化、用 max-height 折叠，避免条件元素无法 focus-terminal。
-            leaf_tv := TerminalView {
-                x: 0;
-                y: 0;
-                width: parent.width;
-                height: parent.height;
-                visible: !root.empty && root.focused;
-                // visible 仍占布局时用 clip + 零尺寸避让；Surface 绝对定位在父 Rectangle 上
-                embedded: true;
-                interactive: true;
-                view-visible: root.view-visible && root.focused && !root.empty;
-                title: "";
-                log-output: "";
-                terminal-image: root.terminal-image;
-                cursor-column: root.cursor-column;
-                cursor-row: root.cursor-row;
-                scroll-offset: root.scroll-offset;
-                selection-active: root.selection-active;
-                search-query <=> root.search-query;
-                search-summary: root.search-summary;
-                search-regex <=> root.search-regex;
-                find-visible: root.focused && !root.empty && root.find-visible;
-                connection-overlay-visible: root.focused && !root.empty && root.connection-overlay-visible;
-                connection-overlay-target: root.connection-overlay-target;
-                connection-overlay-stage: root.connection-overlay-stage;
-                connection-overlay-error: root.connection-overlay-error;
-                connection-overlay-failed: root.connection-overlay-failed;
-                connection-overlay-pending: root.connection-overlay-pending;
-                focus-requested() => { root.focus-requested(); }
-                connection-retry() => { root.connection-retry(); }
-                connection-cancel() => { root.connection-cancel(); }
-                connection-copy-error() => { root.connection-copy-error(); }
-                key-pressed(text, ctrl, alt, shift, meta) => {
-                    root.key-pressed(text, ctrl, alt, shift, meta);
+            // Break layout binding cycle: never bind TerminalView to parent.width/height
+            // (VerticalLayout + min-height inside TV feeds back into parent layout_info).
+            leaf_host := VerticalLayout {
+                padding: 0;
+                spacing: 0;
+                width: 100%;
+                height: 100%;
+                min-height: 0px;
+                max-height: !root.empty && root.focused ? 100000px : 0px;
+
+                leaf_tv := TerminalView {
+                    vertical-stretch: 1;
+                    min-width: 0px;
+                    min-height: 0px;
+                    preferred-width: 0px;
+                    preferred-height: 0px;
+                    embedded: true;
+
+                    interactive: true;
+                    view-visible: root.view-visible && root.focused && !root.empty;
+                    title: "";
+                    log-output: "";
+                    terminal-image: root.terminal-image;
+                    cursor-column: root.cursor-column;
+                    cursor-row: root.cursor-row;
+                    scroll-offset: root.scroll-offset;
+                    selection-active: root.selection-active;
+                    search-query <=> root.search-query;
+                    search-summary: root.search-summary;
+                    search-regex <=> root.search-regex;
+                    find-visible: root.focused && !root.empty && root.find-visible;
+                    connection-overlay-visible: root.focused && !root.empty && root.connection-overlay-visible;
+                    connection-overlay-target: root.connection-overlay-target;
+                    connection-overlay-stage: root.connection-overlay-stage;
+                    connection-overlay-error: root.connection-overlay-error;
+                    connection-overlay-failed: root.connection-overlay-failed;
+                    connection-overlay-pending: root.connection-overlay-pending;
+                    focus-requested() => { root.focus-requested(); }
+                    connection-retry() => { root.connection-retry(); }
+                    connection-cancel() => { root.connection-cancel(); }
+                    connection-copy-error() => { root.connection-copy-error(); }
+                    key-pressed(text, ctrl, alt, shift, meta) => {
+                        root.key-pressed(text, ctrl, alt, shift, meta);
+                    }
+                    scroll-lines(delta) => { root.scroll-lines(delta); }
+                    scroll-to-bottom() => { root.scroll-to-bottom(); }
+                    selection-begin(x, y) => { root.selection-begin(x, y); }
+                    selection-update(x, y) => { root.selection-update(x, y); }
+                    selection-end(x, y) => { root.selection-end(x, y); }
+                    select-word-at(x, y) => { root.select-word-at(x, y); }
+                    copy-visible() => { root.copy-visible(); }
+                    paste-clipboard() => { root.paste-clipboard(); }
+                    clear-terminal() => { root.clear-terminal(); }
+                    find-text(query) => { root.find-text(query); }
+                    find-next() => { root.find-next(); }
+                    find-prev() => { root.find-prev(); }
+                    find-regex-changed(enabled) => { root.find-regex-changed(enabled); }
+                    dismiss-find() => { root.dismiss-find(); }
+
+                    context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
                 }
-                scroll-lines(delta) => { root.scroll-lines(delta); }
-                scroll-to-bottom() => { root.scroll-to-bottom(); }
-                selection-begin(x, y) => { root.selection-begin(x, y); }
-                selection-update(x, y) => { root.selection-update(x, y); }
-                selection-end(x, y) => { root.selection-end(x, y); }
-                select-word-at(x, y) => { root.select-word-at(x, y); }
-                copy-visible() => { root.copy-visible(); }
-                paste-clipboard() => { root.paste-clipboard(); }
-                clear-terminal() => { root.clear-terminal(); }
-                find-text(query) => { root.find-text(query); }
-                find-next() => { root.find-next(); }
-                find-prev() => { root.find-prev(); }
-                find-regex-changed(enabled) => { root.find-regex-changed(enabled); }
-                dismiss-find() => { root.dismiss-find(); }
-                context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
             }
         }
     }
@@ -274,7 +286,7 @@ export component WorkspaceSplitView inherits Rectangle {
             horizontal-stretch: root.clamped-ratio * 100;
             title-text: root.pane0-title-text;
             empty: root.pane0-empty;
-            focused: root.focused-pane == 0;
+            focused: root.horizontal && root.focused-pane == 0;
             terminal-image: root.focused-pane == 0 ? root.primary-image : root.secondary-image;
             cursor-column: root.cursor-column;
             cursor-row: root.cursor-row;
@@ -334,7 +346,7 @@ export component WorkspaceSplitView inherits Rectangle {
             horizontal-stretch: (1.0 - root.clamped-ratio) * 100;
             title-text: root.pane1-title-text;
             empty: root.pane1-empty;
-            focused: root.focused-pane == 1;
+            focused: root.horizontal && root.focused-pane == 1;
             terminal-image: root.focused-pane == 1 ? root.primary-image : root.secondary-image;
             cursor-column: root.cursor-column;
             cursor-row: root.cursor-row;
@@ -385,7 +397,7 @@ export component WorkspaceSplitView inherits Rectangle {
             vertical-stretch: root.clamped-ratio * 100;
             title-text: root.pane0-title-text;
             empty: root.pane0-empty;
-            focused: root.focused-pane == 0;
+            focused: !root.horizontal && root.focused-pane == 0;
             terminal-image: root.focused-pane == 0 ? root.primary-image : root.secondary-image;
             cursor-column: root.cursor-column;
             cursor-row: root.cursor-row;
@@ -445,7 +457,7 @@ export component WorkspaceSplitView inherits Rectangle {
             vertical-stretch: (1.0 - root.clamped-ratio) * 100;
             title-text: root.pane1-title-text;
             empty: root.pane1-empty;
-            focused: root.focused-pane == 1;
+            focused: !root.horizontal && root.focused-pane == 1;
             terminal-image: root.focused-pane == 1 ? root.primary-image : root.secondary-image;
             cursor-column: root.cursor-column;
             cursor-row: root.cursor-row;
