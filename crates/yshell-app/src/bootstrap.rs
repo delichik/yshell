@@ -1088,6 +1088,82 @@ pub(crate) fn wire_callbacks(
         }
     });
 
+    // WP2：Bracketed paste / copy line / select screen / clear scrollback / regex find.
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    let clipboard_ref = Rc::clone(&clipboard);
+    window.on_paste_terminal_bracketed(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        match paste_clipboard_into_terminal_bracketed(&runtime_ref, &clipboard_ref) {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not paste into the terminal.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    let clipboard_ref = Rc::clone(&clipboard);
+    window.on_copy_terminal_current_line(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let result = runtime_ref.borrow_mut().copy_active_terminal_current_line();
+        match result {
+            Ok(projection) => {
+                if let Some(clipboard) = clipboard_ref.borrow_mut().as_mut() {
+                    let _ = clipboard
+                        .set_contents(runtime_ref.borrow().terminal_clipboard_text().to_owned());
+                }
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not copy the current line.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_terminal_select_screen(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let result = runtime_ref.borrow_mut().select_screen_active_terminal();
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => {
+                set_error_status(&window, "Could not select the visible screen.", &error)
+            }
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_clear_terminal_scrollback(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let result = runtime_ref.borrow_mut().clear_active_terminal_scrollback();
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not clear scrollback.", &error),
+        }
+    });
+
     // --- Terminal keyboard / scroll / selection surface ---------------------
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
@@ -1336,6 +1412,23 @@ pub(crate) fn wire_callbacks(
             return;
         };
         let result = runtime_ref.borrow_mut().select_previous_terminal_match();
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Find failed.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_set_terminal_search_regex(move |enabled| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let result = runtime_ref.borrow_mut().set_terminal_search_regex(enabled);
         match result {
             Ok(projection) => {
                 apply_projection(&window, &projection);
@@ -4674,6 +4767,26 @@ fn paste_clipboard_into_terminal(
     }
 }
 
+/// WP2：Bracketed paste from the OS clipboard (same fallback as plain paste).
+fn paste_clipboard_into_terminal_bracketed(
+    runtime: &Rc<crate::windows::WindowRuntime>,
+    clipboard: &Rc<RefCell<Option<ClipboardContext>>>,
+) -> AppResult<AppProjection> {
+    let clipboard_text = clipboard
+        .borrow_mut()
+        .as_mut()
+        .and_then(|clipboard| clipboard.get_contents().ok());
+    match clipboard_text {
+        Some(text) => runtime.borrow_mut().paste_text_into_terminal_bracketed(&text),
+        None => {
+            let text = runtime.borrow().terminal_clipboard_text().to_owned();
+            runtime
+                .borrow_mut()
+                .paste_text_into_terminal_bracketed(&text)
+        }
+    }
+}
+
 /// A key press from the terminal surface.
 struct TerminalKeyPress<'a> {
     text: &'a str,
@@ -5825,7 +5938,11 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     }
     window.set_terminal_selection_active(projection.terminal_selection_active);
     window.set_terminal_has_selection(projection.terminal_has_selection);
+    window.set_terminal_has_scrollback(projection.terminal_has_scrollback);
+    window.set_terminal_has_screen_content(projection.terminal_has_screen_content);
     window.set_terminal_search_query_text(projection.terminal_search_query_text.clone().into());
+    window.set_terminal_search_regex(projection.terminal_search_regex);
+    window.set_terminal_search_error_text(projection.terminal_search_error_text.clone().into());
     window.set_terminal_search_kind_text(projection.terminal_search_kind_text.clone().into());
     window.set_terminal_search_match_count(projection.terminal_search_match_count);
     window.set_terminal_search_current_index(projection.terminal_search_current_index);

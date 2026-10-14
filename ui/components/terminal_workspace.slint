@@ -231,6 +231,8 @@ export component TerminalWorkspace inherits VerticalLayout {
     /// 可见行与查找词与宿主双向绑定（终端内部会写回查找词）。
     in-out property <[string]> visible-lines: [];
     in-out property <string> search-query-text: "";
+    /// WP2：正则查找开关。
+    in-out property <bool> search-regex: false;
 
     out property <float> terminal-viewport-width-px: terminal_view.terminal-viewport-width-px;
     out property <float> terminal-viewport-height-px: terminal_view.terminal-viewport-height-px;
@@ -284,6 +286,7 @@ export component TerminalWorkspace inherits VerticalLayout {
     callback find-text(string);
     callback find-next();
     callback find-prev();
+    callback find-regex-changed(bool);
     callback dismiss-find();
     // WP1：连接 overlay 动作（透传 TerminalView）。
     callback connection-retry();
@@ -396,6 +399,7 @@ export component TerminalWorkspace inherits VerticalLayout {
                 selection-active: root.selection-active;
                 search-query <=> root.search-query-text;
                 search-summary: root.search-summary-text;
+                search-regex <=> root.search-regex;
                 footer-status: root.status-text;
                 find-visible: root.find-visible;
                 connection-overlay-visible: root.connection-overlay-visible;
@@ -420,6 +424,7 @@ export component TerminalWorkspace inherits VerticalLayout {
                 find-text(query) => { root.find-text(query); }
                 find-next() => { root.find-next(); }
                 find-prev() => { root.find-prev(); }
+                find-regex-changed(enabled) => { root.find-regex-changed(enabled); }
                 dismiss-find() => { root.dismiss-find(); }
                 context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
             }

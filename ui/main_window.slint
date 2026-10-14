@@ -199,8 +199,15 @@ export component MainWindow inherits Window {
     in-out property <bool> terminal_selection_active: false;
     // W5-A3：终端 Edit 菜单（Copy/清屏等）的状态开关；与上者同源。
     in-out property <bool> terminal_has_selection: false;
+    // WP2：Clear Scrollback / Select·Copy Screen 启用条件。
+    in-out property <bool> terminal_has_scrollback: false;
+    in-out property <bool> terminal_has_screen_content: false;
     in-out property <string> terminal_search_query_text: "";
+    in-out property <bool> terminal_search_regex: false;
+    in-out property <string> terminal_search_error_text: "";
     in-out property <string> terminal_search_summary_text: "Find in terminal";
+    // WP2：Clear Scrollback 简单确认（无 Type-token）。
+    in-out property <bool> clear_scrollback_dialog_visible: false;
     in-out property <string> sftp_path_text: "/";
     in-out property <string> sftp_listing_text: "Fake backend selected. Switch to native SSH to validate the embedded SSH and SFTP paths.";
     in-out property <string> sftp_local_path_text: "";
@@ -696,13 +703,18 @@ export component MainWindow inherits Window {
     callback terminal_selection_end(float, float);
     callback terminal_select_word_at(float, float);
     callback terminal_select_all();
+    callback terminal_select_screen();
     callback copy_terminal_selection();
     callback copy_terminal_visible();
+    callback copy_terminal_current_line();
     callback paste_terminal_clipboard();
+    callback paste_terminal_bracketed();
     callback clear_terminal();
+    callback clear_terminal_scrollback();
     callback find_terminal_text(string);
     callback find_terminal_next();
     callback find_terminal_prev();
+    callback set_terminal_search_regex(bool);
     callback refresh_sftp();
     callback open_sftp_path(string);
     callback open_sftp_parent();
@@ -982,7 +994,8 @@ export component MainWindow inherits Window {
         || root.auth_prompt_visible
         || root.logging_dialog_visible
         || root.terminal_appearance_dialog_visible
-        || root.folder_editor_visible;
+        || root.folder_editor_visible
+        || root.clear_scrollback_dialog_visible;
 
     /// W5-A2 / N2：Ctrl+O（及非终端焦点下的 Ctrl+L）与 File > Quick Connect —— 打开/激活 QC 页并聚焦输入框。
     public function focus-quick-connect() {
@@ -1128,7 +1141,7 @@ export component MainWindow inherits Window {
         { label: @tr("Quit"), shortcut: root.shortcut-quit, enabled: true, checked: false, separator: false }
     ];
     property <[MenuEntry]> edit_menu_entries: [
-        // W5-A3：无选区 / 无活动会话时禁用。
+        // W5-A3：无选区 / 无活动会话时禁用。WP2：补齐 Select All / Bracketed Paste / Clear Scrollback。
         {
             label: @tr("Copy"), shortcut: root.shortcut-copy,
             enabled: root.terminal_has_selection, checked: false, separator: false,
@@ -1140,9 +1153,28 @@ export component MainWindow inherits Window {
             tooltip: root.has_active_session ? "" : @tr("Open a session first.")
         },
         {
+            label: @tr("Paste as Bracketed"), shortcut: "",
+            enabled: root.has_active_session && root.active_session_connected, checked: false, separator: false,
+            tooltip: root.has_active_session
+                ? (root.active_session_connected
+                    ? @tr("Wraps paste in CSI 200~/201~ for shells that honor bracketed paste.")
+                    : @tr("Connect the session first."))
+                : @tr("Open a session first.")
+        },
+        {
+            label: @tr("Select All"), shortcut: "",
+            enabled: root.has_active_session, checked: false, separator: false,
+            tooltip: root.has_active_session ? "" : @tr("Open a session first.")
+        },
+        {
             label: @tr("Clear Terminal"), shortcut: root.shortcut-clear-terminal,
             enabled: root.has_active_session, checked: false, separator: false,
             tooltip: root.has_active_session ? "" : @tr("Open a session first.")
+        },
+        {
+            label: @tr("Clear Scrollback"), shortcut: "",
+            enabled: root.terminal_has_scrollback, checked: false, separator: false,
+            tooltip: root.terminal_has_scrollback ? "" : @tr("Scrollback is empty.")
         },
         // A24：无活动会话时查找不可用（此前 enabled: true 会静默置位查找栏状态）。
         {
@@ -1221,16 +1253,40 @@ export component MainWindow inherits Window {
         { label: @tr("Quit"), shortcut: root.shortcut-quit, enabled: true, checked: false, separator: false }
     ];
     property <[MenuEntry]> terminal_context_menu_entries: [
-        // W5-A3：无选区时 Copy 禁用（其余项需要活动会话）。
+        // WP2：契约 §7.2 日常项 + N6 日志 + N9 同步。索引见 dispatch_context_menu(which==4)。
         {
             label: @tr("Copy"), shortcut: root.shortcut-copy,
             enabled: root.terminal_has_selection, checked: false, separator: false,
             tooltip: root.terminal_has_selection ? "" : @tr("Select text in the terminal first.")
         },
         {
+            label: @tr("Copy Current Line"), shortcut: "",
+            enabled: root.has_active_session, checked: false, separator: false,
+            tooltip: root.has_active_session ? "" : @tr("Open a session first.")
+        },
+        {
+            label: @tr("Copy Screen"), shortcut: "",
+            enabled: root.terminal_has_screen_content, checked: false, separator: false,
+            tooltip: root.terminal_has_screen_content ? "" : @tr("Visible screen is empty.")
+        },
+        {
             label: @tr("Paste"), shortcut: root.shortcut-paste,
             enabled: root.has_active_session, checked: false, separator: false,
             tooltip: root.has_active_session ? "" : @tr("Open a session first.")
+        },
+        {
+            label: @tr("Paste as Bracketed"), shortcut: "",
+            enabled: root.has_active_session && root.active_session_connected, checked: false, separator: false,
+            tooltip: root.has_active_session
+                ? (root.active_session_connected
+                    ? @tr("Wraps paste in CSI 200~/201~ for shells that honor bracketed paste.")
+                    : @tr("Connect the session first."))
+                : @tr("Open a session first.")
+        },
+        {
+            label: @tr("Select Screen"), shortcut: "",
+            enabled: root.terminal_has_screen_content, checked: false, separator: false,
+            tooltip: root.terminal_has_screen_content ? "" : @tr("Visible screen is empty.")
         },
         {
             label: @tr("Select All"), shortcut: "",
@@ -1243,11 +1299,21 @@ export component MainWindow inherits Window {
             tooltip: root.has_active_session ? "" : @tr("Open a session first.")
         },
         {
+            label: @tr("Clear Scrollback"), shortcut: "",
+            enabled: root.terminal_has_scrollback, checked: false, separator: false,
+            tooltip: root.terminal_has_scrollback ? "" : @tr("Scrollback is empty.")
+        },
+        {
             label: @tr("Find..."), shortcut: root.shortcut-find,
             enabled: root.has_active_session, checked: false, separator: false,
             tooltip: root.has_active_session ? "" : @tr("Open a session first.")
         },
-        // N6：终端日志（顺序与索引：6 Start / 7 Stop / 8 Open File / 9 Open Folder）。
+        {
+            label: @tr("Find Regex..."), shortcut: "",
+            enabled: root.has_active_session, checked: false, separator: false,
+            tooltip: root.has_active_session ? "" : @tr("Open a session first.")
+        },
+        // N6：终端日志（索引 12 Start / 13 Stop / 14 Open File / 15 Open Folder）。
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         {
             label: @tr("Start Logging..."), shortcut: "", enabled: root.terminal_logging_start_enabled,
@@ -1269,7 +1335,7 @@ export component MainWindow inherits Window {
             checked: false, separator: false,
             tooltip: root.terminal_logging_open_folder_enabled ? "" : @tr("No log folder is available yet.")
         },
-        // N9：同步发送按键（索引 11 All / 12 Visible / 13 Stop；见 dispatch_menu which==4）。
+        // N9：同步发送按键（索引 17 All / 18 Visible / 19 Stop）。
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         {
             label: @tr("Send Key Input to All Tabs"), shortcut: "",
@@ -1624,16 +1690,27 @@ export component MainWindow inherits Window {
             else if (index == 4) { root.settings_dialog_visible = true; }
             else if (index == 5) { root.quit_dialog_visible = true; }
         } else if (menu == 1) {
-            // Edit
+            // Edit（WP2：0 Copy / 1 Paste / 2 Bracketed / 3 Select All / 4 Clear / 5 Clear Scrollback / 6 Find）
             // A22（B 轮2 高#1）：Edit > Copy 必须复制**选区**（与终端右键菜单同源回调），
             // 此前调的是 `copy_terminal_visible()`（整屏可见内容），静默给错结果。
             if (index == 0) { root.copy_terminal_selection(); }
             else if (index == 1) {
                 if (root.has_active_session) { root.paste_terminal_clipboard(); }
             }
-            else if (index == 2) { root.clear_terminal(); }
+            else if (index == 2) {
+                if (root.has_active_session && root.active_session_connected) {
+                    root.paste_terminal_bracketed();
+                }
+            }
+            else if (index == 3) { root.terminal_select_all(); }
+            else if (index == 4) { root.clear_terminal(); }
+            else if (index == 5) {
+                if (root.terminal_has_scrollback) {
+                    root.clear_scrollback_dialog_visible = true;
+                }
+            }
             // A24：无活动会话时不置位（避免"状态残留 → 之后打开终端莫名弹出查找栏"）。
-            else if (index == 3) {
+            else if (index == 6) {
                 if (root.has_active_session) {
                     root.terminal_find_visible = true;
                 }
@@ -1731,25 +1808,45 @@ export component MainWindow inherits Window {
             if (index == 0) { root.start_new_saved_session_editor(); }
             else if (index == 1) { root.panel_side_expand("left"); }
         } else if (which == 4) {
-            // 终端菜单
+            // 终端菜单（WP2：0..10 日常项；12..15 日志；17..19 同步）
             if (index == 0) { root.copy_terminal_selection(); }
-            else if (index == 1) {
+            else if (index == 1) { root.copy_terminal_current_line(); }
+            else if (index == 2) { root.copy_terminal_visible(); }
+            else if (index == 3) {
                 if (root.has_active_session) { root.paste_terminal_clipboard(); }
             }
-            else if (index == 2) { root.terminal_select_all(); }
-            else if (index == 3) { root.clear_terminal(); }
             else if (index == 4) {
+                if (root.has_active_session && root.active_session_connected) {
+                    root.paste_terminal_bracketed();
+                }
+            }
+            else if (index == 5) { root.terminal_select_screen(); }
+            else if (index == 6) { root.terminal_select_all(); }
+            else if (index == 7) { root.clear_terminal(); }
+            else if (index == 8) {
+                if (root.terminal_has_scrollback) {
+                    root.clear_scrollback_dialog_visible = true;
+                }
+            }
+            else if (index == 9) {
                 if (root.has_active_session) { root.terminal_find_visible = true; }
             }
+            else if (index == 10) {
+                if (root.has_active_session) {
+                    root.terminal_search_regex = true;
+                    root.set_terminal_search_regex(true);
+                    root.terminal_find_visible = true;
+                }
+            }
             // N6：日志项（Start/Stop/Open File/Open Folder）。
-            else if (index == 6) { root.terminal_logging_start(); }
-            else if (index == 7) { root.terminal_logging_stop(); }
-            else if (index == 8) { root.terminal_logging_open_file(); }
-            else if (index == 9) { root.terminal_logging_open_folder(); }
+            else if (index == 12) { root.terminal_logging_start(); }
+            else if (index == 13) { root.terminal_logging_stop(); }
+            else if (index == 14) { root.terminal_logging_open_file(); }
+            else if (index == 15) { root.terminal_logging_open_folder(); }
             // N9：同步发送按键（All / Visible / Stop；Stop 即"Send to Current"语义）。
-            else if (index == 11) { root.send_key_input_to("all"); }
-            else if (index == 12) { root.send_key_input_to("visible"); }
-            else if (index == 13) { root.stop_input_sync(); }
+            else if (index == 17) { root.send_key_input_to("all"); }
+            else if (index == 18) { root.send_key_input_to("visible"); }
+            else if (index == 19) { root.stop_input_sync(); }
         } else if (which == 7) {
             // N6：状态栏日志菜单（与终端菜单同一组语义动作）。
             if (index == 0) { root.terminal_logging_start(); }
@@ -1856,6 +1953,8 @@ export component MainWindow inherits Window {
     public function focus-top-dialog() {
         if (root.logging_dialog_visible) {
             logging_dialog.focus-dialog();
+        } else if (root.clear_scrollback_dialog_visible) {
+            clear_scrollback_dialog.focus-dialog();
         } else if (root.terminal_appearance_dialog_visible) {
             terminal_appearance_dialog.focus-dialog();
         } else if (root.folder_editor_visible) {
@@ -2065,7 +2164,10 @@ export component MainWindow inherits Window {
                     scroll-offset: root.terminal_scroll_offset;
                     selection-active: root.terminal_selection_active;
                     search-query-text <=> root.terminal_search_query_text;
-                    search-summary-text: TextFormats.terminal-search-summary(root.terminal_search_kind_text, root.terminal_search_query_text, root.terminal_search_match_count, root.terminal_search_current_index);
+                    search-summary-text: root.terminal_search_error_text != ""
+                        ? root.terminal_search_error_text
+                        : TextFormats.terminal-search-summary(root.terminal_search_kind_text, root.terminal_search_query_text, root.terminal_search_match_count, root.terminal_search_current_index);
+                    search-regex <=> root.terminal_search_regex;
                     status-text: root.status_text;
                     find-visible: root.terminal_find_visible;
                     connection-overlay-visible: root.connection_overlay_visible;
@@ -2107,6 +2209,7 @@ export component MainWindow inherits Window {
                     find-text(query) => { root.find_terminal_text(query); }
                     find-next() => { root.find_terminal_next(); }
                     find-prev() => { root.find_terminal_prev(); }
+                    find-regex-changed(enabled) => { root.set_terminal_search_regex(enabled); }
                     dismiss-find() => { root.terminal_find_visible = false; }
 
                     // --- N2：Quick Connect 页（非终端标签的内容；始终实例化，用
@@ -2488,6 +2591,24 @@ export component MainWindow inherits Window {
         field-selected(key, index) => {
             if (key == "appearance.color_scheme") { root.folder_editor_select_scheme(index); }
             else if (key == "logging.format") { root.folder_editor_select_log_format(index); }
+        }
+    }
+
+    // WP2：Clear Scrollback — 简单破坏性确认（无 Type-token）。
+    clear_scrollback_dialog := ConfirmDialog {
+        open: root.clear_scrollback_dialog_visible;
+        destructive: true;
+        title-text: @tr("Clear Scrollback");
+        message-text: @tr("Clear the terminal scrollback buffer? The live screen stays as-is.");
+        confirm-label: @tr("Clear Scrollback");
+        confirmed() => {
+            root.clear_terminal_scrollback();
+            root.clear_scrollback_dialog_visible = false;
+            root.focus-top-dialog();
+        }
+        canceled() => {
+            root.clear_scrollback_dialog_visible = false;
+            root.focus-top-dialog();
         }
     }
 

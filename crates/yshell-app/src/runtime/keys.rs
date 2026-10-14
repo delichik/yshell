@@ -105,6 +105,23 @@ impl AppRuntime {
         self.send_active_terminal_bytes(text.as_bytes())
     }
 
+    /// Paste wrapped in DEC bracketed-paste sequences (`CSI 200 ~` / `CSI 201 ~`).
+    ///
+    /// Mode detection is not tracked yet; this is an explicit user affordance for
+    /// shells that honor bracketed paste.
+    pub fn paste_text_into_terminal_bracketed(&mut self, text: &str) -> AppResult<AppProjection> {
+        if text.is_empty() {
+            self.status_text = "Clipboard is empty, so nothing was pasted.".to_owned();
+            return Ok(self.projection());
+        }
+        self.terminal_clipboard = text.to_owned();
+        let mut bytes = Vec::with_capacity(text.len() + 12);
+        bytes.extend_from_slice(b"\x1b[200~");
+        bytes.extend_from_slice(text.as_bytes());
+        bytes.extend_from_slice(b"\x1b[201~");
+        self.send_active_terminal_bytes(&bytes)
+    }
+
     pub fn clear_active_terminal(&mut self) -> AppResult<AppProjection> {
         let session_key = self.active_session_key()?;
         let runtime = self
@@ -115,24 +132,78 @@ impl AppRuntime {
         self.terminal_search_query.clear();
         self.terminal_search_matches.clear();
         self.terminal_search_current_index = None;
+        self.terminal_search_error.clear();
         self.status_text = "Cleared the visible terminal view.".to_owned();
+        Ok(self.projection())
+    }
+
+    pub fn clear_active_terminal_scrollback(&mut self) -> AppResult<AppProjection> {
+        let session_key = self.active_session_key()?;
+        let runtime = self
+            .sessions
+            .get_mut(&session_key)
+            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
+        if runtime.clear_scrollback_only() {
+            self.terminal_search_query.clear();
+            self.terminal_search_matches.clear();
+            self.terminal_search_current_index = None;
+            self.terminal_search_error.clear();
+            self.status_text = "Cleared terminal scrollback. Live screen kept.".to_owned();
+        } else {
+            self.status_text = "Scrollback is already empty.".to_owned();
+        }
+        Ok(self.projection())
+    }
+
+    pub fn copy_active_terminal_current_line(&mut self) -> AppResult<AppProjection> {
+        let session_key = self.active_session_key()?;
+        let line = self
+            .sessions
+            .get(&session_key)
+            .map(SessionRuntime::current_line_text)
+            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
+        self.terminal_clipboard = line;
+        self.status_text = if self.terminal_clipboard.trim().is_empty() {
+            "Copied the current line, but it was empty.".to_owned()
+        } else {
+            format!(
+                "Copied {} characters from the current line.",
+                self.terminal_clipboard.chars().count()
+            )
+        };
+        Ok(self.projection())
+    }
+
+    pub fn select_screen_active_terminal(&mut self) -> AppResult<AppProjection> {
+        let Some(session_key) = self.active_session_id.clone() else {
+            self.status_text = "No active terminal to select.".to_owned();
+            return Ok(self.projection());
+        };
+        let runtime = self
+            .sessions
+            .get_mut(&session_key)
+            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
+        if runtime.select_screen_terminal() {
+            self.status_text = format!(
+                "Selected {} characters from the visible screen.",
+                runtime.terminal_selection_text().chars().count()
+            );
+        } else {
+            self.status_text = "Visible screen is empty.".to_owned();
+        }
         Ok(self.projection())
     }
 
     pub fn find_in_active_terminal(&mut self, query: &str) -> AppResult<AppProjection> {
         self.terminal_search_query = query.to_owned();
-        let session_key = self.active_session_key()?;
-        let runtime = self
-            .sessions
-            .get(&session_key)
-            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
-        let matches = runtime.find_visible_text(query);
-        self.terminal_search_matches = matches;
-        self.terminal_search_current_index = if self.terminal_search_matches.is_empty() {
-            None
-        } else {
-            Some(0)
-        };
+        self.refresh_terminal_search_for_active_session();
+        self.status_text = self.terminal_search_summary_legacy_text();
+        Ok(self.projection())
+    }
+
+    pub fn set_terminal_search_regex(&mut self, regex: bool) -> AppResult<AppProjection> {
+        self.terminal_search_regex = regex;
+        self.refresh_terminal_search_for_active_session();
         self.status_text = self.terminal_search_summary_legacy_text();
         Ok(self.projection())
     }
@@ -422,17 +493,33 @@ impl AppRuntime {
 
     pub(crate) fn refresh_terminal_search_for_active_session(&mut self) {
         let query = self.terminal_search_query.clone();
+        self.terminal_search_error.clear();
         if query.trim().is_empty() {
             self.terminal_search_matches.clear();
             self.terminal_search_current_index = None;
             return;
         }
-        let matches = self
+        let regex = self.terminal_search_regex;
+        let result = self
             .active_terminal_runtime()
-            .map(|runtime| runtime.find_visible_text(&query))
-            .unwrap_or_default();
-        self.terminal_search_current_index = if matches.is_empty() { None } else { Some(0) };
-        self.terminal_search_matches = matches;
+            .map(|runtime| runtime.find_visible_text(&query, false, regex))
+            .transpose();
+        match result {
+            Ok(Some(matches)) => {
+                self.terminal_search_current_index =
+                    if matches.is_empty() { None } else { Some(0) };
+                self.terminal_search_matches = matches;
+            }
+            Ok(None) => {
+                self.terminal_search_matches.clear();
+                self.terminal_search_current_index = None;
+            }
+            Err(error) => {
+                self.terminal_search_error = error;
+                self.terminal_search_matches.clear();
+                self.terminal_search_current_index = None;
+            }
+        }
     }
 
     pub(crate) fn rotate_terminal_match(&mut self, forward: bool) {
@@ -452,6 +539,9 @@ impl AppRuntime {
     }
 
     pub(crate) fn terminal_search_summary_parts(&self) -> (&'static str, i32, i32) {
+        if !self.terminal_search_error.is_empty() {
+            return ("invalid", 0, 0);
+        }
         if self.terminal_search_query.trim().is_empty() {
             return ("prompt", 0, 0);
         }
@@ -465,6 +555,9 @@ impl AppRuntime {
     }
 
     pub(crate) fn terminal_search_summary_legacy_text(&self) -> String {
+        if !self.terminal_search_error.is_empty() {
+            return self.terminal_search_error.clone();
+        }
         match self.terminal_search_summary_parts().0 {
             "prompt" => "Find in terminal".to_owned(),
             "empty" => format!(

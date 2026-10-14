@@ -12,5 +12,6 @@ workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+regex = { workspace = true }
 swash = { workspace = true }
 unicode-width = "0.1"

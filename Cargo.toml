@@ -43,3 +43,4 @@ time = { version = "0.3.47", features = ["local-offset", "formatting", "macros"]
 swash = "0.2.10"
 rfd = { version = "0.17.2", default-features = false }
 ssh-key = { version = "0.6.7", default-features = false, features = ["std", "encryption", "ecdsa"] }
+regex = "1"

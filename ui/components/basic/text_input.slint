@@ -27,6 +27,10 @@ export component WinTextInput inherits Rectangle {
     callback edited(string);
 
     height: Theme.control-height;
+    // WP2：不让内部 TextInput 的内容宽驱动本控件 preferred-width（QC / 查找栏会被撑开）。
+    // 宽度由父布局（stretch / 显式 width）决定；内容在固定宽度内横向滚动。
+    min-width: 0px;
+    preferred-width: 0px;
     border-radius: Theme.radius-control;
     border-width: 1px;
     border-color: root.has-focus ? Theme.accent : Theme.control-stroke;
@@ -65,25 +69,25 @@ export component WinTextInput inherits Rectangle {
         clicked => { if (root.enabled) { input.focus(); } }
     }
 
-    HorizontalLayout {
-        padding-left: Theme.spacing-12;
-        padding-right: Theme.spacing-12;
-
-        input := TextInput {
-            vertical-alignment: center;
-            single-line: true;
-            // E2：禁用 = 不可聚焦 + 不可输入（不再退化成"只读但仍可 Tab 聚焦"）
-            enabled: root.enabled;
-            color: root.enabled ? Theme.text-primary : Theme.text-disabled;
-            font-family: root.font-family;
-            font-size: root.font-size;
-            read-only: root.read-only;
-            selection-background-color: Theme.selection-fill;
-            selection-foreground-color: Theme.text-primary;
-            text-cursor-width: 1px;
-            edited => { root.edited(self.text); }
-            accepted => { root.accepted(); }
-        }
+    // 绝对定位：避免 HorizontalLayout 把 TextInput 的内容 preferred-width 向上传播。
+    input := TextInput {
+        x: Theme.spacing-12;
+        y: 0;
+        width: max(0px, parent.width - 2 * Theme.spacing-12);
+        height: parent.height;
+        vertical-alignment: center;
+        single-line: true;
+        // E2：禁用 = 不可聚焦 + 不可输入（不再退化成"只读但仍可 Tab 聚焦"）
+        enabled: root.enabled;
+        color: root.enabled ? Theme.text-primary : Theme.text-disabled;
+        font-family: root.font-family;
+        font-size: root.font-size;
+        read-only: root.read-only;
+        selection-background-color: Theme.selection-fill;
+        selection-foreground-color: Theme.text-primary;
+        text-cursor-width: 1px;
+        edited => { root.edited(self.text); }
+        accepted => { root.accepted(); }
     }
 
     /// 供调用方聚焦（例如菜单里的"快速连接"；不能叫 focus，那是内建函数名）

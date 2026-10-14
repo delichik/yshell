@@ -333,8 +333,67 @@ impl SessionRuntime {
         )
     }
 
-    pub fn find_visible_text(&self, query: &str) -> Vec<SearchMatch> {
-        SearchQuery::new(query).find_in_grid(&self.terminal_grid)
+    /// Search visible lines with literal or regex mode.
+    pub fn find_visible_text(
+        &self,
+        query: &str,
+        case_sensitive: bool,
+        regex: bool,
+    ) -> Result<Vec<SearchMatch>, String> {
+        SearchQuery::new(query)
+            .case_sensitive(case_sensitive)
+            .regex(regex)
+            .try_find_in_grid(&self.terminal_grid)
+    }
+
+    #[must_use]
+    pub fn has_scrollback(&self) -> bool {
+        self.terminal_grid.scrollback_len() > 0
+    }
+
+    #[must_use]
+    pub fn has_screen_content(&self) -> bool {
+        !self.visible_text().trim().is_empty()
+    }
+
+    /// Absolute-line text under the live cursor (screen row, not viewport).
+    #[must_use]
+    pub fn current_line_text(&self) -> String {
+        let absolute = self
+            .terminal_grid
+            .scrollback_len()
+            .saturating_add(usize::from(self.terminal_grid.cursor_row));
+        self.terminal_grid
+            .line_text_absolute(absolute)
+            .unwrap_or_default()
+    }
+
+    /// Select only the live screen (excludes scrollback).
+    pub fn select_screen_terminal(&mut self) -> bool {
+        if self.terminal_grid.columns == 0 || self.terminal_grid.rows == 0 {
+            return false;
+        }
+        if !self.has_screen_content() {
+            self.selection = None;
+            self.frame_id = self.frame_id.wrapping_add(1);
+            return false;
+        }
+        let start_row = self.terminal_grid.scrollback_len();
+        let end_row = start_row
+            .saturating_add(usize::from(self.terminal_grid.rows))
+            .saturating_sub(1);
+        self.selection = Some(SelectionRange {
+            start: GridPoint {
+                column: 0,
+                row: u16::try_from(start_row).unwrap_or(u16::MAX),
+            },
+            end: GridPoint {
+                column: self.terminal_grid.columns.saturating_sub(1),
+                row: u16::try_from(end_row).unwrap_or(u16::MAX),
+            },
+        });
+        self.frame_id = self.frame_id.wrapping_add(1);
+        true
     }
 
     pub fn clear_visible_terminal(&mut self) {
@@ -347,6 +406,22 @@ impl SessionRuntime {
         self.selection = None;
         self.frame_id = self.frame_id.wrapping_add(1);
         self.log_runtime_event("Terminal view cleared. Live shell remains attached.");
+    }
+
+    /// Clear scrollback only; keep the live screen cells and cursor.
+    ///
+    /// Returns `true` when scrollback was non-empty and was cleared.
+    pub fn clear_scrollback_only(&mut self) -> bool {
+        if self.terminal_grid.scrollback_len() == 0 {
+            return false;
+        }
+        self.terminal_grid.clear_scrollback();
+        self.viewport_offset = 0;
+        // Absolute selection rows referenced scrollback; drop the selection.
+        self.selection = None;
+        self.frame_id = self.frame_id.wrapping_add(1);
+        self.log_runtime_event("Terminal scrollback cleared. Live screen kept.");
+        true
     }
 
     /// Current frame revision used by the app to decide when to re-render.

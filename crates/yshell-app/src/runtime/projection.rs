@@ -414,7 +414,12 @@ impl AppRuntime {
                 .is_some_and(SessionRuntime::terminal_selection_active),
             terminal_has_selection: focus_terminal
                 .is_some_and(SessionRuntime::terminal_selection_active),
+            terminal_has_scrollback: focus_terminal.is_some_and(SessionRuntime::has_scrollback),
+            terminal_has_screen_content: focus_terminal
+                .is_some_and(SessionRuntime::has_screen_content),
             terminal_search_query_text: self.terminal_search_query.clone(),
+            terminal_search_regex: self.terminal_search_regex,
+            terminal_search_error_text: self.terminal_search_error.clone(),
             terminal_search_kind_text: terminal_search_kind_text.to_owned(),
             terminal_search_match_count,
             terminal_search_current_index,
@@ -1542,7 +1547,13 @@ pub struct AppProjection {
     /// W5-A3：活动终端是否存在可复制选区（Edit/Copy 菜单项状态，与
     /// `terminal_selection_active` 同源；后者继续供终端视图渲染选区浮层）。
     pub terminal_has_selection: bool,
+    /// WP2：scrollback 非空（Clear Scrollback 启用条件）。
+    pub terminal_has_scrollback: bool,
+    /// WP2：当前屏幕有可见内容（Select/Copy Screen 启用条件）。
+    pub terminal_has_screen_content: bool,
     pub terminal_search_query_text: String,
+    pub terminal_search_regex: bool,
+    pub terminal_search_error_text: String,
     pub terminal_search_kind_text: String,
     pub terminal_search_match_count: i32,
     pub terminal_search_current_index: i32,

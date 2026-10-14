@@ -316,6 +316,12 @@ impl TerminalGrid {
         self.scrollback.len()
     }
 
+    /// Drop scrollback only; keep the live screen and cursor intact.
+    pub fn clear_scrollback(&mut self) {
+        self.scrollback.clear();
+        self.scrollback_cells = 0;
+    }
+
     /// Total addressable lines: scrollback plus the visible screen.
     #[must_use]
     pub fn total_lines(&self) -> usize {

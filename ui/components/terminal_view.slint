@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { WinButton, WinIconButton } from "basic/controls.slint";
+import { WinButton, WinIconButton, WinToggle } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 
 // 终端滚动条数据通道（§5.17）：Rust 投影写入总行数/视口行数，滚动条把
@@ -31,6 +31,8 @@ export component TerminalView inherits Rectangle {
     in property <bool> selection-active: false;
     in-out property <string> search-query: "";
     in property <string> search-summary: "";
+    /// WP2：正则查找开关（与运行时 `terminal_search_regex` 双向）。
+    in-out property <bool> search-regex: false;
     // 状态已由窗口状态栏承载，这里只保留属性（不再渲染底栏）
     in property <string> footer-status: "";
     in property <bool> find-visible: false;
@@ -65,6 +67,7 @@ export component TerminalView inherits Rectangle {
     callback find-text(string);
     callback find-next();
     callback find-prev();
+    callback find-regex-changed(bool);
     callback dismiss-find();
     callback context-menu-requested(length, length);
 
@@ -462,11 +465,25 @@ export component TerminalView inherits Rectangle {
                         // E10：窄栏时优先压缩输入框（原 160px 会把三个按钮压成 `…`）
                         min-width: 96px;
                         text <=> root.search-query;
-                        placeholder-text: @tr("Search visible terminal text");
+                        placeholder-text: root.search-regex
+                            ? @tr("Regex (Rust syntax)")
+                            : @tr("Search visible terminal text");
                         accepted => {
                             root.find-text(self.text);
                             // 提交后回焦终端，避免后续按键继续落在输入框/直接进 shell 的歧义
                             terminal_focus.focus();
+                        }
+                    }
+
+                    // WP2：正则模式开关（契约 §7.3 `terminal.search.regex`）
+                    WinToggle {
+                        text: @tr("Regex");
+                        checked <=> root.search-regex;
+                        toggled => {
+                            root.find-regex-changed(root.search-regex);
+                            if (search_input.text != "") {
+                                root.find-text(search_input.text);
+                            }
                         }
                     }
 

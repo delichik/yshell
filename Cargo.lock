@@ -6884,6 +6884,7 @@ dependencies = [
 name = "yshell-terminal"
 version = "0.1.0"
 dependencies = [
+ "regex",
  "swash",
  "unicode-width 0.1.14",
 ]
