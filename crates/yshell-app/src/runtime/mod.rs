@@ -234,6 +234,7 @@ impl AppRuntime {
             pending_move_cleanup: BTreeMap::new(),
             sftp_upload_dir_override: None,
             sftp_jobs: None,
+            connect_jobs: None,
             persistent_known_hosts,
             temporary_known_hosts: KnownHosts::new(),
             known_hosts_modal_visible: false,
@@ -503,6 +504,9 @@ pub struct AppRuntime {
     /// SFTP transfer worker handle (injected by `bootstrap`; tests inject a
     /// channel-backed handle to assert submitted jobs).
     pub(crate) sftp_jobs: Option<crate::sftp_jobs::SftpJobHandle>,
+    /// WP1：SSH connect worker handle (injected by `windows`; absent in unit tests
+    /// so connect stays synchronous for Fake / deterministic assertions).
+    pub(crate) connect_jobs: Option<crate::connect_jobs::ConnectJobHandle>,
     pub(crate) persistent_known_hosts: KnownHosts,
     pub(crate) temporary_known_hosts: KnownHosts,
     pub(crate) known_hosts_modal_visible: bool,

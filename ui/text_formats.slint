@@ -361,6 +361,32 @@ export global TextFormats {
     // --- W4 收尾：状态栏模板（覆盖最常见的 kind；未覆盖的 kind 回退英文 status_text）---
     // Rust 侧 `AppProjection::status_kind` 只在覆盖的生产者处设置，其余赋值路径
     // 保持 kind 为空（见 runtime.rs 的 status_i18n_parts）。
+    /// WP1：连接 overlay 阶段文案（Rust 投影 `tcp` / `handshake` / `host-key` / `auth` / `shell`）。
+    public pure function connection-stage-label(stage: string) -> string {
+        if stage == "tcp" {
+            return @tr("MainWindow" => "TCP connect");
+        }
+        if stage == "handshake" {
+            return @tr("MainWindow" => "SSH handshake");
+        }
+        if stage == "host-key" {
+            return @tr("MainWindow" => "Host key verification");
+        }
+        if stage == "auth" {
+            return @tr("MainWindow" => "Authentication");
+        }
+        if stage == "shell" {
+            return @tr("MainWindow" => "Opening shell");
+        }
+        if stage == "connected" {
+            return @tr("MainWindow" => "Connected");
+        }
+        if stage == "failed" {
+            return @tr("MainWindow" => "Failed");
+        }
+        return stage;
+    }
+
     public pure function status-message(kind: string, param_1: string, param_2: string, fallback: string) -> string {
         if kind == "sftp-sorted" {
             return @tr("MainWindow" => "Sorted SFTP entries by {0}.", sftp-sort-summary(param_1, param_2 == "ascending"));

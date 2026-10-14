@@ -4,6 +4,7 @@
 //! actual network transport is wired, so the app/runtime can target a stable
 //! replacement boundary instead of assuming the fake adapter is the only path.
 
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::io;
 use std::io::Read;
@@ -12,7 +13,7 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::path::Path;
 use std::time::Duration;
 
-use ssh2::{Channel, KeyboardInteractivePrompt, Session};
+use ssh2::{Channel, KeyboardInteractivePrompt, MethodType, Session};
 
 use crate::{
     auth::{
@@ -32,6 +33,74 @@ use crate::{
 
 #[derive(Debug, Clone, Default)]
 pub struct RealSshAdapter;
+
+thread_local! {
+    /// Optional stage progress hook installed by the app connect-job worker so
+    /// UI overlays can show TCP → handshake → host-key → auth → shell without
+    /// polling the attempt struct across threads.
+    static CONNECTION_STAGE_HOOK: RefCell<Option<Box<dyn FnMut(RealConnectionStage)>>> =
+        const { RefCell::new(None) };
+}
+
+/// Runs `f` while forwarding [`RealConnectionAttempt::advance_to`] updates to `hook`.
+pub fn with_connection_stage_hook<R>(
+    mut hook: impl FnMut(RealConnectionStage) + 'static,
+    f: impl FnOnce() -> R,
+) -> R {
+    CONNECTION_STAGE_HOOK.with(|cell| {
+        *cell.borrow_mut() = Some(Box::new(move |stage| hook(stage)));
+    });
+    let result = f();
+    CONNECTION_STAGE_HOOK.with(|cell| {
+        *cell.borrow_mut() = None;
+    });
+    result
+}
+
+fn notify_connection_stage(stage: RealConnectionStage) {
+    CONNECTION_STAGE_HOOK.with(|cell| {
+        if let Some(hook) = cell.borrow_mut().as_mut() {
+            hook(stage);
+        }
+    });
+}
+
+/// Prefer modern KEX algorithms so libssh2 does not lead with DH-GEX and fail
+/// with `Session(-5) Unable to exchange encryption keys` against hosts that
+/// reject or mishandle that path. Unsupported names are ignored by libssh2;
+/// if a whole preference string is unsupported we try a shorter list.
+fn apply_preferred_kex_methods(session: &Session) {
+    const PREFS: &[&str] = &[
+        "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group16-sha512,diffie-hellman-group14-sha256,diffie-hellman-group-exchange-sha256",
+        "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,diffie-hellman-group14-sha256",
+        "curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group14-sha256",
+        "curve25519-sha256,curve25519-sha256@libssh.org",
+    ];
+    for prefs in PREFS {
+        match session.method_pref(MethodType::Kex, prefs) {
+            Ok(()) => {
+                tracing::debug!(
+                    target: "yshell::ssh",
+                    prefs,
+                    "applied preferred SSH KEX method list before handshake"
+                );
+                return;
+            }
+            Err(error) => {
+                tracing::debug!(
+                    target: "yshell::ssh",
+                    prefs,
+                    %error,
+                    "preferred KEX list rejected by libssh2; trying a shorter list"
+                );
+            }
+        }
+    }
+    tracing::warn!(
+        target: "yshell::ssh",
+        "could not set preferred KEX methods; handshake will use libssh2 defaults"
+    );
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RealAuthStrategy {
@@ -927,6 +996,7 @@ impl RealConnectionAttempt {
     pub fn advance_to(&mut self, stage: RealConnectionStage, note: impl Into<String>) {
         self.stage = stage;
         self.record_snapshot(stage, note);
+        notify_connection_stage(stage);
     }
 
     pub fn mark_failed(&mut self, note: impl Into<String>) {
@@ -1497,15 +1567,30 @@ fn connect_authenticated_native_session(attempt: &mut RealConnectionAttempt) -> 
 
 /// TCP connect + SSH handshake + host key verification + auth-method discovery.
 fn establish_native_session(attempt: &mut RealConnectionAttempt) -> SshResult<Session> {
-    let stream = connect_native_stream(&attempt.plan)?;
+    attempt.advance_to(
+        RealConnectionStage::TcpConnect,
+        "Opening a TCP socket for the native SSH session.",
+    );
+    let stream = connect_native_stream(&attempt.plan).map_err(|error| {
+        attempt.mark_failed(error.message.clone());
+        error.with_connection_stage(RealConnectionStage::TcpConnect.label())
+    })?;
+    attempt.advance_to(
+        RealConnectionStage::SshHandshake,
+        "TCP socket is open. Performing the SSH handshake.",
+    );
     let mut session = Session::new().map_err(|error| {
-        SshError::new(
+        native_stage_error(
+            attempt,
+            RealConnectionStage::SshHandshake,
             SshErrorKind::Io,
             format!("failed to allocate native SSH session: {error}"),
         )
     })?;
     session.set_tcp_stream(stream);
     session.set_timeout(session_timeout_ms(attempt.plan.connect_timeout));
+    // Prefer modern KEX before handshake to avoid DH-GEX-first Session(-5) failures.
+    apply_preferred_kex_methods(&session);
     session
         .handshake()
         .map_err(|error| {
@@ -1868,7 +1953,7 @@ fn native_stage_error(
     };
     attempt.record_action(action, RealTransportActionOutcome::Failed, message.clone());
     attempt.mark_failed(message.clone());
-    let mut error = SshError::new(kind, message);
+    let mut error = SshError::new(kind, message).with_connection_stage(stage.label());
     if matches!(stage, RealConnectionStage::Authentication) {
         // A0: authentication failures carry the server method list so the
         // runtime can open / update the auth window without reconnecting.

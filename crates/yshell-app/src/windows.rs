@@ -33,6 +33,7 @@ use crate::bootstrap::{
 };
 use crate::error::{AppError, AppResult};
 use crate::runtime::AppRuntime;
+use crate::connect_jobs::ConnectJobMessage;
 use crate::sftp_jobs::{SftpJobHandle, SftpJobMessage};
 
 /// 应用级轮询间隔。
@@ -102,6 +103,7 @@ pub(crate) struct WindowManager {
     dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
     dialog_rx: Receiver<FileDialogOutcome>,
     sftp_job_rx: Receiver<SftpJobMessage>,
+    connect_job_rx: Receiver<ConnectJobMessage>,
     timer: Option<Timer>,
 }
 
@@ -110,7 +112,12 @@ impl WindowManager {
     pub(crate) fn new(runtime: Rc<RefCell<AppRuntime>>) -> AppResult<Rc<RefCell<Self>>> {
         let (dialog_tx, dialog_rx) = std::sync::mpsc::channel();
         let (sftp_job_tx, sftp_job_rx) = crate::sftp_jobs::start_sftp_job_worker();
-        runtime.borrow_mut().sftp_jobs = Some(SftpJobHandle::new(sftp_job_tx));
+        let (connect_jobs, connect_job_rx) = crate::connect_jobs::start_connect_job_worker();
+        {
+            let mut runtime = runtime.borrow_mut();
+            runtime.sftp_jobs = Some(SftpJobHandle::new(sftp_job_tx));
+            runtime.connect_jobs = Some(connect_jobs);
+        }
         let manager = Rc::new(RefCell::new(Self {
             runtime,
             windows: Vec::new(),
@@ -118,6 +125,7 @@ impl WindowManager {
             dialog_tx,
             dialog_rx,
             sftp_job_rx,
+            connect_job_rx,
             timer: None,
         }));
         Self::open_window(&manager, None)?;
@@ -495,6 +503,10 @@ impl WindowManager {
             }
             while let Ok(message) = self.sftp_job_rx.try_recv() {
                 let _ = runtime.apply_sftp_job_message(message);
+                dirty = true;
+            }
+            while let Ok(message) = self.connect_job_rx.try_recv() {
+                let _ = runtime.apply_connect_job_message(message);
                 dirty = true;
             }
             // N0：所有终端输出（活动会话优先 + 游标轮转后台标签）。

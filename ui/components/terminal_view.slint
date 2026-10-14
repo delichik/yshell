@@ -34,6 +34,16 @@ export component TerminalView inherits Rectangle {
     // 状态已由窗口状态栏承载，这里只保留属性（不再渲染底栏）
     in property <string> footer-status: "";
     in property <bool> find-visible: false;
+    // --- WP1：连接 overlay（connecting / failed / pending-confirmation）------
+    in property <bool> connection-overlay-visible: false;
+    in property <string> connection-overlay-target: "";
+    in property <string> connection-overlay-stage: "";
+    in property <string> connection-overlay-error: "";
+    in property <bool> connection-overlay-failed: false;
+    in property <bool> connection-overlay-pending: false;
+    callback connection-retry();
+    callback connection-cancel();
+    callback connection-copy-error();
     /// E10：宿主告知终端视图当前是否可见（Quick Connect 页 / 无会话时为 false）——
     /// 查找栏的自动聚焦据此避让，不去抢其他页面输入框的焦点。
     in property <bool> view-visible: true;
@@ -173,6 +183,88 @@ export component TerminalView inherits Rectangle {
                             return accept;
                         }
                         reject
+                    }
+                }
+            }
+
+            // WP1：连接生命周期 overlay（居中卡片；不挡底层终端位图布局）。
+            if root.connection-overlay-visible : Rectangle {
+                width: parent.width;
+                height: parent.height;
+                background: #00000088;
+
+                Rectangle {
+                    width: min(420px, parent.width - 2 * Theme.spacing-24);
+                    height: overlay_body.preferred-height;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    background: Theme.panel-background;
+                    border-radius: Theme.radius-panel;
+                    border-width: 1px;
+                    border-color: Theme.control-stroke;
+
+                    overlay_body := VerticalLayout {
+                        padding: Theme.spacing-20;
+                        spacing: Theme.spacing-12;
+
+                        Text {
+                            text: root.connection-overlay-target;
+                            color: Theme.text-primary;
+                            font-size: Theme.font-body;
+                            font-weight: Theme.weight-semibold;
+                            wrap: word-wrap;
+                            horizontal-alignment: center;
+                        }
+
+                        Text {
+                            text: root.connection-overlay-pending
+                                ? @tr("Waiting for confirmation…")
+                                : root.connection-overlay-failed
+                                    ? @tr("Connection failed")
+                                    : @tr("Connecting…");
+                            color: root.connection-overlay-failed ? Theme.critical : Theme.text-secondary;
+                            font-size: Theme.font-caption;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
+                        }
+
+                        Text {
+                            text: root.connection-overlay-stage;
+                            color: Theme.accent;
+                            font-size: Theme.font-body;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
+                        }
+
+                        if root.connection-overlay-error != "" : Text {
+                            text: root.connection-overlay-error;
+                            color: Theme.critical;
+                            font-size: Theme.font-caption;
+                            font-family: Theme.font-mono;
+                            wrap: word-wrap;
+                            horizontal-alignment: left;
+                        }
+
+                        HorizontalLayout {
+                            alignment: center;
+                            spacing: Theme.spacing-8;
+
+                            if root.connection-overlay-failed || root.connection-overlay-pending : WinButton {
+                                text: @tr("Retry");
+                                accent: true;
+                                clicked => { root.connection-retry(); }
+                            }
+
+                            WinButton {
+                                text: @tr("Cancel");
+                                clicked => { root.connection-cancel(); }
+                            }
+
+                            if root.connection-overlay-error != "" : WinButton {
+                                text: @tr("Copy error");
+                                clicked => { root.connection-copy-error(); }
+                            }
+                        }
                     }
                 }
             }

@@ -1840,6 +1840,67 @@ pub(crate) fn wire_callbacks(
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
     let surface = surface_source.clone();
+    window.on_retry_connection_overlay(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let result = runtime_ref.borrow_mut().retry_connection_overlay();
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not retry the connection.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_cancel_connection_overlay(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let result = runtime_ref.borrow_mut().cancel_connection_overlay();
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not cancel the connection.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let clipboard_ref = Rc::clone(&clipboard);
+    let surface = surface_source.clone();
+    window.on_copy_connection_overlay_error(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let text = runtime_ref.borrow().connection_overlay_error_text();
+        if text.is_empty() {
+            return;
+        }
+        let copied = clipboard_ref
+            .borrow_mut()
+            .as_mut()
+            .is_some_and(|clipboard| clipboard.set_contents(text).is_ok());
+        if copied {
+            set_plain_status(&window, "Copied the connection error.".into());
+        } else {
+            set_plain_status(
+                &window,
+                "Could not access the system clipboard.".into(),
+            );
+        }
+        surface.refresh(&window);
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
     window.on_update_secret_reset_confirmation(move |confirmation| {
         if let Some(window) = weak.upgrade() {
             let projection = runtime_ref
@@ -5537,6 +5598,23 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     // W5-A3：菜单/按钮状态感知所需的布尔量。
     window.set_has_active_session(projection.has_active_session);
     window.set_active_session_connected(projection.active_session_connected);
+    window.set_connection_overlay_visible(projection.connection_overlay_visible);
+    window.set_connection_overlay_target_text(
+        projection.connection_overlay_target_text.clone().into(),
+    );
+    window.set_connection_overlay_stage_text(
+        projection.connection_overlay_stage_text.clone().into(),
+    );
+    window.set_connection_overlay_error_text(
+        projection.connection_overlay_error_text.clone().into(),
+    );
+    window.set_connection_overlay_failed(projection.connection_overlay_failed);
+    window.set_connection_overlay_pending(projection.connection_overlay_pending);
+    window.set_status_connection_state_text(projection.status_connection_state_text.clone().into());
+    window.set_status_connection_target_text(
+        projection.status_connection_target_text.clone().into(),
+    );
+    window.set_status_connection_busy(projection.status_connection_busy);
     window.set_has_saved_selection(projection.has_saved_selection);
     window.set_saved_session_count(projection.saved_session_count);
     window.set_session_summary_rows_text(projection.session_summary_rows_text.clone().into());

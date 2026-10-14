@@ -31,7 +31,8 @@ pub use host_key::{HostKeyDecision, HostKeyFingerprint, HostKeyPolicy, KnownHost
 pub use proxy::{ProxyConfig, ProxyState};
 pub use pty::{PtyConfig, PtySize};
 pub use real::{
-    RealAuthStrategy, RealConnectionAttempt, RealConnectionPlan, RealConnectionSnapshot,
-    RealConnectionStage, RealShellSessionPlaceholder, RealSshAdapter, RealTransportAction,
-    RealTransportActionOutcome, RealTransportActionRecord, RealTransportExecutionReport,
+    with_connection_stage_hook, RealAuthStrategy, RealConnectionAttempt, RealConnectionPlan,
+    RealConnectionSnapshot, RealConnectionStage, RealShellSessionPlaceholder, RealSshAdapter,
+    RealTransportAction, RealTransportActionOutcome, RealTransportActionRecord,
+    RealTransportExecutionReport,
 };

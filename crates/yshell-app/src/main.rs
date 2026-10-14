@@ -2,6 +2,7 @@
 
 mod app_state;
 mod bootstrap;
+mod connect_jobs;
 mod error;
 mod local_fs;
 mod runtime;

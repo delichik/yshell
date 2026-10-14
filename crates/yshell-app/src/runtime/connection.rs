@@ -277,6 +277,9 @@ impl AppRuntime {
                 .ok_or_else(|| AppError::new("active runtime session is missing"))?;
             runtime.log_runtime_event("Reconnecting runtime shell session.");
             runtime.transport_backend = self.transport_backend;
+            // Drop any previous shell before reconnecting.
+            let _ = runtime.disconnect_shell();
+            runtime.shell_session = None;
         }
         let connecting_events = self
             .dispatcher
@@ -293,24 +296,100 @@ impl AppRuntime {
             Self::apply_session_events(&session_id, runtime, connecting_events);
         }
 
+        if self.should_connect_async() {
+            return self.submit_connect_job(&session_key, ssh_config, false, true);
+        }
+
         let shell_session = match self.open_shell_for_runtime(&ssh_config) {
             Ok(shell_session) => shell_session,
             Err(error) => {
                 return self.handle_runtime_shell_open_error(&session_key, &session_id, error);
             }
         };
+        self.finish_shell_attach(&session_key, &session_id, shell_session, false, true)
+    }
+
+    /// Native-SSH desktop path: handshake runs on the connect-job worker.
+    fn should_connect_async(&self) -> bool {
+        self.connect_jobs.is_some() && self.transport_backend == TransportBackend::Real
+    }
+
+    fn submit_connect_job(
+        &mut self,
+        session_key: &str,
+        ssh_config: SshConnectionConfig,
+        password_retry: bool,
+        is_reconnect: bool,
+    ) -> AppResult<AppProjection> {
+        let effective = self.effective_ssh_config(&ssh_config);
+        let host_text = self
+            .sessions
+            .get(session_key)
+            .map(SessionRuntime::connection_target_text)
+            .unwrap_or_else(|| {
+                format!(
+                    "{}@{}:{}",
+                    effective.username(),
+                    effective.host,
+                    effective.port
+                )
+            });
+        if let Some(runtime) = self.sessions.get_mut(session_key) {
+            runtime.begin_connection_overlay("tcp");
+            runtime.log_runtime_event("Queued native SSH connect on the background worker.");
+        }
+        let submitted = self
+            .connect_jobs
+            .as_mut()
+            .map(|handle| {
+                handle.submit(crate::connect_jobs::ConnectJobSpec {
+                    session_key: session_key.to_owned(),
+                    ssh_config: effective,
+                    transport_backend: self.transport_backend,
+                    password_retry,
+                    is_reconnect,
+                })
+            })
+            .unwrap_or(false);
+        if !submitted {
+            if let Some(runtime) = self.sessions.get_mut(session_key) {
+                runtime.connection_in_flight = false;
+                runtime.connection_error =
+                    "Could not start the background connect worker.".to_owned();
+            }
+            return Err(AppError::new("connect job worker is unavailable"));
+        }
+        self.set_status_kind(
+            "session-connecting",
+            format!("Connecting to {host_text} ..."),
+            host_text,
+            String::new(),
+        );
+        Ok(self.projection())
+    }
+
+    /// Attaches a shell opened on the UI thread (sync Fake path / tests).
+    fn finish_shell_attach(
+        &mut self,
+        session_key: &str,
+        session_id: &yshell_core::SessionId,
+        shell_session: Box<dyn yshell_ssh::ShellSession>,
+        password_retry: bool,
+        is_reconnect: bool,
+    ) -> AppResult<AppProjection> {
         let shell_connected = shell_session.is_connected();
         {
             let runtime = self
                 .sessions
-                .get_mut(&session_key)
+                .get_mut(session_key)
                 .ok_or_else(|| AppError::new("active runtime session is missing"))?;
+            runtime.clear_connection_overlay();
             runtime.attach_shell_session(shell_session);
             let _ = runtime.poll_shell_output().map_err(AppError::from_error)?;
             if !shell_connected {
                 runtime.log_runtime_event(
-                        "Shell runtime reopened a non-live backend path. Either later SSH stages are still scaffolded, or the live shell has already exited.",
-                    );
+                    "Shell runtime reopened a non-live backend path. Either later SSH stages are still scaffolded, or the live shell has already exited.",
+                );
             }
             if let Some(notice) = runtime.take_logging_notice() {
                 self.fold_logging_notice_into_status(notice);
@@ -326,13 +405,9 @@ impl AppRuntime {
                 .map_err(AppError::from_error)?;
             let runtime = self
                 .sessions
-                .get_mut(&session_key)
+                .get_mut(session_key)
                 .ok_or_else(|| AppError::new("active runtime session is missing"))?;
-            Self::apply_session_events(&session_id, runtime, connected_events);
-        }
-        if shell_connected {
-            // N4：认证重试成功后关闭弹窗；失败时由 `apply_auth_prompt_from_error`
-            // 原地更新同一个弹窗（保留已填内容）。
+            Self::apply_session_events(session_id, runtime, connected_events);
             if self
                 .pending_auth_prompt
                 .as_ref()
@@ -341,29 +416,30 @@ impl AppRuntime {
                 self.pending_auth_prompt = None;
             }
         }
-        let sftp_status = self.sync_sftp_lifecycle_for_session(&session_key, shell_connected);
-        // D15：用户向文案；后端细节（fake/native-ssh）不再进状态栏。
+        let sftp_status = self.sync_sftp_lifecycle_for_session(session_key, shell_connected);
         let host_text = self
             .sessions
-            .get(&session_key)
-            .map(|session| {
-                format!(
-                    "{}@{}:{}",
-                    session.username_label(),
-                    session.ssh_config.host,
-                    session.ssh_config.port
-                )
-            })
+            .get(session_key)
+            .map(SessionRuntime::connection_target_text)
             .unwrap_or_default();
         let (kind, base_text) = if shell_connected {
-            (
-                "session-reconnected",
-                format!("Reconnected to {host_text}."),
-            )
-        } else {
+            if is_reconnect {
+                (
+                    "session-reconnected",
+                    format!("Reconnected to {host_text}."),
+                )
+            } else {
+                ("session-connected", format!("Connected to {host_text}."))
+            }
+        } else if is_reconnect {
             (
                 "session-reopened",
                 format!("Reopened the session for {host_text}, but the shell is not live."),
+            )
+        } else {
+            (
+                "session-connecting",
+                format!("Connecting to {host_text} ..."),
             )
         };
         self.set_status_kind(
@@ -372,8 +448,157 @@ impl AppRuntime {
             host_text,
             String::new(),
         );
-        self.fold_logging_notice_from_session(&session_key);
+        self.fold_logging_notice_from_session(session_key);
+        if shell_connected && !password_retry && !is_reconnect {
+            self.record_connect_success(session_key);
+        }
         Ok(self.projection())
+    }
+
+    /// Drain path for [`crate::connect_jobs::ConnectJobMessage`] (app Timer).
+    pub fn apply_connect_job_message(
+        &mut self,
+        message: crate::connect_jobs::ConnectJobMessage,
+    ) -> AppProjection {
+        use crate::connect_jobs::{overlay_stage_from_error, ConnectJobMessage, ConnectJobOutcome};
+
+        match message {
+            ConnectJobMessage::Progress { session_key, stage } => {
+                if let Some(runtime) = self.sessions.get_mut(&session_key) {
+                    if runtime.connection_in_flight {
+                        runtime.connection_stage = stage;
+                    }
+                }
+            }
+            ConnectJobMessage::Finished {
+                session_key,
+                password_retry,
+                is_reconnect,
+                outcome,
+            } => {
+                if let Some(handle) = self.connect_jobs.as_mut() {
+                    handle.forget(&session_key);
+                }
+                match outcome {
+                    ConnectJobOutcome::Cancelled => {
+                        if let Some(runtime) = self.sessions.get_mut(&session_key) {
+                            runtime.connection_in_flight = false;
+                            runtime.connection_error.clear();
+                            runtime.connection_stage.clear();
+                            runtime.log_runtime_event("Connect job was cancelled.");
+                        }
+                        let _ = self.mark_session_failed_after_connect(&session_key);
+                        self.set_status_kind(
+                            "session-connect-failed",
+                            "Connection cancelled.".to_owned(),
+                            self.sessions
+                                .get(&session_key)
+                                .map(SessionRuntime::connection_target_text)
+                                .unwrap_or_default(),
+                            String::new(),
+                        );
+                    }
+                    ConnectJobOutcome::Succeeded { shell } => {
+                        let session_id = self
+                            .sessions
+                            .get(&session_key)
+                            .map(|session| session.session_id().clone());
+                        if let Some(session_id) = session_id {
+                            let _ = self.finish_shell_attach(
+                                &session_key,
+                                &session_id,
+                                shell,
+                                password_retry,
+                                is_reconnect,
+                            );
+                        } else {
+                            let _ = shell;
+                        }
+                    }
+                    ConnectJobOutcome::Failed { error } => {
+                        let session_id = self
+                            .sessions
+                            .get(&session_key)
+                            .map(|session| session.session_id().clone());
+                        if let Some(runtime) = self.sessions.get_mut(&session_key) {
+                            runtime.connection_in_flight = false;
+                            runtime.connection_stage =
+                                overlay_stage_from_error(&error).to_owned();
+                            runtime.connection_error = error.to_string();
+                        }
+                        if let Some(session_id) = session_id {
+                            let _ = self.handle_runtime_shell_open_error(
+                                &session_key,
+                                &session_id,
+                                error,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        self.projection()
+    }
+
+    fn mark_session_failed_after_connect(&mut self, session_key: &str) -> AppResult<()> {
+        let session_id = self
+            .sessions
+            .get(session_key)
+            .map(|session| session.session_id().clone())
+            .ok_or_else(|| AppError::new("runtime session is missing"))?;
+        let failed_events = self
+            .dispatcher
+            .dispatch(SessionCommand::SetSessionState {
+                session_id: session_id.clone(),
+                state: yshell_core::SessionState::Failed,
+            })
+            .map_err(AppError::from_error)?;
+        if let Some(runtime) = self.sessions.get_mut(session_key) {
+            Self::apply_session_events(&session_id, runtime, failed_events);
+        }
+        Ok(())
+    }
+
+    /// Overlay Retry: re-queue connect for the focused terminal session.
+    pub fn retry_connection_overlay(&mut self) -> AppResult<AppProjection> {
+        self.reconnect_active_session()
+    }
+
+    /// Overlay Cancel: stop the in-flight job and leave the session failed.
+    pub fn cancel_connection_overlay(&mut self) -> AppResult<AppProjection> {
+        let session_key = self.active_session_key()?;
+        if let Some(handle) = self.connect_jobs.as_mut() {
+            handle.cancel(&session_key);
+            handle.forget(&session_key);
+        }
+        if let Some(runtime) = self.sessions.get_mut(&session_key) {
+            runtime.connection_in_flight = false;
+            runtime.connection_error.clear();
+            runtime.connection_stage.clear();
+            let _ = runtime.disconnect_shell();
+            runtime.shell_session = None;
+            runtime.log_runtime_event("Connection cancelled from the terminal overlay.");
+        }
+        self.mark_session_failed_after_connect(&session_key)?;
+        let host_text = self
+            .sessions
+            .get(&session_key)
+            .map(SessionRuntime::connection_target_text)
+            .unwrap_or_default();
+        self.set_status_kind(
+            "session-connect-failed",
+            format!("Cancelled the connection to {host_text}."),
+            host_text,
+            String::new(),
+        );
+        Ok(self.projection())
+    }
+
+    /// Error text for overlay "Copy error" (empty when none).
+    pub fn connection_overlay_error_text(&self) -> String {
+        self.focus_terminal_runtime()
+            .map(|session| session.connection_error.clone())
+            .unwrap_or_default()
     }
 
     pub(crate) fn select_transport_backend(&mut self, backend: TransportBackend) -> AppProjection {
@@ -480,6 +705,17 @@ impl AppRuntime {
             self.pending_auth_prompt = None;
         }
         if let Some(runtime) = self.sessions.get_mut(session_key) {
+            runtime.connection_in_flight = false;
+            runtime.connection_stage = crate::connect_jobs::overlay_stage_from_error(&error).to_owned();
+            if handled {
+                runtime.connection_stage = "host-key".to_owned();
+                runtime.connection_error.clear();
+            } else if handled_auth {
+                runtime.connection_stage = "auth".to_owned();
+                runtime.connection_error.clear();
+            } else {
+                runtime.connection_error = error.to_string();
+            }
             runtime.log_runtime_event(&format!("Shell runtime failed while reconnecting: {error}"));
         }
         let failed_events = self
@@ -804,6 +1040,34 @@ impl AppRuntime {
         self.configure_runtime_logging(&mut runtime);
         self.configure_runtime_terminal_limits(&mut runtime);
         runtime.log_runtime_event("Core session entry created. Opening shell runtime boundary.");
+
+        let session_key = session_id.as_str().to_owned();
+        let host_text = runtime.connection_target_text();
+        let ssh_config = runtime.ssh_config.clone();
+
+        // WP1：原生 SSH 走后台 connect job —— 先插入 Connecting 会话再提交，
+        // 让 UI 立刻显示 overlay / StatusBar，握手不堵 UI 线程。
+        if self.should_connect_async() {
+            let connecting_events = self
+                .dispatcher
+                .dispatch(SessionCommand::SetSessionState {
+                    session_id: session_id.clone(),
+                    state: yshell_core::SessionState::Connecting,
+                })
+                .map_err(AppError::from_error)?;
+            Self::apply_session_events(&session_id, &mut runtime, connecting_events);
+            runtime.begin_connection_overlay("tcp");
+            let logging_notice = runtime.take_logging_notice();
+            self.record_recent_session(&session_key);
+            self.sessions.insert(session_key.clone(), runtime);
+            self.attach_tab(&tab_id_text, &session_key);
+            let _ = self.sync_sftp_lifecycle_for_session(&session_key, false);
+            if let Some(notice) = logging_notice {
+                self.fold_logging_notice_into_status(notice);
+            }
+            return self.submit_connect_job(&session_key, ssh_config, password_retry, false);
+        }
+
         // 密码重试失败时把 shell 的真实错误带进状态栏（普通路径保持原中性文案）。
         let mut shell_open_error: Option<String> = None;
         // D15：连接挂起在主机密钥/认证确认时，状态栏给用户向提示。
@@ -851,6 +1115,17 @@ impl AppRuntime {
                 runtime.log_runtime_event(&format!(
                     "Shell runtime failed during real shell startup: {error}"
                 ));
+                if let Some(stage) = error.connection_stage {
+                    runtime.connection_stage =
+                        crate::connect_jobs::overlay_stage_from_error(&error).to_owned();
+                    let _ = stage;
+                } else if !handled && !handled_auth {
+                    runtime.connection_stage =
+                        crate::connect_jobs::overlay_stage_from_error(&error).to_owned();
+                }
+                if !handled && !handled_auth {
+                    runtime.connection_error = error.to_string();
+                }
                 let failed_events = self
                     .dispatcher
                     .dispatch(SessionCommand::SetSessionState {
@@ -861,11 +1136,13 @@ impl AppRuntime {
                 Self::apply_session_events(&session_id, &mut runtime, failed_events);
                 if handled {
                     prompt_pending = true;
+                    runtime.connection_stage = "host-key".to_owned();
                     runtime.log_runtime_event(
                         "Host key confirmation is required before the native SSH session can continue.",
                     );
                 } else if handled_auth {
                     prompt_pending = true;
+                    runtime.connection_stage = "auth".to_owned();
                     runtime.log_runtime_event(
                         "Authentication requires input before the native SSH session can continue.",
                     );
@@ -876,16 +1153,9 @@ impl AppRuntime {
             }
         }
 
-        let session_key = session_id.as_str().to_owned();
         // N2：shell 是否在本函数内连上（用于插入会话后触发连接成功钩子）。
         let connected_now = runtime.state == yshell_core::SessionState::Connected;
         self.record_recent_session(&session_key);
-        let host_text = format!(
-            "{}@{}:{}",
-            runtime.username_label(),
-            runtime.ssh_config.host,
-            runtime.ssh_config.port
-        );
         if let Some(error) = &shell_open_error {
             tracing::warn!(
                 target: "yshell::runtime",

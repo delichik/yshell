@@ -103,6 +103,12 @@ pub struct SessionRuntime {
     frame_id: u64,
     /// N5/D17：创建时冻结的外观（调色板 + 字体 + 字号）。
     appearance: TerminalAppearance,
+    /// WP1：连接 overlay 当前阶段（`tcp` / `handshake` / `host-key` / `auth` / `shell`）。
+    pub connection_stage: String,
+    /// WP1：最近一次连接失败详情（overlay「Copy error」）。
+    pub connection_error: String,
+    /// WP1：后台 connect job 进行中（StatusBar busy + overlay 连接中）。
+    pub connection_in_flight: bool,
 }
 
 impl SessionRuntime {
@@ -141,6 +147,9 @@ impl SessionRuntime {
             selection: None,
             frame_id: 0,
             appearance: TerminalAppearance::default(),
+            connection_stage: String::new(),
+            connection_error: String::new(),
+            connection_in_flight: false,
         };
         runtime.log_runtime_event("Quick Connect accepted. Preparing runtime session.");
         runtime
@@ -190,6 +199,9 @@ impl SessionRuntime {
             selection: None,
             frame_id: 0,
             appearance: TerminalAppearance::default(),
+            connection_stage: String::new(),
+            connection_error: String::new(),
+            connection_in_flight: false,
         };
         runtime.log_runtime_event("Saved session loaded into runtime inventory.");
         runtime
@@ -229,9 +241,34 @@ impl SessionRuntime {
             selection: None,
             frame_id: 0,
             appearance: TerminalAppearance::default(),
+            connection_stage: String::new(),
+            connection_error: String::new(),
+            connection_in_flight: false,
         };
         runtime.log_runtime_event("Draft session created. Waiting for connection details.");
         runtime
+    }
+
+    /// `user@host:port` for overlay / status bar target summary.
+    pub fn connection_target_text(&self) -> String {
+        format!(
+            "{}@{}:{}",
+            self.username_label(),
+            self.ssh_config.host,
+            self.ssh_config.port
+        )
+    }
+
+    pub fn clear_connection_overlay(&mut self) {
+        self.connection_stage.clear();
+        self.connection_error.clear();
+        self.connection_in_flight = false;
+    }
+
+    pub fn begin_connection_overlay(&mut self, stage: &str) {
+        self.connection_stage = stage.to_owned();
+        self.connection_error.clear();
+        self.connection_in_flight = true;
     }
 
     pub fn session_id(&self) -> &SessionId {

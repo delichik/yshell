@@ -1,15 +1,19 @@
-// 状态栏（26px）：左侧状态文案 + 弹性空白 + 右侧日志区（N6）。
+// 状态栏（26px）：连接态圆点 + 目标摘要 + 状态文案 + 弹性空白 + 右侧日志区（N6）。
 //
 // 拆分自 `ui/main_window.slint`（R1 结构重构）：只搬代码，不改布局/文案/行为。
-// 说明：S2 已移除后端切换入口；N6 在右侧新增终端日志入口/ REC 指示——文案由宿主
-// 用 `TextFormats.logging-status-display` 渲染，点击打开与终端右键菜单相同的日志
-// 菜单（Start/Stop/Open File/Open Folder）。
+// WP1：左侧增加连接状态点（连接中呼吸）+ user@host 摘要 + busy 指示。
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
 
 export component StatusBar inherits Rectangle {
     // A32（D14）：默认空（宿主投影启动时写入，避免闪现英文 "Ready"）。
     in property <string> message: "";
+    /// WP1：连接态 id（`idle` / `connecting` / `connected` / `failed` / `disconnected` / `pending`）。
+    in property <string> connection-state: "idle";
+    /// WP1：`user@host:port` 摘要（无会话时为空）。
+    in property <string> connection-target: "";
+    /// WP1：握手/连接进行中。
+    in property <bool> busy: false;
     /// N6：日志区是否可用（有活动会话）。
     in property <bool> logging-usable: false;
     /// N6：活动会话是否正在记录（REC 圆点）。
@@ -34,10 +38,56 @@ export component StatusBar inherits Rectangle {
     height: Theme.bar-height-status;
     background: Theme.layer-fill;
 
+    property <color> connection-dot-color:
+        root.connection-state == "connected" ? Theme.success
+        : root.connection-state == "connecting" || root.connection-state == "pending" ? Theme.caution
+        : root.connection-state == "failed" ? Theme.critical
+        : Theme.text-tertiary;
+
     HorizontalLayout {
         padding-left: 12px;
         padding-right: 12px;
         spacing: 8px;
+
+        // WP1：连接状态点（连接中 1.5s 呼吸；设计 §6.3）。
+        if root.connection-target != "" : Rectangle {
+            width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            background: root.connection-dot-color;
+            opacity: root.connection-state == "connecting" ? 0.4 : 1.0;
+            animate opacity {
+                duration: 1500ms;
+                easing: ease-in-out;
+                iteration-count: root.connection-state == "connecting" ? -1 : 0;
+                direction: alternate;
+            }
+            accessible-role: none;
+            vertical-stretch: 0;
+            y: (parent.height - self.height) / 2;
+        }
+
+        if root.connection-target != "" : Text {
+            text: root.connection-target;
+            color: Theme.text-primary;
+            font-size: Theme.font-caption;
+            font-weight: Theme.weight-semibold;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+            horizontal-stretch: 0;
+        }
+
+        // WP1：busy 指示（小圆点脉动，与连接中状态点区分开时仅在 busy 且非 connecting 显示亦可；
+        // 连接中已有呼吸点，这里用细文字标记）。
+        if root.busy : Text {
+            text: @tr("StatusBar" => "Busy");
+            color: Theme.caution;
+            font-size: Theme.font-caption;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            horizontal-stretch: 0;
+        }
 
         Text {
             text: root.message;
@@ -46,6 +96,7 @@ export component StatusBar inherits Rectangle {
             vertical-alignment: center;
             wrap: no-wrap;
             overflow: elide;
+            horizontal-stretch: 0;
         }
 
         // A10：弹性空白显式吃掉剩余宽度（Slint 1.18 起 *-stretch 默认是 1，

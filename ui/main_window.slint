@@ -362,6 +362,16 @@ export component MainWindow inherits Window {
     // --- W5-A3：菜单/按钮状态感知（纯布尔量，由 runtime.rs 投影；见 `AppProjection`）---
     in-out property <bool> has_active_session: false;
     in-out property <bool> active_session_connected: false;
+    // --- WP1：连接 overlay + StatusBar 连接态 --------------------------------
+    in-out property <bool> connection_overlay_visible: false;
+    in-out property <string> connection_overlay_target_text: "";
+    in-out property <string> connection_overlay_stage_text: "";
+    in-out property <string> connection_overlay_error_text: "";
+    in-out property <bool> connection_overlay_failed: false;
+    in-out property <bool> connection_overlay_pending: false;
+    in-out property <string> status_connection_state_text: "idle";
+    in-out property <string> status_connection_target_text: "";
+    in-out property <bool> status_connection_busy: false;
     in-out property <bool> has_saved_selection: false;
     in-out property <int> saved_session_count: 0;
     in-out property <string> session_summary_rows_text: "";
@@ -757,6 +767,9 @@ export component MainWindow inherits Window {
     callback drop_on_local_gutter(data-transfer, DragAction);
     callback disconnect_session();
     callback reconnect_session();
+    callback retry_connection_overlay();
+    callback cancel_connection_overlay();
+    callback copy_connection_overlay_error();
     callback toggle_sftp();
     callback toggle_tunnels();
     callback toggle_commands();
@@ -2055,6 +2068,15 @@ export component MainWindow inherits Window {
                     search-summary-text: TextFormats.terminal-search-summary(root.terminal_search_kind_text, root.terminal_search_query_text, root.terminal_search_match_count, root.terminal_search_current_index);
                     status-text: root.status_text;
                     find-visible: root.terminal_find_visible;
+                    connection-overlay-visible: root.connection_overlay_visible;
+                    connection-overlay-target: root.connection_overlay_target_text;
+                    connection-overlay-stage: TextFormats.connection-stage-label(root.connection_overlay_stage_text);
+                    connection-overlay-error: root.connection_overlay_error_text;
+                    connection-overlay-failed: root.connection_overlay_failed;
+                    connection-overlay-pending: root.connection_overlay_pending;
+                    connection-retry() => { root.retry_connection_overlay(); }
+                    connection-cancel() => { root.cancel_connection_overlay(); }
+                    connection-copy-error() => { root.copy_connection_overlay_error(); }
                     new-session() => { root.new_tab_default(); }
                     // A24：标签条的查找入口同样只在有活动会话时置位（WS-E 会移除这个重复入口）。
                     open-find() => {
@@ -2212,6 +2234,9 @@ export component MainWindow inherits Window {
             // N6：右侧日志入口/REC；点击打开与终端右键菜单相同的日志菜单。
             StatusBar {
                 message: TextFormats.status-message(root.status_kind_text, root.status_param_1_text, root.status_param_2_text, root.status_text);
+                connection-state: root.status_connection_state_text;
+                connection-target: root.status_connection_target_text;
+                busy: root.status_connection_busy;
                 logging-usable: root.has_active_session;
                 logging-active: root.logging_active;
                 logging-text: TextFormats.logging-status-display(root.logging_active, root.logging_mode_text, root.logging_file_name_text);
@@ -2469,12 +2494,10 @@ export component MainWindow inherits Window {
     delete_dialog := ConfirmDialog {
         open: root.delete_session_dialog_visible;
         // A29（C24）：破坏性确认 → 主按钮用 critical 语义（WS-C 已落地 `destructive`）。
+        // WP1：去掉 Type DELETE 令牌，保留简单破坏性确认。
         destructive: true;
         title-text: @tr("Delete Saved Session");
-        message-text: @tr("This permanently removes the selected saved session from disk. Type DELETE to confirm.");
-        confirmation-token: "DELETE";
-        confirmation-placeholder: @tr("Type DELETE");
-        confirmation-text <=> root.delete_session_confirmation_text;
+        message-text: @tr("This permanently removes the selected saved session from disk.");
         confirm-label: @tr("Delete");
         confirmed() => {
             root.delete_selected_saved_session();

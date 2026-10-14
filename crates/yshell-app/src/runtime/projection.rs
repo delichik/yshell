@@ -52,6 +52,8 @@ impl AppRuntime {
         let session_tree_rows = self.session_tree_rows();
         let (recent_rows_text, recent_empty) = self.recent_sessions_parts();
         let (active_kind_text, active_name_text, active_state_text) = self.active_session_parts();
+        let connection_overlay = self.connection_overlay_projection();
+        let status_connection = self.status_connection_projection();
         let (tab_has_session, tab_name_text, tab_state_text) = self.tab_parts();
         let (terminal_title_has_session, terminal_title_name_text) = self.terminal_title_parts();
         let (terminal_body_kind_text, terminal_body_text) = self.terminal_body_parts();
@@ -298,6 +300,15 @@ impl AppRuntime {
             active_session_connected: self
                 .focus_terminal_runtime()
                 .is_some_and(|session| session.state == SessionState::Connected),
+            connection_overlay_visible: connection_overlay.visible,
+            connection_overlay_target_text: connection_overlay.target,
+            connection_overlay_stage_text: connection_overlay.stage,
+            connection_overlay_error_text: connection_overlay.error,
+            connection_overlay_failed: connection_overlay.failed,
+            connection_overlay_pending: connection_overlay.pending,
+            status_connection_state_text: status_connection.state,
+            status_connection_target_text: status_connection.target,
+            status_connection_busy: status_connection.busy,
             has_saved_selection: self.selected_saved_session_id.is_some(),
             saved_session_count: i32::try_from(self.saved_session_count()).unwrap_or(i32::MAX),
             session_summary_rows_text,
@@ -667,6 +678,86 @@ impl AppRuntime {
         }
     }
 
+    fn connection_overlay_projection(&self) -> ConnectionOverlayProjection {
+        let Some(session) = self.focus_terminal_runtime() else {
+            return ConnectionOverlayProjection::hidden();
+        };
+        let session_key = session.session_id().as_str();
+        let pending_host_key = self
+            .pending_host_key_prompt
+            .as_ref()
+            .is_some_and(|prompt| prompt.session_key == session_key);
+        let pending_auth = self
+            .pending_auth_prompt
+            .as_ref()
+            .is_some_and(|prompt| prompt.session_key == session_key);
+        let pending_password = self.pending_password_prompt.is_some();
+        let pending = pending_host_key || pending_auth || pending_password;
+        let failed = session.state == SessionState::Failed && !session.connection_error.is_empty();
+        let connecting = session.state == SessionState::Connecting || session.connection_in_flight;
+        let visible = connecting || failed || pending || session.state == SessionState::Failed;
+        if !visible {
+            return ConnectionOverlayProjection::hidden();
+        }
+        let stage = if pending_host_key {
+            "host-key".to_owned()
+        } else if pending_auth || pending_password {
+            "auth".to_owned()
+        } else if !session.connection_stage.is_empty() {
+            session.connection_stage.clone()
+        } else if connecting {
+            "tcp".to_owned()
+        } else {
+            "failed".to_owned()
+        };
+        ConnectionOverlayProjection {
+            visible: true,
+            target: session.connection_target_text(),
+            stage,
+            error: session.connection_error.clone(),
+            failed: failed || (session.state == SessionState::Failed && !pending),
+            pending,
+        }
+    }
+
+    fn status_connection_projection(&self) -> StatusConnectionProjection {
+        let Some(session) = self.focus_terminal_runtime() else {
+            return StatusConnectionProjection {
+                state: "idle".to_owned(),
+                target: String::new(),
+                busy: false,
+            };
+        };
+        let session_key = session.session_id().as_str();
+        let pending = self
+            .pending_host_key_prompt
+            .as_ref()
+            .is_some_and(|prompt| prompt.session_key == session_key)
+            || self
+                .pending_auth_prompt
+                .as_ref()
+                .is_some_and(|prompt| prompt.session_key == session_key)
+            || self.pending_password_prompt.is_some();
+        let state = if session.connection_in_flight || session.state == SessionState::Connecting {
+            "connecting"
+        } else if pending {
+            "pending"
+        } else {
+            match session.state {
+                SessionState::Connected => "connected",
+                SessionState::Failed => "failed",
+                SessionState::Disconnected => "disconnected",
+                SessionState::Idle => "idle",
+                SessionState::Connecting => "connecting",
+            }
+        };
+        StatusConnectionProjection {
+            state: state.to_owned(),
+            target: session.connection_target_text(),
+            busy: session.connection_in_flight || session.state == SessionState::Connecting,
+        }
+    }
+
     pub(crate) fn session_summary_parts(&self) -> (String, usize) {
         let lines = self
             .sessions
@@ -941,6 +1032,36 @@ struct HostKeysProjectionParts {
     import_visible: bool,
     import_text: String,
     clear_confirmation_text: String,
+}
+
+/// WP1：终端连接 overlay 投影。
+struct ConnectionOverlayProjection {
+    visible: bool,
+    target: String,
+    stage: String,
+    error: String,
+    failed: bool,
+    pending: bool,
+}
+
+impl ConnectionOverlayProjection {
+    fn hidden() -> Self {
+        Self {
+            visible: false,
+            target: String::new(),
+            stage: String::new(),
+            error: String::new(),
+            failed: false,
+            pending: false,
+        }
+    }
+}
+
+/// WP1：StatusBar 连接态。
+struct StatusConnectionProjection {
+    state: String,
+    target: String,
+    busy: bool,
 }
 
 /// N4：认证弹窗投影（服务端能力 + 已填内容 + 多轮挑战）。
@@ -1304,6 +1425,17 @@ pub struct AppProjection {
     pub has_active_session: bool,
     /// W5-A3：活动运行时会话是否处于 `connected` 状态。
     pub active_session_connected: bool,
+    /// WP1：终端连接 overlay（connecting / failed / pending-confirmation）。
+    pub connection_overlay_visible: bool,
+    pub connection_overlay_target_text: String,
+    pub connection_overlay_stage_text: String,
+    pub connection_overlay_error_text: String,
+    pub connection_overlay_failed: bool,
+    pub connection_overlay_pending: bool,
+    /// WP1：StatusBar 连接态圆点 / 目标摘要 / busy。
+    pub status_connection_state_text: String,
+    pub status_connection_target_text: String,
+    pub status_connection_busy: bool,
     /// W5-A3：是否有选中的已保存会话（Edit/Update/Delete 菜单项状态）。
     pub has_saved_selection: bool,
     pub saved_session_count: i32,

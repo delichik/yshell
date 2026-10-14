@@ -12,7 +12,10 @@ pub enum ChannelKind {
 }
 
 /// Object-safe boundary for an interactive shell session used by the app runtime.
-pub trait ShellSession: Debug {
+///
+/// `Send` so connect jobs can open the shell on a worker thread and hand it back
+/// to the UI thread without freezing the handshake on the event loop.
+pub trait ShellSession: Debug + Send {
     /// Returns the kind of channel behind this session.
     fn kind(&self) -> ChannelKind {
         ChannelKind::Shell

@@ -21,6 +21,9 @@ pub struct SshError {
     /// Fine grained authentication classification (only meaningful when
     /// `kind == SshErrorKind::Authentication`).
     pub auth_problem: Option<AuthProblemKind>,
+    /// Connection lifecycle stage label when the failure occurred
+    /// (`tcp-connect`, `ssh-handshake`, `host-key-verification`, …).
+    pub connection_stage: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,7 +64,14 @@ impl SshError {
             host_key_problem: None,
             auth_methods: None,
             auth_problem: None,
+            connection_stage: None,
         }
+    }
+
+    /// Attach the connection lifecycle stage where this error was raised.
+    pub fn with_connection_stage(mut self, stage: &'static str) -> Self {
+        self.connection_stage = Some(stage);
+        self
     }
 
     pub fn configuration(message: impl Into<String>) -> Self {
@@ -100,6 +110,9 @@ impl SshError {
 impl fmt::Display for SshError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(formatter, "{:?}: {}", self.kind, self.message)?;
+        if let Some(stage) = self.connection_stage {
+            write!(formatter, " (stage: {stage})")?;
+        }
         if let Some(problem) = self.auth_problem {
             write!(formatter, " (auth-problem: {})", problem.label())?;
         }

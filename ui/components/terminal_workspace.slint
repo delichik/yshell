@@ -285,6 +285,18 @@ export component TerminalWorkspace inherits VerticalLayout {
     callback find-next();
     callback find-prev();
     callback dismiss-find();
+    // WP1：连接 overlay 动作（透传 TerminalView）。
+    callback connection-retry();
+    callback connection-cancel();
+    callback connection-copy-error();
+
+    /// WP1：连接 overlay 投影（由宿主绑定）。
+    in property <bool> connection-overlay-visible: false;
+    in property <string> connection-overlay-target: "";
+    in property <string> connection-overlay-stage: "";
+    in property <string> connection-overlay-error: "";
+    in property <bool> connection-overlay-failed: false;
+    in property <bool> connection-overlay-pending: false;
 
     // 标签条（唯一容器；阶段 B 自绘标题栏时整体上移）
     Rectangle {
@@ -386,6 +398,15 @@ export component TerminalWorkspace inherits VerticalLayout {
                 search-summary: root.search-summary-text;
                 footer-status: root.status-text;
                 find-visible: root.find-visible;
+                connection-overlay-visible: root.connection-overlay-visible;
+                connection-overlay-target: root.connection-overlay-target;
+                connection-overlay-stage: root.connection-overlay-stage;
+                connection-overlay-error: root.connection-overlay-error;
+                connection-overlay-failed: root.connection-overlay-failed;
+                connection-overlay-pending: root.connection-overlay-pending;
+                connection-retry() => { root.connection-retry(); }
+                connection-cancel() => { root.connection-cancel(); }
+                connection-copy-error() => { root.connection-copy-error(); }
                 key-pressed(text, ctrl, alt, shift, meta) => { root.terminal-key(text, ctrl, alt, shift, meta); }
                 scroll-lines(delta) => { root.terminal-scroll(delta); }
                 scroll-to-bottom() => { root.terminal-scroll-to-bottom(); }
