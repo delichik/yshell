@@ -166,7 +166,9 @@ export global Theme {
     out property <length> row-height-nav: 40px;
     out property <length> row-height-list: 32px;
     out property <length> row-height-tree: 28px;
-    out property <length> bar-height-menubar: 32px;
+    /// 顶栏（菜单 + New Session 同行）：32px 控件 + 上下各 4px。
+    out property <length> bar-height-menubar: 40px;
+    /// 旧 CommandBar 高度（已并入菜单栏，保留 token 以免外部引用断裂）。
     out property <length> bar-height-commandbar: 48px;
     out property <length> bar-height-status: 26px;
     out property <length> bar-height-tabs: 32px;

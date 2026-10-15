@@ -1,15 +1,13 @@
-// 菜单栏（WinUI 3 MenuBar 形态）：32px 行高的一级菜单 + 5 个 MenuPopup。
+// 菜单栏（WinUI 3 MenuBar 形态）+ 同排 New Session：一级菜单与高频新建入口共处一行。
 //
-// 拆分自 `ui/main_window.slint`（R1 结构重构）：只搬代码，不改布局/文案/行为。
-// 约定：
-//   * 一级菜单的点击/悬停只上报 index + 锚点 x（`absolute-position` 在组件内取），
-//     展开态与"悬停切换"的判定仍由 main_window 持有（`open-index`/`menu-open`）。
-//   * Popup 实例放在 `MenuBarPopups` 里，但必须在 main_window 的
-//     "内容之后、模态弹窗之前"实例化，保持原有绘制层级。
-//   * `@tr` 文案搬移后显式带上原组件上下文（`@tr("MainWindow" => ...)`），
-//     保证 gettext 的 (msgctxt, msgid) 与拆分前完全一致；`MenuBar` 上下文的
-//     文案本来就是显式写法（`@tr("MenuBar" => ...)`）。
+// 原独立 CommandBar（Panels / 查找 / 设置 / 更多）与 View/File/Edit 菜单重复，已并入本行：
+//   * Panels → View 菜单
+//   * 查找 → Edit > Find
+//   * 设置 → File > Settings
+//   * 更多 → Help / File > Quit
+// 窄窗右栏折叠时仍保留 chevron，避免丢展开入口。
 import { Theme } from "../theme.slint";
+import { WinButton, WinIconButton } from "basic/controls.slint";
 import { MenuEntry, MenuPopup } from "menu_popup.slint";
 
 // 菜单栏项（WinUI 3 MenuBar 形态）：24px 行高、4px 圆角、展开态高亮
@@ -55,23 +53,31 @@ component MenuTitle inherits Rectangle {
     }
 }
 
-// 菜单栏行（32px）：渲染 5 个一级菜单，并把点击/悬停（含锚点 x）上报给宿主。
+// 单行：一级菜单 | New Session …… [窄窗右栏 chevron]
 export component MenuBar inherits Rectangle {
     in property <int> open-index: -1;
+    /// 窄窗口下显示右栏展开/收起按钮（§4.2：<1120px）
+    in property <bool> dock-toggle-visible: false;
+    /// 右栏当前是否被自动折叠（决定 chevron 方向）。
+    in property <bool> right-collapsed: false;
 
     /// 点击一级菜单：index = 0..4，anchor-x = 该项的窗口绝对 x。
     callback menu-activated(int, length);
     /// 菜单已展开时悬停到另一项：index = 0..4，anchor-x = 该项的窗口绝对 x。
     callback menu-hovered(int, length);
+    callback new-session();
+    callback toggle-right-side();
 
     height: Theme.bar-height-menubar;
     background: Theme.window-background;
 
     HorizontalLayout {
         padding-left: 8px;
+        padding-right: 12px;
         padding-top: 4px;
         padding-bottom: 4px;
         spacing: 2px;
+        alignment: center;
 
         file_menu_title := MenuTitle {
             label: @tr("MenuBar" => "File");
@@ -108,12 +114,33 @@ export component MenuBar inherits Rectangle {
             hovered => { root.menu-hovered(4, help_menu_title.absolute-position.x); }
             activated => { root.menu-activated(4, help_menu_title.absolute-position.x); }
         }
-        // 菜单栏右侧的弹性空白：让菜单栏的布局信息 max 无界。
-        // 菜单项都是固定宽度，若菜单栏只有固定宽度的子项，Slint 会把整窗内容
-        // 的 max-width 推导成这些子项之和（有限值），从而把窗口的 max_inner_size
-        // 钉死（表现为拖大窗口被弹回），见 main_window Window 的尺寸约束说明。
-        // （A19：纯布局占位，不需要标识符。）
+
+        // 菜单与 New Session 之间的细分隔
+        Rectangle {
+            width: 1px;
+            height: 16px;
+            horizontal-stretch: 0;
+            background: Theme.control-stroke;
+        }
+
+        WinButton {
+            text: @tr("MainWindow" => "New Session");
+            icon: "plus";
+            accent: true;
+            horizontal-stretch: 0;
+            clicked => { root.new-session(); }
+        }
+
+        // 弹性空白：菜单项固定宽时保证窗口 max-width 无界（见 main_window 尺寸约束说明）。
         Rectangle { horizontal-stretch: 1; }
+
+        if root.dock-toggle-visible : WinIconButton {
+            icon: root.right-collapsed ? "chevron-left" : "chevron-right";
+            accessible-name: root.right-collapsed
+                ? @tr("MainWindow" => "Expand tool panels")
+                : @tr("MainWindow" => "Collapse tool panels");
+            clicked => { root.toggle-right-side(); }
+        }
     }
 }
 
@@ -123,7 +150,7 @@ export component MenuBarPopups inherits Rectangle {
     in property <int> open-index: -1;
     in property <length> anchor-x: 0px;
     in property <length> anchor-y: 0px;
-    /// 遮罩顶部内缩（菜单栏 = menubar；CommandBar Panels = menubar+commandbar）。
+    /// 遮罩顶部内缩（统一顶栏高度）。
     in property <length> scrim-top: Theme.bar-height-menubar;
     in property <[MenuEntry]> file-entries: [];
     in property <[MenuEntry]> edit-entries: [];
