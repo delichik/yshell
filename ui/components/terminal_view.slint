@@ -101,7 +101,7 @@ export component TerminalView inherits Rectangle {
     background: transparent;
 
     VerticalLayout {
-        padding: root.embedded ? 0px : Theme.spacing-12;
+        padding: root.embedded ? 0px : Theme.spacing-8;
         spacing: root.embedded ? (root.find-visible ? Theme.spacing-4 : 0px) : Theme.spacing-8;
 
         terminal_surface := Rectangle {

@@ -484,7 +484,8 @@ export component TerminalWorkspace inherits VerticalLayout {
         max-height: root.terminal-visible && !root.split-active ? 100000px : 0px;
         background: Theme.window-background;
         VerticalLayout {
-            padding: 12px;
+            // 收紧与左右面板的视觉间距（旧 12px 显得脱节）。
+            padding: Theme.spacing-8;
             terminal_view := TerminalView {
                 view-visible: root.terminal-visible && !root.split-active;
                 title: root.title-text;
@@ -536,7 +537,7 @@ export component TerminalWorkspace inherits VerticalLayout {
         max-height: root.terminal-visible && root.split-active ? 100000px : 0px;
         background: Theme.window-background;
         VerticalLayout {
-            padding: 12px;
+            padding: Theme.spacing-8;
             split_view := WorkspaceSplitView {
                 vertical-stretch: 1;
                 orientation-text: root.split-orientation-text;

@@ -118,6 +118,9 @@ impl AppRuntime {
                 .unwrap_or((0, 0)),
             None => self.active_terminal_scroll_geometry(),
         };
+        let terminal_viewport_columns = focus_terminal
+            .map(|runtime| i32::from(runtime.terminal_viewport_metrics().columns))
+            .unwrap_or(0);
         // N6：终端日志（菜单/状态栏入口、REC 指示、弹窗字段）。
         let (
             terminal_logging_start_enabled,
@@ -419,6 +422,7 @@ impl AppRuntime {
                 self.active_terminal_scroll_offset()
             },
             terminal_scrollback_lines: i32::try_from(terminal_scrollback_lines).unwrap_or(i32::MAX),
+            terminal_viewport_columns,
             terminal_viewport_rows: i32::try_from(terminal_viewport_rows).unwrap_or(i32::MAX),
             terminal_selection_active: focus_terminal
                 .is_some_and(SessionRuntime::terminal_selection_active),
@@ -1564,6 +1568,8 @@ pub struct AppProjection {
     pub terminal_scroll_offset: u64,
     /// 终端缓冲区总行数（scrollback 行数 + 当前视口行数）：滚动条几何的唯一总量口径。
     pub terminal_scrollback_lines: i32,
+    /// 当前视口列数（状态栏尺寸显示）。
+    pub terminal_viewport_columns: i32,
     /// 当前视口行数（取自 `active_terminal_viewport_metrics`）：滚动条滑块比例与可见性用。
     pub terminal_viewport_rows: i32,
     pub terminal_selection_active: bool,

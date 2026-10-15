@@ -6209,6 +6209,8 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     )));
     window.set_terminal_cursor_column(projection.terminal_cursor_column);
     window.set_terminal_cursor_row(projection.terminal_cursor_row);
+    window.set_terminal_viewport_columns(projection.terminal_viewport_columns);
+    window.set_terminal_viewport_rows(projection.terminal_viewport_rows);
     window.set_terminal_scroll_offset(
         i32::try_from(projection.terminal_scroll_offset).unwrap_or(i32::MAX),
     );

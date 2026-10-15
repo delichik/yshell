@@ -197,6 +197,8 @@ export component MainWindow inherits Window {
     in-out property <image> terminal_image_secondary;
     in-out property <int> terminal_cursor_column: 0;
     in-out property <int> terminal_cursor_row: 0;
+    in-out property <int> terminal_viewport_columns: 0;
+    in-out property <int> terminal_viewport_rows: 0;
     in-out property <int> terminal_scroll_offset: 0;
     in-out property <bool> terminal_selection_active: false;
     // W5-A3：终端 Edit 菜单（Copy/清屏等）的状态开关；与上者同源。
@@ -2360,6 +2362,10 @@ export component MainWindow inherits Window {
                 logging-usable: root.has_active_session;
                 logging-active: root.logging_active;
                 logging-text: TextFormats.logging-status-display(root.logging_active, root.logging_mode_text, root.logging_file_name_text);
+                terminal-cols: root.terminal_viewport_columns;
+                terminal-rows: root.terminal_viewport_rows;
+                cursor-col: root.terminal_cursor_column;
+                cursor-row: root.terminal_cursor_row;
                 // N9：同步发送按键 chip（`SYNC → n targets` + 一键停止 + 一次性提示）。
                 sync-active: root.input_sync_active;
                 sync-target-count: root.input_sync_target_count;
