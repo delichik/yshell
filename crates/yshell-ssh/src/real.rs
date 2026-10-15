@@ -67,8 +67,16 @@ fn notify_connection_stage(stage: RealConnectionStage) {
 
 /// Prefer modern KEX algorithms so libssh2 does not lead with DH-GEX and fail
 /// with `Session(-5) Unable to exchange encryption keys` against hosts that
-/// reject or mishandle that path. Unsupported names are ignored by libssh2;
-/// if a whole preference string is unsupported we try a shorter list.
+/// reject or mishandle that path (notably OpenSSH >= 10 defaults).
+///
+/// On Windows this only helps when libssh2 is built with OpenSSL
+/// (`ssh2` features `vendored-openssl` + `openssl-on-win32`); the WinCNG
+/// backend cannot offer curve25519/ECDH at all.
+///
+/// Unsupported names are ignored by libssh2; if a whole preference string is
+/// unsupported we try a shorter list. Keep `ext-info-c` /
+/// `kex-strict-c-v00@openssh.com` out of these strings — libssh2 1.11.1+
+/// re-appends them inside `method_pref`.
 fn apply_preferred_kex_methods(session: &Session) {
     const PREFS: &[&str] = &[
         "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group16-sha512,diffie-hellman-group14-sha256,diffie-hellman-group-exchange-sha256",

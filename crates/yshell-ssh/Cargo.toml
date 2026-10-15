@@ -12,6 +12,11 @@ workspace = true
 path = "src/lib.rs"
 
 [dependencies]
-ssh2 = { version = "0.9.5", features = ["vendored-openssl"] }
+# vendored-openssl alone is not enough on Windows: libssh2-sys still defaults to
+# WinCNG, which only offers finite-field DH KEX. OpenSSH >= 10 dropped those from
+# its defaults, so handshake fails with Session(-5) "Unable to exchange encryption
+# keys". openssl-on-win32 builds libssh2 against the vendored OpenSSL so
+# curve25519-sha256 / ecdh-sha2-nistp* are available again.
+ssh2 = { version = "0.9.5", features = ["vendored-openssl", "openssl-on-win32"] }
 # D1：脚手架/传输诊断只进 tracing 日志，不再写进终端网格（pending_output）。
 tracing.workspace = true

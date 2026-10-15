@@ -12,7 +12,9 @@ workspace = true
 path = "src/lib.rs"
 
 [dependencies]
-ssh2 = { version = "0.9.5", features = ["vendored-openssl"] }
+# See yshell-ssh: openssl-on-win32 is required so Windows builds do not use
+# libssh2's WinCNG backend (no curve25519/ECDH), which fails against OpenSSH >= 10.
+ssh2 = { version = "0.9.5", features = ["vendored-openssl", "openssl-on-win32"] }
 yshell-ssh = { path = "../yshell-ssh" }
 
 [dev-dependencies]
