@@ -5,9 +5,9 @@
 //   * `open` 由宿主投影驱动；`close`（Esc / 遮罩点击 / Close 按钮）走同一条路径。
 //   * `keys` 是按显示顺序排好的行模型；`selected-index` 是宿主与页面共享的选择。
 //   * 文本输入属性由页面编辑、经 `update-*` 回调写回宿主，宿主决定何时清空。
-//   * 破坏性操作（删除 / 部署）都需要页面内的二次确认：
-//       request-delete → remove-confirm-visible；confirm-delete/cancel-delete。
-//   * "部署公钥"在 Phase 2 由宿主持有远端会话执行（命令文本由宿主投影）。
+//   * 破坏性操作（删除 / 部署）走 `request-*`；二次确认由宿主 `ConfirmDialog` 承接
+//     （`confirm-*` / `cancel-*` 仍可由宿主直接调用运行时，不在本页展示）。
+//   * "部署公钥"在 Phase 2 由宿主持有远端会话执行（命令文本由宿主投影到确认框）。
 //
 // 规范：docs/product/ui-winui3-design-language.md §5.10（ContentDialog 形态）。
 
@@ -41,6 +41,11 @@ component PrivateKeyListItem inherits Rectangle {
         : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
+    private property <string> passphrase-status:
+        node.passphrase-stored ? @tr("passphrase saved") : @tr("passphrase not saved");
+    private property <string> material-status:
+        node.material-present ? "" : (" · " + @tr("material missing"));
+
     VerticalLayout {
         padding-left: 8px;
         padding-right: 8px;
@@ -67,9 +72,7 @@ component PrivateKeyListItem inherits Rectangle {
         }
 
         Text {
-            text: (node.passphrase-stored ? "passphrase saved" : "passphrase not saved")
-                + " · " + node.used-by
-                + (node.material-present ? "" : " · material missing");
+            text: root.passphrase-status + " · " + node.used-by + root.material-status;
             color: Theme.text-tertiary;
             font-size: Theme.font-caption;
             wrap: no-wrap;
@@ -86,7 +89,7 @@ export component PrivateKeysPage inherits Rectangle {
     in property <bool> open: false;
     in property <[PrivateKeyRow]> keys: [];
     in property <string> list-summary-text: "";
-    in property <string> empty-text: @tr("No managed private keys yet. Import an OpenSSH private key below.");
+    in property <string> empty-text: @tr("No managed private keys yet. Import an OpenSSH private key to get started.");
     in property <string> details-text: "";
     in property <string> public-key-text: "";
     in property <string> test-result-text: "";
@@ -94,10 +97,6 @@ export component PrivateKeysPage inherits Rectangle {
     in property <bool> busy: false;
 
     in-out property <int> selected-index: -1;
-    in-out property <bool> remove-confirm-visible: false;
-    in-out property <bool> deploy-confirm-visible: false;
-    in property <string> deploy-command-text: "";
-    in property <string> deploy-summary-text: "";
     in property <string> remove-warning-text: "";
 
     // 导入表单
@@ -123,11 +122,7 @@ export component PrivateKeysPage inherits Rectangle {
     callback copy-public-key();
     callback export-public-key();
     callback request-remove();
-    callback confirm-remove();
-    callback cancel-remove();
     callback request-deploy();
-    callback confirm-deploy();
-    callback cancel-deploy();
     callback update-passphrase(string);
     callback save-passphrase();
     callback forget-passphrase();
@@ -140,6 +135,7 @@ export component PrivateKeysPage inherits Rectangle {
         root.selected-index >= 0 && root.selected-index < root.keys.length
             ? root.keys[root.selected-index].label
             : "";
+    private property <bool> has-selection: root.selected-index >= 0;
 
     dialog_scope := FocusScope {
         width: parent.width;
@@ -231,152 +227,175 @@ export component PrivateKeysPage inherits Rectangle {
                                 spacing: Theme.spacing-12;
 
                                 WinCard {
-                            vertical-stretch: 0;
+                                    vertical-stretch: 0;
 
-                            WinCardHeader {
-                                title: @tr("Managed Keys");
-                                icon: "shield";
-                            }
+                                    WinCardHeader {
+                                        title: @tr("Managed Keys");
+                                        icon: "shield";
+                                    }
 
-                            Rectangle {
-                                height: max(96px, min(root.keys.length * 56px + 4px, 224px));
-                                clip: true;
-                                background: Theme.panel-background;
-                                border-radius: Theme.radius-control;
-                                border-width: 1px;
-                                border-color: Theme.divider;
+                                    Rectangle {
+                                        height: max(140px, min(root.keys.length * 56px + 4px, 224px));
+                                        clip: true;
+                                        background: Theme.panel-background;
+                                        border-radius: Theme.radius-control;
+                                        border-width: 1px;
+                                        border-color: Theme.divider;
 
-                                keys-list := Flickable {
-                                    width: parent.width;
-                                    height: parent.height;
-                                    interactive: true;
-                                    content-width: self.width;
-                                    content-height: rows.preferred-height;
+                                        keys-list := Flickable {
+                                            visible: root.keys.length > 0;
+                                            width: parent.width;
+                                            height: parent.height;
+                                            interactive: true;
+                                            content-width: self.width;
+                                            content-height: rows.preferred-height;
 
-                                    rows := VerticalLayout {
-                                        padding: 2px;
-                                        spacing: 2px;
+                                            rows := VerticalLayout {
+                                                padding: 2px;
+                                                spacing: 2px;
 
-                                        for row[i] in root.keys : PrivateKeyListItem {
-                                            node: row;
-                                            selected: i == root.selected-index;
-                                            clicked => {
-                                                root.selected-index = i;
-                                                root.select-key(i);
+                                                for row[i] in root.keys : PrivateKeyListItem {
+                                                    node: row;
+                                                    selected: i == root.selected-index;
+                                                    clicked => {
+                                                        root.selected-index = i;
+                                                        root.select-key(i);
+                                                    }
+                                                }
                                             }
+                                        }
+
+                                        // 滚动指示：E22 可复用组件（`content-y` ≤ 0，组件内部取负）
+                                        WinScrollIndicator {
+                                            visible: root.keys.length > 0;
+                                            x: parent.width - self.width - Theme.spacing-4;
+                                            y: Theme.spacing-4;
+                                            height: parent.height - 2 * Theme.spacing-4;
+                                            viewport-position: keys-list.content-y;
+                                            content-extent: keys-list.content-height;
+                                            viewport-extent: keys-list.height;
+                                            thumb-min-length: 24px;
+                                        }
+
+                                        // 空态：居中说明 + Import 主 CTA（Browse/rfd 主路径）
+                                        empty-state := VerticalLayout {
+                                            visible: root.keys.length == 0;
+                                            y: max((parent.height - self.preferred-height) / 2, Theme.spacing-12);
+                                            width: parent.width;
+                                            padding-left: Theme.spacing-16;
+                                            padding-right: Theme.spacing-16;
+                                            spacing: Theme.spacing-12;
+                                            alignment: center;
+
+                                            Text {
+                                                width: min(parent.width - 2 * Theme.spacing-16, 280px);
+                                                text: root.empty-text;
+                                                color: Theme.text-tertiary;
+                                                font-size: Theme.font-caption;
+                                                horizontal-alignment: center;
+                                                wrap: word-wrap;
+                                            }
+
+                                            HorizontalLayout {
+                                                alignment: center;
+
+                                                WinButton {
+                                                    text: @tr("Import");
+                                                    icon: "upload";
+                                                    accent: true;
+                                                    enabled: !root.busy;
+                                                    clicked => { root.browse-import-file(); }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    HorizontalLayout {
+                                        spacing: Theme.spacing-8;
+                                        vertical-stretch: 0;
+
+                                        WinButton {
+                                            text: @tr("Test");
+                                            icon: "check";
+                                            enabled: root.has-selection && !root.busy;
+                                            clicked => { root.test-key(); }
+                                        }
+
+                                        WinButton {
+                                            text: @tr("Import");
+                                            icon: "upload";
+                                            accent: root.keys.length == 0;
+                                            enabled: !root.busy;
+                                            clicked => { root.browse-import-file(); }
                                         }
                                     }
                                 }
 
-                                // 滚动指示：E22 可复用组件（`content-y` ≤ 0，组件内部取负）
-                                WinScrollIndicator {
-                                    x: parent.width - self.width - Theme.spacing-4;
-                                    y: Theme.spacing-4;
-                                    height: parent.height - 2 * Theme.spacing-4;
-                                    viewport-position: keys-list.content-y;
-                                    content-extent: keys-list.content-height;
-                                    viewport-extent: keys-list.height;
-                                    thumb-min-length: 24px;
+                                WinCard {
+                                    vertical-stretch: 0;
+
+                                    WinCardHeader {
+                                        title: @tr("Import Private Key");
+                                        icon: "upload";
+                                    }
+
+                                    Text {
+                                        text: @tr("Stored in the secret store; only metadata is written to config.toml.");
+                                        color: Theme.text-tertiary;
+                                        font-size: Theme.font-caption;
+                                        wrap: word-wrap;
+                                    }
+
+                                    WinTextInput {
+                                        text <=> root.import-label-text;
+                                        placeholder-text: @tr("Label (optional)");
+                                        edited => { root.update-import-label(self.text); }
+                                    }
+
+                                    HorizontalLayout {
+                                        spacing: Theme.spacing-8;
+
+                                        WinTextInput {
+                                            text <=> root.import-path-text;
+                                            placeholder-text: @tr("Path to key file");
+                                            font-family: Theme.font-mono;
+                                            font-size: Theme.font-caption;
+                                            horizontal-stretch: 1;
+                                            edited => { root.update-import-path(self.text); }
+                                        }
+
+                                        WinButton {
+                                            text: @tr("Browse…");
+                                            icon: "file";
+                                            clicked => { root.browse-import-file(); }
+                                        }
+                                    }
+
+                                    WinTextInput {
+                                        text <=> root.import-passphrase-text;
+                                        placeholder-text: @tr("Passphrase (optional)");
+                                        input-type: password;
+                                        edited => { root.update-import-passphrase(self.text); }
+                                    }
+
+                                    WinToggle {
+                                        text: @tr("Remember passphrase");
+                                        checked: root.remember-import-passphrase;
+                                        toggled => { root.toggle-remember-import-passphrase(self.checked); }
+                                    }
+
+                                    HorizontalLayout {
+                                        alignment: end;
+
+                                        WinButton {
+                                            text: @tr("Import");
+                                            icon: "plus";
+                                            accent: true;
+                                            enabled: root.import-enabled && !root.busy;
+                                            clicked => { root.import-key(); }
+                                        }
+                                    }
                                 }
-
-                                Text {
-                                    visible: root.keys.length == 0;
-                                    x: 12px;
-                                    y: 12px;
-                                    width: parent.width - 24px;
-                                    text: root.empty-text;
-                                    color: Theme.text-tertiary;
-                                    font-size: Theme.font-caption;
-                                    wrap: word-wrap;
-                                }
-                            }
-
-                            HorizontalLayout {
-                                spacing: Theme.spacing-8;
-                                vertical-stretch: 0;
-
-                                WinButton {
-                                    text: @tr("Remove");
-                                    icon: "trash";
-                                    critical: true;
-                                    enabled: root.selected-index >= 0 && !root.busy;
-                                    clicked => { root.request-remove(); }
-                                }
-
-                                WinButton {
-                                    text: @tr("Test");
-                                    icon: "check";
-                                    enabled: root.selected-index >= 0 && !root.busy;
-                                    clicked => { root.test-key(); }
-                                }
-                            }
-                        }
-
-                        WinCard {
-                            vertical-stretch: 0;
-
-                            WinCardHeader {
-                                title: @tr("Import Private Key");
-                                icon: "upload";
-                            }
-
-                            Text {
-                                text: @tr("Stored in the secret store; only metadata is written to config.toml.");
-                                color: Theme.text-tertiary;
-                                font-size: Theme.font-caption;
-                                wrap: word-wrap;
-                            }
-
-                            WinTextInput {
-                                text <=> root.import-label-text;
-                                placeholder-text: @tr("Label (optional)");
-                                edited => { root.update-import-label(self.text); }
-                            }
-
-                            HorizontalLayout {
-                                spacing: Theme.spacing-8;
-
-                                WinTextInput {
-                                    text <=> root.import-path-text;
-                                    placeholder-text: @tr("Path to key file");
-                                    font-family: Theme.font-mono;
-                                    font-size: Theme.font-caption;
-                                    horizontal-stretch: 1;
-                                    edited => { root.update-import-path(self.text); }
-                                }
-
-                                WinButton {
-                                    text: @tr("Browse…");
-                                    icon: "file";
-                                    clicked => { root.browse-import-file(); }
-                                }
-                            }
-
-                            WinTextInput {
-                                text <=> root.import-passphrase-text;
-                                placeholder-text: @tr("Passphrase (optional)");
-                                input-type: password;
-                                edited => { root.update-import-passphrase(self.text); }
-                            }
-
-                            WinToggle {
-                                text: @tr("Remember passphrase");
-                                checked: root.remember-import-passphrase;
-                                toggled => { root.toggle-remember-import-passphrase(self.checked); }
-                            }
-
-                            HorizontalLayout {
-                                alignment: end;
-
-                                WinButton {
-                                    text: @tr("Import");
-                                    icon: "plus";
-                                    accent: true;
-                                    enabled: root.import-enabled && !root.busy;
-                                    clicked => { root.import-key(); }
-                                }
-                            }
-                        }
                             }
 
                             // 滚动指示（左列整体；面板高度不足时才出现）
@@ -392,7 +411,7 @@ export component PrivateKeysPage inherits Rectangle {
                         }
                     }
 
-                    // --- 右：详情 / 口令 / 部署确认 / 危险区 ------------------------
+                    // --- 右：详情 / 口令 / 操作 ------------------------------------
                     Rectangle {
                         clip: true;
                         background: transparent;
@@ -406,58 +425,6 @@ export component PrivateKeysPage inherits Rectangle {
 
                             sections := VerticalLayout {
                                 spacing: Theme.spacing-12;
-
-                                // 部署确认（追加 authorized_keys，幂等 + 权限修正）
-                                if root.deploy-confirm-visible : WinCard {
-                                    WinCardHeader {
-                                        title: @tr("Deploy Public Key");
-                                        icon: "upload";
-                                    }
-
-                                    Text {
-                                        text: root.deploy-summary-text;
-                                        color: Theme.text-secondary;
-                                        font-size: Theme.font-body;
-                                        wrap: word-wrap;
-                                    }
-
-                                    Rectangle {
-                                        height: 62px;
-                                        clip: true;
-                                        background: Theme.panel-background;
-                                        border-radius: Theme.radius-control;
-                                        border-width: 1px;
-                                        border-color: Theme.divider;
-
-                                        Text {
-                                            x: 10px;
-                                            y: 10px;
-                                            width: parent.width - 20px;
-                                            text: root.deploy-command-text;
-                                            color: Theme.text-secondary;
-                                            font-size: Theme.font-caption;
-                                            font-family: Theme.font-mono;
-                                            wrap: word-wrap;
-                                        }
-                                    }
-
-                                    HorizontalLayout {
-                                        alignment: end;
-                                        spacing: Theme.spacing-8;
-
-                                        WinButton {
-                                            text: @tr("Cancel");
-                                            clicked => { root.cancel-deploy(); }
-                                        }
-
-                                        WinButton {
-                                            text: @tr("Deploy");
-                                            accent: true;
-                                            enabled: !root.busy;
-                                            clicked => { root.confirm-deploy(); }
-                                        }
-                                    }
-                                }
 
                                 // 详情 + 派生公钥
                                 WinCard {
@@ -522,6 +489,26 @@ export component PrivateKeysPage inherits Rectangle {
                                         }
                                     }
 
+                                    // 重命名
+                                    HorizontalLayout {
+                                        spacing: Theme.spacing-8;
+
+                                        rename-input := WinTextInput {
+                                            text: root.selected-label;
+                                            placeholder-text: @tr("Label");
+                                            horizontal-stretch: 1;
+                                            enabled: root.has-selection && !root.busy;
+                                            accepted => { root.rename-key(self.text); }
+                                        }
+
+                                        WinButton {
+                                            text: @tr("Rename");
+                                            enabled: root.has-selection && !root.busy;
+                                            clicked => { root.rename-key(rename-input.text); }
+                                        }
+                                    }
+
+                                    // 公钥操作：Copy / Export / Deploy
                                     HorizontalLayout {
                                         spacing: Theme.spacing-8;
 
@@ -542,26 +529,29 @@ export component PrivateKeysPage inherits Rectangle {
                                         WinButton {
                                             text: @tr("Deploy");
                                             icon: "upload";
-                                            enabled: root.public-key-text != "";
+                                            enabled: root.public-key-text != "" && !root.busy;
                                             clicked => { root.request-deploy(); }
                                         }
                                     }
 
-                                    // 重命名（label 就地编辑）
+                                    // 移除：普通确认由宿主 ConfirmDialog 承接（非 Danger Zone）
+                                    if root.has-selection : Text {
+                                        text: root.remove-warning-text;
+                                        color: Theme.text-tertiary;
+                                        font-size: Theme.font-caption;
+                                        wrap: word-wrap;
+                                    }
+
                                     HorizontalLayout {
+                                        alignment: start;
                                         spacing: Theme.spacing-8;
 
-                                        rename-input := WinTextInput {
-                                            text: root.selected-label;
-                                            placeholder-text: @tr("Label");
-                                            horizontal-stretch: 1;
-                                            accepted => { root.rename-key(self.text); }
-                                        }
-
                                         WinButton {
-                                            text: @tr("Rename");
-                                            enabled: root.selected-index >= 0 && !root.busy;
-                                            clicked => { root.rename-key(rename-input.text); }
+                                            text: @tr("Remove");
+                                            icon: "trash";
+                                            critical: true;
+                                            enabled: root.has-selection && !root.busy;
+                                            clicked => { root.request-remove(); }
                                         }
                                     }
                                 }
@@ -604,57 +594,15 @@ export component PrivateKeysPage inherits Rectangle {
                                         WinButton {
                                             text: @tr("Forget");
                                             icon: "clear";
-                                            critical: true;
                                             enabled: root.passphrase-manage-enabled && root.passphrase-stored && !root.busy;
                                             clicked => { root.forget-passphrase(); }
                                         }
                                     }
                                 }
-
-                                // 危险区：删除确认（确认态用同一行替换警告文案，避免面板被顶出视口）
-                                WinCard {
-                                    WinCardHeader {
-                                        title: @tr("Danger Zone");
-                                        icon: "warning";
-                                    }
-
-                                    if root.remove-confirm-visible : HorizontalLayout {
-                                        spacing: Theme.spacing-8;
-
-                                        Text {
-                                            text: @tr("Remove this managed key permanently?");
-                                            color: Theme.critical;
-                                            font-size: Theme.font-caption;
-                                            vertical-alignment: center;
-                                            horizontal-stretch: 1;
-                                            wrap: word-wrap;
-                                        }
-
-                                        WinButton {
-                                            text: @tr("Cancel");
-                                            clicked => { root.cancel-remove(); }
-                                        }
-
-                                        WinButton {
-                                            text: @tr("Remove Key");
-                                            accent: true;
-                                            critical: true;
-                                            enabled: !root.busy;
-                                            clicked => { root.confirm-remove(); }
-                                        }
-                                    }
-
-                                    if !root.remove-confirm-visible : Text {
-                                        text: root.remove-warning-text;
-                                        color: Theme.critical;
-                                        font-size: Theme.font-caption;
-                                        wrap: word-wrap;
-                                    }
-                                }
                             }
                         }
 
-                        // 滚动指示（右列详情/口令/危险区）
+                        // 滚动指示（右列详情/口令）
                         WinScrollIndicator {
                             x: parent.width - self.width - Theme.spacing-4;
                             y: Theme.spacing-4;

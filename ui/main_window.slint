@@ -3027,7 +3027,9 @@ export component MainWindow inherits Window {
     private_keys_deploy_dialog := ConfirmDialog {
         open: root.private_keys_deploy_confirm_visible;
         title-text: @tr("Deploy Public Key");
-        message-text: root.private_keys_deploy_summary_text;
+        message-text: root.private_keys_deploy_command_text == ""
+            ? root.private_keys_deploy_summary_text
+            : root.private_keys_deploy_summary_text + "\n\n" + root.private_keys_deploy_command_text;
         confirm-label: @tr("Deploy");
         confirmed() => {
             root.confirm_private_key_deploy();
