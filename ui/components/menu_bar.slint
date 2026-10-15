@@ -1,13 +1,15 @@
-// 菜单栏（WinUI 3 MenuBar 形态）+ 同排 New Session：一级菜单与高频新建入口共处一行。
+// 自绘顶栏（阶段 B）：WinUI 3 MenuBar + 窗口标题栏控件。
 //
-// 原独立 CommandBar（Panels / 查找 / 设置 / 更多）与 View/File/Edit 菜单重复，已并入本行：
-//   * Panels → View 菜单
-//   * 查找 → Edit > Find
-//   * 设置 → File > Settings
-//   * 更多 → Help / File > Quit
-// 窄窗右栏折叠时仍保留 chevron，避免丢展开入口。
+// 无系统装饰（MainWindow.no-frame）时本行同时承担：
+//   * 一级菜单 File / Edit / Session / View / Help
+//   * 空白区拖动（WindowMoveArea）与双击最大化
+//   * 窄窗右栏 chevron
+//   * 最小化 / 最大化·还原 / 关闭
+//
+// New Session 强调按钮已移除：新建走 File 菜单、快捷键与其它既有入口。
 import { Theme } from "../theme.slint";
-import { WinButton, WinIconButton } from "basic/controls.slint";
+import { WinIconButton } from "basic/controls.slint";
+import { Icon } from "basic/icons.slint";
 import { MenuEntry, MenuPopup } from "menu_popup.slint";
 
 // 菜单栏项（WinUI 3 MenuBar 形态）：24px 行高、4px 圆角、展开态高亮
@@ -53,13 +55,103 @@ component MenuTitle inherits Rectangle {
     }
 }
 
-// 单行：一级菜单 | New Session …… [窄窗右栏 chevron]
+/// WinUI 3 标题栏按钮：46×顶栏高、直角、关闭悬停用系统红。
+component CaptionButton inherits Rectangle {
+    in property <string> kind: "minimize";
+    /// 最大化态：方框换成还原（叠方）。
+    in property <bool> window-maximized: false;
+    callback clicked();
+
+    private property <bool> is-close: root.kind == "close";
+    private property <string> access-label:
+        root.kind == "minimize" ? @tr("MenuBar" => "Minimize")
+        : root.kind == "close" ? @tr("MenuBar" => "Close")
+        : root.window-maximized ? @tr("MenuBar" => "Restore")
+        : @tr("MenuBar" => "Maximize");
+    private property <color> glyph-color: root.is-close && touch.has-hover
+        ? Theme.caption-close-hover-text
+        : Theme.text-primary;
+
+    width: 46px;
+    height: 100%;
+    background: root.is-close
+        ? (touch.pressed ? Theme.caption-close-pressed
+            : touch.has-hover ? Theme.caption-close-hover : transparent)
+        : (touch.pressed ? Theme.subtle-pressed
+            : touch.has-hover ? Theme.subtle-hover : transparent);
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    accessible-role: button;
+    accessible-label: root.access-label;
+    accessible-action-default => { root.clicked(); }
+
+    // 最小化 / 关闭用现有图标；最大化·还原用几何方框（无对应 PNG）。
+    if root.kind == "minimize" : Icon {
+        name: "minus";
+        icon-color: root.glyph-color;
+        icon-size: 10px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+    if root.kind == "maximize" && !root.window-maximized : Rectangle {
+        width: 10px;
+        height: 10px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        border-width: 1px;
+        border-color: root.glyph-color;
+        background: transparent;
+    }
+    if root.kind == "maximize" && root.window-maximized : Rectangle {
+        width: 12px;
+        height: 12px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        background: transparent;
+
+        // 后层方框（偏右上）
+        Rectangle {
+            x: 2px;
+            y: 0px;
+            width: 8px;
+            height: 8px;
+            border-width: 1px;
+            border-color: root.glyph-color;
+            background: transparent;
+        }
+        // 前层方框（偏左下，盖住后层一角）
+        Rectangle {
+            x: 0px;
+            y: 2px;
+            width: 8px;
+            height: 8px;
+            border-width: 1px;
+            border-color: root.glyph-color;
+            background: Theme.window-background;
+        }
+    }
+    if root.kind == "close" : Icon {
+        name: "close";
+        icon-color: root.glyph-color;
+        icon-size: 10px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+// 单行自绘顶栏：一级菜单 …… [窄窗 chevron] [─ □ ×]
 export component MenuBar inherits Rectangle {
     in property <int> open-index: -1;
     /// 窄窗口下显示右栏展开/收起按钮（§4.2：<1120px）
     in property <bool> dock-toggle-visible: false;
     /// 右栏当前是否被自动折叠（决定 chevron 方向）。
     in property <bool> right-collapsed: false;
+    /// 宿主 Window.maximized，驱动还原字形。
+    in property <bool> window-maximized: false;
 
     /// 点击一级菜单：index = 0..4，anchor-x = 该项的窗口绝对 x。
     callback menu-activated(int, length);
@@ -67,87 +159,110 @@ export component MenuBar inherits Rectangle {
     callback menu-hovered(int, length);
     /// 点击菜单栏空白（非一级标题）：收起已展开的菜单。
     callback menu-dismiss-requested();
-    callback new-session();
     callback toggle-right-side();
+    callback minimize-requested();
+    callback maximize-toggle-requested();
+    callback close-requested();
 
     height: Theme.bar-height-menubar;
     background: Theme.window-background;
 
-    // 空白区点击收起：铺在布局之下；一级标题 / New Session 的 TouchArea 在上层吞掉事件。
-    TouchArea {
-        enabled: root.open-index >= 0;
-        clicked => { root.menu-dismiss-requested(); }
+    // 底部分隔线：无系统标题栏时与内容区划界。
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        width: 100%;
+        background: Theme.layer-stroke;
     }
 
     HorizontalLayout {
-        padding-left: 8px;
-        padding-right: 12px;
-        padding-top: 4px;
-        padding-bottom: 4px;
-        spacing: 2px;
-        alignment: center;
+        spacing: 0px;
+        alignment: stretch;
 
-        file_menu_title := MenuTitle {
-            label: @tr("MenuBar" => "File");
-            open: root.open-index == 0;
-            menu-open: root.open-index >= 0;
-            hovered => { root.menu-hovered(0, file_menu_title.absolute-position.x); }
-            activated => { root.menu-activated(0, file_menu_title.absolute-position.x); }
-        }
-        edit_menu_title := MenuTitle {
-            label: @tr("MenuBar" => "Edit");
-            open: root.open-index == 1;
-            menu-open: root.open-index >= 0;
-            hovered => { root.menu-hovered(1, edit_menu_title.absolute-position.x); }
-            activated => { root.menu-activated(1, edit_menu_title.absolute-position.x); }
-        }
-        session_menu_title := MenuTitle {
-            label: @tr("MenuBar" => "Session");
-            open: root.open-index == 2;
-            menu-open: root.open-index >= 0;
-            hovered => { root.menu-hovered(2, session_menu_title.absolute-position.x); }
-            activated => { root.menu-activated(2, session_menu_title.absolute-position.x); }
-        }
-        view_menu_title := MenuTitle {
-            label: @tr("MenuBar" => "View");
-            open: root.open-index == 3;
-            menu-open: root.open-index >= 0;
-            hovered => { root.menu-hovered(3, view_menu_title.absolute-position.x); }
-            activated => { root.menu-activated(3, view_menu_title.absolute-position.x); }
-        }
-        help_menu_title := MenuTitle {
-            label: @tr("MenuBar" => "Help");
-            open: root.open-index == 4;
-            menu-open: root.open-index >= 0;
-            hovered => { root.menu-hovered(4, help_menu_title.absolute-position.x); }
-            activated => { root.menu-activated(4, help_menu_title.absolute-position.x); }
+        // 可拖动区：菜单 + 弹性空白 + 窄窗 chevron。按钮/菜单的 TouchArea 仍可点击。
+        WindowMoveArea {
+            horizontal-stretch: 1;
+
+            HorizontalLayout {
+                padding-left: 8px;
+                padding-right: 4px;
+                padding-top: 4px;
+                padding-bottom: 4px;
+                spacing: 2px;
+                alignment: center;
+
+                file_menu_title := MenuTitle {
+                    label: @tr("MenuBar" => "File");
+                    open: root.open-index == 0;
+                    menu-open: root.open-index >= 0;
+                    hovered => { root.menu-hovered(0, file_menu_title.absolute-position.x); }
+                    activated => { root.menu-activated(0, file_menu_title.absolute-position.x); }
+                }
+                edit_menu_title := MenuTitle {
+                    label: @tr("MenuBar" => "Edit");
+                    open: root.open-index == 1;
+                    menu-open: root.open-index >= 0;
+                    hovered => { root.menu-hovered(1, edit_menu_title.absolute-position.x); }
+                    activated => { root.menu-activated(1, edit_menu_title.absolute-position.x); }
+                }
+                session_menu_title := MenuTitle {
+                    label: @tr("MenuBar" => "Session");
+                    open: root.open-index == 2;
+                    menu-open: root.open-index >= 0;
+                    hovered => { root.menu-hovered(2, session_menu_title.absolute-position.x); }
+                    activated => { root.menu-activated(2, session_menu_title.absolute-position.x); }
+                }
+                view_menu_title := MenuTitle {
+                    label: @tr("MenuBar" => "View");
+                    open: root.open-index == 3;
+                    menu-open: root.open-index >= 0;
+                    hovered => { root.menu-hovered(3, view_menu_title.absolute-position.x); }
+                    activated => { root.menu-activated(3, view_menu_title.absolute-position.x); }
+                }
+                help_menu_title := MenuTitle {
+                    label: @tr("MenuBar" => "Help");
+                    open: root.open-index == 4;
+                    menu-open: root.open-index >= 0;
+                    hovered => { root.menu-hovered(4, help_menu_title.absolute-position.x); }
+                    activated => { root.menu-activated(4, help_menu_title.absolute-position.x); }
+                }
+
+                // 弹性空白：拖动主区域；双击切换最大化；菜单展开时单击收起。
+                // 同时保证窗口 max-width 无界（见 main_window 尺寸约束说明）。
+                Rectangle {
+                    horizontal-stretch: 1;
+                    TouchArea {
+                        clicked => {
+                            if (root.open-index >= 0) {
+                                root.menu-dismiss-requested();
+                            }
+                        }
+                        double-clicked => { root.maximize-toggle-requested(); }
+                    }
+                }
+
+                if root.dock-toggle-visible : WinIconButton {
+                    icon: root.right-collapsed ? "chevron-left" : "chevron-right";
+                    accessible-name: root.right-collapsed
+                        ? @tr("MainWindow" => "Expand tool panels")
+                        : @tr("MainWindow" => "Collapse tool panels");
+                    clicked => { root.toggle-right-side(); }
+                }
+            }
         }
 
-        // 菜单与 New Session 之间的细分隔
-        Rectangle {
-            width: 1px;
-            height: 16px;
-            horizontal-stretch: 0;
-            background: Theme.control-stroke;
+        CaptionButton {
+            kind: "minimize";
+            clicked => { root.minimize-requested(); }
         }
-
-        WinButton {
-            text: @tr("MainWindow" => "New Session");
-            icon: "plus";
-            accent: true;
-            horizontal-stretch: 0;
-            clicked => { root.new-session(); }
+        CaptionButton {
+            kind: "maximize";
+            window-maximized: root.window-maximized;
+            clicked => { root.maximize-toggle-requested(); }
         }
-
-        // 弹性空白：菜单项固定宽时保证窗口 max-width 无界（见 main_window 尺寸约束说明）。
-        Rectangle { horizontal-stretch: 1; }
-
-        if root.dock-toggle-visible : WinIconButton {
-            icon: root.right-collapsed ? "chevron-left" : "chevron-right";
-            accessible-name: root.right-collapsed
-                ? @tr("MainWindow" => "Expand tool panels")
-                : @tr("MainWindow" => "Collapse tool panels");
-            clicked => { root.toggle-right-side(); }
+        CaptionButton {
+            kind: "close";
+            clicked => { root.close-requested(); }
         }
     }
 }

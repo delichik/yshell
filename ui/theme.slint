@@ -99,6 +99,10 @@ export global Theme {
     out property <color> success: dark ? #6CCB5F : #0F7B0F;
     out property <color> caution: dark ? #FCE100 : #9D5D00;
     out property <color> critical: dark ? #FF99A4 : #C42B1C;
+    /// 自绘标题栏关闭按钮悬停/按下底（WinUI CaptionButton，深浅色均为系统红）
+    out property <color> caption-close-hover: #C42B1C;
+    out property <color> caption-close-pressed: #B22A1B;
+    out property <color> caption-close-hover-text: #FFFFFF;
     /// 安全提示条（InfoBar warning）—— warning 档保留原黄色语义
     out property <color> attention-background: dark ? #433519 : #FFF4CE;
     out property <color> attention-stroke: dark ? #FCE10055 : #9D5D0055;
@@ -166,7 +170,7 @@ export global Theme {
     out property <length> row-height-nav: 40px;
     out property <length> row-height-list: 32px;
     out property <length> row-height-tree: 28px;
-    /// 顶栏（菜单 + New Session 同行）：32px 控件 + 上下各 4px。
+    /// 自绘顶栏（菜单 + 窗口控件）：32px 控件 + 上下各 4px。
     out property <length> bar-height-menubar: 40px;
     /// 旧 CommandBar 高度（已并入菜单栏，保留 token 以免外部引用断裂）。
     out property <length> bar-height-commandbar: 48px;

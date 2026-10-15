@@ -36,6 +36,10 @@ import { FolderEditor, TriStateField } from "pages/folder_editor.slint";
 
 export component MainWindow inherits Window {
     title: "YShell";
+    // 阶段 B：自绘标题栏（无系统装饰）。拖动/窗口按钮见 components/menu_bar.slint；
+    // 无框时可拖边缩放（winit）。关闭走 close() → on_close_requested（既有确认）。
+    no-frame: true;
+    resize-border-width: 6px;
     // §4.2 / §12：默认 1440×900，最小 880×600
     // （<1120 自动折叠右栏，<960 左导航变 48px 图标条，因此 880×600 是安全下限）
     //
@@ -2074,19 +2078,23 @@ export component MainWindow inherits Window {
             height: parent.height;
             spacing: 0px;
 
-            // --- MenuBar（菜单 + New Session 同行）------------------------------
+            // --- 自绘顶栏（菜单 + 窗口控件；阶段 B）----------------------------
             // 行与一级菜单项见 components/menu_bar.slint；点击/悬停只上报
             // index + 锚点 x，展开态与切换逻辑仍在本文件（toggle_menu/hover_menu）。
             // Panels / 查找 / 设置 / 更多已收敛到 View / Edit / File / Help，避免重复入口。
+            // New Session 强调按钮已去掉：File 菜单 / Ctrl+N / 其它入口仍可用。
             MenuBar {
                 open-index: root.open_menu_index;
                 dock-toggle-visible: root.layout_dock_toggle_visible;
                 right-collapsed: root.layout_dock_collapsed;
+                window-maximized: root.maximized;
                 menu-activated(index, anchor_x) => { root.toggle_menu(index, anchor_x); }
                 menu-hovered(index, anchor_x) => { root.hover_menu(index, anchor_x); }
                 menu-dismiss-requested() => { root.dismiss-overlays(); }
-                new-session() => { root.start_new_saved_session_editor(); }
                 toggle-right-side() => { root.panel_side_toggle("right"); }
+                minimize-requested() => { root.minimized = true; }
+                maximize-toggle-requested() => { root.maximized = !root.maximized; }
+                close-requested() => { root.close(); }
             }
 
             // --- 主机密钥确认：已改为模态弹窗 HostKeyDialog（见文件末尾）------
