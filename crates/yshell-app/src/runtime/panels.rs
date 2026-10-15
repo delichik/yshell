@@ -1390,12 +1390,11 @@ impl AppRuntime {
         self.projection()
     }
 
-    /// 面板头部开始拖拽（换边/换序）：记录拖拽面板。
-    pub fn panel_drag_start(&mut self, panel: PanelId, _x: f32, _y: f32) -> AppProjection {
-        self.panel_drag = Some(PanelDragState {
-            panel,
-            target: None,
-        });
+    /// 面板头部开始拖拽（换边/换序）：记录拖拽面板，并立刻算落点以便显示插入预览。
+    pub fn panel_drag_start(&mut self, panel: PanelId, x: f32, y: f32) -> AppProjection {
+        let view = self.panel_layout_view();
+        let target = self.panel_drop_target(&view, x, y);
+        self.panel_drag = Some(PanelDragState { panel, target });
         self.projection()
     }
 
@@ -1484,7 +1483,8 @@ impl AppRuntime {
             x: first.x,
             y,
             width: first.width,
-            height: 2.0,
+            // 高度仅作投影占位；Slint 侧用加粗指示条绘制。
+            height: 4.0,
         })
     }
 

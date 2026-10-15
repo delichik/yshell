@@ -70,6 +70,8 @@ component PanelDragRegion inherits TouchArea {
     property <length> start-x: 0px;
     property <length> start-y: 0px;
     property <length> drag-threshold: 6px;
+    // 拖拽中换成 move，让用户立刻知道已经抓住面板。
+    mouse-cursor: root.dragging ? MouseCursor.move : MouseCursor.default;
 
     pure function abs-length(value: length) -> length {
         value < 0px ? -value : value;
@@ -272,7 +274,10 @@ export component ToolDock inherits Rectangle {
     property <length> side-drag-start-width: 0px;
     property <bool> left-side-dragging: false;
     property <bool> right-side-dragging: false;
+    /// 分栏拖拽中：只高亮当前 boundary，避免同侧其它把手一起变蓝。
     property <bool> split-dragging: false;
+    property <string> split-drag-side: "";
+    property <int> split-drag-boundary: -1;
 
     background: transparent;
 
@@ -364,14 +369,22 @@ export component ToolDock inherits Rectangle {
         y: handle.y;
         width: handle.width;
         height: handle.height;
-        dragging: root.split-dragging;
+        dragging: root.split-dragging
+            && root.split-drag-side == handle.side
+            && root.split-drag-boundary == handle.boundary;
         drag-started(y) => {
             root.split-dragging = true;
+            root.split-drag-side = handle.side;
+            root.split-drag-boundary = handle.boundary;
             root.panel-split-preview(handle.side, handle.boundary, y - root.absolute-position.y);
         }
-        drag-moved(y) => { root.panel-split-preview(handle.side, handle.boundary, y - root.absolute-position.y); }
+        drag-moved(y) => {
+            root.panel-split-preview(handle.side, handle.boundary, y - root.absolute-position.y);
+        }
         drag-finished() => {
             root.split-dragging = false;
+            root.split-drag-side = "";
+            root.split-drag-boundary = -1;
             root.panel-split-commit();
         }
     }
@@ -646,14 +659,21 @@ export component ToolDock inherits Rectangle {
         drag-cancel() => { root.panel-drag-cancel(); }
     }
 
-    // 拖拽插入位置指示（2px 强调线；Rust 计算）
-    Rectangle {
-        visible: root.drag-indicator-visible;
+    // 拖拽插入位置指示（Rust 算 y；视觉加粗 + 软底，拖动中一目了然）
+    if root.drag-indicator-visible : Rectangle {
         x: root.drag-indicator-x;
-        y: root.drag-indicator-y;
+        y: root.drag-indicator-y - 3px;
         width: root.drag-indicator-width;
-        height: 2px;
-        background: Theme.accent;
+        height: 8px;
+        background: transparent;
+
+        Rectangle {
+            y: 2px;
+            width: parent.width;
+            height: 4px;
+            border-radius: 2px;
+            background: Theme.accent;
+        }
     }
 }
 

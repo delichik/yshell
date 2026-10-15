@@ -160,6 +160,7 @@ export component PanelFrame inherits Rectangle {
 ///
 /// 与 nav/dock 的把手一致：组件只上报指针的窗口绝对 y（`drag-started/moved`），
 /// 宽高钳制与比例换算在宿主；`dragging` 由宿主回传用于高亮。
+/// 视觉条仍是 4px；命中区上下各扩 6px，方便抓住。
 export component PanelSplitHandle inherits Rectangle {
     in property <bool> dragging: false;
 
@@ -168,10 +169,19 @@ export component PanelSplitHandle inherits Rectangle {
     callback drag-finished();
 
     height: Theme.resize-handle-width;
-    background: root.dragging || split_touch.has-hover ? Theme.accent : transparent;
-    animate background { duration: Theme.duration-faster; easing: ease-out; }
+    background: transparent;
+
+    // 视觉高亮条（拖拽/悬停时 accent）；命中区见下方更大的 TouchArea。
+    Rectangle {
+        width: parent.width;
+        height: parent.height;
+        background: root.dragging || split_touch.has-hover ? Theme.accent : transparent;
+        animate background { duration: Theme.duration-faster; easing: ease-out; }
+    }
 
     split_touch := TouchArea {
+        y: -6px;
+        height: parent.height + 12px;
         mouse-cursor: row-resize;
 
         pointer-event(event) => {

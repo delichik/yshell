@@ -5698,6 +5698,44 @@ fn split_handle_data(handle: &RuntimeSplitHandleData) -> SplitHandleData {
     }
 }
 
+fn split_handle_matches(current: &SplitHandleData, next: &RuntimeSplitHandleData) -> bool {
+    current.side.as_str() == next.side
+        && current.boundary == next.boundary
+        && (current.x - next.x as f32).abs() < f32::EPSILON
+        && (current.y - next.y as f32).abs() < f32::EPSILON
+        && (current.width - next.width as f32).abs() < f32::EPSILON
+        && (current.height - next.height as f32).abs() < f32::EPSILON
+}
+
+/// 分栏手柄必须就地更新：拖拽预览每帧都会改 y，若整表 `VecModel::from` 重建，
+/// repeater 会销毁正在抓取的 TouchArea，表现为「只动一下就卡住 + 蓝线常亮」。
+fn set_split_handles_if_changed(window: &MainWindow, handles: &[RuntimeSplitHandleData]) {
+    let current = window.get_layout_split_handles();
+    if handles.is_empty() && current.row_count() == 0 {
+        return;
+    }
+    if current.row_count() == handles.len() {
+        let handle: Option<std::rc::Rc<dyn Model<Data = SplitHandleData>>> =
+            current.clone().try_into().ok();
+        if let Some(handle) = handle {
+            if let Some(model) = handle.as_any().downcast_ref::<VecModel<SplitHandleData>>() {
+                for (index, next) in handles.iter().enumerate() {
+                    let Some(row) = model.row_data(index) else {
+                        continue;
+                    };
+                    if !split_handle_matches(&row, next) {
+                        model.set_row_data(index, split_handle_data(next));
+                    }
+                }
+                return;
+            }
+        }
+    }
+    window.set_layout_split_handles(ModelRc::new(VecModel::from(
+        handles.iter().map(split_handle_data).collect::<Vec<_>>(),
+    )));
+}
+
 pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) {
     window.set_config_dir(projection.config_dir_text.clone().into());
     window.set_secret_store_kind_text(projection.secret_store_kind_text.clone().into());
@@ -6282,13 +6320,7 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window
         .set_layout_quick_commands_frame(panel_frame_data(&projection.layout.quick_commands_frame));
     window.set_layout_transfers_frame(panel_frame_data(&projection.layout.transfers_frame));
-    let handles = projection
-        .layout
-        .split_handles
-        .iter()
-        .map(split_handle_data)
-        .collect::<Vec<_>>();
-    window.set_layout_split_handles(ModelRc::new(VecModel::from(handles)));
+    set_split_handles_if_changed(window, &projection.layout.split_handles);
     window.set_layout_drag_indicator_visible(projection.layout.drag_indicator.is_some());
     if let Some(indicator) = &projection.layout.drag_indicator {
         window.set_layout_drag_indicator_x(indicator.x as f32);
