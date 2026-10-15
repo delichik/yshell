@@ -177,7 +177,7 @@ impl AppRuntime {
         let private_keys = self.private_keys_projection_parts();
         let host_keys = self.host_keys_projection_parts();
         let auth_prompt = self.auth_prompt_projection_parts();
-        // N5：终端外观（Settings 外观弹窗 / Folder Editor / Session Editor）。
+        // N5：终端外观（Settings Appearance 内联 / Folder Editor / Session Editor）。
         let settings_appearance_preview = self.settings_appearance_preview_frame();
         let settings_appearance_status_text = self.settings_appearance_status.display_text();
         let settings_appearance_schemes = theme::scheme_options();
@@ -265,6 +265,8 @@ impl AppRuntime {
             settings_appearance_cursor_text: self.settings_appearance.cursor.clone(),
             settings_appearance_selection_text: self.settings_appearance.selection.clone(),
             settings_appearance_font_family_text: self.settings_appearance.font_family.clone(),
+            settings_appearance_font_options: self.settings_appearance.font_options(),
+            settings_appearance_font_index: self.settings_appearance.font_index(),
             settings_appearance_font_size_text: self.settings_appearance.font_size_text.clone(),
             settings_appearance_fallback_fonts_text: self
                 .settings_appearance
@@ -1407,7 +1409,7 @@ pub struct AppProjection {
     pub settings_terminal_status_field_text: String,
     pub settings_terminal_status_value_text: String,
     pub settings_terminal_status_limit_text: String,
-    // --- N5：Settings 外观弹窗 ---------------------------------------------------
+    // --- N5：Settings → Appearance（内联分区） ----------------------------------
     pub settings_appearance_visible: bool,
     pub settings_appearance_color_scheme_text: String,
     pub settings_appearance_foreground_text: String,
@@ -1415,6 +1417,9 @@ pub struct AppProjection {
     pub settings_appearance_cursor_text: String,
     pub settings_appearance_selection_text: String,
     pub settings_appearance_font_family_text: String,
+    /// D15 ComboBox model: bundled DejaVu + optional imported path.
+    pub settings_appearance_font_options: Vec<String>,
+    pub settings_appearance_font_index: i32,
     pub settings_appearance_font_size_text: String,
     pub settings_appearance_fallback_fonts_text: String,
     pub settings_appearance_status_text: String,

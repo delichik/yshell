@@ -1,4 +1,4 @@
-//! N5 terminal theme: appearance resolution, the Settings appearance dialog,
+//! N5 terminal theme: appearance resolution, the Settings Appearance form,
 //! the Folder Editor state/model and the tri-state field model shared with the
 //! Session Editor.
 //!
@@ -882,10 +882,10 @@ impl AppRuntime {
 }
 
 // ---------------------------------------------------------------------------
-// Settings → Terminal Appearance dialog
+// Settings → Appearance (inline form)
 // ---------------------------------------------------------------------------
 
-/// Editable state of the Settings appearance dialog.
+/// Editable state of the Settings Appearance section.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SettingsAppearanceDraft {
     pub(crate) color_scheme: String,
@@ -905,6 +905,28 @@ impl Default for SettingsAppearanceDraft {
 }
 
 impl SettingsAppearanceDraft {
+    /// D15 font presets for the Settings ComboBox: bundled DejaVu plus the
+    /// current imported file path when the draft is not on the bundled face.
+    pub(crate) fn font_options(&self) -> Vec<String> {
+        let mut options = vec![BUNDLED_FONT_FAMILY.to_owned()];
+        let family = self.font_family.trim();
+        if !family.is_empty() && !family.eq_ignore_ascii_case(BUNDLED_FONT_FAMILY) {
+            options.push(family.to_owned());
+        }
+        options
+    }
+
+    /// Index into [`Self::font_options`] for the current `font_family`.
+    pub(crate) fn font_index(&self) -> i32 {
+        let options = self.font_options();
+        let family = self.font_family.trim();
+        options
+            .iter()
+            .position(|option| option.eq_ignore_ascii_case(family))
+            .and_then(|index| i32::try_from(index).ok())
+            .unwrap_or(0)
+    }
+
     pub(crate) fn from_terminal_profile(profile: &TerminalProfile) -> Self {
         let palette = resolve_palette(profile);
         let (font, _) = resolve_font(profile);
@@ -1068,7 +1090,7 @@ pub(crate) struct SettingsAppearanceTheme {
     pub(crate) fallback_fonts: Option<Vec<String>>,
 }
 
-/// Status line of the Settings appearance dialog.
+/// Status line of the Settings Appearance section.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SettingsAppearanceStatus {
     Hint,
@@ -1091,7 +1113,7 @@ impl SettingsAppearanceStatus {
 }
 
 impl AppRuntime {
-    /// Opens the appearance dialog with the current global defaults.
+    /// Loads the Appearance draft when Settings opens (inline form + preview).
     pub fn open_settings_appearance(&mut self) -> AppProjection {
         self.settings_appearance =
             SettingsAppearanceDraft::from_terminal_profile(&self.config_document.terminal);
@@ -1134,6 +1156,18 @@ impl AppRuntime {
     pub fn update_settings_appearance_font_family(&mut self, value: &str) -> AppProjection {
         self.settings_appearance.font_family = value.to_owned();
         self.settings_appearance_status = SettingsAppearanceStatus::Hint;
+        self.projection()
+    }
+
+    /// Selects a font preset from the Settings ComboBox (D15).
+    pub fn select_settings_appearance_font(&mut self, index: i32) -> AppProjection {
+        let options = self.settings_appearance.font_options();
+        if let Ok(index) = usize::try_from(index) {
+            if let Some(family) = options.get(index) {
+                self.settings_appearance.font_family = family.clone();
+                self.settings_appearance_status = SettingsAppearanceStatus::Hint;
+            }
+        }
         self.projection()
     }
 
@@ -1215,9 +1249,9 @@ impl AppRuntime {
         self.settings_appearance.palette()
     }
 
-    /// Renders the live preview frame for the appearance dialog.
+    /// Renders the live preview frame for the Settings Appearance section.
     ///
-    /// Returns `None` while the dialog is closed. The dedicated preview
+    /// Returns `None` while the draft is inactive. The dedicated preview
     /// renderer keeps the live terminal's glyph cache untouched.
     pub(crate) fn settings_appearance_preview_frame(&self) -> Option<TerminalFrame> {
         if !self.settings_appearance_visible {

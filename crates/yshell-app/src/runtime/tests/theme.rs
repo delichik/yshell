@@ -81,6 +81,12 @@ fn settings_appearance_form_validates_and_persists() {
     );
     assert!(!opened.settings_appearance_schemes.is_empty());
     assert!(opened.settings_appearance_preview.is_some());
+    // D15：主字体下拉至少包含捆绑 DejaVu；默认选中 index 0。
+    assert_eq!(
+        opened.settings_appearance_font_options,
+        vec!["DejaVu Sans Mono".to_owned()]
+    );
+    assert_eq!(opened.settings_appearance_font_index, 0);
 
     // Scheme selection fills the hex fields.
     let selected = runtime.select_settings_appearance_scheme("nord");

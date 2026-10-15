@@ -3503,10 +3503,10 @@ pub(crate) fn wire_callbacks(
         }
     });
 
-    // --- N5：终端外观（Settings 外观弹窗 / Folder Editor / Session Editor 覆盖）--
-    wire_n4!(on_open_terminal_appearance, |runtime| runtime
+    // --- N5：终端外观（Settings Appearance 内联 / Folder Editor / Session Editor）--
+    wire_n4!(on_open_settings_appearance, |runtime| runtime
         .open_settings_appearance());
-    wire_n4!(on_close_terminal_appearance, |runtime| runtime
+    wire_n4!(on_close_settings_appearance, |runtime| runtime
         .close_settings_appearance());
     wire_n4!(on_select_settings_scheme, |runtime, id: SharedString| {
         runtime.select_settings_appearance_scheme(id.as_ref())
@@ -3517,9 +3517,8 @@ pub(crate) fn wire_callbacks(
             .update_settings_appearance_color(field.as_ref(), value.as_ref())
     );
     wire_n4!(
-        on_update_settings_appearance_font_family,
-        |runtime, value: SharedString| runtime
-            .update_settings_appearance_font_family(value.as_ref())
+        on_select_settings_appearance_font,
+        |runtime, index: i32| runtime.select_settings_appearance_font(index)
     );
     wire_n4!(
         on_update_settings_appearance_font_size,
@@ -5939,7 +5938,6 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
             .into(),
     );
     // --- N5：终端外观 / Folder Editor / Session Editor 覆盖 --------------------
-    window.set_terminal_appearance_dialog_visible(projection.settings_appearance_visible);
     window.set_settings_appearance_color_scheme_text(
         projection
             .settings_appearance_color_scheme_text
@@ -5964,12 +5962,14 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_settings_appearance_selection_text(
         projection.settings_appearance_selection_text.clone().into(),
     );
-    window.set_settings_appearance_font_family_text(
+    window.set_settings_appearance_font_options(ModelRc::new(VecModel::from(
         projection
-            .settings_appearance_font_family_text
-            .clone()
-            .into(),
-    );
+            .settings_appearance_font_options
+            .iter()
+            .map(|option| SharedString::from(option.as_str()))
+            .collect::<Vec<_>>(),
+    )));
+    window.set_settings_appearance_font_index(projection.settings_appearance_font_index);
     window.set_settings_appearance_font_size_text(
         projection.settings_appearance_font_size_text.clone().into(),
     );
@@ -6544,7 +6544,6 @@ fn restore_shortcut_focus_after_modal(window: &MainWindow, projection: &AppProje
         || projection.close_tabs_confirm_visible
         || projection.close_window_confirm_visible
         || projection.folder_editor_visible
-        || projection.settings_appearance_visible
         || projection.sftp_conflict_visible
         || projection.sftp_properties_visible
         || window.get_settings_dialog_visible()

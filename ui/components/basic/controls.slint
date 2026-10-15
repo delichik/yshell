@@ -828,6 +828,190 @@ export component WinInfoBar inherits Rectangle {
     }
 }
 
+// ---------------------------------------------------------------- 下拉（ComboBox）
+/// §5.2 ComboBox：32px 高、`control-fill` 底 + `control-stroke` 描边；展开用
+/// PopupWindow（菜单形态 §5.11：勾选当前项、点选关闭）。
+///
+/// 不做系统字体枚举——选项由调用方投影（D15：预设 + 已导入路径）。
+export component WinComboBox inherits Rectangle {
+    in property <[string]> model: [];
+    in-out property <int> current-index: 0;
+    in property <bool> enabled: true;
+    /// 无选中或越界时的占位文案。
+    in property <string> placeholder-text: "";
+    callback selected(int);
+
+    private property <string> current-text:
+        root.current-index >= 0 && root.current-index < root.model.length
+            ? root.model[root.current-index]
+            : "";
+
+    height: Theme.control-height;
+    min-width: 0px;
+    preferred-width: 0px;
+    border-radius: Theme.radius-control;
+    border-width: 1px;
+    border-color: !root.enabled ? Theme.control-stroke
+        : (combo_focus.has-focus || touch.has-hover) ? Theme.accent : Theme.control-stroke;
+    background: !root.enabled ? Theme.control-fill-disabled
+        : touch.pressed ? Theme.control-fill-pressed
+        : touch.has-hover ? Theme.control-fill-hover
+        : Theme.control-fill;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+    animate border-color { duration: Theme.duration-faster; easing: ease-out; }
+
+    accessible-role: combobox;
+    accessible-enabled: root.enabled;
+    accessible-label: root.current-text != "" ? root.current-text : root.placeholder-text;
+
+    FocusRing {
+        visible-ring: root.keyboard-focus && root.enabled;
+        radius: root.border-radius;
+        target-width: root.width;
+        target-height: root.height;
+    }
+
+    // 聚焦时底部 2px 强调条（与 WinTextInput 同形态）
+    Rectangle {
+        visible: combo_focus.has-focus && root.enabled;
+        x: 1px;
+        y: parent.height - 2px;
+        width: parent.width - 2px;
+        height: 2px;
+        border-radius: 1px;
+        background: Theme.accent;
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-12;
+        padding-right: Theme.spacing-8;
+        spacing: Theme.spacing-8;
+
+        Text {
+            text: root.current-text != "" ? root.current-text : root.placeholder-text;
+            color: !root.enabled ? Theme.text-disabled
+                : root.current-text != "" ? Theme.text-primary
+                : Theme.text-tertiary;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        Rectangle {
+            width: Theme.icon-size-small;
+            vertical-stretch: 1;
+            background: transparent;
+
+            Icon {
+                name: "chevron-down";
+                icon-color: root.enabled ? Theme.text-secondary : Theme.text-disabled;
+                icon-size: Theme.icon-size-small;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+    }
+
+    private property <bool> keyboard-focus: false;
+
+    combo_focus := FocusScope {
+        enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (!root.enabled) {
+                return reject;
+            }
+            if (event.text == Key.Space || event.text == Key.Return) {
+                popup.show();
+                return accept;
+            }
+            return reject;
+        }
+        focus-gained(reason) => { root.keyboard-focus = reason != FocusReason.pointer-click; }
+        focus-lost(reason) => { root.keyboard-focus = false; }
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                combo_focus.focus();
+            }
+        }
+        clicked => { popup.show(); }
+    }
+
+    // close-on-click-outside：点选项本身不立刻关掉，由点击回调里 close()。
+    popup := PopupWindow {
+        width: max(root.width, 180px);
+        y: root.height + 2px;
+        close-policy: close-on-click-outside;
+
+        Rectangle {
+            background: Theme.flyout-background;
+            border-width: 1px;
+            border-color: Theme.layer-stroke;
+            border-radius: Theme.radius-panel;
+            drop-shadow-blur: Theme.shadow-blur;
+            drop-shadow-color: Theme.shadow-color;
+            drop-shadow-offset-y: Theme.shadow-offset-y;
+            height: items-layout.preferred-height;
+
+            items-layout := VerticalLayout {
+                padding: 4px;
+                spacing: 0px;
+
+                for item[index] in root.model : Rectangle {
+                    height: Theme.row-height-list;
+                    border-radius: Theme.radius-control;
+                    background: item_touch.has-hover ? Theme.subtle-hover : transparent;
+
+                    HorizontalLayout {
+                        padding-left: Theme.spacing-8;
+                        padding-right: Theme.spacing-8;
+                        spacing: Theme.spacing-8;
+
+                        // 勾选列 16px（§5.11）
+                        Rectangle {
+                            width: Theme.icon-size-small;
+                            vertical-stretch: 1;
+                            background: transparent;
+
+                            if index == root.current-index : Icon {
+                                name: "check";
+                                icon-color: Theme.accent;
+                                icon-size: Theme.icon-size-small;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                            }
+                        }
+
+                        Text {
+                            text: item;
+                            color: Theme.text-primary;
+                            font-size: Theme.font-body;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                            wrap: no-wrap;
+                            overflow: elide;
+                        }
+                    }
+
+                    item_touch := TouchArea {
+                        clicked => {
+                            root.current-index = index;
+                            root.selected(index);
+                            popup.close();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------- 滚动提示
 /// 可滚动区域的 4px 自绘滚动提示（E22）：不参与布局、不吞鼠标事件，
 /// 由调用方叠加在滚动区右/下缘；形态与 settings 的自绘条一致（4px 圆角条）。

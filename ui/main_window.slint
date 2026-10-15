@@ -21,7 +21,7 @@ import { ConfirmDialog } from "components/confirm_dialog.slint";
 import { PasswordPromptDialog } from "components/password_prompt_dialog.slint";
 import { HostKeyDialog } from "components/host_key_dialog.slint";
 import { AboutDialog } from "pages/about.slint";
-import { SettingsDialog, SettingsSchemeOption, TerminalAppearanceDialog } from "pages/settings.slint";
+import { SettingsDialog, SettingsSchemeOption } from "pages/settings.slint";
 import { SessionEditor } from "pages/session_editor.slint";
 import { KnownHostsPage } from "pages/known_hosts.slint";
 import { QuickConnectPage, QuickConnectRow, QuickLinkRow } from "pages/quick_connect.slint";
@@ -342,14 +342,14 @@ export component MainWindow inherits Window {
     in-out property <string> settings_terminal_status_field_text: "";
     in-out property <string> settings_terminal_status_value_text: "";
     in-out property <string> settings_terminal_status_limit_text: "";
-    // N5：Settings → Terminal Appearance（嵌套弹窗；入口在 Settings 的 Terminal 区）
-    in-out property <bool> terminal_appearance_dialog_visible: false;
+    // N5：Settings → Appearance（内联分区；打开 Settings 时加载 draft）
     in-out property <string> settings_appearance_color_scheme_text: "";
     in-out property <string> settings_appearance_foreground_text: "";
     in-out property <string> settings_appearance_background_text: "";
     in-out property <string> settings_appearance_cursor_text: "";
     in-out property <string> settings_appearance_selection_text: "";
-    in-out property <string> settings_appearance_font_family_text: "";
+    in property <[string]> settings_appearance_font_options: [];
+    in-out property <int> settings_appearance_font_index: 0;
     in-out property <string> settings_appearance_font_size_text: "";
     in-out property <string> settings_appearance_fallback_fonts_text: "";
     in property <string> settings_appearance_status_text: "";
@@ -953,12 +953,14 @@ export component MainWindow inherits Window {
     callback set_ui_language(string);
     callback reset_settings_terminal_defaults();
     callback save_settings_terminal();
-    // N5：终端外观（Settings 嵌套弹窗 / Folder Editor / Session Editor 覆盖）
-    callback open_terminal_appearance();
-    callback close_terminal_appearance();
+    // N5：终端外观（Settings Appearance 内联 / Folder Editor / Session Editor 覆盖）
+    /// 打开 Settings 时加载 appearance draft（并启用 live preview）。
+    callback open_settings_appearance();
+    /// 关闭 Settings 时释放 appearance draft / preview。
+    callback close_settings_appearance();
     callback select_settings_scheme(string);
     callback update_settings_appearance_color(string, string);
-    callback update_settings_appearance_font_family(string);
+    callback select_settings_appearance_font(int);
     callback update_settings_appearance_font_size(string);
     callback update_settings_appearance_fallback_fonts(string);
     callback browse_settings_appearance_font_file();
@@ -1036,7 +1038,6 @@ export component MainWindow inherits Window {
         || root.host_keys_remove_dialog_visible
         || root.auth_prompt_visible
         || root.logging_dialog_visible
-        || root.terminal_appearance_dialog_visible
         || root.folder_editor_visible
         || root.clear_scrollback_dialog_visible
         || root.tab_rename_dialog_visible;
@@ -1161,8 +1162,9 @@ export component MainWindow inherits Window {
             root.quit_dialog_visible = true;
             return true;
         }
-        // Ctrl+,：设置
+        // Ctrl+,：设置（同时加载 Appearance draft，供 Appearance 分区内联表单使用）
         if (text == ",") {
+            root.open_settings_appearance();
             root.settings_dialog_visible = true;
             return true;
         }
@@ -1717,7 +1719,10 @@ export component MainWindow inherits Window {
             if (index == 0) { root.start_new_saved_session_editor(); }
             else if (index == 1) { root.focus-quick-connect(); }
             else if (index == 2) { root.save_session(); }
-            else if (index == 4) { root.settings_dialog_visible = true; }
+            else if (index == 4) {
+                root.open_settings_appearance();
+                root.settings_dialog_visible = true;
+            }
             else if (index == 5) { root.quit_dialog_visible = true; }
         } else if (menu == 1) {
             // Edit（WP2：0 Copy / 1 Paste / 2 Bracketed / 3 Select All / 4 Clear / 5 Clear Scrollback / 6 Find）
@@ -1985,8 +1990,6 @@ export component MainWindow inherits Window {
             logging_dialog.focus-dialog();
         } else if (root.clear_scrollback_dialog_visible) {
             clear_scrollback_dialog.focus-dialog();
-        } else if (root.terminal_appearance_dialog_visible) {
-            terminal_appearance_dialog.focus-dialog();
         } else if (root.folder_editor_visible) {
             folder_editor.focus-dialog();
         } else if (root.auth_prompt_visible) {
@@ -2546,8 +2549,22 @@ export component MainWindow inherits Window {
         scrollback-max-cells-text <=> root.settings_scrollback_max_cells_text;
         terminal-status-text: TextFormats.settings-terminal-status(root.settings_terminal_status_kind_text, root.settings_terminal_status_field_text, root.settings_terminal_status_value_text, root.settings_terminal_status_limit_text);
         language-text: root.settings_language_text;
+        appearance-color-scheme-text: root.settings_appearance_color_scheme_text;
+        appearance-schemes: root.settings_appearance_schemes;
+        appearance-palette-swatches: root.settings_appearance_palette_swatches;
+        appearance-foreground-text <=> root.settings_appearance_foreground_text;
+        appearance-background-text <=> root.settings_appearance_background_text;
+        appearance-cursor-text <=> root.settings_appearance_cursor_text;
+        appearance-selection-text <=> root.settings_appearance_selection_text;
+        appearance-font-options: root.settings_appearance_font_options;
+        appearance-font-index <=> root.settings_appearance_font_index;
+        appearance-font-size-text <=> root.settings_appearance_font_size_text;
+        appearance-fallback-fonts-text <=> root.settings_appearance_fallback_fonts_text;
+        appearance-status-text: root.settings_appearance_status_text;
+        appearance-preview: root.settings_appearance_preview;
         close() => {
             root.settings_dialog_visible = false;
+            root.close_settings_appearance();
             root.focus-top-dialog();
         }
         open-host-keys() => { root.open_host_keys_manager(); }
@@ -2556,40 +2573,17 @@ export component MainWindow inherits Window {
         update-scrollback-max-cells(value) => { root.update_settings_scrollback_max_cells(value); }
         reset-terminal-defaults() => { root.reset_settings_terminal_defaults(); }
         save-terminal-settings() => { root.save_settings_terminal(); }
-        open-terminal-appearance() => { root.open_terminal_appearance(); }
         set-language(value) => { root.set_ui_language(value); }
-    }
-
-    // N5：Settings → Terminal Appearance（嵌套在 Settings 之上的独立弹窗；
-    // 入口按钮在 Settings 的 Terminal 区，保持 Settings 本体几何不变）。
-    terminal_appearance_dialog := TerminalAppearanceDialog {
-        open: root.terminal_appearance_dialog_visible;
-        color-scheme-text: root.settings_appearance_color_scheme_text;
-        schemes: root.settings_appearance_schemes;
-        palette-swatches: root.settings_appearance_palette_swatches;
-        foreground-text <=> root.settings_appearance_foreground_text;
-        background-text <=> root.settings_appearance_background_text;
-        cursor-text <=> root.settings_appearance_cursor_text;
-        selection-text <=> root.settings_appearance_selection_text;
-        font-family-text <=> root.settings_appearance_font_family_text;
-        font-size-text <=> root.settings_appearance_font_size_text;
-        fallback-fonts-text <=> root.settings_appearance_fallback_fonts_text;
-        status-text: root.settings_appearance_status_text;
-        preview: root.settings_appearance_preview;
-        select-scheme(id) => { root.select_settings_scheme(id); }
-        update-color(field, value) => { root.update_settings_appearance_color(field, value); }
-        update-font-family(value) => { root.update_settings_appearance_font_family(value); }
-        update-font-size(value) => { root.update_settings_appearance_font_size(value); }
-        update-fallback-fonts(value) => { root.update_settings_appearance_fallback_fonts(value); }
-        browse-font-file() => { root.browse_settings_appearance_font_file(); }
-        browse-fallback-font() => { root.browse_settings_appearance_fallback_font(); }
-        clear-fallbacks() => { root.clear_settings_appearance_fallbacks(); }
-        reset-defaults() => { root.reset_settings_appearance_defaults(); }
-        save() => { root.save_settings_appearance(); }
-        close() => {
-            root.close_terminal_appearance();
-            root.focus-top-dialog();
-        }
+        select-appearance-scheme(id) => { root.select_settings_scheme(id); }
+        update-appearance-color(field, value) => { root.update_settings_appearance_color(field, value); }
+        select-appearance-font(index) => { root.select_settings_appearance_font(index); }
+        update-appearance-font-size(value) => { root.update_settings_appearance_font_size(value); }
+        update-appearance-fallback-fonts(value) => { root.update_settings_appearance_fallback_fonts(value); }
+        browse-appearance-font-file() => { root.browse_settings_appearance_font_file(); }
+        browse-appearance-fallback-font() => { root.browse_settings_appearance_fallback_font(); }
+        clear-appearance-fallbacks() => { root.clear_settings_appearance_fallbacks(); }
+        reset-appearance-defaults() => { root.reset_settings_appearance_defaults(); }
+        save-appearance() => { root.save_settings_appearance(); }
     }
 
     // N5：Folder Editor（会话树文件夹右键 → Edit Folder Defaults…）。
