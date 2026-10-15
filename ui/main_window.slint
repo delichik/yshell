@@ -527,10 +527,6 @@ export component MainWindow inherits Window {
     in-out property <length> menu_anchor_y: 0px;
     /// 一级菜单遮罩顶部内缩（顶栏下方）。
     property <length> menu_scrim_top: Theme.bar-height-menubar;
-    /// A34：当前弹层是"悬停切换"打开的（= 紧随其后的 click 与 hover 同帧到达）。
-    /// 该标志为 true 时，点同一个一级菜单标题保持展开（只清标志），再点一次才收起；
-    /// 点击打开时为 false（维持"点击打开/点击收起"的原有语义）。
-    property <bool> menu-opened-by-hover: false;
     // --- A3：命令栏 "更多(⋯)" 的独立溢出菜单（不再借用一级菜单的 open-menu-index）--
     // 右键菜单：同一时刻只有一个展开（与拆分前一致），用 token + 共享锚点表示。
     // 取值："none" / "terminal" / "saved-session" / "blank" / "rail" / "sftp"。
@@ -1282,12 +1278,12 @@ export component MainWindow inherits Window {
         {
             label: @tr("Split Right"), shortcut: "",
             enabled: root.tab_menu_split_enabled, checked: false, separator: false,
-            tooltip: root.tab_menu_split_enabled ? "" : @tr("Open a tab before splitting, or close a pane (max 4).")
+            tooltip: root.tab_menu_split_enabled ? "" : @tr("Open a terminal session before splitting, or close a pane (max 4).")
         },
         {
             label: @tr("Split Down"), shortcut: "",
             enabled: root.tab_menu_split_enabled, checked: false, separator: false,
-            tooltip: root.tab_menu_split_enabled ? "" : @tr("Open a tab before splitting, or close a pane (max 4).")
+            tooltip: root.tab_menu_split_enabled ? "" : @tr("Open a terminal session before splitting, or close a pane (max 4).")
         },
         {
             label: @tr("Close Current Pane"), shortcut: "",
@@ -1480,12 +1476,12 @@ export component MainWindow inherits Window {
         {
             label: @tr("Split Right"), shortcut: "",
             enabled: root.tab_menu_split_enabled, checked: false, separator: false,
-            tooltip: root.tab_menu_split_enabled ? "" : @tr("Open a tab before splitting, or close a pane (max 4).")
+            tooltip: root.tab_menu_split_enabled ? "" : @tr("Open a terminal session before splitting, or close a pane (max 4).")
         },
         {
             label: @tr("Split Down"), shortcut: "",
             enabled: root.tab_menu_split_enabled, checked: false, separator: false,
-            tooltip: root.tab_menu_split_enabled ? "" : @tr("Open a tab before splitting, or close a pane (max 4).")
+            tooltip: root.tab_menu_split_enabled ? "" : @tr("Open a terminal session before splitting, or close a pane (max 4).")
         },
         // N9：接收键输入勾选（索引 14；未同步/源标签/未连接时禁用并给出原因）。
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
@@ -1641,7 +1637,6 @@ export component MainWindow inherits Window {
     public function dismiss-overlays() -> bool {
         if (root.open_menu_index >= 0) {
             root.open_menu_index = -1;
-            root.menu-opened-by-hover = false;
             root.menu_scrim_top = Theme.bar-height-menubar;
             root.restore-focus-after-menu();
             return true;
@@ -1662,7 +1657,6 @@ export component MainWindow inherits Window {
     function open_context_menu(token: string, x: length, y: length) {
         root.close_context_menus();
         root.open_menu_index = -1;
-        root.menu-opened-by-hover = false;
         root.menu_scrim_top = Theme.bar-height-menubar;
         root.context_menu_x = x;
         root.context_menu_y = y;
@@ -1676,18 +1670,12 @@ export component MainWindow inherits Window {
         root.tab_rename_dialog_visible = true;
     }
 
-    /// 一级菜单点击：已展开则收起；否则切换到本项（并关掉右键菜单/溢出菜单）。
-    /// A34：若当前弹层是"悬停切换"打开的，第一次 click 只确认（保持展开、清标志），
-    /// 第二次 click 才收起 —— 修复"hover 切过去后紧接着的 click 把弹层立刻关掉"。
+    /// 一级菜单点击：已展开则收起；否则切换到本项（并关掉右键菜单）。
     function toggle_menu(index: int, anchor_x: length) {
         if (root.open_menu_index == index) {
-            if (root.menu-opened-by-hover) {
-                root.menu-opened-by-hover = false;
-            } else {
-                root.open_menu_index = -1;
-                root.menu_scrim_top = Theme.bar-height-menubar;
-                root.restore-focus-after-menu();
-            }
+            root.open_menu_index = -1;
+            root.menu_scrim_top = Theme.bar-height-menubar;
+            root.restore-focus-after-menu();
         } else {
             root.close_context_menus();
             if (root.panel_menu_id != "") { root.panel_menu_id = ""; }
@@ -1695,13 +1683,11 @@ export component MainWindow inherits Window {
             root.menu_anchor_y = Theme.bar-height-menubar;
             root.menu_scrim_top = Theme.bar-height-menubar;
             root.open_menu_index = index;
-            root.menu-opened-by-hover = false;
         }
     }
 
     /// 一级菜单悬停切换：已有菜单展开时，指针移到另一个一级菜单直接切到它的菜单
     /// （标准 MenuBar 行为）；没有菜单展开时悬停不动作，保持"点击展开"。
-    /// A34：切换成功后置 `menu-opened-by-hover`，让紧随的 click 不误关弹层。
     function hover_menu(index: int, anchor_x: length) {
         if (root.open_menu_index >= 0 && root.open_menu_index != index) {
             root.close_context_menus();
@@ -1709,7 +1695,6 @@ export component MainWindow inherits Window {
             root.menu_anchor_y = Theme.bar-height-menubar;
             root.menu_scrim_top = Theme.bar-height-menubar;
             root.open_menu_index = index;
-            root.menu-opened-by-hover = true;
         }
     }
 
@@ -1784,7 +1769,6 @@ export component MainWindow inherits Window {
             if (index == 0) { root.about_dialog_visible = true; }
         }
         root.open_menu_index = -1;
-        root.menu-opened-by-hover = false;
         root.menu_scrim_top = Theme.bar-height-menubar;
         root.restore-focus-after-menu();
     }
@@ -2085,6 +2069,7 @@ export component MainWindow inherits Window {
                 right-collapsed: root.layout_dock_collapsed;
                 menu-activated(index, anchor_x) => { root.toggle_menu(index, anchor_x); }
                 menu-hovered(index, anchor_x) => { root.hover_menu(index, anchor_x); }
+                menu-dismiss-requested() => { root.dismiss-overlays(); }
                 new-session() => { root.start_new_saved_session_editor(); }
                 toggle-right-side() => { root.panel_side_toggle("right"); }
             }
@@ -2412,7 +2397,6 @@ export component MainWindow inherits Window {
         selected(menu, index) => { root.dispatch_menu(menu, index); }
         dismissed() => {
             root.open_menu_index = -1;
-            root.menu-opened-by-hover = false;
             root.menu_scrim_top = Theme.bar-height-menubar;
             root.restore-focus-after-menu();
         }

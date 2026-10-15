@@ -1,10 +1,25 @@
 //! Terminal tabs: entries, activation, close requests (single and batch) and the
 //! session polling cursor.
 
-use crate::{error::AppError, error::AppResult, session_runtime::SessionSource};
+use crate::{
+    error::AppError,
+    error::AppResult,
+    session_runtime::{SessionRuntime, SessionSource},
+};
 use yshell_core::{CommandDispatcher, SessionCommand, SessionState};
 
 use super::*;
+
+/// 分屏时为第二 pane 再开同源会话的来源。
+enum SiblingSplitSource {
+    Saved(String),
+    QuickConnect {
+        host: String,
+        port: u16,
+        username: String,
+    },
+    Unsupported,
+}
 
 impl AppRuntime {
     pub fn poll_all_terminal_outputs(&mut self) -> AppResult<Option<AppProjection>> {
@@ -480,6 +495,9 @@ impl AppRuntime {
     }
 
     /// WP4：Split Right / Split Down（契约 §6.3；叶子上限 4，v1 先做 2）。
+    ///
+    /// 分屏始终绑定两个独立 session tab：当前窗口只有一个终端标签时，先再开一份
+    /// 同源会话，再左右/上下排布；禁止留下空 pane。
     pub fn split_workspace(&mut self, direction: &str) -> AppResult<AppProjection> {
         let orientation = match direction {
             "right" | "horizontal" => SplitOrientation::Horizontal,
@@ -494,19 +512,11 @@ impl AppRuntime {
             .focused_window
             .or_else(|| self.main_window_id())
             .ok_or_else(|| AppError::new("no window is available for split"))?;
-        let active_tab = self
-            .windows
-            .get(&window_id)
-            .and_then(|window| window.active_tab.clone())
-            .or_else(|| self.active_tab_id.clone())
-            .ok_or_else(|| AppError::new("open a tab before splitting the workspace"))?;
-
-        let neighbor = {
+        {
             let window = self
                 .windows
-                .get_mut(&window_id)
+                .get(&window_id)
                 .ok_or_else(|| AppError::new("window registration is missing"))?;
-
             if let Some(split) = &window.split {
                 if split.pane_count() >= WorkspaceSplit::MAX_PANES {
                     return Err(AppError::new("workspace already has the maximum of 4 panes"));
@@ -519,39 +529,132 @@ impl AppRuntime {
                     ));
                 }
             }
+        }
 
-            let neighbor = window
-                .tabs
-                .iter()
-                .rev()
-                .find(|id| id.as_str() != active_tab.as_str())
-                .cloned();
+        let original_tab = self
+            .windows
+            .get(&window_id)
+            .and_then(|window| window.active_tab.clone())
+            .or_else(|| self.active_tab_id.clone())
+            .ok_or_else(|| AppError::new("open a tab before splitting the workspace"))?;
 
-            // 契约：当前 active tab 移入新 pane；原 pane 留下邻接标签（若无则空）。
+        let has_neighbor = self
+            .windows
+            .get(&window_id)
+            .is_some_and(|window| {
+                window
+                    .tabs
+                    .iter()
+                    .any(|id| id.as_str() != original_tab.as_str())
+            });
+        if !has_neighbor {
+            let tab_count_before = self.tabs.len();
+            self.open_sibling_session_for_split(&original_tab)?;
+            if self.tabs.len() <= tab_count_before {
+                // 密码/主机密钥挂起：尚未建成第二标签，先不落空 pane。
+                self.status_text =
+                    "Authenticate the new session, then choose Split again.".to_owned();
+                return Ok(self.projection());
+            }
+        }
+
+        let active_tab = self
+            .windows
+            .get(&window_id)
+            .and_then(|window| window.active_tab.clone())
+            .or_else(|| self.active_tab_id.clone())
+            .ok_or_else(|| AppError::new("open a tab before splitting the workspace"))?;
+        let neighbor = self
+            .windows
+            .get(&window_id)
+            .and_then(|window| {
+                window
+                    .tabs
+                    .iter()
+                    .rev()
+                    .find(|id| id.as_str() != active_tab.as_str())
+                    .cloned()
+            })
+            .ok_or_else(|| {
+                AppError::new("split needs two session tabs; open another session first")
+            })?;
+
+        {
+            let window = self
+                .windows
+                .get_mut(&window_id)
+                .ok_or_else(|| AppError::new("window registration is missing"))?;
+            // 契约：当前 active tab 移入新 pane；原 pane 留下邻接标签。
             window.split = Some(WorkspaceSplit::two_pane(
                 orientation,
-                neighbor.clone(),
+                Some(neighbor.clone()),
                 Some(active_tab.clone()),
             ));
             window.active_tab = Some(active_tab.clone());
-            neighbor
-        };
+        }
         if self.focused_window == Some(window_id) {
             self.active_tab_id = Some(active_tab.clone());
             self.active_session_id = self
                 .tab_index(&active_tab)
                 .and_then(|index| self.tabs[index].session_id().map(str::to_owned));
         }
-        for tab_id in [Some(active_tab.as_str()), neighbor.as_deref()]
-            .into_iter()
-            .flatten()
-        {
+        for tab_id in [&active_tab, &neighbor] {
             if let Some(index) = self.tab_index(tab_id) {
                 self.tabs[index].unread = 0;
             }
         }
         self.status_text = format!("Split workspace {}.", orientation.as_str());
         Ok(self.projection())
+    }
+
+    /// 为分屏再开一份同源独立会话（新 tab + 新 runtime）。
+    fn open_sibling_session_for_split(&mut self, source_tab_id: &str) -> AppResult<()> {
+        let session_id = self
+            .tab_index(source_tab_id)
+            .and_then(|index| self.tabs[index].session_id().map(str::to_owned))
+            .ok_or_else(|| {
+                AppError::new("split needs a terminal session; open or connect a session first")
+            })?;
+        let source = self
+            .sessions
+            .get(&session_id)
+            .map(|runtime| match &runtime.source {
+                SessionSource::SavedSession { profile_id } => {
+                    SiblingSplitSource::Saved(profile_id.clone())
+                }
+                SessionSource::QuickConnect => SiblingSplitSource::QuickConnect {
+                    host: runtime.ssh_config.host.clone(),
+                    port: runtime.ssh_config.port,
+                    username: runtime.ssh_config.username().to_owned(),
+                },
+                SessionSource::Draft => SiblingSplitSource::Unsupported,
+            })
+            .ok_or_else(|| AppError::new("active session runtime is missing"))?;
+        match source {
+            SiblingSplitSource::Saved(profile_id) => {
+                self.open_saved_session(&profile_id)?;
+            }
+            SiblingSplitSource::QuickConnect {
+                host,
+                port,
+                username,
+            } => {
+                let target = yshell_config::QuickConnectTarget {
+                    username: Some(username),
+                    host,
+                    port,
+                };
+                let runtime =
+                    SessionRuntime::from_quick_connect(target, self.allocate_runtime_ordinal());
+                self.activate_runtime_session(runtime)?;
+            }
+            SiblingSplitSource::Unsupported => {
+                return Err(AppError::new(
+                    "split needs a terminal session; open or connect a session first",
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// WP4：聚焦指定 pane（0-based）；同步窗口活动标签与未读清除。

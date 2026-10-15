@@ -1131,8 +1131,14 @@ fn append_stack_frames(
     effective_width: f32,
     column_visible: bool,
 ) {
+    // 栈顶/底与内容区边缘之间保留固定留白；同侧相邻 panel 之间只靠分栏把手相连。
     let (slots, ratios, top_padding, bottom_padding) = match side {
-        PanelSide::Left => (&layout.left, &layout.left_ratios, 0.0, 0.0),
+        PanelSide::Left => (
+            &layout.left,
+            &layout.left_ratios,
+            DOCK_TOP_PADDING,
+            DOCK_BOTTOM_PADDING,
+        ),
         PanelSide::Right => (
             &layout.right,
             &layout.right_ratios,
@@ -1946,9 +1952,10 @@ mod tests {
         let sessions = *view.frame(PanelId::Sessions).expect("sessions");
         assert_eq!(sessions.placement, PanelPlacement::Left);
         assert!(sessions.visible);
+        // 左右栏统一：栈顶/底各 12px 留白；同侧相邻 panel 之间只留分栏把手。
         assert_eq!(
             (sessions.x, sessions.y, sessions.width, sessions.height),
-            (0.0, 0.0, 240.0, 794.0)
+            (0.0, 12.0, 240.0, 770.0)
         );
 
         let local = *view.frame(PanelId::Local).expect("local");

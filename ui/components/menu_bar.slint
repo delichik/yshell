@@ -65,11 +65,19 @@ export component MenuBar inherits Rectangle {
     callback menu-activated(int, length);
     /// 菜单已展开时悬停到另一项：index = 0..4，anchor-x = 该项的窗口绝对 x。
     callback menu-hovered(int, length);
+    /// 点击菜单栏空白（非一级标题）：收起已展开的菜单。
+    callback menu-dismiss-requested();
     callback new-session();
     callback toggle-right-side();
 
     height: Theme.bar-height-menubar;
     background: Theme.window-background;
+
+    // 空白区点击收起：铺在布局之下；一级标题 / New Session 的 TouchArea 在上层吞掉事件。
+    TouchArea {
+        enabled: root.open-index >= 0;
+        clicked => { root.menu-dismiss-requested(); }
+    }
 
     HorizontalLayout {
         padding-left: 8px;

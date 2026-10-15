@@ -390,3 +390,43 @@ fn background_output_updates_grid_and_background_close_refreshes_tabs() {
     assert!(projection.tabs[1].connected);
     assert_eq!(projection.active_tab_id, runtime.tabs[1].tab_id);
 }
+
+#[test]
+fn split_with_one_session_opens_sibling_tab() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 1);
+    let first_tab = open_saved_tab(&mut runtime, "saved-0");
+    assert_eq!(runtime.tabs.len(), 1);
+
+    let projection = runtime
+        .split_workspace("right")
+        .expect("split should open a sibling session");
+    assert_eq!(runtime.tabs.len(), 2);
+    assert!(projection.workspace_split.active);
+    assert_eq!(projection.workspace_split.pane_count, 2);
+    assert!(!projection.workspace_split.pane0_empty);
+    assert!(!projection.workspace_split.pane1_empty);
+    assert_eq!(projection.workspace_split.pane0_tab_id, first_tab);
+    assert_ne!(projection.workspace_split.pane1_tab_id, first_tab);
+    assert_eq!(
+        projection.workspace_split.pane1_tab_id,
+        projection.active_tab_id
+    );
+    assert_tab_invariants(&runtime);
+}
+
+#[test]
+fn split_with_two_sessions_reuses_existing_neighbor() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 2);
+    let first_tab = open_saved_tab(&mut runtime, "saved-0");
+    let second_tab = open_saved_tab(&mut runtime, "saved-1");
+    assert_eq!(runtime.tabs.len(), 2);
+
+    let projection = runtime.split_workspace("down").expect("split");
+    assert_eq!(runtime.tabs.len(), 2, "must not open a third tab");
+    assert!(projection.workspace_split.active);
+    assert_eq!(projection.workspace_split.pane0_tab_id, first_tab);
+    assert_eq!(projection.workspace_split.pane1_tab_id, second_tab);
+    assert_tab_invariants(&runtime);
+}
