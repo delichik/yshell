@@ -281,13 +281,20 @@ pub fn run(ctx: &Context, options: &DistOptions) -> Result<()> {
             .append(true)
             .open(summary)
             .context("failed to open $GITHUB_OUTPUT")?;
-        let package = if options.formats.contains(&Format::Portable) {
-            &portable_name
-        } else {
-            &installer_name
-        };
+        let built_portable = options.formats.contains(&Format::Portable);
+        let built_installer = options
+            .formats
+            .iter()
+            .any(|format| *format != Format::Portable);
         writeln!(file, "version={version}")?;
-        writeln!(file, "package={package}")?;
+        // Separate artifact names so CI can upload portable and installer
+        // packages independently instead of bundling them under one name.
+        if built_portable {
+            writeln!(file, "portable_package={portable_name}")?;
+        }
+        if built_installer {
+            writeln!(file, "installer_package={installer_name}")?;
+        }
         writeln!(file, "artifacts={}", files_joined(&artifacts))?;
     }
 

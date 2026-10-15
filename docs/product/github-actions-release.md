@@ -78,9 +78,15 @@ cargo xtask dist --target <triple> --platform <slug> --formats <list>
 
 `--formats`：Windows `portable,msi`；macOS `portable,dmg`；Linux `portable,deb,rpm`。
 
+每个平台只构建一次，但**便携包与安装包分开上传**为两个 Actions artifact：
+
+| Artifact 名（xtask `$GITHUB_OUTPUT`） | 内容 |
+|---|---|
+| `portable_package` → `yshell-<版本>-<平台>-portable` | 便携包 + 其 `.sha256` |
+| `installer_package` → `yshell-<版本>-<平台>` | 安装包（msi / dmg / deb / rpm）+ 其 `.sha256` |
+
 随后 `checksums` 任务下载所有 artifact，把每个 `.sha256` 汇总为 `SHA256SUMS.txt`
-（并校验数量与产物数量一致），单独上传。artifact 名称使用 xtask 输出的包名
-（`$GITHUB_OUTPUT` 的 `package`），便于在 Actions 页面直接辨认。
+（并校验数量与产物数量一致），单独上传。
 
 ## 5. `release.yml`
 

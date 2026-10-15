@@ -1,8 +1,9 @@
 name: Build artifacts
 
 # Reusable workflow: build the portable archives and installers for every
-# supported platform and aggregate SHA256SUMS.txt. Called by ci.yml (packaging
-# smoke test), release.yml (publish) and dev-build.yml (dev draft).
+# supported platform, upload them as separate Actions artifacts, and aggregate
+# SHA256SUMS.txt. Called by ci.yml (packaging smoke test), release.yml
+# (publish) and dev-build.yml (dev draft).
 
 on:
   workflow_call:
@@ -84,18 +85,35 @@ jobs:
           --platform ${{ matrix.platform }}
           --formats ${{ matrix.formats }}
 
-      - name: Upload packages
+      # Portable and installer packages share one build, but are uploaded as
+      # separate Actions artifacts so they can be downloaded independently.
+      - name: Upload portable archive
+        if: steps.dist.outputs.portable_package != ''
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ steps.dist.outputs.package }}
+          name: ${{ steps.dist.outputs.portable_package }}
           path: |
-            dist/*.zip
-            dist/*.tar.gz
+            dist/*-portable.zip
+            dist/*-portable.tar.gz
+            dist/*-portable.zip.sha256
+            dist/*-portable.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+
+      - name: Upload installers
+        if: steps.dist.outputs.installer_package != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.dist.outputs.installer_package }}
+          path: |
             dist/*.msi
+            dist/*.msi.sha256
             dist/*.dmg
+            dist/*.dmg.sha256
             dist/*.deb
+            dist/*.deb.sha256
             dist/*.rpm
-            dist/*.sha256
+            dist/*.rpm.sha256
           if-no-files-found: error
           retention-days: ${{ inputs.retention-days }}
 
