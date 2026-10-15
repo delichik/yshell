@@ -18,6 +18,27 @@ use yshell_terminal::{DEFAULT_SCROLLBACK_LINES, DEFAULT_SCROLLBACK_MAX_CELLS};
 use super::*;
 
 impl AppRuntime {
+    /// Configured UI language preference (`system` / `zh-CN` / `en-US`).
+    pub fn ui_language(&self) -> &str {
+        self.config_document.ui.language.as_str()
+    }
+
+    /// Persist UI language preference. Caller applies `select_bundled_translation`.
+    pub fn set_ui_language(&mut self, language: &str) -> AppResult<AppProjection> {
+        let normalized = match language.trim().to_ascii_lowercase().as_str() {
+            "zh-cn" | "zh" | "zh-hans" => "zh-CN",
+            "en-us" | "en" => "en-US",
+            _ => "system",
+        };
+        if self.config_document.ui.language != normalized {
+            self.config_document.ui.language = normalized.to_owned();
+            self.config_store
+                .save(&self.config_document)
+                .map_err(AppError::from_error)?;
+        }
+        Ok(self.projection())
+    }
+
     pub fn update_settings_scrollback_lines(&mut self, value: &str) -> AppProjection {
         self.settings_scrollback_lines_text = value.to_owned();
         self.projection()

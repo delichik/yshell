@@ -381,7 +381,7 @@ pub(crate) fn apply_fonts(window: &MainWindow) {
 }
 
 /// 解析语言：显式 `zh-CN`/`en-US` 直通（大小写与首尾空白不敏感）；
-/// 其它（含 `system`）按系统 locale 判断，均未知时回退 `en-US`。
+/// 其它（含 `system` / 空）按系统 locale 判断，均未知时回退 `en-US`。
 fn resolve_language(requested: &str, system_locale: Option<&str>) -> &'static str {
     match requested.trim().to_ascii_lowercase().as_str() {
         "zh-cn" | "zh" | "zh-hans" => "zh-CN",
@@ -397,14 +397,29 @@ fn resolve_language(requested: &str, system_locale: Option<&str>) -> &'static st
     }
 }
 
-/// 应用界面语言（W4：`YSHELL_LANG=system|zh-CN|en-US` 作为验收开关；
-/// 设置页下拉在 W5 接线到同一函数）。
-pub(crate) fn apply_language() {
-    let requested = std::env::var("YSHELL_LANG").unwrap_or_default();
-    let system_locale = std::env::var("LC_ALL")
+/// 系统 locale：优先环境变量（验收/CI），否则 `sys-locale`（覆盖 Windows）。
+fn detect_system_locale() -> Option<String> {
+    std::env::var("LC_ALL")
         .or_else(|_| std::env::var("LANG"))
-        .ok();
-    let language = resolve_language(&requested, system_locale.as_deref());
+        .or_else(|_| std::env::var("LC_MESSAGES"))
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(sys_locale::get_locale)
+}
+
+/// 应用界面语言。
+///
+/// 优先级：`YSHELL_LANG` 环境变量（验收开关）> 配置 `ui.language` > 系统 locale。
+/// `requested` 为空时等同 `system`。
+pub(crate) fn apply_language(requested: &str) {
+    let env_override = std::env::var("YSHELL_LANG").unwrap_or_default();
+    let preference = if env_override.trim().is_empty() {
+        requested
+    } else {
+        env_override.as_str()
+    };
+    let system_locale = detect_system_locale();
+    let language = resolve_language(preference, system_locale.as_deref());
     if let Err(error) = slint::select_bundled_translation(language) {
         eprintln!("failed to select bundled translation '{language}': {error}");
     }
@@ -3244,6 +3259,23 @@ pub(crate) fn wire_callbacks(
         }
     });
 
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_set_ui_language(move |value| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        match runtime_ref.borrow_mut().set_ui_language(value.as_ref()) {
+            Ok(projection) => {
+                apply_language(projection.settings_language_text.as_str());
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not save the language setting.", &error),
+        }
+    });
+
     // --- N6：终端日志（右键菜单/状态栏入口 + 弹窗）---------------------------
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
@@ -5849,6 +5881,7 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_settings_scrollback_max_cells_text(
         projection.settings_scrollback_max_cells_text.clone().into(),
     );
+    window.set_settings_language_text(projection.settings_language_text.clone().into());
     window.set_settings_terminal_status_kind_text(
         projection.settings_terminal_status_kind_text.clone().into(),
     );
@@ -6769,6 +6802,7 @@ mod tests {
         assert_eq!(resolve_language("system", Some("zh_CN.UTF-8")), "zh-CN");
         assert_eq!(resolve_language("", Some("en_GB.UTF-8")), "en-US");
         assert_eq!(resolve_language("system", None), "en-US");
+        assert_eq!(resolve_language("system", Some("zh-Hans-CN")), "zh-CN");
     }
 
     #[test]

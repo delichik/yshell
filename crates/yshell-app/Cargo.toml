@@ -31,6 +31,8 @@ yshell-terminal = { path = "../yshell-terminal" }
 yshell-ui = { path = "../yshell-ui" }
 # D1：运行时内部诊断只进 tracing 日志，不再写进终端网格。
 tracing.workspace = true
+# UI 语言：跟随系统时读取 OS locale（Windows 上 LC_ALL/LANG 常为空）。
+sys-locale = "0.3"
 
 # Slint 窗口后端按平台拆分（不要再全局写死 backend-winit-x11）：
 # - Linux：仅 X11。主开发/e2e 在 WSLg + Xvfb；Wayland 会多一套依赖，且当前未验收。

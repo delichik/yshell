@@ -26,6 +26,8 @@ export component SettingsDialog inherits Rectangle {
     in-out property <string> scrollback-lines-text: "";
     in-out property <string> scrollback-max-cells-text: "";
     in property <string> terminal-status-text: "";
+    /// UI language preference: `system` / `zh-CN` / `en-US`.
+    in property <string> language-text: "system";
 
     callback close();
     callback open-known-hosts();
@@ -37,6 +39,7 @@ export component SettingsDialog inherits Rectangle {
     callback save-terminal-settings();
     /// N5：打开嵌套的 Terminal Appearance 弹窗。
     callback open-terminal-appearance();
+    callback set-language(string);
 
     // 内容理想高度：标题行 + 中部 + 操作区 + 间距/分割线/内边距
     private property <length> dialog-content-height:
@@ -129,6 +132,46 @@ export component SettingsDialog inherits Rectangle {
                         sections := VerticalLayout {
                             alignment: start;
                             spacing: Theme.spacing-12;
+
+                            // --- 语言 ---------------------------------------------
+                            Text {
+                                text: @tr("Language");
+                                color: Theme.text-primary;
+                                font-size: Theme.font-body-large;
+                                font-weight: Theme.weight-semibold;
+                            }
+
+                            Text {
+                                text: @tr("Default follows the operating system. Changes apply immediately.");
+                                color: Theme.text-secondary;
+                                font-size: Theme.font-body;
+                                wrap: word-wrap;
+                            }
+
+                            HorizontalLayout {
+                                spacing: Theme.spacing-8;
+
+                                WinButton {
+                                    text: @tr("System");
+                                    accent: root.language-text == "system";
+                                    clicked => { root.set-language("system"); }
+                                }
+                                WinButton {
+                                    text: @tr("Chinese (Simplified)");
+                                    accent: root.language-text == "zh-CN";
+                                    clicked => { root.set-language("zh-CN"); }
+                                }
+                                WinButton {
+                                    text: @tr("English");
+                                    accent: root.language-text == "en-US";
+                                    clicked => { root.set-language("en-US"); }
+                                }
+                            }
+
+                            Rectangle {
+                                height: 1px;
+                                background: Theme.divider;
+                            }
 
                             // --- 安全 ---------------------------------------------
                             Text {

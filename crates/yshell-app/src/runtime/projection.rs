@@ -247,6 +247,7 @@ impl AppRuntime {
             logging_directory_display_text: self.logging_directory_display_text(),
             settings_scrollback_lines_text: self.settings_scrollback_lines_text.clone(),
             settings_scrollback_max_cells_text: self.settings_scrollback_max_cells_text.clone(),
+            settings_language_text: self.config_document.ui.language.clone(),
             settings_terminal_status_kind_text: self.settings_terminal_status.kind_id().to_owned(),
             settings_terminal_status_field_text: self
                 .settings_terminal_status
@@ -1387,6 +1388,8 @@ pub struct AppProjection {
     pub logging_directory_display_text: String,
     pub settings_scrollback_lines_text: String,
     pub settings_scrollback_max_cells_text: String,
+    /// UI language preference: `system` / `zh-CN` / `en-US`.
+    pub settings_language_text: String,
     pub settings_terminal_status_kind_text: String,
     pub settings_terminal_status_field_text: String,
     pub settings_terminal_status_value_text: String,

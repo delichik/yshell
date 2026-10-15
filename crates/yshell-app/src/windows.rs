@@ -168,7 +168,8 @@ impl WindowManager {
             // 语言必须在"第一个组件创建之后、窗口显示之前"选择：bundled translations
             // 挂在首个组件创建出来的全局上下文里（提前调用会报 NoTranslationsBundled，
             // 界面整体回退英文），而晚于 show() 会先闪一帧英文。重复调用是幂等的。
-            apply_language();
+            let ui_language = this.runtime.borrow().ui_language().to_owned();
+            apply_language(&ui_language);
             apply_appearance(&window);
             apply_fonts(&window);
             // W5-A2：窗口级快捷键依赖 root FocusScope 持有键盘焦点。

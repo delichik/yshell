@@ -529,6 +529,9 @@ pub struct UiProfile {
     /// Whether opening additional windows is allowed.
     #[serde(default = "default_true")]
     pub multi_window_enabled: bool,
+    /// UI language: `system` (follow OS), `zh-CN`, or `en-US`.
+    #[serde(default = "default_ui_language")]
+    pub language: String,
 }
 
 impl Default for UiProfile {
@@ -537,8 +540,13 @@ impl Default for UiProfile {
             new_tab_mode: NewTabMode::default(),
             layout: LayoutProfile::default(),
             multi_window_enabled: true,
+            language: default_ui_language(),
         }
     }
+}
+
+fn default_ui_language() -> String {
+    "system".to_owned()
 }
 
 /// Destination of the new-tab action.

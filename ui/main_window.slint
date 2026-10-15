@@ -166,6 +166,7 @@ export component MainWindow inherits Window {
     in-out property <string> logging_directory_text: "";
     in-out property <string> logging_summary_text: "global=disabled format=sanitized directory=logs";
     in-out property <string> settings_scrollback_lines_text: "10000";
+    in-out property <string> settings_language_text: "system";
     in-out property <string> settings_scrollback_max_cells_text: "2000000";
     in-out property <string> settings_terminal_status_text: "Save terminal settings to apply the scrollback limits to existing sessions.";
     in-out property <string> active_session: "Welcome";
@@ -940,6 +941,7 @@ export component MainWindow inherits Window {
     callback save_global_logging_settings();
     callback update_settings_scrollback_lines(string);
     callback update_settings_scrollback_max_cells(string);
+    callback set_ui_language(string);
     callback reset_settings_terminal_defaults();
     callback save_settings_terminal();
     // N5：终端外观（Settings 嵌套弹窗 / Folder Editor / Session Editor 覆盖）
@@ -2520,6 +2522,7 @@ export component MainWindow inherits Window {
         scrollback-lines-text <=> root.settings_scrollback_lines_text;
         scrollback-max-cells-text <=> root.settings_scrollback_max_cells_text;
         terminal-status-text: TextFormats.settings-terminal-status(root.settings_terminal_status_kind_text, root.settings_terminal_status_field_text, root.settings_terminal_status_value_text, root.settings_terminal_status_limit_text);
+        language-text: root.settings_language_text;
         close() => {
             root.settings_dialog_visible = false;
             root.focus-top-dialog();
@@ -2536,6 +2539,7 @@ export component MainWindow inherits Window {
         reset-terminal-defaults() => { root.reset_settings_terminal_defaults(); }
         save-terminal-settings() => { root.save_settings_terminal(); }
         open-terminal-appearance() => { root.open_terminal_appearance(); }
+        set-language(value) => { root.set_ui_language(value); }
     }
 
     // N5：Settings → Terminal Appearance（嵌套在 Settings 之上的独立弹窗；
