@@ -6817,6 +6817,7 @@ dependencies = [
  "slint",
  "slint-build",
  "ssh-key",
+ "sys-locale",
  "tempfile",
  "tracing",
  "yshell-config",
