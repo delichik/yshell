@@ -67,7 +67,8 @@ export component StatusBar inherits Rectangle {
             y: (parent.height - self.height) / 2;
         }
 
-        if root.connection-target != "" : Text {
+        // 失败态状态文案已含 user@host，再显示 target 会叠成难辨的一长串。
+        if root.connection-target != "" && root.connection-state != "failed" : Text {
             text: root.connection-target;
             color: Theme.text-primary;
             font-size: Theme.font-caption;

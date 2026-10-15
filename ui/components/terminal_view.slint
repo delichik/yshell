@@ -112,8 +112,8 @@ export component TerminalView inherits Rectangle {
             border-width: root.embedded ? 0px : 1px;
             border-radius: root.embedded ? 0px : Theme.radius-panel;
             // 可收缩下限：窗口 880×600 时终端区仍能放下（含查找栏），不把状态栏挤出可视区。
-            // 分屏叶子内嵌时放宽，避免把另一片挤没。
-            min-height: root.embedded ? 40px : 320px;
+            // 分屏叶子内嵌时放宽，避免把另一片挤没。略低于旧 320px，给顶栏合并后的布局留余量。
+            min-height: root.embedded ? 40px : 240px;
             clip: true;
 
             // 表面内边距 12px（§5.17）；embedded 时仍保留，与单窗格单元格度量一致。
