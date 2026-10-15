@@ -69,9 +69,8 @@ export component PanelFrame inherits Rectangle {
     border-color: Theme.card-stroke;
     border-radius: Theme.radius-panel;
     clip: true;
-    // 折叠/换序时高度与纵坐标由 Rust 投影跳变；用 duration-fast 过渡（减少动画时为 0）。
-    animate height { duration: Theme.duration-fast; easing: ease-out; }
-    animate y { duration: Theme.duration-fast; easing: ease-out; }
+    // 不动画 height/y：窗口缩放或栏宽拖拽时投影连续改几何，167ms 过渡会让
+    // 面板落后于中心终端区，看起来像「不是同一套界面」。折叠/换序改为瞬时对齐。
 
     // 标题条：图标 16 + 标题（吃剩余宽度、超长省略）+ [可选头部主操作] + ⋯ 按钮。
     HorizontalLayout {
