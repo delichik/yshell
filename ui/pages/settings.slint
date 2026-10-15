@@ -1,6 +1,5 @@
 import { Theme } from "../theme.slint";
-import { Icon } from "../components/basic/icons.slint";
-import { WinButton, WinCard, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
+import { WinButton, WinIconButton, WinNavItem, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 
 // N5：配色方案选项（Settings 外观弹窗的方案卡片）。
@@ -10,29 +9,56 @@ export struct SettingsSchemeOption {
     swatches: [color],
 }
 
-// Settings dialog (iteration 1): config directory, secret store status and the
-// reset-secrets flow, plus the Known Hosts entry point. The reset confirmation
-// stays runtime-gated: the runtime only resets when the text matches exactly.
+// 分区导航项：WinNavItem + 可选的禁用说明 tooltip。
+// （基础控件 WinNavItem 不属本文件；Tooltip 必须声明在其直接父元素下，故包一层薄壳。）
+component SettingsNavItem inherits Rectangle {
+    in property <string> text: "";
+    in property <string> icon: "settings";
+    in property <bool> selected: false;
+    in property <bool> enabled: true;
+    /// 非空且禁用时，hover 显示"本版本未提供"一类说明（契约 §18：disabled 必须有 tooltip）
+    in property <string> hint: "";
+    callback clicked();
+
+    height: Theme.row-height-nav;
+    background: transparent;
+
+    WinNavItem {
+        width: parent.width;
+        height: parent.height;
+        text: root.text;
+        icon: root.icon;
+        selected: root.selected;
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+
+    if !root.enabled && root.hint != "" : Tooltip {
+        text: @markdown("\{root.hint}");
+    }
+}
+
+// Settings dialog：左导航多分区（General / Appearance / Terminal / Security /
+// Advanced）；SFTP / Shortcuts 本版本禁用。Host Keys / Private Keys 以独立页打开。
 //
-// WinUI 3 重排：ContentDialog 形态（§5.10）：标题 → 分区 → 操作区。
-// 标题行与底部操作区固定在面板两端；中部内容在窗口高度不足时滚动（Flickable），
-// 保证任何窗口尺寸下都能关闭弹窗。
+// WinUI 3 形态：标题 → 左导航 + 右滚动表单 → 固定关闭操作区。
+// 面板高度固定（与 Session Editor 同理），切换分区时导航不跳动。
 
 export component SettingsDialog inherits Rectangle {
     in property <bool> open: false;
     in property <string> config-dir-text: "";
     in property <string> secret-store-status-text: "";
-    in property <string> secret-reset-confirmation-text: "";
     in-out property <string> scrollback-lines-text: "";
     in-out property <string> scrollback-max-cells-text: "";
     in property <string> terminal-status-text: "";
     /// UI language preference: `system` / `zh-CN` / `en-US`.
     in property <string> language-text: "system";
+    /// Active left-nav section id.
+    in-out property <string> section: "general";
 
     callback close();
-    callback open-known-hosts();
-    callback update-secret-reset-confirmation(string);
-    callback reset-secrets();
+    callback open-host-keys();
+    callback open-private-keys();
     callback update-scrollback-lines(string);
     callback update-scrollback-max-cells(string);
     callback reset-terminal-defaults();
@@ -41,14 +67,8 @@ export component SettingsDialog inherits Rectangle {
     callback open-terminal-appearance();
     callback set-language(string);
 
-    // 内容理想高度：标题行 + 中部 + 操作区 + 间距/分割线/内边距
-    private property <length> dialog-content-height:
-        title-row.preferred-height
-        + sections.preferred-height
-        + action-row.preferred-height
-        + 4 * Theme.spacing-12
-        + 2 * 1px
-        + 2 * Theme.spacing-20;
+    private property <length> dialog-height: min(self.height - 80px, 640px);
+    private property <length> dialog-width: 760px;
 
     visible: self.open;
     background: Theme.scrim;
@@ -73,12 +93,12 @@ export component SettingsDialog inherits Rectangle {
             clicked => { root.close(); }
         }
 
-        Rectangle {
-            x: (parent.width - 560px) / 2;
+        panel := Rectangle {
+            x: (parent.width - root.dialog-width) / 2;
             y: max((parent.height - self.height) / 2, Theme.spacing-24);
-            width: 560px;
-            // 内容高于窗口时收缩，标题行与操作区始终可见
-            height: min(root.dialog-content-height, parent.height - 2 * Theme.spacing-24);
+            width: root.dialog-width;
+            // 固定高度：不随分区内容变化
+            height: root.dialog-height;
             background: Theme.panel-background;
             border-radius: Theme.radius-panel;
             border-width: 1px;
@@ -116,296 +136,353 @@ export component SettingsDialog inherits Rectangle {
                     background: Theme.divider;
                 }
 
-                // 中部：内容高于窗口时滚动
-                Rectangle {
+                // 主体：左侧分区导航 + 右侧表单
+                HorizontalLayout {
                     vertical-stretch: 1;
-                    clip: true;
-                    background: transparent;
+                    spacing: Theme.spacing-12;
 
-                    scroll := Flickable {
-                        width: parent.width;
-                        height: parent.height;
-                        interactive: true;
-                        content-width: self.width;
-                        content-height: sections.preferred-height;
+                    // 分区导航（NavigationView 形态）
+                    Rectangle {
+                        width: Theme.nav-width;
+                        vertical-stretch: 1;
+                        background: Theme.layer-fill;
+                        border-radius: Theme.radius-panel;
+                        border-width: 1px;
+                        border-color: Theme.layer-stroke;
 
-                        sections := VerticalLayout {
+                        VerticalLayout {
+                            padding: Theme.spacing-8;
+                            spacing: 2px;
                             alignment: start;
-                            spacing: Theme.spacing-12;
 
-                            // --- 语言 ---------------------------------------------
-                            Text {
-                                text: @tr("Language");
-                                color: Theme.text-primary;
-                                font-size: Theme.font-body-large;
-                                font-weight: Theme.weight-semibold;
+                            SettingsNavItem {
+                                text: @tr("General");
+                                icon: "settings";
+                                selected: root.section == "general";
+                                clicked => { root.section = "general"; }
                             }
-
-                            Text {
-                                text: @tr("Default follows the operating system. Changes apply immediately.");
-                                color: Theme.text-secondary;
-                                font-size: Theme.font-body;
-                                wrap: word-wrap;
+                            SettingsNavItem {
+                                text: @tr("Appearance");
+                                icon: "eye";
+                                selected: root.section == "appearance";
+                                clicked => { root.section = "appearance"; }
                             }
-
-                            HorizontalLayout {
-                                spacing: Theme.spacing-8;
-
-                                WinButton {
-                                    text: @tr("System");
-                                    accent: root.language-text == "system";
-                                    clicked => { root.set-language("system"); }
-                                }
-                                WinButton {
-                                    text: @tr("Chinese (Simplified)");
-                                    accent: root.language-text == "zh-CN";
-                                    clicked => { root.set-language("zh-CN"); }
-                                }
-                                WinButton {
-                                    text: @tr("English");
-                                    accent: root.language-text == "en-US";
-                                    clicked => { root.set-language("en-US"); }
-                                }
-                            }
-
-                            Rectangle {
-                                height: 1px;
-                                background: Theme.divider;
-                            }
-
-                            // --- 安全 ---------------------------------------------
-                            Text {
-                                text: @tr("Security");
-                                color: Theme.text-primary;
-                                font-size: Theme.font-body-large;
-                                font-weight: Theme.weight-semibold;
-                            }
-
-                            Text {
-                                text: root.secret-store-status-text;
-                                color: Theme.text-secondary;
-                                font-size: Theme.font-body;
-                                wrap: word-wrap;
-                            }
-
-                            Text {
-                                text: @tr("Config directory: {0}", root.config-dir-text);
-                                color: Theme.text-tertiary;
-                                font-size: Theme.font-caption;
-                                wrap: word-wrap;
-                            }
-
-                            Rectangle {
-                                height: 1px;
-                                background: Theme.divider;
-                            }
-
-                            // --- 终端 ---------------------------------------------
-                            Text {
+                            SettingsNavItem {
                                 text: @tr("Terminal");
-                                color: Theme.text-primary;
-                                font-size: Theme.font-body-large;
-                                font-weight: Theme.weight-semibold;
+                                icon: "terminal";
+                                selected: root.section == "terminal";
+                                clicked => { root.section = "terminal"; }
                             }
-
-                            HorizontalLayout {
-                                spacing: Theme.spacing-12;
-
-                                // 标签列：右对齐（B 轮2 #72 / 轮5 低：左对齐 + 220px 会在标签与输入框
-                                // 之间留下 147px 空洞）。列宽不用 Theme.form-label-width（116px）——
-                                // 这条 CJK 标签最长约 180px；后续如需统一，应由 Theme 增加宽标签 token。
-                                Text {
-                                    text: @tr("Scrollback lines");
-                                    width: 220px;
-                                    horizontal-alignment: right;
-                                    color: Theme.text-secondary;
-                                    font-size: Theme.font-body;
-                                    vertical-alignment: center;
-                                }
-
-                                // 输入框：WinTextInput 自带 control-fill 底 + control-stroke 描边 + 聚焦强调条（§5.2）
-                                scrollback-lines-input := WinTextInput {
-                                    horizontal-stretch: 1;
-                                    text <=> root.scrollback-lines-text;
-                                    placeholder-text: "10000";
-                                    edited => { root.update-scrollback-lines(self.text); }
-                                }
+                            SettingsNavItem {
+                                text: @tr("Security");
+                                icon: "shield";
+                                selected: root.section == "security";
+                                clicked => { root.section = "security"; }
                             }
-
-                            HorizontalLayout {
-                                spacing: Theme.spacing-12;
-
-                                Text {
-                                    text: @tr("Scrollback memory cap (cells)");
-                                    width: 220px;
-                                    horizontal-alignment: right;
-                                    color: Theme.text-secondary;
-                                    font-size: Theme.font-body;
-                                    vertical-alignment: center;
-                                }
-
-                                // 输入框：同上
-                                scrollback-cells-input := WinTextInput {
-                                    horizontal-stretch: 1;
-                                    text <=> root.scrollback-max-cells-text;
-                                    placeholder-text: "2000000";
-                                    edited => { root.update-scrollback-max-cells(self.text); }
-                                }
+                            SettingsNavItem {
+                                text: @tr("Advanced");
+                                icon: "code";
+                                selected: root.section == "advanced";
+                                clicked => { root.section = "advanced"; }
                             }
-
-                            Text {
-                                text: @tr("Scrollback is stored compressed (about 3 MB per session at the defaults). Both the line count and the total cell count are enforced.");
-                                color: Theme.text-tertiary;
-                                font-size: Theme.font-caption;
-                                wrap: word-wrap;
+                            SettingsNavItem {
+                                text: @tr("SFTP");
+                                icon: "folder";
+                                enabled: false;
+                                hint: @tr("Not available in this version.");
                             }
-
-                            Text {
-                                text: @tr("Allowed range: 100-1000000 lines, 100000-100000000 cells.");
-                                color: Theme.text-tertiary;
-                                font-size: Theme.font-caption;
-                                wrap: word-wrap;
-                            }
-
-                            HorizontalLayout {
-                                spacing: Theme.spacing-8;
-                                alignment: end;
-
-                                WinButton {
-                                    text: @tr("Terminal Appearance…");
-                                    icon: "eye";
-                                    clicked => { root.open-terminal-appearance(); }
-                                }
-
-                                WinButton {
-                                    text: @tr("Reset Defaults");
-                                    clicked => { root.reset-terminal-defaults(); }
-                                }
-
-                                WinButton {
-                                    text: @tr("Save Terminal Settings");
-                                    accent: true;
-                                    clicked => { root.save-terminal-settings(); }
-                                }
-                            }
-
-                            Text {
-                                text: root.terminal-status-text;
-                                color: Theme.text-tertiary;
-                                font-size: Theme.font-caption;
-                                wrap: word-wrap;
-                            }
-
-                            Rectangle {
-                                height: 1px;
-                                background: Theme.divider;
-                            }
-
-                            // --- 已知主机 -----------------------------------------
-                            Text {
-                                text: @tr("Known Hosts");
-                                color: Theme.text-primary;
-                                font-size: Theme.font-body-large;
-                                font-weight: Theme.weight-semibold;
-                            }
-
-                            Text {
-                                text: @tr("Review, remove or clear persisted SSH host keys.");
-                                color: Theme.text-secondary;
-                                font-size: Theme.font-body;
-                                wrap: word-wrap;
-                            }
-
-                            HorizontalLayout {
-                                alignment: end;
-
-                                WinButton {
-                                    text: @tr("Open Known Hosts Manager");
-                                    clicked => { root.open-known-hosts(); }
-                                }
-                            }
-
-                            Rectangle {
-                                height: 1px;
-                                background: Theme.divider;
-                            }
-
-                            // --- 危险区：WinCard + critical 文案色 -----------------
-                            WinCard {
-                                // 卡片内容自适应高度（单层纵向容器，避免高度被外层布局拉伸）
-                                VerticalLayout {
-                                    alignment: start;
-                                    spacing: Theme.spacing-8;
-
-                                    HorizontalLayout {
-                                        spacing: Theme.spacing-8;
-
-                                        Rectangle {
-                                            width: Theme.icon-size-small;
-                                            vertical-stretch: 1;
-                                            background: transparent;
-
-                                            Icon {
-                                                name: "warning";
-                                                icon-color: Theme.critical;
-                                                icon-size: Theme.icon-size-small;
-                                                x: (parent.width - self.width) / 2;
-                                                y: (parent.height - self.height) / 2;
-                                            }
-                                        }
-
-                                        Text {
-                                            text: @tr("Danger Zone");
-                                            color: Theme.critical;
-                                            font-size: Theme.font-body-large;
-                                            font-weight: Theme.weight-semibold;
-                                            vertical-alignment: center;
-                                            horizontal-stretch: 1;
-                                        }
-                                    }
-
-                                    Text {
-                                        text: @tr("Type RESET SECRETS to delete the local secret store. Saved passwords and passphrases stored in it are removed.");
-                                        color: Theme.critical;
-                                        font-size: Theme.font-body;
-                                        wrap: word-wrap;
-                                    }
-
-                                    // 输入框：WinTextInput 自带 control-fill 底 + control-stroke 描边 + 聚焦强调条（§5.2）
-                                    reset-confirmation-input := WinTextInput {
-                                        text: root.secret-reset-confirmation-text;
-                                        placeholder-text: @tr("Type RESET SECRETS");
-                                        edited => { root.update-secret-reset-confirmation(self.text); }
-                                    }
-
-                                    HorizontalLayout {
-                                        alignment: end;
-
-                                        WinButton {
-                                            // 机器比对令牌：译文必须保留英文原词（与运行时精确匹配）
-                                            text: @tr("RESET SECRETS");
-                                            critical: true;
-                                            // B 轮2 #58：任意非空即点亮会误导用户；改为精确匹配
-                                            enabled: root.secret-reset-confirmation-text == "RESET SECRETS";
-                                            clicked => { root.reset-secrets(); }
-                                        }
-                                    }
-                                }
+                            SettingsNavItem {
+                                text: @tr("Shortcuts");
+                                icon: "edit";
+                                enabled: false;
+                                hint: @tr("Not available in this version.");
                             }
                         }
                     }
 
-                    // 滚动指示：E22 可复用组件（内部按 `-content-y` 计算进度）。
-                    // 更正 C8：原审计前提"content-y ≥ 0"不成立（Slint 内建文档：content-y 通常为负），
-                    // 带负号的原始公式才是正确的，这里直接采用已验证的组件。
-                    WinScrollIndicator {
-                        x: scroll.width - self.width - Theme.spacing-4;
-                        y: Theme.spacing-4;
-                        height: parent.height - 2 * Theme.spacing-4;
-                        viewport-position: scroll.content-y;
-                        content-extent: scroll.content-height;
-                        viewport-extent: scroll.height;
-                        thumb-min-length: 24px;
+                    // 表单卡片（内容区滚动）
+                    Rectangle {
+                        vertical-stretch: 1;
+                        horizontal-stretch: 1;
+                        background: Theme.card-fill;
+                        border-radius: Theme.radius-panel;
+                        border-width: 1px;
+                        border-color: Theme.card-stroke;
+
+                        VerticalLayout {
+                            padding: Theme.spacing-16;
+                            spacing: Theme.spacing-12;
+
+                            Rectangle {
+                                vertical-stretch: 1;
+                                clip: true;
+                                background: transparent;
+
+                                scroll := Flickable {
+                                    width: parent.width;
+                                    height: parent.height;
+                                    interactive: true;
+                                    content-width: self.width;
+                                    content-height: sections.preferred-height;
+
+                                    sections := VerticalLayout {
+                                        alignment: start;
+                                        spacing: Theme.spacing-12;
+
+                                        // --- General ------------------------------------------
+                                        if root.section == "general" : VerticalLayout {
+                                            alignment: start;
+                                            spacing: Theme.spacing-12;
+
+                                            Text {
+                                                text: @tr("Language");
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-body-large;
+                                                font-weight: Theme.weight-semibold;
+                                            }
+
+                                            Text {
+                                                text: @tr("Default follows the operating system. Changes apply immediately.");
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-body;
+                                                wrap: word-wrap;
+                                            }
+
+                                            HorizontalLayout {
+                                                spacing: Theme.spacing-8;
+
+                                                WinButton {
+                                                    text: @tr("System");
+                                                    accent: root.language-text == "system";
+                                                    clicked => { root.set-language("system"); }
+                                                }
+                                                WinButton {
+                                                    text: @tr("Chinese (Simplified)");
+                                                    accent: root.language-text == "zh-CN";
+                                                    clicked => { root.set-language("zh-CN"); }
+                                                }
+                                                WinButton {
+                                                    text: @tr("English");
+                                                    accent: root.language-text == "en-US";
+                                                    clicked => { root.set-language("en-US"); }
+                                                }
+                                            }
+                                        }
+
+                                        // --- Appearance ---------------------------------------
+                                        if root.section == "appearance" : VerticalLayout {
+                                            alignment: start;
+                                            spacing: Theme.spacing-12;
+
+                                            Text {
+                                                text: @tr("Appearance");
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-body-large;
+                                                font-weight: Theme.weight-semibold;
+                                            }
+
+                                            Text {
+                                                text: @tr("Terminal colors, fonts, and related defaults.");
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-body;
+                                                wrap: word-wrap;
+                                            }
+
+                                            HorizontalLayout {
+                                                alignment: start;
+
+                                                WinButton {
+                                                    text: @tr("Terminal Appearance…");
+                                                    icon: "eye";
+                                                    clicked => { root.open-terminal-appearance(); }
+                                                }
+                                            }
+                                        }
+
+                                        // --- Terminal -----------------------------------------
+                                        if root.section == "terminal" : VerticalLayout {
+                                            alignment: start;
+                                            spacing: Theme.spacing-12;
+
+                                            Text {
+                                                text: @tr("Terminal");
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-body-large;
+                                                font-weight: Theme.weight-semibold;
+                                            }
+
+                                            HorizontalLayout {
+                                                spacing: Theme.spacing-12;
+
+                                                // 标签列：右对齐（B 轮2 #72 / 轮5 低：左对齐 + 220px 会在标签与输入框
+                                                // 之间留下 147px 空洞）。列宽不用 Theme.form-label-width（116px）——
+                                                // 这条 CJK 标签最长约 180px；后续如需统一，应由 Theme 增加宽标签 token。
+                                                Text {
+                                                    text: @tr("Scrollback lines");
+                                                    width: 220px;
+                                                    horizontal-alignment: right;
+                                                    color: Theme.text-secondary;
+                                                    font-size: Theme.font-body;
+                                                    vertical-alignment: center;
+                                                }
+
+                                                // 输入框：WinTextInput 自带 control-fill 底 + control-stroke 描边 + 聚焦强调条（§5.2）
+                                                scrollback-lines-input := WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.scrollback-lines-text;
+                                                    placeholder-text: "10000";
+                                                    edited => { root.update-scrollback-lines(self.text); }
+                                                }
+                                            }
+
+                                            HorizontalLayout {
+                                                spacing: Theme.spacing-12;
+
+                                                Text {
+                                                    text: @tr("Scrollback memory cap (cells)");
+                                                    width: 220px;
+                                                    horizontal-alignment: right;
+                                                    color: Theme.text-secondary;
+                                                    font-size: Theme.font-body;
+                                                    vertical-alignment: center;
+                                                }
+
+                                                scrollback-cells-input := WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.scrollback-max-cells-text;
+                                                    placeholder-text: "2000000";
+                                                    edited => { root.update-scrollback-max-cells(self.text); }
+                                                }
+                                            }
+
+                                            Text {
+                                                text: @tr("Scrollback is stored compressed (about 3 MB per session at the defaults). Both the line count and the total cell count are enforced.");
+                                                color: Theme.text-tertiary;
+                                                font-size: Theme.font-caption;
+                                                wrap: word-wrap;
+                                            }
+
+                                            Text {
+                                                text: @tr("Allowed range: 100-1000000 lines, 100000-100000000 cells.");
+                                                color: Theme.text-tertiary;
+                                                font-size: Theme.font-caption;
+                                                wrap: word-wrap;
+                                            }
+
+                                            HorizontalLayout {
+                                                spacing: Theme.spacing-8;
+                                                alignment: end;
+
+                                                WinButton {
+                                                    text: @tr("Reset Defaults");
+                                                    clicked => { root.reset-terminal-defaults(); }
+                                                }
+
+                                                WinButton {
+                                                    text: @tr("Save Terminal Settings");
+                                                    accent: true;
+                                                    clicked => { root.save-terminal-settings(); }
+                                                }
+                                            }
+
+                                            Text {
+                                                text: root.terminal-status-text;
+                                                color: Theme.text-tertiary;
+                                                font-size: Theme.font-caption;
+                                                wrap: word-wrap;
+                                            }
+                                        }
+
+                                        // --- Security -----------------------------------------
+                                        if root.section == "security" : VerticalLayout {
+                                            alignment: start;
+                                            spacing: Theme.spacing-12;
+
+                                            Text {
+                                                text: @tr("Security");
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-body-large;
+                                                font-weight: Theme.weight-semibold;
+                                            }
+
+                                            Text {
+                                                text: root.secret-store-status-text;
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-body;
+                                                wrap: word-wrap;
+                                            }
+
+                                            Text {
+                                                text: @tr("Config directory: {0}", root.config-dir-text);
+                                                color: Theme.text-tertiary;
+                                                font-size: Theme.font-caption;
+                                                wrap: word-wrap;
+                                            }
+
+                                            HorizontalLayout {
+                                                spacing: Theme.spacing-8;
+                                                alignment: start;
+
+                                                WinButton {
+                                                    text: @tr("Open Host Keys…");
+                                                    clicked => { root.open-host-keys(); }
+                                                }
+
+                                                WinButton {
+                                                    text: @tr("Open Private Keys…");
+                                                    clicked => { root.open-private-keys(); }
+                                                }
+                                            }
+                                        }
+
+                                        // --- Advanced -----------------------------------------
+                                        if root.section == "advanced" : VerticalLayout {
+                                            alignment: start;
+                                            spacing: Theme.spacing-12;
+
+                                            Text {
+                                                text: @tr("Advanced");
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-body-large;
+                                                font-weight: Theme.weight-semibold;
+                                            }
+
+                                            Text {
+                                                text: @tr("Config directory");
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-body;
+                                            }
+
+                                            Text {
+                                                text: root.config-dir-text;
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-body;
+                                                font-family: Theme.font-mono;
+                                                wrap: word-wrap;
+                                            }
+
+                                            Text {
+                                                text: @tr("Application data, sessions, and related files live under this directory.");
+                                                color: Theme.text-tertiary;
+                                                font-size: Theme.font-caption;
+                                                wrap: word-wrap;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 滚动指示：E22 可复用组件（内部按 `-content-y` 计算进度）。
+                                WinScrollIndicator {
+                                    x: scroll.width - self.width - Theme.spacing-4;
+                                    y: Theme.spacing-4;
+                                    height: parent.height - 2 * Theme.spacing-4;
+                                    viewport-position: scroll.content-y;
+                                    content-extent: scroll.content-height;
+                                    viewport-extent: scroll.height;
+                                    thumb-min-length: 24px;
+                                }
+                            }
+                        }
                     }
                 }
 

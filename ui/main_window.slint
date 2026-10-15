@@ -2517,7 +2517,6 @@ export component MainWindow inherits Window {
         open: root.settings_dialog_visible;
         config-dir-text: root.config_dir;
         secret-store-status-text: TextFormats.secret-store-status(root.secret_store_kind_text, root.secret_store_path_text);
-        secret-reset-confirmation-text: root.secret_reset_confirmation_text;
         scrollback-lines-text <=> root.settings_scrollback_lines_text;
         scrollback-max-cells-text <=> root.settings_scrollback_max_cells_text;
         terminal-status-text: TextFormats.settings-terminal-status(root.settings_terminal_status_kind_text, root.settings_terminal_status_field_text, root.settings_terminal_status_value_text, root.settings_terminal_status_limit_text);
@@ -2526,13 +2525,8 @@ export component MainWindow inherits Window {
             root.settings_dialog_visible = false;
             root.focus-top-dialog();
         }
-        open-known-hosts() => {
-            // L2：Settings 不先关闭自己 —— Known Hosts 以嵌套层打开（Esc 只关最上层），
-            // 关闭 Known Hosts 后焦点/界面回到 Settings（见 KnownHostsPage.close）。
-            root.open_known_hosts_manager();
-        }
-        update-secret-reset-confirmation(value) => { root.update_secret_reset_confirmation(value); }
-        reset-secrets() => { root.reset_secrets(); }
+        open-host-keys() => { root.open_host_keys_manager(); }
+        open-private-keys() => { root.open_private_keys_manager(); }
         update-scrollback-lines(value) => { root.update_settings_scrollback_lines(value); }
         update-scrollback-max-cells(value) => { root.update_settings_scrollback_max_cells(value); }
         reset-terminal-defaults() => { root.reset_settings_terminal_defaults(); }
