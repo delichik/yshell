@@ -66,7 +66,9 @@ impl AppRuntime {
     }
 
     pub fn select_session_editor_terminal(&mut self) -> AppProjection {
-        self.editor_section = EditorSection::Terminal;
+        // Scrollback / terminal limits live in global Settings; session editor
+        // no longer exposes a Terminal section — keep the callback but land on General.
+        self.editor_section = EditorSection::General;
         self.projection()
     }
 
@@ -86,7 +88,8 @@ impl AppRuntime {
     }
 
     pub fn select_session_editor_logging(&mut self) -> AppProjection {
-        self.editor_section = EditorSection::Logging;
+        // Logging is started from the session/terminal context menu, not the editor.
+        self.editor_section = EditorSection::General;
         self.projection()
     }
 

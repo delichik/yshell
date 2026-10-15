@@ -96,9 +96,11 @@ fn session_editor_section_selection_updates_projection() {
             .editor_section_text,
         "authentication"
     );
+    // Terminal / Logging sections were removed from the session editor UI
+    // (scrollback → Settings; logging → context menu); callbacks fall back to general.
     assert_eq!(
         runtime.select_session_editor_terminal().editor_section_text,
-        "terminal"
+        "general"
     );
     assert_eq!(
         runtime.select_session_editor_sftp().editor_section_text,
@@ -114,7 +116,7 @@ fn session_editor_section_selection_updates_projection() {
     );
     assert_eq!(
         runtime.select_session_editor_logging().editor_section_text,
-        "logging"
+        "general"
     );
     assert_eq!(
         runtime.select_session_editor_advanced().editor_section_text,

@@ -306,12 +306,10 @@ export component SessionEditor inherits Rectangle {
 
                             EditorNavItem { text: @tr("General"); icon: "settings"; selected: root.section == "general"; clicked => { root.select-general(); } }
                             EditorNavItem { text: @tr("Authentication"); icon: "shield"; selected: root.section == "authentication"; clicked => { root.select-authentication(); } }
-                            // N5：终端 / 外观分区有字段模型（三态覆盖）；SFTP / 高级本版本无字段。
-                            EditorNavItem { text: @tr("Terminal"); icon: "terminal"; selected: root.section == "terminal"; clicked => { root.select-terminal(); } }
+                            // SFTP / 高级本版本无字段；Terminal scrollback 归全局 Settings；Logging 走会话树/终端右键。
                             EditorNavItem { text: @tr("SFTP"); icon: "folder"; enabled: false; hint: @tr("Not available in this version."); }
                             EditorNavItem { text: @tr("Tunnels"); icon: "connect"; selected: root.section == "tunnels"; clicked => { root.select-tunnels(); } }
                             EditorNavItem { text: @tr("Proxy"); icon: "globe"; selected: root.section == "proxy"; clicked => { root.select-proxy(); } }
-                            EditorNavItem { text: @tr("Logging"); icon: "file"; selected: root.section == "logging"; clicked => { root.select-logging(); } }
                             EditorNavItem { text: @tr("Advanced"); icon: "code"; enabled: false; hint: @tr("Not available in this version."); }
                             EditorNavItem { text: @tr("Appearance"); icon: "eye"; selected: root.section == "appearance"; clicked => { root.select-appearance(); } }
                         }
@@ -352,9 +350,11 @@ export component SessionEditor inherits Rectangle {
             
                                             SectionTitle { heading: @tr("General"); }
             
-                                            FormRow {
+                                            // 文件夹只读：归属由会话树「New Session Here」决定；
+                                            // 新建/改名文件夹走树右键，不在此对话框里选或建。
+                                            if root.folder-text != "" : FormRow {
                                                 label: @tr("Folder");
-            
+
                                                 Text {
                                                     text: root.folder-text;
                                                     color: Theme.text-secondary;
@@ -366,27 +366,7 @@ export component SessionEditor inherits Rectangle {
                                                     overflow: elide;
                                                 }
                                             }
-            
-                                            FormRow {
-                                                label: "";
 
-                                                WinButton { text: @tr("Folder Prev"); clicked => { root.select-folder-prev(); } }
-                                                WinButton { text: @tr("Folder Next"); clicked => { root.select-folder-next(); } }
-                                            }
-            
-                                            FormRow {
-                                                label: @tr("New folder");
-            
-                                                WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    text <=> root.new-folder-name;
-                                                    placeholder-text: @tr("New folder name");
-                                                    edited => { root.update-new-folder-name(self.text); }
-                                                }
-            
-                                                WinButton { text: @tr("New Folder"); icon: "plus"; clicked => { root.create-folder(); } }
-                                            }
-            
                                             FormRow {
                                                 label: @tr("Session name");
             
@@ -647,99 +627,6 @@ export component SessionEditor inherits Rectangle {
                                             }
             
                                             HintText { hint: root.tunnel-summary-text; }
-                                        }
-                                        if root.section == "logging" : VerticalLayout {
-                                            alignment: start;
-                                            spacing: Theme.spacing-12;
-            
-                                            SectionTitle { heading: @tr("Logging"); }
-            
-                                            GroupTitle { heading: @tr("Global Logging Policy"); }
-
-                                            FormRow {
-                                                label: @tr("Toggle");
-
-                                                WinButton {
-                                                    text: root.logging-enabled-text == "enabled" ? @tr("Disable Logging") : @tr("Enable Logging");
-                                                    icon: root.logging-enabled-text == "enabled" ? "pause" : "play";
-                                                    clicked => { root.toggle-logging-enabled(); }
-                                                }
-                                                WinButton { text: @tr("Raw"); accent: root.logging-format-text == "raw"; clicked => { root.set-logging-format-raw(); } }
-                                                WinButton { text: @tr("Sanitized"); accent: root.logging-format-text == "sanitized"; clicked => { root.set-logging-format-sanitized(); } }
-                                            }
-
-                                            FormRow {
-                                                label: @tr("Directory");
-            
-                                                WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    text <=> root.logging-directory-text;
-                                                    placeholder-text: "logs";
-                                                    edited => { root.update-logging-directory(self.text); }
-                                                }
-            
-                                                WinButton { text: @tr("Save Logging"); icon: "check"; clicked => { root.save-logging-settings(); } }
-                                            }
-            
-                                            Rectangle { height: 1px; background: Theme.layer-stroke; }
-            
-                                            GroupTitle { heading: @tr("Secret Store"); }
-            
-                                            HintText { hint: root.secret-store-status-text; }
-            
-                                            // 危险操作提示
-                                            Text {
-                                                text: @tr("Destructive: resetting the secret store permanently deletes the saved passwords and passphrases.");
-                                                color: Theme.critical;
-                                                font-size: Theme.font-caption;
-                                                wrap: word-wrap;
-                                            }
-            
-                                            FormRow {
-                                                label: @tr("Confirmation");
-            
-                                                WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    text <=> root.secret-reset-confirmation-text;
-                                                    placeholder-text: @tr("Type RESET SECRETS");
-                                                    edited => { root.update-secret-reset-confirmation(self.text); }
-                                                }
-                                            }
-            
-                                            FormRow {
-                                                label: "";
-
-                                                // B 轮2 #58：与 settings 同一门限 —— 只有精确输入确认词才可点击
-                                                // （原文案未走 @tr，这里同时补上；CLEAR 类令牌不在本分区使用）
-                                                WinButton {
-                                                    text: @tr("Reset Secrets");
-                                                    icon: "warning";
-                                                    critical: true;
-                                                    enabled: root.secret-reset-confirmation-text == "RESET SECRETS";
-                                                    clicked => { root.reset-secrets(); }
-                                                }
-                                            }
-            
-                                            HintText { hint: @tr("Config Dir: {0}", root.config-dir-text); }
-                                        }
-                                        if root.section == "terminal" : VerticalLayout {
-                                            alignment: start;
-                                            spacing: Theme.spacing-12;
-
-                                            SectionTitle { heading: @tr("Terminal"); }
-
-                                            HintText { hint: @tr("Scrollback limits for this session. `Inherit` follows the folder and global defaults; `Explicit` stores an override here."); }
-
-                                            TriStateFieldSection {
-                                                fields: root.editor-terminal-fields;
-                                                label-width: 150px;
-                                                field-set-inherit(key) => { root.editor-theme-field-action(key, "inherit"); }
-                                                field-set-explicit(key) => { root.editor-theme-field-action(key, "explicit"); }
-                                                field-reset(key) => { root.editor-theme-field-action(key, "reset"); }
-                                                field-edited(key, value) => { root.update-editor-theme-field(key, value); }
-                                                field-toggled(key) => { }
-                                                field-selected(key, index) => { }
-                                            }
                                         }
                                         if root.section == "appearance" : VerticalLayout {
                                             alignment: start;
