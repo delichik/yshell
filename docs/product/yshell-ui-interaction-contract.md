@@ -691,26 +691,28 @@ Folder Editor 用于保存文件夹级默认配置。
 
 ## 14. Settings
 
-Settings 是非 modal 页面或 dialog，左侧分类，右侧表单。
+Settings 是 dialog，左侧分类，右侧表单。
 
 分类：
 
-- General：启动行为、语言、更新检查。
-- Appearance：主题、字体、密度、面板默认显示。
-- Terminal：全局终端默认值。
-- SFTP：全局下载目录、并发数、覆盖策略。
-- Security：SecretStore、主密码、known_hosts、日志敏感输入。
-- Shortcuts：快捷键查看和修改。
-- Advanced：调试日志、配置目录、重置状态。
+- General：语言（system / zh-CN / en-US）。
+- Appearance：终端外观入口（配色、字体；保存后对新开终端生效）。
+- Terminal：全局终端默认值（scrollback 行数 / 单元上限）。
+- Security：SecretStore 状态、配置目录；跳转独立 **Host Keys** / **Private Keys** 管理页（不内嵌）。
+- Advanced：配置目录展示；本版本不提供整库 wipe secrets / 重置布局。
+- SFTP、Shortcuts：本版本禁用，tooltip 说明未提供。
 
-危险操作：
+Settings **不**使用 Danger Zone，也 **不**提供打字令牌确认的 `RESET SECRETS` / `CLEAR` 入口。
+
+Host Keys / Private Keys 由 Session 菜单打开（与 Settings 同级独立弹窗）。破坏性操作用普通 `ConfirmDialog`（`destructive`，无确认词）：
 
 | 控件 ID | 行为 | 确认 |
 |---|---|---|
-| `settings.security.clear_known_hosts` | 清空 known_hosts。 | 输入 `CLEAR`。 |
-| `settings.security.reset_secrets` | 删除本地 secret store。 | 输入 `RESET SECRETS`。 |
-| `settings.advanced.reset_layout` | 重置窗口布局。 | 普通确认。 |
-| `settings.advanced.open_config_dir` | 打开配置目录。 | 无。 |
+| `host_keys.remove` | 删除选中 `host:port` 整组 known hosts。 | 普通确认。 |
+| `host_keys.clear_all` | 清空全部 known hosts。 | 普通确认。 |
+| `private_keys.remove` | 删除选中托管私钥。 | 普通确认（含被引用告警）。 |
+| `private_keys.deploy` | 向当前会话部署公钥。 | 普通确认。 |
+| `settings.advanced.open_config_dir` | 打开配置目录。 | 无（本版本可仅展示路径）。 |
 
 ## 15. 安全弹窗
 

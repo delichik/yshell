@@ -42,7 +42,9 @@ export component KnownHostsPage inherits Rectangle {
         root.detail-entry-visible || root.detail-path-text != "";
 
     visible: self.open;
-    // B 轮3 #32：本弹窗**只**从 Settings 内部打开（`open_known_hosts_manager()` 唯一调用点
+    // 已由 Session > Host Keys…（HostKeysPage）取代日常入口；Settings 不再打开本页。
+    // 运行时 `open_known_hosts_manager()` / 单测仍可触达，待后续波次删除双轨。
+    // 原注释：B 轮3 #32：本弹窗**只**从 Settings 内部打开（`open_known_hosts_manager()` 唯一调用点
     // 在 settings 的「打开已知主机管理器」按钮），此时 Settings 自己的 scrim 已经压暗全窗；
     // 再叠一层会让遮罩明显更深（实测 45→9，其它弹窗 45→21）。这里不再画第二层遮罩，
     // 视觉与其它单层弹窗一致；点击"面板外"仍由 dialog_scope 的全窗 TouchArea 关闭本弹窗。
