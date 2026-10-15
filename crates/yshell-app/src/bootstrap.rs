@@ -2423,12 +2423,20 @@ pub(crate) fn wire_callbacks(
     );
     wire_n4!(on_import_host_keys, |runtime| runtime
         .import_host_keys_from_text());
-    wire_n4!(
-        on_update_host_keys_clear_confirmation,
-        |runtime, value: SharedString| runtime.update_host_keys_clear_confirmation(value.as_ref())
-    );
     wire_n4_result!(on_clear_all_host_keys, "Host keys error", |runtime| runtime
         .clear_all_host_keys());
+
+    // N4：导入主机密钥文件（rfd pick_file → 读文本 → import_host_keys_from_text）。
+    {
+        let dialog_tx = dialog_tx.clone();
+        window.on_browse_host_keys_import(move || {
+            spawn_pick_file(
+                dialog_tx.clone(),
+                DialogKind::HostKeysImport,
+                "Import host keys",
+            );
+        });
+    }
 
     // N4：导出主机密钥（rfd 保存对话框；文本 = `host:port algorithm fingerprint`）。
     {
@@ -4316,6 +4324,7 @@ pub(crate) enum DialogKind {
     PrivateKeyImport,
     AuthKeyFile,
     PublicKeyExport,
+    HostKeysImport,
     HostKeysExport,
     /// N6：终端日志弹窗的保存位置（pick_folder）。
     LoggingDirectory,
@@ -4717,6 +4726,7 @@ pub(crate) fn apply_dialog_outcome(
         FileDialogOutcome::Picked { kind, path } => match kind {
             DialogKind::PrivateKeyImport => runtime.update_private_keys_import_path(&path),
             DialogKind::AuthKeyFile => runtime.set_auth_prompt_key_path(&path),
+            DialogKind::HostKeysImport => runtime.import_host_keys_from_path(&path),
             // N6：终端日志弹窗的保存位置。
             DialogKind::LoggingDirectory => runtime.update_logging_dialog_directory(&path),
             // N1：rfd 直接触发的 SFTP 上传/下载（错误 → 状态栏）。
@@ -4756,7 +4766,9 @@ pub(crate) fn apply_dialog_outcome(
                 (None, _) => format!("Saved to `{path}`."),
             };
             match kind {
-                DialogKind::HostKeysExport => runtime.set_host_keys_status(&detail),
+                DialogKind::HostKeysExport | DialogKind::HostKeysImport => {
+                    runtime.set_host_keys_status(&detail)
+                }
                 DialogKind::LoggingDirectory => runtime.set_logging_dialog_path_error(&detail),
                 _ => runtime.set_private_keys_status(&detail),
             }
@@ -6442,16 +6454,10 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_host_keys_detail_path_text(projection.host_keys_detail_path_text.clone().into());
     window.set_host_keys_path_text(projection.host_keys_path_text.clone().into());
     window.set_host_keys_status_text(projection.host_keys_status_text.clone().into());
+    window.set_host_keys_key_count(projection.host_keys_key_count);
     window.set_host_keys_import_visible(projection.host_keys_import_visible);
     if window.get_host_keys_import_text().as_str() != projection.host_keys_import_text {
         window.set_host_keys_import_text(projection.host_keys_import_text.clone().into());
-    }
-    if window.get_host_keys_clear_confirmation_text().as_str()
-        != projection.host_keys_clear_confirmation_text
-    {
-        window.set_host_keys_clear_confirmation_text(
-            projection.host_keys_clear_confirmation_text.clone().into(),
-        );
     }
     // N4：认证弹窗（服务端能力 + 已填内容 + 多轮挑战）。
     window.set_auth_prompt_visible(projection.auth_prompt_visible);

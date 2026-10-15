@@ -116,7 +116,10 @@ export component MainWindow inherits Window {
     in-out property <string> host_keys_status_text: "";
     in-out property <bool> host_keys_import_visible: false;
     in-out property <string> host_keys_import_text: "";
-    in-out property <string> host_keys_clear_confirmation_text: "";
+    in-out property <int> host_keys_key_count: 0;
+    // Host Keys 破坏性确认（ConfirmDialog；无 CLEAR 令牌）。
+    in-out property <bool> host_keys_clear_dialog_visible: false;
+    in-out property <bool> host_keys_remove_dialog_visible: false;
     // A30（D20）：主机密钥详情字段拆分（Rust 投影；页面用 @tr 标签渲染）。
     in-out property <string> host_keys_detail_host_text: "";
     in-out property <string> host_keys_detail_algorithm_text: "";
@@ -856,8 +859,8 @@ export component MainWindow inherits Window {
     callback toggle_host_keys_import();
     callback update_host_keys_import_text(string);
     callback import_host_keys();
+    callback browse_host_keys_import();
     callback export_host_keys();
-    callback update_host_keys_clear_confirmation(string);
     callback clear_all_host_keys();
     // --- N4：认证弹窗（服务端能力驱动）--------------------------------------
     callback select_auth_prompt_method(int);
@@ -1023,6 +1026,8 @@ export component MainWindow inherits Window {
         || root.sftp_properties_visible
         || root.private_keys_modal_visible
         || root.host_keys_modal_visible
+        || root.host_keys_clear_dialog_visible
+        || root.host_keys_remove_dialog_visible
         || root.auth_prompt_visible
         || root.logging_dialog_visible
         || root.terminal_appearance_dialog_visible
@@ -1982,8 +1987,16 @@ export component MainWindow inherits Window {
             auth_prompt_dialog.focus-dialog();
         } else if (root.host_key_prompt_visible) {
             host_key_dialog.focus-dialog();
+        } else if (root.private_keys_remove_confirm_visible) {
+            private_keys_remove_dialog.focus-dialog();
+        } else if (root.private_keys_deploy_confirm_visible) {
+            private_keys_deploy_dialog.focus-dialog();
         } else if (root.private_keys_modal_visible) {
             private_keys_page.focus-dialog();
+        } else if (root.host_keys_clear_dialog_visible) {
+            host_keys_clear_dialog.focus-dialog();
+        } else if (root.host_keys_remove_dialog_visible) {
+            host_keys_remove_dialog.focus-dialog();
         } else if (root.host_keys_modal_visible) {
             host_keys_page.focus-dialog();
         } else if (root.known_hosts_modal_visible) {
@@ -2960,10 +2973,6 @@ export component MainWindow inherits Window {
         public-key-text: root.private_keys_public_key_text;
         test-result-text: root.private_keys_test_result_text;
         status-text: root.private_keys_status_text;
-        remove-confirm-visible <=> root.private_keys_remove_confirm_visible;
-        deploy-confirm-visible <=> root.private_keys_deploy_confirm_visible;
-        deploy-command-text: root.private_keys_deploy_command_text;
-        deploy-summary-text: root.private_keys_deploy_summary_text;
         remove-warning-text: root.private_keys_remove_warning_text;
         import-label-text <=> root.private_keys_import_label_text;
         import-path-text <=> root.private_keys_import_path_text;
@@ -2990,21 +2999,51 @@ export component MainWindow inherits Window {
         copy-public-key() => { root.copy_private_key_public(); }
         export-public-key() => { root.export_private_key_public(); }
         request-remove() => { root.request_private_key_remove(); }
-        confirm-remove() => { root.confirm_private_key_remove(); }
-        cancel-remove() => { root.cancel_private_key_remove(); }
         request-deploy() => { root.request_private_key_deploy(); }
-        confirm-deploy() => { root.confirm_private_key_deploy(); }
-        cancel-deploy() => { root.cancel_private_key_deploy(); }
         update-passphrase(value) => { root.update_private_key_passphrase(value); }
         save-passphrase() => { root.save_private_key_passphrase(); }
         forget-passphrase() => { root.forget_private_key_passphrase(); }
         rename-key(label) => { root.rename_private_key(label); }
     }
 
+    // N4：私钥删除确认（叠在 Private Keys 页之上；破坏性，无 Type-token）。
+    private_keys_remove_dialog := ConfirmDialog {
+        open: root.private_keys_remove_confirm_visible;
+        destructive: true;
+        title-text: @tr("Remove Managed Key");
+        message-text: root.private_keys_remove_warning_text;
+        confirm-label: @tr("Remove");
+        confirmed() => {
+            root.confirm_private_key_remove();
+            root.focus-top-dialog();
+        }
+        canceled() => {
+            root.cancel_private_key_remove();
+            root.focus-top-dialog();
+        }
+    }
+
+    // N4：部署公钥确认（紧凑 ConfirmDialog，替代页内大卡片）。
+    private_keys_deploy_dialog := ConfirmDialog {
+        open: root.private_keys_deploy_confirm_visible;
+        title-text: @tr("Deploy Public Key");
+        message-text: root.private_keys_deploy_summary_text;
+        confirm-label: @tr("Deploy");
+        confirmed() => {
+            root.confirm_private_key_deploy();
+            root.focus-top-dialog();
+        }
+        canceled() => {
+            root.cancel_private_key_deploy();
+            root.focus-top-dialog();
+        }
+    }
+
     // N4：主机密钥页（Session > Host Keys…；按 host:port 分组 + SHA256 指纹）。
     host_keys_page := HostKeysPage {
         open: root.host_keys_modal_visible;
         groups: root.host_keys_groups;
+        key-count: root.host_keys_key_count;
         selected-group <=> root.host_keys_selected_group;
         selected-entry <=> root.host_keys_selected_entry;
         path-text: root.host_keys_path_text;
@@ -3017,20 +3056,59 @@ export component MainWindow inherits Window {
         status-text: root.host_keys_status_text;
         import-visible <=> root.host_keys_import_visible;
         import-text <=> root.host_keys_import_text;
-        clear-confirmation-text <=> root.host_keys_clear_confirmation_text;
         close() => {
+            root.host_keys_clear_dialog_visible = false;
+            root.host_keys_remove_dialog_visible = false;
             root.close_host_keys_manager();
             root.focus-top-dialog();
         }
         select-group(index) => { root.select_host_key(index, 0); }
         select-entry(group-index, entry-index) => { root.select_host_key(group-index, entry-index); }
-        request-remove() => { root.remove_selected_host_key(); }
+        request-remove() => { root.host_keys_remove_dialog_visible = true; }
+        browse-import-file() => { root.browse_host_keys_import(); }
         toggle-import() => { root.toggle_host_keys_import(); }
         update-import-text(value) => { root.update_host_keys_import_text(value); }
         import-keys() => { root.import_host_keys(); }
         export-keys() => { root.export_host_keys(); }
-        update-clear-confirmation(value) => { root.update_host_keys_clear_confirmation(value); }
-        clear-all() => { root.clear_all_host_keys(); }
+        request-clear-all() => { root.host_keys_clear_dialog_visible = true; }
+    }
+
+    // N4：清空全部主机密钥确认（破坏性，无 Type-token）。
+    host_keys_clear_dialog := ConfirmDialog {
+        open: root.host_keys_clear_dialog_visible;
+        destructive: true;
+        title-text: @tr("Clear All Host Keys");
+        message-text: @tr("Remove every saved host key from disk? This cannot be undone.");
+        confirm-label: @tr("Clear All");
+        confirmed() => {
+            root.clear_all_host_keys();
+            root.host_keys_clear_dialog_visible = false;
+            root.focus-top-dialog();
+        }
+        canceled() => {
+            root.host_keys_clear_dialog_visible = false;
+            root.focus-top-dialog();
+        }
+    }
+
+    // N4：删除选中 host:port 组确认（后端按 host+port 整组删除）。
+    host_keys_remove_dialog := ConfirmDialog {
+        open: root.host_keys_remove_dialog_visible;
+        destructive: true;
+        title-text: @tr("Remove Host Keys");
+        message-text: root.host_keys_selected_group >= 0 && root.host_keys_selected_group < root.host_keys_groups.length
+            ? @tr("Remove all saved keys for {0}? This deletes the entire host:port group, not just the selected key.", root.host_keys_groups[root.host_keys_selected_group].host + ":" + root.host_keys_groups[root.host_keys_selected_group].port)
+            : @tr("Remove all saved keys for the selected host:port? This deletes the entire group, not just the selected key.");
+        confirm-label: @tr("Remove");
+        confirmed() => {
+            root.remove_selected_host_key();
+            root.host_keys_remove_dialog_visible = false;
+            root.focus-top-dialog();
+        }
+        canceled() => {
+            root.host_keys_remove_dialog_visible = false;
+            root.focus-top-dialog();
+        }
     }
 
     // N4：认证弹窗（服务端 AuthMethods/AuthProblemKind 驱动；host key 仍在认证之前）。

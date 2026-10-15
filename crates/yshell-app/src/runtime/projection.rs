@@ -604,6 +604,7 @@ impl AppRuntime {
             host_keys_groups: host_keys.groups,
             host_keys_selected_group: host_keys.selected_group,
             host_keys_selected_entry: host_keys.selected_entry,
+            host_keys_key_count: host_keys.key_count,
             host_keys_details_text: host_keys.details_text,
             host_keys_detail_host_text: host_keys.detail_host_text,
             host_keys_detail_algorithm_text: host_keys.detail_algorithm_text,
@@ -613,7 +614,6 @@ impl AppRuntime {
             host_keys_status_text: host_keys.status_text,
             host_keys_import_visible: host_keys.import_visible,
             host_keys_import_text: host_keys.import_text,
-            host_keys_clear_confirmation_text: host_keys.clear_confirmation_text,
             auth_prompt_visible: auth_prompt.visible,
             auth_prompt_host_text: auth_prompt.host_text,
             auth_prompt_problem_text: auth_prompt.problem_text,
@@ -1045,6 +1045,8 @@ struct HostKeysProjectionParts {
     groups: Vec<HostKeyGroupData>,
     selected_group: i32,
     selected_entry: i32,
+    /// 全部密钥条数（跨 host:port 合计）。
+    key_count: i32,
     details_text: String,
     /// D20：详情拆分字段（标签由 UI 侧 `@tr` 渲染；指纹为 D9 分组格式）。
     detail_host_text: String,
@@ -1055,7 +1057,6 @@ struct HostKeysProjectionParts {
     status_text: String,
     import_visible: bool,
     import_text: String,
-    clear_confirmation_text: String,
 }
 
 /// WP1：终端连接 overlay 投影。
@@ -1214,6 +1215,13 @@ impl AppRuntime {
 
     fn host_keys_projection_parts(&self) -> HostKeysProjectionParts {
         let groups = self.host_key_group_data();
+        let key_count = i32::try_from(
+            groups
+                .iter()
+                .map(|group| group.entries.len())
+                .sum::<usize>(),
+        )
+        .unwrap_or(i32::MAX);
         HostKeysProjectionParts {
             visible: self.host_keys_modal_visible,
             groups,
@@ -1225,6 +1233,7 @@ impl AppRuntime {
                 .host_keys_selected_entry
                 .map(|index| i32::try_from(index).unwrap_or(i32::MAX))
                 .unwrap_or(-1),
+            key_count,
             details_text: self.host_keys_details_text(),
             detail_host_text: self.host_keys_detail_host_text(),
             detail_algorithm_text: self.host_keys_detail_algorithm_text(),
@@ -1234,7 +1243,6 @@ impl AppRuntime {
             status_text: self.host_keys_status_text.clone(),
             import_visible: self.host_keys_import_visible,
             import_text: self.host_keys_import_text.clone(),
-            clear_confirmation_text: self.known_hosts_clear_confirmation.clone(),
         }
     }
 
@@ -1748,6 +1756,7 @@ pub struct AppProjection {
     pub host_keys_groups: Vec<HostKeyGroupData>,
     pub host_keys_selected_group: i32,
     pub host_keys_selected_entry: i32,
+    pub host_keys_key_count: i32,
     pub host_keys_details_text: String,
     /// D20：主机密钥页详情拆分字段（标签由 UI 侧 `@tr` 渲染；指纹为 D9 分组格式）。
     pub host_keys_detail_host_text: String,
@@ -1758,7 +1767,6 @@ pub struct AppProjection {
     pub host_keys_status_text: String,
     pub host_keys_import_visible: bool,
     pub host_keys_import_text: String,
-    pub host_keys_clear_confirmation_text: String,
     // --- N4：认证弹窗 --------------------------------------------------------
     pub auth_prompt_visible: bool,
     pub auth_prompt_host_text: String,

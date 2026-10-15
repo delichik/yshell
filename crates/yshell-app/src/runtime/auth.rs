@@ -1587,9 +1587,22 @@ impl AppRuntime {
         self.projection()
     }
 
-    pub fn update_host_keys_clear_confirmation(&mut self, value: &str) -> AppProjection {
-        self.known_hosts_clear_confirmation = value.to_owned();
-        self.projection()
+    /// 从文件导入主机密钥（rfd 选路后读文本，再走 `import_host_keys_from_text`）。
+    pub fn import_host_keys_from_path(&mut self, path: &str) -> AppProjection {
+        match std::fs::read_to_string(path) {
+            Ok(text) => {
+                self.host_keys_import_text = text;
+                self.host_keys_import_visible = false;
+                let _ = self.import_host_keys_from_text();
+                self.host_keys_import_text.clear();
+                self.projection()
+            }
+            Err(error) => {
+                self.host_keys_status_text = format!("Import failed to read `{path}`: {error}");
+                self.status_text = self.host_keys_status_text.clone();
+                self.projection()
+            }
+        }
     }
 
     /// 导入主机密钥：每行 `host:port <公钥行>` 或 `host:port <SHA256:指纹>`。
@@ -1715,18 +1728,12 @@ impl AppRuntime {
     }
 
     pub fn clear_all_host_keys(&mut self) -> AppResult<AppProjection> {
-        if self.known_hosts_clear_confirmation.trim() != "CLEAR" {
-            return Err(AppError::new(
-                "type CLEAR before removing all saved host keys",
-            ));
-        }
         self.persistent_known_hosts = KnownHosts::new();
         self.config_store
             .save_known_hosts(&self.persistent_known_hosts)
             .map_err(AppError::from_error)?;
         self.host_keys_selected_group = None;
         self.host_keys_selected_entry = None;
-        self.known_hosts_clear_confirmation.clear();
         self.host_keys_status_text = "Cleared all saved host keys.".to_owned();
         self.status_text = self.host_keys_status_text.clone();
         Ok(self.projection())
