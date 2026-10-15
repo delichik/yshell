@@ -17,24 +17,9 @@ import { Icon } from "basic/icons.slint";
 import { MenuEntry, MenuPopup } from "menu_popup.slint";
 import { TerminalView } from "terminal_view.slint";
 import { WorkspaceSplitView } from "workspace_split.slint";
+import { WorkspaceTab } from "workspace_tab_model.slint";
 
-/// N0：标签条单元（Rust `TabData` 投影；`id` 回传给 activate/close/右键菜单）。
-/// N2：`kind_text == "quick-connect"` 时标题用 @tr 渲染（快速连接页标签）。
-/// WP4：`title` 非空时优先显示（含 QC 重命名）；`unread` > 0 显示未读角标。
-export struct WorkspaceTab {
-    id: string,
-    title: string,
-    state_text: string,
-    connected: bool,
-    active: bool,
-    kind_text: string,
-    /// N6：该会话正在写日志（标签角标 REC）。
-    logging: bool,
-    /// N9：同步发送按键角色（空 / `source` / `target`；标签角标 SRC/RCV）。
-    sync_role_text: string,
-    /// WP4：未读输出计数（0 = 不显示角标）。
-    unread: int,
-}
+export { WorkspaceTab }
 
 // 单个标签：复刻 `WinTab` 的视觉（32px 行高、活动标签底部强调条、右内边距 4 的
 // 18×18 关闭按钮 + 32×32 命中区），额外支持右键菜单。左键点击激活；标签整体
@@ -263,22 +248,35 @@ export component TerminalWorkspace inherits VerticalLayout {
     /// WP2：正则查找开关。
     in-out property <bool> search-regex: false;
 
-    /// 单终端：取 TerminalView；分屏：按聚焦 pane 比例估算（含 12px 内边距）。
+    // 分屏视口：从 split_host 独立算 pane0/pane1（勿对已缩过的 primary 再 ×ratio）。
+    // split_host VerticalLayout padding 8+8；把手 4px；叶内 tab 条 = bar-height-tabs；TerminalView 内边距 12+12。
+    property <float> split-clamped-ratio: Math.max(0.2, Math.min(0.8, root.split-ratio));
+    property <float> split-pane-chrome-px: Theme.bar-height-tabs / 1px;
+    property <float> split-inner-width-px: Math.max(split_host.width / 1px - 16.0, 1.0);
+    property <float> split-inner-height-px: Math.max(split_host.height / 1px - 16.0, 1.0);
+    property <float> split-pane0-viewport-width-px: root.split-orientation-text == "vertical"
+        ? Math.max(root.split-inner-width-px - 24.0, 1.0)
+        : Math.max((root.split-inner-width-px - 4.0) * root.split-clamped-ratio - 24.0, 1.0);
+    property <float> split-pane1-viewport-width-px: root.split-orientation-text == "vertical"
+        ? Math.max(root.split-inner-width-px - 24.0, 1.0)
+        : Math.max((root.split-inner-width-px - 4.0) * (1.0 - root.split-clamped-ratio) - 24.0, 1.0);
+    property <float> split-pane0-viewport-height-px: root.split-orientation-text == "vertical"
+        ? Math.max((root.split-inner-height-px - 4.0) * root.split-clamped-ratio - root.split-pane-chrome-px - 24.0, 1.0)
+        : Math.max(root.split-inner-height-px - root.split-pane-chrome-px - 24.0, 1.0);
+    property <float> split-pane1-viewport-height-px: root.split-orientation-text == "vertical"
+        ? Math.max((root.split-inner-height-px - 4.0) * (1.0 - root.split-clamped-ratio) - root.split-pane-chrome-px - 24.0, 1.0)
+        : Math.max(root.split-inner-height-px - root.split-pane-chrome-px - 24.0, 1.0);
+
+    /// 单终端：取 TerminalView；分屏：聚焦 pane 的独立视口。
     out property <float> terminal-viewport-width-px: root.split-active
-        ? Math.max(
-            (root.split-orientation-text == "vertical"
-                ? split_host.width / 1px - 24
-                : (split_host.width / 1px - 28)
-                    * (root.split-focused-pane == 0 ? root.split-ratio : (1.0 - root.split-ratio))),
-            1.0)
+        ? (root.split-focused-pane == 0
+            ? root.split-pane0-viewport-width-px
+            : root.split-pane1-viewport-width-px)
         : terminal_view.terminal-viewport-width-px;
     out property <float> terminal-viewport-height-px: root.split-active
-        ? Math.max(
-            (root.split-orientation-text == "vertical"
-                ? (split_host.height / 1px - 28 - 28)
-                    * (root.split-focused-pane == 0 ? root.split-ratio : (1.0 - root.split-ratio))
-                : split_host.height / 1px - 24 - 28),
-            1.0)
+        ? (root.split-focused-pane == 0
+            ? root.split-pane0-viewport-height-px
+            : root.split-pane1-viewport-height-px)
         : terminal_view.terminal-viewport-height-px;
     /// W5-A2：终端是否持有键盘焦点（模态弹窗关闭后的焦点恢复据此避让终端）。
     /// P1：分屏时读聚焦叶子里的 TerminalView。
@@ -290,6 +288,13 @@ export component TerminalWorkspace inherits VerticalLayout {
     // 这里不碰条件元素）。终端不可见（Quick Connect 页）时不动焦点。
     changed find-visible => {
         if (!root.find-visible && root.terminal-visible) {
+            root.focus-terminal();
+        }
+    }
+
+    // 分屏切换聚焦 pane 后把键盘焦点落到新叶子（投影写回 focused-pane 时触发）。
+    changed split-focused-pane => {
+        if (root.split-active && root.terminal-visible) {
             root.focus-terminal();
         }
     }
@@ -367,24 +372,27 @@ export component TerminalWorkspace inherits VerticalLayout {
     in property <int> split-focused-pane: 0;
     in property <string> split-pane0-title-text: "";
     in property <bool> split-pane0-empty: false;
+    in property <[WorkspaceTab]> split-pane0-tabs: [];
     in property <string> split-pane1-title-text: "";
     in property <bool> split-pane1-empty: false;
+    in property <[WorkspaceTab]> split-pane1-tabs: [];
     in property <image> terminal-image-secondary;
-    /// 次 pane 视口（按主视口 × 比例估算，供 PTY resize）。
+    /// 次 pane 视口（非聚焦叶，与 primary 对称独立计算，供 PTY resize）。
     out property <float> terminal-viewport-secondary-width-px: root.split-active
-        ? (root.split-orientation-text == "vertical"
-            ? root.terminal-viewport-width-px
-            : root.terminal-viewport-width-px * (1.0 - root.split-ratio))
+        ? (root.split-focused-pane == 0
+            ? root.split-pane1-viewport-width-px
+            : root.split-pane0-viewport-width-px)
         : 0;
     out property <float> terminal-viewport-secondary-height-px: root.split-active
-        ? (root.split-orientation-text == "vertical"
-            ? root.terminal-viewport-height-px * (1.0 - root.split-ratio)
-            : root.terminal-viewport-height-px)
+        ? (root.split-focused-pane == 0
+            ? root.split-pane1-viewport-height-px
+            : root.split-pane0-viewport-height-px)
         : 0;
 
-    // 标签条（唯一容器；阶段 B 自绘标题栏时整体上移）
+    // 标签条：未分屏时全局一条；分屏时藏起，改由各叶子自带 tab strip（Xshell 式）。
     Rectangle {
-        height: Theme.bar-height-tabs;
+        clip: true;
+        height: root.split-active ? 0px : Theme.bar-height-tabs;
         background: Theme.window-background;
         HorizontalLayout {
             // E12：与终端内容区左缘（12px）统一
@@ -549,8 +557,10 @@ export component TerminalWorkspace inherits VerticalLayout {
                 focused-pane: root.split-focused-pane;
                 pane0-title-text: root.split-pane0-title-text;
                 pane0-empty: root.split-pane0-empty;
+                pane0-tabs: root.split-pane0-tabs;
                 pane1-title-text: root.split-pane1-title-text;
                 pane1-empty: root.split-pane1-empty;
+                pane1-tabs: root.split-pane1-tabs;
                 primary-image: root.terminal-image;
                 secondary-image: root.terminal-image-secondary;
                 cursor-column: root.cursor-column;
@@ -579,6 +589,9 @@ export component TerminalWorkspace inherits VerticalLayout {
                         root.close-split-pane(index);
                     }
                 }
+                activate-tab(id) => { root.activate-tab(id); }
+                close-tab(id) => { root.close-tab(id); }
+                new-session() => { root.new-session(); }
                 terminal-key(text, ctrl, alt, shift, meta) => {
                     root.terminal-key(text, ctrl, alt, shift, meta);
                 }

@@ -271,6 +271,74 @@ impl TerminalGrid {
         self.debug_assert_shape();
     }
 
+    /// Absolute cursor position (0-based, clamped to the screen).
+    pub fn set_cursor(&mut self, column: u16, row: u16) {
+        self.cursor_column = column.min(self.columns.saturating_sub(1));
+        self.cursor_row = row.min(self.rows.saturating_sub(1));
+    }
+
+    /// Move the cursor by `(d_col, d_row)` without wrapping; clamped to the screen.
+    pub fn move_cursor(&mut self, d_col: i32, d_row: i32) {
+        let column = (i32::from(self.cursor_column) + d_col).clamp(0, i32::from(self.columns.saturating_sub(1)));
+        let row = (i32::from(self.cursor_row) + d_row).clamp(0, i32::from(self.rows.saturating_sub(1)));
+        self.cursor_column = column as u16;
+        self.cursor_row = row as u16;
+    }
+
+    /// Erase in display (`CSI n J`). Does not move the cursor.
+    ///
+    /// - `0`: cursor through end of screen
+    /// - `1`: start of screen through cursor
+    /// - `2` / `3`: entire screen (`3` also clears scrollback)
+    pub fn erase_in_display(&mut self, mode: u16, style: &CellStyle) {
+        let blank = TerminalCell::blank_with_style(style);
+        let cursor = self.index(self.cursor_column, self.cursor_row).unwrap_or(0);
+        match mode {
+            0 => {
+                for cell in &mut self.cells[cursor..] {
+                    *cell = blank.clone();
+                }
+            }
+            1 => {
+                let end = cursor.min(self.cells.len().saturating_sub(1));
+                for cell in &mut self.cells[..=end] {
+                    *cell = blank.clone();
+                }
+            }
+            2 => {
+                self.cells.fill(blank);
+            }
+            3 => {
+                self.cells.fill(blank);
+                self.clear_scrollback();
+            }
+            _ => {}
+        }
+        self.debug_assert_shape();
+    }
+
+    /// Erase in line (`CSI n K`). Does not move the cursor.
+    ///
+    /// - `0`: cursor through end of line
+    /// - `1`: start of line through cursor
+    /// - `2`: entire line
+    pub fn erase_in_line(&mut self, mode: u16, style: &CellStyle) {
+        let blank = TerminalCell::blank_with_style(style);
+        let row_start = usize::from(self.cursor_row) * usize::from(self.columns);
+        let row_end = row_start + usize::from(self.columns);
+        let cursor = row_start + usize::from(self.cursor_column);
+        let (start, end) = match mode {
+            0 => (cursor, row_end),
+            1 => (row_start, cursor.saturating_add(1).min(row_end)),
+            2 => (row_start, row_end),
+            _ => return,
+        };
+        let end = end.min(self.cells.len());
+        for cell in &mut self.cells[start..end] {
+            *cell = blank.clone();
+        }
+    }
+
     pub fn newline(&mut self, style: &CellStyle) {
         self.cursor_column = 0;
         if self.cursor_row + 1 >= self.rows {

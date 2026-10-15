@@ -85,7 +85,8 @@ impl AppRuntime {
             let tab_id = format!("tab-quick-connect-{}", self.allocate_runtime_ordinal());
             self.tabs.push(TabEntry::quick_connect(tab_id.clone()));
             self.register_tab_in_focused_window(&tab_id);
-            self.active_tab_id = Some(tab_id);
+            self.active_tab_id = Some(tab_id.clone());
+            self.assign_tab_to_focused_pane(&tab_id);
             true
         };
         self.active_session_id = None;

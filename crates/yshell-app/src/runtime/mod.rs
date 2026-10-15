@@ -622,9 +622,11 @@ impl SplitOrientation {
     }
 }
 
-/// WP4：一个分屏叶子（绑定窗口内某个标签为该 pane 的活动标签）。
+/// WP4：一个分屏叶子（自有标签列表 + 活动标签；契约 §6.3 Leaf）。
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct SplitPane {
+    /// 本 pane 拥有的标签（顺序 = 叶内标签条顺序）。
+    pub(crate) tabs: Vec<String>,
     pub(crate) active_tab: Option<String>,
 }
 
@@ -644,15 +646,19 @@ impl WorkspaceSplit {
     pub(crate) const MAX_PANES: usize = 4;
 
     pub(crate) fn two_pane(orientation: SplitOrientation, first: Option<String>, second: Option<String>) -> Self {
+        let pane0_tabs = first.iter().cloned().collect();
+        let pane1_tabs = second.iter().cloned().collect();
         Self {
             orientation,
             ratio: 0.5,
             focused_pane: 1,
             panes: vec![
                 SplitPane {
+                    tabs: pane0_tabs,
                     active_tab: first,
                 },
                 SplitPane {
+                    tabs: pane1_tabs,
                     active_tab: second,
                 },
             ],
@@ -677,9 +683,10 @@ impl WorkspaceSplit {
     }
 
     pub(crate) fn shows_tab(&self, tab_id: &str) -> bool {
-        self.panes
-            .iter()
-            .any(|pane| pane.active_tab.as_deref() == Some(tab_id))
+        self.panes.iter().any(|pane| {
+            pane.active_tab.as_deref() == Some(tab_id)
+                || pane.tabs.iter().any(|id| id.as_str() == tab_id)
+        })
     }
 }
 

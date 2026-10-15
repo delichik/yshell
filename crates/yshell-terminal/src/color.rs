@@ -70,6 +70,26 @@ impl TerminalColor {
             _ => Self::BRIGHT_WHITE,
         }
     }
+
+    /// xterm 256-color index: 0–15 ANSI, 16–231 6×6×6 cube, 232–255 grayscale.
+    #[must_use]
+    pub const fn indexed(index: u8) -> Self {
+        match index {
+            0..=15 => Self::ansi(index),
+            16..=231 => {
+                let value = index - 16;
+                let r = value / 36;
+                let g = (value % 36) / 6;
+                let b = value % 6;
+                const LEVELS: [u8; 6] = [0, 95, 135, 175, 215, 255];
+                Self::rgb(LEVELS[r as usize], LEVELS[g as usize], LEVELS[b as usize])
+            }
+            232..=255 => {
+                let level = 8 + (index - 232) * 10;
+                Self::rgb(level, level, level)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -115,5 +135,13 @@ mod tests {
             assert_eq!(TerminalColor::ansi(index as u8), expected);
         }
         assert_eq!(TerminalColor::ansi(200), TerminalColor::BRIGHT_WHITE);
+    }
+
+    #[test]
+    fn indexed_cube_and_gray_ramp() {
+        assert_eq!(TerminalColor::indexed(1), TerminalColor::RED);
+        assert_eq!(TerminalColor::indexed(196), TerminalColor::rgb(255, 0, 0));
+        assert_eq!(TerminalColor::indexed(232), TerminalColor::rgb(8, 8, 8));
+        assert_eq!(TerminalColor::indexed(255), TerminalColor::rgb(238, 238, 238));
     }
 }

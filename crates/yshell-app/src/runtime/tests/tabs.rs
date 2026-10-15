@@ -412,6 +412,9 @@ fn split_with_one_session_opens_sibling_tab() {
         projection.workspace_split.pane1_tab_id,
         projection.active_tab_id
     );
+    assert_eq!(projection.workspace_split.pane0_tabs.len(), 1);
+    assert_eq!(projection.workspace_split.pane1_tabs.len(), 1);
+    assert_eq!(projection.workspace_split.pane0_tabs[0].id, first_tab);
     assert_tab_invariants(&runtime);
 }
 

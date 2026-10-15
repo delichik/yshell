@@ -6,8 +6,9 @@
 //!
 //! Glyphs are rasterized with `swash` (hinted outlines) and `zeno` (alpha mask).
 //! swash's scaler hardcodes `HintingMode::Smooth { preserve_linear_metrics: true }`,
-//! which forbids horizontal grid fitting, so the hinted outline is snapped to
-//! whole pixels before rasterizing; terminal text needs integer-aligned stems.
+//! which forbids horizontal grid fitting, so hinted outline **X** coordinates are
+//! snapped to whole pixels (keeps vertical stems on one column) while **Y** stays
+//! subpixel so curves are not stair-stepped. Coverage is blended in linear light.
 //! Measurements for this choice are in the N5a-B report.
 
 use std::borrow::Cow;
@@ -668,10 +669,9 @@ struct RasterGlyph {
 /// which by design **does not adjust outlines horizontally** (it keeps advances
 /// stable so layout never has to evaluate outlines). At terminal sizes that
 /// leaves vertical stems straddling two pixel columns (e.g. `|` at 64+36 %
-/// coverage). We therefore take the hinted outline from swash and snap it to
-/// whole pixels before rasterizing it with `zeno` (re-exported by swash), which
-/// matches the "single fully covered stem column" terminal look. Each
-/// `ScaleContext` owns swash's hinting/scale caches.
+/// coverage). We therefore snap hinted outline **X** to whole pixels before
+/// `zeno` rasterization (Y stays subpixel). Snapping both axes used to warp
+/// curves into stairs; X-only keeps the single-column stem look without that.
 struct GlyphRasterizer {
     context: ScaleContext,
 }
@@ -693,7 +693,6 @@ impl GlyphRasterizer {
         }
         for point in outline.points_mut() {
             point.x = point.x.round();
-            point.y = point.y.round();
         }
         // `inspect` triggers zeno's `ensure_size`; without it `Mask::render`
         // computes a y-down `placement.top` even for `Origin::BottomLeft`.
@@ -1013,13 +1012,14 @@ impl TerminalRenderer {
                 } else {
                     0.0
                 };
+                let cell_span = if wide { 2 } else { 1 };
                 paint_glyph(
                     &mut rgba,
                     width,
                     CellRect {
                         x: column as u32 * self.cell_width,
                         y: row as u32 * self.cell_height,
-                        width: self.cell_width,
+                        width: self.cell_width * cell_span,
                         height: self.cell_height,
                     },
                     self.ascent.round() as i32,
@@ -1236,9 +1236,13 @@ fn paint_glyph(
     color: TerminalColor,
 ) {
     let top = baseline - glyph.top;
+    let clip_left = rect.x as i32;
+    let clip_top = rect.y as i32;
+    let clip_right = clip_left + rect.width as i32;
+    let clip_bottom = clip_top + rect.height as i32;
     for bitmap_y in 0..glyph.height {
         let destination_y = rect.y as i32 + top + bitmap_y as i32;
-        if destination_y < 0 {
+        if destination_y < clip_top || destination_y >= clip_bottom {
             continue;
         }
         for bitmap_x in 0..glyph.width {
@@ -1247,7 +1251,7 @@ fn paint_glyph(
                 continue;
             }
             let destination_x = rect.x as i32 + x_offset + glyph.left + bitmap_x as i32;
-            if destination_x < 0 {
+            if destination_x < clip_left || destination_x >= clip_right {
                 continue;
             }
             blend_pixel(
@@ -1287,20 +1291,38 @@ fn blend_pixel(rgba: &mut [u8], frame_width: u32, x: u32, y: u32, color: Termina
     if index * 4 + 4 > rgba.len() {
         return;
     }
-    // Mild coverage gamma (>1) pushes mid-tone AA fringes toward transparent so
-    // stems stay crisp on dark backgrounds instead of washing out grey.
-    let coverage = (f32::from(alpha) / 255.0).powf(1.25);
+    // Mild coverage gamma (>1) trims soft AA fringes; 1.1 is gentler than the
+    // old 1.25 so mid-tone strokes stay denser after linear-light blending.
+    let coverage = (f32::from(alpha) / 255.0).powf(1.1);
     let pixel = &mut rgba[index * 4..index * 4 + 4];
-    pixel[0] = blend_channel(pixel[0], color.red, coverage);
-    pixel[1] = blend_channel(pixel[1], color.green, coverage);
-    pixel[2] = blend_channel(pixel[2], color.blue, coverage);
+    pixel[0] = blend_channel_linear(pixel[0], color.red, coverage);
+    pixel[1] = blend_channel_linear(pixel[1], color.green, coverage);
+    pixel[2] = blend_channel_linear(pixel[2], color.blue, coverage);
     pixel[3] = 255;
 }
 
-fn blend_channel(background: u8, foreground: u8, coverage: f32) -> u8 {
-    (f32::from(background) * (1.0 - coverage) + f32::from(foreground) * coverage)
-        .round()
-        .clamp(0.0, 255.0) as u8
+/// Blend one sRGB channel in linear light to avoid washed/haloing AA on dark bg.
+fn blend_channel_linear(background: u8, foreground: u8, coverage: f32) -> u8 {
+    let mixed = srgb_to_linear(background) * (1.0 - coverage) + srgb_to_linear(foreground) * coverage;
+    (linear_to_srgb(mixed) * 255.0).round().clamp(0.0, 255.0) as u8
+}
+
+fn srgb_to_linear(channel: u8) -> f32 {
+    let c = f32::from(channel) / 255.0;
+    if c <= 0.04045 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn linear_to_srgb(linear: f32) -> f32 {
+    let c = linear.clamp(0.0, 1.0);
+    if c <= 0.0031308 {
+        c * 12.92
+    } else {
+        1.055 * c.powf(1.0 / 2.4) - 0.055
+    }
 }
 
 #[cfg(test)]
@@ -1611,8 +1633,8 @@ mod tests {
         let (ink, mean, ge90) = ink_stats(&frame);
         eprintln!("n5ab-metric 16px ink={ink} mean={mean:.3} ge90={ge90:.1}%");
         assert!(
-            ge90 >= 32.0,
-            "ge90 {ge90:.1}% is below the 32% N5a-B baseline"
+            ge90 >= 50.0,
+            "ge90 {ge90:.1}% is below the 50% linear-blend baseline"
         );
         assert!(mean > 0.6, "mean coverage {mean:.3} is too grey");
         assert!(ink > 200);

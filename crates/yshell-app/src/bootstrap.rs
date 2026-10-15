@@ -5309,7 +5309,29 @@ fn workspace_tab_matches(current: &WorkspaceTab, next: &TabData) -> bool {
 /// SFTP rows). When the count is unchanged, equal-length updates are applied
 /// in place for the same reason (switching tabs only flips `active`).
 fn set_tabs_if_changed(window: &MainWindow, tabs: &[TabData]) {
-    let current = window.get_tabs();
+    apply_workspace_tabs_model(window.get_tabs(), tabs, |model| window.set_tabs(model));
+}
+
+fn set_split_pane_tabs_if_changed(window: &MainWindow, pane: u8, tabs: &[TabData]) {
+    match pane {
+        0 => apply_workspace_tabs_model(
+            window.get_workspace_split_pane0_tabs(),
+            tabs,
+            |model| window.set_workspace_split_pane0_tabs(model),
+        ),
+        _ => apply_workspace_tabs_model(
+            window.get_workspace_split_pane1_tabs(),
+            tabs,
+            |model| window.set_workspace_split_pane1_tabs(model),
+        ),
+    }
+}
+
+fn apply_workspace_tabs_model(
+    current: ModelRc<WorkspaceTab>,
+    tabs: &[TabData],
+    set_model: impl FnOnce(ModelRc<WorkspaceTab>),
+) {
     if tabs.is_empty() && current.row_count() == 0 {
         return;
     }
@@ -5330,7 +5352,7 @@ fn set_tabs_if_changed(window: &MainWindow, tabs: &[TabData]) {
             }
         }
     }
-    window.set_tabs(ModelRc::new(VecModel::from(
+    set_model(ModelRc::new(VecModel::from(
         tabs.iter().map(workspace_tab_from).collect::<Vec<_>>(),
     )));
 }
@@ -6187,9 +6209,11 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_workspace_split_pane0_tab_id(split.pane0_tab_id.clone().into());
     window.set_workspace_split_pane0_title_text(split.pane0_title_text.clone().into());
     window.set_workspace_split_pane0_empty(split.pane0_empty);
+    set_split_pane_tabs_if_changed(window, 0, &split.pane0_tabs);
     window.set_workspace_split_pane1_tab_id(split.pane1_tab_id.clone().into());
     window.set_workspace_split_pane1_title_text(split.pane1_title_text.clone().into());
     window.set_workspace_split_pane1_empty(split.pane1_empty);
+    set_split_pane_tabs_if_changed(window, 1, &split.pane1_tabs);
     // N9：同步发送按键（终端/标签菜单 + 状态栏 chip + 标签角标）。
     window.set_terminal_sync_all_enabled(projection.terminal_sync_all_enabled);
     window.set_terminal_sync_visible_enabled(projection.terminal_sync_visible_enabled);

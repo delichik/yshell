@@ -151,7 +151,9 @@ impl AppRuntime {
                 self.active_session_id = None;
             }
             self.tabs[index].unread = 0;
-            self.assign_tab_to_focused_pane(tab_id);
+            if !self.focus_pane_for_tab(tab_id) {
+                self.assign_tab_to_focused_pane(tab_id);
+            }
             self.refresh_terminal_search_for_active_session();
             // D16：无会话标签不得残留上一个会话的 SFTP 目录（B 轮3 #19）。
             self.reset_sftp_view_state();
@@ -176,7 +178,9 @@ impl AppRuntime {
             self.active_session_id = Some(session_id.clone());
         }
         self.tabs[index].unread = 0;
-        self.assign_tab_to_focused_pane(tab_id);
+        if !self.focus_pane_for_tab(tab_id) {
+            self.assign_tab_to_focused_pane(tab_id);
+        }
         self.refresh_terminal_search_for_active_session();
         let title = self.tab_display_title(tab_id);
         // D16：切换会话时清掉上一个会话的目录并重新加载当前会话的 SFTP 视图。
@@ -438,7 +442,10 @@ impl AppRuntime {
         window.active_tab.as_deref() == Some(tab_id)
     }
 
-    /// WP4：把标签绑到聚焦 pane（无分屏时 no-op，活动位已由 `activate_tab_in_window` 处理）。
+    /// WP4：把标签绑到聚焦 pane（无分屏时 no-op）。
+    ///
+    /// 新标签 / 从全局条激活：加入聚焦 pane 的 `tabs`，并从其它 pane 列表移除。
+    /// 若标签已在某 pane 的列表中，应改走 [`Self::focus_pane_for_tab`]（点叶内条）。
     pub(crate) fn assign_tab_to_focused_pane(&mut self, tab_id: &str) {
         let Some(window_id) = self.window_of_tab(tab_id) else {
             return;
@@ -449,49 +456,49 @@ impl AppRuntime {
         if window.split.is_none() {
             return;
         }
-        let other_tabs: Vec<String> = window
-            .tabs
-            .iter()
-            .filter(|id| id.as_str() != tab_id)
-            .cloned()
-            .collect();
         let Some(split) = window.split.as_mut() else {
             return;
         };
         let focused = split.focused_pane.min(split.panes.len().saturating_sub(1));
-        // 若另一 pane 正显示同一标签，先把它换到其它标签，避免同一会话双尺寸冲突。
-        let conflict_indices: Vec<usize> = split
-            .panes
-            .iter()
-            .enumerate()
-            .filter(|(index, pane)| {
-                *index != focused && pane.active_tab.as_deref() == Some(tab_id)
-            })
-            .map(|(index, _)| index)
-            .collect();
-        for index in conflict_indices {
-            let taken: Vec<String> = split
-                .panes
-                .iter()
-                .enumerate()
-                .filter_map(|(i, pane)| {
-                    if i == index {
-                        None
-                    } else {
-                        pane.active_tab.clone()
-                    }
-                })
-                .collect();
-            split.panes[index].active_tab = other_tabs
-                .iter()
-                .find(|candidate| !taken.iter().any(|id| id == *candidate))
-                .cloned()
-                .or_else(|| other_tabs.first().cloned());
+        for (index, pane) in split.panes.iter_mut().enumerate() {
+            pane.tabs.retain(|id| id.as_str() != tab_id);
+            if index != focused && pane.active_tab.as_deref() == Some(tab_id) {
+                pane.active_tab = pane.tabs.first().cloned();
+            }
         }
         if let Some(pane) = split.panes.get_mut(focused) {
+            if !pane.tabs.iter().any(|id| id == tab_id) {
+                pane.tabs.push(tab_id.to_owned());
+            }
             pane.active_tab = Some(tab_id.to_owned());
         }
         window.active_tab = Some(tab_id.to_owned());
+    }
+
+    /// 若 `tab_id` 已属于某 pane，聚焦该 pane 并激活；返回是否已处理。
+    pub(crate) fn focus_pane_for_tab(&mut self, tab_id: &str) -> bool {
+        let Some(window_id) = self.window_of_tab(tab_id) else {
+            return false;
+        };
+        let Some(window) = self.windows.get_mut(&window_id) else {
+            return false;
+        };
+        let Some(split) = window.split.as_mut() else {
+            return false;
+        };
+        let Some(pane_index) = split
+            .panes
+            .iter()
+            .position(|pane| pane.tabs.iter().any(|id| id == tab_id))
+        else {
+            return false;
+        };
+        split.focused_pane = pane_index;
+        if let Some(pane) = split.panes.get_mut(pane_index) {
+            pane.active_tab = Some(tab_id.to_owned());
+        }
+        window.active_tab = Some(tab_id.to_owned());
+        true
     }
 
     /// WP4：Split Right / Split Down（契约 §6.3；叶子上限 4，v1 先做 2）。
@@ -585,11 +592,23 @@ impl AppRuntime {
                 .get_mut(&window_id)
                 .ok_or_else(|| AppError::new("window registration is missing"))?;
             // 契约：当前 active tab 移入新 pane；原 pane 留下邻接标签。
-            window.split = Some(WorkspaceSplit::two_pane(
+            // 其余窗口标签归入 pane0，避免分屏后悬空。
+            let mut split = WorkspaceSplit::two_pane(
                 orientation,
                 Some(neighbor.clone()),
                 Some(active_tab.clone()),
-            ));
+            );
+            for tab_id in &window.tabs {
+                if tab_id == &neighbor || tab_id == &active_tab {
+                    continue;
+                }
+                if let Some(pane0) = split.panes.first_mut() {
+                    if !pane0.tabs.iter().any(|id| id == tab_id) {
+                        pane0.tabs.push(tab_id.clone());
+                    }
+                }
+            }
+            window.split = Some(split);
             window.active_tab = Some(active_tab.clone());
         }
         if self.focused_window == Some(window_id) {
@@ -809,6 +828,12 @@ impl AppRuntime {
             .and_then(|pane| pane.active_tab.as_deref())
             .map(|tab_id| self.tab_display_title(tab_id))
             .unwrap_or_default();
+        let pane0_tabs = pane0
+            .map(|pane| self.pane_tab_data(pane))
+            .unwrap_or_default();
+        let pane1_tabs = pane1
+            .map(|pane| self.pane_tab_data(pane))
+            .unwrap_or_default();
         WorkspaceSplitProjection {
             active: true,
             orientation_text: split.orientation.as_str().to_owned(),
@@ -820,15 +845,28 @@ impl AppRuntime {
                 .unwrap_or_default(),
             pane0_title_text: title0,
             pane0_empty: pane0.is_none_or(|pane| pane.active_tab.is_none()),
+            pane0_tabs,
             pane1_tab_id: pane1
                 .and_then(|pane| pane.active_tab.clone())
                 .unwrap_or_default(),
             pane1_title_text: title1,
             pane1_empty: pane1.is_none_or(|pane| pane.active_tab.is_none()),
+            pane1_tabs,
             // v1：UI 只渲染 2 叶子；`MAX_PANES=4` 留给后续递归树扩展。
             can_split: split.pane_count() < 2,
             can_close_pane: split.pane_count() > 1,
         }
+    }
+
+    /// 单个分屏叶子的标签条投影（`active` 相对该 pane 的 `active_tab`）。
+    fn pane_tab_data(&self, pane: &super::SplitPane) -> Vec<TabData> {
+        pane.tabs
+            .iter()
+            .map(|tab_id| {
+                let active = pane.active_tab.as_deref() == Some(tab_id.as_str());
+                self.tab_data_entry(tab_id, active)
+            })
+            .collect()
     }
 
     /// WP4：非聚焦 pane 的会话 key（双图渲染 / 次视口 resize）。
@@ -1096,34 +1134,18 @@ impl AppRuntime {
                             .cloned();
                     }
                 }
-                // WP4：关闭标签后清理分屏引用；只剩 1 片时合并回单 pane。
+                // WP4：关闭标签后清理分屏引用；pane 无标签或只剩 1 片时合并。
                 if let Some(mut split) = window.split.take() {
-                    let available = window.tabs.clone();
-                    let conflicted: Vec<usize> = split
-                        .panes
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, pane)| pane.active_tab.as_deref() == Some(tab_id))
-                        .map(|(index, _)| index)
-                        .collect();
-                    for index in conflicted {
-                        let taken: Vec<String> = split
-                            .panes
-                            .iter()
-                            .enumerate()
-                            .filter_map(|(i, pane)| {
-                                if i == index {
-                                    None
-                                } else {
-                                    pane.active_tab.clone()
-                                }
-                            })
-                            .collect();
-                        split.panes[index].active_tab = available
-                            .iter()
-                            .find(|id| !taken.iter().any(|taken_id| taken_id == *id))
-                            .cloned()
-                            .or_else(|| available.first().cloned());
+                    for pane in &mut split.panes {
+                        pane.tabs.retain(|id| id.as_str() != tab_id);
+                        if pane.active_tab.as_deref() == Some(tab_id) {
+                            pane.active_tab = pane.tabs.first().cloned();
+                        }
+                    }
+                    // 空 pane 移除；剩 ≤1 片则拆掉分屏。
+                    split.panes.retain(|pane| !pane.tabs.is_empty());
+                    if split.focused_pane >= split.panes.len() {
+                        split.focused_pane = split.panes.len().saturating_sub(1);
                     }
                     if split.panes.len() <= 1 {
                         if let Some(pane) = split.panes.first() {
@@ -1227,6 +1249,8 @@ impl AppRuntime {
         self.active_tab_id = Some(tab_id.to_owned());
         self.active_session_id = Some(session_id.to_owned());
         self.tab_menu_tab_id = None;
+        // 分屏时新标签归入当前聚焦 pane 的标签条。
+        self.assign_tab_to_focused_pane(tab_id);
     }
 
     pub(crate) fn drop_inventory_placeholder(&mut self, profile_id: &str) {
@@ -1621,9 +1645,12 @@ pub struct WorkspaceSplitProjection {
     pub pane0_tab_id: String,
     pub pane0_title_text: String,
     pub pane0_empty: bool,
+    /// 左/上 pane 的标签条投影（分屏时用；未分屏为空）。
+    pub pane0_tabs: Vec<TabData>,
     pub pane1_tab_id: String,
     pub pane1_title_text: String,
     pub pane1_empty: bool,
+    pub pane1_tabs: Vec<TabData>,
     pub can_split: bool,
     pub can_close_pane: bool,
 }

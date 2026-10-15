@@ -1,0 +1,15 @@
+// Shared tab row model for the global tab bar and per-pane split strips.
+export struct WorkspaceTab {
+    id: string,
+    title: string,
+    state_text: string,
+    connected: bool,
+    active: bool,
+    kind_text: string,
+    /// N6：该会话正在写日志（标签角标 REC）。
+    logging: bool,
+    /// N9：同步发送按键角色（空 / `source` / `target`；标签角标 SRC/RCV）。
+    sync_role_text: string,
+    /// WP4：未读输出计数（0 = 不显示角标）。
+    unread: int,
+}
