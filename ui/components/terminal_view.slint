@@ -13,8 +13,9 @@ export global TerminalScrollInfo {
     callback scroll-to-line(int);
 }
 
-// 终端表面（§5.17）：8px 圆角 + 1px 描边（聚焦 accent）+ 内边距 12。
+// 终端表面（§5.17）：8px 圆角 + 1px 静默描边 + 内边距 12。
 // 表面内不再有标题条与底栏；滚动/选择反馈改为覆盖在表面右上角的小浮层。
+// 聚焦不再切 accent 描边（深色底上蓝框过重）。
 export component TerminalView inherits Rectangle {
     // E21：这些属性每次启动都由 Rust 投影覆盖；默认值置空，避免投影到达前闪现英文
     //（muse 轮1 中#35）。因此也不标 @tr。
@@ -96,8 +97,7 @@ export component TerminalView inherits Rectangle {
     }
 
     // 根容器只做布局承载（§5.17 的唯一视觉容器是 terminal_surface）：
-    // 这里保持透明、无边框，避免和 terminal_surface 形成两层圆角描边；
-    // 聚焦态只在 terminal_surface 的描边上体现（terminal-focused 由它读取）。
+    // 这里保持透明、无边框，避免和 terminal_surface 形成两层圆角描边。
     background: transparent;
 
     VerticalLayout {
@@ -106,9 +106,9 @@ export component TerminalView inherits Rectangle {
 
         terminal_surface := Rectangle {
             background: Theme.terminal-surface;
-            border-color: root.embedded
-                ? transparent
-                : (root.terminal-focused ? Theme.accent : Theme.terminal-border);
+            // 聚焦态不再换成 accent 描边：蓝框在深色终端上刺眼，且和键盘
+            // FocusRing 叠出「双重选中」。聚焦只靠光标/输入反馈表达。
+            border-color: root.embedded ? transparent : Theme.terminal-border;
             border-width: root.embedded ? 0px : 1px;
             border-radius: root.embedded ? 0px : Theme.radius-panel;
             // 可收缩下限：窗口 880×600 时终端区仍能放下（含查找栏），不把状态栏挤出可视区。

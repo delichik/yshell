@@ -58,8 +58,9 @@ component SplitPaneLeaf inherits Rectangle {
     callback connection-cancel();
     callback connection-copy-error();
 
-    border-width: root.focused ? 2px : 1px;
-    border-color: root.focused ? Theme.accent : Theme.control-stroke;
+    // 聚焦叶用不换色的细描边：标题字重/底色已区分焦点，避免整框蓝边。
+    border-width: 1px;
+    border-color: Theme.control-stroke;
     border-radius: Theme.radius-control;
     background: Theme.window-background;
     clip: true;
