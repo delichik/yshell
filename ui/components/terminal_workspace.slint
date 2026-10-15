@@ -480,6 +480,8 @@ export component TerminalWorkspace inherits VerticalLayout {
     Rectangle {
         // min-height 显式归零：否则内容（终端视图）的隐式 min 会顶住折叠。
         // WP4：分屏时折叠单 TerminalView，改用下方 WorkspaceSplitView。
+        // clip：折叠后标题条/叶子不得溢出到状态栏（Slint 里 max-height=0 仍可能绘制子项）。
+        clip: true;
         min-height: 0px;
         max-height: root.terminal-visible && !root.split-active ? 100000px : 0px;
         background: Theme.window-background;
@@ -533,6 +535,8 @@ export component TerminalWorkspace inherits VerticalLayout {
 
     // WP4：分屏内容区（与单终端互斥折叠）。
     split_host := Rectangle {
+        // 未分屏时折叠为 0：必须 clip，否则叶子标题条（"Terminal" + ×）会溢到状态栏。
+        clip: true;
         min-height: 0px;
         max-height: root.terminal-visible && root.split-active ? 100000px : 0px;
         background: Theme.window-background;
@@ -564,8 +568,17 @@ export component TerminalWorkspace inherits VerticalLayout {
                 connection-overlay-failed: root.connection-overlay-failed;
                 connection-overlay-pending: root.connection-overlay-pending;
                 view-visible: root.terminal-visible && root.split-active;
-                focus-pane(index) => { root.focus-split-pane(index); }
-                close-pane(index) => { root.close-split-pane(index); }
+                // 折叠态仍可能收到溢出命中：未激活时吞掉，避免 "workspace is not split"。
+                focus-pane(index) => {
+                    if (root.split-active) {
+                        root.focus-split-pane(index);
+                    }
+                }
+                close-pane(index) => {
+                    if (root.split-active) {
+                        root.close-split-pane(index);
+                    }
+                }
                 terminal-key(text, ctrl, alt, shift, meta) => {
                     root.terminal-key(text, ctrl, alt, shift, meta);
                 }

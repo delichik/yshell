@@ -99,12 +99,14 @@ component SplitPaneLeaf inherits Rectangle {
 
                 if root.show-close : WinIconButton {
                     icon: "close";
+                    enabled: root.view-visible;
                     accessible-name: @tr("Close pane");
                     clicked => { root.close-requested(); }
                 }
             }
 
             TouchArea {
+                enabled: root.view-visible;
                 clicked => { root.focus-requested(); }
             }
         }
@@ -137,6 +139,7 @@ component SplitPaneLeaf inherits Rectangle {
             if !root.empty && !root.focused : TouchArea {
                 width: parent.width;
                 height: parent.height;
+                enabled: root.view-visible;
                 clicked => { root.focus-requested(); }
             }
 

@@ -658,12 +658,21 @@ impl AppRuntime {
     }
 
     /// WP4：聚焦指定 pane（0-based）；同步窗口活动标签与未读清除。
+    ///
+    /// 未分屏时静默忽略（折叠分屏 UI 溢出命中不应当成错误刷状态栏）。
     pub fn focus_split_pane(&mut self, pane_index: i32) -> AppResult<AppProjection> {
         let window_id = self
             .focused_window
             .or_else(|| self.main_window_id())
             .ok_or_else(|| AppError::new("no window is available"))?;
         let pane_index = usize::try_from(pane_index).unwrap_or(0);
+        if !self
+            .windows
+            .get(&window_id)
+            .is_some_and(|window| window.split.is_some())
+        {
+            return Ok(self.projection());
+        }
         let tab_id = {
             let window = self
                 .windows
