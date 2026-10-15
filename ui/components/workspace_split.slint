@@ -30,11 +30,11 @@ component SplitPaneLeaf inherits Rectangle {
     in property <bool> connection-overlay-pending: false;
     in property <bool> view-visible: true;
 
-    // 仅在「分屏可见 + 本叶聚焦 + 非空」时挂载 TerminalView。
-    // 四个叶子若始终各嵌一份 TerminalView，组件树过深会在 Windows ~1MB 主线程栈上
-    // 直接 stack overflow（Linux 默认 8MB 往往幸免）。
-    property <bool> mount-terminal: root.view-visible && root.focused && !root.empty;
-    out property <bool> terminal-focused: root.mount-terminal ? leaf_tv.terminal-focused : false;
+    // 始终实例化 leaf_tv：Slint 不允许从 `if` 外访问条件元素 id（CI 会报
+    // Cannot access id 'leaf_tv'）。用 max-height 折叠；仅活动方向叶子 focused，
+    // 非活动方向不展开。Windows 主线程栈由 build.rs 提到 8MB 兜底。
+    property <bool> show-terminal: root.view-visible && root.focused && !root.empty;
+    out property <bool> terminal-focused: root.show-terminal && leaf_tv.terminal-focused;
 
     callback focus-requested();
     callback close-requested();
@@ -65,25 +65,8 @@ component SplitPaneLeaf inherits Rectangle {
     clip: true;
 
     public function focus-terminal() {
-        if (root.mount-terminal) {
+        if (root.show-terminal) {
             leaf_tv.focus-terminal();
-        }
-    }
-
-    // 条件挂载后的焦点回落：等本帧布局完成再 focus（与查找栏 Timer 同思路）。
-    focus_timer := Timer {
-        interval: 1ms;
-        running: false;
-        triggered => {
-            if (root.mount-terminal) {
-                leaf_tv.focus-terminal();
-            }
-            self.running = false;
-        }
-    }
-    changed mount-terminal => {
-        if (root.mount-terminal) {
-            focus_timer.running = true;
         }
     }
 
@@ -156,58 +139,67 @@ component SplitPaneLeaf inherits Rectangle {
                 clicked => { root.focus-requested(); }
             }
 
-            // P1：聚焦叶子 —— 条件挂载完整 TerminalView（含查找 / overlay / 滚动条 / 选择）。
-            // 禁止 width/height: parent.* —— TerminalView 内含 VerticalLayout + min-height
-            // 会与父 Rectangle 的 layout_info 形成绑定环；改由 100% + 零 preferred 填满。
-            if root.mount-terminal : leaf_tv := TerminalView {
+            // P1：聚焦叶子 —— 完整 TerminalView（含查找 / overlay / 滚动条 / 选择）。
+            // 始终实例化、用 max-height 折叠，保证 leaf_tv id 可从 focus-terminal 访问。
+            // 禁止 width/height: parent.* —— VerticalLayout + min-height 会与父 layout_info
+            // 形成绑定环；改由 100% + 零 preferred 填满。
+            leaf_host := VerticalLayout {
+                padding: 0;
+                spacing: 0;
                 width: 100%;
                 height: 100%;
-                min-width: 0px;
                 min-height: 0px;
-                preferred-width: 0px;
-                preferred-height: 0px;
-                embedded: true;
-                interactive: true;
-                view-visible: true;
-                title: "";
-                log-output: "";
-                terminal-image: root.terminal-image;
-                cursor-column: root.cursor-column;
-                cursor-row: root.cursor-row;
-                scroll-offset: root.scroll-offset;
-                selection-active: root.selection-active;
-                search-query <=> root.search-query;
-                search-summary: root.search-summary;
-                search-regex <=> root.search-regex;
-                find-visible: root.find-visible;
-                connection-overlay-visible: root.connection-overlay-visible;
-                connection-overlay-target: root.connection-overlay-target;
-                connection-overlay-stage: root.connection-overlay-stage;
-                connection-overlay-error: root.connection-overlay-error;
-                connection-overlay-failed: root.connection-overlay-failed;
-                connection-overlay-pending: root.connection-overlay-pending;
-                focus-requested() => { root.focus-requested(); }
-                connection-retry() => { root.connection-retry(); }
-                connection-cancel() => { root.connection-cancel(); }
-                connection-copy-error() => { root.connection-copy-error(); }
-                key-pressed(text, ctrl, alt, shift, meta) => {
-                    root.key-pressed(text, ctrl, alt, shift, meta);
+                max-height: root.show-terminal ? 100000px : 0px;
+
+                leaf_tv := TerminalView {
+                    vertical-stretch: 1;
+                    min-width: 0px;
+                    min-height: 0px;
+                    preferred-width: 0px;
+                    preferred-height: 0px;
+                    embedded: true;
+                    interactive: true;
+                    view-visible: root.show-terminal;
+                    title: "";
+                    log-output: "";
+                    terminal-image: root.terminal-image;
+                    cursor-column: root.cursor-column;
+                    cursor-row: root.cursor-row;
+                    scroll-offset: root.scroll-offset;
+                    selection-active: root.selection-active;
+                    search-query <=> root.search-query;
+                    search-summary: root.search-summary;
+                    search-regex <=> root.search-regex;
+                    find-visible: root.show-terminal && root.find-visible;
+                    connection-overlay-visible: root.show-terminal && root.connection-overlay-visible;
+                    connection-overlay-target: root.connection-overlay-target;
+                    connection-overlay-stage: root.connection-overlay-stage;
+                    connection-overlay-error: root.connection-overlay-error;
+                    connection-overlay-failed: root.connection-overlay-failed;
+                    connection-overlay-pending: root.connection-overlay-pending;
+                    focus-requested() => { root.focus-requested(); }
+                    connection-retry() => { root.connection-retry(); }
+                    connection-cancel() => { root.connection-cancel(); }
+                    connection-copy-error() => { root.connection-copy-error(); }
+                    key-pressed(text, ctrl, alt, shift, meta) => {
+                        root.key-pressed(text, ctrl, alt, shift, meta);
+                    }
+                    scroll-lines(delta) => { root.scroll-lines(delta); }
+                    scroll-to-bottom() => { root.scroll-to-bottom(); }
+                    selection-begin(x, y) => { root.selection-begin(x, y); }
+                    selection-update(x, y) => { root.selection-update(x, y); }
+                    selection-end(x, y) => { root.selection-end(x, y); }
+                    select-word-at(x, y) => { root.select-word-at(x, y); }
+                    copy-visible() => { root.copy-visible(); }
+                    paste-clipboard() => { root.paste-clipboard(); }
+                    clear-terminal() => { root.clear-terminal(); }
+                    find-text(query) => { root.find-text(query); }
+                    find-next() => { root.find-next(); }
+                    find-prev() => { root.find-prev(); }
+                    find-regex-changed(enabled) => { root.find-regex-changed(enabled); }
+                    dismiss-find() => { root.dismiss-find(); }
+                    context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
                 }
-                scroll-lines(delta) => { root.scroll-lines(delta); }
-                scroll-to-bottom() => { root.scroll-to-bottom(); }
-                selection-begin(x, y) => { root.selection-begin(x, y); }
-                selection-update(x, y) => { root.selection-update(x, y); }
-                selection-end(x, y) => { root.selection-end(x, y); }
-                select-word-at(x, y) => { root.select-word-at(x, y); }
-                copy-visible() => { root.copy-visible(); }
-                paste-clipboard() => { root.paste-clipboard(); }
-                clear-terminal() => { root.clear-terminal(); }
-                find-text(query) => { root.find-text(query); }
-                find-next() => { root.find-next(); }
-                find-prev() => { root.find-prev(); }
-                find-regex-changed(enabled) => { root.find-regex-changed(enabled); }
-                dismiss-find() => { root.dismiss-find(); }
-                context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
             }
         }
     }
