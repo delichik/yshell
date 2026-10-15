@@ -231,16 +231,14 @@ export component LocalPane inherits Rectangle {
             height: Theme.control-height;
             spacing: Theme.spacing-4;
 
-            WinIconButton {
+            // 独立 Local dock 面板时关闭内嵌折叠（由 PanelFrame 负责）。
+            if root.toggle-enabled : WinIconButton {
                 icon: root.collapsed ? "chevron-right" : "chevron-down";
-                enabled: root.toggle-enabled;
-                accessible-name: root.toggle-enabled
-                    ? (root.collapsed ? @tr("Expand local pane") : @tr("Collapse local pane"))
-                    : @tr("Window is too short to expand the local pane");
+                accessible-name: root.collapsed ? @tr("Expand local pane") : @tr("Collapse local pane");
                 clicked => { root.toggle-collapsed(); }
             }
 
-            Text {
+            if root.title-text != "" : Text {
                 text: root.title-text;
                 color: Theme.text-primary;
                 font-size: Theme.font-body;

@@ -17,7 +17,7 @@ import { PanelFrame, PanelSplitHandle } from "panel_frame.slint";
 import { SessionSidebarContent, SessionSidebarHandle, SessionSidebarRail } from "session_sidebar.slint";
 import { SessionTreeRow } from "session_tree.slint";
 import { LocalRow } from "local_pane.slint";
-import { SftpCrumb, SftpPanel, SftpRow, SftpTransferRow } from "sftp_panel.slint";
+import { LocalFilesSection, SftpCrumb, SftpPanel, SftpRow, SftpTransferRow } from "sftp_panel.slint";
 import { TunnelPanel, TunnelRow } from "tunnel_panel.slint";
 import { TransferQueue } from "transfer_queue.slint";
 
@@ -131,6 +131,7 @@ export component ToolDock inherits Rectangle {
     in property <bool> nav-rail-active: false;
     in property <float> layout-drag-scale: 1.0;
     in property <PanelFrameData> sessions-frame;
+    in property <PanelFrameData> local-frame;
     in property <PanelFrameData> sftp-frame;
     in property <PanelFrameData> tunnels-frame;
     in property <PanelFrameData> quick-commands-frame;
@@ -429,6 +430,61 @@ export component ToolDock inherits Rectangle {
         }
     }
 
+    // Local files（独立面板；传输默认目录即此栏当前路径）
+    PanelFrame {
+        x: root.local-frame.x;
+        y: root.local-frame.y;
+        width: root.local-frame.width;
+        height: root.local-frame.height;
+        visible: root.local-frame.visible;
+        min-height: 0px;
+        max-height: 100000px;
+        header-height: 44px;
+        content-padding: 0px;
+        title-text: @tr("MainWindow" => "Local");
+        icon: "folder";
+        collapsed: root.local-frame.collapsed;
+        menu-requested(x, y) => { root.panel-menu-requested("local", x, y); }
+        collapse-toggled() => { root.panel-collapse-requested("local"); }
+        hide-requested() => { root.panel-hide-requested("local"); }
+
+        LocalFilesSection {
+            width: parent.width;
+            height: parent.height;
+            rows: root.local-rows;
+            path-text: root.local-path-text;
+            show-hidden: root.local-show-hidden;
+            sort-column: root.local-sort-column-text;
+            sort-ascending: root.local-sort-ascending;
+            sort-text: root.local-sort-text;
+            item-count: root.local-item-count;
+            dir-count: root.local-dir-count;
+            selected-count: root.local-selected-count;
+            empty-text: root.local-empty-text;
+            error-text: root.local-error-text;
+            retry-visible: root.local-retry-visible;
+            collapsed: false;
+            toggle-enabled: false;
+            title-text: "";
+            selected-name-text: root.local-selected-name-text;
+            selection-key: root.local-selection-key;
+            up() => { root.local-up(); }
+            home() => { root.local-home(); }
+            refresh() => { root.local-refresh(); }
+            open-path(path) => { root.local-open-path(path); }
+            sort-by(column) => { root.local-sort-by(column); }
+            toggle-hidden() => { root.local-toggle-hidden(); }
+            select-row(index, ctrl, shift) => { root.local-select-row(index, ctrl, shift); }
+            activate-row(index) => { root.local-activate-row(index); }
+            context-menu-requested(index, x, y) => { root.local-context-menu-requested(index, x, y); }
+            retry() => { root.local-retry(); }
+            drag-payload(key) => { return root.drag-local-transfer(key); }
+            drop-received(data, action) => { root.drop-on-local(data, action); }
+            toggle-collapsed() => { }
+            focus-requested() => { }
+        }
+    }
+
     // SFTP（内容偏移 44 与 N1 一致：标题条 44 + SftpPanel y=0 + 底部 8px 留白）
     PanelFrame {
         x: root.sftp-frame.x;
@@ -441,7 +497,7 @@ export component ToolDock inherits Rectangle {
         header-height: 44px;
         content-padding: 0px;
         title-text: @tr("MainWindow" => "SFTP");
-        icon: "folder";
+        icon: "upload";
         collapsed: root.sftp-frame.collapsed;
         menu-requested(x, y) => { root.panel-menu-requested("sftp", x, y); }
         collapse-toggled() => { root.panel-collapse-requested("sftp"); }
@@ -450,12 +506,14 @@ export component ToolDock inherits Rectangle {
 
     // SftpPanel 是面板框的兄弟元素（绝对定位），偏移与旧卡片一致：
     // 标题条 44px + 左右 8px + 底部 8px，保证 N1 的行坐标不变。
+    // Local 已拆成独立面板：show-local 固定 false。
     SftpPanel {
         x: root.sftp-frame.x + 8px;
         y: root.sftp-frame.y + 44px;
         width: max(0px, root.sftp-frame.width - 16px);
         height: max(0px, root.sftp-frame.height - 52px);
         visible: root.sftp-frame.visible;
+        show-local: false;
 
         rows: root.sftp-rows;
             crumbs: root.sftp-crumbs;
@@ -473,22 +531,6 @@ export component ToolDock inherits Rectangle {
             remote-edit-active: root.sftp-remote-edit-active;
             remote-edit-text: root.sftp-remote-edit-text;
             path-text <=> root.sftp-path-text;
-            local-rows: root.local-rows;
-            local-path-text: root.local-path-text;
-            local-show-hidden: root.local-show-hidden;
-            local-sort-column: root.local-sort-column-text;
-            local-sort-ascending: root.local-sort-ascending;
-            local-sort-text: root.local-sort-text;
-            local-item-count: root.local-item-count;
-            local-dir-count: root.local-dir-count;
-            local-selected-count: root.local-selected-count;
-            local-empty-text: root.local-empty-text;
-            local-error-text: root.local-error-text;
-            local-retry-visible: root.local-retry-visible;
-            local-collapsed: root.local-collapsed;
-            local-title-text: @tr("MainWindow" => "Local");
-            local-selected-name-text: root.local-selected-name-text;
-            local-selection-key: root.local-selection-key;
             sftp-selection-key: root.sftp-selection-key;
             transfer-rows: root.transfer-rows;
             transfer-expanded: root.transfer-expanded;
@@ -513,22 +555,8 @@ export component ToolDock inherits Rectangle {
             save-edit() => { root.save-sftp-remote-edit(); }
             cancel-edit() => { root.cancel-sftp-remote-edit(); }
             drag-remote-transfer(key) => { return root.drag-remote-transfer(key); }
-            drag-local-transfer(key) => { return root.drag-local-transfer(key); }
             drop-on-remote-row(index, data, action) => { root.drop-on-remote-row(index, data, action); }
             drop-on-remote-blank(data, action) => { root.drop-on-remote-blank(data, action); }
-            drop-on-local(data, action) => { root.drop-on-local(data, action); }
-            local-toggle-collapsed() => { root.local-toggle-collapsed(); }
-            local-up() => { root.local-up(); }
-            local-home() => { root.local-home(); }
-            local-refresh() => { root.local-refresh(); }
-            local-open-path(path) => { root.local-open-path(path); }
-            local-sort-by(column) => { root.local-sort-by(column); }
-            local-toggle-hidden() => { root.local-toggle-hidden(); }
-            local-select-row(index, ctrl, shift) => { root.local-select-row(index, ctrl, shift); }
-            local-activate-row(index) => { root.local-activate-row(index); }
-            local-context-menu-requested(index, x, y) => { root.local-context-menu-requested(index, x, y); }
-            local-redirect-requested() => { }
-            local-retry() => { root.local-retry(); }
             transfer-toggle-expanded() => { root.transfer-toggle-expanded(); }
             transfer-pause(id) => { root.transfer-pause(id); }
             transfer-resume(id) => { root.transfer-resume(id); }
@@ -637,6 +665,7 @@ export component ToolDock inherits Rectangle {
     // --- 面板头部拖拽层（换边/换序）------------------------------------------
     for frame in [
         { p: "sessions", f: root.sessions-frame },
+        { p: "local", f: root.local-frame },
         { p: "sftp", f: root.sftp-frame },
         { p: "tunnels", f: root.tunnels-frame },
         { p: "quick_commands", f: root.quick-commands-frame },

@@ -5688,6 +5688,7 @@ fn set_error_status(window: &MainWindow, user_message: &str, error: &dyn std::fm
 fn panel_id_from_str(id: &str) -> Option<PanelId> {
     match id {
         "sessions" => Some(PanelId::Sessions),
+        "local" => Some(PanelId::Local),
         "sftp" => Some(PanelId::Sftp),
         "tunnels" => Some(PanelId::Tunnels),
         "quick_commands" => Some(PanelId::QuickCommands),
@@ -6339,6 +6340,7 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_commands_visible(projection.commands_visible);
     // --- N3：面板停靠布局（Rust px 几何 → Slint 普通属性，无 width 反推）------
     window.set_sessions_visible(projection.sessions_visible);
+    window.set_local_visible(projection.local_visible);
     window.set_transfers_visible(projection.transfers_visible);
     window.set_layout_left_effective_width(projection.layout.left_effective_width_px as f32);
     window.set_layout_right_effective_width(projection.layout.right_effective_width_px as f32);
@@ -6350,6 +6352,7 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_layout_dock_collapsed(projection.layout.dock_auto_collapsed);
     window.set_layout_drag_scale(projection.layout.layout_drag_scale_permille as f32 / 1000.0);
     window.set_layout_sessions_frame(panel_frame_data(&projection.layout.sessions_frame));
+    window.set_layout_local_frame(panel_frame_data(&projection.layout.local_frame));
     window.set_layout_sftp_frame(panel_frame_data(&projection.layout.sftp_frame));
     window.set_layout_tunnels_frame(panel_frame_data(&projection.layout.tunnels_frame));
     window

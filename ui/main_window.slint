@@ -293,6 +293,7 @@ export component MainWindow inherits Window {
     in-out property <bool> sftp_visible: true;
     in-out property <bool> tunnels_visible: true;
     in-out property <bool> commands_visible: true;
+    in-out property <bool> local_visible: true;
     in-out property <string> app_version_text: "";
 
     // --- W5：连接密码弹窗（仅本次连接使用；不写密钥库/磁盘）------------------
@@ -560,6 +561,7 @@ export component MainWindow inherits Window {
     in-out property <bool> layout_dock_collapsed: false;
     in-out property <float> layout_drag_scale: 1.0;
     in-out property <PanelFrameData> layout_sessions_frame;
+    in-out property <PanelFrameData> layout_local_frame;
     in-out property <PanelFrameData> layout_sftp_frame;
     in-out property <PanelFrameData> layout_tunnels_frame;
     in-out property <PanelFrameData> layout_quick_commands_frame;
@@ -1258,6 +1260,10 @@ export component MainWindow inherits Window {
     ];
     property <[MenuEntry]> view_menu_entries: [
         { label: @tr("Session Manager"), shortcut: root.shortcut-toggle-sidebar, enabled: true, checked: root.sessions_visible, separator: false },
+        {
+            label: @tr("Local Files"), shortcut: "", enabled: true, checked: root.local_visible, separator: false,
+            tooltip: @tr("Browse local folders; download/upload targets use this directory.")
+        },
         { label: @tr("SFTP Panel"), shortcut: "", enabled: true, checked: root.sftp_visible, separator: false },
         {
             label: @tr("Tunnels"), shortcut: "", enabled: true, checked: root.tunnels_visible, separator: false,
@@ -1272,7 +1278,7 @@ export component MainWindow inherits Window {
             tooltip: @tr("Transfer queue with pause/resume/retry; shares the SFTP drawer model.")
         },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
-        // WP4：分屏（索引 6/7/8）。
+        // WP4：分屏（索引 7/8/9）。
         {
             label: @tr("Split Right"), shortcut: "",
             enabled: root.tab_menu_split_enabled, checked: false, separator: false,
@@ -1758,10 +1764,11 @@ export component MainWindow inherits Window {
         } else if (menu == 3) {
             // View：面板可见性/位置统一入口（隐藏过的按默认侧恢复）。
             if (index == 0) { root.toggle_panel("sessions"); }
-            else if (index == 1) { root.toggle_panel("sftp"); }
-            else if (index == 2) { root.toggle_panel("tunnels"); }
-            else if (index == 3) { root.toggle_panel("quick_commands"); }
-            else if (index == 4) {
+            else if (index == 1) { root.toggle_panel("local"); }
+            else if (index == 2) { root.toggle_panel("sftp"); }
+            else if (index == 3) { root.toggle_panel("tunnels"); }
+            else if (index == 4) { root.toggle_panel("quick_commands"); }
+            else if (index == 5) {
                 // 打开 Transfers 摘要时顺带展开 SFTP 传输抽屉，便于暂停/恢复/重试。
                 if (!root.transfers_visible && !root.transfer_drawer_expanded) {
                     root.transfer_toggle_expanded();
@@ -1769,9 +1776,9 @@ export component MainWindow inherits Window {
                 root.toggle_panel("transfers");
             }
             // WP4：Split Right / Split Down / Close Current Pane。
-            else if (index == 6) { root.split_workspace("right"); }
-            else if (index == 7) { root.split_workspace("down"); }
-            else if (index == 8) { root.close_split_pane(-1); }
+            else if (index == 7) { root.split_workspace("right"); }
+            else if (index == 8) { root.split_workspace("down"); }
+            else if (index == 9) { root.close_split_pane(-1); }
         } else if (menu == 4) {
             // Help
             if (index == 0) { root.about_dialog_visible = true; }
@@ -1916,6 +1923,7 @@ export component MainWindow inherits Window {
     /// 某个面板框的当前投影（菜单禁用项 / 收起文案用）。
     function panel_frame_for(id: string) -> PanelFrameData {
         if (id == "sessions") { return root.layout_sessions_frame; }
+        if (id == "local") { return root.layout_local_frame; }
         if (id == "sftp") { return root.layout_sftp_frame; }
         if (id == "tunnels") { return root.layout_tunnels_frame; }
         if (id == "quick_commands") { return root.layout_quick_commands_frame; }
@@ -2100,6 +2108,7 @@ export component MainWindow inherits Window {
                 nav-rail-active: root.layout_rail_active;
                 layout-drag-scale: root.layout_drag_scale;
                 sessions-frame: root.layout_sessions_frame;
+                local-frame: root.layout_local_frame;
                 sftp-frame: root.layout_sftp_frame;
                 tunnels-frame: root.layout_tunnels_frame;
                 quick-commands-frame: root.layout_quick_commands_frame;

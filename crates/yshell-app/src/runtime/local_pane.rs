@@ -62,6 +62,18 @@ impl LocalPaneState {
 }
 
 impl AppRuntime {
+    /// Persist the Local panel directory so the next launch restores it.
+    fn remember_local_directory(&mut self) {
+        let path = self.local_pane.dir.display().to_string();
+        if self.config_document.ui.local_directory.as_deref() == Some(path.as_str()) {
+            return;
+        }
+        self.config_document.ui.local_directory = Some(path);
+        if let Err(error) = self.config_store.save(&self.config_document) {
+            tracing::warn!(error = %error, "failed to persist local directory");
+        }
+    }
+
     /// Re-reads the current local directory. Errors are kept inline (the pane
     /// shows the previous listing plus a retry entry) instead of clearing it.
     pub fn refresh_local_pane(&mut self) -> AppProjection {
@@ -71,6 +83,7 @@ impl AppRuntime {
                 self.local_pane.dir = listing.dir.clone();
                 self.local_pane.error = None;
                 self.prune_local_selection(&listing);
+                self.remember_local_directory();
                 self.set_status_kind(
                     "local-dir-loaded",
                     format!(
@@ -125,7 +138,7 @@ impl AppRuntime {
         self.open_local_path(&parent)
     }
 
-    /// Home directory shortcut in the local pane header.
+    /// Home shortcut in the local pane header (Downloads, then home).
     pub fn open_local_home(&mut self) -> AppProjection {
         let home = local_fs::default_local_dir().display().to_string();
         self.open_local_path(&home)

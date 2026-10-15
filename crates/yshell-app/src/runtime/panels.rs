@@ -438,9 +438,11 @@ impl From<PanelSide> for PanelPlacement {
 pub(crate) const fn default_side(panel: PanelId) -> PanelSide {
     match panel {
         PanelId::Sessions => PanelSide::Left,
-        PanelId::Sftp | PanelId::Tunnels | PanelId::QuickCommands | PanelId::Transfers => {
-            PanelSide::Right
-        }
+        PanelId::Local
+        | PanelId::Sftp
+        | PanelId::Tunnels
+        | PanelId::QuickCommands
+        | PanelId::Transfers => PanelSide::Right,
     }
 }
 
@@ -859,7 +861,7 @@ const fn other_side(side: PanelSide) -> PanelSide {
 /// 1440×900 默认布局下 SFTP 面板与其内部行位置与旧版一致（e2e 像素基线）。
 fn auto_panel_height(panel: PanelId) -> Option<f32> {
     match panel {
-        PanelId::Sftp | PanelId::Sessions => None,
+        PanelId::Sftp | PanelId::Sessions | PanelId::Local => None,
         // WP3: Tunnels/Transfers need room for live rows + actions (was 89/120).
         PanelId::Tunnels => Some(200.0),
         PanelId::QuickCommands => Some(89.0),
@@ -1827,6 +1829,7 @@ mod tests {
     fn every_panel_can_move_to_every_side() {
         let panels = [
             PanelId::Sessions,
+            PanelId::Local,
             PanelId::Sftp,
             PanelId::Tunnels,
             PanelId::QuickCommands,
@@ -1842,6 +1845,7 @@ mod tests {
         }
         assert_eq!(default_side(PanelId::Sessions), PanelSide::Left);
         for panel in [
+            PanelId::Local,
             PanelId::Sftp,
             PanelId::Tunnels,
             PanelId::QuickCommands,
@@ -1947,10 +1951,19 @@ mod tests {
             (0.0, 0.0, 240.0, 794.0)
         );
 
+        let local = *view.frame(PanelId::Local).expect("local");
+        assert_eq!((local.x, local.y, local.width), (1100.0, 12.0, 340.0));
+        // Local + SFTP 均分弹性高度；Tunnels/QuickCommands 固定 200/89。
+        // 12 上留白 + 3×4 把手 + 200/89 → 两弹性面板各约 234.5px。
+        assert!(
+            approx(local.height, 234.5),
+            "local height = {}",
+            local.height
+        );
         let sftp = *view.frame(PanelId::Sftp).expect("sftp");
-        assert_eq!((sftp.x, sftp.y, sftp.width), (1100.0, 12.0, 340.0));
-        // 12 上留白 + 2×4 把手 + 200/89 内容高度 → SFTP 吸收剩余 473px。
-        assert!(approx(sftp.height, 473.0), "sftp height = {}", sftp.height);
+        assert_eq!((sftp.x, sftp.width), (1100.0, 340.0));
+        assert!(approx(sftp.y, 250.5), "sftp y = {}", sftp.y);
+        assert!(approx(sftp.height, 234.5), "sftp height = {}", sftp.height);
         let tunnels = *view.frame(PanelId::Tunnels).expect("tunnels");
         assert!(approx(tunnels.y, 489.0), "tunnels y = {}", tunnels.y);
         assert!(

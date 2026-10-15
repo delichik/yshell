@@ -447,11 +447,17 @@ pub fn home_dir() -> Option<PathBuf> {
         .filter(|path| !path.as_os_str().is_empty())
 }
 
-/// Default directory for a fresh local pane: home, then the process cwd.
+/// Default directory for a fresh local pane: Downloads, then home, then cwd.
 pub fn default_local_dir() -> PathBuf {
-    home_dir()
+    downloads_dir()
+        .or_else(home_dir)
         .or_else(|| std::env::current_dir().ok())
         .unwrap_or_else(|| PathBuf::from("/"))
+}
+
+/// User Downloads folder (`~/Downloads` / `%USERPROFILE%\Downloads`).
+pub fn downloads_dir() -> Option<PathBuf> {
+    home_dir().map(|home| home.join("Downloads"))
 }
 
 fn expand_home(input: &str) -> Result<PathBuf, LocalFsError> {
@@ -866,9 +872,11 @@ mod tests {
     }
 
     #[test]
-    fn default_local_dir_prefers_the_home_directory() {
+    fn default_local_dir_prefers_downloads() {
         let dir = default_local_dir();
-        if let Some(home) = super::home_dir() {
+        if let Some(downloads) = super::downloads_dir() {
+            assert_eq!(dir, downloads);
+        } else if let Some(home) = super::home_dir() {
             assert_eq!(dir, home);
         } else {
             assert!(!dir.as_os_str().is_empty());

@@ -159,6 +159,7 @@ impl AppRuntime {
             .load_or_recover()
             .map_err(AppError::from_error)?;
         let terminal = document.terminal.clone();
+        let remembered_local_directory = document.ui.local_directory.clone();
         let persistent_known_hosts = config_store
             .load_known_hosts()
             .map_err(AppError::from_error)?;
@@ -228,7 +229,16 @@ impl AppRuntime {
             remote_edit_session: None,
             transfer_queue: TransferQueue::default(),
             next_transfer_ordinal: 1,
-            local_pane: LocalPaneState::default(),
+            local_pane: {
+                let mut pane = LocalPaneState::default();
+                if let Some(path) = remembered_local_directory {
+                    let candidate = std::path::PathBuf::from(path);
+                    if candidate.is_dir() {
+                        pane.dir = candidate;
+                    }
+                }
+                pane
+            },
             sftp_selection: BTreeSet::new(),
             sftp_selection_anchor: None,
             transfer_drawer_expanded: false,

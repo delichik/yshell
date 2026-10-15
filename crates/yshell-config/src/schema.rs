@@ -532,6 +532,9 @@ pub struct UiProfile {
     /// UI language: `system` (follow OS), `zh-CN`, or `en-US`.
     #[serde(default = "default_ui_language")]
     pub language: String,
+    /// Last directory shown in the Local files panel (absolute path).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_directory: Option<String>,
 }
 
 impl Default for UiProfile {
@@ -541,6 +544,7 @@ impl Default for UiProfile {
             layout: LayoutProfile::default(),
             multi_window_enabled: true,
             language: default_ui_language(),
+            local_directory: None,
         }
     }
 }
@@ -565,6 +569,8 @@ pub enum NewTabMode {
 #[serde(rename_all = "snake_case")]
 pub enum PanelId {
     Sessions,
+    /// Local filesystem browser (independent of SFTP).
+    Local,
     Sftp,
     Tunnels,
     QuickCommands,
@@ -577,6 +583,7 @@ impl PanelId {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Sessions => "sessions",
+            Self::Local => "local",
             Self::Sftp => "sftp",
             Self::Tunnels => "tunnels",
             Self::QuickCommands => "quick_commands",
@@ -1312,13 +1319,18 @@ fn default_left_panels() -> Vec<PanelSlot> {
 }
 
 fn default_right_panels() -> Vec<PanelSlot> {
-    [PanelId::Sftp, PanelId::Tunnels, PanelId::QuickCommands]
-        .into_iter()
-        .map(|panel| PanelSlot {
-            panel,
-            collapsed: false,
-        })
-        .collect()
+    [
+        PanelId::Local,
+        PanelId::Sftp,
+        PanelId::Tunnels,
+        PanelId::QuickCommands,
+    ]
+    .into_iter()
+    .map(|panel| PanelSlot {
+        panel,
+        collapsed: false,
+    })
+    .collect()
 }
 
 #[cfg(test)]
@@ -1777,6 +1789,7 @@ collapsed = true
     fn panel_id_serializes_as_snake_case() {
         let cases = [
             (PanelId::Sessions, "sessions"),
+            (PanelId::Local, "local"),
             (PanelId::Sftp, "sftp"),
             (PanelId::Tunnels, "tunnels"),
             (PanelId::QuickCommands, "quick_commands"),

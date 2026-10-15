@@ -564,6 +564,7 @@ impl AppRuntime {
             tunnels_visible: self.panel_visible(PanelId::Tunnels),
             commands_visible: self.panel_visible(PanelId::QuickCommands),
             sessions_visible: self.panel_visible(PanelId::Sessions),
+            local_visible: self.panel_visible(PanelId::Local),
             transfers_visible: self.panel_visible(PanelId::Transfers),
             layout: layout_projection(&panel_view),
             app_version_text: env!("CARGO_PKG_VERSION").to_owned(),
@@ -1691,8 +1692,9 @@ pub struct AppProjection {
     pub sftp_visible: bool,
     pub tunnels_visible: bool,
     pub commands_visible: bool,
-    /// N3：Sessions / Transfers 面板可见性（View/Panels 菜单勾选项）。
+    /// N3：Sessions / Local / Transfers 面板可见性（View/Panels 菜单勾选项）。
     pub sessions_visible: bool,
+    pub local_visible: bool,
     pub transfers_visible: bool,
     /// N3：内容区布局投影（面板框 px 几何 + 断点标志）。
     pub layout: LayoutProjection,
@@ -1871,7 +1873,7 @@ pub struct PanelDragIndicator {
     pub height: i32,
 }
 
-/// N3：内容区布局投影（断点标志 + 五个面板框 + 分栏手柄 + 拖拽指示）。
+/// N3：内容区布局投影（断点标志 + 面板框 + 分栏手柄 + 拖拽指示）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LayoutProjection {
     pub left_width_px: i32,
@@ -1884,6 +1886,7 @@ pub struct LayoutProjection {
     pub dock_auto_collapsed: bool,
     pub layout_drag_scale_permille: i32,
     pub sessions_frame: PanelFrameData,
+    pub local_frame: PanelFrameData,
     pub sftp_frame: PanelFrameData,
     pub tunnels_frame: PanelFrameData,
     pub quick_commands_frame: PanelFrameData,
@@ -1913,6 +1916,10 @@ fn layout_projection(view: &PanelLayoutView) -> LayoutProjection {
         layout_drag_scale_permille: round_px(view.drag_scale * 1000.0),
         sessions_frame: view
             .frame(PanelId::Sessions)
+            .map(PanelFrameData::from_view)
+            .unwrap_or_else(PanelFrameData::hidden),
+        local_frame: view
+            .frame(PanelId::Local)
             .map(PanelFrameData::from_view)
             .unwrap_or_else(PanelFrameData::hidden),
         sftp_frame: view

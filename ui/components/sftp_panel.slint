@@ -872,8 +872,9 @@ component SftpTransferDrawer inherits Rectangle {
 
 // ---------------------------------------------------------------- 本地栏
 
-/// 本地栏：LocalPane（只读接线，行内 DragArea）+ 整栏 DropArea。
-component SftpLocalSection inherits Rectangle {
+/// 本地文件栏：LocalPane（只读接线，行内 DragArea）+ 整栏 DropArea。
+/// 可供独立 Local panel 与（可选）SFTP 内嵌栏复用。
+export component LocalFilesSection inherits Rectangle {
     in property <[LocalRow]> rows;
     in property <string> path-text: "/";
     in property <bool> show-hidden: false;
@@ -1024,6 +1025,8 @@ export component SftpPanel inherits Rectangle {
     in property <bool> local-collapsed: false;
     in property <string> local-title-text: "";
     in property <string> local-selected-name-text: "";
+    /// 本地栏已独立为 Local panel：默认不在 SFTP 内嵌（避免与停靠面板重复）。
+    in property <bool> show-local: false;
     /// 本地/远端选择路径串（data 绑定依赖；载荷由宿主生成）。
     in property <string> local-selection-key: "";
     in property <string> sftp-selection-key: "";
@@ -1087,7 +1090,7 @@ export component SftpPanel inherits Rectangle {
     clip: true;
 
     /// 宽面板（并排）阈值：两栏各 ≥ 280px。
-    private property <bool> side-by-side: root.width >= 600px;
+    private property <bool> side-by-side: root.show-local && root.width >= 600px;
     private property <length> local-column-width: max(240px, root.width * 0.42);
     /// 传输抽屉占位高度（与 SftpTransferDrawer 内部公式一致；空队列固定 96px）。
     private property <length> drawer-reserve-height: root.transfer-expanded
@@ -1125,8 +1128,10 @@ export component SftpPanel inherits Rectangle {
     private property <int> stacked-remote-rows: clamp(
         round(floor((root.stacked-space - root.drawer-reserve-height - root.local-preferred-block - 124px) / Theme.row-height-list)),
         0, 24);
-    /// 叠放时远端栏高度。
-    private property <length> stacked-remote-height: 124px + Theme.row-height-list * root.stacked-remote-rows;
+    /// 叠放时远端栏高度（无内嵌本地栏时吃满剩余空间）。
+    private property <length> stacked-remote-height: !root.show-local
+        ? max(0px, root.content-space - root.drawer-reserve-height)
+        : 124px + Theme.row-height-list * root.stacked-remote-rows;
     /// 本地栏高度 = 剩余高度（紧凑态下限 48px；放不下时归零，见 stacked-remote-fits）。
     private property <length> local-section-height: !root.stacked-remote-fits ? 0px
         : max(root.local-min-block,
@@ -1219,7 +1224,7 @@ export component SftpPanel inherits Rectangle {
                     drop-on-blank(data, action) => { root.drop-on-remote-blank(data, action); }
                 }
 
-                SftpLocalSection {
+                if root.show-local : LocalFilesSection {
                     width: root.local-column-width;
                     height: root.column-height;
                     rows: root.local-rows;
@@ -1313,7 +1318,7 @@ export component SftpPanel inherits Rectangle {
                 clear-completed => { root.transfer-clear-completed(); }
             }
 
-            if !root.side-by-side : SftpLocalSection {
+            if root.show-local && !root.side-by-side : LocalFilesSection {
                 height: root.local-section-height;
                 rows: root.local-rows;
                 path-text: root.local-path-text;
