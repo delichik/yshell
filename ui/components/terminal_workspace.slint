@@ -46,22 +46,29 @@ export component TerminalWorkspace inherits VerticalLayout {
     in-out property <bool> search-regex: false;
 
     // 分屏视口：从 split_host 独立算 pane0/pane1（勿对已缩过的 primary 再 ×ratio）。
-    // split_host VerticalLayout padding 8+8；把手 4px；叶内无 tab 条；TerminalView 内边距 12+12。
+    // chrome（两叶共用同一套，避免聚焦切换改变几何）：
+    //   host padding 8+8=16；把手 4；叶描边 2+2=4；TerminalView 表面内边距 12+12=24。
     property <float> split-clamped-ratio: Math.max(0.2, Math.min(0.8, root.split-ratio));
-    property <float> split-inner-width-px: Math.max(split_host.width / 1px - 16.0, 1.0);
-    property <float> split-inner-height-px: Math.max(split_host.height / 1px - 16.0, 1.0);
+    property <float> split-host-pad-px: 2.0 * Theme.spacing-8 / 1px;
+    property <float> split-splitter-px: 4.0;
+    property <float> split-leaf-border-px: 4.0;
+    property <float> split-tv-pad-px: 2.0 * Theme.spacing-12 / 1px;
+    property <float> split-pane-chrome-px: root.split-leaf-border-px + root.split-tv-pad-px;
+    property <float> split-inner-width-px: Math.max(split_host.width / 1px - root.split-host-pad-px, 1.0);
+    property <float> split-inner-height-px: Math.max(split_host.height / 1px - root.split-host-pad-px, 1.0);
+    // 左右分屏：两叶同高；上下分屏：两叶同宽。比例只切分主轴。
     property <float> split-pane0-viewport-width-px: root.split-orientation-text == "vertical"
-        ? Math.max(root.split-inner-width-px - 24.0, 1.0)
-        : Math.max((root.split-inner-width-px - 4.0) * root.split-clamped-ratio - 24.0, 1.0);
+        ? Math.max(root.split-inner-width-px - root.split-pane-chrome-px, 1.0)
+        : Math.max((root.split-inner-width-px - root.split-splitter-px) * root.split-clamped-ratio - root.split-pane-chrome-px, 1.0);
     property <float> split-pane1-viewport-width-px: root.split-orientation-text == "vertical"
-        ? Math.max(root.split-inner-width-px - 24.0, 1.0)
-        : Math.max((root.split-inner-width-px - 4.0) * (1.0 - root.split-clamped-ratio) - 24.0, 1.0);
+        ? Math.max(root.split-inner-width-px - root.split-pane-chrome-px, 1.0)
+        : Math.max((root.split-inner-width-px - root.split-splitter-px) * (1.0 - root.split-clamped-ratio) - root.split-pane-chrome-px, 1.0);
     property <float> split-pane0-viewport-height-px: root.split-orientation-text == "vertical"
-        ? Math.max((root.split-inner-height-px - 4.0) * root.split-clamped-ratio - 24.0, 1.0)
-        : Math.max(root.split-inner-height-px - 24.0, 1.0);
+        ? Math.max((root.split-inner-height-px - root.split-splitter-px) * root.split-clamped-ratio - root.split-pane-chrome-px, 1.0)
+        : Math.max(root.split-inner-height-px - root.split-pane-chrome-px, 1.0);
     property <float> split-pane1-viewport-height-px: root.split-orientation-text == "vertical"
-        ? Math.max((root.split-inner-height-px - 4.0) * (1.0 - root.split-clamped-ratio) - 24.0, 1.0)
-        : Math.max(root.split-inner-height-px - 24.0, 1.0);
+        ? Math.max((root.split-inner-height-px - root.split-splitter-px) * (1.0 - root.split-clamped-ratio) - root.split-pane-chrome-px, 1.0)
+        : Math.max(root.split-inner-height-px - root.split-pane-chrome-px, 1.0);
 
     /// 单终端：取 TerminalView；分屏：聚焦 pane 的独立视口。
     out property <float> terminal-viewport-width-px: root.split-active
@@ -210,12 +217,15 @@ export component TerminalWorkspace inherits VerticalLayout {
         : (root.split-pane1-quick-connect ? 1 : -1);
     property <float> split-qc-ratio: Math.max(0.2, Math.min(0.8, root.split-ratio));
     property <bool> split-qc-shown: root.split-active && root.split-qc-pane >= 0;
+    property <length> split-splitter: 4px;
+    property <length> split-leaf-border: 2px;
     property <length> split-inner-w: split_host.width - 2 * Theme.spacing-8;
     property <length> split-inner-h: split_host.height - 2 * Theme.spacing-8;
-    property <length> split-pane0-w: (root.split-inner-w - 4px) * root.split-qc-ratio;
-    property <length> split-pane1-w: (root.split-inner-w - 4px) * (1.0 - root.split-qc-ratio);
-    property <length> split-pane0-h: (root.split-inner-h - 4px) * root.split-qc-ratio;
-    property <length> split-pane1-h: (root.split-inner-h - 4px) * (1.0 - root.split-qc-ratio);
+    // 与 WorkspaceSplitView stretch 主轴分配一致（扣把手后再按 ratio）。
+    property <length> split-pane0-w: (root.split-inner-w - root.split-splitter) * root.split-qc-ratio;
+    property <length> split-pane1-w: (root.split-inner-w - root.split-splitter) * (1.0 - root.split-qc-ratio);
+    property <length> split-pane0-h: (root.split-inner-h - root.split-splitter) * root.split-qc-ratio;
+    property <length> split-pane1-h: (root.split-inner-h - root.split-splitter) * (1.0 - root.split-qc-ratio);
     /// 次 pane 视口（非聚焦叶，与 primary 对称独立计算，供 PTY resize）。
     out property <float> terminal-viewport-secondary-width-px: root.split-active
         ? (root.split-focused-pane == 0
@@ -466,24 +476,26 @@ export component TerminalWorkspace inherits VerticalLayout {
             }
         }
 
-        // QC 与终端叶子平等占位：始终实例化（避免条件 id），非 QC 时几何归零。
+        // QC 叠在对应叶子内容盒内（host pad + 叶描边内侧），与终端区同几何。
         split_qc_page := QuickConnectPage {
-            x: Theme.spacing-8 + (
+            x: Theme.spacing-8 + root.split-leaf-border + (
                 !root.split-qc-shown ? 0px
                 : root.split-orientation-text == "vertical" ? 0px
-                : (root.split-qc-pane == 0 ? 0px : root.split-pane0-w + 4px)
+                : (root.split-qc-pane == 0 ? 0px : root.split-pane0-w + root.split-splitter)
             );
-            y: Theme.spacing-8 + (
+            y: Theme.spacing-8 + root.split-leaf-border + (
                 !root.split-qc-shown ? 0px
                 : root.split-orientation-text != "vertical" ? 0px
-                : (root.split-qc-pane == 0 ? 0px : root.split-pane0-h + 4px)
+                : (root.split-qc-pane == 0 ? 0px : root.split-pane0-h + root.split-splitter)
             );
             width: !root.split-qc-shown ? 0px
-                : root.split-orientation-text == "vertical" ? root.split-inner-w
-                : (root.split-qc-pane == 0 ? root.split-pane0-w : root.split-pane1-w);
+                : (root.split-orientation-text == "vertical" ? root.split-inner-w
+                    : (root.split-qc-pane == 0 ? root.split-pane0-w : root.split-pane1-w))
+                    - 2 * root.split-leaf-border;
             height: !root.split-qc-shown ? 0px
-                : root.split-orientation-text != "vertical" ? root.split-inner-h
-                : (root.split-qc-pane == 0 ? root.split-pane0-h : root.split-pane1-h);
+                : (root.split-orientation-text != "vertical" ? root.split-inner-h
+                    : (root.split-qc-pane == 0 ? root.split-pane0-h : root.split-pane1-h))
+                    - 2 * root.split-leaf-border;
             clip: true;
             input-text: root.quick-connect-input-text;
             input-error-text: root.quick-connect-error-text;
