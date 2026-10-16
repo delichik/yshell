@@ -142,10 +142,10 @@ component QuickConnectRowItem inherits Rectangle {
             width: min(160px, self.preferred-width);
         }
 
-        WinButton {
-            text: @tr("Connect");
+        // 与 pin/copy 同为图标按钮，避免「Connect」文字按钮把行动作区撑得过长。
+        WinIconButton {
             icon: "connect";
-            subtle: true;
+            accessible-name: @tr("Connect");
             clicked => { root.connect(); }
         }
 
@@ -226,10 +226,9 @@ component QuickLinkRowItem inherits Rectangle {
             }
         }
 
-        WinButton {
-            text: @tr("Connect");
+        WinIconButton {
             icon: "connect";
-            subtle: true;
+            accessible-name: @tr("Connect");
             clicked => { root.connect(); }
         }
 
@@ -348,9 +347,9 @@ export component QuickConnectPage inherits Rectangle {
                         edited(text) => { root.input-changed(text); }
                     }
 
+                    // 主操作只保留文案：图标+「连接」在输入行会显得过宽。
                     WinButton {
                         text: @tr("Connect");
-                        icon: "connect";
                         accent: true;
                         // 空输入没有可解析的目标（与 W5-A3 的状态门限一致）。
                         enabled: root.input-text != "";

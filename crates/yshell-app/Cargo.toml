@@ -39,10 +39,15 @@ sys-locale = "0.3"
 #   桌面 Linux 若以后要原生 Wayland，再改为 backend-winit（X11+Wayland）或加独立 feature。
 # - Windows / macOS：backend-winit（Win32 / AppKit）。x11 feature 名在这两端易误导，且不应依赖。
 [target.'cfg(target_os = "linux")'.dependencies]
-slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "backend-winit-x11", "renderer-software"] }
+slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "backend-winit-x11", "renderer-software", "unstable-winit-030"] }
 
 [target.'cfg(not(target_os = "linux"))'.dependencies]
-slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-software"] }
+slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-software", "unstable-winit-030"] }
+
+# Win11 自绘窗口圆角（DwmSetWindowAttribute）；仅 Windows 链接。
+[target.'cfg(windows)'.dependencies]
+raw-window-handle = "0.6"
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Dwm"] }
 
 [build-dependencies]
 slint-build = "=1.18.1"

@@ -86,7 +86,8 @@ component CaptionButton inherits Rectangle {
     accessible-label: root.access-label;
     accessible-action-default => { root.clicked(); }
 
-    // 最小化 / 关闭用现有图标；最大化·还原用几何方框（无对应 PNG）。
+    // 最小化 / 关闭用图标；最大化·还原用几何方框。
+    // close 的 SVG 描边比 minus 更内缩，同为 10px 时 X 会显得更小，故关闭用 12px。
     if root.kind == "minimize" : Icon {
         name: "minus";
         icon-color: root.glyph-color;
@@ -134,7 +135,7 @@ component CaptionButton inherits Rectangle {
     if root.kind == "close" : Icon {
         name: "close";
         icon-color: root.glyph-color;
-        icon-size: 10px;
+        icon-size: 12px;
         x: (parent.width - self.width) / 2;
         y: (parent.height - self.height) / 2;
     }
@@ -166,6 +167,7 @@ export component MenuBar inherits Rectangle {
     callback close-requested();
 
     height: Theme.bar-height-menubar;
+    vertical-stretch: 0;
     background: Theme.window-background;
 
     // 底部分隔线：无系统标题栏时与内容区划界。
@@ -197,11 +199,13 @@ export component MenuBar inherits Rectangle {
                 padding-bottom: 4px;
                 spacing: 2px;
                 alignment: stretch;
+                // 应用图标与 MenuTitle（24px）垂直居中，避免图标相对菜单文字偏上/偏下。
+                cross-axis-alignment: center;
 
                 // 最左应用图标（落在拖动区内，可拖窗；无独立点击）。
                 Rectangle {
-                    width: Theme.control-height;
-                    height: 100%;
+                    width: Theme.control-height-compact;
+                    height: Theme.control-height-compact;
                     horizontal-stretch: 0;
                     background: transparent;
 

@@ -41,7 +41,11 @@ export component StatusBar inherits Rectangle {
     callback logging-clicked();
     callback sync-stop-clicked();
 
+    // 固定高度 + 不参与纵向拉伸：Slint 1.18 起 stretch 默认为 1，否则会被
+    // 主内容区挤扁，表现为状态栏「消失一截」。
     height: Theme.bar-height-status;
+    vertical-stretch: 0;
+    clip: true;
     background: Theme.layer-fill;
 
     property <color> connection-dot-color:
@@ -54,6 +58,7 @@ export component StatusBar inherits Rectangle {
         padding-left: 12px;
         padding-right: 12px;
         spacing: 8px;
+        cross-axis-alignment: center;
 
         // WP1：连接状态点（连接中 1.5s 呼吸；设计 §6.3）。
         if root.connection-target != "" : Rectangle {
@@ -95,6 +100,7 @@ export component StatusBar inherits Rectangle {
             horizontal-stretch: 0;
         }
 
+        // 消息吃掉中间剩余宽度并 elide，避免长文案把右侧尺寸/日志区顶出可视范围。
         Text {
             text: root.message;
             color: Theme.text-secondary;
@@ -102,12 +108,9 @@ export component StatusBar inherits Rectangle {
             vertical-alignment: center;
             wrap: no-wrap;
             overflow: elide;
-            horizontal-stretch: 0;
+            horizontal-stretch: 1;
+            min-width: 0px;
         }
-
-        // A10：弹性空白显式吃掉剩余宽度（Slint 1.18 起 *-stretch 默认是 1，
-        // 不声明的话消息文本会和它平分空间）；日志入口在最后，因此钉在右缘。
-        Rectangle { horizontal-stretch: 1; }
 
         // 终端尺寸 + 光标（有活动视口时显示；光标按 1-based 给用户看）。
         if root.terminal-cols > 0 && root.terminal-rows > 0 : Text {

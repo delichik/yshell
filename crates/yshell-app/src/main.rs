@@ -9,6 +9,7 @@ mod runtime;
 mod session_runtime;
 mod sftp_jobs;
 mod sftp_view;
+mod win_chrome;
 mod windows;
 
 use std::env;

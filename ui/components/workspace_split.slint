@@ -2,58 +2,12 @@
 // P1：聚焦叶子复用 TerminalView（选择/滚动/滚动条/查找/overlay/右键）；
 //     非聚焦叶子用与 TerminalView 相同的 pixelated 物理像素位图（非 letterbox 预览）。
 // 次 pane PTY 尺寸由宿主从 split_host 独立计算（勿对 primary 再 ×ratio）。
+// 叶内标签条与全局共用 WorkspaceTabItem（视觉/命中一致）。
 import { Theme } from "../theme.slint";
 import { WinIconButton } from "basic/controls.slint";
 import { TerminalView } from "terminal_view.slint";
 import { WorkspaceTab } from "workspace_tab_model.slint";
-
-/// Compact tab chip for per-pane strips (smaller than the global WorkspaceTabItem).
-component PaneTabChip inherits Rectangle {
-    in property <string> tab-id: "";
-    in property <string> tab-title: "";
-    in property <bool> tab-active: false;
-    in property <string> tab-kind-text: "";
-
-    callback activate();
-    callback close-requested();
-
-    height: Theme.bar-height-tabs - 4px;
-    horizontal-stretch: 0;
-    border-radius: Theme.radius-control;
-    background: root.tab-active ? Theme.control-fill : chip_hover.has-hover ? Theme.subtle-hover : transparent;
-
-    HorizontalLayout {
-        padding-left: Theme.spacing-8;
-        padding-right: Theme.spacing-4;
-        spacing: Theme.spacing-4;
-        alignment: center;
-
-        // 标题区可点激活；关闭按钮单独命中，避免被整卡 TouchArea 吞掉。
-        chip_hover := TouchArea {
-            mouse-cursor: MouseCursor.default;
-            clicked => { root.activate(); }
-
-            Text {
-                text: root.tab-kind-text == "quick-connect" && root.tab-title == ""
-                    ? @tr("Quick Connect")
-                    : root.tab-title;
-                color: root.tab-active ? Theme.text-primary : Theme.text-secondary;
-                font-size: Theme.font-caption;
-                font-weight: root.tab-active ? Theme.weight-semibold : 400;
-                vertical-alignment: center;
-                overflow: elide;
-                wrap: no-wrap;
-                max-width: 140px;
-            }
-        }
-
-        WinIconButton {
-            icon: "close";
-            accessible-name: @tr("Close tab");
-            clicked => { root.close-requested(); }
-        }
-    }
-}
+import { WorkspaceTabItem } from "workspace_tab_item.slint";
 
 component SplitPaneLeaf inherits Rectangle {
     in property <string> title-text: "";
@@ -91,6 +45,9 @@ component SplitPaneLeaf inherits Rectangle {
     callback close-requested();
     callback activate-tab(string);
     callback close-tab(string);
+    /// 参数：tab id, 当前显示名, x, y。
+    callback tab-context-menu-requested(string, string, length, length);
+    callback rename-tab-requested(string, string);
     callback new-session();
     callback key-pressed(string, bool, bool, bool, bool);
     callback scroll-lines(int);
@@ -128,15 +85,15 @@ component SplitPaneLeaf inherits Rectangle {
     VerticalLayout {
         spacing: 0;
 
-        // 叶内标签条（契约 §6.3）：tabs + +；关标签走 tab ×，关 pane 走菜单。
+        // 叶内标签条：与全局同一 WorkspaceTabItem（含图标/状态/角标/关闭命中）。
         Rectangle {
             height: Theme.bar-height-tabs;
             background: root.focused ? Theme.layer-fill : Theme.window-background;
             clip: true;
 
             HorizontalLayout {
-                padding-left: Theme.spacing-4;
-                padding-right: Theme.spacing-4;
+                padding-left: Theme.spacing-12;
+                padding-right: Theme.spacing-12;
                 spacing: Theme.spacing-4;
                 alignment: center;
 
@@ -157,23 +114,46 @@ component SplitPaneLeaf inherits Rectangle {
                                 ? @tr("Empty pane")
                                 : (root.title-text == "" ? @tr("Terminal") : root.title-text);
                             color: root.focused ? Theme.text-primary : Theme.text-secondary;
-                            font-size: Theme.font-caption;
+                            font-size: Theme.font-body;
                             font-weight: root.focused ? Theme.weight-semibold : 400;
                             vertical-alignment: center;
                             overflow: elide;
                             wrap: no-wrap;
                         }
 
-                        for tab[i] in root.pane-tabs : PaneTabChip {
+                        for tab[i] in root.pane-tabs : WorkspaceTabItem {
                             tab-id: tab.id;
                             tab-title: tab.title;
+                            tab-state-text: tab.state_text;
                             tab-active: tab.active;
                             tab-kind-text: tab.kind_text;
+                            tab-logging: tab.logging;
+                            tab-sync-role-text: tab.sync_role_text;
+                            tab-unread: tab.unread;
+                            show-divider: i > 0 && !tab.active && !root.pane-tabs[i - 1].active;
                             activate() => {
                                 root.focus-requested();
                                 root.activate-tab(tab.id);
                             }
                             close-requested() => { root.close-tab(tab.id); }
+                            rename-requested() => {
+                                root.rename-tab-requested(
+                                    tab.id,
+                                    tab.kind_text == "quick-connect" && tab.title == ""
+                                        ? @tr("Quick Connect")
+                                        : tab.title
+                                );
+                            }
+                            context-menu-requested(x, y) => {
+                                root.tab-context-menu-requested(
+                                    tab.id,
+                                    tab.kind_text == "quick-connect" && tab.title == ""
+                                        ? @tr("Quick Connect")
+                                        : tab.title,
+                                    x,
+                                    y
+                                );
+                            }
                         }
                     }
                 }
@@ -216,24 +196,15 @@ component SplitPaneLeaf inherits Rectangle {
                 y: Theme.spacing-12;
             }
 
-            // 全叶可点聚焦（含位图两侧黑边），避免只能点到细条位图。
-            if !root.empty && !root.focused : TouchArea {
-                width: parent.width;
-                height: parent.height;
-                enabled: root.view-visible;
-                mouse-cursor: MouseCursor.default;
-                clicked => { root.focus-requested(); }
-            }
-
             // P1：聚焦叶子 —— 完整 TerminalView（含查找 / overlay / 滚动条 / 选择）。
             // 始终实例化、用 max-height 折叠，保证 leaf_tv id 可从 focus-terminal 访问。
-            // 禁止 width/height: parent.* —— VerticalLayout + min-height 会与父 layout_info
-            // 形成绑定环；改由 100% + 零 preferred 填满。
+            // 折叠时宽高归零：否则 height:100% 的叶子会盖住聚焦 TouchArea，
+            // 导致点击终端区无法切换输入目标。
             leaf_host := VerticalLayout {
                 padding: 0;
                 spacing: 0;
-                width: 100%;
-                height: 100%;
+                width: root.show-terminal ? 100% : 0%;
+                height: root.show-terminal ? 100% : 0%;
                 min-height: 0px;
                 max-height: root.show-terminal ? 100000px : 0px;
 
@@ -287,6 +258,15 @@ component SplitPaneLeaf inherits Rectangle {
                     context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
                 }
             }
+
+            // 全叶可点聚焦：声明在 leaf_host 之后，非聚焦时盖在位图上。
+            if !root.empty && !root.focused : TouchArea {
+                width: parent.width;
+                height: parent.height;
+                enabled: root.view-visible;
+                mouse-cursor: MouseCursor.default;
+                clicked => { root.focus-requested(); }
+            }
         }
     }
 }
@@ -329,6 +309,8 @@ export component WorkspaceSplitView inherits Rectangle {
     callback close-pane(int);
     callback activate-tab(string);
     callback close-tab(string);
+    callback tab-context-menu-requested(string, string, length, length);
+    callback rename-tab-requested(string, string);
     callback new-session();
     callback terminal-key(string, bool, bool, bool, bool);
     callback terminal-scroll(int);
@@ -401,6 +383,8 @@ export component WorkspaceSplitView inherits Rectangle {
             close-requested() => { root.close-pane(0); }
             activate-tab(id) => { root.activate-tab(id); }
             close-tab(id) => { root.close-tab(id); }
+            tab-context-menu-requested(id, title, x, y) => { root.tab-context-menu-requested(id, title, x, y); }
+            rename-tab-requested(id, title) => { root.rename-tab-requested(id, title); }
             new-session() => { root.new-session(); }
             key-pressed(t, c, a, s, m) => { root.terminal-key(t, c, a, s, m); }
             scroll-lines(d) => { root.terminal-scroll(d); }
@@ -465,6 +449,8 @@ export component WorkspaceSplitView inherits Rectangle {
             close-requested() => { root.close-pane(1); }
             activate-tab(id) => { root.activate-tab(id); }
             close-tab(id) => { root.close-tab(id); }
+            tab-context-menu-requested(id, title, x, y) => { root.tab-context-menu-requested(id, title, x, y); }
+            rename-tab-requested(id, title) => { root.rename-tab-requested(id, title); }
             new-session() => { root.new-session(); }
             key-pressed(t, c, a, s, m) => { root.terminal-key(t, c, a, s, m); }
             scroll-lines(d) => { root.terminal-scroll(d); }
@@ -520,6 +506,8 @@ export component WorkspaceSplitView inherits Rectangle {
             close-requested() => { root.close-pane(0); }
             activate-tab(id) => { root.activate-tab(id); }
             close-tab(id) => { root.close-tab(id); }
+            tab-context-menu-requested(id, title, x, y) => { root.tab-context-menu-requested(id, title, x, y); }
+            rename-tab-requested(id, title) => { root.rename-tab-requested(id, title); }
             new-session() => { root.new-session(); }
             key-pressed(t, c, a, s, m) => { root.terminal-key(t, c, a, s, m); }
             scroll-lines(d) => { root.terminal-scroll(d); }
@@ -584,6 +572,8 @@ export component WorkspaceSplitView inherits Rectangle {
             close-requested() => { root.close-pane(1); }
             activate-tab(id) => { root.activate-tab(id); }
             close-tab(id) => { root.close-tab(id); }
+            tab-context-menu-requested(id, title, x, y) => { root.tab-context-menu-requested(id, title, x, y); }
+            rename-tab-requested(id, title) => { root.rename-tab-requested(id, title); }
             new-session() => { root.new-session(); }
             key-pressed(t, c, a, s, m) => { root.terminal-key(t, c, a, s, m); }
             scroll-lines(d) => { root.terminal-scroll(d); }

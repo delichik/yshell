@@ -4604,6 +4604,7 @@ dependencies = [
  "const-field-offset",
  "i-slint-backend-linuxkms",
  "i-slint-backend-selector",
+ "i-slint-backend-winit",
  "i-slint-common",
  "i-slint-core",
  "i-slint-core-macros",
@@ -6813,6 +6814,7 @@ name = "yshell-app"
 version = "0.1.0"
 dependencies = [
  "copypasta",
+ "raw-window-handle",
  "rfd",
  "slint",
  "slint-build",
@@ -6820,6 +6822,7 @@ dependencies = [
  "sys-locale",
  "tempfile",
  "tracing",
+ "windows-sys 0.59.0",
  "yshell-config",
  "yshell-core",
  "yshell-logging",

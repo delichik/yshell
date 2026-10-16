@@ -192,6 +192,8 @@ export global Theme {
     out property <length> spacing-24: 24px;
     out property <length> radius-control: 4px;
     out property <length> radius-panel: 8px;
+    /// 自绘无框窗口圆角（Win11 DWM `DWMWCP_ROUND`；最大化时系统会拉直角）。
+    out property <length> radius-window: 8px;
 
     // -------------------------------------------------------------------- 动效
     // 时长在"减少动画"下统一为 0，动画声明处直接绑定这些 token

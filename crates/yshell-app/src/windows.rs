@@ -211,6 +211,17 @@ impl WindowManager {
         window.show().map_err(AppError::from_error)?;
         surface.sync_scale_factor(&window);
         surface.refresh(&window);
+        // Win11：无框窗口默认直角；DWM 圆角需显式 opt-in。HWND 可能要等事件循环
+        // 首帧才就绪，因此 show 后立即试一次，并再排队到事件循环补一次。
+        crate::win_chrome::apply_rounded_corners(window.window());
+        {
+            let weak = window.as_weak();
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(window) = weak.upgrade() {
+                    crate::win_chrome::apply_rounded_corners(window.window());
+                }
+            });
+        }
 
         // X（窗口关闭按钮）：窗口级语义（带活动连接 → 确认后断开；最后一个窗口 = 退出）。
         //

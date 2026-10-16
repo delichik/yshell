@@ -1,0 +1,208 @@
+// 工作区标签项：全局标签条与分屏叶子标签条共用同一视觉与命中规则。
+import { Theme } from "../theme.slint";
+import { Icon } from "basic/icons.slint";
+
+/// 单个标签：复刻 `WinTab` 的视觉（32px 行高、活动标签底部强调条、右内边距 4 的
+/// 18×18 关闭按钮 + 32×32 命中区），额外支持右键菜单。左键点击激活；标签整体
+/// 位于外层 Flickable 内，按住拖动由 Flickable 处理（N0 设计 §5）。
+export component WorkspaceTabItem inherits Rectangle {
+    in property <string> tab-id: "";
+    in property <string> tab-title: "";
+    in property <string> tab-state-text: "";
+    in property <bool> tab-active: false;
+    /// N2：标签种类（`quick-connect` = 快速连接页；空 = 终端）。
+    in property <string> tab-kind-text: "";
+    /// N6：该会话正在写日志（REC 圆点）。
+    in property <bool> tab-logging: false;
+    /// N9：同步发送按键角色（空 / `source` / `target`）。
+    in property <string> tab-sync-role-text: "";
+    /// WP4：未读输出计数。
+    in property <int> tab-unread: 0;
+    /// E11：在标签左缘之后画 1px 分隔线（位于 4px 标签间距中央）。
+    in property <bool> show-divider: false;
+
+    callback activate();
+    callback close-requested();
+    callback context-menu-requested(length, length);
+    /// WP4：双击重命名。
+    callback rename-requested();
+
+    /// N9：角标悬停提示（源/接收的完整说明；@markdown 插值用）。
+    property <string> tab-sync-tooltip: root.tab-sync-role-text == "source"
+        ? @tr("Key input source")
+        : @tr("Receiving key input");
+
+    height: Theme.bar-height-tabs;
+    horizontal-stretch: 0;
+    border-radius: Theme.radius-control;
+    background: tab-active ? Theme.layer-fill : tab-hover.has-hover ? Theme.subtle-hover : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    // E19：标签语义（与 WinTab 一致）
+    accessible-role: tab;
+    accessible-label: root.tab-kind-text == "quick-connect" ? @tr("Quick Connect") : root.tab-title;
+    accessible-item-selectable: true;
+    accessible-item-selected: root.tab-active;
+
+    // E11：标签之间的 1px 分隔线（上下各留 7px；画在间距中央，需要越过自身左缘 2px）
+    Rectangle {
+        visible: root.show-divider;
+        x: -2px;
+        y: (parent.height - 18px) / 2;
+        width: 1px;
+        height: 18px;
+        background: Theme.divider;
+    }
+
+    // 活动标签底部强调条
+    Rectangle {
+        visible: root.tab-active;
+        x: 0;
+        y: parent.height - 2px;
+        width: parent.width;
+        height: 2px;
+        border-radius: 1px;
+        background: Theme.accent;
+    }
+
+    HorizontalLayout {
+        // 与 WinTab 相同：文本左 10；有关闭按钮时右 4，关闭按钮 18×18、间距 8
+        padding-left: 10px;
+        padding-right: 4px;
+        spacing: Theme.spacing-8;
+        alignment: center;
+
+        Rectangle {
+            width: Theme.icon-size-small;
+            vertical-stretch: 1;
+            background: transparent;
+
+            Icon {
+                // N2：快速连接页用 link 图标，终端标签保持 terminal。
+                name: root.tab-kind-text == "quick-connect" ? "link" : "terminal";
+                icon-color: root.tab-active ? Theme.text-primary : Theme.text-secondary;
+                icon-size: Theme.icon-size-small;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        Text {
+            // N2：快速连接页默认走 @tr；WP4：自定义 title 非空时优先显示。
+            text: root.tab-kind-text == "quick-connect" && root.tab-title == ""
+                ? @tr("Quick Connect")
+                : root.tab-title;
+            color: root.tab-active ? Theme.text-primary : Theme.text-secondary;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        // E11：状态独立成段（8px spacing + text-tertiary），不再用两个字面空格拼接
+        //（B 轮4：实测两个字面空格会留出约 19px 空洞）。
+        if root.tab-kind-text != "quick-connect" && root.tab-state-text != "" : Text {
+            text: root.tab-state-text;
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        // N9：同步发送按键角标（源 = accent 实底；目标 = accent-soft 底 + accent 描边）。
+        if root.tab-sync-role-text != "" : Rectangle {
+            height: 16px;
+            width: sync-badge-text.preferred-width + 10px;
+            border-radius: 8px;
+            background: root.tab-sync-role-text == "source" ? Theme.accent : Theme.accent-soft;
+            border-width: root.tab-sync-role-text == "source" ? 0px : 1px;
+            border-color: Theme.accent;
+
+            sync-badge-text := Text {
+                text: root.tab-sync-role-text == "source" ? @tr("SRC") : @tr("RCV");
+                color: root.tab-sync-role-text == "source" ? Theme.accent-text : Theme.text-primary;
+                font-size: Theme.font-caption;
+                font-weight: Theme.weight-semibold;
+                vertical-alignment: center;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                wrap: no-wrap;
+            }
+
+            Tooltip {
+                text: @markdown("\{root.tab-sync-tooltip}");
+            }
+        }
+
+        // WP4：未读角标（后台输出；活动标签清零）。
+        if root.tab-unread > 0 && !root.tab-active : Rectangle {
+            height: 16px;
+            width: Math.max(unread-badge-text.preferred-width + 8px, 16px);
+            border-radius: 8px;
+            background: Theme.accent;
+
+            unread-badge-text := Text {
+                text: root.tab-unread > 99 ? "99+" : root.tab-unread;
+                color: Theme.accent-text;
+                font-size: Theme.font-caption;
+                font-weight: Theme.weight-semibold;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+                width: parent.width;
+                height: parent.height;
+                wrap: no-wrap;
+            }
+        }
+
+        // N6：REC 角标（记录中才占位，避免影响未记录标签的布局）。
+        if root.tab-logging : Rectangle {
+            width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            background: Theme.critical;
+        }
+
+        Rectangle {
+            width: 18px;
+            height: 18px;
+            // 布局不设纵向 padding：显式居中，避免关闭按钮贴顶
+            y: (parent.height - self.height) / 2;
+            border-radius: 3px;
+            background: close-touch.has-hover ? Theme.control-fill-hover : transparent;
+
+            Icon {
+                name: "close";
+                icon-color: Theme.text-secondary;
+                icon-size: 12px;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+
+            close-touch := TouchArea {
+                // 命中区 32×32（§8 最小点击目标），与 WinTab 的偏移规则一致。
+                width: Theme.control-height;
+                height: Theme.control-height;
+                x: parent.width + Theme.spacing-4 - self.width;
+                y: (parent.height - self.height) / 2;
+                clicked => { root.close-requested(); }
+            }
+        }
+    }
+
+    tab-hover := TouchArea {
+        // 关闭命中区（右 32px）让给 close-touch：整标签命中区声明在布局之后，
+        // 输入遍历会先命中它，否则关闭点击会被标签本体抢走。
+        width: parent.width - Theme.control-height;
+        clicked => { root.activate(); }
+        double-clicked => { root.rename-requested(); }
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                root.context-menu-requested(
+                    self.absolute-position.x + self.mouse-x,
+                    self.absolute-position.y + self.mouse-y
+                );
+            }
+        }
+    }
+}
