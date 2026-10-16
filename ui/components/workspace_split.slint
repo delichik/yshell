@@ -1,13 +1,14 @@
 // WP4：终端工作区 2-pane 分屏（扩展点：叶子可增至 4）。
 //
-// 布局约定（修复 active 切换变窄 / UI 错乱）：
-//   * 叶内不再自带标签条——与未分屏共用全局 WorkspaceTabItem 条。
-//   * 两叶始终挂载 TerminalView（interactive 随焦点切换），禁止 Image 绝对像素
-//     撑破 HorizontalLayout stretch。
+// 布局约定：
+//   * 每叶 = tab 栏 + terminal，同框描边（spacing 0），是一个整体。
+//   * 两叶始终挂载 TerminalView（interactive 随焦点切换）。
 //   * pane 用 stretch×ratio 分配（勿用 parent.width 反推 extent，会绑布局环）。
-//   * 快速连接页由宿主叠在对应叶子上（与终端区平等占位）；叶内只留 drop 与终端。
+//   * 拖放：tab 栏 = 移入本叶；terminal 上/下 30%、左/右余区 = 方向分屏（含预览）。
 import { Theme } from "../theme.slint";
 import { TerminalView } from "terminal_view.slint";
+import { WorkspaceTab } from "workspace_tab_model.slint";
+import { WorkspaceTabBar } from "workspace_tab_bar.slint";
 
 component SplitPaneLeaf inherits Rectangle {
     in property <bool> empty: false;
@@ -16,6 +17,7 @@ component SplitPaneLeaf inherits Rectangle {
     in property <bool> quick-connect: false;
     in property <image> terminal-image;
     in property <int> pane-index: 0;
+    in property <[WorkspaceTab]> tabs: [];
 
     in property <int> cursor-column: 0;
     in property <int> cursor-row: 0;
@@ -36,6 +38,19 @@ component SplitPaneLeaf inherits Rectangle {
     /// 终端交互：聚焦且非 QC 且非空。
     property <bool> show-terminal: root.view-visible && !root.empty && !root.quick-connect;
     out property <bool> terminal-focused: root.show-terminal && root.focused && leaf_tv.terminal-focused;
+    /// 内容区高度（叶高 − tab 栏），供宿主 QC overlay 对齐。
+    out property <length> content-height: max(0px, root.height - Theme.bar-height-tabs);
+    /// 拖拽分区预览：`up`/`down`/`left`/`right`/空。
+    property <string> drop-preview: "";
+
+    /// 指针落在 terminal 内容区时的分屏方向。
+    pure function split-zone(x: length, y: length, w: length, h: length) -> string {
+        if (h <= 0px || w <= 0px) { return "right"; }
+        if (y < h * 0.3) { return "up"; }
+        if (y > h * 0.7) { return "down"; }
+        if (x < w * 0.5) { return "left"; }
+        return "right";
+    }
 
     callback focus-requested();
     callback key-pressed(string, bool, bool, bool, bool);
@@ -57,10 +72,16 @@ component SplitPaneLeaf inherits Rectangle {
     callback connection-retry();
     callback connection-cancel();
     callback connection-copy-error();
-    /// 标签拖放到本叶（载荷为 Rust `TabDragPayload`）。
+    /// 标签拖放到本叶 tab 栏（移入）。
     callback tab-dropped(data-transfer);
-    /// 拖到右/下边缘：请求以该方向分屏。
+    /// 拖到 terminal 分区：up/down/left/right。
     callback tab-split-dropped(data-transfer, string);
+    callback activate-tab(string);
+    callback close-tab(string);
+    callback duplicate-tab(string);
+    callback tab-context-menu-requested(string, string, length, length);
+    callback new-session();
+    pure callback drag-tab-transfer(string) -> data-transfer;
 
     min-width: 0px;
     min-height: 0px;
@@ -77,143 +98,168 @@ component SplitPaneLeaf inherits Rectangle {
         }
     }
 
-    // 叶内容：QC 占位 / 空态 / 终端（始终挂载 TerminalView，用可见性折叠交互）。
-    Rectangle {
+    VerticalLayout {
         width: 100%;
         height: 100%;
-        background: Theme.terminal-background;
-        clip: true;
+        spacing: 0;
 
-        if root.empty : Text {
-            text: @tr("Activate a tab for this pane");
-            color: Theme.text-tertiary;
-            font-size: Theme.font-body;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            width: parent.width;
-            height: parent.height;
+        leaf_tabs := WorkspaceTabBar {
+            tabs: root.tabs;
+            drop-enabled: root.view-visible;
+            activate-tab(id) => { root.activate-tab(id); }
+            close-tab(id) => { root.close-tab(id); }
+            duplicate-tab(id) => { root.duplicate-tab(id); }
+            tab-context-menu-requested(id, title, x, y) => {
+                root.tab-context-menu-requested(id, title, x, y);
+            }
+            new-session() => {
+                root.focus-requested();
+                root.new-session();
+            }
+            drag-tab-transfer(id) => { return root.drag-tab-transfer(id); }
+            tab-bar-dropped(data) => { root.tab-dropped(data); }
         }
 
-        if root.quick-connect && !root.empty : Text {
-            // 真实 QC 页由 TerminalWorkspace 叠在几何对齐的 overlay 上；
-            // 这里只占位，避免终端位图闪一下。
-            text: @tr("Quick Connect");
-            color: Theme.text-tertiary;
-            font-size: Theme.font-body;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            width: parent.width;
-            height: parent.height;
-        }
-
-        // 始终实例化：焦点切换只改 interactive / 图像源。
-        // 折叠用 max-height（勿同时绑 width+min-width / height+min-height）。
-        leaf_host := VerticalLayout {
-            width: 100%;
-            height: root.show-terminal ? 100% : 0%;
+        // 终端 / 空态 / QC：单一 DropArea 作父，按坐标分区；子项仍可接收单击/选择。
+        content := Rectangle {
+            vertical-stretch: 1;
             min-height: 0px;
-            max-height: root.show-terminal ? 100000px : 0px;
-            spacing: 0;
+            background: Theme.terminal-background;
+            clip: true;
 
-            leaf_tv := TerminalView {
-                vertical-stretch: 1;
-                preferred-width: 0px;
-                preferred-height: 0px;
-                min-width: 0px;
-                min-height: 0px;
-                embedded: true;
-                interactive: root.show-terminal && root.focused;
-                view-visible: root.show-terminal;
-                title: "";
-                log-output: "";
-                terminal-image: root.terminal-image;
-                cursor-column: root.focused ? root.cursor-column : 0;
-                cursor-row: root.focused ? root.cursor-row : 0;
-                scroll-offset: root.focused ? root.scroll-offset : 0;
-                selection-active: root.focused && root.selection-active;
-                search-query <=> root.search-query;
-                search-summary: root.focused ? root.search-summary : "";
-                search-regex <=> root.search-regex;
-                find-visible: root.show-terminal && root.focused && root.find-visible;
-                connection-overlay-visible: root.show-terminal && root.focused && root.connection-overlay-visible;
-                connection-overlay-target: root.connection-overlay-target;
-                connection-overlay-stage: root.connection-overlay-stage;
-                connection-overlay-error: root.connection-overlay-error;
-                connection-overlay-failed: root.connection-overlay-failed;
-                connection-overlay-pending: root.connection-overlay-pending;
-                focus-requested() => { root.focus-requested(); }
-                connection-retry() => { root.connection-retry(); }
-                connection-cancel() => { root.connection-cancel(); }
-                connection-copy-error() => { root.connection-copy-error(); }
-                key-pressed(text, ctrl, alt, shift, meta) => {
-                    root.key-pressed(text, ctrl, alt, shift, meta);
+            content_drop := DropArea {
+                width: 100%;
+                height: 100%;
+                enabled: root.view-visible;
+                can-drop(event) => {
+                    root.drop-preview = root.split-zone(
+                        event.position.x, event.position.y, self.width, self.height
+                    );
+                    return DragAction.move;
                 }
-                scroll-lines(delta) => { root.scroll-lines(delta); }
-                scroll-to-bottom() => { root.scroll-to-bottom(); }
-                selection-begin(x, y) => { root.selection-begin(x, y); }
-                selection-update(x, y) => { root.selection-update(x, y); }
-                selection-end(x, y) => { root.selection-end(x, y); }
-                select-word-at(x, y) => { root.select-word-at(x, y); }
-                copy-visible() => { root.copy-visible(); }
-                paste-clipboard() => { root.paste-clipboard(); }
-                clear-terminal() => { root.clear-terminal(); }
-                find-text(q) => { root.find-text(q); }
-                find-next() => { root.find-next(); }
-                find-prev() => { root.find-prev(); }
-                find-regex-changed(e) => { root.find-regex-changed(e); }
-                dismiss-find() => { root.dismiss-find(); }
-                context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
-            }
-        }
+                dropped(event) => {
+                    root.tab-split-dropped(
+                        event.data,
+                        root.split-zone(event.position.x, event.position.y, self.width, self.height)
+                    );
+                    root.drop-preview = "";
+                    return DragAction.move;
+                }
 
-        // 非聚焦叶：整叶点击聚焦（TerminalView interactive=false 时也会上报）。
-        if root.show-terminal && !root.focused : TouchArea {
-            width: parent.width;
-            height: parent.height;
-            enabled: root.view-visible;
-            mouse-cursor: MouseCursor.default;
-            clicked => { root.focus-requested(); }
-        }
+                if root.empty : Text {
+                    text: @tr("Activate a tab for this pane");
+                    color: Theme.text-tertiary;
+                    font-size: Theme.font-body;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    width: parent.width;
+                    height: parent.height;
+                }
 
-        if root.quick-connect && !root.empty && !root.focused : TouchArea {
-            width: parent.width;
-            height: parent.height;
-            enabled: root.view-visible;
-            clicked => { root.focus-requested(); }
-        }
+                if root.quick-connect && !root.empty : Text {
+                    text: @tr("Quick Connect");
+                    color: Theme.text-tertiary;
+                    font-size: Theme.font-body;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    width: parent.width;
+                    height: parent.height;
+                }
 
-        // 中心落点：把标签移入本叶。
-        DropArea {
-            width: parent.width;
-            height: parent.height;
-            can-drop(_event) => { return DragAction.move; }
-            dropped(event) => {
-                root.tab-dropped(event.data);
-                return DragAction.move;
-            }
-        }
+                leaf_host := VerticalLayout {
+                    width: 100%;
+                    height: root.show-terminal ? 100% : 0%;
+                    min-height: 0px;
+                    max-height: root.show-terminal ? 100000px : 0px;
+                    spacing: 0;
 
-        // 右缘：左右分屏。
-        DropArea {
-            x: parent.width - 28px;
-            width: 28px;
-            height: parent.height;
-            can-drop(_event) => { return DragAction.move; }
-            dropped(event) => {
-                root.tab-split-dropped(event.data, "right");
-                return DragAction.move;
-            }
-        }
+                    leaf_tv := TerminalView {
+                        vertical-stretch: 1;
+                        preferred-width: 0px;
+                        preferred-height: 0px;
+                        min-width: 0px;
+                        min-height: 0px;
+                        embedded: true;
+                        interactive: root.show-terminal && root.focused;
+                        view-visible: root.show-terminal;
+                        title: "";
+                        log-output: "";
+                        terminal-image: root.terminal-image;
+                        cursor-column: root.focused ? root.cursor-column : 0;
+                        cursor-row: root.focused ? root.cursor-row : 0;
+                        scroll-offset: root.focused ? root.scroll-offset : 0;
+                        selection-active: root.focused && root.selection-active;
+                        search-query <=> root.search-query;
+                        search-summary: root.focused ? root.search-summary : "";
+                        search-regex <=> root.search-regex;
+                        find-visible: root.show-terminal && root.focused && root.find-visible;
+                        connection-overlay-visible: root.show-terminal && root.focused && root.connection-overlay-visible;
+                        connection-overlay-target: root.connection-overlay-target;
+                        connection-overlay-stage: root.connection-overlay-stage;
+                        connection-overlay-error: root.connection-overlay-error;
+                        connection-overlay-failed: root.connection-overlay-failed;
+                        connection-overlay-pending: root.connection-overlay-pending;
+                        focus-requested() => { root.focus-requested(); }
+                        connection-retry() => { root.connection-retry(); }
+                        connection-cancel() => { root.connection-cancel(); }
+                        connection-copy-error() => { root.connection-copy-error(); }
+                        key-pressed(text, ctrl, alt, shift, meta) => {
+                            root.key-pressed(text, ctrl, alt, shift, meta);
+                        }
+                        scroll-lines(delta) => { root.scroll-lines(delta); }
+                        scroll-to-bottom() => { root.scroll-to-bottom(); }
+                        selection-begin(x, y) => { root.selection-begin(x, y); }
+                        selection-update(x, y) => { root.selection-update(x, y); }
+                        selection-end(x, y) => { root.selection-end(x, y); }
+                        select-word-at(x, y) => { root.select-word-at(x, y); }
+                        copy-visible() => { root.copy-visible(); }
+                        paste-clipboard() => { root.paste-clipboard(); }
+                        clear-terminal() => { root.clear-terminal(); }
+                        find-text(q) => { root.find-text(q); }
+                        find-next() => { root.find-next(); }
+                        find-prev() => { root.find-prev(); }
+                        find-regex-changed(e) => { root.find-regex-changed(e); }
+                        dismiss-find() => { root.dismiss-find(); }
+                        context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
+                    }
+                }
 
-        // 底缘：上下分屏。
-        DropArea {
-            y: parent.height - 28px;
-            width: parent.width;
-            height: 28px;
-            can-drop(_event) => { return DragAction.move; }
-            dropped(event) => {
-                root.tab-split-dropped(event.data, "down");
-                return DragAction.move;
+                if root.show-terminal && !root.focused : TouchArea {
+                    width: parent.width;
+                    height: parent.height;
+                    enabled: root.view-visible;
+                    mouse-cursor: MouseCursor.default;
+                    clicked => { root.focus-requested(); }
+                }
+
+                if root.quick-connect && !root.empty && !root.focused : TouchArea {
+                    width: parent.width;
+                    height: parent.height;
+                    enabled: root.view-visible;
+                    clicked => { root.focus-requested(); }
+                }
+
+                // 分区预览（DropArea 子项，仅视觉）
+                if content_drop.has-drag && root.drop-preview == "up" : Rectangle {
+                    x: 0; y: 0; width: parent.width; height: parent.height * 0.3;
+                    background: Theme.selection-fill;
+                    border-width: 1px; border-color: Theme.accent;
+                }
+                if content_drop.has-drag && root.drop-preview == "down" : Rectangle {
+                    x: 0; y: parent.height * 0.7; width: parent.width; height: parent.height * 0.3;
+                    background: Theme.selection-fill;
+                    border-width: 1px; border-color: Theme.accent;
+                }
+                if content_drop.has-drag && root.drop-preview == "left" : Rectangle {
+                    x: 0; y: parent.height * 0.3; width: parent.width * 0.5; height: parent.height * 0.4;
+                    background: Theme.selection-fill;
+                    border-width: 1px; border-color: Theme.accent;
+                }
+                if content_drop.has-drag && root.drop-preview == "right" : Rectangle {
+                    x: parent.width * 0.5; y: parent.height * 0.3; width: parent.width * 0.5; height: parent.height * 0.4;
+                    background: Theme.selection-fill;
+                    border-width: 1px; border-color: Theme.accent;
+                }
             }
         }
     }
@@ -230,6 +276,8 @@ export component WorkspaceSplitView inherits Rectangle {
     in property <bool> pane1-quick-connect: false;
     in property <image> primary-image;
     in property <image> secondary-image;
+    in property <[WorkspaceTab]> pane0-tabs: [];
+    in property <[WorkspaceTab]> pane1-tabs: [];
 
     in property <int> cursor-column: 0;
     in property <int> cursor-row: 0;
@@ -274,6 +322,12 @@ export component WorkspaceSplitView inherits Rectangle {
     callback ratio-changed(float);
     callback tab-dropped-on-pane(int, data-transfer);
     callback tab-split-dropped(data-transfer, string);
+    callback activate-tab(string);
+    callback close-tab(string);
+    callback duplicate-tab(string);
+    callback tab-context-menu-requested(string, string, length, length);
+    callback new-session();
+    pure callback drag-tab-transfer(string) -> data-transfer;
 
     property <bool> horizontal: root.orientation-text != "vertical";
     property <float> clamped-ratio: Math.max(0.2, Math.min(0.8, root.ratio));
@@ -304,6 +358,7 @@ export component WorkspaceSplitView inherits Rectangle {
             empty: root.pane0-empty;
             quick-connect: root.pane0-quick-connect;
             pane-index: 0;
+            tabs: root.pane0-tabs;
             focused: root.horizontal && root.focused-pane == 0;
             terminal-image: root.focused-pane == 0 ? root.primary-image : root.secondary-image;
             cursor-column: root.cursor-column;
@@ -343,6 +398,14 @@ export component WorkspaceSplitView inherits Rectangle {
             connection-copy-error() => { root.connection-copy-error(); }
             tab-dropped(data) => { root.tab-dropped-on-pane(0, data); }
             tab-split-dropped(data, dir) => { root.tab-split-dropped(data, dir); }
+            activate-tab(id) => { root.activate-tab(id); }
+            close-tab(id) => { root.close-tab(id); }
+            duplicate-tab(id) => { root.duplicate-tab(id); }
+            tab-context-menu-requested(id, title, x, y) => {
+                root.tab-context-menu-requested(id, title, x, y);
+            }
+            new-session() => { root.new-session(); }
+            drag-tab-transfer(id) => { return root.drag-tab-transfer(id); }
         }
         Rectangle {
             width: root.splitter-size;
@@ -366,6 +429,7 @@ export component WorkspaceSplitView inherits Rectangle {
             empty: root.pane1-empty;
             quick-connect: root.pane1-quick-connect;
             pane-index: 1;
+            tabs: root.pane1-tabs;
             focused: root.horizontal && root.focused-pane == 1;
             terminal-image: root.focused-pane == 1 ? root.primary-image : root.secondary-image;
             cursor-column: root.cursor-column;
@@ -405,6 +469,14 @@ export component WorkspaceSplitView inherits Rectangle {
             connection-copy-error() => { root.connection-copy-error(); }
             tab-dropped(data) => { root.tab-dropped-on-pane(1, data); }
             tab-split-dropped(data, dir) => { root.tab-split-dropped(data, dir); }
+            activate-tab(id) => { root.activate-tab(id); }
+            close-tab(id) => { root.close-tab(id); }
+            duplicate-tab(id) => { root.duplicate-tab(id); }
+            tab-context-menu-requested(id, title, x, y) => {
+                root.tab-context-menu-requested(id, title, x, y);
+            }
+            new-session() => { root.new-session(); }
+            drag-tab-transfer(id) => { return root.drag-tab-transfer(id); }
         }
     }
 
@@ -419,6 +491,7 @@ export component WorkspaceSplitView inherits Rectangle {
             empty: root.pane0-empty;
             quick-connect: root.pane0-quick-connect;
             pane-index: 0;
+            tabs: root.pane0-tabs;
             focused: !root.horizontal && root.focused-pane == 0;
             terminal-image: root.focused-pane == 0 ? root.primary-image : root.secondary-image;
             cursor-column: root.cursor-column;
@@ -458,6 +531,14 @@ export component WorkspaceSplitView inherits Rectangle {
             connection-copy-error() => { root.connection-copy-error(); }
             tab-dropped(data) => { root.tab-dropped-on-pane(0, data); }
             tab-split-dropped(data, dir) => { root.tab-split-dropped(data, dir); }
+            activate-tab(id) => { root.activate-tab(id); }
+            close-tab(id) => { root.close-tab(id); }
+            duplicate-tab(id) => { root.duplicate-tab(id); }
+            tab-context-menu-requested(id, title, x, y) => {
+                root.tab-context-menu-requested(id, title, x, y);
+            }
+            new-session() => { root.new-session(); }
+            drag-tab-transfer(id) => { return root.drag-tab-transfer(id); }
         }
         Rectangle {
             height: root.splitter-size;
@@ -481,6 +562,7 @@ export component WorkspaceSplitView inherits Rectangle {
             empty: root.pane1-empty;
             quick-connect: root.pane1-quick-connect;
             pane-index: 1;
+            tabs: root.pane1-tabs;
             focused: !root.horizontal && root.focused-pane == 1;
             terminal-image: root.focused-pane == 1 ? root.primary-image : root.secondary-image;
             cursor-column: root.cursor-column;
@@ -520,6 +602,14 @@ export component WorkspaceSplitView inherits Rectangle {
             connection-copy-error() => { root.connection-copy-error(); }
             tab-dropped(data) => { root.tab-dropped-on-pane(1, data); }
             tab-split-dropped(data, dir) => { root.tab-split-dropped(data, dir); }
+            activate-tab(id) => { root.activate-tab(id); }
+            close-tab(id) => { root.close-tab(id); }
+            duplicate-tab(id) => { root.duplicate-tab(id); }
+            tab-context-menu-requested(id, title, x, y) => {
+                root.tab-context-menu-requested(id, title, x, y);
+            }
+            new-session() => { root.new-session(); }
+            drag-tab-transfer(id) => { return root.drag-tab-transfer(id); }
         }
     }
 }

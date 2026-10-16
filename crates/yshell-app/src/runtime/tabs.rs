@@ -523,14 +523,18 @@ impl AppRuntime {
         Ok(self.projection())
     }
 
-    /// 拖到右/下边缘：未分屏则创建；已分屏则把标签移到目标侧叶子。
+    /// 拖到 terminal 分区：未分屏则创建；已分屏则按方向放到对应侧（仍两叶）。
+    ///
+    /// 方向：`up`/`left` → 被拖 tab 在 pane0；`down`/`right` → 被拖 tab 在 pane1。
     pub fn place_tab_split(&mut self, tab_id: &str, direction: &str) -> AppResult<AppProjection> {
-        let orientation = match direction {
-            "right" | "horizontal" => SplitOrientation::Horizontal,
-            "down" | "vertical" => SplitOrientation::Vertical,
+        let (orientation, dragged_is_first) = match direction {
+            "right" | "horizontal" => (SplitOrientation::Horizontal, false),
+            "left" => (SplitOrientation::Horizontal, true),
+            "down" | "vertical" => (SplitOrientation::Vertical, false),
+            "up" => (SplitOrientation::Vertical, true),
             other => {
                 return Err(AppError::new(format!(
-                    "unknown split direction `{other}` (expected right/down)"
+                    "unknown split direction `{other}` (expected up/down/left/right)"
                 )));
             }
         };
@@ -548,9 +552,19 @@ impl AppRuntime {
             .get(&window_id)
             .is_some_and(|window| window.split.is_some());
         if already_split {
-            // v1 两叶：拖到右/下边缘 = 移入 pane1。
-            let _ = orientation;
-            return self.move_tab_to_pane(tab_id, 1);
+            // v1 两叶：改方向 + 把被拖 tab 放到对应侧。
+            let target_pane = if dragged_is_first { 0 } else { 1 };
+            {
+                let window = self
+                    .windows
+                    .get_mut(&window_id)
+                    .ok_or_else(|| AppError::new("window registration is missing"))?;
+                if let Some(split) = window.split.as_mut() {
+                    split.orientation = orientation;
+                }
+            }
+            let projection = self.move_tab_to_pane(tab_id, target_pane)?;
+            return Ok(projection);
         }
 
         // 未分屏：需要邻接标签；若只有一个终端标签则先复制一份。
@@ -593,16 +607,22 @@ impl AppRuntime {
                 .windows
                 .get_mut(&window_id)
                 .ok_or_else(|| AppError::new("window registration is missing"))?;
-            // 被拖标签进新 pane（pane1）；邻接与其余进 pane0。
-            let mut split =
-                WorkspaceSplit::two_pane(orientation, Some(neighbor.clone()), Some(tab_id.to_owned()));
+            // up/left：被拖 → pane0，邻居 → pane1；down/right：邻居 → pane0，被拖 → pane1。
+            let (first, second) = if dragged_is_first {
+                (Some(tab_id.to_owned()), Some(neighbor.clone()))
+            } else {
+                (Some(neighbor.clone()), Some(tab_id.to_owned()))
+            };
+            let mut split = WorkspaceSplit::two_pane(orientation, first, second);
+            split.focused_pane = if dragged_is_first { 0 } else { 1 };
+            let remainder_pane = if dragged_is_first { 1 } else { 0 };
             for other in &window.tabs {
                 if other == &neighbor || other.as_str() == tab_id {
                     continue;
                 }
-                if let Some(pane0) = split.panes.first_mut() {
-                    if !pane0.tabs.iter().any(|id| id == other) {
-                        pane0.tabs.push(other.clone());
+                if let Some(pane) = split.panes.get_mut(remainder_pane) {
+                    if !pane.tabs.iter().any(|id| id == other) {
+                        pane.tabs.push(other.clone());
                     }
                 }
             }

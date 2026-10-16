@@ -1,0 +1,126 @@
+// 工作区标签条：未分屏与分屏叶子共用。
+// `+` 紧跟最后一个 tab；整条 DropArea 包裹内容（单击进子项，拖放由 DropArea 接）。
+import { Theme } from "../theme.slint";
+import { WinIconButton, WinScrollIndicator } from "basic/controls.slint";
+import { WorkspaceTab } from "workspace_tab_model.slint";
+import { WorkspaceTabItem } from "workspace_tab_item.slint";
+
+export component WorkspaceTabBar inherits Rectangle {
+    in property <[WorkspaceTab]> tabs: [];
+    /// 是否接受拖入（分屏叶内为 true）。
+    in property <bool> drop-enabled: true;
+    /// 悬停拖入时高亮整条栏。
+    out property <bool> drop-hover: tab_drop.has-drag;
+
+    callback activate-tab(string);
+    callback close-tab(string);
+    callback duplicate-tab(string);
+    callback tab-context-menu-requested(string, string, length, length);
+    callback new-session();
+    pure callback drag-tab-transfer(string) -> data-transfer;
+    /// 标签拖放到本条（移入本叶）。
+    callback tab-bar-dropped(data-transfer);
+
+    clip: true;
+    height: Theme.bar-height-tabs;
+    background: Theme.window-background;
+
+    // DropArea 作父：ForwardEvent → 子项处理单击；子项忽略的 DragMove 由本区接受。
+    tab_drop := DropArea {
+        width: 100%;
+        height: 100%;
+        enabled: root.drop-enabled;
+        can-drop(_event) => { return DragAction.move; }
+        dropped(event) => {
+            root.tab-bar-dropped(event.data);
+            return DragAction.move;
+        }
+
+        HorizontalLayout {
+            width: 100%;
+            height: 100%;
+            padding-left: Theme.spacing-8;
+            padding-right: Theme.spacing-8;
+            spacing: Theme.spacing-4;
+
+            Rectangle {
+                horizontal-stretch: 1;
+                vertical-stretch: 1;
+                background: transparent;
+
+                tabs-flickable := Flickable {
+                    width: parent.width;
+                    height: parent.height;
+                    interactive: true;
+                    mouse-drag-pan-enabled: true;
+                    content-width: tabs-strip.width;
+                    content-height: self.height;
+
+                    tabs-strip := Rectangle {
+                        width: tabs-row.preferred-width;
+                        height: parent.height;
+                        background: transparent;
+
+                        tabs-row := HorizontalLayout {
+                            width: parent.width;
+                            height: parent.height;
+                            spacing: Theme.spacing-4;
+
+                            for tab[i] in root.tabs : WorkspaceTabItem {
+                                tab-id: tab.id;
+                                tab-title: tab.title;
+                                tab-state-text: tab.state_text;
+                                tab-active: tab.active;
+                                tab-kind-text: tab.kind_text;
+                                tab-logging: tab.logging;
+                                tab-sync-role-text: tab.sync_role_text;
+                                tab-unread: tab.unread;
+                                drag-enabled: true;
+                                drag-payload: root.drag-tab-transfer(tab.id);
+                                show-divider: i > 0 && !tab.active && !root.tabs[i - 1].active;
+                                activate() => { root.activate-tab(tab.id); }
+                                close-requested() => { root.close-tab(tab.id); }
+                                duplicate-requested() => { root.duplicate-tab(tab.id); }
+                                context-menu-requested(x, y) => {
+                                    root.tab-context-menu-requested(
+                                        tab.id,
+                                        tab.kind_text == "quick-connect" && tab.title == ""
+                                            ? @tr("Quick Connect")
+                                            : tab.title,
+                                        x,
+                                        y
+                                    );
+                                }
+                            }
+
+                            // `+` 紧跟最后一个 tab（随内容滚动，不钉在栏右缘）。
+                            WinIconButton {
+                                icon: "plus";
+                                accessible-name: @tr("MainWindow" => "New session");
+                                clicked => { root.new-session(); }
+                            }
+                        }
+                    }
+                }
+
+                WinScrollIndicator {
+                    x: parent.width - self.width - Theme.spacing-4;
+                    y: Theme.spacing-4;
+                    height: parent.height - 2 * Theme.spacing-4;
+                    viewport-position: tabs-flickable.content-x;
+                    content-extent: tabs-strip.width;
+                    viewport-extent: tabs-flickable.width;
+                }
+            }
+        }
+
+        // 预览为 DropArea 末子：拖放命中仍由 DropArea 处理。
+        if tab_drop.has-drag : Rectangle {
+            width: 100%;
+            height: 100%;
+            background: Theme.selection-fill;
+            border-width: 1px;
+            border-color: Theme.accent;
+        }
+    }
+}

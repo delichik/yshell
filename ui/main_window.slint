@@ -180,6 +180,8 @@ export component MainWindow inherits Window {
     in-out property <string> logging_summary_text: "global=disabled format=sanitized directory=logs";
     in-out property <string> settings_scrollback_lines_text: "10000";
     in-out property <string> settings_language_text: "system";
+    in-out property <bool> settings_debug_logging_enabled: false;
+    in-out property <string> settings_debug_log_dir_text: "";
     in-out property <string> settings_scrollback_max_cells_text: "2000000";
     in-out property <string> settings_terminal_status_text: "Save terminal settings to apply the scrollback limits to existing sessions.";
     in-out property <string> active_session: "Welcome";
@@ -972,6 +974,8 @@ export component MainWindow inherits Window {
     callback update_settings_scrollback_lines(string);
     callback update_settings_scrollback_max_cells(string);
     callback set_ui_language(string);
+    callback set_debug_logging(bool);
+    callback open_debug_log_dir();
     callback reset_settings_terminal_defaults();
     callback save_settings_terminal();
     // N5：终端外观（Settings Appearance 内联 / Folder Editor / Session Editor 覆盖）
@@ -2267,6 +2271,8 @@ export component MainWindow inherits Window {
                     split-pane0-quick-connect: root.workspace_split_pane0_quick_connect;
                     split-pane1-empty: root.workspace_split_pane1_empty;
                     split-pane1-quick-connect: root.workspace_split_pane1_quick_connect;
+                    split-pane0-tabs: root.workspace_split_pane0_tabs;
+                    split-pane1-tabs: root.workspace_split_pane1_tabs;
                     terminal-image-secondary: root.terminal_image_secondary;
                     focus-split-pane(index) => { root.focus_split_pane(index); }
                     close-split-pane(index) => { root.close_split_pane(index); }
@@ -2578,6 +2584,8 @@ export component MainWindow inherits Window {
         scrollback-max-cells-text <=> root.settings_scrollback_max_cells_text;
         terminal-status-text: TextFormats.settings-terminal-status(root.settings_terminal_status_kind_text, root.settings_terminal_status_field_text, root.settings_terminal_status_value_text, root.settings_terminal_status_limit_text);
         language-text: root.settings_language_text;
+        debug-logging-enabled <=> root.settings_debug_logging_enabled;
+        debug-log-dir-text: root.settings_debug_log_dir_text;
         appearance-color-scheme-text: root.settings_appearance_color_scheme_text;
         appearance-schemes: root.settings_appearance_schemes;
         appearance-palette-swatches: root.settings_appearance_palette_swatches;
@@ -2608,6 +2616,8 @@ export component MainWindow inherits Window {
         reset-terminal-defaults() => { root.reset_settings_terminal_defaults(); }
         save-terminal-settings() => { root.save_settings_terminal(); }
         set-language(value) => { root.set_ui_language(value); }
+        set-debug-logging(enabled) => { root.set_debug_logging(enabled); }
+        open-debug-log-dir() => { root.open_debug_log_dir(); }
         select-appearance-scheme(id) => { root.select_settings_scheme(id); }
         clone-appearance-theme(id) => { root.clone_settings_theme(id); }
         edit-appearance-theme(id) => { root.edit_settings_theme(id); }

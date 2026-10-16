@@ -12,12 +12,11 @@
 //     main_window 的"内容之后、模态弹窗之前"实例化，保持原有绘制层级。
 //   * `@tr` 文案搬移后显式带上原组件上下文（`@tr("MainWindow" => ...)`）。
 import { Theme } from "../theme.slint";
-import { WinIconButton, WinScrollIndicator } from "basic/controls.slint";
 import { MenuEntry, MenuPopup } from "menu_popup.slint";
 import { TerminalView } from "terminal_view.slint";
 import { WorkspaceSplitView } from "workspace_split.slint";
 import { WorkspaceTab } from "workspace_tab_model.slint";
-import { WorkspaceTabItem } from "workspace_tab_item.slint";
+import { WorkspaceTabBar } from "workspace_tab_bar.slint";
 import { QuickConnectPage, QuickConnectRow, QuickLinkRow } from "../pages/quick_connect.slint";
 
 export { WorkspaceTab }
@@ -47,28 +46,31 @@ export component TerminalWorkspace inherits VerticalLayout {
 
     // 分屏视口：从 split_host 独立算 pane0/pane1（勿对已缩过的 primary 再 ×ratio）。
     // chrome（两叶共用同一套，避免聚焦切换改变几何）：
-    //   host padding 8+8=16；把手 4；叶描边 2+2=4；TerminalView 表面内边距 6+6=12。
+    //   host padding 8+8；把手 4；叶描边 2+2；叶内 tab 栏；TerminalView 内边距 6+6。
+    // 宽度只扣描边+TV pad；高度再扣 tab 栏。
     property <float> split-clamped-ratio: Math.max(0.2, Math.min(0.8, root.split-ratio));
     property <float> split-host-pad-px: 2.0 * Theme.spacing-8 / 1px;
     property <float> split-splitter-px: 4.0;
     property <float> split-leaf-border-px: 4.0;
     property <float> split-tv-pad-px: 2.0 * Theme.terminal-padding / 1px;
-    property <float> split-pane-chrome-px: root.split-leaf-border-px + root.split-tv-pad-px;
+    property <float> split-tab-bar-px: Theme.bar-height-tabs / 1px;
+    property <float> split-pane-chrome-w-px: root.split-leaf-border-px + root.split-tv-pad-px;
+    property <float> split-pane-chrome-h-px: root.split-leaf-border-px + root.split-tv-pad-px + root.split-tab-bar-px;
     property <float> split-inner-width-px: Math.max(split_host.width / 1px - root.split-host-pad-px, 1.0);
     property <float> split-inner-height-px: Math.max(split_host.height / 1px - root.split-host-pad-px, 1.0);
     // 左右分屏：两叶同高；上下分屏：两叶同宽。比例只切分主轴。
     property <float> split-pane0-viewport-width-px: root.split-orientation-text == "vertical"
-        ? Math.max(root.split-inner-width-px - root.split-pane-chrome-px, 1.0)
-        : Math.max((root.split-inner-width-px - root.split-splitter-px) * root.split-clamped-ratio - root.split-pane-chrome-px, 1.0);
+        ? Math.max(root.split-inner-width-px - root.split-pane-chrome-w-px, 1.0)
+        : Math.max((root.split-inner-width-px - root.split-splitter-px) * root.split-clamped-ratio - root.split-pane-chrome-w-px, 1.0);
     property <float> split-pane1-viewport-width-px: root.split-orientation-text == "vertical"
-        ? Math.max(root.split-inner-width-px - root.split-pane-chrome-px, 1.0)
-        : Math.max((root.split-inner-width-px - root.split-splitter-px) * (1.0 - root.split-clamped-ratio) - root.split-pane-chrome-px, 1.0);
+        ? Math.max(root.split-inner-width-px - root.split-pane-chrome-w-px, 1.0)
+        : Math.max((root.split-inner-width-px - root.split-splitter-px) * (1.0 - root.split-clamped-ratio) - root.split-pane-chrome-w-px, 1.0);
     property <float> split-pane0-viewport-height-px: root.split-orientation-text == "vertical"
-        ? Math.max((root.split-inner-height-px - root.split-splitter-px) * root.split-clamped-ratio - root.split-pane-chrome-px, 1.0)
-        : Math.max(root.split-inner-height-px - root.split-pane-chrome-px, 1.0);
+        ? Math.max((root.split-inner-height-px - root.split-splitter-px) * root.split-clamped-ratio - root.split-pane-chrome-h-px, 1.0)
+        : Math.max(root.split-inner-height-px - root.split-pane-chrome-h-px, 1.0);
     property <float> split-pane1-viewport-height-px: root.split-orientation-text == "vertical"
-        ? Math.max((root.split-inner-height-px - root.split-splitter-px) * (1.0 - root.split-clamped-ratio) - root.split-pane-chrome-px, 1.0)
-        : Math.max(root.split-inner-height-px - root.split-pane-chrome-px, 1.0);
+        ? Math.max((root.split-inner-height-px - root.split-splitter-px) * (1.0 - root.split-clamped-ratio) - root.split-pane-chrome-h-px, 1.0)
+        : Math.max(root.split-inner-height-px - root.split-pane-chrome-h-px, 1.0);
 
     /// 单终端：取 TerminalView；分屏：聚焦 pane 的独立视口。
     out property <float> terminal-viewport-width-px: root.split-active
@@ -211,6 +213,19 @@ export component TerminalWorkspace inherits VerticalLayout {
     in property <bool> split-pane1-empty: false;
     in property <bool> split-pane1-quick-connect: false;
     in property <image> terminal-image-secondary;
+    in property <[WorkspaceTab]> split-pane0-tabs: [];
+    in property <[WorkspaceTab]> split-pane1-tabs: [];
+    /// 未分屏拖拽分区预览：`up`/`down`/`left`/`right`/空。
+    property <string> single-drop-preview: "";
+
+    /// 指针落在 terminal 内容区时的分屏方向。
+    pure function split-zone(x: length, y: length, w: length, h: length) -> string {
+        if (h <= 0px || w <= 0px) { return "right"; }
+        if (y < h * 0.3) { return "up"; }
+        if (y > h * 0.7) { return "down"; }
+        if (x < w * 0.5) { return "left"; }
+        return "right";
+    }
 
     /// 分屏时 QC 叠在哪个叶子（-1 = 无）。
     property <int> split-qc-pane: root.split-pane0-quick-connect ? 0
@@ -238,173 +253,141 @@ export component TerminalWorkspace inherits VerticalLayout {
             : root.split-pane0-viewport-height-px)
         : 0;
 
-    // 标签条：分屏与否共用同一条（与未分屏视觉/交互一致；拖拽可落到 pane）。
-    Rectangle {
-        clip: true;
-        height: Theme.bar-height-tabs;
-        background: Theme.window-background;
-        HorizontalLayout {
-            // E12：与终端内容区左缘（12px）统一
-            padding-left: Theme.spacing-12;
-            padding-right: Theme.spacing-12;
-            spacing: Theme.spacing-4;
-
-            // N0：标签横向滚动区（滚轮/按住拖动）；`+` 钉在右侧始终可见。
-            // E11：查找入口已按设计语言 §4.1 归命令栏，这里不再重复放放大镜。
-            // E22：滚动区外包一层透明容器，叠加 4px 自绘滚动提示（不占布局、不吞事件）。
-            Rectangle {
-                horizontal-stretch: 1;
-                vertical-stretch: 1;
-                background: transparent;
-
-                tabs-flickable := Flickable {
-                    width: parent.width;
-                    height: parent.height;
-                    interactive: true;
-                    mouse-drag-pan-enabled: true;
-                    content-width: tabs-strip.width;
-                    content-height: self.height;
-
-                    tabs-strip := Rectangle {
-                        width: tabs-row.preferred-width;
-                        height: parent.height;
-                        background: transparent;
-
-                        tabs-row := HorizontalLayout {
-                            width: parent.width;
-                            height: parent.height;
-                            spacing: Theme.spacing-4;
-
-                            for tab[i] in root.tabs : WorkspaceTabItem {
-                                tab-id: tab.id;
-                                tab-title: tab.title;
-                                tab-state-text: tab.state_text;
-                                tab-active: tab.active;
-                                tab-kind-text: tab.kind_text;
-                                tab-logging: tab.logging;
-                                tab-sync-role-text: tab.sync_role_text;
-                                tab-unread: tab.unread;
-                                drag-enabled: true;
-                                drag-payload: root.drag-tab-transfer(tab.id);
-                                // E11：相邻标签之间 1px 分隔线；紧邻活动标签时不画
-                                show-divider: i > 0 && !tab.active && !root.tabs[i - 1].active;
-                                activate() => { root.activate-tab(tab.id); }
-                                close-requested() => { root.close-tab(tab.id); }
-                                duplicate-requested() => { root.duplicate-tab-requested(tab.id); }
-                                context-menu-requested(x, y) => {
-                                    root.tab-context-menu-requested(
-                                        tab.id,
-                                        tab.kind_text == "quick-connect" && tab.title == ""
-                                            ? @tr("Quick Connect")
-                                            : tab.title,
-                                        x,
-                                        y
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // E22：标签超出视口时才出现；横向滚动传宽而不是高
-                WinScrollIndicator {
-                    x: parent.width - self.width - Theme.spacing-4;
-                    y: Theme.spacing-4;
-                    height: parent.height - 2 * Theme.spacing-4;
-                    viewport-position: tabs-flickable.content-x;
-                    content-extent: tabs-strip.width;
-                    viewport-extent: tabs-flickable.width;
-                }
-            }
-            WinIconButton {
-                icon: "plus";
-                accessible-name: @tr("MainWindow" => "New session");
-                clicked => { root.new-session(); }
-            }
-        }
-    }
-    // N2：活动标签是 QC 页时把终端视图压成 0 高（Slint 1.18 里 invisible 元素
-    // 仍占布局空间，所以用 max-height 折叠而不是 visible），
-    // 但保持实例存在——`terminal_view` 的 out 属性仍被宿主引用。
-    // E13：`100000px` 是"无上限"哨兵。改成 `root.height` 会与父布局形成绑定环，
-    // 改成 `visible` 会让隐藏期间的 viewport 宽高读数归零（PTY 尺寸依赖它），
-    // 故保留哨兵并在此记录（见 ws-E.md 遗留）。
+    // 未分屏：tab 栏 + terminal 一体（spacing 0）；分屏时折叠，改用叶内各自 tab 栏。
+    // N2：QC 页时用 max-height 折叠（invisible 仍占位）；保持 terminal_view 实例供 viewport out。
     single_host := Rectangle {
-        // min-height 显式归零：否则内容（终端视图）的隐式 min 会顶住折叠。
-        // WP4：分屏时折叠单 TerminalView，改用下方 WorkspaceSplitView。
-        // clip：折叠后标题条/叶子不得溢出到状态栏（Slint 里 max-height=0 仍可能绘制子项）。
         clip: true;
         min-height: 0px;
         max-height: root.terminal-visible && !root.split-active ? 100000px : 0px;
         background: Theme.window-background;
         VerticalLayout {
-            // 收紧与左右面板的视觉间距（旧 12px 显得脱节）。
             padding: Theme.spacing-8;
-            terminal_view := TerminalView {
-                view-visible: root.terminal-visible && !root.split-active;
-                title: root.title-text;
-                log-output: root.body-text;
-                visible-lines <=> root.visible-lines;
-                terminal-image: root.terminal-image;
-                cursor-column: root.cursor-column;
-                cursor-row: root.cursor-row;
-                scroll-offset: root.scroll-offset;
-                selection-active: root.selection-active;
-                search-query <=> root.search-query-text;
-                search-summary: root.search-summary-text;
-                search-regex <=> root.search-regex;
-                footer-status: root.status-text;
-                // 单窗格查找；分屏时查找改由聚焦叶子 TerminalView 承接（P1）。
-                find-visible: root.find-visible && !root.split-active;
-                connection-overlay-visible: root.connection-overlay-visible && !root.split-active;
-                connection-overlay-target: root.connection-overlay-target;
-                connection-overlay-stage: root.connection-overlay-stage;
-                connection-overlay-error: root.connection-overlay-error;
-                connection-overlay-failed: root.connection-overlay-failed;
-                connection-overlay-pending: root.connection-overlay-pending;
-                connection-retry() => { root.connection-retry(); }
-                connection-cancel() => { root.connection-cancel(); }
-                connection-copy-error() => { root.connection-copy-error(); }
-                key-pressed(text, ctrl, alt, shift, meta) => { root.terminal-key(text, ctrl, alt, shift, meta); }
-                scroll-lines(delta) => { root.terminal-scroll(delta); }
-                scroll-to-bottom() => { root.terminal-scroll-to-bottom(); }
-                selection-begin(x, y) => { root.terminal-selection-begin(x, y); }
-                selection-update(x, y) => { root.terminal-selection-update(x, y); }
-                selection-end(x, y) => { root.terminal-selection-end(x, y); }
-                select-word-at(x, y) => { root.terminal-select-word-at(x, y); }
-                copy-visible() => { root.copy-visible(); }
-                paste-clipboard() => { root.paste-clipboard(); }
-                clear-terminal() => { root.clear-terminal(); }
-                find-text(query) => { root.find-text(query); }
-                find-next() => { root.find-next(); }
-                find-prev() => { root.find-prev(); }
-                find-regex-changed(enabled) => { root.find-regex-changed(enabled); }
-                dismiss-find() => { root.dismiss-find(); }
-                context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
-            }
-        }
+            spacing: 0;
 
-        // 未分屏：拖到右/下边缘即可创建分屏。
-        DropArea {
-            x: parent.width - 28px;
-            width: 28px;
-            height: parent.height;
-            enabled: !root.split-active && root.terminal-visible;
-            can-drop(_event) => { return DragAction.move; }
-            dropped(event) => {
-                root.drop-tab-split(event.data, "right");
-                return DragAction.move;
-            }
-        }
-        DropArea {
-            y: parent.height - 28px;
-            width: parent.width;
-            height: 28px;
-            enabled: !root.split-active && root.terminal-visible;
-            can-drop(_event) => { return DragAction.move; }
-            dropped(event) => {
-                root.drop-tab-split(event.data, "down");
-                return DragAction.move;
+            // 同框：描边包住 tab+terminal
+            Rectangle {
+                vertical-stretch: 1;
+                min-height: 0px;
+                border-width: 1px;
+                border-color: Theme.terminal-border;
+                border-radius: Theme.radius-panel;
+                background: Theme.window-background;
+                clip: true;
+
+                VerticalLayout {
+                    width: 100%;
+                    height: 100%;
+                    spacing: 0;
+
+                    WorkspaceTabBar {
+                        tabs: root.tabs;
+                        drop-enabled: false;
+                        activate-tab(id) => { root.activate-tab(id); }
+                        close-tab(id) => { root.close-tab(id); }
+                        duplicate-tab(id) => { root.duplicate-tab-requested(id); }
+                        tab-context-menu-requested(id, title, x, y) => {
+                            root.tab-context-menu-requested(id, title, x, y);
+                        }
+                        new-session() => { root.new-session(); }
+                        drag-tab-transfer(id) => { return root.drag-tab-transfer(id); }
+                        tab-bar-dropped(_data) => { }
+                    }
+
+                    single_content := Rectangle {
+                        vertical-stretch: 1;
+                        min-height: 0px;
+                        background: Theme.terminal-background;
+                        clip: true;
+
+                        // 单一 DropArea 包住 terminal：单击/选择进子项，拖放按坐标分区。
+                        single_drop := DropArea {
+                            width: 100%;
+                            height: 100%;
+                            enabled: !root.split-active && root.terminal-visible;
+                            can-drop(event) => {
+                                root.single-drop-preview = root.split-zone(
+                                    event.position.x, event.position.y, self.width, self.height
+                                );
+                                return DragAction.move;
+                            }
+                            dropped(event) => {
+                                root.drop-tab-split(
+                                    event.data,
+                                    root.split-zone(event.position.x, event.position.y, self.width, self.height)
+                                );
+                                root.single-drop-preview = "";
+                                return DragAction.move;
+                            }
+
+                            terminal_view := TerminalView {
+                                width: 100%;
+                                height: 100%;
+                                // 外框已由 tab+terminal 一体容器承担，避免双重描边。
+                                embedded: true;
+                                view-visible: root.terminal-visible && !root.split-active;
+                                title: root.title-text;
+                                log-output: root.body-text;
+                                visible-lines <=> root.visible-lines;
+                                terminal-image: root.terminal-image;
+                                cursor-column: root.cursor-column;
+                                cursor-row: root.cursor-row;
+                                scroll-offset: root.scroll-offset;
+                                selection-active: root.selection-active;
+                                search-query <=> root.search-query-text;
+                                search-summary: root.search-summary-text;
+                                search-regex <=> root.search-regex;
+                                footer-status: root.status-text;
+                                find-visible: root.find-visible && !root.split-active;
+                                connection-overlay-visible: root.connection-overlay-visible && !root.split-active;
+                                connection-overlay-target: root.connection-overlay-target;
+                                connection-overlay-stage: root.connection-overlay-stage;
+                                connection-overlay-error: root.connection-overlay-error;
+                                connection-overlay-failed: root.connection-overlay-failed;
+                                connection-overlay-pending: root.connection-overlay-pending;
+                                connection-retry() => { root.connection-retry(); }
+                                connection-cancel() => { root.connection-cancel(); }
+                                connection-copy-error() => { root.connection-copy-error(); }
+                                key-pressed(text, ctrl, alt, shift, meta) => { root.terminal-key(text, ctrl, alt, shift, meta); }
+                                scroll-lines(delta) => { root.terminal-scroll(delta); }
+                                scroll-to-bottom() => { root.terminal-scroll-to-bottom(); }
+                                selection-begin(x, y) => { root.terminal-selection-begin(x, y); }
+                                selection-update(x, y) => { root.terminal-selection-update(x, y); }
+                                selection-end(x, y) => { root.terminal-selection-end(x, y); }
+                                select-word-at(x, y) => { root.terminal-select-word-at(x, y); }
+                                copy-visible() => { root.copy-visible(); }
+                                paste-clipboard() => { root.paste-clipboard(); }
+                                clear-terminal() => { root.clear-terminal(); }
+                                find-text(query) => { root.find-text(query); }
+                                find-next() => { root.find-next(); }
+                                find-prev() => { root.find-prev(); }
+                                find-regex-changed(enabled) => { root.find-regex-changed(enabled); }
+                                dismiss-find() => { root.dismiss-find(); }
+                                context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
+                            }
+
+                            if single_drop.has-drag && root.single-drop-preview == "up" : Rectangle {
+                                x: 0; y: 0; width: parent.width; height: parent.height * 0.3;
+                                background: Theme.selection-fill;
+                                border-width: 1px; border-color: Theme.accent;
+                            }
+                            if single_drop.has-drag && root.single-drop-preview == "down" : Rectangle {
+                                x: 0; y: parent.height * 0.7; width: parent.width; height: parent.height * 0.3;
+                                background: Theme.selection-fill;
+                                border-width: 1px; border-color: Theme.accent;
+                            }
+                            if single_drop.has-drag && root.single-drop-preview == "left" : Rectangle {
+                                x: 0; y: parent.height * 0.3; width: parent.width * 0.5; height: parent.height * 0.4;
+                                background: Theme.selection-fill;
+                                border-width: 1px; border-color: Theme.accent;
+                            }
+                            if single_drop.has-drag && root.single-drop-preview == "right" : Rectangle {
+                                x: parent.width * 0.5; y: parent.height * 0.3; width: parent.width * 0.5; height: parent.height * 0.4;
+                                background: Theme.selection-fill;
+                                border-width: 1px; border-color: Theme.accent;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -427,6 +410,8 @@ export component TerminalWorkspace inherits VerticalLayout {
                 pane0-quick-connect: root.split-pane0-quick-connect;
                 pane1-empty: root.split-pane1-empty;
                 pane1-quick-connect: root.split-pane1-quick-connect;
+                pane0-tabs: root.split-pane0-tabs;
+                pane1-tabs: root.split-pane1-tabs;
                 primary-image: root.terminal-image;
                 secondary-image: root.terminal-image-secondary;
                 cursor-column: root.cursor-column;
@@ -473,17 +458,25 @@ export component TerminalWorkspace inherits VerticalLayout {
                 ratio-changed(value) => { root.set-split-ratio(value); }
                 tab-dropped-on-pane(index, data) => { root.drop-tab-on-pane(index, data); }
                 tab-split-dropped(data, dir) => { root.drop-tab-split(data, dir); }
+                activate-tab(id) => { root.activate-tab(id); }
+                close-tab(id) => { root.close-tab(id); }
+                duplicate-tab(id) => { root.duplicate-tab-requested(id); }
+                tab-context-menu-requested(id, title, x, y) => {
+                    root.tab-context-menu-requested(id, title, x, y);
+                }
+                new-session() => { root.new-session(); }
+                drag-tab-transfer(id) => { return root.drag-tab-transfer(id); }
             }
         }
 
-        // QC 叠在对应叶子内容盒内（host pad + 叶描边内侧），与终端区同几何。
+        // QC 叠在对应叶子 terminal 内容区（host pad + 叶描边 + 叶内 tab 栏下方）。
         split_qc_page := QuickConnectPage {
             x: Theme.spacing-8 + root.split-leaf-border + (
                 !root.split-qc-shown ? 0px
                 : root.split-orientation-text == "vertical" ? 0px
                 : (root.split-qc-pane == 0 ? 0px : root.split-pane0-w + root.split-splitter)
             );
-            y: Theme.spacing-8 + root.split-leaf-border + (
+            y: Theme.spacing-8 + root.split-leaf-border + Theme.bar-height-tabs + (
                 !root.split-qc-shown ? 0px
                 : root.split-orientation-text != "vertical" ? 0px
                 : (root.split-qc-pane == 0 ? 0px : root.split-pane0-h + root.split-splitter)
@@ -495,7 +488,7 @@ export component TerminalWorkspace inherits VerticalLayout {
             height: !root.split-qc-shown ? 0px
                 : (root.split-orientation-text != "vertical" ? root.split-inner-h
                     : (root.split-qc-pane == 0 ? root.split-pane0-h : root.split-pane1-h))
-                    - 2 * root.split-leaf-border;
+                    - 2 * root.split-leaf-border - Theme.bar-height-tabs;
             clip: true;
             input-text: root.quick-connect-input-text;
             input-error-text: root.quick-connect-error-text;

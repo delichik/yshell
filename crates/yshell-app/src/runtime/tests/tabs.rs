@@ -479,3 +479,56 @@ fn place_tab_split_creates_two_pane_layout() {
     assert_eq!(moved.workspace_split.focused_pane, 0);
     assert_tab_invariants(&runtime);
 }
+
+#[test]
+fn place_tab_split_up_puts_dragged_in_pane0() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 2);
+    let first_tab = open_saved_tab(&mut runtime, "saved-0");
+    let second_tab = open_saved_tab(&mut runtime, "saved-1");
+
+    let projection = runtime
+        .place_tab_split(&second_tab, "up")
+        .expect("drag split up");
+    assert!(projection.workspace_split.active);
+    assert_eq!(projection.workspace_split.orientation_text, "vertical");
+    assert_eq!(projection.workspace_split.pane0_tab_id, second_tab);
+    assert_eq!(projection.workspace_split.pane1_tab_id, first_tab);
+    assert_eq!(projection.workspace_split.focused_pane, 0);
+    assert_tab_invariants(&runtime);
+}
+
+#[test]
+fn place_tab_split_left_puts_dragged_in_pane0() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 2);
+    let first_tab = open_saved_tab(&mut runtime, "saved-0");
+    let second_tab = open_saved_tab(&mut runtime, "saved-1");
+
+    let projection = runtime
+        .place_tab_split(&second_tab, "left")
+        .expect("drag split left");
+    assert_eq!(projection.workspace_split.orientation_text, "horizontal");
+    assert_eq!(projection.workspace_split.pane0_tab_id, second_tab);
+    assert_eq!(projection.workspace_split.pane1_tab_id, first_tab);
+    assert_tab_invariants(&runtime);
+}
+
+#[test]
+fn place_tab_split_when_already_split_reorients_and_moves() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 2);
+    let first_tab = open_saved_tab(&mut runtime, "saved-0");
+    let second_tab = open_saved_tab(&mut runtime, "saved-1");
+    runtime
+        .place_tab_split(&second_tab, "right")
+        .expect("initial split");
+
+    let projection = runtime
+        .place_tab_split(&first_tab, "up")
+        .expect("reorient up");
+    assert_eq!(projection.workspace_split.orientation_text, "vertical");
+    assert_eq!(projection.workspace_split.pane0_tab_id, first_tab);
+    assert_eq!(projection.workspace_split.focused_pane, 0);
+    assert_tab_invariants(&runtime);
+}
