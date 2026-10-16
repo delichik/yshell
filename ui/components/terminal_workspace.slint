@@ -47,12 +47,12 @@ export component TerminalWorkspace inherits VerticalLayout {
 
     // 分屏视口：从 split_host 独立算 pane0/pane1（勿对已缩过的 primary 再 ×ratio）。
     // chrome（两叶共用同一套，避免聚焦切换改变几何）：
-    //   host padding 8+8=16；把手 4；叶描边 2+2=4；TerminalView 表面内边距 12+12=24。
+    //   host padding 8+8=16；把手 4；叶描边 2+2=4；TerminalView 表面内边距 6+6=12。
     property <float> split-clamped-ratio: Math.max(0.2, Math.min(0.8, root.split-ratio));
     property <float> split-host-pad-px: 2.0 * Theme.spacing-8 / 1px;
     property <float> split-splitter-px: 4.0;
     property <float> split-leaf-border-px: 4.0;
-    property <float> split-tv-pad-px: 2.0 * Theme.spacing-12 / 1px;
+    property <float> split-tv-pad-px: 2.0 * Theme.terminal-padding / 1px;
     property <float> split-pane-chrome-px: root.split-leaf-border-px + root.split-tv-pad-px;
     property <float> split-inner-width-px: Math.max(split_host.width / 1px - root.split-host-pad-px, 1.0);
     property <float> split-inner-height-px: Math.max(split_host.height / 1px - root.split-host-pad-px, 1.0);

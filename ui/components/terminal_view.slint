@@ -55,9 +55,9 @@ export component TerminalView inherits Rectangle {
     /// P1：非聚焦分屏叶子只做位图预览 + 点击聚焦，不接手选择/滚动/按键/查找/overlay。
     in property <bool> interactive: true;
     out property <bool> terminal-focused: root.interactive && terminal_focus.has-focus;
-    // E16：内边距统一走 Theme token（表面内边距 = spacing-12，两侧共 2×）
-    out property <float> terminal-viewport-width-px: terminal_surface.width / 1px - 2 * Theme.spacing-12 / 1px;
-    out property <float> terminal-viewport-height-px: terminal_surface.height / 1px - 2 * Theme.spacing-12 / 1px;
+    // E16：内边距统一走 Theme token（表面内边距 = terminal-padding，两侧共 2×）
+    out property <float> terminal-viewport-width-px: terminal_surface.width / 1px - 2 * Theme.terminal-padding / 1px;
+    out property <float> terminal-viewport-height-px: terminal_surface.height / 1px - 2 * Theme.terminal-padding / 1px;
 
     /// P1：非交互叶子被点击时请求宿主切换焦点（分屏未聚焦 pane）。
     callback focus-requested();
@@ -116,12 +116,12 @@ export component TerminalView inherits Rectangle {
             min-height: root.embedded ? 40px : 240px;
             clip: true;
 
-            // 表面内边距 12px（§5.17）；embedded 时仍保留，与单窗格单元格度量一致。
+            // 表面内边距（§5.17 → Theme.terminal-padding）；embedded 时仍保留，与单窗格度量一致。
             terminal_focus := FocusScope {
-                x: Theme.spacing-12;
-                y: Theme.spacing-12;
-                width: parent.width - 2 * Theme.spacing-12;
-                height: parent.height - 2 * Theme.spacing-12;
+                x: Theme.terminal-padding;
+                y: Theme.terminal-padding;
+                width: parent.width - 2 * Theme.terminal-padding;
+                height: parent.height - 2 * Theme.terminal-padding;
                 enabled: root.interactive;
 
                 key-pressed(event) => {
@@ -164,6 +164,9 @@ export component TerminalView inherits Rectangle {
                     source: root.terminal-image;
                     width: root.terminal-image.width * 1phx;
                     height: root.terminal-image.height * 1phx;
+                    // 贴顶左：余数空白落在右/下（与 xterm floor 网格一致），避免顶边像空行。
+                    horizontal-alignment: left;
+                    vertical-alignment: top;
                     image-rendering: pixelated;
                 }
 
@@ -315,8 +318,8 @@ export component TerminalView inherits Rectangle {
 
             // 滚动 / 选择反馈：右上角小浮层（半透明 chrome 底 + 4px 圆角），不占整行
             if root.interactive && (root.scroll-offset > 0 || root.selection-active) : Rectangle {
-                x: parent.width - self.width - Theme.spacing-12;
-                y: Theme.spacing-12;
+                x: parent.width - self.width - Theme.terminal-padding;
+                y: Theme.terminal-padding;
                 width: feedback_row.preferred-width;
                 height: feedback_row.preferred-height;
                 background: Theme.terminal-chrome-fill;
