@@ -13,7 +13,7 @@ use std::sync::{
 
 use yshell_ssh::{
     with_connection_stage_hook, RealConnectionStage, ShellClient, ShellSession, SshConnectionConfig,
-    SshError, TransportBackend,
+    SshError,
 };
 
 /// Work item for the connect worker.
@@ -21,7 +21,6 @@ use yshell_ssh::{
 pub struct ConnectJobSpec {
     pub session_key: String,
     pub ssh_config: SshConnectionConfig,
-    pub transport_backend: TransportBackend,
     /// When true, Finished failure uses the password-retry status kind.
     pub password_retry: bool,
     /// When true, success status uses the reconnect wording.
@@ -178,10 +177,7 @@ fn run_connect(job: &ConnectJob, msg_tx: &Sender<ConnectJobMessage>) -> ConnectJ
 fn open_shell_for_job(
     spec: &ConnectJobSpec,
 ) -> Result<Box<dyn ShellSession>, SshError> {
-    match spec.transport_backend {
-        TransportBackend::Fake => ShellClient::with_fake_backend().open_shell_boxed(&spec.ssh_config),
-        TransportBackend::Real => ShellClient::with_real_backend().open_shell_boxed(&spec.ssh_config),
-    }
+    ShellClient::with_real_backend().open_shell_boxed(&spec.ssh_config)
 }
 
 /// Maps internal stages onto the five overlay stages the UI expects.

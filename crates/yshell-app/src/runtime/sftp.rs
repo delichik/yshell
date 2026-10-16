@@ -10,8 +10,6 @@ use crate::{
     sftp_view::SftpSortColumn,
 };
 use yshell_sftp::{DirectoryListing, FsEntry, FsEntryKind, RealSftpBackend, SftpClient};
-use yshell_ssh::TransportBackend;
-
 use super::*;
 
 /// UI-thread live SFTP client bound to one runtime session key.
@@ -605,22 +603,7 @@ impl AppRuntime {
         session_key: &str,
         refresh_listing: bool,
     ) -> String {
-        if self.transport_backend != TransportBackend::Real {
-            self.drop_sftp_live_client();
-            self.sftp_view_cache.clear();
-            self.sftp_listing_pending = false;
-            self.sftp_session = SftpSessionLifecycle::Unavailable {
-                reason: SftpUnavailableReason::SelectNativeSsh,
-            };
-            self.sftp_listing = SftpListingState::SyncFakeBackend;
-            return self.sftp_session.legacy_status_text();
-        }
-
-        let Some((session_state, session_backend)) =
-            self.sessions.get(session_key).map(|runtime| {
-                (runtime.state, runtime.transport_backend)
-            })
-        else {
+        let Some(session_state) = self.sessions.get(session_key).map(|runtime| runtime.state) else {
             self.drop_sftp_live_client_for(session_key);
             self.sftp_session = SftpSessionLifecycle::Failed {
                 session_key: Some(session_key.to_owned()),
@@ -636,15 +619,6 @@ impl AppRuntime {
                 session_key: Some(session_key.to_owned()),
             };
             self.sftp_listing = SftpListingState::SyncDisconnected;
-            return self.sftp_session.legacy_status_text();
-        }
-
-        if session_backend != TransportBackend::Real {
-            self.drop_sftp_live_client_for(session_key);
-            self.sftp_session = SftpSessionLifecycle::Disconnected {
-                session_key: Some(session_key.to_owned()),
-            };
-            self.sftp_listing = SftpListingState::SyncReconnectNative;
             return self.sftp_session.legacy_status_text();
         }
 
@@ -705,8 +679,7 @@ impl AppRuntime {
     pub(crate) fn sftp_ready_session_key(&self) -> Option<&str> {
         match &self.sftp_session {
             SftpSessionLifecycle::Ready { session_key } => Some(session_key.as_str()),
-            SftpSessionLifecycle::Unavailable { .. }
-            | SftpSessionLifecycle::Disconnected { .. }
+            SftpSessionLifecycle::Disconnected { .. }
             | SftpSessionLifecycle::Failed { .. } => None,
         }
     }
@@ -742,29 +715,6 @@ pub struct SftpCrumbData {
     pub path: String,
 }
 
-/// Why the SFTP lifecycle is unavailable (enum id; Slint renders the sentence).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SftpUnavailableReason {
-    SelectNativeSsh,
-    FakeBackendSelected,
-}
-
-impl SftpUnavailableReason {
-    pub(crate) const fn id(self) -> &'static str {
-        match self {
-            Self::SelectNativeSsh => "select-native-ssh",
-            Self::FakeBackendSelected => "fake-backend",
-        }
-    }
-
-    pub(crate) const fn legacy_text(self) -> &'static str {
-        match self {
-            Self::SelectNativeSsh => "select the native-ssh backend before using SFTP",
-            Self::FakeBackendSelected => "fake transport backend is selected",
-        }
-    }
-}
-
 /// Value-only SFTP listing placeholder state (the row listing itself is data).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SftpListingState {
@@ -774,15 +724,12 @@ pub(crate) enum SftpListingState {
     #[allow(dead_code)]
     DraftDisconnected,
     RefreshNeedsSession,
-    FakeBackendSelected,
-    NativeSshSelected,
     EmptyDirectory,
     Rows(String),
     ReconnectFailed,
-    SyncFakeBackend,
     SyncMissingSession,
     SyncDisconnected,
-    SyncReconnectNative,
+    SyncReconnect,
     SyncFailed {
         session_key: String,
         path: String,
@@ -796,15 +743,12 @@ impl SftpListingState {
             Self::ConnectReal => "connect-real",
             Self::DraftDisconnected => "draft-disconnected",
             Self::RefreshNeedsSession => "refresh-needs-session",
-            Self::FakeBackendSelected => "fake-backend-selected",
-            Self::NativeSshSelected => "native-ssh-selected",
             Self::EmptyDirectory => "empty-directory",
             Self::Rows(_) => "rows",
             Self::ReconnectFailed => "reconnect-failed",
-            Self::SyncFakeBackend => "sync-fake-backend",
             Self::SyncMissingSession => "sync-missing-session",
             Self::SyncDisconnected => "sync-disconnected",
-            Self::SyncReconnectNative => "sync-reconnect-native",
+            Self::SyncReconnect => "sync-reconnect",
             Self::SyncFailed { .. } => "sync-failed",
         }
     }
@@ -840,9 +784,6 @@ impl SftpListingState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SftpSessionLifecycle {
-    Unavailable {
-        reason: SftpUnavailableReason,
-    },
     Disconnected {
         session_key: Option<String>,
     },
@@ -858,7 +799,6 @@ pub(crate) enum SftpSessionLifecycle {
 impl SftpSessionLifecycle {
     pub(crate) const fn status_kind(&self) -> &'static str {
         match self {
-            Self::Unavailable { .. } => "unavailable",
             Self::Disconnected { .. } => "disconnected",
             Self::Ready { .. } => "ready",
             Self::Failed { .. } => "failed",
@@ -866,16 +806,13 @@ impl SftpSessionLifecycle {
     }
 
     pub(crate) fn status_reason(&self) -> &'static str {
-        match self {
-            Self::Unavailable { reason } => reason.id(),
-            Self::Disconnected { .. } | Self::Ready { .. } | Self::Failed { .. } => "",
-        }
+        ""
     }
 
     pub(crate) fn status_detail(&self) -> &str {
         match self {
             Self::Failed { reason, .. } => reason,
-            Self::Unavailable { .. } | Self::Disconnected { .. } | Self::Ready { .. } => "",
+            Self::Disconnected { .. } | Self::Ready { .. } => "",
         }
     }
 
@@ -889,8 +826,7 @@ impl SftpSessionLifecycle {
                 session_key: Some(session_key),
                 ..
             } => session_key,
-            Self::Unavailable { .. }
-            | Self::Disconnected { session_key: None }
+            Self::Disconnected { session_key: None }
             | Self::Failed {
                 session_key: None, ..
             } => "",
@@ -900,9 +836,6 @@ impl SftpSessionLifecycle {
     /// English sentence kept only for the not-yet-migrated status bar channel.
     pub(crate) fn legacy_status_text(&self) -> String {
         match self {
-            Self::Unavailable { reason } => {
-                format!("SFTP unavailable: {}", reason.legacy_text())
-            }
             Self::Disconnected { session_key } => match session_key {
                 Some(session_key) => {
                     format!("SFTP session disconnected for runtime session `{session_key}`.")

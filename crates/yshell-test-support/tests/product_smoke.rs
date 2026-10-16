@@ -16,10 +16,10 @@ use yshell_logging::{
     Redactor, RotationPolicy, SessionLogger, TranscriptDirection, TranscriptFormat,
 };
 use yshell_secret::{FakeKeychain, Keychain, SecretRef, SecretString};
-use yshell_sftp::{FakeSftpBackend, FsEntry, SftpBackend, SftpClient};
-use yshell_ssh::{AuthMethod, SshClient, SshConnectionConfig};
+use yshell_sftp::{InMemorySftpBackend, FsEntry, SftpBackend, SftpClient};
+use yshell_ssh::{channel::ShellSession, AuthMethod, SshConnectionConfig};
 use yshell_terminal::{TerminalColor, TerminalGrid, TerminalParser};
-use yshell_test_support::{TempHome, TestSshServer};
+use yshell_test_support::{TempHome, TestShellSession, TestSshServer};
 
 const SESSION_SECRET: &str = "p@ssw0rd-never-log";
 
@@ -147,7 +147,6 @@ fn product_docs_smoke_acceptance_loop() {
     assert_eq!(styled_cell.foreground, TerminalColor::rgb(12, 34, 56));
     assert_eq!(grid.line_text(1), "wide: 好");
 
-    let ssh = SshClient::new();
     let ssh_config = SshConnectionConfig::new(
         &resolved.session.host,
         resolved.session.port,
@@ -160,15 +159,23 @@ fn product_docs_smoke_acceptance_loop() {
                 .to_owned(),
         },
     );
-    let mut ssh_session = ssh.connect(&ssh_config).expect("fake ssh connects");
-    let exec = ssh
-        .exec(&mut ssh_session, "printf smoke")
-        .expect("fake exec");
-    assert_eq!(ssh_session.host, fake_server.host());
-    assert_eq!(exec.exit_status, 0);
-    assert_eq!(exec.stdout, b"fake ssh executed: printf smoke\n");
+    let mut shell = TestShellSession::open(&ssh_config).expect("test shell opens");
+    assert_eq!(shell.host, fake_server.host());
+    shell
+        .write_input(b"printf smoke\n")
+        .expect("test shell accepts input");
+    let mut shell_output = Vec::new();
+    for _ in 0..8 {
+        let chunk = shell.poll_output().expect("poll test shell");
+        if chunk.is_empty() {
+            break;
+        }
+        shell_output.extend_from_slice(&chunk);
+    }
+    let shell_text = String::from_utf8_lossy(&shell_output);
+    assert!(shell_text.contains("test-shell received input: printf smoke\\n"));
 
-    let mut sftp_backend = FakeSftpBackend::default();
+    let mut sftp_backend = InMemorySftpBackend::default();
     sftp_backend.mkdir("/srv").expect("mkdir /srv");
     sftp_backend.insert(FsEntry::file("/srv/readme.txt", 12));
     let mut sftp = SftpClient::with_backend(sftp_backend);
@@ -198,17 +205,17 @@ fn product_docs_smoke_acceptance_loop() {
         )
         .expect("secret input logged safely");
     logger
-        .record(TranscriptDirection::Output, &exec.stdout)
+        .record(TranscriptDirection::Output, &shell_output)
         .expect("output logged safely");
     let log = fs::read_to_string(log_path).expect("log readable");
     assert!(log.contains("[REDACTED]"));
-    assert!(log.contains("fake ssh executed"));
+    assert!(log.contains("test-shell received input"));
     assert!(
         !log.contains(SESSION_SECRET),
         "sanitized session logs must not leak plaintext secrets"
     );
 
-    ssh.disconnect(ssh_session).expect("fake ssh disconnects");
+    shell.disconnect().expect("test shell disconnects");
     manager.close_tab(&tab_id).expect("tab closes");
     assert_eq!(manager.tab_len(), 0);
 }

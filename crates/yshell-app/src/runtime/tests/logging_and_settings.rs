@@ -226,7 +226,7 @@ fn enabled_logging_writes_fake_terminal_transcript() {
         .collect::<Vec<_>>()
         .join("\n");
     assert!(combined.contains("Connecting to example.com:2200 as alice"));
-    assert!(combined.contains("Fake shell established"));
+    assert!(combined.contains("Test shell established"));
 }
 
 // ---------------------------------------------------------------- N6 手动日志

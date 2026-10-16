@@ -14,7 +14,7 @@
 # msgid 保持英文源串，msgstr 为中文译文；改动 msgid 视为破坏性变更。
 # 复数规则：nplurals=1，只有 msgstr[0]。
 # 机器比对令牌（REPLACE/DELETE/CLEAR/RESET SECRETS）、技术标识（YShell/SFTP/SSH/
-# SOCKS4/4a/5/HTTP/TOFU/KbdInt/fake/native-ssh）、快捷键与路径示例保留英文原词。
+# SOCKS4/4a/5/HTTP/TOFU/KbdInt）、快捷键与路径示例保留英文原词。
 msgid ""
 msgstr ""
 "Project-Id-Version: yshell\n"
@@ -436,13 +436,13 @@ msgstr "认证测试失败：{0}"
 
 #: ui/main_window.slint:1065
 msgctxt "MainWindow"
-msgid "Auth test succeeded for {0} using the `{1}` backend."
-msgstr "使用 `{1}` 后端对 {0} 的认证测试成功。"
+msgid "Auth test succeeded for {0}."
+msgstr "对 {0} 的认证测试成功。"
 
 #: ui/main_window.slint:1067
 msgctxt "MainWindow"
-msgid "Auth test succeeded for {0} using the `{1}` backend. Startup: {2}"
-msgstr "使用 `{1}` 后端对 {0} 的认证测试成功。启动：{2}"
+msgid "Auth test succeeded for {0}. Startup: {1}"
+msgstr "对 {0} 的认证测试成功。启动：{1}"
 
 #: ui/main_window.slint:1072
 msgctxt "MainWindow"
@@ -564,19 +564,6 @@ msgctxt "MainWindow"
 msgid "Connect a runtime session before refreshing the SFTP panel."
 msgstr "刷新 SFTP 面板前请先连接运行时会话。"
 
-#: ui/main_window.slint:1148
-msgctxt "MainWindow"
-msgid ""
-"Fake backend selected. Switch to `native-ssh` when you want to validate the "
-"embedded SSH and SFTP paths."
-msgstr "已选择 fake 后端。需要校验内嵌 SSH 与 SFTP 路径时，请切换到 `native-ssh`。"
-
-#: ui/main_window.slint:1151
-msgctxt "MainWindow"
-msgid ""
-"Native SSH selected. Connect a session to open the managed SFTP lifecycle."
-msgstr "已选择原生 SSH。请连接会话以开启托管的 SFTP 生命周期。"
-
 #: ui/main_window.slint:1154
 msgctxt "MainWindow"
 msgid "Current directory is empty."
@@ -584,13 +571,8 @@ msgstr "当前目录为空。"
 
 #: ui/main_window.slint:1157
 msgctxt "MainWindow"
-msgid "SFTP session failed because the native SSH session is not connected."
-msgstr "SFTP 会话失败，因为原生 SSH 会话未连接。"
-
-#: ui/main_window.slint:1160
-msgctxt "MainWindow"
-msgid "SFTP is unavailable on the fake backend. Switch to `native-ssh` first."
-msgstr "fake 后端无法使用 SFTP。请先切换到 `native-ssh`。"
+msgid "SFTP session failed because the SSH session is not connected."
+msgstr "SFTP 会话失败，因为 SSH 会话未连接。"
 
 #: ui/main_window.slint:1163
 msgctxt "MainWindow"
@@ -606,9 +588,9 @@ msgstr "SFTP 会话已断开。请先连接或重新连接运行时会话。"
 #: ui/main_window.slint:1169
 msgctxt "MainWindow"
 msgid ""
-"SFTP session is disconnected. Reconnect this runtime session with `native-"
-"ssh` before using SFTP."
-msgstr "SFTP 会话已断开。使用 SFTP 前，请用 `native-ssh` 重新连接此运行时会话。"
+"SFTP session is disconnected. Reconnect this runtime session before using "
+"SFTP."
+msgstr "SFTP 会话已断开。使用 SFTP 前，请重新连接此运行时会话。"
 
 #: ui/main_window.slint:1172
 msgctxt "MainWindow"
@@ -617,13 +599,8 @@ msgstr "SFTP 会话已附加到 `{0}`，但列出 `{1}` 失败：{2}"
 
 #: ui/main_window.slint:1180
 msgctxt "MainWindow"
-msgid "SFTP unavailable: fake transport backend is selected"
-msgstr "无法使用 SFTP：已选择 fake 传输后端"
-
-#: ui/main_window.slint:1182
-msgctxt "MainWindow"
-msgid "SFTP unavailable: select the native-ssh backend before using SFTP"
-msgstr "无法使用 SFTP：请先选择 native-ssh 后端"
+msgid "SFTP unavailable: {0}"
+msgstr "无法使用 SFTP：{0}"
 
 #: ui/main_window.slint:1186
 msgctxt "MainWindow"

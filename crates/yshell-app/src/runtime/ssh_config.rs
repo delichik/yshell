@@ -603,20 +603,16 @@ impl AppRuntime {
         if connected {
             Ok(EditorAuthTestStatus::Success {
                 host_label,
-                backend: self.transport_backend.label().to_owned(),
                 startup_snippet,
             })
         } else {
             Err(AppError::new(if startup_snippet.is_empty() {
                 format!(
-                    "auth test reached the `{}` backend path for {host_label}, but a live shell was not established",
-                    self.transport_backend.label()
+                    "auth test for {host_label} did not establish a live shell"
                 )
             } else {
                 format!(
-                    "auth test reached the `{}` backend path for {host_label}, but a live shell was not established. Startup: {}",
-                    self.transport_backend.label(),
-                    startup_snippet
+                    "auth test for {host_label} did not establish a live shell. Startup: {startup_snippet}"
                 )
             }))
         }

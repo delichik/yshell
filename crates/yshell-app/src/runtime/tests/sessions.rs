@@ -42,7 +42,7 @@ fn open_saved_session_reuses_saved_profile_path() {
     assert_eq!(projection.active_session_kind_text, "session");
     assert!(projection
         .terminal_body_text
-        .contains("Fake shell established"));
+        .contains("Test shell established"));
 }
 
 #[test]

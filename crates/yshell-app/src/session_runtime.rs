@@ -11,7 +11,7 @@ use yshell_logging::{
     TranscriptDirection, TranscriptFormat, TransferLogger,
 };
 use yshell_ssh::{
-    AuthMethod, HostKeyPolicy, PtySize, ShellSession, SshConnectionConfig, TransportBackend,
+    AuthMethod, HostKeyPolicy, PtySize, ShellSession, SshConnectionConfig,
 };
 use yshell_terminal::{
     GridPoint, SearchMatch, SearchQuery, SelectionRange, TerminalGrid, TerminalParser,
@@ -85,7 +85,6 @@ pub struct SessionRuntime {
     pub terminal_grid: TerminalGrid,
     pub shell_session: Option<Box<dyn ShellSession>>,
     pub state: SessionState,
-    pub transport_backend: TransportBackend,
     session_logger: Option<SessionLogger>,
     transfer_logger: Option<TransferLogger>,
     logging_notice: Option<String>,
@@ -145,7 +144,6 @@ impl SessionRuntime {
             terminal_grid: TerminalGrid::new(120, 32),
             shell_session: None,
             state: SessionState::Connecting,
-            transport_backend: TransportBackend::Fake,
             session_logger: None,
             transfer_logger: None,
             logging_notice: None,
@@ -200,7 +198,6 @@ impl SessionRuntime {
             terminal_grid: TerminalGrid::new(120, 32),
             shell_session: None,
             state: SessionState::Idle,
-            transport_backend: TransportBackend::Fake,
             session_logger: None,
             transfer_logger: None,
             logging_notice: None,
@@ -245,7 +242,6 @@ impl SessionRuntime {
             terminal_grid: TerminalGrid::new(120, 32),
             shell_session: None,
             state: SessionState::Idle,
-            transport_backend: TransportBackend::Fake,
             session_logger: None,
             transfer_logger: None,
             logging_notice: None,
@@ -1076,7 +1072,6 @@ fn transcript_format(logging: &LoggingProfile) -> TranscriptFormat {
 
 #[cfg(test)]
 mod tests {
-    use yshell_ssh::ShellClient;
     use yshell_terminal::TerminalCell;
 
     use super::*;
@@ -1133,11 +1128,10 @@ mod tests {
     }
 
     #[test]
-    fn resize_shell_pty_resizes_the_grid_with_a_fake_shell_attached() {
+    fn resize_shell_pty_resizes_the_grid_with_a_test_shell_attached() {
         let mut runtime = SessionRuntime::draft(1);
-        let shell = ShellClient::new()
-            .open_shell(&runtime.ssh_config)
-            .expect("open fake shell");
+        let shell = yshell_test_support::TestShellSession::open(&runtime.ssh_config)
+            .expect("open test shell");
         runtime.attach_shell_session(Box::new(shell));
         runtime.poll_shell_output().expect("banner");
 
@@ -1147,7 +1141,7 @@ mod tests {
         assert_eq!(runtime.terminal_grid.rows, 20);
         assert!(runtime
             .visible_text()
-            .contains("fake-shell resized to 64x20"));
+            .contains("test-shell resized to 64x20"));
     }
 
     #[test]

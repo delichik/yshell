@@ -16,7 +16,7 @@ pub mod transfer_queue;
 pub mod transfer_task;
 pub mod tree;
 
-pub use client::{FakeSftpBackend, SftpBackend, SftpClient};
+pub use client::{InMemorySftpBackend, SftpBackend, SftpClient};
 pub use error::{SftpError, SftpErrorKind, SftpResult};
 pub use fs_entry::{DirectoryListing, FsEntry, FsEntryKind};
 pub use real::RealSftpBackend;

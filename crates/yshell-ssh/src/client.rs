@@ -5,7 +5,6 @@ use std::time::Duration;
 use crate::auth::{AuthAttempt, AuthMethod, AuthMethods, KeyboardInteractivePrompter};
 use crate::channel::ShellSession;
 use crate::error::{SshError, SshResult};
-use crate::fake::FakeSshAdapter;
 use crate::forwarding::TunnelConfig;
 use crate::host_key::{HostKeyPolicy, KnownHosts};
 use crate::proxy::ProxyConfig;
@@ -75,7 +74,7 @@ pub trait SshAdapter {
     fn disconnect(&self, session: Self::Session) -> SshResult<()>;
 
     /// Server advertised authentication methods learned for this session
-    /// (`None` = the server did not return a list).
+    /// (`None` = not queried yet or the server did not return a list).
     fn auth_methods(&self, session: &Self::Session) -> SshResult<Option<AuthMethods>>;
 
     /// Perform one authentication attempt.
@@ -103,41 +102,18 @@ pub trait ShellAdapter {
     fn open_shell(&self, config: &SshConnectionConfig) -> SshResult<Self::Shell>;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TransportBackend {
-    Fake,
-    Real,
-}
-
-impl TransportBackend {
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::Fake => "fake",
-            Self::Real => "native-ssh",
-        }
-    }
-}
-
 #[derive(Debug, Default)]
-pub struct SshClient<A = FakeSshAdapter> {
+pub struct SshClient<A = RealSshAdapter> {
     adapter: A,
 }
 
-impl SshClient<FakeSshAdapter> {
+impl SshClient<RealSshAdapter> {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn with_fake_backend() -> Self {
-        Self::new()
-    }
-}
-
-impl SshClient<RealSshAdapter> {
     pub fn with_real_backend() -> Self {
-        Self {
-            adapter: RealSshAdapter,
-        }
+        Self::new()
     }
 }
 
@@ -190,25 +166,17 @@ where
 }
 
 #[derive(Debug, Default)]
-pub struct ShellClient<A = FakeSshAdapter> {
+pub struct ShellClient<A = RealSshAdapter> {
     adapter: A,
 }
 
-impl ShellClient<FakeSshAdapter> {
+impl ShellClient<RealSshAdapter> {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn with_fake_backend() -> Self {
-        Self::new()
-    }
-}
-
-impl ShellClient<RealSshAdapter> {
     pub fn with_real_backend() -> Self {
-        Self {
-            adapter: RealSshAdapter,
-        }
+        Self::new()
     }
 }
 

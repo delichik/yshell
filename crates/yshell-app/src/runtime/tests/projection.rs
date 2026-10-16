@@ -6,7 +6,7 @@ use super::*;
 
 #[test]
 fn fingerprints_are_grouped_in_user_facing_text() {
-    // D9：裸 hex 指纹按 4 位分组；SHA256:… 形式原样保留。
+    // D9：裸 hex 指纹按 4 佝分组；SHA256:… 形弝原样保留。
     assert_eq!(
         format_fingerprint_groups("00112233445566"),
         "0011 2233 4455 66"
@@ -46,7 +46,7 @@ fn host_key_prompt_split_fields_track_prompt_state() {
     let mut runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), None)
         .expect("runtime without keychain");
 
-    // 无挂起提示：拆分字段全为空串（弹窗打开前 UI 保持空布局）。
+    // 无挂起杝示：拆分字段全为空串（弹窗打开剝 UI 保挝空布局）。
     let idle = runtime.projection();
     assert!(!idle.host_key_prompt_visible);
     assert_eq!(idle.host_key_prompt_target_text, "");
@@ -74,7 +74,7 @@ fn host_key_prompt_split_fields_track_prompt_state() {
         resume_password: None,
     });
 
-    // changed 模式：expected 侧非空，指纹均按 4 位分组。
+    // changed 模弝：expected 侧非空，指纹均按 4 佝分组。
     let changed = runtime.projection();
     assert!(changed.host_key_prompt_visible);
     assert_eq!(
@@ -102,7 +102,7 @@ fn host_key_prompt_split_fields_track_prompt_state() {
         "0011 2233 4455 6677"
     );
 
-    // first-trust：expected 侧为空（空值行在弹窗里不占位）。
+    // first-trust：expected 侧为空（空值行在弹窗里丝坠佝）。
     runtime
         .pending_host_key_prompt
         .as_mut()
@@ -173,15 +173,13 @@ fn editor_auth_test_status_projects_kind_and_params() {
 
     let success = EditorAuthTestStatus::Success {
         host_label: "ops@example.test:22".to_owned(),
-        backend: "fake".to_owned(),
         startup_snippet: "welcome".to_owned(),
     };
     assert_eq!(success.kind_id(), "success");
-    assert_eq!(success.backend(), "fake");
     assert_eq!(success.startup_snippet(), "welcome");
     assert_eq!(
         success.legacy_text(),
-        "Auth test succeeded for ops@example.test:22 using the `fake` backend. Startup: welcome"
+        "Auth test succeeded for ops@example.test:22. Startup: welcome"
     );
 
     let failed = EditorAuthTestStatus::Failed {
@@ -230,7 +228,7 @@ fn projection_state_flags_track_session_and_selection() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
 
-    // 冷启动：无会话、无选中项，SFTP 与终端选区也不可用。
+    // 冷坯动：无会话〝无选中项，SFTP 与终端选区也丝坯用。
     let welcome = runtime.projection();
     assert!(!welcome.has_active_session);
     assert!(!welcome.active_session_connected);
@@ -238,7 +236,7 @@ fn projection_state_flags_track_session_and_selection() {
     assert!(!welcome.sftp_available);
     assert!(!welcome.terminal_has_selection);
 
-    // 快速连接后：有活动会话且已连接，但还没有选区/保存选中项。
+    // 快速连接坎：有活动会话且已连接，但还没有选区/保存选中项。
     let connected = runtime
         .handle_quick_connect("alice@example.com:2200")
         .expect("quick connect");
@@ -248,25 +246,25 @@ fn projection_state_flags_track_session_and_selection() {
     assert!(!connected.terminal_has_selection);
     assert!(!connected.sftp_available);
 
-    // 终端全选 → Copy 菜单项的选区开关跟随。
+    // 终端全选 → Copy 蝜坕项的选区开关跟隝。
     let selected = runtime
         .select_all_active_terminal()
         .expect("select all terminal");
     assert!(selected.terminal_has_selection);
     assert!(selected.terminal_selection_active);
 
-    // 保存活动会话会选中新 profile → Edit/Update/Delete 菜单项可用。
+    // 保存活动会话会选中新 profile → Edit/Update/Delete 蝜坕项坯用。
     let saved = runtime.save_active_session().expect("save active session");
     assert!(saved.has_saved_selection);
 
-    // 断开后 connected 开关跟随运行时状态。
+    // 断开坎 connected 开关跟隝违行时状思。
     let disconnected = runtime
         .disconnect_active_session()
         .expect("disconnect active session");
     assert!(disconnected.has_active_session);
     assert!(!disconnected.active_session_connected);
 
-    // SFTP 生命周期进入 ready → SFTP 操作项可用。
+    // SFTP 生命周期进入 ready → SFTP 擝作项坯用。
     runtime.sftp_session = SftpSessionLifecycle::Ready {
         session_key: "runtime-1".to_owned(),
     };

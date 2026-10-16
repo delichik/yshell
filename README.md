@@ -23,8 +23,8 @@ Quick Connect input is parsed and validated both from the CLI and from the nativ
 
 ## Adapter coverage
 
-- `yshell-ssh` defines connection configuration, authentication methods, host-key policy and in-memory known-hosts management, proxy state, PTY configuration, tunnel configuration, error classification, and a deterministic fake SSH adapter for tests.
-- `yshell-sftp` defines directory listings, file operation interfaces (`chmod`, `delete`, `rename`, `mkdir`), a transfer queue state machine with progress/retry/cancel, and a deterministic fake backend for tests.
+- `yshell-ssh` defines connection configuration, authentication methods, host-key policy and in-memory known-hosts management, proxy state, PTY configuration, tunnel configuration, and error classification for real SSH sessions.
+- `yshell-sftp` defines directory listings, file operation interfaces (`chmod`, `delete`, `rename`, `mkdir`), a transfer queue state machine with progress/retry/cancel, and an in-memory backend for tests.
 - `yshell-ui` defines view models and command/event types for sessions, tabs, SFTP, tunnels, quick commands, logging, search, and status.
 
 ## Development checks

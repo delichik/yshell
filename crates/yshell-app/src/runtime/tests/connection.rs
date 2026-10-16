@@ -1,4 +1,4 @@
-//! Transport backend selection and connect/disconnect state transitions.
+//! Connect/disconnect state transitions and real-SSH failure paths.
 
 use tempfile::tempdir;
 
@@ -23,16 +23,15 @@ fn disconnect_and_reconnect_update_runtime_state() {
     assert_eq!(reconnected.tab_state_text, "connected");
     assert!(reconnected
         .terminal_body_text
-        .contains("Fake shell established"));
+        .contains("Test shell established"));
 }
 
 #[test]
-fn native_ssh_backend_marks_failed_when_non_ssh_target_rejects_native_handshake() {
+fn real_ssh_marks_failed_when_non_ssh_target_rejects_handshake() {
     let (port, accept_handle) = start_tcp_probe_target();
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
-    let projection = runtime.select_native_ssh_transport_backend();
-    assert_eq!(projection.transport_backend_text, "native-ssh");
+    runtime.force_real_ssh_in_tests = true;
 
     let projection = runtime
         .handle_quick_connect(&format!("alice@127.0.0.1:{port}"))
@@ -40,50 +39,27 @@ fn native_ssh_backend_marks_failed_when_non_ssh_target_rejects_native_handshake(
     accept_handle.join().expect("accept thread");
 
     assert_eq!(projection.tab_state_text, "failed");
-    // D15：失败文案用户向（后端错误细节只进日志）。
     assert!(projection.status_text.contains("Could not connect"));
-    // D1：内部失败诊断不再写进终端网格。
     assert!(!projection
         .terminal_body_text
         .contains("Shell runtime failed"));
 }
 
 #[test]
-fn transport_backend_selection_is_runtime_visible() {
-    let temp = tempdir().expect("tempdir");
-    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
-
-    let fake_projection = runtime.select_fake_transport_backend();
-    assert_eq!(fake_projection.transport_backend_text, "fake");
-    assert!(fake_projection
-        .status_text
-        .contains("deterministic in-process shell adapter"));
-
-    let native_projection = runtime.select_native_ssh_transport_backend();
-    assert_eq!(native_projection.transport_backend_text, "native-ssh");
-    assert!(native_projection
-        .status_text
-        .contains("embedded ssh2 shell path"));
-}
-
-#[test]
-fn desktop_startup_defaults_to_native_ssh_without_losing_startup_context() {
+fn desktop_startup_projection_is_ready_without_backend_labels() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
 
     let projection = runtime.prepare_desktop_startup_projection();
 
-    assert_eq!(projection.transport_backend_text, "native-ssh");
     assert!(projection.status_text.contains("Saved sessions discovered"));
-    // 启动文案保持 `startup_status()`，不再追加/出现任何后端字样（S2/D26）。
     assert!(!projection.status_text.contains("fake"));
     assert!(!projection.status_text.contains("native-ssh"));
-    assert_eq!(projection.sftp_listing_kind_text, "native-ssh-selected");
+    assert_eq!(projection.sftp_listing_kind_text, "connect-real");
     assert_eq!(projection.sftp_session_status_kind_text, "disconnected");
 }
 
-/// N4：认证弹窗在"同一会话重试再次失败"时原地更新（保留已填内容，设计 §2），
-/// 其它会话的错误则挂起新的弹窗。
+/// N4: auth window updates in place on retry failure (keeps typed values).
 #[test]
 fn failed_auth_retry_updates_the_prompt_in_place_and_keeps_typed_values() {
     use yshell_ssh::{AuthMethods, AuthProblemKind, SshError, SshErrorKind};
@@ -111,7 +87,6 @@ fn failed_auth_retry_updates_the_prompt_in_place_and_keeps_typed_values() {
     runtime.update_auth_prompt_password("hunter2");
     runtime.toggle_auth_prompt_remember_password(true);
 
-    // 同一会话重试再次失败：不新建弹窗，只刷新服务端方式与错误条。
     let retry = SshError::new(SshErrorKind::Authentication, "denied again").with_auth_context(
         Some(AuthMethods::parse("password").expect("methods")),
         AuthProblemKind::InvalidCredentials,
@@ -128,7 +103,6 @@ fn failed_auth_retry_updates_the_prompt_in_place_and_keeps_typed_values() {
     assert!(prompt.method_allowed(AuthPromptMethod::Password));
     assert!(!prompt.method_allowed(AuthPromptMethod::PublicKey));
 
-    // 另一个会话的认证错误：新弹窗（不继承上一个会话的输入）。
     assert!(runtime.apply_auth_prompt_from_error(context("session-2"), &retry));
     let prompt = runtime
         .pending_auth_prompt

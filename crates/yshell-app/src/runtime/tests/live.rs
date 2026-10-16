@@ -18,7 +18,7 @@ fn live_native_ssh_projection_smoke_when_env_target_is_set() {
     };
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
-    runtime.select_native_ssh_transport_backend();
+    runtime.force_real_ssh_in_tests = true;
     runtime.set_host_key_policy_override_for_testing(HostKeyPolicy::AcceptAnyForTesting);
 
     let projection = runtime
@@ -61,7 +61,7 @@ fn live_terminal_color_render_when_env_target_is_set() {
     };
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
-    runtime.select_native_ssh_transport_backend();
+    runtime.force_real_ssh_in_tests = true;
     runtime.set_host_key_policy_override_for_testing(HostKeyPolicy::AcceptAnyForTesting);
     let projection = runtime
         .handle_quick_connect(&target)
@@ -112,7 +112,7 @@ fn live_native_sftp_projection_smoke_when_env_target_is_set() {
     };
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
-    runtime.select_native_ssh_transport_backend();
+    runtime.force_real_ssh_in_tests = true;
     runtime.set_host_key_policy_override_for_testing(HostKeyPolicy::AcceptAnyForTesting);
 
     let _ = runtime
@@ -135,7 +135,7 @@ fn live_native_sftp_transfer_smoke_when_env_target_is_set() {
     };
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
-    runtime.select_native_ssh_transport_backend();
+    runtime.force_real_ssh_in_tests = true;
     runtime.set_host_key_policy_override_for_testing(HostKeyPolicy::AcceptAnyForTesting);
     let _ = runtime
         .handle_quick_connect(&target)
@@ -201,7 +201,7 @@ fn live_native_logging_smoke_when_env_target_is_set() {
     store.save(&document).expect("save config");
 
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
-    runtime.select_native_ssh_transport_backend();
+    runtime.force_real_ssh_in_tests = true;
     runtime.set_host_key_policy_override_for_testing(HostKeyPolicy::AcceptAnyForTesting);
     let _ = runtime
         .handle_quick_connect(&target)
@@ -307,7 +307,7 @@ fn live_native_shell_typing_after_sftp_smoke_when_env_target_is_set() {
 
     let mut runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), None)
         .expect("runtime without keychain");
-    runtime.select_native_ssh_transport_backend();
+    runtime.force_real_ssh_in_tests = true;
     let _ = runtime.open_saved_session("saved-key").expect("connect");
     let _ = runtime.resize_active_terminal(78, 36).expect("resize");
     // 模拟 UI 计时器：每 120ms 轮询 5 秒。

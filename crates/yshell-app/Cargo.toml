@@ -59,6 +59,7 @@ dialog-gtk3 = ["rfd/gtk3"]
 
 [dev-dependencies]
 tempfile.workspace = true
+yshell-test-support = { path = "../yshell-test-support" }
 
 # Metadata for `cargo xtask dist --formats deb` (cargo-deb).
 [package.metadata.deb]

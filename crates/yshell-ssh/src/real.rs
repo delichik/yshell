@@ -1,8 +1,4 @@
-//! Real SSH transport integration skeleton.
-//!
-//! This module intentionally keeps the "real" path explicit even before the
-//! actual network transport is wired, so the app/runtime can target a stable
-//! replacement boundary instead of assuming the fake adapter is the only path.
+//! Real SSH transport via libssh2 (`ssh2`).
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -649,7 +645,7 @@ impl SshAdapter for RealSshAdapter {
             ),
         )?;
         session.mark_disconnected(
-            "Single-attempt native authentication completed; the native transport was released.",
+            "Single-attempt native authentication completed; the transport was released.",
         );
         Ok(())
     }
@@ -685,7 +681,7 @@ impl SshAdapter for RealSshAdapter {
             format!("native keyboard-interactive authentication succeeded as `{username}`"),
         )?;
         session.mark_disconnected(
-            "Single-attempt native authentication completed; the native transport was released.",
+            "Single-attempt native authentication completed; the transport was released.",
         );
         Ok(())
     }
@@ -777,11 +773,11 @@ impl ShellSession for RealShellSessionPlaceholder {
             RealShellTransport::Native(session) => {
                 session.disconnect()?;
                 self.attempt
-                    .mark_disconnected("Native SSH shell session was explicitly disconnected by the runtime.");
+                    .mark_disconnected("SSH shell session was explicitly disconnected by the runtime.");
                 // D1：运行时诊断只进日志；真实会话状态由 refresh_transport_state 播报。
                 tracing::debug!(
                     target: "yshell::ssh",
-                    "native SSH shell session was disconnected by the runtime"
+                    "SSH shell session was disconnected by the runtime"
                 );
                 Ok(())
             }
@@ -827,18 +823,18 @@ impl RealShellSessionPlaceholder {
         if !self.attempt.plan.tunnels.is_empty() {
             tracing::debug!(
                 target: "yshell::ssh",
-                "native SSH shell startup does not provision tunnel forwards yet; the session stays on the scaffold path"
+                "SSH shell startup does not provision tunnel forwards yet; the session stays on the scaffold path"
             );
             return Ok(());
         }
 
-        tracing::info!(target: "yshell::ssh", "opening a native SSH session inside yshell-ssh");
+        tracing::info!(target: "yshell::ssh", "opening a SSH session inside yshell-ssh");
         let session = RealNativeShellSession::connect(&mut self.attempt)?;
         tracing::debug!(
             target: "yshell::ssh",
             stage = self.attempt.stage.label(),
             note = self.attempt.stage_note(self.attempt.stage),
-            "native transport is live"
+            "transport is live"
         );
         self.transport = RealShellTransport::Native(session);
         Ok(())
@@ -858,7 +854,7 @@ impl RealShellSessionPlaceholder {
         if let Some(notice) = native_disconnected {
             self.pending_output.push_back(notice.clone().into_bytes());
             self.attempt
-                .mark_disconnected("Native SSH shell session closed.");
+                .mark_disconnected("SSH shell session closed.");
         }
     }
 }
@@ -1380,7 +1376,7 @@ impl RealNativeShellSession {
                 attempt,
                 RealConnectionStage::ShellOpen,
                 SshErrorKind::Channel,
-                format!("failed to open native SSH session channel: {error}"),
+                format!("failed to open SSH session channel: {error}"),
             )
         })?;
         channel
@@ -1399,7 +1395,7 @@ impl RealNativeShellSession {
                     attempt,
                     RealConnectionStage::PtyRequest,
                     SshErrorKind::Channel,
-                    format!("failed to request native PTY: {error}"),
+                    format!("failed to request PTY: {error}"),
                 )
             })?;
         attempt.record_action(
@@ -1410,7 +1406,7 @@ impl RealNativeShellSession {
             },
             RealTransportActionOutcome::Completed,
             format!(
-                "native PTY allocated for {} at {}x{}.",
+                "PTY allocated for {} at {}x{}.",
                 attempt.plan.pty.term, attempt.plan.pty.size.columns, attempt.plan.pty.size.rows
             ),
         );
@@ -1424,7 +1420,7 @@ impl RealNativeShellSession {
                 attempt,
                 RealConnectionStage::ShellOpen,
                 SshErrorKind::Channel,
-                format!("failed to start native interactive shell: {error}"),
+                format!("failed to start interactive shell: {error}"),
             )
         })?;
         // Interactive shell is polled from the UI tick: drop the connect-time
@@ -1437,11 +1433,11 @@ impl RealNativeShellSession {
         attempt.record_action(
             RealTransportAction::OpenShell,
             RealTransportActionOutcome::Completed,
-            "native interactive shell channel is open.".to_owned(),
+            "interactive shell channel is open.".to_owned(),
         );
         attempt.advance_to(
             RealConnectionStage::Connected,
-            "Interactive shell is live inside the embedded native SSH transport.",
+            "Interactive shell is live inside the embedded SSH transport.",
         );
         Ok(Self {
             session,
@@ -1474,7 +1470,7 @@ impl RealNativeShellSession {
                 self.mark_closed_after_transport_error();
                 return Err(SshError::new(
                     SshErrorKind::Io,
-                    format!("native SSH keepalive failed: {error}"),
+                    format!("SSH keepalive failed: {error}"),
                 ));
             }
         }
@@ -1494,7 +1490,7 @@ impl RealNativeShellSession {
         if self.closed {
             return Err(SshError::new(
                 SshErrorKind::Io,
-                "cannot write to a closed native SSH shell".to_owned(),
+                "cannot write to a closed SSH shell".to_owned(),
             ));
         }
         // 会话始终是非阻塞的（`open_shell` 里 `set_blocking(false)`）。这里不要
@@ -1509,7 +1505,7 @@ impl RealNativeShellSession {
                     self.mark_closed_after_transport_error();
                     return Err(SshError::new(
                         SshErrorKind::Io,
-                        "native SSH shell accepted zero bytes while writing input".to_owned(),
+                        "SSH shell accepted zero bytes while writing input".to_owned(),
                     ));
                 }
                 Ok(written) => {
@@ -1521,7 +1517,7 @@ impl RealNativeShellSession {
                     if retries > 500 {
                         return Err(SshError::new(
                             SshErrorKind::Io,
-                            "native SSH shell input stalled while waiting for backpressure to clear"
+                            "SSH shell input stalled while waiting for backpressure to clear"
                                 .to_owned(),
                         ));
                     }
@@ -1531,7 +1527,7 @@ impl RealNativeShellSession {
                     self.mark_closed_after_transport_error();
                     return Err(SshError::new(
                         SshErrorKind::Io,
-                        format!("failed to write bytes into native SSH shell: {error}"),
+                        format!("failed to write bytes into SSH shell: {error}"),
                     ));
                 }
             }
@@ -1547,7 +1543,7 @@ impl RealNativeShellSession {
                     if retries > 500 {
                         return Err(SshError::new(
                             SshErrorKind::Io,
-                            "native SSH shell flush stalled while waiting for backpressure to clear"
+                            "SSH shell flush stalled while waiting for backpressure to clear"
                                 .to_owned(),
                         ));
                     }
@@ -1557,7 +1553,7 @@ impl RealNativeShellSession {
                     self.mark_closed_after_transport_error();
                     return Err(SshError::new(
                         SshErrorKind::Io,
-                        format!("failed to flush bytes into native SSH shell: {error}"),
+                        format!("failed to flush bytes into SSH shell: {error}"),
                     ));
                 }
             }
@@ -1576,7 +1572,7 @@ impl RealNativeShellSession {
                 SshError::new(
                     SshErrorKind::Channel,
                     format!(
-                        "failed to resize native SSH PTY to {}x{}: {error}",
+                        "failed to resize SSH PTY to {}x{}: {error}",
                         size.columns, size.rows
                     ),
                 )
@@ -1588,7 +1584,7 @@ impl RealNativeShellSession {
         let close_result = self
             .channel
             .close()
-            .map_err(|error| SshError::new(SshErrorKind::Channel, format!("failed to close native SSH channel: {error}")));
+            .map_err(|error| SshError::new(SshErrorKind::Channel, format!("failed to close SSH channel: {error}")));
         if close_result.is_ok() {
             let _ = self.channel.wait_close();
         }
@@ -1604,13 +1600,13 @@ impl RealNativeShellSession {
         }
         self.disconnect_reported = true;
         if self.closed {
-            Some("native SSH shell session was closed.\n".to_owned())
+            Some("SSH shell session was closed.\n".to_owned())
         } else if let Ok(status) = self.channel.exit_status() {
             self.closed = true;
-            Some(format!("native SSH shell session exited with status {status}.\n"))
+            Some(format!("SSH shell session exited with status {status}.\n"))
         } else {
             self.closed = true;
-            Some("native SSH shell session reached EOF.\n".to_owned())
+            Some("SSH shell session reached EOF.\n".to_owned())
         }
     }
 }
@@ -1625,7 +1621,7 @@ fn connect_authenticated_native_session(attempt: &mut RealConnectionAttempt) -> 
 fn establish_native_session(attempt: &mut RealConnectionAttempt) -> SshResult<Session> {
     attempt.advance_to(
         RealConnectionStage::TcpConnect,
-        "Opening a TCP socket for the native SSH session.",
+        "Opening a TCP socket for the SSH session.",
     );
     let stream = connect_native_stream(&attempt.plan).map_err(|error| {
         attempt.mark_failed(error.message.clone());
@@ -1640,7 +1636,7 @@ fn establish_native_session(attempt: &mut RealConnectionAttempt) -> SshResult<Se
             attempt,
             RealConnectionStage::SshHandshake,
             SshErrorKind::Io,
-            format!("failed to allocate native SSH session: {error}"),
+            format!("failed to allocate SSH session: {error}"),
         )
     })?;
     session.set_tcp_stream(stream);
@@ -1654,7 +1650,7 @@ fn establish_native_session(attempt: &mut RealConnectionAttempt) -> SshResult<Se
                 attempt,
                 RealConnectionStage::SshHandshake,
                 SshErrorKind::Handshake,
-                format!("native SSH handshake failed: {error}"),
+                format!("SSH handshake failed: {error}"),
             )
         })?;
     attempt.record_action(
@@ -1662,11 +1658,11 @@ fn establish_native_session(attempt: &mut RealConnectionAttempt) -> SshResult<Se
             server: format!("{}:{}", attempt.plan.host, attempt.plan.port),
         },
         RealTransportActionOutcome::Completed,
-        "native SSH handshake completed through the embedded ssh2 transport.".to_owned(),
+        "SSH handshake completed through the embedded ssh2 transport.".to_owned(),
     );
     attempt.advance_to(
         RealConnectionStage::HostKeyVerification,
-        "Native SSH handshake completed. Host-key verification is next.",
+        "SSH handshake completed. Host-key verification is next.",
     );
 
     verify_native_host_key(&session, attempt)?;
@@ -1677,10 +1673,10 @@ fn establish_native_session(attempt: &mut RealConnectionAttempt) -> SshResult<Se
     let methods = query_native_auth_methods(&session, &attempt.plan.username);
     let auth_note = match methods {
         Some(methods) => format!(
-            "Host key accepted. Native SSH authentication is next. Server auth methods: {}.",
+            "Host key accepted. SSH authentication is next. Server auth methods: {}.",
             methods.describe()
         ),
-        None => "Host key accepted. Native SSH authentication is next. The server did not return an auth-method list.".to_owned(),
+        None => "Host key accepted. SSH authentication is next. The server did not return an auth-method list.".to_owned(),
     };
     attempt.auth_methods = methods;
     attempt.advance_to(RealConnectionStage::Authentication, auth_note);
@@ -1766,14 +1762,14 @@ fn connect_native_stream(plan: &RealConnectionPlan) -> SshResult<TcpStream> {
         .map_err(|error| {
             SshError::new(
                 SshErrorKind::Dns,
-                format!("failed to resolve `{target}` for native SSH session: {error}"),
+                format!("failed to resolve `{target}` for SSH session: {error}"),
             )
         })?;
     let addresses = resolved.collect::<Vec<_>>();
     if addresses.is_empty() {
         return Err(SshError::new(
             SshErrorKind::Dns,
-            format!("failed to resolve `{target}` for native SSH session: no socket addresses"),
+            format!("failed to resolve `{target}` for SSH session: no socket addresses"),
         ));
     }
     let mut last_error = None;
@@ -1786,7 +1782,7 @@ fn connect_native_stream(plan: &RealConnectionPlan) -> SshResult<TcpStream> {
                     tracing::warn!(
                         target: "yshell::ssh",
                         %error,
-                        "failed to enable TCP_NODELAY on native SSH stream; interactive typing may feel laggy"
+                        "failed to enable TCP_NODELAY on SSH stream; interactive typing may feel laggy"
                     );
                 }
                 return Ok(stream);
@@ -1797,7 +1793,7 @@ fn connect_native_stream(plan: &RealConnectionPlan) -> SshResult<TcpStream> {
     let (address, error) = last_error.expect("native connect attempted at least one address");
     Err(SshError::new(
         map_tcp_connect_error_kind(&error),
-        format!("failed to open native SSH TCP stream to `{address}`: {error}"),
+        format!("failed to open SSH TCP stream to `{address}`: {error}"),
     ))
 }
 
@@ -1811,7 +1807,7 @@ fn verify_native_host_key(session: &Session, attempt: &mut RealConnectionAttempt
             attempt,
             RealConnectionStage::HostKeyVerification,
             SshErrorKind::Handshake,
-            "native SSH session did not expose a server host key".to_owned(),
+            "SSH session did not expose a server host key".to_owned(),
         )
     })?;
     let presented = crate::host_key::HostKeyFingerprint {
@@ -1953,7 +1949,7 @@ fn drain_read_stream(reader: &mut impl Read, queue: &mut VecDeque<Vec<u8>>) -> S
             Err(error) => {
                 return Err(SshError::new(
                     SshErrorKind::Io,
-                    format!("failed while reading native SSH output: {error}"),
+                    format!("failed while reading SSH output: {error}"),
                 ))
             }
         }
@@ -2048,7 +2044,7 @@ mod tests {
             .expect_err("non-ssh listener should fail during handshake handoff");
         accept_handle.join().expect("accept thread");
         assert_eq!(error.kind, SshErrorKind::Handshake);
-        assert!(error.message.contains("native SSH handshake failed"));
+        assert!(error.message.contains("SSH handshake failed"));
     }
 
     #[test]

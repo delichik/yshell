@@ -709,7 +709,7 @@ fn editor_password_save_requires_enabled_secret_store() {
 }
 
 #[test]
-fn fake_backend_editor_auth_test_succeeds_without_saving() {
+fn editor_auth_test_succeeds_without_saving() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
     let _ = runtime.start_new_saved_session_editor();
@@ -724,15 +724,15 @@ fn fake_backend_editor_auth_test_succeeds_without_saving() {
     assert!(projection
         .editor_auth_test_host_text
         .contains("auth-test.example.test:2222"));
-    assert_eq!(projection.editor_auth_test_backend_text, "fake");
+    assert_eq!(projection.editor_auth_test_backend_text, "");
     assert_eq!(runtime.saved_session_profiles().len(), 0);
 }
 
 #[test]
-fn native_ssh_password_auth_test_runs_without_old_system_bridge_limitation() {
+fn password_auth_test_runs_against_real_ssh_path() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
-    let _ = runtime.select_native_ssh_transport_backend();
+    runtime.force_real_ssh_in_tests = true;
     let _ = runtime.start_new_saved_session_editor();
     let _ = runtime.update_editor_name("Password Auth Test");
     let _ = runtime.update_editor_host("password-auth.example.test");
@@ -770,7 +770,7 @@ fn editor_save_and_connect_opens_the_saved_session_runtime() {
     assert_eq!(projection.tab_state_text, "connected");
     assert!(projection
         .terminal_body_text
-        .contains("Fake shell established"));
+        .contains("Test shell established"));
     assert_eq!(runtime.saved_session_profiles().len(), 1);
 }
 

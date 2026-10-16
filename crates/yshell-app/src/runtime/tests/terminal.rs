@@ -16,11 +16,10 @@ fn active_terminal_input_flows_through_shell_boundary() {
         .send_active_terminal_input("pwd\n")
         .expect("send input");
 
-    // D4：正常输入不再刷新状态栏。
-    assert!(!projection.status_text.contains("Sent"));
+    // D4：正常输入丝冝刷新状思栝�?    assert!(!projection.status_text.contains("Sent"));
     assert!(projection
         .terminal_body_text
-        .contains("fake-shell received input"));
+        .contains("test-shell received input"));
 }
 
 #[test]
@@ -38,7 +37,7 @@ fn terminal_projection_exposes_grid_lines_and_cursor_position() {
     assert!(projection
         .terminal_visible_lines
         .iter()
-        .any(|line| line.contains("fake-shell received input")));
+        .any(|line| line.contains("test-shell received input")));
     assert!(projection.terminal_cursor_row >= 0);
     assert!(projection.terminal_cursor_column >= 0);
 }
@@ -56,7 +55,7 @@ fn active_terminal_resize_flows_through_shell_boundary() {
         .expect("resize terminal");
 
     assert!(projection.status_text.contains("100x40"));
-    assert!(projection.terminal_body_text.contains("fake-shell resized"));
+    assert!(projection.terminal_body_text.contains("test-shell resized"));
 }
 
 #[test]
@@ -80,7 +79,7 @@ fn passive_terminal_resize_skips_duplicate_dimensions() {
 
 #[test]
 fn attach_shell_forces_viewport_pty_resync_even_when_config_matches() {
-    use yshell_ssh::{PtySize, ShellClient};
+    use yshell_ssh::PtySize;
 
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
@@ -102,8 +101,7 @@ fn attach_shell_forces_viewport_pty_resync_even_when_config_matches() {
         pixel_width: 0,
         pixel_height: 0,
     };
-    let shell = ShellClient::with_fake_backend()
-        .open_shell_boxed(&stale_config)
+    let shell = yshell_test_support::TestShellSession::open_boxed(&stale_config)
         .expect("open stale shell");
     {
         let session = runtime.sessions.get_mut(&session_key).expect("session");
@@ -119,7 +117,7 @@ fn attach_shell_forces_viewport_pty_resync_even_when_config_matches() {
         .sync_active_terminal_size_passive(100, 40)
         .expect("post-attach sync")
         .expect("must push resize onto live shell");
-    assert!(forced.terminal_body_text.contains("fake-shell resized to 100x40"));
+    assert!(forced.terminal_body_text.contains("test-shell resized to 100x40"));
     assert!(!runtime.sessions[&session_key].needs_pty_viewport_resync());
 
     let skipped = runtime
@@ -139,18 +137,17 @@ fn terminal_key_input_flows_through_the_shell_boundary() {
     let typed = runtime
         .send_active_terminal_key("x", false, false, false, false)
         .expect("send key");
-    // D4：按键不写状态栏。
-    assert!(!typed.status_text.contains("Sent"));
+    // D4：按键丝写状思栝�?    assert!(!typed.status_text.contains("Sent"));
     assert!(typed
         .terminal_body_text
-        .contains("fake-shell received input: x"));
+        .contains("test-shell received input: x"));
 
     let entered = runtime
         .send_active_terminal_key("\u{000a}", false, false, false, false)
         .expect("send enter");
     assert!(entered
         .terminal_body_text
-        .contains("fake-shell received input: \\r"));
+        .contains("test-shell received input: \\r"));
 
     let control = runtime
         .send_active_terminal_key("c", true, false, false, false)
@@ -342,10 +339,8 @@ fn copy_paste_clear_and_find_work_on_visible_terminal_text() {
 
     let cleared = runtime.clear_active_terminal().expect("clear terminal");
     assert!(cleared.status_text.contains("Cleared"));
-    // D1：清屏不再把应用内文案写进网格。
-    assert!(!cleared.terminal_body_text.contains("Terminal view cleared"));
+    // D1：清屝丝冝把应用内文案写进网格�?    assert!(!cleared.terminal_body_text.contains("Terminal view cleared"));
 
     let pasted = runtime.paste_terminal_clipboard().expect("paste clipboard");
-    // D4：粘贴走同一条输入路径，不写状态栏；内容确实到达 shell。
-    assert!(pasted.terminal_body_text.contains("echo secret"));
+    // D4：粘贴走坌一条输入路径，丝写状思栝；内容确实到�?shell�?    assert!(pasted.terminal_body_text.contains("echo secret"));
 }

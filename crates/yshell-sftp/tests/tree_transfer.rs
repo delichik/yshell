@@ -9,19 +9,19 @@ use std::{
 
 use tempfile::TempDir;
 use yshell_sftp::{
-    FakeSftpBackend, FsEntry, FsEntryKind, OverwritePolicy, RealSftpBackend, SftpBackend,
+    InMemorySftpBackend, FsEntry, FsEntryKind, OverwritePolicy, RealSftpBackend, SftpBackend,
     SftpClient, SftpErrorKind, TransferDirection, TransferItemKind, TransferProgress,
     TreeTransferOptions,
 };
 
-fn fake_client() -> SftpClient {
-    SftpClient::with_backend(FakeSftpBackend::default())
+fn in_memory_client() -> SftpClient {
+    SftpClient::with_backend(InMemorySftpBackend::default())
 }
 
 /// Build a fake-backed client after seeding the raw backend (needed for
 /// `insert`, which is a fake-only helper).
-fn fake_client_with(setup: impl FnOnce(&mut FakeSftpBackend)) -> SftpClient {
-    let mut backend = FakeSftpBackend::default();
+fn in_memory_client_with(setup: impl FnOnce(&mut InMemorySftpBackend)) -> SftpClient {
+    let mut backend = InMemorySftpBackend::default();
     setup(&mut backend);
     SftpClient::with_backend(backend)
 }
@@ -61,7 +61,7 @@ fn download_text(client: &SftpClient, remote: &str) -> String {
 /// Remote seeding shared by the upload overwrite-policy tests: `/dest` already
 /// contains `a.txt` (file), `sub/keep.txt` (dir) and `blocked` (file).
 fn seeded_upload_client() -> SftpClient {
-    let mut client = fake_client();
+    let mut client = in_memory_client();
     client.mkdir("/dest").expect("mkdir /dest");
     upload_text(&mut client, "/dest/a.txt", "old-a");
     client.mkdir("/dest/sub").expect("mkdir /dest/sub");
@@ -88,7 +88,7 @@ fn upload_tree_transfers_nested_tree_and_reports_progress() {
     write_file(&local, "sub/b.txt", "beta!"); // 5 bytes
     write_file(&local, "sub/deep/c.txt", "c"); // 1 byte
 
-    let mut client = fake_client();
+    let mut client = in_memory_client();
     let cancel = AtomicBool::new(false);
     let mut events: Vec<TransferProgress> = Vec::new();
     let mut progress = |event: TransferProgress| events.push(event);
@@ -229,7 +229,7 @@ fn upload_tree_cancel_stops_remaining_items() {
     write_file(&local, "b.txt", "bbbbb");
     write_file(&local, "c.txt", "ccccc");
 
-    let mut client = fake_client();
+    let mut client = in_memory_client();
     let cancel = AtomicBool::new(false);
     let mut events: Vec<TransferProgress> = Vec::new();
     let mut progress = |event: TransferProgress| {
@@ -269,7 +269,7 @@ fn upload_tree_cancelled_before_start_transfers_nothing() {
     let local = temp.path().join("src");
     write_file(&local, "a.txt", "aaaaa");
 
-    let mut client = fake_client();
+    let mut client = in_memory_client();
     let cancel = AtomicBool::new(true);
     let mut progress = |_event: TransferProgress| {};
     let report = client
@@ -304,7 +304,7 @@ fn upload_tree_records_broken_symlink_and_continues() {
     symlink("missing-target", local.join("m_broken.txt")).expect("create dangling symlink");
     write_file(&local, "z.txt", "zzzzz");
 
-    let mut client = fake_client();
+    let mut client = in_memory_client();
     let cancel = AtomicBool::new(false);
     let mut progress = |_event: TransferProgress| {};
     let report = client
@@ -326,7 +326,7 @@ fn upload_tree_records_broken_symlink_and_continues() {
     assert_eq!(download_text(&client, "/dest/z.txt"), "zzzzz");
 
     // Without following symlinks the same tree succeeds and reports a skip.
-    let mut client = fake_client();
+    let mut client = in_memory_client();
     let report = client
         .upload_tree(
             &local,
@@ -356,7 +356,7 @@ fn upload_tree_follows_symlinks_and_detects_cycles() {
     symlink("real", local.join("linkdir")).expect("symlink dir");
     symlink(".", local.join("loop")).expect("symlink cycle");
 
-    let mut client = fake_client();
+    let mut client = in_memory_client();
     let cancel = AtomicBool::new(false);
     let mut progress = |_event: TransferProgress| {};
     let report = client
@@ -384,7 +384,7 @@ fn upload_tree_follows_symlinks_and_detects_cycles() {
 /// Remote seeding shared by the download tests: `/src/a.txt` plus
 /// `/src/blocked/y.txt`.
 fn seeded_download_client() -> SftpClient {
-    let mut client = fake_client();
+    let mut client = in_memory_client();
     client.mkdir("/src").expect("mkdir /src");
     upload_text(&mut client, "/src/a.txt", "A-new");
     client.mkdir("/src/blocked").expect("mkdir /src/blocked");
@@ -406,7 +406,7 @@ fn seeded_download_output(temp: &TempDir) -> PathBuf {
 fn download_tree_transfers_nested_tree_and_reports_progress() {
     let temp = TempDir::new().expect("tempdir");
     let out = temp.path().join("out");
-    let mut client = fake_client();
+    let mut client = in_memory_client();
     client.mkdir("/src").expect("mkdir /src");
     upload_text(&mut client, "/src/a.txt", "A");
     client.mkdir("/src/sub").expect("mkdir /src/sub");
@@ -544,7 +544,7 @@ fn download_tree_overwrite_skip_ask_and_rename_policies() {
 fn download_tree_records_missing_remote_content_and_continues() {
     let temp = TempDir::new().expect("tempdir");
     let out = temp.path().join("out");
-    let mut client = fake_client_with(|backend| {
+    let mut client = in_memory_client_with(|backend| {
         backend.mkdir("/src").expect("mkdir /src");
         // An entry without stored fake content fails on download.
         backend.insert(FsEntry::file("/src/bad.txt", 5));
@@ -575,7 +575,7 @@ fn download_tree_records_missing_remote_content_and_continues() {
 fn download_tree_cancel_stops_remaining_items() {
     let temp = TempDir::new().expect("tempdir");
     let out = temp.path().join("out");
-    let mut client = fake_client();
+    let mut client = in_memory_client();
     client.mkdir("/src").expect("mkdir /src");
     upload_text(&mut client, "/src/a.txt", "a");
     upload_text(&mut client, "/src/b.txt", "b");
@@ -608,7 +608,7 @@ fn download_tree_follow_symlinks_policy() {
     let temp = TempDir::new().expect("tempdir");
     let upload_source = temp.path().join("upload.txt");
     fs::write(&upload_source, "linked").expect("write upload source");
-    let mut client = fake_client_with(|backend| {
+    let mut client = in_memory_client_with(|backend| {
         backend.mkdir("/src").expect("mkdir /src");
         backend
             .upload_file(&upload_source, "/src/real.txt")
@@ -666,7 +666,7 @@ fn download_tree_follow_symlinks_policy() {
 
 #[test]
 fn remove_dir_only_removes_empty_directories() {
-    let mut client = fake_client();
+    let mut client = in_memory_client();
     client.mkdir("/srv").expect("mkdir /srv");
     client.mkdir("/srv/sub").expect("mkdir /srv/sub");
     upload_text(&mut client, "/srv/sub/a.txt", "a");
@@ -689,7 +689,7 @@ fn remove_dir_only_removes_empty_directories() {
 
 #[test]
 fn delete_many_and_chmod_many_report_each_item() {
-    let mut client = fake_client();
+    let mut client = in_memory_client();
     client.mkdir("/srv").expect("mkdir /srv");
     upload_text(&mut client, "/srv/a.txt", "a");
     upload_text(&mut client, "/srv/b.txt", "b");
@@ -732,7 +732,7 @@ fn tree_transfer_rejects_renaming_the_transfer_root() {
     let temp = TempDir::new().expect("tempdir");
     let local = temp.path().join("src");
     write_file(&local, "a.txt", "a");
-    let mut client = fake_client();
+    let mut client = in_memory_client();
     upload_text(&mut client, "/dest", "file");
     let error = client
         .upload_tree(
@@ -751,7 +751,7 @@ fn tree_transfer_rejects_renaming_the_transfer_root() {
     let temp = TempDir::new().expect("tempdir");
     let out = temp.path().join("out");
     fs::write(&out, "file").expect("write blocking root");
-    let mut client = fake_client();
+    let mut client = in_memory_client();
     client.mkdir("/src").expect("mkdir /src");
     upload_text(&mut client, "/src/a.txt", "a");
     let error = client
@@ -771,6 +771,6 @@ fn tree_transfer_rejects_renaming_the_transfer_root() {
 #[test]
 fn fake_and_real_backends_expose_the_same_trait_surface() {
     fn assert_backend<B: SftpBackend>() {}
-    assert_backend::<FakeSftpBackend>();
+    assert_backend::<InMemorySftpBackend>();
     assert_backend::<RealSftpBackend>();
 }

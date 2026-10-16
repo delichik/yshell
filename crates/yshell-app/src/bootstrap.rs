@@ -16,7 +16,6 @@ use slint::language::ColorScheme;
 use slint::private_unstable_api::re_exports::DragAction;
 use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, SharedString, VecModel};
 use yshell_config::{PanelId, PanelSide};
-use yshell_ssh::TransportBackend;
 use yshell_terminal::TerminalRenderer;
 use yshell_ui::appearance::{self, AccentColors, ThemeMode};
 
@@ -250,7 +249,7 @@ impl YShellApp {
     pub fn show(&mut self) -> AppResult<()> {
         // N2：启动落点 = Quick Connect 页（无标签时内容区显示 QC 页，不新建标签，
         // 见 `AppRuntime::quick_connect_visible`）。
-        resolve_startup_ssh_backend(&mut self.runtime.borrow_mut());
+        let _ = self.runtime.borrow_mut().prepare_desktop_startup_projection();
         // 本地栏首次列出（默认 home 目录）。
         self.runtime.borrow_mut().refresh_local_pane();
         let manager = crate::windows::WindowManager::new(Rc::clone(&self.runtime))?;
@@ -266,30 +265,6 @@ impl YShellApp {
     pub fn run(mut self) -> AppResult<()> {
         self.show()?;
         self.run_event_loop()
-    }
-}
-
-/// E2E/开发开关：`YSHELL_SSH_BACKEND=native-ssh|fake` 启动即切换传输后端，
-/// 等价于调用 `select_native_ssh_transport_backend()` / `select_fake_transport_backend()`。
-///
-/// S2/D26：**未设置或值无法识别时默认原生 SSH（Real）**，桌面启动不再落到 fake
-/// 适配器；`fake` 仅供 e2e/离线测试显式选择。
-fn resolve_startup_ssh_backend(runtime: &mut AppRuntime) -> AppProjection {
-    match startup_ssh_backend_from_value(std::env::var("YSHELL_SSH_BACKEND").ok().as_deref()) {
-        // 显式开关（e2e/开发）：沿用菜单同款切换路径与状态文案。
-        Some(TransportBackend::Fake) => runtime.select_fake_transport_backend(),
-        Some(TransportBackend::Real) => runtime.select_native_ssh_transport_backend(),
-        // 无环境变量：桌面启动默认原生 SSH，状态文案保持 `startup_status()`。
-        None => runtime.prepare_desktop_startup_projection(),
-    }
-}
-
-/// `YSHELL_SSH_BACKEND` 的取值解析（大小写与首尾空白不敏感；未知值回退 `None`）。
-fn startup_ssh_backend_from_value(value: Option<&str>) -> Option<TransportBackend> {
-    match value?.trim().to_ascii_lowercase().as_str() {
-        "native-ssh" => Some(TransportBackend::Real),
-        "fake" => Some(TransportBackend::Fake),
-        _ => None,
     }
 }
 
@@ -6764,74 +6739,21 @@ pub fn init_logging() -> AppResult<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        platform_default_ui_font, resolve_appearance, resolve_language,
-        resolve_startup_ssh_backend, resolve_ui_font, startup_ssh_backend_from_value,
+        platform_default_ui_font, resolve_appearance, resolve_language, resolve_ui_font,
         terminal_grid_cell, terminal_size_from_viewport,
     };
     use crate::runtime::AppRuntime;
     use tempfile::tempdir;
     use yshell_config::discover_config_dir;
-    use yshell_ssh::TransportBackend;
     use yshell_ui::appearance::{self, ThemeMode};
 
     #[test]
-    fn startup_ssh_backend_env_selects_native_ssh_runtime() {
-        // 取值解析：大小写/空白不敏感，未知值回退默认（None → 原生 SSH）。
-        assert_eq!(
-            startup_ssh_backend_from_value(Some("native-ssh")),
-            Some(TransportBackend::Real)
-        );
-        assert_eq!(
-            startup_ssh_backend_from_value(Some(" Native-SSH ")),
-            Some(TransportBackend::Real)
-        );
-        assert_eq!(
-            startup_ssh_backend_from_value(Some("fake")),
-            Some(TransportBackend::Fake)
-        );
-        assert_eq!(startup_ssh_backend_from_value(Some("bogus")), None);
-        assert_eq!(startup_ssh_backend_from_value(Some("   ")), None);
-        assert_eq!(startup_ssh_backend_from_value(None), None);
-
-        // S2/D26：无环境变量启动 → 原生 SSH（不是 fake-shell 横幅）。
-        // 同一测试内串行覆盖三种取值，避免并行测试互相改 `YSHELL_SSH_BACKEND`。
-        std::env::remove_var("YSHELL_SSH_BACKEND");
+    fn desktop_startup_projection_is_ready_for_ssh() {
         let temp = tempdir().expect("tempdir");
         let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
-
-        let default_projection = resolve_startup_ssh_backend(&mut runtime);
-        assert_eq!(default_projection.transport_backend_text, "native-ssh");
-        assert_eq!(
-            default_projection.sftp_listing_kind_text,
-            "native-ssh-selected"
-        );
-        assert_eq!(
-            default_projection.sftp_session_status_kind_text,
-            "disconnected"
-        );
-        assert!(!default_projection.status_text.contains("fake"));
-        assert!(!default_projection
-            .sftp_listing_rows_text
-            .contains("fake backend"));
-
-        // e2e/离线测试开关仍可用：YSHELL_SSH_BACKEND=fake。
-        std::env::set_var("YSHELL_SSH_BACKEND", "fake");
-        let fake_projection = resolve_startup_ssh_backend(&mut runtime);
-        assert_eq!(fake_projection.transport_backend_text, "fake");
-        assert_eq!(
-            fake_projection.sftp_listing_kind_text,
-            "fake-backend-selected"
-        );
-
-        // 显式 native-ssh 与缺省一致。
-        std::env::set_var("YSHELL_SSH_BACKEND", "native-ssh");
-        let native_projection = resolve_startup_ssh_backend(&mut runtime);
-        std::env::remove_var("YSHELL_SSH_BACKEND");
-        assert_eq!(native_projection.transport_backend_text, "native-ssh");
-        assert_eq!(
-            native_projection.sftp_listing_kind_text,
-            "native-ssh-selected"
-        );
+        let projection = runtime.prepare_desktop_startup_projection();
+        assert_eq!(projection.sftp_listing_kind_text, "connect-real");
+        assert_eq!(projection.sftp_session_status_kind_text, "disconnected");
     }
 
     #[test]

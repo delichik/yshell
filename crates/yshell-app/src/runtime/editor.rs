@@ -866,7 +866,6 @@ pub(crate) enum EditorAuthTestStatus {
     LoadedHint,
     Success {
         host_label: String,
-        backend: String,
         startup_snippet: String,
     },
     Failed {
@@ -887,13 +886,6 @@ impl EditorAuthTestStatus {
     pub(crate) fn host_label(&self) -> &str {
         match self {
             Self::Success { host_label, .. } => host_label,
-            _ => "",
-        }
-    }
-
-    pub(crate) fn backend(&self) -> &str {
-        match self {
-            Self::Success { backend, .. } => backend,
             _ => "",
         }
     }
@@ -926,14 +918,13 @@ impl EditorAuthTestStatus {
             }
             Self::Success {
                 host_label,
-                backend,
                 startup_snippet,
             } => {
                 if startup_snippet.is_empty() {
-                    format!("Auth test succeeded for {host_label} using the `{backend}` backend.")
+                    format!("Auth test succeeded for {host_label}.")
                 } else {
                     format!(
-                        "Auth test succeeded for {host_label} using the `{backend}` backend. Startup: {startup_snippet}"
+                        "Auth test succeeded for {host_label}. Startup: {startup_snippet}"
                     )
                 }
             }

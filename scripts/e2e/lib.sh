@@ -116,8 +116,7 @@ e2e_wait_window() { # $1 = pid，$2 = 轮数（每轮 2s）→ stdout 窗口 id
 
 # 启动 app：固定 1440x900、窗口移动到 (0,0)（坐标均为窗口内坐标）。
 # 固定 WINIT_X11_SCALE_FACTOR=1，保证 winit 设备缩放 = 1.0（见 lib.sh 全局说明）。
-# 不读任何菜单：桌面版默认 native SSH，UI 已无后端切换入口；YSHELL_SSH_BACKEND
-# 只供 e2e/测试覆盖（fake 离线路径等），这里显式钉住 native-ssh。
+# 不读任何菜单：桌面版只走真实 SSH（无后端切换入口）。
 e2e_launch_app() { # $1=bin $2=config_dir $3=theme $4=lang $5=log $6=display
   local bin="$1" config_dir="$2" theme="$3" lang="$4" log="$5" display="$6"
   if [ ! -x "$bin" ]; then
@@ -127,7 +126,6 @@ e2e_launch_app() { # $1=bin $2=config_dir $3=theme $4=lang $5=log $6=display
   DISPLAY="${E2E_DISPLAY:-$display}" \
     env -u YSHELL_MASTER_PASSWORD \
     WINIT_X11_SCALE_FACTOR="$E2E_WINIT_SCALE" \
-    YSHELL_SSH_BACKEND=native-ssh \
     YSHELL_THEME="$theme" \
     YSHELL_LANG="$lang" \
     YSHELL_CONFIG_DIR="$config_dir" \

@@ -1026,7 +1026,7 @@ mod tests {
         let mut parser = TerminalParser::new();
         parser.advance(
             &mut grid,
-            b"Connecting to example.com:2200 as alice\nFake shell established\n$ ",
+            b"Connecting to example.com:2200 as alice\nTest shell established\n$ ",
         );
 
         grid.resize(78, 36);

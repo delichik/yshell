@@ -1,5 +1,5 @@
-//! SSH connection lifecycle: transport backend selection, connect, reconnect,
-//! disconnect, host-key and password prompt state.
+//! SSH connection lifecycle: connect, reconnect, disconnect, host-key and
+//! password prompt state.
 
 use crate::{
     error::AppError, error::AppResult, session_runtime::SessionRuntime,
@@ -11,7 +11,7 @@ use yshell_core::{CommandDispatcher, SessionCommand, SessionState};
 use yshell_ssh::{
     AuthAttemptKind, AuthMethod, AuthMethods, AuthProblemKind, HostKeyFingerprint, HostKeyProblem,
     KeyboardInteractiveChallenge, KeyboardInteractiveResponse, Prompt, ShellClient,
-    SshConnectionConfig, SshError, SshErrorKind, TransportBackend,
+    SshConnectionConfig, SshError, SshErrorKind,
 };
 
 use super::*;
@@ -65,18 +65,9 @@ impl AppRuntime {
         self.projection()
     }
 
-    pub fn select_fake_transport_backend(&mut self) -> AppProjection {
-        self.select_transport_backend(TransportBackend::Fake)
-    }
-
-    pub fn select_native_ssh_transport_backend(&mut self) -> AppProjection {
-        self.select_transport_backend(TransportBackend::Real)
-    }
-
     pub fn prepare_desktop_startup_projection(&mut self) -> AppProjection {
-        self.transport_backend = TransportBackend::Real;
         self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
-        self.sftp_listing = SftpListingState::NativeSshSelected;
+        self.sftp_listing = SftpListingState::ConnectReal;
         self.projection()
     }
 
@@ -276,7 +267,6 @@ impl AppRuntime {
                 .get_mut(&session_key)
                 .ok_or_else(|| AppError::new("active runtime session is missing"))?;
             runtime.log_runtime_event("Reconnecting runtime shell session.");
-            runtime.transport_backend = self.transport_backend;
             // Drop any previous shell before reconnecting.
             let _ = runtime.disconnect_shell();
             runtime.shell_session = None;
@@ -309,9 +299,9 @@ impl AppRuntime {
         self.finish_shell_attach(&session_key, &session_id, shell_session, false, true)
     }
 
-    /// Native-SSH desktop path: handshake runs on the connect-job worker.
+    /// Desktop path: handshake runs on the connect-job worker when installed.
     fn should_connect_async(&self) -> bool {
-        self.connect_jobs.is_some() && self.transport_backend == TransportBackend::Real
+        self.connect_jobs.is_some()
     }
 
     fn submit_connect_job(
@@ -341,7 +331,7 @@ impl AppRuntime {
             });
         if let Some(runtime) = self.sessions.get_mut(session_key) {
             runtime.begin_connection_overlay("tcp");
-            runtime.log_runtime_event("Queued native SSH connect on the background worker.");
+            runtime.log_runtime_event("Queued SSH connect on the background worker.");
         }
         let submitted = self
             .connect_jobs
@@ -350,7 +340,6 @@ impl AppRuntime {
                 handle.submit(crate::connect_jobs::ConnectJobSpec {
                     session_key: session_key.to_owned(),
                     ssh_config: effective,
-                    transport_backend: self.transport_backend,
                     password_retry,
                     is_reconnect,
                 })
@@ -606,55 +595,16 @@ impl AppRuntime {
             .unwrap_or_default()
     }
 
-    pub(crate) fn select_transport_backend(&mut self, backend: TransportBackend) -> AppProjection {
-        self.transport_backend = backend;
-        self.status_text = match backend {
-            TransportBackend::Fake => {
-                self.sftp_session = SftpSessionLifecycle::Unavailable {
-                    reason: SftpUnavailableReason::FakeBackendSelected,
-                };
-                self.sftp_listing = SftpListingState::FakeBackendSelected;
-                "Transport backend set to `fake`. Quick Connect will use the deterministic in-process shell adapter.".to_owned()
-            }
-            TransportBackend::Real => {
-                if let Some(session_key) = self.active_session_id.clone() {
-                    let _ = self.sync_sftp_lifecycle_for_session(&session_key, false);
-                } else {
-                    self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
-                    self.sftp_listing = SftpListingState::NativeSshSelected;
-                }
-                "Transport backend set to `native-ssh`. Quick Connect will use the embedded ssh2 shell path, and the SFTP panel will use the embedded ssh2 SFTP path.".to_owned()
-            }
-        };
-        self.status_text = format!(
-            "{} {}",
-            self.status_text,
-            self.sftp_session.legacy_status_text()
-        );
-        self.projection()
-    }
-
     pub(crate) fn open_shell_for_runtime(
         &mut self,
         ssh_config: &SshConnectionConfig,
     ) -> Result<Box<dyn yshell_ssh::ShellSession>, yshell_ssh::SshError> {
         let effective_config = self.effective_ssh_config(ssh_config);
-        match self.transport_backend {
-            TransportBackend::Fake => {
-                // e2e/dev：`YSHELL_FAKE_AUTH_FAILURE=<methods>` 时首次开 shell 注入
-                // 认证失败（fake 后端不做真实认证，用于驱动认证弹窗三态）。
-                if let Some(scenario) = self.fake_auth_scenario.clone() {
-                    if !self.fake_auth_failure_injected {
-                        self.fake_auth_failure_injected = true;
-                        return Err(fake_auth_failure_error(&scenario));
-                    }
-                }
-                ShellClient::with_fake_backend().open_shell_boxed(&effective_config)
-            }
-            TransportBackend::Real => {
-                ShellClient::with_real_backend().open_shell_boxed(&effective_config)
-            }
+        #[cfg(test)]
+        if !self.force_real_ssh_in_tests {
+            return yshell_test_support::TestShellSession::open_boxed(&effective_config);
         }
+        ShellClient::with_real_backend().open_shell_boxed(&effective_config)
     }
 
     pub(crate) fn reconnect_session_by_key(
@@ -901,7 +851,7 @@ impl AppRuntime {
         // 用户 `submit_password` 后走 `activate_runtime_session_with_ssh_config` 重试。
         if let Some(prompt) = self.pending_password_prompt_for_runtime(&runtime) {
             // D7：TOFU 顺序——密码之前先完成主机密钥确认。只有原生后端才会
-            // 探测（fake 后端没有握手，无从取得指纹）。
+            // 探测（离线测试壳没有握手，无从取得指纹）。
             if self.probe_host_key_before_password(&runtime, &prompt)? {
                 return Ok(self.projection());
             }
@@ -952,9 +902,6 @@ impl AppRuntime {
         runtime: &SessionRuntime,
         prompt: &PendingPasswordPrompt,
     ) -> AppResult<bool> {
-        if self.transport_backend != TransportBackend::Real {
-            return Ok(false);
-        }
         let mut probe_config = runtime.ssh_config.clone();
         probe_config.auth = AuthMethod::PrivateKey {
             username: prompt.username.clone(),
@@ -1041,7 +988,6 @@ impl AppRuntime {
             .map_err(AppError::from_error)?;
         Self::apply_session_events(&session_id, &mut runtime, state_events);
         runtime.ssh_config = ssh_config;
-        runtime.transport_backend = self.transport_backend;
         self.configure_runtime_logging(&mut runtime);
         self.configure_runtime_terminal_limits(&mut runtime);
         runtime.log_runtime_event("Core session entry created. Opening shell runtime boundary.");
@@ -1733,7 +1679,7 @@ impl PendingAuthPrompt {
         self.active_keyboard_round.is_some()
     }
 
-    /// 当前轮是否为最后一轮（宿主判断；fake 场景固定两轮）。
+    /// 当前轮是否为最后一轮（宿主判断；测试壳场景固定两轮）。
     #[must_use]
     pub(crate) fn keyboard_final_round(&self, total_rounds: usize) -> bool {
         self.active_keyboard_round.is_some() && self.keyboard_rounds.len() + 1 >= total_rounds
@@ -1818,29 +1764,10 @@ impl AppRuntime {
         )
         .with_session_key(&context.session_key);
         prompt.last_problem = Some(problem);
-        self.seed_fake_keyboard_challenge(&mut prompt);
         self.pending_auth_prompt = Some(prompt);
         // 认证弹窗取代 W5 的密码挂起（同一窗口的两种形态）。
         self.pending_password_prompt = None;
         true
-    }
-
-    /// e2e/dev：`YSHELL_FAKE_AUTH_FAILURE` 场景下给 keyboard-interactive 预置挑战
-    /// （fake 后端不做真实认证，挑战由运行时合成，用于验证多轮渲染与状态机）。
-    fn seed_fake_keyboard_challenge(&self, prompt: &mut PendingAuthPrompt) {
-        if !self.fake_keyboard_scenario() {
-            return;
-        }
-        if prompt.selected() != AuthPromptMethod::KeyboardInteractive {
-            return;
-        }
-        prompt.begin_keyboard_round(&fake_keyboard_challenge(1));
-    }
-
-    pub(crate) fn fake_keyboard_scenario(&self) -> bool {
-        self.fake_auth_scenario
-            .as_deref()
-            .is_some_and(|scenario| scenario.contains("keyboard-interactive"))
     }
 
     pub fn select_auth_prompt_method(&mut self, index: i32) -> AppProjection {
@@ -1963,20 +1890,15 @@ impl AppRuntime {
         }
     }
 
-    /// keyboard-interactive 轮次提交：记录本轮作答；fake 场景第一轮后进入第二轮，
-    /// 否则用本轮首个非 echo 作答作为 secret 走 A0 单秘密 prompter 重试。
+    /// keyboard-interactive 轮次提交：记录本轮作答，用首个非 echo 作答作为
+    /// secret 走 A0 单秘密 prompter 重试。
     pub fn submit_auth_prompt_keyboard_round(&mut self) -> AppProjection {
-        let Some(mut prompt) = self.pending_auth_prompt.clone() else {
+        let Some(prompt) = self.pending_auth_prompt.clone() else {
             return self.projection();
         };
+        let mut prompt = prompt;
         if let Err(error) = prompt.submit_keyboard_round() {
             self.status_text = error.message();
-            return self.projection();
-        }
-        if self.fake_keyboard_scenario() && prompt.keyboard_rounds.len() == 1 {
-            prompt.begin_keyboard_round(&fake_keyboard_challenge(2));
-            self.pending_auth_prompt = Some(prompt);
-            self.status_text = "Round 1 accepted; answer the next challenge.".to_owned();
             return self.projection();
         }
         let secret = prompt
@@ -2084,43 +2006,6 @@ impl AppRuntime {
         self.reconnect_session_by_key(&session_key)
             .map_err(|error| error.message)
     }
-}
-
-/// fake 场景的 keyboard-interactive 挑战（第 1/2 轮）。
-fn fake_keyboard_challenge(round: usize) -> KeyboardInteractiveChallenge {
-    match round {
-        1 => KeyboardInteractiveChallenge::new(
-            "SSH Server",
-            "Please authenticate to continue.",
-            vec![
-                Prompt::new("Password: ", false),
-                Prompt::new("Verification code: ", false),
-            ],
-        ),
-        _ => KeyboardInteractiveChallenge::new(
-            "SSH Server",
-            "Additional verification required.",
-            vec![Prompt::new("One-time password: ", false)],
-        ),
-    }
-}
-
-/// fake 后端注入的认证失败（`YSHELL_FAKE_AUTH_FAILURE=<methods>`）。
-fn fake_auth_failure_error(scenario: &str) -> SshError {
-    let methods = AuthMethods::parse(scenario);
-    let problem = if scenario.contains("keyboard-interactive")
-        && !scenario.contains("password")
-        && !scenario.contains("publickey")
-    {
-        AuthProblemKind::OtherMethodRequired
-    } else {
-        AuthProblemKind::InvalidCredentials
-    };
-    SshError::new(
-        SshErrorKind::Authentication,
-        format!("fake auth scenario `{scenario}` rejected the configured method"),
-    )
-    .with_auth_context(methods, problem)
 }
 
 #[cfg(test)]

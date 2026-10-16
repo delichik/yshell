@@ -1,21 +1,9 @@
 #!/usr/bin/env bash
-# N9 同步发送按键 UI E2E（无头 Xvfb 驱动，Fake SSH 后端可离线运行）。
+# N9 同步发送按键 UI E2E（无头 Xvfb 驱动）。
 #
-# 覆盖（N9 设计 §3/§4）：
-#   ① 终端右键菜单出现 Send Key Input to All/Visible/Stop 三项（含 Visible 的
-#      "分屏落地前等同 All" tooltip 截图）
-#   ② Send to Visible 启动同步：状态栏 chip（accent 像素）出现；源/目标标签角标
-#      出现（标签条 accent 像素增加）
-#   ③ 扇出：在源终端输入命令 → 切到目标标签，终端区域内容变化（stddev 上升）
-#   ④ Ctrl+C 广播：chip 出现非阻塞提示（不弹窗；chip 区域像素变化）
-#   ⑤ 标签右键"接收键输入"勾选态截图；取消勾选后扇出停止
-#   ⑥ 状态栏 chip 一键停止（点击后 accent 像素消失）+ 停止后不再复制
-#   ⑦ 目标断开 → 自动移出（chip 提示出现，标签角标消失）
-#   ⑧ 源断开 → 同步停止（chip 不再 accent，出现停止提示）
-#
-# 依赖：Xvfb/xdotool/ImageMagick/python3-PIL（与其它 e2e 相同）；构建产物
-#       target/debug/yshell（YSHELL_E2E_BIN 可覆盖）。不需要 SSH 测试容器：
-#       脚本用 YSHELL_SSH_BACKEND=fake + 已保存会话直连。
+# Fake SSH 离线路径已移除：本脚本默认跳过。需要真实 SSH 的同步 UI 验收请走
+# `scripts/e2e/run-ui-ssh.sh`（或设置 YSHELL_E2E_ALLOW_OFFLINE_SYNC=1 并自行
+# 提供可达会话——无 Fake 时已保存会话无法离线直连）。
 #
 # 用法：
 #   bash scripts/e2e/run-ui-sync.sh [--theme dark|light] [--lang zh-CN|en-US]
@@ -77,6 +65,11 @@ done
 case "$theme" in dark | light) ;; *) echo "--theme 只支持 dark|light" >&2; exit 2 ;; esac
 case "$lang" in zh-CN | en-US) ;; *) echo "--lang 只支持 zh-CN|en-US" >&2; exit 2 ;; esac
 
+if [ -z "${YSHELL_E2E_ALLOW_OFFLINE_SYNC:-}" ]; then
+  e2e_warn "Offline Fake SSH sync e2e was removed. Use scripts/e2e/run-ui-ssh.sh (or set YSHELL_E2E_ALLOW_OFFLINE_SYNC=1)."
+  exit 0
+fi
+
 E2E_SHOT_PREFIX="$prefix-$theme-$lang"
 E2E_THEME="$theme"
 mkdir -p "$outdir"
@@ -91,10 +84,10 @@ if [ ! -x "$bin" ]; then
   exit 1
 fi
 
-e2e_log "配置：theme=$theme lang=$lang outdir=$outdir prefix=$prefix（Fake 后端离线）"
+e2e_log "配置：theme=$theme lang=$lang outdir=$outdir prefix=$prefix"
 e2e_ensure_xvfb "$display" || exit 1
 
-# ---------------------------------------------------------------- 配置（Fake 直连）
+# ---------------------------------------------------------------- 配置
 write_config() {
   mkdir -p "$config_dir"
   {
@@ -113,12 +106,11 @@ write_config() {
 [ "$keep_config" = 0 ] && rm -rf "$config_dir"
 write_config
 
-# ---------------------------------------------------------------- 启动（YSHELL_SSH_BACKEND=fake）
+# ---------------------------------------------------------------- 启动
 sync_launch_app() {
   DISPLAY="${E2E_DISPLAY:-$display}" \
     env -u YSHELL_MASTER_PASSWORD \
     WINIT_X11_SCALE_FACTOR="$E2E_WINIT_SCALE" \
-    YSHELL_SSH_BACKEND=fake \
     YSHELL_THEME="$theme" \
     YSHELL_LANG="$lang" \
     YSHELL_CONFIG_DIR="$config_dir" \
@@ -136,7 +128,7 @@ sync_launch_app() {
   e2e_wait_paint || true
   sleep 1
   e2e_capture_dialog_baseline
-  e2e_log "app 已就绪：win=$E2E_APP_WIN pid=$E2E_APP_PID（$theme/$lang，fake）"
+  e2e_log "app 已就绪：win=$E2E_APP_WIN pid=$E2E_APP_PID（$theme/$lang）"
 }
 
 # ---------------------------------------------------------------- 像素 helper
@@ -241,7 +233,7 @@ sync_capture() { # $1=输出路径
   import -window "$E2E_APP_WIN" "$1" 2>/dev/null
 }
 
-# 终端内容区 AE（覆盖整块终端表面；Fake shell 无 clear，内容对比需用整块差分）。
+# 终端内容区 AE（覆盖整块终端表面；内容对比用整块差分）。
 sync_terminal_ae() { # $1=before.png $2=after.png
   local diff
   diff=$(compare -metric AE \
@@ -251,14 +243,14 @@ sync_terminal_ae() { # $1=before.png $2=after.png
 }
 
 # ---------------------------------------------------------------- 场景
-e2e_log "== N9 sync e2e：打开两个 fake 会话标签 =="
+e2e_log "== N9 sync e2e：打开两个会话标签 =="
 sync_launch_app || exit 1
 e2e_open_saved_session 239
 sleep 1.0
 e2e_open_saved_session 268
 sleep 1.5
 
-# T2 活动 → T1 活动（点击确保终端聚焦；Fake shell 不需要 clear）。
+# T2 活动 → T1 活动（点击确保终端聚焦）。
 sync_select_tab "$TAB2_X"
 sync_select_tab "$TAB1_X"
 
@@ -293,7 +285,7 @@ e2e_check "②标签角标" "源/目标标签出现同步角标（accent 像素�
 e2e_check_shot "$outdir" "02-sync-chip-badges" "②状态栏 chip + 源/目标标签角标"
 
 e2e_log "== ③ 扇出：源输入 → 目标收到 =="
-# 基线：T2 当前画面（Fake shell 不认识 clear，内容对比用整块终端 AE）。
+# 基线：T2 当前画面（内容对比用整块终端 AE）。
 sync_select_tab "$TAB2_X"
 sleep 0.5
 sync_capture /tmp/yshell-n9-target-before.png

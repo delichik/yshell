@@ -8,7 +8,7 @@
 //! * `tabs` - terminal tabs, close scopes, session polling cursor
 //! * `menus` - menu flags and tab context-menu state
 //! * `sessions` - saved-session table, recent sessions, sidebar tree
-//! * `connection` - backend selection, connect/reconnect/disconnect, prompts
+//! * `connection` - connect/reconnect/disconnect, prompts
 //! * `ssh_config` - SSH/proxy/tunnel config assembly and secret resolution
 //! * `sftp` - SFTP browsing state; `sftp_ops` - SFTP mutations
 //! * `transfer` - SFTP transfer queue
@@ -68,7 +68,6 @@ pub(crate) use sftp::LiveSftpClient;
 pub(crate) use sftp::SftpListingState;
 pub use sftp::SftpRowData;
 pub(crate) use sftp::SftpSessionLifecycle;
-pub(crate) use sftp::SftpUnavailableReason;
 pub(crate) use ssh_config::proxy_protocol_label;
 pub(crate) use ssh_config::tunnel_config_summary;
 pub(crate) use ssh_config::tunnel_forward_summary;
@@ -132,7 +131,7 @@ use yshell_core::SessionCommand;
 use yshell_core::SessionEvent;
 use yshell_secret::{FileKeychain, Keychain, OsKeychain};
 use yshell_sftp::{FsEntry, RemoteEditSession, TransferQueue};
-use yshell_ssh::{HostKeyPolicy, KnownHosts, TransportBackend};
+use yshell_ssh::{HostKeyPolicy, KnownHosts};
 use yshell_terminal::SearchMatch;
 use yshell_terminal::TerminalSnapshot;
 
@@ -270,7 +269,6 @@ impl AppRuntime {
             pending_host_key_prompt: None,
             host_key_replace_confirmation: String::new(),
             pending_password_prompt: None,
-            transport_backend: TransportBackend::Fake,
             editor_modal_visible: false,
             editor_section: EditorSection::General,
             host_key_policy_override: None,
@@ -302,10 +300,8 @@ impl AppRuntime {
             host_keys_import_text: String::new(),
             host_keys_status_text: String::new(),
             pending_auth_prompt: None,
-            fake_auth_scenario: env::var("YSHELL_FAKE_AUTH_FAILURE")
-                .ok()
-                .filter(|value| !value.trim().is_empty()),
-            fake_auth_failure_injected: false,
+            #[cfg(test)]
+            force_real_ssh_in_tests: false,
             settings_appearance: SettingsAppearanceDraft::default(),
             settings_appearance_status: SettingsAppearanceStatus::Hint,
             settings_appearance_visible: false,
@@ -544,7 +540,7 @@ pub struct AppRuntime {
     /// channel-backed handle to assert submitted jobs).
     pub(crate) sftp_jobs: Option<crate::sftp_jobs::SftpJobHandle>,
     /// WP1：SSH connect worker handle (injected by `windows`; absent in unit tests
-    /// so connect stays synchronous for Fake / deterministic assertions).
+    /// so connect stays synchronous via the in-memory test shell).
     pub(crate) connect_jobs: Option<crate::connect_jobs::ConnectJobHandle>,
     pub(crate) persistent_known_hosts: KnownHosts,
     pub(crate) temporary_known_hosts: KnownHosts,
@@ -555,7 +551,6 @@ pub struct AppRuntime {
     pub(crate) host_key_replace_confirmation: String,
     /// W5：密码型认证缺少密钥时的挂起目标（仅内存；重试连接用）。
     pub(crate) pending_password_prompt: Option<PendingPasswordPrompt>,
-    pub(crate) transport_backend: TransportBackend,
     pub(crate) editor_modal_visible: bool,
     pub(crate) editor_section: EditorSection,
     pub(crate) host_key_policy_override: Option<HostKeyPolicy>,
@@ -601,10 +596,9 @@ pub struct AppRuntime {
     pub(crate) host_keys_status_text: String,
     /// 认证弹窗挂起状态（服务端驱动的认证失败；Phase 2 接线）。
     pub(crate) pending_auth_prompt: Option<PendingAuthPrompt>,
-    /// e2e/dev：`YSHELL_FAKE_AUTH_FAILURE` 场景（fake 后端首次开 shell 注入认证失败）。
-    pub(crate) fake_auth_scenario: Option<String>,
-    /// 上述场景是否已注入（重试放行）。
-    pub(crate) fake_auth_failure_injected: bool,
+    /// Unit tests default to the in-memory test shell; live SSH tests flip this.
+    #[cfg(test)]
+    pub(crate) force_real_ssh_in_tests: bool,
     // --- N5：终端外观（Settings 外观弹窗 / Folder Editor）------------------------
     /// Settings 外观弹窗的表单草稿。
     pub(crate) settings_appearance: SettingsAppearanceDraft,
@@ -801,7 +795,6 @@ impl fmt::Debug for AppRuntime {
             .field("remote_edit_session", &self.remote_edit_session)
             .field("transfer_queue", &self.transfer_queue)
             .field("next_transfer_ordinal", &self.next_transfer_ordinal)
-            .field("transport_backend", &self.transport_backend)
             .field("host_key_policy_override", &self.host_key_policy_override)
             .field("recovered_from_backup", &self.recovered_from_backup)
             .field("next_runtime_ordinal", &self.next_runtime_ordinal)

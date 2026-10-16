@@ -148,7 +148,7 @@ impl AppRuntime {
         if let Some(session_key) = self.active_session_id.clone() {
             self.pending_quick_connect_targets
                 .insert(session_key.clone(), canonical);
-            // fake/已就绪后端会同步连接成功：立即补一次成功钩子（异步路径由
+            // 测试壳/已就绪会话会同步连接成功：立即补一次成功钩子（异步路径由
             // `record_connect_success` 在 shell 连上时触发）。
             let connected = self
                 .sessions

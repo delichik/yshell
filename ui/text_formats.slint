@@ -140,9 +140,9 @@ export global TextFormats {
             return @tr("MainWindow" => "Auth test failed: {0}", error);
         }
         if startup == "" {
-            return @tr("MainWindow" => "Auth test succeeded for {0} using the `{1}` backend.", host, backend);
+            return @tr("MainWindow" => "Auth test succeeded for {0}.", host);
         }
-        return @tr("MainWindow" => "Auth test succeeded for {0} using the `{1}` backend. Startup: {2}", host, backend, startup);
+        return @tr("MainWindow" => "Auth test succeeded for {0}. Startup: {1}", host, startup);
     }
 
     public pure function proxy-summary-text(kind: string, protocol: string, address: string, user: string, dns: bool) -> string {
@@ -214,7 +214,7 @@ export global TextFormats {
 
     public pure function sftp-listing-summary(kind: string, rows: string, session_key: string, path: string, error: string) -> string {
         if kind == "connect-real" {
-            return @tr("MainWindow" => "Connect a real session and refresh SFTP to browse remote files.");
+            return @tr("MainWindow" => "Connect a session and refresh SFTP to browse remote files.");
         }
         if kind == "draft-disconnected" {
             return @tr("MainWindow" => "SFTP session is disconnected. Connect the draft before browsing remote files.");
@@ -222,20 +222,11 @@ export global TextFormats {
         if kind == "refresh-needs-session" {
             return @tr("MainWindow" => "Connect a runtime session before refreshing the SFTP panel.");
         }
-        if kind == "fake-backend-selected" {
-            return @tr("MainWindow" => "Fake backend selected. Switch to `native-ssh` when you want to validate the embedded SSH and SFTP paths.");
-        }
-        if kind == "native-ssh-selected" {
-            return @tr("MainWindow" => "Native SSH selected. Connect a session to open the managed SFTP lifecycle.");
-        }
         if kind == "empty-directory" {
             return @tr("MainWindow" => "Current directory is empty.");
         }
         if kind == "reconnect-failed" {
-            return @tr("MainWindow" => "SFTP session failed because the native SSH session is not connected.");
-        }
-        if kind == "sync-fake-backend" {
-            return @tr("MainWindow" => "SFTP is unavailable on the fake backend. Switch to `native-ssh` first.");
+            return @tr("MainWindow" => "SFTP session failed because the SSH session is not connected.");
         }
         if kind == "sync-missing-session" {
             return @tr("MainWindow" => "SFTP lifecycle failed because the active runtime session is missing.");
@@ -243,8 +234,8 @@ export global TextFormats {
         if kind == "sync-disconnected" {
             return @tr("MainWindow" => "SFTP session is disconnected. Connect or reconnect the runtime session first.");
         }
-        if kind == "sync-reconnect-native" {
-            return @tr("MainWindow" => "SFTP session is disconnected. Reconnect this runtime session with `native-ssh` before using SFTP.");
+        if kind == "sync-reconnect" {
+            return @tr("MainWindow" => "SFTP session is disconnected. Reconnect this runtime session before using SFTP.");
         }
         if kind == "sync-failed" {
             return @tr("MainWindow" => "SFTP session is attached to `{0}`, but listing `{1}` failed: {2}", session_key, path, error);
@@ -254,10 +245,7 @@ export global TextFormats {
 
     public pure function sftp-session-status(kind: string, reason: string, detail: string, session_key: string) -> string {
         if kind == "unavailable" {
-            if reason == "fake-backend" {
-                return @tr("MainWindow" => "SFTP unavailable: fake transport backend is selected");
-            }
-            return @tr("MainWindow" => "SFTP unavailable: select the native-ssh backend before using SFTP");
+            return @tr("MainWindow" => "SFTP unavailable: {0}", reason);
         }
         if kind == "disconnected" {
             if session_key == "" {

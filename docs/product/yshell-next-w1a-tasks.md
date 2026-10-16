@@ -44,15 +44,13 @@ cargo <check/test/clippy> ... --locked
 - 保留其它入口：CommandBar `New Session`、File 菜单、Ctrl+N、标签条 `+`。
 
 **S2 后端（§14.2）**
-- `resolve_startup_ssh_backend`：无环境变量时默认 **native SSH（Real）**；`YSHELL_SSH_BACKEND=fake|native-ssh` 仍可覆盖（e2e 用）。
-- View 菜单删除 `Fake Backend` / `Native SSH Backend` 两项；状态栏删除后端色点与 `Backend: {0}` 文案；`transport_backend_text` 不再投影到 UI。
-- 删除 `.slint` 侧 `select_fake_backend` / `select_native_ssh_backend` 回调及 bootstrap 接线；runtime 方法保留给测试。
-- 更新受影响的单测/断言；`--locked` 全绿。
+- **已完成**：仅真实 SSH；Fake SSH / `YSHELL_SSH_BACKEND` / `TransportBackend` 已删除。
+- View 菜单与状态栏无后端切换；离线单测用 `TestShellSession`。
 
 验收（主 agent 复核）：
 1. `cargo xtask lint`、`cargo xtask test` 全绿；
 2. 会话栏无 `+`/`…` 按钮；空白区右键能新建会话、新建文件夹（树中立即可见）、刷新；
-3. 菜单/状态栏无后端字样；无环境变量启动走 real（终端出现真实登录横幅而非 fake-shell）；`YSHELL_SSH_BACKEND=fake` 仍可用；
+3. 菜单/状态栏无后端字样；产品路径仅真实 SSH；
 4. 截图证据：会话栏、空白区菜单、View 菜单、状态栏（dark/zh-CN 一份即可）。
 
 ## L3b 浅色 text-tertiary 修正

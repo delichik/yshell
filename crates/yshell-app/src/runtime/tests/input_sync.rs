@@ -5,7 +5,7 @@ use yshell_core::SessionState;
 
 use super::*;
 
-/// 打开 `count` 个已保存会话标签（fake 后端 → 全部 connected），返回
+/// 打开 `count` 个已保存会话标签（测试壳 → 全部 connected），返回
 /// `(tempdir, runtime, tab ids, session keys)`。
 fn sync_setup(count: usize) -> (tempfile::TempDir, AppRuntime, Vec<String>, Vec<String>) {
     let temp = tempdir().expect("tempdir");

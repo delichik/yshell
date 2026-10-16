@@ -3067,12 +3067,12 @@ msgstr ""
 
 #: ui/text_formats.slint:143
 msgctxt "MainWindow"
-msgid "Auth test succeeded for {0} using the `{1}` backend."
+msgid "Auth test succeeded for {0}."
 msgstr ""
 
 #: ui/text_formats.slint:145
 msgctxt "MainWindow"
-msgid "Auth test succeeded for {0} using the `{1}` backend. Startup: {2}"
+msgid "Auth test succeeded for {0}. Startup: {1}"
 msgstr ""
 
 #: ui/text_formats.slint:150
@@ -3191,19 +3191,6 @@ msgctxt "MainWindow"
 msgid "Connect a runtime session before refreshing the SFTP panel."
 msgstr ""
 
-#: ui/text_formats.slint:226
-msgctxt "MainWindow"
-msgid ""
-"Fake backend selected. Switch to `native-ssh` when you want to validate the "
-"embedded SSH and SFTP paths."
-msgstr ""
-
-#: ui/text_formats.slint:229
-msgctxt "MainWindow"
-msgid ""
-"Native SSH selected. Connect a session to open the managed SFTP lifecycle."
-msgstr ""
-
 #: ui/text_formats.slint:232
 msgctxt "MainWindow"
 msgid "Current directory is empty."
@@ -3211,12 +3198,7 @@ msgstr ""
 
 #: ui/text_formats.slint:235
 msgctxt "MainWindow"
-msgid "SFTP session failed because the native SSH session is not connected."
-msgstr ""
-
-#: ui/text_formats.slint:238
-msgctxt "MainWindow"
-msgid "SFTP is unavailable on the fake backend. Switch to `native-ssh` first."
+msgid "SFTP session failed because the SSH session is not connected."
 msgstr ""
 
 #: ui/text_formats.slint:241
@@ -3233,8 +3215,8 @@ msgstr ""
 #: ui/text_formats.slint:247
 msgctxt "MainWindow"
 msgid ""
-"SFTP session is disconnected. Reconnect this runtime session with `native-"
-"ssh` before using SFTP."
+"SFTP session is disconnected. Reconnect this runtime session before using "
+"SFTP."
 msgstr ""
 
 #: ui/text_formats.slint:250
@@ -3244,12 +3226,7 @@ msgstr ""
 
 #: ui/text_formats.slint:258
 msgctxt "MainWindow"
-msgid "SFTP unavailable: fake transport backend is selected"
-msgstr ""
-
-#: ui/text_formats.slint:260
-msgctxt "MainWindow"
-msgid "SFTP unavailable: select the native-ssh backend before using SFTP"
+msgid "SFTP unavailable: {0}"
 msgstr ""
 
 #: ui/text_formats.slint:264

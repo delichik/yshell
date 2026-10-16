@@ -808,7 +808,7 @@ fn run_remote_delete(
 }
 
 /// Post-order recursive delete. Generic over the backend so unit tests can use
-/// the in-process fake.
+/// [`yshell_sftp::InMemorySftpBackend`].
 pub(crate) fn delete_remote_entry<B: yshell_sftp::SftpBackend>(
     client: &mut SftpClient<B>,
     path: &str,
@@ -918,20 +918,20 @@ mod tests {
     use std::{path::PathBuf, sync::atomic::AtomicBool};
 
     use tempfile::tempdir;
-    use yshell_sftp::{FakeSftpBackend, FsEntry, SftpClient, TreeTransferOptions};
+    use yshell_sftp::{InMemorySftpBackend, FsEntry, SftpClient, TreeTransferOptions};
     use yshell_ssh::SshConnectionConfig;
 
     use super::{delete_remote_entry, join_remote, numbered_name, split_remote, SftpJobSpec};
 
-    fn fake_client(entries: &[FsEntry]) -> SftpClient<FakeSftpBackend> {
-        let mut backend = FakeSftpBackend::default();
+    fn in_memory_client(entries: &[FsEntry]) -> SftpClient<InMemorySftpBackend> {
+        let mut backend = InMemorySftpBackend::default();
         for entry in entries {
             backend.insert(entry.clone());
         }
         SftpClient::with_backend(backend)
     }
 
-    fn names_at(client: &SftpClient<FakeSftpBackend>, path: &str) -> Vec<String> {
+    fn names_at(client: &SftpClient<InMemorySftpBackend>, path: &str) -> Vec<String> {
         client
             .list_dir(path)
             .map(|listing| {
@@ -1006,7 +1006,7 @@ mod tests {
 
     #[test]
     fn recursive_delete_walks_directories_post_order() {
-        let mut client = fake_client(&[
+        let mut client = in_memory_client(&[
             FsEntry::directory("/srv/tree"),
             FsEntry::directory("/srv/tree/sub"),
             FsEntry::file("/srv/tree/sub/a.txt", 3),
@@ -1023,7 +1023,7 @@ mod tests {
 
     #[test]
     fn recursive_delete_observes_cancel() {
-        let mut client = fake_client(&[
+        let mut client = in_memory_client(&[
             FsEntry::directory("/srv/tree"),
             FsEntry::file("/srv/tree/a.txt", 3),
         ]);

@@ -4,7 +4,9 @@ pub mod fake_secret_store;
 pub mod fixtures;
 pub mod ssh_server;
 pub mod temp_home;
+pub mod test_shell;
 
 pub use fake_secret_store::FakeSecretStore;
 pub use ssh_server::TestSshServer;
 pub use temp_home::TempHome;
+pub use test_shell::{test_shell_config, TestShellAdapter, TestShellSession};

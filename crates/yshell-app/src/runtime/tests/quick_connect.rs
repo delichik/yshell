@@ -69,7 +69,7 @@ fn failed_submit_clears_stale_last_target() {
 
     // D10：新的失败尝试不得让页面继续显示"Connected to …"。
     let (port, accept_handle) = start_tcp_probe_target();
-    let _ = runtime.select_native_ssh_transport_backend();
+    runtime.force_real_ssh_in_tests = true;
     let projection = runtime
         .submit_quick_connect(&format!("root@127.0.0.1:{port}"))
         .expect("failing submit is reported through the projection");

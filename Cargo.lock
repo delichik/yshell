@@ -6830,6 +6830,7 @@ dependencies = [
  "yshell-sftp",
  "yshell-ssh",
  "yshell-terminal",
+ "yshell-test-support",
  "yshell-ui",
 ]
 

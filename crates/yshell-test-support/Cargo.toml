@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 tempfile.workspace = true
+yshell-ssh = { path = "../yshell-ssh" }
 
 [dev-dependencies]
 yshell-config = { path = "../yshell-config" }
@@ -17,5 +18,4 @@ yshell-core = { path = "../yshell-core" }
 yshell-logging = { path = "../yshell-logging" }
 yshell-secret = { path = "../yshell-secret" }
 yshell-sftp = { path = "../yshell-sftp" }
-yshell-ssh = { path = "../yshell-ssh" }
 yshell-terminal = { path = "../yshell-terminal" }

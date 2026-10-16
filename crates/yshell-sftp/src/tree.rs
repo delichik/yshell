@@ -1,7 +1,7 @@
 //! Recursive tree transfers and batch-operation helpers.
 //!
 //! The engine in this module is generic over [`SftpBackend`], so
-//! [`FakeSftpBackend`](crate::FakeSftpBackend) and
+//! [`InMemorySftpBackend`](crate::InMemorySftpBackend) and
 //! [`RealSftpBackend`](crate::RealSftpBackend) share exactly the same
 //! traversal, overwrite-policy and reporting behaviour.
 //!

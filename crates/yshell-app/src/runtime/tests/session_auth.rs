@@ -34,7 +34,7 @@ fn quick_connect_enters_runtime_pipeline() {
     assert!(projection.tab_name_text.contains("alice@example.com:2200"));
     assert!(projection
         .terminal_body_text
-        .contains("Fake shell established"));
+        .contains("Test shell established"));
     assert_eq!(runtime.emitted_events().len(), 1);
 }
 
@@ -425,10 +425,10 @@ fn submit_password_retries_saved_session_and_connects() {
         .expect("open saved session");
     assert!(prompted.password_prompt_visible);
 
-    // fake 后端：带密码重试后进入 connected。
-    // 说明：fake 后端不校验密码正确性，"密码错误 → 认证失败"只能在
-    // native-ssh + 真实服务器上验证；这里断言的是"挂起 → 重试 → 连接成功"
-    // 这条状态机，以及密码不写密钥库/配置文件。
+    // 测试壳：带密码重试后进入 connected。
+    // 说明：测试壳不校验密码正确性，"密码错误 → 认证失败"只能在真实 SSH 上验证；
+    // 这里断言的是"挂起 → 重试 → 连接成功"这条状态机，以及密码不写密钥库/配置文件。
+
     let projection = runtime
         .submit_password("hunter2")
         .expect("submit password should retry the connection");
@@ -515,9 +515,9 @@ fn submit_password_reports_failure_and_closes_prompt_when_target_is_gone() {
 }
 
 #[test]
-fn submit_password_reports_auth_failure_from_native_backend() {
-    // native-ssh + 本地 TCP 探针：握手必失败，用来验证"密码重试失败"会写进
-    // status_text（fake 后端不会失败，覆盖不到这条路径）。
+fn submit_password_reports_auth_failure_from_real_ssh() {
+    // 真实 SSH + 本地 TCP 探针：握手必失败，用来验证"密码重试失败"会写进 status_text。
+
     let (port, accept_handle) = start_tcp_probe_target();
     let temp = tempdir().expect("tempdir");
     let store = ConfigStore::new(temp.path());
@@ -546,7 +546,7 @@ fn submit_password_reports_auth_failure_from_native_backend() {
 
     let mut runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), None)
         .expect("runtime without keychain");
-    let _ = runtime.select_native_ssh_transport_backend();
+    runtime.force_real_ssh_in_tests = true;
     let prompted = runtime
         .open_saved_session("saved-password")
         .expect("open saved session");

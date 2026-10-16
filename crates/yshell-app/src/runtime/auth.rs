@@ -1419,22 +1419,11 @@ impl AppRuntime {
         deployment: &AuthorizedKeysDeployment,
     ) -> yshell_ssh::SshResult<ExecOutput> {
         let effective = self.effective_ssh_config(ssh_config);
-        match self.transport_backend {
-            TransportBackend::Fake => {
-                let client = SshClient::with_fake_backend();
-                let mut session = client.connect(&effective)?;
-                let output = deploy_authorized_keys_with_client(&client, &mut session, deployment)?;
-                let _ = client.disconnect(session);
-                Ok(output)
-            }
-            TransportBackend::Real => {
-                let client = SshClient::with_real_backend();
-                let mut session = client.connect(&effective)?;
-                let output = deploy_authorized_keys_with_client(&client, &mut session, deployment)?;
-                let _ = client.disconnect(session);
-                Ok(output)
-            }
-        }
+        let client = SshClient::with_real_backend();
+        let mut session = client.connect(&effective)?;
+        let output = deploy_authorized_keys_with_client(&client, &mut session, deployment)?;
+        let _ = client.disconnect(session);
+        Ok(output)
     }
 
     pub fn save_selected_private_key_passphrase(&mut self) -> AppProjection {
@@ -2031,23 +2020,12 @@ mod tests {
     }
 
     #[test]
-    fn deployment_executes_through_the_a0_exec_boundary() {
-        let client = yshell_ssh::SshClient::with_fake_backend();
-        let config = yshell_ssh::SshConnectionConfig::new(
-            "example.test",
-            22,
-            yshell_ssh::AuthMethod::Agent {
-                username: "alice".to_owned(),
-            },
-        );
-        let mut session = client.connect(&config).expect("fake connect");
+    fn deployment_builds_an_idempotent_authorized_keys_command() {
         let deployment = AuthorizedKeysDeployment::new(ED25519_PLAIN_PUBLIC);
-
-        let output = deploy_authorized_keys_with_client(&client, &mut session, &deployment)
-            .expect("fake exec");
-
-        assert_eq!(output.exit_status, 0);
-        assert_eq!(session.executed_commands, vec![deployment.command()]);
+        let command = deployment.command();
+        assert!(command.contains("mkdir -p"));
+        assert!(command.contains("authorized_keys"));
+        assert!(command.contains(ED25519_PLAIN_PUBLIC));
     }
 
     #[test]

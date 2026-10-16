@@ -73,11 +73,11 @@ pub trait SftpBackend {
 }
 
 #[derive(Debug, Default)]
-pub struct SftpClient<B = FakeSftpBackend> {
+pub struct SftpClient<B = InMemorySftpBackend> {
     backend: B,
 }
 
-impl SftpClient<FakeSftpBackend> {
+impl SftpClient<InMemorySftpBackend> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -169,12 +169,12 @@ where
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FakeSftpBackend {
+pub struct InMemorySftpBackend {
     entries: BTreeMap<String, FsEntry>,
     contents: BTreeMap<String, Vec<u8>>,
 }
 
-impl Default for FakeSftpBackend {
+impl Default for InMemorySftpBackend {
     fn default() -> Self {
         let mut entries = BTreeMap::new();
         entries.insert("/".to_owned(), FsEntry::directory("/"));
@@ -185,7 +185,7 @@ impl Default for FakeSftpBackend {
     }
 }
 
-impl FakeSftpBackend {
+impl InMemorySftpBackend {
     pub fn insert(&mut self, entry: FsEntry) {
         self.entries.insert(entry.path.clone(), entry);
     }
@@ -222,7 +222,7 @@ impl FakeSftpBackend {
     }
 }
 
-impl SftpBackend for FakeSftpBackend {
+impl SftpBackend for InMemorySftpBackend {
     fn list_dir(&self, path: &str) -> SftpResult<DirectoryListing> {
         let directory = self.entries.get(path).ok_or_else(|| {
             SftpError::new(
@@ -373,7 +373,7 @@ impl SftpBackend for FakeSftpBackend {
     }
 }
 
-impl FakeSftpBackend {
+impl InMemorySftpBackend {
     fn entry_mut(&mut self, path: &str) -> SftpResult<&mut FsEntry> {
         self.entries
             .get_mut(path)
@@ -387,7 +387,7 @@ mod tests {
 
     #[test]
     fn fake_backend_lists_and_mutates_files() {
-        let mut backend = FakeSftpBackend::default();
+        let mut backend = InMemorySftpBackend::default();
         backend.mkdir("/tmp").unwrap();
         backend.insert(FsEntry::file("/tmp/a.txt", 42));
         let listing = backend.list_dir("/tmp").unwrap();
@@ -405,7 +405,7 @@ mod tests {
         let download_path = temp.path().join("download.txt");
         fs::write(&upload_path, b"hello fake sftp").unwrap();
 
-        let mut backend = FakeSftpBackend::default();
+        let mut backend = InMemorySftpBackend::default();
         backend.upload_file(&upload_path, "/upload.txt").unwrap();
         backend.download_file("/upload.txt", &download_path).unwrap();
 
@@ -419,7 +419,7 @@ mod tests {
 
     #[test]
     fn fake_backend_delete_and_remove_dir_align_with_the_real_backend() {
-        let mut backend = FakeSftpBackend::default();
+        let mut backend = InMemorySftpBackend::default();
         backend.mkdir("/srv").unwrap();
         backend.mkdir("/srv/sub").unwrap();
         backend.insert(FsEntry::file("/srv/sub/a.txt", 1));

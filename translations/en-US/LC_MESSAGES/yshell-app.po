@@ -428,13 +428,13 @@ msgstr "Auth test failed: {0}"
 
 #: ui/main_window.slint:1065
 msgctxt "MainWindow"
-msgid "Auth test succeeded for {0} using the `{1}` backend."
-msgstr "Auth test succeeded for {0} using the `{1}` backend."
+msgid "Auth test succeeded for {0}."
+msgstr "Auth test succeeded for {0}."
 
 #: ui/main_window.slint:1067
 msgctxt "MainWindow"
-msgid "Auth test succeeded for {0} using the `{1}` backend. Startup: {2}"
-msgstr "Auth test succeeded for {0} using the `{1}` backend. Startup: {2}"
+msgid "Auth test succeeded for {0}. Startup: {1}"
+msgstr "Auth test succeeded for {0}. Startup: {1}"
 
 #: ui/main_window.slint:1072
 msgctxt "MainWindow"
@@ -558,19 +558,6 @@ msgctxt "MainWindow"
 msgid "Connect a runtime session before refreshing the SFTP panel."
 msgstr "Connect a runtime session before refreshing the SFTP panel."
 
-#: ui/main_window.slint:1148
-msgctxt "MainWindow"
-msgid ""
-"Fake backend selected. Switch to `native-ssh` when you want to validate the "
-"embedded SSH and SFTP paths."
-msgstr "Fake backend selected. Switch to `native-ssh` when you want to validate the embedded SSH and SFTP paths."
-
-#: ui/main_window.slint:1151
-msgctxt "MainWindow"
-msgid ""
-"Native SSH selected. Connect a session to open the managed SFTP lifecycle."
-msgstr "Native SSH selected. Connect a session to open the managed SFTP lifecycle."
-
 #: ui/main_window.slint:1154
 msgctxt "MainWindow"
 msgid "Current directory is empty."
@@ -578,13 +565,8 @@ msgstr "Current directory is empty."
 
 #: ui/main_window.slint:1157
 msgctxt "MainWindow"
-msgid "SFTP session failed because the native SSH session is not connected."
-msgstr "SFTP session failed because the native SSH session is not connected."
-
-#: ui/main_window.slint:1160
-msgctxt "MainWindow"
-msgid "SFTP is unavailable on the fake backend. Switch to `native-ssh` first."
-msgstr "SFTP is unavailable on the fake backend. Switch to `native-ssh` first."
+msgid "SFTP session failed because the SSH session is not connected."
+msgstr "SFTP session failed because the SSH session is not connected."
 
 #: ui/main_window.slint:1163
 msgctxt "MainWindow"
@@ -600,9 +582,9 @@ msgstr "SFTP session is disconnected. Connect or reconnect the runtime session f
 #: ui/main_window.slint:1169
 msgctxt "MainWindow"
 msgid ""
-"SFTP session is disconnected. Reconnect this runtime session with `native-"
-"ssh` before using SFTP."
-msgstr "SFTP session is disconnected. Reconnect this runtime session with `native-ssh` before using SFTP."
+"SFTP session is disconnected. Reconnect this runtime session before using "
+"SFTP."
+msgstr "SFTP session is disconnected. Reconnect this runtime session before using SFTP."
 
 #: ui/main_window.slint:1172
 msgctxt "MainWindow"
@@ -611,13 +593,8 @@ msgstr "SFTP session is attached to `{0}`, but listing `{1}` failed: {2}"
 
 #: ui/main_window.slint:1180
 msgctxt "MainWindow"
-msgid "SFTP unavailable: fake transport backend is selected"
-msgstr "SFTP unavailable: fake transport backend is selected"
-
-#: ui/main_window.slint:1182
-msgctxt "MainWindow"
-msgid "SFTP unavailable: select the native-ssh backend before using SFTP"
-msgstr "SFTP unavailable: select the native-ssh backend before using SFTP"
+msgid "SFTP unavailable: {0}"
+msgstr "SFTP unavailable: {0}"
 
 #: ui/main_window.slint:1186
 msgctxt "MainWindow"

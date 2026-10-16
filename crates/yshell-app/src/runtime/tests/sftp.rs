@@ -7,45 +7,28 @@ use yshell_sftp::{FsEntry, RemoteEditSession, TransferDirection};
 use super::*;
 
 #[test]
-fn fake_backend_sftp_refresh_explains_the_missing_native_ssh_path() {
+fn connected_session_marks_sftp_lifecycle_ready_without_listing() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
-    runtime
+    let projection = runtime
         .handle_quick_connect("alice@example.com:2200")
         .expect("quick connect");
-
-    let projection = runtime.refresh_active_sftp_listing().expect("refresh sftp");
-
-    assert!(projection.status_text.contains("SFTP unavailable"));
-    assert_eq!(projection.sftp_listing_kind_text, "sync-fake-backend");
-    assert_eq!(projection.sftp_session_status_kind_text, "unavailable");
-    assert_eq!(
-        projection.sftp_session_status_reason_text,
-        "select-native-ssh"
-    );
+    assert_eq!(projection.sftp_session_status_kind_text, "ready");
 }
 
 #[test]
-fn sftp_lifecycle_tracks_backend_and_runtime_session_state() {
+fn sftp_lifecycle_tracks_runtime_session_state() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
 
-    // S2/D26：桌面启动默认原生 SSH（不再有 desktop-startup 的 fake 占位）。
     let startup = runtime.prepare_desktop_startup_projection();
-    assert_eq!(startup.transport_backend_text, "native-ssh");
     assert_eq!(startup.sftp_session_status_kind_text, "disconnected");
-    assert_eq!(startup.sftp_listing_kind_text, "native-ssh-selected");
+    assert_eq!(startup.sftp_listing_kind_text, "connect-real");
 
-    // 后续用 fake 适配器验证 SFTP 生命周期（不触网；fake 仍是测试可选项）。
-    let _ = runtime.select_fake_transport_backend();
     let connected = runtime
         .handle_quick_connect("alice@example.com:2200")
         .expect("quick connect");
-    assert_eq!(connected.sftp_session_status_kind_text, "unavailable");
-
-    let native = runtime.select_native_ssh_transport_backend();
-    assert_eq!(native.sftp_session_status_kind_text, "disconnected");
-    assert_eq!(native.sftp_listing_kind_text, "sync-reconnect-native");
+    assert_eq!(connected.sftp_session_status_kind_text, "ready");
 
     let draft = runtime.handle_new_session();
     assert_eq!(draft.sftp_session_status_kind_text, "disconnected");
@@ -140,25 +123,30 @@ fn sftp_transfer_queue_is_visible_in_projection() {
 }
 
 #[test]
-fn fake_backend_gates_sftp_mutation_entry_points() {
+fn disconnected_session_gates_sftp_mutation_entry_points() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
     runtime
         .handle_quick_connect("alice@example.com:2200")
         .expect("quick connect");
+    runtime
+        .disconnect_active_session()
+        .expect("disconnect");
     runtime.set_sftp_operation_inputs("", "/srv/source.txt", "renamed.txt", "755");
 
     let mkdir = runtime.create_sftp_directory().expect("mkdir gate");
-    assert!(mkdir.status_text.contains("native-ssh backend"));
+    assert!(mkdir.status_text.contains("Cannot continue"));
+    assert!(!mkdir.status_text.contains("native-ssh"));
+    assert!(!mkdir.status_text.contains("fake"));
 
     let rename = runtime.rename_sftp_path().expect("rename gate");
-    assert!(rename.status_text.contains("native-ssh backend"));
+    assert!(rename.status_text.contains("Cannot continue"));
 
     let chmod = runtime.chmod_sftp_path().expect("chmod gate");
-    assert!(chmod.status_text.contains("native-ssh backend"));
+    assert!(chmod.status_text.contains("Cannot continue"));
 
     let remote_edit = runtime.start_sftp_remote_edit().expect("remote edit gate");
-    assert!(remote_edit.status_text.contains("native-ssh backend"));
+    assert!(remote_edit.status_text.contains("Cannot continue"));
 }
 
 #[test]
@@ -352,6 +340,9 @@ fn sftp_selection_operations_assemble_existing_operation_inputs() {
     runtime
         .handle_quick_connect("alice@example.com:2200")
         .expect("quick connect");
+    runtime
+        .disconnect_active_session()
+        .expect("disconnect before gated ops");
     runtime.sftp_path = "/demo".to_owned();
     runtime.sftp_entries = vec![
         FsEntry::directory("/demo/sub"),
@@ -364,37 +355,37 @@ fn sftp_selection_operations_assemble_existing_operation_inputs() {
         .expect("rename gate");
     assert_eq!(runtime.sftp_remote_target, "/demo/readme.txt");
     assert_eq!(runtime.sftp_secondary_target, "renamed.txt");
-    assert!(rename.status_text.contains("native-ssh backend"));
+    assert!(rename.status_text.contains("Cannot continue"));
 
     let chmod = runtime.chmod_sftp_selected("0o600").expect("chmod gate");
     assert_eq!(runtime.sftp_remote_target, "/demo/readme.txt");
     assert_eq!(runtime.sftp_permissions, "0o600");
-    assert!(chmod.status_text.contains("native-ssh backend"));
+    assert!(chmod.status_text.contains("Cannot continue"));
 
     let delete = runtime.delete_sftp_selected().expect("delete gate");
-    assert!(delete.status_text.contains("native-ssh backend"));
+    assert!(delete.status_text.contains("Cannot continue"));
 
     let created = runtime
         .create_sftp_folder_named("logs")
         .expect("mkdir gate");
     assert_eq!(runtime.sftp_secondary_target, "logs");
-    assert!(created.status_text.contains("native-ssh backend"));
+    assert!(created.status_text.contains("Cannot continue"));
 
     let upload = runtime
         .upload_sftp_into_current("C:/tmp/upload.txt")
         .expect("upload gate");
     assert_eq!(runtime.sftp_local_path, "C:/tmp/upload.txt");
     assert!(runtime.sftp_remote_target.is_empty());
-    assert!(upload.status_text.contains("native-ssh backend"));
+    assert!(upload.status_text.contains("Cannot continue"));
 
     let download = runtime
         .download_sftp_selected("C:/tmp/download.txt")
         .expect("download gate");
     assert_eq!(runtime.sftp_local_path, "C:/tmp/download.txt");
-    assert!(download.status_text.contains("native-ssh backend"));
+    assert!(download.status_text.contains("Cannot continue"));
 
     let edit = runtime.edit_sftp_selected().expect("edit gate");
-    assert!(edit.status_text.contains("native-ssh backend"));
+    assert!(edit.status_text.contains("Cannot continue"));
 
     // Empty inputs and a cleared selection are rejected before any backend work.
     let empty_name = runtime.rename_sftp_selected("   ").expect("empty rename");
@@ -417,16 +408,6 @@ fn sftp_selection_operations_assemble_existing_operation_inputs() {
 
 #[test]
 fn sftp_session_lifecycle_projects_status_parts() {
-    let unavailable = SftpSessionLifecycle::Unavailable {
-        reason: SftpUnavailableReason::SelectNativeSsh,
-    };
-    assert_eq!(unavailable.status_kind(), "unavailable");
-    assert_eq!(unavailable.status_reason(), "select-native-ssh");
-    assert_eq!(
-        unavailable.legacy_status_text(),
-        "SFTP unavailable: select the native-ssh backend before using SFTP"
-    );
-
     let disconnected = SftpSessionLifecycle::Disconnected {
         session_key: Some("runtime-1".to_owned()),
     };

@@ -661,7 +661,7 @@
 | # | 决策 |
 |---|---|
 | D25 | 会话栏简化：删除 `RECENT` / `ACTIVE` 区块；删除标题栏 `+`、列表下方 `…` 按钮以及 48px 图标条里的 `+`；新建/管理动作全部走上下文菜单（节点菜单 + 空白区菜单，空白区至少含 New Session / New Folder / Refresh，其余契约项分批） |
-| D26 | 后端：View 菜单移除 Fake/Native SSH 切换项，状态栏不再显示当前后端与指示点；桌面启动**默认使用原生 SSH**；`YSHELL_SSH_BACKEND` 仅保留为测试/开发环境开关，不出现在 UI |
+| D26 | 后端：仅真实 SSH；View 菜单/状态栏无 Fake/Native 切换；Fake SSH 与 `YSHELL_SSH_BACKEND` 已删除 |
 | D27 | 将其他 agent 遗留项纳入本轮：状态栏文案 i18n（P1 安全+错误兜底 → P2 会话生命周期 → P3 SFTP/传输 → P4 终端与设置）、对话框 Esc/遮罩点击关闭、对比度自动检查脚本（`ui-winui3-design-language.md` §8/§9 与验收 #6）、`cargo fmt --all` 债单独一轮收敛。各遗留项约定与验收见 §14 |
 | D28 | 字体清晰度：调研（`yshell-font-clarity-findings.md`）确认 UI 文字 Thin 变量字体问题随 T0 解决；终端字形质量独立成 **N5a**（T0 后开工，含物理像素光栅/CJK 回退/真粗斜体/字体选择链路），**e2e 的 Xvfb 缩放固定为 1.0 并入 N5a**；N5 依赖 N5a |
 | D29 | 对比度：**修正浅色 `text-tertiary` token**（alpha `0x72→0x8B`，使浅色 57/57 通过），由 L3 owner 在 T0 释放 UI 后执行（L3b）；对比度脚本**只保留本地入口**，暂不接 CI |
@@ -707,17 +707,9 @@
 
 ### 14.2 S2 后端 UI 与默认值
 
-- 现状：View 菜单有 `Fake Backend` / `Native SSH Backend` 两项切换；状态栏有后端色点与 `Backend: {0}` 文案；桌面启动默认 fake（`prepare_desktop_startup_projection` → `TransportBackend::Fake`）。
-- 变更：
-  - View 菜单删除两项后端切换（`view_menu_entries`）。
-  - 状态栏删除后端色点与 `Backend: ...` 文案；`transport_backend_text` 不再投影到 UI。
-  - 桌面启动默认 **native SSH**；仅 `YSHELL_SSH_BACKEND=fake`（或等价测试开关）时切到 fake，用于 e2e/离线测试。
-  - `AppRuntime::select_fake/native_ssh_transport_backend` 保留给测试与内部使用，但不再有 UI 入口。
-- 验收：
-  - 无环境变量启动即走真实 SSH（无 fake-shell 行为）；
-  - 菜单与状态栏无任何后端字样/指示；
-  - `YSHELL_SSH_BACKEND=fake` 仍可让 e2e 在无网络下跑通；
-  - 相关 UI/投影测试同步更新。
+- **已完成**：仅真实 SSH；Fake SSH / `TransportBackend` / `YSHELL_SSH_BACKEND` 已删除。
+- View 菜单与状态栏无后端切换/指示；离线单测用 `TestShellSession`，SFTP 测试用 `InMemorySftpBackend`。
+- 验收：产品路径只有真实 SSH；菜单/状态栏无后端字样；相关 UI/投影测试同步更新。
 
 ### 14.3 L1 状态栏文案 i18n
 

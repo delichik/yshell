@@ -257,7 +257,7 @@ impl AppRuntime {
             editor_target_editing,
             editor_auth_test_kind_text: self.editor_auth_test_status.kind_id().to_owned(),
             editor_auth_test_host_text: self.editor_auth_test_status.host_label().to_owned(),
-            editor_auth_test_backend_text: self.editor_auth_test_status.backend().to_owned(),
+            editor_auth_test_backend_text: String::new(),
             editor_auth_test_startup_text: self
                 .editor_auth_test_status
                 .startup_snippet()
@@ -611,7 +611,6 @@ impl AppRuntime {
             status_kind,
             status_param_1,
             status_param_2,
-            transport_backend_text: self.transport_backend.label().to_owned(),
             sftp_visible: self.panel_visible(PanelId::Sftp),
             tunnels_visible: self.panel_visible(PanelId::Tunnels),
             commands_visible: self.panel_visible(PanelId::QuickCommands),
@@ -1331,12 +1330,7 @@ impl AppRuntime {
                 prompt.keyboard_rounds.len() + usize::from(prompt.active_keyboard_round.is_some())
             })
             .unwrap_or(0);
-        // e2e/dev：fake 场景固定两轮（第 1 轮显示 Continue，第 2 轮显示 Connect）。
-        let challenge_round_total = if self.fake_keyboard_scenario() {
-            rounds_seen.max(2)
-        } else {
-            rounds_seen
-        };
+        let challenge_round_total = rounds_seen;
         let keyboard_submit_enabled =
             prompt.is_some_and(PendingAuthPrompt::keyboard_submit_enabled);
         let keyboard_final_round = prompt
@@ -1761,7 +1755,6 @@ pub struct AppProjection {
     pub status_kind: String,
     pub status_param_1: String,
     pub status_param_2: String,
-    pub transport_backend_text: String,
     pub sftp_visible: bool,
     pub tunnels_visible: bool,
     pub commands_visible: bool,
