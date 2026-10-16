@@ -156,6 +156,8 @@ impl AppRuntime {
             }
             self.refresh_terminal_search_for_active_session();
             // D16：无会话标签不得残留上一个会话的 SFTP 目录（B 轮3 #19）。
+            // 停放视图与 live 连接，回到该会话 tab 时即时恢复。
+            self.snapshot_sftp_view_to_cache();
             self.reset_sftp_view_state();
             self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
             self.status_text = "Activated the Quick Connect page.".to_owned();
@@ -183,13 +185,32 @@ impl AppRuntime {
         }
         self.refresh_terminal_search_for_active_session();
         let title = self.tab_display_title(tab_id);
-        // D16：切换会话时清掉上一个会话的目录并重新加载当前会话的 SFTP 视图。
+        // D16：切换会话时停放上一个会话的 SFTP 面板；不要在 UI 线程同步 list_dir /
+        // 重建 TCP+SSH——那是切已连接 tab 体感极慢的主因。
         let sftp_session_changed = self.sftp_session.status_session_key() != session_id.as_str();
         if sftp_session_changed {
+            self.snapshot_sftp_view_to_cache();
             self.reset_sftp_view_state();
         }
-        let sftp_status = self.sync_sftp_lifecycle_for_session(&session_id, sftp_session_changed);
-        self.status_text = format!("Activated tab `{title}`. {sftp_status}");
+        let sftp_status = self.sync_sftp_lifecycle_for_session(&session_id, false);
+        if sftp_session_changed {
+            if self.restore_sftp_view_from_cache(&session_id) {
+                self.status_text = format!("Activated tab `{title}`. {sftp_status}");
+            } else if matches!(
+                self.sftp_session,
+                super::SftpSessionLifecycle::Ready { .. }
+            ) {
+                // 首次进入该会话：先完成标签切换，列目录放到下一 tick。
+                self.sftp_listing_pending = true;
+                self.status_text = format!(
+                    "Activated tab `{title}`. {sftp_status} Loading SFTP listing…"
+                );
+            } else {
+                self.status_text = format!("Activated tab `{title}`. {sftp_status}");
+            }
+        } else {
+            self.status_text = format!("Activated tab `{title}`. {sftp_status}");
+        }
         Ok(self.projection())
     }
 

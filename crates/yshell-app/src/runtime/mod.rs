@@ -236,7 +236,9 @@ impl AppRuntime {
             sftp_sort_ascending: true,
             sftp_show_hidden: false,
             sftp_session: SftpSessionLifecycle::Disconnected { session_key: None },
-            sftp_live: None,
+            sftp_live: BTreeMap::new(),
+            sftp_view_cache: BTreeMap::new(),
+            sftp_listing_pending: false,
             remote_edit_session: None,
             transfer_queue: TransferQueue::default(),
             next_transfer_ordinal: 1,
@@ -509,13 +511,17 @@ pub struct AppRuntime {
     pub(crate) sftp_sort_ascending: bool,
     pub(crate) sftp_show_hidden: bool,
     pub(crate) sftp_session: SftpSessionLifecycle,
-    /// UI-thread SFTP client kept alive for the active session.
+    /// UI-thread SFTP clients keyed by runtime session.
     ///
-    /// Without this, every list/navigate/mkdir re-ran a full TCP+SSH+auth
-    /// handshake (see `RealSftpBackend`), which is why the right-hand SFTP
-    /// panel felt dramatically slower than Xshell. Cleared on disconnect /
-    /// session switch / transport failure.
-    pub(crate) sftp_live: Option<LiveSftpClient>,
+    /// Without a live client, every list/navigate/mkdir re-ran a full
+    /// TCP+SSH+auth handshake (see `RealSftpBackend`). Clients stay parked
+    /// across tab switches so revisiting a connected session stays instant;
+    /// cleared on disconnect / transport failure for that session.
+    pub(crate) sftp_live: BTreeMap<String, LiveSftpClient>,
+    /// Last visible SFTP panel per session (restored on tab activate).
+    pub(crate) sftp_view_cache: BTreeMap<String, sftp::SftpViewCache>,
+    /// Tab activate deferred the first listing for a session; drain on tick.
+    pub(crate) sftp_listing_pending: bool,
     pub(crate) remote_edit_session: Option<RemoteEditSession>,
     pub(crate) transfer_queue: TransferQueue,
     pub(crate) next_transfer_ordinal: usize,
@@ -788,12 +794,10 @@ impl fmt::Debug for AppRuntime {
             .field("sftp_show_hidden", &self.sftp_show_hidden)
             .field("sftp_session", &self.sftp_session)
             .field(
-                "sftp_live_session",
-                &self
-                    .sftp_live
-                    .as_ref()
-                    .map(|live| live.session_key.as_str()),
+                "sftp_live_sessions",
+                &self.sftp_live.keys().cloned().collect::<Vec<_>>(),
             )
+            .field("sftp_listing_pending", &self.sftp_listing_pending)
             .field("remote_edit_session", &self.remote_edit_session)
             .field("transfer_queue", &self.transfer_queue)
             .field("next_transfer_ordinal", &self.next_transfer_ordinal)

@@ -1,6 +1,8 @@
 //! SFTP browsing: listing state, selection, sorting, breadcrumbs and remote-edit
 //! lifecycle tracking.
 
+use std::collections::BTreeSet;
+
 use crate::{
     error::AppError, error::AppResult, sftp_view::format_sftp_modified,
     sftp_view::format_sftp_permissions, sftp_view::format_sftp_permissions_octal,
@@ -18,37 +20,139 @@ pub(crate) struct LiveSftpClient {
     pub(crate) client: SftpClient<RealSftpBackend>,
 }
 
+/// Per-session SFTP panel snapshot so tab switches restore instantly.
+#[derive(Debug, Clone)]
+pub(crate) struct SftpViewCache {
+    pub(crate) path: String,
+    pub(crate) entries: Vec<FsEntry>,
+    pub(crate) selected_index: Option<usize>,
+    pub(crate) selection: BTreeSet<String>,
+    pub(crate) selection_anchor: Option<String>,
+    pub(crate) sort_column: SftpSortColumn,
+    pub(crate) sort_ascending: bool,
+    pub(crate) show_hidden: bool,
+    pub(crate) listing: SftpListingState,
+}
+
 impl AppRuntime {
-    /// Drop the cached SFTP TCP/SSH session (next op reconnects once).
+    /// Drop every parked SFTP TCP/SSH session (backend switch / hard reset).
     pub(crate) fn drop_sftp_live_client(&mut self) {
-        self.sftp_live = None;
+        self.sftp_live.clear();
+    }
+
+    /// Drop the live client for one session (disconnect / transport failure).
+    pub(crate) fn drop_sftp_live_client_for(&mut self, session_key: &str) {
+        self.sftp_live.remove(session_key);
+        self.sftp_view_cache.remove(session_key);
     }
 
     /// Reuse or create the live SFTP client for `session_key`.
+    ///
+    /// Clients stay in `sftp_live` across tab switches so revisiting a connected
+    /// session does not redo TCP+SSH+auth on the UI thread.
     pub(crate) fn sftp_live_client_mut(
         &mut self,
         session_key: &str,
     ) -> AppResult<&mut SftpClient<RealSftpBackend>> {
-        let needs_new = !self
-            .sftp_live
-            .as_ref()
-            .is_some_and(|live| live.session_key == session_key);
-        if needs_new {
+        if !self.sftp_live.contains_key(session_key) {
             let ssh_config = {
                 let runtime = self.sessions.get(session_key).ok_or_else(|| {
                     AppError::new("active runtime session is missing")
                 })?;
                 self.effective_ssh_config(&runtime.ssh_config)
             };
-            self.sftp_live = Some(LiveSftpClient {
-                session_key: session_key.to_owned(),
-                client: SftpClient::with_real_backend(ssh_config),
-            });
+            self.sftp_live.insert(
+                session_key.to_owned(),
+                LiveSftpClient {
+                    session_key: session_key.to_owned(),
+                    client: SftpClient::with_real_backend(ssh_config),
+                },
+            );
         }
         self.sftp_live
-            .as_mut()
+            .get_mut(session_key)
             .map(|live| &mut live.client)
             .ok_or_else(|| AppError::new("SFTP live client missing after ensure"))
+    }
+
+    /// Snapshot the visible SFTP panel into the per-session cache (tab switch).
+    pub(crate) fn snapshot_sftp_view_to_cache(&mut self) {
+        let session_key = self.sftp_session.status_session_key();
+        if session_key.is_empty() {
+            return;
+        }
+        let session_key = session_key.to_owned();
+        self.sftp_view_cache.insert(
+            session_key,
+            SftpViewCache {
+                path: self.sftp_path.clone(),
+                entries: self.sftp_entries.clone(),
+                selected_index: self.sftp_selected_index,
+                selection: self.sftp_selection.clone(),
+                selection_anchor: self.sftp_selection_anchor.clone(),
+                sort_column: self.sftp_sort_column,
+                sort_ascending: self.sftp_sort_ascending,
+                show_hidden: self.sftp_show_hidden,
+                listing: self.sftp_listing.clone(),
+            },
+        );
+    }
+
+    /// Restore a parked SFTP panel for `session_key`. Returns whether a cache hit.
+    pub(crate) fn restore_sftp_view_from_cache(&mut self, session_key: &str) -> bool {
+        let Some(cache) = self.sftp_view_cache.get(session_key).cloned() else {
+            return false;
+        };
+        self.sftp_path = cache.path;
+        self.sftp_entries = cache.entries;
+        self.sftp_selected_index = cache.selected_index;
+        self.sftp_selection = cache.selection;
+        self.sftp_selection_anchor = cache.selection_anchor;
+        self.sftp_sort_column = cache.sort_column;
+        self.sftp_sort_ascending = cache.sort_ascending;
+        self.sftp_show_hidden = cache.show_hidden;
+        self.sftp_listing = cache.listing;
+        self.sftp_listing_pending = false;
+        true
+    }
+
+    /// Remember the current panel under the ready session key (after list/navigate).
+    fn remember_sftp_view_cache_for_ready_session(&mut self) {
+        let Some(session_key) = self.sftp_ready_session_key().map(str::to_owned) else {
+            return;
+        };
+        self.sftp_view_cache.insert(
+            session_key,
+            SftpViewCache {
+                path: self.sftp_path.clone(),
+                entries: self.sftp_entries.clone(),
+                selected_index: self.sftp_selected_index,
+                selection: self.sftp_selection.clone(),
+                selection_anchor: self.sftp_selection_anchor.clone(),
+                sort_column: self.sftp_sort_column,
+                sort_ascending: self.sftp_sort_ascending,
+                show_hidden: self.sftp_show_hidden,
+                listing: self.sftp_listing.clone(),
+            },
+        );
+    }
+
+    /// Drain a deferred listing requested by tab activation (non-blocking switch).
+    pub fn drain_pending_sftp_listing(&mut self) -> Option<AppProjection> {
+        if !self.sftp_listing_pending {
+            return None;
+        }
+        self.sftp_listing_pending = false;
+        match self.refresh_active_sftp_listing() {
+            Ok(projection) => Some(projection),
+            Err(error) => {
+                tracing::warn!(
+                    target: "yshell::app",
+                    "deferred SFTP listing after tab switch failed: {error}"
+                );
+                None
+            }
+        }
     }
 
     pub fn refresh_active_sftp_listing(&mut self) -> AppResult<AppProjection> {
@@ -440,6 +544,7 @@ impl AppRuntime {
         self.reconcile_sftp_selection(selected.as_deref());
         if listing.entries.is_empty() {
             self.sftp_listing = SftpListingState::EmptyDirectory;
+            self.remember_sftp_view_cache_for_ready_session();
             return;
         }
         if self.sftp_remote_target.trim().is_empty() {
@@ -471,6 +576,7 @@ impl AppRuntime {
                 .collect::<Vec<_>>()
                 .join("\n"),
         );
+        self.remember_sftp_view_cache_for_ready_session();
     }
 
     pub(crate) fn prepare_active_sftp_operation(
@@ -501,6 +607,8 @@ impl AppRuntime {
     ) -> String {
         if self.transport_backend != TransportBackend::Real {
             self.drop_sftp_live_client();
+            self.sftp_view_cache.clear();
+            self.sftp_listing_pending = false;
             self.sftp_session = SftpSessionLifecycle::Unavailable {
                 reason: SftpUnavailableReason::SelectNativeSsh,
             };
@@ -513,7 +621,7 @@ impl AppRuntime {
                 (runtime.state, runtime.transport_backend)
             })
         else {
-            self.drop_sftp_live_client();
+            self.drop_sftp_live_client_for(session_key);
             self.sftp_session = SftpSessionLifecycle::Failed {
                 session_key: Some(session_key.to_owned()),
                 reason: "runtime session is missing".to_owned(),
@@ -523,7 +631,7 @@ impl AppRuntime {
         };
 
         if session_state != yshell_core::SessionState::Connected {
-            self.drop_sftp_live_client();
+            self.drop_sftp_live_client_for(session_key);
             self.sftp_session = SftpSessionLifecycle::Disconnected {
                 session_key: Some(session_key.to_owned()),
             };
@@ -532,7 +640,7 @@ impl AppRuntime {
         }
 
         if session_backend != TransportBackend::Real {
-            self.drop_sftp_live_client();
+            self.drop_sftp_live_client_for(session_key);
             self.sftp_session = SftpSessionLifecycle::Disconnected {
                 session_key: Some(session_key.to_owned()),
             };
@@ -556,14 +664,15 @@ impl AppRuntime {
                 let entry_count = listing.entries.len();
                 let listing_path = listing.path.clone();
                 self.apply_sftp_listing(&listing);
+                self.sftp_listing_pending = false;
                 format!(
                     "SFTP session ready. Loaded {entry_count} SFTP entr{} from `{listing_path}`.",
                     if entry_count == 1 { "y" } else { "ies" }
                 )
             }
             Err(error) => {
-                // Force the next refresh to open a new SSH/SFTP channel.
-                self.drop_sftp_live_client();
+                // Force the next refresh to open a new SSH/SFTP channel for this session.
+                self.drop_sftp_live_client_for(session_key);
                 self.sftp_session = SftpSessionLifecycle::Failed {
                     session_key: Some(session_key.to_owned()),
                     reason: error.to_string(),
@@ -580,16 +689,17 @@ impl AppRuntime {
 
     /// D16：清空 SFTP 面板视图状态（切换会话/切到无会话标签时调用）。
     ///
-    /// 只清"上一个会话的目录"这类残留；生命周期由调用方随后用
+    /// 只清可见目录残留；**不**丢掉 per-session live TCP/SSH——切 tab 时销毁连接
+    /// 会在 UI 线程重做完整握手，体感极慢。生命周期由调用方随后用
     /// [`Self::sync_sftp_lifecycle_for_session`] 重建。
     pub(crate) fn reset_sftp_view_state(&mut self) {
-        self.drop_sftp_live_client();
         self.sftp_entries.clear();
         self.sftp_selection.clear();
         self.sftp_selection_anchor = None;
         self.sftp_selected_index = None;
         self.sftp_path = "/".to_owned();
         self.sftp_listing = SftpListingState::ConnectReal;
+        self.sftp_listing_pending = false;
     }
 
     pub(crate) fn sftp_ready_session_key(&self) -> Option<&str> {

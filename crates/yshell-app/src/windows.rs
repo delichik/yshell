@@ -550,6 +550,10 @@ impl WindowManager {
                 let _ = runtime.apply_connect_job_message(message);
                 dirty = true;
             }
+            // 标签切换故意跳过同步 SFTP list_dir；这里补做首次/未缓存会话的列目录。
+            if runtime.drain_pending_sftp_listing().is_some() {
+                dirty = true;
+            }
             // N0：所有终端输出（活动会话优先 + 游标轮转后台标签）。
             match runtime.poll_all_terminal_outputs() {
                 Ok(Some(_)) => dirty = true,
