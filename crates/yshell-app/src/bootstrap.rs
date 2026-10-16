@@ -3389,6 +3389,42 @@ pub(crate) fn wire_callbacks(
         }
     });
 
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_set_debug_logging(move |enabled| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        match runtime_ref.borrow_mut().set_debug_logging(enabled) {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => {
+                // Re-project so a failed save restores the toggle from config.
+                let projection = runtime_ref.borrow().projection();
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+                set_error_status(&window, "Could not save the debug logging setting.", &error);
+            }
+        }
+    });
+
+    {
+        let weak = window.as_weak();
+        let runtime_ref = Rc::clone(&runtime);
+        window.on_open_debug_log_dir(move || {
+            if weak.upgrade().is_none() {
+                return;
+            }
+            match runtime_ref.borrow().ensure_debug_log_dir() {
+                Ok(dir) => spawn_open_path(dir.display().to_string()),
+                Err(_) => {}
+            }
+        });
+    }
+
     // --- N6：终端日志（右键菜单/状态栏入口 + 弹窗）---------------------------
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
@@ -6079,6 +6115,8 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
         projection.settings_scrollback_max_cells_text.clone().into(),
     );
     window.set_settings_language_text(projection.settings_language_text.clone().into());
+    window.set_settings_debug_logging_enabled(projection.settings_debug_logging_enabled);
+    window.set_settings_debug_log_dir_text(projection.settings_debug_log_dir_text.clone().into());
     window.set_settings_terminal_status_kind_text(
         projection.settings_terminal_status_kind_text.clone().into(),
     );
@@ -6724,16 +6762,41 @@ fn restore_shortcut_focus_after_modal(window: &MainWindow, projection: &AppProje
 }
 
 pub fn bootstrap_app() -> AppResult<YShellApp> {
-    init_logging()?;
     // 须在首个 Window 创建之前：关掉 Windows 无框窗默认透明（顶栏透缝）。
     crate::win_chrome::select_backend()?;
     let config_dir = yshell_config::discover_config_dir().map_err(AppError::from_error)?;
-    Ok(YShellApp::new(AppState::new(config_dir)?.runtime))
+    let runtime = AppState::new(config_dir)?.runtime;
+    init_logging_for_runtime(&runtime)?;
+    Ok(YShellApp::new(runtime))
 }
 
-pub fn init_logging() -> AppResult<()> {
-    yshell_logging::init_tracing(&yshell_logging::LoggingConfig::default())
-        .map_err(AppError::from_error)
+/// Installs the process tracing subscriber from the loaded UI preference.
+///
+/// GUI builds write only to `{config_dir}/logs` when debug logging is enabled
+/// (no console window). `RUST_LOG` still overrides the filter when set.
+pub fn init_logging_for_runtime(runtime: &AppRuntime) -> AppResult<()> {
+    let env_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "yshell=debug,warn".to_owned());
+    let config = yshell_logging::LoggingConfig::with_env_filter(env_filter)
+        .with_ansi(false)
+        .with_stderr(false)
+        .with_file_directory(yshell_logging::debug_log_dir(&runtime.config_dir))
+        .with_debug_enabled(runtime.debug_logging_enabled());
+    match yshell_logging::init_tracing(&config) {
+        Ok(()) => {
+            if runtime.debug_logging_enabled() {
+                tracing::info!(
+                    path = %yshell_logging::debug_log_path(&runtime.config_dir).display(),
+                    "debug logging enabled"
+                );
+            }
+            Ok(())
+        }
+        Err(yshell_logging::InitLoggingError::AlreadyInitialized(_)) => {
+            yshell_logging::set_debug_logging_enabled(runtime.debug_logging_enabled());
+            Ok(())
+        }
+        Err(error) => Err(AppError::from_error(error)),
+    }
 }
 
 #[cfg(test)]

@@ -294,6 +294,8 @@ impl AppRuntime {
             settings_scrollback_lines_text: self.settings_scrollback_lines_text.clone(),
             settings_scrollback_max_cells_text: self.settings_scrollback_max_cells_text.clone(),
             settings_language_text: self.config_document.ui.language.clone(),
+            settings_debug_logging_enabled: self.config_document.ui.debug_logging,
+            settings_debug_log_dir_text: self.debug_log_dir().display().to_string(),
             settings_terminal_status_kind_text: self.settings_terminal_status.kind_id().to_owned(),
             settings_terminal_status_field_text: self
                 .settings_terminal_status
@@ -1452,6 +1454,10 @@ pub struct AppProjection {
     pub settings_scrollback_max_cells_text: String,
     /// UI language preference: `system` / `zh-CN` / `en-US`.
     pub settings_language_text: String,
+    /// Whether process debug logs are written under `{config_dir}/logs`.
+    pub settings_debug_logging_enabled: bool,
+    /// Absolute path of the debug log directory.
+    pub settings_debug_log_dir_text: String,
     pub settings_terminal_status_kind_text: String,
     pub settings_terminal_status_field_text: String,
     pub settings_terminal_status_value_text: String,

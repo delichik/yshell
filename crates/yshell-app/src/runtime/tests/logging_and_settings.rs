@@ -46,6 +46,36 @@ fn global_logging_settings_are_visible_and_persisted() {
 }
 
 #[test]
+fn debug_logging_setting_persists_and_creates_log_dir() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+
+    let projection = runtime.projection();
+    assert!(!projection.settings_debug_logging_enabled);
+    assert_eq!(
+        projection.settings_debug_log_dir_text,
+        temp.path().join("logs").display().to_string()
+    );
+
+    let enabled = runtime.set_debug_logging(true).expect("enable debug logging");
+    assert!(enabled.settings_debug_logging_enabled);
+    assert!(enabled.status_text.contains("Debug logging enabled"));
+    assert!(temp.path().join("logs").is_dir());
+
+    let persisted = ConfigStore::new(temp.path())
+        .load_or_recover()
+        .expect("reload config")
+        .document
+        .ui
+        .debug_logging;
+    assert!(persisted);
+
+    let disabled = runtime.set_debug_logging(false).expect("disable debug logging");
+    assert!(!disabled.settings_debug_logging_enabled);
+    assert!(disabled.status_text.contains("Debug logging disabled"));
+}
+
+#[test]
 fn status_kind_expires_when_text_is_overwritten() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");

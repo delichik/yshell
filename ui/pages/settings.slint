@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { WinButton, WinComboBox, WinIconButton, WinNavItem, WinScrollIndicator } from "../components/basic/controls.slint";
+import { WinButton, WinComboBox, WinIconButton, WinNavItem, WinScrollIndicator, WinToggle } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 
 // N5：配色方案选项（Settings → Appearance 分区的方案卡片）。
@@ -136,6 +136,10 @@ export component SettingsDialog inherits Rectangle {
     in property <string> terminal-status-text: "";
     /// UI language preference: `system` / `zh-CN` / `en-US`.
     in property <string> language-text: "system";
+    /// Process debug logging preference (writes under the config directory).
+    in-out property <bool> debug-logging-enabled: false;
+    /// Absolute path of the debug log directory.
+    in property <string> debug-log-dir-text: "";
     /// Active left-nav section id.
     in-out property <string> section: "general";
 
@@ -168,6 +172,8 @@ export component SettingsDialog inherits Rectangle {
     callback reset-terminal-defaults();
     callback save-terminal-settings();
     callback set-language(string);
+    callback set-debug-logging(bool);
+    callback open-debug-log-dir();
     // Appearance
     callback select-appearance-scheme(string);
     callback clone-appearance-theme(string);
@@ -882,6 +888,48 @@ export component SettingsDialog inherits Rectangle {
                                                 color: Theme.text-tertiary;
                                                 font-size: Theme.font-caption;
                                                 wrap: word-wrap;
+                                            }
+
+                                            Rectangle { height: 1px; background: Theme.divider; }
+
+                                            Text {
+                                                text: @tr("Debug logging");
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-body;
+                                                font-weight: Theme.weight-semibold;
+                                            }
+
+                                            Text {
+                                                text: @tr("When enabled, diagnostic logs are written under the config directory. The console window stays hidden.");
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-body;
+                                                wrap: word-wrap;
+                                            }
+
+                                            WinToggle {
+                                                text: @tr("Record debug logs");
+                                                checked <=> root.debug-logging-enabled;
+                                                toggled => {
+                                                    root.set-debug-logging(root.debug-logging-enabled);
+                                                }
+                                            }
+
+                                            Text {
+                                                text: root.debug-log-dir-text;
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-caption;
+                                                font-family: Theme.font-mono;
+                                                wrap: word-wrap;
+                                            }
+
+                                            HorizontalLayout {
+                                                spacing: Theme.spacing-8;
+                                                alignment: start;
+
+                                                WinButton {
+                                                    text: @tr("Open Log Folder");
+                                                    clicked => { root.open-debug-log-dir(); }
+                                                }
                                             }
                                         }
                                     }

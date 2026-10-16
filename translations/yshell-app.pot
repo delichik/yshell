@@ -3712,3 +3712,23 @@ msgstr ""
 msgctxt "MainWindow"
 msgid "Log output directory"
 msgstr ""
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Application data, sessions, and related files live under this directory."
+msgstr ""
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Debug logging"
+msgstr ""
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "When enabled, diagnostic logs are written under the config directory. The console window stays hidden."
+msgstr ""
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Record debug logs"
+msgstr ""

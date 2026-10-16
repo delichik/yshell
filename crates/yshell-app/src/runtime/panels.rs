@@ -39,6 +39,54 @@ impl AppRuntime {
         Ok(self.projection())
     }
 
+    /// Whether process debug logs are written under `{config_dir}/logs`.
+    #[must_use]
+    pub fn debug_logging_enabled(&self) -> bool {
+        self.config_document.ui.debug_logging
+    }
+
+    /// Absolute path of the debug log directory (may not exist yet).
+    #[must_use]
+    pub fn debug_log_dir(&self) -> PathBuf {
+        yshell_logging::debug_log_dir(&self.config_dir)
+    }
+
+    /// Persist the debug-logging preference and apply it to the live subscriber.
+    pub fn set_debug_logging(&mut self, enabled: bool) -> AppResult<AppProjection> {
+        if self.config_document.ui.debug_logging != enabled {
+            self.config_document.ui.debug_logging = enabled;
+            self.config_store
+                .save(&self.config_document)
+                .map_err(AppError::from_error)?;
+        }
+        if enabled {
+            let dir = self.debug_log_dir();
+            std::fs::create_dir_all(&dir).map_err(AppError::from_error)?;
+            yshell_logging::set_debug_logging_enabled(true);
+            tracing::info!(
+                path = %yshell_logging::debug_log_path(&self.config_dir).display(),
+                "debug logging enabled"
+            );
+            self.status_text = format!(
+                "Debug logging enabled. Writing to {}.",
+                dir.display()
+            );
+        } else {
+            // Log while the writer is still enabled so the disable event is persisted.
+            tracing::info!("debug logging disabled");
+            yshell_logging::set_debug_logging_enabled(false);
+            self.status_text = "Debug logging disabled.".to_owned();
+        }
+        Ok(self.projection())
+    }
+
+    /// Ensures the debug log directory exists and returns its absolute path.
+    pub fn ensure_debug_log_dir(&self) -> AppResult<PathBuf> {
+        let dir = self.debug_log_dir();
+        std::fs::create_dir_all(&dir).map_err(AppError::from_error)?;
+        Ok(dir)
+    }
+
     pub fn update_settings_scrollback_lines(&mut self, value: &str) -> AppProjection {
         self.settings_scrollback_lines_text = value.to_owned();
         self.projection()

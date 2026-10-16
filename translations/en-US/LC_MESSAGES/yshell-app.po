@@ -4002,3 +4002,38 @@ msgstr "Receiving key input"
 msgctxt "WorkspaceTabItem"
 msgid "SRC"
 msgstr "SRC"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Advanced"
+msgstr "Advanced"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Config directory"
+msgstr "Config directory"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Application data, sessions, and related files live under this directory."
+msgstr "Application data, sessions, and related files live under this directory."
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Debug logging"
+msgstr "Debug logging"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "When enabled, diagnostic logs are written under the config directory. The console window stays hidden."
+msgstr "When enabled, diagnostic logs are written under the config directory. The console window stays hidden."
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Record debug logs"
+msgstr "Record debug logs"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Open Log Folder"
+msgstr "Open Log Folder"

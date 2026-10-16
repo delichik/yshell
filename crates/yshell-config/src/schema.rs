@@ -535,6 +535,9 @@ pub struct UiProfile {
     /// Last directory shown in the Local files panel (absolute path).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub local_directory: Option<String>,
+    /// When true, write process debug logs under `{config_dir}/logs`.
+    #[serde(default)]
+    pub debug_logging: bool,
 }
 
 impl Default for UiProfile {
@@ -545,6 +548,7 @@ impl Default for UiProfile {
             multi_window_enabled: true,
             language: default_ui_language(),
             local_directory: None,
+            debug_logging: false,
         }
     }
 }
@@ -1401,6 +1405,7 @@ mod tests {
                 narrow_collapsed_side: Some(PanelSide::Right),
             },
             multi_window_enabled: false,
+            ..UiProfile::default()
         }
     }
 

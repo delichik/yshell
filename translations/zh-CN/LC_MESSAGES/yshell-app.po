@@ -3977,3 +3977,38 @@ msgstr "正在接收按键输入"
 msgctxt "WorkspaceTabItem"
 msgid "SRC"
 msgstr "源"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Advanced"
+msgstr "高级"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Config directory"
+msgstr "配置目录"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Application data, sessions, and related files live under this directory."
+msgstr "应用数据、会话及相关文件保存在此目录下。"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Debug logging"
+msgstr "调试日志"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "When enabled, diagnostic logs are written under the config directory. The console window stays hidden."
+msgstr "开启后，诊断日志会写入配置目录；启动时不再显示命令行窗口。"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Record debug logs"
+msgstr "记录调试日志"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Open Log Folder"
+msgstr "打开日志文件夹"

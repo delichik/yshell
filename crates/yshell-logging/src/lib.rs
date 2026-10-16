@@ -6,14 +6,30 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{self, Write},
     path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, OnceLock,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use time::{error::IndeterminateOffset, OffsetDateTime};
 
 use tracing_subscriber::{
-    fmt as tracing_fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter,
+    fmt as tracing_fmt,
+    fmt::writer::MakeWriter,
+    layer::SubscriberExt,
+    util::SubscriberInitExt,
+    EnvFilter,
 };
+
+/// File name for process-wide debug logs under the configured log directory.
+pub const DEBUG_LOG_FILE_NAME: &str = "yshell-debug.log";
+
+/// Relative directory (under the config / user data root) for debug logs.
+pub const DEBUG_LOG_DIR_NAME: &str = "logs";
+
+static DEBUG_LOG_STATE: OnceLock<Arc<DebugLogState>> = OnceLock::new();
 
 /// Options used to initialize the process-wide tracing subscriber.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,6 +37,12 @@ pub struct LoggingConfig {
     env_filter: String,
     ansi: bool,
     compact: bool,
+    /// Write formatted events to stderr (console). Defaults to `true`.
+    stderr: bool,
+    /// When set, also install a file writer under this directory.
+    file_directory: Option<PathBuf>,
+    /// Initial enabled state for the optional file writer.
+    debug_enabled: bool,
 }
 
 impl Default for LoggingConfig {
@@ -29,6 +51,9 @@ impl Default for LoggingConfig {
             env_filter: "yshell=info,warn".to_owned(),
             ansi: true,
             compact: false,
+            stderr: true,
+            file_directory: None,
+            debug_enabled: false,
         }
     }
 }
@@ -56,6 +81,56 @@ impl LoggingConfig {
         self.compact = true;
         self
     }
+
+    /// Enables or disables stderr (console) output.
+    #[must_use]
+    pub const fn with_stderr(mut self, stderr: bool) -> Self {
+        self.stderr = stderr;
+        self
+    }
+
+    /// Writes debug logs under `directory` when file logging is enabled.
+    #[must_use]
+    pub fn with_file_directory(mut self, directory: impl Into<PathBuf>) -> Self {
+        self.file_directory = Some(directory.into());
+        self
+    }
+
+    /// Sets whether the optional file writer is enabled initially.
+    #[must_use]
+    pub const fn with_debug_enabled(mut self, enabled: bool) -> Self {
+        self.debug_enabled = enabled;
+        self
+    }
+}
+
+/// Returns `{config_dir}/logs` — the debug log directory under the user data root.
+#[must_use]
+pub fn debug_log_dir(config_dir: &Path) -> PathBuf {
+    config_dir.join(DEBUG_LOG_DIR_NAME)
+}
+
+/// Returns the path of the process-wide debug log file.
+#[must_use]
+pub fn debug_log_path(config_dir: &Path) -> PathBuf {
+    debug_log_dir(config_dir).join(DEBUG_LOG_FILE_NAME)
+}
+
+/// Enables or disables writing to the debug log file at runtime.
+///
+/// No-op when tracing was initialized without a file directory.
+pub fn set_debug_logging_enabled(enabled: bool) {
+    if let Some(state) = DEBUG_LOG_STATE.get() {
+        state.enabled.store(enabled, Ordering::Release);
+    }
+}
+
+/// Returns whether debug file logging is currently enabled.
+#[must_use]
+pub fn is_debug_logging_enabled() -> bool {
+    DEBUG_LOG_STATE
+        .get()
+        .is_some_and(|state| state.enabled.load(Ordering::Acquire))
 }
 
 /// Error returned when tracing cannot be initialized.
@@ -92,10 +167,12 @@ pub fn init_tracing(config: &LoggingConfig) -> Result<(), InitLoggingError> {
     let env_filter =
         EnvFilter::try_new(&config.env_filter).map_err(InitLoggingError::InvalidFilter)?;
 
+    let writer = build_writer(config);
     if config.compact {
         let fmt_layer = tracing_fmt::layer()
             .with_ansi(config.ansi)
             .with_target(true)
+            .with_writer(writer)
             .compact();
         tracing_subscriber::registry()
             .with(env_filter)
@@ -105,12 +182,122 @@ pub fn init_tracing(config: &LoggingConfig) -> Result<(), InitLoggingError> {
     } else {
         let fmt_layer = tracing_fmt::layer()
             .with_ansi(config.ansi)
-            .with_target(true);
+            .with_target(true)
+            .with_writer(writer);
         tracing_subscriber::registry()
             .with(env_filter)
             .with(fmt_layer)
             .try_init()
             .map_err(InitLoggingError::AlreadyInitialized)
+    }
+}
+
+fn build_writer(config: &LoggingConfig) -> BoxMakeWriter {
+    let file_state = config.file_directory.as_ref().map(|directory| {
+        if let Some(existing) = DEBUG_LOG_STATE.get() {
+            existing.enabled.store(config.debug_enabled, Ordering::Release);
+            return Arc::clone(existing);
+        }
+        let state = Arc::new(DebugLogState {
+            enabled: AtomicBool::new(config.debug_enabled),
+            path: directory.join(DEBUG_LOG_FILE_NAME),
+            file: Mutex::new(None),
+        });
+        match DEBUG_LOG_STATE.set(Arc::clone(&state)) {
+            Ok(()) => state,
+            Err(_) => {
+                let existing = DEBUG_LOG_STATE.get().expect("debug log state installed");
+                existing
+                    .enabled
+                    .store(config.debug_enabled, Ordering::Release);
+                Arc::clone(existing)
+            }
+        }
+    });
+
+    BoxMakeWriter::Tee {
+        stderr: config.stderr,
+        file: file_state,
+    }
+}
+
+#[derive(Debug)]
+struct DebugLogState {
+    enabled: AtomicBool,
+    path: PathBuf,
+    file: Mutex<Option<File>>,
+}
+
+impl DebugLogState {
+    fn write_all(&self, buf: &[u8]) -> io::Result<()> {
+        if !self.enabled.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        let mut guard = self
+            .file
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if guard.is_none() {
+            if let Some(parent) = self.path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            let file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.path)?;
+            *guard = Some(file);
+        }
+        if let Some(file) = guard.as_mut() {
+            file.write_all(buf)?;
+            file.flush()?;
+        }
+        Ok(())
+    }
+}
+
+/// Combined stderr / optional file writer for the fmt layer.
+#[derive(Debug, Clone)]
+enum BoxMakeWriter {
+    Tee {
+        stderr: bool,
+        file: Option<Arc<DebugLogState>>,
+    },
+}
+
+impl<'a> MakeWriter<'a> for BoxMakeWriter {
+    type Writer = CombinedWriter;
+
+    fn make_writer(&'a self) -> Self::Writer {
+        match self {
+            Self::Tee { stderr, file } => CombinedWriter {
+                stderr: *stderr,
+                file: file.clone(),
+            },
+        }
+    }
+}
+
+struct CombinedWriter {
+    stderr: bool,
+    file: Option<Arc<DebugLogState>>,
+}
+
+impl Write for CombinedWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        if self.stderr {
+            let _ = io::stderr().write_all(buf);
+        }
+        if let Some(state) = &self.file {
+            let _ = state.write_all(buf);
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        if self.stderr {
+            let _ = io::stderr().flush();
+        }
+        Ok(())
     }
 }
 
@@ -706,6 +893,34 @@ mod tests {
             .expect_err("invalid filter should fail before subscriber install");
 
         assert!(matches!(error, InitLoggingError::InvalidFilter(_)));
+    }
+
+    #[test]
+    fn debug_log_paths_nest_under_config_dir() {
+        let root = PathBuf::from("/tmp/yshell-home");
+        assert_eq!(debug_log_dir(&root), PathBuf::from("/tmp/yshell-home/logs"));
+        assert_eq!(
+            debug_log_path(&root),
+            PathBuf::from("/tmp/yshell-home/logs/yshell-debug.log")
+        );
+    }
+
+    #[test]
+    fn debug_log_state_writes_only_when_enabled() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join(DEBUG_LOG_FILE_NAME);
+        let state = DebugLogState {
+            enabled: AtomicBool::new(false),
+            path: path.clone(),
+            file: Mutex::new(None),
+        };
+
+        state.write_all(b"hidden\n").expect("discard while disabled");
+        assert!(!path.exists());
+
+        state.enabled.store(true, Ordering::Release);
+        state.write_all(b"visible\n").expect("write while enabled");
+        assert_eq!(fs::read_to_string(&path).expect("read"), "visible\n");
     }
 
     #[test]

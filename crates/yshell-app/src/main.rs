@@ -1,5 +1,9 @@
 //! YShell application entry point.
 
+// Hide the console window for the GUI process on Windows. CLI subcommands
+// re-attach to the parent console so `--help` / `--version` still print.
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 mod app_state;
 mod bootstrap;
 mod connect_jobs;
@@ -19,7 +23,11 @@ use error::{AppError, AppResult};
 use runtime::AppRuntime;
 
 fn main() -> AppResult<()> {
-    match CliCommand::parse(env::args().skip(1))? {
+    let command = CliCommand::parse(env::args().skip(1))?;
+    if !matches!(command, CliCommand::RunShell) {
+        attach_parent_console();
+    }
+    match command {
         CliCommand::CheckConfig => {
             let config_dir = yshell_config::discover_config_dir().map_err(AppError::from_error)?;
             println!("configuration OK: {}", config_dir.display());
@@ -54,6 +62,18 @@ fn main() -> AppResult<()> {
         }
     }
 }
+
+/// Re-attach stdout/stderr to the launching console for CLI flags.
+#[cfg(windows)]
+fn attach_parent_console() {
+    use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
+    // AttachConsole is Win32 FFI; workspace denies unsafe by default.
+    #[allow(unsafe_code)]
+    let _ = unsafe { AttachConsole(ATTACH_PARENT_PROCESS) };
+}
+
+#[cfg(not(windows))]
+fn attach_parent_console() {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum CliCommand {
