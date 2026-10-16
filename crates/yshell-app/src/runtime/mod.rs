@@ -206,6 +206,8 @@ impl AppRuntime {
             secret_store_kind,
             secret_reset_confirmation: String::new(),
             editor: SessionEditorDraft::default(),
+            editor_baseline: None,
+            editor_discard_dialog_visible: false,
             new_folder_name: String::new(),
             editor_auth_test_status: EditorAuthTestStatus::Hint,
             status_text: String::new(),
@@ -474,6 +476,9 @@ pub struct AppRuntime {
     pub(crate) secret_store_kind: SecretStoreKind,
     pub(crate) secret_reset_confirmation: String,
     pub(crate) editor: SessionEditorDraft,
+    /// Snapshot taken when the Session Editor opens; used for Discard Changes.
+    pub(crate) editor_baseline: Option<SessionEditorDraft>,
+    pub(crate) editor_discard_dialog_visible: bool,
     pub(crate) new_folder_name: String,
     pub(crate) editor_auth_test_status: EditorAuthTestStatus,
     pub(crate) status_text: String,

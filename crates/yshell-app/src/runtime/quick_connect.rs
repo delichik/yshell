@@ -306,9 +306,12 @@ impl AppRuntime {
         self.editor.port_text = parsed.port.to_string();
         self.editor.username = parsed.username.clone().unwrap_or_default();
         self.new_folder_name.clear();
+        self.editor_discard_dialog_visible = false;
         self.editor_modal_visible = true;
         self.editor_section = EditorSection::General;
         self.editor_auth_test_status = EditorAuthTestStatus::Hint;
+        self.editor_set_theme_baseline(None);
+        self.editor_baseline = Some(self.editor.clone());
         self.status_text = format!(
             "Session editor opened with Quick Connect target `{}`.",
             parsed.canonical()

@@ -57,7 +57,6 @@ component HintText inherits Text {
 }
 
 // 分区导航项：WinNavItem + 可选的禁用说明 tooltip。
-// （基础控件 WinNavItem 不属本文件；Tooltip 必须声明在其直接父元素下，故包一层薄壳。）
 component EditorNavItem inherits Rectangle {
     in property <string> text: "";
     in property <string> icon: "settings";
@@ -90,7 +89,6 @@ export component SessionEditor inherits Rectangle {
     in property <string> section: "general";
     in property <string> target-text: "";
     in property <string> folder-text: "";
-    in-out property <string> new-folder-name: "";
     in-out property <string> name-text: "";
     in-out property <string> host-text: "";
     in-out property <string> port-text: "22";
@@ -100,6 +98,8 @@ export component SessionEditor inherits Rectangle {
     in-out property <string> password-text: "";
     in-out property <string> key-path-text: "";
     in-out property <string> passphrase-text: "";
+    in property <bool> has-stored-password: false;
+    in property <bool> has-stored-passphrase: false;
     in property <string> auth-test-status-text: "";
     in property <string> proxy-mode-text: "none";
     in property <string> proxy-protocol-text: "socks5";
@@ -107,6 +107,7 @@ export component SessionEditor inherits Rectangle {
     in-out property <string> proxy-port-text: "";
     in-out property <string> proxy-username-text: "";
     in-out property <string> proxy-password-text: "";
+    in property <bool> has-stored-proxy-password: false;
     in property <bool> proxy-dns-by-proxy: true;
     in property <string> proxy-summary-text: "";
     in property <string> tunnel-kind-text: "local";
@@ -115,31 +116,16 @@ export component SessionEditor inherits Rectangle {
     in-out property <string> tunnel-target-host-text: "";
     in-out property <string> tunnel-target-port-text: "";
     in property <string> tunnel-summary-text: "";
-    in property <string> logging-enabled-text: "disabled";
-    in property <string> logging-format-text: "sanitized";
-    in-out property <string> logging-directory-text: "";
-    in property <string> logging-summary-text: "";
-    in property <string> secret-store-status-text: "";
-    in-out property <string> secret-reset-confirmation-text: "";
-    in property <string> config-dir-text: "";
-    // N5：Appearance/Terminal 三态覆盖字段（Rust 组装 TriStateField 模型）。
+    // N5：Appearance 三态覆盖字段（Rust 组装 TriStateField 模型）。
+    // 字体 / 配色必须是 choice，禁止自由文本输入。
     in property <[TriStateField]> editor-appearance-fields: [];
-    in property <[TriStateField]> editor-terminal-fields: [];
 
     callback close();
     callback select-general();
     callback select-authentication();
-    callback select-terminal();
-    callback select-sftp();
     callback select-tunnels();
     callback select-proxy();
-    callback select-logging();
-    callback select-advanced();
     callback select-appearance();
-    callback select-folder-prev();
-    callback select-folder-next();
-    callback update-new-folder-name(string);
-    callback create-folder();
     callback update-name(string);
     callback update-host(string);
     callback update-port(string);
@@ -175,21 +161,20 @@ export component SessionEditor inherits Rectangle {
     callback update-tunnel-target-port(string);
     callback add-tunnel();
     callback clear-tunnels();
-    callback toggle-logging-enabled();
-    callback set-logging-format-raw();
-    callback set-logging-format-sanitized();
-    callback update-logging-directory(string);
-    callback save-logging-settings();
-    callback reset-secrets();
-    callback update-secret-reset-confirmation(string);
     callback save();
     callback save-connect();
-    // N5：Appearance/Terminal 三态字段动作。
+    // N5：Appearance 三态字段动作。
     callback editor-theme-field-action(string, string);
     callback update-editor-theme-field(string, string);
     callback editor-select-scheme(int);
     callback editor-select-font(int);
     callback reset-all-editor-theme();
+
+    private property <bool> show-password-auth:
+        root.auth-method-text == "password" || root.auth-method-text == "keyboard_interactive";
+    private property <bool> show-key-auth: root.auth-method-text == "private_key";
+    private property <bool> show-proxy-custom: root.proxy-mode-text == "custom";
+    private property <bool> show-tunnel-target: root.tunnel-kind-text != "dynamic";
 
     // 面板高度固定（B 轮3 #13）：原实现按各分区内容收缩，切换分区时整块面板（含左侧导航）
     // 上下跳动、鼠标下的导航项会移位。现在取最高分区所需高度并给伪本地化留余量，
@@ -339,9 +324,9 @@ export component SessionEditor inherits Rectangle {
                                         if root.section == "general" : VerticalLayout {
                                             alignment: start;
                                             spacing: Theme.spacing-12;
-            
+
                                             SectionTitle { heading: @tr("General"); }
-            
+
                                             // 文件夹只读：归属由会话树「New Session Here」决定；
                                             // 新建/改名文件夹走树右键，不在此对话框里选或建。
                                             if root.folder-text != "" : FormRow {
@@ -361,7 +346,7 @@ export component SessionEditor inherits Rectangle {
 
                                             FormRow {
                                                 label: @tr("Session name");
-            
+
                                                 WinTextInput {
                                                     horizontal-stretch: 1;
                                                     text <=> root.name-text;
@@ -369,10 +354,10 @@ export component SessionEditor inherits Rectangle {
                                                     edited => { root.update-name(self.text); }
                                                 }
                                             }
-            
+
                                             FormRow {
                                                 label: @tr("Host");
-            
+
                                                 WinTextInput {
                                                     horizontal-stretch: 1;
                                                     text <=> root.host-text;
@@ -380,10 +365,10 @@ export component SessionEditor inherits Rectangle {
                                                     edited => { root.update-host(self.text); }
                                                 }
                                             }
-            
+
                                             FormRow {
                                                 label: @tr("Port");
-            
+
                                                 WinTextInput {
                                                     horizontal-stretch: 1;
                                                     text <=> root.port-text;
@@ -391,7 +376,7 @@ export component SessionEditor inherits Rectangle {
                                                     edited => { root.update-port(self.text); }
                                                 }
                                             }
-            
+
                                             FormRow {
                                                 label: @tr("Username");
 
@@ -415,17 +400,21 @@ export component SessionEditor inherits Rectangle {
                                         if root.section == "authentication" : VerticalLayout {
                                             alignment: start;
                                             spacing: Theme.spacing-12;
-            
+
                                             SectionTitle { heading: @tr("Authentication"); }
-            
+
+                                            // Method：两行分段，避免 Keyboard Interactive 把整行撑破。
                                             FormRow {
                                                 label: @tr("Method");
 
-                                                // 分段控件统一切到 accent/常态按钮（B 轮2 #55）：用 check 图标会让
-                                                // 选中项宽度 +24px、整行抖动；未选中项保留常态描边以表达分组边界。
                                                 WinButton { text: @tr("Agent"); accent: root.auth-method-text == "agent"; clicked => { root.set-auth-method-agent(); } }
                                                 WinButton { text: @tr("Password"); accent: root.auth-method-text == "password"; clicked => { root.set-auth-method-password(); } }
-                                                WinButton { text: @tr("KbdInt"); accent: root.auth-method-text == "keyboard_interactive"; clicked => { root.set-auth-method-keyboard-interactive(); } }
+                                            }
+
+                                            FormRow {
+                                                label: "";
+
+                                                WinButton { text: @tr("Keyboard Interactive"); accent: root.auth-method-text == "keyboard_interactive"; clicked => { root.set-auth-method-keyboard-interactive(); } }
                                                 WinButton { text: @tr("Key"); accent: root.auth-method-text == "private_key"; clicked => { root.set-auth-method-private-key(); } }
                                             }
 
@@ -436,21 +425,24 @@ export component SessionEditor inherits Rectangle {
                                                 WinButton { text: @tr("TOFU"); accent: root.host-key-policy-text == "trust-on-first-use"; clicked => { root.set-host-key-policy-trust-on-first-use(); } }
                                                 WinButton { text: @tr("Accept Any"); accent: root.host-key-policy-text == "accept-any-for-testing"; clicked => { root.set-host-key-policy-accept-any-for-testing(); } }
                                             }
-            
-                                            FormRow {
+
+                                            if root.show-password-auth : FormRow {
                                                 label: @tr("Password");
-            
+
                                                 WinTextInput {
                                                     horizontal-stretch: 1;
                                                     text <=> root.password-text;
-                                                    placeholder-text: @tr("Password / keyboard-interactive secret");
+                                                    input-type: password;
+                                                    placeholder-text: root.has-stored-password
+                                                        ? @tr("Leave blank to keep saved password")
+                                                        : @tr("Password / keyboard-interactive secret");
                                                     edited => { root.update-password(self.text); }
                                                 }
                                             }
-            
-                                            FormRow {
+
+                                            if root.show-key-auth : FormRow {
                                                 label: @tr("Private key");
-            
+
                                                 WinTextInput {
                                                     horizontal-stretch: 1;
                                                     text <=> root.key-path-text;
@@ -458,32 +450,35 @@ export component SessionEditor inherits Rectangle {
                                                     edited => { root.update-key-path(self.text); }
                                                 }
                                             }
-            
-                                            FormRow {
+
+                                            if root.show-key-auth : FormRow {
                                                 label: @tr("Passphrase");
-            
+
                                                 WinTextInput {
                                                     horizontal-stretch: 1;
                                                     text <=> root.passphrase-text;
-                                                    placeholder-text: @tr("Private key passphrase");
+                                                    input-type: password;
+                                                    placeholder-text: root.has-stored-passphrase
+                                                        ? @tr("Leave blank to keep saved passphrase")
+                                                        : @tr("Private key passphrase");
                                                     edited => { root.update-passphrase(self.text); }
                                                 }
                                             }
-            
+
                                             FormRow {
                                                 label: "";
 
                                                 WinButton { text: @tr("Test Connection"); icon: "refresh"; clicked => { root.test-auth(); } }
                                             }
-            
+
                                             HintText { hint: root.auth-test-status-text; }
                                         }
                                         if root.section == "proxy" : VerticalLayout {
                                             alignment: start;
                                             spacing: Theme.spacing-12;
-            
+
                                             SectionTitle { heading: @tr("Proxy"); }
-            
+
                                             FormRow {
                                                 label: @tr("Mode");
 
@@ -491,18 +486,23 @@ export component SessionEditor inherits Rectangle {
                                                 WinButton { text: @tr("Custom"); accent: root.proxy-mode-text == "custom"; clicked => { root.set-proxy-mode-custom(); } }
                                             }
 
-                                            FormRow {
+                                            if root.show-proxy-custom : FormRow {
                                                 label: @tr("Protocol");
 
                                                 WinButton { text: @tr("SOCKS4"); accent: root.proxy-protocol-text == "socks4"; clicked => { root.set-proxy-protocol-socks4(); } }
                                                 WinButton { text: @tr("SOCKS4a"); accent: root.proxy-protocol-text == "socks4a"; clicked => { root.set-proxy-protocol-socks4a(); } }
+                                            }
+
+                                            if root.show-proxy-custom : FormRow {
+                                                label: "";
+
                                                 WinButton { text: @tr("SOCKS5"); accent: root.proxy-protocol-text == "socks5"; clicked => { root.set-proxy-protocol-socks5(); } }
                                                 WinButton { text: @tr("HTTP"); accent: root.proxy-protocol-text == "http-connect"; clicked => { root.set-proxy-protocol-http-connect(); } }
                                             }
-            
-                                            FormRow {
+
+                                            if root.show-proxy-custom : FormRow {
                                                 label: @tr("Proxy host");
-            
+
                                                 WinTextInput {
                                                     horizontal-stretch: 1;
                                                     text <=> root.proxy-host-text;
@@ -510,10 +510,10 @@ export component SessionEditor inherits Rectangle {
                                                     edited => { root.update-proxy-host(self.text); }
                                                 }
                                             }
-            
-                                            FormRow {
+
+                                            if root.show-proxy-custom : FormRow {
                                                 label: @tr("Proxy port");
-            
+
                                                 WinTextInput {
                                                     horizontal-stretch: 1;
                                                     text <=> root.proxy-port-text;
@@ -521,10 +521,10 @@ export component SessionEditor inherits Rectangle {
                                                     edited => { root.update-proxy-port(self.text); }
                                                 }
                                             }
-            
-                                            FormRow {
+
+                                            if root.show-proxy-custom : FormRow {
                                                 label: @tr("Username");
-            
+
                                                 WinTextInput {
                                                     horizontal-stretch: 1;
                                                     text <=> root.proxy-username-text;
@@ -532,33 +532,35 @@ export component SessionEditor inherits Rectangle {
                                                     edited => { root.update-proxy-username(self.text); }
                                                 }
                                             }
-            
-                                            FormRow {
+
+                                            if root.show-proxy-custom : FormRow {
                                                 label: @tr("Password");
-            
+
                                                 WinTextInput {
                                                     horizontal-stretch: 1;
                                                     text <=> root.proxy-password-text;
-                                                    placeholder-text: @tr("Proxy password");
+                                                    input-type: password;
+                                                    placeholder-text: root.has-stored-proxy-password
+                                                        ? @tr("Leave blank to keep saved password")
+                                                        : @tr("Proxy password");
                                                     edited => { root.update-proxy-password(self.text); }
                                                 }
                                             }
-            
-                                            // 开关语义：WinToggle 的 checked 与文案同步（不再用 check 图标改变按钮宽度）
-                                            WinToggle {
+
+                                            if root.show-proxy-custom : WinToggle {
                                                 text: root.proxy-dns-by-proxy ? @tr("DNS via Proxy: On") : @tr("DNS via Proxy: Off");
                                                 checked: root.proxy-dns-by-proxy;
                                                 toggled => { root.toggle-proxy-dns-by-proxy(); }
                                             }
-            
+
                                             HintText { hint: root.proxy-summary-text; }
                                         }
                                         if root.section == "tunnels" : VerticalLayout {
                                             alignment: start;
                                             spacing: Theme.spacing-12;
-            
+
                                             SectionTitle { heading: @tr("Tunnels"); }
-            
+
                                             FormRow {
                                                 label: @tr("Kind");
 
@@ -566,10 +568,10 @@ export component SessionEditor inherits Rectangle {
                                                 WinButton { text: @tr("Remote"); accent: root.tunnel-kind-text == "remote"; clicked => { root.set-tunnel-kind-remote(); } }
                                                 WinButton { text: @tr("Dynamic"); accent: root.tunnel-kind-text == "dynamic"; clicked => { root.set-tunnel-kind-dynamic(); } }
                                             }
-            
+
                                             FormRow {
                                                 label: @tr("Listen host");
-            
+
                                                 WinTextInput {
                                                     horizontal-stretch: 1;
                                                     text <=> root.tunnel-bind-host-text;
@@ -577,10 +579,10 @@ export component SessionEditor inherits Rectangle {
                                                     edited => { root.update-tunnel-bind-host(self.text); }
                                                 }
                                             }
-            
+
                                             FormRow {
                                                 label: @tr("Listen port");
-            
+
                                                 WinTextInput {
                                                     horizontal-stretch: 1;
                                                     text <=> root.tunnel-bind-port-text;
@@ -588,10 +590,10 @@ export component SessionEditor inherits Rectangle {
                                                     edited => { root.update-tunnel-bind-port(self.text); }
                                                 }
                                             }
-            
-                                            FormRow {
+
+                                            if root.show-tunnel-target : FormRow {
                                                 label: @tr("Target host");
-            
+
                                                 WinTextInput {
                                                     horizontal-stretch: 1;
                                                     text <=> root.tunnel-target-host-text;
@@ -599,10 +601,10 @@ export component SessionEditor inherits Rectangle {
                                                     edited => { root.update-tunnel-target-host(self.text); }
                                                 }
                                             }
-            
-                                            FormRow {
+
+                                            if root.show-tunnel-target : FormRow {
                                                 label: @tr("Target port");
-            
+
                                                 WinTextInput {
                                                     horizontal-stretch: 1;
                                                     text <=> root.tunnel-target-port-text;
@@ -610,14 +612,14 @@ export component SessionEditor inherits Rectangle {
                                                     edited => { root.update-tunnel-target-port(self.text); }
                                                 }
                                             }
-            
+
                                             FormRow {
                                                 label: "";
 
                                                 WinButton { text: @tr("Add Tunnel"); icon: "plus"; clicked => { root.add-tunnel(); } }
                                                 WinButton { text: @tr("Clear Tunnels"); icon: "trash"; subtle: true; clicked => { root.clear-tunnels(); } }
                                             }
-            
+
                                             HintText { hint: root.tunnel-summary-text; }
                                         }
                                         if root.section == "appearance" : VerticalLayout {
@@ -653,25 +655,10 @@ export component SessionEditor inherits Rectangle {
                                                 }
                                             }
                                         }
-                                        if root.section == "sftp" || root.section == "advanced" : VerticalLayout {
-                                            alignment: start;
-                                            spacing: Theme.spacing-12;
-
-                                            SectionTitle {
-                                                heading: root.section == "sftp" ? @tr("SFTP") : @tr("Advanced");
-                                            }
-
-                                            Text {
-                                                text: @tr("This section is not configurable in this version.");
-                                                color: Theme.text-secondary;
-                                                wrap: word-wrap;
-                                            }
-                                        }
                                     }
                                 }
 
                                 // 滚动指示：E22 可复用组件（内部按 `-content-y` 计算进度）。
-                                // 更正 C8：`content-y` 向下滚动为负值，原"去负号"是反向修改。
                                 WinScrollIndicator {
                                     x: form-scroll.width - self.width - Theme.spacing-4;
                                     y: Theme.spacing-4;

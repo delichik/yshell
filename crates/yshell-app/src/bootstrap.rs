@@ -2673,7 +2673,31 @@ pub(crate) fn wire_callbacks(
     let surface = surface_source.clone();
     window.on_close_session_editor_modal(move || {
         if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref.borrow_mut().close_session_editor_modal();
+            let projection = runtime_ref
+                .borrow_mut()
+                .request_close_session_editor_modal();
+            apply_projection(&window, &projection);
+            surface.refresh(&window);
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_confirm_discard_session_editor(move || {
+        if let Some(window) = weak.upgrade() {
+            let projection = runtime_ref.borrow_mut().confirm_discard_session_editor();
+            apply_projection(&window, &projection);
+            surface.refresh(&window);
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_cancel_discard_session_editor(move || {
+        if let Some(window) = weak.upgrade() {
+            let projection = runtime_ref.borrow_mut().cancel_discard_session_editor();
             apply_projection(&window, &projection);
             surface.refresh(&window);
         }
@@ -5897,10 +5921,14 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_editor_password_text(projection.editor_password_text.clone().into());
     window.set_editor_key_path_text(projection.editor_key_path_text.clone().into());
     window.set_editor_passphrase_text(projection.editor_passphrase_text.clone().into());
+    window.set_editor_has_stored_password(projection.editor_has_stored_password);
+    window.set_editor_has_stored_passphrase(projection.editor_has_stored_passphrase);
     window
         .set_editor_target_session_id_text(projection.editor_target_session_id_text.clone().into());
     window.set_editor_target_editing(projection.editor_target_editing);
     window.set_editor_modal_visible(projection.editor_modal_visible);
+    window.set_editor_discard_dialog_visible(projection.editor_discard_dialog_visible);
+    window.set_editor_is_dirty(projection.editor_is_dirty);
     window.set_editor_section_text(projection.editor_section_text.clone().into());
     window.set_editor_auth_test_kind_text(projection.editor_auth_test_kind_text.clone().into());
     window.set_editor_auth_test_host_text(projection.editor_auth_test_host_text.clone().into());
@@ -5952,6 +5980,7 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_editor_proxy_port_text(projection.editor_proxy_port_text.clone().into());
     window.set_editor_proxy_username_text(projection.editor_proxy_username_text.clone().into());
     window.set_editor_proxy_password_text(projection.editor_proxy_password_text.clone().into());
+    window.set_editor_has_stored_proxy_password(projection.editor_has_stored_proxy_password);
     window.set_editor_proxy_dns_by_proxy(projection.editor_proxy_dns_by_proxy);
     window.set_editor_proxy_summary_kind_text(
         projection.editor_proxy_summary_kind_text.clone().into(),
@@ -6606,6 +6635,7 @@ static MODAL_WAS_VISIBLE: AtomicBool = AtomicBool::new(false);
 fn restore_shortcut_focus_after_modal(window: &MainWindow, projection: &AppProjection) {
     // Keep in sync with Slint `any_modal_visible` / `focus-top-dialog`.
     let modal_visible = projection.editor_modal_visible
+        || projection.editor_discard_dialog_visible
         || projection.known_hosts_modal_visible
         || projection.password_prompt_visible
         || projection.host_key_prompt_visible

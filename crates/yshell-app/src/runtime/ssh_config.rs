@@ -53,12 +53,15 @@ impl AppRuntime {
             password: String::new(),
             key_path: String::new(),
             passphrase: String::new(),
+            has_stored_password: false,
+            has_stored_passphrase: false,
             proxy_mode: EditorProxyMode::None,
             proxy_protocol: ProxyProtocol::Socks5,
             proxy_host: String::new(),
             proxy_port_text: String::new(),
             proxy_username: String::new(),
             proxy_password: String::new(),
+            has_stored_proxy_password: false,
             proxy_dns_by_proxy: true,
             tunnel_kind: TunnelForwardKind::Local,
             tunnel_bind_host: "127.0.0.1".to_owned(),
@@ -75,13 +78,20 @@ impl AppRuntime {
                 }
                 ConfigAuthMethod::Password { .. } => {
                     draft.auth_method = EditorAuthMethod::Password;
+                    draft.has_stored_password = true;
                 }
                 ConfigAuthMethod::KeyboardInteractive { .. } => {
                     draft.auth_method = EditorAuthMethod::KeyboardInteractive;
+                    draft.has_stored_password = true;
                 }
-                ConfigAuthMethod::PrivateKey { path, .. } => {
+                ConfigAuthMethod::PrivateKey {
+                    path,
+                    passphrase_secret_key,
+                    ..
+                } => {
                     draft.auth_method = EditorAuthMethod::PrivateKey;
                     draft.key_path = path.clone();
+                    draft.has_stored_passphrase = passphrase_secret_key.is_some();
                 }
             }
         }
@@ -92,6 +102,7 @@ impl AppRuntime {
             draft.proxy_port_text = proxy.port.to_string();
             draft.proxy_username = proxy.username.clone().unwrap_or_default();
             draft.proxy_dns_by_proxy = proxy.resolve_dns_by_proxy;
+            draft.has_stored_proxy_password = proxy.password_secret_key.is_some();
         }
         draft
     }
@@ -218,24 +229,12 @@ impl AppRuntime {
         let auth = match self.editor.auth_method {
             EditorAuthMethod::Agent => AuthMethod::Agent { username },
             EditorAuthMethod::Password => {
-                if self.editor.password.trim().is_empty() {
-                    return Err(AppError::new("password auth requires a password value"));
-                }
-                AuthMethod::Password {
-                    username,
-                    password: self.editor.password.trim().to_owned(),
-                }
+                let password = self.resolve_editor_password_secret(false)?;
+                AuthMethod::Password { username, password }
             }
             EditorAuthMethod::KeyboardInteractive => {
-                if self.editor.password.trim().is_empty() {
-                    return Err(AppError::new(
-                        "keyboard-interactive auth requires a response value",
-                    ));
-                }
-                AuthMethod::KeyboardInteractive {
-                    username,
-                    secret: self.editor.password.trim().to_owned(),
-                }
+                let secret = self.resolve_editor_password_secret(true)?;
+                AuthMethod::KeyboardInteractive { username, secret }
             }
             EditorAuthMethod::PrivateKey => {
                 if self.editor.key_path.trim().is_empty() {
@@ -244,11 +243,7 @@ impl AppRuntime {
                 AuthMethod::PrivateKey {
                     username,
                     key_path: self.editor.key_path.trim().to_owned(),
-                    passphrase: if self.editor.passphrase.trim().is_empty() {
-                        None
-                    } else {
-                        Some(self.editor.passphrase.trim().to_owned())
-                    },
+                    passphrase: self.resolve_editor_passphrase_secret()?,
                 }
             }
         };
@@ -314,11 +309,7 @@ impl AppRuntime {
         } else {
             Some(self.editor.proxy_username.trim().to_owned())
         };
-        let password = if self.editor.proxy_password.trim().is_empty() {
-            None
-        } else {
-            Some(self.editor.proxy_password.trim().to_owned())
-        };
+        let password = self.resolve_editor_proxy_password_secret()?;
         Ok(match self.editor.proxy_protocol {
             ProxyProtocol::Socks4 => ProxyConfig::Socks4 { address, username },
             ProxyProtocol::Socks4a => ProxyConfig::Socks4a { address, username },
@@ -340,37 +331,35 @@ impl AppRuntime {
         &self,
         auth_profile_id: &str,
     ) -> AppResult<yshell_config::AuthProfile> {
+        let existing = self.config_document.auth_profiles.get(auth_profile_id);
         let method = match self.editor.auth_method {
             EditorAuthMethod::Agent => ConfigAuthMethod::Agent,
             EditorAuthMethod::Password => {
-                if self.editor.password.trim().is_empty() {
-                    return Err(AppError::new("password auth requires a password value"));
-                }
-                let secret_key = format!("local://yshell/{auth_profile_id}/password");
-                self.store_secret_value(&secret_key, self.editor.password.trim())?;
+                let secret_key = self.resolve_or_store_editor_password_secret(
+                    auth_profile_id,
+                    "password",
+                    false,
+                    existing,
+                )?;
                 ConfigAuthMethod::Password { secret_key }
             }
             EditorAuthMethod::KeyboardInteractive => {
-                if self.editor.password.trim().is_empty() {
-                    return Err(AppError::new(
-                        "keyboard-interactive auth requires a response value",
-                    ));
-                }
-                let secret_key = format!("local://yshell/{auth_profile_id}/keyboard-interactive");
-                self.store_secret_value(&secret_key, self.editor.password.trim())?;
+                let secret_key = self.resolve_or_store_editor_password_secret(
+                    auth_profile_id,
+                    "keyboard-interactive",
+                    true,
+                    existing,
+                )?;
                 ConfigAuthMethod::KeyboardInteractive { secret_key }
             }
             EditorAuthMethod::PrivateKey => {
                 if self.editor.key_path.trim().is_empty() {
                     return Err(AppError::new("private key auth requires a key path"));
                 }
-                let passphrase_secret_key = if self.editor.passphrase.trim().is_empty() {
-                    None
-                } else {
-                    let secret_key = format!("local://yshell/{auth_profile_id}/passphrase");
-                    self.store_secret_value(&secret_key, self.editor.passphrase.trim())?;
-                    Some(secret_key)
-                };
+                let passphrase_secret_key = self.resolve_or_store_editor_passphrase_secret(
+                    auth_profile_id,
+                    existing,
+                )?;
                 ConfigAuthMethod::PrivateKey {
                     key_id: None,
                     path: self.editor.key_path.trim().to_owned(),
@@ -400,15 +389,22 @@ impl AppRuntime {
             &self.editor.proxy_port_text,
             "proxy port must be a valid integer between 1 and 65535",
         )?;
-        let password_secret_key = if self.editor.proxy_password.trim().is_empty() {
-            None
-        } else {
-            match self.editor.proxy_protocol {
-                ProxyProtocol::Socks4 | ProxyProtocol::Socks4a => None,
-                ProxyProtocol::Socks5 | ProxyProtocol::HttpConnect => {
+        let existing = self.config_document.proxy_profiles.get(proxy_profile_id);
+        let password_secret_key = match self.editor.proxy_protocol {
+            ProxyProtocol::Socks4 | ProxyProtocol::Socks4a => None,
+            ProxyProtocol::Socks5 | ProxyProtocol::HttpConnect => {
+                if !self.editor.proxy_password.trim().is_empty() {
                     let secret_key = format!("local://yshell/{proxy_profile_id}/password");
                     self.store_secret_value(&secret_key, self.editor.proxy_password.trim())?;
                     Some(secret_key)
+                } else if self.editor.has_stored_proxy_password {
+                    existing
+                        .and_then(|profile| profile.password_secret_key.clone())
+                        .or_else(|| {
+                            Some(format!("local://yshell/{proxy_profile_id}/password"))
+                        })
+                } else {
+                    None
                 }
             }
         };
@@ -426,6 +422,163 @@ impl AppRuntime {
             resolve_dns_by_proxy: self.editor.proxy_dns_by_proxy,
             password_secret_key,
         }))
+    }
+
+    /// Resolves the typed password, or the stored secret when editing and the
+    /// field was left blank ("keep existing").
+    fn resolve_editor_password_secret(&self, keyboard_interactive: bool) -> AppResult<String> {
+        if !self.editor.password.trim().is_empty() {
+            return Ok(self.editor.password.trim().to_owned());
+        }
+        if !self.editor.has_stored_password {
+            return Err(AppError::new(if keyboard_interactive {
+                "keyboard-interactive auth requires a response value"
+            } else {
+                "password auth requires a password value"
+            }));
+        }
+        let Some(session_id) = self.editor.target_session_id.as_deref() else {
+            return Err(AppError::new(if keyboard_interactive {
+                "keyboard-interactive auth requires a response value"
+            } else {
+                "password auth requires a password value"
+            }));
+        };
+        let auth_profile_id = format!("{session_id}-auth");
+        let secret_key = self
+            .config_document
+            .auth_profiles
+            .get(&auth_profile_id)
+            .and_then(|profile| match &profile.method {
+                ConfigAuthMethod::Password { secret_key } if !keyboard_interactive => {
+                    Some(secret_key.as_str())
+                }
+                ConfigAuthMethod::KeyboardInteractive { secret_key } if keyboard_interactive => {
+                    Some(secret_key.as_str())
+                }
+                _ => None,
+            })
+            .ok_or_else(|| {
+                AppError::new(if keyboard_interactive {
+                    "keyboard-interactive auth requires a response value"
+                } else {
+                    "password auth requires a password value"
+                })
+            })?;
+        self.resolve_secret_value(secret_key)
+    }
+
+    fn resolve_editor_passphrase_secret(&self) -> AppResult<Option<String>> {
+        if !self.editor.passphrase.trim().is_empty() {
+            return Ok(Some(self.editor.passphrase.trim().to_owned()));
+        }
+        if !self.editor.has_stored_passphrase {
+            return Ok(None);
+        }
+        let Some(session_id) = self.editor.target_session_id.as_deref() else {
+            return Ok(None);
+        };
+        let auth_profile_id = format!("{session_id}-auth");
+        let Some(secret_key) = self
+            .config_document
+            .auth_profiles
+            .get(&auth_profile_id)
+            .and_then(|profile| match &profile.method {
+                ConfigAuthMethod::PrivateKey {
+                    passphrase_secret_key,
+                    ..
+                } => passphrase_secret_key.clone(),
+                _ => None,
+            })
+        else {
+            return Ok(None);
+        };
+        Ok(Some(self.resolve_secret_value(&secret_key)?))
+    }
+
+    fn resolve_or_store_editor_password_secret(
+        &self,
+        auth_profile_id: &str,
+        key_suffix: &str,
+        keyboard_interactive: bool,
+        existing: Option<&yshell_config::AuthProfile>,
+    ) -> AppResult<String> {
+        if !self.editor.password.trim().is_empty() {
+            let secret_key = format!("local://yshell/{auth_profile_id}/{key_suffix}");
+            self.store_secret_value(&secret_key, self.editor.password.trim())?;
+            return Ok(secret_key);
+        }
+        if self.editor.has_stored_password {
+            if let Some(profile) = existing {
+                match &profile.method {
+                    ConfigAuthMethod::Password { secret_key } if !keyboard_interactive => {
+                        return Ok(secret_key.clone());
+                    }
+                    ConfigAuthMethod::KeyboardInteractive { secret_key }
+                        if keyboard_interactive =>
+                    {
+                        return Ok(secret_key.clone());
+                    }
+                    _ => {}
+                }
+            }
+            // Stable key when the profile id is unchanged but method metadata drifted.
+            return Ok(format!("local://yshell/{auth_profile_id}/{key_suffix}"));
+        }
+        Err(AppError::new(if keyboard_interactive {
+            "keyboard-interactive auth requires a response value"
+        } else {
+            "password auth requires a password value"
+        }))
+    }
+
+    fn resolve_editor_proxy_password_secret(&self) -> AppResult<Option<String>> {
+        if !self.editor.proxy_password.trim().is_empty() {
+            return Ok(Some(self.editor.proxy_password.trim().to_owned()));
+        }
+        if !self.editor.has_stored_proxy_password {
+            return Ok(None);
+        }
+        let Some(session_id) = self.editor.target_session_id.as_deref() else {
+            return Ok(None);
+        };
+        let proxy_profile_id = format!("{session_id}-proxy");
+        let Some(secret_key) = self
+            .config_document
+            .proxy_profiles
+            .get(&proxy_profile_id)
+            .and_then(|profile| profile.password_secret_key.clone())
+        else {
+            return Ok(None);
+        };
+        Ok(Some(self.resolve_secret_value(&secret_key)?))
+    }
+
+    fn resolve_or_store_editor_passphrase_secret(
+        &self,
+        auth_profile_id: &str,
+        existing: Option<&yshell_config::AuthProfile>,
+    ) -> AppResult<Option<String>> {
+        if !self.editor.passphrase.trim().is_empty() {
+            let secret_key = format!("local://yshell/{auth_profile_id}/passphrase");
+            self.store_secret_value(&secret_key, self.editor.passphrase.trim())?;
+            return Ok(Some(secret_key));
+        }
+        if !self.editor.has_stored_passphrase {
+            return Ok(None);
+        }
+        if let Some(profile) = existing {
+            if let ConfigAuthMethod::PrivateKey {
+                passphrase_secret_key: Some(secret_key),
+                ..
+            } = &profile.method
+            {
+                return Ok(Some(secret_key.clone()));
+            }
+        }
+        Ok(Some(format!(
+            "local://yshell/{auth_profile_id}/passphrase"
+        )))
     }
 
     pub(crate) fn run_editor_auth_test(&mut self) -> AppResult<EditorAuthTestStatus> {

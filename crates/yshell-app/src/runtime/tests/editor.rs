@@ -69,18 +69,31 @@ fn session_editor_modal_visibility_tracks_open_close_save_flows() {
 
     let opened = runtime.start_new_saved_session_editor();
     assert!(opened.editor_modal_visible);
+    assert!(!opened.editor_is_dirty);
     assert_eq!(opened.editor_section_text, "general");
 
-    let closed = runtime.close_session_editor_modal();
+    // Clean close (no edits) skips Discard Changes.
+    let closed = runtime.request_close_session_editor_modal();
     assert!(!closed.editor_modal_visible);
+    assert!(!closed.editor_discard_dialog_visible);
 
     let _ = runtime.start_new_saved_session_editor();
     let _ = runtime.update_editor_name("Modal Session");
+    let dirty_close = runtime.request_close_session_editor_modal();
+    assert!(dirty_close.editor_modal_visible);
+    assert!(dirty_close.editor_discard_dialog_visible);
+    assert!(dirty_close.editor_is_dirty);
+
+    let canceled = runtime.cancel_discard_session_editor();
+    assert!(canceled.editor_modal_visible);
+    assert!(!canceled.editor_discard_dialog_visible);
+
     let _ = runtime.update_editor_host("modal.example.test");
     let saved = runtime
         .save_editor_to_saved_session()
         .expect("save editor session");
     assert!(!saved.editor_modal_visible);
+    assert!(!saved.editor_discard_dialog_visible);
 }
 
 #[test]
@@ -574,6 +587,61 @@ fn editor_can_create_password_saved_session_and_persist_secret() {
         fs::read_to_string(temp.path().join("secret-store.toml")).expect("read store");
     assert!(store_contents.contains(&secret_key));
     assert!(!store_contents.contains("super-secret"));
+
+    std::env::remove_var("YSHELL_MASTER_PASSWORD");
+}
+
+#[test]
+fn editing_password_session_keeps_secret_when_password_left_blank() {
+    let _guard = lock_env();
+    let temp = tempdir().expect("tempdir");
+    std::env::set_var("YSHELL_MASTER_PASSWORD", "editor-master");
+
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    let _ = runtime.start_new_saved_session_editor();
+    let _ = runtime.update_editor_name("Keep Secret Session");
+    let _ = runtime.update_editor_host("keep-secret.example.test");
+    let _ = runtime.update_editor_username("root");
+    let _ = runtime.set_editor_auth_method_password();
+    let _ = runtime.update_editor_password("original-secret");
+    let _ = runtime
+        .save_editor_to_saved_session()
+        .expect("create password session");
+    // After save the modal closes; look up the new profile by host.
+    let profile_id = runtime
+        .saved_session_profiles()
+        .into_iter()
+        .find(|session| session.host == "keep-secret.example.test")
+        .expect("saved session")
+        .id;
+
+    let _ = runtime.select_saved_session_by_id(&profile_id);
+    let loaded = runtime
+        .load_selected_saved_session_into_editor()
+        .expect("load into editor");
+    assert!(loaded.editor_has_stored_password);
+    assert!(runtime.editor.password.is_empty());
+
+    // Rename only — leave password blank and save again.
+    let _ = runtime.update_editor_name("Keep Secret Session Renamed");
+    let resaved = runtime
+        .save_editor_to_saved_session()
+        .expect("save without retyping password");
+    assert!(resaved.status_text.contains("Saved session editor changes"));
+
+    let auth = runtime
+        .config_document
+        .auth_profiles
+        .get(&format!("{profile_id}-auth"))
+        .expect("auth profile");
+    let secret_key = match &auth.method {
+        ConfigAuthMethod::Password { secret_key } => secret_key.clone(),
+        other => panic!("expected password auth, got {other:?}"),
+    };
+    let resolved = runtime
+        .resolve_secret_value(&secret_key)
+        .expect("resolve kept secret");
+    assert_eq!(resolved, "original-secret");
 
     std::env::remove_var("YSHELL_MASTER_PASSWORD");
 }

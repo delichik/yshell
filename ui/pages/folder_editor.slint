@@ -32,7 +32,7 @@ export struct TriStateField {
     source-kind: string,
     /// 来源参数（文件夹名 / 方案名；其余为空）。
     source-param: string,
-    /// choice 类型的候选项（空 = 无候选项，退化为文本输入）。
+    /// choice 类型的候选项（空 = 只读展示当前值，仍禁止自由文本）。
     options: [string],
     /// choice 类型的当前选中索引。
     selected: int,
@@ -235,11 +235,12 @@ component FieldRow inherits Rectangle {
                             toggled => { root.toggled(); }
                         }
 
-                        if root.data.kind == "choice" && root.data.options.length > 0 : HorizontalLayout {
+                        // choice：字体 / 配色等枚举字段只允许选项切换，禁止退回自由文本。
+                        if root.data.kind == "choice" : HorizontalLayout {
                             spacing: Theme.spacing-4;
                             alignment: start;
 
-                            WinIconButton {
+                            if root.data.options.length > 0 : WinIconButton {
                                 icon: "chevron-left";
                                 accessible-name: @tr("Previous option");
                                 enabled: root.data.selected > 0;
@@ -255,7 +256,7 @@ component FieldRow inherits Rectangle {
                                 background: Theme.control-fill;
 
                                 Text {
-                                    text: root.data.value;
+                                    text: root.data.value == "" ? @tr("(not set)") : root.data.value;
                                     color: Theme.text-primary;
                                     font-size: Theme.font-body;
                                     horizontal-alignment: center;
@@ -265,7 +266,7 @@ component FieldRow inherits Rectangle {
                                 }
                             }
 
-                            WinIconButton {
+                            if root.data.options.length > 0 : WinIconButton {
                                 icon: "chevron-right";
                                 accessible-name: @tr("Next option");
                                 enabled: root.data.selected < root.data.options.length - 1;
@@ -273,12 +274,32 @@ component FieldRow inherits Rectangle {
                             }
                         }
 
-                        if (root.data.kind == "text" || root.data.kind == "number" || root.data.kind == "hex"
-                            || (root.data.kind == "choice" && root.data.options.length == 0)) : WinTextInput {
+                        // 仅纯字符串 / 数字允许手动输入；hex 颜色也禁止自由输入（走色板/方案选择）。
+                        if root.data.kind == "text" || root.data.kind == "number" : WinTextInput {
                             horizontal-stretch: 1;
                             text: root.data.value;
-                            font-family: root.data.kind == "hex" ? Theme.font-mono : Theme.font-ui;
+                            font-family: Theme.font-ui;
                             edited => { root.edited(self.text); }
+                        }
+
+                        if root.data.kind == "hex" : Rectangle {
+                            horizontal-stretch: 1;
+                            height: Theme.control-height;
+                            border-radius: Theme.radius-control;
+                            border-width: 1px;
+                            border-color: Theme.control-stroke;
+                            background: Theme.control-fill;
+
+                            Text {
+                                text: root.data.value == "" ? @tr("(not set)") : root.data.value;
+                                color: Theme.text-primary;
+                                font-family: Theme.font-mono;
+                                font-size: Theme.font-body;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                wrap: no-wrap;
+                                overflow: elide;
+                            }
                         }
                     }
                 }

@@ -24,10 +24,12 @@ impl AppRuntime {
     pub fn start_new_saved_session_editor(&mut self) -> AppProjection {
         self.editor = SessionEditorDraft::default();
         self.new_folder_name.clear();
+        self.editor_discard_dialog_visible = false;
         self.editor_modal_visible = true;
         self.editor_section = EditorSection::General;
         self.editor_auth_test_status = EditorAuthTestStatus::Hint;
         self.editor_set_theme_baseline(None);
+        self.editor_baseline = Some(self.editor.clone());
         self.status_text =
             "Session editor cleared. Fill in the fields to create a saved session.".to_owned();
         self.projection()
@@ -43,6 +45,8 @@ impl AppRuntime {
             .resolve_session(&profile_id)
             .ok_or_else(|| AppError::new(format!("saved session `{profile_id}` was not found")))?;
         self.editor = self.editor_from_resolved_session(&resolved);
+        self.editor_baseline = Some(self.editor.clone());
+        self.editor_discard_dialog_visible = false;
         self.editor_modal_visible = true;
         self.editor_section = EditorSection::General;
         self.editor_auth_test_status = EditorAuthTestStatus::LoadedHint;
@@ -50,10 +54,40 @@ impl AppRuntime {
         Ok(self.projection())
     }
 
+    /// Cancel / Esc / scrim: prompt Discard Changes when the draft is dirty.
+    pub fn request_close_session_editor_modal(&mut self) -> AppProjection {
+        if self.editor_is_dirty() {
+            self.editor_discard_dialog_visible = true;
+            self.status_text = "Discard unsaved session editor changes?".to_owned();
+            return self.projection();
+        }
+        self.close_session_editor_modal()
+    }
+
+    pub fn confirm_discard_session_editor(&mut self) -> AppProjection {
+        self.editor_discard_dialog_visible = false;
+        self.close_session_editor_modal()
+    }
+
+    pub fn cancel_discard_session_editor(&mut self) -> AppProjection {
+        self.editor_discard_dialog_visible = false;
+        self.status_text = "Continued editing the session.".to_owned();
+        self.projection()
+    }
+
     pub fn close_session_editor_modal(&mut self) -> AppProjection {
         self.editor_modal_visible = false;
+        self.editor_discard_dialog_visible = false;
+        self.editor_baseline = None;
         self.status_text = "Closed Session Editor.".to_owned();
         self.projection()
+    }
+
+    pub(crate) fn editor_is_dirty(&self) -> bool {
+        match &self.editor_baseline {
+            Some(baseline) => &self.editor != baseline,
+            None => false,
+        }
     }
 
     pub fn select_session_editor_general(&mut self) -> AppProjection {
@@ -926,11 +960,9 @@ pub(crate) enum EditorProxyMode {
 pub(crate) enum EditorSection {
     General,
     Authentication,
-    Terminal,
     Sftp,
     Tunnels,
     Proxy,
-    Logging,
     Advanced,
     Appearance,
 }
@@ -949,11 +981,9 @@ impl EditorSection {
         match self {
             Self::General => "general",
             Self::Authentication => "authentication",
-            Self::Terminal => "terminal",
             Self::Sftp => "sftp",
             Self::Tunnels => "tunnels",
             Self::Proxy => "proxy",
-            Self::Logging => "logging",
             Self::Advanced => "advanced",
             Self::Appearance => "appearance",
         }
@@ -984,12 +1014,19 @@ pub(crate) struct SessionEditorDraft {
     pub(crate) password: String,
     pub(crate) key_path: String,
     pub(crate) passphrase: String,
+    /// Edit mode: a password / keyboard-interactive secret is already stored.
+    /// Empty password field means "keep existing" rather than "missing".
+    pub(crate) has_stored_password: bool,
+    /// Edit mode: a private-key passphrase is already stored.
+    pub(crate) has_stored_passphrase: bool,
     pub(crate) proxy_mode: EditorProxyMode,
     pub(crate) proxy_protocol: ProxyProtocol,
     pub(crate) proxy_host: String,
     pub(crate) proxy_port_text: String,
     pub(crate) proxy_username: String,
     pub(crate) proxy_password: String,
+    /// Edit mode: a proxy password is already stored.
+    pub(crate) has_stored_proxy_password: bool,
     pub(crate) proxy_dns_by_proxy: bool,
     pub(crate) tunnel_kind: TunnelForwardKind,
     pub(crate) tunnel_bind_host: String,
@@ -1015,12 +1052,15 @@ impl Default for SessionEditorDraft {
             password: String::new(),
             key_path: String::new(),
             passphrase: String::new(),
+            has_stored_password: false,
+            has_stored_passphrase: false,
             proxy_mode: EditorProxyMode::None,
             proxy_protocol: ProxyProtocol::Socks5,
             proxy_host: String::new(),
             proxy_port_text: String::new(),
             proxy_username: String::new(),
             proxy_password: String::new(),
+            has_stored_proxy_password: false,
             proxy_dns_by_proxy: true,
             tunnel_kind: TunnelForwardKind::Local,
             tunnel_bind_host: "127.0.0.1".to_owned(),

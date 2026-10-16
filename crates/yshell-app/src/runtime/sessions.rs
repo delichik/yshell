@@ -98,11 +98,13 @@ impl AppRuntime {
                 "saved-session folder `{folder_id}` was not found"
             )));
         }
-        // 复用编辑器初始化（主题基线等），只改目标文件夹。
-        let projection = self.start_new_saved_session_editor();
+        // 复用编辑器初始化，再改目标文件夹并重建主题基线；投影与 dirty 基线必须在这之后取。
+        let _ = self.start_new_saved_session_editor();
         self.editor.target_folder_id = folder_id.to_owned();
+        self.editor_set_theme_baseline(None);
+        self.editor_baseline = Some(self.editor.clone());
         self.status_text = "New session will be saved into the selected folder.".to_owned();
-        Ok(projection)
+        Ok(self.projection())
     }
 
     /// D12：会话树右键菜单目标类型（`session` / `folder` / `none`）。

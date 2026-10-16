@@ -327,6 +327,14 @@ fn folder_context_menu_kind_and_new_session_in_folder() {
         .expect("open editor in folder");
     assert!(editor.editor_modal_visible);
     assert_eq!(runtime.editor.target_folder_id, "folder-prod");
+    // Projection must reflect the chosen folder (not the default root from init).
+    assert_eq!(editor.editor_folder_id_text, "folder-prod");
+    assert!(editor.editor_folder_known);
+    assert!(
+        editor.status_text.contains("selected folder"),
+        "status should mention the folder target: {}",
+        editor.status_text
+    );
 
     let missing = runtime
         .start_new_saved_session_editor_in_folder("folder-missing")

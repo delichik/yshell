@@ -73,8 +73,13 @@ export component MainWindow inherits Window {
     in-out property <string> editor_password_text: "";
     in-out property <string> editor_key_path_text: "";
     in-out property <string> editor_passphrase_text: "";
+    in-out property <bool> editor_has_stored_password: false;
+    in-out property <bool> editor_has_stored_passphrase: false;
+    in-out property <bool> editor_has_stored_proxy_password: false;
     in-out property <string> editor_target_text: "Creating new saved session";
     in-out property <bool> editor_modal_visible: false;
+    in-out property <bool> editor_discard_dialog_visible: false;
+    in-out property <bool> editor_is_dirty: false;
     in-out property <string> editor_section_text: "general";
     in-out property <string> editor_auth_test_status_text: "Run Auth Test to validate the current editor fields without saving.";
     in-out property <bool> known_hosts_modal_visible: false;
@@ -895,6 +900,8 @@ export component MainWindow inherits Window {
     // A27（D12）：文件夹右键 "New Session Here"（bootstrap 由 WS-D Part 2 接线）。
     callback start_new_saved_session_editor_in_folder(string);
     callback close_session_editor_modal();
+    callback confirm_discard_session_editor();
+    callback cancel_discard_session_editor();
     callback update_new_folder_name(string);
     callback create_folder_under_editor_target();
     // S1：会话树空白区菜单 —— 根目录建文件夹（一次性传入弹窗名称）与刷新会话树。
@@ -1035,6 +1042,7 @@ export component MainWindow inherits Window {
     /// L2：是否有任一模态弹窗可见（快捷键让位、焦点恢复、关菜单后回焦共用）。
     property <bool> any_modal_visible:
         root.editor_modal_visible
+        || root.editor_discard_dialog_visible
         || root.settings_dialog_visible
         || root.about_dialog_visible
         || root.known_hosts_modal_visible
@@ -2026,6 +2034,8 @@ export component MainWindow inherits Window {
             host_keys_page.focus-dialog();
         } else if (root.known_hosts_modal_visible) {
             known_hosts_page.focus-dialog();
+        } else if (root.editor_discard_dialog_visible) {
+            editor_discard_dialog.focus-dialog();
         } else if (root.editor_modal_visible) {
             session_editor.focus-dialog();
         } else if (root.sftp_properties_visible) {
@@ -2874,7 +2884,6 @@ export component MainWindow inherits Window {
         section: root.editor_section_text;
         target-text: TextFormats.editor-target-display(root.editor_target_editing, root.editor_target_session_id_text);
         folder-text: TextFormats.editor-folder-display(root.editor_folder_known, root.editor_folder_label_text, root.editor_folder_id_text);
-        new-folder-name <=> root.new_folder_name_text;
         name-text <=> root.editor_name_text;
         host-text <=> root.editor_host_text;
         port-text <=> root.editor_port_text;
@@ -2884,6 +2893,8 @@ export component MainWindow inherits Window {
         password-text <=> root.editor_password_text;
         key-path-text <=> root.editor_key_path_text;
         passphrase-text <=> root.editor_passphrase_text;
+        has-stored-password: root.editor_has_stored_password;
+        has-stored-passphrase: root.editor_has_stored_passphrase;
         auth-test-status-text: TextFormats.editor-auth-test-status(root.editor_auth_test_kind_text, root.editor_auth_test_host_text, root.editor_auth_test_backend_text, root.editor_auth_test_startup_text, root.editor_auth_test_error_text);
         proxy-mode-text: root.editor_proxy_mode_text;
         proxy-protocol-text: root.editor_proxy_protocol_text;
@@ -2891,6 +2902,7 @@ export component MainWindow inherits Window {
         proxy-port-text <=> root.editor_proxy_port_text;
         proxy-username-text <=> root.editor_proxy_username_text;
         proxy-password-text <=> root.editor_proxy_password_text;
+        has-stored-proxy-password: root.editor_has_stored_proxy_password;
         proxy-dns-by-proxy: root.editor_proxy_dns_by_proxy;
         proxy-summary-text: TextFormats.proxy-summary-text(root.editor_proxy_summary_kind_text, root.editor_proxy_protocol_text, root.editor_proxy_summary_address_text, root.editor_proxy_summary_user_text, root.editor_proxy_dns_by_proxy);
         tunnel-kind-text: root.editor_tunnel_kind_text;
@@ -2899,37 +2911,22 @@ export component MainWindow inherits Window {
         tunnel-target-host-text <=> root.editor_tunnel_target_host_text;
         tunnel-target-port-text <=> root.editor_tunnel_target_port_text;
         tunnel-summary-text: TextFormats.editor-tunnel-summary-display(root.editor_tunnel_summary_count, root.editor_tunnel_summary_rows_text);
-        logging-enabled-text: root.logging_enabled_text;
-        logging-format-text: root.logging_format_text;
-        logging-directory-text <=> root.logging_directory_text;
-        logging-summary-text: TextFormats.logging-summary-display(root.logging_enabled_text, root.logging_format_text, root.logging_directory_display_text);
-        secret-store-status-text: TextFormats.secret-store-status(root.secret_store_kind_text, root.secret_store_path_text);
-        secret-reset-confirmation-text <=> root.secret_reset_confirmation_text;
-        config-dir-text: root.config_dir;
+        editor-appearance-fields: root.editor_appearance_fields;
         close() => {
+            // Dirty drafts open Discard Changes; clean drafts close immediately.
             root.close_session_editor_modal();
             root.focus-top-dialog();
         }
         select-general() => { root.select_session_editor_general(); }
         select-authentication() => { root.select_session_editor_authentication(); }
-        select-terminal() => { root.select_session_editor_terminal(); }
-        editor-appearance-fields: root.editor_appearance_fields;
-        editor-terminal-fields: root.editor_terminal_fields;
         editor-theme-field-action(key, action) => { root.editor_theme_field_action(key, action); }
         update-editor-theme-field(key, value) => { root.update_editor_theme_field(key, value); }
         editor-select-scheme(index) => { root.editor_select_scheme(index); }
         editor-select-font(index) => { root.editor_select_font(index); }
         reset-all-editor-theme() => { root.reset_all_editor_theme(); }
-        select-sftp() => { root.select_session_editor_sftp(); }
         select-tunnels() => { root.select_session_editor_tunnels(); }
         select-proxy() => { root.select_session_editor_proxy(); }
-        select-logging() => { root.select_session_editor_logging(); }
-        select-advanced() => { root.select_session_editor_advanced(); }
         select-appearance() => { root.select_session_editor_appearance(); }
-        select-folder-prev() => { root.select_previous_editor_folder(); }
-        select-folder-next() => { root.select_next_editor_folder(); }
-        update-new-folder-name(value) => { root.update_new_folder_name(value); }
-        create-folder() => { root.create_folder_under_editor_target(); }
         update-name(value) => { root.update_editor_name(value); }
         update-host(value) => { root.update_editor_host(value); }
         update-port(value) => { root.update_editor_port(value); }
@@ -2965,15 +2962,24 @@ export component MainWindow inherits Window {
         update-tunnel-target-port(value) => { root.update_editor_tunnel_target_port(value); }
         add-tunnel() => { root.add_editor_tunnel_forward(); }
         clear-tunnels() => { root.clear_editor_tunnels(); }
-        toggle-logging-enabled() => { root.toggle_global_logging_enabled(); }
-        set-logging-format-raw() => { root.set_global_logging_format_raw(); }
-        set-logging-format-sanitized() => { root.set_global_logging_format_sanitized(); }
-        update-logging-directory(value) => { root.update_global_logging_directory(value); }
-        save-logging-settings() => { root.save_global_logging_settings(); }
-        reset-secrets() => { root.reset_secrets(); }
-        update-secret-reset-confirmation(value) => { root.update_secret_reset_confirmation(value); }
         save() => { root.save_editor_to_saved_session(); }
         save-connect() => { root.save_editor_and_connect(); }
+    }
+
+    editor_discard_dialog := ConfirmDialog {
+        open: root.editor_discard_dialog_visible;
+        destructive: true;
+        title-text: @tr("Discard Changes");
+        message-text: @tr("Discard unsaved changes to this session?");
+        confirm-label: @tr("Discard");
+        confirmed() => {
+            root.confirm_discard_session_editor();
+            root.focus-top-dialog();
+        }
+        canceled() => {
+            root.cancel_discard_session_editor();
+            root.focus-top-dialog();
+        }
     }
 
     known_hosts_page := KnownHostsPage {
