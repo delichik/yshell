@@ -4,7 +4,7 @@
 //   * 每叶 = tab 栏 + terminal，同框描边（spacing 0），是一个整体。
 //   * 两叶始终挂载 TerminalView（interactive 随焦点切换）。
 //   * pane 用 stretch×ratio 分配（勿用 parent.width 反推 extent，会绑布局环）。
-//   * 拖放：tab 栏 = 移入本叶；terminal 上/下 30%、左/右余区 = 方向分屏（含预览）。
+//   * 拖放：tab 栏 = 移入本叶；terminal 六段分区 = 方向+占比分屏（预览按实际占比盖满整叶）。
 import { Theme } from "../theme.slint";
 import { TerminalView } from "terminal_view.slint";
 import { WorkspaceTab } from "workspace_tab_model.slint";
@@ -40,16 +40,41 @@ component SplitPaneLeaf inherits Rectangle {
     out property <bool> terminal-focused: root.show-terminal && root.focused && leaf_tv.terminal-focused;
     /// 内容区高度（叶高 − tab 栏），供宿主 QC overlay 对齐。
     out property <length> content-height: max(0px, root.height - Theme.bar-height-tabs);
-    /// 拖拽分区预览：`up`/`down`/`left`/`right`/空。
+    /// 拖拽分区规格：`up|down|left|right` + `:small|equal|major`；空 = 无悬停。
     property <string> drop-preview: "";
+    property <bool> drop-hovering: content_drop.has-drag && root.drop-preview != "";
+    /// 被拖侧将占用的比例（小 0.25 / 均分 0.5 / 大 0.7）。
+    property <float> drop-share:
+        root.drop-preview == "up:small" || root.drop-preview == "down:small"
+            || root.drop-preview == "left:small" || root.drop-preview == "right:small" ? 0.25
+        : root.drop-preview == "up:major" || root.drop-preview == "down:major"
+            || root.drop-preview == "left:major" || root.drop-preview == "right:major" ? 0.7
+        : 0.5;
+    property <bool> drop-vertical:
+        root.drop-preview == "up:small" || root.drop-preview == "up:equal" || root.drop-preview == "up:major"
+        || root.drop-preview == "down:small" || root.drop-preview == "down:equal" || root.drop-preview == "down:major";
+    property <bool> drop-on-start:
+        root.drop-preview == "up:small" || root.drop-preview == "up:equal" || root.drop-preview == "up:major"
+        || root.drop-preview == "left:small" || root.drop-preview == "left:equal" || root.drop-preview == "left:major";
 
-    /// 指针落在 terminal 内容区时的分屏方向。
+    /// 目标 pane 六段：最外=小、次外=均分、最内=大部分；轴向取更靠近的边。
     pure function split-zone(x: length, y: length, w: length, h: length) -> string {
-        if (h <= 0px || w <= 0px) { return "right"; }
-        if (y < h * 0.3) { return "up"; }
-        if (y > h * 0.7) { return "down"; }
-        if (x < w * 0.5) { return "left"; }
-        return "right";
+        if (h <= 0px || w <= 0px) { return "right:equal"; }
+        // 更靠近上下边 → 纵向六段；更靠近左右边 → 横向六段。
+        if (Math.min(y / h, 1.0 - y / h) <= Math.min(x / w, 1.0 - x / w)) {
+            if (y < h / 6) { return "up:small"; }
+            if (y < h * 2 / 6) { return "up:equal"; }
+            if (y < h * 3 / 6) { return "up:major"; }
+            if (y < h * 4 / 6) { return "down:major"; }
+            if (y < h * 5 / 6) { return "down:equal"; }
+            return "down:small";
+        }
+        if (x < w / 6) { return "left:small"; }
+        if (x < w * 2 / 6) { return "left:equal"; }
+        if (x < w * 3 / 6) { return "left:major"; }
+        if (x < w * 4 / 6) { return "right:major"; }
+        if (x < w * 5 / 6) { return "right:equal"; }
+        return "right:small";
     }
 
     callback focus-requested();
@@ -239,29 +264,21 @@ component SplitPaneLeaf inherits Rectangle {
                     clicked => { root.focus-requested(); }
                 }
 
-                // 分区预览（DropArea 子项，仅视觉）
-                if content_drop.has-drag && root.drop-preview == "up" : Rectangle {
-                    x: 0; y: 0; width: parent.width; height: parent.height * 0.3;
-                    background: Theme.selection-fill;
-                    border-width: 1px; border-color: Theme.accent;
-                }
-                if content_drop.has-drag && root.drop-preview == "down" : Rectangle {
-                    x: 0; y: parent.height * 0.7; width: parent.width; height: parent.height * 0.3;
-                    background: Theme.selection-fill;
-                    border-width: 1px; border-color: Theme.accent;
-                }
-                if content_drop.has-drag && root.drop-preview == "left" : Rectangle {
-                    x: 0; y: parent.height * 0.3; width: parent.width * 0.5; height: parent.height * 0.4;
-                    background: Theme.selection-fill;
-                    border-width: 1px; border-color: Theme.accent;
-                }
-                if content_drop.has-drag && root.drop-preview == "right" : Rectangle {
-                    x: parent.width * 0.5; y: parent.height * 0.3; width: parent.width * 0.5; height: parent.height * 0.4;
-                    background: Theme.selection-fill;
-                    border-width: 1px; border-color: Theme.accent;
-                }
             }
         }
+    }
+
+    // 整叶预览：按被拖侧实际占比高亮（含 tab 栏，看起来像落成后的 pane）。
+    if root.drop-hovering : Rectangle {
+        x: root.drop-vertical ? 0px
+            : (root.drop-on-start ? 0px : root.width * (1.0 - root.drop-share));
+        y: !root.drop-vertical ? 0px
+            : (root.drop-on-start ? 0px : root.height * (1.0 - root.drop-share));
+        width: root.drop-vertical ? root.width : root.width * root.drop-share;
+        height: root.drop-vertical ? root.height * root.drop-share : root.height;
+        background: Theme.selection-fill;
+        border-width: 1px;
+        border-color: Theme.accent;
     }
 }
 

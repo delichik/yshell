@@ -215,16 +215,39 @@ export component TerminalWorkspace inherits VerticalLayout {
     in property <image> terminal-image-secondary;
     in property <[WorkspaceTab]> split-pane0-tabs: [];
     in property <[WorkspaceTab]> split-pane1-tabs: [];
-    /// 未分屏拖拽分区预览：`up`/`down`/`left`/`right`/空。
+    /// 未分屏拖拽分区：`dir:small|equal|major`。
     property <string> single-drop-preview: "";
+    property <bool> single-drop-hovering: single_drop.has-drag && root.single-drop-preview != "";
+    property <float> single-drop-share:
+        root.single-drop-preview == "up:small" || root.single-drop-preview == "down:small"
+            || root.single-drop-preview == "left:small" || root.single-drop-preview == "right:small" ? 0.25
+        : root.single-drop-preview == "up:major" || root.single-drop-preview == "down:major"
+            || root.single-drop-preview == "left:major" || root.single-drop-preview == "right:major" ? 0.7
+        : 0.5;
+    property <bool> single-drop-vertical:
+        root.single-drop-preview == "up:small" || root.single-drop-preview == "up:equal" || root.single-drop-preview == "up:major"
+        || root.single-drop-preview == "down:small" || root.single-drop-preview == "down:equal" || root.single-drop-preview == "down:major";
+    property <bool> single-drop-on-start:
+        root.single-drop-preview == "up:small" || root.single-drop-preview == "up:equal" || root.single-drop-preview == "up:major"
+        || root.single-drop-preview == "left:small" || root.single-drop-preview == "left:equal" || root.single-drop-preview == "left:major";
 
-    /// 指针落在 terminal 内容区时的分屏方向。
+    /// 目标区六段：最外=小、次外=均分、最内=大部分；轴向取更靠近的边。
     pure function split-zone(x: length, y: length, w: length, h: length) -> string {
-        if (h <= 0px || w <= 0px) { return "right"; }
-        if (y < h * 0.3) { return "up"; }
-        if (y > h * 0.7) { return "down"; }
-        if (x < w * 0.5) { return "left"; }
-        return "right";
+        if (h <= 0px || w <= 0px) { return "right:equal"; }
+        if (Math.min(y / h, 1.0 - y / h) <= Math.min(x / w, 1.0 - x / w)) {
+            if (y < h / 6) { return "up:small"; }
+            if (y < h * 2 / 6) { return "up:equal"; }
+            if (y < h * 3 / 6) { return "up:major"; }
+            if (y < h * 4 / 6) { return "down:major"; }
+            if (y < h * 5 / 6) { return "down:equal"; }
+            return "down:small";
+        }
+        if (x < w / 6) { return "left:small"; }
+        if (x < w * 2 / 6) { return "left:equal"; }
+        if (x < w * 3 / 6) { return "left:major"; }
+        if (x < w * 4 / 6) { return "right:major"; }
+        if (x < w * 5 / 6) { return "right:equal"; }
+        return "right:small";
     }
 
     /// 分屏时 QC 叠在哪个叶子（-1 = 无）。
@@ -264,8 +287,8 @@ export component TerminalWorkspace inherits VerticalLayout {
             padding: Theme.spacing-8;
             spacing: 0;
 
-            // 同框：描边包住 tab+terminal
-            Rectangle {
+            // 同框：描边包住 tab+terminal；预览盖满整框按实际占比。
+            single_unit := Rectangle {
                 vertical-stretch: 1;
                 min-height: 0px;
                 border-width: 1px;
@@ -299,7 +322,6 @@ export component TerminalWorkspace inherits VerticalLayout {
                         background: Theme.terminal-background;
                         clip: true;
 
-                        // 单一 DropArea 包住 terminal：单击/选择进子项，拖放按坐标分区。
                         single_drop := DropArea {
                             width: 100%;
                             height: 100%;
@@ -322,7 +344,6 @@ export component TerminalWorkspace inherits VerticalLayout {
                             terminal_view := TerminalView {
                                 width: 100%;
                                 height: 100%;
-                                // 外框已由 tab+terminal 一体容器承担，避免双重描边。
                                 embedded: true;
                                 view-visible: root.terminal-visible && !root.split-active;
                                 title: root.title-text;
@@ -364,29 +385,20 @@ export component TerminalWorkspace inherits VerticalLayout {
                                 dismiss-find() => { root.dismiss-find(); }
                                 context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
                             }
-
-                            if single_drop.has-drag && root.single-drop-preview == "up" : Rectangle {
-                                x: 0; y: 0; width: parent.width; height: parent.height * 0.3;
-                                background: Theme.selection-fill;
-                                border-width: 1px; border-color: Theme.accent;
-                            }
-                            if single_drop.has-drag && root.single-drop-preview == "down" : Rectangle {
-                                x: 0; y: parent.height * 0.7; width: parent.width; height: parent.height * 0.3;
-                                background: Theme.selection-fill;
-                                border-width: 1px; border-color: Theme.accent;
-                            }
-                            if single_drop.has-drag && root.single-drop-preview == "left" : Rectangle {
-                                x: 0; y: parent.height * 0.3; width: parent.width * 0.5; height: parent.height * 0.4;
-                                background: Theme.selection-fill;
-                                border-width: 1px; border-color: Theme.accent;
-                            }
-                            if single_drop.has-drag && root.single-drop-preview == "right" : Rectangle {
-                                x: parent.width * 0.5; y: parent.height * 0.3; width: parent.width * 0.5; height: parent.height * 0.4;
-                                background: Theme.selection-fill;
-                                border-width: 1px; border-color: Theme.accent;
-                            }
                         }
                     }
+                }
+
+                if root.single-drop-hovering : Rectangle {
+                    x: root.single-drop-vertical ? 0px
+                        : (root.single-drop-on-start ? 0px : single_unit.width * (1.0 - root.single-drop-share));
+                    y: !root.single-drop-vertical ? 0px
+                        : (root.single-drop-on-start ? 0px : single_unit.height * (1.0 - root.single-drop-share));
+                    width: root.single-drop-vertical ? single_unit.width : single_unit.width * root.single-drop-share;
+                    height: root.single-drop-vertical ? single_unit.height * root.single-drop-share : single_unit.height;
+                    background: Theme.selection-fill;
+                    border-width: 1px;
+                    border-color: Theme.accent;
                 }
             }
         }

@@ -525,19 +525,10 @@ impl AppRuntime {
 
     /// 拖到 terminal 分区：未分屏则创建；已分屏则按方向放到对应侧（仍两叶）。
     ///
-    /// 方向：`up`/`left` → 被拖 tab 在 pane0；`down`/`right` → 被拖 tab 在 pane1。
+    /// `direction`：`up|down|left|right`，可选 `:small|:equal|:major`（被拖侧占比
+    /// 0.25 / 0.5 / 0.7）。`up`/`left` → 被拖在 pane0；`down`/`right` → pane1。
     pub fn place_tab_split(&mut self, tab_id: &str, direction: &str) -> AppResult<AppProjection> {
-        let (orientation, dragged_is_first) = match direction {
-            "right" | "horizontal" => (SplitOrientation::Horizontal, false),
-            "left" => (SplitOrientation::Horizontal, true),
-            "down" | "vertical" => (SplitOrientation::Vertical, false),
-            "up" => (SplitOrientation::Vertical, true),
-            other => {
-                return Err(AppError::new(format!(
-                    "unknown split direction `{other}` (expected up/down/left/right)"
-                )));
-            }
-        };
+        let (orientation, dragged_is_first, ratio) = Self::parse_split_drop_spec(direction)?;
         if self.tab_index(tab_id).is_none() {
             return Err(AppError::new(format!("tab `{tab_id}` was not found")));
         }
@@ -552,7 +543,7 @@ impl AppRuntime {
             .get(&window_id)
             .is_some_and(|window| window.split.is_some());
         if already_split {
-            // v1 两叶：改方向 + 把被拖 tab 放到对应侧。
+            // v1 两叶：改方向/比例 + 把被拖 tab 放到对应侧。
             let target_pane = if dragged_is_first { 0 } else { 1 };
             {
                 let window = self
@@ -561,6 +552,7 @@ impl AppRuntime {
                     .ok_or_else(|| AppError::new("window registration is missing"))?;
                 if let Some(split) = window.split.as_mut() {
                     split.orientation = orientation;
+                    split.ratio = ratio;
                 }
             }
             let projection = self.move_tab_to_pane(tab_id, target_pane)?;
@@ -614,6 +606,7 @@ impl AppRuntime {
                 (Some(neighbor.clone()), Some(tab_id.to_owned()))
             };
             let mut split = WorkspaceSplit::two_pane(orientation, first, second);
+            split.ratio = ratio;
             split.focused_pane = if dragged_is_first { 0 } else { 1 };
             let remainder_pane = if dragged_is_first { 1 } else { 0 };
             for other in &window.tabs {
@@ -643,6 +636,44 @@ impl AppRuntime {
         self.refresh_terminal_search_for_active_session();
         self.status_text = format!("Split workspace {}.", orientation.as_str());
         Ok(self.projection())
+    }
+
+    /// 解析拖放规格：`dir[:size]` → (朝向, 被拖是否 pane0, pane0 占比)。
+    ///
+    /// `size`：`small`=0.25 / `equal`=0.5（默认）/ `major`=0.7，指被拖侧；
+    /// pane0 占比在 `down`/`right` 时取 `1 - share`，并夹到 0.2..=0.8。
+    fn parse_split_drop_spec(spec: &str) -> AppResult<(SplitOrientation, bool, f32)> {
+        let mut parts = spec.split(':');
+        let dir = parts.next().unwrap_or("").trim();
+        let size = parts.next().unwrap_or("equal").trim();
+        if parts.next().is_some() {
+            return Err(AppError::new(format!(
+                "unknown split drop spec `{spec}` (expected dir[:small|equal|major])"
+            )));
+        }
+        let share = match size {
+            "" | "equal" | "half" => 0.5_f32,
+            "small" | "minor" => 0.25,
+            "major" | "large" => 0.7,
+            other => {
+                return Err(AppError::new(format!(
+                    "unknown split size `{other}` (expected small/equal/major)"
+                )));
+            }
+        };
+        let (orientation, dragged_is_first) = match dir {
+            "up" => (SplitOrientation::Vertical, true),
+            "down" => (SplitOrientation::Vertical, false),
+            "left" => (SplitOrientation::Horizontal, true),
+            "right" => (SplitOrientation::Horizontal, false),
+            other => {
+                return Err(AppError::new(format!(
+                    "unknown split direction `{other}` (expected up/down/left/right)"
+                )));
+            }
+        };
+        let pane0_ratio = if dragged_is_first { share } else { 1.0 - share };
+        Ok((orientation, dragged_is_first, pane0_ratio.clamp(0.2, 0.8)))
     }
 
     /// WP4：后台会话有输出时给对应标签加未读（已在任一 pane 可见则跳过）。

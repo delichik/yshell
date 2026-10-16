@@ -532,3 +532,34 @@ fn place_tab_split_when_already_split_reorients_and_moves() {
     assert_eq!(projection.workspace_split.focused_pane, 0);
     assert_tab_invariants(&runtime);
 }
+
+#[test]
+fn place_tab_split_size_suffix_sets_pane0_ratio() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 2);
+    let first_tab = open_saved_tab(&mut runtime, "saved-0");
+    let second_tab = open_saved_tab(&mut runtime, "saved-1");
+
+    // up:small → 被拖在 pane0，占比 0.25
+    let small = runtime
+        .place_tab_split(&second_tab, "up:small")
+        .expect("up:small");
+    assert!((small.workspace_split.ratio - 0.25).abs() < 1e-3);
+    assert_eq!(small.workspace_split.pane0_tab_id, second_tab);
+
+    // 已分屏：down:major → 被拖在 pane1，pane0 = 1 - 0.7 = 0.3
+    let major = runtime
+        .place_tab_split(&first_tab, "down:major")
+        .expect("down:major");
+    assert!((major.workspace_split.ratio - 0.3).abs() < 1e-3);
+    assert_eq!(major.workspace_split.pane1_tab_id, first_tab);
+    assert_eq!(major.workspace_split.orientation_text, "vertical");
+
+    // right:equal → pane0 = 0.5
+    let equal = runtime
+        .place_tab_split(&second_tab, "right:equal")
+        .expect("right:equal");
+    assert!((equal.workspace_split.ratio - 0.5).abs() < 1e-3);
+    assert_eq!(equal.workspace_split.pane1_tab_id, second_tab);
+    assert_tab_invariants(&runtime);
+}
