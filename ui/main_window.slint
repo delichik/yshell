@@ -10,6 +10,7 @@ import { MenuPopup } from "components/menu_popup.slint";
 import { MenuBar, MenuBarPopups } from "components/menu_bar.slint";
 import { NewFolderDialog, SessionSidebarPopups } from "components/session_sidebar.slint";
 import { TerminalWorkspace, TerminalWorkspacePopups, TabBarPopups, WorkspaceTab } from "components/terminal_workspace.slint";
+import { WorkspacePaneLeaf, WorkspaceSplitter } from "components/workspace_pane_model.slint";
 import { PanelFrameData, SplitHandleData, ToolDock, TunnelRow } from "components/tool_dock.slint";
 import { PanelMenuAction, PanelMenuPopup, PanelPlacement } from "components/panel_frame.slint";
 import { StatusBar } from "components/status_bar.slint";
@@ -474,19 +475,21 @@ export component MainWindow inherits Window {
     in-out property <bool> tab_menu_split_enabled: false;
     in-out property <bool> tab_menu_close_pane_enabled: false;
     in-out property <bool> workspace_split_active: false;
-    in-out property <string> workspace_split_orientation_text: "horizontal";
-    in-out property <float> workspace_split_ratio: 0.5;
     in-out property <int> workspace_split_focused_pane: 0;
-    in-out property <string> workspace_split_pane0_tab_id: "";
-    in-out property <string> workspace_split_pane0_title_text: "";
-    in-out property <bool> workspace_split_pane0_empty: false;
-    in-out property <bool> workspace_split_pane0_quick_connect: false;
-    in-out property <[WorkspaceTab]> workspace_split_pane0_tabs: [];
-    in-out property <string> workspace_split_pane1_tab_id: "";
-    in-out property <string> workspace_split_pane1_title_text: "";
-    in-out property <bool> workspace_split_pane1_empty: false;
-    in-out property <bool> workspace_split_pane1_quick_connect: false;
-    in-out property <[WorkspaceTab]> workspace_split_pane1_tabs: [];
+    in-out property <[WorkspacePaneLeaf]> workspace_split_leaves: [];
+    in-out property <[WorkspaceSplitter]> workspace_split_splitters: [];
+    in-out property <float> workspace_split_focused_leaf_x: 0.0;
+    in-out property <float> workspace_split_focused_leaf_y: 0.0;
+    in-out property <float> workspace_split_focused_leaf_w: 1.0;
+    in-out property <float> workspace_split_focused_leaf_h: 1.0;
+    in-out property <float> workspace_split_secondary_leaf_w: 0.5;
+    in-out property <float> workspace_split_secondary_leaf_h: 1.0;
+    in-out property <bool> workspace_split_qc_shown: false;
+    in-out property <bool> workspace_split_focused_quick_connect: false;
+    in-out property <float> workspace_split_qc_leaf_x: 0.0;
+    in-out property <float> workspace_split_qc_leaf_y: 0.0;
+    in-out property <float> workspace_split_qc_leaf_w: 0.0;
+    in-out property <float> workspace_split_qc_leaf_h: 0.0;
     // WP4：标签重命名弹窗（显示名仅内存，会话生命周期内有效）。
     in-out property <bool> tab_rename_dialog_visible: false;
     in-out property <string> tab_rename_tab_id: "";
@@ -722,11 +725,11 @@ export component MainWindow inherits Window {
     /// 标签拖拽载荷（`TabDragPayload`）。
     pure callback drag_tab_transfer(string) -> data-transfer;
     callback drop_tab_on_pane(int, data-transfer);
-    callback drop_tab_split(data-transfer, string);
+    callback drop_tab_split(data-transfer, int, string);
     callback split_workspace(string);
     callback focus_split_pane(int);
     callback close_split_pane(int);
-    callback set_split_ratio(float);
+    callback set_split_ratio(int, float);
     callback close_tab(string);
     callback close_tabs(string);
     callback tab_context_menu_requested(string, length, length);
@@ -2253,8 +2256,8 @@ export component MainWindow inherits Window {
                     close-tab(id) => { root.close_tab(id); }
                     duplicate-tab-requested(id) => { root.duplicate_tab(id); }
                     drag-tab-transfer(id) => { return root.drag_tab_transfer(id); }
-                    drop-tab-on-pane(index, data) => { root.drop_tab_on_pane(index, data); }
-                    drop-tab-split(data, dir) => { root.drop_tab_split(data, dir); }
+                    drop-tab-on-pane(pane-id, data) => { root.drop_tab_on_pane(pane-id, data); }
+                    drop-tab-split(data, pane-id, dir) => { root.drop_tab_split(data, pane-id, dir); }
                     tab-context-menu-requested(id, title, x, y) => {
                         root.tab_menu_id = id;
                         root.tab_menu_title_text = title;
@@ -2264,19 +2267,25 @@ export component MainWindow inherits Window {
                     context-menu-requested(x, y) => { root.open_context_menu("terminal", x, y); }
                     // WP4：分屏
                     split-active: root.workspace_split_active;
-                    split-orientation-text: root.workspace_split_orientation_text;
-                    split-ratio: root.workspace_split_ratio;
                     split-focused-pane: root.workspace_split_focused_pane;
-                    split-pane0-empty: root.workspace_split_pane0_empty;
-                    split-pane0-quick-connect: root.workspace_split_pane0_quick_connect;
-                    split-pane1-empty: root.workspace_split_pane1_empty;
-                    split-pane1-quick-connect: root.workspace_split_pane1_quick_connect;
-                    split-pane0-tabs: root.workspace_split_pane0_tabs;
-                    split-pane1-tabs: root.workspace_split_pane1_tabs;
+                    split-leaves: root.workspace_split_leaves;
+                    split-splitters: root.workspace_split_splitters;
+                    split-focused-leaf-x: root.workspace_split_focused_leaf_x;
+                    split-focused-leaf-y: root.workspace_split_focused_leaf_y;
+                    split-focused-leaf-w: root.workspace_split_focused_leaf_w;
+                    split-focused-leaf-h: root.workspace_split_focused_leaf_h;
+                    split-secondary-leaf-w: root.workspace_split_secondary_leaf_w;
+                    split-secondary-leaf-h: root.workspace_split_secondary_leaf_h;
+                    split-qc-shown: root.workspace_split_qc_shown;
+                    split-focused-quick-connect: root.workspace_split_focused_quick_connect;
+                    split-qc-leaf-x: root.workspace_split_qc_leaf_x;
+                    split-qc-leaf-y: root.workspace_split_qc_leaf_y;
+                    split-qc-leaf-w: root.workspace_split_qc_leaf_w;
+                    split-qc-leaf-h: root.workspace_split_qc_leaf_h;
                     terminal-image-secondary: root.terminal_image_secondary;
-                    focus-split-pane(index) => { root.focus_split_pane(index); }
-                    close-split-pane(index) => { root.close_split_pane(index); }
-                    set-split-ratio(value) => { root.set_split_ratio(value); }
+                    focus-split-pane(pane-id) => { root.focus_split_pane(pane-id); }
+                    close-split-pane(pane-id) => { root.close_split_pane(pane-id); }
+                    set-split-ratio(split-id, value) => { root.set_split_ratio(split-id, value); }
                     // N2：快速连接（工作区自持全页 / 分屏叶子 overlay）
                     quick-connect-input-text <=> root.quick_connect_input_text;
                     quick-connect-error-text: root.quick_connect_error_text;

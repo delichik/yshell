@@ -1,0 +1,32 @@
+import { WorkspaceTab } from "workspace_tab_model.slint";
+
+/// Flattened split leaf (normalized geometry 0..1).
+export struct WorkspacePaneLeaf {
+    pane-id: int,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    empty: bool,
+    focused: bool,
+    quick-connect: bool,
+    tab-id: string,
+    title-text: string,
+    tabs: [WorkspaceTab],
+}
+
+/// Flattened splitter handle (normalized geometry 0..1).
+export struct WorkspaceSplitter {
+    split-id: int,
+    /// true = vertical bar (left/right split).
+    vertical: bool,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    parent-x: float,
+    parent-y: float,
+    parent-w: float,
+    parent-h: float,
+    ratio: float,
+}

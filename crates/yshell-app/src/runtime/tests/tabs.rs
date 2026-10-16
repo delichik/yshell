@@ -463,7 +463,7 @@ fn place_tab_split_creates_two_pane_layout() {
     let second_tab = open_saved_tab(&mut runtime, "saved-1");
 
     let projection = runtime
-        .place_tab_split(&second_tab, "right")
+        .place_tab_split(&second_tab, 0, "right")
         .expect("drag split");
     assert!(projection.workspace_split.active);
     assert_eq!(projection.workspace_split.orientation_text, "horizontal");
@@ -471,12 +471,14 @@ fn place_tab_split_creates_two_pane_layout() {
     assert_eq!(projection.workspace_split.pane0_tab_id, first_tab);
     assert!(!projection.workspace_split.pane0_quick_connect);
     assert!(!projection.workspace_split.pane1_quick_connect);
+    assert_eq!(projection.workspace_split.leaves.len(), 2);
 
+    let pane0_id = projection.workspace_split.leaves[0].pane_id as u64;
     let moved = runtime
-        .move_tab_to_pane(&second_tab, 0)
+        .move_tab_to_pane(&second_tab, pane0_id)
         .expect("move to pane0");
-    assert_eq!(moved.workspace_split.pane0_tab_id, second_tab);
-    assert_eq!(moved.workspace_split.focused_pane, 0);
+    // 另一叶变空 → 自动取消分屏。
+    assert!(!moved.workspace_split.active);
     assert_tab_invariants(&runtime);
 }
 
@@ -488,13 +490,13 @@ fn place_tab_split_up_puts_dragged_in_pane0() {
     let second_tab = open_saved_tab(&mut runtime, "saved-1");
 
     let projection = runtime
-        .place_tab_split(&second_tab, "up")
+        .place_tab_split(&second_tab, 0, "up")
         .expect("drag split up");
     assert!(projection.workspace_split.active);
     assert_eq!(projection.workspace_split.orientation_text, "vertical");
     assert_eq!(projection.workspace_split.pane0_tab_id, second_tab);
     assert_eq!(projection.workspace_split.pane1_tab_id, first_tab);
-    assert_eq!(projection.workspace_split.focused_pane, 0);
+    assert_eq!(projection.workspace_split.focused_pane, 1);
     assert_tab_invariants(&runtime);
 }
 
@@ -506,7 +508,7 @@ fn place_tab_split_left_puts_dragged_in_pane0() {
     let second_tab = open_saved_tab(&mut runtime, "saved-1");
 
     let projection = runtime
-        .place_tab_split(&second_tab, "left")
+        .place_tab_split(&second_tab, 0, "left")
         .expect("drag split left");
     assert_eq!(projection.workspace_split.orientation_text, "horizontal");
     assert_eq!(projection.workspace_split.pane0_tab_id, second_tab);
@@ -515,21 +517,30 @@ fn place_tab_split_left_puts_dragged_in_pane0() {
 }
 
 #[test]
-fn place_tab_split_when_already_split_reorients_and_moves() {
+fn place_tab_split_when_already_split_nests_third_leaf() {
     let temp = tempdir().expect("tempdir");
-    let mut runtime = tab_runtime(temp.path(), 2);
+    let mut runtime = tab_runtime(temp.path(), 3);
     let first_tab = open_saved_tab(&mut runtime, "saved-0");
     let second_tab = open_saved_tab(&mut runtime, "saved-1");
+    let third_tab = open_saved_tab(&mut runtime, "saved-2");
     runtime
-        .place_tab_split(&second_tab, "right")
+        .place_tab_split(&second_tab, 0, "right")
         .expect("initial split");
 
+    let target = runtime
+        .projection()
+        .workspace_split
+        .leaves
+        .iter()
+        .find(|leaf| leaf.tab_id == first_tab)
+        .map(|leaf| leaf.pane_id as u64)
+        .expect("first leaf");
     let projection = runtime
-        .place_tab_split(&first_tab, "up")
-        .expect("reorient up");
-    assert_eq!(projection.workspace_split.orientation_text, "vertical");
-    assert_eq!(projection.workspace_split.pane0_tab_id, first_tab);
-    assert_eq!(projection.workspace_split.focused_pane, 0);
+        .place_tab_split(&third_tab, target, "up")
+        .expect("nested split");
+    assert_eq!(projection.workspace_split.pane_count, 3);
+    assert_eq!(projection.workspace_split.leaves.len(), 3);
+    assert!(projection.workspace_split.can_split);
     assert_tab_invariants(&runtime);
 }
 
@@ -537,29 +548,31 @@ fn place_tab_split_when_already_split_reorients_and_moves() {
 fn place_tab_split_size_suffix_sets_pane0_ratio() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 2);
-    let first_tab = open_saved_tab(&mut runtime, "saved-0");
+    let _first_tab = open_saved_tab(&mut runtime, "saved-0");
     let second_tab = open_saved_tab(&mut runtime, "saved-1");
 
-    // up:small → 被拖在 pane0，占比 0.25
     let small = runtime
-        .place_tab_split(&second_tab, "up:small")
+        .place_tab_split(&second_tab, 0, "up:small")
         .expect("up:small");
     assert!((small.workspace_split.ratio - 0.25).abs() < 1e-3);
     assert_eq!(small.workspace_split.pane0_tab_id, second_tab);
+    assert_eq!(small.workspace_split.leaves.len(), 2);
+    assert_tab_invariants(&runtime);
+}
 
-    // 已分屏：down:major → 被拖在 pane1，pane0 = 1 - 0.7 = 0.3
-    let major = runtime
-        .place_tab_split(&first_tab, "down:major")
-        .expect("down:major");
-    assert!((major.workspace_split.ratio - 0.3).abs() < 1e-3);
-    assert_eq!(major.workspace_split.pane1_tab_id, first_tab);
-    assert_eq!(major.workspace_split.orientation_text, "vertical");
-
-    // right:equal → pane0 = 0.5
-    let equal = runtime
-        .place_tab_split(&second_tab, "right:equal")
-        .expect("right:equal");
-    assert!((equal.workspace_split.ratio - 0.5).abs() < 1e-3);
-    assert_eq!(equal.workspace_split.pane1_tab_id, second_tab);
+#[test]
+fn move_last_tab_out_of_pane_auto_unsplits() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 2);
+    let _first_tab = open_saved_tab(&mut runtime, "saved-0");
+    let second_tab = open_saved_tab(&mut runtime, "saved-1");
+    let split = runtime
+        .place_tab_split(&second_tab, 0, "right")
+        .expect("split");
+    let pane0 = split.workspace_split.leaves[0].pane_id as u64;
+    let after = runtime
+        .move_tab_to_pane(&second_tab, pane0)
+        .expect("move last tab");
+    assert!(!after.workspace_split.active);
     assert_tab_invariants(&runtime);
 }

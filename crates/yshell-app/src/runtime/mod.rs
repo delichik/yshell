@@ -34,10 +34,15 @@ mod quick_connect;
 mod sessions;
 mod sftp;
 mod sftp_ops;
+mod split_tree;
 mod ssh_config;
 mod tabs;
 mod theme;
 mod transfer;
+
+pub(crate) use split_tree::{
+    CompactOutcome, LaidOutLeaf, LaidOutSplitter, NormRect, SplitNode, WorkspaceSplit,
+};
 
 #[cfg(test)]
 mod tests;
@@ -75,7 +80,9 @@ pub(crate) use ssh_config::tunnel_kind_label;
 pub(crate) use tabs::PendingCloseTabs;
 pub use tabs::TabData;
 pub(crate) use tabs::TabEntry;
+pub use tabs::WorkspacePaneLeafProjection;
 pub use tabs::WorkspaceSplitProjection;
+pub use tabs::WorkspaceSplitterProjection;
 #[cfg(test)]
 pub(crate) use tabs::CLOSE_SCOPE_ALL;
 #[cfg(test)]
@@ -619,7 +626,7 @@ pub(crate) struct WindowTabs {
     pub(crate) tabs: Vec<String>,
     /// 该窗口的活动标签 id（必须存在于 `tabs`；分屏时 = 聚焦 pane 的活动标签）。
     pub(crate) active_tab: Option<String>,
-    /// WP4：窗口内分屏（`None` = 单 pane；叶子最多 4，v1 先落地 2）。
+    /// WP4：窗口内分屏（`None` = 单 pane；递归二叉树，最多 10 叶）。
     pub(crate) split: Option<WorkspaceSplit>,
 }
 
@@ -647,66 +654,6 @@ pub(crate) struct SplitPane {
     /// 本 pane 拥有的标签（顺序 = 叶内标签条顺序）。
     pub(crate) tabs: Vec<String>,
     pub(crate) active_tab: Option<String>,
-}
-
-/// WP4：窗口内分屏布局（内存态；不落盘）。
-///
-/// 扩展点：`panes` 可增长到 4；v1 UI/动作先保证 2 叶子可用。
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct WorkspaceSplit {
-    pub(crate) orientation: SplitOrientation,
-    /// 第一片 pane 占比（0.2..=0.8）。
-    pub(crate) ratio: f32,
-    pub(crate) focused_pane: usize,
-    pub(crate) panes: Vec<SplitPane>,
-}
-
-impl WorkspaceSplit {
-    pub(crate) const MAX_PANES: usize = 4;
-
-    pub(crate) fn two_pane(orientation: SplitOrientation, first: Option<String>, second: Option<String>) -> Self {
-        let pane0_tabs = first.iter().cloned().collect();
-        let pane1_tabs = second.iter().cloned().collect();
-        Self {
-            orientation,
-            ratio: 0.5,
-            focused_pane: 1,
-            panes: vec![
-                SplitPane {
-                    tabs: pane0_tabs,
-                    active_tab: first,
-                },
-                SplitPane {
-                    tabs: pane1_tabs,
-                    active_tab: second,
-                },
-            ],
-        }
-    }
-
-    pub(crate) fn pane_count(&self) -> usize {
-        self.panes.len()
-    }
-
-    pub(crate) fn focused_tab(&self) -> Option<&str> {
-        self.panes
-            .get(self.focused_pane)
-            .and_then(|pane| pane.active_tab.as_deref())
-    }
-
-    pub(crate) fn secondary_pane_index(&self) -> Option<usize> {
-        if self.panes.len() < 2 {
-            return None;
-        }
-        Some(if self.focused_pane == 0 { 1 } else { 0 })
-    }
-
-    pub(crate) fn shows_tab(&self, tab_id: &str) -> bool {
-        self.panes.iter().any(|pane| {
-            pane.active_tab.as_deref() == Some(tab_id)
-                || pane.tabs.iter().any(|id| id.as_str() == tab_id)
-        })
-    }
 }
 
 #[derive(Clone)]

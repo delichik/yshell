@@ -37,7 +37,7 @@ use generated_ui::{
     AuthKeyOption, AuthKeyboardPrompt, HostKeyEntry, HostKeyGroup, LocalRow, MainWindow, Palette,
     PanelFrameData, PrivateKeyRow, QuickConnectRow, QuickLinkRow, SessionTreeRow,
     SettingsSchemeOption, SftpCrumb, SftpRow, SftpTransferRow, SplitHandleData, TerminalScrollInfo,
-    Theme, TriStateField, TunnelRow, WorkspaceTab,
+    Theme, TriStateField, TunnelRow, WorkspacePaneLeaf, WorkspaceSplitter, WorkspaceTab,
 };
 
 /// Keeps the pixel-rendered terminal surface in sync with the runtime.
@@ -718,7 +718,7 @@ pub(crate) fn wire_callbacks(
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
     let surface = surface_source.clone();
-    window.on_drop_tab_on_pane(move |pane_index, data: slint::DataTransfer| {
+    window.on_drop_tab_on_pane(move |pane_id, data: slint::DataTransfer| {
         let Some(window) = weak.upgrade() else {
             return;
         };
@@ -727,7 +727,7 @@ pub(crate) fn wire_callbacks(
         };
         match runtime_ref
             .borrow_mut()
-            .move_tab_to_pane(&tab_id, usize::try_from(pane_index).unwrap_or(0))
+            .move_tab_to_pane(&tab_id, u64::try_from(pane_id).unwrap_or(0))
         {
             Ok(projection) => {
                 apply_projection(&window, &projection);
@@ -740,17 +740,18 @@ pub(crate) fn wire_callbacks(
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
     let surface = surface_source.clone();
-    window.on_drop_tab_split(move |data: slint::DataTransfer, direction| {
+    window.on_drop_tab_split(move |data: slint::DataTransfer, pane_id, direction| {
         let Some(window) = weak.upgrade() else {
             return;
         };
         let Some(tab_id) = tab_drag_payload(&data) else {
             return;
         };
-        match runtime_ref
-            .borrow_mut()
-            .place_tab_split(&tab_id, direction.as_ref())
-        {
+        match runtime_ref.borrow_mut().place_tab_split(
+            &tab_id,
+            u64::try_from(pane_id).unwrap_or(0),
+            direction.as_ref(),
+        ) {
             Ok(projection) => {
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
@@ -819,11 +820,11 @@ pub(crate) fn wire_callbacks(
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
     let surface = surface_source.clone();
-    window.on_set_split_ratio(move |ratio| {
+    window.on_set_split_ratio(move |split_id, ratio| {
         let Some(window) = weak.upgrade() else {
             return;
         };
-        match runtime_ref.borrow_mut().set_split_ratio(ratio) {
+        match runtime_ref.borrow_mut().set_split_ratio(split_id, ratio) {
             Ok(projection) => {
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
@@ -5505,18 +5506,83 @@ fn set_tabs_if_changed(window: &MainWindow, tabs: &[TabData]) {
     apply_workspace_tabs_model(window.get_tabs(), tabs, |model| window.set_tabs(model));
 }
 
-fn set_split_pane_tabs_if_changed(window: &MainWindow, pane: u8, tabs: &[TabData]) {
-    match pane {
-        0 => apply_workspace_tabs_model(
-            window.get_workspace_split_pane0_tabs(),
-            tabs,
-            |model| window.set_workspace_split_pane0_tabs(model),
-        ),
-        _ => apply_workspace_tabs_model(
-            window.get_workspace_split_pane1_tabs(),
-            tabs,
-            |model| window.set_workspace_split_pane1_tabs(model),
-        ),
+fn workspace_pane_leaf_from(
+    leaf: &crate::runtime::WorkspacePaneLeafProjection,
+) -> WorkspacePaneLeaf {
+    WorkspacePaneLeaf {
+        pane_id: leaf.pane_id,
+        x: leaf.x,
+        y: leaf.y,
+        w: leaf.w,
+        h: leaf.h,
+        empty: leaf.empty,
+        focused: leaf.focused,
+        quick_connect: leaf.quick_connect,
+        tab_id: leaf.tab_id.clone().into(),
+        title_text: leaf.title_text.clone().into(),
+        tabs: ModelRc::new(VecModel::from(
+            leaf.tabs.iter().map(workspace_tab_from).collect::<Vec<_>>(),
+        )),
+    }
+}
+
+fn workspace_splitter_from(
+    splitter: &crate::runtime::WorkspaceSplitterProjection,
+) -> WorkspaceSplitter {
+    WorkspaceSplitter {
+        split_id: splitter.split_id,
+        vertical: splitter.vertical,
+        x: splitter.x,
+        y: splitter.y,
+        w: splitter.w,
+        h: splitter.h,
+        parent_x: splitter.parent_x,
+        parent_y: splitter.parent_y,
+        parent_w: splitter.parent_w,
+        parent_h: splitter.parent_h,
+        ratio: splitter.ratio,
+    }
+}
+
+fn set_workspace_split_models(
+    window: &MainWindow,
+    split: &crate::runtime::WorkspaceSplitProjection,
+) {
+    window.set_workspace_split_leaves(ModelRc::new(VecModel::from(
+        split
+            .leaves
+            .iter()
+            .map(workspace_pane_leaf_from)
+            .collect::<Vec<_>>(),
+    )));
+    window.set_workspace_split_splitters(ModelRc::new(VecModel::from(
+        split
+            .splitters
+            .iter()
+            .map(workspace_splitter_from)
+            .collect::<Vec<_>>(),
+    )));
+    let focused = split.leaves.iter().find(|leaf| leaf.focused);
+    window.set_workspace_split_focused_leaf_x(focused.map(|l| l.x).unwrap_or(0.0));
+    window.set_workspace_split_focused_leaf_y(focused.map(|l| l.y).unwrap_or(0.0));
+    window.set_workspace_split_focused_leaf_w(focused.map(|l| l.w).unwrap_or(1.0));
+    window.set_workspace_split_focused_leaf_h(focused.map(|l| l.h).unwrap_or(1.0));
+    window.set_workspace_split_focused_quick_connect(
+        focused.map(|l| l.quick_connect).unwrap_or(false),
+    );
+    let secondary = split.leaves.iter().find(|leaf| !leaf.focused);
+    window.set_workspace_split_secondary_leaf_w(secondary.map(|l| l.w).unwrap_or(0.5));
+    window.set_workspace_split_secondary_leaf_h(secondary.map(|l| l.h).unwrap_or(1.0));
+    if let Some(qc) = split.leaves.iter().find(|leaf| leaf.quick_connect) {
+        window.set_workspace_split_qc_shown(true);
+        window.set_workspace_split_qc_leaf_x(qc.x);
+        window.set_workspace_split_qc_leaf_y(qc.y);
+        window.set_workspace_split_qc_leaf_w(qc.w);
+        window.set_workspace_split_qc_leaf_h(qc.h);
+    } else {
+        window.set_workspace_split_qc_shown(false);
+        window.set_workspace_split_qc_leaf_w(0.0);
+        window.set_workspace_split_qc_leaf_h(0.0);
     }
 }
 
@@ -6401,19 +6467,8 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_tab_menu_close_pane_enabled(projection.tab_menu_close_pane_enabled);
     let split = &projection.workspace_split;
     window.set_workspace_split_active(split.active);
-    window.set_workspace_split_orientation_text(split.orientation_text.clone().into());
-    window.set_workspace_split_ratio(split.ratio);
     window.set_workspace_split_focused_pane(split.focused_pane);
-    window.set_workspace_split_pane0_tab_id(split.pane0_tab_id.clone().into());
-    window.set_workspace_split_pane0_title_text(split.pane0_title_text.clone().into());
-    window.set_workspace_split_pane0_empty(split.pane0_empty);
-    window.set_workspace_split_pane0_quick_connect(split.pane0_quick_connect);
-    set_split_pane_tabs_if_changed(window, 0, &split.pane0_tabs);
-    window.set_workspace_split_pane1_tab_id(split.pane1_tab_id.clone().into());
-    window.set_workspace_split_pane1_title_text(split.pane1_title_text.clone().into());
-    window.set_workspace_split_pane1_empty(split.pane1_empty);
-    window.set_workspace_split_pane1_quick_connect(split.pane1_quick_connect);
-    set_split_pane_tabs_if_changed(window, 1, &split.pane1_tabs);
+    set_workspace_split_models(window, split);
     // N9：同步发送按键（终端/标签菜单 + 状态栏 chip + 标签角标）。
     window.set_terminal_sync_all_enabled(projection.terminal_sync_all_enabled);
     window.set_terminal_sync_visible_enabled(projection.terminal_sync_visible_enabled);

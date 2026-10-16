@@ -471,8 +471,9 @@ impl AppRuntime {
         Ok(self.projection())
     }
 
-    /// 把标签移入指定分屏叶子（已分屏时）；未分屏则忽略。
-    pub fn move_tab_to_pane(&mut self, tab_id: &str, pane_index: usize) -> AppResult<AppProjection> {
+    /// 把标签移入指定分屏叶子（`pane_id`；已分屏时）；未分屏则忽略。
+    /// 若源叶因此变空，自动合并邻叶。
+    pub fn move_tab_to_pane(&mut self, tab_id: &str, pane_id: u64) -> AppResult<AppProjection> {
         if self.tab_index(tab_id).is_none() {
             return Err(AppError::new(format!("tab `{tab_id}` was not found")));
         }
@@ -489,26 +490,12 @@ impl AppRuntime {
             let Some(split) = window.split.as_mut() else {
                 return Ok(self.projection());
             };
-            if pane_index >= split.panes.len() {
-                return Err(AppError::new(format!(
-                    "pane index {pane_index} is out of range"
-                )));
-            }
-            for (index, pane) in split.panes.iter_mut().enumerate() {
-                pane.tabs.retain(|id| id.as_str() != tab_id);
-                if index != pane_index && pane.active_tab.as_deref() == Some(tab_id) {
-                    pane.active_tab = pane.tabs.first().cloned();
-                }
-            }
-            if let Some(pane) = split.panes.get_mut(pane_index) {
-                if !pane.tabs.iter().any(|id| id == tab_id) {
-                    pane.tabs.push(tab_id.to_owned());
-                }
-                pane.active_tab = Some(tab_id.to_owned());
-            }
-            split.focused_pane = pane_index;
+            split
+                .move_tab_to_pane(tab_id, pane_id)
+                .map_err(AppError::new)?;
             window.active_tab = Some(tab_id.to_owned());
         }
+        self.compact_window_split(window_id)?;
         if self.focused_window == Some(window_id) {
             self.active_tab_id = Some(tab_id.to_owned());
             self.active_session_id = self
@@ -519,15 +506,20 @@ impl AppRuntime {
             self.tabs[index].unread = 0;
         }
         self.refresh_terminal_search_for_active_session();
-        self.status_text = format!("Moved tab to pane {}.", pane_index + 1);
+        self.status_text = format!("Moved tab to pane {pane_id}.");
         Ok(self.projection())
     }
 
-    /// 拖到 terminal 分区：未分屏则创建；已分屏则按方向放到对应侧（仍两叶）。
+    /// 拖到 terminal 分区：未分屏则创建两叶；已分屏则拆分目标叶（最多 10 叶）。
     ///
-    /// `direction`：`up|down|left|right`，可选 `:small|:equal|:major`（被拖侧占比
-    /// 0.25 / 0.5 / 0.7）。`up`/`left` → 被拖在 pane0；`down`/`right` → pane1。
-    pub fn place_tab_split(&mut self, tab_id: &str, direction: &str) -> AppResult<AppProjection> {
+    /// `target_pane_id`：悬停叶 id；未分屏传 `0`。
+    /// `direction`：`up|down|left|right`，可选 `:small|:equal|:major`。
+    pub fn place_tab_split(
+        &mut self,
+        tab_id: &str,
+        target_pane_id: u64,
+        direction: &str,
+    ) -> AppResult<AppProjection> {
         let (orientation, dragged_is_first, ratio) = Self::parse_split_drop_spec(direction)?;
         if self.tab_index(tab_id).is_none() {
             return Err(AppError::new(format!("tab `{tab_id}` was not found")));
@@ -543,20 +535,54 @@ impl AppRuntime {
             .get(&window_id)
             .is_some_and(|window| window.split.is_some());
         if already_split {
-            // v1 两叶：改方向/比例 + 把被拖 tab 放到对应侧。
-            let target_pane = if dragged_is_first { 0 } else { 1 };
+            let target = {
+                let window = self
+                    .windows
+                    .get(&window_id)
+                    .ok_or_else(|| AppError::new("window registration is missing"))?;
+                let split = window
+                    .split
+                    .as_ref()
+                    .ok_or_else(|| AppError::new("workspace is not split"))?;
+                if target_pane_id != 0 && split.find_pane(target_pane_id).is_some() {
+                    target_pane_id
+                } else {
+                    split.focused_pane
+                }
+            };
             {
                 let window = self
                     .windows
                     .get_mut(&window_id)
                     .ok_or_else(|| AppError::new("window registration is missing"))?;
-                if let Some(split) = window.split.as_mut() {
-                    split.orientation = orientation;
-                    split.ratio = ratio;
-                }
+                let split = window
+                    .split
+                    .as_mut()
+                    .ok_or_else(|| AppError::new("workspace is not split"))?;
+                split
+                    .split_leaf_with_tab(
+                        target,
+                        orientation,
+                        ratio,
+                        dragged_is_first,
+                        tab_id,
+                    )
+                    .map_err(AppError::new)?;
+                window.active_tab = Some(tab_id.to_owned());
             }
-            let projection = self.move_tab_to_pane(tab_id, target_pane)?;
-            return Ok(projection);
+            self.compact_window_split(window_id)?;
+            if self.focused_window == Some(window_id) {
+                self.active_tab_id = Some(tab_id.to_owned());
+                self.active_session_id = self
+                    .tab_index(tab_id)
+                    .and_then(|index| self.tabs[index].session_id().map(str::to_owned));
+            }
+            if let Some(index) = self.tab_index(tab_id) {
+                self.tabs[index].unread = 0;
+            }
+            self.refresh_terminal_search_for_active_session();
+            self.status_text = format!("Split pane {target} {}.", orientation.as_str());
+            return Ok(self.projection());
         }
 
         // 未分屏：需要邻接标签；若只有一个终端标签则先复制一份。
@@ -599,26 +625,34 @@ impl AppRuntime {
                 .windows
                 .get_mut(&window_id)
                 .ok_or_else(|| AppError::new("window registration is missing"))?;
-            // up/left：被拖 → pane0，邻居 → pane1；down/right：邻居 → pane0，被拖 → pane1。
             let (first, second) = if dragged_is_first {
                 (Some(tab_id.to_owned()), Some(neighbor.clone()))
             } else {
                 (Some(neighbor.clone()), Some(tab_id.to_owned()))
             };
             let mut split = WorkspaceSplit::two_pane(orientation, first, second);
-            split.ratio = ratio;
-            split.focused_pane = if dragged_is_first { 0 } else { 1 };
-            let remainder_pane = if dragged_is_first { 1 } else { 0 };
-            for other in &window.tabs {
-                if other == &neighbor || other.as_str() == tab_id {
-                    continue;
-                }
-                if let Some(pane) = split.panes.get_mut(remainder_pane) {
-                    if !pane.tabs.iter().any(|id| id == other) {
-                        pane.tabs.push(other.clone());
+            if let SplitNode::Split {
+                ratio: r,
+                first,
+                second,
+                ..
+            } = &mut split.root
+            {
+                *r = ratio;
+                let remainder = if dragged_is_first { second } else { first };
+                if let SplitNode::Leaf { pane, .. } = remainder.as_mut() {
+                    for other in &window.tabs {
+                        if other == &neighbor || other.as_str() == tab_id {
+                            continue;
+                        }
+                        if !pane.tabs.iter().any(|id| id == other) {
+                            pane.tabs.push(other.clone());
+                        }
                     }
                 }
             }
+            // two_pane: first leaf id=1, second id=2；聚焦被拖侧。
+            split.focused_pane = if dragged_is_first { 1 } else { 2 };
             window.split = Some(split);
             window.active_tab = Some(tab_id.to_owned());
         }
@@ -636,6 +670,31 @@ impl AppRuntime {
         self.refresh_terminal_search_for_active_session();
         self.status_text = format!("Split workspace {}.", orientation.as_str());
         Ok(self.projection())
+    }
+
+    /// 空叶合并；若只剩一叶则取消分屏。
+    fn compact_window_split(&mut self, window_id: u64) -> AppResult<()> {
+        let window = self
+            .windows
+            .get_mut(&window_id)
+            .ok_or_else(|| AppError::new("window registration is missing"))?;
+        let Some(split) = window.split.as_mut() else {
+            return Ok(());
+        };
+        match split.compact_empty_leaves() {
+            CompactOutcome::Keep => Ok(()),
+            CompactOutcome::Unsplit => {
+                let remaining_tab = match &split.root {
+                    SplitNode::Leaf { pane, .. } => pane.active_tab.clone(),
+                    SplitNode::Split { .. } => split.focused_tab().map(str::to_owned),
+                };
+                window.split = None;
+                if let Some(tab) = remaining_tab {
+                    window.active_tab = Some(tab);
+                }
+                Ok(())
+            }
+        }
     }
 
     /// 解析拖放规格：`dir[:size]` → (朝向, 被拖是否 pane0, pane0 占比)。
@@ -710,9 +769,6 @@ impl AppRuntime {
     }
 
     /// WP4：把标签绑到聚焦 pane（无分屏时 no-op）。
-    ///
-    /// 新标签 / 从全局条激活：加入聚焦 pane 的 `tabs`，并从其它 pane 列表移除。
-    /// 若标签已在某 pane 的列表中，应改走 [`Self::focus_pane_for_tab`]（点叶内条）。
     pub(crate) fn assign_tab_to_focused_pane(&mut self, tab_id: &str) {
         let Some(window_id) = self.window_of_tab(tab_id) else {
             return;
@@ -720,25 +776,11 @@ impl AppRuntime {
         let Some(window) = self.windows.get_mut(&window_id) else {
             return;
         };
-        if window.split.is_none() {
-            return;
-        }
         let Some(split) = window.split.as_mut() else {
             return;
         };
-        let focused = split.focused_pane.min(split.panes.len().saturating_sub(1));
-        for (index, pane) in split.panes.iter_mut().enumerate() {
-            pane.tabs.retain(|id| id.as_str() != tab_id);
-            if index != focused && pane.active_tab.as_deref() == Some(tab_id) {
-                pane.active_tab = pane.tabs.first().cloned();
-            }
-        }
-        if let Some(pane) = split.panes.get_mut(focused) {
-            if !pane.tabs.iter().any(|id| id == tab_id) {
-                pane.tabs.push(tab_id.to_owned());
-            }
-            pane.active_tab = Some(tab_id.to_owned());
-        }
+        let focused = split.focused_pane;
+        let _ = split.move_tab_to_pane(tab_id, focused);
         window.active_tab = Some(tab_id.to_owned());
     }
 
@@ -753,25 +795,18 @@ impl AppRuntime {
         let Some(split) = window.split.as_mut() else {
             return false;
         };
-        let Some(pane_index) = split
-            .panes
-            .iter()
-            .position(|pane| pane.tabs.iter().any(|id| id == tab_id))
-        else {
+        let Some(pane_id) = split.find_pane_id_for_tab(tab_id) else {
             return false;
         };
-        split.focused_pane = pane_index;
-        if let Some(pane) = split.panes.get_mut(pane_index) {
+        split.focused_pane = pane_id;
+        if let Some(pane) = split.find_pane_mut(pane_id) {
             pane.active_tab = Some(tab_id.to_owned());
         }
         window.active_tab = Some(tab_id.to_owned());
         true
     }
 
-    /// WP4：Split Right / Split Down（契约 §6.3；叶子上限 4，v1 先做 2）。
-    ///
-    /// 分屏始终绑定两个独立 session tab：当前窗口只有一个终端标签时，先再开一份
-    /// 同源会话，再左右/上下排布；禁止留下空 pane。
+    /// WP4：Split Right / Split Down（递归拆聚焦叶，最多 10 叶）。
     pub fn split_workspace(&mut self, direction: &str) -> AppResult<AppProjection> {
         let orientation = match direction {
             "right" | "horizontal" => SplitOrientation::Horizontal,
@@ -792,15 +827,11 @@ impl AppRuntime {
                 .get(&window_id)
                 .ok_or_else(|| AppError::new("window registration is missing"))?;
             if let Some(split) = &window.split {
-                if split.pane_count() >= WorkspaceSplit::MAX_PANES {
-                    return Err(AppError::new("workspace already has the maximum of 4 panes"));
-                }
-                // v1：已有分屏时只支持把聚焦 pane 再拆成 2（总叶子到 4 的扩展点），
-                // 本拍先拒绝 >2，避免无 UI 的递归树。
-                if split.pane_count() >= 2 {
-                    return Err(AppError::new(
-                        "3–4 pane layouts are deferred; close a pane first or use a single 2-pane split",
-                    ));
+                if split.pane_count() >= WorkspaceSplit::MAX_LEAVES {
+                    return Err(AppError::new(format!(
+                        "workspace already has the maximum of {} panes",
+                        WorkspaceSplit::MAX_LEAVES
+                    )));
                 }
             }
         }
@@ -812,20 +843,16 @@ impl AppRuntime {
             .or_else(|| self.active_tab_id.clone())
             .ok_or_else(|| AppError::new("open a tab before splitting the workspace"))?;
 
-        let has_neighbor = self
-            .windows
-            .get(&window_id)
-            .is_some_and(|window| {
-                window
-                    .tabs
-                    .iter()
-                    .any(|id| id.as_str() != original_tab.as_str())
-            });
+        let has_neighbor = self.windows.get(&window_id).is_some_and(|window| {
+            window
+                .tabs
+                .iter()
+                .any(|id| id.as_str() != original_tab.as_str())
+        });
         if !has_neighbor {
             let tab_count_before = self.tabs.len();
             self.open_sibling_session_for_split(&original_tab)?;
             if self.tabs.len() <= tab_count_before {
-                // 密码/主机密钥挂起：尚未建成第二标签，先不落空 pane。
                 self.status_text =
                     "Authenticate the new session, then choose Split again.".to_owned();
                 return Ok(self.projection());
@@ -853,25 +880,65 @@ impl AppRuntime {
                 AppError::new("split needs two session tabs; open another session first")
             })?;
 
-        {
+        let already_split = self
+            .windows
+            .get(&window_id)
+            .is_some_and(|window| window.split.is_some());
+        if already_split {
+            // 拆聚焦叶：active 进新叶（右侧/下侧），邻接留在原叶。
+            let focused = self
+                .windows
+                .get(&window_id)
+                .and_then(|w| w.split.as_ref().map(|s| s.focused_pane))
+                .unwrap_or(1);
+            {
+                let window = self
+                    .windows
+                    .get_mut(&window_id)
+                    .ok_or_else(|| AppError::new("window registration is missing"))?;
+                let split = window
+                    .split
+                    .as_mut()
+                    .ok_or_else(|| AppError::new("workspace is not split"))?;
+                // 确保 neighbor 在聚焦叶，active 被拖到新侧（second）。
+                let _ = split.move_tab_to_pane(&neighbor, focused);
+                if let Some(pane) = split.find_pane_mut(focused) {
+                    if !pane.tabs.iter().any(|id| id == &neighbor) {
+                        pane.tabs.push(neighbor.clone());
+                    }
+                    pane.active_tab = Some(neighbor.clone());
+                }
+                split
+                    .split_leaf_with_tab(
+                        focused,
+                        orientation,
+                        0.5,
+                        false,
+                        &active_tab,
+                    )
+                    .map_err(AppError::new)?;
+                window.active_tab = Some(active_tab.clone());
+            }
+            self.compact_window_split(window_id)?;
+        } else {
             let window = self
                 .windows
                 .get_mut(&window_id)
                 .ok_or_else(|| AppError::new("window registration is missing"))?;
-            // 契约：当前 active tab 移入新 pane；原 pane 留下邻接标签。
-            // 其余窗口标签归入 pane0，避免分屏后悬空。
             let mut split = WorkspaceSplit::two_pane(
                 orientation,
                 Some(neighbor.clone()),
                 Some(active_tab.clone()),
             );
-            for tab_id in &window.tabs {
-                if tab_id == &neighbor || tab_id == &active_tab {
-                    continue;
-                }
-                if let Some(pane0) = split.panes.first_mut() {
-                    if !pane0.tabs.iter().any(|id| id == tab_id) {
-                        pane0.tabs.push(tab_id.clone());
+            if let SplitNode::Split { first, .. } = &mut split.root {
+                if let SplitNode::Leaf { pane, .. } = first.as_mut() {
+                    for tab_id in &window.tabs {
+                        if tab_id == &neighbor || tab_id == &active_tab {
+                            continue;
+                        }
+                        if !pane.tabs.iter().any(|id| id == tab_id) {
+                            pane.tabs.push(tab_id.clone());
+                        }
                     }
                 }
             }
@@ -943,15 +1010,13 @@ impl AppRuntime {
         Ok(())
     }
 
-    /// WP4：聚焦指定 pane（0-based）；同步窗口活动标签与未读清除。
-    ///
-    /// 未分屏时静默忽略（折叠分屏 UI 溢出命中不应当成错误刷状态栏）。
-    pub fn focus_split_pane(&mut self, pane_index: i32) -> AppResult<AppProjection> {
+    /// WP4：聚焦指定 pane（pane id）；同步窗口活动标签与未读清除。
+    pub fn focus_split_pane(&mut self, pane_id: i32) -> AppResult<AppProjection> {
         let window_id = self
             .focused_window
             .or_else(|| self.main_window_id())
             .ok_or_else(|| AppError::new("no window is available"))?;
-        let pane_index = usize::try_from(pane_index).unwrap_or(0);
+        let pane_id = u64::try_from(pane_id).unwrap_or(0);
         if !self
             .windows
             .get(&window_id)
@@ -968,13 +1033,13 @@ impl AppRuntime {
                 .split
                 .as_mut()
                 .ok_or_else(|| AppError::new("workspace is not split"))?;
-            if pane_index >= split.panes.len() {
-                return Err(AppError::new(format!(
-                    "pane index {pane_index} is out of range"
-                )));
+            if split.find_pane(pane_id).is_none() {
+                return Err(AppError::new(format!("pane {pane_id} was not found")));
             }
-            split.focused_pane = pane_index;
-            let tab_id = split.panes[pane_index].active_tab.clone();
+            split.focused_pane = pane_id;
+            let tab_id = split
+                .find_pane(pane_id)
+                .and_then(|pane| pane.active_tab.clone());
             if let Some(tab_id) = tab_id.as_ref() {
                 window.active_tab = Some(tab_id.clone());
             }
@@ -992,17 +1057,17 @@ impl AppRuntime {
             }
             self.refresh_terminal_search_for_active_session();
         }
-        self.status_text = format!("Focused pane {}.", pane_index + 1);
+        self.status_text = format!("Focused pane {pane_id}.");
         Ok(self.projection())
     }
 
     /// WP4：关闭当前（或指定）pane；剩 1 片时拆掉分屏。
-    pub fn close_split_pane(&mut self, pane_index: Option<i32>) -> AppResult<AppProjection> {
+    pub fn close_split_pane(&mut self, pane_id: Option<i32>) -> AppResult<AppProjection> {
         let window_id = self
             .focused_window
             .or_else(|| self.main_window_id())
             .ok_or_else(|| AppError::new("no window is available"))?;
-        let (remaining_tab, closed_index) = {
+        let closed_id = {
             let window = self
                 .windows
                 .get_mut(&window_id)
@@ -1010,53 +1075,52 @@ impl AppRuntime {
             let Some(mut split) = window.split.take() else {
                 return Err(AppError::new("workspace is not split"));
             };
-            let index = pane_index
-                .and_then(|value| usize::try_from(value).ok())
+            let id = pane_id
+                .and_then(|value| u64::try_from(value).ok())
                 .unwrap_or(split.focused_pane);
-            if index >= split.panes.len() {
-                window.split = Some(split);
-                return Err(AppError::new(format!(
-                    "pane index {index} is out of range"
-                )));
-            }
-            split.panes.remove(index);
-            if split.panes.is_empty() {
-                let tab = window.active_tab.clone();
-                (tab, index)
-            } else if split.panes.len() == 1 {
-                let tab = split.panes[0].active_tab.clone();
-                window.active_tab = tab.clone();
-                (tab, index)
-            } else {
-                if split.focused_pane >= split.panes.len() {
-                    split.focused_pane = split.panes.len() - 1;
-                } else if index < split.focused_pane {
-                    split.focused_pane -= 1;
+            match split.close_pane(id) {
+                Ok(CompactOutcome::Unsplit) => {
+                    let tab = match &split.root {
+                        SplitNode::Leaf { pane, .. } => pane.active_tab.clone(),
+                        SplitNode::Split { .. } => split.focused_tab().map(str::to_owned),
+                    };
+                    window.active_tab = tab.or(window.active_tab.clone());
+                    id
                 }
-                let tab = split.focused_tab().map(str::to_owned);
-                window.active_tab = tab.clone();
-                window.split = Some(split);
-                (tab, index)
+                Ok(CompactOutcome::Keep) => {
+                    let tab = split.focused_tab().map(str::to_owned);
+                    window.active_tab = tab.or(window.active_tab.clone());
+                    window.split = Some(split);
+                    id
+                }
+                Err(message) => {
+                    window.split = Some(split);
+                    return Err(AppError::new(message));
+                }
             }
         };
-        if let Some(tab_id) = remaining_tab.as_deref() {
+        if let Some(tab_id) = self
+            .windows
+            .get(&window_id)
+            .and_then(|window| window.active_tab.clone())
+        {
             if self.focused_window == Some(window_id) {
-                self.active_tab_id = Some(tab_id.to_owned());
+                self.active_tab_id = Some(tab_id.clone());
                 self.active_session_id = self
-                    .tab_index(tab_id)
+                    .tab_index(&tab_id)
                     .and_then(|index| self.tabs[index].session_id().map(str::to_owned));
             }
-            if let Some(index) = self.tab_index(tab_id) {
+            if let Some(index) = self.tab_index(&tab_id) {
                 self.tabs[index].unread = 0;
             }
             self.refresh_terminal_search_for_active_session();
         }
-        self.status_text = format!("Closed pane {}.", closed_index + 1);
+        self.status_text = format!("Closed pane {closed_id}.");
         Ok(self.projection())
     }
 
-    /// WP4：调整分屏比例（立即写内存；不落盘）。
-    pub fn set_split_ratio(&mut self, ratio: f32) -> AppResult<AppProjection> {
+    /// WP4：调整某个 split 节点比例（`split_id`；立即写内存）。
+    pub fn set_split_ratio(&mut self, split_id: i32, ratio: f32) -> AppResult<AppProjection> {
         let window_id = self
             .focused_window
             .or_else(|| self.main_window_id())
@@ -1069,7 +1133,19 @@ impl AppRuntime {
             .split
             .as_mut()
             .ok_or_else(|| AppError::new("workspace is not split"))?;
-        split.ratio = ratio.clamp(0.2, 0.8);
+        let split_id = u64::try_from(split_id).unwrap_or(0);
+        if !split.set_split_ratio(split_id, ratio) {
+            // 兼容：旧 UI 只传 ratio 时 split_id=0 → 改第一个 splitter。
+            if split_id == 0 {
+                let (_, splitters) = split.layout();
+                if let Some(first) = splitters.first() {
+                    let id = first.split_id;
+                    let _ = split.set_split_ratio(id, ratio);
+                }
+            } else {
+                return Err(AppError::new(format!("split {split_id} was not found")));
+            }
+        }
         Ok(self.projection())
     }
 
@@ -1085,49 +1161,77 @@ impl AppRuntime {
         let Some(split) = &window.split else {
             return WorkspaceSplitProjection::default();
         };
-        let pane0 = split.panes.first();
-        let pane1 = split.panes.get(1);
-        let title0 = pane0
-            .and_then(|pane| pane.active_tab.as_deref())
-            .map(|tab_id| self.tab_display_title(tab_id))
-            .unwrap_or_default();
-        let title1 = pane1
-            .and_then(|pane| pane.active_tab.as_deref())
-            .map(|tab_id| self.tab_display_title(tab_id))
-            .unwrap_or_default();
-        let pane0_tabs = pane0
-            .map(|pane| self.pane_tab_data(pane))
-            .unwrap_or_default();
-        let pane1_tabs = pane1
-            .map(|pane| self.pane_tab_data(pane))
-            .unwrap_or_default();
-        let pane0_tab_id = pane0
-            .and_then(|pane| pane.active_tab.clone())
-            .unwrap_or_default();
-        let pane1_tab_id = pane1
-            .and_then(|pane| pane.active_tab.clone())
-            .unwrap_or_default();
+        let (laid_leaves, laid_splitters) = split.layout();
+        let leaves = laid_leaves
+            .iter()
+            .map(|leaf| {
+                let tab_id = leaf.pane.active_tab.clone().unwrap_or_default();
+                WorkspacePaneLeafProjection {
+                    pane_id: i32::try_from(leaf.pane_id).unwrap_or(0),
+                    x: leaf.rect.x,
+                    y: leaf.rect.y,
+                    w: leaf.rect.w,
+                    h: leaf.rect.h,
+                    empty: leaf.pane.active_tab.is_none(),
+                    focused: leaf.pane_id == split.focused_pane,
+                    quick_connect: !tab_id.is_empty() && self.tab_kind_is_quick_connect(&tab_id),
+                    tab_id: tab_id.clone(),
+                    title_text: if tab_id.is_empty() {
+                        String::new()
+                    } else {
+                        self.tab_display_title(&tab_id)
+                    },
+                    tabs: self.pane_tab_data(&leaf.pane),
+                }
+            })
+            .collect::<Vec<_>>();
+        let splitters = laid_splitters
+            .iter()
+            .map(|s| WorkspaceSplitterProjection {
+                split_id: i32::try_from(s.split_id).unwrap_or(0),
+                vertical: matches!(s.orientation, SplitOrientation::Horizontal),
+                x: s.rect.x,
+                y: s.rect.y,
+                w: s.rect.w,
+                h: s.rect.h,
+                parent_x: s.parent.x,
+                parent_y: s.parent.y,
+                parent_w: s.parent.w,
+                parent_h: s.parent.h,
+                ratio: s.ratio,
+            })
+            .collect();
+        // 兼容字段：前两叶 + 根 split 比例/朝向。
+        let pane0 = leaves.first();
+        let pane1 = leaves.get(1);
+        let root_orient = match &split.root {
+            SplitNode::Split { orientation, .. } => orientation.as_str(),
+            SplitNode::Leaf { .. } => "horizontal",
+        };
+        let root_ratio = match &split.root {
+            SplitNode::Split { ratio, .. } => *ratio,
+            SplitNode::Leaf { .. } => 0.5,
+        };
         WorkspaceSplitProjection {
             active: true,
-            orientation_text: split.orientation.as_str().to_owned(),
-            ratio: split.ratio,
+            orientation_text: root_orient.to_owned(),
+            ratio: root_ratio,
             focused_pane: i32::try_from(split.focused_pane).unwrap_or(0),
             pane_count: i32::try_from(split.pane_count()).unwrap_or(0),
-            pane0_quick_connect: !pane0_tab_id.is_empty()
-                && self.tab_kind_is_quick_connect(&pane0_tab_id),
-            pane0_tab_id,
-            pane0_title_text: title0,
-            pane0_empty: pane0.is_none_or(|pane| pane.active_tab.is_none()),
-            pane0_tabs,
-            pane1_quick_connect: !pane1_tab_id.is_empty()
-                && self.tab_kind_is_quick_connect(&pane1_tab_id),
-            pane1_tab_id,
-            pane1_title_text: title1,
-            pane1_empty: pane1.is_none_or(|pane| pane.active_tab.is_none()),
-            pane1_tabs,
-            // v1：UI 只渲染 2 叶子；`MAX_PANES=4` 留给后续递归树扩展。
-            can_split: split.pane_count() < 2,
+            pane0_quick_connect: pane0.map(|p| p.quick_connect).unwrap_or(false),
+            pane0_tab_id: pane0.map(|p| p.tab_id.clone()).unwrap_or_default(),
+            pane0_title_text: pane0.map(|p| p.title_text.clone()).unwrap_or_default(),
+            pane0_empty: pane0.map(|p| p.empty).unwrap_or(true),
+            pane0_tabs: pane0.map(|p| p.tabs.clone()).unwrap_or_default(),
+            pane1_quick_connect: pane1.map(|p| p.quick_connect).unwrap_or(false),
+            pane1_tab_id: pane1.map(|p| p.tab_id.clone()).unwrap_or_default(),
+            pane1_title_text: pane1.map(|p| p.title_text.clone()).unwrap_or_default(),
+            pane1_empty: pane1.map(|p| p.empty).unwrap_or(true),
+            pane1_tabs: pane1.map(|p| p.tabs.clone()).unwrap_or_default(),
+            can_split: split.pane_count() < WorkspaceSplit::MAX_LEAVES,
             can_close_pane: split.pane_count() > 1,
+            leaves,
+            splitters,
         }
     }
 
@@ -1142,12 +1246,21 @@ impl AppRuntime {
             .collect()
     }
 
-    /// WP4：非聚焦 pane 的会话 key（双图渲染 / 次视口 resize）。
+    /// WP4：非聚焦 pane 的会话 key（次图渲染；多叶时取第一个非聚焦叶）。
     pub(crate) fn window_secondary_session(&self, window_id: u64) -> Option<&str> {
         let window = self.windows.get(&window_id)?;
         let split = window.split.as_ref()?;
-        let secondary = split.secondary_pane_index()?;
-        let tab_id = split.panes.get(secondary)?.active_tab.as_deref()?;
+        let secondary = split.secondary_pane_ids().into_iter().next()?;
+        let tab_id = split.find_pane(secondary)?.active_tab.as_deref()?;
+        let index = self.tab_index(tab_id)?;
+        self.tabs[index].session_id()
+    }
+
+    /// 分屏叶上活动会话（按 pane id）。
+    pub(crate) fn window_pane_session(&self, window_id: u64, pane_id: u64) -> Option<&str> {
+        let window = self.windows.get(&window_id)?;
+        let split = window.split.as_ref()?;
+        let tab_id = split.find_pane(pane_id)?.active_tab.as_deref()?;
         let index = self.tab_index(tab_id)?;
         self.tabs[index].session_id()
     }
@@ -1407,25 +1520,23 @@ impl AppRuntime {
                             .cloned();
                     }
                 }
-                // WP4：关闭标签后清理分屏引用；pane 无标签或只剩 1 片时合并。
+                // WP4：关闭标签后清理分屏引用；空叶合并，剩 ≤1 片则取消分屏。
                 if let Some(mut split) = window.split.take() {
-                    for pane in &mut split.panes {
-                        pane.tabs.retain(|id| id.as_str() != tab_id);
-                        if pane.active_tab.as_deref() == Some(tab_id) {
-                            pane.active_tab = pane.tabs.first().cloned();
+                    split.remove_tab_from_all(tab_id);
+                    match split.compact_empty_leaves() {
+                        CompactOutcome::Unsplit => {
+                            if let SplitNode::Leaf { pane, .. } = &split.root {
+                                window.active_tab =
+                                    pane.active_tab.clone().or(window.active_tab.clone());
+                            }
                         }
-                    }
-                    // 空 pane 移除；剩 ≤1 片则拆掉分屏。
-                    split.panes.retain(|pane| !pane.tabs.is_empty());
-                    if split.focused_pane >= split.panes.len() {
-                        split.focused_pane = split.panes.len().saturating_sub(1);
-                    }
-                    if split.panes.len() <= 1 {
-                        if let Some(pane) = split.panes.first() {
-                            window.active_tab = pane.active_tab.clone();
+                        CompactOutcome::Keep => {
+                            window.active_tab = split
+                                .focused_tab()
+                                .map(str::to_owned)
+                                .or(window.active_tab.clone());
+                            window.split = Some(split);
                         }
-                    } else {
-                        window.split = Some(split);
                     }
                 }
             }
@@ -1907,7 +2018,40 @@ pub(crate) struct SessionPollOutcome {
     pub(crate) state_changed: bool,
 }
 
-/// WP4：分屏投影（Slint 双 pane 布局）。
+/// 单个分屏叶子投影（绝对归一化几何）。
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct WorkspacePaneLeafProjection {
+    pub pane_id: i32,
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+    pub empty: bool,
+    pub focused: bool,
+    pub quick_connect: bool,
+    pub tab_id: String,
+    pub title_text: String,
+    pub tabs: Vec<TabData>,
+}
+
+/// 分屏把手投影。
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct WorkspaceSplitterProjection {
+    pub split_id: i32,
+    /// `true` = 竖条（左右分）；`false` = 横条（上下分）。
+    pub vertical: bool,
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+    pub parent_x: f32,
+    pub parent_y: f32,
+    pub parent_w: f32,
+    pub parent_h: f32,
+    pub ratio: f32,
+}
+
+/// WP4：分屏投影（递归树摊平为叶子 + 把手）。
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct WorkspaceSplitProjection {
     pub active: bool,
@@ -1918,9 +2062,7 @@ pub struct WorkspaceSplitProjection {
     pub pane0_tab_id: String,
     pub pane0_title_text: String,
     pub pane0_empty: bool,
-    /// 左/上 pane 活动标签是否为 Quick Connect。
     pub pane0_quick_connect: bool,
-    /// 左/上 pane 的标签条投影（分屏时用；未分屏为空）。
     pub pane0_tabs: Vec<TabData>,
     pub pane1_tab_id: String,
     pub pane1_title_text: String,
@@ -1929,6 +2071,8 @@ pub struct WorkspaceSplitProjection {
     pub pane1_tabs: Vec<TabData>,
     pub can_split: bool,
     pub can_close_pane: bool,
+    pub leaves: Vec<WorkspacePaneLeafProjection>,
+    pub splitters: Vec<WorkspaceSplitterProjection>,
 }
 
 /// N0 轮询：单个 tick 最多轮询的会话数（活动标签优先，其余按游标轮转）。
