@@ -1505,12 +1505,16 @@ pub(crate) fn wire_callbacks(
         if suppress_ref.replace(false) {
             return;
         }
-        let Some((column, row)) = terminal_grid_point(&surface, &runtime_ref, x, y) else {
-            return;
-        };
+        // Apply the release cell first (in case the last move was missed), then
+        // finish: a click that never left the anchor clears the selection.
+        if let Some((column, row)) = terminal_grid_point(&surface, &runtime_ref, x, y) {
+            let _ = runtime_ref
+                .borrow_mut()
+                .update_active_terminal_selection(column, row);
+        }
         let result = runtime_ref
             .borrow_mut()
-            .update_active_terminal_selection(column, row);
+            .finish_active_terminal_selection();
         match result {
             Ok(projection) => {
                 apply_projection(&window, &projection);

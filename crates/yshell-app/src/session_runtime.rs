@@ -100,6 +100,10 @@ pub struct SessionRuntime {
     terminal_limits: (usize, usize),
     viewport_offset: usize,
     selection: Option<SelectionRange>,
+    /// Anchor cell for an in-progress left-button drag; `None` when idle.
+    selection_anchor: Option<GridPoint>,
+    /// True once the pointer left the anchor cell during the current drag.
+    selection_drag_moved: bool,
     frame_id: u64,
     /// N5/D17：创建时冻结的外观（调色板 + 字体 + 字号）。
     appearance: TerminalAppearance,
@@ -145,6 +149,8 @@ impl SessionRuntime {
             terminal_limits: (DEFAULT_SCROLLBACK_LINES, DEFAULT_SCROLLBACK_MAX_CELLS),
             viewport_offset: 0,
             selection: None,
+            selection_anchor: None,
+            selection_drag_moved: false,
             frame_id: 0,
             appearance: TerminalAppearance::default(),
             connection_stage: String::new(),
@@ -197,6 +203,8 @@ impl SessionRuntime {
             terminal_limits: (DEFAULT_SCROLLBACK_LINES, DEFAULT_SCROLLBACK_MAX_CELLS),
             viewport_offset: 0,
             selection: None,
+            selection_anchor: None,
+            selection_drag_moved: false,
             frame_id: 0,
             appearance: TerminalAppearance::default(),
             connection_stage: String::new(),
@@ -239,6 +247,8 @@ impl SessionRuntime {
             terminal_limits: (DEFAULT_SCROLLBACK_LINES, DEFAULT_SCROLLBACK_MAX_CELLS),
             viewport_offset: 0,
             selection: None,
+            selection_anchor: None,
+            selection_drag_moved: false,
             frame_id: 0,
             appearance: TerminalAppearance::default(),
             connection_stage: String::new(),
@@ -373,6 +383,8 @@ impl SessionRuntime {
         if self.terminal_grid.columns == 0 || self.terminal_grid.rows == 0 {
             return false;
         }
+        self.selection_anchor = None;
+        self.selection_drag_moved = false;
         if !self.has_screen_content() {
             self.selection = None;
             self.frame_id = self.frame_id.wrapping_add(1);
@@ -404,6 +416,8 @@ impl SessionRuntime {
         self.terminal_grid = TerminalGrid::with_limits(columns, rows, line_limit, cell_limit);
         self.viewport_offset = 0;
         self.selection = None;
+        self.selection_anchor = None;
+        self.selection_drag_moved = false;
         self.frame_id = self.frame_id.wrapping_add(1);
         self.log_runtime_event("Terminal view cleared. Live shell remains attached.");
     }
@@ -419,6 +433,8 @@ impl SessionRuntime {
         self.viewport_offset = 0;
         // Absolute selection rows referenced scrollback; drop the selection.
         self.selection = None;
+        self.selection_anchor = None;
+        self.selection_drag_moved = false;
         self.frame_id = self.frame_id.wrapping_add(1);
         self.log_runtime_event("Terminal scrollback cleared. Live screen kept.");
         true
@@ -438,12 +454,15 @@ impl SessionRuntime {
 
     #[must_use]
     pub fn terminal_selection_active(&self) -> bool {
-        self.selection
-            .map(|selection| {
-                let range = selection.normalized();
-                range.start != range.end
-            })
-            .unwrap_or(false)
+        self.selection.is_some_and(|selection| {
+            let range = selection.normalized();
+            // Multi-cell ranges are always active. A single cell is active when
+            // it holds copyable text (e.g. double-click on a one-character word).
+            range.start != range.end
+                || !selection
+                    .copy_text_absolute(&self.terminal_grid)
+                    .is_empty()
+        })
     }
 
     /// Grid geometry plus the absolute line at the top of the viewport.
@@ -491,30 +510,57 @@ impl SessionRuntime {
     }
 
     /// Start a drag selection at an absolute grid point.
+    ///
+    /// Clears any previous selection immediately (click-to-focus / click-to-
+    /// dismiss). A new painted range appears only after the pointer moves to
+    /// another cell — a plain click must not leave a one-cell highlight.
     pub fn begin_terminal_selection(&mut self, point: GridPoint) -> bool {
-        self.set_terminal_selection(Some(SelectionRange {
-            start: point,
-            end: point,
-        }))
+        self.selection_anchor = Some(point);
+        self.selection_drag_moved = false;
+        self.set_terminal_selection(None)
     }
 
     /// Extend the active drag selection to an absolute grid point.
     pub fn update_terminal_selection(&mut self, point: GridPoint) -> bool {
-        let start = self
-            .selection
-            .map(|selection| selection.start)
-            .unwrap_or(point);
+        let start = self.selection_anchor.unwrap_or(point);
+        if point != start {
+            self.selection_drag_moved = true;
+        }
+        if !self.selection_drag_moved {
+            return false;
+        }
         self.set_terminal_selection(Some(SelectionRange { start, end: point }))
+    }
+
+    /// Finish a pointer drag. Clears the selection when the click never left
+    /// the anchor cell (plain click = focus / dismiss only).
+    pub fn finish_terminal_selection(&mut self) -> bool {
+        let moved = self.selection_drag_moved;
+        self.selection_anchor = None;
+        self.selection_drag_moved = false;
+        if moved {
+            return self.selection.is_some();
+        }
+        if self.selection.is_none() {
+            return false;
+        }
+        self.selection = None;
+        self.frame_id = self.frame_id.wrapping_add(1);
+        false
     }
 
     /// Select the word under an absolute grid point; clears on whitespace.
     pub fn select_word_at(&mut self, point: GridPoint) -> bool {
+        self.selection_anchor = None;
+        self.selection_drag_moved = false;
         self.selection = SelectionRange::word_at(&self.terminal_grid, point);
         self.frame_id = self.frame_id.wrapping_add(1);
         self.selection.is_some()
     }
 
     pub fn select_all_terminal(&mut self) -> bool {
+        self.selection_anchor = None;
+        self.selection_drag_moved = false;
         self.selection = SelectionRange::select_all(&self.terminal_grid);
         self.frame_id = self.frame_id.wrapping_add(1);
         self.selection.is_some()
@@ -1148,8 +1194,46 @@ mod tests {
         let word = runtime.select_word_at(GridPoint { column: 2, row: 1 });
         assert!(word);
         assert_eq!(runtime.terminal_selection_text(), "second");
+        assert!(runtime.terminal_selection_active());
         assert!(!runtime.select_word_at(GridPoint { column: 3, row: 0 }));
         assert!(!runtime.terminal_selection_active());
+    }
+
+    #[test]
+    fn plain_click_clears_selection_without_leaving_a_cell_highlight() {
+        let mut runtime = runtime_with_output(10, 2, "hello\nworld");
+        runtime.begin_terminal_selection(GridPoint { column: 0, row: 0 });
+        runtime.update_terminal_selection(GridPoint { column: 4, row: 0 });
+        assert!(runtime.terminal_selection_active());
+        assert_eq!(runtime.terminal_selection_text(), "hello");
+
+        // Click without leaving the cell: dismiss only — no one-cell flash.
+        runtime.begin_terminal_selection(GridPoint { column: 1, row: 1 });
+        assert!(!runtime.terminal_selection_active());
+        assert!(runtime
+            .terminal_render_snapshot()
+            .expect("snapshot")
+            .selection
+            .is_none());
+        runtime.update_terminal_selection(GridPoint { column: 1, row: 1 });
+        runtime.finish_terminal_selection();
+        assert!(!runtime.terminal_selection_active());
+        assert!(runtime
+            .terminal_render_snapshot()
+            .expect("snapshot")
+            .selection
+            .is_none());
+    }
+
+    #[test]
+    fn drag_away_and_back_keeps_a_single_cell_selection() {
+        let mut runtime = runtime_with_output(10, 1, "hello");
+        runtime.begin_terminal_selection(GridPoint { column: 1, row: 0 });
+        runtime.update_terminal_selection(GridPoint { column: 2, row: 0 });
+        runtime.update_terminal_selection(GridPoint { column: 1, row: 0 });
+        runtime.finish_terminal_selection();
+        assert!(runtime.terminal_selection_active());
+        assert_eq!(runtime.terminal_selection_text(), "e");
     }
 
     #[test]

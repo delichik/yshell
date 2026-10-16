@@ -362,6 +362,18 @@ impl AppRuntime {
         })
     }
 
+    pub fn finish_active_terminal_selection(&mut self) -> AppResult<AppProjection> {
+        let Some(session_key) = self.active_session_id.clone() else {
+            return Ok(self.projection());
+        };
+        let runtime = self
+            .sessions
+            .get_mut(&session_key)
+            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
+        let _ = runtime.finish_terminal_selection();
+        Ok(self.projection())
+    }
+
     pub fn select_word_in_active_terminal(
         &mut self,
         column: u16,

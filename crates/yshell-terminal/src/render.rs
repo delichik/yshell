@@ -1271,7 +1271,7 @@ fn sanitize_font_size(font_size: f32) -> f32 {
 }
 
 /// Effective (foreground, background) for a cell, honoring default colors,
-/// bold lightening, selection blending and the cursor.
+/// bold lightening, selection highlight and the cursor.
 ///
 /// `synthesize_bold` keeps the pre-W0 "lighten the foreground" behavior for
 /// glyph sources without a real bold face (see [`GlyphSource::has_dedicated_bold`]).
@@ -1300,7 +1300,10 @@ fn cell_colors(
         palette_color(palette, cell.background)
     };
     if selected {
-        background = mix(background, palette.selection, 0.5);
+        // Themes define `selection` as the highlight color (VS Code / Windows
+        // Terminal style). Paint it solid so the range is obvious on dark and
+        // light backgrounds; a 50% blend was too easy to miss.
+        background = palette.selection;
     }
     if cursor {
         // The cursor block uses the palette cursor color; the glyph keeps the
@@ -1330,19 +1333,6 @@ fn lighten(color: TerminalColor, amount: f32) -> TerminalColor {
 fn lighten_channel(channel: u8, amount: f32) -> u8 {
     let value = f32::from(channel);
     (value + (255.0 - value) * amount).round().clamp(0.0, 255.0) as u8
-}
-
-fn mix(left: TerminalColor, right: TerminalColor, amount: f32) -> TerminalColor {
-    let channel = |a: u8, b: u8| {
-        (f32::from(a) * (1.0 - amount) + f32::from(b) * amount)
-            .round()
-            .clamp(0.0, 255.0) as u8
-    };
-    TerminalColor::rgb(
-        channel(left.red, right.red),
-        channel(left.green, right.green),
-        channel(left.blue, right.blue),
-    )
 }
 
 const fn rgba_of(color: TerminalColor) -> [u8; 4] {
@@ -2335,7 +2325,7 @@ mod tests {
     }
 
     #[test]
-    fn selection_blends_the_cell_background() {
+    fn selection_paints_the_palette_selection_background() {
         let mut renderer = TerminalRenderer::new();
         let frame = render_lines(
             &mut renderer,
@@ -2347,7 +2337,7 @@ mod tests {
             }),
         );
 
-        let expected = mix(DEFAULT_BACKGROUND, SELECTION_BACKGROUND, 0.5);
+        let expected = SELECTION_BACKGROUND;
         assert_eq!(
             pixel(&frame, 0, 0),
             [expected.red, expected.green, expected.blue, 255]

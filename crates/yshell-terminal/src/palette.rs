@@ -27,7 +27,7 @@ pub struct TerminalPalette {
     pub background: TerminalColor,
     /// Cursor block color.
     pub cursor: TerminalColor,
-    /// Selection highlight, blended over the cell background at 50%.
+    /// Selection highlight painted as the cell background while selected.
     pub selection: TerminalColor,
     /// The 16 ANSI colors (`0..=7` normal, `8..=15` bright).
     pub ansi: [TerminalColor; 16],
