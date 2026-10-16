@@ -484,6 +484,11 @@ const LIBSSH2_ERROR_METHOD_NONE: i32 = -17;
 const LIBSSH2_ERROR_AUTHENTICATION_FAILED: i32 = -18;
 const LIBSSH2_ERROR_PUBLICKEY_UNVERIFIED: i32 = -19;
 const LIBSSH2_ERROR_METHOD_NOT_SUPPORTED: i32 = -33;
+const LIBSSH2_ERROR_EAGAIN: i32 = -37;
+
+/// Seconds of idle SSH I/O before libssh2 sends a keepalive probe.
+/// Matches common client defaults (OpenSSH `ServerAliveInterval` style).
+const NATIVE_SSH_KEEPALIVE_INTERVAL_SECS: u32 = 15;
 
 fn ssh2_error_code(error: &ssh2::Error) -> Option<i32> {
     match error.code() {
@@ -1422,6 +1427,12 @@ impl RealNativeShellSession {
                 format!("failed to start native interactive shell: {error}"),
             )
         })?;
+        // Interactive shell is polled from the UI tick: drop the connect-time
+        // blocking timeout and enable SSH keepalives so NAT/firewalls (and
+        // servers with ClientAlive) do not silently reset an otherwise healthy
+        // session mid-use.
+        session.set_timeout(0);
+        session.set_keepalive(true, NATIVE_SSH_KEEPALIVE_INTERVAL_SECS);
         session.set_blocking(false);
         attempt.record_action(
             RealTransportAction::OpenShell,
@@ -1444,14 +1455,48 @@ impl RealNativeShellSession {
         !self.closed && !self.channel.eof()
     }
 
+    /// Mark the native shell dead after a fatal transport/channel I/O error.
+    ///
+    /// Without this, `is_connected()` can stay true (no channel EOF yet) while
+    /// every UI tick keeps re-reading and warn-spamming `transport read`.
+    fn mark_closed_after_transport_error(&mut self) {
+        self.closed = true;
+    }
+
     fn drain_into(&mut self, queue: &mut VecDeque<Vec<u8>>) -> SshResult<()> {
-        drain_channel_stream(&mut self.channel, queue)?;
+        if self.closed {
+            return Ok(());
+        }
+        // keepalive_send is a no-op until the configured idle interval elapses;
+        // call it every poll so probes actually go out on the UI tick.
+        if let Err(error) = self.session.keepalive_send() {
+            if ssh2_error_code(&error) != Some(LIBSSH2_ERROR_EAGAIN) {
+                self.mark_closed_after_transport_error();
+                return Err(SshError::new(
+                    SshErrorKind::Io,
+                    format!("native SSH keepalive failed: {error}"),
+                ));
+            }
+        }
+        if let Err(error) = drain_channel_stream(&mut self.channel, queue) {
+            self.mark_closed_after_transport_error();
+            return Err(error);
+        }
         let mut stderr = self.channel.stderr();
-        drain_read_stream(&mut stderr, queue)?;
+        if let Err(error) = drain_read_stream(&mut stderr, queue) {
+            self.mark_closed_after_transport_error();
+            return Err(error);
+        }
         Ok(())
     }
 
     fn write_input(&mut self, bytes: &[u8]) -> SshResult<()> {
+        if self.closed {
+            return Err(SshError::new(
+                SshErrorKind::Io,
+                "cannot write to a closed native SSH shell".to_owned(),
+            ));
+        }
         // 会话始终是非阻塞的（`open_shell` 里 `set_blocking(false)`）。这里不要
         // 临时切到 `set_blocking(true)`：底层 socket 仍是非阻塞，libssh2 在"阻塞
         // 模式"下排空 incoming 时会直接失败（`Failure while draining incoming flow`），
@@ -1461,6 +1506,7 @@ impl RealNativeShellSession {
         while !remaining.is_empty() {
             match self.channel.write(remaining) {
                 Ok(0) => {
+                    self.mark_closed_after_transport_error();
                     return Err(SshError::new(
                         SshErrorKind::Io,
                         "native SSH shell accepted zero bytes while writing input".to_owned(),
@@ -1482,6 +1528,7 @@ impl RealNativeShellSession {
                     std::thread::sleep(Duration::from_millis(2));
                 }
                 Err(error) => {
+                    self.mark_closed_after_transport_error();
                     return Err(SshError::new(
                         SshErrorKind::Io,
                         format!("failed to write bytes into native SSH shell: {error}"),
@@ -1507,6 +1554,7 @@ impl RealNativeShellSession {
                     std::thread::sleep(Duration::from_millis(2));
                 }
                 Err(error) => {
+                    self.mark_closed_after_transport_error();
                     return Err(SshError::new(
                         SshErrorKind::Io,
                         format!("failed to flush bytes into native SSH shell: {error}"),
@@ -1901,6 +1949,7 @@ fn drain_read_stream(reader: &mut impl Read, queue: &mut VecDeque<Vec<u8>>) -> S
             Ok(0) => break,
             Ok(count) => queue.push_back(buffer[..count].to_vec()),
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
             Err(error) => {
                 return Err(SshError::new(
                     SshErrorKind::Io,
