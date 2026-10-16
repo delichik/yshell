@@ -46,6 +46,12 @@ impl ConfigStore {
         self.root.join(CONFIG_FILE_NAME)
     }
 
+    /// Directory that holds user color-theme TOML files.
+    #[must_use]
+    pub fn themes_dir(&self) -> PathBuf {
+        self.root.join(crate::themes::THEMES_DIR_NAME)
+    }
+
     #[must_use]
     pub fn known_hosts_file(&self) -> PathBuf {
         self.root.join(KNOWN_HOSTS_FILE_NAME)

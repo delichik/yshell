@@ -8,17 +8,17 @@
 //! parent-resolved values first, so adding a theme override at a folder never
 //! changes the effective scrollback/logging of its subtree.
 
-use yshell_config::{FolderProfile, LoggingProfile, SessionProfile, TerminalProfile};
+use yshell_config::{FolderProfile, LoggingProfile, SessionProfile, TerminalProfile, ThemeCatalog};
 
 use super::panels::{
     SETTINGS_SCROLLBACK_LINES_MAX, SETTINGS_SCROLLBACK_LINES_MIN,
     SETTINGS_SCROLLBACK_MAX_CELLS_MAX, SETTINGS_SCROLLBACK_MAX_CELLS_MIN,
 };
 use super::theme::{
-    color_scheme_id_at, parse_scrollback, resolve_palette, theme_field_rows, ThemeDraft,
-    ThemeFieldAction, ThemeFieldDraft, ThemeSources, TriStateFieldData, KEY_LOGGING_DIRECTORY,
-    KEY_LOGGING_ENABLED, KEY_LOGGING_FORMAT, KEY_SCROLLBACK_LINES, KEY_SCROLLBACK_MAX_CELLS,
-    LOG_FORMAT_RAW,
+    appearance_font_preset_labels, color_scheme_id_at, parse_scrollback, resolve_palette,
+    scheme_display_name, theme_field_rows, ThemeDraft, ThemeFieldAction, ThemeFieldDraft,
+    ThemeSources, TriStateFieldData, KEY_LOGGING_DIRECTORY, KEY_LOGGING_ENABLED,
+    KEY_LOGGING_FORMAT, KEY_SCROLLBACK_LINES, KEY_SCROLLBACK_MAX_CELLS, LOG_FORMAT_RAW,
 };
 use super::*;
 
@@ -53,7 +53,11 @@ impl Default for FolderEditorState {
             folder_id: String::new(),
             folder_name: String::new(),
             folder_path: String::new(),
-            theme: ThemeDraft::from_resolved(&parent_terminal, None),
+            theme: ThemeDraft::from_resolved(
+                &parent_terminal,
+                None,
+                &ThemeCatalog::default(),
+            ),
             scrollback_lines: ThemeFieldDraft {
                 text: parent_terminal.scrollback_lines.to_string(),
                 explicit: false,
@@ -118,7 +122,11 @@ impl AppRuntime {
             folder_id: folder_id.to_owned(),
             folder_name: folder_name.clone(),
             folder_path,
-            theme: ThemeDraft::from_resolved(&parent_terminal, own_terminal.as_ref()),
+            theme: ThemeDraft::from_resolved(
+                &parent_terminal,
+                own_terminal.as_ref(),
+                &self.theme_catalog,
+            ),
             scrollback_lines: ThemeFieldDraft {
                 text: current_terminal.scrollback_lines.to_string(),
                 explicit: terminal_explicit,
@@ -245,18 +253,25 @@ impl AppRuntime {
         self.projection()
     }
 
-    /// Picks a color scheme from the option list (index into `COLOR_SCHEMES`).
+    /// Picks a color scheme from the option list (built-in + user themes).
     pub fn select_folder_editor_scheme_index(&mut self, index: i32) -> AppProjection {
-        if let Some(id) = color_scheme_id_at(index) {
+        if let Some(id) = color_scheme_id_at(&self.theme_catalog, index) {
             let field = &mut self.folder_editor.theme.color_scheme;
-            field.text = id.to_owned();
+            field.text = id;
             field.explicit = true;
-            if let Some(scheme) = yshell_terminal::color_scheme(id) {
-                let theme = &mut self.folder_editor.theme;
-                theme.foreground.text = scheme.palette.foreground.to_hex();
-                theme.background.text = scheme.palette.background.to_hex();
-                theme.cursor.text = scheme.palette.cursor.to_hex();
-                theme.selection.text = scheme.palette.selection.to_hex();
+        }
+        self.folder_editor.status_text.clear();
+        self.projection()
+    }
+
+    /// Picks a font family preset for the folder appearance draft.
+    pub fn select_folder_editor_font_index(&mut self, index: i32) -> AppProjection {
+        let labels = appearance_font_preset_labels();
+        if let Ok(index) = usize::try_from(index) {
+            if let Some(label) = labels.get(index) {
+                let field = &mut self.folder_editor.theme.font_family;
+                field.text = label.clone();
+                field.explicit = true;
             }
         }
         self.folder_editor.status_text.clear();
@@ -281,7 +296,8 @@ impl AppRuntime {
     pub fn reset_all_folder_editor(&mut self) -> AppProjection {
         let parent_terminal = self.folder_editor.parent_terminal.clone();
         let parent_logging = self.folder_editor.parent_logging.clone();
-        self.folder_editor.theme = ThemeDraft::from_resolved(&parent_terminal, None);
+        self.folder_editor.theme =
+            ThemeDraft::from_resolved(&parent_terminal, None, &self.theme_catalog);
         self.folder_editor.scrollback_lines = ThemeFieldDraft {
             text: parent_terminal.scrollback_lines.to_string(),
             explicit: false,
@@ -319,11 +335,11 @@ impl AppRuntime {
         let parent_logging = self.folder_editor.parent_logging.clone();
 
         let mut terminal = parent_terminal.clone();
-        if let Err(error) = self
-            .folder_editor
-            .theme
-            .write_into(&mut terminal, &parent_terminal)
-        {
+        if let Err(error) = self.folder_editor.theme.write_into(
+            &mut terminal,
+            &parent_terminal,
+            &self.theme_catalog,
+        ) {
             self.folder_editor.status_text = format!("{}: {}", error.field, error.message);
             return Ok(self.projection());
         }
@@ -467,23 +483,23 @@ impl AppRuntime {
             .logging
     }
 
-    /// The eight Appearance rows of the Folder Editor.
+    /// Appearance rows of the Folder Editor (theme reference + fonts).
     pub(crate) fn folder_editor_appearance_fields(&self) -> Vec<TriStateFieldData> {
         let state = &self.folder_editor;
         let resolved = self.folder_editor_resolved_terminal();
-        let palette = resolve_palette(&resolved);
+        let palette = resolve_palette(&resolved, &self.theme_catalog);
         let scheme_label = resolved
             .color_scheme
             .as_deref()
-            .and_then(yshell_terminal::color_scheme)
-            .map_or("YShell Default", |scheme| scheme.name)
-            .to_owned();
+            .map(|id| scheme_display_name(id, &self.theme_catalog))
+            .unwrap_or_else(|| "YShell Default".to_owned());
         theme_field_rows(
             &state.theme,
             &state.sources,
             "local-folder",
             palette,
             scheme_label,
+            &self.theme_catalog,
         )
     }
 
@@ -491,10 +507,11 @@ impl AppRuntime {
     /// over the parent resolution).
     pub(crate) fn folder_editor_resolved_terminal(&self) -> TerminalProfile {
         let mut terminal = self.folder_editor.parent_terminal.clone();
-        let _ = self
-            .folder_editor
-            .theme
-            .write_into(&mut terminal, &self.folder_editor.parent_terminal);
+        let _ = self.folder_editor.theme.write_into(
+            &mut terminal,
+            &self.folder_editor.parent_terminal,
+            &self.theme_catalog,
+        );
         terminal
     }
 

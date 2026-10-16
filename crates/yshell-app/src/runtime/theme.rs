@@ -10,7 +10,10 @@
 
 use std::path::{Path, PathBuf};
 
-use yshell_config::{FolderProfile, LoggingProfile, TerminalProfile};
+use yshell_config::{
+    ColorTheme, ConfigDocument, ConfigWarning, FolderProfile, LoggingProfile, TerminalProfile,
+    ThemeCatalog,
+};
 use yshell_terminal::{
     color_scheme, FontFamilyFaces, FontSelection, PrimaryFont, TerminalCell, TerminalColor,
     TerminalFrame, TerminalPalette, TerminalRenderer, TerminalSnapshot, COLOR_SCHEMES,
@@ -183,10 +186,13 @@ pub(crate) struct TerminalAppearance {
 }
 
 /// Resolves a terminal profile into the renderer inputs.
-pub(crate) fn terminal_appearance(profile: &TerminalProfile) -> TerminalAppearance {
+pub(crate) fn terminal_appearance(
+    profile: &TerminalProfile,
+    catalog: &ThemeCatalog,
+) -> TerminalAppearance {
     let (font, rejected_fonts) = resolve_font(profile);
     TerminalAppearance {
-        palette: resolve_palette(profile),
+        palette: resolve_palette(profile, catalog),
         font,
         font_size: resolve_font_size(profile.font_size),
         rejected_fonts,
@@ -195,19 +201,80 @@ pub(crate) fn terminal_appearance(profile: &TerminalProfile) -> TerminalAppearan
 
 impl Default for TerminalAppearance {
     fn default() -> Self {
-        terminal_appearance(&TerminalProfile::default())
+        terminal_appearance(&TerminalProfile::default(), &ThemeCatalog::default())
     }
 }
 
-/// Palette resolved from a profile: named scheme (or the built-in default) plus
-/// the inline color overrides. Invalid hex values are ignored here; the config
-/// loader clears them (`ConfigWarning`), and the editors validate before saving.
-pub(crate) fn resolve_palette(profile: &TerminalProfile) -> TerminalPalette {
-    let mut palette = profile
-        .color_scheme
-        .as_deref()
-        .and_then(color_scheme)
-        .map_or(TerminalPalette::DEFAULT, |scheme| scheme.palette);
+/// Looks up a named scheme: user catalog first, then built-ins, then default.
+#[must_use]
+pub(crate) fn lookup_scheme_palette(id: Option<&str>, catalog: &ThemeCatalog) -> TerminalPalette {
+    let Some(id) = id.filter(|value| !value.is_empty()) else {
+        return TerminalPalette::DEFAULT;
+    };
+    if let Some(theme) = catalog.get_user(id) {
+        return palette_from_color_theme(theme);
+    }
+    color_scheme(id).map_or(TerminalPalette::DEFAULT, |scheme| scheme.palette)
+}
+
+/// Whether `id` resolves to a built-in or user theme.
+#[must_use]
+pub(crate) fn scheme_id_known(id: &str, catalog: &ThemeCatalog) -> bool {
+    catalog.contains_user(id) || color_scheme(id).is_some()
+}
+
+/// Converts a persisted [`ColorTheme`] into a renderer palette.
+#[must_use]
+pub(crate) fn palette_from_color_theme(theme: &ColorTheme) -> TerminalPalette {
+    let parse = |value: &str, fallback: TerminalColor| {
+        TerminalColor::from_hex(value).unwrap_or(fallback)
+    };
+    let default = TerminalPalette::DEFAULT;
+    let ansi = std::array::from_fn(|index| {
+        parse(&theme.ansi[index], default.ansi[index])
+    });
+    TerminalPalette {
+        foreground: parse(&theme.foreground, default.foreground),
+        background: parse(&theme.background, default.background),
+        cursor: parse(&theme.cursor, default.cursor),
+        selection: parse(&theme.selection, default.selection),
+        ansi,
+    }
+}
+
+/// Builds a user-theme document from a palette (clone / migration).
+#[must_use]
+pub(crate) fn color_theme_from_palette(
+    id: impl Into<String>,
+    name: impl Into<String>,
+    palette: TerminalPalette,
+) -> ColorTheme {
+    ColorTheme {
+        id: id.into(),
+        name: name.into(),
+        foreground: palette.foreground.to_hex(),
+        background: palette.background.to_hex(),
+        cursor: palette.cursor.to_hex(),
+        selection: palette.selection.to_hex(),
+        ansi: std::array::from_fn(|index| palette.ansi[index].to_hex()),
+    }
+}
+
+/// Built-in scheme as a [`ColorTheme`] document (for clone).
+#[must_use]
+pub(crate) fn builtin_as_color_theme(id: &str) -> Option<ColorTheme> {
+    let scheme = color_scheme(id)?;
+    Some(color_theme_from_palette(
+        scheme.id,
+        scheme.name,
+        scheme.palette,
+    ))
+}
+
+/// Palette resolved from a profile: named theme (user or built-in) plus any
+/// legacy inline color overrides (kept until migration clears them).
+pub(crate) fn resolve_palette(profile: &TerminalProfile, catalog: &ThemeCatalog) -> TerminalPalette {
+    let mut palette = lookup_scheme_palette(profile.color_scheme.as_deref(), catalog);
     if let Some(color) = profile
         .foreground
         .as_deref()
@@ -243,6 +310,109 @@ pub(crate) fn resolve_palette(profile: &TerminalProfile) -> TerminalPalette {
         }
     }
     palette
+}
+
+/// `true` when a profile still carries legacy inline color overrides.
+fn profile_has_color_overrides(profile: &TerminalProfile) -> bool {
+    profile.foreground.is_some()
+        || profile.background.is_some()
+        || profile.cursor.is_some()
+        || profile.selection.is_some()
+        || profile.ansi.is_some()
+}
+
+fn clear_color_overrides(profile: &mut TerminalProfile) {
+    profile.foreground = None;
+    profile.background = None;
+    profile.cursor = None;
+    profile.selection = None;
+    profile.ansi = None;
+}
+
+/// Promotes every legacy inline color override into a named user theme.
+pub(crate) fn migrate_inline_color_overrides(
+    document: &mut ConfigDocument,
+    catalog: &mut ThemeCatalog,
+) -> Vec<ConfigWarning> {
+    let mut warnings = Vec::new();
+    migrate_profile_overrides(
+        &mut document.terminal,
+        "terminal",
+        catalog,
+        &mut warnings,
+    );
+    for folder in &mut document.folders {
+        migrate_folder_overrides(folder, "folders", catalog, &mut warnings);
+    }
+    warnings
+}
+
+fn migrate_folder_overrides(
+    folder: &mut FolderProfile,
+    prefix: &str,
+    catalog: &mut ThemeCatalog,
+    warnings: &mut Vec<ConfigWarning>,
+) {
+    let location = format!("{prefix}.{}", folder.id);
+    if let Some(terminal) = folder.terminal.as_mut() {
+        migrate_profile_overrides(
+            terminal,
+            &format!("{location}.terminal"),
+            catalog,
+            warnings,
+        );
+    }
+    for session in &mut folder.sessions {
+        if let Some(terminal) = session.terminal.as_mut() {
+            migrate_profile_overrides(
+                terminal,
+                &format!("{location}.sessions.{}.terminal", session.id),
+                catalog,
+                warnings,
+            );
+        }
+    }
+    for child in &mut folder.folders {
+        migrate_folder_overrides(child, &location, catalog, warnings);
+    }
+}
+
+fn migrate_profile_overrides(
+    profile: &mut TerminalProfile,
+    location: &str,
+    catalog: &mut ThemeCatalog,
+    warnings: &mut Vec<ConfigWarning>,
+) {
+    if !profile_has_color_overrides(profile) {
+        return;
+    }
+    let palette = resolve_palette(profile, catalog);
+    let base_name = profile
+        .color_scheme
+        .as_deref()
+        .and_then(|id| {
+            catalog
+                .get_user(id)
+                .map(|theme| theme.name.clone())
+                .or_else(|| color_scheme(id).map(|scheme| scheme.name.to_owned()))
+        })
+        .unwrap_or_else(|| "Custom".to_owned());
+    let theme_name = format!("Custom from {base_name}");
+    let source = color_theme_from_palette("pending", &theme_name, palette);
+    match catalog.clone_theme(&source, &theme_name) {
+        Ok(theme) => {
+            warnings.push(ConfigWarning::MigratedColorOverrides {
+                location: location.to_owned(),
+                theme_id: theme.id.clone(),
+                theme_name: theme.name.clone(),
+            });
+            profile.color_scheme = Some(theme.id);
+            clear_color_overrides(profile);
+        }
+        Err(_) => {
+            // Keep overrides if the catalog cannot accept the clone; next load retries.
+        }
+    }
 }
 
 /// Font selection plus the paths that could not be loaded.
@@ -321,12 +491,14 @@ pub(crate) struct ThemeSchemeOption {
     pub(crate) id: String,
     pub(crate) name: String,
     pub(crate) swatches: Vec<[u8; 3]>,
+    /// Built-in schemes are immutable; user themes can be edited/deleted.
+    pub(crate) builtin: bool,
 }
 
-/// The built-in schemes as projection data. Scheme chips carry the four role
+/// Built-in + user schemes as projection data. Scheme chips carry the four role
 /// colors (foreground/background/cursor/selection) so the name stays readable.
-pub(crate) fn scheme_options() -> Vec<ThemeSchemeOption> {
-    COLOR_SCHEMES
+pub(crate) fn scheme_options(catalog: &ThemeCatalog) -> Vec<ThemeSchemeOption> {
+    let mut options: Vec<ThemeSchemeOption> = COLOR_SCHEMES
         .iter()
         .map(|scheme| {
             let mut swatches = palette_swatches(scheme.palette);
@@ -335,9 +507,57 @@ pub(crate) fn scheme_options() -> Vec<ThemeSchemeOption> {
                 id: scheme.id.to_owned(),
                 name: scheme.name.to_owned(),
                 swatches,
+                builtin: true,
             }
         })
+        .collect();
+    for theme in catalog.user_themes() {
+        let palette = palette_from_color_theme(theme);
+        let mut swatches = palette_swatches(palette);
+        swatches.truncate(4);
+        options.push(ThemeSchemeOption {
+            id: theme.id.clone(),
+            name: theme.name.clone(),
+            swatches,
+            builtin: false,
+        });
+    }
+    options
+}
+
+/// Scheme display names for the folder/session choice control.
+pub(crate) fn color_scheme_option_names(catalog: &ThemeCatalog) -> Vec<String> {
+    scheme_options(catalog)
+        .into_iter()
+        .map(|option| option.name)
         .collect()
+}
+
+/// Index of a scheme id inside [`scheme_options`].
+pub(crate) fn color_scheme_index(catalog: &ThemeCatalog, id: &str) -> i32 {
+    scheme_options(catalog)
+        .iter()
+        .position(|scheme| scheme.id == id)
+        .map_or(0, |index| index as i32)
+}
+
+/// Scheme id at `index` inside [`scheme_options`].
+pub(crate) fn color_scheme_id_at(catalog: &ThemeCatalog, index: i32) -> Option<String> {
+    let options = scheme_options(catalog);
+    usize::try_from(index)
+        .ok()
+        .and_then(|index| options.get(index))
+        .map(|scheme| scheme.id.clone())
+}
+
+/// Display name for a scheme id (user or built-in).
+pub(crate) fn scheme_display_name(id: &str, catalog: &ThemeCatalog) -> String {
+    if let Some(theme) = catalog.get_user(id) {
+        return theme.name.clone();
+    }
+    color_scheme(id)
+        .map(|scheme| scheme.name.to_owned())
+        .unwrap_or_else(|| id.to_owned())
 }
 
 // ---------------------------------------------------------------------------
@@ -392,14 +612,10 @@ impl ThemeSource {
     }
 }
 
-/// The eight terminal theme fields shared by every level.
+/// Terminal appearance fields shared by every level (theme reference + fonts).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ThemeDraft {
     pub(crate) color_scheme: ThemeFieldDraft,
-    pub(crate) foreground: ThemeFieldDraft,
-    pub(crate) background: ThemeFieldDraft,
-    pub(crate) cursor: ThemeFieldDraft,
-    pub(crate) selection: ThemeFieldDraft,
     pub(crate) font_family: ThemeFieldDraft,
     pub(crate) font_size: ThemeFieldDraft,
     pub(crate) fallback_fonts: ThemeFieldDraft,
@@ -409,7 +625,11 @@ impl ThemeDraft {
     /// Merges a level's own profile over the resolved parent profile: explicit
     /// fields show the stored value, inherited fields show the parent value
     /// (display-only until the user flips the field to explicit).
-    pub(crate) fn from_resolved(resolved: &TerminalProfile, own: Option<&TerminalProfile>) -> Self {
+    pub(crate) fn from_resolved(
+        resolved: &TerminalProfile,
+        own: Option<&TerminalProfile>,
+        catalog: &ThemeCatalog,
+    ) -> Self {
         let merge = |own: Option<String>, resolved: String| -> ThemeFieldDraft {
             match own {
                 Some(value) => ThemeFieldDraft::value(value, true),
@@ -417,20 +637,15 @@ impl ThemeDraft {
             }
         };
         let own = own.cloned().unwrap_or_default();
-        let palette = resolve_palette(resolved);
         Self {
             color_scheme: merge(
                 own.color_scheme,
                 resolved
                     .color_scheme
                     .clone()
-                    .filter(|id| color_scheme(id).is_some())
+                    .filter(|id| scheme_id_known(id, catalog))
                     .unwrap_or_else(|| DEFAULT_COLOR_SCHEME_ID.to_owned()),
             ),
-            foreground: merge(own.foreground, palette.foreground.to_hex()),
-            background: merge(own.background, palette.background.to_hex()),
-            cursor: merge(own.cursor, palette.cursor.to_hex()),
-            selection: merge(own.selection, palette.selection.to_hex()),
             font_family: merge(
                 own.font_family,
                 resolved
@@ -456,8 +671,11 @@ impl ThemeDraft {
 
     /// Refreshes the display text of every inherited field from a new parent
     /// resolution (the editor's target folder changed).
-    pub(crate) fn refresh_inherited(&mut self, resolved: &TerminalProfile) {
-        let palette = resolve_palette(resolved);
+    pub(crate) fn refresh_inherited(
+        &mut self,
+        resolved: &TerminalProfile,
+        catalog: &ThemeCatalog,
+    ) {
         let update = |field: &mut ThemeFieldDraft, text: String| {
             if !field.explicit {
                 field.text = text;
@@ -468,13 +686,9 @@ impl ThemeDraft {
             resolved
                 .color_scheme
                 .clone()
-                .filter(|id| color_scheme(id).is_some())
+                .filter(|id| scheme_id_known(id, catalog))
                 .unwrap_or_else(|| DEFAULT_COLOR_SCHEME_ID.to_owned()),
         );
-        update(&mut self.foreground, palette.foreground.to_hex());
-        update(&mut self.background, palette.background.to_hex());
-        update(&mut self.cursor, palette.cursor.to_hex());
-        update(&mut self.selection, palette.selection.to_hex());
         update(
             &mut self.font_family,
             resolved
@@ -501,10 +715,6 @@ impl ThemeDraft {
     pub(crate) fn has_explicit_field(&self) -> bool {
         [
             &self.color_scheme,
-            &self.foreground,
-            &self.background,
-            &self.cursor,
-            &self.selection,
             &self.font_family,
             &self.font_size,
             &self.fallback_fonts,
@@ -517,10 +727,6 @@ impl ThemeDraft {
     pub(crate) fn field_mut(&mut self, key: &str) -> Option<&mut ThemeFieldDraft> {
         match key {
             KEY_COLOR_SCHEME => Some(&mut self.color_scheme),
-            KEY_FOREGROUND => Some(&mut self.foreground),
-            KEY_BACKGROUND => Some(&mut self.background),
-            KEY_CURSOR => Some(&mut self.cursor),
-            KEY_SELECTION => Some(&mut self.selection),
             KEY_FONT_FAMILY => Some(&mut self.font_family),
             KEY_FONT_SIZE => Some(&mut self.font_size),
             KEY_FALLBACK_FONTS => Some(&mut self.fallback_fonts),
@@ -536,10 +742,11 @@ impl ThemeDraft {
         &self,
         profile: &mut TerminalProfile,
         inherited: &TerminalProfile,
+        catalog: &ThemeCatalog,
     ) -> Result<(), ThemeFieldError> {
         profile.color_scheme = if self.color_scheme.explicit {
             let id = self.color_scheme.text.trim();
-            if color_scheme(id).is_none() {
+            if !scheme_id_known(id, catalog) {
                 return Err(ThemeFieldError::new(
                     "appearance.color_scheme",
                     "unknown color scheme id",
@@ -549,10 +756,8 @@ impl ThemeDraft {
         } else {
             inherited.color_scheme.clone()
         };
-        profile.foreground = self.write_color(&self.foreground, inherited.foreground.clone())?;
-        profile.background = self.write_color(&self.background, inherited.background.clone())?;
-        profile.cursor = self.write_color(&self.cursor, inherited.cursor.clone())?;
-        profile.selection = self.write_color(&self.selection, inherited.selection.clone())?;
+        // Usage sites only reference a theme; never persist inline color overrides.
+        clear_color_overrides(profile);
         profile.font_family = if self.font_family.explicit {
             let text = self.font_family.text.trim().to_owned();
             let default_label = default_font_family_label();
@@ -583,27 +788,6 @@ impl ThemeDraft {
             inherited.fallback_fonts.clone()
         };
         Ok(())
-    }
-
-    fn write_color(
-        &self,
-        field: &ThemeFieldDraft,
-        inherited: Option<String>,
-    ) -> Result<Option<String>, ThemeFieldError> {
-        if !field.explicit {
-            return Ok(inherited);
-        }
-        let text = field.text.trim();
-        if text.is_empty() {
-            return Ok(inherited);
-        }
-        if TerminalColor::from_hex(text).is_none() {
-            return Err(ThemeFieldError::new(
-                "appearance.color",
-                format!("`{text}` is not a #RRGGBB color"),
-            ));
-        }
-        Ok(Some(text.to_owned()))
     }
 
     pub(crate) fn parse_font_size(&self) -> Result<u16, ThemeFieldError> {
@@ -702,10 +886,6 @@ impl TriStateFieldData {
 
 /// Field key → the tri-state field data model used by the editors.
 pub(crate) const KEY_COLOR_SCHEME: &str = "appearance.color_scheme";
-pub(crate) const KEY_FOREGROUND: &str = "appearance.foreground";
-pub(crate) const KEY_BACKGROUND: &str = "appearance.background";
-pub(crate) const KEY_CURSOR: &str = "appearance.cursor";
-pub(crate) const KEY_SELECTION: &str = "appearance.selection";
 pub(crate) const KEY_FONT_FAMILY: &str = "appearance.font_family";
 pub(crate) const KEY_FONT_SIZE: &str = "appearance.font_size";
 pub(crate) const KEY_FALLBACK_FONTS: &str = "appearance.fallback_fonts";
@@ -714,29 +894,6 @@ pub(crate) const KEY_SCROLLBACK_MAX_CELLS: &str = "terminal.scrollback_max_cells
 pub(crate) const KEY_LOGGING_ENABLED: &str = "logging.enabled";
 pub(crate) const KEY_LOGGING_FORMAT: &str = "logging.format";
 pub(crate) const KEY_LOGGING_DIRECTORY: &str = "logging.directory";
-
-/// Scheme labels offered by the choice editor (ids resolved by index).
-pub(crate) fn color_scheme_options() -> Vec<String> {
-    COLOR_SCHEMES
-        .iter()
-        .map(|scheme| scheme.name.to_owned())
-        .collect()
-}
-
-/// Index of a scheme id inside [`color_scheme_options`].
-pub(crate) fn color_scheme_index(id: &str) -> i32 {
-    COLOR_SCHEMES
-        .iter()
-        .position(|scheme| scheme.id == id)
-        .map_or(0, |index| index as i32)
-}
-
-pub(crate) fn color_scheme_id_at(index: i32) -> Option<&'static str> {
-    usize::try_from(index)
-        .ok()
-        .and_then(|index| COLOR_SCHEMES.get(index))
-        .map(|scheme| scheme.id)
-}
 
 /// Nearest level that defines one terminal theme field, nearest-first chain.
 fn theme_field_source(
@@ -761,10 +918,6 @@ fn theme_field_source(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ThemeSources {
     pub(crate) color_scheme: ThemeSource,
-    pub(crate) foreground: ThemeSource,
-    pub(crate) background: ThemeSource,
-    pub(crate) cursor: ThemeSource,
-    pub(crate) selection: ThemeSource,
     pub(crate) font_family: ThemeSource,
     pub(crate) font_size: ThemeSource,
     pub(crate) fallback_fonts: ThemeSource,
@@ -815,10 +968,6 @@ impl ThemeSources {
         };
         Self {
             color_scheme: terminal(&|profile| profile.color_scheme.is_some()),
-            foreground: terminal(&|profile| profile.foreground.is_some()),
-            background: terminal(&|profile| profile.background.is_some()),
-            cursor: terminal(&|profile| profile.cursor.is_some()),
-            selection: terminal(&|profile| profile.selection.is_some()),
             font_family: terminal(&|profile| profile.font_family.is_some()),
             font_size: terminal(&|profile| profile.font_size.is_some()),
             fallback_fonts: terminal(&|profile| profile.fallback_fonts.is_some()),
@@ -855,10 +1004,6 @@ impl ThemeSources {
     pub(crate) fn theme_field(&self, key: &str) -> &ThemeSource {
         match key {
             KEY_COLOR_SCHEME => &self.color_scheme,
-            KEY_FOREGROUND => &self.foreground,
-            KEY_BACKGROUND => &self.background,
-            KEY_CURSOR => &self.cursor,
-            KEY_SELECTION => &self.selection,
             KEY_FONT_FAMILY => &self.font_family,
             KEY_FONT_SIZE => &self.font_size,
             KEY_FALLBACK_FONTS => &self.fallback_fonts,
@@ -872,13 +1017,14 @@ impl ThemeSources {
     }
 }
 
-/// Builds the eight appearance rows for a folder/session editor.
+/// Builds the appearance rows for a folder/session editor (theme ref + fonts).
 pub(crate) fn theme_field_rows(
     draft: &ThemeDraft,
     sources: &ThemeSources,
     local_kind: &'static str,
     palette: TerminalPalette,
     scheme_label: String,
+    catalog: &ThemeCatalog,
 ) -> Vec<TriStateFieldData> {
     let mut scheme_field = draft.color_scheme.clone();
     if !scheme_field.explicit {
@@ -897,52 +1043,38 @@ pub(crate) fn theme_field_rows(
         )
     };
     let swatches = palette_role_swatches(palette);
+    let scheme_id = if scheme_field.explicit {
+        scheme_field.text.clone()
+    } else {
+        draft.color_scheme.text.clone()
+    };
+    let font_labels = appearance_font_preset_labels();
+    let font_index = font_labels
+        .iter()
+        .position(|label| label.eq_ignore_ascii_case(draft.font_family.text.trim()))
+        .and_then(|index| i32::try_from(index).ok())
+        .unwrap_or(0);
     vec![
         row(
             KEY_COLOR_SCHEME,
             "Color scheme",
-            "Built-in palette",
+            "Named theme (built-in or user)",
             "choice",
             &scheme_field,
         )
         .with_choice(
-            color_scheme_options(),
-            color_scheme_index(&scheme_field.text),
+            color_scheme_option_names(catalog),
+            color_scheme_index(catalog, &scheme_id),
         )
-        .with_swatches(swatches.clone()),
-        row(
-            KEY_FOREGROUND,
-            "Foreground",
-            "Hex color",
-            "hex",
-            &draft.foreground,
-        )
-        .with_swatches(vec![rgb_of(palette.foreground)]),
-        row(
-            KEY_BACKGROUND,
-            "Background",
-            "Hex color",
-            "hex",
-            &draft.background,
-        )
-        .with_swatches(vec![rgb_of(palette.background)]),
-        row(KEY_CURSOR, "Cursor", "Hex color", "hex", &draft.cursor)
-            .with_swatches(vec![rgb_of(palette.cursor)]),
-        row(
-            KEY_SELECTION,
-            "Selection",
-            "Hex color",
-            "hex",
-            &draft.selection,
-        )
-        .with_swatches(vec![rgb_of(palette.selection)]),
+        .with_swatches(swatches),
         row(
             KEY_FONT_FAMILY,
             "Font family",
             "System mono preset, bundled DejaVu, or an imported file",
-            "text",
+            "choice",
             &draft.font_family,
-        ),
+        )
+        .with_choice(font_labels, font_index),
         row(
             KEY_FONT_SIZE,
             "Font size",
@@ -988,10 +1120,6 @@ pub(crate) fn parse_scrollback(
     Ok(value)
 }
 
-fn rgb_of(color: TerminalColor) -> [u8; 3] {
-    [color.red, color.green, color.blue]
-}
-
 // ---------------------------------------------------------------------------
 // Session appearance capture (D17)
 // ---------------------------------------------------------------------------
@@ -1000,7 +1128,7 @@ impl AppRuntime {
     /// Resolves the appearance a *new* terminal for `runtime` would use.
     pub(crate) fn appearance_for_runtime(&self, runtime: &SessionRuntime) -> TerminalAppearance {
         let profile = self.resolved_terminal_profile_for_runtime(runtime);
-        terminal_appearance(&profile)
+        terminal_appearance(&profile, &self.theme_catalog)
     }
 
     /// Captures the resolved appearance into the session (called once, when the
@@ -1027,10 +1155,6 @@ impl AppRuntime {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SettingsAppearanceDraft {
     pub(crate) color_scheme: String,
-    pub(crate) foreground: String,
-    pub(crate) background: String,
-    pub(crate) cursor: String,
-    pub(crate) selection: String,
     pub(crate) font_family: String,
     pub(crate) font_size_text: String,
     pub(crate) fallback_fonts_text: String,
@@ -1038,7 +1162,7 @@ pub(crate) struct SettingsAppearanceDraft {
 
 impl Default for SettingsAppearanceDraft {
     fn default() -> Self {
-        Self::from_terminal_profile(&TerminalProfile::default())
+        Self::from_terminal_profile(&TerminalProfile::default(), &ThemeCatalog::default())
     }
 }
 
@@ -1069,19 +1193,17 @@ impl SettingsAppearanceDraft {
             .unwrap_or(0)
     }
 
-    pub(crate) fn from_terminal_profile(profile: &TerminalProfile) -> Self {
-        let palette = resolve_palette(profile);
+    pub(crate) fn from_terminal_profile(
+        profile: &TerminalProfile,
+        catalog: &ThemeCatalog,
+    ) -> Self {
         let (font, _) = resolve_font(profile);
         Self {
             color_scheme: profile
                 .color_scheme
                 .clone()
-                .filter(|id| color_scheme(id).is_some())
+                .filter(|id| scheme_id_known(id, catalog))
                 .unwrap_or_else(|| DEFAULT_COLOR_SCHEME_ID.to_owned()),
-            foreground: palette.foreground.to_hex(),
-            background: palette.background.to_hex(),
-            cursor: palette.cursor.to_hex(),
-            selection: palette.selection.to_hex(),
             font_family: match font.primary {
                 PrimaryFont::BundledDejaVu => BUNDLED_FONT_FAMILY.to_owned(),
                 PrimaryFont::Family(faces) => faces.label,
@@ -1096,27 +1218,9 @@ impl SettingsAppearanceDraft {
         }
     }
 
-    /// Base scheme palette (before the hex overrides).
-    fn scheme_palette(&self) -> TerminalPalette {
-        color_scheme(&self.color_scheme).map_or(TerminalPalette::DEFAULT, |scheme| scheme.palette)
-    }
-
-    /// Effective palette: scheme base plus the hex fields.
-    pub(crate) fn palette(&self) -> TerminalPalette {
-        let mut palette = self.scheme_palette();
-        if let Some(color) = TerminalColor::from_hex(&self.foreground) {
-            palette.foreground = color;
-        }
-        if let Some(color) = TerminalColor::from_hex(&self.background) {
-            palette.background = color;
-        }
-        if let Some(color) = TerminalColor::from_hex(&self.cursor) {
-            palette.cursor = color;
-        }
-        if let Some(color) = TerminalColor::from_hex(&self.selection) {
-            palette.selection = color;
-        }
-        palette
+    /// Effective palette for the selected theme id.
+    pub(crate) fn palette(&self, catalog: &ThemeCatalog) -> TerminalPalette {
+        lookup_scheme_palette(Some(&self.color_scheme), catalog)
     }
 
     pub(crate) fn font_selection(&self) -> FontSelection {
@@ -1142,23 +1246,16 @@ impl SettingsAppearanceDraft {
 
     /// Validates the draft and returns the theme fields to write into the
     /// global `TerminalProfile`.
-    pub(crate) fn theme_fields(&self) -> Result<SettingsAppearanceTheme, ThemeFieldError> {
-        if color_scheme(&self.color_scheme).is_none() {
+    pub(crate) fn theme_fields(
+        &self,
+        catalog: &ThemeCatalog,
+    ) -> Result<SettingsAppearanceTheme, ThemeFieldError> {
+        if !scheme_id_known(&self.color_scheme, catalog) {
             return Err(ThemeFieldError::new(
                 "appearance.color_scheme",
                 "unknown color scheme id",
             ));
         }
-        let base = self.scheme_palette();
-        let parsed = |field: &'static str, value: &str| -> Result<TerminalColor, ThemeFieldError> {
-            TerminalColor::from_hex(value).ok_or_else(|| {
-                ThemeFieldError::new(field, format!("`{value}` is not a #RRGGBB color"))
-            })
-        };
-        let foreground = parsed("appearance.foreground", &self.foreground)?;
-        let background = parsed("appearance.background", &self.background)?;
-        let cursor = parsed("appearance.cursor", &self.cursor)?;
-        let selection = parsed("appearance.selection", &self.selection)?;
         let font_size = self.font_size().ok_or_else(|| {
             ThemeFieldError::new(
                 "appearance.font_size",
@@ -1202,10 +1299,6 @@ impl SettingsAppearanceDraft {
         }
         Ok(SettingsAppearanceTheme {
             color_scheme: self.color_scheme.clone(),
-            foreground: (foreground != base.foreground).then(|| foreground.to_hex()),
-            background: (background != base.background).then(|| background.to_hex()),
-            cursor: (cursor != base.cursor).then(|| cursor.to_hex()),
-            selection: (selection != base.selection).then(|| selection.to_hex()),
             font_family,
             font_size: Some(font_size),
             fallback_fonts: (!fallback_fonts.is_empty()).then_some(fallback_fonts),
@@ -1217,13 +1310,76 @@ impl SettingsAppearanceDraft {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SettingsAppearanceTheme {
     pub(crate) color_scheme: String,
-    pub(crate) foreground: Option<String>,
-    pub(crate) background: Option<String>,
-    pub(crate) cursor: Option<String>,
-    pub(crate) selection: Option<String>,
     pub(crate) font_family: Option<String>,
     pub(crate) font_size: Option<u16>,
     pub(crate) fallback_fonts: Option<Vec<String>>,
+}
+
+/// Draft state while editing a user color theme (or previewing a built-in).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct ThemeEditorDraft {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) builtin: bool,
+    pub(crate) foreground: String,
+    pub(crate) background: String,
+    pub(crate) cursor: String,
+    pub(crate) selection: String,
+    pub(crate) ansi: [String; 16],
+    pub(crate) dirty: bool,
+}
+
+impl ThemeEditorDraft {
+    pub(crate) fn from_color_theme(theme: &ColorTheme, builtin: bool) -> Self {
+        Self {
+            id: theme.id.clone(),
+            name: theme.name.clone(),
+            builtin,
+            foreground: theme.foreground.clone(),
+            background: theme.background.clone(),
+            cursor: theme.cursor.clone(),
+            selection: theme.selection.clone(),
+            ansi: theme.ansi.clone(),
+            dirty: false,
+        }
+    }
+
+    pub(crate) fn to_color_theme(&self) -> ColorTheme {
+        ColorTheme {
+            id: self.id.clone(),
+            name: self.name.clone(),
+            foreground: self.foreground.clone(),
+            background: self.background.clone(),
+            cursor: self.cursor.clone(),
+            selection: self.selection.clone(),
+            ansi: self.ansi.clone(),
+        }
+    }
+
+    pub(crate) fn palette(&self) -> TerminalPalette {
+        palette_from_color_theme(&self.to_color_theme())
+    }
+
+    pub(crate) fn set_role_color(&mut self, role: &str, hex: &str) {
+        let slot = match role {
+            "foreground" => Some(&mut self.foreground),
+            "background" => Some(&mut self.background),
+            "cursor" => Some(&mut self.cursor),
+            "selection" => Some(&mut self.selection),
+            _ => None,
+        };
+        if let Some(slot) = slot {
+            *slot = hex.to_owned();
+            self.dirty = true;
+        }
+    }
+
+    pub(crate) fn set_ansi_color(&mut self, index: usize, hex: &str) {
+        if let Some(slot) = self.ansi.get_mut(index) {
+            *slot = hex.to_owned();
+            self.dirty = true;
+        }
+    }
 }
 
 /// Status line of the Settings Appearance section.
@@ -1251,8 +1407,10 @@ impl SettingsAppearanceStatus {
 impl AppRuntime {
     /// Loads the Appearance draft when Settings opens (inline form + preview).
     pub fn open_settings_appearance(&mut self) -> AppProjection {
-        self.settings_appearance =
-            SettingsAppearanceDraft::from_terminal_profile(&self.config_document.terminal);
+        self.settings_appearance = SettingsAppearanceDraft::from_terminal_profile(
+            &self.config_document.terminal,
+            &self.theme_catalog,
+        );
         self.settings_appearance_status = SettingsAppearanceStatus::Hint;
         self.settings_appearance_visible = true;
         self.projection()
@@ -1260,33 +1418,136 @@ impl AppRuntime {
 
     pub fn close_settings_appearance(&mut self) -> AppProjection {
         self.settings_appearance_visible = false;
+        self.theme_editor = None;
         self.projection()
     }
 
-    /// Picks a named scheme; the hex fields follow the scheme until the user
-    /// overrides them again.
+    /// Picks a named theme by id (built-in or user).
     pub fn select_settings_appearance_scheme(&mut self, id: &str) -> AppProjection {
-        if let Some(scheme) = color_scheme(id) {
-            self.settings_appearance.color_scheme = scheme.id.to_owned();
-            self.settings_appearance.foreground = scheme.palette.foreground.to_hex();
-            self.settings_appearance.background = scheme.palette.background.to_hex();
-            self.settings_appearance.cursor = scheme.palette.cursor.to_hex();
-            self.settings_appearance.selection = scheme.palette.selection.to_hex();
+        if scheme_id_known(id, &self.theme_catalog) {
+            self.settings_appearance.color_scheme = id.to_owned();
             self.settings_appearance_status = SettingsAppearanceStatus::Hint;
         }
         self.projection()
     }
 
-    pub fn update_settings_appearance_color(&mut self, field: &str, value: &str) -> AppProjection {
-        match field {
-            "foreground" => self.settings_appearance.foreground = value.to_owned(),
-            "background" => self.settings_appearance.background = value.to_owned(),
-            "cursor" => self.settings_appearance.cursor = value.to_owned(),
-            "selection" => self.settings_appearance.selection = value.to_owned(),
-            _ => return self.projection(),
-        }
+    /// Clones the selected (or given) theme into an editable user theme.
+    pub fn clone_color_theme(&mut self, source_id: &str) -> AppResult<AppProjection> {
+        let source = if let Some(user) = self.theme_catalog.get_user(source_id).cloned() {
+            user
+        } else if let Some(builtin) = builtin_as_color_theme(source_id) {
+            builtin
+        } else {
+            return Err(AppError::new(format!("unknown theme '{source_id}'")));
+        };
+        let name = format!("{} Copy", source.name);
+        let cloned = self
+            .theme_catalog
+            .clone_theme(&source, &name)
+            .map_err(AppError::from_error)?;
+        self.settings_appearance.color_scheme = cloned.id.clone();
+        self.theme_editor = Some(ThemeEditorDraft::from_color_theme(&cloned, false));
         self.settings_appearance_status = SettingsAppearanceStatus::Hint;
+        Ok(self.projection())
+    }
+
+    /// Opens the theme editor for a user theme (built-ins open read-only).
+    pub fn open_theme_editor(&mut self, id: &str) -> AppProjection {
+        if let Some(user) = self.theme_catalog.get_user(id).cloned() {
+            self.theme_editor = Some(ThemeEditorDraft::from_color_theme(&user, false));
+        } else if let Some(builtin) = builtin_as_color_theme(id) {
+            self.theme_editor = Some(ThemeEditorDraft::from_color_theme(&builtin, true));
+        }
         self.projection()
+    }
+
+    pub fn close_theme_editor(&mut self) -> AppProjection {
+        self.theme_editor = None;
+        self.projection()
+    }
+
+    pub fn update_theme_editor_name(&mut self, name: &str) -> AppProjection {
+        if let Some(editor) = self.theme_editor.as_mut() {
+            if !editor.builtin {
+                editor.name = name.to_owned();
+                editor.dirty = true;
+            }
+        }
+        self.projection()
+    }
+
+    pub fn update_theme_editor_role_color(&mut self, role: &str, hex: &str) -> AppProjection {
+        if let Some(editor) = self.theme_editor.as_mut() {
+            if !editor.builtin {
+                editor.set_role_color(role, hex);
+            }
+        }
+        self.projection()
+    }
+
+    pub fn update_theme_editor_ansi_color(&mut self, index: i32, hex: &str) -> AppProjection {
+        if let Some(editor) = self.theme_editor.as_mut() {
+            if !editor.builtin {
+                if let Ok(index) = usize::try_from(index) {
+                    editor.set_ansi_color(index, hex);
+                }
+            }
+        }
+        self.projection()
+    }
+
+    /// Saves the theme editor draft (user themes only).
+    pub fn save_theme_editor(&mut self) -> AppResult<AppProjection> {
+        let Some(editor) = self.theme_editor.clone() else {
+            return Ok(self.projection());
+        };
+        if editor.builtin {
+            return Err(AppError::new("built-in themes cannot be modified; clone first"));
+        }
+        let theme = editor.to_color_theme();
+        if !theme.colors_valid() {
+            return Err(AppError::new("theme has invalid color values"));
+        }
+        self.theme_catalog
+            .save_user(theme.clone())
+            .map_err(AppError::from_error)?;
+        self.theme_editor = Some(ThemeEditorDraft::from_color_theme(&theme, false));
+        self.settings_appearance_status = SettingsAppearanceStatus::Hint;
+        Ok(self.projection())
+    }
+
+    /// Renames a user theme's display name.
+    pub fn rename_color_theme(&mut self, id: &str, new_name: &str) -> AppResult<AppProjection> {
+        self.theme_catalog
+            .rename_user(id, new_name)
+            .map_err(AppError::from_error)?;
+        if self.settings_appearance.color_scheme == id {
+            // Name-only change; id stays the same.
+        }
+        if let Some(editor) = self.theme_editor.as_mut() {
+            if editor.id == id {
+                editor.name = new_name.trim().to_owned();
+            }
+        }
+        Ok(self.projection())
+    }
+
+    /// Deletes a user theme and retargets any references to the default.
+    pub fn delete_color_theme(&mut self, id: &str) -> AppResult<AppProjection> {
+        self.theme_catalog
+            .delete_user(id)
+            .map_err(AppError::from_error)?;
+        retarget_theme_references(&mut self.config_document, id, DEFAULT_COLOR_SCHEME_ID);
+        if self.settings_appearance.color_scheme == id {
+            self.settings_appearance.color_scheme = DEFAULT_COLOR_SCHEME_ID.to_owned();
+        }
+        if self.theme_editor.as_ref().is_some_and(|editor| editor.id == id) {
+            self.theme_editor = None;
+        }
+        self.config_store
+            .save(&self.config_document)
+            .map_err(AppError::from_error)?;
+        Ok(self.projection())
     }
 
     pub fn update_settings_appearance_font_family(&mut self, value: &str) -> AppProjection {
@@ -1309,6 +1570,20 @@ impl AppRuntime {
 
     pub fn update_settings_appearance_font_size(&mut self, value: &str) -> AppProjection {
         self.settings_appearance.font_size_text = value.to_owned();
+        self.settings_appearance_status = SettingsAppearanceStatus::Hint;
+        self.projection()
+    }
+
+    /// Steps the Settings font size by `delta` (clamped to the accepted range).
+    pub fn bump_settings_appearance_font_size(&mut self, delta: i32) -> AppProjection {
+        let current = self
+            .settings_appearance
+            .font_size()
+            .unwrap_or(DEFAULT_FONT_SIZE as u16);
+        let next = i32::from(current)
+            .saturating_add(delta)
+            .clamp(i32::from(THEME_FONT_SIZE_MIN), i32::from(THEME_FONT_SIZE_MAX));
+        self.settings_appearance.font_size_text = next.to_string();
         self.settings_appearance_status = SettingsAppearanceStatus::Hint;
         self.projection()
     }
@@ -1349,7 +1624,10 @@ impl AppRuntime {
 
     /// Validates and persists the global terminal appearance defaults.
     pub fn save_settings_appearance(&mut self) -> AppResult<AppProjection> {
-        let theme = match self.settings_appearance.theme_fields() {
+        let theme = match self
+            .settings_appearance
+            .theme_fields(&self.theme_catalog)
+        {
             Ok(theme) => theme,
             Err(error) => {
                 self.settings_appearance_status = SettingsAppearanceStatus::Rejected(error);
@@ -1358,10 +1636,7 @@ impl AppRuntime {
         };
         let terminal = &mut self.config_document.terminal;
         terminal.color_scheme = Some(theme.color_scheme);
-        terminal.foreground = theme.foreground;
-        terminal.background = theme.background;
-        terminal.cursor = theme.cursor;
-        terminal.selection = theme.selection;
+        clear_color_overrides(terminal);
         terminal.font_family = theme.font_family;
         terminal.font_size = theme.font_size;
         terminal.fallback_fonts = theme.fallback_fonts;
@@ -1369,8 +1644,10 @@ impl AppRuntime {
             .save(&self.config_document)
             .map_err(AppError::from_error)?;
         self.settings_appearance_status = SettingsAppearanceStatus::Saved;
-        self.settings_appearance =
-            SettingsAppearanceDraft::from_terminal_profile(&self.config_document.terminal);
+        self.settings_appearance = SettingsAppearanceDraft::from_terminal_profile(
+            &self.config_document.terminal,
+            &self.theme_catalog,
+        );
         self.set_status_kind(
             "terminal-appearance-saved",
             "Saved the global terminal appearance defaults.".to_owned(),
@@ -1382,7 +1659,10 @@ impl AppRuntime {
 
     /// Palette of the current draft (settings preview / swatches).
     pub(crate) fn settings_appearance_palette(&self) -> TerminalPalette {
-        self.settings_appearance.palette()
+        if let Some(editor) = self.theme_editor.as_ref() {
+            return editor.palette();
+        }
+        self.settings_appearance.palette(&self.theme_catalog)
     }
 
     /// Renders the live preview frame for the Settings Appearance section.
@@ -1393,7 +1673,7 @@ impl AppRuntime {
         if !self.settings_appearance_visible {
             return None;
         }
-        let palette = self.settings_appearance.palette();
+        let palette = self.settings_appearance_palette();
         let font = self.settings_appearance.font_selection();
         let font_size = resolve_font_size(self.settings_appearance.font_size());
         let mut renderer = self.settings_preview_renderer.borrow_mut();
@@ -1411,6 +1691,34 @@ impl AppRuntime {
         };
         Some(renderer.render(&snapshot))
     }
+}
+
+/// Rewrites every `color_scheme` reference from `from_id` to `to_id`.
+fn retarget_theme_references(document: &mut ConfigDocument, from_id: &str, to_id: &str) {
+    let retarget = |profile: &mut TerminalProfile| {
+        if profile.color_scheme.as_deref() == Some(from_id) {
+            profile.color_scheme = Some(to_id.to_owned());
+        }
+    };
+    retarget(&mut document.terminal);
+    fn walk(folders: &mut [FolderProfile], from_id: &str, to_id: &str) {
+        for folder in folders {
+            if let Some(terminal) = folder.terminal.as_mut() {
+                if terminal.color_scheme.as_deref() == Some(from_id) {
+                    terminal.color_scheme = Some(to_id.to_owned());
+                }
+            }
+            for session in &mut folder.sessions {
+                if let Some(terminal) = session.terminal.as_mut() {
+                    if terminal.color_scheme.as_deref() == Some(from_id) {
+                        terminal.color_scheme = Some(to_id.to_owned());
+                    }
+                }
+            }
+            walk(&mut folder.folders, from_id, to_id);
+        }
+    }
+    walk(&mut document.folders, from_id, to_id);
 }
 
 /// Sample text of the live preview window (colors taken from the palette).

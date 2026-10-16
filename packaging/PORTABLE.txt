@@ -6,8 +6,10 @@ and no system-wide files. Extract it anywhere and run the binary.
 
 Contents
   yshell / yshell.exe   Main application binary.
+  fonts/                Product-shipped open-source terminal fonts (not
+                        embedded in the executable; loaded from this folder).
   yshell-portable.cmd   Windows launcher that keeps YShell data in .\data next
-                        to this file (green/portable mode).
+    to this file (green/portable mode).
   yshell-portable.sh    Linux/macOS launcher that keeps YShell data in ./data.
   README.md, LICENSE    Project documentation and license.
   PORTABLE.txt          This file.

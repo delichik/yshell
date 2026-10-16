@@ -345,10 +345,6 @@ export component MainWindow inherits Window {
     in-out property <string> settings_terminal_status_limit_text: "";
     // N5：Settings → Appearance（内联分区；打开 Settings 时加载 draft）
     in-out property <string> settings_appearance_color_scheme_text: "";
-    in-out property <string> settings_appearance_foreground_text: "";
-    in-out property <string> settings_appearance_background_text: "";
-    in-out property <string> settings_appearance_cursor_text: "";
-    in-out property <string> settings_appearance_selection_text: "";
     in property <[string]> settings_appearance_font_options: [];
     in-out property <int> settings_appearance_font_index: 0;
     in-out property <string> settings_appearance_font_size_text: "";
@@ -357,6 +353,15 @@ export component MainWindow inherits Window {
     in property <[SettingsSchemeOption]> settings_appearance_schemes: [];
     in property <[color]> settings_appearance_palette_swatches: [];
     in property <image> settings_appearance_preview;
+    in property <bool> theme_editor_open: false;
+    in property <bool> theme_editor_builtin: false;
+    in property <string> theme_editor_id: "";
+    in-out property <string> theme_editor_name: "";
+    in property <string> theme_editor_foreground: "";
+    in property <string> theme_editor_background: "";
+    in property <string> theme_editor_cursor: "";
+    in property <string> theme_editor_selection: "";
+    in property <[string]> theme_editor_ansi: [];
     // N5：Folder Editor（会话树文件夹右键 → Edit Folder Defaults…）
     in-out property <bool> folder_editor_visible: false;
     in property <string> folder_editor_name_text: "";
@@ -960,9 +965,17 @@ export component MainWindow inherits Window {
     /// 关闭 Settings 时释放 appearance draft / preview。
     callback close_settings_appearance();
     callback select_settings_scheme(string);
-    callback update_settings_appearance_color(string, string);
+    callback clone_settings_theme(string);
+    callback edit_settings_theme(string);
+    callback delete_settings_theme(string);
+    callback close_theme_editor();
+    callback save_theme_editor();
+    callback update_theme_editor_name(string);
+    callback update_theme_editor_role(string, string);
+    callback update_theme_editor_ansi(int, string);
     callback select_settings_appearance_font(int);
     callback update_settings_appearance_font_size(string);
+    callback bump_settings_appearance_font_size(int);
     callback update_settings_appearance_fallback_fonts(string);
     callback browse_settings_appearance_font_file();
     callback browse_settings_appearance_fallback_font();
@@ -974,6 +987,7 @@ export component MainWindow inherits Window {
     callback folder_editor_field_action(string, string);
     callback update_folder_editor_field(string, string);
     callback folder_editor_select_scheme(int);
+    callback folder_editor_select_font(int);
     callback folder_editor_select_log_format(int);
     callback toggle_folder_editor_logging();
     callback reset_all_folder_editor();
@@ -981,6 +995,7 @@ export component MainWindow inherits Window {
     callback editor_theme_field_action(string, string);
     callback update_editor_theme_field(string, string);
     callback editor_select_scheme(int);
+    callback editor_select_font(int);
     callback reset_all_editor_theme();
     callback test_editor_auth();
     callback save_editor_to_saved_session();
@@ -2553,16 +2568,21 @@ export component MainWindow inherits Window {
         appearance-color-scheme-text: root.settings_appearance_color_scheme_text;
         appearance-schemes: root.settings_appearance_schemes;
         appearance-palette-swatches: root.settings_appearance_palette_swatches;
-        appearance-foreground-text <=> root.settings_appearance_foreground_text;
-        appearance-background-text <=> root.settings_appearance_background_text;
-        appearance-cursor-text <=> root.settings_appearance_cursor_text;
-        appearance-selection-text <=> root.settings_appearance_selection_text;
         appearance-font-options: root.settings_appearance_font_options;
         appearance-font-index <=> root.settings_appearance_font_index;
         appearance-font-size-text <=> root.settings_appearance_font_size_text;
         appearance-fallback-fonts-text <=> root.settings_appearance_fallback_fonts_text;
         appearance-status-text: root.settings_appearance_status_text;
         appearance-preview: root.settings_appearance_preview;
+        theme-editor-open: root.theme_editor_open;
+        theme-editor-builtin: root.theme_editor_builtin;
+        theme-editor-id: root.theme_editor_id;
+        theme-editor-name <=> root.theme_editor_name;
+        theme-editor-foreground: root.theme_editor_foreground;
+        theme-editor-background: root.theme_editor_background;
+        theme-editor-cursor: root.theme_editor_cursor;
+        theme-editor-selection: root.theme_editor_selection;
+        theme-editor-ansi: root.theme_editor_ansi;
         close() => {
             root.settings_dialog_visible = false;
             root.close_settings_appearance();
@@ -2576,9 +2596,17 @@ export component MainWindow inherits Window {
         save-terminal-settings() => { root.save_settings_terminal(); }
         set-language(value) => { root.set_ui_language(value); }
         select-appearance-scheme(id) => { root.select_settings_scheme(id); }
-        update-appearance-color(field, value) => { root.update_settings_appearance_color(field, value); }
+        clone-appearance-theme(id) => { root.clone_settings_theme(id); }
+        edit-appearance-theme(id) => { root.edit_settings_theme(id); }
+        delete-appearance-theme(id) => { root.delete_settings_theme(id); }
+        close-theme-editor() => { root.close_theme_editor(); }
+        save-theme-editor() => { root.save_theme_editor(); }
+        update-theme-editor-name(value) => { root.update_theme_editor_name(value); }
+        update-theme-editor-role(role, hex) => { root.update_theme_editor_role(role, hex); }
+        update-theme-editor-ansi(index, hex) => { root.update_theme_editor_ansi(index, hex); }
         select-appearance-font(index) => { root.select_settings_appearance_font(index); }
         update-appearance-font-size(value) => { root.update_settings_appearance_font_size(value); }
+        bump-appearance-font-size(delta) => { root.bump_settings_appearance_font_size(delta); }
         update-appearance-fallback-fonts(value) => { root.update_settings_appearance_fallback_fonts(value); }
         browse-appearance-font-file() => { root.browse_settings_appearance_font_file(); }
         browse-appearance-fallback-font() => { root.browse_settings_appearance_fallback_font(); }
@@ -2609,6 +2637,7 @@ export component MainWindow inherits Window {
         field-toggled(key) => { root.toggle_folder_editor_logging(); }
         field-selected(key, index) => {
             if (key == "appearance.color_scheme") { root.folder_editor_select_scheme(index); }
+            else if (key == "appearance.font_family") { root.folder_editor_select_font(index); }
             else if (key == "logging.format") { root.folder_editor_select_log_format(index); }
         }
     }
@@ -2889,6 +2918,7 @@ export component MainWindow inherits Window {
         editor-theme-field-action(key, action) => { root.editor_theme_field_action(key, action); }
         update-editor-theme-field(key, value) => { root.update_editor_theme_field(key, value); }
         editor-select-scheme(index) => { root.editor_select_scheme(index); }
+        editor-select-font(index) => { root.editor_select_font(index); }
         reset-all-editor-theme() => { root.reset_all_editor_theme(); }
         select-sftp() => { root.select_session_editor_sftp(); }
         select-tunnels() => { root.select_session_editor_tunnels(); }

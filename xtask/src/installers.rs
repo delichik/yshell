@@ -344,6 +344,7 @@ fn rpm(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
         &sources.join("README.md"),
         false,
     )?;
+    crate::dist::copy_shipped_fonts_public(ctx.root, &sources.join("fonts"))?;
 
     let (version, release) = rpm_version(ctx.version);
     let spec = render_template(

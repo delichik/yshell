@@ -7,6 +7,8 @@ export struct SettingsSchemeOption {
     id: string,
     name: string,
     swatches: [color],
+    /// Built-in themes are read-only; user themes can be edited/deleted.
+    builtin: bool,
 }
 
 // 分区导航项：WinNavItem + 可选的禁用说明 tooltip。
@@ -57,6 +59,71 @@ component AppearanceFieldRow inherits HorizontalLayout {
     @children
 }
 
+// Color swatch that opens a preset palette popup (select, don't type hex).
+component ThemeColorSwatch inherits Rectangle {
+    in property <string> hex: "#000000";
+    in property <bool> enabled: true;
+    callback picked(string);
+
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: Theme.control-stroke;
+    // Host supplies lowercase #rrggbb; Slint accepts that as a brush.
+    background: root.hex;
+
+    private property <bool> picker-open: false;
+
+    TouchArea {
+        enabled: root.enabled;
+        clicked => { root.picker-open = true; }
+    }
+
+    if root.picker-open : PopupWindow {
+        x: 0;
+        y: root.height + 4px;
+        width: 196px;
+        height: 72px;
+        close-policy: close-on-click-outside;
+
+        Rectangle {
+            background: Theme.flyout-background;
+            border-radius: Theme.radius-control;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
+
+            VerticalLayout {
+                padding: Theme.spacing-8;
+                spacing: Theme.spacing-4;
+
+                HorizontalLayout {
+                    spacing: 4px;
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #000000; TouchArea { clicked => { root.picked("#000000"); root.picker-open = false; } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #ffffff; TouchArea { clicked => { root.picked("#ffffff"); root.picker-open = false; } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #ff5555; TouchArea { clicked => { root.picked("#ff5555"); root.picker-open = false; } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #50fa7b; TouchArea { clicked => { root.picked("#50fa7b"); root.picker-open = false; } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #f1fa8c; TouchArea { clicked => { root.picked("#f1fa8c"); root.picker-open = false; } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #bd93f9; TouchArea { clicked => { root.picked("#bd93f9"); root.picker-open = false; } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #ff79c6; TouchArea { clicked => { root.picked("#ff79c6"); root.picker-open = false; } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #8be9fd; TouchArea { clicked => { root.picked("#8be9fd"); root.picker-open = false; } } }
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #282a36; TouchArea { clicked => { root.picked("#282a36"); root.picker-open = false; } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #44475a; TouchArea { clicked => { root.picked("#44475a"); root.picker-open = false; } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #6272a4; TouchArea { clicked => { root.picked("#6272a4"); root.picker-open = false; } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #f8f8f2; TouchArea { clicked => { root.picked("#f8f8f2"); root.picker-open = false; } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #002b36; TouchArea { clicked => { root.picked("#002b36"); root.picker-open = false; } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #073642; TouchArea { clicked => { root.picked("#073642"); root.picker-open = false; } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #839496; TouchArea { clicked => { root.picked("#839496"); root.picker-open = false; } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #eee8d5; TouchArea { clicked => { root.picked("#eee8d5"); root.picker-open = false; } } }
+                }
+            }
+        }
+    }
+}
+
 // Settings dialog：左导航多分区（General / Appearance / Terminal / Security /
 // Advanced）；SFTP / Shortcuts 本版本禁用。Host Keys / Private Keys 以独立页打开。
 //
@@ -79,16 +146,22 @@ export component SettingsDialog inherits Rectangle {
     in property <string> appearance-color-scheme-text: "";
     in property <[SettingsSchemeOption]> appearance-schemes: [];
     in property <[color]> appearance-palette-swatches: [];
-    in-out property <string> appearance-foreground-text: "";
-    in-out property <string> appearance-background-text: "";
-    in-out property <string> appearance-cursor-text: "";
-    in-out property <string> appearance-selection-text: "";
     in property <[string]> appearance-font-options: [];
     in-out property <int> appearance-font-index: 0;
     in-out property <string> appearance-font-size-text: "";
     in-out property <string> appearance-fallback-fonts-text: "";
     in property <string> appearance-status-text: "";
     in property <image> appearance-preview;
+    // Theme editor (Xshell-style named themes).
+    in property <bool> theme-editor-open: false;
+    in property <bool> theme-editor-builtin: false;
+    in property <string> theme-editor-id: "";
+    in-out property <string> theme-editor-name: "";
+    in property <string> theme-editor-foreground: "";
+    in property <string> theme-editor-background: "";
+    in property <string> theme-editor-cursor: "";
+    in property <string> theme-editor-selection: "";
+    in property <[string]> theme-editor-ansi: [];
 
     callback close();
     callback open-host-keys();
@@ -100,9 +173,17 @@ export component SettingsDialog inherits Rectangle {
     callback set-language(string);
     // Appearance
     callback select-appearance-scheme(string);
-    callback update-appearance-color(string, string);
+    callback clone-appearance-theme(string);
+    callback edit-appearance-theme(string);
+    callback delete-appearance-theme(string);
+    callback close-theme-editor();
+    callback save-theme-editor();
+    callback update-theme-editor-name(string);
+    callback update-theme-editor-role(string, string);
+    callback update-theme-editor-ansi(int, string);
     callback select-appearance-font(int);
     callback update-appearance-font-size(string);
+    callback bump-appearance-font-size(int);
     callback update-appearance-fallback-fonts(string);
     callback browse-appearance-font-file();
     callback browse-appearance-fallback-font();
@@ -356,7 +437,7 @@ export component SettingsDialog inherits Rectangle {
                                                         spacing: Theme.spacing-8;
 
                                                         Text {
-                                                            text: option.name;
+                                                            text: option.builtin ? option.name : option.name + " ★";
                                                             color: Theme.text-primary;
                                                             font-size: Theme.font-caption;
                                                             vertical-alignment: center;
@@ -386,70 +467,125 @@ export component SettingsDialog inherits Rectangle {
                                                 }
                                             }
 
-                                            Rectangle { height: 1px; background: Theme.divider; }
-
-                                            Text {
-                                                text: @tr("Color overrides");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body;
-                                                font-weight: Theme.weight-semibold;
-                                            }
-
                                             HorizontalLayout {
                                                 spacing: Theme.spacing-8;
-                                                padding-left: 128px + Theme.spacing-12;
+                                                alignment: start;
 
-                                                for swatch in root.appearance-palette-swatches : Rectangle {
-                                                    width: 14px;
-                                                    height: 14px;
-                                                    border-radius: 3px;
-                                                    border-width: 1px;
-                                                    border-color: Theme.control-stroke;
-                                                    background: swatch;
+                                                WinButton {
+                                                    text: @tr("Clone…");
+                                                    clicked => { root.clone-appearance-theme(root.appearance-color-scheme-text); }
+                                                }
+                                                WinButton {
+                                                    text: @tr("Edit…");
+                                                    clicked => { root.edit-appearance-theme(root.appearance-color-scheme-text); }
+                                                }
+                                                WinButton {
+                                                    text: @tr("Delete");
+                                                    clicked => { root.delete-appearance-theme(root.appearance-color-scheme-text); }
                                                 }
                                             }
 
-                                            AppearanceFieldRow {
-                                                label: @tr("Foreground");
-                                                WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    font-family: Theme.font-mono;
-                                                    text <=> root.appearance-foreground-text;
-                                                    placeholder-text: "#RRGGBB";
-                                                    edited => { root.update-appearance-color("foreground", self.text); }
-                                                }
-                                            }
+                                            if root.theme-editor-open : VerticalLayout {
+                                                spacing: Theme.spacing-8;
 
-                                            AppearanceFieldRow {
-                                                label: @tr("Background");
-                                                WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    font-family: Theme.font-mono;
-                                                    text <=> root.appearance-background-text;
-                                                    placeholder-text: "#RRGGBB";
-                                                    edited => { root.update-appearance-color("background", self.text); }
-                                                }
-                                            }
+                                                Rectangle { height: 1px; background: Theme.divider; }
 
-                                            AppearanceFieldRow {
-                                                label: @tr("Cursor");
-                                                WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    font-family: Theme.font-mono;
-                                                    text <=> root.appearance-cursor-text;
-                                                    placeholder-text: "#RRGGBB";
-                                                    edited => { root.update-appearance-color("cursor", self.text); }
+                                                Text {
+                                                    text: root.theme-editor-builtin ? @tr("Theme (read-only)") : @tr("Edit theme");
+                                                    color: Theme.text-primary;
+                                                    font-size: Theme.font-body;
+                                                    font-weight: Theme.weight-semibold;
                                                 }
-                                            }
 
-                                            AppearanceFieldRow {
-                                                label: @tr("Selection");
-                                                WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    font-family: Theme.font-mono;
-                                                    text <=> root.appearance-selection-text;
-                                                    placeholder-text: "#RRGGBB";
-                                                    edited => { root.update-appearance-color("selection", self.text); }
+                                                AppearanceFieldRow {
+                                                    label: @tr("Name");
+                                                    WinTextInput {
+                                                        horizontal-stretch: 1;
+                                                        text <=> root.theme-editor-name;
+                                                        enabled: !root.theme-editor-builtin;
+                                                        edited => { root.update-theme-editor-name(self.text); }
+                                                    }
+                                                }
+
+                                                HorizontalLayout {
+                                                    spacing: Theme.spacing-8;
+                                                    padding-left: 128px + Theme.spacing-12;
+
+                                                    for swatch in root.appearance-palette-swatches : Rectangle {
+                                                        width: 14px;
+                                                        height: 14px;
+                                                        border-radius: 3px;
+                                                        border-width: 1px;
+                                                        border-color: Theme.control-stroke;
+                                                        background: swatch;
+                                                    }
+                                                }
+
+                                                AppearanceFieldRow {
+                                                    label: @tr("Foreground");
+                                                    ThemeColorSwatch {
+                                                        hex: root.theme-editor-foreground;
+                                                        enabled: !root.theme-editor-builtin;
+                                                        picked(hex) => { root.update-theme-editor-role("foreground", hex); }
+                                                    }
+                                                }
+                                                AppearanceFieldRow {
+                                                    label: @tr("Background");
+                                                    ThemeColorSwatch {
+                                                        hex: root.theme-editor-background;
+                                                        enabled: !root.theme-editor-builtin;
+                                                        picked(hex) => { root.update-theme-editor-role("background", hex); }
+                                                    }
+                                                }
+                                                AppearanceFieldRow {
+                                                    label: @tr("Cursor");
+                                                    ThemeColorSwatch {
+                                                        hex: root.theme-editor-cursor;
+                                                        enabled: !root.theme-editor-builtin;
+                                                        picked(hex) => { root.update-theme-editor-role("cursor", hex); }
+                                                    }
+                                                }
+                                                AppearanceFieldRow {
+                                                    label: @tr("Selection");
+                                                    ThemeColorSwatch {
+                                                        hex: root.theme-editor-selection;
+                                                        enabled: !root.theme-editor-builtin;
+                                                        picked(hex) => { root.update-theme-editor-role("selection", hex); }
+                                                    }
+                                                }
+
+                                                Text {
+                                                    text: @tr("ANSI colors");
+                                                    color: Theme.text-secondary;
+                                                    font-size: Theme.font-caption;
+                                                }
+
+                                                GridLayout {
+                                                    spacing: Theme.spacing-4;
+                                                    for ansi-hex[ansi-index] in root.theme-editor-ansi : ThemeColorSwatch {
+                                                        row: Math.floor(ansi-index / 8);
+                                                        col: Math.mod(ansi-index, 8);
+                                                        hex: ansi-hex;
+                                                        enabled: !root.theme-editor-builtin;
+                                                        picked(hex) => { root.update-theme-editor-ansi(ansi-index, hex); }
+                                                    }
+                                                }
+
+                                                HorizontalLayout {
+                                                    spacing: Theme.spacing-8;
+                                                    alignment: end;
+                                                    if root.theme-editor-builtin : WinButton {
+                                                        text: @tr("Clone to edit");
+                                                        clicked => { root.clone-appearance-theme(root.theme-editor-id); }
+                                                    }
+                                                    if !root.theme-editor-builtin : WinButton {
+                                                        text: @tr("Save Theme");
+                                                        clicked => { root.save-theme-editor(); }
+                                                    }
+                                                    WinButton {
+                                                        text: @tr("Close Editor");
+                                                        clicked => { root.close-theme-editor(); }
+                                                    }
                                                 }
                                             }
 
@@ -479,18 +615,33 @@ export component SettingsDialog inherits Rectangle {
 
                                             AppearanceFieldRow {
                                                 label: @tr("Font size");
-                                                WinTextInput {
-                                                    width: 80px;
-                                                    text <=> root.appearance-font-size-text;
-                                                    placeholder-text: "16";
-                                                    edited => { root.update-appearance-font-size(self.text); }
-                                                }
-                                                Text {
-                                                    text: @tr("Logical pixels (6-72)");
-                                                    color: Theme.text-tertiary;
-                                                    font-size: Theme.font-caption;
-                                                    vertical-alignment: center;
-                                                    horizontal-stretch: 1;
+                                                HorizontalLayout {
+                                                    spacing: Theme.spacing-4;
+                                                    WinIconButton {
+                                                        icon: "chevron-left";
+                                                        accessible-name: @tr("Decrease font size");
+                                                        clicked => { root.bump-appearance-font-size(-1); }
+                                                    }
+                                                    Text {
+                                                        text: root.appearance-font-size-text;
+                                                        color: Theme.text-primary;
+                                                        font-size: Theme.font-body;
+                                                        vertical-alignment: center;
+                                                        horizontal-alignment: center;
+                                                        width: 40px;
+                                                    }
+                                                    WinIconButton {
+                                                        icon: "chevron-right";
+                                                        accessible-name: @tr("Increase font size");
+                                                        clicked => { root.bump-appearance-font-size(1); }
+                                                    }
+                                                    Text {
+                                                        text: @tr("Logical pixels (6-72)");
+                                                        color: Theme.text-tertiary;
+                                                        font-size: Theme.font-caption;
+                                                        vertical-alignment: center;
+                                                        horizontal-stretch: 1;
+                                                    }
                                                 }
                                             }
 

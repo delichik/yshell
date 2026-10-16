@@ -399,6 +399,7 @@ fn prepare_portable_staging(
     copy_file(binary, &staging.join(target_os.binary_name()), true)?;
     copy_file(&root.join("README.md"), &staging.join("README.md"), false)?;
     copy_file(&root.join("LICENSE"), &staging.join("LICENSE"), false)?;
+    copy_shipped_fonts(root, &staging.join("fonts"))?;
     copy_file(
         &root.join("packaging/PORTABLE.txt"),
         &staging.join("PORTABLE.txt"),
@@ -459,22 +460,63 @@ struct ArchiveEntry {
 
 fn collect_files(dir: &Path) -> Result<Vec<ArchiveEntry>> {
     let mut entries = Vec::new();
+    collect_files_into(dir, dir, &mut entries)?;
+    entries.sort_by(|left, right| left.name.cmp(&right.name));
+    Ok(entries)
+}
+
+fn collect_files_into(root: &Path, dir: &Path, entries: &mut Vec<ArchiveEntry>) -> Result<()> {
     for entry in fs::read_dir(dir).with_context(|| format!("failed to read {}", dir.display()))? {
         let entry = entry?;
         let path = entry.path();
+        if path.is_dir() {
+            collect_files_into(root, &path, entries)?;
+            continue;
+        }
         if !path.is_file() {
             continue;
         }
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let executable = name == "yshell" || name == "yshell.exe" || name.ends_with(".sh");
+        let name = path
+            .strip_prefix(root)
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        let file_name = entry.file_name().to_string_lossy().into_owned();
+        let executable =
+            file_name == "yshell" || file_name == "yshell.exe" || file_name.ends_with(".sh");
         entries.push(ArchiveEntry {
             name,
             path,
             mode: if executable { 0o755 } else { 0o644 },
         });
     }
-    entries.sort_by(|left, right| left.name.cmp(&right.name));
-    Ok(entries)
+    Ok(())
+}
+
+/// Copies product-shipped open-source fonts next to the binary (`fonts/`).
+pub fn copy_shipped_fonts_public(root: &Path, dest: &Path) -> Result<()> {
+    copy_shipped_fonts(root, dest)
+}
+
+/// Copies product-shipped open-source fonts next to the binary (`fonts/`).
+fn copy_shipped_fonts(root: &Path, dest: &Path) -> Result<()> {
+    let source = root.join("crates/yshell-terminal/assets");
+    fs::create_dir_all(dest).with_context(|| format!("failed to create {}", dest.display()))?;
+    for name in [
+        "DejaVuSansMono.ttf",
+        "DejaVuSansMono-Bold.ttf",
+        "DejaVuSansMono-Oblique.ttf",
+        "DejaVuSansMono-BoldOblique.ttf",
+        "NotoSansMonoCJKsc-GB2312-Subset.otf",
+        "LICENSE-DejaVu.txt",
+        "LICENSE-NotoSansMonoCJK-OFL-1.1.txt",
+    ] {
+        let from = source.join(name);
+        if from.is_file() {
+            copy_file(&from, &dest.join(name), false)?;
+        }
+    }
+    Ok(())
 }
 
 fn write_zip(dest: &Path, entries: &[ArchiveEntry]) -> Result<()> {

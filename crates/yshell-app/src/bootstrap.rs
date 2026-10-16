@@ -3540,10 +3540,34 @@ pub(crate) fn wire_callbacks(
     wire_n4!(on_select_settings_scheme, |runtime, id: SharedString| {
         runtime.select_settings_appearance_scheme(id.as_ref())
     });
+    wire_n4_result!(on_clone_settings_theme, "Clone theme", |runtime, id: SharedString| {
+        runtime.clone_color_theme(id.as_ref())
+    });
+    wire_n4!(on_edit_settings_theme, |runtime, id: SharedString| {
+        runtime.open_theme_editor(id.as_ref())
+    });
+    wire_n4_result!(
+        on_delete_settings_theme,
+        "Delete theme",
+        |runtime, id: SharedString| runtime.delete_color_theme(id.as_ref())
+    );
+    wire_n4!(on_close_theme_editor, |runtime| runtime.close_theme_editor());
+    wire_n4_result!(on_save_theme_editor, "Save theme", |runtime| {
+        runtime.save_theme_editor()
+    });
     wire_n4!(
-        on_update_settings_appearance_color,
-        |runtime, field: SharedString, value: SharedString| runtime
-            .update_settings_appearance_color(field.as_ref(), value.as_ref())
+        on_update_theme_editor_name,
+        |runtime, value: SharedString| runtime.update_theme_editor_name(value.as_ref())
+    );
+    wire_n4!(
+        on_update_theme_editor_role,
+        |runtime, role: SharedString, hex: SharedString| runtime
+            .update_theme_editor_role_color(role.as_ref(), hex.as_ref())
+    );
+    wire_n4!(
+        on_update_theme_editor_ansi,
+        |runtime, index: i32, hex: SharedString| runtime
+            .update_theme_editor_ansi_color(index, hex.as_ref())
     );
     wire_n4!(
         on_select_settings_appearance_font,
@@ -3552,6 +3576,10 @@ pub(crate) fn wire_callbacks(
     wire_n4!(
         on_update_settings_appearance_font_size,
         |runtime, value: SharedString| runtime.update_settings_appearance_font_size(value.as_ref())
+    );
+    wire_n4!(
+        on_bump_settings_appearance_font_size,
+        |runtime, delta: i32| runtime.bump_settings_appearance_font_size(delta)
     );
     wire_n4!(
         on_update_settings_appearance_fallback_fonts,
@@ -3587,6 +3615,9 @@ pub(crate) fn wire_callbacks(
     wire_n4!(on_folder_editor_select_scheme, |runtime, index: i32| {
         runtime.select_folder_editor_scheme_index(index)
     });
+    wire_n4!(on_folder_editor_select_font, |runtime, index: i32| {
+        runtime.select_folder_editor_font_index(index)
+    });
     wire_n4!(on_folder_editor_select_log_format, |runtime, index: i32| {
         runtime.select_folder_editor_log_format_index(index)
     });
@@ -3610,6 +3641,8 @@ pub(crate) fn wire_callbacks(
     );
     wire_n4!(on_editor_select_scheme, |runtime, index: i32| runtime
         .select_editor_scheme_index(index));
+    wire_n4!(on_editor_select_font, |runtime, index: i32| runtime
+        .select_editor_font_index(index));
     wire_n4!(on_reset_all_editor_theme, |runtime| runtime
         .reset_all_editor_theme());
 
@@ -4861,6 +4894,7 @@ fn settings_scheme_model(schemes: &[ThemeSchemeOption]) -> ModelRc<SettingsSchem
             id: scheme.id.clone().into(),
             name: scheme.name.clone().into(),
             swatches: swatch_model(&scheme.swatches),
+            builtin: scheme.builtin,
         })
         .collect();
     ModelRc::new(VecModel::from(rows))
@@ -5973,24 +6007,6 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
             .clone()
             .into(),
     );
-    window.set_settings_appearance_foreground_text(
-        projection
-            .settings_appearance_foreground_text
-            .clone()
-            .into(),
-    );
-    window.set_settings_appearance_background_text(
-        projection
-            .settings_appearance_background_text
-            .clone()
-            .into(),
-    );
-    window.set_settings_appearance_cursor_text(
-        projection.settings_appearance_cursor_text.clone().into(),
-    );
-    window.set_settings_appearance_selection_text(
-        projection.settings_appearance_selection_text.clone().into(),
-    );
     window.set_settings_appearance_font_options(ModelRc::new(VecModel::from(
         projection
             .settings_appearance_font_options
@@ -6020,6 +6036,21 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     if let Some(preview) = projection.settings_appearance_preview.as_ref() {
         window.set_settings_appearance_preview(frame_image(preview));
     }
+    window.set_theme_editor_open(projection.theme_editor_open);
+    window.set_theme_editor_builtin(projection.theme_editor_builtin);
+    window.set_theme_editor_id(projection.theme_editor_id.clone().into());
+    window.set_theme_editor_name(projection.theme_editor_name.clone().into());
+    window.set_theme_editor_foreground(projection.theme_editor_foreground.clone().into());
+    window.set_theme_editor_background(projection.theme_editor_background.clone().into());
+    window.set_theme_editor_cursor(projection.theme_editor_cursor.clone().into());
+    window.set_theme_editor_selection(projection.theme_editor_selection.clone().into());
+    window.set_theme_editor_ansi(ModelRc::new(VecModel::from(
+        projection
+            .theme_editor_ansi
+            .iter()
+            .map(|value| SharedString::from(value.as_str()))
+            .collect::<Vec<_>>(),
+    )));
     window.set_folder_editor_visible(projection.folder_editor_visible);
     window.set_folder_editor_name_text(projection.folder_editor_name_text.clone().into());
     window.set_folder_editor_path_text(projection.folder_editor_path_text.clone().into());

@@ -21,10 +21,10 @@ pub use keys::encode_key;
 pub use palette::{color_scheme, TerminalColorScheme, TerminalPalette, COLOR_SCHEMES};
 pub use parser::TerminalParser;
 pub use render::{
-    FontFace, FontFaceError, FontFaceStyle, FontFamilyFaces, FontLineMetrics, FontSelection,
-    GlyphSource, GlyphStyle, PrimaryFont, ResolvedFace, TerminalFontSet, TerminalFontStack,
-    TerminalFrame, TerminalRenderer, TerminalSnapshot, DEFAULT_BACKGROUND, DEFAULT_CURSOR,
-    DEFAULT_FONT_SIZE, DEFAULT_FOREGROUND, DEFAULT_SCALE_FACTOR,
+    resolve_fonts_dir, FontFace, FontFaceError, FontFaceStyle, FontFamilyFaces, FontLineMetrics,
+    FontSelection, GlyphSource, GlyphStyle, PrimaryFont, ResolvedFace, TerminalFontSet,
+    TerminalFontStack, TerminalFrame, TerminalRenderer, TerminalSnapshot, DEFAULT_BACKGROUND,
+    DEFAULT_CURSOR, DEFAULT_FONT_SIZE, DEFAULT_FOREGROUND, DEFAULT_SCALE_FACTOR, FONTS_DIR_ENV,
 };
 pub use search::{SearchMatch, SearchQuery};
 pub use selection::{GridPoint, SelectionRange};

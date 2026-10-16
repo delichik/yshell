@@ -1072,6 +1072,12 @@ pub enum ConfigWarning {
     },
     /// A font size of `0` was cleared.
     InvalidFontSize { location: String },
+    /// Inline color overrides were promoted into a named user theme.
+    MigratedColorOverrides {
+        location: String,
+        theme_id: String,
+        theme_name: String,
+    },
 }
 
 impl fmt::Display for ConfigWarning {
@@ -1104,6 +1110,14 @@ impl fmt::Display for ConfigWarning {
             Self::InvalidFontSize { location } => {
                 write!(f, "cleared font size 0 at {location}.font_size")
             }
+            Self::MigratedColorOverrides {
+                location,
+                theme_id,
+                theme_name,
+            } => write!(
+                f,
+                "migrated inline color overrides at {location} into theme '{theme_name}' ({theme_id})"
+            ),
         }
     }
 }

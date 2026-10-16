@@ -197,6 +197,7 @@ export component SessionEditor inherits Rectangle {
     callback editor-theme-field-action(string, string);
     callback update-editor-theme-field(string, string);
     callback editor-select-scheme(int);
+    callback editor-select-font(int);
     callback reset-all-editor-theme();
 
     // 面板高度固定（B 轮3 #13）：原实现按各分区内容收缩，切换分区时整块面板（含左侧导航）
@@ -644,7 +645,13 @@ export component SessionEditor inherits Rectangle {
                                                 field-reset(key) => { root.editor-theme-field-action(key, "reset"); }
                                                 field-edited(key, value) => { root.update-editor-theme-field(key, value); }
                                                 field-toggled(key) => { }
-                                                field-selected(key, index) => { root.editor-select-scheme(index); }
+                                                field-selected(key, index) => {
+                                                    if (key == "appearance.color_scheme") {
+                                                        root.editor-select-scheme(index);
+                                                    } else if (key == "appearance.font_family") {
+                                                        root.editor-select-font(index);
+                                                    }
+                                                }
                                             }
 
                                             HorizontalLayout {

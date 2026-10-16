@@ -180,8 +180,48 @@ impl AppRuntime {
         // N5：终端外观（Settings Appearance 内联 / Folder Editor / Session Editor）。
         let settings_appearance_preview = self.settings_appearance_preview_frame();
         let settings_appearance_status_text = self.settings_appearance_status.display_text();
-        let settings_appearance_schemes = theme::scheme_options();
+        let settings_appearance_schemes = theme::scheme_options(&self.theme_catalog);
         let settings_appearance_palette = palette_parts(self.settings_appearance_palette());
+        let theme_editor_open = self.theme_editor.is_some();
+        let theme_editor_builtin = self
+            .theme_editor
+            .as_ref()
+            .is_some_and(|editor| editor.builtin);
+        let theme_editor_id = self
+            .theme_editor
+            .as_ref()
+            .map(|editor| editor.id.clone())
+            .unwrap_or_default();
+        let theme_editor_name = self
+            .theme_editor
+            .as_ref()
+            .map(|editor| editor.name.clone())
+            .unwrap_or_default();
+        let theme_editor_foreground = self
+            .theme_editor
+            .as_ref()
+            .map(|editor| editor.foreground.clone())
+            .unwrap_or_default();
+        let theme_editor_background = self
+            .theme_editor
+            .as_ref()
+            .map(|editor| editor.background.clone())
+            .unwrap_or_default();
+        let theme_editor_cursor = self
+            .theme_editor
+            .as_ref()
+            .map(|editor| editor.cursor.clone())
+            .unwrap_or_default();
+        let theme_editor_selection = self
+            .theme_editor
+            .as_ref()
+            .map(|editor| editor.selection.clone())
+            .unwrap_or_default();
+        let theme_editor_ansi = self
+            .theme_editor
+            .as_ref()
+            .map(|editor| editor.ansi.to_vec())
+            .unwrap_or_default();
         let folder_editor_appearance_fields = self.folder_editor_appearance_fields();
         let folder_editor_terminal_fields = self.folder_editor_terminal_fields();
         let folder_editor_logging_fields = self.folder_editor_logging_fields();
@@ -260,10 +300,6 @@ impl AppRuntime {
             settings_terminal_status_limit_text: self.settings_terminal_status.limit_text(),
             settings_appearance_visible: self.settings_appearance_visible,
             settings_appearance_color_scheme_text: self.settings_appearance.color_scheme.clone(),
-            settings_appearance_foreground_text: self.settings_appearance.foreground.clone(),
-            settings_appearance_background_text: self.settings_appearance.background.clone(),
-            settings_appearance_cursor_text: self.settings_appearance.cursor.clone(),
-            settings_appearance_selection_text: self.settings_appearance.selection.clone(),
             settings_appearance_font_family_text: self.settings_appearance.font_family.clone(),
             settings_appearance_font_options: self.settings_appearance.font_options(),
             settings_appearance_font_index: self.settings_appearance.font_index(),
@@ -276,6 +312,15 @@ impl AppRuntime {
             settings_appearance_schemes,
             settings_appearance_palette_swatches: settings_appearance_palette,
             settings_appearance_preview,
+            theme_editor_open,
+            theme_editor_builtin,
+            theme_editor_id,
+            theme_editor_name,
+            theme_editor_foreground,
+            theme_editor_background,
+            theme_editor_cursor,
+            theme_editor_selection,
+            theme_editor_ansi,
             folder_editor_visible: self.folder_editor.visible,
             folder_editor_name_text: self.folder_editor.folder_name.clone(),
             folder_editor_path_text: self.folder_editor.folder_path.clone(),
@@ -1412,10 +1457,6 @@ pub struct AppProjection {
     // --- N5：Settings → Appearance（内联分区） ----------------------------------
     pub settings_appearance_visible: bool,
     pub settings_appearance_color_scheme_text: String,
-    pub settings_appearance_foreground_text: String,
-    pub settings_appearance_background_text: String,
-    pub settings_appearance_cursor_text: String,
-    pub settings_appearance_selection_text: String,
     pub settings_appearance_font_family_text: String,
     /// D15 ComboBox model: bundled DejaVu + optional imported path.
     pub settings_appearance_font_options: Vec<String>,
@@ -1426,6 +1467,15 @@ pub struct AppProjection {
     pub settings_appearance_schemes: Vec<theme::ThemeSchemeOption>,
     pub settings_appearance_palette_swatches: Vec<[u8; 3]>,
     pub settings_appearance_preview: Option<yshell_terminal::TerminalFrame>,
+    pub theme_editor_open: bool,
+    pub theme_editor_builtin: bool,
+    pub theme_editor_id: String,
+    pub theme_editor_name: String,
+    pub theme_editor_foreground: String,
+    pub theme_editor_background: String,
+    pub theme_editor_cursor: String,
+    pub theme_editor_selection: String,
+    pub theme_editor_ansi: Vec<String>,
     // --- N5：Folder Editor ------------------------------------------------------
     pub folder_editor_visible: bool,
     pub folder_editor_name_text: String,

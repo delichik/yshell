@@ -38,10 +38,13 @@ install -D -m 0755 %{_sourcedir}/yshell %{buildroot}/usr/bin/yshell
 install -D -m 0644 %{_sourcedir}/yshell.desktop %{buildroot}/usr/share/applications/yshell.desktop
 install -D -m 0644 %{_sourcedir}/LICENSE %{buildroot}/usr/share/licenses/yshell/LICENSE
 install -D -m 0644 %{_sourcedir}/README.md %{buildroot}/usr/share/doc/yshell/README.md
+mkdir -p %{buildroot}/usr/share/yshell/fonts
+cp -a %{_sourcedir}/fonts/. %{buildroot}/usr/share/yshell/fonts/ || true
 
 %files
 /usr/bin/yshell
 /usr/share/applications/yshell.desktop
+/usr/share/yshell/fonts
 %license /usr/share/licenses/yshell/LICENSE
 %doc /usr/share/doc/yshell/README.md
 

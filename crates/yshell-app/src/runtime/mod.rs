@@ -112,7 +112,7 @@ pub use quick_connect::QuickConnectRowData;
 pub use quick_connect::QuickLinkRowData;
 // N5：外观/文件夹默认值（session_runtime、bootstrap、projection 消费）。
 pub(crate) use theme::TerminalAppearance;
-pub(crate) use theme::{SettingsAppearanceDraft, SettingsAppearanceStatus};
+pub(crate) use theme::{SettingsAppearanceDraft, SettingsAppearanceStatus, ThemeEditorDraft};
 pub(crate) use theme::{ThemeFieldAction, ThemeSchemeOption, TriStateFieldData};
 
 use crate::{
@@ -122,7 +122,9 @@ use std::{
     cell::Cell, cell::RefCell, collections::BTreeMap, collections::BTreeSet, env, fmt, fs,
     path::Path, path::PathBuf, sync::Arc,
 };
-use yshell_config::{ConfigDocument, ConfigStore, LoadOutcome, PanelSide, QuickLink};
+use yshell_config::{
+    ConfigDocument, ConfigStore, LoadOutcome, PanelSide, QuickLink, ThemeCatalog,
+};
 use yshell_core::CommandDispatcher;
 use yshell_core::CoreCommandDispatcher;
 use yshell_core::SessionCommand;
@@ -153,11 +155,17 @@ impl AppRuntime {
     ) -> AppResult<Self> {
         let config_store = ConfigStore::new(config_dir.clone());
         let LoadOutcome {
-            document,
+            mut document,
             recovered_from_backup,
         } = config_store
             .load_or_recover()
             .map_err(AppError::from_error)?;
+        let (mut theme_catalog, _theme_warnings) = ThemeCatalog::load(&config_dir);
+        let migration_warnings =
+            theme::migrate_inline_color_overrides(&mut document, &mut theme_catalog);
+        if !migration_warnings.is_empty() {
+            let _ = config_store.save(&document);
+        }
         let terminal = document.terminal.clone();
         let remembered_local_directory = document.ui.local_directory.clone();
         let persistent_known_hosts = config_store
@@ -167,6 +175,7 @@ impl AppRuntime {
             config_dir: config_dir.clone(),
             config_store,
             config_document: document,
+            theme_catalog,
             dispatcher: CoreCommandDispatcher::new(),
             sessions: BTreeMap::new(),
             active_session_id: None,
@@ -297,6 +306,7 @@ impl AppRuntime {
             settings_appearance_status: SettingsAppearanceStatus::Hint,
             settings_appearance_visible: false,
             settings_preview_renderer: RefCell::new(None),
+            theme_editor: None,
             folder_editor: folder_editor::FolderEditorState::default(),
         };
         runtime.status_text = runtime.startup_status();
@@ -410,6 +420,8 @@ pub struct AppRuntime {
     pub(crate) config_dir: PathBuf,
     pub(crate) config_store: ConfigStore,
     pub(crate) config_document: ConfigDocument,
+    /// Named terminal color themes (built-in ids + user themes on disk).
+    pub(crate) theme_catalog: ThemeCatalog,
     pub(crate) dispatcher: CoreCommandDispatcher,
     pub(crate) sessions: BTreeMap<String, SessionRuntime>,
     pub(crate) active_session_id: Option<String>,
@@ -589,6 +601,8 @@ pub struct AppRuntime {
     pub(crate) settings_appearance_visible: bool,
     /// 预览专用渲染器（与活动终端渲染器分离，避免抢占 glyph 缓存）。
     pub(crate) settings_preview_renderer: RefCell<Option<yshell_terminal::TerminalRenderer>>,
+    /// Inline theme editor draft (None when closed).
+    pub(crate) theme_editor: Option<ThemeEditorDraft>,
     /// Folder Editor 表单状态。
     pub(crate) folder_editor: folder_editor::FolderEditorState,
 }
