@@ -38,8 +38,9 @@ export component MainWindow inherits Window {
     title: "YShell";
     // 阶段 B：自绘标题栏（无系统装饰）。拖动/窗口按钮见 components/menu_bar.slint；
     // 无框时可拖边缩放（winit）。关闭走 close() → on_close_requested（既有确认）。
+    // resize-border-width：边沿命中带；过窄时难抓，8px 与常见无框窗一致。
     no-frame: true;
-    resize-border-width: 6px;
+    resize-border-width: 8px;
     // §4.2 / §12：默认 1440×900，最小 880×600
     // （<1120 自动折叠右栏，<960 左导航变 48px 图标条，因此 880×600 是安全下限）
     //

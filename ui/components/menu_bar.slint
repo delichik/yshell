@@ -1,7 +1,8 @@
 // 自绘顶栏（阶段 B）：WinUI 3 MenuBar + 窗口标题栏控件。
 //
 // 无系统装饰（MainWindow.no-frame）时本行同时承担：
-//   * 一级菜单 File / Edit / Session / View / Help
+//   * 最左应用图标
+//   * 一级菜单 File / Edit / Session / View / Help（左对齐）
 //   * 空白区拖动（WindowMoveArea）与双击最大化
 //   * 窄窗右栏 chevron
 //   * 最小化 / 最大化·还原 / 关闭
@@ -143,7 +144,7 @@ component CaptionButton inherits Rectangle {
     }
 }
 
-// 单行自绘顶栏：一级菜单 …… [窄窗 chevron] [─ □ ×]
+// 单行自绘顶栏：[图标] 一级菜单 …… [窄窗 chevron] [─ □ ×]
 export component MenuBar inherits Rectangle {
     in property <int> open-index: -1;
     /// 窄窗口下显示右栏展开/收起按钮（§4.2：<1120px）
@@ -179,22 +180,45 @@ export component MenuBar inherits Rectangle {
         spacing: 0px;
         alignment: stretch;
 
-        // 可拖动区：菜单 + 弹性空白 + 窄窗 chevron。按钮/菜单的 TouchArea 仍可点击。
+        // 可拖动区：图标 + 菜单 + 弹性空白 + 窄窗 chevron。
+        // 菜单/按钮的 TouchArea 仍可点击；空白区拖动窗口、双击最大化。
+        //
+        // 注意：内层必须用 alignment: stretch（不能用 center）。center 会忽略
+        // horizontal-stretch，把菜单整组居中，并把弹性拖动区压成 0 宽，导致
+        // 拖动/双击最大化失效，菜单也不在左边。
         WindowMoveArea {
             horizontal-stretch: 1;
+            height: 100%;
 
             HorizontalLayout {
-                padding-left: 8px;
+                padding-left: 4px;
                 padding-right: 4px;
                 padding-top: 4px;
                 padding-bottom: 4px;
                 spacing: 2px;
-                alignment: center;
+                alignment: stretch;
+
+                // 最左应用图标（落在拖动区内，可拖窗；无独立点击）。
+                Rectangle {
+                    width: Theme.control-height;
+                    height: 100%;
+                    horizontal-stretch: 0;
+                    background: transparent;
+
+                    Icon {
+                        name: "terminal";
+                        icon-color: Theme.text-primary;
+                        icon-size: Theme.icon-size-small;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
 
                 file_menu_title := MenuTitle {
                     label: @tr("MenuBar" => "File");
                     open: root.open-index == 0;
                     menu-open: root.open-index >= 0;
+                    horizontal-stretch: 0;
                     hovered => { root.menu-hovered(0, file_menu_title.absolute-position.x); }
                     activated => { root.menu-activated(0, file_menu_title.absolute-position.x); }
                 }
@@ -202,6 +226,7 @@ export component MenuBar inherits Rectangle {
                     label: @tr("MenuBar" => "Edit");
                     open: root.open-index == 1;
                     menu-open: root.open-index >= 0;
+                    horizontal-stretch: 0;
                     hovered => { root.menu-hovered(1, edit_menu_title.absolute-position.x); }
                     activated => { root.menu-activated(1, edit_menu_title.absolute-position.x); }
                 }
@@ -209,6 +234,7 @@ export component MenuBar inherits Rectangle {
                     label: @tr("MenuBar" => "Session");
                     open: root.open-index == 2;
                     menu-open: root.open-index >= 0;
+                    horizontal-stretch: 0;
                     hovered => { root.menu-hovered(2, session_menu_title.absolute-position.x); }
                     activated => { root.menu-activated(2, session_menu_title.absolute-position.x); }
                 }
@@ -216,6 +242,7 @@ export component MenuBar inherits Rectangle {
                     label: @tr("MenuBar" => "View");
                     open: root.open-index == 3;
                     menu-open: root.open-index >= 0;
+                    horizontal-stretch: 0;
                     hovered => { root.menu-hovered(3, view_menu_title.absolute-position.x); }
                     activated => { root.menu-activated(3, view_menu_title.absolute-position.x); }
                 }
@@ -223,6 +250,7 @@ export component MenuBar inherits Rectangle {
                     label: @tr("MenuBar" => "Help");
                     open: root.open-index == 4;
                     menu-open: root.open-index >= 0;
+                    horizontal-stretch: 0;
                     hovered => { root.menu-hovered(4, help_menu_title.absolute-position.x); }
                     activated => { root.menu-activated(4, help_menu_title.absolute-position.x); }
                 }
@@ -231,6 +259,7 @@ export component MenuBar inherits Rectangle {
                 // 同时保证窗口 max-width 无界（见 main_window 尺寸约束说明）。
                 Rectangle {
                     horizontal-stretch: 1;
+                    height: 100%;
                     TouchArea {
                         clicked => {
                             if (root.open-index >= 0) {
@@ -242,6 +271,7 @@ export component MenuBar inherits Rectangle {
                 }
 
                 if root.dock-toggle-visible : WinIconButton {
+                    horizontal-stretch: 0;
                     icon: root.right-collapsed ? "chevron-left" : "chevron-right";
                     accessible-name: root.right-collapsed
                         ? @tr("MainWindow" => "Expand tool panels")
@@ -252,15 +282,18 @@ export component MenuBar inherits Rectangle {
         }
 
         CaptionButton {
+            horizontal-stretch: 0;
             kind: "minimize";
             clicked => { root.minimize-requested(); }
         }
         CaptionButton {
+            horizontal-stretch: 0;
             kind: "maximize";
             window-maximized: root.window-maximized;
             clicked => { root.maximize-toggle-requested(); }
         }
         CaptionButton {
+            horizontal-stretch: 0;
             kind: "close";
             clicked => { root.close-requested(); }
         }
