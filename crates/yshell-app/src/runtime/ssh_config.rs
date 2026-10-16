@@ -32,8 +32,12 @@ impl AppRuntime {
             &self.config_document.terminal,
             &self.config_document.logging,
         );
-        let theme =
-            SessionThemeDraft::new(parent_profile, sources, resolved.session.terminal.as_ref());
+        let theme = SessionThemeDraft::new(
+            parent_profile,
+            sources,
+            resolved.session.terminal.as_ref(),
+            &self.theme_catalog,
+        );
         let mut draft = SessionEditorDraft {
             target_session_id: Some(resolved.session.id.clone()),
             target_folder_id,

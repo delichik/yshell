@@ -39,9 +39,13 @@ pub(crate) const LOG_FORMAT_RAW: &str = "raw";
 
 /// D15 presets discovered from fixed system paths (not a full font catalog).
 fn system_mono_presets() -> Vec<FontFamilyFaces> {
-    let mut presets = Vec::new();
+    #[cfg(not(windows))]
+    {
+        Vec::new()
+    }
     #[cfg(windows)]
     {
+        let mut presets = Vec::new();
         let fonts = windows_fonts_dir();
         if let Some(faces) = load_windows_family(
             CASCADIA_MONO_FAMILY,
@@ -79,8 +83,8 @@ fn system_mono_presets() -> Vec<FontFamilyFaces> {
         ) {
             presets.push(faces);
         }
+        presets
     }
-    presets
 }
 
 #[cfg(windows)]
