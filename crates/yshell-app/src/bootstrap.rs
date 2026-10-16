@@ -6750,6 +6750,8 @@ fn restore_shortcut_focus_after_modal(window: &MainWindow, projection: &AppProje
 
 pub fn bootstrap_app() -> AppResult<YShellApp> {
     init_logging()?;
+    // 须在首个 Window 创建之前：关掉 Windows 无框窗默认透明（顶栏透缝）。
+    crate::win_chrome::select_backend()?;
     let config_dir = yshell_config::discover_config_dir().map_err(AppError::from_error)?;
     Ok(YShellApp::new(AppState::new(config_dir)?.runtime))
 }
