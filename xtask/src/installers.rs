@@ -529,6 +529,7 @@ fn numeric_components(version: &str) -> Vec<u64> {
         .collect()
 }
 
+#[cfg(target_os = "macos")]
 fn numeric_version(version: &str, max_components: usize) -> String {
     let components = numeric_components(version);
     if components.is_empty() {
@@ -589,6 +590,7 @@ pub fn rpm_version(version: &str) -> (String, String) {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn short_version(version: &str) -> String {
     version.strip_prefix('v').unwrap_or(version).to_string()
 }

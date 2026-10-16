@@ -47,15 +47,6 @@ component SectionTitle inherits Text {
     font-weight: Theme.weight-semibold;
 }
 
-// 分组小标题
-component GroupTitle inherits Text {
-    in property <string> heading: "";
-    text: root.heading;
-    color: Theme.text-secondary;
-    font-size: Theme.font-body;
-    font-weight: Theme.weight-semibold;
-}
-
 // 字段说明 / 路径 / 状态：低对比小字
 component HintText inherits Text {
     in property <string> hint: "";

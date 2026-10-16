@@ -72,14 +72,12 @@ component ThemeColorSwatch inherits Rectangle {
     border-color: Theme.control-stroke;
     background: root.fill;
 
-    private property <bool> picker-open: false;
-
     TouchArea {
         enabled: root.enabled;
-        clicked => { root.picker-open = true; }
+        clicked => { picker.show(); }
     }
 
-    if root.picker-open : PopupWindow {
+    picker := PopupWindow {
         x: 0;
         y: root.height + 4px;
         width: 196px;
@@ -98,25 +96,25 @@ component ThemeColorSwatch inherits Rectangle {
 
                 HorizontalLayout {
                     spacing: 4px;
-                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #000000; TouchArea { clicked => { root.picked("#000000"); root.picker-open = false; } } }
-                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #ffffff; TouchArea { clicked => { root.picked("#ffffff"); root.picker-open = false; } } }
-                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #ff5555; TouchArea { clicked => { root.picked("#ff5555"); root.picker-open = false; } } }
-                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #50fa7b; TouchArea { clicked => { root.picked("#50fa7b"); root.picker-open = false; } } }
-                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #f1fa8c; TouchArea { clicked => { root.picked("#f1fa8c"); root.picker-open = false; } } }
-                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #bd93f9; TouchArea { clicked => { root.picked("#bd93f9"); root.picker-open = false; } } }
-                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #ff79c6; TouchArea { clicked => { root.picked("#ff79c6"); root.picker-open = false; } } }
-                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #8be9fd; TouchArea { clicked => { root.picked("#8be9fd"); root.picker-open = false; } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #000000; TouchArea { clicked => { root.picked("#000000"); picker.close(); } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #ffffff; TouchArea { clicked => { root.picked("#ffffff"); picker.close(); } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #ff5555; TouchArea { clicked => { root.picked("#ff5555"); picker.close(); } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #50fa7b; TouchArea { clicked => { root.picked("#50fa7b"); picker.close(); } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #f1fa8c; TouchArea { clicked => { root.picked("#f1fa8c"); picker.close(); } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #bd93f9; TouchArea { clicked => { root.picked("#bd93f9"); picker.close(); } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #ff79c6; TouchArea { clicked => { root.picked("#ff79c6"); picker.close(); } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #8be9fd; TouchArea { clicked => { root.picked("#8be9fd"); picker.close(); } } }
                 }
                 HorizontalLayout {
                     spacing: 4px;
-                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #282a36; TouchArea { clicked => { root.picked("#282a36"); root.picker-open = false; } } }
-                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #44475a; TouchArea { clicked => { root.picked("#44475a"); root.picker-open = false; } } }
-                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #6272a4; TouchArea { clicked => { root.picked("#6272a4"); root.picker-open = false; } } }
-                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #f8f8f2; TouchArea { clicked => { root.picked("#f8f8f2"); root.picker-open = false; } } }
-                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #002b36; TouchArea { clicked => { root.picked("#002b36"); root.picker-open = false; } } }
-                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #073642; TouchArea { clicked => { root.picked("#073642"); root.picker-open = false; } } }
-                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #839496; TouchArea { clicked => { root.picked("#839496"); root.picker-open = false; } } }
-                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #eee8d5; TouchArea { clicked => { root.picked("#eee8d5"); root.picker-open = false; } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #282a36; TouchArea { clicked => { root.picked("#282a36"); picker.close(); } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #44475a; TouchArea { clicked => { root.picked("#44475a"); picker.close(); } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #6272a4; TouchArea { clicked => { root.picked("#6272a4"); picker.close(); } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #f8f8f2; TouchArea { clicked => { root.picked("#f8f8f2"); picker.close(); } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #002b36; TouchArea { clicked => { root.picked("#002b36"); picker.close(); } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #073642; TouchArea { clicked => { root.picked("#073642"); picker.close(); } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #839496; TouchArea { clicked => { root.picked("#839496"); picker.close(); } } }
+                    Rectangle { width: 16px; height: 16px; border-radius: 2px; border-width: 1px; border-color: Theme.control-stroke; background: #eee8d5; TouchArea { clicked => { root.picked("#eee8d5"); picker.close(); } } }
                 }
             }
         }
