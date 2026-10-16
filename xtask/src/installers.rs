@@ -224,63 +224,69 @@ fn msi(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
 /// DMG disk image containing a `YShell.app` bundle and an `/Applications`
 /// symlink, built with the `hdiutil` that ships with macOS.
 fn dmg(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
-    let hdiutil = context::which("hdiutil")
-        .with_context(|| format!("hdiutil was not found; {}", Format::Dmg.install_hint()))?;
-
-    let stage = ctx.work_dir.join("dmg");
-    recreate_dir(&stage)?;
-    let app = stage.join("YShell.app");
-    let macos_dir = app.join("Contents/MacOS");
-    let resources_dir = app.join("Contents/Resources");
-    fs::create_dir_all(&macos_dir)?;
-    fs::create_dir_all(&resources_dir)?;
-
-    copy_file(ctx.binary, &macos_dir.join("yshell"), true)?;
-
-    let icon_source = ctx.root.join("assets/icons/yshell.icns");
-    let icon_entry = if icon_source.is_file() {
-        copy_file(&icon_source, &resources_dir.join("yshell.icns"), false)?;
-        "  <key>CFBundleIconFile</key>\n  <string>yshell</string>\n".to_string()
-    } else {
-        String::new()
-    };
-
-    let info_plist = render_template(
-        &ctx.root.join("packaging/macos/Info.plist"),
-        &[
-            ("@VERSION@", &short_version(ctx.version)),
-            ("@BUNDLE_VERSION@", &numeric_version(ctx.version, 3)),
-            ("@ICON_ENTRY@", &icon_entry),
-        ],
-    )?;
-    fs::write(app.join("Contents/Info.plist"), info_plist)?;
-    copy_file(
-        &ctx.root.join("LICENSE"),
-        &resources_dir.join("LICENSE"),
-        false,
-    )?;
-
-    #[cfg(unix)]
+    #[cfg(not(target_os = "macos"))]
     {
-        use std::os::unix::fs::symlink;
-        let applications = stage.join("Applications");
-        let _ = fs::remove_file(&applications);
-        symlink("/Applications", &applications)?;
+        let _ = ctx;
+        bail!("dmg packages can only be built on macOS");
     }
-    #[cfg(not(unix))]
-    bail!("dmg packages can only be built on macOS");
 
-    let dest = ctx.out_dir.join(format!("{}.dmg", ctx.name));
-    let mut command = Command::new(hdiutil);
-    command
-        .args(["create", "-volname"])
-        .arg(format!("YShell {}", short_version(ctx.version)))
-        .arg("-srcfolder")
-        .arg(&stage)
-        .args(["-ov", "-format", "UDZO"])
-        .arg(&dest);
-    context::run(command)?;
-    Ok(dest)
+    #[cfg(target_os = "macos")]
+    {
+        let hdiutil = context::which("hdiutil")
+            .with_context(|| format!("hdiutil was not found; {}", Format::Dmg.install_hint()))?;
+
+        let stage = ctx.work_dir.join("dmg");
+        recreate_dir(&stage)?;
+        let app = stage.join("YShell.app");
+        let macos_dir = app.join("Contents/MacOS");
+        let resources_dir = app.join("Contents/Resources");
+        fs::create_dir_all(&macos_dir)?;
+        fs::create_dir_all(&resources_dir)?;
+
+        copy_file(ctx.binary, &macos_dir.join("yshell"), true)?;
+
+        let icon_source = ctx.root.join("assets/icons/yshell.icns");
+        let icon_entry = if icon_source.is_file() {
+            copy_file(&icon_source, &resources_dir.join("yshell.icns"), false)?;
+            "  <key>CFBundleIconFile</key>\n  <string>yshell</string>\n".to_string()
+        } else {
+            String::new()
+        };
+
+        let info_plist = render_template(
+            &ctx.root.join("packaging/macos/Info.plist"),
+            &[
+                ("@VERSION@", &short_version(ctx.version)),
+                ("@BUNDLE_VERSION@", &numeric_version(ctx.version, 3)),
+                ("@ICON_ENTRY@", &icon_entry),
+            ],
+        )?;
+        fs::write(app.join("Contents/Info.plist"), info_plist)?;
+        copy_file(
+            &ctx.root.join("LICENSE"),
+            &resources_dir.join("LICENSE"),
+            false,
+        )?;
+
+        {
+            use std::os::unix::fs::symlink;
+            let applications = stage.join("Applications");
+            let _ = fs::remove_file(&applications);
+            symlink("/Applications", &applications)?;
+        }
+
+        let dest = ctx.out_dir.join(format!("{}.dmg", ctx.name));
+        let mut command = Command::new(hdiutil);
+        command
+            .args(["create", "-volname"])
+            .arg(format!("YShell {}", short_version(ctx.version)))
+            .arg("-srcfolder")
+            .arg(&stage)
+            .args(["-ov", "-format", "UDZO"])
+            .arg(&dest);
+        context::run(command)?;
+        Ok(dest)
+    }
 }
 
 /// Debian package built with cargo-deb; the metadata lives in the

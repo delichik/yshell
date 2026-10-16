@@ -357,11 +357,11 @@ export component MainWindow inherits Window {
     in property <bool> theme_editor_builtin: false;
     in property <string> theme_editor_id: "";
     in-out property <string> theme_editor_name: "";
-    in property <string> theme_editor_foreground: "";
-    in property <string> theme_editor_background: "";
-    in property <string> theme_editor_cursor: "";
-    in property <string> theme_editor_selection: "";
-    in property <[string]> theme_editor_ansi: [];
+    in property <color> theme_editor_foreground: #000000;
+    in property <color> theme_editor_background: #000000;
+    in property <color> theme_editor_cursor: #000000;
+    in property <color> theme_editor_selection: #000000;
+    in property <[color]> theme_editor_ansi: [];
     // N5：Folder Editor（会话树文件夹右键 → Edit Folder Defaults…）
     in-out property <bool> folder_editor_visible: false;
     in property <string> folder_editor_name_text: "";

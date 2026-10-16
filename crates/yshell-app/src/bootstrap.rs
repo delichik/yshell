@@ -4910,6 +4910,14 @@ fn swatch_model(swatches: &[[u8; 3]]) -> ModelRc<slint::Color> {
     ))
 }
 
+/// `#rrggbb` (or bare hex) → Slint color; invalid input falls back to black.
+fn slint_color_from_hex(hex: &str) -> slint::Color {
+    match yshell_terminal::TerminalColor::from_hex(hex) {
+        Some(color) => slint::Color::from_rgb_u8(color.red, color.green, color.blue),
+        None => slint::Color::from_rgb_u8(0, 0, 0),
+    }
+}
+
 /// Rasterized terminal frame → Slint image.
 fn frame_image(frame: &yshell_terminal::TerminalFrame) -> slint::Image {
     slint::Image::from_rgba8(SharedPixelBuffer::clone_from_slice(
@@ -6040,15 +6048,15 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_theme_editor_builtin(projection.theme_editor_builtin);
     window.set_theme_editor_id(projection.theme_editor_id.clone().into());
     window.set_theme_editor_name(projection.theme_editor_name.clone().into());
-    window.set_theme_editor_foreground(projection.theme_editor_foreground.clone().into());
-    window.set_theme_editor_background(projection.theme_editor_background.clone().into());
-    window.set_theme_editor_cursor(projection.theme_editor_cursor.clone().into());
-    window.set_theme_editor_selection(projection.theme_editor_selection.clone().into());
+    window.set_theme_editor_foreground(slint_color_from_hex(&projection.theme_editor_foreground));
+    window.set_theme_editor_background(slint_color_from_hex(&projection.theme_editor_background));
+    window.set_theme_editor_cursor(slint_color_from_hex(&projection.theme_editor_cursor));
+    window.set_theme_editor_selection(slint_color_from_hex(&projection.theme_editor_selection));
     window.set_theme_editor_ansi(ModelRc::new(VecModel::from(
         projection
             .theme_editor_ansi
             .iter()
-            .map(|value| SharedString::from(value.as_str()))
+            .map(|value| slint_color_from_hex(value))
             .collect::<Vec<_>>(),
     )));
     window.set_folder_editor_visible(projection.folder_editor_visible);

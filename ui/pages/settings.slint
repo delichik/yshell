@@ -61,7 +61,7 @@ component AppearanceFieldRow inherits HorizontalLayout {
 
 // Color swatch that opens a preset palette popup (select, don't type hex).
 component ThemeColorSwatch inherits Rectangle {
-    in property <string> hex: "#000000";
+    in property <color> fill: #000000;
     in property <bool> enabled: true;
     callback picked(string);
 
@@ -70,8 +70,7 @@ component ThemeColorSwatch inherits Rectangle {
     border-radius: 4px;
     border-width: 1px;
     border-color: Theme.control-stroke;
-    // Host supplies lowercase #rrggbb; Slint accepts that as a brush.
-    background: root.hex;
+    background: root.fill;
 
     private property <bool> picker-open: false;
 
@@ -157,11 +156,11 @@ export component SettingsDialog inherits Rectangle {
     in property <bool> theme-editor-builtin: false;
     in property <string> theme-editor-id: "";
     in-out property <string> theme-editor-name: "";
-    in property <string> theme-editor-foreground: "";
-    in property <string> theme-editor-background: "";
-    in property <string> theme-editor-cursor: "";
-    in property <string> theme-editor-selection: "";
-    in property <[string]> theme-editor-ansi: [];
+    in property <color> theme-editor-foreground: #000000;
+    in property <color> theme-editor-background: #000000;
+    in property <color> theme-editor-cursor: #000000;
+    in property <color> theme-editor-selection: #000000;
+    in property <[color]> theme-editor-ansi: [];
 
     callback close();
     callback open-host-keys();
@@ -524,7 +523,7 @@ export component SettingsDialog inherits Rectangle {
                                                 AppearanceFieldRow {
                                                     label: @tr("Foreground");
                                                     ThemeColorSwatch {
-                                                        hex: root.theme-editor-foreground;
+                                                        fill: root.theme-editor-foreground;
                                                         enabled: !root.theme-editor-builtin;
                                                         picked(hex) => { root.update-theme-editor-role("foreground", hex); }
                                                     }
@@ -532,7 +531,7 @@ export component SettingsDialog inherits Rectangle {
                                                 AppearanceFieldRow {
                                                     label: @tr("Background");
                                                     ThemeColorSwatch {
-                                                        hex: root.theme-editor-background;
+                                                        fill: root.theme-editor-background;
                                                         enabled: !root.theme-editor-builtin;
                                                         picked(hex) => { root.update-theme-editor-role("background", hex); }
                                                     }
@@ -540,7 +539,7 @@ export component SettingsDialog inherits Rectangle {
                                                 AppearanceFieldRow {
                                                     label: @tr("Cursor");
                                                     ThemeColorSwatch {
-                                                        hex: root.theme-editor-cursor;
+                                                        fill: root.theme-editor-cursor;
                                                         enabled: !root.theme-editor-builtin;
                                                         picked(hex) => { root.update-theme-editor-role("cursor", hex); }
                                                     }
@@ -548,7 +547,7 @@ export component SettingsDialog inherits Rectangle {
                                                 AppearanceFieldRow {
                                                     label: @tr("Selection");
                                                     ThemeColorSwatch {
-                                                        hex: root.theme-editor-selection;
+                                                        fill: root.theme-editor-selection;
                                                         enabled: !root.theme-editor-builtin;
                                                         picked(hex) => { root.update-theme-editor-role("selection", hex); }
                                                     }
@@ -562,10 +561,10 @@ export component SettingsDialog inherits Rectangle {
 
                                                 GridLayout {
                                                     spacing: Theme.spacing-4;
-                                                    for ansi-hex[ansi-index] in root.theme-editor-ansi : ThemeColorSwatch {
+                                                    for ansi-color[ansi-index] in root.theme-editor-ansi : ThemeColorSwatch {
                                                         row: Math.floor(ansi-index / 8);
                                                         col: Math.mod(ansi-index, 8);
-                                                        hex: ansi-hex;
+                                                        fill: ansi-color;
                                                         enabled: !root.theme-editor-builtin;
                                                         picked(hex) => { root.update-theme-editor-ansi(ansi-index, hex); }
                                                     }
