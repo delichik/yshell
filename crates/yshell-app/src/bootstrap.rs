@@ -711,6 +711,79 @@ pub(crate) fn wire_callbacks(
         }
     });
 
+    // 双击标签：复制 session。
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_duplicate_tab(move |tab_id| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        match runtime_ref.borrow_mut().duplicate_tab(tab_id.as_ref()) {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not duplicate the tab.", &error),
+        }
+    });
+
+    // 标签拖拽载荷。
+    {
+        let runtime_ref = Rc::clone(&runtime);
+        window.on_drag_tab_transfer(move |tab_id: SharedString| {
+            let mut transfer = slint::DataTransfer::default();
+            transfer.set_user_data(Rc::new(TabDragPayload {
+                tab_id: tab_id.as_ref().to_owned(),
+            }));
+            transfer
+        });
+    }
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_drop_tab_on_pane(move |pane_index, data: slint::DataTransfer| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let Some(tab_id) = tab_drag_payload(&data) else {
+            return;
+        };
+        match runtime_ref
+            .borrow_mut()
+            .move_tab_to_pane(&tab_id, usize::try_from(pane_index).unwrap_or(0))
+        {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not move the tab.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_drop_tab_split(move |data: slint::DataTransfer, direction| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let Some(tab_id) = tab_drag_payload(&data) else {
+            return;
+        };
+        match runtime_ref
+            .borrow_mut()
+            .place_tab_split(&tab_id, direction.as_ref())
+        {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not split with the tab.", &error),
+        }
+    });
+
     // WP4：分屏。
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
@@ -4551,6 +4624,17 @@ struct SftpDragPayload {
     paths: Vec<PathBuf>,
 }
 
+#[derive(Clone)]
+struct TabDragPayload {
+    tab_id: String,
+}
+
+fn tab_drag_payload(data: &slint::DataTransfer) -> Option<String> {
+    data.user_data()
+        .and_then(|value| value.downcast::<TabDragPayload>().ok())
+        .map(|value| value.tab_id.clone())
+}
+
 /// Builds the `data-transfer` for a drag that starts in the given pane.
 fn build_drag_transfer(
     runtime: &AppRuntime,
@@ -6310,10 +6394,12 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_workspace_split_pane0_tab_id(split.pane0_tab_id.clone().into());
     window.set_workspace_split_pane0_title_text(split.pane0_title_text.clone().into());
     window.set_workspace_split_pane0_empty(split.pane0_empty);
+    window.set_workspace_split_pane0_quick_connect(split.pane0_quick_connect);
     set_split_pane_tabs_if_changed(window, 0, &split.pane0_tabs);
     window.set_workspace_split_pane1_tab_id(split.pane1_tab_id.clone().into());
     window.set_workspace_split_pane1_title_text(split.pane1_title_text.clone().into());
     window.set_workspace_split_pane1_empty(split.pane1_empty);
+    window.set_workspace_split_pane1_quick_connect(split.pane1_quick_connect);
     set_split_pane_tabs_if_changed(window, 1, &split.pane1_tabs);
     // N9：同步发送按键（终端/标签菜单 + 状态栏 chip + 标签角标）。
     window.set_terminal_sync_all_enabled(projection.terminal_sync_all_enabled);

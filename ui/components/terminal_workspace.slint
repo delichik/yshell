@@ -18,6 +18,7 @@ import { TerminalView } from "terminal_view.slint";
 import { WorkspaceSplitView } from "workspace_split.slint";
 import { WorkspaceTab } from "workspace_tab_model.slint";
 import { WorkspaceTabItem } from "workspace_tab_item.slint";
+import { QuickConnectPage, QuickConnectRow, QuickLinkRow } from "../pages/quick_connect.slint";
 
 export { WorkspaceTab }
 
@@ -26,9 +27,10 @@ export component TerminalWorkspace inherits VerticalLayout {
     // E21：这些默认值都会被宿主投影覆盖；置空避免投影到达前闪现英文（muse 轮1 中#35）
     in property <string> title-text: "";
     in property <string> body-text: "";
-    /// N2：活动标签是 Quick Connect 页时隐藏终端视图，内容区交给宿主注入的页面
-    /// （`@children`），标签条保持可见（标签本身仍是标签）。
+    /// N2：活动标签是 Quick Connect 页时隐藏单终端视图；分屏时由叶子/overlay 承接 QC。
     in property <bool> terminal-visible: true;
+    /// 是否显示快速连接内容（非分屏全页，或分屏时叠在 QC 叶子上）。
+    in property <bool> quick-connect-visible: false;
     in property <image> terminal-image;
     in property <int> cursor-column: 0;
     in property <int> cursor-row: 0;
@@ -44,9 +46,8 @@ export component TerminalWorkspace inherits VerticalLayout {
     in-out property <bool> search-regex: false;
 
     // 分屏视口：从 split_host 独立算 pane0/pane1（勿对已缩过的 primary 再 ×ratio）。
-    // split_host VerticalLayout padding 8+8；把手 4px；叶内 tab 条 = bar-height-tabs；TerminalView 内边距 12+12。
+    // split_host VerticalLayout padding 8+8；把手 4px；叶内无 tab 条；TerminalView 内边距 12+12。
     property <float> split-clamped-ratio: Math.max(0.2, Math.min(0.8, root.split-ratio));
-    property <float> split-pane-chrome-px: Theme.bar-height-tabs / 1px;
     property <float> split-inner-width-px: Math.max(split_host.width / 1px - 16.0, 1.0);
     property <float> split-inner-height-px: Math.max(split_host.height / 1px - 16.0, 1.0);
     property <float> split-pane0-viewport-width-px: root.split-orientation-text == "vertical"
@@ -56,11 +57,11 @@ export component TerminalWorkspace inherits VerticalLayout {
         ? Math.max(root.split-inner-width-px - 24.0, 1.0)
         : Math.max((root.split-inner-width-px - 4.0) * (1.0 - root.split-clamped-ratio) - 24.0, 1.0);
     property <float> split-pane0-viewport-height-px: root.split-orientation-text == "vertical"
-        ? Math.max((root.split-inner-height-px - 4.0) * root.split-clamped-ratio - root.split-pane-chrome-px - 24.0, 1.0)
-        : Math.max(root.split-inner-height-px - root.split-pane-chrome-px - 24.0, 1.0);
+        ? Math.max((root.split-inner-height-px - 4.0) * root.split-clamped-ratio - 24.0, 1.0)
+        : Math.max(root.split-inner-height-px - 24.0, 1.0);
     property <float> split-pane1-viewport-height-px: root.split-orientation-text == "vertical"
-        ? Math.max((root.split-inner-height-px - 4.0) * (1.0 - root.split-clamped-ratio) - root.split-pane-chrome-px - 24.0, 1.0)
-        : Math.max(root.split-inner-height-px - root.split-pane-chrome-px - 24.0, 1.0);
+        ? Math.max((root.split-inner-height-px - 4.0) * (1.0 - root.split-clamped-ratio) - 24.0, 1.0)
+        : Math.max(root.split-inner-height-px - 24.0, 1.0);
 
     /// 单终端：取 TerminalView；分屏：聚焦 pane 的独立视口。
     out property <float> terminal-viewport-width-px: root.split-active
@@ -106,13 +107,25 @@ export component TerminalWorkspace inherits VerticalLayout {
     /// A2/E23：宿主在菜单/弹层关闭后把键盘焦点还给终端（WS-A 的焦点回退请求）。
     /// 终端不可见（Quick Connect 页）时不动焦点，避免抢 QC 输入框。
     public function focus-terminal() {
-        if (!root.terminal-visible) {
+        if (root.quick-connect-visible && !root.split-active) {
+            return;
+        }
+        if (root.split-active && root.split-qc-pane == root.split-focused-pane) {
             return;
         }
         if (root.split-active) {
             split_view.focus-terminal();
-        } else {
+        } else if (root.terminal-visible) {
             terminal_view.focus-terminal();
+        }
+    }
+
+    /// Ctrl+O / File > Quick Connect：聚焦 QC 输入框。
+    public function focus-quick-connect() {
+        if (root.split-active && root.split-qc-pane >= 0) {
+            split_qc_page.focus-quick-connect();
+        } else {
+            full_qc_page.focus-quick-connect();
         }
     }
 
@@ -125,13 +138,17 @@ export component TerminalWorkspace inherits VerticalLayout {
     callback close-tab(string);
     /// 参数：tab id, 当前显示名, x, y。
     callback tab-context-menu-requested(string, string, length, length);
-    /// WP4：请求重命名标签（双击；参数 = id, 当前显示名）。
-    callback rename-tab-requested(string, string);
+    /// 双击标签：复制 session（参数 = tab id）。
+    callback duplicate-tab-requested(string);
     callback context-menu-requested(length, length);
     // WP4：分屏动作。
     callback focus-split-pane(int);
     callback close-split-pane(int);
     callback set-split-ratio(float);
+    /// 标签拖拽载荷 / 落到 pane / 边缘分屏。
+    pure callback drag-tab-transfer(string) -> data-transfer;
+    callback drop-tab-on-pane(int, data-transfer);
+    callback drop-tab-split(data-transfer, string);
     callback terminal-key(string, bool, bool, bool, bool);
     callback terminal-scroll(int);
     callback terminal-scroll-to-bottom();
@@ -152,6 +169,23 @@ export component TerminalWorkspace inherits VerticalLayout {
     callback connection-cancel();
     callback connection-copy-error();
 
+    // --- N2：快速连接页（工作区自持；分屏时叠在对应叶子上）----------------
+    in-out property <string> quick-connect-input-text: "";
+    in property <string> quick-connect-error-text: "";
+    in property <string> quick-connect-summary-text: "";
+    in property <bool> quick-connect-history-enabled: true;
+    in property <string> quick-connect-last-target-text: "";
+    in property <[QuickConnectRow]> quick-connect-rows: [];
+    in property <[QuickLinkRow]> quick-link-rows: [];
+    callback quick-connect-input-changed(string);
+    callback quick-connect-submit(string);
+    callback quick-connect-connect-target(string);
+    callback quick-connect-pin-target(string);
+    callback quick-connect-copy-target(string);
+    callback quick-connect-remove-link(string);
+    callback quick-connect-save-as-session(string);
+    callback quick-connect-clear-history();
+
     /// WP1：连接 overlay 投影（由宿主绑定）。
     in property <bool> connection-overlay-visible: false;
     in property <string> connection-overlay-target: "";
@@ -165,13 +199,23 @@ export component TerminalWorkspace inherits VerticalLayout {
     in property <string> split-orientation-text: "horizontal";
     in property <float> split-ratio: 0.5;
     in property <int> split-focused-pane: 0;
-    in property <string> split-pane0-title-text: "";
     in property <bool> split-pane0-empty: false;
-    in property <[WorkspaceTab]> split-pane0-tabs: [];
-    in property <string> split-pane1-title-text: "";
+    in property <bool> split-pane0-quick-connect: false;
     in property <bool> split-pane1-empty: false;
-    in property <[WorkspaceTab]> split-pane1-tabs: [];
+    in property <bool> split-pane1-quick-connect: false;
     in property <image> terminal-image-secondary;
+
+    /// 分屏时 QC 叠在哪个叶子（-1 = 无）。
+    property <int> split-qc-pane: root.split-pane0-quick-connect ? 0
+        : (root.split-pane1-quick-connect ? 1 : -1);
+    property <float> split-qc-ratio: Math.max(0.2, Math.min(0.8, root.split-ratio));
+    property <bool> split-qc-shown: root.split-active && root.split-qc-pane >= 0;
+    property <length> split-inner-w: split_host.width - 2 * Theme.spacing-8;
+    property <length> split-inner-h: split_host.height - 2 * Theme.spacing-8;
+    property <length> split-pane0-w: (root.split-inner-w - 4px) * root.split-qc-ratio;
+    property <length> split-pane1-w: (root.split-inner-w - 4px) * (1.0 - root.split-qc-ratio);
+    property <length> split-pane0-h: (root.split-inner-h - 4px) * root.split-qc-ratio;
+    property <length> split-pane1-h: (root.split-inner-h - 4px) * (1.0 - root.split-qc-ratio);
     /// 次 pane 视口（非聚焦叶，与 primary 对称独立计算，供 PTY resize）。
     out property <float> terminal-viewport-secondary-width-px: root.split-active
         ? (root.split-focused-pane == 0
@@ -184,10 +228,10 @@ export component TerminalWorkspace inherits VerticalLayout {
             : root.split-pane0-viewport-height-px)
         : 0;
 
-    // 标签条：未分屏时全局一条；分屏时藏起，改由各叶子自带 tab strip（Xshell 式）。
+    // 标签条：分屏与否共用同一条（与未分屏视觉/交互一致；拖拽可落到 pane）。
     Rectangle {
         clip: true;
-        height: root.split-active ? 0px : Theme.bar-height-tabs;
+        height: Theme.bar-height-tabs;
         background: Theme.window-background;
         HorizontalLayout {
             // E12：与终端内容区左缘（12px）统一
@@ -230,18 +274,13 @@ export component TerminalWorkspace inherits VerticalLayout {
                                 tab-logging: tab.logging;
                                 tab-sync-role-text: tab.sync_role_text;
                                 tab-unread: tab.unread;
+                                drag-enabled: true;
+                                drag-payload: root.drag-tab-transfer(tab.id);
                                 // E11：相邻标签之间 1px 分隔线；紧邻活动标签时不画
                                 show-divider: i > 0 && !tab.active && !root.tabs[i - 1].active;
                                 activate() => { root.activate-tab(tab.id); }
                                 close-requested() => { root.close-tab(tab.id); }
-                                rename-requested() => {
-                                    root.rename-tab-requested(
-                                        tab.id,
-                                        tab.kind_text == "quick-connect" && tab.title == ""
-                                            ? @tr("Quick Connect")
-                                            : tab.title
-                                    );
-                                }
+                                duplicate-requested() => { root.duplicate-tab-requested(tab.id); }
                                 context-menu-requested(x, y) => {
                                     root.tab-context-menu-requested(
                                         tab.id,
@@ -280,7 +319,7 @@ export component TerminalWorkspace inherits VerticalLayout {
     // E13：`100000px` 是"无上限"哨兵。改成 `root.height` 会与父布局形成绑定环，
     // 改成 `visible` 会让隐藏期间的 viewport 宽高读数归零（PTY 尺寸依赖它），
     // 故保留哨兵并在此记录（见 ws-E.md 遗留）。
-    Rectangle {
+    single_host := Rectangle {
         // min-height 显式归零：否则内容（终端视图）的隐式 min 会顶住折叠。
         // WP4：分屏时折叠单 TerminalView，改用下方 WorkspaceSplitView。
         // clip：折叠后标题条/叶子不得溢出到状态栏（Slint 里 max-height=0 仍可能绘制子项）。
@@ -334,15 +373,39 @@ export component TerminalWorkspace inherits VerticalLayout {
                 context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
             }
         }
+
+        // 未分屏：拖到右/下边缘即可创建分屏。
+        DropArea {
+            x: parent.width - 28px;
+            width: 28px;
+            height: parent.height;
+            enabled: !root.split-active && root.terminal-visible;
+            can-drop(_event) => { return DragAction.move; }
+            dropped(event) => {
+                root.drop-tab-split(event.data, "right");
+                return DragAction.move;
+            }
+        }
+        DropArea {
+            y: parent.height - 28px;
+            width: parent.width;
+            height: 28px;
+            enabled: !root.split-active && root.terminal-visible;
+            can-drop(_event) => { return DragAction.move; }
+            dropped(event) => {
+                root.drop-tab-split(event.data, "down");
+                return DragAction.move;
+            }
+        }
     }
 
-    // WP4：分屏内容区（与单终端互斥折叠）。
+    // WP4：分屏内容区（与单终端互斥折叠）。QC 活动时仍保持几何——QC 叠在对应叶子上。
     split_host := Rectangle {
-        // 未分屏时折叠为 0：必须 clip，否则叶子标题条（"Terminal" + ×）会溢到状态栏。
         clip: true;
         min-height: 0px;
-        max-height: root.terminal-visible && root.split-active ? 100000px : 0px;
+        max-height: root.split-active ? 100000px : 0px;
         background: Theme.window-background;
+
         VerticalLayout {
             padding: Theme.spacing-8;
             split_view := WorkspaceSplitView {
@@ -350,12 +413,10 @@ export component TerminalWorkspace inherits VerticalLayout {
                 orientation-text: root.split-orientation-text;
                 ratio: root.split-ratio;
                 focused-pane: root.split-focused-pane;
-                pane0-title-text: root.split-pane0-title-text;
                 pane0-empty: root.split-pane0-empty;
-                pane0-tabs: root.split-pane0-tabs;
-                pane1-title-text: root.split-pane1-title-text;
+                pane0-quick-connect: root.split-pane0-quick-connect;
                 pane1-empty: root.split-pane1-empty;
-                pane1-tabs: root.split-pane1-tabs;
+                pane1-quick-connect: root.split-pane1-quick-connect;
                 primary-image: root.terminal-image;
                 secondary-image: root.terminal-image-secondary;
                 cursor-column: root.cursor-column;
@@ -372,27 +433,12 @@ export component TerminalWorkspace inherits VerticalLayout {
                 connection-overlay-error: root.connection-overlay-error;
                 connection-overlay-failed: root.connection-overlay-failed;
                 connection-overlay-pending: root.connection-overlay-pending;
-                view-visible: root.terminal-visible && root.split-active;
-                // 折叠态仍可能收到溢出命中：未激活时吞掉，避免 "workspace is not split"。
+                view-visible: root.split-active;
                 focus-pane(index) => {
                     if (root.split-active) {
                         root.focus-split-pane(index);
                     }
                 }
-                close-pane(index) => {
-                    if (root.split-active) {
-                        root.close-split-pane(index);
-                    }
-                }
-                activate-tab(id) => { root.activate-tab(id); }
-                close-tab(id) => { root.close-tab(id); }
-                tab-context-menu-requested(id, title, x, y) => {
-                    root.tab-context-menu-requested(id, title, x, y);
-                }
-                rename-tab-requested(id, title) => {
-                    root.rename-tab-requested(id, title);
-                }
-                new-session() => { root.new-session(); }
                 terminal-key(text, ctrl, alt, shift, meta) => {
                     root.terminal-key(text, ctrl, alt, shift, meta);
                 }
@@ -415,13 +461,75 @@ export component TerminalWorkspace inherits VerticalLayout {
                 connection-cancel() => { root.connection-cancel(); }
                 connection-copy-error() => { root.connection-copy-error(); }
                 ratio-changed(value) => { root.set-split-ratio(value); }
+                tab-dropped-on-pane(index, data) => { root.drop-tab-on-pane(index, data); }
+                tab-split-dropped(data, dir) => { root.drop-tab-split(data, dir); }
             }
+        }
+
+        // QC 与终端叶子平等占位：始终实例化（避免条件 id），非 QC 时几何归零。
+        split_qc_page := QuickConnectPage {
+            x: Theme.spacing-8 + (
+                !root.split-qc-shown ? 0px
+                : root.split-orientation-text == "vertical" ? 0px
+                : (root.split-qc-pane == 0 ? 0px : root.split-pane0-w + 4px)
+            );
+            y: Theme.spacing-8 + (
+                !root.split-qc-shown ? 0px
+                : root.split-orientation-text != "vertical" ? 0px
+                : (root.split-qc-pane == 0 ? 0px : root.split-pane0-h + 4px)
+            );
+            width: !root.split-qc-shown ? 0px
+                : root.split-orientation-text == "vertical" ? root.split-inner-w
+                : (root.split-qc-pane == 0 ? root.split-pane0-w : root.split-pane1-w);
+            height: !root.split-qc-shown ? 0px
+                : root.split-orientation-text != "vertical" ? root.split-inner-h
+                : (root.split-qc-pane == 0 ? root.split-pane0-h : root.split-pane1-h);
+            clip: true;
+            input-text: root.quick-connect-input-text;
+            input-error-text: root.quick-connect-error-text;
+            summary-text: root.quick-connect-summary-text;
+            history-enabled: root.quick-connect-history-enabled;
+            last-target-text: root.quick-connect-last-target-text;
+            recent-rows: root.quick-connect-rows;
+            link-rows: root.quick-link-rows;
+            input-changed(text) => {
+                root.quick-connect-input-text = text;
+                root.quick-connect-input-changed(text);
+            }
+            submit(text) => { root.quick-connect-submit(text); }
+            connect-target(target) => { root.quick-connect-connect-target(target); }
+            pin-target(target) => { root.quick-connect-pin-target(target); }
+            copy-target(target) => { root.quick-connect-copy-target(target); }
+            remove-link(id) => { root.quick-connect-remove-link(id); }
+            save-as-session(target) => { root.quick-connect-save-as-session(target); }
+            clear-history() => { root.quick-connect-clear-history(); }
         }
     }
 
-    // N2：非终端标签的内容（QuickConnectPage）由宿主作为子项注入；
-    // 作为布局单元放在终端块之后，由宿主控制显隐与拉伸。
-    @children
+    // N2：未分屏时的全页 Quick Connect。
+    full_qc_page := QuickConnectPage {
+        vertical-stretch: 1;
+        min-height: 0px;
+        max-height: !root.split-active && root.quick-connect-visible ? 100000px : 0px;
+        input-text: root.quick-connect-input-text;
+        input-error-text: root.quick-connect-error-text;
+        summary-text: root.quick-connect-summary-text;
+        history-enabled: root.quick-connect-history-enabled;
+        last-target-text: root.quick-connect-last-target-text;
+        recent-rows: root.quick-connect-rows;
+        link-rows: root.quick-link-rows;
+        input-changed(text) => {
+            root.quick-connect-input-text = text;
+            root.quick-connect-input-changed(text);
+        }
+        submit(text) => { root.quick-connect-submit(text); }
+        connect-target(target) => { root.quick-connect-connect-target(target); }
+        pin-target(target) => { root.quick-connect-pin-target(target); }
+        copy-target(target) => { root.quick-connect-copy-target(target); }
+        remove-link(id) => { root.quick-connect-remove-link(id); }
+        save-as-session(target) => { root.quick-connect-save-as-session(target); }
+        clear-history() => { root.quick-connect-clear-history(); }
+    }
 }
 
 // 终端右键菜单 Popup（宿主在窗口层级实例化）。

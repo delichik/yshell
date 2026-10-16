@@ -21,11 +21,16 @@ export component WorkspaceTabItem inherits Rectangle {
     /// E11：在标签左缘之后画 1px 分隔线（位于 4px 标签间距中央）。
     in property <bool> show-divider: false;
 
+    /// 拖拽载荷（宿主按 tab-id 构建 `TabDragPayload`）。
+    in property <data-transfer> drag-payload;
+    /// 是否允许拖出分屏/换 pane（无载荷时禁用 DragArea）。
+    in property <bool> drag-enabled: true;
+
     callback activate();
     callback close-requested();
     callback context-menu-requested(length, length);
-    /// WP4：双击重命名。
-    callback rename-requested();
+    /// 双击：复制 session（新建同源标签）。
+    callback duplicate-requested();
 
     /// N9：角标悬停提示（源/接收的完整说明；@markdown 插值用）。
     property <string> tab-sync-tooltip: root.tab-sync-role-text == "source"
@@ -190,18 +195,29 @@ export component WorkspaceTabItem inherits Rectangle {
         }
     }
 
-    tab-hover := TouchArea {
-        // 关闭命中区（右 32px）让给 close-touch：整标签命中区声明在布局之后，
-        // 输入遍历会先命中它，否则关闭点击会被标签本体抢走。
+    // 拖拽整标签（关闭钮除外）；点击/双击/右键仍由内层 TouchArea 处理。
+    DragArea {
         width: parent.width - Theme.control-height;
-        clicked => { root.activate(); }
-        double-clicked => { root.rename-requested(); }
-        pointer-event(event) => {
-            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
-                root.context-menu-requested(
-                    self.absolute-position.x + self.mouse-x,
-                    self.absolute-position.y + self.mouse-y
-                );
+        height: parent.height;
+        enabled: root.drag-enabled;
+        data: root.drag-payload;
+        allow-move: true;
+        allow-copy: false;
+
+        tab-hover := TouchArea {
+            // 关闭命中区（右 32px）让给 close-touch：整标签命中区声明在布局之后，
+            // 输入遍历会先命中它，否则关闭点击会被标签本体抢走。
+            width: 100%;
+            height: 100%;
+            clicked => { root.activate(); }
+            double-clicked => { root.duplicate-requested(); }
+            pointer-event(event) => {
+                if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                    root.context-menu-requested(
+                        self.absolute-position.x + self.mouse-x,
+                        self.absolute-position.y + self.mouse-y
+                    );
+                }
             }
         }
     }

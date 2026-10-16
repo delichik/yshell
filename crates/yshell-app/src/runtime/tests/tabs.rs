@@ -433,3 +433,49 @@ fn split_with_two_sessions_reuses_existing_neighbor() {
     assert_eq!(projection.workspace_split.pane1_tab_id, second_tab);
     assert_tab_invariants(&runtime);
 }
+
+#[test]
+fn duplicate_tab_opens_sibling_session() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 1);
+    let first_tab = open_saved_tab(&mut runtime, "saved-0");
+    let first_session = runtime.tabs[0]
+        .session_id()
+        .expect("terminal tab")
+        .to_owned();
+
+    let projection = runtime.duplicate_tab(&first_tab).expect("duplicate");
+    assert_eq!(runtime.tabs.len(), 2);
+    assert_ne!(projection.active_tab_id, first_tab);
+    let second_session = runtime.tabs[1]
+        .session_id()
+        .expect("duplicated tab")
+        .to_owned();
+    assert_ne!(first_session, second_session);
+    assert_tab_invariants(&runtime);
+}
+
+#[test]
+fn place_tab_split_creates_two_pane_layout() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 2);
+    let first_tab = open_saved_tab(&mut runtime, "saved-0");
+    let second_tab = open_saved_tab(&mut runtime, "saved-1");
+
+    let projection = runtime
+        .place_tab_split(&second_tab, "right")
+        .expect("drag split");
+    assert!(projection.workspace_split.active);
+    assert_eq!(projection.workspace_split.orientation_text, "horizontal");
+    assert_eq!(projection.workspace_split.pane1_tab_id, second_tab);
+    assert_eq!(projection.workspace_split.pane0_tab_id, first_tab);
+    assert!(!projection.workspace_split.pane0_quick_connect);
+    assert!(!projection.workspace_split.pane1_quick_connect);
+
+    let moved = runtime
+        .move_tab_to_pane(&second_tab, 0)
+        .expect("move to pane0");
+    assert_eq!(moved.workspace_split.pane0_tab_id, second_tab);
+    assert_eq!(moved.workspace_split.focused_pane, 0);
+    assert_tab_invariants(&runtime);
+}

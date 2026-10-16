@@ -24,7 +24,7 @@ import { AboutDialog } from "pages/about.slint";
 import { SettingsDialog, SettingsSchemeOption } from "pages/settings.slint";
 import { SessionEditor } from "pages/session_editor.slint";
 import { KnownHostsPage } from "pages/known_hosts.slint";
-import { QuickConnectPage, QuickConnectRow, QuickLinkRow } from "pages/quick_connect.slint";
+import { QuickConnectRow, QuickLinkRow } from "pages/quick_connect.slint";
 import { PrivateKeysPage, PrivateKeyRow } from "pages/private_keys.slint";
 import { HostKeysPage, HostKeyGroup, HostKeyEntry } from "pages/host_keys.slint";
 import { AuthPromptDialog, AuthKeyOption, AuthKeyboardPrompt } from "components/auth_prompt_dialog.slint";
@@ -478,10 +478,12 @@ export component MainWindow inherits Window {
     in-out property <string> workspace_split_pane0_tab_id: "";
     in-out property <string> workspace_split_pane0_title_text: "";
     in-out property <bool> workspace_split_pane0_empty: false;
+    in-out property <bool> workspace_split_pane0_quick_connect: false;
     in-out property <[WorkspaceTab]> workspace_split_pane0_tabs: [];
     in-out property <string> workspace_split_pane1_tab_id: "";
     in-out property <string> workspace_split_pane1_title_text: "";
     in-out property <bool> workspace_split_pane1_empty: false;
+    in-out property <bool> workspace_split_pane1_quick_connect: false;
     in-out property <[WorkspaceTab]> workspace_split_pane1_tabs: [];
     // WP4：标签重命名弹窗（显示名仅内存，会话生命周期内有效）。
     in-out property <bool> tab_rename_dialog_visible: false;
@@ -713,6 +715,12 @@ export component MainWindow inherits Window {
     // --- N0 标签条：激活/关闭（单关 + 批量 scope）/右键菜单/关闭确认 ----------
     callback activate_tab(string);
     callback rename_tab(string, string);
+    /// 双击标签：复制同源 session。
+    callback duplicate_tab(string);
+    /// 标签拖拽载荷（`TabDragPayload`）。
+    pure callback drag_tab_transfer(string) -> data-transfer;
+    callback drop_tab_on_pane(int, data-transfer);
+    callback drop_tab_split(data-transfer, string);
     callback split_workspace(string);
     callback focus_split_pane(int);
     callback close_split_pane(int);
@@ -1069,13 +1077,13 @@ export component MainWindow inherits Window {
     /// W5-A2 / N2：Ctrl+O（及非终端焦点下的 Ctrl+L）与 File > Quick Connect —— 打开/激活 QC 页并聚焦输入框。
     public function focus-quick-connect() {
         root.open_quick_connect();
-        quick_connect_page.focus-quick-connect();
+        terminal_workspace.focus-quick-connect();
     }
 
     // N2：切到 QC 标签（点击标签/Ctrl+O/启动落点）时自动聚焦输入框。
     changed quick_connect_visible => {
         if (root.quick_connect_visible) {
-            quick_connect_page.focus-quick-connect();
+            terminal_workspace.focus-quick-connect();
         }
     }
 
@@ -2202,8 +2210,9 @@ export component MainWindow inherits Window {
                 // 投影与回调由本文件转发，viewport/焦点 out 属性继续对 Rust 暴露。
                 terminal_workspace := TerminalWorkspace {
                     horizontal-stretch: 1;
-                    // N2：活动标签是 QC 页时隐藏终端视图，内容区换成页面实例。
-                    terminal-visible: !root.quick_connect_visible;
+                    // N2：活动标签是 QC 页时隐藏单终端；分屏时 QC 叠在对应叶子上。
+                    terminal-visible: !root.quick_connect_visible || root.workspace_split_active;
+                    quick-connect-visible: root.quick_connect_visible;
                     tabs: root.tabs;
                     title-text: TextFormats.terminal-title-display(root.terminal_title_has_session, root.terminal_title_name_text);
                     body-text: TextFormats.terminal-body-display(root.terminal_body_kind_text, root.terminal_body_text);
@@ -2238,7 +2247,10 @@ export component MainWindow inherits Window {
                     }
                     activate-tab(id) => { root.activate_tab(id); }
                     close-tab(id) => { root.close_tab(id); }
-                    rename-tab-requested(id, title) => { root.open_tab_rename_dialog(id, title); }
+                    duplicate-tab-requested(id) => { root.duplicate_tab(id); }
+                    drag-tab-transfer(id) => { return root.drag_tab_transfer(id); }
+                    drop-tab-on-pane(index, data) => { root.drop_tab_on_pane(index, data); }
+                    drop-tab-split(data, dir) => { root.drop_tab_split(data, dir); }
                     tab-context-menu-requested(id, title, x, y) => {
                         root.tab_menu_id = id;
                         root.tab_menu_title_text = title;
@@ -2251,16 +2263,35 @@ export component MainWindow inherits Window {
                     split-orientation-text: root.workspace_split_orientation_text;
                     split-ratio: root.workspace_split_ratio;
                     split-focused-pane: root.workspace_split_focused_pane;
-                    split-pane0-title-text: root.workspace_split_pane0_title_text;
                     split-pane0-empty: root.workspace_split_pane0_empty;
-                    split-pane0-tabs: root.workspace_split_pane0_tabs;
-                    split-pane1-title-text: root.workspace_split_pane1_title_text;
+                    split-pane0-quick-connect: root.workspace_split_pane0_quick_connect;
                     split-pane1-empty: root.workspace_split_pane1_empty;
-                    split-pane1-tabs: root.workspace_split_pane1_tabs;
+                    split-pane1-quick-connect: root.workspace_split_pane1_quick_connect;
                     terminal-image-secondary: root.terminal_image_secondary;
                     focus-split-pane(index) => { root.focus_split_pane(index); }
                     close-split-pane(index) => { root.close_split_pane(index); }
                     set-split-ratio(value) => { root.set_split_ratio(value); }
+                    // N2：快速连接（工作区自持全页 / 分屏叶子 overlay）
+                    quick-connect-input-text <=> root.quick_connect_input_text;
+                    quick-connect-error-text: root.quick_connect_error_text;
+                    quick-connect-summary-text: TextFormats.status-message(
+                        root.quick_connect_summary_kind_text,
+                        root.quick_connect_summary_param_1_text,
+                        root.quick_connect_summary_param_2_text,
+                        root.quick_connect_summary_text
+                    );
+                    quick-connect-history-enabled: root.quick_connect_history_enabled;
+                    quick-connect-last-target-text: root.quick_connect_last_target_text;
+                    quick-connect-rows: root.quick_connect_rows;
+                    quick-link-rows: root.quick_links_rows;
+                    quick-connect-input-changed(text) => { root.update_quick_connect_input(text); }
+                    quick-connect-submit(text) => { root.submit_quick_connect(text); }
+                    quick-connect-connect-target(target) => { root.submit_quick_connect(target); }
+                    quick-connect-pin-target(target) => { root.quick_connect_pin(target); }
+                    quick-connect-copy-target(target) => { root.quick_connect_copy(target); }
+                    quick-connect-remove-link(id) => { root.quick_link_remove(id); }
+                    quick-connect-save-as-session(target) => { root.quick_connect_save_as_session(target); }
+                    quick-connect-clear-history() => { root.quick_connect_clear_history(); }
                     // N7：终端 FocusScope 拿到焦点（窗口激活 / 点击终端）→ 标记交互窗口。
                     window-activated() => { root.window_activated(); }
                     terminal-key(text, ctrl, alt, shift, meta) => { root.terminal_key(text, ctrl, alt, shift, meta); }
@@ -2278,34 +2309,6 @@ export component MainWindow inherits Window {
                     find-prev() => { root.find_terminal_prev(); }
                     find-regex-changed(enabled) => { root.set_terminal_search_regex(enabled); }
                     dismiss-find() => { root.terminal_find_visible = false; }
-
-                    // --- N2：Quick Connect 页（非终端标签的内容；始终实例化，用
-                    // max-height 折叠——invisible 元素在 Slint 1.18 仍占布局空间）--
-                    quick_connect_page := QuickConnectPage {
-                        vertical-stretch: 1;
-                        max-height: root.quick_connect_visible ? 100000px : 0px;
-                        input-text <=> root.quick_connect_input_text;
-                        input-error-text: root.quick_connect_error_text;
-                        // A36（WS-D D37）：kind 为空时回退到 Rust 的一体化文案（现状兼容）。
-                        summary-text: TextFormats.status-message(
-                            root.quick_connect_summary_kind_text,
-                            root.quick_connect_summary_param_1_text,
-                            root.quick_connect_summary_param_2_text,
-                            root.quick_connect_summary_text
-                        );
-                        history-enabled: root.quick_connect_history_enabled;
-                        last-target-text: root.quick_connect_last_target_text;
-                        recent-rows: root.quick_connect_rows;
-                        link-rows: root.quick_links_rows;
-                        input-changed(text) => { root.update_quick_connect_input(text); }
-                        submit(text) => { root.submit_quick_connect(text); }
-                        connect-target(target) => { root.submit_quick_connect(target); }
-                        pin-target(target) => { root.quick_connect_pin(target); }
-                        copy-target(target) => { root.quick_connect_copy(target); }
-                        remove-link(id) => { root.quick_link_remove(id); }
-                        save-as-session(target) => { root.quick_connect_save_as_session(target); }
-                        clear-history() => { root.quick_connect_clear_history(); }
-                    }
                 }
 
                 // --- N1：SftpPanel 投影 + 回调透传（ToolDock 提供面板壳与透传）------
