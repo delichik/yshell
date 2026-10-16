@@ -113,6 +113,12 @@ pub struct SessionRuntime {
     pub connection_error: String,
     /// WP1：后台 connect job 进行中（StatusBar busy + overlay 连接中）。
     pub connection_in_flight: bool,
+    /// Live shell PTY may have been allocated from a connect-job snapshot that
+    /// predates later viewport syncs into `ssh_config`. When set, the next
+    /// viewport sync must call `resize_pty` even if columns/rows already match
+    /// the desired size in config (otherwise the remote keeps the stale size
+    /// until the user manually resizes the window).
+    pty_force_resync: bool,
 }
 
 impl SessionRuntime {
@@ -156,6 +162,7 @@ impl SessionRuntime {
             connection_stage: String::new(),
             connection_error: String::new(),
             connection_in_flight: false,
+            pty_force_resync: false,
         };
         runtime.log_runtime_event("Quick Connect accepted. Preparing runtime session.");
         runtime
@@ -210,6 +217,7 @@ impl SessionRuntime {
             connection_stage: String::new(),
             connection_error: String::new(),
             connection_in_flight: false,
+            pty_force_resync: false,
         };
         runtime.log_runtime_event("Saved session loaded into runtime inventory.");
         runtime
@@ -254,6 +262,7 @@ impl SessionRuntime {
             connection_stage: String::new(),
             connection_error: String::new(),
             connection_in_flight: false,
+            pty_force_resync: false,
         };
         runtime.log_runtime_event("Draft session created. Waiting for connection details.");
         runtime
@@ -690,6 +699,19 @@ impl SessionRuntime {
 
     pub fn attach_shell_session(&mut self, shell_session: Box<dyn ShellSession>) {
         self.shell_session = Some(shell_session);
+        // Connect jobs snapshot ssh_config at submit time; viewport sync may
+        // update desired size while the handshake runs. Force the next sync to
+        // push the live window size onto the newly attached shell.
+        self.pty_force_resync = true;
+    }
+
+    /// See [`Self::pty_force_resync`].
+    pub fn needs_pty_viewport_resync(&self) -> bool {
+        self.pty_force_resync
+    }
+
+    pub(crate) fn clear_pty_force_resync(&mut self) {
+        self.pty_force_resync = false;
     }
 
     /// Apply the resolved terminal profile to the grid.

@@ -79,6 +79,56 @@ fn passive_terminal_resize_skips_duplicate_dimensions() {
 }
 
 #[test]
+fn attach_shell_forces_viewport_pty_resync_even_when_config_matches() {
+    use yshell_ssh::{PtySize, ShellClient};
+
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    runtime
+        .handle_quick_connect("alice@example.com:2200")
+        .expect("quick connect");
+    let session_key = runtime.active_session_id.clone().expect("session");
+
+    // Simulate pre-attach viewport sync writing the desired size into config
+    // while the connect job still opens the shell with a stale snapshot.
+    runtime
+        .sync_active_terminal_size_passive(100, 40)
+        .expect("pre-attach sync")
+        .expect("should resize config/grid");
+    let mut stale_config = runtime.sessions[&session_key].ssh_config.clone();
+    stale_config.pty.size = PtySize {
+        columns: 80,
+        rows: 24,
+        pixel_width: 0,
+        pixel_height: 0,
+    };
+    let shell = ShellClient::with_fake_backend()
+        .open_shell_boxed(&stale_config)
+        .expect("open stale shell");
+    {
+        let session = runtime.sessions.get_mut(&session_key).expect("session");
+        // Config already at viewport size; live shell is 80x24.
+        assert_eq!(session.current_pty_size().columns, 100);
+        assert_eq!(session.current_pty_size().rows, 40);
+        session.attach_shell_session(shell);
+        assert!(session.needs_pty_viewport_resync());
+    }
+
+    // Without force-resync this would no-op (config already 100x40).
+    let forced = runtime
+        .sync_active_terminal_size_passive(100, 40)
+        .expect("post-attach sync")
+        .expect("must push resize onto live shell");
+    assert!(forced.terminal_body_text.contains("fake-shell resized to 100x40"));
+    assert!(!runtime.sessions[&session_key].needs_pty_viewport_resync());
+
+    let skipped = runtime
+        .sync_active_terminal_size_passive(100, 40)
+        .expect("steady-state sync");
+    assert!(skipped.is_none());
+}
+
+#[test]
 fn terminal_key_input_flows_through_the_shell_boundary() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");

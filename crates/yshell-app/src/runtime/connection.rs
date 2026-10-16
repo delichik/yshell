@@ -321,7 +321,12 @@ impl AppRuntime {
         password_retry: bool,
         is_reconnect: bool,
     ) -> AppResult<AppProjection> {
-        let effective = self.effective_ssh_config(&ssh_config);
+        let mut effective = self.effective_ssh_config(&ssh_config);
+        // Caller may have cloned ssh_config before the latest viewport sync;
+        // prefer the session's current desired PTY size for request_pty.
+        if let Some(runtime) = self.sessions.get(session_key) {
+            effective.pty.size = runtime.ssh_config.pty.size;
+        }
         let host_text = self
             .sessions
             .get(session_key)

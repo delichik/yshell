@@ -926,17 +926,21 @@ impl AppRuntime {
         let Some(session_key) = self.window_secondary_session(window_id).map(str::to_owned) else {
             return Ok(false);
         };
-        let Some(current_size) = self
-            .sessions
-            .get(&session_key)
-            .map(SessionRuntime::current_pty_size)
-        else {
+        let Some((current_size, force)) = self.sessions.get(&session_key).map(|runtime| {
+            (
+                runtime.current_pty_size(),
+                runtime.needs_pty_viewport_resync(),
+            )
+        }) else {
             return Ok(false);
         };
-        if current_size.columns == columns && current_size.rows == rows {
+        if current_size.columns == columns && current_size.rows == rows && !force {
             return Ok(false);
         }
         self.resize_terminal_session(&session_key, columns, rows, false)?;
+        if let Some(runtime) = self.sessions.get_mut(&session_key) {
+            runtime.clear_pty_force_resync();
+        }
         Ok(true)
     }
 
@@ -954,17 +958,21 @@ impl AppRuntime {
         let Some(session_key) = self.window_active_session(window_id).map(str::to_owned) else {
             return Ok(false);
         };
-        let Some(current_size) = self
-            .sessions
-            .get(&session_key)
-            .map(SessionRuntime::current_pty_size)
-        else {
+        let Some((current_size, force)) = self.sessions.get(&session_key).map(|runtime| {
+            (
+                runtime.current_pty_size(),
+                runtime.needs_pty_viewport_resync(),
+            )
+        }) else {
             return Ok(false);
         };
-        if current_size.columns == columns && current_size.rows == rows {
+        if current_size.columns == columns && current_size.rows == rows && !force {
             return Ok(false);
         }
         self.resize_terminal_session(&session_key, columns, rows, status)?;
+        if let Some(runtime) = self.sessions.get_mut(&session_key) {
+            runtime.clear_pty_force_resync();
+        }
         Ok(true)
     }
 

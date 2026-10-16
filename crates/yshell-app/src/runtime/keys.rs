@@ -492,15 +492,24 @@ impl AppRuntime {
         let Some(session_key) = self.active_session_id.clone() else {
             return Ok(None);
         };
-        let current_size = self
-            .sessions
-            .get(&session_key)
-            .map(SessionRuntime::current_pty_size)
-            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
-        if current_size.columns == columns && current_size.rows == rows {
+        let (current_size, force) = {
+            let runtime = self
+                .sessions
+                .get(&session_key)
+                .ok_or_else(|| AppError::new("active runtime session is missing"))?;
+            (
+                runtime.current_pty_size(),
+                runtime.needs_pty_viewport_resync(),
+            )
+        };
+        if current_size.columns == columns && current_size.rows == rows && !force {
             return Ok(None);
         }
-        self.resize_active_terminal(columns, rows).map(Some)
+        let projection = self.resize_active_terminal(columns, rows)?;
+        if let Some(runtime) = self.sessions.get_mut(&session_key) {
+            runtime.clear_pty_force_resync();
+        }
+        Ok(Some(projection))
     }
 
     pub(crate) fn refresh_terminal_search_for_active_session(&mut self) {
