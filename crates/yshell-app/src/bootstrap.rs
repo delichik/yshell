@@ -734,7 +734,7 @@ pub(crate) fn wire_callbacks(
         window.on_drag_tab_transfer(move |tab_id: SharedString| {
             let mut transfer = slint::DataTransfer::default();
             transfer.set_user_data(Rc::new(TabDragPayload {
-                tab_id: tab_id.as_ref().to_owned(),
+                tab_id: tab_id.as_str().to_owned(),
             }));
             transfer
         });
