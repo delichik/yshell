@@ -156,8 +156,8 @@ export global Theme {
     ///
     /// 必须写具体族名：Slint 只按"字体族名"精确查找，不解析 CSS 通用别名
     ///（`monospace` 会静默回退到 UI 字体，B 轮5 的主机密钥指纹即因此不是等宽）。
-    /// 这里给 Linux 常见族名；Windows/macOS 由 Rust 侧按平台写入（与 `font-ui` 同机制，
-    /// 见 crates/yshell-app/src/bootstrap.rs 的 `platform_default_ui_font`）。
+    /// 默认给 Linux 常见族名；Windows/macOS 由 Rust `apply_fonts` 写成
+    /// Cascadia Mono / Consolas / Menlo（与 `font-ui` 同机制）。
     in-out property <string> font-mono: "DejaVu Sans Mono";
     /// 表单标签列宽（对话框里的「标签 + 控件」两列布局）
     out property <length> form-label-width: 116px;

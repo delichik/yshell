@@ -8,18 +8,23 @@
 //! their whole lifetime; later theme edits only affect terminals opened
 //! afterwards.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use yshell_config::{FolderProfile, LoggingProfile, TerminalProfile};
 use yshell_terminal::{
-    color_scheme, FontSelection, PrimaryFont, TerminalCell, TerminalColor, TerminalFrame,
-    TerminalPalette, TerminalRenderer, TerminalSnapshot, COLOR_SCHEMES, DEFAULT_FONT_SIZE,
+    color_scheme, FontFamilyFaces, FontSelection, PrimaryFont, TerminalCell, TerminalColor,
+    TerminalFrame, TerminalPalette, TerminalRenderer, TerminalSnapshot, COLOR_SCHEMES,
+    DEFAULT_FONT_SIZE,
 };
 
 use super::*;
 
 /// `font_family` value that selects the bundled DejaVu Sans Mono family.
 pub(crate) const BUNDLED_FONT_FAMILY: &str = "DejaVu Sans Mono";
+/// Windows Terminal / PowerShell–style mono (preferred when installed).
+pub(crate) const CASCADIA_MONO_FAMILY: &str = "Cascadia Mono";
+/// Classic Windows console mono (always present on modern Windows).
+pub(crate) const CONSOLAS_FAMILY: &str = "Consolas";
 /// Built-in palette id (also the fallback when `color_scheme` is unknown).
 pub(crate) const DEFAULT_COLOR_SCHEME_ID: &str = "yshell-default";
 /// Font size bounds accepted by the settings/editor forms.
@@ -28,6 +33,139 @@ pub(crate) const THEME_FONT_SIZE_MIN: u16 = 6;
 pub(crate) const THEME_FONT_SIZE_MAX: u16 = 72;
 /// Log format ids stored in `LoggingProfile::format`.
 pub(crate) const LOG_FORMAT_RAW: &str = "raw";
+
+/// D15 presets discovered from fixed system paths (not a full font catalog).
+fn system_mono_presets() -> Vec<FontFamilyFaces> {
+    let mut presets = Vec::new();
+    #[cfg(windows)]
+    {
+        let fonts = windows_fonts_dir();
+        if let Some(faces) = load_windows_family(
+            CASCADIA_MONO_FAMILY,
+            &fonts,
+            &[
+                "CascadiaMono.ttf",
+                "CascadiaMono-Regular.ttf",
+                "CascadiaMonoNF.ttf",
+            ],
+            &[
+                "CascadiaMono-Bold.ttf",
+                "CascadiaMonoNF-Bold.ttf",
+                "CascadiaMono-Bold.otf",
+            ],
+            &[
+                "CascadiaMono-Italic.ttf",
+                "CascadiaMonoNF-Italic.ttf",
+                "CascadiaMonoItalic.ttf",
+            ],
+            &[
+                "CascadiaMono-BoldItalic.ttf",
+                "CascadiaMonoNF-BoldItalic.ttf",
+                "CascadiaMono-BoldItalic.otf",
+            ],
+        ) {
+            presets.push(faces);
+        }
+        if let Some(faces) = load_windows_family(
+            CONSOLAS_FAMILY,
+            &fonts,
+            &["consola.ttf"],
+            &["consolab.ttf"],
+            &["consolai.ttf"],
+            &["consolaz.ttf"],
+        ) {
+            presets.push(faces);
+        }
+    }
+    presets
+}
+
+#[cfg(windows)]
+fn windows_fonts_dir() -> PathBuf {
+    std::env::var_os("WINDIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(r"C:\Windows"))
+        .join("Fonts")
+}
+
+#[cfg(windows)]
+fn first_existing(dir: &Path, names: &[&str]) -> Option<PathBuf> {
+    names
+        .iter()
+        .map(|name| dir.join(name))
+        .find(|path| path.is_file())
+}
+
+#[cfg(windows)]
+fn load_windows_family(
+    label: &str,
+    fonts: &Path,
+    regular: &[&str],
+    bold: &[&str],
+    italic: &[&str],
+    bold_italic: &[&str],
+) -> Option<FontFamilyFaces> {
+    let regular = first_existing(fonts, regular)?;
+    Some(FontFamilyFaces {
+        label: label.to_owned(),
+        regular,
+        bold: first_existing(fonts, bold),
+        italic: first_existing(fonts, italic),
+        bold_italic: first_existing(fonts, bold_italic),
+    })
+}
+
+/// Labels for the Settings font ComboBox: system presets first, then bundled.
+pub(crate) fn appearance_font_preset_labels() -> Vec<String> {
+    let mut labels: Vec<String> = system_mono_presets()
+        .into_iter()
+        .map(|faces| faces.label)
+        .collect();
+    labels.push(BUNDLED_FONT_FAMILY.to_owned());
+    labels
+}
+
+/// Platform default primary font: bundled DejaVu (portable). System presets
+/// stay available in Settings for users who prefer Consolas / Cascadia Mono.
+pub(crate) fn default_primary_font() -> PrimaryFont {
+    PrimaryFont::BundledDejaVu
+}
+
+/// Display label for [`default_primary_font`].
+pub(crate) fn default_font_family_label() -> String {
+    match default_primary_font() {
+        PrimaryFont::BundledDejaVu => BUNDLED_FONT_FAMILY.to_owned(),
+        PrimaryFont::Family(faces) => faces.label,
+        PrimaryFont::File(path) => path.display().to_string(),
+    }
+}
+
+/// Maps a stored `font_family` string to a [`PrimaryFont`].
+pub(crate) fn primary_font_from_name(name: &str) -> PrimaryFont {
+    let name = name.trim();
+    if name.is_empty() {
+        return default_primary_font();
+    }
+    if name.eq_ignore_ascii_case(BUNDLED_FONT_FAMILY) {
+        return PrimaryFont::BundledDejaVu;
+    }
+    if let Some(faces) = system_mono_presets()
+        .into_iter()
+        .find(|faces| faces.label.eq_ignore_ascii_case(name))
+    {
+        return PrimaryFont::Family(faces);
+    }
+    PrimaryFont::File(PathBuf::from(name))
+}
+
+/// Whether `name` is a known preset label (bundled or system), not a file path.
+pub(crate) fn is_font_preset_label(name: &str) -> bool {
+    let name = name.trim();
+    name.eq_ignore_ascii_case(BUNDLED_FONT_FAMILY)
+        || system_mono_presets()
+            .iter()
+            .any(|faces| faces.label.eq_ignore_ascii_case(name))
+}
 
 // ---------------------------------------------------------------------------
 // Appearance resolution
@@ -110,9 +248,8 @@ pub(crate) fn resolve_palette(profile: &TerminalProfile) -> TerminalPalette {
 /// Font selection plus the paths that could not be loaded.
 pub(crate) fn resolve_font(profile: &TerminalProfile) -> (FontSelection, Vec<String>) {
     let primary = match profile.font_family.as_deref().map(str::trim) {
-        None | Some("") => PrimaryFont::BundledDejaVu,
-        Some(name) if name.eq_ignore_ascii_case(BUNDLED_FONT_FAMILY) => PrimaryFont::BundledDejaVu,
-        Some(path) => PrimaryFont::File(PathBuf::from(path)),
+        None | Some("") => default_primary_font(),
+        Some(name) => primary_font_from_name(name),
     };
     let fallback_files = profile
         .fallback_fonts
@@ -300,7 +437,7 @@ impl ThemeDraft {
                     .font_family
                     .clone()
                     .filter(|name| !name.trim().is_empty())
-                    .unwrap_or_else(|| BUNDLED_FONT_FAMILY.to_owned()),
+                    .unwrap_or_else(default_font_family_label),
             ),
             font_size: merge(
                 own.font_size.map(|size| size.to_string()),
@@ -344,7 +481,7 @@ impl ThemeDraft {
                 .font_family
                 .clone()
                 .filter(|name| !name.trim().is_empty())
-                .unwrap_or_else(|| BUNDLED_FONT_FAMILY.to_owned()),
+                .unwrap_or_else(default_font_family_label),
         );
         update(
             &mut self.font_size,
@@ -418,7 +555,8 @@ impl ThemeDraft {
         profile.selection = self.write_color(&self.selection, inherited.selection.clone())?;
         profile.font_family = if self.font_family.explicit {
             let text = self.font_family.text.trim().to_owned();
-            if text.is_empty() || text.eq_ignore_ascii_case(BUNDLED_FONT_FAMILY) {
+            let default_label = default_font_family_label();
+            if text.is_empty() || text.eq_ignore_ascii_case(&default_label) {
                 None
             } else {
                 Some(text)
@@ -801,7 +939,7 @@ pub(crate) fn theme_field_rows(
         row(
             KEY_FONT_FAMILY,
             "Font family",
-            "Bundled DejaVu or an imported file",
+            "System mono preset, bundled DejaVu, or an imported file",
             "text",
             &draft.font_family,
         ),
@@ -905,12 +1043,16 @@ impl Default for SettingsAppearanceDraft {
 }
 
 impl SettingsAppearanceDraft {
-    /// D15 font presets for the Settings ComboBox: bundled DejaVu plus the
-    /// current imported file path when the draft is not on the bundled face.
+    /// D15 font presets for the Settings ComboBox: system monospace presets,
+    /// bundled DejaVu, plus the current imported file path when needed.
     pub(crate) fn font_options(&self) -> Vec<String> {
-        let mut options = vec![BUNDLED_FONT_FAMILY.to_owned()];
+        let mut options = appearance_font_preset_labels();
         let family = self.font_family.trim();
-        if !family.is_empty() && !family.eq_ignore_ascii_case(BUNDLED_FONT_FAMILY) {
+        if !family.is_empty()
+            && !options
+                .iter()
+                .any(|option| option.eq_ignore_ascii_case(family))
+        {
             options.push(family.to_owned());
         }
         options
@@ -942,6 +1084,7 @@ impl SettingsAppearanceDraft {
             selection: palette.selection.to_hex(),
             font_family: match font.primary {
                 PrimaryFont::BundledDejaVu => BUNDLED_FONT_FAMILY.to_owned(),
+                PrimaryFont::Family(faces) => faces.label,
                 PrimaryFont::File(path) => path.display().to_string(),
             },
             font_size_text: resolve_font_size(profile.font_size).round().to_string(),
@@ -977,16 +1120,8 @@ impl SettingsAppearanceDraft {
     }
 
     pub(crate) fn font_selection(&self) -> FontSelection {
-        let primary = {
-            let text = self.font_family.trim();
-            if text.is_empty() || text.eq_ignore_ascii_case(BUNDLED_FONT_FAMILY) {
-                PrimaryFont::BundledDejaVu
-            } else {
-                PrimaryFont::File(PathBuf::from(text))
-            }
-        };
         FontSelection {
-            primary,
+            primary: primary_font_from_name(&self.font_family),
             fallback_files: self
                 .fallback_fonts_text
                 .lines()
@@ -1034,17 +1169,18 @@ impl SettingsAppearanceDraft {
         })?;
         let font_family = {
             let text = self.font_family.trim();
-            if text.is_empty() || text.eq_ignore_ascii_case(BUNDLED_FONT_FAMILY) {
+            let default_label = default_font_family_label();
+            if text.is_empty() || text.eq_ignore_ascii_case(&default_label) {
                 None
             } else {
                 Some(text.to_owned())
             }
         };
-        if let Some(path) = font_family.as_deref() {
-            if !Path::new(path).is_file() {
+        if let Some(name) = font_family.as_deref() {
+            if !is_font_preset_label(name) && !Path::new(name).is_file() {
                 return Err(ThemeFieldError::new(
                     "appearance.font_family",
-                    format!("font file `{path}` was not found"),
+                    format!("font file `{name}` was not found"),
                 ));
             }
         }

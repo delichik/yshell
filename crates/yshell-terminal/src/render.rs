@@ -4,12 +4,12 @@
 //! glyph cache and the pixel buffer, so it can be unit tested by inspecting
 //! raw pixels. The app converts the frame into a `slint::Image`.
 //!
-//! Glyphs are rasterized with `swash` (hinted outlines) and `zeno` (alpha mask).
-//! swash's scaler hardcodes `HintingMode::Smooth { preserve_linear_metrics: true }`,
-//! which forbids horizontal grid fitting, so hinted outline **X** coordinates are
-//! snapped to whole pixels (keeps vertical stems on one column) while **Y** stays
-//! subpixel so curves are not stair-stepped. Coverage is blended in linear light.
-//! Measurements for this choice are in the N5a-B report.
+//! Glyphs are rasterized with `swash` (hinted outlines) and `zeno` (**LCD
+//! subpixel** masks, `Format::Subpixel`). Coverage is blended per-channel in
+//! linear light — matching DirectWrite / Windows Terminal ClearType much more
+//! closely than the previous grayscale-only AA. Outline **X** is quantized to
+//! the ⅓-pixel LCD grid (not whole pixels) so vertical stems sit on RGB stripe
+//! boundaries without collapsing onto a single green subpixel.
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -218,10 +218,18 @@ impl FontFace {
     /// The face name is the path as printed by [`Path::display`], so a rejected
     /// file can be reported to the user verbatim.
     pub fn from_file(path: &Path) -> Result<Self, FontFaceError> {
+        Self::from_file_with_style(path, FontFaceStyle::Regular)
+    }
+
+    /// Load a face from disk and annotate it with `style`.
+    pub fn from_file_with_style(
+        path: &Path,
+        style: FontFaceStyle,
+    ) -> Result<Self, FontFaceError> {
         let name = path.display().to_string();
         let bytes = std::fs::read(path)
             .map_err(|error| FontFaceError::new(name.clone(), io_reason(&error)))?;
-        Self::from_bytes(name, &bytes)
+        Self::with_style(name, style, &bytes)
     }
 
     #[must_use]
@@ -441,16 +449,33 @@ impl Default for TerminalFontSet {
     }
 }
 
+/// On-disk faces for one named monospace family (regular required; styles optional).
+///
+/// Used for D15 presets such as Windows `Consolas` / `Cascadia Mono` without
+/// enumerating the whole system font catalog.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FontFamilyFaces {
+    /// Display name shown in Settings (e.g. `"Consolas"`).
+    pub label: String,
+    pub regular: PathBuf,
+    pub bold: Option<PathBuf>,
+    pub italic: Option<PathBuf>,
+    pub bold_italic: Option<PathBuf>,
+}
+
 /// Primary terminal font.
 ///
-/// The first version offers the bundled DejaVu Sans Mono family or a single
-/// user-imported font file; no system font enumeration (decision D15).
+/// Offers the bundled DejaVu Sans Mono family, a named multi-face preset
+/// (system paths from a fixed allow-list), or a single user-imported file.
+/// No full system font enumeration (decision D15).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum PrimaryFont {
     /// Bundled DejaVu Sans Mono (regular/bold/oblique/bold-oblique) plus the
     /// bundled CJK subset.
     #[default]
     BundledDejaVu,
+    /// Named family loaded from known face paths (e.g. Windows Consolas).
+    Family(FontFamilyFaces),
     /// A user-imported font file (`TTF`/`OTF`, used as the regular face).
     File(PathBuf),
 }
@@ -505,9 +530,17 @@ impl TerminalFontSet {
     #[must_use]
     pub fn from_selection(selection: &FontSelection) -> (Self, Vec<FontFaceError>) {
         let mut rejected = Vec::new();
-        // The primary file is reported first, then the fallbacks in order.
-        let primary = match &selection.primary {
+        // Primary is reported first, then fallbacks — callers assert that order.
+        let primary_face = match &selection.primary {
             PrimaryFont::BundledDejaVu => None,
+            PrimaryFont::Family(faces) => {
+                // Family loads its own faces (and may push rejections); build later.
+                let user_fallbacks = load_faces(&selection.fallback_files, &mut rejected);
+                return match family_face_set(faces, &user_fallbacks, &mut rejected) {
+                    Some(set) => (set, rejected),
+                    None => (bundled_face_set(&user_fallbacks), rejected),
+                };
+            }
             PrimaryFont::File(path) => match FontFace::from_file(path) {
                 Ok(face) => Some(face),
                 Err(error) => {
@@ -517,7 +550,7 @@ impl TerminalFontSet {
             },
         };
         let user_fallbacks = load_faces(&selection.fallback_files, &mut rejected);
-        match primary {
+        match primary_face {
             Some(face) => (user_primary_face_set(face, &user_fallbacks), rejected),
             None => (bundled_face_set(&user_fallbacks), rejected),
         }
@@ -562,6 +595,53 @@ fn user_primary_face_set(primary: FontFace, user_fallbacks: &[FontFace]) -> Term
     let mut fallbacks = user_fallbacks.to_vec();
     fallbacks.push(bundled_cjk_face());
     TerminalFontSet::new(TerminalFontStack::with_fallbacks(primary, fallbacks))
+}
+
+/// Builds a styled font set from on-disk family faces; returns `None` when the
+/// regular face cannot be loaded (caller falls back to bundled DejaVu).
+fn family_face_set(
+    faces: &FontFamilyFaces,
+    user_fallbacks: &[FontFace],
+    rejected: &mut Vec<FontFaceError>,
+) -> Option<TerminalFontSet> {
+    let regular = match FontFace::from_file_with_style(&faces.regular, FontFaceStyle::Regular) {
+        Ok(face) => face,
+        Err(error) => {
+            rejected.push(error);
+            return None;
+        }
+    };
+    let mut load_style = |path: &Option<PathBuf>, style: FontFaceStyle| -> Option<FontFace> {
+        let path = path.as_ref()?;
+        match FontFace::from_file_with_style(path, style) {
+            Ok(face) => Some(face),
+            Err(error) => {
+                rejected.push(error);
+                None
+            }
+        }
+    };
+    let bold = load_style(&faces.bold, FontFaceStyle::Bold);
+    let italic = load_style(&faces.italic, FontFaceStyle::Italic);
+    let bold_italic = load_style(&faces.bold_italic, FontFaceStyle::BoldItalic);
+
+    let stack = |primary: FontFace| {
+        let mut fallbacks = user_fallbacks.to_vec();
+        fallbacks.push(bundled_cjk_face());
+        TerminalFontStack::with_fallbacks(primary, fallbacks)
+    };
+
+    let mut set = TerminalFontSet::new(stack(regular));
+    if let Some(face) = bold {
+        set = set.with_bold(stack(face));
+    }
+    if let Some(face) = italic {
+        set = set.with_italic(stack(face));
+    }
+    if let Some(face) = bold_italic {
+        set = set.with_bold_italic(stack(face));
+    }
+    Some(set)
 }
 
 /// Inserts `faces` right before the CJK face, which is always the last entry
@@ -632,6 +712,8 @@ struct CachedGlyph {
     top: i32,
     width: usize,
     height: usize,
+    /// LCD subpixel coverage: `width * height` pixels × 4 bytes (R,G,B,A).
+    /// R/G/B are the per-channel coverages used for ClearType-style blending.
     bitmap: Vec<u8>,
     /// Horizontal advance of the glyph in physical pixels (used to centre wide
     /// CJK glyphs inside their two-cell box).
@@ -652,7 +734,7 @@ impl CachedGlyph {
     }
 }
 
-/// One rasterized glyph mask.
+/// One rasterized glyph mask (LCD subpixel RGBA coverage).
 struct RasterGlyph {
     left: i32,
     top: i32,
@@ -662,16 +744,14 @@ struct RasterGlyph {
     advance: f32,
 }
 
-/// swash-backed glyph rasterizer.
+/// Coverage gamma applied before linear-light blending.
 ///
-/// swash's own `Render` builds glyphs with
-/// `skrifa::outline::HintingMode::Smooth { lcd_subpixel: Some(Horizontal), preserve_linear_metrics: true }`,
-/// which by design **does not adjust outlines horizontally** (it keeps advances
-/// stable so layout never has to evaluate outlines). At terminal sizes that
-/// leaves vertical stems straddling two pixel columns (e.g. `|` at 64+36 %
-/// coverage). We therefore snap hinted outline **X** to whole pixels before
-/// `zeno` rasterization (Y stays subpixel). Snapping both axes used to warp
-/// curves into stairs; X-only keeps the single-column stem look without that.
+/// `> 1` darkens mid-tone AA fringes so stems read denser (closer to
+/// DirectWrite/ClearType punch). 1.25 matches the pre-N5a-B tuning; 1.1 was
+/// too soft on dark terminal backgrounds.
+const COVERAGE_GAMMA: f32 = 1.25;
+
+/// swash-backed glyph rasterizer (hinted outlines → LCD subpixel mask).
 struct GlyphRasterizer {
     context: ScaleContext,
 }
@@ -683,7 +763,7 @@ impl GlyphRasterizer {
         }
     }
 
-    /// Hint + snap + rasterize one glyph index at `px` physical pixels.
+    /// Hint + LCD-subpixel rasterize one glyph index at `px` physical pixels.
     fn rasterize(&mut self, face: &FontFace, glyph_index: u16, px: f32) -> Option<RasterGlyph> {
         let font = face.font_ref();
         let mut scaler = self.context.builder(font).size(px).hint(true).build();
@@ -691,20 +771,27 @@ impl GlyphRasterizer {
         if outline.points().is_empty() {
             return None;
         }
+        // Quantize X to the LCD subpixel grid (⅓ px). Whole-pixel snap made
+        // thin stems hit only the green sample; no snap left stems split 50/50.
         for point in outline.points_mut() {
-            point.x = point.x.round();
+            point.x = (point.x * 3.0).round() / 3.0;
         }
         // `inspect` triggers zeno's `ensure_size`; without it `Mask::render`
         // computes a y-down `placement.top` even for `Origin::BottomLeft`.
         let mut mask = Mask::new(outline.path());
         let (bitmap, placement) = mask
-            .format(ZenoFormat::Alpha)
+            .format(ZenoFormat::Subpixel)
             .origin(Origin::BottomLeft)
             .inspect(|_, _, _| {})
             .render();
         if placement.width == 0 || placement.height == 0 {
             return None;
         }
+        debug_assert_eq!(
+            bitmap.len(),
+            placement.width as usize * placement.height as usize * 4,
+            "zeno Subpixel masks are RGBA"
+        );
         Some(RasterGlyph {
             left: placement.left,
             top: placement.top,
@@ -1246,21 +1333,29 @@ fn paint_glyph(
             continue;
         }
         for bitmap_x in 0..glyph.width {
-            let alpha = glyph.bitmap[bitmap_y * glyph.width + bitmap_x];
-            if alpha == 0 {
+            let cover_index = (bitmap_y * glyph.width + bitmap_x) * 4;
+            let Some(cover) = glyph.bitmap.get(cover_index..cover_index + 3) else {
+                continue;
+            };
+            let cover_r = cover[0];
+            let cover_g = cover[1];
+            let cover_b = cover[2];
+            if cover_r | cover_g | cover_b == 0 {
                 continue;
             }
             let destination_x = rect.x as i32 + x_offset + glyph.left + bitmap_x as i32;
             if destination_x < clip_left || destination_x >= clip_right {
                 continue;
             }
-            blend_pixel(
+            blend_pixel_subpixel(
                 rgba,
                 frame_width,
                 destination_x as u32,
                 destination_y as u32,
                 color,
-                alpha,
+                cover_r,
+                cover_g,
+                cover_b,
             );
         }
     }
@@ -1286,18 +1381,37 @@ fn paint_underline(
     }
 }
 
-fn blend_pixel(rgba: &mut [u8], frame_width: u32, x: u32, y: u32, color: TerminalColor, alpha: u8) {
+/// ClearType-style blend: each LCD subpixel has its own coverage.
+fn blend_pixel_subpixel(
+    rgba: &mut [u8],
+    frame_width: u32,
+    x: u32,
+    y: u32,
+    color: TerminalColor,
+    cover_r: u8,
+    cover_g: u8,
+    cover_b: u8,
+) {
     let index = y as usize * frame_width as usize + x as usize;
     if index * 4 + 4 > rgba.len() {
         return;
     }
-    // Mild coverage gamma (>1) trims soft AA fringes; 1.1 is gentler than the
-    // old 1.25 so mid-tone strokes stay denser after linear-light blending.
-    let coverage = (f32::from(alpha) / 255.0).powf(1.1);
     let pixel = &mut rgba[index * 4..index * 4 + 4];
-    pixel[0] = blend_channel_linear(pixel[0], color.red, coverage);
-    pixel[1] = blend_channel_linear(pixel[1], color.green, coverage);
-    pixel[2] = blend_channel_linear(pixel[2], color.blue, coverage);
+    pixel[0] = blend_channel_linear(
+        pixel[0],
+        color.red,
+        (f32::from(cover_r) / 255.0).powf(COVERAGE_GAMMA),
+    );
+    pixel[1] = blend_channel_linear(
+        pixel[1],
+        color.green,
+        (f32::from(cover_g) / 255.0).powf(COVERAGE_GAMMA),
+    );
+    pixel[2] = blend_channel_linear(
+        pixel[2],
+        color.blue,
+        (f32::from(cover_b) / 255.0).powf(COVERAGE_GAMMA),
+    );
     pixel[3] = 255;
 }
 
@@ -1421,16 +1535,24 @@ mod tests {
 
     /// Coverage of one pixel assuming default-foreground text over the default
     /// background (0.0 = background, 1.0 = fully covered).
+    ///
+    /// Uses luminance so ClearType RGB fringes (uneven R/G/B) still count as
+    /// solid coverage when the perceived brightness matches the foreground.
     fn pixel_coverage(pixel: [u8; 4]) -> f64 {
-        let channels = [
-            (f64::from(pixel[0]) - f64::from(DEFAULT_BACKGROUND.red))
-                / (f64::from(DEFAULT_FOREGROUND.red) - f64::from(DEFAULT_BACKGROUND.red)),
-            (f64::from(pixel[1]) - f64::from(DEFAULT_BACKGROUND.green))
-                / (f64::from(DEFAULT_FOREGROUND.green) - f64::from(DEFAULT_BACKGROUND.green)),
-            (f64::from(pixel[2]) - f64::from(DEFAULT_BACKGROUND.blue))
-                / (f64::from(DEFAULT_FOREGROUND.blue) - f64::from(DEFAULT_BACKGROUND.blue)),
-        ];
-        (channels.iter().sum::<f64>() / 3.0).clamp(0.0, 1.0)
+        let lum = |r: u8, g: u8, b: u8| -> f64 {
+            0.2126 * f64::from(r) + 0.7152 * f64::from(g) + 0.0722 * f64::from(b)
+        };
+        let bg = lum(
+            DEFAULT_BACKGROUND.red,
+            DEFAULT_BACKGROUND.green,
+            DEFAULT_BACKGROUND.blue,
+        );
+        let fg = lum(
+            DEFAULT_FOREGROUND.red,
+            DEFAULT_FOREGROUND.green,
+            DEFAULT_FOREGROUND.blue,
+        );
+        ((lum(pixel[0], pixel[1], pixel[2]) - bg) / (fg - bg)).clamp(0.0, 1.0)
     }
 
     /// `(ink pixels, mean coverage of ink pixels, share of ink pixels at >= 90%
@@ -1632,11 +1754,13 @@ mod tests {
         let frame = render_lines(&mut renderer, vec![line_from_text(sample)], None, None);
         let (ink, mean, ge90) = ink_stats(&frame);
         eprintln!("n5ab-metric 16px ink={ink} mean={mean:.3} ge90={ge90:.1}%");
+        // ClearType leaves softer RGB fringes than grayscale AA, so ge90 is
+        // naturally lower; luminance mean is the sharper-looking signal.
         assert!(
-            ge90 >= 50.0,
-            "ge90 {ge90:.1}% is below the 50% linear-blend baseline"
+            ge90 >= 28.0,
+            "ge90 {ge90:.1}% is below the ClearType baseline"
         );
-        assert!(mean > 0.6, "mean coverage {mean:.3} is too grey");
+        assert!(mean > 0.55, "mean coverage {mean:.3} is too grey");
         assert!(ink > 200);
     }
 
@@ -1645,15 +1769,23 @@ mod tests {
         let mut renderer = TerminalRenderer::new();
         let frame = render_lines(&mut renderer, vec![vec![cell_of("|")]], None, None);
         let columns = ink_columns(&frame, 0);
-        let inked = columns.iter().filter(|count| **count > 0).count();
         eprintln!("n5ab-metric '|' columns={columns:?}");
-        assert_eq!(
-            inked, 1,
-            "the bar must not be split across pixel columns: {columns:?}"
+        let total: usize = columns.iter().sum();
+        let inked = columns.iter().filter(|count| **count > 0).count();
+        let &dominant = columns.iter().max().expect("cell has columns");
+        // LCD AA may touch a neighbour column; the stem must still dominate.
+        assert!(
+            inked <= 2,
+            "stem fringe must stay within 2 columns: {columns:?}"
         );
-        let (ink, _, ge90) = ink_stats(&frame);
+        assert!(
+            dominant * 2 >= total,
+            "dominant column must hold >=50% ink: {columns:?}"
+        );
+        let (ink, mean, ge90) = ink_stats(&frame);
         assert!(ink > 10);
-        assert!(ge90 >= 95.0, "the bar must be solid, ge90={ge90:.1}%");
+        assert!(mean > 0.55, "bar mean coverage {mean:.3} too soft");
+        assert!(ge90 >= 40.0, "the bar core must be solid, ge90={ge90:.1}%");
     }
 
     #[test]
@@ -2396,6 +2528,39 @@ mod tests {
             frame.rgba, expected.rgba,
             "the user file must rasterize through its own face"
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_consolas_family_loads_real_bold() {
+        let fonts = std::env::var_os("WINDIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\Windows"))
+            .join("Fonts");
+        let regular = fonts.join("consola.ttf");
+        if !regular.is_file() {
+            return;
+        }
+        let selection = FontSelection {
+            primary: PrimaryFont::Family(FontFamilyFaces {
+                label: "Consolas".to_owned(),
+                regular,
+                bold: Some(fonts.join("consolab.ttf")),
+                italic: Some(fonts.join("consolai.ttf")),
+                bold_italic: Some(fonts.join("consolaz.ttf")),
+            }),
+            fallback_files: Vec::new(),
+        };
+        let (set, rejected) = TerminalFontSet::from_selection(&selection);
+        assert!(rejected.is_empty(), "rejected={rejected:?}");
+        assert!(set.has_dedicated_bold());
+        assert!(set.resolve('A', GlyphStyle::default()).is_some());
+        assert!(set
+            .resolve('A', GlyphStyle {
+                bold: true,
+                italic: false
+            })
+            .is_some());
     }
 
     #[test]

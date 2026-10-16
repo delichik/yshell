@@ -374,10 +374,39 @@ fn resolve_ui_font(env_override: Option<&str>) -> String {
     }
 }
 
-/// 把 UI 字体族写入 `Theme` 全局（须在窗口创建后、`run()` 前调用）。
+/// 平台默认等宽字体族（路径 / 指纹 / 权限等 UI 技术信息）。
+///
+/// Windows 优先 Cascadia Mono（与 Windows Terminal / 新版 PowerShell 一致），
+/// 否则 Consolas（经典控制台）；其它平台用捆绑 DejaVu 族名。
+fn platform_default_mono_font() -> &'static str {
+    if cfg!(target_os = "windows") {
+        let fonts = std::env::var_os("WINDIR")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::PathBuf::from(r"C:\Windows"))
+            .join("Fonts");
+        let cascadia = ["CascadiaMono.ttf", "CascadiaMono-Regular.ttf"]
+            .iter()
+            .any(|name| fonts.join(name).is_file());
+        if cascadia {
+            "Cascadia Mono"
+        } else if fonts.join("consola.ttf").is_file() {
+            "Consolas"
+        } else {
+            "DejaVu Sans Mono"
+        }
+    } else if cfg!(target_os = "macos") {
+        "Menlo"
+    } else {
+        "DejaVu Sans Mono"
+    }
+}
+
+/// 把 UI / 等宽字体族写入 `Theme` 全局（须在窗口创建后、`run()` 前调用）。
 pub(crate) fn apply_fonts(window: &MainWindow) {
+    let theme = window.global::<Theme>();
     let font = resolve_ui_font(std::env::var("YSHELL_UI_FONT").ok().as_deref());
-    window.global::<Theme>().set_font_ui(font.into());
+    theme.set_font_ui(font.into());
+    theme.set_font_mono(platform_default_mono_font().into());
 }
 
 /// 解析语言：显式 `zh-CN`/`en-US` 直通（大小写与首尾空白不敏感）；

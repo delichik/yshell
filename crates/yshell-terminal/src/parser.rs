@@ -1,8 +1,9 @@
 //! Small ANSI/VTE parser for the terminal model.
 //!
 //! Supports printable text, LF/CR/backspace/tab, SGR colors/styles, cursor
-//! addressing (`CSI H`/`f`/`A`–`D`), and erase (`CSI J`/`K`) — enough for TUI
-//! apps such as `htop` to paint without drifting.
+//! addressing (`CSI H`/`f`/`A`–`D`), erase (`CSI J`/`K`), and ESC charset
+//! designates (`ESC ( B` …) — enough for TUI apps such as `htop` to paint
+//! without drifting.
 
 use unicode_width::UnicodeWidthChar;
 
@@ -18,6 +19,9 @@ pub struct TerminalParser {
 enum ParserState {
     Ground,
     Escape,
+    /// ESC 后跟了中间字节 (`0x20`–`0x2F`)，例如字符集切换 `ESC ( B`。
+    /// 必须整段消费，否则 final `B` 会漏到网格（htop 满屏 `B` 的根因）。
+    EscapeIntermediate,
     Csi(String),
     /// OSC/DCS/PM/APC 字符串序列：消费到 BEL (`0x07`) 或 ST (`ESC \`) 为止。
     /// D3：窗口标题等序列不得作为明文回显到网格。
@@ -93,16 +97,24 @@ impl TerminalParser {
                 }
                 _ => {}
             },
-            ParserState::Escape => {
-                if character == '[' {
-                    self.state = ParserState::Csi(String::new());
-                } else if matches!(character, ']' | 'P' | '^' | '_') {
-                    // OSC / DCS / PM / APC：整段消费，不写入网格。
-                    self.state = ParserState::StringSequence;
-                } else {
-                    self.state = ParserState::Ground;
-                }
-            }
+            ParserState::Escape => match character {
+                '[' => self.state = ParserState::Csi(String::new()),
+                // OSC / DCS / PM / APC：整段消费，不写入网格。
+                ']' | 'P' | '^' | '_' => self.state = ParserState::StringSequence,
+                // ESC 中间字节：`ESC ( B` / `ESC ) 0` / `ESC # 8` 等。
+                '\u{20}'..='\u{2f}' => self.state = ParserState::EscapeIntermediate,
+                // 两字节 ESC 终了（`ESC c` / `ESC 7` / `ESC M` …）：吞掉终字节。
+                '\u{30}'..='\u{7e}' => self.state = ParserState::Ground,
+                '\x1b' => {}
+                _ => self.state = ParserState::Ground,
+            },
+            ParserState::EscapeIntermediate => match character {
+                '\u{20}'..='\u{2f}' => {}
+                // 终字节：字符集指定等，不写入网格。
+                '\u{30}'..='\u{7e}' => self.state = ParserState::Ground,
+                '\x1b' => self.state = ParserState::Escape,
+                _ => self.state = ParserState::Ground,
+            },
             ParserState::StringSequence => match character {
                 '\x07' => self.state = ParserState::Ground,
                 '\x1b' => self.state = ParserState::StringSequenceEscape,
@@ -365,5 +377,19 @@ mod tests {
         let cell = grid.cell(0, 0).expect("cell");
         assert_eq!(cell.grapheme, "X");
         assert_eq!(cell.foreground, TerminalColor::indexed(196));
+    }
+
+    #[test]
+    fn consumes_charset_designate_without_printing_b() {
+        let mut grid = TerminalGrid::new(40, 2);
+        let mut parser = TerminalParser::new();
+
+        // ncurses/htop 频繁发送 `ESC ( B`（G0 → USASCII）；不得把 `B` 打到屏幕上。
+        parser.advance(
+            &mut grid,
+            b"1 \x1b(B[\x1b(B||\x1b(B  4.3%]\x1b(B Mem\x1b(B\x1b)0#\x1b(B",
+        );
+
+        assert_eq!(grid.line_text(0), "1 [||  4.3%] Mem#");
     }
 }

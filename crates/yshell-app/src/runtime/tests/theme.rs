@@ -81,10 +81,17 @@ fn settings_appearance_form_validates_and_persists() {
     );
     assert!(!opened.settings_appearance_schemes.is_empty());
     assert!(opened.settings_appearance_preview.is_some());
-    // D15：主字体下拉至少包含捆绑 DejaVu；默认选中 index 0。
-    assert_eq!(
-        opened.settings_appearance_font_options,
-        vec!["DejaVu Sans Mono".to_owned()]
+    // D15：主字体下拉含系统 preset（若有）+ 捆绑 DejaVu；默认选中 index 0。
+    let font_options = &opened.settings_appearance_font_options;
+    assert!(
+        font_options
+            .last()
+            .is_some_and(|label| label == "DejaVu Sans Mono"),
+        "bundled DejaVu must remain a preset: {font_options:?}"
+    );
+    assert!(
+        !font_options.is_empty(),
+        "font preset list must not be empty"
     );
     assert_eq!(opened.settings_appearance_font_index, 0);
 
