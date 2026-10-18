@@ -120,6 +120,7 @@ impl SplitNode {
 
     /// Split a leaf into two. `dragged_is_first` places the new leaf on first/second.
     /// Returns the new pane id.
+    #[allow(clippy::too_many_arguments)]
     fn split_leaf(
         &mut self,
         target: u64,
@@ -353,6 +354,7 @@ pub(crate) struct WorkspaceSplit {
     next_split_id: u64,
 }
 
+#[allow(dead_code)]
 impl WorkspaceSplit {
     pub(crate) const MAX_LEAVES: usize = 10;
     /// Normalized splitter thickness (~4px on a 800px axis → 0.005).

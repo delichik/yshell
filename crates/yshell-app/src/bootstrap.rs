@@ -749,7 +749,6 @@ pub(crate) fn wire_callbacks(
 
     // 标签拖拽载荷。
     {
-        let runtime_ref = Rc::clone(&runtime);
         window.on_drag_tab_transfer(move |tab_id: SharedString| {
             let mut transfer = slint::DataTransfer::default();
             transfer.set_user_data(Rc::new(TabDragPayload {
@@ -3435,9 +3434,8 @@ pub(crate) fn wire_callbacks(
             if weak.upgrade().is_none() {
                 return;
             }
-            match runtime_ref.borrow().ensure_debug_log_dir() {
-                Ok(dir) => spawn_open_path(dir.display().to_string()),
-                Err(_) => {}
+            if let Ok(dir) = runtime_ref.borrow().ensure_debug_log_dir() {
+                spawn_open_path(dir.display().to_string());
             }
         });
     }

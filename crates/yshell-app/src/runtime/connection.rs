@@ -10,8 +10,8 @@ use yshell_config::{parse_quick_connect, AuthMethod as ConfigAuthMethod};
 use yshell_core::{CommandDispatcher, SessionCommand, SessionState};
 use yshell_ssh::{
     AuthAttemptKind, AuthMethod, AuthMethods, AuthProblemKind, HostKeyFingerprint, HostKeyProblem,
-    KeyboardInteractiveChallenge, KeyboardInteractiveResponse, Prompt, ShellClient,
-    SshConnectionConfig, SshError, SshErrorKind,
+    KeyboardInteractiveChallenge, KeyboardInteractiveResponse, ShellClient, SshConnectionConfig,
+    SshError,
 };
 
 use super::*;
@@ -1348,6 +1348,7 @@ pub(crate) struct PendingKeyboardRound {
 
 impl PendingKeyboardRound {
     #[must_use]
+    #[allow(dead_code)]
     fn from_challenge(challenge: &KeyboardInteractiveChallenge) -> Self {
         Self {
             name: challenge.name.clone(),
@@ -1585,6 +1586,7 @@ impl PendingAuthPrompt {
     }
 
     /// 开始一轮 keyboard-interactive 挑战（多轮时服务端会再次触发）。
+    #[allow(dead_code)]
     pub(crate) fn begin_keyboard_round(
         &mut self,
         challenge: &KeyboardInteractiveChallenge,

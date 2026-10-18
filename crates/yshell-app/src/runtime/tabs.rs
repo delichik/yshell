@@ -1371,6 +1371,7 @@ impl AppRuntime {
     }
 
     /// 分屏叶上活动会话（按 pane id）。
+    #[allow(dead_code)]
     pub(crate) fn window_pane_session(&self, window_id: u64, pane_id: u64) -> Option<&str> {
         let window = self.windows.get(&window_id)?;
         let split = window.split.as_ref()?;

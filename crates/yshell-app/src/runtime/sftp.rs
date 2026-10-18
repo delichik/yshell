@@ -14,6 +14,7 @@ use super::*;
 
 /// UI-thread live SFTP client bound to one runtime session key.
 pub(crate) struct LiveSftpClient {
+    #[allow(dead_code)]
     pub(crate) session_key: String,
     pub(crate) client: SftpClient<RealSftpBackend>,
 }
@@ -34,6 +35,7 @@ pub(crate) struct SftpViewCache {
 
 impl AppRuntime {
     /// Drop every parked SFTP TCP/SSH session (backend switch / hard reset).
+    #[allow(dead_code)]
     pub(crate) fn drop_sftp_live_client(&mut self) {
         self.sftp_live.clear();
     }
@@ -804,6 +806,7 @@ pub(crate) enum SftpListingState {
     ReconnectFailed,
     SyncMissingSession,
     SyncDisconnected,
+    #[allow(dead_code)]
     SyncReconnect,
     SyncFailed {
         session_key: String,

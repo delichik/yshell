@@ -42,9 +42,7 @@ mod tabs;
 mod theme;
 mod transfer;
 
-pub(crate) use split_tree::{
-    CompactOutcome, LaidOutLeaf, LaidOutSplitter, NormRect, SplitNode, WorkspaceSplit,
-};
+pub(crate) use split_tree::{CompactOutcome, SplitNode, WorkspaceSplit};
 
 #[cfg(test)]
 mod tests;

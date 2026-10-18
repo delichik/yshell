@@ -1,6 +1,8 @@
 //! N5 终端主题：外观解析、Settings 外观、Folder/Session 三态覆盖；
 //! 命名主题库（内置只读 / 用户可克隆）；以及 D17（只对新开终端生效）。
 
+#![allow(clippy::field_reassign_with_default, clippy::useless_conversion)]
+
 use tempfile::tempdir;
 use yshell_config::{ConfigDocument, ConfigStore, FolderProfile, SessionProfile, TerminalProfile};
 use yshell_terminal::{color_scheme, TerminalCell, TerminalColor, TerminalPalette};

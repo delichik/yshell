@@ -13,7 +13,7 @@
 
 use std::{
     collections::BTreeMap,
-    sync::mpsc::{Receiver, Sender, TryRecvError},
+    sync::mpsc::{Receiver, Sender},
     time::Duration,
 };
 
@@ -774,11 +774,8 @@ impl AppRuntime {
                 return false;
             };
             let mut messages = Vec::new();
-            loop {
-                match receiver.try_recv() {
-                    Ok(message) => messages.push(message),
-                    Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
-                }
+            while let Ok(message) = receiver.try_recv() {
+                messages.push(message);
             }
             messages
         };

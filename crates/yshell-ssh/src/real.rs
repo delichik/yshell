@@ -30,21 +30,22 @@ use crate::{
 #[derive(Debug, Clone, Default)]
 pub struct RealSshAdapter;
 
+type ConnectionStageHook = RefCell<Option<Box<dyn FnMut(RealConnectionStage)>>>;
+
 thread_local! {
     /// Optional stage progress hook installed by the app connect-job worker so
     /// UI overlays can show TCP → handshake → host-key → auth → shell without
     /// polling the attempt struct across threads.
-    static CONNECTION_STAGE_HOOK: RefCell<Option<Box<dyn FnMut(RealConnectionStage)>>> =
-        const { RefCell::new(None) };
+    static CONNECTION_STAGE_HOOK: ConnectionStageHook = const { RefCell::new(None) };
 }
 
 /// Runs `f` while forwarding [`RealConnectionAttempt::advance_to`] updates to `hook`.
 pub fn with_connection_stage_hook<R>(
-    mut hook: impl FnMut(RealConnectionStage) + 'static,
+    hook: impl FnMut(RealConnectionStage) + 'static,
     f: impl FnOnce() -> R,
 ) -> R {
     CONNECTION_STAGE_HOOK.with(|cell| {
-        *cell.borrow_mut() = Some(Box::new(move |stage| hook(stage)));
+        *cell.borrow_mut() = Some(Box::new(hook));
     });
     let result = f();
     CONNECTION_STAGE_HOOK.with(|cell| {

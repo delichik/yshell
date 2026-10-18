@@ -158,7 +158,6 @@ impl ThemeCatalog {
     }
 
     /// All user themes, sorted by id.
-    #[must_use]
     pub fn user_themes(&self) -> impl Iterator<Item = &ColorTheme> {
         self.user.values()
     }
@@ -267,7 +266,7 @@ impl ThemeCatalog {
 /// Whether `id` collides with a built-in color scheme.
 #[must_use]
 pub fn is_builtin_scheme_id(id: &str) -> bool {
-    BUILTIN_SCHEME_IDS.iter().any(|builtin| *builtin == id)
+    BUILTIN_SCHEME_IDS.contains(&id)
 }
 
 /// Allocates a unique `user-<millis>-<n>` id that is not reserved and not in use.

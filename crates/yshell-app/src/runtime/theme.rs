@@ -26,8 +26,10 @@ use super::*;
 /// `font_family` value that selects the bundled DejaVu Sans Mono family.
 pub(crate) const BUNDLED_FONT_FAMILY: &str = "DejaVu Sans Mono";
 /// Windows Terminal / PowerShell–style mono (preferred when installed).
+#[allow(dead_code)]
 pub(crate) const CASCADIA_MONO_FAMILY: &str = "Cascadia Mono";
 /// Classic Windows console mono (always present on modern Windows).
+#[allow(dead_code)]
 pub(crate) const CONSOLAS_FAMILY: &str = "Consolas";
 /// Built-in palette id (also the fallback when `color_scheme` is unknown).
 pub(crate) const DEFAULT_COLOR_SCHEME_ID: &str = "yshell-default";
@@ -1747,6 +1749,7 @@ impl AppRuntime {
     }
 
     /// Renames a user theme's display name.
+    #[allow(dead_code)]
     pub fn rename_color_theme(&mut self, id: &str, new_name: &str) -> AppResult<AppProjection> {
         self.theme_catalog
             .rename_user(id, new_name)

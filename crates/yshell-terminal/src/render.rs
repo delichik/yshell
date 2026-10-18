@@ -1434,6 +1434,7 @@ fn paint_underline(
 }
 
 /// ClearType-style blend: each LCD subpixel has its own coverage.
+#[allow(clippy::too_many_arguments)]
 fn blend_pixel_subpixel(
     rgba: &mut [u8],
     frame_width: u32,

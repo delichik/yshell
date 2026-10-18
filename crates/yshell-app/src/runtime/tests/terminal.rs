@@ -341,6 +341,6 @@ fn copy_paste_clear_and_find_work_on_visible_terminal_text() {
     assert!(cleared.status_text.contains("Cleared"));
     // D1：清屝丝冝把应用内文案写进网格�?    assert!(!cleared.terminal_body_text.contains("Terminal view cleared"));
 
-    let pasted = runtime.paste_terminal_clipboard().expect("paste clipboard");
+    let _pasted = runtime.paste_terminal_clipboard().expect("paste clipboard");
     // D4：粘贴走坌一条输入路径，丝写状思栝；内容确实到�?shell�?    assert!(pasted.terminal_body_text.contains("echo secret"));
 }
