@@ -128,6 +128,9 @@ component SwatchStrip inherits Rectangle {
     content := HorizontalLayout {
         spacing: 3px;
         alignment: center;
+        // 交叉轴（垂直）居中：12px 色块在 control-height 高的条内居中；
+        // 默认 stretch 会把固定尺寸色块放在顶部。
+        cross-axis-alignment: center;
 
         for swatch in root.swatches : Rectangle {
             width: 12px;
@@ -306,6 +309,9 @@ component FieldRow inherits Rectangle {
 
                 SwatchStrip {
                     swatches: root.data.swatches;
+                    // 只让色块条自身在 44px 行内居中；不能给外层布局设 center，
+                    // 否则同排的值区 Rectangle 会塌成 0 高、文字下沉。
+                    cross-axis-self-alignment: center;
                 }
             }
         }

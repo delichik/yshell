@@ -46,6 +46,9 @@ component AppearanceFieldRow inherits HorizontalLayout {
     in property <string> label: "";
     spacing: Theme.spacing-12;
     alignment: stretch;
+    // 交叉轴（垂直）居中：28px 色块与控件、右对齐标签在同一水平线；
+    // 固定尺寸子项不再贴顶（默认 stretch 会把它们放在 padding.begin）。
+    cross-axis-alignment: center;
 
     Text {
         text: root.label;
@@ -492,6 +495,8 @@ export component SettingsDialog inherits Rectangle {
                                                         HorizontalLayout {
                                                             spacing: 3px;
                                                             alignment: end;
+                                                            // 交叉轴居中：12px 色块与左侧名称文字同处一行中线。
+                                                            cross-axis-alignment: center;
 
                                                             for swatch in option.swatches : Rectangle {
                                                                 width: 12px;
@@ -553,6 +558,8 @@ export component SettingsDialog inherits Rectangle {
                                                 HorizontalLayout {
                                                     spacing: Theme.spacing-8;
                                                     padding-left: 128px + Theme.spacing-12;
+                                                    // 交叉轴居中：色块条在行内垂直居中（不随行高拉伸）。
+                                                    cross-axis-alignment: center;
 
                                                     for swatch in root.appearance-palette-swatches : Rectangle {
                                                         width: 14px;
