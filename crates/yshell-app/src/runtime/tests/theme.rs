@@ -3,7 +3,7 @@
 
 use tempfile::tempdir;
 use yshell_config::{ConfigDocument, ConfigStore, FolderProfile, SessionProfile, TerminalProfile};
-use yshell_terminal::{color_scheme, TerminalColor};
+use yshell_terminal::{color_scheme, TerminalCell, TerminalColor, TerminalPalette};
 
 use crate::runtime::{ThemeFieldAction, ThemeSchemeOption};
 
@@ -487,4 +487,117 @@ fn folder_editor_menu_requires_a_selected_folder() {
     runtime.select_saved_session_by_id("saved-one");
     let session = runtime.projection();
     assert!(!session.saved_folder_selected);
+}
+
+/// Visible text of a preview line (wide continuations carry only a filler).
+fn preview_line_text(line: &[TerminalCell]) -> String {
+    line.iter()
+        .filter(|cell| !cell.wide_continuation)
+        .map(|cell| cell.grapheme.as_str())
+        .collect()
+}
+
+fn preview_texts(lines: &[Vec<TerminalCell>]) -> Vec<String> {
+    lines
+        .iter()
+        .map(|line| preview_line_text(line.as_slice()))
+        .collect()
+}
+
+#[test]
+fn preview_lines_include_current_language_and_a_fixed_cjk_sample() {
+    let palette = TerminalPalette::DEFAULT;
+    let english = crate::runtime::theme::preview_lines(palette, "en-US");
+    let chinese = crate::runtime::theme::preview_lines(palette, "zh-CN");
+    let english_text = preview_texts(&english);
+    let chinese_text = preview_texts(&chinese);
+
+    // English UI keeps its English sample and still gets the CJK fallback line.
+    assert!(
+        english_text
+            .iter()
+            .any(|line| line == "Hello, world · theme preview"),
+        "missing English sample: {english_text:?}"
+    );
+    assert!(
+        english_text
+            .iter()
+            .any(|line| line == "CJK fallback: 你好，世界"),
+        "missing CJK fallback line: {english_text:?}"
+    );
+    // Chinese UI gets a Chinese sample; the CJK fallback line is shared.
+    assert!(
+        chinese_text
+            .iter()
+            .any(|line| line == "你好，世界 · 终端主题预览"),
+        "missing Chinese sample: {chinese_text:?}"
+    );
+    assert!(
+        chinese_text
+            .iter()
+            .any(|line| line == "CJK fallback: 你好，世界"),
+        "missing CJK fallback line: {chinese_text:?}"
+    );
+    // Both languages keep the ASCII prompt/listing samples.
+    for texts in [&english_text, &chinese_text] {
+        assert!(
+            texts.iter().any(|line| line.contains("user@host:~$ ls --color")),
+            "missing ASCII prompt: {texts:?}"
+        );
+    }
+    assert_eq!(english.len(), chinese.len());
+}
+
+#[test]
+fn preview_lines_keep_the_wide_cell_and_preview_width_conventions() {
+    let palette = TerminalPalette::DEFAULT;
+    let lines = crate::runtime::theme::preview_lines(palette, "zh-CN");
+    let cjk = lines
+        .iter()
+        .find(|line| preview_line_text(line) == "CJK fallback: 你好，世界")
+        .expect("CJK fallback line");
+
+    let lead = cjk
+        .iter()
+        .position(|cell| cell.grapheme == "你")
+        .expect("CJK lead cell");
+    assert!(
+        cjk[lead + 1].wide_continuation,
+        "wide glyph must be followed by a continuation cell"
+    );
+    assert_eq!(cjk[lead + 1].grapheme, " ");
+    assert_eq!(
+        preview_line_text(cjk),
+        "CJK fallback: 你好，世界",
+        "continuation cells must not duplicate the glyph"
+    );
+
+    // The old preview was 29 columns wide; the added samples must not make the
+    // renderer image wider than the fixed Settings preview box.
+    let widest = lines.iter().map(Vec::len).max().unwrap_or(0);
+    assert!(
+        widest <= 29,
+        "preview sample must keep the fixed preview width, got {widest} columns"
+    );
+}
+
+#[test]
+fn preview_lines_follow_explicit_language_values() {
+    let palette = TerminalPalette::DEFAULT;
+    for language in ["zh", "zh-CN", "zh-Hans", " ZH-cn "] {
+        let texts = preview_texts(&crate::runtime::theme::preview_lines(palette, language));
+        assert!(
+            texts.iter().any(|line| line == "你好，世界 · 终端主题预览"),
+            "language {language:?} must select the Chinese sample: {texts:?}"
+        );
+    }
+    for language in ["en", "en-US", "EN-us"] {
+        let texts = preview_texts(&crate::runtime::theme::preview_lines(palette, language));
+        assert!(
+            texts
+                .iter()
+                .any(|line| line == "Hello, world · theme preview"),
+            "language {language:?} must select the English sample: {texts:?}"
+        );
+    }
 }

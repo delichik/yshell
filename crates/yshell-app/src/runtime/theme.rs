@@ -1667,7 +1667,7 @@ impl AppRuntime {
         let renderer = renderer.get_or_insert_with(TerminalRenderer::new);
         renderer.set_font_size(font_size.clamp(8.0, 20.0));
         renderer.apply_appearance(palette, font);
-        let lines = preview_lines(palette);
+        let lines = preview_lines(palette, self.ui_language());
         let snapshot = TerminalSnapshot {
             lines: lines
                 .iter()
@@ -1708,8 +1708,71 @@ fn retarget_theme_references(document: &mut ConfigDocument, from_id: &str, to_id
     walk(&mut document.folders, from_id, to_id);
 }
 
+/// Resolves the live-preview sample language from the configured UI language
+/// (`ui.language`): explicit `zh-CN`/`en-US` win, `system` follows the OS
+/// locale, and anything unknown falls back to `en-US`.
+///
+/// Explicit preferences are resolved without touching any global state so the
+/// preview samples stay deterministic in tests; only `system` consults
+/// `sys-locale`, mirroring [`crate::bootstrap::apply_language`].
+fn preview_sample_language(preference: &str) -> &'static str {
+    match preference.trim().to_ascii_lowercase().as_str() {
+        "zh-cn" | "zh" | "zh-hans" => "zh-CN",
+        "en-us" | "en" => "en-US",
+        _ => {
+            let locale = sys_locale::get_locale().unwrap_or_default();
+            if locale.to_ascii_lowercase().starts_with("zh") {
+                "zh-CN"
+            } else {
+                "en-US"
+            }
+        }
+    }
+}
+
+/// Localized sample line plus the fixed CJK fallback line.
+///
+/// The CJK line is always present (also in English UI) so the primary/backup
+/// font rendering can be inspected without changing the UI language.
+fn preview_language_lines(language: &str) -> [&'static str; 2] {
+    match language {
+        "zh-CN" => ["你好，世界 · 终端主题预览", "CJK fallback: 你好，世界"],
+        _ => ["Hello, world · theme preview", "CJK fallback: 你好，世界"],
+    }
+}
+
+/// Terminal display width of a preview character.
+///
+/// The sample is fixed, so this only needs to cover the CJK ideographs and
+/// full-width punctuation used below. Wide characters are expanded to a lead
+/// cell followed by a `wide_continuation` cell, matching the terminal grid
+/// convention the renderer expects.
+fn preview_char_width(character: char) -> usize {
+    match character as u32 {
+        0x1100..=0x115F
+        | 0x2E80..=0x303E
+        | 0x3041..=0x33FF
+        | 0x3400..=0x4DBF
+        | 0x4E00..=0x9FFF
+        | 0xA000..=0xA4CF
+        | 0xAC00..=0xD7A3
+        | 0xF900..=0xFAFF
+        | 0xFE10..=0xFE19
+        | 0xFE30..=0xFE6F
+        | 0xFF00..=0xFF60
+        | 0xFFE0..=0xFFE6
+        | 0x1F300..=0x1FAFF
+        | 0x20000..=0x3FFFD => 2,
+        _ => 1,
+    }
+}
+
 /// Sample text of the live preview window (colors taken from the palette).
-pub(crate) fn preview_lines(palette: TerminalPalette) -> Vec<Vec<TerminalCell>> {
+///
+/// `language` is the configured UI language preference (`system` / `zh-CN` /
+/// `en-US`). The localized line and the fixed CJK fallback line are appended
+/// after the existing rows so the cursor row stays on the prompt.
+pub(crate) fn preview_lines(palette: TerminalPalette, language: &str) -> Vec<Vec<TerminalCell>> {
     let cell = |text: &str, foreground: TerminalColor, bold: bool| {
         let mut cell = TerminalCell {
             grapheme: text.to_owned(),
@@ -1720,9 +1783,16 @@ pub(crate) fn preview_lines(palette: TerminalPalette) -> Vec<Vec<TerminalCell>> 
         cell
     };
     let line = |text: &str, foreground: TerminalColor| -> Vec<TerminalCell> {
-        text.chars()
-            .map(|character| cell(&character.to_string(), foreground, false))
-            .collect()
+        let mut cells = Vec::with_capacity(text.chars().count());
+        for character in text.chars() {
+            cells.push(cell(&character.to_string(), foreground, false));
+            if preview_char_width(character) >= 2 {
+                let mut continuation = cell(" ", foreground, false);
+                continuation.wide_continuation = true;
+                cells.push(continuation);
+            }
+        }
+        cells
     };
     let mut prompt = line("user@host:~$ ", palette.ansi(2));
     prompt.extend(line("ls --color", palette.foreground));
@@ -1739,6 +1809,7 @@ pub(crate) fn preview_lines(palette: TerminalPalette) -> Vec<Vec<TerminalCell>> 
     let mut status = line("connected ", palette.ansi(10));
     status.extend(line("| idle ", palette.ansi(11)));
     status.extend(line("| failed", palette.ansi(9)));
+    let [language_line, cjk_line] = preview_language_lines(preview_sample_language(language));
     vec![
         line("YShell terminal theme preview", palette.foreground),
         prompt,
@@ -1746,5 +1817,7 @@ pub(crate) fn preview_lines(palette: TerminalPalette) -> Vec<Vec<TerminalCell>> 
         ansi,
         selection,
         status,
+        line(language_line, palette.foreground),
+        line(cjk_line, palette.foreground),
     ]
 }
