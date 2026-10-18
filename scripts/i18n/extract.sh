@@ -27,6 +27,11 @@ if ! command -v slint-tr-extractor >/dev/null 2>&1; then
     exit 1
 fi
 
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "错误：未找到 python3（用于规范化 .pot 注释，见 scripts/i18n/catalogs.py）。" >&2
+    exit 1
+fi
+
 # ui/**/*.slint 需要 globstar（bash >= 4）；"..**" 匹配零层或多层目录。
 shopt -s globstar nullglob
 
@@ -46,6 +51,11 @@ trap 'rm -f "$tmp"' EXIT
 # extractor 默认行为：全量重新生成 + 写入新的 POT-Creation-Date（分钟粒度）。
 slint-tr-extractor "${files[@]}" -o "$tmp"
 
+# slint-tr-extractor 1.18 会把过长的 // 注释按宽度折行，但折行后的续行
+# （有时连首行）缺少 "#. " 前缀，使 .pot 不再是合法 gettext。这里确定性
+# 地补回前缀；见 scripts/i18n/catalogs.py 的 normalize 实现。
+python3 scripts/i18n/catalogs.py normalize "$tmp" >/dev/null
+
 # 幂等处理：除 POT-Creation-Date 外内容一致时保留旧文件，避免每次运行都产生
 # diff；内容变化时用新文件（携带新时间戳）替换。
 if [[ -f "$POT" ]] \
@@ -61,3 +71,4 @@ fi
 msgids=$(grep -c '^msgid ' "$POT" || true)
 echo "已扫描 ${scanned} 个 .slint 文件，提取 ${msgids} 条 msgid -> $POT"
 echo "下一步：把新条目合并进 translations/<lang>/LC_MESSAGES/yshell-app.po（见 scripts/i18n/README.md）。"
+echo "同步/校验：python3 scripts/i18n/catalogs.py sync --reuse-same-msgid；bash scripts/i18n/check.sh"
