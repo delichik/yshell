@@ -1272,14 +1272,23 @@ impl AppRuntime {
     pub fn import_private_key_from_form(&mut self) -> AppProjection {
         let path_text = self.private_keys_import_path.trim().to_owned();
         if path_text.is_empty() {
-            self.private_keys_status_text =
-                "Enter or browse a private key file path first.".to_owned();
+            self.set_private_keys_status_kind(
+                "private-key-import-path-empty",
+                "Enter or browse a private key file path first.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         }
         let material = match fs::read_to_string(&path_text) {
             Ok(material) => material,
             Err(error) => {
-                self.private_keys_status_text = format!("Failed to read `{path_text}`: {error}");
+                self.set_private_keys_status_kind(
+                    "private-key-import-read-failed",
+                    format!("Failed to read `{path_text}`: {error}"),
+                    path_text,
+                    error.to_string(),
+                );
                 return self.projection();
             }
         };
@@ -1298,18 +1307,32 @@ impl AppRuntime {
         ) {
             Ok(entry) => {
                 self.private_keys_selected_id = Some(entry.id.clone());
-                self.private_keys_status_text = format!(
-                    "Imported `{}` ({} · {}).",
-                    entry.label, entry.algorithm, entry.fingerprint
+                let detail = format!("{} · {}", entry.algorithm, entry.fingerprint);
+                let text = format!("Imported `{}` ({detail}).", entry.label);
+                self.set_status_kind(
+                    "private-key-imported",
+                    text.clone(),
+                    entry.label.clone(),
+                    detail.clone(),
+                );
+                self.set_private_keys_status_kind(
+                    "private-key-imported",
+                    text,
+                    entry.label,
+                    detail,
                 );
                 self.private_keys_import_label.clear();
                 self.private_keys_import_path.clear();
                 self.private_keys_import_passphrase.clear();
                 self.private_keys_remember_import_passphrase = false;
-                self.status_text = self.private_keys_status_text.clone();
             }
             Err(error) => {
-                self.private_keys_status_text = format!("Import failed: {error}");
+                self.set_private_keys_status_kind(
+                    "private-key-import-failed",
+                    format!("Import failed: {error}"),
+                    error.to_string(),
+                    String::new(),
+                );
             }
         }
         self.projection()
@@ -1318,7 +1341,12 @@ impl AppRuntime {
     /// "测试"选中私钥：重新解析存储材料（口令输入非空时作为覆盖）。
     pub fn test_selected_private_key(&mut self) -> AppProjection {
         let Some(entry) = self.selected_private_key_entry() else {
-            self.private_keys_status_text = "Select a managed key first.".to_owned();
+            self.set_private_keys_status_kind(
+                "private-key-test-requires-selection",
+                "Select a managed key first.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         };
         let override_passphrase = self.private_keys_passphrase_input.clone();
@@ -1330,11 +1358,21 @@ impl AppRuntime {
         match self.test_private_key(&entry.id, override_passphrase) {
             Ok(report) => {
                 self.private_keys_test_result_text = report.summary();
-                self.private_keys_status_text = format!("Key test passed for `{}`.", entry.label);
+                self.set_private_keys_status_kind(
+                    "private-key-test-passed",
+                    format!("Key test passed for `{}`.", entry.label),
+                    entry.label,
+                    String::new(),
+                );
             }
             Err(error) => {
                 self.private_keys_test_result_text = String::new();
-                self.private_keys_status_text = format!("Key test failed: {error}");
+                self.set_private_keys_status_kind(
+                    "private-key-test-failed",
+                    format!("Key test failed: {error}"),
+                    error.to_string(),
+                    String::new(),
+                );
             }
         }
         self.projection()
@@ -1349,20 +1387,51 @@ impl AppRuntime {
     }
 
     /// 复制/导出后的状态反馈（`detail` 为空 = 成功）。
-    pub fn set_private_keys_status(&mut self, detail: &str) -> AppProjection {
-        self.private_keys_status_text = detail.to_owned();
-        if !detail.is_empty() {
-            self.status_text = detail.to_owned();
+    /// I18N-1：写私钥页内联状态（kind + 参数 + 英文回退），不触碰状态栏。
+    pub(crate) fn set_private_keys_status_kind(
+        &mut self,
+        kind: &str,
+        text: String,
+        param_1: String,
+        param_2: String,
+    ) {
+        self.private_keys_status_text = text;
+        self.private_keys_status_kind = kind.to_owned();
+        self.private_keys_status_param_1 = param_1;
+        self.private_keys_status_param_2 = param_2;
+    }
+
+    /// 页面反馈同时镜像到状态栏（复制/导出等由宿主触发的动作）。
+    pub fn set_private_keys_status_feedback(
+        &mut self,
+        kind: &str,
+        text: String,
+        param_1: String,
+        param_2: String,
+    ) -> AppProjection {
+        if !text.is_empty() {
+            self.set_status_kind(kind, text.clone(), param_1.clone(), param_2.clone());
         }
+        self.set_private_keys_status_kind(kind, text, param_1, param_2);
         self.projection()
     }
 
     pub fn request_private_key_remove(&mut self) -> AppProjection {
         if let Some(entry) = self.selected_private_key_entry() {
             self.private_keys_remove_confirm_visible = true;
-            self.private_keys_status_text =
-                format!("Confirm removal of `{}` in the Danger Zone.", entry.label);
-            self.status_text = self.private_keys_status_text.clone();
+            let text = format!("Confirm removal of `{}` in the Danger Zone.", entry.label);
+            self.set_status_kind(
+                "private-key-remove-confirm",
+                text.clone(),
+                entry.label.clone(),
+                String::new(),
+            );
+            self.set_private_keys_status_kind(
+                "private-key-remove-confirm",
+                text,
+                entry.label,
+                String::new(),
+            );
         }
         self.projection()
     }
@@ -1383,12 +1452,28 @@ impl AppRuntime {
                 self.private_keys_remove_confirm_visible = false;
                 self.private_keys_passphrase_input.clear();
                 self.private_keys_test_result_text.clear();
-                self.private_keys_status_text = format!("Removed managed key `{}`.", removed.label);
+                let text = format!("Removed managed key `{}`.", removed.label);
+                self.set_private_keys_status_kind(
+                    "private-key-removed",
+                    text.clone(),
+                    removed.label.clone(),
+                    String::new(),
+                );
                 self.ensure_private_keys_selection();
-                self.status_text = self.private_keys_status_text.clone();
+                self.set_status_kind(
+                    "private-key-removed",
+                    text,
+                    removed.label,
+                    String::new(),
+                );
             }
             Err(error) => {
-                self.private_keys_status_text = format!("Remove failed: {error}");
+                self.set_private_keys_status_kind(
+                    "private-key-remove-failed",
+                    format!("Remove failed: {error}"),
+                    error.to_string(),
+                    String::new(),
+                );
             }
         }
         self.projection()
@@ -1417,26 +1502,44 @@ impl AppRuntime {
             Ok(deployment) => deployment,
             Err(error) => {
                 self.private_keys_deploy_confirm_visible = false;
-                self.private_keys_status_text = format!("Deploy failed: {error}");
+                self.set_private_keys_status_kind(
+                    "private-key-deploy-failed",
+                    format!("Deploy failed: {error}"),
+                    error.to_string(),
+                    String::new(),
+                );
                 return self.projection();
             }
         };
         let Some(session_key) = self.active_session_id.clone() else {
             self.private_keys_deploy_confirm_visible = false;
-            self.private_keys_status_text =
-                "Deploy requires an active session to the target host.".to_owned();
+            self.set_private_keys_status_kind(
+                "private-key-deploy-requires-session",
+                "Deploy requires an active session to the target host.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         };
         let Some(session) = self.sessions.get(&session_key) else {
             self.private_keys_deploy_confirm_visible = false;
-            self.private_keys_status_text = "The active session is gone.".to_owned();
+            self.set_private_keys_status_kind(
+                "private-key-deploy-session-gone",
+                "The active session is gone.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         };
         // TAB-4：本地终端没有 SSH 目标，密钥部署绝不能拿占位配置去连网。
         if session.is_local() {
             self.private_keys_deploy_confirm_visible = false;
-            self.private_keys_status_text =
-                "Deploy requires an SSH session; the active tab is a local terminal.".to_owned();
+            self.set_private_keys_status_kind(
+                "private-key-deploy-requires-ssh",
+                "Deploy requires an SSH session; the active tab is a local terminal.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         }
         let ssh_config = session.ssh_config.clone();
@@ -1449,22 +1552,44 @@ impl AppRuntime {
         match self.deploy_authorized_keys_over_backend(&ssh_config, &deployment) {
             Ok(output) if output.exit_status == 0 => {
                 self.private_keys_deploy_confirm_visible = false;
-                self.private_keys_status_text = format!(
+                let text = format!(
                     "Deployed `{}` to {target} (idempotent append, exit status 0).",
                     entry.label
                 );
-                self.status_text = self.private_keys_status_text.clone();
+                self.set_status_kind(
+                    "private-key-deployed",
+                    text.clone(),
+                    entry.label.clone(),
+                    target.clone(),
+                );
+                self.set_private_keys_status_kind(
+                    "private-key-deployed",
+                    text,
+                    entry.label,
+                    target,
+                );
             }
             Ok(output) => {
                 self.private_keys_deploy_confirm_visible = false;
-                self.private_keys_status_text = format!(
-                    "Deploy command failed on {target} with exit status {}.",
-                    output.exit_status
+                let exit_status = output.exit_status.to_string();
+                let text = format!(
+                    "Deploy command failed on {target} with exit status {exit_status}."
+                );
+                self.set_private_keys_status_kind(
+                    "private-key-deploy-exit-failed",
+                    text,
+                    target,
+                    exit_status,
                 );
             }
             Err(error) => {
                 self.private_keys_deploy_confirm_visible = false;
-                self.private_keys_status_text = format!("Deploy failed on {target}: {error}");
+                self.set_private_keys_status_kind(
+                    "private-key-deploy-target-failed",
+                    format!("Deploy failed on {target}: {error}"),
+                    target,
+                    error.to_string(),
+                );
             }
         }
         self.projection()
@@ -1491,14 +1616,30 @@ impl AppRuntime {
         match self.store_private_key_passphrase(&entry.id, &passphrase) {
             Ok(updated) => {
                 self.private_keys_passphrase_input.clear();
-                self.private_keys_status_text = format!(
+                let text = format!(
                     "Passphrase saved for `{}` (validated against the stored key).",
                     updated.label
                 );
-                self.status_text = self.private_keys_status_text.clone();
+                self.set_status_kind(
+                    "private-key-passphrase-saved",
+                    text.clone(),
+                    updated.label.clone(),
+                    String::new(),
+                );
+                self.set_private_keys_status_kind(
+                    "private-key-passphrase-saved",
+                    text,
+                    updated.label,
+                    String::new(),
+                );
             }
             Err(error) => {
-                self.private_keys_status_text = format!("Cannot save passphrase: {error}");
+                self.set_private_keys_status_kind(
+                    "private-key-passphrase-save-failed",
+                    format!("Cannot save passphrase: {error}"),
+                    error.to_string(),
+                    String::new(),
+                );
             }
         }
         self.projection()
@@ -1510,12 +1651,27 @@ impl AppRuntime {
         };
         match self.forget_private_key_passphrase(&entry.id) {
             Ok(updated) => {
-                self.private_keys_status_text =
-                    format!("Forgot the saved passphrase for `{}`.", updated.label);
-                self.status_text = self.private_keys_status_text.clone();
+                let text = format!("Forgot the saved passphrase for `{}`.", updated.label);
+                self.set_status_kind(
+                    "private-key-passphrase-forgotten",
+                    text.clone(),
+                    updated.label.clone(),
+                    String::new(),
+                );
+                self.set_private_keys_status_kind(
+                    "private-key-passphrase-forgotten",
+                    text,
+                    updated.label,
+                    String::new(),
+                );
             }
             Err(error) => {
-                self.private_keys_status_text = format!("Cannot forget passphrase: {error}");
+                self.set_private_keys_status_kind(
+                    "private-key-passphrase-forget-failed",
+                    format!("Cannot forget passphrase: {error}"),
+                    error.to_string(),
+                    String::new(),
+                );
             }
         }
         self.projection()
@@ -1527,12 +1683,27 @@ impl AppRuntime {
         };
         match self.rename_private_key(&entry.id, label) {
             Ok(updated) => {
-                self.private_keys_status_text =
-                    format!("Renamed managed key to `{}`.", updated.label);
-                self.status_text = self.private_keys_status_text.clone();
+                let text = format!("Renamed managed key to `{}`.", updated.label);
+                self.set_status_kind(
+                    "private-key-renamed",
+                    text.clone(),
+                    updated.label.clone(),
+                    String::new(),
+                );
+                self.set_private_keys_status_kind(
+                    "private-key-renamed",
+                    text,
+                    updated.label,
+                    String::new(),
+                );
             }
             Err(error) => {
-                self.private_keys_status_text = format!("Rename failed: {error}");
+                self.set_private_keys_status_kind(
+                    "private-key-rename-failed",
+                    format!("Rename failed: {error}"),
+                    error.to_string(),
+                    String::new(),
+                );
             }
         }
         self.projection()
@@ -1655,11 +1826,12 @@ impl AppRuntime {
                 self.host_keys_import_text.clear();
                 self.projection()
             }
-            Err(error) => {
-                self.host_keys_status_text = format!("Import failed to read `{path}`: {error}");
-                self.status_text = self.host_keys_status_text.clone();
-                self.projection()
-            }
+            Err(error) => self.set_host_keys_status_feedback(
+                "host-keys-import-read-failed",
+                format!("Import failed to read `{path}`: {error}"),
+                path.to_owned(),
+                error.to_string(),
+            ),
         }
     }
 
@@ -1723,18 +1895,29 @@ impl AppRuntime {
                 .config_store
                 .save_known_hosts(&self.persistent_known_hosts)
             {
-                self.host_keys_status_text = format!("Import failed to persist: {error}");
+                self.set_host_keys_status_kind(
+                    "host-keys-import-persist-failed",
+                    format!("Import failed to persist: {error}"),
+                    error.to_string(),
+                    String::new(),
+                );
                 return self.projection();
             }
             self.ensure_host_keys_selection();
         }
         if failures.is_empty() {
             let status_text = format!("Imported {imported} host key(s).");
-            self.host_keys_status_text = status_text.clone();
+            let imported_text = imported.to_string();
+            self.set_host_keys_status_kind(
+                "host-keys-imported",
+                status_text.clone(),
+                imported_text.clone(),
+                String::new(),
+            );
             self.set_status_kind(
                 "host-keys-imported",
                 status_text,
-                imported.to_string(),
+                imported_text,
                 String::new(),
             );
         } else {
@@ -1744,11 +1927,16 @@ impl AppRuntime {
                 failures.join("; ")
             );
             let skipped = failures.len();
+            let failures_text = failures.join("; ");
             let status_text = format!(
-                "Imported {imported} host key(s); {skipped} line(s) skipped: {}",
-                failures.join("; ")
+                "Imported {imported} host key(s); {skipped} line(s) skipped: {failures_text}"
             );
-            self.host_keys_status_text = status_text.clone();
+            self.set_host_keys_status_kind(
+                "host-keys-imported-with-skips",
+                status_text.clone(),
+                imported.to_string(),
+                failures_text,
+            );
             self.set_status_kind(
                 "host-keys-imported",
                 status_text,
@@ -1776,12 +1964,32 @@ impl AppRuntime {
         lines.join("\n")
     }
 
-    /// 主机密钥页状态反馈（rfd 导出等宿主侧动作）。
-    pub fn set_host_keys_status(&mut self, detail: &str) -> AppProjection {
-        self.host_keys_status_text = detail.to_owned();
-        if !detail.is_empty() {
-            self.status_text = detail.to_owned();
+    /// I18N-1：写主机密钥页内联状态（kind + 参数 + 英文回退），不触碰状态栏。
+    pub(crate) fn set_host_keys_status_kind(
+        &mut self,
+        kind: &str,
+        text: String,
+        param_1: String,
+        param_2: String,
+    ) {
+        self.host_keys_status_text = text;
+        self.host_keys_status_kind = kind.to_owned();
+        self.host_keys_status_param_1 = param_1;
+        self.host_keys_status_param_2 = param_2;
+    }
+
+    /// 页面反馈同时镜像到状态栏（导出等由宿主触发的动作）。
+    pub fn set_host_keys_status_feedback(
+        &mut self,
+        kind: &str,
+        text: String,
+        param_1: String,
+        param_2: String,
+    ) -> AppProjection {
+        if !text.is_empty() {
+            self.set_status_kind(kind, text.clone(), param_1.clone(), param_2.clone());
         }
+        self.set_host_keys_status_kind(kind, text, param_1, param_2);
         self.projection()
     }
 
@@ -1797,7 +2005,12 @@ impl AppRuntime {
         self.ensure_host_keys_selection();
         let host_text = format!("{}:{}", selected.host, selected.port);
         let status_text = format!("Removed the saved host key for {host_text}.");
-        self.host_keys_status_text = status_text.clone();
+        self.set_host_keys_status_kind(
+            "host-key-removed",
+            status_text.clone(),
+            host_text.clone(),
+            String::new(),
+        );
         self.set_status_kind("host-key-removed", status_text, host_text, String::new());
         Ok(self.projection())
     }
@@ -1810,7 +2023,12 @@ impl AppRuntime {
         self.host_keys_selected_group = None;
         self.host_keys_selected_entry = None;
         let status_text = "Cleared all saved host keys.".to_owned();
-        self.host_keys_status_text = status_text.clone();
+        self.set_host_keys_status_kind(
+            "host-keys-cleared",
+            status_text.clone(),
+            String::new(),
+            String::new(),
+        );
         self.set_status_kind(
             "host-keys-cleared",
             status_text,

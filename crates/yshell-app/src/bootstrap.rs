@@ -2572,25 +2572,42 @@ pub(crate) fn wire_callbacks(
                 return;
             };
             let result = runtime_ref.borrow().selected_private_key_public_line();
-            let detail = match result {
+            let (kind, detail, param_1) = match result {
                 Ok(text) => {
                     let copied = clipboard_ref
                         .borrow_mut()
                         .as_mut()
                         .is_some_and(|clipboard| clipboard.set_contents(text.clone()).is_ok());
                     if copied {
-                        format!(
-                            "Copied the derived public key ({} chars) to the clipboard.",
-                            text.len()
+                        (
+                            "private-key-public-copied",
+                            format!(
+                                "Copied the derived public key ({} chars) to the clipboard.",
+                                text.len()
+                            ),
+                            text.len().to_string(),
                         )
                     } else {
-                        "Could not access the system clipboard; select the key text manually."
-                            .to_owned()
+                        (
+                            "private-key-clipboard-unavailable",
+                            "Could not access the system clipboard; select the key text manually."
+                                .to_owned(),
+                            String::new(),
+                        )
                     }
                 }
-                Err(error) => format!("Copy failed: {error}"),
+                Err(error) => (
+                    "private-key-copy-failed",
+                    format!("Copy failed: {error}"),
+                    error.to_string(),
+                ),
             };
-            let projection = runtime_ref.borrow_mut().set_private_keys_status(&detail);
+            let projection = runtime_ref.borrow_mut().set_private_keys_status_feedback(
+                kind,
+                detail,
+                param_1,
+                String::new(),
+            );
             apply_projection(&window, &projection);
             surface.refresh(&window);
         });
@@ -2616,7 +2633,12 @@ pub(crate) fn wire_callbacks(
                 Err(error) => {
                     let projection = runtime_ref
                         .borrow_mut()
-                        .set_private_keys_status(&format!("Export failed: {error}"));
+                        .set_private_keys_status_feedback(
+                            "private-key-export-failed",
+                            format!("Export failed: {error}"),
+                            error.to_string(),
+                            String::new(),
+                        );
                     apply_projection(&window, &projection);
                 }
             }
@@ -3788,8 +3810,12 @@ pub(crate) fn wire_callbacks(
             };
             if !file_dialogs_available() {
                 let mut runtime = runtime_ref.borrow_mut();
-                runtime.status_text =
-                    "No display server was found; type the font file path instead.".to_owned();
+                runtime.set_status_kind(
+                    "appearance-font-picker-unavailable",
+                    "No display server was found; type the font file path instead.".to_owned(),
+                    String::new(),
+                    String::new(),
+                );
                 let projection = runtime.projection();
                 apply_projection(&window, &projection);
                 return;
@@ -3811,9 +3837,13 @@ pub(crate) fn wire_callbacks(
             };
             if !file_dialogs_available() {
                 let mut runtime = runtime_ref.borrow_mut();
-                runtime.status_text =
+                runtime.set_status_kind(
+                    "appearance-fallback-font-picker-unavailable",
                     "No display server was found; type the fallback font file path instead."
-                        .to_owned();
+                        .to_owned(),
+                    String::new(),
+                    String::new(),
+                );
                 let projection = runtime.projection();
                 apply_projection(&window, &projection);
                 return;
@@ -4831,13 +4861,16 @@ fn dispatch_sftp_menu_action(
                 runtime.sftp_selected_paths().join("\n")
             };
             copy_text_to_clipboard(clipboard, &text);
-            runtime.status_text = format!(
-                "Copied {} path(s).",
-                if text.is_empty() {
-                    0
-                } else {
-                    text.lines().count()
-                }
+            let count = if text.is_empty() {
+                0
+            } else {
+                text.lines().count()
+            };
+            runtime.set_status_kind(
+                "sftp-copied-paths",
+                format!("Copied {count} path(s)."),
+                count.to_string(),
+                String::new(),
             );
             Ok(runtime.projection())
         }
@@ -4849,12 +4882,23 @@ fn dispatch_sftp_menu_action(
                 .collect::<Vec<_>>()
                 .join("\n");
             copy_text_to_clipboard(clipboard, &text);
-            runtime.status_text = "Copied local path(s).".to_owned();
+            runtime.set_status_kind(
+                "local-copied-paths",
+                "Copied local path(s).".to_owned(),
+                String::new(),
+                String::new(),
+            );
             Ok(runtime.projection())
         }
         "copy-path-current" => {
             copy_text_to_clipboard(clipboard, &runtime.sftp_path);
-            runtime.status_text = format!("Copied `{}`.", runtime.sftp_path);
+            let path = runtime.sftp_path.clone();
+            runtime.set_status_kind(
+                "sftp-copied-path",
+                format!("Copied `{path}`."),
+                path,
+                String::new(),
+            );
             Ok(runtime.projection())
         }
         "paste-into-remote" => Ok(runtime.paste_file_clipboard_into_remote()),
@@ -4878,7 +4922,12 @@ fn dispatch_sftp_menu_action(
         "up" => runtime.open_sftp_parent(),
         "home" => runtime.open_sftp_path("/"),
         unknown => {
-            runtime.status_text = format!("Unknown SFTP menu action `{unknown}`.");
+            runtime.set_status_kind(
+                "sftp-unknown-menu-action",
+                format!("Unknown SFTP menu action `{unknown}`."),
+                unknown.to_owned(),
+                String::new(),
+            );
             Ok(runtime.projection())
         }
     }
@@ -4900,13 +4949,23 @@ pub(crate) fn apply_dialog_outcome(
             DialogKind::SftpUploadFile => runtime
                 .upload_local_path_to_remote(&path, "ask")
                 .unwrap_or_else(|error| {
-                    runtime.status_text = format!("SFTP upload: {error}");
+                    runtime.set_status_kind(
+                        "sftp-upload-error",
+                        format!("SFTP upload: {error}"),
+                        error.to_string(),
+                        String::new(),
+                    );
                     runtime.projection()
                 }),
             DialogKind::SftpDownloadFolder => runtime
                 .download_sftp_selection_to(&path, "ask")
                 .unwrap_or_else(|error| {
-                    runtime.status_text = format!("SFTP download: {error}");
+                    runtime.set_status_kind(
+                        "sftp-download-error",
+                        format!("SFTP download: {error}"),
+                        error.to_string(),
+                        String::new(),
+                    );
                     runtime.projection()
                 }),
             // 保存类对话框不会产生 Picked。
@@ -4919,27 +4978,57 @@ pub(crate) fn apply_dialog_outcome(
                 runtime.set_settings_appearance_backup_font(&path)
             }
         },
-        FileDialogOutcome::Saved { kind, path, error } => {
-            let detail = match (&error, kind) {
-                (Some(error), DialogKind::PublicKeyExport) => format!("Export failed: {error}"),
-                (Some(error), DialogKind::HostKeysExport) => format!("Export failed: {error}"),
-                (Some(error), _) => format!("Dialog failed: {error}"),
-                (None, DialogKind::PublicKeyExport) => {
-                    format!("Exported the public key to `{path}`.")
-                }
-                (None, DialogKind::HostKeysExport) => {
-                    format!("Exported host keys to `{path}`.")
-                }
-                (None, _) => format!("Saved to `{path}`."),
-            };
-            match kind {
-                DialogKind::HostKeysExport | DialogKind::HostKeysImport => {
-                    runtime.set_host_keys_status(&detail)
-                }
-                DialogKind::LoggingDirectory => runtime.set_logging_dialog_path_error(&detail),
-                _ => runtime.set_private_keys_status(&detail),
+        FileDialogOutcome::Saved { kind, path, error } => match kind {
+            DialogKind::HostKeysExport | DialogKind::HostKeysImport => match &error {
+                Some(error) => runtime.set_host_keys_status_feedback(
+                    "host-keys-export-failed",
+                    format!("Export failed: {error}"),
+                    error.to_string(),
+                    String::new(),
+                ),
+                None => runtime.set_host_keys_status_feedback(
+                    "host-keys-exported",
+                    format!("Exported host keys to `{path}`."),
+                    path.clone(),
+                    String::new(),
+                ),
+            },
+            DialogKind::LoggingDirectory => {
+                let detail = match &error {
+                    Some(error) => format!("Dialog failed: {error}"),
+                    None => format!("Saved to `{path}`."),
+                };
+                runtime.set_logging_dialog_path_error(&detail)
             }
-        }
+            _ => match (&error, kind) {
+                (Some(error), DialogKind::PublicKeyExport) => runtime
+                    .set_private_keys_status_feedback(
+                        "private-key-export-failed",
+                        format!("Export failed: {error}"),
+                        error.to_string(),
+                        String::new(),
+                    ),
+                (Some(error), _) => runtime.set_private_keys_status_feedback(
+                    "private-key-dialog-failed",
+                    format!("Dialog failed: {error}"),
+                    error.to_string(),
+                    String::new(),
+                ),
+                (None, DialogKind::PublicKeyExport) => runtime
+                    .set_private_keys_status_feedback(
+                        "private-key-exported",
+                        format!("Exported the public key to `{path}`."),
+                        path.clone(),
+                        String::new(),
+                    ),
+                (None, _) => runtime.set_private_keys_status_feedback(
+                    "private-key-file-saved",
+                    format!("Saved to `{path}`."),
+                    path.clone(),
+                    String::new(),
+                ),
+            },
+        },
     }
 }
 
@@ -6379,6 +6468,15 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_folder_editor_name_text(projection.folder_editor_name_text.clone().into());
     window.set_folder_editor_path_text(projection.folder_editor_path_text.clone().into());
     window.set_folder_editor_status_text(projection.folder_editor_status_text.clone().into());
+    window.set_folder_editor_status_kind_text(
+        projection.folder_editor_status_kind_text.clone().into(),
+    );
+    window.set_folder_editor_status_param_1_text(
+        projection.folder_editor_status_param_1_text.clone().into(),
+    );
+    window.set_folder_editor_status_param_2_text(
+        projection.folder_editor_status_param_2_text.clone().into(),
+    );
     window.set_folder_editor_appearance_fields(tri_state_field_model(
         &projection.folder_editor_appearance_fields,
     ));
@@ -6790,6 +6888,15 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window
         .set_private_keys_test_result_text(projection.private_keys_test_result_text.clone().into());
     window.set_private_keys_status_text(projection.private_keys_status_text.clone().into());
+    window.set_private_keys_status_kind_text(
+        projection.private_keys_status_kind_text.clone().into(),
+    );
+    window.set_private_keys_status_param_1_text(
+        projection.private_keys_status_param_1_text.clone().into(),
+    );
+    window.set_private_keys_status_param_2_text(
+        projection.private_keys_status_param_2_text.clone().into(),
+    );
     window.set_private_keys_remove_confirm_visible(projection.private_keys_remove_confirm_visible);
     window.set_private_keys_deploy_confirm_visible(projection.private_keys_deploy_confirm_visible);
     window.set_private_keys_deploy_command_text(
@@ -6845,6 +6952,13 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_proxies_selected_index(projection.proxies_selected_index);
     window.set_proxies_summary_text(projection.proxies_summary_text.clone().into());
     window.set_proxies_status_text(projection.proxies_status_text.clone().into());
+    window.set_proxies_status_kind_text(projection.proxies_status_kind_text.clone().into());
+    window.set_proxies_status_param_1_text(
+        projection.proxies_status_param_1_text.clone().into(),
+    );
+    window.set_proxies_status_param_2_text(
+        projection.proxies_status_param_2_text.clone().into(),
+    );
     window.set_proxies_test_result_text(projection.proxies_test_result_text.clone().into());
     window.set_proxies_remove_confirm_visible(projection.proxies_remove_confirm_visible);
     window.set_proxies_remove_blocked(projection.proxies_remove_blocked);
@@ -6894,6 +7008,13 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_host_keys_detail_path_text(projection.host_keys_detail_path_text.clone().into());
     window.set_host_keys_path_text(projection.host_keys_path_text.clone().into());
     window.set_host_keys_status_text(projection.host_keys_status_text.clone().into());
+    window.set_host_keys_status_kind_text(projection.host_keys_status_kind_text.clone().into());
+    window.set_host_keys_status_param_1_text(
+        projection.host_keys_status_param_1_text.clone().into(),
+    );
+    window.set_host_keys_status_param_2_text(
+        projection.host_keys_status_param_2_text.clone().into(),
+    );
     window.set_host_keys_key_count(projection.host_keys_key_count);
     window.set_host_keys_import_visible(projection.host_keys_import_visible);
     if window.get_host_keys_import_text().as_str() != projection.host_keys_import_text {

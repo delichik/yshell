@@ -843,8 +843,10 @@ impl ThemeDraft {
         profile.color_scheme = if self.color_scheme.explicit {
             let id = self.color_scheme.text.trim();
             if !scheme_id_known(id, catalog) {
-                return Err(ThemeFieldError::new(
+                return Err(ThemeFieldError::with_reason(
                     "appearance.color_scheme",
+                    "unknown-scheme",
+                    String::new(),
                     "unknown color scheme id",
                 ));
             }
@@ -881,11 +883,18 @@ impl ThemeDraft {
     pub(crate) fn parse_font_size(&self) -> Result<u16, ThemeFieldError> {
         let text = self.font_size.text.trim();
         let value = text.parse::<u16>().map_err(|_| {
-            ThemeFieldError::new("appearance.font_size", "font size must be a number")
+            ThemeFieldError::with_reason(
+                "appearance.font_size",
+                "not-number",
+                String::new(),
+                "font size must be a number",
+            )
         })?;
         if !(THEME_FONT_SIZE_MIN..=THEME_FONT_SIZE_MAX).contains(&value) {
-            return Err(ThemeFieldError::new(
+            return Err(ThemeFieldError::with_reason(
                 "appearance.font_size",
+                "out-of-range",
+                format!("{THEME_FONT_SIZE_MIN} and {THEME_FONT_SIZE_MAX}"),
                 format!(
                     "font size must be between {THEME_FONT_SIZE_MIN} and {THEME_FONT_SIZE_MAX}"
                 ),
@@ -899,13 +908,29 @@ impl ThemeDraft {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ThemeFieldError {
     pub(crate) field: &'static str,
+    /// I18N-1：稳定原因 id（`unknown-scheme` / `not-number` / `out-of-range` /
+    /// `invalid`），供 Folder Editor 选择状态模板。
+    pub(crate) reason: &'static str,
+    /// 原因相关的技术参数（当前为数值范围，如 `100 and 1000000`）。
+    pub(crate) param: String,
     pub(crate) message: String,
 }
 
 impl ThemeFieldError {
     pub(crate) fn new(field: &'static str, message: impl Into<String>) -> Self {
+        Self::with_reason(field, "invalid", String::new(), message)
+    }
+
+    pub(crate) fn with_reason(
+        field: &'static str,
+        reason: &'static str,
+        param: String,
+        message: impl Into<String>,
+    ) -> Self {
         Self {
             field,
+            reason,
+            param,
             message: message.into(),
         }
     }
@@ -1196,12 +1221,14 @@ pub(crate) fn parse_scrollback(
     if text.is_empty() {
         return Ok(inherited);
     }
-    let value = text
-        .parse::<usize>()
-        .map_err(|_| ThemeFieldError::new(key, "value must be a number"))?;
+    let value = text.parse::<usize>().map_err(|_| {
+        ThemeFieldError::with_reason(key, "not-number", String::new(), "value must be a number")
+    })?;
     if !(minimum..=maximum).contains(&value) {
-        return Err(ThemeFieldError::new(
+        return Err(ThemeFieldError::with_reason(
             key,
+            "out-of-range",
+            format!("{minimum} and {maximum}"),
             format!("value must be between {minimum} and {maximum}"),
         ));
     }

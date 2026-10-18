@@ -9,6 +9,7 @@
 // 规范：docs/product/ui-winui3-design-language.md §5.10（ContentDialog 形态）。
 
 import { Theme } from "../theme.slint";
+import { TextFormats } from "../text_formats.slint";
 import { Icon } from "../components/basic/icons.slint";
 import { WinButton, WinCard, WinCardHeader, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
 
@@ -94,6 +95,10 @@ export component HostKeysPage inherits Rectangle {
     in property <string> detail-fingerprint-text: "";
     in property <string> detail-path-text: "";
     in property <string> status-text: "";
+    /// I18N-1：状态行模板（Rust 只投影 kind/参数；`status-text` 为英文回退）。
+    in property <string> status-kind-text: "";
+    in property <string> status-param-1-text: "";
+    in property <string> status-param-2-text: "";
     in property <string> empty-text: @tr("No host keys have been saved yet. They are recorded when you trust a host.");
 
     in-out property <int> selected-group: -1;
@@ -121,6 +126,12 @@ export component HostKeysPage inherits Rectangle {
     private property <bool> detail-split-visible:
         root.detail-host-text != "" || root.detail-algorithm-text != ""
         || root.detail-fingerprint-text != "" || root.detail-path-text != "";
+    private property <string> status-display: TextFormats.status-message(
+        root.status-kind-text,
+        root.status-param-1-text,
+        root.status-param-2-text,
+        root.status-text
+    );
 
     dialog_scope := FocusScope {
         width: parent.width;
@@ -480,8 +491,8 @@ export component HostKeysPage inherits Rectangle {
                                             }
                                         }
 
-                                        if root.status-text != "" : Text {
-                                            text: root.status-text;
+                                        if root.status-display != "" : Text {
+                                            text: root.status-display;
                                             color: Theme.text-secondary;
                                             font-size: Theme.font-caption;
                                             wrap: word-wrap;

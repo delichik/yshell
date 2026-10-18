@@ -167,6 +167,9 @@ fn deleting_a_referenced_proxy_is_blocked_and_can_be_cleared_explicitly() {
     assert!(!projection.proxies_remove_confirm_visible);
     assert!(projection.proxies_referencing_text.contains("Prod"));
     assert!(projection.proxies_referencing_text.contains("Staging"));
+    assert_eq!(projection.proxies_status_kind_text, "proxies-remove-blocked");
+    assert_eq!(projection.proxies_status_param_1_text, "Shared SOCKS");
+    assert!(projection.proxies_status_param_2_text.contains("Prod"));
     assert!(projection.proxies_status_text.contains("Prod"));
     assert!(runtime
         .config_document

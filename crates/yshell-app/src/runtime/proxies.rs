@@ -112,6 +112,20 @@ pub(crate) fn proxy_test_channel() -> (Sender<ProxyTestMessage>, Receiver<ProxyT
 }
 
 impl AppRuntime {
+    /// I18N-1：写代理页内联状态（kind + 参数 + 英文回退）。
+    pub(crate) fn set_proxies_status_kind(
+        &mut self,
+        kind: &str,
+        text: String,
+        param_1: String,
+        param_2: String,
+    ) {
+        self.proxies_status_text = text;
+        self.proxies_status_kind = kind.to_owned();
+        self.proxies_status_param_1 = param_1;
+        self.proxies_status_param_2 = param_2;
+    }
+
     // --- page lifecycle ---------------------------------------------------
 
     pub fn open_proxies_manager(&mut self) -> AppProjection {
@@ -131,11 +145,17 @@ impl AppRuntime {
             "Proxy manager opened with {count} managed profile{}.",
             if count == 1 { "" } else { "s" }
         );
-        self.proxies_status_text = status_text.clone();
+        let count_text = count.to_string();
+        self.set_proxies_status_kind(
+            "proxies-opened",
+            status_text.clone(),
+            count_text.clone(),
+            String::new(),
+        );
         self.set_status_kind(
             "proxies-opened",
             status_text,
-            count.to_string(),
+            count_text,
             String::new(),
         );
         self.projection()
@@ -169,7 +189,12 @@ impl AppRuntime {
         self.proxies_referencing_text.clear();
         self.proxies_test_result_text.clear();
         let status_text = format!("Selected proxy profile `{}`.", row.name);
-        self.proxies_status_text = status_text.clone();
+        self.set_proxies_status_kind(
+            "proxies-selected",
+            status_text.clone(),
+            row.name.clone(),
+            String::new(),
+        );
         self.set_status_kind(
             "proxies-selected",
             status_text,
@@ -190,14 +215,24 @@ impl AppRuntime {
         self.proxies_editor_password.clear();
         self.proxies_editor_dns_by_proxy = true;
         self.proxies_remove_blocked = false;
-        self.proxies_status_text = "New proxy profile draft.".to_owned();
+        self.set_proxies_status_kind(
+            "proxies-new-draft",
+            "New proxy profile draft.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
     /// Loads the selected profile into the edit form.
     pub fn begin_edit_proxy(&mut self) -> AppProjection {
         let Some(profile) = self.selected_proxy_profile() else {
-            self.proxies_status_text = "Select a proxy profile to edit.".to_owned();
+            self.set_proxies_status_kind(
+                "proxies-edit-requires-selection",
+                "Select a proxy profile to edit.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         };
         self.proxies_editor_id = Some(profile.id.clone());
@@ -209,14 +244,24 @@ impl AppRuntime {
         self.proxies_editor_password.clear();
         self.proxies_editor_dns_by_proxy = profile.resolve_dns_by_proxy;
         self.proxies_remove_blocked = false;
-        self.proxies_status_text = format!("Editing proxy profile `{}`.", profile.name);
+        self.set_proxies_status_kind(
+            "proxies-editing",
+            format!("Editing proxy profile `{}`.", profile.name),
+            profile.name,
+            String::new(),
+        );
         self.projection()
     }
 
     /// Duplicates the selected profile under a new id (including its password).
     pub fn duplicate_selected_proxy(&mut self) -> AppProjection {
         let Some(profile) = self.selected_proxy_profile() else {
-            self.proxies_status_text = "Select a proxy profile to duplicate.".to_owned();
+            self.set_proxies_status_kind(
+                "proxies-duplicate-requires-selection",
+                "Select a proxy profile to duplicate.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         };
         let new_id = self.allocate_proxy_id();
@@ -230,8 +275,12 @@ impl AppRuntime {
                     match self.store_secret_value(&new_key, &password) {
                         Ok(()) => Some(new_key),
                         Err(error) => {
-                            self.proxies_status_text =
-                                format!("Duplicate saved without its password: {error}");
+                            self.set_proxies_status_kind(
+                                "proxies-duplicate-password-missing",
+                                format!("Duplicate saved without its password: {error}"),
+                                error.to_string(),
+                                String::new(),
+                            );
                             None
                         }
                     }
@@ -246,13 +295,23 @@ impl AppRuntime {
             .insert(new_id.clone(), copy);
         if let Err(error) = self.save_proxy_config() {
             self.config_document.proxy_profiles.remove(&new_id);
-            self.proxies_status_text = format!("Duplicate failed: {error}");
+            self.set_proxies_status_kind(
+                "proxies-duplicate-failed",
+                format!("Duplicate failed: {error}"),
+                error.to_string(),
+                String::new(),
+            );
             return self.projection();
         }
         self.proxies_selected_id = Some(new_id);
         self.begin_edit_proxy();
         let status_text = format!("Duplicated proxy profile as `{name}`.");
-        self.proxies_status_text = status_text.clone();
+        self.set_proxies_status_kind(
+            "proxies-duplicated",
+            status_text.clone(),
+            name.clone(),
+            String::new(),
+        );
         self.set_status_kind("proxies-duplicated", status_text, name, String::new());
         self.projection()
     }
@@ -301,7 +360,12 @@ impl AppRuntime {
         } else {
             self.start_new_proxy();
         }
-        self.proxies_status_text = "Discarded proxy editor changes.".to_owned();
+        self.set_proxies_status_kind(
+            "proxies-editor-discarded",
+            "Discarded proxy editor changes.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -318,20 +382,26 @@ impl AppRuntime {
                 } else {
                     "Saved proxy profile changes; all referencing sessions use them.".to_owned()
                 };
-                self.proxies_status_text = status_text.clone();
-                self.set_status_kind(
-                    if created {
-                        "proxies-saved-new"
-                    } else {
-                        "proxies-saved-changes"
-                    },
-                    status_text,
+                let kind = if created {
+                    "proxies-saved-new"
+                } else {
+                    "proxies-saved-changes"
+                };
+                self.set_proxies_status_kind(
+                    kind,
+                    status_text.clone(),
                     String::new(),
                     String::new(),
                 );
+                self.set_status_kind(kind, status_text, String::new(), String::new());
             }
             Err(error) => {
-                self.proxies_status_text = format!("Cannot save proxy profile: {error}");
+                self.set_proxies_status_kind(
+                    "proxies-save-failed",
+                    format!("Cannot save proxy profile: {error}"),
+                    error.to_string(),
+                    String::new(),
+                );
             }
         }
         self.projection()
@@ -428,7 +498,12 @@ impl AppRuntime {
 
     pub fn request_proxy_remove(&mut self) -> AppProjection {
         let Some(profile) = self.selected_proxy_profile() else {
-            self.proxies_status_text = "Select a proxy profile to delete.".to_owned();
+            self.set_proxies_status_kind(
+                "proxies-remove-requires-selection",
+                "Select a proxy profile to delete.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         };
         let used_by = self.proxy_used_by();
@@ -438,7 +513,12 @@ impl AppRuntime {
             self.proxies_referencing_text.clear();
             self.proxies_remove_confirm_visible = true;
             let status_text = format!("Confirm deleting proxy profile `{}`.", profile.name);
-            self.proxies_status_text = status_text.clone();
+            self.set_proxies_status_kind(
+                "proxies-remove-confirm",
+                status_text.clone(),
+                profile.name.clone(),
+                String::new(),
+            );
             self.set_status_kind(
                 "proxies-remove-confirm",
                 status_text,
@@ -456,7 +536,12 @@ impl AppRuntime {
                 references.len(),
                 referencing
             );
-            self.proxies_status_text = status_text.clone();
+            self.set_proxies_status_kind(
+                "proxies-remove-blocked",
+                status_text.clone(),
+                profile.name.clone(),
+                referencing.clone(),
+            );
             self.set_status_kind(
                 "proxies-remove-blocked",
                 status_text,
@@ -499,7 +584,12 @@ impl AppRuntime {
                     self.begin_edit_proxy();
                 }
                 let status_text = format!("Deleted proxy profile `{}`.", removed.name);
-                self.proxies_status_text = status_text.clone();
+                self.set_proxies_status_kind(
+                    "proxies-deleted",
+                    status_text.clone(),
+                    removed.name.clone(),
+                    String::new(),
+                );
                 self.set_status_kind(
                     "proxies-deleted",
                     status_text,
@@ -508,7 +598,12 @@ impl AppRuntime {
                 );
             }
             Err(error) => {
-                self.proxies_status_text = format!("Delete failed: {error}");
+                self.set_proxies_status_kind(
+                    "proxies-delete-failed",
+                    format!("Delete failed: {error}"),
+                    error.to_string(),
+                    String::new(),
+                );
             }
         }
         self.projection()
@@ -524,9 +619,14 @@ impl AppRuntime {
             profile.id.as_str(),
         );
         if cleared == 0 {
-            self.proxies_status_text = format!(
-                "No saved session references `{}` anymore.",
-                profile.name
+            self.set_proxies_status_kind(
+                "proxies-no-references",
+                format!(
+                    "No saved session references `{}` anymore.",
+                    profile.name
+                ),
+                profile.name,
+                String::new(),
             );
             self.proxies_remove_blocked = false;
             return self.projection();
@@ -539,7 +639,12 @@ impl AppRuntime {
                     "Cleared proxy `{}` from {cleared} saved session(s); they now use No Proxy.",
                     profile.name
                 );
-                self.proxies_status_text = status_text.clone();
+                self.set_proxies_status_kind(
+                    "proxies-cleared-from-sessions",
+                    status_text.clone(),
+                    profile.name.clone(),
+                    cleared.to_string(),
+                );
                 self.set_status_kind(
                     "proxies-cleared-from-sessions",
                     status_text,
@@ -548,7 +653,12 @@ impl AppRuntime {
                 );
             }
             Err(error) => {
-                self.proxies_status_text = format!("Cannot update saved sessions: {error}");
+                self.set_proxies_status_kind(
+                    "proxies-clear-from-sessions-failed",
+                    format!("Cannot update saved sessions: {error}"),
+                    error.to_string(),
+                    String::new(),
+                );
             }
         }
         self.projection()
@@ -578,25 +688,45 @@ impl AppRuntime {
     /// thread. `poll_proxy_test_result` applies the outcome on the UI thread.
     pub fn test_selected_proxy(&mut self) -> AppProjection {
         if self.proxy_test_in_flight.is_some() {
-            self.proxies_status_text = "A proxy test is already running.".to_owned();
+            self.set_proxies_status_kind(
+                "proxies-test-in-progress",
+                "A proxy test is already running.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         }
         let Some(profile) = self.selected_proxy_profile() else {
-            self.proxies_status_text = "Select a proxy profile to test.".to_owned();
+            self.set_proxies_status_kind(
+                "proxies-test-requires-selection",
+                "Select a proxy profile to test.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         };
         let config = match self.proxy_config_from_profile(&profile) {
             Ok(config) => config,
             Err(error) => {
                 self.proxies_test_result_text = format!("Test failed before connecting: {error}");
-                self.proxies_status_text = self.proxies_test_result_text.clone();
+                self.set_proxies_status_kind(
+                    "proxies-test-config-failed",
+                    self.proxies_test_result_text.clone(),
+                    error.to_string(),
+                    String::new(),
+                );
                 return self.projection();
             }
         };
         let Some(sender) = self.proxy_test_tx.clone() else {
             self.proxies_test_result_text =
                 "Test is unavailable: the proxy-test worker was not started.".to_owned();
-            self.proxies_status_text = self.proxies_test_result_text.clone();
+            self.set_proxies_status_kind(
+                "proxies-test-worker-unavailable",
+                self.proxies_test_result_text.clone(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         };
         let proxy_id = profile.id.clone();
@@ -614,17 +744,24 @@ impl AppRuntime {
         if let Err(error) = spawned {
             self.proxies_test_result_text =
                 format!("Test could not start its worker thread: {error}");
-            self.proxies_status_text = self.proxies_test_result_text.clone();
+            self.set_proxies_status_kind(
+                "proxies-test-spawn-failed",
+                self.proxies_test_result_text.clone(),
+                error.to_string(),
+                String::new(),
+            );
             return self.projection();
         }
         self.proxy_test_in_flight = Some(proxy_id.clone());
-        self.proxies_test_result_text = format!(
-            "Testing {} at {}:{}…",
-            proxy_protocol_display(profile.protocol),
-            profile.host,
-            profile.port
+        let protocol = proxy_protocol_display(profile.protocol);
+        let address = format!("{}:{}", profile.host, profile.port);
+        self.proxies_test_result_text = format!("Testing {protocol} at {address}…");
+        self.set_proxies_status_kind(
+            "proxies-testing",
+            self.proxies_test_result_text.clone(),
+            protocol.to_owned(),
+            address,
         );
-        self.proxies_status_text = self.proxies_test_result_text.clone();
         self.projection()
     }
 
@@ -657,24 +794,42 @@ impl AppRuntime {
     }
 
     fn apply_proxy_test_result(&mut self, message: ProxyTestMessage) {
-        let text = match message.result {
-            Ok(report) => format!(
-                "Test passed: {} at {} answered from {} in {} ms. {}",
-                proxy_protocol_display(match report.protocol {
+        match message.result {
+            Ok(report) => {
+                let protocol = proxy_protocol_display(match report.protocol {
                     "socks4" => ProxyProtocol::Socks4,
                     "socks4a" => ProxyProtocol::Socks4a,
                     "http-connect" => ProxyProtocol::HttpConnect,
                     _ => ProxyProtocol::Socks5,
-                }),
-                report.address,
-                report.remote,
-                report.elapsed_ms,
-                report.detail
-            ),
-            Err(error) => format!("Test failed: {error}"),
-        };
-        self.proxies_test_result_text = text.clone();
-        self.proxies_status_text = text;
+                });
+                let status_text = format!(
+                    "Test passed: {protocol} at {} answered from {} in {} ms. {}",
+                    report.address, report.remote, report.elapsed_ms, report.detail
+                );
+                let param_1 = format!("{protocol} at {}", report.address);
+                let param_2 = format!(
+                    "{} in {} ms. {}",
+                    report.remote, report.elapsed_ms, report.detail
+                );
+                self.proxies_test_result_text = status_text.clone();
+                self.set_proxies_status_kind(
+                    "proxies-test-passed",
+                    status_text,
+                    param_1,
+                    param_2,
+                );
+            }
+            Err(error) => {
+                let status_text = format!("Test failed: {error}");
+                self.proxies_test_result_text = status_text.clone();
+                self.set_proxies_status_kind(
+                    "proxies-test-failed",
+                    status_text,
+                    error,
+                    String::new(),
+                );
+            }
+        }
     }
 
     /// Deterministic wait used by unit tests (the app timer drives this in the

@@ -12,6 +12,7 @@
 // 规范：docs/product/ui-winui3-design-language.md §5.10（ContentDialog 形态）。
 
 import { Theme } from "../theme.slint";
+import { TextFormats } from "../text_formats.slint";
 import { WinButton, WinCard, WinCardHeader, WinIconButton, WinToggle, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 
@@ -94,6 +95,10 @@ export component PrivateKeysPage inherits Rectangle {
     in property <string> public-key-text: "";
     in property <string> test-result-text: "";
     in property <string> status-text: "";
+    /// I18N-1：状态行模板（Rust 只投影 kind/参数；`status-text` 为英文回退）。
+    in property <string> status-kind-text: "";
+    in property <string> status-param-1-text: "";
+    in property <string> status-param-2-text: "";
     in property <bool> busy: false;
 
     in-out property <int> selected-index: -1;
@@ -136,6 +141,12 @@ export component PrivateKeysPage inherits Rectangle {
             ? root.keys[root.selected-index].label
             : "";
     private property <bool> has-selection: root.selected-index >= 0;
+    private property <string> status-display: TextFormats.status-message(
+        root.status-kind-text,
+        root.status-param-1-text,
+        root.status-param-2-text,
+        root.status-text
+    );
 
     dialog_scope := FocusScope {
         width: parent.width;
@@ -453,8 +464,8 @@ export component PrivateKeysPage inherits Rectangle {
                                         }
                                     }
 
-                                    if root.status-text != "" : Text {
-                                        text: root.status-text;
+                                    if root.status-display != "" : Text {
+                                        text: root.status-display;
                                         color: Theme.text-secondary;
                                         font-size: Theme.font-caption;
                                         wrap: word-wrap;

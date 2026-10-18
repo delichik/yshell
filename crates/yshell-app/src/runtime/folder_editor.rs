@@ -17,7 +17,7 @@ use super::panels::{
 use super::theme::{
     appearance_font_preset_labels, color_scheme_id_at, parse_scrollback, resolve_palette,
     scheme_display_name, theme_field_rows, ThemeDraft, ThemeFieldAction, ThemeFieldDraft,
-    ThemeSources, TriStateFieldData, KEY_LOGGING_DIRECTORY, KEY_LOGGING_ENABLED,
+    ThemeFieldError, ThemeSources, TriStateFieldData, KEY_LOGGING_DIRECTORY, KEY_LOGGING_ENABLED,
     KEY_LOGGING_FORMAT, KEY_SCROLLBACK_LINES, KEY_SCROLLBACK_MAX_CELLS, LOG_FORMAT_RAW,
 };
 use super::*;
@@ -41,7 +41,11 @@ pub(crate) struct FolderEditorState {
     pub(crate) logging_enabled: ThemeFieldDraft,
     pub(crate) logging_format: ThemeFieldDraft,
     pub(crate) logging_directory: ThemeFieldDraft,
+    /// I18N-1：内联状态的模板 id 与参数；`status_text` 保留为英文回退。
     pub(crate) status_text: String,
+    pub(crate) status_kind: String,
+    pub(crate) status_param_1: String,
+    pub(crate) status_param_2: String,
 }
 
 impl Default for FolderEditorState {
@@ -82,11 +86,70 @@ impl Default for FolderEditorState {
             parent_terminal,
             parent_logging,
             status_text: String::new(),
+            status_kind: String::new(),
+            status_param_1: String::new(),
+            status_param_2: String::new(),
         }
     }
 }
 
 impl AppRuntime {
+    /// I18N-1：写 Folder Editor 内联状态（kind + 参数 + 英文回退）。
+    pub(crate) fn set_folder_editor_status(
+        &mut self,
+        kind: &str,
+        text: String,
+        param_1: String,
+        param_2: String,
+    ) {
+        self.folder_editor.status_text = text;
+        self.folder_editor.status_kind = kind.to_owned();
+        self.folder_editor.status_param_1 = param_1;
+        self.folder_editor.status_param_2 = param_2;
+    }
+
+    /// 清空内联状态（修改草稿后旧提示不再适用）。
+    pub(crate) fn clear_folder_editor_status(&mut self) {
+        self.folder_editor.status_text.clear();
+        self.folder_editor.status_kind.clear();
+        self.folder_editor.status_param_1.clear();
+        self.folder_editor.status_param_2.clear();
+    }
+
+    /// I18N-1：把字段校验错误映射为稳定的状态模板（英文原文保留为回退）。
+    fn set_folder_editor_field_error(&mut self, error: ThemeFieldError) {
+        let text = format!("{}: {}", error.field, error.message);
+        match error.reason {
+            "unknown-scheme" => {
+                let scheme = self.folder_editor.theme.color_scheme.text.trim().to_owned();
+                self.set_folder_editor_status(
+                    "folder-defaults-unknown-scheme",
+                    text,
+                    scheme,
+                    error.message,
+                );
+            }
+            "not-number" => self.set_folder_editor_status(
+                "folder-defaults-not-number",
+                text,
+                error.field.to_owned(),
+                error.message,
+            ),
+            "out-of-range" => self.set_folder_editor_status(
+                "folder-defaults-out-of-range",
+                text,
+                error.field.to_owned(),
+                error.param,
+            ),
+            _ => self.set_folder_editor_status(
+                "folder-defaults-invalid-field",
+                text,
+                error.field.to_owned(),
+                error.message,
+            ),
+        }
+    }
+
     /// Opens the Folder Editor for `folder_id` with the current defaults.
     pub fn open_folder_editor(&mut self, folder_id: &str) -> AppResult<AppProjection> {
         let Some(folder) = self.config_document.find_folder(folder_id) else {
@@ -150,10 +213,19 @@ impl AppRuntime {
             sources,
             parent_terminal,
             parent_logging,
-            status_text: format!(
+            status_text: String::new(),
+            status_kind: String::new(),
+            status_param_1: String::new(),
+            status_param_2: String::new(),
+        };
+        self.set_folder_editor_status(
+            "folder-defaults-editing",
+            format!(
                 "Editing defaults for `{folder_name}`. Changes apply to terminals opened afterwards."
             ),
-        };
+            folder_name.clone(),
+            String::new(),
+        );
         self.set_status_kind(
             "folder-defaults-opened",
             format!("Opened folder defaults for `{folder_name}`."),
@@ -221,7 +293,7 @@ impl AppRuntime {
             }
             _ => {}
         }
-        self.folder_editor.status_text.clear();
+        self.clear_folder_editor_status();
         self.projection()
     }
 
@@ -245,7 +317,7 @@ impl AppRuntime {
                 field.explicit = true;
             }
         }
-        self.folder_editor.status_text.clear();
+        self.clear_folder_editor_status();
         self.projection()
     }
 
@@ -254,7 +326,7 @@ impl AppRuntime {
         let field = &mut self.folder_editor.logging_enabled;
         field.text = if field.text == "on" { "off" } else { "on" }.to_owned();
         field.explicit = true;
-        self.folder_editor.status_text.clear();
+        self.clear_folder_editor_status();
         self.projection()
     }
 
@@ -265,7 +337,7 @@ impl AppRuntime {
             field.text = id;
             field.explicit = true;
         }
-        self.folder_editor.status_text.clear();
+        self.clear_folder_editor_status();
         self.projection()
     }
 
@@ -279,7 +351,7 @@ impl AppRuntime {
                 field.explicit = true;
             }
         }
-        self.folder_editor.status_text.clear();
+        self.clear_folder_editor_status();
         self.projection()
     }
 
@@ -293,7 +365,7 @@ impl AppRuntime {
         }
         .to_owned();
         field.explicit = true;
-        self.folder_editor.status_text.clear();
+        self.clear_folder_editor_status();
         self.projection()
     }
 
@@ -323,8 +395,12 @@ impl AppRuntime {
             text: parent_logging.directory.clone().unwrap_or_default(),
             explicit: false,
         };
-        self.folder_editor.status_text =
-            "Cleared every override for this folder; Save persists the reset.".to_owned();
+        self.set_folder_editor_status(
+            "folder-defaults-reset",
+            "Cleared every override for this folder; Save persists the reset.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -345,7 +421,7 @@ impl AppRuntime {
             &parent_terminal,
             &self.theme_catalog,
         ) {
-            self.folder_editor.status_text = format!("{}: {}", error.field, error.message);
+            self.set_folder_editor_field_error(error);
             return Ok(self.projection());
         }
         terminal.scrollback_lines = match parse_scrollback(
@@ -357,7 +433,7 @@ impl AppRuntime {
         ) {
             Ok(value) => value,
             Err(error) => {
-                self.folder_editor.status_text = format!("{}: {}", error.field, error.message);
+                self.set_folder_editor_field_error(error);
                 return Ok(self.projection());
             }
         };
@@ -370,7 +446,7 @@ impl AppRuntime {
         ) {
             Ok(value) => value,
             Err(error) => {
-                self.folder_editor.status_text = format!("{}: {}", error.field, error.message);
+                self.set_folder_editor_field_error(error);
                 return Ok(self.projection());
             }
         };
@@ -379,30 +455,43 @@ impl AppRuntime {
             || self.folder_editor.scrollback_max_cells.explicit;
 
         let mut logging = parent_logging.clone();
-        logging.enabled = if self.folder_editor.logging_enabled.explicit {
-            match self.folder_editor.logging_enabled.text.as_str() {
+        if self.folder_editor.logging_enabled.explicit {
+            let enabled_text = self.folder_editor.logging_enabled.text.clone();
+            logging.enabled = match enabled_text.as_str() {
                 "on" => true,
                 "off" => false,
                 other => {
-                    self.folder_editor.status_text =
+                    let other = other.to_owned();
+                    let text =
                         format!("{KEY_LOGGING_ENABLED}: `{other}` is not `on` or `off`");
+                    self.set_folder_editor_status(
+                        "folder-defaults-logging-toggle-invalid",
+                        text,
+                        other,
+                        String::new(),
+                    );
                     return Ok(self.projection());
                 }
-            }
+            };
         } else {
-            parent_logging.enabled
-        };
-        logging.format = if self.folder_editor.logging_format.explicit {
-            let format = self.folder_editor.logging_format.text.trim();
+            logging.enabled = parent_logging.enabled;
+        }
+        if self.folder_editor.logging_format.explicit {
+            let format = self.folder_editor.logging_format.text.trim().to_owned();
             if format != LOG_FORMAT_RAW && format != "sanitized" {
-                self.folder_editor.status_text =
-                    format!("{KEY_LOGGING_FORMAT}: format must be `raw` or `sanitized`");
+                let text = format!("{KEY_LOGGING_FORMAT}: format must be `raw` or `sanitized`");
+                self.set_folder_editor_status(
+                    "folder-defaults-logging-format-invalid",
+                    text,
+                    String::new(),
+                    String::new(),
+                );
                 return Ok(self.projection());
             }
-            format.to_owned()
+            logging.format = format;
         } else {
-            parent_logging.format.clone()
-        };
+            logging.format = parent_logging.format.clone();
+        }
         logging.directory = if self.folder_editor.logging_directory.explicit {
             let text = self.folder_editor.logging_directory.text.trim();
             (!text.is_empty()).then(|| text.to_owned())
@@ -424,8 +513,13 @@ impl AppRuntime {
             .map_err(AppError::from_error)?;
 
         let folder_name = self.folder_editor.folder_name.clone();
-        self.folder_editor.status_text = format!(
-            "Saved folder defaults for `{folder_name}`. New terminals use them; open terminals keep their theme."
+        self.set_folder_editor_status(
+            "folder-defaults-saved-detail",
+            format!(
+                "Saved folder defaults for `{folder_name}`. New terminals use them; open terminals keep their theme."
+            ),
+            folder_name.clone(),
+            String::new(),
         );
         self.set_status_kind(
             "folder-defaults-saved",

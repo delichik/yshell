@@ -115,6 +115,11 @@ export component MainWindow inherits Window {
     in-out property <string> private_keys_public_key_text: "";
     in-out property <string> private_keys_test_result_text: "";
     in-out property <string> private_keys_status_text: "";
+    /// I18N-1：私钥页内联状态的 kind/参数；页面用 `TextFormats.status-message` 渲染，
+    /// `private_keys_status_text` 保留为英文回退。
+    in-out property <string> private_keys_status_kind_text: "";
+    in-out property <string> private_keys_status_param_1_text: "";
+    in-out property <string> private_keys_status_param_2_text: "";
     in-out property <bool> private_keys_remove_confirm_visible: false;
     in-out property <bool> private_keys_deploy_confirm_visible: false;
     in-out property <string> private_keys_deploy_command_text: "";
@@ -134,6 +139,10 @@ export component MainWindow inherits Window {
     in-out property <int> proxies_selected_index: -1;
     in-out property <string> proxies_summary_text: "";
     in-out property <string> proxies_status_text: "";
+    /// I18N-1：代理页内联状态的 kind/参数（英文 `proxies_status_text` 为回退）。
+    in-out property <string> proxies_status_kind_text: "";
+    in-out property <string> proxies_status_param_1_text: "";
+    in-out property <string> proxies_status_param_2_text: "";
     in-out property <string> proxies_test_result_text: "";
     in-out property <bool> proxies_remove_confirm_visible: false;
     in-out property <bool> proxies_remove_blocked: false;
@@ -158,6 +167,10 @@ export component MainWindow inherits Window {
     in-out property <string> host_keys_details_text: "";
     in-out property <string> host_keys_path_text: "";
     in-out property <string> host_keys_status_text: "";
+    /// I18N-1：主机密钥页内联状态的 kind/参数（英文 `host_keys_status_text` 为回退）。
+    in-out property <string> host_keys_status_kind_text: "";
+    in-out property <string> host_keys_status_param_1_text: "";
+    in-out property <string> host_keys_status_param_2_text: "";
     in-out property <bool> host_keys_import_visible: false;
     in-out property <string> host_keys_import_text: "";
     in-out property <int> host_keys_key_count: 0;
@@ -417,6 +430,10 @@ export component MainWindow inherits Window {
     in property <string> folder_editor_name_text: "";
     in property <string> folder_editor_path_text: "";
     in property <string> folder_editor_status_text: "";
+    /// I18N-1：Folder Editor 内联状态的 kind/参数（英文 `_status_text` 为回退）。
+    in property <string> folder_editor_status_kind_text: "";
+    in property <string> folder_editor_status_param_1_text: "";
+    in property <string> folder_editor_status_param_2_text: "";
     in property <[TriStateField]> folder_editor_appearance_fields: [];
     in property <[TriStateField]> folder_editor_terminal_fields: [];
     in property <[TriStateField]> folder_editor_logging_fields: [];
@@ -2759,6 +2776,9 @@ export component MainWindow inherits Window {
         folder-name: root.folder_editor_name_text;
         folder-path: root.folder_editor_path_text;
         status-text: root.folder_editor_status_text;
+        status-kind-text: root.folder_editor_status_kind_text;
+        status-param-1-text: root.folder_editor_status_param_1_text;
+        status-param-2-text: root.folder_editor_status_param_2_text;
         appearance-fields: root.folder_editor_appearance_fields;
         terminal-fields: root.folder_editor_terminal_fields;
         logging-fields: root.folder_editor_logging_fields;
@@ -3151,6 +3171,9 @@ export component MainWindow inherits Window {
         public-key-text: root.private_keys_public_key_text;
         test-result-text: root.private_keys_test_result_text;
         status-text: root.private_keys_status_text;
+        status-kind-text: root.private_keys_status_kind_text;
+        status-param-1-text: root.private_keys_status_param_1_text;
+        status-param-2-text: root.private_keys_status_param_2_text;
         remove-warning-text: root.private_keys_remove_warning_text;
         import-label-text <=> root.private_keys_import_label_text;
         import-path-text <=> root.private_keys_import_path_text;
@@ -3227,6 +3250,9 @@ export component MainWindow inherits Window {
         selected-index <=> root.proxies_selected_index;
         list-summary-text: root.proxies_summary_text;
         status-text: root.proxies_status_text;
+        status-kind-text: root.proxies_status_kind_text;
+        status-param-1-text: root.proxies_status_param_1_text;
+        status-param-2-text: root.proxies_status_param_2_text;
         test-result-text: root.proxies_test_result_text;
         test-in-flight: root.proxies_test_in_flight;
         remove-blocked: root.proxies_remove_blocked;
@@ -3354,6 +3380,9 @@ export component MainWindow inherits Window {
         detail-fingerprint-text: root.host_keys_detail_fingerprint_text;
         detail-path-text: root.host_keys_detail_path_text;
         status-text: root.host_keys_status_text;
+        status-kind-text: root.host_keys_status_kind_text;
+        status-param-1-text: root.host_keys_status_param_1_text;
+        status-param-2-text: root.host_keys_status_param_2_text;
         import-visible <=> root.host_keys_import_visible;
         import-text <=> root.host_keys_import_text;
         close() => {

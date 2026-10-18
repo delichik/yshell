@@ -1342,6 +1342,218 @@ export global TextFormats {
         if kind == "folder-defaults-opened" {
             return @tr("MainWindow" => "Opened folder defaults for `{0}`.", param_1);
         }
+        // --- I18N-1：私钥页内联状态 ---------------------------------------------
+        if kind == "private-key-import-path-empty" {
+            return @tr("MainWindow" => "Enter or browse a private key file path first.");
+        }
+        if kind == "private-key-import-read-failed" {
+            return @tr("MainWindow" => "Failed to read `{0}`: {1}", param_1, param_2);
+        }
+        if kind == "private-key-imported" {
+            return @tr("MainWindow" => "Imported `{0}` ({1}).", param_1, param_2);
+        }
+        if kind == "private-key-import-failed" {
+            return @tr("MainWindow" => "Import failed: {0}", param_1);
+        }
+        if kind == "private-key-test-requires-selection" {
+            return @tr("MainWindow" => "Select a managed key first.");
+        }
+        if kind == "private-key-test-passed" {
+            return @tr("MainWindow" => "Key test passed for `{0}`.", param_1);
+        }
+        if kind == "private-key-test-failed" {
+            return @tr("MainWindow" => "Key test failed: {0}", param_1);
+        }
+        if kind == "private-key-remove-confirm" {
+            return @tr("MainWindow" => "Confirm removal of `{0}` in the Danger Zone.", param_1);
+        }
+        if kind == "private-key-removed" {
+            return @tr("MainWindow" => "Removed managed key `{0}`.", param_1);
+        }
+        if kind == "private-key-remove-failed" {
+            return @tr("MainWindow" => "Remove failed: {0}", param_1);
+        }
+        if kind == "private-key-deploy-failed" {
+            return @tr("MainWindow" => "Deploy failed: {0}", param_1);
+        }
+        if kind == "private-key-deploy-requires-session" {
+            return @tr("MainWindow" => "Deploy requires an active session to the target host.");
+        }
+        if kind == "private-key-deploy-session-gone" {
+            return @tr("MainWindow" => "The active session is gone.");
+        }
+        if kind == "private-key-deploy-requires-ssh" {
+            return @tr("MainWindow" => "Deploy requires an SSH session; the active tab is a local terminal.");
+        }
+        if kind == "private-key-deployed" {
+            return @tr("MainWindow" => "Deployed `{0}` to {1} (idempotent append, exit status 0).", param_1, param_2);
+        }
+        if kind == "private-key-deploy-exit-failed" {
+            return @tr("MainWindow" => "Deploy command failed on {0} with exit status {1}.", param_1, param_2);
+        }
+        if kind == "private-key-deploy-target-failed" {
+            return @tr("MainWindow" => "Deploy failed on {0}: {1}", param_1, param_2);
+        }
+        if kind == "private-key-passphrase-saved" {
+            return @tr("MainWindow" => "Passphrase saved for `{0}` (validated against the stored key).", param_1);
+        }
+        if kind == "private-key-passphrase-save-failed" {
+            return @tr("MainWindow" => "Cannot save passphrase: {0}", param_1);
+        }
+        if kind == "private-key-passphrase-forgotten" {
+            return @tr("MainWindow" => "Forgot the saved passphrase for `{0}`.", param_1);
+        }
+        if kind == "private-key-passphrase-forget-failed" {
+            return @tr("MainWindow" => "Cannot forget passphrase: {0}", param_1);
+        }
+        if kind == "private-key-renamed" {
+            return @tr("MainWindow" => "Renamed managed key to `{0}`.", param_1);
+        }
+        if kind == "private-key-rename-failed" {
+            return @tr("MainWindow" => "Rename failed: {0}", param_1);
+        }
+        if kind == "private-key-public-copied" {
+            return @tr("MainWindow" => "Copied the derived public key ({0} chars) to the clipboard.", param_1);
+        }
+        if kind == "private-key-clipboard-unavailable" {
+            return @tr("MainWindow" => "Could not access the system clipboard; select the key text manually.");
+        }
+        if kind == "private-key-copy-failed" {
+            return @tr("MainWindow" => "Copy failed: {0}", param_1);
+        }
+        if kind == "private-key-exported" {
+            return @tr("MainWindow" => "Exported the public key to `{0}`.", param_1);
+        }
+        if kind == "private-key-export-failed" {
+            return @tr("MainWindow" => "Export failed: {0}", param_1);
+        }
+        if kind == "private-key-file-saved" {
+            return @tr("MainWindow" => "Saved to `{0}`.", param_1);
+        }
+        if kind == "private-key-dialog-failed" {
+            return @tr("MainWindow" => "Dialog failed: {0}", param_1);
+        }
+        // --- I18N-1：主机密钥页内联状态 -----------------------------------------
+        if kind == "host-keys-import-read-failed" {
+            return @tr("MainWindow" => "Import failed to read `{0}`: {1}", param_1, param_2);
+        }
+        if kind == "host-keys-import-persist-failed" {
+            return @tr("MainWindow" => "Import failed to persist: {0}", param_1);
+        }
+        if kind == "host-keys-imported-with-skips" {
+            return @tr("MainWindow" => "Imported {n} host key; skipped lines: {0}" | "Imported {n} host keys; skipped lines: {0}" % round(param_1.to-float()), param_2);
+        }
+        if kind == "host-keys-exported" {
+            return @tr("MainWindow" => "Exported host keys to `{0}`.", param_1);
+        }
+        if kind == "host-keys-export-failed" {
+            return @tr("MainWindow" => "Export failed: {0}", param_1);
+        }
+        // --- I18N-1：代理页内联状态 ---------------------------------------------
+        if kind == "proxies-new-draft" {
+            return @tr("MainWindow" => "New proxy profile draft.");
+        }
+        if kind == "proxies-editing" {
+            return @tr("MainWindow" => "Editing proxy profile `{0}`.", param_1);
+        }
+        if kind == "proxies-edit-requires-selection" {
+            return @tr("MainWindow" => "Select a proxy profile to edit.");
+        }
+        if kind == "proxies-duplicate-requires-selection" {
+            return @tr("MainWindow" => "Select a proxy profile to duplicate.");
+        }
+        if kind == "proxies-duplicate-password-missing" {
+            return @tr("MainWindow" => "Duplicate saved without its password: {0}", param_1);
+        }
+        if kind == "proxies-duplicate-failed" {
+            return @tr("MainWindow" => "Duplicate failed: {0}", param_1);
+        }
+        if kind == "proxies-editor-discarded" {
+            return @tr("MainWindow" => "Discarded proxy editor changes.");
+        }
+        if kind == "proxies-save-failed" {
+            return @tr("MainWindow" => "Cannot save proxy profile: {0}", param_1);
+        }
+        if kind == "proxies-remove-requires-selection" {
+            return @tr("MainWindow" => "Select a proxy profile to delete.");
+        }
+        if kind == "proxies-delete-failed" {
+            return @tr("MainWindow" => "Delete failed: {0}", param_1);
+        }
+        if kind == "proxies-clear-from-sessions-failed" {
+            return @tr("MainWindow" => "Cannot update saved sessions: {0}", param_1);
+        }
+        if kind == "proxies-test-in-progress" {
+            return @tr("MainWindow" => "A proxy test is already running.");
+        }
+        if kind == "proxies-test-requires-selection" {
+            return @tr("MainWindow" => "Select a proxy profile to test.");
+        }
+        if kind == "proxies-test-config-failed" {
+            return @tr("MainWindow" => "Test failed before connecting: {0}", param_1);
+        }
+        if kind == "proxies-test-worker-unavailable" {
+            return @tr("MainWindow" => "Test is unavailable: the proxy-test worker was not started.");
+        }
+        if kind == "proxies-test-spawn-failed" {
+            return @tr("MainWindow" => "Test could not start its worker thread: {0}", param_1);
+        }
+        if kind == "proxies-testing" {
+            return @tr("MainWindow" => "Testing {0} at {1}…", param_1, param_2);
+        }
+        if kind == "proxies-test-passed" {
+            return @tr("MainWindow" => "Test passed: {0} answered from {1}.", param_1, param_2);
+        }
+        if kind == "proxies-test-failed" {
+            return @tr("MainWindow" => "Test failed: {0}", param_1);
+        }
+        // --- I18N-1：Folder Editor 内联状态 --------------------------------------
+        if kind == "folder-defaults-editing" {
+            return @tr("MainWindow" => "Editing defaults for `{0}`. Changes apply to terminals opened afterwards.", param_1);
+        }
+        if kind == "folder-defaults-reset" {
+            return @tr("MainWindow" => "Cleared every override for this folder; Save persists the reset.");
+        }
+        if kind == "folder-defaults-unknown-scheme" {
+            return @tr("MainWindow" => "Unknown color scheme id `{0}`.", param_1);
+        }
+        if kind == "folder-defaults-not-number" {
+            return @tr("MainWindow" => "{0} must be a whole number.", theme-field-name(param_1));
+        }
+        if kind == "folder-defaults-out-of-range" {
+            return @tr("MainWindow" => "{0} must be between {1}.", theme-field-name(param_1), param_2);
+        }
+        if kind == "folder-defaults-invalid-field" {
+            return @tr("MainWindow" => "{0}: {1}", theme-field-name(param_1), param_2);
+        }
+        if kind == "folder-defaults-logging-toggle-invalid" {
+            return @tr("MainWindow" => "Session logging: `{0}` is not `on` or `off`.", param_1);
+        }
+        if kind == "folder-defaults-logging-format-invalid" {
+            return @tr("MainWindow" => "Format: format must be `raw` or `sanitized`.");
+        }
+        if kind == "folder-defaults-saved-detail" {
+            return @tr("MainWindow" => "Saved folder defaults for `{0}`. New terminals use them; open terminals keep their theme.", param_1);
+        }
+        // --- I18N-1：宿主（bootstrap）直写状态 -----------------------------------
+        if kind == "appearance-font-picker-unavailable" {
+            return @tr("MainWindow" => "No display server was found; type the font file path instead.");
+        }
+        if kind == "appearance-fallback-font-picker-unavailable" {
+            return @tr("MainWindow" => "No display server was found; type the fallback font file path instead.");
+        }
+        if kind == "sftp-copied-paths" {
+            return @tr("MainWindow" => "Copied {n} path." | "Copied {n} paths." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "local-copied-paths" {
+            return @tr("MainWindow" => "Copied local path(s).");
+        }
+        if kind == "sftp-copied-path" {
+            return @tr("MainWindow" => "Copied `{0}`.", param_1);
+        }
+        if kind == "sftp-unknown-menu-action" {
+            return @tr("MainWindow" => "Unknown SFTP menu action `{0}`.", param_1);
+        }
         return fallback;
     }
 
@@ -1407,6 +1619,11 @@ export global TextFormats {
         if key == "logging.format" { return @tr("MainWindow" => "Format"); }
         if key == "logging.directory" { return @tr("MainWindow" => "Directory"); }
         return "";
+    }
+
+    /// I18N-1：状态行里的字段名（未知 key 回退原始 key，避免丢技术细节）。
+    public pure function theme-field-name(key: string) -> string {
+        return theme-field-label(key) == "" ? key : theme-field-label(key);
     }
 
     /// N5：三态字段下方的说明（按稳定 key 渲染）。

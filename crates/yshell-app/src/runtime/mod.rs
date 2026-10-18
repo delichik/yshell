@@ -313,6 +313,9 @@ impl AppRuntime {
             private_keys_remove_confirm_visible: false,
             private_keys_deploy_confirm_visible: false,
             private_keys_status_text: String::new(),
+            private_keys_status_kind: String::new(),
+            private_keys_status_param_1: String::new(),
+            private_keys_status_param_2: String::new(),
             private_keys_test_result_text: String::new(),
             proxies_modal_visible: false,
             proxies_selected_id: None,
@@ -325,6 +328,9 @@ impl AppRuntime {
             proxies_editor_password: String::new(),
             proxies_editor_dns_by_proxy: true,
             proxies_status_text: String::new(),
+            proxies_status_kind: String::new(),
+            proxies_status_param_1: String::new(),
+            proxies_status_param_2: String::new(),
             proxies_test_result_text: String::new(),
             proxies_remove_confirm_visible: false,
             proxies_remove_blocked: false,
@@ -338,6 +344,9 @@ impl AppRuntime {
             host_keys_import_visible: false,
             host_keys_import_text: String::new(),
             host_keys_status_text: String::new(),
+            host_keys_status_kind: String::new(),
+            host_keys_status_param_1: String::new(),
+            host_keys_status_param_2: String::new(),
             pending_auth_prompt: None,
             #[cfg(test)]
             force_real_ssh_in_tests: false,
@@ -673,6 +682,10 @@ pub struct AppRuntime {
     pub(crate) private_keys_remove_confirm_visible: bool,
     pub(crate) private_keys_deploy_confirm_visible: bool,
     pub(crate) private_keys_status_text: String,
+    /// I18N-1：私钥页内联状态的模板 id 与参数（英文 `_status_text` 保留为回退）。
+    pub(crate) private_keys_status_kind: String,
+    pub(crate) private_keys_status_param_1: String,
+    pub(crate) private_keys_status_param_2: String,
     pub(crate) private_keys_test_result_text: String,
     // --- NET-1：代理管理器页 -------------------------------------------------
     /// Proxy manager modal visibility.
@@ -691,6 +704,10 @@ pub struct AppRuntime {
     pub(crate) proxies_editor_dns_by_proxy: bool,
     /// Inline page feedback (validation errors, delete guidance, test state).
     pub(crate) proxies_status_text: String,
+    /// I18N-1：代理页内联状态的模板 id 与参数（英文 `_status_text` 保留为回退）。
+    pub(crate) proxies_status_kind: String,
+    pub(crate) proxies_status_param_1: String,
+    pub(crate) proxies_status_param_2: String,
     pub(crate) proxies_test_result_text: String,
     pub(crate) proxies_remove_confirm_visible: bool,
     /// D8: deletion is blocked because saved sessions still reference the profile.
@@ -708,6 +725,10 @@ pub struct AppRuntime {
     pub(crate) host_keys_import_visible: bool,
     pub(crate) host_keys_import_text: String,
     pub(crate) host_keys_status_text: String,
+    /// I18N-1：主机密钥页内联状态的模板 id 与参数（英文 `_status_text` 保留为回退）。
+    pub(crate) host_keys_status_kind: String,
+    pub(crate) host_keys_status_param_1: String,
+    pub(crate) host_keys_status_param_2: String,
     /// 认证弹窗挂起状态（服务端驱动的认证失败；Phase 2 接线）。
     pub(crate) pending_auth_prompt: Option<PendingAuthPrompt>,
     /// Unit tests default to the in-memory test shell; live SSH tests flip this.

@@ -19,6 +19,18 @@ const STATUS_MESSAGE_FUNCTIONS: [&str; 7] = [
     "status-message-managers",
 ];
 
+/// Producers that write an i18n status kind. The first argument is the kind in
+/// every call site covered by this guard; dynamic expressions are skipped.
+const STATUS_KIND_SETTERS: [&str; 7] = [
+    "set_status_kind",
+    "set_private_keys_status_kind",
+    "set_private_keys_status_feedback",
+    "set_host_keys_status_kind",
+    "set_host_keys_status_feedback",
+    "set_proxies_status_kind",
+    "set_folder_editor_status",
+];
+
 fn crate_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -58,22 +70,25 @@ fn template_kinds(source: &str) -> Vec<String> {
     kinds
 }
 
-/// First-argument kind literals of every `set_status_kind(...)` call.
+/// First-argument kind literals of every `set_status_kind(...)`-style call.
 fn literal_status_kinds(source: &str) -> Vec<String> {
     let mut kinds = Vec::new();
-    let mut rest = source;
-    while let Some(index) = rest.find("set_status_kind(") {
-        rest = &rest[index + "set_status_kind(".len()..];
-        let trimmed = rest.trim_start();
-        let Some(quoted) = trimmed.strip_prefix('"') else {
-            // Dynamic expression: out of scope for this guard.
-            continue;
-        };
-        let Some(kind) = quoted.split('"').next() else {
-            continue;
-        };
-        if !kind.is_empty() {
-            kinds.push(kind.to_owned());
+    for setter in STATUS_KIND_SETTERS {
+        let needle = format!("{setter}(");
+        let mut rest = source;
+        while let Some(index) = rest.find(&needle) {
+            rest = &rest[index + needle.len()..];
+            let trimmed = rest.trim_start();
+            let Some(quoted) = trimmed.strip_prefix('"') else {
+                // Dynamic expression: out of scope for this guard.
+                continue;
+            };
+            let Some(kind) = quoted.split('"').next() else {
+                continue;
+            };
+            if !kind.is_empty() {
+                kinds.push(kind.to_owned());
+            }
         }
     }
     kinds
@@ -96,6 +111,35 @@ fn runtime_sources() -> Vec<PathBuf> {
     paths
 }
 
+/// Runtime sources plus the bootstrap host, which also writes status kinds.
+fn status_source_files() -> Vec<PathBuf> {
+    let mut paths = runtime_sources();
+    paths.push(crate_root().join("src/bootstrap.rs"));
+    paths
+}
+
+/// Direct `.status_text = ...` writes in the files this migration covers.
+fn raw_status_text_writes(source: &str) -> Vec<String> {
+    let mut hits = Vec::new();
+    for (index, line) in source.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("//") {
+            continue;
+        }
+        let looks_like_write = (trimmed.starts_with("self.") || trimmed.starts_with("runtime."))
+            && trimmed.contains("status_text =");
+        if !looks_like_write {
+            continue;
+        }
+        // The page helpers intentionally store the English fallback field.
+        if trimmed.ends_with("status_text = text;") {
+            continue;
+        }
+        hits.push(format!("line {}: {trimmed}", index + 1));
+    }
+    hits
+}
+
 #[test]
 fn every_literal_status_kind_has_a_status_message_template() {
     let text_formats = read_text_formats();
@@ -114,7 +158,7 @@ fn every_literal_status_kind_has_a_status_message_template() {
     );
 
     let mut missing = Vec::new();
-    for path in runtime_sources() {
+    for path in status_source_files() {
         let source = fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
         for kind in literal_status_kinds(&source) {
@@ -126,7 +170,7 @@ fn every_literal_status_kind_has_a_status_message_template() {
 
     assert!(
         missing.is_empty(),
-        "set_status_kind kinds without a TextFormats.status-message branch:\n{}",
+        "status kind producer(s) without a TextFormats.status-message branch:\n{}",
         missing.join("\n")
     );
 }
@@ -141,5 +185,30 @@ fn status_message_kind_branches_are_unique() {
         total,
         kinds.len(),
         "duplicate status-message kind branch(es) found"
+    );
+}
+
+#[test]
+fn scoped_producers_do_not_write_raw_status_text() {
+    // I18N-1 scope: manager/page statuses and the bootstrap host. New producers
+    // must go through `set_*_status_kind`/`set_status_kind`, carrying a kind.
+    let scoped = [
+        crate_root().join("src/runtime/auth.rs"),
+        crate_root().join("src/runtime/proxies.rs"),
+        crate_root().join("src/runtime/folder_editor.rs"),
+        crate_root().join("src/bootstrap.rs"),
+    ];
+    let mut violations = Vec::new();
+    for path in scoped {
+        let source = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
+        for hit in raw_status_text_writes(&source) {
+            violations.push(format!("{}: {hit}", path.display()));
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "raw status_text writes remain (use a status kind + params):\n{}",
+        violations.join("\n")
     );
 }

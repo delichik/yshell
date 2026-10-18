@@ -628,6 +628,11 @@ fn folder_editor_three_state_round_trip() {
     runtime.toggle_folder_editor_logging();
     runtime.update_folder_editor_field("logging.directory", "/var/log/prod");
     let saved = runtime.save_folder_editor().expect("save folder defaults");
+    assert_eq!(
+        saved.folder_editor_status_kind_text,
+        "folder-defaults-saved-detail"
+    );
+    assert_eq!(saved.folder_editor_status_param_1_text, "Prod");
     assert!(saved
         .folder_editor_status_text
         .contains("Saved folder defaults"));
@@ -655,6 +660,41 @@ fn folder_editor_three_state_round_trip() {
         .expect("folder");
     assert!(folder.terminal.is_none());
     assert!(folder.logging.is_none());
+}
+
+#[test]
+fn folder_editor_validation_reports_translatable_status_kind() {
+    let temp = tempdir().expect("tempdir");
+    store_with_prod_folder(temp.path());
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime
+        .open_folder_editor("folder-prod")
+        .expect("open editor");
+    runtime.folder_editor_field_action("terminal.scrollback_lines", ThemeFieldAction::SetExplicit);
+
+    runtime.update_folder_editor_field("terminal.scrollback_lines", "not-a-number");
+    let rejected = runtime.save_folder_editor().expect("save returns a projection");
+    assert_eq!(
+        rejected.folder_editor_status_kind_text,
+        "folder-defaults-not-number"
+    );
+    assert_eq!(
+        rejected.folder_editor_status_param_1_text,
+        "terminal.scrollback_lines"
+    );
+
+    runtime.update_folder_editor_field("terminal.scrollback_lines", "999999999");
+    let rejected = runtime.save_folder_editor().expect("save returns a projection");
+    assert_eq!(
+        rejected.folder_editor_status_kind_text,
+        "folder-defaults-out-of-range"
+    );
+    assert_eq!(
+        rejected.folder_editor_status_param_1_text,
+        "terminal.scrollback_lines"
+    );
+    assert!(!rejected.folder_editor_status_param_2_text.is_empty());
 }
 
 #[test]

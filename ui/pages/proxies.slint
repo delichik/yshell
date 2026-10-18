@@ -12,6 +12,7 @@
 // 规范：docs/product/ui-winui3-design-language.md §5.10（ContentDialog 形态）。
 
 import { Theme } from "../theme.slint";
+import { TextFormats } from "../text_formats.slint";
 import {
     WinButton, WinCard, WinCardHeader, WinComboBox, WinIconButton, WinScrollIndicator, WinToggle,
 } from "../components/basic/controls.slint";
@@ -137,6 +138,10 @@ export component ProxiesPage inherits Rectangle {
     in property <string> list-summary-text: "";
     in property <string> empty-text: @tr("No managed proxies yet. Create one to use it in a session.");
     in property <string> status-text: "";
+    /// I18N-1：状态行模板（Rust 只投影 kind/参数；`status-text` 为英文回退）。
+    in property <string> status-kind-text: "";
+    in property <string> status-param-1-text: "";
+    in property <string> status-param-2-text: "";
     in property <string> test-result-text: "";
     in property <bool> test-in-flight: false;
 
@@ -157,6 +162,13 @@ export component ProxiesPage inherits Rectangle {
     in property <bool> editor-password-stored: false;
     in property <bool> editor-dns-by-proxy: true;
     in-out property <int> editor-protocol-index: 2;    in property <bool> editor-save-enabled: false;
+
+    private property <string> status-display: TextFormats.status-message(
+        root.status-kind-text,
+        root.status-param-1-text,
+        root.status-param-2-text,
+        root.status-text
+    );
 
     callback close();
     callback select-proxy(int);
@@ -586,7 +598,7 @@ export component ProxiesPage inherits Rectangle {
                                             }
 
                                             Text {
-                                                text: root.status-text;
+                                                text: root.status-display;
                                                 color: Theme.text-secondary;
                                                 font-size: Theme.font-caption;
                                                 wrap: word-wrap;
@@ -627,7 +639,7 @@ export component ProxiesPage inherits Rectangle {
                             // 固定状态行（完整测试详情在滚动区 Status 卡里）。
                             Text {
                                 height: Theme.control-height;
-                                text: root.status-text;
+                                text: root.status-display;
                                 color: Theme.text-secondary;
                                 font-size: Theme.font-caption;
                                 vertical-alignment: center;
