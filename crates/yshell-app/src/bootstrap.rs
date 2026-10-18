@@ -25,7 +25,7 @@ use crate::runtime::{
     AppProjection, AppRuntime, AuthKeyOptionData, AuthPromptQuestionData, HostKeyGroupData,
     PanelFrameData as RuntimePanelFrameData, PrivateKeyRowData, ProxyProfileOptionData,
     ProxyRowData, SftpCrumbData, SftpRowData, SplitHandleData as RuntimeSplitHandleData, TabData,
-    ThemeFieldAction, ThemeSchemeOption, TransferRowData, TriStateFieldData, TunnelRowData,
+    ThemeFieldAction, ThemeManagerRowData, TransferRowData, TriStateFieldData, TunnelRowData,
 };
 
 pub(crate) mod generated_ui {
@@ -36,8 +36,8 @@ pub(crate) mod generated_ui {
 use generated_ui::{
     AuthKeyOption, AuthKeyboardPrompt, HostKeyEntry, HostKeyGroup, LocalRow, MainWindow, Palette,
     PanelFrameData, PrivateKeyRow, ProxyProfileOption, ProxyRow, QuickConnectRow, QuickLinkRow,
-    SessionTreeRow, SettingsSchemeOption, SftpCrumb, SftpRow, SftpTransferRow, SplitHandleData,
-    TerminalScrollInfo, Theme, TriStateField, TunnelRow, WorkspacePaneLeaf, WorkspaceSplitter,
+    SessionTreeRow, SftpCrumb, SftpRow, SftpTransferRow, SplitHandleData, TerminalScrollInfo,
+    Theme, ThemeManagerRow, TriStateField, TunnelRow, WorkspacePaneLeaf, WorkspaceSplitter,
     WorkspaceTab,
 };
 
@@ -3703,6 +3703,30 @@ pub(crate) fn wire_callbacks(
         |runtime| runtime.save_settings_appearance()
     );
 
+    // --- TERM-1：独立主题管理器 ----------------------------------------------
+    wire_n4!(on_open_theme_manager, |runtime| runtime
+        .open_theme_manager());
+    wire_n4!(on_close_theme_manager, |runtime| runtime
+        .close_theme_manager());
+    wire_n4!(on_select_theme_manager, |runtime, index: i32| runtime
+        .select_theme_manager_row(index));
+    wire_n4_result!(
+        on_apply_theme_manager_default,
+        "Set default theme",
+        |runtime| runtime.apply_theme_manager_selection()
+    );
+    wire_n4!(
+        on_request_delete_theme,
+        |runtime, id: SharedString| runtime.request_delete_color_theme(id.as_ref())
+    );
+    wire_n4_result!(
+        on_confirm_delete_theme,
+        "Delete theme",
+        |runtime| runtime.confirm_delete_color_theme()
+    );
+    wire_n4!(on_cancel_delete_theme, |runtime| runtime
+        .cancel_delete_color_theme());
+
     wire_n4_result!(on_edit_folder_defaults, "Open folder defaults", |runtime| {
         let folder_id = runtime.selected_saved_folder_id.clone().unwrap_or_default();
         runtime.open_folder_editor(&folder_id)
@@ -4968,18 +4992,49 @@ fn tri_state_field_model(fields: &[TriStateFieldData]) -> ModelRc<TriStateField>
     ModelRc::new(VecModel::from(rows))
 }
 
-/// `[ThemeSchemeOption]` → Slint model.
-fn settings_scheme_model(schemes: &[ThemeSchemeOption]) -> ModelRc<SettingsSchemeOption> {
-    let rows: Vec<SettingsSchemeOption> = schemes
-        .iter()
-        .map(|scheme| SettingsSchemeOption {
-            id: scheme.id.clone().into(),
-            name: scheme.name.clone().into(),
-            swatches: swatch_model(&scheme.swatches),
-            builtin: scheme.builtin,
-        })
-        .collect();
-    ModelRc::new(VecModel::from(rows))
+/// `[ThemeManagerRowData]` → Slint model (TERM-1).
+fn theme_manager_row_from(row: &ThemeManagerRowData) -> ThemeManagerRow {
+    ThemeManagerRow {
+        id: row.id.clone().into(),
+        name: row.name.clone().into(),
+        swatches: swatch_model(&row.swatches),
+        builtin: row.builtin,
+        selected: row.selected,
+        current: row.current,
+    }
+}
+
+fn theme_manager_row_matches(current: &ThemeManagerRow, next: &ThemeManagerRowData) -> bool {
+    let swatches_match = current.swatches.row_count() == next.swatches.len()
+        && (0..next.swatches.len()).all(|index| {
+            current.swatches.row_data(index).is_some_and(|color| {
+                let [red, green, blue] = next.swatches[index];
+                color == slint::Color::from_rgb_u8(red, green, blue)
+            })
+        });
+    swatches_match
+        && current.id == next.id.as_str()
+        && current.name == next.name.as_str()
+        && current.builtin == next.builtin
+        && current.selected == next.selected
+        && current.current == next.current
+}
+
+fn set_theme_manager_rows_if_changed(window: &MainWindow, rows: &[ThemeManagerRowData]) {
+    let current = window.get_theme_manager_rows();
+    if current.row_count() == rows.len() {
+        let unchanged = (0..rows.len()).all(|index| {
+            current
+                .row_data(index)
+                .is_some_and(|row| theme_manager_row_matches(&row, &rows[index]))
+        });
+        if unchanged {
+            return;
+        }
+    }
+    window.set_theme_manager_rows(ModelRc::new(VecModel::from(
+        rows.iter().map(theme_manager_row_from).collect::<Vec<_>>(),
+    )));
 }
 
 /// `[u8; 3]` swatches → Slint color model.
@@ -6248,11 +6303,14 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
             .into(),
     );
     // --- N5：终端外观 / Folder Editor / Session Editor 覆盖 --------------------
-    window.set_settings_appearance_color_scheme_text(
+    window.set_settings_appearance_color_scheme_name_text(
         projection
-            .settings_appearance_color_scheme_text
+            .settings_appearance_color_scheme_name_text
             .clone()
             .into(),
+    );
+    window.set_settings_appearance_color_scheme_builtin(
+        projection.settings_appearance_color_scheme_builtin,
     );
     window.set_settings_appearance_font_options(ModelRc::new(VecModel::from(
         projection
@@ -6274,15 +6332,34 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_settings_appearance_status_text(
         projection.settings_appearance_status_text.clone().into(),
     );
-    window.set_settings_appearance_schemes(settings_scheme_model(
-        &projection.settings_appearance_schemes,
-    ));
     window.set_settings_appearance_palette_swatches(swatch_model(
         &projection.settings_appearance_palette_swatches,
     ));
     if let Some(preview) = projection.settings_appearance_preview.as_ref() {
         window.set_settings_appearance_preview(frame_image(preview));
     }
+    // TERM-1：独立主题管理器（列表 / 选择 / 默认主题 / 删除确认 / 预览）。
+    window.set_theme_manager_visible(projection.theme_manager_visible);
+    set_theme_manager_rows_if_changed(window, &projection.theme_manager_rows);
+    window.set_theme_manager_selected_index(projection.theme_manager_selected_index);
+    window.set_theme_manager_default_name_text(
+        projection.theme_manager_default_name_text.clone().into(),
+    );
+    window.set_theme_manager_selected_is_default(projection.theme_manager_selected_is_default);
+    window.set_theme_manager_builtin_count(projection.theme_manager_builtin_count);
+    window.set_theme_manager_user_count(projection.theme_manager_user_count);
+    if let Some(preview) = projection.theme_manager_preview.as_ref() {
+        window.set_theme_manager_preview(frame_image(preview));
+    }
+    window.set_theme_manager_remove_confirm_visible(
+        projection.theme_manager_remove_confirm_visible,
+    );
+    window.set_theme_manager_remove_name_text(
+        projection.theme_manager_remove_name_text.clone().into(),
+    );
+    window.set_theme_manager_remove_reference_count(
+        projection.theme_manager_remove_reference_count,
+    );
     window.set_theme_editor_open(projection.theme_editor_open);
     window.set_theme_editor_builtin(projection.theme_editor_builtin);
     window.set_theme_editor_id(projection.theme_editor_id.clone().into());
@@ -6884,6 +6961,8 @@ fn restore_shortcut_focus_after_modal(window: &MainWindow, projection: &AppProje
         || projection.close_tabs_confirm_visible
         || projection.close_window_confirm_visible
         || projection.folder_editor_visible
+        || projection.theme_manager_visible
+        || projection.theme_manager_remove_confirm_visible
         || projection.sftp_conflict_visible
         || projection.sftp_properties_visible
         || window.get_settings_dialog_visible()

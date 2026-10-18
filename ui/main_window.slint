@@ -22,12 +22,13 @@ import { ConfirmDialog } from "components/confirm_dialog.slint";
 import { PasswordPromptDialog } from "components/password_prompt_dialog.slint";
 import { HostKeyDialog } from "components/host_key_dialog.slint";
 import { AboutDialog } from "pages/about.slint";
-import { SettingsDialog, SettingsSchemeOption } from "pages/settings.slint";
+import { SettingsDialog } from "pages/settings.slint";
 import { SessionEditor } from "pages/session_editor.slint";
 import { KnownHostsPage } from "pages/known_hosts.slint";
 import { QuickConnectRow, QuickLinkRow } from "pages/quick_connect.slint";
 import { PrivateKeysPage, PrivateKeyRow } from "pages/private_keys.slint";
 import { ProxiesPage, ProxyRow, ProxyProfileOption } from "pages/proxies.slint";
+import { ThemeManagerPage, ThemeManagerRow } from "pages/theme_manager.slint";
 import { HostKeysPage, HostKeyGroup, HostKeyEntry } from "pages/host_keys.slint";
 import { AuthPromptDialog, AuthKeyOption, AuthKeyboardPrompt } from "components/auth_prompt_dialog.slint";
 import { LoggingDialog } from "components/logging_dialog.slint";
@@ -378,18 +379,30 @@ export component MainWindow inherits Window {
     in-out property <string> settings_terminal_status_field_text: "";
     in-out property <string> settings_terminal_status_value_text: "";
     in-out property <string> settings_terminal_status_limit_text: "";
-    // N5：Settings → Appearance（内联分区；打开 Settings 时加载 draft）
-    in-out property <string> settings_appearance_color_scheme_text: "";
+    // N5：Settings → Appearance（字体 + 当前主题摘要）
+    in-out property <string> settings_appearance_color_scheme_name_text: "";
+    in-out property <bool> settings_appearance_color_scheme_builtin: false;
     in property <[string]> settings_appearance_font_options: [];
     in-out property <int> settings_appearance_font_index: 0;
     in-out property <string> settings_appearance_font_size_text: "";
     in-out property <string> settings_appearance_fallback_fonts_text: "";
     in property <string> settings_appearance_status_text: "";
-    in property <[SettingsSchemeOption]> settings_appearance_schemes: [];
     in property <[color]> settings_appearance_palette_swatches: [];
     in property <image> settings_appearance_preview;
     // TERM-4：Session Editor 外观分区的 live preview（关闭/切出分区时为空）。
     in property <image> session_editor_preview;
+    // TERM-1：独立主题管理器（D6 模态页）与共享的用户主题编辑器草稿。
+    in-out property <bool> theme_manager_visible: false;
+    in-out property <[ThemeManagerRow]> theme_manager_rows: [];
+    in-out property <int> theme_manager_selected_index: -1;
+    in property <string> theme_manager_default_name_text: "";
+    in property <bool> theme_manager_selected_is_default: false;
+    in property <int> theme_manager_builtin_count: 0;
+    in property <int> theme_manager_user_count: 0;
+    in property <image> theme_manager_preview;
+    in-out property <bool> theme_manager_remove_confirm_visible: false;
+    in property <string> theme_manager_remove_name_text: "";
+    in property <int> theme_manager_remove_reference_count: 0;
     in property <bool> theme_editor_open: false;
     in property <bool> theme_editor_builtin: false;
     in property <string> theme_editor_id: "";
@@ -1047,6 +1060,14 @@ export component MainWindow inherits Window {
     callback update_theme_editor_name(string);
     callback update_theme_editor_role(string, string);
     callback update_theme_editor_ansi(int, string);
+    // TERM-1：独立主题管理器页（Settings / Session 菜单入口）。
+    callback open_theme_manager();
+    callback close_theme_manager();
+    callback select_theme_manager(int);
+    callback apply_theme_manager_default();
+    callback request_delete_theme(string);
+    callback confirm_delete_theme();
+    callback cancel_delete_theme();
     callback select_settings_appearance_font(int);
     callback update_settings_appearance_font_size(string);
     callback bump_settings_appearance_font_size(int);
@@ -1127,6 +1148,8 @@ export component MainWindow inherits Window {
         || root.host_keys_modal_visible
         || root.host_keys_clear_dialog_visible
         || root.host_keys_remove_dialog_visible
+        || root.theme_manager_visible
+        || root.theme_manager_remove_confirm_visible
         || root.auth_prompt_visible
         || root.logging_dialog_visible
         || root.folder_editor_visible
@@ -1374,7 +1397,8 @@ export component MainWindow inherits Window {
         // N4：两个同级、独立入口（私钥页 / 主机密钥页）；NET-1 增加代理管理器。
         { label: @tr("Host Keys..."), shortcut: "", enabled: true, checked: false, separator: false },
         { label: @tr("Private Keys..."), shortcut: "", enabled: true, checked: false, separator: false },
-        { label: @tr("Proxy Manager..."), shortcut: "", enabled: true, checked: false, separator: false }
+        { label: @tr("Proxy Manager..."), shortcut: "", enabled: true, checked: false, separator: false },
+        { label: @tr("Theme Manager..."), shortcut: "", enabled: true, checked: false, separator: false }
     ];
     property <[MenuEntry]> view_menu_entries: [
         { label: @tr("Session Manager"), shortcut: root.shortcut-toggle-sidebar, enabled: true, checked: root.sessions_visible, separator: false },
@@ -1884,6 +1908,7 @@ export component MainWindow inherits Window {
             else if (index == 7) { root.open_host_keys_manager(); }
             else if (index == 8) { root.open_private_keys_manager(); }
             else if (index == 9) { root.open_proxies_manager(); }
+            else if (index == 10) { root.open_theme_manager(); }
         } else if (menu == 3) {
             // View：面板可见性/位置统一入口（隐藏过的按默认侧恢复）。
             if (index == 0) { root.toggle_panel("sessions"); }
@@ -2122,6 +2147,10 @@ export component MainWindow inherits Window {
             proxies_remove_dialog.focus-dialog();
         } else if (root.proxies_modal_visible) {
             proxies_page.focus-dialog();
+        } else if (root.theme_manager_remove_confirm_visible) {
+            theme_manager_remove_dialog.focus-dialog();
+        } else if (root.theme_manager_visible) {
+            theme_manager_page.focus-dialog();
         } else if (root.private_keys_remove_confirm_visible) {
             private_keys_remove_dialog.focus-dialog();
         } else if (root.private_keys_deploy_confirm_visible) {
@@ -2686,8 +2715,8 @@ export component MainWindow inherits Window {
         confirm-close-session-enabled <=> root.settings_confirm_close_session;
         confirm-quit-app-enabled <=> root.settings_confirm_quit_app;
         debug-log-dir-text: root.settings_debug_log_dir_text;
-        appearance-color-scheme-text: root.settings_appearance_color_scheme_text;
-        appearance-schemes: root.settings_appearance_schemes;
+        appearance-color-scheme-name-text: root.settings_appearance_color_scheme_name_text;
+        appearance-color-scheme-builtin: root.settings_appearance_color_scheme_builtin;
         appearance-palette-swatches: root.settings_appearance_palette_swatches;
         appearance-font-options: root.settings_appearance_font_options;
         appearance-font-index <=> root.settings_appearance_font_index;
@@ -2695,15 +2724,6 @@ export component MainWindow inherits Window {
         appearance-fallback-fonts-text <=> root.settings_appearance_fallback_fonts_text;
         appearance-status-text: root.settings_appearance_status_text;
         appearance-preview: root.settings_appearance_preview;
-        theme-editor-open: root.theme_editor_open;
-        theme-editor-builtin: root.theme_editor_builtin;
-        theme-editor-id: root.theme_editor_id;
-        theme-editor-name <=> root.theme_editor_name;
-        theme-editor-foreground: root.theme_editor_foreground;
-        theme-editor-background: root.theme_editor_background;
-        theme-editor-cursor: root.theme_editor_cursor;
-        theme-editor-selection: root.theme_editor_selection;
-        theme-editor-ansi: root.theme_editor_ansi;
         close() => {
             root.settings_dialog_visible = false;
             root.close_settings_appearance();
@@ -2712,6 +2732,7 @@ export component MainWindow inherits Window {
         open-host-keys() => { root.open_host_keys_manager(); }
         open-private-keys() => { root.open_private_keys_manager(); }
         open-proxies() => { root.open_proxies_manager(); }
+        open-theme-manager() => { root.open_theme_manager(); }
         update-scrollback-lines(value) => { root.update_settings_scrollback_lines(value); }
         update-scrollback-max-cells(value) => { root.update_settings_scrollback_max_cells(value); }
         reset-terminal-defaults() => { root.reset_settings_terminal_defaults(); }
@@ -2721,15 +2742,6 @@ export component MainWindow inherits Window {
         set-confirm-close-session(enabled) => { root.set_confirm_close_session(enabled); }
         set-confirm-quit-app(enabled) => { root.set_confirm_quit_app(enabled); }
         open-debug-log-dir() => { root.open_debug_log_dir(); }
-        select-appearance-scheme(id) => { root.select_settings_scheme(id); }
-        clone-appearance-theme(id) => { root.clone_settings_theme(id); }
-        edit-appearance-theme(id) => { root.edit_settings_theme(id); }
-        delete-appearance-theme(id) => { root.delete_settings_theme(id); }
-        close-theme-editor() => { root.close_theme_editor(); }
-        save-theme-editor() => { root.save_theme_editor(); }
-        update-theme-editor-name(value) => { root.update_theme_editor_name(value); }
-        update-theme-editor-role(role, hex) => { root.update_theme_editor_role(role, hex); }
-        update-theme-editor-ansi(index, hex) => { root.update_theme_editor_ansi(index, hex); }
         select-appearance-font(index) => { root.select_settings_appearance_font(index); }
         update-appearance-font-size(value) => { root.update_settings_appearance_font_size(value); }
         bump-appearance-font-size(delta) => { root.bump_settings_appearance_font_size(delta); }
@@ -3266,6 +3278,63 @@ export component MainWindow inherits Window {
         }
         canceled() => {
             root.cancel_remove_proxy();
+            root.focus-top-dialog();
+        }
+    }
+
+    // TERM-1：独立主题管理器（Settings → Appearance / Session → Theme Manager…）。
+    // 声明在 Settings 之后：从设置打开时绘制在设置对话框上方，仍是独立模态页。
+    theme_manager_page := ThemeManagerPage {
+        open: root.theme_manager_visible;
+        themes: root.theme_manager_rows;
+        selected-index <=> root.theme_manager_selected_index;
+        default-name-text: root.theme_manager_default_name_text;
+        selected-is-default: root.theme_manager_selected_is_default;
+        builtin-count: root.theme_manager_builtin_count;
+        user-count: root.theme_manager_user_count;
+        preview: root.theme_manager_preview;
+        theme-editor-open: root.theme_editor_open;
+        theme-editor-builtin: root.theme_editor_builtin;
+        theme-editor-id: root.theme_editor_id;
+        theme-editor-name <=> root.theme_editor_name;
+        theme-editor-foreground: root.theme_editor_foreground;
+        theme-editor-background: root.theme_editor_background;
+        theme-editor-cursor: root.theme_editor_cursor;
+        theme-editor-selection: root.theme_editor_selection;
+        theme-editor-ansi: root.theme_editor_ansi;
+        editor-palette-swatches: root.settings_appearance_palette_swatches;
+        close() => {
+            root.close_theme_manager();
+            root.focus-top-dialog();
+        }
+        select-theme(index) => { root.select_theme_manager(index); }
+        set-default-theme() => { root.apply_theme_manager_default(); }
+        clone-theme(id) => { root.clone_settings_theme(id); }
+        edit-theme(id) => { root.edit_settings_theme(id); }
+        request-delete-theme(id) => { root.request_delete_theme(id); }
+        close-theme-editor() => { root.close_theme_editor(); }
+        save-theme-editor() => { root.save_theme_editor(); }
+        update-theme-editor-name(value) => { root.update_theme_editor_name(value); }
+        update-theme-editor-role(role, hex) => { root.update_theme_editor_role(role, hex); }
+        update-theme-editor-ansi(index, hex) => { root.update_theme_editor_ansi(index, hex); }
+    }
+
+    // TERM-1：删除用户主题确认。被引用的主题由宿主 retarget 到默认主题后删除，
+    // 因此确认正文显式给出会迁移的引用数（不留下悬空 id）。
+    theme_manager_remove_dialog := ConfirmDialog {
+        open: root.theme_manager_remove_confirm_visible;
+        destructive: true;
+        title-text: @tr("Delete Theme");
+        message-text: root.theme_manager_remove_reference_count > 0
+            ? @tr("Delete “{0}”? {1} theme reference(s) will switch to the built-in default theme.", root.theme_manager_remove_name_text, root.theme_manager_remove_reference_count)
+            : @tr("Delete “{0}”? This removes the user theme file and cannot be undone.", root.theme_manager_remove_name_text);
+        confirm-label: @tr("Delete");
+        confirmed() => {
+            root.confirm_delete_theme();
+            root.focus-top-dialog();
+        }
+        canceled() => {
+            root.cancel_delete_theme();
             root.focus-top-dialog();
         }
     }

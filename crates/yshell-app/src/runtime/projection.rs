@@ -204,8 +204,54 @@ impl AppRuntime {
         // TERM-4：Session Editor 外观分区的 live preview（仅打开且停在外观分区）。
         let session_editor_preview = self.session_editor_preview_frame();
         let settings_appearance_status_text = self.settings_appearance_status.display_text();
-        let settings_appearance_schemes = theme::scheme_options(&self.theme_catalog);
+        let settings_appearance_color_scheme_id = theme::resolved_global_scheme_id(
+            &self.config_document.terminal,
+            &self.theme_catalog,
+        );
+        let settings_appearance_color_scheme_name_text = theme::scheme_display_name(
+            &settings_appearance_color_scheme_id,
+            &self.theme_catalog,
+        );
+        let settings_appearance_color_scheme_builtin =
+            yshell_config::ThemeCatalog::is_builtin(&settings_appearance_color_scheme_id);
         let settings_appearance_palette = palette_parts(self.settings_appearance_palette());
+        // TERM-1: the independent Theme Manager list + preview.
+        let theme_manager_default_id = theme::resolved_global_scheme_id(
+            &self.config_document.terminal,
+            &self.theme_catalog,
+        );
+        let theme_manager_selected_id = self.theme_manager_selection_id();
+        let theme_manager_rows = theme::theme_manager_rows(
+            &self.theme_catalog,
+            &theme_manager_selected_id,
+            &theme_manager_default_id,
+        );
+        let theme_manager_selected_index = theme_manager_rows
+            .iter()
+            .position(|row| row.selected)
+            .map_or(-1, |index| i32::try_from(index).unwrap_or(i32::MAX));
+        let theme_manager_builtin_count = i32::try_from(
+            theme_manager_rows.iter().filter(|row| row.builtin).count(),
+        )
+        .unwrap_or(i32::MAX);
+        let theme_manager_user_count =
+            i32::try_from(theme_manager_rows.len()).unwrap_or(i32::MAX)
+                - theme_manager_builtin_count;
+        let theme_manager_default_name_text =
+            theme::scheme_display_name(&theme_manager_default_id, &self.theme_catalog);
+        let theme_manager_selected_is_default =
+            theme_manager_selected_id == theme_manager_default_id;
+        let theme_manager_preview = self.theme_manager_preview_frame();
+        let theme_manager_pending_delete = self.theme_manager_pending_delete.as_deref();
+        let theme_manager_remove_name_text = theme_manager_pending_delete
+            .map(|id| theme::scheme_display_name(id, &self.theme_catalog))
+            .unwrap_or_default();
+        let theme_manager_remove_reference_count = theme_manager_pending_delete
+            .map(|id| {
+                i32::try_from(theme::theme_reference_count(&self.config_document, id))
+                    .unwrap_or(i32::MAX)
+            })
+            .unwrap_or(0);
         let theme_editor_open = self.theme_editor.is_some();
         let theme_editor_builtin = self
             .theme_editor
@@ -325,7 +371,8 @@ impl AppRuntime {
             settings_terminal_status_value_text: self.settings_terminal_status.value_text(),
             settings_terminal_status_limit_text: self.settings_terminal_status.limit_text(),
             settings_appearance_visible: self.settings_appearance_visible,
-            settings_appearance_color_scheme_text: self.settings_appearance.color_scheme.clone(),
+            settings_appearance_color_scheme_name_text,
+            settings_appearance_color_scheme_builtin,
             settings_appearance_font_family_text: self.settings_appearance.font_family.clone(),
             settings_appearance_font_options: self.settings_appearance.font_options(),
             settings_appearance_font_index: self.settings_appearance.font_index(),
@@ -335,9 +382,19 @@ impl AppRuntime {
                 .backup_font_text
                 .clone(),
             settings_appearance_status_text,
-            settings_appearance_schemes,
             settings_appearance_palette_swatches: settings_appearance_palette,
             settings_appearance_preview,
+            theme_manager_visible: self.theme_manager_visible,
+            theme_manager_rows,
+            theme_manager_selected_index,
+            theme_manager_default_name_text,
+            theme_manager_selected_is_default,
+            theme_manager_builtin_count,
+            theme_manager_user_count,
+            theme_manager_preview,
+            theme_manager_remove_confirm_visible: self.theme_manager_pending_delete.is_some(),
+            theme_manager_remove_name_text,
+            theme_manager_remove_reference_count,
             theme_editor_open,
             theme_editor_builtin,
             theme_editor_id,
@@ -1595,9 +1652,10 @@ pub struct AppProjection {
     pub settings_terminal_status_field_text: String,
     pub settings_terminal_status_value_text: String,
     pub settings_terminal_status_limit_text: String,
-    // --- N5：Settings → Appearance（内联分区） ----------------------------------
+    // --- N5：Settings → Appearance（字体 + 当前主题摘要） -----------------------
     pub settings_appearance_visible: bool,
-    pub settings_appearance_color_scheme_text: String,
+    pub settings_appearance_color_scheme_name_text: String,
+    pub settings_appearance_color_scheme_builtin: bool,
     pub settings_appearance_font_family_text: String,
     /// D15 ComboBox model: bundled DejaVu + optional imported path.
     pub settings_appearance_font_options: Vec<String>,
@@ -1606,9 +1664,20 @@ pub struct AppProjection {
     /// Single backup font path shown in Settings (TERM-5).
     pub settings_appearance_backup_font_text: String,
     pub settings_appearance_status_text: String,
-    pub settings_appearance_schemes: Vec<theme::ThemeSchemeOption>,
     pub settings_appearance_palette_swatches: Vec<[u8; 3]>,
     pub settings_appearance_preview: Option<yshell_terminal::TerminalFrame>,
+    // --- TERM-1：独立主题管理器 ------------------------------------------------
+    pub theme_manager_visible: bool,
+    pub theme_manager_rows: Vec<ThemeManagerRowData>,
+    pub theme_manager_selected_index: i32,
+    pub theme_manager_default_name_text: String,
+    pub theme_manager_selected_is_default: bool,
+    pub theme_manager_builtin_count: i32,
+    pub theme_manager_user_count: i32,
+    pub theme_manager_preview: Option<yshell_terminal::TerminalFrame>,
+    pub theme_manager_remove_confirm_visible: bool,
+    pub theme_manager_remove_name_text: String,
+    pub theme_manager_remove_reference_count: i32,
     pub theme_editor_open: bool,
     pub theme_editor_builtin: bool,
     pub theme_editor_id: String,

@@ -575,6 +575,95 @@ pub(crate) fn scheme_display_name(id: &str, catalog: &ThemeCatalog) -> String {
         .unwrap_or_else(|| id.to_owned())
 }
 
+/// Effective global theme id: the persisted known id, else the built-in default.
+pub(crate) fn resolved_global_scheme_id(
+    profile: &TerminalProfile,
+    catalog: &ThemeCatalog,
+) -> String {
+    profile
+        .color_scheme
+        .clone()
+        .filter(|id| scheme_id_known(id, catalog))
+        .unwrap_or_else(|| DEFAULT_COLOR_SCHEME_ID.to_owned())
+}
+
+/// One row of the independent Theme Manager list (Slint `ThemeManagerRow`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ThemeManagerRowData {
+    pub id: String,
+    pub name: String,
+    /// Role colors + ANSI accents (8 chips, never truncated in the list).
+    pub swatches: Vec<[u8; 3]>,
+    /// Built-ins are immutable: Edit/Delete are disabled, Clone stays enabled.
+    pub builtin: bool,
+    /// Row is selected for the live preview.
+    pub selected: bool,
+    /// Row is the current global default (`terminal.color_scheme`).
+    pub current: bool,
+}
+
+/// Built-in + user themes as Theme Manager rows.
+///
+/// Order matches the rest of the app: built-ins (compile-time order) first,
+/// then user themes sorted by id (the catalog is a `BTreeMap`).
+pub(crate) fn theme_manager_rows(
+    catalog: &ThemeCatalog,
+    selected_id: &str,
+    default_id: &str,
+) -> Vec<ThemeManagerRowData> {
+    let mut rows: Vec<ThemeManagerRowData> = COLOR_SCHEMES
+        .iter()
+        .map(|scheme| ThemeManagerRowData {
+            id: scheme.id.to_owned(),
+            name: scheme.name.to_owned(),
+            swatches: palette_swatches(scheme.palette),
+            builtin: true,
+            selected: scheme.id == selected_id,
+            current: scheme.id == default_id,
+        })
+        .collect();
+    for theme in catalog.user_themes() {
+        rows.push(ThemeManagerRowData {
+            id: theme.id.clone(),
+            name: theme.name.clone(),
+            swatches: palette_swatches(palette_from_color_theme(theme)),
+            builtin: false,
+            selected: theme.id == selected_id,
+            current: theme.id == default_id,
+        });
+    }
+    rows
+}
+
+/// Number of `color_scheme` references to `id` across the global profile,
+/// folders and sessions (including nested folders).
+///
+/// Used by the delete confirmation: the existing [`retarget_theme_references`]
+/// path rewrites every hit to the built-in default, and the count tells the
+/// user how many references will move.
+pub(crate) fn theme_reference_count(document: &ConfigDocument, id: &str) -> usize {
+    fn profile_matches(profile: Option<&TerminalProfile>, id: &str) -> bool {
+        profile.is_some_and(|profile| profile.color_scheme.as_deref() == Some(id))
+    }
+    fn walk(folders: &[FolderProfile], id: &str) -> usize {
+        let mut count = 0;
+        for folder in folders {
+            if profile_matches(folder.terminal.as_ref(), id) {
+                count += 1;
+            }
+            for session in &folder.sessions {
+                if profile_matches(session.terminal.as_ref(), id) {
+                    count += 1;
+                }
+            }
+            count += walk(&folder.folders, id);
+        }
+        count
+    }
+    let global = usize::from(profile_matches(Some(&document.terminal), id));
+    global + walk(&document.folders, id)
+}
+
 // ---------------------------------------------------------------------------
 // Tri-state field model (Folder Editor + Session Editor + Settings)
 // ---------------------------------------------------------------------------
@@ -1414,8 +1503,126 @@ impl AppRuntime {
         if scheme_id_known(id, &self.theme_catalog) {
             self.settings_appearance.color_scheme = id.to_owned();
             self.settings_appearance_status = SettingsAppearanceStatus::Hint;
+            if self.theme_manager_visible {
+                self.theme_manager_selected_id = Some(id.to_owned());
+                self.theme_manager_pending_delete = None;
+            }
         }
         self.projection()
+    }
+
+    // --- TERM-1: independent Theme Manager (D6 modal page) -----------------
+
+    /// Opens the Theme Manager with the current global default selected.
+    pub fn open_theme_manager(&mut self) -> AppProjection {
+        self.theme_manager_visible = true;
+        self.theme_manager_pending_delete = None;
+        self.theme_editor = None;
+        self.theme_manager_selected_id = Some(resolved_global_scheme_id(
+            &self.config_document.terminal,
+            &self.theme_catalog,
+        ));
+        self.projection()
+    }
+
+    /// Closes the manager (discards the editor draft and pending delete).
+    pub fn close_theme_manager(&mut self) -> AppProjection {
+        self.theme_manager_visible = false;
+        self.theme_manager_pending_delete = None;
+        self.theme_editor = None;
+        self.theme_manager_selected_id = None;
+        self.projection()
+    }
+
+    /// Row click: select a theme **for the preview only**. The global default
+    /// changes only through [`Self::apply_theme_manager_selection`].
+    pub fn select_theme_manager_row(&mut self, index: i32) -> AppProjection {
+        let default_id = resolved_global_scheme_id(
+            &self.config_document.terminal,
+            &self.theme_catalog,
+        );
+        let selected_id = self.theme_manager_selection_id();
+        let rows = theme_manager_rows(&self.theme_catalog, &selected_id, &default_id);
+        if let Some(row) = usize::try_from(index)
+            .ok()
+            .and_then(|index| rows.get(index))
+        {
+            self.theme_manager_selected_id = Some(row.id.clone());
+            self.theme_manager_pending_delete = None;
+        }
+        self.projection()
+    }
+
+    /// Applies the selected theme as the global default (writes config).
+    ///
+    /// Existing sessions keep their captured appearance (D17); only terminals
+    /// opened afterwards use the new default.
+    pub fn apply_theme_manager_selection(&mut self) -> AppResult<AppProjection> {
+        let selected = self.theme_manager_selection_id();
+        if !scheme_id_known(&selected, &self.theme_catalog) {
+            return Err(AppError::new("selected theme is no longer available"));
+        }
+        self.config_document.terminal.color_scheme = Some(selected.clone());
+        clear_color_overrides(&mut self.config_document.terminal);
+        self.settings_appearance.color_scheme = selected.clone();
+        self.settings_appearance_status = SettingsAppearanceStatus::Hint;
+        self.config_store
+            .save(&self.config_document)
+            .map_err(AppError::from_error)?;
+        let name = scheme_display_name(&selected, &self.theme_catalog);
+        self.set_status_kind(
+            "terminal-appearance-saved",
+            format!("Set `{name}` as the default terminal theme."),
+            selected,
+            String::new(),
+        );
+        Ok(self.projection())
+    }
+
+    /// Asks for confirmation before deleting a user theme.
+    pub fn request_delete_color_theme(&mut self, id: &str) -> AppProjection {
+        if self.theme_catalog.contains_user(id) {
+            self.theme_manager_pending_delete = Some(id.to_owned());
+            self.theme_manager_selected_id = Some(id.to_owned());
+        }
+        self.projection()
+    }
+
+    /// Cancels the pending delete confirmation.
+    pub fn cancel_delete_color_theme(&mut self) -> AppProjection {
+        self.theme_manager_pending_delete = None;
+        self.projection()
+    }
+
+    /// Confirms the pending delete (retargets references to the default).
+    pub fn confirm_delete_color_theme(&mut self) -> AppResult<AppProjection> {
+        let Some(id) = self.theme_manager_pending_delete.clone() else {
+            return Ok(self.projection());
+        };
+        self.theme_manager_pending_delete = None;
+        self.delete_color_theme(&id)
+    }
+
+    /// Theme selected in the manager (falls back to the global default).
+    pub(crate) fn theme_manager_selection_id(&self) -> String {
+        self.theme_manager_selected_id
+            .clone()
+            .filter(|id| scheme_id_known(id, &self.theme_catalog))
+            .unwrap_or_else(|| {
+                resolved_global_scheme_id(&self.config_document.terminal, &self.theme_catalog)
+            })
+    }
+
+    /// Palette under the manager preview: editor draft when editing, else the
+    /// selected theme (row click preview, no save required).
+    pub(crate) fn theme_manager_palette(&self) -> TerminalPalette {
+        if let Some(editor) = self.theme_editor.as_ref() {
+            return editor.palette();
+        }
+        lookup_scheme_palette(
+            Some(&self.theme_manager_selection_id()),
+            &self.theme_catalog,
+        )
     }
 
     /// Clones the selected (or given) theme into an editable user theme.
@@ -1432,9 +1639,13 @@ impl AppRuntime {
             .theme_catalog
             .clone_theme(&source, &name)
             .map_err(AppError::from_error)?;
-        self.settings_appearance.color_scheme = cloned.id.clone();
-        self.theme_editor = Some(ThemeEditorDraft::from_color_theme(&cloned, false));
+        // The manager selects the clone for the editor preview; the Settings
+        // draft (and the global default) must stay untouched until the user
+        // explicitly saves the theme and clicks "Set as Default".
         self.settings_appearance_status = SettingsAppearanceStatus::Hint;
+        self.theme_manager_selected_id = Some(cloned.id.clone());
+        self.theme_manager_pending_delete = None;
+        self.theme_editor = Some(ThemeEditorDraft::from_color_theme(&cloned, false));
         Ok(self.projection())
     }
 
@@ -1442,8 +1653,12 @@ impl AppRuntime {
     pub fn open_theme_editor(&mut self, id: &str) -> AppProjection {
         if let Some(user) = self.theme_catalog.get_user(id).cloned() {
             self.theme_editor = Some(ThemeEditorDraft::from_color_theme(&user, false));
+            self.theme_manager_selected_id = Some(id.to_owned());
+            self.theme_manager_pending_delete = None;
         } else if let Some(builtin) = builtin_as_color_theme(id) {
             self.theme_editor = Some(ThemeEditorDraft::from_color_theme(&builtin, true));
+            self.theme_manager_selected_id = Some(id.to_owned());
+            self.theme_manager_pending_delete = None;
         }
         self.projection()
     }
@@ -1499,6 +1714,7 @@ impl AppRuntime {
             .save_user(theme.clone())
             .map_err(AppError::from_error)?;
         self.theme_editor = Some(ThemeEditorDraft::from_color_theme(&theme, false));
+        self.theme_manager_selected_id = Some(theme.id.clone());
         self.settings_appearance_status = SettingsAppearanceStatus::Hint;
         Ok(self.projection())
     }
@@ -1530,6 +1746,15 @@ impl AppRuntime {
         }
         if self.theme_editor.as_ref().is_some_and(|editor| editor.id == id) {
             self.theme_editor = None;
+        }
+        if self.theme_manager_pending_delete.as_deref() == Some(id) {
+            self.theme_manager_pending_delete = None;
+        }
+        if self.theme_manager_selected_id.as_deref() == Some(id) {
+            self.theme_manager_selected_id = Some(resolved_global_scheme_id(
+                &self.config_document.terminal,
+                &self.theme_catalog,
+            ));
         }
         self.config_store
             .save(&self.config_document)
@@ -1674,6 +1899,7 @@ impl AppRuntime {
         }
         self.ui_scale_factor = scale_factor;
         if self.settings_appearance_visible
+            || self.theme_manager_visible
             || (self.editor_modal_visible
                 && matches!(self.editor_section, EditorSection::Appearance))
         {
@@ -1748,6 +1974,29 @@ impl AppRuntime {
             self.ui_language(),
         ))
     }
+
+    /// Renders the Theme Manager live preview (TERM-1).
+    ///
+    /// Returns `None` while the modal page is closed. The palette comes from the
+    /// editor draft while a theme is being edited (so color-picker changes show
+    /// immediately) and from the selected row otherwise. The font stack/font
+    /// size come from the persisted global terminal profile, because fonts stay
+    /// in Settings while the manager only owns color themes.
+    pub(crate) fn theme_manager_preview_frame(&self) -> Option<TerminalFrame> {
+        if !self.theme_manager_visible {
+            return None;
+        }
+        let profile = &self.config_document.terminal;
+        let (font, _rejected) = resolve_font(profile);
+        Some(self.theme_manager_preview_renderer.render(
+            self.theme_manager_palette(),
+            font,
+            resolve_font_size(profile.font_size),
+            self.ui_scale_factor(),
+            THEME_MANAGER_PREVIEW_AREA_PX,
+            self.ui_language(),
+        ))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1781,6 +2030,18 @@ pub(crate) const SETTINGS_PREVIEW_AREA_PX: (f32, f32) = (420.0, 198.0);
 /// columns/rows and keeps the bitmap at 1:1 physical pixels (never a stretched
 /// image).
 pub(crate) const SESSION_EDITOR_PREVIEW_AREA_PX: (f32, f32) = (480.0, 98.0);
+
+/// Logical-pixel bitmap area of the Theme Manager live preview surface.
+///
+/// Mirrors `ui/pages/theme_manager.slint`: the dialog is 800 px wide with 20 px
+/// body padding, so the surface is 760 px; the surface border (1 px) and
+/// `Theme.terminal-padding-x` (6 px per side) leave 746 px. The fixed surface
+/// height is 120 px, leaving 118 px for the bitmap (`terminal-padding-y` = 0).
+///
+/// Like the other previews the grid is **floored** into this area: a font/DPI
+/// combination that does not fit drops columns/rows and keeps the bitmap at
+/// 1:1 physical pixels (never a stretched image).
+pub(crate) const THEME_MANAGER_PREVIEW_AREA_PX: (f32, f32) = (746.0, 118.0);
 
 /// Dedicated renderer for one live-preview surface.
 ///

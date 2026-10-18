@@ -126,7 +126,7 @@ pub use quick_connect::QuickLinkRowData;
 // N5：外观/文件夹默认值（session_runtime、bootstrap、projection 消费）。
 pub(crate) use theme::TerminalAppearance;
 pub(crate) use theme::{SettingsAppearanceDraft, SettingsAppearanceStatus, ThemeEditorDraft};
-pub(crate) use theme::{ThemeFieldAction, ThemeSchemeOption, TriStateFieldData};
+pub(crate) use theme::{ThemeFieldAction, ThemeManagerRowData, TriStateFieldData};
 
 use crate::{
     error::AppError, error::AppResult, session_runtime::SessionRuntime, sftp_view::SftpSortColumn,
@@ -348,6 +348,10 @@ impl AppRuntime {
             editor_preview_renderer: theme::LivePreviewRenderer::new(),
             ui_scale_factor: yshell_terminal::DEFAULT_SCALE_FACTOR,
             theme_editor: None,
+            theme_manager_visible: false,
+            theme_manager_selected_id: None,
+            theme_manager_pending_delete: None,
+            theme_manager_preview_renderer: theme::LivePreviewRenderer::new(),
             folder_editor: folder_editor::FolderEditorState::default(),
         };
         let startup_text = runtime.startup_status();
@@ -726,6 +730,14 @@ pub struct AppRuntime {
     pub(crate) ui_scale_factor: f32,
     /// Inline theme editor draft (None when closed).
     pub(crate) theme_editor: Option<ThemeEditorDraft>,
+    // --- TERM-1：独立主题管理器（D6 模态页）-------------------------------------
+    pub(crate) theme_manager_visible: bool,
+    /// Theme selected for the manager live preview (row click; not persisted).
+    pub(crate) theme_manager_selected_id: Option<String>,
+    /// User theme waiting for the delete confirmation dialog.
+    pub(crate) theme_manager_pending_delete: Option<String>,
+    /// 管理器预览专用渲染器（与 Settings / Session Editor 分离）。
+    pub(crate) theme_manager_preview_renderer: theme::LivePreviewRenderer,
     /// Folder Editor 表单状态。
     pub(crate) folder_editor: folder_editor::FolderEditorState,
 }

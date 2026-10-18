@@ -1,0 +1,505 @@
+// TERM-1：独立的终端主题管理器（D6 模态页面，与 Known Hosts / Private Keys /
+// Proxy Manager 同级）。
+//
+// 布局（自上而下，窗口内固定）：
+//   * 顶部固定 live preview：使用与 Settings / Session Editor 相同的
+//     `TerminalPreview` 像素契约（Rust 侧 `THEME_MANAGER_PREVIEW_AREA_PX`）；
+//   * 当前全局默认主题 + 「Set as Default」；
+//   * 单列、固定行高（56px）的主题列表：名称 + 色块条 + 右侧 Clone/Edit/Delete。
+//     内置主题的 Edit/Delete 禁用并带 tooltip；Clone 对内置/用户主题都可用；
+//   * 打开编辑器时列表区域换成可滚动的 `ThemeEditor`（顶部预览仍固定）。
+//
+// 语义（文档化）：
+//   * 行点击只把主题选中用于预览，不改全局默认；
+//   * 显式点「Set as Default」才写入 `terminal.color_scheme` 并保存配置；
+//   * Delete 先弹确认；被引用的用户主题删除时，宿主通过既有
+//     `retarget_theme_references` 把所有引用改到内置默认主题，不留下悬空 id。
+//
+// 规范：docs/product/ui-winui3-design-language.md §5.10（ContentDialog 形态）。
+import { Theme } from "../theme.slint";
+import { WinButton, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
+import { ThemeEditor } from "../components/theme_editor.slint";
+import { TerminalPreview } from "../components/terminal_preview.slint";
+
+/// 主题列表行（Rust `ThemeManagerRowData` 的 Slint 镜像）。
+export struct ThemeManagerRow {
+    id: string,
+    name: string,
+    /// 角色色 + ANSI 色块的短色带（Rust 侧从调色板生成）。
+    swatches: [color],
+    /// 内置主题不可编辑/删除（Clone 仍可用）。
+    builtin: bool,
+    /// 当前预览选中项。
+    selected: bool,
+    /// 当前全局默认主题（`terminal.color_scheme` 的有效值）。
+    current: bool,
+}
+
+/// 行内动作按钮（禁用时在按钮上悬停显示原因，契约 §18）。
+component ThemeRowAction inherits Rectangle {
+    in property <string> label: "";
+    in property <length> action-width: 68px;
+    in property <bool> enabled: true;
+    in property <string> hint: "";
+    in property <bool> critical: false;
+    callback clicked();
+
+    width: root.action-width;
+    height: Theme.control-height;
+    background: transparent;
+
+    button := WinButton {
+        width: parent.width;
+        height: parent.height;
+        text: root.label;
+        enabled: root.enabled;
+        subtle: true;
+        critical: root.critical;
+        clicked => { root.clicked(); }
+    }
+
+    if !root.enabled && root.hint != "" : Tooltip {
+        text: @markdown("\{root.hint}");
+    }
+}
+
+/// 小徽章（Default / Built-in / Custom）。
+component ThemeBadge inherits Rectangle {
+    in property <string> label: "";
+    in property <bool> emphasized: false;
+
+    height: 18px;
+    width: text.preferred-width + 12px;
+    border-radius: 9px;
+    background: root.emphasized ? Theme.accent-soft : Theme.subtle-selected;
+
+    text := Text {
+        x: (parent.width - self.width) / 2;
+        height: parent.height;
+        text: root.label;
+        color: root.emphasized ? Theme.accent : Theme.text-secondary;
+        font-size: Theme.font-caption;
+        vertical-alignment: center;
+        wrap: no-wrap;
+    }
+}
+
+/// 单条主题行：固定 56px，名称/类型 + 色带 + Clone/Edit/Delete。
+component ThemeListRow inherits Rectangle {
+    in property <ThemeManagerRow> node;
+    in property <bool> selected: false;
+    callback activate();
+    callback clone-theme();
+    callback edit-theme();
+    callback delete-theme();
+
+    height: 56px;
+    border-radius: Theme.radius-control;
+    background: root.selected ? Theme.subtle-selected
+        : touch.has-hover ? Theme.subtle-hover
+        : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    // 选中标记：左侧 3px 强调色细条（固定高度，不随行高变化）。
+    if root.selected : Rectangle {
+        x: 0px;
+        y: 8px;
+        width: 3px;
+        height: parent.height - 16px;
+        border-radius: 2px;
+        background: Theme.accent;
+    }
+
+    // 整行点击（按钮自己的 TouchArea 在更上层，点击按钮不会触发行选中）。
+    touch := TouchArea {
+        clicked => { root.activate(); }
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-12;
+        padding-right: Theme.spacing-8;
+        spacing: Theme.spacing-12;
+        cross-axis-alignment: center;
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            vertical-stretch: 1;
+            alignment: center;
+            spacing: 0px;
+
+            HorizontalLayout {
+                spacing: Theme.spacing-8;
+                cross-axis-alignment: center;
+
+                Text {
+                    horizontal-stretch: 1;
+                    text: root.node.name;
+                    color: Theme.text-primary;
+                    font-size: Theme.font-body;
+                    font-weight: root.selected ? Theme.weight-semibold : 400;
+                    wrap: no-wrap;
+                    overflow: elide;
+                }
+
+                if root.node.current : ThemeBadge {
+                    label: @tr("Default");
+                    emphasized: true;
+                }
+            }
+
+            Text {
+                text: root.node.builtin ? @tr("Built-in theme") : @tr("Custom theme");
+                color: Theme.text-tertiary;
+                font-size: Theme.font-caption;
+                wrap: no-wrap;
+                overflow: elide;
+            }
+        }
+
+        HorizontalLayout {
+            horizontal-stretch: 0;
+            spacing: 3px;
+            cross-axis-alignment: center;
+
+            for swatch in root.node.swatches : Rectangle {
+                width: 14px;
+                height: 14px;
+                border-radius: 3px;
+                border-width: 1px;
+                border-color: Theme.control-stroke;
+                background: swatch;
+            }
+        }
+
+        HorizontalLayout {
+            horizontal-stretch: 0;
+            spacing: Theme.spacing-4;
+            cross-axis-alignment: center;
+
+            ThemeRowAction {
+                label: @tr("Clone");
+                action-width: 66px;
+                clicked => { root.clone-theme(); }
+            }
+
+            ThemeRowAction {
+                label: @tr("Edit");
+                action-width: 58px;
+                enabled: !root.node.builtin;
+                hint: @tr("Built-in themes are read-only. Clone this theme to make changes.");
+                clicked => { root.edit-theme(); }
+            }
+
+            ThemeRowAction {
+                label: @tr("Delete");
+                action-width: 66px;
+                critical: true;
+                enabled: !root.node.builtin;
+                hint: @tr("Built-in themes cannot be deleted or edited.");
+                clicked => { root.delete-theme(); }
+            }
+        }
+    }
+}
+
+export component ThemeManagerPage inherits Rectangle {
+    in property <bool> open: false;
+    in property <[ThemeManagerRow]> themes: [];
+    in-out property <int> selected-index: -1;
+    in property <string> default-name-text: "";
+    in property <bool> selected-is-default: false;
+    in property <int> builtin-count: 0;
+    in property <int> user-count: 0;
+    /// Rust 投影的 live preview 位图（仅在页面打开时生成）。
+    in property <image> preview;
+
+    // 编辑器状态（与 Settings 旧内联编辑器共用同一份宿主草稿）。
+    in property <bool> theme-editor-open: false;
+    in property <bool> theme-editor-builtin: false;
+    in property <string> theme-editor-id: "";
+    in-out property <string> theme-editor-name: "";
+    in property <color> theme-editor-foreground: Theme.text-primary;
+    in property <color> theme-editor-background: Theme.terminal-background;
+    in property <color> theme-editor-cursor: Theme.text-primary;
+    in property <color> theme-editor-selection: Theme.selection-fill;
+    in property <[color]> theme-editor-ansi: [];
+    in property <[color]> editor-palette-swatches: [];
+
+    callback close();
+    /// 行点击：参数为列表索引（宿主按索引解析主题 id）。
+    callback select-theme(int);
+    callback set-default-theme();
+    callback clone-theme(string);
+    callback edit-theme(string);
+    callback request-delete-theme(string);
+    callback close-theme-editor();
+    callback save-theme-editor();
+    callback update-theme-editor-name(string);
+    callback update-theme-editor-role(string, string);
+    callback update-theme-editor-ansi(int, string);
+
+    visible: self.open;
+    background: Theme.scrim;
+
+    private property <bool> has-selection:
+        root.selected-index >= 0 && root.selected-index < root.themes.length;
+
+    dialog_scope := FocusScope {
+        width: parent.width;
+        height: parent.height;
+
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.close();
+                return accept;
+            }
+            return reject;
+        }
+
+        TouchArea {
+            clicked => { root.close(); }
+        }
+
+        panel := Rectangle {
+            x: (parent.width - 800px) / 2;
+            y: max((parent.height - self.height) / 2, 40px);
+            width: 800px;
+            height: min(parent.height - 88px, 640px);
+            background: Theme.panel-background;
+            border-radius: Theme.radius-panel;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
+            clip: true;
+
+            // 吞掉面板空白处点击，避免穿透到遮罩触发关闭。
+            TouchArea { }
+
+            VerticalLayout {
+                padding: Theme.spacing-20;
+                spacing: Theme.spacing-12;
+
+                // --- 标题行 -------------------------------------------------
+                HorizontalLayout {
+                    vertical-stretch: 0;
+                    spacing: Theme.spacing-12;
+                    cross-axis-alignment: center;
+
+                    Text {
+                        text: @tr("Theme Manager");
+                        color: Theme.text-primary;
+                        font-size: Theme.font-subtitle;
+                        font-weight: Theme.weight-semibold;
+                        vertical-alignment: center;
+                    }
+
+                    Text {
+                        horizontal-stretch: 1;
+                        text: @tr("Built-in {0} · Custom {1}", root.builtin-count, root.user-count);
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-body;
+                        vertical-alignment: center;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    WinIconButton {
+                        icon: "close";
+                        accessible-name: @tr("Close");
+                        clicked => { root.close(); }
+                    }
+                }
+
+                Rectangle {
+                    height: 1px;
+                    vertical-stretch: 0;
+                    background: Theme.divider;
+                }
+
+                // --- 顶部固定 live preview ----------------------------------
+                // 尺寸契约：800 dialog − 40 body padding = 760 表面宽；
+                // 内部位图 760 − 2px 边框 − 2×6px 终端内边距 = 746px；
+                // 高 120px − 2px 边框 = 118px（Rust `THEME_MANAGER_PREVIEW_AREA_PX`）。
+                TerminalPreview {
+                    vertical-stretch: 0;
+                    frame: root.preview;
+                    surface-height: 120px;
+                }
+
+                // --- 当前全局默认 + 应用动作 --------------------------------
+                HorizontalLayout {
+                    vertical-stretch: 0;
+                    spacing: Theme.spacing-12;
+                    cross-axis-alignment: center;
+
+                    Text {
+                        horizontal-stretch: 1;
+                        text: @tr("Current default: {0}", root.default-name-text);
+                        color: Theme.text-primary;
+                        font-size: Theme.font-body;
+                        font-weight: Theme.weight-semibold;
+                        vertical-alignment: center;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    WinButton {
+                        text: @tr("Set as Default");
+                        enabled: root.has-selection && !root.selected-is-default && !root.theme-editor-open;
+                        clicked => { root.set-default-theme(); }
+                    }
+                }
+
+                // --- 内容：列表 或 编辑器 -----------------------------------
+                Rectangle {
+                    vertical-stretch: 1;
+                    clip: true;
+                    background: transparent;
+
+                    // 主题列表：单列、固定行高，剩余高度滚动。
+                    if !root.theme-editor-open : Rectangle {
+                        clip: true;
+                        background: Theme.card-fill;
+                        border-radius: Theme.radius-control;
+                        border-width: 1px;
+                        border-color: Theme.divider;
+
+                        list := Flickable {
+                            visible: root.themes.length > 0;
+                            width: parent.width;
+                            height: parent.height;
+                            interactive: true;
+                            content-width: self.width;
+                            content-height: rows.preferred-height;
+
+                            rows := VerticalLayout {
+                                padding: 2px;
+                                spacing: 2px;
+
+                                for row[i] in root.themes : ThemeListRow {
+                                    node: row;
+                                    selected: row.selected || i == root.selected-index;
+                                    activate => {
+                                        root.selected-index = i;
+                                        root.select-theme(i);
+                                    }
+                                    clone-theme => { root.clone-theme(row.id); }
+                                    edit-theme => { root.edit-theme(row.id); }
+                                    delete-theme => { root.request-delete-theme(row.id); }
+                                }
+                            }
+                        }
+
+                        WinScrollIndicator {
+                            visible: root.themes.length > 0;
+                            x: parent.width - self.width - Theme.spacing-4;
+                            y: Theme.spacing-4;
+                            height: parent.height - 2 * Theme.spacing-4;
+                            viewport-position: list.content-y;
+                            content-extent: list.content-height;
+                            viewport-extent: list.height;
+                            thumb-min-length: 24px;
+                        }
+
+                        Text {
+                            visible: root.themes.length == 0;
+                            width: parent.width - 2 * Theme.spacing-16;
+                            x: Theme.spacing-16;
+                            y: (parent.height - self.height) / 2;
+                            text: @tr("No themes available.");
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    // 编辑器：占用列表区域，自身内容可滚动（880×600 下可保存）。
+                    if root.theme-editor-open : Rectangle {
+                        clip: true;
+                        background: Theme.card-fill;
+                        border-radius: Theme.radius-control;
+                        border-width: 1px;
+                        border-color: Theme.divider;
+
+                        editor-scroll := Flickable {
+                            width: parent.width;
+                            height: parent.height;
+                            interactive: true;
+                            content-width: self.width;
+                            content-height: editor.preferred-height;
+
+                            editor := ThemeEditor {
+                                width: editor-scroll.width;
+                                builtin: root.theme-editor-builtin;
+                                theme-id: root.theme-editor-id;
+                                theme-name <=> root.theme-editor-name;
+                                foreground: root.theme-editor-foreground;
+                                background: root.theme-editor-background;
+                                cursor: root.theme-editor-cursor;
+                                selection: root.theme-editor-selection;
+                                ansi: root.theme-editor-ansi;
+                                palette-swatches: root.editor-palette-swatches;
+                                close() => { root.close-theme-editor(); }
+                                save() => { root.save-theme-editor(); }
+                                clone-theme() => { root.clone-theme(root.theme-editor-id); }
+                                update-name(value) => { root.update-theme-editor-name(value); }
+                                update-role(role, hex) => { root.update-theme-editor-role(role, hex); }
+                                update-ansi(index, hex) => { root.update-theme-editor-ansi(index, hex); }
+                            }
+                        }
+
+                        WinScrollIndicator {
+                            x: parent.width - self.width - Theme.spacing-4;
+                            y: Theme.spacing-4;
+                            height: parent.height - 2 * Theme.spacing-4;
+                            viewport-position: editor-scroll.content-y;
+                            content-extent: editor-scroll.content-height;
+                            viewport-extent: editor-scroll.height;
+                            thumb-min-length: 24px;
+                        }
+                    }
+                }
+
+                Rectangle {
+                    height: 1px;
+                    vertical-stretch: 0;
+                    background: Theme.divider;
+                }
+
+                // --- 底部：语义说明 + Close --------------------------------
+                HorizontalLayout {
+                    vertical-stretch: 0;
+                    spacing: Theme.spacing-12;
+                    cross-axis-alignment: center;
+
+                    Text {
+                        horizontal-stretch: 1;
+                        text: root.theme-editor-open
+                            ? @tr("The preview follows the draft. Save the theme to write it to disk; discard discards the draft.")
+                            : @tr("Click a theme to preview it. Set as default applies it to terminals opened afterwards.");
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        wrap: word-wrap;
+                    }
+
+                    WinButton {
+                        text: @tr("Close");
+                        clicked => { root.close(); }
+                    }
+                }
+            }
+        }
+    }
+
+    /// 宿主在关闭上层弹窗后把键盘焦点交还给本页（嵌套场景）。
+    public function focus-dialog() {
+        dialog_scope.focus();
+    }
+
+    changed open => {
+        if (root.open) {
+            dialog_scope.focus();
+        }
+    }
+}

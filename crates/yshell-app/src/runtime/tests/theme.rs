@@ -5,7 +5,7 @@ use tempfile::tempdir;
 use yshell_config::{ConfigDocument, ConfigStore, FolderProfile, SessionProfile, TerminalProfile};
 use yshell_terminal::{color_scheme, TerminalCell, TerminalColor, TerminalPalette};
 
-use crate::runtime::{ThemeFieldAction, ThemeSchemeOption};
+use crate::runtime::ThemeFieldAction;
 
 use super::*;
 
@@ -104,10 +104,10 @@ fn settings_appearance_form_validates_and_persists() {
     let opened = runtime.open_settings_appearance();
     assert!(opened.settings_appearance_visible);
     assert_eq!(
-        opened.settings_appearance_color_scheme_text,
-        "yshell-default"
+        opened.settings_appearance_color_scheme_name_text,
+        "YShell Default"
     );
-    assert!(!opened.settings_appearance_schemes.is_empty());
+    assert!(opened.settings_appearance_color_scheme_builtin);
     assert!(opened.settings_appearance_preview.is_some());
     let font_options = &opened.settings_appearance_font_options;
     assert!(
@@ -119,7 +119,12 @@ fn settings_appearance_form_validates_and_persists() {
     assert_eq!(opened.settings_appearance_font_index, 0);
 
     let selected = runtime.select_settings_appearance_scheme("nord");
-    assert_eq!(selected.settings_appearance_color_scheme_text, "nord");
+    assert_eq!(runtime.settings_appearance.color_scheme, "nord");
+    // The summary always reflects the *global default*, not the unsaved draft.
+    assert_eq!(
+        selected.settings_appearance_color_scheme_name_text,
+        "YShell Default"
+    );
 
     runtime.update_settings_appearance_font_size("18");
     let saved = runtime.save_settings_appearance().expect("save appearance");
@@ -149,8 +154,8 @@ fn settings_appearance_form_validates_and_persists() {
     runtime.reset_settings_appearance_defaults();
     let reset = runtime.save_settings_appearance().expect("save reset");
     assert_eq!(
-        reset.settings_appearance_color_scheme_text,
-        "yshell-default"
+        reset.settings_appearance_color_scheme_name_text,
+        "YShell Default"
     );
 }
 
@@ -228,10 +233,20 @@ fn clone_edit_and_delete_user_theme() {
     let cloned = runtime
         .clone_color_theme("dracula")
         .expect("clone built-in");
-    let user_id = cloned.settings_appearance_color_scheme_text.clone();
+    let user_id = cloned
+        .theme_manager_rows
+        .iter()
+        .find(|row| row.selected)
+        .expect("selected clone")
+        .id
+        .clone();
     assert!(user_id.starts_with("user-"));
     assert!(cloned.theme_editor_open);
     assert!(!cloned.theme_editor_builtin);
+    assert!(cloned
+        .theme_manager_rows
+        .iter()
+        .any(|row| row.id == user_id && row.selected && !row.builtin));
 
     runtime.update_theme_editor_role_color("foreground", "#112233");
     runtime.save_theme_editor().expect("save theme");
@@ -243,13 +258,336 @@ fn clone_edit_and_delete_user_theme() {
 
     let listed = runtime.projection();
     assert!(listed
-        .settings_appearance_schemes
+        .theme_manager_rows
         .iter()
-        .any(|scheme: &ThemeSchemeOption| scheme.id == user_id && !scheme.builtin));
+        .any(|row: &crate::runtime::ThemeManagerRowData| {
+            row.id == user_id && !row.builtin && row.selected
+        }));
 
     runtime.delete_color_theme(&user_id).expect("delete");
     assert!(!runtime.theme_catalog.contains_user(&user_id));
     assert_eq!(runtime.settings_appearance.color_scheme, "yshell-default");
+    let after = runtime.projection();
+    assert!(after
+        .theme_manager_rows
+        .iter()
+        .any(|row| row.id == "yshell-default" && row.current && row.selected));
+}
+
+#[test]
+fn theme_manager_lists_builtin_and_user_themes_with_the_default_flagged() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+
+    let opened = runtime.open_theme_manager();
+    assert!(opened.theme_manager_visible);
+    assert_eq!(
+        opened.theme_manager_builtin_count,
+        i32::try_from(yshell_terminal::COLOR_SCHEMES.len()).expect("builtin count")
+    );
+    assert_eq!(opened.theme_manager_user_count, 0);
+    assert_eq!(
+        opened.theme_manager_rows.len(),
+        yshell_terminal::COLOR_SCHEMES.len()
+    );
+    let current = opened
+        .theme_manager_rows
+        .iter()
+        .find(|row| row.current)
+        .expect("current default row");
+    assert_eq!(current.id, "yshell-default");
+    assert!(current.builtin);
+    assert!(current.selected);
+    assert_eq!(
+        opened.theme_manager_selected_index,
+        i32::try_from(
+            opened
+                .theme_manager_rows
+                .iter()
+                .position(|row| row.id == "yshell-default")
+                .expect("default row index")
+        )
+        .expect("index")
+    );
+    assert_eq!(opened.theme_manager_default_name_text, "YShell Default");
+    assert!(opened.theme_manager_preview.is_some());
+
+    let cloned = runtime.clone_color_theme("nord").expect("clone built-in");
+    let user_id = cloned
+        .theme_manager_rows
+        .iter()
+        .find(|row| row.selected)
+        .expect("selected clone")
+        .id
+        .clone();
+    assert!(user_id.starts_with("user-"));
+    assert_eq!(cloned.theme_manager_user_count, 1);
+    assert_eq!(cloned.theme_manager_rows.len(), opened.theme_manager_rows.len() + 1);
+    let cloned_row = cloned
+        .theme_manager_rows
+        .iter()
+        .find(|row| row.id == user_id)
+        .expect("cloned row");
+    assert!(!cloned_row.builtin);
+    assert!(cloned_row.selected);
+    assert!(!cloned_row.current, "cloning must not change the default");
+    assert!(cloned.theme_editor_open);
+    assert!(!cloned.theme_editor_builtin);
+}
+
+#[test]
+fn theme_manager_row_selection_updates_preview_and_apply_sets_default() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime.note_ui_scale_factor(1.0);
+    let opened = runtime.open_theme_manager();
+    let dracula_index = opened
+        .theme_manager_rows
+        .iter()
+        .position(|row| row.id == "dracula")
+        .expect("dracula row");
+    let dracula_index = i32::try_from(dracula_index).expect("index");
+
+    let selected = runtime.select_theme_manager_row(dracula_index);
+    assert_eq!(selected.theme_manager_selected_index, dracula_index);
+    assert!(!selected.theme_manager_selected_is_default);
+    assert!(selected
+        .theme_manager_rows
+        .iter()
+        .any(|row| row.id == "dracula" && row.selected && !row.current));
+
+    let dracula = color_scheme("dracula").expect("dracula scheme").palette;
+    let frame = selected
+        .theme_manager_preview
+        .as_ref()
+        .expect("manager preview frame");
+    let columns = u16::try_from(frame.width / frame.cell_width).expect("columns");
+    let rows = u16::try_from(frame.height / frame.cell_height).expect("rows");
+    assert_eq!(
+        frame_cell_pixel(frame, columns - 1, rows - 1),
+        color_rgba(dracula.background),
+        "row click must preview the selected theme without saving"
+    );
+
+    let applied = runtime
+        .apply_theme_manager_selection()
+        .expect("apply default theme");
+    assert_eq!(
+        runtime.config_document.terminal.color_scheme.as_deref(),
+        Some("dracula")
+    );
+    assert!(applied.theme_manager_selected_is_default);
+    assert_eq!(applied.theme_manager_default_name_text, "Dracula");
+    assert!(applied
+        .theme_manager_rows
+        .iter()
+        .any(|row| row.id == "dracula" && row.current && row.selected));
+
+    let persisted = ConfigStore::new(temp.path())
+        .load_or_recover()
+        .expect("reload")
+        .document
+        .terminal;
+    assert_eq!(persisted.color_scheme.as_deref(), Some("dracula"));
+}
+
+#[test]
+fn theme_manager_clone_edit_and_delete_require_confirmation() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime.note_ui_scale_factor(1.0);
+    runtime.open_theme_manager();
+    let cloned = runtime.clone_color_theme("dracula").expect("clone");
+    let user_id = cloned
+        .theme_manager_rows
+        .iter()
+        .find(|row| row.selected)
+        .expect("selected clone")
+        .id
+        .clone();
+    assert!(cloned.theme_editor_open);
+
+    // Editing the draft re-renders the preview on the same projection.
+    let edited = runtime.update_theme_editor_role_color("background", "#112233");
+    let frame = edited
+        .theme_manager_preview
+        .as_ref()
+        .expect("preview while editing");
+    let columns = u16::try_from(frame.width / frame.cell_width).expect("columns");
+    let rows = u16::try_from(frame.height / frame.cell_height).expect("rows");
+    assert_eq!(
+        frame_cell_pixel(frame, columns - 1, rows - 1),
+        color_rgba(TerminalColor::rgb(0x11, 0x22, 0x33)),
+        "preview must follow the editor draft"
+    );
+    runtime.save_theme_editor().expect("save theme");
+    let saved = runtime.projection();
+    assert!(saved
+        .theme_manager_rows
+        .iter()
+        .any(|row| row.id == user_id && row.name == "Dracula Copy" && !row.builtin));
+
+    // Built-ins never enter the delete-confirmation path.
+    let builtin = runtime.request_delete_color_theme("dracula");
+    assert!(!builtin.theme_manager_remove_confirm_visible);
+    assert!(runtime.delete_color_theme("dracula").is_err());
+
+    // User themes ask first; Cancel keeps the catalog untouched.
+    let requested = runtime.request_delete_color_theme(&user_id);
+    assert!(requested.theme_manager_remove_confirm_visible);
+    assert_eq!(requested.theme_manager_remove_name_text, "Dracula Copy");
+    assert_eq!(requested.theme_manager_remove_reference_count, 0);
+    let canceled = runtime.cancel_delete_color_theme();
+    assert!(!canceled.theme_manager_remove_confirm_visible);
+    assert!(runtime.theme_catalog.contains_user(&user_id));
+
+    runtime.request_delete_color_theme(&user_id);
+    let deleted = runtime.confirm_delete_color_theme().expect("delete confirmed");
+    assert!(!runtime.theme_catalog.contains_user(&user_id));
+    assert!(!deleted
+        .theme_manager_rows
+        .iter()
+        .any(|row| row.id == user_id));
+    assert!(deleted.theme_manager_visible);
+    assert_eq!(deleted.theme_manager_user_count, 0);
+    assert!(!deleted.theme_manager_remove_confirm_visible);
+}
+
+#[test]
+fn theme_manager_delete_retargets_references_to_the_default() {
+    let temp = tempdir().expect("tempdir");
+    store_with_prod_folder(temp.path());
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime.open_theme_manager();
+    runtime.clone_color_theme("nord").expect("clone");
+    let user_id = runtime
+        .theme_manager_selection_id();
+    runtime
+        .apply_theme_manager_selection()
+        .expect("apply cloned default");
+    // A folder and a saved session also reference the user theme.
+    let folder = runtime
+        .config_document
+        .find_folder_mut("folder-prod")
+        .expect("prod folder");
+    folder
+        .terminal
+        .get_or_insert_with(TerminalProfile::default)
+        .color_scheme = Some(user_id.clone());
+    let session = runtime
+        .config_document
+        .find_session_mut("saved-prod")
+        .expect("prod session");
+    session
+        .terminal
+        .get_or_insert_with(TerminalProfile::default)
+        .color_scheme = Some(user_id.clone());
+    assert_eq!(
+        crate::runtime::theme::theme_reference_count(&runtime.config_document, &user_id),
+        3,
+        "global default + folder + session references"
+    );
+
+    let requested = runtime.request_delete_color_theme(&user_id);
+    assert_eq!(requested.theme_manager_remove_reference_count, 3);
+    let deleted = runtime
+        .confirm_delete_color_theme()
+        .expect("delete and retarget");
+    assert!(!runtime.theme_catalog.contains_user(&user_id));
+    assert_eq!(
+        crate::runtime::theme::theme_reference_count(&runtime.config_document, &user_id),
+        0,
+        "no orphaned theme references may remain"
+    );
+    assert_eq!(
+        runtime.config_document.terminal.color_scheme.as_deref(),
+        Some("yshell-default")
+    );
+    assert_eq!(
+        runtime
+            .config_document
+            .find_folder("folder-prod")
+            .expect("folder")
+            .terminal
+            .as_ref()
+            .expect("folder terminal")
+            .color_scheme
+            .as_deref(),
+        Some("yshell-default")
+    );
+    assert_eq!(
+        runtime
+            .config_document
+            .find_session("saved-prod")
+            .expect("session")
+            .terminal
+            .as_ref()
+            .expect("session terminal")
+            .color_scheme
+            .as_deref(),
+        Some("yshell-default")
+    );
+    assert_eq!(
+        deleted.theme_manager_default_name_text, "YShell Default",
+        "the manager falls back to the built-in default after deletion"
+    );
+    let persisted = ConfigStore::new(temp.path())
+        .load_or_recover()
+        .expect("reload")
+        .document;
+    assert_eq!(
+        persisted.terminal.color_scheme.as_deref(),
+        Some("yshell-default")
+    );
+    assert_eq!(
+        crate::runtime::theme::theme_reference_count(&persisted, &user_id),
+        0
+    );
+}
+
+#[test]
+fn theme_manager_opens_from_settings_and_closes_back_to_it() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+
+    let settings = runtime.open_settings_appearance();
+    assert!(settings.settings_appearance_visible);
+    let manager = runtime.open_theme_manager();
+    assert!(manager.theme_manager_visible);
+    assert!(manager.settings_appearance_visible, "Settings stays behind");
+    assert_eq!(manager.theme_manager_default_name_text, "YShell Default");
+
+    // Applying a theme from the manager updates the Settings summary.
+    let dracula_index = manager
+        .theme_manager_rows
+        .iter()
+        .position(|row| row.id == "dracula")
+        .expect("dracula row");
+    runtime.select_theme_manager_row(i32::try_from(dracula_index).expect("index"));
+    runtime
+        .apply_theme_manager_selection()
+        .expect("apply default theme");
+
+    let closed = runtime.close_theme_manager();
+    assert!(!closed.theme_manager_visible);
+    assert!(!closed.theme_editor_open);
+    assert!(closed.settings_appearance_visible);
+    assert_eq!(
+        closed.settings_appearance_color_scheme_name_text, "Dracula",
+        "Settings keeps showing the current global theme"
+    );
+    assert!(
+        closed.settings_appearance_preview.is_some(),
+        "Settings must keep its preview after the manager closes"
+    );
+    let settings_closed = runtime.close_settings_appearance();
+    assert!(!settings_closed.settings_appearance_visible);
+    assert!(settings_closed.settings_appearance_preview.is_none());
 }
 
 #[test]

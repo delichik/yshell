@@ -1,0 +1,236 @@
+// TERM-1：命名终端主题编辑器（从 Settings → Appearance 内联表单抽出）。
+//
+// 由独立的 Theme Manager 模态页使用；Settings 只保留「当前主题摘要 + 管理主题…」
+// 与字体设置。组件本身不带弹窗/遮罩，嵌在管理器的编辑区（可滚动）。
+//
+// 与宿主的约定：
+//   * `builtin` 为 true 时所有颜色/名称输入只读，只提供「Clone to edit」；
+//   * 用户主题的每次编辑都通过 update-* 回调立即写回宿主草稿，live preview
+//     （管理器顶部的 TerminalPreview）在下一帧跟随草稿；
+//   * `save` 写用户主题文件，`close` 丢弃草稿（不写盘）。
+import { Theme } from "../theme.slint";
+import { WinButton } from "basic/controls.slint";
+import { WinTextInput } from "basic/text_input.slint";
+
+// 标签 + 控件行：右对齐 128px 标签列（与原 Settings 内联编辑器一致）。
+component ThemeFieldRow inherits HorizontalLayout {
+    in property <string> label: "";
+    spacing: Theme.spacing-12;
+    alignment: stretch;
+    cross-axis-alignment: center;
+
+    Text {
+        text: root.label;
+        width: 128px;
+        horizontal-alignment: right;
+        color: Theme.text-secondary;
+        font-size: Theme.font-body;
+        vertical-alignment: center;
+    }
+
+    @children
+}
+
+// 预设色块：点击弹出 16 色预设面板（选择而非手输 hex）。
+component ThemeColorSwatch inherits Rectangle {
+    in property <color> fill: Theme.terminal-background;
+    in property <bool> enabled: true;
+    callback picked(string);
+
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: Theme.control-stroke;
+    background: root.fill;
+
+    TouchArea {
+        enabled: root.enabled;
+        clicked => { picker.show(); }
+    }
+
+    picker := PopupWindow {
+        x: 0;
+        y: root.height + 4px;
+        width: 196px;
+        height: 72px;
+        close-policy: close-on-click-outside;
+
+        Rectangle {
+            background: Theme.flyout-background;
+            border-radius: Theme.radius-control;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
+
+            VerticalLayout {
+                padding: Theme.spacing-8;
+                spacing: Theme.spacing-4;
+
+                GridLayout {
+                    spacing: 4px;
+                    for swatch[index] in Theme.color-presets : Rectangle {
+                        row: index / 8;
+                        col: Math.mod(index, 8);
+                        width: 16px;
+                        height: 16px;
+                        border-radius: 2px;
+                        border-width: 1px;
+                        border-color: Theme.control-stroke;
+                        background: swatch;
+                        TouchArea {
+                            clicked => {
+                                root.picked(Theme.color-preset-hex[index]);
+                                picker.close();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component ThemeEditor inherits VerticalLayout {
+    in property <bool> builtin: false;
+    in property <string> theme-id: "";
+    in-out property <string> theme-name: "";
+    in property <color> foreground: Theme.text-primary;
+    in property <color> background: Theme.terminal-background;
+    in property <color> cursor: Theme.text-primary;
+    in property <color> selection: Theme.selection-fill;
+    in property <[color]> ansi: [];
+    /// 草稿调色板的角色色块条（宿主投影，与 live preview 同源）。
+    in property <[color]> palette-swatches: [];
+
+    callback close();
+    callback save();
+    callback clone-theme();
+    callback update-name(string);
+    callback update-role(string, string);
+    callback update-ansi(int, string);
+
+    spacing: Theme.spacing-8;
+    padding: Theme.spacing-12;
+
+    Text {
+        text: root.builtin ? @tr("Theme (read-only)") : @tr("Edit theme");
+        color: Theme.text-primary;
+        font-size: Theme.font-body;
+        font-weight: Theme.weight-semibold;
+    }
+
+    ThemeFieldRow {
+        label: @tr("Name");
+
+        WinTextInput {
+            horizontal-stretch: 1;
+            text <=> root.theme-name;
+            enabled: !root.builtin;
+            edited => { root.update-name(self.text); }
+        }
+    }
+
+    Text {
+        visible: !root.builtin && root.theme-id != "";
+        text: @tr("Theme id: {0}", root.theme-id);
+        color: Theme.text-tertiary;
+        font-size: Theme.font-caption;
+        font-family: Theme.font-mono;
+        wrap: no-wrap;
+        overflow: elide;
+    }
+
+    HorizontalLayout {
+        spacing: Theme.spacing-8;
+        padding-left: 128px + Theme.spacing-12;
+        cross-axis-alignment: center;
+
+        for swatch in root.palette-swatches : Rectangle {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
+            background: swatch;
+        }
+    }
+
+    ThemeFieldRow {
+        label: @tr("Foreground");
+
+        ThemeColorSwatch {
+            fill: root.foreground;
+            enabled: !root.builtin;
+            picked(hex) => { root.update-role("foreground", hex); }
+        }
+    }
+
+    ThemeFieldRow {
+        label: @tr("Background");
+
+        ThemeColorSwatch {
+            fill: root.background;
+            enabled: !root.builtin;
+            picked(hex) => { root.update-role("background", hex); }
+        }
+    }
+
+    ThemeFieldRow {
+        label: @tr("Cursor");
+
+        ThemeColorSwatch {
+            fill: root.cursor;
+            enabled: !root.builtin;
+            picked(hex) => { root.update-role("cursor", hex); }
+        }
+    }
+
+    ThemeFieldRow {
+        label: @tr("Selection");
+
+        ThemeColorSwatch {
+            fill: root.selection;
+            enabled: !root.builtin;
+            picked(hex) => { root.update-role("selection", hex); }
+        }
+    }
+
+    Text {
+        text: @tr("ANSI colors");
+        color: Theme.text-secondary;
+        font-size: Theme.font-caption;
+    }
+
+    GridLayout {
+        spacing: Theme.spacing-4;
+
+        for ansi-color[ansi-index] in root.ansi : ThemeColorSwatch {
+            row: Math.floor(ansi-index / 8);
+            col: Math.mod(ansi-index, 8);
+            fill: ansi-color;
+            enabled: !root.builtin;
+            picked(hex) => { root.update-ansi(ansi-index, hex); }
+        }
+    }
+
+    HorizontalLayout {
+        spacing: Theme.spacing-8;
+        alignment: end;
+
+        if root.builtin : WinButton {
+            text: @tr("Clone to edit");
+            clicked => { root.clone-theme(); }
+        }
+
+        if !root.builtin : WinButton {
+            text: @tr("Save Theme");
+            accent: true;
+            clicked => { root.save(); }
+        }
+
+        WinButton {
+            text: root.builtin ? @tr("Close") : @tr("Discard Changes");
+            clicked => { root.close(); }
+        }
+    }
+}
