@@ -2238,7 +2238,8 @@ export component MainWindow inherits Window {
                 // 投影与回调由本文件转发，viewport/焦点 out 属性继续对 Rust 暴露。
                 terminal_workspace := TerminalWorkspace {
                     horizontal-stretch: 1;
-                    // N2：活动标签是 QC 页时隐藏单终端；分屏时 QC 叠在对应叶子上。
+                    // TAB-3：QC 全页只覆盖单窗格内容区（tab 栏常驻）；单终端实例保留在
+                    // 底层但置为非交互（terminal-visible=false）。分屏时 QC 仍叠在对应叶子上。
                     terminal-visible: !root.quick_connect_visible || root.workspace_split_active;
                     quick-connect-visible: root.quick_connect_visible;
                     tabs: root.tabs;
