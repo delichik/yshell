@@ -124,8 +124,8 @@ fn closing_active_tab_selects_right_neighbor_then_left() {
     assert_eq!(after_last.tab_count, 0);
     assert_eq!(after_last.active_tab_id, "");
     assert!(after_last.tabs.is_empty());
-    // N2：没有标签时内容区回到 Quick Connect 页（不新建标签）。
-    assert!(after_last.quick_connect_visible);
+    // TAB-6：零标签不再强制显示 QC；覆盖层保持关闭（D1：空工作区）。
+    assert!(!after_last.quick_connect_visible);
     assert!(!after_last.has_active_session);
     assert!(runtime.active_session_id.is_none());
     assert_tab_invariants(&runtime);
@@ -155,8 +155,8 @@ fn close_request_requires_confirmation_and_cancel_keeps_tabs() {
 
     let confirmed = close_tab_confirmed(&mut runtime, &tab_id);
     assert_eq!(confirmed.tab_count, 0);
-    // N2：没有标签时内容区回到 Quick Connect 页（不新建标签）。
-    assert!(confirmed.quick_connect_visible);
+    // TAB-6：关闭最后一个标签不打开 QC；空工作区保持空态（D1）。
+    assert!(!confirmed.quick_connect_visible);
     assert!(confirmed.status_text.contains("Closed tab"));
     assert!(runtime.request_close_tab("missing-tab").is_err());
 }
@@ -178,8 +178,8 @@ fn idle_tab_closes_without_confirmation() {
     assert!(!closed.close_tabs_confirm_visible);
     assert_eq!(closed.tab_count, 0);
     assert_eq!(closed.active_tab_id, "");
-    // N2：没有标签时内容区回到 Quick Connect 页（不新建标签）。
-    assert!(closed.quick_connect_visible);
+    // TAB-6：零标签 + 覆盖层关闭 = 空工作区（D1）。
+    assert!(!closed.quick_connect_visible);
     assert!(!closed.has_active_session);
     assert_tab_invariants(&runtime);
 }
@@ -293,8 +293,8 @@ fn batch_close_skips_already_closed_tabs_in_stable_order() {
         .confirm_close_tabs_with(false)
         .expect("confirm batch");
     assert_eq!(confirmed.tab_count, 0);
-    // N2：没有标签时内容区回到 Quick Connect 页（不新建标签）。
-    assert!(confirmed.quick_connect_visible);
+    // TAB-6：零标签不再强制显示 QC；覆盖层保持关闭（D1）。
+    assert!(!confirmed.quick_connect_visible);
     assert_eq!(confirmed.status_text, "Closed 3 tab(s).");
     assert_tab_invariants(&runtime);
 }

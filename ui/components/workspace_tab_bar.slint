@@ -71,7 +71,6 @@ export component WorkspaceTabBar inherits Rectangle {
                                 tab-title: tab.title;
                                 tab-state-text: tab.state_text;
                                 tab-active: tab.active;
-                                tab-kind-text: tab.kind_text;
                                 tab-logging: tab.logging;
                                 tab-sync-role-text: tab.sync_role_text;
                                 tab-unread: tab.unread;
@@ -84,9 +83,7 @@ export component WorkspaceTabBar inherits Rectangle {
                                 context-menu-requested(x, y) => {
                                     root.tab-context-menu-requested(
                                         tab.id,
-                                        tab.kind_text == "quick-connect" && tab.title == ""
-                                            ? @tr("Quick Connect")
-                                            : tab.title,
+                                        tab.title,
                                         x,
                                         y
                                     );

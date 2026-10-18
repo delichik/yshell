@@ -247,7 +247,7 @@ impl YShellApp {
     /// 语言在 `WindowManager::open_window` 里、首个组件创建之后选择（bundled
     /// translations 依赖全局上下文），这里不再重复。
     pub fn show(&mut self) -> AppResult<()> {
-        // N2：启动落点 = Quick Connect 页（无标签时内容区显示 QC 页，不新建标签，
+        // TAB-6：启动首帧 = Quick Connect 覆盖层打开（工作区级状态，不创建 QC 标签；
         // 见 `AppRuntime::quick_connect_visible`）。
         let _ = self.runtime.borrow_mut().prepare_desktop_startup_projection();
         // 本地栏首次列出（默认 home 目录）。
@@ -515,10 +515,37 @@ pub(crate) fn wire_callbacks(
     let surface = surface_source.clone();
     window.on_open_quick_connect(move || {
         if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref.borrow_mut().open_quick_connect_tab();
+            // TAB-6：只打开/聚焦覆盖层，不创建标签；聚焦由 Slint `changed` 完成。
+            let projection = runtime_ref.borrow_mut().open_quick_connect();
             apply_projection(&window, &projection);
             surface.refresh(&window);
         }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_dismiss_quick_connect(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        // TAB-6：Esc / Ctrl+O 再次按下 —— 只关覆盖层，不动标签/会话。
+        let projection = runtime_ref.borrow_mut().dismiss_quick_connect();
+        apply_projection(&window, &projection);
+        surface.refresh(&window);
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_toggle_quick_connect(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        // TAB-6：Ctrl+O 在"打开/关闭覆盖层"之间切换（打开后的输入聚焦由 Slint 负责）。
+        let projection = runtime_ref.borrow_mut().toggle_quick_connect();
+        apply_projection(&window, &projection);
+        surface.refresh(&window);
     });
 
     let weak = window.as_weak();
@@ -5448,7 +5475,6 @@ fn workspace_tab_from(tab: &TabData) -> WorkspaceTab {
         state_text: tab.state_text.clone().into(),
         connected: tab.connected,
         active: tab.active,
-        kind_text: tab.kind_text.clone().into(),
         logging: tab.logging,
         sync_role_text: tab.sync_role_text.clone().into(),
         unread: i32::try_from(tab.unread).unwrap_or(i32::MAX),
@@ -5461,7 +5487,6 @@ fn workspace_tab_matches(current: &WorkspaceTab, next: &TabData) -> bool {
         && current.state_text.as_str() == next.state_text
         && current.connected == next.connected
         && current.active == next.active
-        && current.kind_text.as_str() == next.kind_text
         && current.logging == next.logging
         && current.sync_role_text.as_str() == next.sync_role_text
         && current.unread == i32::try_from(next.unread).unwrap_or(i32::MAX)
@@ -5543,7 +5568,8 @@ fn set_workspace_split_models(
     let secondary = split.leaves.iter().find(|leaf| !leaf.focused);
     window.set_workspace_split_secondary_leaf_w(secondary.map(|l| l.w).unwrap_or(0.5));
     window.set_workspace_split_secondary_leaf_h(secondary.map(|l| l.h).unwrap_or(1.0));
-    if let Some(qc) = split.leaves.iter().find(|leaf| leaf.quick_connect) {
+    // TAB-6：QC 覆盖层只叠在聚焦叶的终端内容区，几何直接取聚焦叶（其余叶保持正常终端）。
+    if let Some(qc) = focused.filter(|leaf| leaf.quick_connect) {
         window.set_workspace_split_qc_shown(true);
         window.set_workspace_split_qc_leaf_x(qc.x);
         window.set_workspace_split_qc_leaf_y(qc.y);

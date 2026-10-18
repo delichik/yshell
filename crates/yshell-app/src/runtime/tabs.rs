@@ -152,27 +152,7 @@ impl AppRuntime {
         let Some(index) = self.tab_index(tab_id) else {
             return Err(AppError::new(format!("tab `{tab_id}` was not found")));
         };
-        // N2：快速连接页没有运行时会话，只切换活动标签。
-        if self.tabs[index].kind.is_quick_connect() {
-            let window_id = self.window_of_tab(tab_id);
-            self.activate_tab_in_window(tab_id);
-            if window_id.is_none_or(|id| self.focused_window == Some(id)) {
-                self.active_tab_id = Some(tab_id.to_owned());
-                self.active_session_id = None;
-            }
-            self.tabs[index].unread = 0;
-            if !self.focus_pane_for_tab(tab_id) {
-                self.assign_tab_to_focused_pane(tab_id);
-            }
-            self.refresh_terminal_search_for_active_session();
-            // D16：无会话标签不得残留上一个会话的 SFTP 目录（B 轮3 #19）。
-            // 停放视图与 live 连接，回到该会话 tab 时即时恢复。
-            self.snapshot_sftp_view_to_cache();
-            self.reset_sftp_view_state();
-            self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
-            self.status_text = "Activated the Quick Connect page.".to_owned();
-            return Ok(self.projection());
-        }
+        // TAB-6：Quick Connect 是工作区覆盖层，不占标签，因此这里只有终端标签。
         let Some(session_id) = self.tabs[index].session_id().map(str::to_owned) else {
             return Err(AppError::new(format!(
                 "tab `{tab_id}` has no runtime session"
@@ -251,7 +231,7 @@ impl AppRuntime {
             }
             None => format!("Closed tab `{title}`."),
         };
-        // N2：没有标签时内容区自动回到 QC 页（`quick_connect_visible`），无需新建标签。
+        // TAB-6：关闭标签不改变 Quick Connect 覆盖层状态；零标签 = 空工作区（D1）。
         Ok(self.projection())
     }
 
@@ -303,7 +283,7 @@ impl AppRuntime {
             Some(path) => format!("{base_status} Stopped logging; log file: `{path}`."),
             None => base_status,
         };
-        // N2：没有标签时内容区自动回到 QC 页（`quick_connect_visible`）。
+        // TAB-6：关闭标签不改变 Quick Connect 覆盖层状态；零标签 = 空工作区（D1）。
         Ok(self.projection())
     }
 
@@ -358,16 +338,10 @@ impl AppRuntime {
         self.tabs.iter().position(|tab| tab.tab_id == tab_id)
     }
 
-    /// N2：标签是否是快速连接页（不存在时返回 false）。
-    pub(crate) fn tab_kind_is_quick_connect(&self, tab_id: &str) -> bool {
-        self.tab_index(tab_id)
-            .is_some_and(|index| self.tabs[index].kind.is_quick_connect())
-    }
-
     /// D18：标签右键菜单的连接状态（针对 `tab_menu_tab_id`）。
     ///
-    /// 返回 `(reconnect_enabled, disconnect_enabled)`；没有会话（QC 页）时都为
-    /// `false`。WS-A 的标签菜单用这两个旗标启用 Reconnect/Disconnect。
+    /// 返回 `(reconnect_enabled, disconnect_enabled)`；没有会话时都为 `false`。
+    /// WS-A 的标签菜单用这两个旗标启用 Reconnect/Disconnect。
     pub(crate) fn tab_menu_connection_flags(&self) -> (bool, bool) {
         let session_key = self
             .tab_menu_tab_id
@@ -410,7 +384,7 @@ impl AppRuntime {
         }
     }
 
-    /// 标签对应的会话 key（QC 页/未知标签报错）。
+    /// 标签对应的会话 key（未知标签报错）。
     fn tab_session_key(&self, tab_id: &str) -> AppResult<String> {
         self.tab_index(tab_id)
             .and_then(|index| self.tabs[index].session_id().map(str::to_owned))
@@ -423,10 +397,6 @@ impl AppRuntime {
         };
         if let Some(custom) = self.tabs[index].custom_title.as_ref() {
             return custom.clone();
-        }
-        if self.tabs[index].kind.is_quick_connect() {
-            // 标签条上的 @tr 由 Slint 侧渲染（`kind_text`），这里只给状态栏文案。
-            return "Quick Connect".to_owned();
         }
         self.tabs[index]
             .session_id()
@@ -454,16 +424,9 @@ impl AppRuntime {
     }
 
     /// 双击标签：复制同源 session（新开独立标签 + runtime）。
-    ///
-    /// Quick Connect 页全局至多一个，双击仅激活它。
     pub fn duplicate_tab(&mut self, tab_id: &str) -> AppResult<AppProjection> {
-        let Some(index) = self.tab_index(tab_id) else {
+        if self.tab_index(tab_id).is_none() {
             return Err(AppError::new(format!("tab `{tab_id}` was not found")));
-        };
-        if self.tabs[index].kind.is_quick_connect() {
-            self.activate_tab(tab_id)?;
-            self.status_text = "Quick Connect is already open.".to_owned();
-            return Ok(self.projection());
         }
         let before = self.tabs.len();
         self.open_sibling_session_for_split(tab_id)?;
@@ -1163,6 +1126,9 @@ impl AppRuntime {
     }
 
     /// WP4：投影用分屏快照（无分屏时 active=false）。
+    ///
+    /// TAB-6：Quick Connect 覆盖层只叠在**聚焦叶**的终端内容区上；其它叶保持正常
+    /// 终端（可点选聚焦，聚焦后覆盖层随焦点移动）。覆盖层不改变叶子/标签归属。
     pub(crate) fn workspace_split_projection(&self) -> WorkspaceSplitProjection {
         let window_id = self.projection_window_id().or(self.focused_window);
         let Some(window_id) = window_id else {
@@ -1174,6 +1140,7 @@ impl AppRuntime {
         let Some(split) = &window.split else {
             return WorkspaceSplitProjection::default();
         };
+        let overlay_open = self.quick_connect_visible();
         let (laid_leaves, laid_splitters) = split.layout();
         let leaves = laid_leaves
             .iter()
@@ -1187,7 +1154,7 @@ impl AppRuntime {
                     h: leaf.rect.h,
                     empty: leaf.pane.active_tab.is_none(),
                     focused: leaf.pane_id == split.focused_pane,
-                    quick_connect: !tab_id.is_empty() && self.tab_kind_is_quick_connect(&tab_id),
+                    quick_connect: overlay_open && leaf.pane_id == split.focused_pane,
                     tab_id: tab_id.clone(),
                     title_text: if tab_id.is_empty() {
                         String::new()
@@ -1292,19 +1259,6 @@ impl AppRuntime {
                     .unwrap_or_else(|| self.active_tab_id.as_deref() == Some(tab.tab_id.as_str()));
                 // N9：同步发送按键的源/目标角标（源不在 targets 内，两者互斥）。
                 let sync_role_text = self.tab_sync_role_text(&tab.tab_id);
-                if tab.kind.is_quick_connect() {
-                    return TabData {
-                        id: tab.tab_id.clone(),
-                        title: tab.custom_title.clone().unwrap_or_default(),
-                        state_text: String::new(),
-                        connected: false,
-                        active,
-                        kind_text: "quick-connect".to_owned(),
-                        logging: false,
-                        sync_role_text,
-                        unread: tab.unread,
-                    };
-                }
                 let (default_title, state_text, connected) = match tab
                     .session_id()
                     .and_then(|session_id| self.sessions.get(session_id))
@@ -1316,17 +1270,13 @@ impl AppRuntime {
                     ),
                     None => (tab.tab_id.clone(), "failed".to_owned(), false),
                 };
-                let title = tab
-                    .custom_title
-                    .clone()
-                    .unwrap_or(default_title);
+                let title = tab.custom_title.clone().unwrap_or(default_title);
                 TabData {
                     id: tab.tab_id.clone(),
                     title,
                     state_text,
                     connected,
                     active,
-                    kind_text: String::new(),
                     // N6：标签角标 REC（该会话正在写日志时）。
                     logging: tab
                         .session_id()
@@ -1365,7 +1315,6 @@ impl AppRuntime {
                 state_text: String::new(),
                 connected: false,
                 active,
-                kind_text: String::new(),
                 logging: false,
                 sync_role_text: String::new(),
                 unread: 0,
@@ -1373,19 +1322,6 @@ impl AppRuntime {
         };
         let tab = &self.tabs[index];
         let sync_role_text = self.tab_sync_role_text(&tab.tab_id);
-        if tab.kind.is_quick_connect() {
-            return TabData {
-                id: tab.tab_id.clone(),
-                title: tab.custom_title.clone().unwrap_or_default(),
-                state_text: String::new(),
-                connected: false,
-                active,
-                kind_text: "quick-connect".to_owned(),
-                logging: false,
-                sync_role_text,
-                unread: tab.unread,
-            };
-        }
         let (default_title, state_text, connected) = match tab
             .session_id()
             .and_then(|session_id| self.sessions.get(session_id))
@@ -1404,7 +1340,6 @@ impl AppRuntime {
             state_text,
             connected,
             active,
-            kind_text: String::new(),
             logging: tab
                 .session_id()
                 .is_some_and(|session_id| self.session_logging_active(session_id)),
@@ -1423,7 +1358,7 @@ impl AppRuntime {
     }
 
     pub(crate) fn has_disconnected_tabs(&self) -> bool {
-        // N2：快速连接页没有会话，不计入"断开标签"。作用域与"关闭断开标签"一致。
+        // 作用域与"关闭断开标签"一致；只统计有运行时会话的标签。
         self.menu_anchor_pane_tab_ids().iter().any(|tab_id| {
             self.tab_index(tab_id)
                 .and_then(|index| self.tabs[index].session_id())
@@ -1603,7 +1538,7 @@ impl AppRuntime {
         if sync_closed_title.is_some() {
             self.reconcile_input_sync_with(sync_closed_title);
         }
-        // N2：快速连接页没有运行时会话，无需回收会话/核心登记。
+        // 防御：TAB-6 起所有标签都是终端标签；没有运行时会话时只做 UI 收敛。
         let Some(session_id) = session_id else {
             self.refresh_terminal_search_for_active_session();
             self.terminal_poll_cursor = if self.tabs.is_empty() {
@@ -1660,11 +1595,14 @@ impl AppRuntime {
         }
         self.tabs
             .push(TabEntry::terminal(tab_id.to_owned(), session_id.to_owned()));
-        // N7：新标签登记到当前交互窗口（键盘/菜单/QC 回调已把焦点切到该窗口）。
+        // N7：新标签登记到当前交互窗口（键盘/菜单回调已把焦点切到该窗口）。
         self.register_tab_in_focused_window(tab_id);
         self.active_tab_id = Some(tab_id.to_owned());
         self.active_session_id = Some(session_id.to_owned());
         self.tab_menu_tab_id = None;
+        // TAB-6：新终端标签出现即收起 Quick Connect 覆盖层（打开/连接会话 = 显示终端；
+        // 启动/`+` 需要时再由上层显式 open）。提交 QC 成功的关闭也由这里保证。
+        self.quick_connect_overlay_open = false;
         // 分屏时新标签归入当前聚焦 pane 的标签条。
         self.assign_tab_to_focused_pane(tab_id);
     }
@@ -1954,13 +1892,14 @@ impl AppRuntime {
 }
 
 /// N0/N2：标签承载的内容。
+///
+/// TAB-6：Quick Connect 不再占标签（工作区覆盖层），因此目前只有终端标签；
+/// TAB-4 会在这里加入本地/SSH 后端区分。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum TabKind {
     Terminal {
         session_id: String,
     },
-    /// N2：快速连接页（无运行时会话，内容区由宿主的页面实例渲染）。
-    QuickConnect,
 }
 
 /// N0：一个标签的运行时条目；`tabs` 的顺序就是标签条的显示顺序。
@@ -1984,27 +1923,11 @@ impl TabEntry {
         }
     }
 
-    pub(crate) fn quick_connect(tab_id: String) -> Self {
-        Self {
-            tab_id,
-            kind: TabKind::QuickConnect,
-            unread: 0,
-            custom_title: None,
-        }
-    }
-
-    /// 终端标签的运行时会话 key；快速连接页返回 `None`。
+    /// 标签对应的运行时会话 key（TAB-6 起所有标签都有会话）。
     pub(crate) fn session_id(&self) -> Option<&str> {
         match &self.kind {
             TabKind::Terminal { session_id } => Some(session_id),
-            TabKind::QuickConnect => None,
         }
-    }
-}
-
-impl TabKind {
-    pub(crate) fn is_quick_connect(&self) -> bool {
-        matches!(self, Self::QuickConnect)
     }
 }
 
@@ -2019,9 +1942,6 @@ pub struct TabData {
     /// 是否处于 `connected`（Slint 侧标签样式/菜单启用条件用）。
     pub connected: bool,
     pub active: bool,
-    /// N2：标签种类 id（空 = 终端；`quick-connect` = 快速连接页，标题由 Slint 侧 @tr）。
-    /// WP4：若 `title` 非空则优先显示自定义名（含 QC 重命名）。
-    pub kind_text: String,
     /// N6：该标签的会话是否正在写日志（标签角标 REC）。
     pub logging: bool,
     /// N9：同步发送按键的角色（空 = 无；`source` = 源；`target` = 接收目标）。
@@ -2694,13 +2614,16 @@ mod window_ownership_tests {
         let _ = first;
     }
 
-    /// N7：空窗口投影 Quick Connect 页（而不是没有会话的终端视图）。
+    /// N7/TAB-6：零标签窗口不再强制显示 Quick Connect（D1）；覆盖层是工作区状态，
+    /// 关闭后空窗口保持空工作区。
     #[test]
-    fn empty_window_projects_the_quick_connect_page() {
+    fn empty_window_projects_an_empty_workspace_when_the_overlay_is_closed() {
         let temp = tempdir().expect("tempdir");
         let mut runtime = tab_runtime(temp.path(), 2);
         let _first = open_saved_tab(&mut runtime, "saved-0");
         let second = open_saved_tab(&mut runtime, "saved-1");
+        // 打开已保存会话会收起启动时的 QC 覆盖层。
+        assert!(!runtime.projection().quick_connect_visible);
         runtime.register_window(1);
         runtime
             .move_tab_to_window(&second, 1)
@@ -2711,12 +2634,18 @@ mod window_ownership_tests {
 
         let empty = runtime.projection_for_window(1);
         assert_eq!(empty.tab_count, 0);
-        assert!(empty.quick_connect_visible);
+        assert!(!empty.quick_connect_visible);
         assert!(!empty.has_active_session);
 
         let main = runtime.projection_for_window(0);
         assert_eq!(main.tab_count, 2);
         assert!(!main.quick_connect_visible);
+
+        // 显式打开覆盖层：零标签窗口也会投影 QC（工作区级状态）。
+        runtime.open_quick_connect();
+        assert!(runtime.projection_for_window(1).quick_connect_visible);
+        runtime.dismiss_quick_connect();
+        assert!(!runtime.projection_for_window(1).quick_connect_visible);
     }
 
     /// N7：窗口关闭确认标记按窗口隔离，并在窗口移除后清理。

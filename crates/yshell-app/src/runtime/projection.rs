@@ -23,18 +23,12 @@ impl AppRuntime {
         projection
     }
 
-    /// N7：投影窗口是否显示 Quick Connect 页（窗口自己的标签集合决定）。
+    /// TAB-6：投影窗口是否显示 Quick Connect 覆盖层。
     ///
-    /// 无窗口登记（单窗口/测试）时沿用 `quick_connect_visible()` 的全局语义。
+    /// 覆盖层是工作区级状态（不占标签），与窗口的标签集合/活动标签无关；零标签时
+    /// 关闭覆盖层就保持空工作区（D1，不再由"无标签"强制显示 QC 页）。
     fn projection_quick_connect_visible(&self) -> bool {
-        let Some(window_id) = self.projection_window_id() else {
-            return self.quick_connect_visible();
-        };
-        if self.window_tab_ids(window_id).is_empty() {
-            return true;
-        }
-        self.window_active_tab(window_id)
-            .is_some_and(|tab_id| self.tab_kind_is_quick_connect(tab_id))
+        self.quick_connect_visible()
     }
 
     pub fn projection(&self) -> AppProjection {
@@ -1807,8 +1801,8 @@ pub struct AppProjection {
     /// N3：内容区布局投影（面板框 px 几何 + 断点标志）。
     pub layout: LayoutProjection,
     pub app_version_text: String,
-    // --- N2：Quick Connect 页（`ui/pages/quick_connect.slint` 的投影）------------
-    /// 活动标签是否是 Quick Connect 页（宿主据此切换内容区）。
+    // --- N2：Quick Connect 覆盖层（`ui/pages/quick_connect.slint` 的投影）---------
+    /// TAB-6：工作区是否显示 Quick Connect 覆盖层（不占标签；只由 overlay 状态驱动）。
     pub quick_connect_visible: bool,
     /// 输入框内容（in-out；Rust 侧在提交成功/清空时写回）。
     pub quick_connect_input_text: String,

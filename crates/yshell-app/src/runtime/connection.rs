@@ -66,6 +66,8 @@ impl AppRuntime {
     }
 
     pub fn prepare_desktop_startup_projection(&mut self) -> AppProjection {
+        // TAB-6：启动首帧仍显示 Quick Connect（工作区覆盖层，不创建 QC 标签）。
+        self.quick_connect_overlay_open = true;
         self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
         self.sftp_listing = SftpListingState::ConnectReal;
         self.projection()

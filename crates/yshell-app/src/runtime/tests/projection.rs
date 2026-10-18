@@ -273,3 +273,37 @@ fn projection_state_flags_track_session_and_selection() {
     };
     assert!(runtime.projection().sftp_available);
 }
+
+#[test]
+fn quick_connect_visible_projection_is_driven_by_the_overlay_state() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+
+    // TAB-6：启动时覆盖层默认打开，但零标签（QC 不再是标签）。
+    let startup = runtime.projection();
+    assert!(startup.quick_connect_visible);
+    assert_eq!(startup.tab_count, 0);
+    assert!(startup.tabs.is_empty());
+
+    // 关闭覆盖层：零标签仍合法，不因"无标签"强制重开。
+    let closed = runtime.dismiss_quick_connect();
+    assert!(!closed.quick_connect_visible);
+    assert_eq!(closed.tab_count, 0);
+    assert!(closed.tabs.is_empty());
+    assert_eq!(closed.active_tab_id, "");
+
+    // 连接终端：追加标签，覆盖层保持关闭（打开会话 = 显示终端）。
+    let connected = runtime
+        .handle_quick_connect("alice@example.com:2200")
+        .expect("quick connect");
+    assert!(!connected.quick_connect_visible);
+    assert_eq!(connected.tab_count, 1);
+    let tab_id = connected.active_tab_id.clone();
+
+    // 显式打开覆盖层：可见性切换但标签投影原样（数量/活动标签不变）。
+    let opened = runtime.open_quick_connect();
+    assert!(opened.quick_connect_visible);
+    assert_eq!(opened.tab_count, 1);
+    assert_eq!(opened.active_tab_id, tab_id);
+    assert!(opened.tabs[0].active);
+}

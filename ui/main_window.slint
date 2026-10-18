@@ -442,8 +442,8 @@ export component MainWindow inherits Window {
     in-out property <[WorkspaceTab]> tabs: [];
     in-out property <int> tab_count: 0;
     in-out property <bool> tab_has_disconnected: false;
-    // --- N2：快速连接页（`ui/pages/quick_connect.slint`）投影 -----------------
-    /// 活动标签是否是 QuickConnect 页（内容区在终端视图/QC 页之间切换）。
+    // --- N2：快速连接覆盖层（`ui/pages/quick_connect.slint`）投影 --------------
+    /// TAB-6：工作区 Quick Connect 覆盖层是否打开（不占标签；零标签时也可关闭）。
     in-out property <bool> quick_connect_visible: false;
     /// 输入框内容（in-out：宿主在提交成功/清空时写回）。
     in-out property <string> quick_connect_input_text: "";
@@ -680,9 +680,13 @@ export component MainWindow inherits Window {
     callback logging_dialog_options_changed(bool, bool, bool, bool, bool);
     callback logging_dialog_start();
     callback logging_dialog_stop();
-    // --- N2：快速连接页的回调（与页面 §2 一一对应）----------------------------
-    /// Ctrl+O / File > Quick Connect：打开/激活 QC 页并聚焦输入框。
+    // --- N2/TAB-6：快速连接覆盖层回调（与页面 §2 一一对应）---------------------
+    /// Ctrl+O / File > Quick Connect：打开/聚焦 QC 覆盖层（不创建标签）。
     callback open_quick_connect();
+    /// TAB-6：Esc / 再次 Ctrl+O 关闭覆盖层（只关覆盖层，不动标签/会话）。
+    callback dismiss_quick_connect();
+    /// TAB-6：Ctrl+O —— 打开时关闭，关闭时打开（聚焦由 `changed` 负责）。
+    callback toggle_quick_connect();
     /// 输入框逐键回传（宿主保存副本，投影回写不吃掉输入）。
     callback update_quick_connect_input(string);
     /// 输入框 Enter / "连接"按钮。
@@ -695,7 +699,7 @@ export component MainWindow inherits Window {
     callback quick_connect_save_as_session(string);
     /// D12：清空连接历史。
     callback quick_connect_clear_history();
-    /// `+` 按钮：按 `ui.new_tab_mode` 打开 QC 页或 Session Editor。
+    /// `+` 按钮：按 `ui.new_tab_mode` 打开 QC 覆盖层或 Session Editor。
     callback new_tab_default();
     // --- N3：面板停靠（语义动作全部交给 Rust：布局是全局持久化状态）-----------
     /// ⋯ 菜单动作：id + "move-left"/"move-right"/"collapse"/"expand"/"hide"。
@@ -1095,20 +1099,33 @@ export component MainWindow inherits Window {
         || root.clear_scrollback_dialog_visible
         || root.tab_rename_dialog_visible;
 
-    /// W5-A2 / N2：Ctrl+O（及非终端焦点下的 Ctrl+L）与 File > Quick Connect —— 打开/激活 QC 页并聚焦输入框。
+    /// W5-A2 / N2 / TAB-6：Ctrl+O（及非终端焦点下的 Ctrl+L）与 File > Quick Connect
+    /// —— 打开覆盖层（已打开则保持）并聚焦输入框。
     public function focus-quick-connect() {
         root.open_quick_connect();
         terminal_workspace.focus-quick-connect();
     }
 
-    // N2：切到 QC 标签（点击标签/Ctrl+O/启动落点）时自动聚焦输入框。
-    changed quick_connect_visible => {
+    /// TAB-6：关闭覆盖层（Esc / 菜单显式 dismiss）；零标签时回到空工作区。
+    public function dismiss-quick-connect-overlay() {
         if (root.quick_connect_visible) {
-            terminal_workspace.focus-quick-connect();
+            root.dismiss_quick_connect();
         }
     }
 
-    // A24：活动会话消失（关闭/切到 QC 标签等）时清掉查找栏状态，
+    // N2/TAB-6：覆盖层打开时自动聚焦输入框；关闭后把键盘焦点还给终端（有会话时）
+    // 或窗口级快捷键（零标签空工作区）。
+    changed quick_connect_visible => {
+        if (root.quick_connect_visible) {
+            terminal_workspace.focus-quick-connect();
+        } else if (root.has_active_session) {
+            terminal_workspace.focus-terminal();
+        } else {
+            root.focus-global-shortcuts();
+        }
+    }
+
+    // A24：活动会话消失（关闭标签等）时清掉查找栏状态，
     // 避免它残留并在下一个会话里"莫名弹出"。
     changed has_active_session => {
         if (!root.has_active_session) {
@@ -1170,9 +1187,9 @@ export component MainWindow inherits Window {
             root.start_new_saved_session_editor();
             return true;
         }
-        // Ctrl+O：聚焦快速连接（与 File > Quick Connect 菜单快捷键一致）
+        // Ctrl+O：打开/关闭 Quick Connect 覆盖层（与 File > Quick Connect 菜单一致）
         if (shortcut-key(text, "o", "O")) {
-            root.focus-quick-connect();
+            root.toggle_quick_connect();
             return true;
         }
         // Ctrl+L：终端聚焦 → 不消费，留给 PTY 清屏；否则打开快速连接（兼容旧习惯）
@@ -1686,7 +1703,10 @@ export component MainWindow inherits Window {
     function restore-focus-after-menu() {
         if (root.any_modal_visible) {
             root.focus-top-dialog();
-        } else if (root.has_active_session && !root.quick_connect_visible) {
+        } else if (root.quick_connect_visible) {
+            // TAB-6：覆盖层可见时把焦点还给 QC 输入框（而不是快捷键层）。
+            terminal_workspace.focus-quick-connect();
+        } else if (root.has_active_session) {
             terminal_workspace.focus-terminal();
         } else {
             root.focus-global-shortcuts();
@@ -1718,6 +1738,12 @@ export component MainWindow inherits Window {
         if (root.context_menu_token != "none") {
             root.close_context_menus();
             root.restore-focus-after-menu();
+            return true;
+        }
+        // TAB-6：Quick Connect 覆盖层是最后一层浮层（菜单/右键菜单优先关）。
+        // QC 输入框内的 Esc 会被 TextInput reject 并冒泡到这里。
+        if (root.quick_connect_visible) {
+            root.dismiss-quick-connect-overlay();
             return true;
         }
         return false;
@@ -2238,8 +2264,9 @@ export component MainWindow inherits Window {
                 // 投影与回调由本文件转发，viewport/焦点 out 属性继续对 Rust 暴露。
                 terminal_workspace := TerminalWorkspace {
                     horizontal-stretch: 1;
-                    // TAB-3：QC 全页只覆盖单窗格内容区（tab 栏常驻）；单终端实例保留在
-                    // 底层但置为非交互（terminal-visible=false）。分屏时 QC 仍叠在对应叶子上。
+                    // TAB-3/TAB-6：QC 覆盖层只盖单窗格内容区（tab 栏常驻）；单终端实例保留
+                    // 在底层但置为非交互（terminal-visible=false）。分屏时覆盖层只叠在聚焦
+                    // 叶上（由叶子投影的 quick-connect 控制），其它叶保持正常终端。
                     terminal-visible: !root.quick_connect_visible || root.workspace_split_active;
                     quick-connect-visible: root.quick_connect_visible;
                     tabs: root.tabs;

@@ -104,6 +104,13 @@ export component TerminalWorkspace inherits VerticalLayout {
         }
     }
 
+    // TAB-6：覆盖层关闭（Esc/提交成功）后，分屏模式把焦点还给聚焦叶的终端。
+    changed split-focused-quick-connect => {
+        if (root.split-active && !root.split-focused-quick-connect) {
+            root.focus-terminal();
+        }
+    }
+
     // N7：terminal-focused 由 TerminalView 的 FocusScope.has-focus 驱动。窗口失去
     // OS 焦点时它翻 false、重新激活时翻 true —— 后者即"该窗口被激活"的信号
     // （终端持有焦点时 focus-gained 事件到不了窗口级 shortcut_scope）。
@@ -130,8 +137,11 @@ export component TerminalWorkspace inherits VerticalLayout {
     }
 
     /// Ctrl+O / File > Quick Connect：聚焦 QC 输入框。
+    ///
+    /// 按分屏状态选择实例（不能依赖 `split-qc-shown`：打开覆盖层的同一投影里它
+    /// 尚未写回）。两个页面实例都常驻，隐藏时聚焦也是安全的。
     public function focus-quick-connect() {
-        if (root.split-active && root.split-qc-shown) {
+        if (root.split-active) {
             split_qc_page.focus-quick-connect();
         } else {
             full_qc_page.focus-quick-connect();

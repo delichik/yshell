@@ -288,6 +288,7 @@ impl AppRuntime {
             logging_dialog: LoggingDialogState::default(),
             last_logging_directory: None,
             quick_connect_input: String::new(),
+            quick_connect_overlay_open: true,
             quick_connect_error_text: String::new(),
             quick_connect_last_target: String::new(),
             pending_quick_connect_targets: BTreeMap::new(),
@@ -572,6 +573,11 @@ pub struct AppRuntime {
     pub(crate) last_logging_directory: Option<PathBuf>,
     /// N2：Quick Connect 输入框内容（宿主与页面双向绑定）。
     pub(crate) quick_connect_input: String,
+    /// TAB-6：Quick Connect 覆盖层是否打开（工作区级状态，不占标签）。
+    ///
+    /// 启动时默认打开（第一帧仍显示 Quick Connect）；关闭后即使零标签也不强制重开
+    /// （D1：零标签是合法工作区状态）。打开/关闭不改变 `tabs`。
+    pub(crate) quick_connect_overlay_open: bool,
     /// N2：非法输入的内联提示（空 = 无错误）。
     pub(crate) quick_connect_error_text: String,
     /// N2：最近一次连接成功的目标（"保存为会话…"入口）。
@@ -751,6 +757,10 @@ impl fmt::Debug for AppRuntime {
             .field("logging_dialog", &self.logging_dialog)
             .field("last_logging_directory", &self.last_logging_directory)
             .field("quick_connect_input", &self.quick_connect_input)
+            .field(
+                "quick_connect_overlay_open",
+                &self.quick_connect_overlay_open,
+            )
             .field("quick_connect_error_text", &self.quick_connect_error_text)
             .field("quick_connect_last_target", &self.quick_connect_last_target)
             .field(

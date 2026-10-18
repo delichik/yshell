@@ -142,11 +142,8 @@ pub(crate) fn assert_tab_invariants(runtime: &AppRuntime) {
             assert_eq!(tab.session_id(), Some(session_id.as_str()));
         }
         (Some(tab_id), None) => {
-            // N2：没有运行时会话的活动标签只能是快速连接页。
-            assert!(
-                runtime.tab_kind_is_quick_connect(tab_id),
-                "active tab `{tab_id}` has no session but is not the Quick Connect page"
-            );
+            // TAB-6：Quick Connect 不再占标签，活动标签必须绑定运行时会话。
+            panic!("active tab `{tab_id}` has no runtime session (Quick Connect is an overlay)");
         }
         (None, None) => {}
         (tab_id, session_id) => {

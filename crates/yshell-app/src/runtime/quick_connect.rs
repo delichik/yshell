@@ -1,8 +1,10 @@
-//! N2 Quick Connect：标签页、输入态、历史/快速链接持久化与行投影。
+//! N2 Quick Connect：工作区覆盖层状态、输入态、历史/快速链接持久化与行投影。
 //!
 //! 设计：`docs/product/yshell-next-n2-quick-connect.md` §1/§2/§4。
 //!
-//! 职责划分：
+//! TAB-6 起 Quick Connect 是**工作区级覆盖层**，不再占用标签页：
+//! * 开关只由 [`AppRuntime::quick_connect_overlay_open`] 驱动（打开/关闭/切换不改变
+//!   标签数量）；零标签时仍可打开覆盖层，关闭后保持空工作区（D1，不强制重开）。
 //! * 页面（`ui/pages/quick_connect.slint`）只渲染；本模块投影行数据、错误文案与摘要。
 //! * 历史/快速链接即时写回 `config.toml`；写失败只提示状态栏，不阻断连接（§1.5）。
 //! * 连接成功钩子由 `connection.rs` 在 shell 真正连上后调用
@@ -43,76 +45,67 @@ pub struct QuickLinkRowData {
 }
 
 impl AppRuntime {
-    // ------------------------------------------------------------ 标签页（§1.2）
-    /// `+` 按钮：按 `ui.new_tab_mode` 打开 Quick Connect 页或 Session Editor。
+    // ------------------------------------------- 工作区覆盖层开关（TAB-6 / §1.2）
+    /// `+` 按钮：按 `ui.new_tab_mode` 打开 Quick Connect 覆盖层或 Session Editor。
     ///
     /// `Ctrl+N`（`start_new_saved_session_editor`）不经过这里，始终打开编辑器。
     pub fn handle_new_tab_default(&mut self) -> AppProjection {
         match self.config_document.ui.new_tab_mode {
-            NewTabMode::QuickConnect => self.open_quick_connect_tab(),
+            NewTabMode::QuickConnect => self.open_quick_connect(),
             NewTabMode::SessionEditor => self.start_new_saved_session_editor(),
         }
     }
 
-    /// 打开或激活 Quick Connect 页标签（D11：`+` 默认、Ctrl+O 同路径）。
+    /// 打开 Quick Connect 覆盖层（D11：`+` 默认、Ctrl+O 同路径）。
     ///
-    /// 启动/无标签时由 `quick_connect_visible()` 直接显示页面（不新建标签），
-    /// 见设计 §1.2"无标签则不新建"。
-    pub fn open_quick_connect_tab(&mut self) -> AppProjection {
-        let created = self.activate_quick_connect_tab_inner();
-        self.status_text = if created {
-            "Opened the Quick Connect page.".to_owned()
-        } else {
+    /// 覆盖层是工作区状态，**不创建标签**（TAB-6）；打开/重复打开都不改变标签数量。
+    /// 已打开时只返回投影（Slint 侧继续聚焦输入框），状态栏文案区分首次打开/再次激活。
+    pub fn open_quick_connect(&mut self) -> AppProjection {
+        let was_open = self.quick_connect_overlay_open;
+        self.quick_connect_overlay_open = true;
+        self.status_text = if was_open {
             "Activated the Quick Connect page.".to_owned()
+        } else {
+            "Opened the Quick Connect page.".to_owned()
         };
         self.projection()
     }
 
-    /// 打开/激活 QC 标签但不改状态栏（关闭标签后的回退要保持"Closed tab …"文案）。
-    /// 返回是否新建了标签。
-    pub(crate) fn activate_quick_connect_tab_inner(&mut self) -> bool {
-        let created = if let Some(tab_id) = self.quick_connect_tab_id() {
-            // N7：已有 QC 标签可能在别的窗口——激活它所在窗口的标签并聚焦该窗口。
-            let window_id = self.window_of_tab(&tab_id);
-            self.activate_tab_in_window(&tab_id);
-            if window_id.is_none_or(|id| self.focused_window == Some(id)) {
-                self.active_tab_id = Some(tab_id);
-            } else if let Some(window_id) = window_id {
-                self.focus_window(window_id);
-            }
-            false
-        } else {
-            let tab_id = format!("tab-quick-connect-{}", self.allocate_runtime_ordinal());
-            self.tabs.push(TabEntry::quick_connect(tab_id.clone()));
-            self.register_tab_in_focused_window(&tab_id);
-            self.active_tab_id = Some(tab_id.clone());
-            self.assign_tab_to_focused_pane(&tab_id);
-            true
-        };
-        self.active_session_id = None;
-        self.refresh_terminal_search_for_active_session();
-        created
-    }
-
-    /// 现有 Quick Connect 标签的 id（同一时刻最多一个）。
-    pub(crate) fn quick_connect_tab_id(&self) -> Option<String> {
-        self.tabs
-            .iter()
-            .find(|tab| tab.kind.is_quick_connect())
-            .map(|tab| tab.tab_id.clone())
-    }
-
-    /// N2：内容区是否显示 Quick Connect 页。
+    /// 关闭 Quick Connect 覆盖层（覆盖层本身可见时）。
     ///
-    /// 两种情况：活动标签就是 QC 页；或者**根本没有标签**（启动落点、关掉最后一个
-    /// 标签的回落）——此时显示 QC 页但不新建标签（设计 §1.2"无标签则不新建"）。
-    pub(crate) fn quick_connect_visible(&self) -> bool {
-        if self.tabs.is_empty() {
-            return true;
+    /// 覆盖层没有持久的"关闭"入口文案需求，供 Esc / 菜单等显式 dismiss 使用；
+    /// 关闭后底层终端（若有）立即恢复可交互，标签数量不变。
+    pub fn dismiss_quick_connect(&mut self) -> AppProjection {
+        if self.quick_connect_overlay_open {
+            self.close_quick_connect()
+        } else {
+            self.projection()
         }
-        self.active_tab_id
-            .as_deref()
-            .is_some_and(|tab_id| self.tab_kind_is_quick_connect(tab_id))
+    }
+
+    /// 关闭 Quick Connect 覆盖层（无论当前是否可见，用于重置/测试路径）。
+    pub fn close_quick_connect(&mut self) -> AppProjection {
+        self.quick_connect_overlay_open = false;
+        self.status_text = "Closed the Quick Connect page.".to_owned();
+        self.projection()
+    }
+
+    /// Ctrl+O：覆盖层已打开时关闭，否则打开（聚焦由 Slint 侧 `changed` 处理）。
+    pub fn toggle_quick_connect(&mut self) -> AppProjection {
+        if self.quick_connect_overlay_open {
+            self.close_quick_connect()
+        } else {
+            self.open_quick_connect()
+        }
+    }
+
+    /// TAB-6：工作区是否显示 Quick Connect 覆盖层。
+    ///
+    /// **只**由覆盖层状态决定，与标签数量/活动标签无关：
+    /// * 启动时默认打开（第一帧仍显示 Quick Connect，但不再有 QC 标签）；
+    /// * 零标签时关闭覆盖层 → 空工作区（tab 栏只剩 `+`），不强制重开（D1）。
+    pub(crate) fn quick_connect_visible(&self) -> bool {
+        self.quick_connect_overlay_open
     }
 
     // -------------------------------------------------------- 输入与提交（§2）
@@ -125,9 +118,10 @@ impl AppRuntime {
 
     /// Enter / "连接"：解析并直连。
     ///
-    /// * 解析失败：只更新内联错误文案，不建标签、不记录历史；
+    /// * 解析失败：只更新内联错误文案，不建标签、不记录历史；覆盖层保持打开；
     /// * 解析成功：走既有 `handle_quick_connect`（与 CLI 同一条连接路径），
-    ///   连接成功由 `record_connect_success` 落历史（含主机密钥/密码重试后成功）。
+    ///   连接成功后收起覆盖层（TAB-6：成功 = 关闭），历史由
+    ///   `record_connect_success` 落库（含主机密钥/密码重试后成功）。
     pub fn submit_quick_connect(&mut self, input: &str) -> AppResult<AppProjection> {
         let target = match parse_quick_connect(input) {
             Ok(target) => target,
@@ -145,6 +139,8 @@ impl AppRuntime {
         // 失败时页面不会再显示"Connected to …"（B 轮3 #15）。
         self.quick_connect_last_target.clear();
         self.handle_quick_connect(input)?;
+        // TAB-6：提交成功即收起覆盖层；失败错误（`?` 提前返回）保持打开以便重试。
+        self.quick_connect_overlay_open = false;
         if let Some(session_key) = self.active_session_id.clone() {
             self.pending_quick_connect_targets
                 .insert(session_key.clone(), canonical);

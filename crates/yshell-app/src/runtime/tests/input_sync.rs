@@ -355,3 +355,27 @@ fn no_targets_start_is_reported_without_ghost_sync() {
     assert!(runtime.input_sync.source.is_none());
     assert!(runtime.start_input_sync_mode("bogus").is_err());
 }
+
+/// TAB-6：Quick Connect 覆盖层是工作区状态，不占标签、不切换活动会话，也不影响
+/// 同步发送按键状态（覆盖层可见时终端不可交互由 UI 层负责，运行时语义不变）。
+#[test]
+fn quick_connect_overlay_does_not_change_tabs_or_input_sync_state() {
+    let (_temp, mut runtime, tabs, _sessions) = sync_setup(2);
+    runtime.activate_tab(&tabs[0]).expect("activate source");
+    runtime.start_input_sync_mode("all").expect("start sync");
+
+    let opened = runtime.open_quick_connect();
+    assert!(opened.quick_connect_visible);
+    assert_eq!(opened.tab_count, 2);
+    assert_eq!(opened.active_tab_id, tabs[0]);
+    assert!(opened.input_sync_active);
+    assert_eq!(opened.input_sync_target_count, 1);
+
+    let closed = runtime.dismiss_quick_connect();
+    assert!(!closed.quick_connect_visible);
+    assert_eq!(closed.tab_count, 2);
+    assert_eq!(closed.active_tab_id, tabs[0]);
+    assert!(closed.input_sync_active);
+    assert_eq!(closed.input_sync_target_count, 1);
+    assert_tab_invariants(&runtime);
+}

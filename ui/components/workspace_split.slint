@@ -12,7 +12,8 @@ import { WorkspacePaneLeaf, WorkspaceSplitter } from "workspace_pane_model.slint
 component SplitPaneLeaf inherits Rectangle {
     in property <bool> empty: false;
     in property <bool> focused: false;
-    /// 本叶活动标签是 Quick Connect（内容由宿主 overlay；叶内不画终端）。
+    /// TAB-6：本叶被 Quick Connect 覆盖层盖住（只可能是聚焦叶）。终端实例仍按满尺寸
+    /// 布局并保持存活，但不再接收键盘/鼠标/焦点；其它叶保持正常终端。
     in property <bool> quick-connect: false;
     in property <image> terminal-image;
     in property <int> pane-id: 0;
@@ -34,9 +35,9 @@ component SplitPaneLeaf inherits Rectangle {
     in property <bool> connection-overlay-pending: false;
     in property <bool> view-visible: true;
 
-    /// 终端交互：聚焦且非 QC 且非空。
-    property <bool> show-terminal: root.view-visible && !root.empty && !root.quick-connect;
-    out property <bool> terminal-focused: root.show-terminal && root.focused && leaf_tv.terminal-focused;
+    /// 终端交互：非空且没有被 Quick Connect 覆盖层盖住。
+    property <bool> show-terminal: root.view-visible && !root.empty;
+    out property <bool> terminal-focused: root.show-terminal && !root.quick-connect && root.focused && leaf_tv.terminal-focused;
     /// 内容区高度（叶高 − tab 栏），供宿主 QC overlay 对齐。
     out property <length> content-height: max(0px, root.height - Theme.bar-height-tabs);
     /// 拖拽分区规格：`up|down|left|right` + `:small|equal|major`；空 = 无悬停。
@@ -120,7 +121,7 @@ component SplitPaneLeaf inherits Rectangle {
     background: Theme.window-background;
 
     public function focus-terminal() {
-        if (root.show-terminal && root.focused) {
+        if (root.show-terminal && root.focused && !root.quick-connect) {
             leaf_tv.focus-terminal();
         }
     }
@@ -199,16 +200,6 @@ component SplitPaneLeaf inherits Rectangle {
                     height: parent.height;
                 }
 
-                if root.quick-connect && !root.empty : Text {
-                    text: @tr("Quick Connect");
-                    color: Theme.text-tertiary;
-                    font-size: Theme.font-body;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                    width: parent.width;
-                    height: parent.height;
-                }
-
                 leaf_host := VerticalLayout {
                     width: 100%;
                     height: root.show-terminal ? 100% : 0%;
@@ -223,7 +214,8 @@ component SplitPaneLeaf inherits Rectangle {
                         min-width: 0px;
                         min-height: 0px;
                         embedded: true;
-                        interactive: root.show-terminal && root.focused;
+                        // TAB-6：覆盖层可见时终端保持存活/渲染，但不接收输入。
+                        interactive: root.show-terminal && root.focused && !root.quick-connect;
                         view-visible: root.show-terminal;
                         title: "";
                         log-output: "";
@@ -231,12 +223,12 @@ component SplitPaneLeaf inherits Rectangle {
                         cursor-column: root.focused ? root.cursor-column : 0;
                         cursor-row: root.focused ? root.cursor-row : 0;
                         scroll-offset: root.focused ? root.scroll-offset : 0;
-                        selection-active: root.focused && root.selection-active;
+                        selection-active: root.focused && root.selection-active && !root.quick-connect;
                         search-query <=> root.search-query;
                         search-summary: root.focused ? root.search-summary : "";
                         search-regex <=> root.search-regex;
-                        find-visible: root.show-terminal && root.focused && root.find-visible;
-                        connection-overlay-visible: root.show-terminal && root.focused && root.connection-overlay-visible;
+                        find-visible: root.show-terminal && root.focused && root.find-visible && !root.quick-connect;
+                        connection-overlay-visible: root.show-terminal && root.focused && root.connection-overlay-visible && !root.quick-connect;
                         connection-overlay-target: root.connection-overlay-target;
                         connection-overlay-stage: root.connection-overlay-stage;
                         connection-overlay-error: root.connection-overlay-error;
@@ -272,13 +264,6 @@ component SplitPaneLeaf inherits Rectangle {
                     height: parent.height;
                     enabled: root.view-visible;
                     mouse-cursor: MouseCursor.default;
-                    clicked => { root.focus-requested(); }
-                }
-
-                if root.quick-connect && !root.empty && !root.focused : TouchArea {
-                    width: parent.width;
-                    height: parent.height;
-                    enabled: root.view-visible;
                     clicked => { root.focus-requested(); }
                 }
             }
