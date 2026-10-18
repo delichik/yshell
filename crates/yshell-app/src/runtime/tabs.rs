@@ -228,18 +228,20 @@ impl AppRuntime {
         let Some(index) = self.tab_index(tab_id) else {
             return Err(AppError::new(format!("tab `{tab_id}` was not found")));
         };
-        if let Some(session_id) = self.tabs[index].session_id().map(str::to_owned) {
-            if self.session_has_active_connection(&session_id) {
-                let title = self.tab_display_title(tab_id);
-                self.pending_close_tabs = Some(PendingCloseTabs {
-                    tab_ids: vec![tab_id.to_owned()],
-                    single: true,
-                    active_connections: 1,
-                });
-                self.status_text =
-                    format!("Confirm closing tab `{title}`: the session is still active.");
-                return Ok(self.projection());
-            }
+        if self.confirm_close_session_enabled()
+            && self.tabs[index]
+                .session_id()
+                .is_some_and(|session_id| self.session_has_active_connection(session_id))
+        {
+            let title = self.tab_display_title(tab_id);
+            self.pending_close_tabs = Some(PendingCloseTabs {
+                tab_ids: vec![tab_id.to_owned()],
+                single: true,
+                active_connections: 1,
+            });
+            self.status_text =
+                format!("Confirm closing tab `{title}`: the session is still active.");
+            return Ok(self.projection());
         }
         let title = self.tab_display_title(tab_id);
         let stopped_log_path = self.close_tab_immediate(tab_id);
@@ -273,7 +275,7 @@ impl AppRuntime {
         let mut close_order = targets;
         close_order.reverse();
         let target_count = close_order.len();
-        if active_connections > 0 {
+        if active_connections > 0 && self.confirm_close_session_enabled() {
             self.pending_close_tabs = Some(PendingCloseTabs {
                 tab_ids: close_order,
                 single: false,
@@ -290,17 +292,24 @@ impl AppRuntime {
                 stopped_log_path = Some(path);
             }
         }
+        let base_status = if active_connections > 0 {
+            format!(
+                "Closed {target_count} tab(s); {active_connections} active connection(s) were disconnected without confirmation."
+            )
+        } else {
+            format!("Closed {target_count} tab(s).")
+        };
         self.status_text = match stopped_log_path {
-            Some(path) => format!(
-                "Closed {target_count} tab(s) without active connections. Stopped logging; log file: `{path}`."
-            ),
-            None => format!("Closed {target_count} tab(s) without active connections."),
+            Some(path) => format!("{base_status} Stopped logging; log file: `{path}`."),
+            None => base_status,
         };
         // N2：没有标签时内容区自动回到 QC 页（`quick_connect_visible`）。
         Ok(self.projection())
     }
 
-    pub fn confirm_close_tabs(&mut self) -> AppResult<AppProjection> {
+    /// 确认关闭；`dont_ask_again` 为真时把"关闭会话前确认"持久化为关闭，
+    /// 用户可在 Settings 里重新开启。
+    pub fn confirm_close_tabs_with(&mut self, dont_ask_again: bool) -> AppResult<AppProjection> {
         let Some(pending) = self.pending_close_tabs.take() else {
             return Ok(self.projection());
         };
@@ -328,6 +337,10 @@ impl AppRuntime {
         } else {
             format!("Closed {closed} tab(s).")
         };
+        // 先落盘「不再询问」，再写状态栏文案（setter 会覆盖 status_text）。
+        if dont_ask_again {
+            self.set_confirm_close_session(false)?;
+        }
         self.status_text = match stopped_log_path {
             Some(path) => format!("{base_status} Stopped logging; log file: `{path}`."),
             None => base_status,
@@ -1410,8 +1423,8 @@ impl AppRuntime {
     }
 
     pub(crate) fn has_disconnected_tabs(&self) -> bool {
-        // N2：快速连接页没有会话，不计入"断开标签"。
-        self.menu_anchor_window_tab_ids().iter().any(|tab_id| {
+        // N2：快速连接页没有会话，不计入"断开标签"。作用域与"关闭断开标签"一致。
+        self.menu_anchor_pane_tab_ids().iter().any(|tab_id| {
             self.tab_index(tab_id)
                 .and_then(|index| self.tabs[index].session_id())
                 .is_some_and(|session_id| !self.session_has_active_connection(session_id))
@@ -1429,19 +1442,38 @@ impl AppRuntime {
             .or_else(|| self.main_window_id())
     }
 
-    /// N7：锚定窗口的标签 id；无窗口登记时 = 全部标签（保持单窗口语义）。
-    pub(crate) fn menu_anchor_window_tab_ids(&self) -> Vec<String> {
-        match self.menu_anchor_window() {
-            Some(window_id) => self.window_tab_ids(window_id),
-            None => self.tabs.iter().map(|tab| tab.tab_id.clone()).collect(),
-        }
+    /// 菜单作用域内的标签 id（分屏时 = 当前 terminal 区域）。
+    ///
+    /// 标签右键菜单的"关闭其它/左侧/右侧/全部"只应影响被右键标签所在的那块
+    /// terminal 区域（pane），同窗口的其它区域不受影响。未分屏时退化为窗口标签
+    /// 集合（单终端区域 = 整个窗口）；无窗口登记（单窗口/测试）时 = 全部标签。
+    pub(crate) fn menu_anchor_pane_tab_ids(&self) -> Vec<String> {
+        let Some(window_id) = self.menu_anchor_window() else {
+            return self.tabs.iter().map(|tab| tab.tab_id.clone()).collect();
+        };
+        let Some(window) = self.windows.get(&window_id) else {
+            return Vec::new();
+        };
+        let Some(split) = window.split.as_ref() else {
+            return window.tabs.clone();
+        };
+        // 优先取被右键标签所在的 pane；没有右键目标时用聚焦 pane。
+        let pane_id = self
+            .tab_menu_tab_id
+            .as_deref()
+            .and_then(|tab_id| split.find_pane_id_for_tab(tab_id))
+            .unwrap_or(split.focused_pane);
+        split
+            .find_pane(pane_id)
+            .map(|pane| pane.tabs.clone())
+            .unwrap_or_default()
     }
 
     pub(crate) fn close_scope_targets(&self, scope: &str) -> AppResult<Vec<String>> {
-        // N7：全部 scope 都在"锚定窗口"的标签集合内计算（无窗口登记 = 全部标签）。
-        let window_tabs = self.menu_anchor_window_tab_ids();
+        // 全部 scope 都在"当前 terminal 区域"的标签集合内计算（未分屏 = 窗口）。
+        let pane_tabs = self.menu_anchor_pane_tab_ids();
         if scope == CLOSE_SCOPE_ALL {
-            return Ok(window_tabs);
+            return Ok(pane_tabs);
         }
         if scope == CLOSE_SCOPE_DISCONNECTED {
             return Ok(self
@@ -1452,7 +1484,7 @@ impl AppRuntime {
                     // N2：快速连接页视为"可关闭"，但不属于"断开标签"批量语义。
                     None => false,
                 })
-                .filter(|tab| window_tabs.iter().any(|id| id == &tab.tab_id))
+                .filter(|tab| pane_tabs.iter().any(|id| id == &tab.tab_id))
                 .map(|tab| tab.tab_id.clone())
                 .collect());
         }
@@ -1467,19 +1499,19 @@ impl AppRuntime {
         if self.tab_index(reference).is_none() {
             return Err(AppError::new(format!("tab `{reference}` was not found")));
         }
-        let index = window_tabs
+        let index = pane_tabs
             .iter()
             .position(|tab_id| tab_id == reference)
             .ok_or_else(|| AppError::new(format!("tab `{reference}` was not found")))?;
         let targets = match prefix {
-            CLOSE_SCOPE_OTHERS => window_tabs
+            CLOSE_SCOPE_OTHERS => pane_tabs
                 .iter()
                 .enumerate()
                 .filter(|(position, _)| *position != index)
                 .map(|(_, tab_id)| tab_id.clone())
                 .collect(),
-            CLOSE_SCOPE_LEFT => window_tabs[..index].to_vec(),
-            CLOSE_SCOPE_RIGHT => window_tabs[index + 1..].to_vec(),
+            CLOSE_SCOPE_LEFT => pane_tabs[..index].to_vec(),
+            CLOSE_SCOPE_RIGHT => pane_tabs[index + 1..].to_vec(),
             _ => unreachable!("matched one of the three prefixed scopes"),
         };
         Ok(targets)

@@ -623,6 +623,11 @@ msgctxt "ConfirmDialog"
 msgid "Cancel"
 msgstr ""
 
+#: ui/components/confirm_dialog.slint:109
+msgctxt "ConfirmDialog"
+msgid "Don't ask again"
+msgstr ""
+
 #: ui/components/host_key_dialog.slint:113
 msgctxt "HostKeyDialog"
 msgid "Host Key Confirmation"
@@ -3731,4 +3736,24 @@ msgstr ""
 #: ui/pages/settings.slint
 msgctxt "SettingsDialog"
 msgid "Record debug logs"
+msgstr ""
+
+#: ui/pages/settings.slint:410
+msgctxt "SettingsDialog"
+msgid "Confirmations"
+msgstr ""
+
+#: ui/pages/settings.slint:417
+msgctxt "SettingsDialog"
+msgid "Turn off a confirmation to close or quit without asking. You can turn it back on here at any time."
+msgstr ""
+
+#: ui/pages/settings.slint:424
+msgctxt "SettingsDialog"
+msgid "Confirm before closing a session"
+msgstr ""
+
+#: ui/pages/settings.slint:433
+msgctxt "SettingsDialog"
+msgid "Confirm before quitting YShell"
 msgstr ""

@@ -138,6 +138,10 @@ export component SettingsDialog inherits Rectangle {
     in property <string> language-text: "system";
     /// Process debug logging preference (writes under the config directory).
     in-out property <bool> debug-logging-enabled: false;
+    /// Confirm before closing a session that still has an active connection.
+    in-out property <bool> confirm-close-session-enabled: true;
+    /// Confirm before quitting YShell.
+    in-out property <bool> confirm-quit-app-enabled: true;
     /// Absolute path of the debug log directory.
     in property <string> debug-log-dir-text: "";
     /// Active left-nav section id.
@@ -173,6 +177,8 @@ export component SettingsDialog inherits Rectangle {
     callback save-terminal-settings();
     callback set-language(string);
     callback set-debug-logging(bool);
+    callback set-confirm-close-session(bool);
+    callback set-confirm-quit-app(bool);
     callback open-debug-log-dir();
     // Appearance
     callback select-appearance-scheme(string);
@@ -393,6 +399,43 @@ export component SettingsDialog inherits Rectangle {
                                                     accent: root.language-text == "en-US";
                                                     clicked => { root.set-language("en-US"); }
                                                 }
+                                            }
+
+                                            Rectangle {
+                                                height: 1px;
+                                                background: Theme.divider;
+                                            }
+
+                                            Text {
+                                                text: @tr("Confirmations");
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-body-large;
+                                                font-weight: Theme.weight-semibold;
+                                            }
+
+                                            Text {
+                                                text: @tr("Turn off a confirmation to close or quit without asking. You can turn it back on here at any time.");
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-body;
+                                                wrap: word-wrap;
+                                            }
+
+                                            WinToggle {
+                                                text: @tr("Confirm before closing a session");
+                                                checked <=> root.confirm-close-session-enabled;
+                                                toggled => {
+                                                    root.set-confirm-close-session(root.confirm-close-session-enabled);
+                                                }
+                                                horizontal-stretch: 0;
+                                            }
+
+                                            WinToggle {
+                                                text: @tr("Confirm before quitting YShell");
+                                                checked <=> root.confirm-quit-app-enabled;
+                                                toggled => {
+                                                    root.set-confirm-quit-app(root.confirm-quit-app-enabled);
+                                                }
+                                                horizontal-stretch: 0;
                                             }
                                         }
 

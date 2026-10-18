@@ -969,11 +969,14 @@ pub(crate) fn wire_callbacks(
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
     let surface = surface_source.clone();
-    window.on_confirm_close_tabs(move || {
+    window.on_confirm_close_tabs(move |dont_ask_again| {
         let Some(window) = weak.upgrade() else {
             return;
         };
-        match runtime_ref.borrow_mut().confirm_close_tabs() {
+        match runtime_ref
+            .borrow_mut()
+            .confirm_close_tabs_with(dont_ask_again)
+        {
             Ok(projection) => {
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
@@ -990,6 +993,43 @@ pub(crate) fn wire_callbacks(
             let projection = runtime_ref.borrow_mut().cancel_close_tabs();
             apply_projection(&window, &projection);
             surface.refresh(&window);
+        }
+    });
+
+    // 关闭会话前确认 / 退出前确认：Settings 开关与弹窗「不再询问」共用。
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_set_confirm_close_session(move |enabled| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        match runtime_ref.borrow_mut().set_confirm_close_session(enabled) {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => {
+                set_error_status(&window, "Could not update the close confirmation setting.", &error)
+            }
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_set_confirm_quit_app(move |enabled| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        match runtime_ref.borrow_mut().set_confirm_quit_app(enabled) {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => {
+                set_error_status(&window, "Could not update the quit confirmation setting.", &error)
+            }
         }
     });
 
@@ -4200,10 +4240,10 @@ pub(crate) fn wire_callbacks(
     }
     {
         let manager_weak = manager_weak.clone();
-        window.on_confirm_close_window(move || {
+        window.on_confirm_close_window(move |dont_ask_again| {
             if let Some(manager) = manager_weak.upgrade() {
                 if let Ok(mut manager) = manager.try_borrow_mut() {
-                    manager.confirm_close_window(window_id);
+                    manager.confirm_close_window(window_id, dont_ask_again);
                 }
             }
         });
@@ -6182,6 +6222,8 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     );
     window.set_settings_language_text(projection.settings_language_text.clone().into());
     window.set_settings_debug_logging_enabled(projection.settings_debug_logging_enabled);
+    window.set_settings_confirm_close_session(projection.settings_confirm_close_session);
+    window.set_settings_confirm_quit_app(projection.settings_confirm_quit_app);
     window.set_settings_debug_log_dir_text(projection.settings_debug_log_dir_text.clone().into());
     window.set_settings_terminal_status_kind_text(
         projection.settings_terminal_status_kind_text.clone().into(),

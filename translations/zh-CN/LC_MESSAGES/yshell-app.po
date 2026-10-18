@@ -4012,3 +4012,29 @@ msgstr "记录调试日志"
 msgctxt "SettingsDialog"
 msgid "Open Log Folder"
 msgstr "打开日志文件夹"
+
+#: ui/components/confirm_dialog.slint:109
+msgctxt "ConfirmDialog"
+msgid "Don't ask again"
+msgstr "不再询问"
+
+#: ui/pages/settings.slint:410
+msgctxt "SettingsDialog"
+msgid "Confirmations"
+msgstr "确认"
+
+#: ui/pages/settings.slint:417
+msgctxt "SettingsDialog"
+msgid "Turn off a confirmation to close or quit without asking. You can turn it back on here at any time."
+msgstr "关闭某项确认后，关闭或退出时将不再询问。你可以随时在这里重新开启。"
+
+#: ui/pages/settings.slint:424
+msgctxt "SettingsDialog"
+msgid "Confirm before closing a session"
+msgstr "关闭会话前确认"
+
+#: ui/pages/settings.slint:433
+msgctxt "SettingsDialog"
+msgid "Confirm before quitting YShell"
+msgstr "退出 YShell 前确认"
+

@@ -15,13 +15,13 @@ impl AppRuntime {
     }
 
     pub(crate) fn tab_menu_flags(&self) -> (bool, bool, bool, bool, bool) {
-        // N7：关闭 scope 在右键标签所属窗口内计算（无窗口登记 = 全部标签）。
-        let window_tabs = self.menu_anchor_window_tab_ids();
+        // 关闭 scope 在被右键标签所在的 terminal 区域（pane）内计算。
+        let pane_tabs = self.menu_anchor_pane_tab_ids();
         let index = self
             .tab_menu_tab_id
             .as_deref()
-            .and_then(|tab_id| window_tabs.iter().position(|id| id == tab_id));
-        let count = window_tabs.len();
+            .and_then(|tab_id| pane_tabs.iter().position(|id| id == tab_id));
+        let count = pane_tabs.len();
         (
             count > 1,
             index.is_some_and(|index| index > 0),

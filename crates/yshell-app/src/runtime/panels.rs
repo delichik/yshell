@@ -51,6 +51,50 @@ impl AppRuntime {
         yshell_logging::debug_log_dir(&self.config_dir)
     }
 
+    /// 关闭仍有活动连接的标签/窗口前是否弹确认。
+    #[must_use]
+    pub fn confirm_close_session_enabled(&self) -> bool {
+        self.config_document.ui.confirm_close_session
+    }
+
+    /// 持久化"关闭会话前确认"偏好（弹窗的「不再询问」写的就是它）。
+    pub fn set_confirm_close_session(&mut self, enabled: bool) -> AppResult<AppProjection> {
+        if self.config_document.ui.confirm_close_session != enabled {
+            self.config_document.ui.confirm_close_session = enabled;
+            self.config_store
+                .save(&self.config_document)
+                .map_err(AppError::from_error)?;
+        }
+        self.status_text = if enabled {
+            "Session close confirmation is enabled.".to_owned()
+        } else {
+            "Session close confirmation is disabled.".to_owned()
+        };
+        Ok(self.projection())
+    }
+
+    /// 退出应用前是否弹确认（最后一个窗口关闭 / Quit 菜单）。
+    #[must_use]
+    pub fn confirm_quit_app_enabled(&self) -> bool {
+        self.config_document.ui.confirm_quit_app
+    }
+
+    /// 持久化"退出前确认"偏好。
+    pub fn set_confirm_quit_app(&mut self, enabled: bool) -> AppResult<AppProjection> {
+        if self.config_document.ui.confirm_quit_app != enabled {
+            self.config_document.ui.confirm_quit_app = enabled;
+            self.config_store
+                .save(&self.config_document)
+                .map_err(AppError::from_error)?;
+        }
+        self.status_text = if enabled {
+            "Quit confirmation is enabled.".to_owned()
+        } else {
+            "Quit confirmation is disabled.".to_owned()
+        };
+        Ok(self.projection())
+    }
+
     /// Persist the debug-logging preference and apply it to the live subscriber.
     pub fn set_debug_logging(&mut self, enabled: bool) -> AppResult<AppProjection> {
         if self.config_document.ui.debug_logging != enabled {

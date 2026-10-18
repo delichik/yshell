@@ -4037,3 +4037,29 @@ msgstr "Record debug logs"
 msgctxt "SettingsDialog"
 msgid "Open Log Folder"
 msgstr "Open Log Folder"
+
+#: ui/components/confirm_dialog.slint:109
+msgctxt "ConfirmDialog"
+msgid "Don't ask again"
+msgstr "Don't ask again"
+
+#: ui/pages/settings.slint:410
+msgctxt "SettingsDialog"
+msgid "Confirmations"
+msgstr "Confirmations"
+
+#: ui/pages/settings.slint:417
+msgctxt "SettingsDialog"
+msgid "Turn off a confirmation to close or quit without asking. You can turn it back on here at any time."
+msgstr "Turn off a confirmation to close or quit without asking. You can turn it back on here at any time."
+
+#: ui/pages/settings.slint:424
+msgctxt "SettingsDialog"
+msgid "Confirm before closing a session"
+msgstr "Confirm before closing a session"
+
+#: ui/pages/settings.slint:433
+msgctxt "SettingsDialog"
+msgid "Confirm before quitting YShell"
+msgstr "Confirm before quitting YShell"
+

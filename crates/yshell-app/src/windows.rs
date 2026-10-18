@@ -97,6 +97,40 @@ struct WindowEntry {
     last_secondary_viewport: (u16, u16),
 }
 
+/// 点击窗口关闭按钮后的动作。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WindowCloseAction {
+    /// 直接关闭窗口（最后一个窗口 = 退出应用）。
+    CloseNow,
+    /// 最后一个窗口仍有活动连接：弹 Quit 确认。
+    ConfirmQuit,
+    /// 非最后一个窗口仍有活动连接：弹窗口关闭确认。
+    ConfirmClose,
+}
+
+/// 计算关闭窗口的动作。
+///
+/// 「关闭会话前确认」只控制非最后窗口的关闭确认；最后一个窗口的退出确认由
+/// `confirm_quit_app` 单独控制，不能被「不再询问关闭会话」顺手关掉。
+fn window_close_action(
+    has_active_connections: bool,
+    is_last: bool,
+    confirm_close_session: bool,
+    confirm_quit_app: bool,
+) -> WindowCloseAction {
+    if is_last {
+        if has_active_connections && confirm_quit_app {
+            WindowCloseAction::ConfirmQuit
+        } else {
+            WindowCloseAction::CloseNow
+        }
+    } else if has_active_connections && confirm_close_session {
+        WindowCloseAction::ConfirmClose
+    } else {
+        WindowCloseAction::CloseNow
+    }
+}
+
 /// N7：窗口生命周期 + 应用级轮询的管理器。
 pub(crate) struct WindowManager {
     runtime: Rc<RefCell<AppRuntime>>,
@@ -333,47 +367,58 @@ impl WindowManager {
 
     /// 用户点击窗口关闭按钮：返回 `true` = 直接关闭，`false` = 保持打开（等待确认）。
     pub(crate) fn request_close_window(&mut self, window_id: u64) -> bool {
-        let (needs_confirm, is_last) = {
+        let (has_active_connections, is_last, confirm_close, confirm_quit) = {
             let runtime = self.runtime.borrow();
             (
                 runtime.active_connections_in_window(window_id) > 0,
                 runtime.is_last_window(window_id),
+                runtime.confirm_close_session_enabled(),
+                runtime.confirm_quit_app_enabled(),
             )
         };
+        let action =
+            window_close_action(has_active_connections, is_last, confirm_close, confirm_quit);
         tracing::info!(
             target: "yshell::app",
             window_id,
-            needs_confirm,
+            ?action,
             is_last,
             "window close requested"
         );
-        if !needs_confirm {
-            self.close_window_now(window_id);
-            return true;
-        }
-        if is_last {
-            // D7 + 设计 §1：最后一个窗口关闭 = 退出，沿用既有 Quit 确认。
-            if let Some(entry) = self.entry(window_id) {
-                entry.window.set_quit_dialog_visible(true);
-                entry.window.invoke_focus_top_dialog();
+        match action {
+            WindowCloseAction::CloseNow => {
+                self.close_window_now(window_id);
+                true
             }
-            return false;
+            WindowCloseAction::ConfirmQuit => {
+                // D7 + 设计 §1：最后一个窗口关闭 = 退出，沿用既有 Quit 确认。
+                if let Some(entry) = self.entry(window_id) {
+                    entry.window.set_quit_dialog_visible(true);
+                    entry.window.invoke_focus_top_dialog();
+                }
+                false
+            }
+            WindowCloseAction::ConfirmClose => {
+                self.runtime
+                    .borrow_mut()
+                    .set_window_close_pending(window_id, true);
+                self.refresh_window(window_id);
+                if let Some(entry) = self.entry(window_id) {
+                    entry.window.invoke_focus_top_dialog();
+                }
+                false
+            }
         }
-        self.runtime
-            .borrow_mut()
-            .set_window_close_pending(window_id, true);
-        self.refresh_window(window_id);
-        if let Some(entry) = self.entry(window_id) {
-            entry.window.invoke_focus_top_dialog();
-        }
-        false
     }
 
-    /// 关闭窗口确认弹窗：确认后断开并关闭。
-    pub(crate) fn confirm_close_window(&mut self, window_id: u64) {
+    /// 关闭窗口确认弹窗：确认后断开并关闭（`dont_ask_again` 持久化偏好）。
+    pub(crate) fn confirm_close_window(&mut self, window_id: u64, dont_ask_again: bool) {
         self.runtime
             .borrow_mut()
             .set_window_close_pending(window_id, false);
+        if dont_ask_again {
+            let _ = self.runtime.borrow_mut().set_confirm_close_session(false);
+        }
         self.close_window_now(window_id);
     }
 
@@ -578,5 +623,54 @@ impl WindowManager {
             let entry = &self.windows[index];
             entry.surface.refresh(&entry.window);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{window_close_action, WindowCloseAction};
+
+    #[test]
+    fn quitting_the_last_window_still_honours_the_quit_setting() {
+        // 「不再询问关闭会话」不能顺带关掉退出确认。
+        assert_eq!(
+            window_close_action(true, true, false, true),
+            WindowCloseAction::ConfirmQuit
+        );
+        assert_eq!(
+            window_close_action(true, true, true, true),
+            WindowCloseAction::ConfirmQuit
+        );
+        // 用户明确关闭退出确认后直接退出。
+        assert_eq!(
+            window_close_action(true, true, false, false),
+            WindowCloseAction::CloseNow
+        );
+        // 没有活动连接时不需要退出确认（与既有行为一致）。
+        assert_eq!(
+            window_close_action(false, true, true, true),
+            WindowCloseAction::CloseNow
+        );
+    }
+
+    #[test]
+    fn close_confirmation_applies_only_to_non_last_windows() {
+        assert_eq!(
+            window_close_action(true, false, true, true),
+            WindowCloseAction::ConfirmClose
+        );
+        assert_eq!(
+            window_close_action(true, false, false, true),
+            WindowCloseAction::CloseNow
+        );
+        // 退出设置不影响普通窗口的关闭确认。
+        assert_eq!(
+            window_close_action(true, false, true, false),
+            WindowCloseAction::ConfirmClose
+        );
+        assert_eq!(
+            window_close_action(false, false, true, true),
+            WindowCloseAction::CloseNow
+        );
     }
 }

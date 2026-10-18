@@ -76,6 +76,43 @@ fn debug_logging_setting_persists_and_creates_log_dir() {
 }
 
 #[test]
+fn confirmation_settings_project_and_persist() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+
+    let defaults = runtime.projection();
+    assert!(defaults.settings_confirm_close_session);
+    assert!(defaults.settings_confirm_quit_app);
+
+    let close_off = runtime
+        .set_confirm_close_session(false)
+        .expect("disable close confirmation");
+    assert!(!close_off.settings_confirm_close_session);
+    assert!(close_off.settings_confirm_quit_app);
+    assert!(close_off.status_text.contains("disabled"));
+
+    let quit_off = runtime
+        .set_confirm_quit_app(false)
+        .expect("disable quit confirmation");
+    assert!(!quit_off.settings_confirm_close_session);
+    assert!(!quit_off.settings_confirm_quit_app);
+
+    let ui = ConfigStore::new(temp.path())
+        .load_or_recover()
+        .expect("reload config")
+        .document
+        .ui;
+    assert!(!ui.confirm_close_session);
+    assert!(!ui.confirm_quit_app);
+
+    let close_on = runtime
+        .set_confirm_close_session(true)
+        .expect("re-enable close confirmation");
+    assert!(close_on.settings_confirm_close_session);
+    assert!(close_on.status_text.contains("enabled"));
+}
+
+#[test]
 fn status_kind_expires_when_text_is_overwritten() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
@@ -917,7 +954,9 @@ fn closing_tab_stops_logging_and_reports_log_path() {
     // 活动连接：先确认再关闭；关闭路径强制停止日志并提示文件位置。
     let pending = runtime.request_close_tab(&tab_id).expect("request close");
     assert!(pending.close_tabs_confirm_visible);
-    let projection = runtime.confirm_close_tabs().expect("confirm close");
+    let projection = runtime
+        .confirm_close_tabs_with(false)
+        .expect("confirm close");
     assert!(
         projection.status_text.contains("close-flow.log"),
         "status must mention the log file: {}",

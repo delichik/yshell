@@ -538,6 +538,12 @@ pub struct UiProfile {
     /// When true, write process debug logs under `{config_dir}/logs`.
     #[serde(default)]
     pub debug_logging: bool,
+    /// Confirm before closing a tab/window that still has active sessions.
+    #[serde(default = "default_true")]
+    pub confirm_close_session: bool,
+    /// Confirm before quitting the application (last window close / Quit).
+    #[serde(default = "default_true")]
+    pub confirm_quit_app: bool,
 }
 
 impl Default for UiProfile {
@@ -549,6 +555,8 @@ impl Default for UiProfile {
             language: default_ui_language(),
             local_directory: None,
             debug_logging: false,
+            confirm_close_session: true,
+            confirm_quit_app: true,
         }
     }
 }
@@ -1795,6 +1803,8 @@ collapsed = true
         // Unspecified fields keep their defaults.
         assert_eq!(parsed.ui.layout.left.len(), 1);
         assert_eq!(parsed.ui.layout.right_width, 340);
+        assert!(parsed.ui.confirm_close_session);
+        assert!(parsed.ui.confirm_quit_app);
         assert_eq!(
             parsed.ui.layout.right,
             vec![PanelSlot {
@@ -1802,6 +1812,13 @@ collapsed = true
                 collapsed: true
             }]
         );
+    }
+
+    #[test]
+    fn confirmations_default_to_on_for_existing_configs() {
+        let parsed = ConfigDocument::from_toml_str("schema_version = 2\n").expect("parse");
+        assert!(parsed.ui.confirm_close_session);
+        assert!(parsed.ui.confirm_quit_app);
     }
 
     #[test]

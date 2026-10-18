@@ -1,6 +1,7 @@
 //! Tab open/close/activate flows and the polling cursor.
 
 use tempfile::tempdir;
+use yshell_config::ConfigStore;
 use yshell_core::SessionState;
 
 use super::*;
@@ -258,7 +259,9 @@ fn batch_close_scopes_build_target_sets_and_keep_order() {
 
     // 确认 right:<A>：按右→左关闭 C/E；活动 E 被关后回退到存活的左侧 A。
     let _ = runtime.request_close_tabs(&format!("right:{}", tabs[0]));
-    let confirmed = runtime.confirm_close_tabs().expect("confirm batch");
+    let confirmed = runtime
+        .confirm_close_tabs_with(false)
+        .expect("confirm batch");
     assert_eq!(confirmed.tab_count, 1);
     assert_eq!(confirmed.active_tab_id, tabs[0]);
     assert_tab_invariants(&runtime);
@@ -286,12 +289,158 @@ fn batch_close_skips_already_closed_tabs_in_stable_order() {
     );
     // 模拟一个目标标签已被其它路径关闭：确认时跳过，不 panic。
     runtime.close_tab_immediate(&tabs[2]);
-    let confirmed = runtime.confirm_close_tabs().expect("confirm batch");
+    let confirmed = runtime
+        .confirm_close_tabs_with(false)
+        .expect("confirm batch");
     assert_eq!(confirmed.tab_count, 0);
     // N2：没有标签时内容区回到 Quick Connect 页（不新建标签）。
     assert!(confirmed.quick_connect_visible);
     assert_eq!(confirmed.status_text, "Closed 3 tab(s).");
     assert_tab_invariants(&runtime);
+}
+
+#[test]
+fn close_scopes_stay_inside_the_anchor_pane() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 4);
+    let tab0 = open_saved_tab(&mut runtime, "saved-0");
+    let tab1 = open_saved_tab(&mut runtime, "saved-1");
+    let tab2 = open_saved_tab(&mut runtime, "saved-2");
+    let tab3 = open_saved_tab(&mut runtime, "saved-3");
+
+    // 左叶 [tab0, tab1]，右叶 [tab3, tab2]。
+    let split = runtime.place_tab_split(&tab3, 0, "right").expect("split");
+    assert_eq!(split.workspace_split.leaves.len(), 2);
+    let right_pane = u64::try_from(split.workspace_split.leaves[1].pane_id).expect("pane id");
+    let moved = runtime
+        .move_tab_to_pane(&tab2, right_pane)
+        .expect("move tab to right pane");
+    assert_eq!(moved.workspace_split.leaves.len(), 2);
+
+    // 左叶的菜单只看左叶的两个标签。
+    let left_menu = runtime.prepare_tab_context_menu(&tab0);
+    assert!(left_menu.tab_menu_close_others_enabled);
+    assert!(!left_menu.tab_menu_close_left_enabled);
+    assert!(left_menu.tab_menu_close_right_enabled);
+    assert!(left_menu.tab_menu_close_all_enabled);
+    assert_eq!(
+        runtime
+            .close_scope_targets(CLOSE_SCOPE_ALL)
+            .expect("left close all"),
+        vec![tab0.clone(), tab1.clone()]
+    );
+    assert_eq!(
+        runtime
+            .close_scope_targets(&format!("others:{tab0}"))
+            .expect("left close others"),
+        vec![tab1.clone()]
+    );
+
+    // 右叶的菜单只看右叶的两个标签。
+    let right_menu = runtime.prepare_tab_context_menu(&tab2);
+    assert!(right_menu.tab_menu_close_left_enabled);
+    assert!(!right_menu.tab_menu_close_right_enabled);
+    assert!(right_menu.tab_menu_close_all_enabled);
+    assert_eq!(
+        runtime
+            .close_scope_targets(CLOSE_SCOPE_ALL)
+            .expect("right close all"),
+        vec![tab3.clone(), tab2.clone()]
+    );
+
+    // 在左叶执行 Close All：右叶标签与连接必须保留。
+    let _ = runtime.prepare_tab_context_menu(&tab0);
+    let pending = runtime
+        .request_close_tabs(CLOSE_SCOPE_ALL)
+        .expect("close left pane");
+    assert!(pending.close_tabs_confirm_visible);
+    let closed = runtime
+        .confirm_close_tabs_with(false)
+        .expect("confirm left close");
+    assert_eq!(
+        closed
+            .tabs
+            .iter()
+            .map(|tab| tab.id.clone())
+            .collect::<Vec<_>>(),
+        vec![tab2.clone(), tab3.clone()]
+    );
+    assert_tab_invariants(&runtime);
+}
+
+#[test]
+fn disabled_close_confirmation_closes_active_tab_immediately() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 1);
+    let tab = open_saved_tab(&mut runtime, "saved-0");
+
+    runtime
+        .set_confirm_close_session(false)
+        .expect("disable close confirmation");
+    assert!(!runtime.confirm_close_session_enabled());
+
+    let closed = runtime.request_close_tab(&tab).expect("close active tab");
+    assert!(!closed.close_tabs_confirm_visible);
+    assert_eq!(closed.tab_count, 0);
+
+    let persisted = ConfigStore::new(temp.path())
+        .load_or_recover()
+        .expect("reload config")
+        .document
+        .ui
+        .confirm_close_session;
+    assert!(!persisted);
+}
+
+#[test]
+fn disabled_batch_close_reports_disconnected_connections() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 2);
+    let _first = open_saved_tab(&mut runtime, "saved-0");
+    let _second = open_saved_tab(&mut runtime, "saved-1");
+    runtime
+        .set_confirm_close_session(false)
+        .expect("disable close confirmation");
+
+    let closed = runtime
+        .request_close_tabs(CLOSE_SCOPE_ALL)
+        .expect("close all");
+    assert!(!closed.close_tabs_confirm_visible);
+    assert_eq!(closed.tab_count, 0);
+    assert!(
+        closed
+            .status_text
+            .contains("2 active connection(s) were disconnected without confirmation"),
+        "status must report the disconnected connections: {}",
+        closed.status_text
+    );
+}
+
+#[test]
+fn dont_ask_again_disables_close_confirmation_and_persists() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 2);
+    let _first = open_saved_tab(&mut runtime, "saved-0");
+    let _second = open_saved_tab(&mut runtime, "saved-1");
+
+    let pending = runtime
+        .request_close_tabs(CLOSE_SCOPE_ALL)
+        .expect("close all");
+    assert!(pending.close_tabs_confirm_visible);
+
+    let confirmed = runtime
+        .confirm_close_tabs_with(true)
+        .expect("confirm with dont-ask-again");
+    assert_eq!(confirmed.tab_count, 0);
+    assert!(!runtime.confirm_close_session_enabled());
+
+    let persisted = ConfigStore::new(temp.path())
+        .load_or_recover()
+        .expect("reload config")
+        .document
+        .ui
+        .confirm_close_session;
+    assert!(!persisted);
 }
 
 #[test]

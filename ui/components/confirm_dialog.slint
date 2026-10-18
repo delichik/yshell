@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { WinButton } from "basic/controls.slint";
+import { WinButton, WinToggle } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 
 // Reusable modal confirmation dialog.
@@ -28,6 +28,9 @@ export component ConfirmDialog inherits Rectangle {
     /// B 轮2 #48：不需要输入确认词的破坏性确认（关闭标签 / 退出 / 删除会话）也应使用
     /// `critical` 文案色而不是强调色实底；由宿主对破坏性动作传 true（WS-A 接线）。
     in property <bool> destructive: false;
+    /// 显示「不再询问」勾选（关闭会话 / 退出应用等）。
+    in property <bool> show-dont-ask-again: false;
+    in-out property <bool> dont-ask-again: false;
 
     callback confirmed();
     callback canceled();
@@ -100,6 +103,12 @@ export component ConfirmDialog inherits Rectangle {
                     enabled: root.confirmation-token != "";
                     text <=> root.confirmation-text;
                     placeholder-text: root.confirmation-placeholder;
+                }
+
+                if root.show-dont-ask-again : WinToggle {
+                    text: @tr("Don't ask again");
+                    checked <=> root.dont-ask-again;
+                    horizontal-stretch: 0;
                 }
 
                 // 操作区：右对齐，主操作（确认）在最右

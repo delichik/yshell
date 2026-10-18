@@ -503,6 +503,13 @@ export component MainWindow inherits Window {
     // N7：关闭窗口确认（带活动连接的非最后一个窗口；D7）。
     in-out property <bool> close_window_confirm_visible: false;
     in-out property <int> close_window_confirm_active_count: 0;
+    // 关闭/退出确认弹窗的「不再询问」勾选（写回设置后可在 Settings 重新开启）。
+    in-out property <bool> close_confirm_dont_ask_again: false;
+    in-out property <bool> close_window_confirm_dont_ask_again: false;
+    in-out property <bool> quit_confirm_dont_ask_again: false;
+    // Settings → General：关闭会话前 / 退出前是否确认（可在「不再询问」后重新开启）。
+    in-out property <bool> settings_confirm_close_session: true;
+    in-out property <bool> settings_confirm_quit_app: true;
     in-out property <string> terminal_title_name_text: "";
     in-out property <bool> terminal_title_has_session: false;
     in-out property <string> terminal_body_kind_text: "ready";
@@ -741,15 +748,19 @@ export component MainWindow inherits Window {
     callback send_key_input_to(string);
     callback stop_input_sync();
     callback toggle_tab_receive_key_input(string);
-    callback confirm_close_tabs();
+    callback confirm_close_tabs(bool);
     callback cancel_close_tabs();
+    /// 持久化「关闭会话前确认」偏好（「不再询问」勾选 / Settings 开关共用）。
+    callback set_confirm_close_session(bool);
+    /// 持久化「退出前确认」偏好。
+    callback set_confirm_quit_app(bool);
     // --- N7：多窗口（标签迁移 / 窗口关闭确认 / 窗口激活）------------------------
     /// 标签右键：把标签移动到新窗口（只换 UI 所有权）。
     callback move_tab_to_new_window(string);
     /// 标签右键：把标签移动回主窗口。
     callback move_tab_to_main_window(string);
-    /// 关闭带活动连接窗口的确认弹窗（D7：确认后断开）。
-    callback confirm_close_window();
+    /// 关闭带活动连接窗口的确认弹窗（D7：确认后断开；参数 = 「不再询问」）。
+    callback confirm_close_window(bool);
     callback cancel_close_window();
     /// 窗口被激活（OS 焦点）：把该窗口标记为交互窗口。
     callback window_activated();
@@ -1196,9 +1207,13 @@ export component MainWindow inherits Window {
             root.toggle_panel("sessions");
             return true;
         }
-        // Ctrl+Q：退出（走现有确认弹窗）
+        // Ctrl+Q：退出（「不再询问」后直接退出，否则走确认弹窗）
         if (shortcut-key(text, "q", "Q")) {
-            root.quit_dialog_visible = true;
+            if (root.settings_confirm_quit_app) {
+                root.quit_dialog_visible = true;
+            } else {
+                root.quit_app();
+            }
             return true;
         }
         // Ctrl+,：设置（同时加载 Appearance draft，供 Appearance 分区内联表单使用）
@@ -1762,7 +1777,10 @@ export component MainWindow inherits Window {
                 root.open_settings_appearance();
                 root.settings_dialog_visible = true;
             }
-            else if (index == 5) { root.quit_dialog_visible = true; }
+            else if (index == 5) {
+                if (root.settings_confirm_quit_app) { root.quit_dialog_visible = true; }
+                else { root.quit_app(); }
+            }
         } else if (menu == 1) {
             // Edit（WP2：0 Copy / 1 Paste / 2 Bracketed / 3 Select All / 4 Clear / 5 Clear Scrollback / 6 Find）
             // A22（B 轮2 高#1）：Edit > Copy 必须复制**选区**（与终端右键菜单同源回调），
@@ -2594,6 +2612,8 @@ export component MainWindow inherits Window {
         terminal-status-text: TextFormats.settings-terminal-status(root.settings_terminal_status_kind_text, root.settings_terminal_status_field_text, root.settings_terminal_status_value_text, root.settings_terminal_status_limit_text);
         language-text: root.settings_language_text;
         debug-logging-enabled <=> root.settings_debug_logging_enabled;
+        confirm-close-session-enabled <=> root.settings_confirm_close_session;
+        confirm-quit-app-enabled <=> root.settings_confirm_quit_app;
         debug-log-dir-text: root.settings_debug_log_dir_text;
         appearance-color-scheme-text: root.settings_appearance_color_scheme_text;
         appearance-schemes: root.settings_appearance_schemes;
@@ -2626,6 +2646,8 @@ export component MainWindow inherits Window {
         save-terminal-settings() => { root.save_settings_terminal(); }
         set-language(value) => { root.set_ui_language(value); }
         set-debug-logging(enabled) => { root.set_debug_logging(enabled); }
+        set-confirm-close-session(enabled) => { root.set_confirm_close_session(enabled); }
+        set-confirm-quit-app(enabled) => { root.set_confirm_quit_app(enabled); }
         open-debug-log-dir() => { root.open_debug_log_dir(); }
         select-appearance-scheme(id) => { root.select_settings_scheme(id); }
         clone-appearance-theme(id) => { root.clone_settings_theme(id); }
@@ -2717,12 +2739,22 @@ export component MainWindow inherits Window {
         open: root.quit_dialog_visible;
         // A29（C24）：破坏性确认（断开所有运行时会话）。
         destructive: true;
+        // 「不再询问」写入 `ui.confirm_quit_app`，可在 Settings → General 重新开启。
+        show-dont-ask-again: true;
+        dont-ask-again <=> root.quit_confirm_dont_ask_again;
         title-text: @tr("Quit YShell");
         message-text: @tr("Quit YShell now? Active runtime sessions will be disconnected.");
         confirm-label: @tr("Quit");
-        confirmed() => { root.quit_app(); }
+        confirmed() => {
+            if (root.quit_confirm_dont_ask_again) {
+                root.set_confirm_quit_app(false);
+                root.quit_confirm_dont_ask_again = false;
+            }
+            root.quit_app();
+        }
         canceled() => {
             root.quit_dialog_visible = false;
+            root.quit_confirm_dont_ask_again = false;
             root.focus-top-dialog();
         }
     }
@@ -2734,6 +2766,9 @@ export component MainWindow inherits Window {
         open: root.close_tabs_confirm_visible;
         // A29（C24）：破坏性确认（关闭标签会断开活动连接）。
         destructive: true;
+        // 「不再询问」写入 `ui.confirm_close_session`，可在 Settings → General 重新开启。
+        show-dont-ask-again: true;
+        dont-ask-again <=> root.close_confirm_dont_ask_again;
         title-text: TextFormats.close-tabs-confirm-title(root.close_tabs_confirm_single);
         message-text: TextFormats.close-tabs-confirm-message(
             root.close_tabs_confirm_single,
@@ -2743,11 +2778,13 @@ export component MainWindow inherits Window {
         );
         confirm-label: @tr("Close");
         confirmed() => {
-            root.confirm_close_tabs();
+            root.confirm_close_tabs(root.close_confirm_dont_ask_again);
+            root.close_confirm_dont_ask_again = false;
             root.focus-top-dialog();
         }
         canceled() => {
             root.cancel_close_tabs();
+            root.close_confirm_dont_ask_again = false;
             root.focus-top-dialog();
         }
     }
@@ -2758,15 +2795,19 @@ export component MainWindow inherits Window {
         open: root.close_window_confirm_visible;
         // A29（C24）：破坏性确认（关闭窗口会断开其中的活动连接）。
         destructive: true;
+        show-dont-ask-again: true;
+        dont-ask-again <=> root.close_window_confirm_dont_ask_again;
         title-text: @tr("Close Window");
         message-text: @tr("Close this window? {n} active session will be disconnected." | "Close this window? {n} active sessions will be disconnected." % root.close_window_confirm_active_count, root.close_window_confirm_active_count);
         confirm-label: @tr("Close");
         confirmed() => {
-            root.confirm_close_window();
+            root.confirm_close_window(root.close_window_confirm_dont_ask_again);
+            root.close_window_confirm_dont_ask_again = false;
             root.focus-top-dialog();
         }
         canceled() => {
             root.cancel_close_window();
+            root.close_window_confirm_dont_ask_again = false;
             root.focus-top-dialog();
         }
     }

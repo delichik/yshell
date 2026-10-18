@@ -126,7 +126,9 @@ pub(crate) fn close_tab_confirmed(runtime: &mut AppRuntime, tab_id: &str) -> App
         pending.close_tabs_confirm_visible,
         "an active connection must ask for confirmation"
     );
-    runtime.confirm_close_tabs().expect("confirm close")
+    runtime
+        .confirm_close_tabs_with(false)
+        .expect("confirm close")
 }
 
 pub(crate) fn assert_tab_invariants(runtime: &AppRuntime) {

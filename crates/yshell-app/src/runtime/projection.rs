@@ -295,6 +295,8 @@ impl AppRuntime {
             settings_scrollback_max_cells_text: self.settings_scrollback_max_cells_text.clone(),
             settings_language_text: self.config_document.ui.language.clone(),
             settings_debug_logging_enabled: self.config_document.ui.debug_logging,
+            settings_confirm_close_session: self.config_document.ui.confirm_close_session,
+            settings_confirm_quit_app: self.config_document.ui.confirm_quit_app,
             settings_debug_log_dir_text: self.debug_log_dir().display().to_string(),
             settings_terminal_status_kind_text: self.settings_terminal_status.kind_id().to_owned(),
             settings_terminal_status_field_text: self
@@ -1456,6 +1458,10 @@ pub struct AppProjection {
     pub settings_language_text: String,
     /// Whether process debug logs are written under `{config_dir}/logs`.
     pub settings_debug_logging_enabled: bool,
+    /// Whether closing a session with an active connection asks for confirmation.
+    pub settings_confirm_close_session: bool,
+    /// Whether quitting the application asks for confirmation.
+    pub settings_confirm_quit_app: bool,
     /// Absolute path of the debug log directory.
     pub settings_debug_log_dir_text: String,
     pub settings_terminal_status_kind_text: String,
