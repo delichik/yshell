@@ -244,7 +244,7 @@ fn projection_state_flags_track_session_and_selection() {
     assert!(connected.active_session_connected);
     assert!(!connected.has_saved_selection);
     assert!(!connected.terminal_has_selection);
-    assert!(!connected.sftp_available);
+    assert!(connected.sftp_available);
 
     // 终端全选 → Copy 蝜坕项的选区开关跟隝。
     let selected = runtime

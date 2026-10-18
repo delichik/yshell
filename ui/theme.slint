@@ -69,6 +69,16 @@ export global Theme {
     out property <color> flyout-background: dark ? #2C2C2C : #FFFFFF;
     /// 模态遮罩
     out property <color> scrim: #00000088;
+    /// 主题/ANSI 颜色选择器的预设色板（纯数据，供设置页色块弹层使用）。
+    out property <[color]> color-presets: [
+        #000000, #FFFFFF, #FF5555, #50FA7B, #F1FA8C, #BD93F9, #FF79C6, #8BE9FD,
+        #282A36, #44475A, #6272A4, #F8F8F2, #002B36, #073642, #839496, #EEE8D5
+    ];
+    /// 与 `color-presets` 一一对应的 `#RRGGBB` 字符串（Rust 侧按 hex 解析）。
+    out property <[string]> color-preset-hex: [
+        "#000000", "#FFFFFF", "#FF5555", "#50FA7B", "#F1FA8C", "#BD93F9", "#FF79C6", "#8BE9FD",
+        "#282A36", "#44475A", "#6272A4", "#F8F8F2", "#002B36", "#073642", "#839496", "#EEE8D5"
+    ];
     /// 浮层阴影
     out property <color> shadow-color: dark ? #00000055 : #00000033;
     out property <length> shadow-blur: 10px;

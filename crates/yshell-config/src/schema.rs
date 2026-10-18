@@ -1748,6 +1748,10 @@ path = "/home/me/.ssh/id_ed25519"
             defaulted.ui.layout.right,
             vec![
                 PanelSlot {
+                    panel: PanelId::Local,
+                    collapsed: false
+                },
+                PanelSlot {
                     panel: PanelId::Sftp,
                     collapsed: false
                 },

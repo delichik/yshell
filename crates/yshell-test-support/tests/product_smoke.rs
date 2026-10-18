@@ -173,7 +173,7 @@ fn product_docs_smoke_acceptance_loop() {
         shell_output.extend_from_slice(&chunk);
     }
     let shell_text = String::from_utf8_lossy(&shell_output);
-    assert!(shell_text.contains("test-shell received input: printf smoke\\n"));
+    assert!(shell_text.contains("test-shell received input: printf smoke\n"));
 
     let mut sftp_backend = InMemorySftpBackend::default();
     sftp_backend.mkdir("/srv").expect("mkdir /srv");

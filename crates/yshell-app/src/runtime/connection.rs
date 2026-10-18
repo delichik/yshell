@@ -1116,7 +1116,7 @@ impl AppRuntime {
         let logging_notice = runtime.take_logging_notice();
         self.sessions.insert(session_key.clone(), runtime);
         self.attach_tab(&tab_id_text, &session_key);
-        let sftp_status = self.sync_sftp_lifecycle_for_session(&session_key, true);
+        let sftp_status = self.sync_sftp_lifecycle_for_session(&session_key, false);
         // D15：用户向的连接状态文案（kind 供 Slint 侧 @tr 模板映射）。
         let (kind, base_text) = if shell_open_error.is_some() {
             if password_retry {

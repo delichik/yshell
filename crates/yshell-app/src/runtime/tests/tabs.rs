@@ -487,9 +487,12 @@ fn poll_all_prioritizes_active_tab_and_rotates_the_cursor() {
     }
     assert_eq!(runtime.terminal_poll_cursor, 7);
 
-    // 第二个 tick 补完剩余会话；只有后台输出时不再重投影。
-    let second = runtime.poll_all_terminal_outputs().expect("second tick");
-    assert!(second.is_none());
+    // 第二个 tick 补完剩余会话；后台输出会累加未读并刷新标签条。
+    let second = runtime
+        .poll_all_terminal_outputs()
+        .expect("second tick")
+        .expect("background output marks the remaining tabs unread");
+    assert!(second.tabs.iter().any(|tab| tab.unread > 0));
     for (index, session_key) in session_keys.iter().enumerate() {
         assert!(runtime.sessions[session_key]
             .visible_text()
@@ -510,10 +513,11 @@ fn background_output_updates_grid_and_background_close_refreshes_tabs() {
         .to_owned();
 
     queue_shell_output(&mut runtime, &background_session, "bg-only");
-    let without_projection = runtime
+    let background_projection = runtime
         .poll_all_terminal_outputs()
-        .expect("background poll");
-    assert!(without_projection.is_none());
+        .expect("background poll")
+        .expect("background output marks the tab unread and refreshes the tab strip");
+    assert_eq!(background_projection.tabs[0].unread, 1);
     assert!(runtime.sessions[&background_session]
         .visible_text()
         .contains("bg-only"));
@@ -681,7 +685,7 @@ fn place_tab_split_when_already_split_nests_third_leaf() {
         .workspace_split
         .leaves
         .iter()
-        .find(|leaf| leaf.tab_id == first_tab)
+        .find(|leaf| leaf.tabs.iter().any(|tab| tab.id == first_tab))
         .map(|leaf| leaf.pane_id as u64)
         .expect("first leaf");
     let projection = runtime

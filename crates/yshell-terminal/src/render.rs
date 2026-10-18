@@ -1500,6 +1500,10 @@ mod tests {
     use super::*;
     use crate::png;
 
+    /// Bundled faces used by the renderer tests (the runtime loads them from disk).
+    const FONT_REGULAR_BYTES: &[u8] = include_bytes!("../assets/DejaVuSansMono.ttf");
+    const FONT_BOLD_BYTES: &[u8] = include_bytes!("../assets/DejaVuSansMono-Bold.ttf");
+
     fn cell_of(grapheme: &str) -> TerminalCell {
         TerminalCell {
             grapheme: grapheme.to_owned(),

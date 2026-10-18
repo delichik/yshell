@@ -227,7 +227,7 @@ export component TerminalView inherits Rectangle {
             if root.interactive : Rectangle {
                 width: parent.width;
                 height: parent.height;
-                background: #00000088;
+                background: Theme.scrim;
                 opacity: root.connection-overlay-visible ? 1.0 : 0.0;
                 visible: root.connection-overlay-visible || self.opacity > 0.01;
                 animate opacity {

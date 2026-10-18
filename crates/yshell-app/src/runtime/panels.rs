@@ -2172,9 +2172,11 @@ mod tests {
             AppRuntime::new_with_keychain(dir.path().to_path_buf(), None).expect("runtime");
         runtime.set_panel_area_size(1440.0, 794.0);
         let view = runtime.panel_layout_view();
-        // C0 默认布局：Transfers 不在栈中（默认隐藏），其余四个面板全部可见。
-        assert_eq!(view.frames.len(), 4);
+        // C0 默认布局：左 Sessions + 右 Local/SFTP/Tunnels/QuickCommands 共 5 个；
+        // Transfers 不在栈中（默认隐藏）。
+        assert_eq!(view.frames.len(), 5);
         assert!(view.frames.iter().all(|frame| frame.visible));
+        assert!(runtime.panel_visible(PanelId::Local));
         assert!(!runtime.panel_visible(PanelId::Transfers));
         let projection = runtime.projection();
         assert!(projection.sessions_visible);
