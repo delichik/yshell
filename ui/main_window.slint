@@ -273,6 +273,10 @@ export component MainWindow inherits Window {
     // WP2：Clear Scrollback 简单确认（无 Type-token）。
     in-out property <bool> clear_scrollback_dialog_visible: false;
     in-out property <string> sftp_path_text: "/";
+    /// `new` / `terminal` / `sftp` — active workspace tab mode.
+    in-out property <string> active_tab_mode_text: "new";
+    /// Per-SFTP-tab local/remote split ratio (default 1:1).
+    in-out property <float> sftp_column_ratio: 0.5;
     in-out property <string> sftp_listing_text: "Connect a session and refresh SFTP to browse remote files.";
     in-out property <string> sftp_local_path_text: "";
     in-out property <string> sftp_remote_target_text: "";
@@ -530,6 +534,11 @@ export component MainWindow inherits Window {
     // N7：标签右键"移动到新窗口 / 移动到主窗口"（Rust 按标签所在窗口计算）。
     in-out property <bool> tab_menu_move_to_new_window_enabled: false;
     in-out property <bool> tab_menu_move_to_main_window_enabled: false;
+    /// Right-clicked tab mode (`new` / `terminal` / `sftp`).
+    in-out property <string> tab_menu_mode_text: "";
+    in-out property <bool> tab_menu_switch_mode_enabled: false;
+    /// Active tab can switch Terminal → SFTP.
+    in-out property <bool> active_tab_can_switch_to_sftp: false;
     // WP4：分屏菜单启用态 + 布局投影。
     in-out property <bool> tab_menu_split_enabled: false;
     in-out property <bool> tab_menu_close_pane_enabled: false;
@@ -777,6 +786,7 @@ export component MainWindow inherits Window {
     callback update_session_search(string);
     callback open_saved_session();
     callback open_selected_saved_session();
+    callback open_selected_saved_session_sftp();
     callback update_selected_saved_session();
     callback delete_selected_saved_session();
     callback select_previous_saved_session();
@@ -850,6 +860,10 @@ export component MainWindow inherits Window {
     callback find_terminal_prev();
     callback set_terminal_search_regex(bool);
     callback refresh_sftp();
+    callback sftp_column_ratio_changed(float);
+    callback switch_active_tab_to_sftp();
+    callback switch_tab_to_sftp(string);
+    callback switch_tab_to_terminal(string);
     callback open_sftp_path(string);
     callback open_sftp_parent();
     callback upload_sftp(string, string, string, string);
@@ -1420,11 +1434,6 @@ export component MainWindow inherits Window {
     property <[MenuEntry]> view_menu_entries: [
         { label: @tr("Session Manager"), shortcut: root.shortcut-toggle-sidebar, enabled: true, checked: root.sessions_visible, separator: false },
         {
-            label: @tr("Local Files"), shortcut: "", enabled: true, checked: root.local_visible, separator: false,
-            tooltip: @tr("Browse local folders; download/upload targets use this directory.")
-        },
-        { label: @tr("SFTP Panel"), shortcut: "", enabled: true, checked: root.sftp_visible, separator: false },
-        {
             label: @tr("Tunnels"), shortcut: "", enabled: true, checked: root.tunnels_visible, separator: false,
             tooltip: @tr("Configured tunnels for the active session.")
         },
@@ -1434,10 +1443,10 @@ export component MainWindow inherits Window {
         },
         {
             label: @tr("Transfers"), shortcut: "", enabled: true, checked: root.transfers_visible, separator: false,
-            tooltip: @tr("Transfer queue with pause/resume/retry; shares the SFTP drawer model.")
+            tooltip: @tr("Transfer queue with pause/resume/retry.")
         },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
-        // WP4：分屏（索引 7/8/9）。
+        // WP4：分屏（索引 5/6/7）。
         {
             label: @tr("Split Right"), shortcut: "",
             enabled: root.tab_menu_split_enabled, checked: false, separator: false,
@@ -1558,6 +1567,16 @@ export component MainWindow inherits Window {
             label: @tr("Stop Sending Key Input"), shortcut: "",
             enabled: root.terminal_sync_stop_enabled, checked: false, separator: false,
             tooltip: root.terminal_sync_stop_enabled ? "" : @tr("Key input sync is not active.")
+        },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true,
+            hidden: root.active_tab_mode_text != "terminal" },
+        {
+            label: @tr("Switch to SFTP"), shortcut: "",
+            enabled: root.active_tab_can_switch_to_sftp, checked: false, separator: false,
+            hidden: root.active_tab_mode_text != "terminal",
+            tooltip: root.active_tab_can_switch_to_sftp
+                ? ""
+                : @tr("Connect the terminal before switching to SFTP.")
         }
     ];
     // N6：状态栏日志入口复用同一组日志项（无分隔符；索引 0..3）。
@@ -1615,7 +1634,8 @@ export component MainWindow inherits Window {
             enabled: root.tab_menu_close_disconnected_enabled, checked: false, separator: false,
             tooltip: root.tab_menu_close_disconnected_enabled ? "" : @tr("No disconnected or failed tabs to close.")
         },
-        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true,
+            hidden: root.tab_menu_mode_text == "new" },
         // A28（D18）：标签级 Reconnect/Disconnect 的启用态来自 Rust 对"被右键标签"的
         // 投影（`tab_menu_reconnect_enabled` / `tab_menu_disconnect_enabled`）。
         // 断开的标签才可 Reconnect；已连接的标签才可 Disconnect。
@@ -1623,11 +1643,13 @@ export component MainWindow inherits Window {
         {
             label: @tr("Reconnect"), shortcut: "",
             enabled: root.tab_menu_reconnect_enabled, checked: false, separator: false,
+            hidden: root.tab_menu_mode_text == "new",
             tooltip: root.tab_menu_reconnect_enabled ? "" : @tr("This tab is already connected.")
         },
         {
             label: @tr("Disconnect"), shortcut: "",
             enabled: root.tab_menu_disconnect_enabled, checked: false, separator: false,
+            hidden: root.tab_menu_mode_text == "new",
             tooltip: root.tab_menu_disconnect_enabled ? "" : @tr("This tab is already disconnected.")
         },
         // WP4：Rename / Split（索引 10–12）。
@@ -1646,12 +1668,14 @@ export component MainWindow inherits Window {
             enabled: root.tab_menu_split_enabled, checked: false, separator: false,
             tooltip: root.tab_menu_split_enabled ? "" : @tr("Open a terminal session before splitting, or close a pane (max 4).")
         },
-        // N9：接收键输入勾选（索引 14；未同步/源标签/未连接时禁用并给出原因）。
-        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        // N9：接收键输入勾选（索引 14；仅终端标签显示）。
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true,
+            hidden: root.tab_menu_mode_text != "terminal" },
         {
             label: @tr("Receive Key Input"), shortcut: "",
             enabled: root.tab_menu_receive_key_input_enabled,
             checked: root.tab_menu_receives_key_input_checked, separator: false,
+            hidden: root.tab_menu_mode_text != "terminal",
             tooltip: root.tab_menu_receive_key_input_enabled
                 ? ""
                 : TextFormats.receive-key-input-reason(root.tab_menu_receive_key_input_reason_text)
@@ -1671,6 +1695,17 @@ export component MainWindow inherits Window {
             tooltip: root.tab_menu_move_to_main_window_enabled
                 ? ""
                 : @tr("This tab is already in the main window.")
+        },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true,
+            hidden: root.tab_menu_mode_text == "new" },
+        {
+            label: root.tab_menu_mode_text == "sftp" ? @tr("Switch to Terminal") : @tr("Switch to SFTP"),
+            shortcut: "",
+            enabled: root.tab_menu_switch_mode_enabled, checked: false, separator: false,
+            hidden: root.tab_menu_mode_text == "new",
+            tooltip: root.tab_menu_switch_mode_enabled
+                ? ""
+                : @tr("Connect the session before switching modes.")
         }
     ];
     property <[MenuEntry]> saved_session_context_menu_entries: [
@@ -1679,6 +1714,11 @@ export component MainWindow inherits Window {
         // 按 kind 分流需要 Rust 投影"被右键节点类型"，见 WS-A 报告的跨组请求。
         {
             label: @tr("Session" => "Open"), shortcut: "",
+            enabled: root.has_saved_selection, checked: false, separator: false,
+            tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
+        },
+        {
+            label: @tr("Open SFTP"), shortcut: "",
             enabled: root.has_saved_selection, checked: false, separator: false,
             tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
         },
@@ -1927,23 +1967,20 @@ export component MainWindow inherits Window {
             else if (index == 9) { root.open_proxies_manager(); }
             else if (index == 10) { root.open_theme_manager(); }
         } else if (menu == 3) {
-            // View：面板可见性/位置统一入口（隐藏过的按默认侧恢复）。
+            // View：面板可见性 + 分屏（Local/SFTP 已并入 SFTP 标签）。
             if (index == 0) { root.toggle_panel("sessions"); }
-            else if (index == 1) { root.toggle_panel("local"); }
-            else if (index == 2) { root.toggle_panel("sftp"); }
-            else if (index == 3) { root.toggle_panel("tunnels"); }
-            else if (index == 4) { root.toggle_panel("quick_commands"); }
-            else if (index == 5) {
-                // 打开 Transfers 摘要时顺带展开 SFTP 传输抽屉，便于暂停/恢复/重试。
-                if (!root.transfers_visible && !root.transfer_drawer_expanded) {
+            else if (index == 1) { root.toggle_panel("tunnels"); }
+            else if (index == 2) { root.toggle_panel("quick_commands"); }
+            else if (index == 3) {
+                if (!root.transfers_visible) {
                     root.transfer_toggle_expanded();
                 }
                 root.toggle_panel("transfers");
             }
             // WP4：Split Right / Split Down / Close Current Pane。
-            else if (index == 7) { root.split_workspace("right"); }
-            else if (index == 8) { root.split_workspace("down"); }
-            else if (index == 9) { root.close_split_pane(-1); }
+            else if (index == 5) { root.split_workspace("right"); }
+            else if (index == 6) { root.split_workspace("down"); }
+            else if (index == 7) { root.close_split_pane(-1); }
         } else if (menu == 4) {
             // Help
             if (index == 0) { root.about_dialog_visible = true; }
@@ -1981,13 +2018,14 @@ export component MainWindow inherits Window {
                 else if (index == 5) { root.edit_folder_defaults(); }
             } else {
                 if (index == 0) { root.open_selected_saved_session(); }
-                else if (index == 1) { root.load_selected_saved_session_into_editor(); }
-                else if (index == 2) { root.update_selected_saved_session(); }
-                else if (index == 3) {
+                else if (index == 1) { root.open_selected_saved_session_sftp(); }
+                else if (index == 2) { root.load_selected_saved_session_into_editor(); }
+                else if (index == 3) { root.update_selected_saved_session(); }
+                else if (index == 4) {
                     root.delete_session_confirmation_text = "";
                     root.delete_session_dialog_visible = true;
                 }
-                else if (index == 5) { root.start_new_saved_session_editor(); }
+                else if (index == 6) { root.start_new_saved_session_editor(); }
             }
         } else if (which == 1) {
             // 会话树空白区菜单
@@ -2041,6 +2079,7 @@ export component MainWindow inherits Window {
             else if (index == 17) { root.send_key_input_to("all"); }
             else if (index == 18) { root.send_key_input_to("visible"); }
             else if (index == 19) { root.stop_input_sync(); }
+            else if (index == 21) { root.switch_active_tab_to_sftp(); }
         } else if (which == 7) {
             // N6：状态栏日志菜单（与终端菜单同一组语义动作）。
             if (index == 0) { root.terminal_logging_start(); }
@@ -2067,6 +2106,14 @@ export component MainWindow inherits Window {
             // N7：跨窗口迁移（索引 16/17；只换 UI 所有权）。
             else if (index == 16) { root.move_tab_to_new_window(root.tab_menu_id); }
             else if (index == 17) { root.move_tab_to_main_window(root.tab_menu_id); }
+            // Terminal ↔ SFTP in-place conversion (index 19).
+            else if (index == 19) {
+                if (root.tab_menu_mode_text == "sftp") {
+                    root.switch_tab_to_terminal(root.tab_menu_id);
+                } else if (root.tab_menu_mode_text == "terminal") {
+                    root.switch_tab_to_sftp(root.tab_menu_id);
+                }
+            }
         }
         root.close_context_menus();
         root.restore-focus-after-menu();
@@ -2353,7 +2400,82 @@ export component MainWindow inherits Window {
                     // TAB-3/TAB-6：QC 覆盖层只盖单窗格内容区（tab 栏常驻）；单终端实例保留
                     // 在底层但置为非交互（terminal-visible=false）。分屏时覆盖层只叠在聚焦
                     // 叶上（由叶子投影的 quick-connect 控制），其它叶保持正常终端。
-                    terminal-visible: !root.quick_connect_visible || root.workspace_split_active;
+                    terminal-visible: root.active_tab_mode_text == "terminal";
+                    active-tab-mode-text: root.active_tab_mode_text;
+                    sftp-rows: root.sftp_rows;
+                    sftp-crumbs: root.sftp_crumbs;
+                    sftp-selected-index: root.sftp_selected_index;
+                    sftp-sort-column: root.sftp_sort_column_text;
+                    sftp-sort-ascending: root.sftp_sort_ascending;
+                    sftp-sort-text: root.sftp_sort_text;
+                    sftp-show-hidden: root.sftp_show_hidden;
+                    sftp-item-count: root.sftp_item_count;
+                    sftp-dir-count: root.sftp_dir_count;
+                    sftp-selected-count: root.sftp_selected_count;
+                    sftp-empty-text: TextFormats.sftp-empty-display(root.sftp_empty_text, root.sftp_listing_kind_text, root.sftp_listing_rows_text, root.sftp_listing_session_key_text, root.sftp_listing_path_text, root.sftp_listing_error_text);
+                    sftp-error-text: root.sftp_listing_error_text;
+                    sftp-connected: root.sftp_available;
+                    sftp-remote-edit-active: root.sftp_remote_edit_active;
+                    sftp-remote-edit-text: root.sftp_remote_edit_text;
+                    sftp-path-text <=> root.sftp_path_text;
+                    sftp-local-rows: root.local_rows;
+                    sftp-local-path-text: root.local_path_text;
+                    sftp-local-show-hidden: root.local_show_hidden;
+                    sftp-local-sort-column: root.local_sort_column_text;
+                    sftp-local-sort-ascending: root.local_sort_ascending;
+                    sftp-local-sort-text: TextFormats.sftp-sort-summary(root.local_sort_column_text, root.local_sort_ascending);
+                    sftp-local-item-count: root.local_item_count;
+                    sftp-local-dir-count: root.local_dir_count;
+                    sftp-local-selected-count: root.local_selected_count;
+                    sftp-local-empty-text: root.local_empty_text;
+                    sftp-local-error-text: root.local_error_text;
+                    sftp-local-retry-visible: root.local_retry_visible;
+                    sftp-local-title-text: @tr("MainWindow" => "Local");
+                    sftp-local-selected-name-text: root.local_selected_name_text;
+                    sftp-local-selection-key: root.local_selection_key_text;
+                    sftp-selection-key: root.sftp_selection_key_text;
+                    sftp-column-ratio: root.sftp_column_ratio;
+                    sftp-refresh() => { root.refresh_sftp(); }
+                    sftp-up() => { root.open_sftp_parent(); }
+                    sftp-home() => { root.open_sftp_path("/"); }
+                    sftp-open-path(path) => { root.open_sftp_path(path); }
+                    sftp-open-crumb(index) => { root.open_sftp_crumb(index); }
+                    sftp-sort-by(column) => { root.sort_sftp(column); }
+                    sftp-toggle-hidden() => { root.toggle_sftp_hidden(); }
+                    sftp-select-row(index, ctrl, shift) => { root.select_sftp_row(index, ctrl, shift); }
+                    sftp-activate-row(index) => {
+                        root.select_sftp_entry(index);
+                        root.activate_sftp_entry();
+                    }
+                    sftp-context-menu-requested(index, x, y) => {
+                        root.begin_sftp_row_context_menu(index, x, y);
+                    }
+                    sftp-panel-menu-requested(x, y) => {
+                        root.begin_sftp_context_menu("remote-blank", x, y);
+                    }
+                    sftp-save-edit() => { root.save_sftp_remote_edit(); }
+                    sftp-cancel-edit() => { root.cancel_sftp_remote_edit(); }
+                    sftp-drag-remote-transfer(key) => { return root.drag_remote_transfer(key); }
+                    sftp-drop-on-remote-row(index, data, action) => { root.drop_on_remote_row(index, data, action); }
+                    sftp-drop-on-remote-blank(data, action) => { root.drop_on_remote_blank(data, action); }
+                    sftp-local-up() => { root.local_up(); }
+                    sftp-local-home() => { root.local_home(); }
+                    sftp-local-refresh() => { root.local_refresh(); }
+                    sftp-local-open-path(path) => { root.local_open_path(path); }
+                    sftp-local-sort-by(column) => { root.local_sort_by(column); }
+                    sftp-local-toggle-hidden() => { root.local_toggle_hidden(); }
+                    sftp-local-select-row(index, ctrl, shift) => { root.local_select_row(index, ctrl, shift); }
+                    sftp-local-activate-row(index) => { root.local_activate_row(index); }
+                    sftp-local-context-menu-requested(index, x, y) => {
+                        root.begin_sftp_context_menu("local", x, y);
+                    }
+                    sftp-local-retry() => { root.local_retry(); }
+                    sftp-drag-local-transfer(key) => { return root.drag_local_transfer(key); }
+                    sftp-drop-on-local(data, action) => { root.drop_on_local(data, action); }
+                    sftp-copy-selection() => { root.copy_file_selection(); }
+                    sftp-cut-selection() => { root.cut_file_selection(); }
+                    sftp-paste-cross-pane() => { root.paste_cross_pane(); }
+                    sftp-column-ratio-changed(ratio) => { root.sftp_column_ratio_changed(ratio); }
                     quick-connect-visible: root.quick_connect_visible;
                     tabs: root.tabs;
                     title-text: TextFormats.terminal-title-display(root.terminal_title_has_session, root.terminal_title_name_text);
@@ -2411,7 +2533,7 @@ export component MainWindow inherits Window {
                     split-focused-leaf-h: root.workspace_split_focused_leaf_h;
                     split-secondary-leaf-w: root.workspace_split_secondary_leaf_w;
                     split-secondary-leaf-h: root.workspace_split_secondary_leaf_h;
-                    split-qc-shown: root.workspace_split_qc_shown;
+                    split-qc-shown: false;
                     split-focused-quick-connect: root.workspace_split_focused_quick_connect;
                     split-qc-leaf-x: root.workspace_split_qc_leaf_x;
                     split-qc-leaf-y: root.workspace_split_qc_leaf_y;

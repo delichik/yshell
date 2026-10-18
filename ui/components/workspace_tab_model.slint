@@ -3,6 +3,8 @@ export struct WorkspaceTab {
     id: string,
     title: string,
     state_text: string,
+    /// `new` / `terminal` / `sftp` — drives the tab icon.
+    mode_text: string,
     connected: bool,
     active: bool,
     /// N6：该会话正在写日志（标签角标 REC）。

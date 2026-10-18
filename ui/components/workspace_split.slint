@@ -8,6 +8,8 @@ import { TerminalView } from "terminal_view.slint";
 import { WorkspaceTab } from "workspace_tab_model.slint";
 import { WorkspaceTabBar } from "workspace_tab_bar.slint";
 import { WorkspacePaneLeaf, WorkspaceSplitter } from "workspace_pane_model.slint";
+import { QuickConnectPage, QuickConnectRow, QuickLinkRow } from "../pages/quick_connect.slint";
+import { SftpPaneData, SftpTabPage } from "sftp_tab_page.slint";
 
 component SplitPaneLeaf inherits Rectangle {
     in property <bool> empty: false;
@@ -15,6 +17,16 @@ component SplitPaneLeaf inherits Rectangle {
     /// TAB-6：本叶被 Quick Connect 覆盖层盖住（只可能是聚焦叶）。终端实例仍按满尺寸
     /// 布局并保持存活，但不再接收键盘/鼠标/焦点；其它叶保持正常终端。
     in property <bool> quick-connect: false;
+    /// `new` / `terminal` / `sftp`.
+    in property <string> mode-text: "terminal";
+    in property <string> quick-connect-input-text: "";
+    in property <string> quick-connect-error-text: "";
+    in property <string> quick-connect-summary-text: "";
+    in property <bool> quick-connect-history-enabled: true;
+    in property <string> quick-connect-last-target-text: "";
+    in property <[QuickConnectRow]> quick-connect-rows: [];
+    in property <[QuickLinkRow]> quick-link-rows: [];
+    in property <SftpPaneData> sftp;
     in property <image> terminal-image;
     in property <int> pane-id: 0;
     in property <[WorkspaceTab]> tabs: [];
@@ -35,8 +47,8 @@ component SplitPaneLeaf inherits Rectangle {
     in property <bool> connection-overlay-pending: false;
     in property <bool> view-visible: true;
 
-    /// 终端交互：非空且没有被 Quick Connect 覆盖层盖住。
-    property <bool> show-terminal: root.view-visible && !root.empty;
+    /// 终端交互：非空且当前标签是 Terminal 模式。
+    property <bool> show-terminal: root.view-visible && !root.empty && root.mode-text == "terminal";
     out property <bool> terminal-focused: root.show-terminal && !root.quick-connect && root.focused && leaf_tv.terminal-focused;
     /// 内容区高度（叶高 − tab 栏），供宿主 QC overlay 对齐。
     out property <length> content-height: max(0px, root.height - Theme.bar-height-tabs);
@@ -108,6 +120,50 @@ component SplitPaneLeaf inherits Rectangle {
     callback tab-context-menu-requested(string, string, length, length);
     callback new-session();
     pure callback drag-tab-transfer(string) -> data-transfer;
+
+    // --- New Tab (Quick Connect) page -----------------------------------
+    callback quick-connect-input-changed(string);
+    callback quick-connect-submit(string);
+    callback quick-connect-connect-target(string);
+    callback quick-connect-pin-target(string);
+    callback quick-connect-copy-target(string);
+    callback quick-connect-remove-link(string);
+    callback quick-connect-save-as-session(string);
+    callback quick-connect-clear-history();
+
+    // --- SFTP page ------------------------------------------------------
+    callback sftp-refresh();
+    callback sftp-up();
+    callback sftp-home();
+    callback sftp-open-path(string);
+    callback sftp-open-crumb(int);
+    callback sftp-sort-by(string);
+    callback sftp-toggle-hidden();
+    callback sftp-select-row(int, bool, bool);
+    callback sftp-activate-row(int);
+    callback sftp-context-menu-requested(int, length, length);
+    callback sftp-panel-menu-requested(length, length);
+    callback sftp-save-edit();
+    callback sftp-cancel-edit();
+    pure callback sftp-drag-remote-transfer(string) -> data-transfer;
+    callback sftp-drop-on-remote-row(int, data-transfer, DragAction);
+    callback sftp-drop-on-remote-blank(data-transfer, DragAction);
+    callback sftp-local-up();
+    callback sftp-local-home();
+    callback sftp-local-refresh();
+    callback sftp-local-open-path(string);
+    callback sftp-local-sort-by(string);
+    callback sftp-local-toggle-hidden();
+    callback sftp-local-select-row(int, bool, bool);
+    callback sftp-local-activate-row(int);
+    callback sftp-local-context-menu-requested(int, length, length);
+    callback sftp-local-retry();
+    pure callback sftp-drag-local-transfer(string) -> data-transfer;
+    callback sftp-drop-on-local(data-transfer, DragAction);
+    callback sftp-copy-selection();
+    callback sftp-cut-selection();
+    callback sftp-paste-cross-pane();
+    callback sftp-column-ratio-changed(float);
 
     min-width: 0px;
     min-height: 0px;
@@ -259,6 +315,106 @@ component SplitPaneLeaf inherits Rectangle {
                     }
                 }
 
+                if root.mode-text == "new" : QuickConnectPage {
+                    x: 0px;
+                    y: 0px;
+                    width: parent.width;
+                    height: parent.height;
+                    input-text: root.quick-connect-input-text;
+                    input-error-text: root.quick-connect-error-text;
+                    summary-text: root.quick-connect-summary-text;
+                    history-enabled: root.quick-connect-history-enabled;
+                    last-target-text: root.quick-connect-last-target-text;
+                    recent-rows: root.quick-connect-rows;
+                    link-rows: root.quick-link-rows;
+                    input-changed(text) => {
+                        root.focus-requested();
+                        root.quick-connect-input-changed(text);
+                    }
+                    submit(text) => { root.quick-connect-submit(text); }
+                    connect-target(target) => { root.quick-connect-connect-target(target); }
+                    pin-target(target) => { root.quick-connect-pin-target(target); }
+                    copy-target(target) => { root.quick-connect-copy-target(target); }
+                    remove-link(id) => { root.quick-connect-remove-link(id); }
+                    save-as-session(target) => { root.quick-connect-save-as-session(target); }
+                    clear-history() => { root.quick-connect-clear-history(); }
+                }
+
+                if root.mode-text == "sftp" : SftpTabPage {
+                    x: 0px;
+                    y: 0px;
+                    width: parent.width;
+                    height: parent.height;
+                    rows: root.sftp.rows;
+                    crumbs: root.sftp.crumbs;
+                    selected-index: root.sftp.selected-index;
+                    sort-column: root.sftp.sort-column-text;
+                    sort-ascending: root.sftp.sort-ascending;
+                    sort-text: root.sftp.sort-text;
+                    show-hidden: root.sftp.show-hidden;
+                    item-count: root.sftp.item-count;
+                    dir-count: root.sftp.dir-count;
+                    selected-count: root.sftp.selected-count;
+                    empty-text: root.sftp.empty-text;
+                    error-text: root.sftp.error-text;
+                    connected: root.sftp.connected;
+                    remote-edit-active: root.sftp.remote-edit-active;
+                    remote-edit-text: root.sftp.remote-edit-text;
+                    path-text: root.sftp.path-text;
+                    local-rows: root.sftp.local-rows;
+                    local-path-text: root.sftp.local-path-text;
+                    local-show-hidden: root.sftp.local-show-hidden;
+                    local-sort-column: root.sftp.local-sort-column-text;
+                    local-sort-ascending: root.sftp.local-sort-ascending;
+                    local-sort-text: root.sftp.local-sort-text;
+                    local-item-count: root.sftp.local-item-count;
+                    local-dir-count: root.sftp.local-dir-count;
+                    local-selected-count: root.sftp.local-selected-count;
+                    local-empty-text: root.sftp.local-empty-text;
+                    local-error-text: root.sftp.local-error-text;
+                    local-retry-visible: root.sftp.local-retry-visible;
+                    local-title-text: @tr("Local");
+                    local-selected-name-text: root.sftp.local-selected-name-text;
+                    local-selection-key: root.sftp.local-selection-key;
+                    sftp-selection-key: root.sftp.sftp-selection-key;
+                    column-ratio: root.sftp.column-ratio;
+                    column-ratio-changed(ratio) => {
+                        root.focus-requested();
+                        root.sftp-column-ratio-changed(ratio);
+                    }
+                    refresh => { root.focus-requested(); root.sftp-refresh(); }
+                    up => { root.focus-requested(); root.sftp-up(); }
+                    home => { root.focus-requested(); root.sftp-home(); }
+                    open-path(path) => { root.focus-requested(); root.sftp-open-path(path); }
+                    open-crumb(index) => { root.focus-requested(); root.sftp-open-crumb(index); }
+                    sort-by(column) => { root.focus-requested(); root.sftp-sort-by(column); }
+                    toggle-hidden => { root.focus-requested(); root.sftp-toggle-hidden(); }
+                    select-row(index, ctrl, shift) => { root.focus-requested(); root.sftp-select-row(index, ctrl, shift); }
+                    activate-row(index) => { root.focus-requested(); root.sftp-activate-row(index); }
+                    context-menu-requested(index, x, y) => { root.focus-requested(); root.sftp-context-menu-requested(index, x, y); }
+                    panel-menu-requested(x, y) => { root.focus-requested(); root.sftp-panel-menu-requested(x, y); }
+                    save-edit => { root.focus-requested(); root.sftp-save-edit(); }
+                    cancel-edit => { root.focus-requested(); root.sftp-cancel-edit(); }
+                    drag-remote-transfer(key) => { return root.sftp-drag-remote-transfer(key); }
+                    drop-on-remote-row(index, data, action) => { root.focus-requested(); root.sftp-drop-on-remote-row(index, data, action); }
+                    drop-on-remote-blank(data, action) => { root.focus-requested(); root.sftp-drop-on-remote-blank(data, action); }
+                    local-up => { root.focus-requested(); root.sftp-local-up(); }
+                    local-home => { root.focus-requested(); root.sftp-local-home(); }
+                    local-refresh => { root.focus-requested(); root.sftp-local-refresh(); }
+                    local-open-path(path) => { root.focus-requested(); root.sftp-local-open-path(path); }
+                    local-sort-by(column) => { root.focus-requested(); root.sftp-local-sort-by(column); }
+                    local-toggle-hidden => { root.focus-requested(); root.sftp-local-toggle-hidden(); }
+                    local-select-row(index, ctrl, shift) => { root.focus-requested(); root.sftp-local-select-row(index, ctrl, shift); }
+                    local-activate-row(index) => { root.focus-requested(); root.sftp-local-activate-row(index); }
+                    local-context-menu-requested(index, x, y) => { root.focus-requested(); root.sftp-local-context-menu-requested(index, x, y); }
+                    local-retry => { root.focus-requested(); root.sftp-local-retry(); }
+                    drag-local-transfer(key) => { return root.sftp-drag-local-transfer(key); }
+                    drop-on-local(data, action) => { root.focus-requested(); root.sftp-drop-on-local(data, action); }
+                    copy-selection => { root.focus-requested(); root.sftp-copy-selection(); }
+                    cut-selection => { root.focus-requested(); root.sftp-cut-selection(); }
+                    paste-cross-pane => { root.focus-requested(); root.sftp-paste-cross-pane(); }
+                }
+
                 if root.show-terminal && !root.focused : TouchArea {
                     width: parent.width;
                     height: parent.height;
@@ -309,6 +465,13 @@ export component WorkspaceSplitView inherits Rectangle {
 
     out property <bool> terminal-focused: false;
 
+    /// New Tab page data shared by every leaf (per-tab input lives in the leaf).
+    in property <string> quick-connect-summary-text: "";
+    in property <bool> quick-connect-history-enabled: true;
+    in property <string> quick-connect-last-target-text: "";
+    in property <[QuickConnectRow]> quick-connect-rows: [];
+    in property <[QuickLinkRow]> quick-link-rows: [];
+
     callback focus-pane(int);
     callback terminal-key(string, bool, bool, bool, bool);
     callback terminal-scroll(int);
@@ -340,6 +503,50 @@ export component WorkspaceSplitView inherits Rectangle {
     callback new-session();
     pure callback drag-tab-transfer(string) -> data-transfer;
 
+    // New Tab page.
+    callback quick-connect-input-changed(string);
+    callback quick-connect-submit(string);
+    callback quick-connect-connect-target(string);
+    callback quick-connect-pin-target(string);
+    callback quick-connect-copy-target(string);
+    callback quick-connect-remove-link(string);
+    callback quick-connect-save-as-session(string);
+    callback quick-connect-clear-history();
+
+    // SFTP page.
+    callback sftp-refresh();
+    callback sftp-up();
+    callback sftp-home();
+    callback sftp-open-path(string);
+    callback sftp-open-crumb(int);
+    callback sftp-sort-by(string);
+    callback sftp-toggle-hidden();
+    callback sftp-select-row(int, bool, bool);
+    callback sftp-activate-row(int);
+    callback sftp-context-menu-requested(int, length, length);
+    callback sftp-panel-menu-requested(length, length);
+    callback sftp-save-edit();
+    callback sftp-cancel-edit();
+    pure callback sftp-drag-remote-transfer(string) -> data-transfer;
+    callback sftp-drop-on-remote-row(int, data-transfer, DragAction);
+    callback sftp-drop-on-remote-blank(data-transfer, DragAction);
+    callback sftp-local-up();
+    callback sftp-local-home();
+    callback sftp-local-refresh();
+    callback sftp-local-open-path(string);
+    callback sftp-local-sort-by(string);
+    callback sftp-local-toggle-hidden();
+    callback sftp-local-select-row(int, bool, bool);
+    callback sftp-local-activate-row(int);
+    callback sftp-local-context-menu-requested(int, length, length);
+    callback sftp-local-retry();
+    pure callback sftp-drag-local-transfer(string) -> data-transfer;
+    callback sftp-drop-on-local(data-transfer, DragAction);
+    callback sftp-copy-selection();
+    callback sftp-cut-selection();
+    callback sftp-paste-cross-pane();
+    callback sftp-column-ratio-changed(float);
+
     public function focus-terminal() { }
 
     for leaf in root.leaves : SplitPaneLeaf {
@@ -349,6 +556,15 @@ export component WorkspaceSplitView inherits Rectangle {
         height: root.height * leaf.h;
         empty: leaf.empty;
         quick-connect: leaf.quick-connect;
+        mode-text: leaf.mode_text;
+        quick-connect-input-text: leaf.quick_connect_input_text;
+        quick-connect-error-text: leaf.quick_connect_error_text;
+        quick-connect-summary-text: root.quick-connect-summary-text;
+        quick-connect-history-enabled: root.quick-connect-history-enabled;
+        quick-connect-last-target-text: root.quick-connect-last-target-text;
+        quick-connect-rows: root.quick-connect-rows;
+        quick-link-rows: root.quick-link-rows;
+        sftp: leaf.sftp;
         pane-id: leaf.pane-id;
         tabs: leaf.tabs;
         focused: leaf.focused;
@@ -398,6 +614,46 @@ export component WorkspaceSplitView inherits Rectangle {
         }
         new-session() => { root.new-session(); }
         drag-tab-transfer(id) => { return root.drag-tab-transfer(id); }
+        quick-connect-input-changed(text) => { root.quick-connect-input-changed(text); }
+        quick-connect-submit(text) => { root.quick-connect-submit(text); }
+        quick-connect-connect-target(target) => { root.quick-connect-connect-target(target); }
+        quick-connect-pin-target(target) => { root.quick-connect-pin-target(target); }
+        quick-connect-copy-target(target) => { root.quick-connect-copy-target(target); }
+        quick-connect-remove-link(id) => { root.quick-connect-remove-link(id); }
+        quick-connect-save-as-session(target) => { root.quick-connect-save-as-session(target); }
+        quick-connect-clear-history() => { root.quick-connect-clear-history(); }
+        sftp-refresh() => { root.sftp-refresh(); }
+        sftp-up() => { root.sftp-up(); }
+        sftp-home() => { root.sftp-home(); }
+        sftp-open-path(path) => { root.sftp-open-path(path); }
+        sftp-open-crumb(index) => { root.sftp-open-crumb(index); }
+        sftp-sort-by(column) => { root.sftp-sort-by(column); }
+        sftp-toggle-hidden() => { root.sftp-toggle-hidden(); }
+        sftp-select-row(index, ctrl, shift) => { root.sftp-select-row(index, ctrl, shift); }
+        sftp-activate-row(index) => { root.sftp-activate-row(index); }
+        sftp-context-menu-requested(index, x, y) => { root.sftp-context-menu-requested(index, x, y); }
+        sftp-panel-menu-requested(x, y) => { root.sftp-panel-menu-requested(x, y); }
+        sftp-save-edit() => { root.sftp-save-edit(); }
+        sftp-cancel-edit() => { root.sftp-cancel-edit(); }
+        sftp-drag-remote-transfer(key) => { return root.sftp-drag-remote-transfer(key); }
+        sftp-drop-on-remote-row(index, data, action) => { root.sftp-drop-on-remote-row(index, data, action); }
+        sftp-drop-on-remote-blank(data, action) => { root.sftp-drop-on-remote-blank(data, action); }
+        sftp-local-up() => { root.sftp-local-up(); }
+        sftp-local-home() => { root.sftp-local-home(); }
+        sftp-local-refresh() => { root.sftp-local-refresh(); }
+        sftp-local-open-path(path) => { root.sftp-local-open-path(path); }
+        sftp-local-sort-by(column) => { root.sftp-local-sort-by(column); }
+        sftp-local-toggle-hidden() => { root.sftp-local-toggle-hidden(); }
+        sftp-local-select-row(index, ctrl, shift) => { root.sftp-local-select-row(index, ctrl, shift); }
+        sftp-local-activate-row(index) => { root.sftp-local-activate-row(index); }
+        sftp-local-context-menu-requested(index, x, y) => { root.sftp-local-context-menu-requested(index, x, y); }
+        sftp-local-retry() => { root.sftp-local-retry(); }
+        sftp-drag-local-transfer(key) => { return root.sftp-drag-local-transfer(key); }
+        sftp-drop-on-local(data, action) => { root.sftp-drop-on-local(data, action); }
+        sftp-copy-selection() => { root.sftp-copy-selection(); }
+        sftp-cut-selection() => { root.sftp-cut-selection(); }
+        sftp-paste-cross-pane() => { root.sftp-paste-cross-pane(); }
+        sftp-column-ratio-changed(ratio) => { root.sftp-column-ratio-changed(ratio); }
     }
 
     for handle in root.splitters : Rectangle {

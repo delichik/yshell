@@ -714,6 +714,134 @@ fn place_tab_split_size_suffix_sets_pane0_ratio() {
 }
 
 #[test]
+fn saved_session_opens_directly_as_an_sftp_tab() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 1);
+    let projection = runtime
+        .open_saved_session_sftp("saved-0")
+        .expect("open sftp");
+
+    assert_eq!(projection.tab_count, 1);
+    assert_eq!(projection.active_tab_mode_text, "sftp");
+    assert_eq!(projection.tabs[0].title, "Session 0");
+    assert_eq!(projection.tabs[0].mode_text, "sftp");
+    assert!(projection.sftp_available);
+    assert_eq!(runtime.sessions.len(), 1);
+    assert!(runtime.sessions.values().next().expect("runtime").is_sftp());
+    assert_tab_invariants(&runtime);
+}
+
+#[test]
+fn terminal_and_sftp_modes_convert_in_place() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 1);
+    let tab_id = open_saved_tab(&mut runtime, "saved-0");
+    let session_key = runtime.tabs[0].session_id().expect("session").to_owned();
+    assert_eq!(runtime.projection().active_tab_mode_text, "terminal");
+
+    let to_sftp = runtime.switch_tab_to_sftp(&tab_id).expect("switch to sftp");
+    assert_eq!(to_sftp.active_tab_id, tab_id);
+    assert_eq!(to_sftp.active_tab_mode_text, "sftp");
+    assert!(to_sftp.sftp_available);
+    assert!(runtime.sessions[&session_key].is_sftp());
+    assert!(runtime.sessions[&session_key].shell_session.is_none());
+    assert_eq!(runtime.sessions.len(), 1);
+
+    let to_terminal = runtime
+        .switch_tab_to_terminal(&tab_id)
+        .expect("switch to terminal");
+    assert_eq!(to_terminal.active_tab_id, tab_id);
+    assert_eq!(to_terminal.active_tab_mode_text, "terminal");
+    assert!(!runtime.sessions[&session_key].is_sftp());
+    assert_tab_invariants(&runtime);
+}
+
+#[test]
+fn closing_the_last_tab_requests_window_close() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    runtime.open_new_tab();
+    let tab_id = runtime.active_tab_id.clone().expect("tab");
+    runtime.close_tab_immediate(&tab_id);
+    assert_eq!(runtime.take_requested_window_close(), Some(0));
+}
+
+#[test]
+fn split_can_show_two_sftp_tabs_with_independent_local_state() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 2);
+    let first_tab = runtime
+        .open_saved_session_sftp("saved-0")
+        .expect("first sftp");
+    let first_tab_id = first_tab.active_tab_id.clone();
+    let second_tab = runtime
+        .open_saved_session_sftp("saved-1")
+        .expect("second sftp");
+    let second_tab_id = second_tab.active_tab_id.clone();
+
+    let split = runtime
+        .place_tab_split(&second_tab_id, 0, "right")
+        .expect("split");
+    assert!(split.workspace_split.active);
+    assert_eq!(split.workspace_split.leaves.len(), 2);
+    assert!(split
+        .workspace_split
+        .leaves
+        .iter()
+        .all(|leaf| leaf.mode_text == "sftp"));
+    assert!(split
+        .workspace_split
+        .leaves
+        .iter()
+        .all(|leaf| leaf.sftp.connected));
+
+    // Each SFTP tab keeps its own local directory.
+    let dir_a = temp.path().join("local-a");
+    let dir_b = temp.path().join("local-b");
+    std::fs::create_dir_all(&dir_a).expect("dir a");
+    std::fs::create_dir_all(&dir_b).expect("dir b");
+    let first_pane = split
+        .workspace_split
+        .leaves
+        .iter()
+        .find(|leaf| leaf.tab_id == first_tab_id)
+        .expect("first leaf")
+        .pane_id;
+    let second_pane = split
+        .workspace_split
+        .leaves
+        .iter()
+        .find(|leaf| leaf.tab_id == second_tab_id)
+        .expect("second leaf")
+        .pane_id;
+
+    runtime.focus_split_pane(first_pane).expect("focus first");
+    runtime.open_local_path(&dir_a.display().to_string());
+    runtime.focus_split_pane(second_pane).expect("focus second");
+    runtime.open_local_path(&dir_b.display().to_string());
+
+    let projection = runtime.projection();
+    let first_leaf = projection
+        .workspace_split
+        .leaves
+        .iter()
+        .find(|leaf| leaf.tab_id == first_tab_id)
+        .expect("first leaf");
+    let second_leaf = projection
+        .workspace_split
+        .leaves
+        .iter()
+        .find(|leaf| leaf.tab_id == second_tab_id)
+        .expect("second leaf");
+    assert_eq!(first_leaf.sftp.local_path_text, dir_a.display().to_string());
+    assert_eq!(
+        second_leaf.sftp.local_path_text,
+        dir_b.display().to_string()
+    );
+    assert_tab_invariants(&runtime);
+}
+
+#[test]
 fn move_last_tab_out_of_pane_auto_unsplits() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 2);

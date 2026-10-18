@@ -350,9 +350,7 @@ impl AppRuntime {
     pub fn stop_tunnel(&mut self, tunnel_id: &str) -> AppProjection {
         self.set_status_kind(
             "tunnel-not-running",
-            format!(
-                "Tunnel `{tunnel_id}` is not running; port forwarding is not provisioned yet."
-            ),
+            format!("Tunnel `{tunnel_id}` is not running; port forwarding is not provisioned yet."),
             tunnel_id.to_owned(),
             String::new(),
         );
@@ -901,11 +899,17 @@ fn sanitize_layout(layout: &LayoutProfile) -> LayoutProfile {
     let mut left = Vec::new();
     let mut right = Vec::new();
     for slot in &layout.left {
+        if matches!(slot.panel, PanelId::Local | PanelId::Sftp) {
+            continue;
+        }
         if seen.insert(slot.panel) {
             left.push(*slot);
         }
     }
     for slot in &layout.right {
+        if matches!(slot.panel, PanelId::Local | PanelId::Sftp) {
+            continue;
+        }
         if seen.insert(slot.panel) {
             right.push(*slot);
         }
@@ -1353,60 +1357,61 @@ fn stack_heights(
         return heights;
     }
 
-    let ratios_allocated = if let Some(fractions) = resolve_fractions(ratios, count.saturating_sub(1)) {
-        let weights: Vec<f32> = slots
-            .iter()
-            .enumerate()
-            .map(|(index, _)| {
-                let lower = if index == 0 {
-                    0.0
-                } else {
-                    fractions[index - 1]
-                };
-                let upper = if index + 1 == count {
-                    1.0
-                } else {
-                    fractions[index]
-                };
-                (upper - lower).max(0.0)
-            })
-            .collect();
-        let total: f32 = expanded.iter().map(|&index| weights[index]).sum();
-        for &index in &expanded {
-            heights[index] = if total > 0.0 {
-                flex * weights[index] / total
-            } else {
-                flex / expanded.len() as f32
-            };
-        }
-        true
-    } else {
-        let fills: Vec<usize> = expanded
-            .iter()
-            .copied()
-            .filter(|&index| auto_panel_height(slots[index].panel).is_none())
-            .collect();
-        if fills.is_empty() {
-            // 没有「填充」面板（例如 SFTP 被折叠/移走）：展开面板等分剩余高度。
-            let share = flex / expanded.len() as f32;
-            for &index in &expanded {
-                heights[index] = share;
-            }
-        } else {
-            let fixed: f32 = expanded
+    let ratios_allocated =
+        if let Some(fractions) = resolve_fractions(ratios, count.saturating_sub(1)) {
+            let weights: Vec<f32> = slots
                 .iter()
-                .filter_map(|&index| auto_panel_height(slots[index].panel))
-                .sum();
-            let share = ((flex - fixed).max(0.0)) / fills.len() as f32;
+                .enumerate()
+                .map(|(index, _)| {
+                    let lower = if index == 0 {
+                        0.0
+                    } else {
+                        fractions[index - 1]
+                    };
+                    let upper = if index + 1 == count {
+                        1.0
+                    } else {
+                        fractions[index]
+                    };
+                    (upper - lower).max(0.0)
+                })
+                .collect();
+            let total: f32 = expanded.iter().map(|&index| weights[index]).sum();
             for &index in &expanded {
-                heights[index] = auto_panel_height(slots[index].panel).unwrap_or(share);
+                heights[index] = if total > 0.0 {
+                    flex * weights[index] / total
+                } else {
+                    flex / expanded.len() as f32
+                };
             }
-            // 默认布局下内容尺寸面板（Tunnels/Quick Commands）不套 120px 下限，
-            // 保持与旧 WinCard 相同的内容高度；「填充」面板仍受最小高度约束。
-            enforce_min_heights(&mut heights, &fills);
-        }
-        false
-    };
+            true
+        } else {
+            let fills: Vec<usize> = expanded
+                .iter()
+                .copied()
+                .filter(|&index| auto_panel_height(slots[index].panel).is_none())
+                .collect();
+            if fills.is_empty() {
+                // 没有「填充」面板（例如 SFTP 被折叠/移走）：展开面板等分剩余高度。
+                let share = flex / expanded.len() as f32;
+                for &index in &expanded {
+                    heights[index] = share;
+                }
+            } else {
+                let fixed: f32 = expanded
+                    .iter()
+                    .filter_map(|&index| auto_panel_height(slots[index].panel))
+                    .sum();
+                let share = ((flex - fixed).max(0.0)) / fills.len() as f32;
+                for &index in &expanded {
+                    heights[index] = auto_panel_height(slots[index].panel).unwrap_or(share);
+                }
+                // 默认布局下内容尺寸面板（Tunnels/Quick Commands）不套 120px 下限，
+                // 保持与旧 WinCard 相同的内容高度；「填充」面板仍受最小高度约束。
+                enforce_min_heights(&mut heights, &fills);
+            }
+            false
+        };
     // 显式比例布局沿用「所有展开面板 >= 120px」的既有契约；默认布局只抬填充
     // 面板（Tunnels/Quick Commands 保持 preferred，避免改变 1440×900 基线）。
     if ratios_allocated {
@@ -1762,7 +1767,7 @@ mod tests {
                 slot(PanelId::Tunnels, false),
             ],
             right: vec![
-                slot(PanelId::Sftp, false),
+                slot(PanelId::Transfers, false),
                 slot(PanelId::QuickCommands, true),
             ],
             left_ratios: vec![0.4],
@@ -1867,7 +1872,10 @@ mod tests {
     #[test]
     fn layout_reading_dedupes_and_sanitizes() {
         let dirty = LayoutProfile {
-            left: vec![slot(PanelId::Sftp, true), slot(PanelId::Sftp, false)],
+            left: vec![
+                slot(PanelId::QuickCommands, true),
+                slot(PanelId::QuickCommands, false),
+            ],
             right: vec![
                 slot(PanelId::Tunnels, false),
                 slot(PanelId::Transfers, false),
@@ -1880,7 +1888,10 @@ mod tests {
             narrow_collapsed_side: Some(PanelSide::Left),
         };
         let model = PanelLayoutModel::from_layout(&dirty);
-        assert_eq!(panels_of(&model, PanelSide::Left), vec![PanelId::Sftp]);
+        assert_eq!(
+            panels_of(&model, PanelSide::Left),
+            vec![PanelId::QuickCommands]
+        );
         assert_eq!(
             panels_of(&model, PanelSide::Right),
             vec![PanelId::Tunnels, PanelId::Transfers]
@@ -1891,9 +1902,12 @@ mod tests {
         assert_eq!(width_of(&model, PanelSide::Left), LEFT_WIDTH_MAX);
         assert_eq!(width_of(&model, PanelSide::Right), RIGHT_WIDTH_MIN);
         assert_eq!(model.layout().narrow_collapsed_side, Some(PanelSide::Left));
-        assert!(model.collapsed(PanelId::Sftp));
+        assert!(model.collapsed(PanelId::QuickCommands));
         assert!(!model.collapsed(PanelId::Tunnels));
-        assert_eq!(model.placement(PanelId::Sftp), PanelPlacement::Left);
+        assert_eq!(
+            model.placement(PanelId::QuickCommands),
+            PanelPlacement::Left
+        );
         assert_eq!(model.placement(PanelId::Tunnels), PanelPlacement::Right);
     }
 
@@ -1904,7 +1918,11 @@ mod tests {
         assert!(model.move_to(PanelId::Sessions, PanelSide::Right, Some(0)));
         assert_eq!(
             panels_of(&model, PanelSide::Right),
-            vec![PanelId::Sessions, PanelId::Sftp, PanelId::QuickCommands]
+            vec![
+                PanelId::Sessions,
+                PanelId::Transfers,
+                PanelId::QuickCommands
+            ]
         );
         assert_eq!(panels_of(&model, PanelSide::Left), vec![PanelId::Tunnels]);
         assert!(model.collapsed(PanelId::Sessions));
@@ -1939,18 +1957,18 @@ mod tests {
     #[test]
     fn hide_and_show_roundtrip() {
         let mut model = PanelLayoutModel::from_layout(&sample_layout());
-        assert!(model.hide(PanelId::Sftp));
-        assert_eq!(model.placement(PanelId::Sftp), PanelPlacement::Hidden);
-        assert!(!model.collapsed(PanelId::Sftp));
-        assert!(!model.hide(PanelId::Sftp));
+        assert!(model.hide(PanelId::Transfers));
+        assert_eq!(model.placement(PanelId::Transfers), PanelPlacement::Hidden);
+        assert!(!model.collapsed(PanelId::Transfers));
+        assert!(!model.hide(PanelId::Transfers));
         assert!(model.layout().right_ratios.is_empty());
         // 显式显示：追加到指定栈尾。
-        assert!(model.move_to(PanelId::Sftp, PanelSide::Left, None));
+        assert!(model.move_to(PanelId::Transfers, PanelSide::Left, None));
         assert_eq!(
             panels_of(&model, PanelSide::Left),
-            vec![PanelId::Sessions, PanelId::Tunnels, PanelId::Sftp]
+            vec![PanelId::Sessions, PanelId::Tunnels, PanelId::Transfers]
         );
-        assert_eq!(model.placement(PanelId::Sftp), PanelPlacement::Left);
+        assert_eq!(model.placement(PanelId::Transfers), PanelPlacement::Left);
     }
 
     #[test]
@@ -1958,10 +1976,10 @@ mod tests {
         let layout = LayoutProfile {
             left: vec![
                 slot(PanelId::Sessions, false),
-                slot(PanelId::Sftp, false),
+                slot(PanelId::Transfers, false),
                 slot(PanelId::Tunnels, false),
             ],
-            right: vec![slot(PanelId::Transfers, false)],
+            right: vec![slot(PanelId::QuickCommands, false)],
             left_ratios: vec![0.0, 1.0],
             ..LayoutProfile::default()
         };
@@ -1993,7 +2011,7 @@ mod tests {
         let layout = LayoutProfile {
             left: vec![
                 slot(PanelId::Sessions, false),
-                slot(PanelId::Sftp, false),
+                slot(PanelId::Transfers, false),
                 slot(PanelId::Tunnels, false),
             ],
             left_ratios: vec![0.4],
@@ -2009,7 +2027,7 @@ mod tests {
         let nan = LayoutProfile {
             left: vec![
                 slot(PanelId::Sessions, false),
-                slot(PanelId::Sftp, false),
+                slot(PanelId::Transfers, false),
                 slot(PanelId::Tunnels, false),
             ],
             left_ratios: vec![f32::NAN, 0.6],
@@ -2027,12 +2045,12 @@ mod tests {
         assert_eq!(width_of(&model, PanelSide::Right), RIGHT_WIDTH_MAX);
         model.set_width(PanelSide::Left, 250.0);
         assert_eq!(width_of(&model, PanelSide::Left), 250);
-        assert!(model.set_collapsed(PanelId::Sftp, true));
-        assert!(!model.set_collapsed(PanelId::Sftp, true));
-        assert!(!model.toggle_collapsed(PanelId::Sftp));
-        assert!(!model.collapsed(PanelId::Sftp));
-        assert!(model.toggle_collapsed(PanelId::Sftp));
-        assert!(model.collapsed(PanelId::Sftp));
+        assert!(model.set_collapsed(PanelId::Transfers, true));
+        assert!(!model.set_collapsed(PanelId::Transfers, true));
+        assert!(!model.toggle_collapsed(PanelId::Transfers));
+        assert!(!model.collapsed(PanelId::Transfers));
+        assert!(model.toggle_collapsed(PanelId::Transfers));
+        assert!(model.collapsed(PanelId::Transfers));
         // 隐藏面板不可折叠。
         model.hide(PanelId::QuickCommands);
         assert!(!model.toggle_collapsed(PanelId::QuickCommands));
@@ -2043,8 +2061,6 @@ mod tests {
     fn every_panel_can_move_to_every_side() {
         let panels = [
             PanelId::Sessions,
-            PanelId::Local,
-            PanelId::Sftp,
             PanelId::Tunnels,
             PanelId::QuickCommands,
             PanelId::Transfers,
@@ -2058,13 +2074,7 @@ mod tests {
             }
         }
         assert_eq!(default_side(PanelId::Sessions), PanelSide::Left);
-        for panel in [
-            PanelId::Local,
-            PanelId::Sftp,
-            PanelId::Tunnels,
-            PanelId::QuickCommands,
-            PanelId::Transfers,
-        ] {
+        for panel in [PanelId::Tunnels, PanelId::QuickCommands, PanelId::Transfers] {
             assert_eq!(default_side(panel), PanelSide::Right);
         }
     }
@@ -2106,15 +2116,15 @@ mod tests {
         let mut runtime =
             AppRuntime::new_with_keychain(dir.path().to_path_buf(), None).expect("runtime");
         runtime
-            .move_panel(PanelId::Sftp, PanelSide::Left, Some(1))
+            .move_panel(PanelId::Tunnels, PanelSide::Left, Some(1))
             .expect("move");
         runtime
-            .toggle_panel_collapsed(PanelId::Sftp)
+            .toggle_panel_collapsed(PanelId::Tunnels)
             .expect("collapse");
         runtime.set_panel_area_size(1440.0, 794.0);
         // 栏宽拖拽预览 + 分栏拖拽预览，结束时一起落盘（Phase 2 的拖拽路径）。
         runtime.preview_panel_side_width(PanelSide::Left, 260.0);
-        // 左栈 = [Sessions, Sftp(折叠 32px)]；把边界拖到 Sessions 高 ≈ 400px 处。
+        // 左栈 = [Sessions, Tunnels(折叠 32px)]；把边界拖到 Sessions 高 ≈ 400px 处。
         runtime.preview_panel_split_pixels(PanelSide::Left, 0, 400.0);
         runtime.commit_panel_layout().expect("commit");
         runtime
@@ -2124,8 +2134,8 @@ mod tests {
         let reloaded =
             AppRuntime::new_with_keychain(dir.path().to_path_buf(), None).expect("reload");
         let model = reloaded.panel_layout();
-        assert_eq!(model.placement(PanelId::Sftp), PanelPlacement::Left);
-        assert!(model.collapsed(PanelId::Sftp));
+        assert_eq!(model.placement(PanelId::Tunnels), PanelPlacement::Left);
+        assert!(model.collapsed(PanelId::Tunnels));
         assert_eq!(width_of(&model, PanelSide::Left), 260);
         // 边界比例被夹取在 [MIN, MAX] 且显式落盘。
         let fractions = model.boundary_fractions(PanelSide::Left);
@@ -2135,7 +2145,7 @@ mod tests {
         assert_eq!(model.layout().narrow_collapsed_side, Some(PanelSide::Right));
         assert_eq!(
             panels_of(&model, PanelSide::Left),
-            vec![PanelId::Sessions, PanelId::Sftp]
+            vec![PanelId::Sessions, PanelId::Tunnels]
         );
     }
 
@@ -2146,7 +2156,7 @@ mod tests {
     }
 
     #[test]
-    fn layout_view_keeps_legacy_geometry_at_1440x900() {
+    fn layout_view_keeps_sessions_and_the_remaining_docks() {
         let layout = LayoutProfile::default();
         let view = compute_panel_layout(&layout, 1440.0, 794.0, None);
         assert_eq!(view.left_width, 240.0);
@@ -2160,36 +2170,22 @@ mod tests {
         let sessions = *view.frame(PanelId::Sessions).expect("sessions");
         assert_eq!(sessions.placement, PanelPlacement::Left);
         assert!(sessions.visible);
-        // 左右栏统一：栈顶/底各 12px 留白；同侧相邻 panel 之间只留分栏把手。
         assert_eq!(
             (sessions.x, sessions.y, sessions.width, sessions.height),
             (0.0, 12.0, 240.0, 770.0)
         );
 
-        let local = *view.frame(PanelId::Local).expect("local");
-        assert_eq!((local.x, local.y, local.width), (1100.0, 12.0, 340.0));
-        // Local + SFTP 均分弹性高度；Tunnels/QuickCommands 固定 200/89。
-        // 12 上留白 + 3×4 把手 + 200/89 → 两弹性面板各约 234.5px。
-        assert!(
-            approx(local.height, 234.5),
-            "local height = {}",
-            local.height
-        );
-        let sftp = *view.frame(PanelId::Sftp).expect("sftp");
-        assert_eq!((sftp.x, sftp.width), (1100.0, 340.0));
-        assert!(approx(sftp.y, 250.5), "sftp y = {}", sftp.y);
-        assert!(approx(sftp.height, 234.5), "sftp height = {}", sftp.height);
+        // Local/SFTP are no longer dock panels; the remaining panels keep the
+        // default right dock geometry.
+        assert!(view.frame(PanelId::Local).is_none());
+        assert!(view.frame(PanelId::Sftp).is_none());
         let tunnels = *view.frame(PanelId::Tunnels).expect("tunnels");
-        assert!(approx(tunnels.y, 489.0), "tunnels y = {}", tunnels.y);
-        assert!(
-            approx(tunnels.height, 200.0),
-            "tunnels height = {}",
-            tunnels.height
-        );
+        assert_eq!((tunnels.x, tunnels.y, tunnels.width), (1100.0, 12.0, 340.0));
+        assert!(tunnels.visible);
         let commands = *view.frame(PanelId::QuickCommands).expect("commands");
-        assert!(approx(commands.y, 693.0), "commands y = {}", commands.y);
-        assert!(approx(commands.y + commands.height + 12.0, 794.0));
-        // C0 默认不含 Transfers：默认隐藏，等 Panels 菜单恢复。
+        assert_eq!(commands.x, 1100.0);
+        assert!(commands.y > tunnels.y);
+        assert!(commands.visible);
         assert!(view.frame(PanelId::Transfers).is_none());
     }
 
@@ -2201,7 +2197,7 @@ mod tests {
         assert!(view.dock_toggle_visible);
         assert!(view.right_collapsed);
         assert_eq!(view.right_effective_width, 0.0);
-        assert!(!view.frame(PanelId::Sftp).expect("sftp").visible);
+        assert!(!view.frame(PanelId::Tunnels).expect("tunnels").visible);
         assert!(view.frame(PanelId::Sessions).expect("sessions").visible);
         assert_eq!(view.left_effective_width, 240.0);
 
@@ -2222,22 +2218,29 @@ mod tests {
         let view = compute_panel_layout(&layout, 1000.0, 600.0, Some(PanelSide::Right));
         assert!(!view.right_collapsed);
         assert_eq!(view.right_effective_width, 340.0);
-        assert!(view.frame(PanelId::Sftp).expect("sftp").visible);
+        assert!(view.frame(PanelId::Tunnels).expect("tunnels").visible);
     }
 
     #[test]
     fn explicit_ratios_drive_stack_heights() {
         let layout = LayoutProfile {
             left: vec![slot(PanelId::Sessions, false)],
-            right: vec![slot(PanelId::Sftp, false), slot(PanelId::Tunnels, false)],
+            right: vec![
+                slot(PanelId::Transfers, false),
+                slot(PanelId::Tunnels, false),
+            ],
             right_ratios: vec![0.5],
             ..LayoutProfile::default()
         };
         let view = compute_panel_layout(&layout, 1200.0, 500.0, None);
-        let sftp = *view.frame(PanelId::Sftp).expect("sftp");
+        let transfers = *view.frame(PanelId::Transfers).expect("transfers");
         let tunnels = *view.frame(PanelId::Tunnels).expect("tunnels");
         // available = 500 − 24 留白 − 4 把手 = 472，对半 = 236。
-        assert!(approx(sftp.height, 236.0), "sftp = {}", sftp.height);
+        assert!(
+            approx(transfers.height, 236.0),
+            "transfers = {}",
+            transfers.height
+        );
         assert!(
             approx(tunnels.height, 236.0),
             "tunnels = {}",
@@ -2250,14 +2253,17 @@ mod tests {
     fn min_height_is_enforced_by_rebalancing() {
         let layout = LayoutProfile {
             left: vec![slot(PanelId::Sessions, false)],
-            right: vec![slot(PanelId::Sftp, false), slot(PanelId::Tunnels, false)],
+            right: vec![
+                slot(PanelId::Transfers, false),
+                slot(PanelId::Tunnels, false),
+            ],
             right_ratios: vec![0.05],
             ..LayoutProfile::default()
         };
         let view = compute_panel_layout(&layout, 1200.0, 500.0, None);
-        let sftp = *view.frame(PanelId::Sftp).expect("sftp");
+        let transfers = *view.frame(PanelId::Transfers).expect("transfers");
         let tunnels = *view.frame(PanelId::Tunnels).expect("tunnels");
-        assert!(approx(sftp.height, PANEL_MIN_HEIGHT));
+        assert!(approx(transfers.height, PANEL_MIN_HEIGHT));
         assert!(approx(tunnels.height, 472.0 - PANEL_MIN_HEIGHT));
     }
 
@@ -2278,7 +2284,7 @@ mod tests {
             .filter(|frame| frame.placement == PanelPlacement::Right && frame.visible)
             .copied()
             .collect();
-        assert_eq!(right.len(), 4, "默认右栏 Local/SFTP/Tunnels/QuickCommands");
+        assert_eq!(right.len(), 2, "默认右栏 Tunnels/QuickCommands");
         // 不越界：最后一个面板底边最多到内容区底部留白之上。
         for frame in &right {
             assert!(
@@ -2296,8 +2302,8 @@ mod tests {
                 frame.height
             );
         }
-        let sftp = *view.frame(PanelId::Sftp).expect("sftp");
-        assert!(approx(sftp.height, PANEL_MIN_HEIGHT), "sftp = {}", sftp.height);
+        let tunnels = *view.frame(PanelId::Tunnels).expect("tunnels");
+        assert!(tunnels.height > 0.0, "tunnels = {}", tunnels.height);
 
         // 极短内容区：总下限也放不下时等比压缩，仍然不得越过内容区底边。
         let tiny = compute_panel_layout(
@@ -2325,14 +2331,17 @@ mod tests {
     fn collapsed_panel_pins_to_32px() {
         let layout = LayoutProfile {
             left: vec![slot(PanelId::Sessions, false)],
-            right: vec![slot(PanelId::Sftp, true), slot(PanelId::Tunnels, false)],
+            right: vec![
+                slot(PanelId::Transfers, true),
+                slot(PanelId::Tunnels, false),
+            ],
             ..LayoutProfile::default()
         };
         let view = compute_panel_layout(&layout, 1200.0, 500.0, None);
-        let sftp = *view.frame(PanelId::Sftp).expect("sftp");
+        let transfers = *view.frame(PanelId::Transfers).expect("transfers");
         let tunnels = *view.frame(PanelId::Tunnels).expect("tunnels");
-        assert!(sftp.collapsed);
-        assert!(approx(sftp.height, PANEL_COLLAPSED_HEIGHT));
+        assert!(transfers.collapsed);
+        assert!(approx(transfers.height, PANEL_COLLAPSED_HEIGHT));
         assert!(approx(tunnels.y, 12.0 + PANEL_COLLAPSED_HEIGHT + 4.0));
         // 唯一展开的面板吸收全部剩余高度（没有填充面板时等分）。
         assert!(approx(
@@ -2348,15 +2357,14 @@ mod tests {
             AppRuntime::new_with_keychain(dir.path().to_path_buf(), None).expect("runtime");
         runtime.set_panel_area_size(1440.0, 794.0);
         let view = runtime.panel_layout_view();
-        // C0 默认布局：左 Sessions + 右 Local/SFTP/Tunnels/QuickCommands 共 5 个；
+        // 默认布局：左 Sessions + 右 Tunnels/QuickCommands 共 3 个；
         // Transfers 不在栈中（默认隐藏）。
-        assert_eq!(view.frames.len(), 5);
+        assert_eq!(view.frames.len(), 3);
         assert!(view.frames.iter().all(|frame| frame.visible));
-        assert!(runtime.panel_visible(PanelId::Local));
+        assert!(runtime.panel_visible(PanelId::Tunnels));
         assert!(!runtime.panel_visible(PanelId::Transfers));
         let projection = runtime.projection();
         assert!(projection.sessions_visible);
-        assert!(projection.sftp_visible);
         assert!(projection.tunnels_visible);
         assert!(projection.commands_visible);
         assert!(!projection.transfers_visible);

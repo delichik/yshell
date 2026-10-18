@@ -90,9 +90,10 @@ fn submit_invalid_target_sets_inline_error_without_tab() {
 
     assert!(!projection.quick_connect_error_text.is_empty());
     assert!(projection.status_text.contains("Quick Connect error"));
-    // TAB-6：解析失败保持覆盖层打开（方便直接改），不建标签、不记历史。
+    // 解析失败保持 New Tab 打开（方便直接改），不建会话、不记历史。
     assert!(projection.quick_connect_visible);
-    assert!(runtime.tabs.is_empty());
+    assert_eq!(runtime.tabs.len(), 1);
+    assert!(runtime.tabs[0].is_new_tab());
     assert!(runtime.config_document.quick_connect.history.is_empty());
     assert_eq!(projection.quick_connect_input_text, "bad host:notaport");
 
@@ -230,94 +231,92 @@ fn pin_and_remove_quick_links_persist() {
 }
 
 #[test]
-fn submit_closes_the_overlay_but_invalid_input_keeps_it_open() {
+fn submit_invalid_input_keeps_the_new_tab_and_success_converts_it() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 0);
-    // 启动：覆盖层打开、零标签。
-    assert!(runtime.projection().quick_connect_visible);
+    // 启动新标签页。
+    let opened = runtime.open_new_tab();
+    assert!(opened.quick_connect_visible);
+    assert_eq!(opened.tab_count, 1);
 
-    // 解析失败：内联错误 + 覆盖层保持打开，不建标签。
+    // 解析失败：内联错误 + 标签保持 New Tab，不建会话。
     let invalid = runtime
         .submit_quick_connect("bad host:notaport")
         .expect("invalid submit");
     assert!(!invalid.quick_connect_error_text.is_empty());
     assert!(invalid.quick_connect_visible);
-    assert_eq!(invalid.tab_count, 0);
-    assert!(runtime.tabs.is_empty());
+    assert_eq!(invalid.tab_count, 1);
+    assert!(runtime.tabs[0].is_new_tab());
 
-    // 成功：连接后收起覆盖层（标签数量 +1）。
+    // 成功：同一个 New Tab 原地变成 Terminal，标签数量不变。
     let connected = runtime
         .submit_quick_connect("ssh://root@example.com:2200")
         .expect("submit");
     assert!(!connected.quick_connect_visible);
     assert_eq!(connected.tab_count, 1);
     assert!(connected.has_active_session);
+    assert_eq!(runtime.tabs[0].kind.mode_text(), "terminal");
     assert_tab_invariants(&runtime);
 }
 
 #[test]
-fn overlay_open_and_close_never_change_the_tab_count() {
+fn open_and_close_new_tab_changes_tab_count_by_one() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 1);
 
-    // 启动：覆盖层默认打开，但没有 Quick Connect 标签。
-    let startup = runtime.projection();
-    assert!(startup.quick_connect_visible);
-    assert_eq!(startup.tab_count, 0);
-    assert!(startup.tabs.is_empty());
-
-    // 打开/重复打开不创建标签。
+    // 打开 New Tab。
     let opened = runtime.open_quick_connect();
     assert!(opened.quick_connect_visible);
-    assert_eq!(opened.tab_count, 0);
+    assert_eq!(opened.tab_count, 1);
+    assert_eq!(runtime.tabs[0].kind.mode_text(), "new");
+
+    // 重复打开只聚焦已有 New Tab，不新增。
     let reopened = runtime.open_quick_connect();
     assert!(reopened.quick_connect_visible);
-    assert_eq!(reopened.tab_count, 0);
+    assert_eq!(reopened.tab_count, 1);
 
-    // 打开终端标签会收起覆盖层；随后打开/关闭覆盖层不改变标签数量与活动标签。
+    // 打开终端标签后 New Tab 不再是活动标签。
     let tab = open_saved_tab(&mut runtime, "saved-0");
     assert!(!runtime.projection().quick_connect_visible);
     let before = runtime.tabs.len();
     let opened = runtime.open_quick_connect();
     assert!(opened.quick_connect_visible);
-    assert_eq!(opened.tab_count, i32::try_from(before).unwrap());
-    assert_eq!(opened.active_tab_id, tab);
+    assert_eq!(opened.tab_count, i32::try_from(before + 1).unwrap());
+    assert_ne!(opened.active_tab_id, tab);
     let dismissed = runtime.dismiss_quick_connect();
     assert!(!dismissed.quick_connect_visible);
     assert_eq!(dismissed.tab_count, i32::try_from(before).unwrap());
-    assert_eq!(dismissed.active_tab_id, tab);
     assert_tab_invariants(&runtime);
 
-    // toggle（Ctrl+O）同样只改覆盖层状态。
+    // toggle（Ctrl+O）同样打开/关闭 New Tab。
     assert!(runtime.toggle_quick_connect().quick_connect_visible);
     let toggled_off = runtime.toggle_quick_connect();
     assert!(!toggled_off.quick_connect_visible);
     assert_eq!(runtime.tabs.len(), before);
-    assert_eq!(runtime.active_tab_id.as_deref(), Some(tab.as_str()));
 }
 
 #[test]
-fn zero_tabs_with_overlay_closed_stays_an_empty_workspace() {
+fn closing_the_last_new_tab_leaves_an_empty_workspace_until_reopened() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 1);
 
-    // 启动默认打开，Esc/dismiss 后保持关闭（不因零标签强制重开，D1）。
-    assert!(runtime.projection().quick_connect_visible);
+    let opened = runtime.open_quick_connect();
+    assert!(opened.quick_connect_visible);
     let closed = runtime.dismiss_quick_connect();
     assert!(!closed.quick_connect_visible);
     assert_eq!(closed.tab_count, 0);
     assert!(closed.tabs.is_empty());
     assert_eq!(closed.active_tab_id, "");
     assert!(!closed.has_active_session);
-    assert!(!runtime.projection().quick_connect_visible);
 
-    // Ctrl+O 仍可重新打开空工作区的覆盖层。
+    // Ctrl+O 仍可重新打开新标签页。
     let reopened = runtime.open_quick_connect();
     assert!(reopened.quick_connect_visible);
+    assert_eq!(reopened.tab_count, 1);
 }
 
 #[test]
-fn split_overlay_is_drawn_only_over_the_focused_pane() {
+fn new_tab_lives_in_the_focused_split_pane() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 2);
     let _first = open_saved_tab(&mut runtime, "saved-0");
@@ -341,34 +340,23 @@ fn split_overlay_is_drawn_only_over_the_focused_pane() {
         .find(|leaf| leaf.focused)
         .expect("focused leaf");
     assert_eq!(focused.pane_id, right);
-    assert!(focused.quick_connect);
-    assert!(!opened.workspace_split.leaves[0].quick_connect);
-    assert_eq!(
-        opened
-            .workspace_split
-            .leaves
-            .iter()
-            .filter(|leaf| leaf.quick_connect)
-            .count(),
-        1,
-        "overlay must cover exactly one (focused) leaf"
-    );
+    assert_eq!(focused.mode_text, "new");
+    assert_eq!(opened.tab_count, 3);
 
-    // 聚焦另一叶：覆盖层跟随焦点、不关闭，底层分屏与标签不变。
+    // 聚焦左叶：右叶仍是 New Tab 模式（按叶子独立渲染）。
     let moved = runtime.focus_split_pane(left).expect("focus left pane");
-    assert!(moved.quick_connect_visible);
-    let focused = moved
+    let right_leaf = moved
         .workspace_split
         .leaves
         .iter()
-        .find(|leaf| leaf.focused)
-        .expect("focused leaf");
-    assert_eq!(focused.pane_id, left);
-    assert!(focused.quick_connect);
-    assert!(!moved.workspace_split.leaves[1].quick_connect);
-    assert_eq!(moved.tab_count, 2);
+        .find(|leaf| leaf.pane_id == right)
+        .expect("right leaf");
+    assert_eq!(right_leaf.mode_text, "new");
+    assert_eq!(moved.tab_count, 3);
 
-    // Esc/dismiss 只关覆盖层：分屏、标签、底层会话都保留。
+    // 回到右叶并关闭 New Tab：分屏和两个终端标签保留。
+    let moved = runtime.focus_split_pane(right).expect("focus right pane");
+    assert!(moved.quick_connect_visible);
     let dismissed = runtime.dismiss_quick_connect();
     assert!(!dismissed.quick_connect_visible);
     assert!(dismissed.workspace_split.active);
@@ -377,7 +365,7 @@ fn split_overlay_is_drawn_only_over_the_focused_pane() {
         .workspace_split
         .leaves
         .iter()
-        .all(|leaf| !leaf.quick_connect));
+        .all(|leaf| leaf.mode_text != "new"));
     assert_eq!(runtime.sessions.len(), 2);
 }
 

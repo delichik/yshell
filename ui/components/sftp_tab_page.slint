@@ -1,0 +1,205 @@
+// SFTP tab page: fixed two columns (local left, remote right), no transfer
+// drawer. The standalone Transfers dock owns the queue.
+//
+// This wrapper keeps the large SFTP prop/callback list out of
+// `terminal_workspace.slint`; the actual chrome/list widgets are the existing
+// `SftpPanel` panes.
+import { Theme } from "../theme.slint";
+import { LocalRow } from "local_pane.slint";
+import { SftpPanel, SftpRow, SftpCrumb } from "sftp_panel.slint";
+
+/// Per-SFTP-tab data used by split-pane leaves (and reusable for a single page).
+export struct SftpPaneData {
+    path_text: string,
+    rows: [SftpRow],
+    crumbs: [SftpCrumb],
+    selected_index: int,
+    connected: bool,
+    sort_column_text: string,
+    sort_ascending: bool,
+    sort_text: string,
+    show_hidden: bool,
+    item_count: int,
+    dir_count: int,
+    selected_count: int,
+    empty_text: string,
+    error_text: string,
+    remote_edit_active: bool,
+    remote_edit_text: string,
+    local_rows: [LocalRow],
+    local_path_text: string,
+    local_sort_column_text: string,
+    local_sort_ascending: bool,
+    local_sort_text: string,
+    local_show_hidden: bool,
+    local_item_count: int,
+    local_dir_count: int,
+    local_selected_count: int,
+    local_empty_text: string,
+    local_error_text: string,
+    local_retry_visible: bool,
+    local_selected_name_text: string,
+    local_selection_key: string,
+    sftp_selection_key: string,
+    column_ratio: float,
+}
+
+export component SftpTabPage inherits Rectangle {
+    background: Theme.window-background;
+    clip: true;
+
+    // Remote projection.
+    in property <[SftpRow]> rows;
+    in property <[SftpCrumb]> crumbs;
+    in property <int> selected-index: -1;
+    in property <string> sort-column: "name";
+    in property <bool> sort-ascending: true;
+    in property <string> sort-text: "Name ↑";
+    in property <bool> show-hidden: false;
+    in property <int> item-count: 0;
+    in property <int> dir-count: 0;
+    in property <int> selected-count: 0;
+    in property <string> empty-text: "";
+    in property <string> error-text: "";
+    in property <bool> connected: false;
+    in property <bool> remote-edit-active: false;
+    in property <string> remote-edit-text: "";
+    in-out property <string> path-text: "/";
+
+    // Local projection (per SFTP tab).
+    in property <[LocalRow]> local-rows;
+    in property <string> local-path-text: "/";
+    in property <bool> local-show-hidden: false;
+    in property <string> local-sort-column: "name";
+    in property <bool> local-sort-ascending: true;
+    in property <string> local-sort-text: "Name ↑";
+    in property <int> local-item-count: 0;
+    in property <int> local-dir-count: 0;
+    in property <int> local-selected-count: 0;
+    in property <string> local-empty-text: "";
+    in property <string> local-error-text: "";
+    in property <bool> local-retry-visible: true;
+    in property <string> local-title-text: "";
+    in property <string> local-selected-name-text: "";
+    in property <string> local-selection-key: "";
+    in property <string> sftp-selection-key: "";
+
+    // 1:1 default, per-tab, changed by dragging the divider.
+    in property <float> column-ratio: 0.5;
+    callback column-ratio-changed(float);
+
+    // Remote callbacks.
+    callback refresh();
+    callback up();
+    callback home();
+    callback open-path(string);
+    callback open-crumb(int);
+    callback sort-by(string);
+    callback toggle-hidden();
+    callback select-row(int, bool, bool);
+    callback activate-row(int);
+    callback context-menu-requested(int, length, length);
+    callback panel-menu-requested(length, length);
+    callback save-edit();
+    callback cancel-edit();
+    pure callback drag-remote-transfer(string) -> data-transfer;
+    callback drop-on-remote-row(int, data-transfer, DragAction);
+    callback drop-on-remote-blank(data-transfer, DragAction);
+
+    // Local callbacks.
+    callback local-up();
+    callback local-home();
+    callback local-refresh();
+    callback local-open-path(string);
+    callback local-sort-by(string);
+    callback local-toggle-hidden();
+    callback local-select-row(int, bool, bool);
+    callback local-activate-row(int);
+    callback local-context-menu-requested(int, length, length);
+    callback local-retry();
+    pure callback drag-local-transfer(string) -> data-transfer;
+    callback drop-on-local(data-transfer, DragAction);
+
+    // Keyboard clipboard (Ctrl+C/X/V inside the SFTP page).
+    callback copy-selection();
+    callback cut-selection();
+    callback paste-cross-pane();
+    callback focus-requested();
+
+    SftpPanel {
+        width: 100%;
+        height: 100%;
+        show-local: true;
+        fixed-two-column: true;
+        show-transfers: false;
+        local-collapsed: false;
+        column-ratio: root.column-ratio;
+        column-ratio-changed(ratio) => { root.column-ratio-changed(ratio); }
+
+        rows: root.rows;
+        crumbs: root.crumbs;
+        selected-index: root.selected-index;
+        sort-column: root.sort-column;
+        sort-ascending: root.sort-ascending;
+        sort-text: root.sort-text;
+        show-hidden: root.show-hidden;
+        item-count: root.item-count;
+        dir-count: root.dir-count;
+        selected-count: root.selected-count;
+        empty-text: root.empty-text;
+        error-text: root.error-text;
+        connected: root.connected;
+        remote-edit-active: root.remote-edit-active;
+        remote-edit-text: root.remote-edit-text;
+        path-text <=> root.path-text;
+        local-rows: root.local-rows;
+        local-path-text: root.local-path-text;
+        local-show-hidden: root.local-show-hidden;
+        local-sort-column: root.local-sort-column;
+        local-sort-ascending: root.local-sort-ascending;
+        local-sort-text: root.local-sort-text;
+        local-item-count: root.local-item-count;
+        local-dir-count: root.local-dir-count;
+        local-selected-count: root.local-selected-count;
+        local-empty-text: root.local-empty-text;
+        local-error-text: root.local-error-text;
+        local-retry-visible: root.local-retry-visible;
+        local-title-text: root.local-title-text;
+        local-selected-name-text: root.local-selected-name-text;
+        local-selection-key: root.local-selection-key;
+        sftp-selection-key: root.sftp-selection-key;
+
+        refresh => { root.refresh(); }
+        up => { root.up(); }
+        home => { root.home(); }
+        open-path(path) => { root.open-path(path); }
+        open-crumb(index) => { root.open-crumb(index); }
+        sort-by(column) => { root.sort-by(column); }
+        toggle-hidden => { root.toggle-hidden(); }
+        select-row(index, ctrl, shift) => { root.select-row(index, ctrl, shift); }
+        activate-row(index) => { root.activate-row(index); }
+        context-menu-requested(index, x, y) => { root.context-menu-requested(index, x, y); }
+        panel-menu-requested(x, y) => { root.panel-menu-requested(x, y); }
+        save-edit => { root.save-edit(); }
+        cancel-edit => { root.cancel-edit(); }
+        drag-remote-transfer(key) => { return root.drag-remote-transfer(key); }
+        drop-on-remote-row(index, data, action) => { root.drop-on-remote-row(index, data, action); }
+        drop-on-remote-blank(data, action) => { root.drop-on-remote-blank(data, action); }
+        local-toggle-collapsed => { }
+        local-up => { root.local-up(); }
+        local-home => { root.local-home(); }
+        local-refresh => { root.local-refresh(); }
+        local-open-path(path) => { root.local-open-path(path); }
+        local-sort-by(column) => { root.local-sort-by(column); }
+        local-toggle-hidden => { root.local-toggle-hidden(); }
+        local-select-row(index, ctrl, shift) => { root.local-select-row(index, ctrl, shift); }
+        local-activate-row(index) => { root.local-activate-row(index); }
+        local-context-menu-requested(index, x, y) => { root.local-context-menu-requested(index, x, y); }
+        local-retry => { root.local-retry(); }
+        drag-local-transfer(key) => { return root.drag-local-transfer(key); }
+        drop-on-local(data, action) => { root.drop-on-local(data, action); }
+        copy-selection => { root.copy-selection(); }
+        cut-selection => { root.cut-selection(); }
+        paste-cross-pane => { root.paste-cross-pane(); }
+    }
+}

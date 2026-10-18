@@ -15,6 +15,10 @@ export struct MenuEntry {
     enabled: bool,
     checked: bool,
     separator: bool,
+    /// When true the row is omitted from the popup and its layout height.
+    /// Mode-specific context-menu items use this instead of showing a
+    /// permanently disabled row. Defaults to false (visible).
+    hidden: bool = false,
     /// 禁用项的原因说明：hover 该行时由内置 Tooltip 显示（空串 = 不显示）。
     /// 带默认值，既有条目无需逐条填写（S1 会话树空白区菜单的 disabled + tooltip 契约）。
     tooltip: string = "",
@@ -30,7 +34,8 @@ component MenuPopupRow inherits Rectangle {
     };
     callback selected();
 
-    height: root.entry.separator ? 9px : Theme.row-height-list;
+    min-height: root.entry.hidden ? 0px : (root.entry.separator ? 9px : Theme.row-height-list);
+    max-height: root.entry.hidden ? 0px : (root.entry.separator ? 9px : Theme.row-height-list);
     // 禁用项：整行 36% 不透明（颜色不再额外套 text-disabled，避免双重变暗）
     opacity: (root.entry.enabled || root.entry.separator) ? 1.0 : 0.36;
     border-radius: Theme.radius-control;
@@ -40,7 +45,7 @@ component MenuPopupRow inherits Rectangle {
     // 分隔线（上下各留 4px）
     // 浮层底上 layer-stroke 对比不足（截图里几乎看不见），改用 divider token
     Rectangle {
-        visible: root.entry.separator;
+        visible: root.entry.separator && !root.entry.hidden;
         x: Theme.spacing-8;
         y: (parent.height - 1px) / 2;
         width: parent.width - 2 * Theme.spacing-8;
@@ -50,7 +55,7 @@ component MenuPopupRow inherits Rectangle {
 
     // 勾选列：16px，勾选色 accent；左内边距 8
     Icon {
-        visible: !root.entry.separator && root.entry.checked;
+        visible: !root.entry.separator && root.entry.checked && !root.entry.hidden;
         name: "check";
         icon-color: Theme.accent;
         icon-size: Theme.icon-size-small;
@@ -59,7 +64,7 @@ component MenuPopupRow inherits Rectangle {
     }
 
     Text {
-        visible: !root.entry.separator;
+        visible: !root.entry.separator && !root.entry.hidden;
         text: root.entry.label;
         // 缩进 = 内边距 8 + 勾选列 16 + 间距 8 = 32（§5.11）
         x: Theme.spacing-8 + Theme.icon-size-small + Theme.spacing-8;
@@ -75,7 +80,7 @@ component MenuPopupRow inherits Rectangle {
     }
 
     shortcut_text := Text {
-        visible: !root.entry.separator && root.entry.shortcut != "";
+        visible: !root.entry.separator && root.entry.shortcut != "" && !root.entry.hidden;
         text: root.entry.shortcut;
         x: parent.width - self.width - Theme.spacing-8;
         height: parent.height;
@@ -86,7 +91,7 @@ component MenuPopupRow inherits Rectangle {
     }
 
     row-touch := TouchArea {
-        enabled: root.entry.enabled && !root.entry.separator;
+        enabled: root.entry.enabled && !root.entry.separator && !root.entry.hidden;
         clicked => { root.selected(); }
     }
 
@@ -149,7 +154,9 @@ export component MenuPopup inherits Rectangle {
             x: min(max(root.anchor-x, 8px), max(root.width - root.panel-width - 8px, 8px));
             y: min(max(root.anchor-y, 8px), max(root.height - self.height - 8px, 8px));
             width: root.panel-width;
-            height: entries-layout.preferred-height;
+            // 4px padding on each side; +8px guards against a one-row
+            // preferred-height rounding error when hidden rows are collapsed.
+            height: entries-layout.preferred-height + Theme.spacing-8;
             background: Theme.flyout-background;
             border-width: 1px;
             border-color: Theme.layer-stroke;
@@ -166,6 +173,7 @@ export component MenuPopup inherits Rectangle {
                 spacing: 0px;
 
                 for entry[i] in root.entries : MenuPopupRow {
+                    visible: !entry.hidden;
                     entry: entry;
                     selected => { root.selected(i); }
                 }

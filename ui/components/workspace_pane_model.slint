@@ -1,4 +1,5 @@
 import { WorkspaceTab } from "workspace_tab_model.slint";
+import { SftpPaneData } from "sftp_tab_page.slint";
 
 /// Flattened split leaf (normalized geometry 0..1).
 export struct WorkspacePaneLeaf {
@@ -12,6 +13,11 @@ export struct WorkspacePaneLeaf {
     quick-connect: bool,
     tab-id: string,
     title-text: string,
+    /// `new` / `terminal` / `sftp`.
+    mode-text: string,
+    quick-connect-input-text: string,
+    quick-connect-error-text: string,
+    sftp: SftpPaneData,
     tabs: [WorkspaceTab],
 }
 

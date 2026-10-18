@@ -440,13 +440,13 @@ export component ToolDock inherits Rectangle {
         }
     }
 
-    // Local files（独立面板；传输默认目录即此栏当前路径）
+    // Local files: superseded by the SFTP tab's left column.
     PanelFrame {
         x: root.local-frame.x;
         y: root.local-frame.y;
         width: root.local-frame.width;
         height: root.local-frame.height;
-        visible: root.local-frame.visible;
+        visible: false;
         min-height: 0px;
         max-height: 100000px;
         header-height: 44px;
@@ -501,7 +501,7 @@ export component ToolDock inherits Rectangle {
         y: root.sftp-frame.y;
         width: root.sftp-frame.width;
         height: root.sftp-frame.height;
-        visible: root.sftp-frame.visible;
+        visible: false;
         min-height: 0px;
         max-height: 100000px;
         header-height: 44px;
@@ -522,7 +522,7 @@ export component ToolDock inherits Rectangle {
         y: root.sftp-frame.y + 44px;
         width: max(0px, root.sftp-frame.width - 16px);
         height: max(0px, root.sftp-frame.height - 52px);
-        visible: root.sftp-frame.visible;
+        visible: false;
         show-local: false;
 
         rows: root.sftp-rows;

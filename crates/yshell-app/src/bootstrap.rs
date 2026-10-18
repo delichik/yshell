@@ -36,9 +36,9 @@ pub(crate) mod generated_ui {
 use generated_ui::{
     AuthKeyOption, AuthKeyboardPrompt, HostKeyEntry, HostKeyGroup, LocalRow, MainWindow, Palette,
     PanelFrameData, PrivateKeyRow, ProxyProfileOption, ProxyRow, QuickConnectRow, QuickLinkRow,
-    SessionTreeRow, SftpCrumb, SftpRow, SftpTransferRow, SplitHandleData, TerminalScrollInfo,
-    Theme, ThemeManagerRow, TriStateField, TunnelRow, WorkspacePaneLeaf, WorkspaceSplitter,
-    WorkspaceTab,
+    SessionTreeRow, SftpCrumb, SftpPaneData, SftpRow, SftpTransferRow, SplitHandleData,
+    TerminalScrollInfo, Theme, ThemeManagerRow, TriStateField, TunnelRow, WorkspacePaneLeaf,
+    WorkspaceSplitter, WorkspaceTab,
 };
 
 /// Keeps the pixel-rendered terminal surface in sync with the runtime.
@@ -151,13 +151,13 @@ impl TerminalSurface {
             };
             runtime.window_terminal_frame_id(self.window_id)
         };
-        let primary_unchanged = self
-            .last_frame
-            .borrow()
-            .as_ref()
-            .is_some_and(|(last_session, last_frame)| {
-                *last_session == session && *last_frame == frame_id
-            });
+        let primary_unchanged =
+            self.last_frame
+                .borrow()
+                .as_ref()
+                .is_some_and(|(last_session, last_frame)| {
+                    *last_session == session && *last_frame == frame_id
+                });
         if !primary_unchanged {
             let Ok(runtime) = self.runtime.try_borrow() else {
                 return;
@@ -210,7 +210,8 @@ impl TerminalSurface {
             let _ = renderer.apply_appearance(appearance.palette, appearance.font);
             renderer.set_font_size(appearance.font_size);
         }
-        let Some(snapshot) = runtime.window_secondary_terminal_render_snapshot(self.window_id) else {
+        let Some(snapshot) = runtime.window_secondary_terminal_render_snapshot(self.window_id)
+        else {
             return;
         };
         let frame = self.renderer.borrow_mut().render(&snapshot);
@@ -250,14 +251,15 @@ impl YShellApp {
     pub fn show(&mut self) -> AppResult<()> {
         // TAB-6：启动首帧 = Quick Connect 覆盖层打开（工作区级状态，不创建 QC 标签；
         // 见 `AppRuntime::quick_connect_visible`）。
-        let _ = self.runtime.borrow_mut().prepare_desktop_startup_projection();
+        let _ = self
+            .runtime
+            .borrow_mut()
+            .prepare_desktop_startup_projection();
         // TAB-5：无恢复标签时先创建一个本地终端，再把 Quick Connect 覆盖层开在它上面。
         let _ = self
             .runtime
             .borrow_mut()
             .prepare_desktop_startup_workspace();
-        // 本地栏首次列出（默认 home 目录）。
-        self.runtime.borrow_mut().refresh_local_pane();
         let manager = crate::windows::WindowManager::new(Rc::clone(&self.runtime))?;
         self.manager = Some(manager);
         Ok(())
@@ -811,10 +813,7 @@ pub(crate) fn wire_callbacks(
         let Some(window) = weak.upgrade() else {
             return;
         };
-        match runtime_ref
-            .borrow_mut()
-            .split_workspace(direction.as_ref())
-        {
+        match runtime_ref.borrow_mut().split_workspace(direction.as_ref()) {
             Ok(projection) => {
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
@@ -957,7 +956,10 @@ pub(crate) fn wire_callbacks(
         let Some(window) = weak.upgrade() else {
             return;
         };
-        match runtime_ref.borrow_mut().start_input_sync_mode(mode.as_ref()) {
+        match runtime_ref
+            .borrow_mut()
+            .start_input_sync_mode(mode.as_ref())
+        {
             Ok(projection) => {
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
@@ -1052,9 +1054,11 @@ pub(crate) fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_error_status(&window, "Could not update the close confirmation setting.", &error)
-            }
+            Err(error) => set_error_status(
+                &window,
+                "Could not update the close confirmation setting.",
+                &error,
+            ),
         }
     });
 
@@ -1070,9 +1074,11 @@ pub(crate) fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_error_status(&window, "Could not update the quit confirmation setting.", &error)
-            }
+            Err(error) => set_error_status(
+                &window,
+                "Could not update the quit confirmation setting.",
+                &error,
+            ),
         }
     });
 
@@ -1137,6 +1143,27 @@ pub(crate) fn wire_callbacks(
                 surface.refresh(&window);
             }
             Err(error) => set_error_status(&window, "Could not open the saved session.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_open_selected_saved_session_sftp(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let result = runtime_ref.borrow_mut().open_selected_saved_session_sftp();
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(
+                &window,
+                "Could not open SFTP for the saved session.",
+                &error,
+            ),
         }
     });
 
@@ -1468,9 +1495,7 @@ pub(crate) fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => {
-                set_error_status(&window, "Could not select the visible screen.", &error)
-            }
+            Err(error) => set_error_status(&window, "Could not select the visible screen.", &error),
         }
     });
 
@@ -1644,9 +1669,7 @@ pub(crate) fn wire_callbacks(
                 .borrow_mut()
                 .update_active_terminal_selection(column, row);
         }
-        let result = runtime_ref
-            .borrow_mut()
-            .finish_active_terminal_selection();
+        let result = runtime_ref.borrow_mut().finish_active_terminal_selection();
         match result {
             Ok(projection) => {
                 apply_projection(&window, &projection);
@@ -2314,10 +2337,7 @@ pub(crate) fn wire_callbacks(
         if copied {
             set_plain_status(&window, "Copied the connection error.".into());
         } else {
-            set_plain_status(
-                &window,
-                "Could not access the system clipboard.".into(),
-            );
+            set_plain_status(&window, "Could not access the system clipboard.".into());
         }
         surface.refresh(&window);
     });
@@ -2524,10 +2544,9 @@ pub(crate) fn wire_callbacks(
         on_update_proxy_editor_name,
         |runtime, value: SharedString| runtime.update_proxy_editor_name(value.as_ref())
     );
-    wire_n4!(
-        on_select_proxy_editor_protocol,
-        |runtime, index: i32| runtime.select_proxy_editor_protocol(index)
-    );
+    wire_n4!(on_select_proxy_editor_protocol, |runtime, index: i32| {
+        runtime.select_proxy_editor_protocol(index)
+    });
     wire_n4!(
         on_update_proxy_editor_host,
         |runtime, value: SharedString| runtime.update_proxy_editor_host(value.as_ref())
@@ -2546,7 +2565,6 @@ pub(crate) fn wire_callbacks(
     );
     wire_n4!(on_toggle_proxy_editor_dns, |runtime| runtime
         .toggle_proxy_editor_dns());
-
 
     // N4：浏览私钥文件（rfd；worker 线程 + mpsc 回填）。
     {
@@ -2630,14 +2648,12 @@ pub(crate) fn wire_callbacks(
                     text,
                 ),
                 Err(error) => {
-                    let projection = runtime_ref
-                        .borrow_mut()
-                        .set_private_keys_status_feedback(
-                            "private-key-export-failed",
-                            format!("Export failed: {error}"),
-                            error.to_string(),
-                            String::new(),
-                        );
+                    let projection = runtime_ref.borrow_mut().set_private_keys_status_feedback(
+                        "private-key-export-failed",
+                        format!("Export failed: {error}"),
+                        error.to_string(),
+                        String::new(),
+                    );
                     apply_projection(&window, &projection);
                 }
             }
@@ -3667,9 +3683,11 @@ pub(crate) fn wire_callbacks(
     wire_n4!(on_select_settings_scheme, |runtime, id: SharedString| {
         runtime.select_settings_appearance_scheme(id.as_ref())
     });
-    wire_n4_result!(on_clone_settings_theme, "Clone theme", |runtime, id: SharedString| {
-        runtime.clone_color_theme(id.as_ref())
-    });
+    wire_n4_result!(
+        on_clone_settings_theme,
+        "Clone theme",
+        |runtime, id: SharedString| runtime.clone_color_theme(id.as_ref())
+    );
     wire_n4!(on_edit_settings_theme, |runtime, id: SharedString| {
         runtime.open_theme_editor(id.as_ref())
     });
@@ -3678,7 +3696,8 @@ pub(crate) fn wire_callbacks(
         "Delete theme",
         |runtime, id: SharedString| runtime.delete_color_theme(id.as_ref())
     );
-    wire_n4!(on_close_theme_editor, |runtime| runtime.close_theme_editor());
+    wire_n4!(on_close_theme_editor, |runtime| runtime
+        .close_theme_editor());
     wire_n4_result!(on_save_theme_editor, "Save theme", |runtime| {
         runtime.save_theme_editor()
     });
@@ -3696,10 +3715,9 @@ pub(crate) fn wire_callbacks(
         |runtime, index: i32, hex: SharedString| runtime
             .update_theme_editor_ansi_color(index, hex.as_ref())
     );
-    wire_n4!(
-        on_select_settings_appearance_font,
-        |runtime, index: i32| runtime.select_settings_appearance_font(index)
-    );
+    wire_n4!(on_select_settings_appearance_font, |runtime, index: i32| {
+        runtime.select_settings_appearance_font(index)
+    });
     wire_n4!(
         on_update_settings_appearance_font_size,
         |runtime, value: SharedString| runtime.update_settings_appearance_font_size(value.as_ref())
@@ -3735,15 +3753,10 @@ pub(crate) fn wire_callbacks(
         "Set default theme",
         |runtime| runtime.apply_theme_manager_selection()
     );
-    wire_n4!(
-        on_request_delete_theme,
-        |runtime, id: SharedString| runtime.request_delete_color_theme(id.as_ref())
-    );
-    wire_n4_result!(
-        on_confirm_delete_theme,
-        "Delete theme",
-        |runtime| runtime.confirm_delete_color_theme()
-    );
+    wire_n4!(on_request_delete_theme, |runtime, id: SharedString| runtime
+        .request_delete_color_theme(id.as_ref()));
+    wire_n4_result!(on_confirm_delete_theme, "Delete theme", |runtime| runtime
+        .confirm_delete_color_theme());
     wire_n4!(on_cancel_delete_theme, |runtime| runtime
         .cancel_delete_color_theme());
 
@@ -4319,6 +4332,23 @@ fn wire_n1_sftp_callbacks(
         on_select_sftp_row,
         |runtime, index: i32, ctrl: bool, shift: bool| runtime.select_sftp_row(index, ctrl, shift)
     );
+    wire_projection!(on_sftp_column_ratio_changed, |runtime, ratio: f32| runtime
+        .set_sftp_column_ratio(ratio));
+    wire_result!(
+        on_switch_active_tab_to_sftp,
+        "Could not switch to SFTP.",
+        |runtime| runtime.switch_active_tab_to_sftp()
+    );
+    wire_result!(
+        on_switch_tab_to_sftp,
+        "Could not switch to SFTP.",
+        |runtime, tab_id: SharedString| runtime.switch_tab_to_sftp(tab_id.as_ref())
+    );
+    wire_result!(
+        on_switch_tab_to_terminal,
+        "Could not switch to Terminal.",
+        |runtime, tab_id: SharedString| runtime.switch_tab_to_terminal(tab_id.as_ref())
+    );
 
     // ---------------------------------------------------------- 队列抽屉
     wire_projection!(on_transfer_toggle_expanded, |runtime| runtime
@@ -4763,6 +4793,7 @@ fn dispatch_sftp_menu_action(
     let local_scope = window.get_sftp_menu_target_kind_text().starts_with("local");
     let local_dir = runtime.local_pane.dir.display().to_string();
     match action {
+        "switch-to-terminal" => runtime.switch_active_tab_to_terminal(),
         "open" => runtime.activate_sftp_entry(),
         "edit" => runtime.edit_sftp_selected(),
         "download" | "download-selection" => runtime.download_sftp_selection_to(&local_dir, "ask"),
@@ -4972,9 +5003,7 @@ pub(crate) fn apply_dialog_outcome(
             DialogKind::TerminalFontPrimary => {
                 runtime.update_settings_appearance_font_family(&path)
             }
-            DialogKind::TerminalFontBackup => {
-                runtime.set_settings_appearance_backup_font(&path)
-            }
+            DialogKind::TerminalFontBackup => runtime.set_settings_appearance_backup_font(&path),
         },
         FileDialogOutcome::Saved { kind, path, error } => match kind {
             DialogKind::HostKeysExport | DialogKind::HostKeysImport => match &error {
@@ -5012,13 +5041,12 @@ pub(crate) fn apply_dialog_outcome(
                     error.to_string(),
                     String::new(),
                 ),
-                (None, DialogKind::PublicKeyExport) => runtime
-                    .set_private_keys_status_feedback(
-                        "private-key-exported",
-                        format!("Exported the public key to `{path}`."),
-                        path.clone(),
-                        String::new(),
-                    ),
+                (None, DialogKind::PublicKeyExport) => runtime.set_private_keys_status_feedback(
+                    "private-key-exported",
+                    format!("Exported the public key to `{path}`."),
+                    path.clone(),
+                    String::new(),
+                ),
                 (None, _) => runtime.set_private_keys_status_feedback(
                     "private-key-file-saved",
                     format!("Saved to `{path}`."),
@@ -5272,7 +5300,9 @@ fn paste_clipboard_into_terminal_bracketed(
         .as_mut()
         .and_then(|clipboard| clipboard.get_contents().ok());
     match clipboard_text {
-        Some(text) => runtime.borrow_mut().paste_text_into_terminal_bracketed(&text),
+        Some(text) => runtime
+            .borrow_mut()
+            .paste_text_into_terminal_bracketed(&text),
         None => {
             let text = runtime.borrow().terminal_clipboard_text().to_owned();
             runtime
@@ -5523,6 +5553,52 @@ fn sftp_crumb_from(crumb: &SftpCrumbData) -> SftpCrumb {
     }
 }
 
+fn sftp_pane_data_from(pane: &crate::runtime::SftpPaneProjection) -> SftpPaneData {
+    SftpPaneData {
+        path_text: pane.path_text.clone().into(),
+        rows: ModelRc::new(VecModel::from(
+            pane.rows.iter().map(sftp_row_from).collect::<Vec<_>>(),
+        )),
+        crumbs: ModelRc::new(VecModel::from(
+            pane.crumbs.iter().map(sftp_crumb_from).collect::<Vec<_>>(),
+        )),
+        selected_index: pane.selected_index,
+        connected: pane.connected,
+        sort_column_text: pane.sort_column_text.clone().into(),
+        sort_ascending: pane.sort_ascending,
+        sort_text: pane.sort_text.clone().into(),
+        show_hidden: pane.show_hidden,
+        item_count: pane.item_count,
+        dir_count: pane.dir_count,
+        selected_count: pane.selected_count,
+        empty_text: pane.empty_text.clone().into(),
+        error_text: pane.error_text.clone().into(),
+        remote_edit_active: pane.remote_edit_active,
+        remote_edit_text: pane.remote_edit_text.clone().into(),
+        local_rows: ModelRc::new(VecModel::from(
+            pane.local_rows
+                .iter()
+                .map(local_row_from)
+                .collect::<Vec<_>>(),
+        )),
+        local_path_text: pane.local_path_text.clone().into(),
+        local_sort_column_text: pane.local_sort_column_text.clone().into(),
+        local_sort_ascending: pane.local_sort_ascending,
+        local_sort_text: pane.local_sort_text.clone().into(),
+        local_show_hidden: pane.local_show_hidden,
+        local_item_count: pane.local_item_count,
+        local_dir_count: pane.local_dir_count,
+        local_selected_count: pane.local_selected_count,
+        local_empty_text: pane.local_empty_text.clone().into(),
+        local_error_text: pane.local_error_text.clone().into(),
+        local_retry_visible: pane.local_retry_visible,
+        local_selected_name_text: pane.local_selected_name_text.clone().into(),
+        local_selection_key: pane.local_selection_key.clone().into(),
+        sftp_selection_key: pane.sftp_selection_key.clone().into(),
+        column_ratio: pane.column_ratio,
+    }
+}
+
 fn sftp_row_matches(current: &SftpRow, next: &SftpRowData) -> bool {
     current.name.as_str() == next.name
         && current.kind_text.as_str() == next.kind_text
@@ -5576,6 +5652,7 @@ fn workspace_tab_from(tab: &TabData) -> WorkspaceTab {
         id: tab.id.clone().into(),
         title: tab.title.clone().into(),
         state_text: tab.state_text.clone().into(),
+        mode_text: tab.mode_text.clone().into(),
         connected: tab.connected,
         active: tab.active,
         logging: tab.logging,
@@ -5588,6 +5665,7 @@ fn workspace_tab_matches(current: &WorkspaceTab, next: &TabData) -> bool {
     current.id.as_str() == next.id
         && current.title.as_str() == next.title
         && current.state_text.as_str() == next.state_text
+        && current.mode_text.as_str() == next.mode_text
         && current.connected == next.connected
         && current.active == next.active
         && current.logging == next.logging
@@ -5618,6 +5696,10 @@ fn workspace_pane_leaf_from(
         quick_connect: leaf.quick_connect,
         tab_id: leaf.tab_id.clone().into(),
         title_text: leaf.title_text.clone().into(),
+        mode_text: leaf.mode_text.clone().into(),
+        quick_connect_input_text: leaf.quick_connect_input_text.clone().into(),
+        quick_connect_error_text: leaf.quick_connect_error_text.clone().into(),
+        sftp: sftp_pane_data_from(&leaf.sftp),
         tabs: ModelRc::new(VecModel::from(
             leaf.tabs.iter().map(workspace_tab_from).collect::<Vec<_>>(),
         )),
@@ -6271,9 +6353,7 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     set_editor_key_options_if_changed(window, &projection.editor_key_options);
     window.set_editor_selected_key_index(projection.editor_selected_key_index);
     window.set_editor_selected_key_missing(projection.editor_selected_key_missing);
-    window.set_editor_legacy_key_path_text(
-        projection.editor_legacy_key_path_text.clone().into(),
-    );
+    window.set_editor_legacy_key_path_text(projection.editor_legacy_key_path_text.clone().into());
     window.set_editor_legacy_key_has_passphrase(projection.editor_legacy_key_has_passphrase);
     window.set_editor_has_stored_password(projection.editor_has_stored_password);
     window
@@ -6438,15 +6518,13 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     if let Some(preview) = projection.theme_manager_preview.as_ref() {
         window.set_theme_manager_preview(frame_image(preview));
     }
-    window.set_theme_manager_remove_confirm_visible(
-        projection.theme_manager_remove_confirm_visible,
-    );
+    window
+        .set_theme_manager_remove_confirm_visible(projection.theme_manager_remove_confirm_visible);
     window.set_theme_manager_remove_name_text(
         projection.theme_manager_remove_name_text.clone().into(),
     );
-    window.set_theme_manager_remove_reference_count(
-        projection.theme_manager_remove_reference_count,
-    );
+    window
+        .set_theme_manager_remove_reference_count(projection.theme_manager_remove_reference_count);
     window.set_theme_editor_open(projection.theme_editor_open);
     window.set_theme_editor_builtin(projection.theme_editor_builtin);
     window.set_theme_editor_id(projection.theme_editor_id.clone().into());
@@ -6504,18 +6582,15 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_connection_overlay_target_text(
         projection.connection_overlay_target_text.clone().into(),
     );
-    window.set_connection_overlay_stage_text(
-        projection.connection_overlay_stage_text.clone().into(),
-    );
-    window.set_connection_overlay_error_text(
-        projection.connection_overlay_error_text.clone().into(),
-    );
+    window
+        .set_connection_overlay_stage_text(projection.connection_overlay_stage_text.clone().into());
+    window
+        .set_connection_overlay_error_text(projection.connection_overlay_error_text.clone().into());
     window.set_connection_overlay_failed(projection.connection_overlay_failed);
     window.set_connection_overlay_pending(projection.connection_overlay_pending);
     window.set_status_connection_state_text(projection.status_connection_state_text.clone().into());
-    window.set_status_connection_target_text(
-        projection.status_connection_target_text.clone().into(),
-    );
+    window
+        .set_status_connection_target_text(projection.status_connection_target_text.clone().into());
     window.set_status_connection_busy(projection.status_connection_busy);
     window.set_has_saved_selection(projection.has_saved_selection);
     window.set_saved_session_count(projection.saved_session_count);
@@ -6679,6 +6754,9 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_tab_menu_move_to_new_window_enabled(projection.tab_menu_move_to_new_window_enabled);
     window
         .set_tab_menu_move_to_main_window_enabled(projection.tab_menu_move_to_main_window_enabled);
+    window.set_tab_menu_mode_text(projection.tab_menu_mode_text.clone().into());
+    window.set_tab_menu_switch_mode_enabled(projection.tab_menu_switch_mode_enabled);
+    window.set_active_tab_can_switch_to_sftp(projection.active_tab_can_switch_to_sftp);
     window.set_close_window_confirm_visible(projection.close_window_confirm_visible);
     window.set_close_window_confirm_active_count(projection.close_window_confirm_active_count);
     // WP4：分屏投影。
@@ -6695,7 +6773,10 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_tab_menu_receive_key_input_enabled(projection.tab_menu_receive_key_input_enabled);
     window.set_tab_menu_receives_key_input_checked(projection.tab_menu_receives_key_input_checked);
     window.set_tab_menu_receive_key_input_reason_text(
-        projection.tab_menu_receive_key_input_reason_text.clone().into(),
+        projection
+            .tab_menu_receive_key_input_reason_text
+            .clone()
+            .into(),
     );
     window.set_input_sync_active(projection.input_sync_active);
     window.set_input_sync_mode_text(projection.input_sync_mode_text.clone().into());
@@ -6742,6 +6823,8 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_terminal_search_match_count(projection.terminal_search_match_count);
     window.set_terminal_search_current_index(projection.terminal_search_current_index);
     window.set_sftp_path_text(projection.sftp_path_text.clone().into());
+    window.set_sftp_column_ratio(projection.sftp_column_ratio);
+    window.set_active_tab_mode_text(projection.active_tab_mode_text.clone().into());
     window.set_sftp_listing_kind_text(projection.sftp_listing_kind_text.clone().into());
     window.set_sftp_listing_rows_text(projection.sftp_listing_rows_text.clone().into());
     window
@@ -6886,9 +6969,8 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window
         .set_private_keys_test_result_text(projection.private_keys_test_result_text.clone().into());
     window.set_private_keys_status_text(projection.private_keys_status_text.clone().into());
-    window.set_private_keys_status_kind_text(
-        projection.private_keys_status_kind_text.clone().into(),
-    );
+    window
+        .set_private_keys_status_kind_text(projection.private_keys_status_kind_text.clone().into());
     window.set_private_keys_status_param_1_text(
         projection.private_keys_status_param_1_text.clone().into(),
     );
@@ -6951,12 +7033,8 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_proxies_summary_text(projection.proxies_summary_text.clone().into());
     window.set_proxies_status_text(projection.proxies_status_text.clone().into());
     window.set_proxies_status_kind_text(projection.proxies_status_kind_text.clone().into());
-    window.set_proxies_status_param_1_text(
-        projection.proxies_status_param_1_text.clone().into(),
-    );
-    window.set_proxies_status_param_2_text(
-        projection.proxies_status_param_2_text.clone().into(),
-    );
+    window.set_proxies_status_param_1_text(projection.proxies_status_param_1_text.clone().into());
+    window.set_proxies_status_param_2_text(projection.proxies_status_param_2_text.clone().into());
     window.set_proxies_test_result_text(projection.proxies_test_result_text.clone().into());
     window.set_proxies_remove_confirm_visible(projection.proxies_remove_confirm_visible);
     window.set_proxies_remove_blocked(projection.proxies_remove_blocked);
@@ -7007,12 +7085,10 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_host_keys_path_text(projection.host_keys_path_text.clone().into());
     window.set_host_keys_status_text(projection.host_keys_status_text.clone().into());
     window.set_host_keys_status_kind_text(projection.host_keys_status_kind_text.clone().into());
-    window.set_host_keys_status_param_1_text(
-        projection.host_keys_status_param_1_text.clone().into(),
-    );
-    window.set_host_keys_status_param_2_text(
-        projection.host_keys_status_param_2_text.clone().into(),
-    );
+    window
+        .set_host_keys_status_param_1_text(projection.host_keys_status_param_1_text.clone().into());
+    window
+        .set_host_keys_status_param_2_text(projection.host_keys_status_param_2_text.clone().into());
     window.set_host_keys_key_count(projection.host_keys_key_count);
     window.set_host_keys_import_visible(projection.host_keys_import_visible);
     if window.get_host_keys_import_text().as_str() != projection.host_keys_import_text {

@@ -104,7 +104,7 @@ StatusBar
 | `menu.session.reconnect` | Reconnect | 菜单项 | 断开后重新连接当前会话。 | `F5` when disconnected | 当前标签断开或错误时启用。 |
 | `menu.session.duplicate_tab` | Duplicate Tab | 菜单项 | 使用相同 SessionProfile 打开新标签并连接。 | 无 | 当前标签有会话 profile 时启用。 |
 | `menu.session.edit` | Edit Session... | 菜单项 | 打开 Session Editor，模式为 edit。 | 无 | 选中保存的会话时启用。 |
-| `menu.session.open_sftp` | Open SFTP Panel | 菜单项 | 打开或聚焦右侧 SFTP 面板。 | `Ctrl+Shift+S` | 当前标签已连接时启用。 |
+| `menu.session.open_sftp` | Open SFTP | 菜单项 | 在当前会话上打开 SFTP 标签（固定本地/远程左右两栏）。 | `Ctrl+Shift+S` | 当前标签已连接时启用。 |
 | `menu.session.tunnels` | Tunnels... | 菜单项 | 打开右侧 Tunnel 面板。 | 无 | 当前标签存在时启用。 |
 
 ### 3.4 View 菜单
@@ -112,7 +112,7 @@ StatusBar
 | 控件 ID | 文案 | 类型 | 左键行为 | 快捷键 | 状态规则 |
 |---|---|---|---|---|---|
 | `menu.view.session_manager` | Session Manager | 勾选菜单项 | 显示/隐藏左侧会话树。 | `Ctrl+B` | 始终启用。 |
-| `menu.view.sftp_panel` | SFTP Panel | 勾选菜单项 | 显示/隐藏右侧 SFTP 面板。 | 无 | 当前标签存在时启用。 |
+| `menu.view.transfers` | Transfers | 勾选菜单项 | 显示/隐藏右侧传输队列面板。 | 无 | 始终启用。 |
 | `menu.view.quick_commands` | Quick Commands | 勾选菜单项 | 右侧 Dock 切换到 Quick Commands tab。 | 无 | 始终启用。 |
 | `menu.view.tunnel_panel` | Tunnel Panel | 勾选菜单项 | 右侧 Dock 切换到 Tunnels tab。 | 无 | 始终启用。 |
 | `menu.view.fullscreen` | Full Screen | 勾选菜单项 | 切换全屏。 | `F11` | 始终启用。 |
@@ -128,7 +128,6 @@ StatusBar
 | `toolbar.quick_connect.button` | Connect | 按钮 | 无 | 解析输入并连接。 | 无 | 无 | 输入非空时启用。 |
 | `toolbar.new_session` | New | 图标按钮 | 无 | 打开 Session Editor(create)。 | 无 | 无 | 始终启用。 |
 | `toolbar.split` | Split | 下拉按钮 | Vertical | 左键按上次方向分屏；下拉选择 Vertical/Horizontal。 | 无 | 无 | 当前有标签时启用。 |
-| `toolbar.sftp` | SFTP | toggle 按钮 | Off | 打开/关闭 RightDock SFTP tab。 | 无 | 无 | 当前标签已连接时启用。 |
 | `toolbar.tunnels` | Tunnels | toggle 按钮 | Off | 打开/关闭 RightDock Tunnels tab。 | 无 | 无 | 当前有标签时启用。 |
 | `toolbar.commands` | Commands | toggle 按钮 | Off | 打开/关闭 RightDock Quick Commands tab。 | 无 | 无 | 始终启用。 |
 | `toolbar.log` | Log | toggle 按钮 | 取 SessionProfile | 开启/关闭当前会话日志。 | 无 | 右键打开日志菜单。 | 当前有终端时启用。 |
@@ -177,7 +176,7 @@ StatusBar
 |---|---|---|---|
 | Connect | Session | 当前工作区打开新标签并连接。 | 无 |
 | Open in New Tab | Session | 新建标签但不切断其它标签。 | 无 |
-| Open SFTP | Session | 若未连接则先连接，再打开 SFTP。 | 未保存认证时打开认证弹窗。 |
+| Open SFTP | Session | 新建 SFTP 标签；未连接时先连接。 | 未保存认证时打开认证弹窗。 |
 | Edit | Session | 打开 Session Editor(edit)。 | 无 |
 | Duplicate | Session | 复制配置，名称追加 `Copy`，打开编辑器。 | 无 |
 | Rename | Folder/Session | 行内编辑名称。 | Enter 保存，Esc 取消。 |
@@ -189,29 +188,38 @@ StatusBar
 
 ### 6.1 标签项
 
+标签有三种模式：New Tab（快速连接）、Terminal、SFTP。三者共享同一套标签条、分屏、拖拽和关闭机制；模式差异只体现在内容区、标签图标和模式专属菜单项。`+` / `Ctrl+T` / 启动应用都创建一个 New Tab；多个 New Tab 相互独立。
+
 | 区域 | 左键单击 | 左键双击 | 右键单击 | 中键单击 | 拖拽 |
 |---|---|---|---|---|---|
 | 标签主体 | 切换到该标签。 | 重命名标签显示名。 | 打开标签上下文菜单。 | 关闭标签。 | 调整顺序或拖入分屏。 |
 | 关闭按钮 `x` | 关闭标签。 | 无 | 无 | 无 | 无 |
 | 状态图标 | 显示状态 tooltip。 | 无 | 无 | 无 | 无 |
 
+关闭窗口内最后一个标签等同点击窗口关闭：主窗口进入退出确认，次窗口直接关闭。
+
 ### 6.2 标签上下文菜单
 
 | 菜单项 | 行为 | 状态 |
 |---|---|---|
-| Reconnect | 重新连接当前会话。 | 断开或错误时启用。 |
-| Disconnect | 断开 SSH 和关联 SFTP。 | 已连接时启用。 |
-| Duplicate | 用同一 SessionProfile 打开新标签。 | 有 SessionProfile 时启用。 |
+| Reconnect | 重新连接当前会话。 | Terminal / SFTP 标签；断开或错误时启用。 |
+| Disconnect | 断开 SSH / SFTP 连接。 | Terminal / SFTP 标签；已连接时启用。 |
 | Rename Tab | 行内编辑标签名，仅影响当前 tab。 | 始终启用。 |
 | Split Right | 将标签移入右侧分屏。 | 当前工作区可分屏时启用。 |
 | Split Down | 将标签移入下方分屏。 | 当前工作区可分屏时启用。 |
-| Move to New Window | 后续版本；第一版 disabled。 | 始终 disabled，tooltip 说明。 |
+| Receive Key Input | 勾选/取消该标签作为键输入接收目标。 | 仅 Terminal 标签。 |
+| Move to New Window | 将标签迁移到新窗口。 | 当前窗口存在标签时启用。 |
+| Move to Main Window | 将标签迁回主窗口。 | 标签不在主窗口时启用。 |
+| Switch to SFTP | 关闭 shell 通道、保留 SSH transport，原标签转为 SFTP。 | Terminal 标签且连接可用时启用。 |
+| Switch to Terminal | 关闭 SFTP 通道，在同一 SSH transport 上打开新 shell，原标签转为 Terminal。 | SFTP 标签且连接可用时启用。 |
 | Close Others | 关闭其它标签。 | 标签数大于 1 时启用。 |
 | Close Tabs to Left | 关闭左侧标签。 | 左侧存在标签时启用。 |
 | Close Tabs to Right | 关闭右侧标签。 | 右侧存在标签时启用。 |
 | Close All Tabs | 关闭当前 pane 全部标签。 | 标签数大于 0 时启用。 |
 | Close Disconnected Tabs | 关闭断开或错误标签。 | 存在断开/错误标签时启用。 |
 | Close | 关闭当前标签。 | 始终启用。 |
+
+模式过滤：New Tab 隐藏 Reconnect / Disconnect / Receive Key Input / Switch；SFTP 隐藏 Receive Key Input。隐藏项不占菜单高度。
 
 ## 6.3 分屏交互
 
@@ -237,8 +245,11 @@ Split 下拉菜单：
 分屏规则：
 
 - 第一版最多 4 个 pane。
+- New Tab、Terminal、SFTP 三种标签都可以进入分屏；分屏叶子数与标签模式无关。
+- 每个 SFTP 标签独立保存远程路径、列表、选择、排序、隐藏文件开关和本地目录；分屏中的两个 SFTP 叶子互不同步。
+- SFTP 叶子固定为本地左栏 / 远程右栏，默认 1:1；拖动分隔条只影响当前 SFTP 叶子，比例不跨叶子同步、不持久化。
 - 关闭 pane 内最后一个标签后，自动合并相邻 pane。
-- 调整比例后立即更新内存状态，500ms debounce 写入 `state.toml`。
+- 调整 pane 比例后立即更新内存状态，500ms debounce 写入 `state.toml`。
 - 分屏状态只保存布局和 tab/session id，不保存 SSH 连接 secret。
 
 ## 7. TerminalWorkspace
@@ -310,11 +321,10 @@ Split 下拉菜单：
 
 ## 8. RightDock
 
-RightDock 是 tabbed dock，第一版包含 `SFTP`、`Transfers`、`Tunnels`、`Commands`、`Session Info`。
+RightDock 是 tabbed dock，第一版包含 `Transfers`、`Tunnels`、`Commands`、`Session Info`。`Local` / `SFTP` 不再作为 RightDock 面板；SFTP 是独立标签，固定本地左栏 / 远程右栏。默认显示 `Tunnels` 和 `Commands`，`Transfers` 通过 View 菜单或传输任务打开。
 
 | Dock Tab | 左键行为 | 右键行为 |
 |---|---|---|
-| SFTP | 切换到 SFTP 面板。 | 菜单：Detach disabled、Close Panel。 |
 | Transfers | 切换到传输队列。 | 菜单：Clear Completed、Pause All、Resume All。 |
 | Tunnels | 切换到端口转发面板。 | 菜单：Add Tunnel、Stop All。 |
 | Commands | 切换到快捷命令。 | 菜单：New Command、Manage Groups。 |
@@ -340,7 +350,11 @@ RightDock 是 tabbed dock，第一版包含 `SFTP`、`Transfers`、`Tunnels`、`
 |---|---|---|---|
 | `pane.receive_key_input_toggle` | checkbox/toggle | 将当前 pane 加入或移出 Send Key Input To 目标。 | 仅 connected SSH shell pane 启用；源 pane disabled。 |
 
-## 9. SFTP Panel
+## 9. SFTP Tab
+
+### 9.0 SFTP 标签布局
+
+SFTP 标签固定为左右两栏：左栏本地文件，右栏远程文件。顶部各自有路径输入、刷新/上级/主目录按钮；远程栏额外提供上传、下载、新建目录和更多菜单。默认列宽 1:1，中间分隔条可拖动；比例只属于当前 SFTP 标签，不跨标签同步、不持久化。传输任务只进入独立 Transfers 面板，SFTP 标签内不再嵌入传输抽屉。
 
 ### 9.1 SFTP 顶部工具栏
 
@@ -789,7 +803,8 @@ Host Keys / Private Keys 由 Session 菜单打开（与 Settings 同级独立弹
 |---|---|---|---|
 | Quick Connect input | Enter | Quick Auth Dialog 或 Terminal Tab | 解析后的 host/port/username。 |
 | Session Tree Session | 双击 | Terminal Tab | SessionProfile id。 |
-| Terminal Tab | 点击 SFTP | RightDock SFTP | 当前 SessionHandle id。 |
+| Terminal Tab | 切换为 SFTP / 点击 SFTP | SFTP Tab（同一标签） | 当前 SessionHandle id + SSH transport。 |
+| SFTP Tab | 切换为 Terminal | Terminal Tab（同一标签） | 当前 SessionHandle id + SSH transport。 |
 | SFTP 文件双击 | 文件 | Remote Edit Flow | remote path。 |
 | SFTP 文件双击 | 目录 | SFTP 当前目录 | remote path。 |
 | Tunnel Add | 左键 | Tunnel Editor | 当前 SessionProfile id。 |
@@ -811,4 +826,4 @@ Host Keys / Private Keys 由 Session 菜单打开（与 Settings 同级独立弹
 - 每个拖拽动作必须有定义；未定义区域不得响应拖拽。
 - 每个跳转必须定义目标页面和传递数据。
 - 每个安全弹窗默认焦点必须是安全按钮。
-- SFTP 面板必须能在第一版主窗口中直接访问。
+- SFTP 标签必须能从保存会话右键、终端标签右键和终端内容右键直接打开，并与 Terminal 标签原位互切。

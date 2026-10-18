@@ -12,8 +12,8 @@ use std::sync::{
 };
 
 use yshell_ssh::{
-    with_connection_stage_hook, RealConnectionStage, ShellClient, ShellSession, SshConnectionConfig,
-    SshError,
+    with_connection_stage_hook, RealConnectionStage, ShellSession, SshConnectionConfig, SshError,
+    SshTransport,
 };
 
 /// Work item for the connect worker.
@@ -25,6 +25,9 @@ pub struct ConnectJobSpec {
     pub password_retry: bool,
     /// When true, success status uses the reconnect wording.
     pub is_reconnect: bool,
+    /// Open a shell channel after authentication (terminal tabs). SFTP tabs
+    /// connect the transport only and open the SFTP subsystem lazily.
+    pub open_shell: bool,
 }
 
 /// Messages the worker sends back to the UI thread.
@@ -47,7 +50,10 @@ pub enum ConnectJobMessage {
 #[derive(Debug)]
 pub enum ConnectJobOutcome {
     Succeeded {
-        shell: Box<dyn ShellSession>,
+        transport: SshTransport,
+        /// `None` for SFTP-only tabs (the transport is connected but no shell
+        /// channel was opened).
+        shell: Option<Box<dyn ShellSession>>,
     },
     Failed {
         error: SshError,
@@ -158,26 +164,36 @@ fn run_connect(job: &ConnectJob, msg_tx: &Sender<ConnectJobMessage>) -> ConnectJ
                 stage: overlay_stage_id(stage).to_owned(),
             });
         },
-        || open_shell_for_job(&job.spec),
+        || connect_for_job(&job.spec),
     );
 
     if job.cancel.load(Ordering::SeqCst) {
-        if let Ok(mut shell) = result {
-            let _ = shell.disconnect();
+        if let Ok((transport, _)) = result {
+            transport.close();
         }
         return ConnectJobOutcome::Cancelled;
     }
 
     match result {
-        Ok(shell) => ConnectJobOutcome::Succeeded { shell },
+        Ok((transport, shell)) => ConnectJobOutcome::Succeeded { transport, shell },
         Err(error) => ConnectJobOutcome::Failed { error },
     }
 }
 
-fn open_shell_for_job(
+fn connect_for_job(
     spec: &ConnectJobSpec,
-) -> Result<Box<dyn ShellSession>, SshError> {
-    ShellClient::with_real_backend().open_shell_boxed(&spec.ssh_config)
+) -> Result<(SshTransport, Option<Box<dyn ShellSession>>), SshError> {
+    let transport = SshTransport::connect(&spec.ssh_config)?;
+    if !spec.open_shell {
+        return Ok((transport, None));
+    }
+    match transport.open_shell(&spec.ssh_config.pty) {
+        Ok(shell) => Ok((transport, Some(shell))),
+        Err(error) => {
+            transport.close();
+            Err(error)
+        }
+    }
 }
 
 /// Maps internal stages onto the five overlay stages the UI expects.

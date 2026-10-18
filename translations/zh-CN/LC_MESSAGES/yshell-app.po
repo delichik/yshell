@@ -6011,3 +6011,58 @@ msgstr "原始格式保留转义序列"
 msgctxt "MainWindow"
 msgid "Log output directory"
 msgstr "日志输出目录"
+
+#: ui/main_window.slint
+msgctxt "MainWindow"
+msgid "Open SFTP"
+msgstr "打开 SFTP"
+
+#: ui/main_window.slint
+msgctxt "MainWindow"
+msgid "Switch to SFTP"
+msgstr "切换为 SFTP"
+
+#: ui/main_window.slint
+msgctxt "MainWindow"
+msgid "Switch to Terminal"
+msgstr "切换为终端"
+
+#: ui/main_window.slint
+msgctxt "MainWindow"
+msgid "Connect the session before switching modes."
+msgstr "请先连接会话再切换模式。"
+
+#: ui/main_window.slint
+msgctxt "MainWindow"
+msgid "Connect the terminal before switching to SFTP."
+msgstr "请先连接终端再切换为 SFTP。"
+
+#: ui/components/workspace_tab_item.slint
+msgctxt "WorkspaceTabItem"
+msgid "New Tab"
+msgstr "新标签"
+
+#: ui/components/workspace_split.slint
+msgctxt "SplitPaneLeaf"
+msgid "Local"
+msgstr "本地"
+
+#: ui/components/sftp_panel.slint
+msgctxt "SftpContextMenu"
+msgid "Switch to Terminal"
+msgstr "切换为终端"
+
+#: ui/text_formats.slint
+msgctxt "MainWindow"
+msgid "Switched tab `{0}` to SFTP."
+msgstr "已将标签 `{0}` 切换为 SFTP。"
+
+#: ui/text_formats.slint
+msgctxt "MainWindow"
+msgid "Switched tab `{0}` to Terminal."
+msgstr "已将标签 `{0}` 切换为终端。"
+
+#: ui/text_formats.slint
+msgctxt "MainWindow"
+msgid "Opened a new tab."
+msgstr "已打开新标签。"

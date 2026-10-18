@@ -23,7 +23,7 @@ fn runtime_boots_with_startup_projection() {
     assert!(projection.status_text.contains("Saved sessions discovered"));
     assert_eq!(projection.active_session_kind_text, "welcome");
     assert_eq!(projection.saved_session_count, 0);
-    assert!(projection.sftp_visible);
+    assert_eq!(projection.tab_count, 0);
 }
 
 #[test]
@@ -118,8 +118,7 @@ fn runtime_with_stored_host_key(config_dir: &std::path::Path) -> AppRuntime {
     store
         .save_known_hosts(&known_hosts)
         .expect("seed known_hosts with the old key");
-    AppRuntime::new_with_keychain(config_dir.to_path_buf(), None)
-        .expect("runtime without keychain")
+    AppRuntime::new_with_keychain(config_dir.to_path_buf(), None).expect("runtime without keychain")
 }
 
 /// 挂起一次主机密钥确认（`expected = Some(..)` 即 changed 模式）。
@@ -247,7 +246,10 @@ fn canceling_changed_host_key_writes_nothing() {
             .fingerprint,
         "sha256:old"
     );
-    assert!(runtime.temporary_known_hosts.get("example.com", 2200).is_none());
+    assert!(runtime
+        .temporary_known_hosts
+        .get("example.com", 2200)
+        .is_none());
 }
 
 /// SSH-3：首次信任的 "Trust Once" 同样只写临时表，不落盘。
@@ -423,6 +425,8 @@ fn host_key_trust_resumes_password_prompt_for_password_sessions() {
         port: 2200,
         username: "alice".to_owned(),
         auth_method: PendingPasswordAuthMethod::Password,
+        reuse_tab_id: None,
+        view_mode: crate::session_runtime::SessionViewMode::Terminal,
     };
     runtime.pending_host_key_prompt = Some(PendingHostKeyPrompt {
         session_key: "saved-password-1".to_owned(),

@@ -51,6 +51,24 @@ impl AppRuntime {
         (true, current != main_window)
     }
 
+    pub(crate) fn tab_menu_switch_mode_flags(&self) -> (String, bool) {
+        let Some(tab_id) = self.tab_menu_tab_id.as_deref() else {
+            return (String::new(), false);
+        };
+        let Some(index) = self.tab_index(tab_id) else {
+            return (String::new(), false);
+        };
+        let mode = self.tabs[index].kind.mode_text().to_owned();
+        let enabled = if self.tabs[index].is_sftp() {
+            self.tab_can_switch_to_terminal(tab_id)
+        } else if self.tabs[index].is_new_tab() {
+            false
+        } else {
+            self.tab_can_switch_to_sftp(tab_id)
+        };
+        (mode, enabled)
+    }
+
     /// N6：终端日志菜单/状态栏入口的启用旗标（针对活动会话）。
     ///
     /// 返回 `(start, stop, open_file, open_folder)`：

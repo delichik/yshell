@@ -1,18 +1,11 @@
 //! SFTP client lifecycle and backend adapters.
 
-use std::{
-    collections::BTreeMap,
-    fs,
-    path::Path,
-    sync::atomic::AtomicBool,
-};
+use std::{collections::BTreeMap, fs, path::Path, sync::atomic::AtomicBool};
 
 use crate::error::{SftpError, SftpErrorKind, SftpResult};
 use crate::fs_entry::{DirectoryListing, FsEntry, FsEntryKind};
 use crate::real::RealSftpBackend;
-use crate::tree::{
-    BatchOpResult, TransferProgress, TreeTransferOptions, TreeTransferReport,
-};
+use crate::tree::{BatchOpResult, TransferProgress, TreeTransferOptions, TreeTransferReport};
 
 pub trait SftpBackend {
     fn list_dir(&self, path: &str) -> SftpResult<DirectoryListing>;
@@ -87,6 +80,13 @@ impl SftpClient<RealSftpBackend> {
     pub fn with_real_backend(config: yshell_ssh::SshConnectionConfig) -> Self {
         Self {
             backend: RealSftpBackend::new(config),
+        }
+    }
+
+    /// Opens the SFTP subsystem on an existing authenticated SSH transport.
+    pub fn with_shared_transport(transport: yshell_ssh::SshTransport) -> Self {
+        Self {
+            backend: RealSftpBackend::with_transport(transport),
         }
     }
 }
@@ -407,10 +407,15 @@ mod tests {
 
         let mut backend = InMemorySftpBackend::default();
         backend.upload_file(&upload_path, "/upload.txt").unwrap();
-        backend.download_file("/upload.txt", &download_path).unwrap();
+        backend
+            .download_file("/upload.txt", &download_path)
+            .unwrap();
 
         assert_eq!(fs::read(&download_path).unwrap(), b"hello fake sftp");
-        assert_eq!(backend.file_contents("/upload.txt"), Some(&b"hello fake sftp"[..]));
+        assert_eq!(
+            backend.file_contents("/upload.txt"),
+            Some(&b"hello fake sftp"[..])
+        );
         assert_eq!(
             backend.entry("/upload.txt").map(|entry| entry.size_bytes),
             Some(15)

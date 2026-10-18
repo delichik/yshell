@@ -7,6 +7,8 @@ use std::io::Read;
 use std::io::Write;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use ssh2::{Channel, KeyboardInteractivePrompt, MethodType, Session};
@@ -110,7 +112,10 @@ fn apply_preferred_kex_methods(session: &Session) {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RealAuthStrategy {
     Password,
-    PrivateKey { key_path: String, has_passphrase: bool },
+    PrivateKey {
+        key_path: String,
+        has_passphrase: bool,
+    },
     Agent,
     KeyboardInteractive,
 }
@@ -165,12 +170,29 @@ impl RealConnectionStage {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RealTransportAction {
-    NegotiateProxy { protocol: &'static str, address: String },
-    OpenTcpSocket { address: String },
-    PerformSshHandshake { server: String },
-    VerifyHostKey { server: String, policy: HostKeyPolicy },
-    Authenticate { username: String, strategy: RealAuthStrategy },
-    RequestPty { term: String, columns: u16, rows: u16 },
+    NegotiateProxy {
+        protocol: &'static str,
+        address: String,
+    },
+    OpenTcpSocket {
+        address: String,
+    },
+    PerformSshHandshake {
+        server: String,
+    },
+    VerifyHostKey {
+        server: String,
+        policy: HostKeyPolicy,
+    },
+    Authenticate {
+        username: String,
+        strategy: RealAuthStrategy,
+    },
+    RequestPty {
+        term: String,
+        columns: u16,
+        rows: u16,
+    },
     OpenShell,
     None,
 }
@@ -763,8 +785,9 @@ impl ShellSession for RealShellSessionPlaceholder {
     fn disconnect(&mut self) -> SshResult<()> {
         match &mut self.transport {
             RealShellTransport::Scaffold => {
-                self.attempt
-                    .mark_disconnected("Shell scaffold was closed before any live transport existed.");
+                self.attempt.mark_disconnected(
+                    "Shell scaffold was closed before any live transport existed.",
+                );
                 tracing::debug!(
                     target: "yshell::ssh",
                     "real-shell scaffold marked the session as disconnected before any live transport existed"
@@ -773,8 +796,9 @@ impl ShellSession for RealShellSessionPlaceholder {
             }
             RealShellTransport::Native(session) => {
                 session.disconnect()?;
-                self.attempt
-                    .mark_disconnected("SSH shell session was explicitly disconnected by the runtime.");
+                self.attempt.mark_disconnected(
+                    "SSH shell session was explicitly disconnected by the runtime.",
+                );
                 // D1：运行时诊断只进日志；真实会话状态由 refresh_transport_state 播报。
                 tracing::debug!(
                     target: "yshell::ssh",
@@ -854,8 +878,7 @@ impl RealShellSessionPlaceholder {
         };
         if let Some(notice) = native_disconnected {
             self.pending_output.push_back(notice.clone().into_bytes());
-            self.attempt
-                .mark_disconnected("SSH shell session closed.");
+            self.attempt.mark_disconnected("SSH shell session closed.");
         }
     }
 }
@@ -1027,11 +1050,7 @@ impl RealConnectionAttempt {
             .latest_action_record()
             .map(RealTransportActionRecord::summary)
             .unwrap_or_else(|| self.next_action().summary());
-        format!(
-            "stage={} action={} note={note}",
-            self.stage.label(),
-            action
-        )
+        format!("stage={} action={} note={note}", self.stage.label(), action)
     }
 
     pub fn history_transcript_lines(&self) -> Vec<String> {
@@ -1087,11 +1106,19 @@ impl RealConnectionAttempt {
     }
 
     pub fn record_current_action_pending(&mut self, detail: impl Into<String>) {
-        self.record_action(self.next_action(), RealTransportActionOutcome::Pending, detail);
+        self.record_action(
+            self.next_action(),
+            RealTransportActionOutcome::Pending,
+            detail,
+        );
     }
 
     pub fn record_current_action_blocked(&mut self, detail: impl Into<String>) {
-        self.record_action(self.next_action(), RealTransportActionOutcome::Blocked, detail);
+        self.record_action(
+            self.next_action(),
+            RealTransportActionOutcome::Blocked,
+            detail,
+        );
     }
 
     pub fn record_current_action_completed(&mut self, detail: impl Into<String>) {
@@ -1103,7 +1130,11 @@ impl RealConnectionAttempt {
     }
 
     pub fn record_current_action_failed(&mut self, detail: impl Into<String>) {
-        self.record_action(self.next_action(), RealTransportActionOutcome::Failed, detail);
+        self.record_action(
+            self.next_action(),
+            RealTransportActionOutcome::Failed,
+            detail,
+        );
     }
 
     pub fn latest_action_record(&self) -> Option<&RealTransportActionRecord> {
@@ -1335,7 +1366,9 @@ impl RealConnectionAttempt {
                 "Shell channel open is the next step after transport and auth succeed."
             }
             RealConnectionStage::Connected => "Transport and shell are live.",
-            RealConnectionStage::Disconnected => "Connection attempt or shell was explicitly disconnected.",
+            RealConnectionStage::Disconnected => {
+                "Connection attempt or shell was explicitly disconnected."
+            }
             RealConnectionStage::Failed => "Connection attempt reached a failed terminal state.",
         }
     }
@@ -1582,10 +1615,12 @@ impl RealNativeShellSession {
 
     fn disconnect(&mut self) -> SshResult<()> {
         self.session.set_blocking(true);
-        let close_result = self
-            .channel
-            .close()
-            .map_err(|error| SshError::new(SshErrorKind::Channel, format!("failed to close SSH channel: {error}")));
+        let close_result = self.channel.close().map_err(|error| {
+            SshError::new(
+                SshErrorKind::Channel,
+                format!("failed to close SSH channel: {error}"),
+            )
+        });
         if close_result.is_ok() {
             let _ = self.channel.wait_close();
         }
@@ -1609,6 +1644,322 @@ impl RealNativeShellSession {
             self.closed = true;
             Some("SSH shell session reached EOF.\n".to_owned())
         }
+    }
+}
+
+/// A live, authenticated SSH transport that can host one shell channel and/or
+/// one SFTP channel over the same TCP/SSH connection.
+///
+/// `ssh2::Session` is internally synchronized and `Clone`; cloning this type
+/// creates another handle to the same connection. The app uses this to convert
+/// a terminal tab into an SFTP tab without reconnecting: the shell channel is
+/// closed, the transport survives, and the SFTP subsystem is opened on it.
+#[derive(Clone)]
+pub struct SshTransport {
+    session: Session,
+    connect_timeout: Duration,
+    closed: Arc<AtomicBool>,
+}
+
+impl std::fmt::Debug for SshTransport {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SshTransport")
+            .field("authenticated", &self.session.authenticated())
+            .field("closed", &self.closed.load(Ordering::SeqCst))
+            .finish()
+    }
+}
+
+impl SshTransport {
+    /// Opens a TCP + SSH connection, verifies the host key and authenticates.
+    ///
+    /// Unlike [`ShellClient::open_shell`] this deliberately **does not** open a
+    /// shell channel, so an SFTP-only tab can connect without allocating a PTY.
+    pub fn connect(config: &SshConnectionConfig) -> SshResult<Self> {
+        config.validate()?;
+        if !matches!(config.proxy, ProxyConfig::None) {
+            return Err(SshError::new(
+                SshErrorKind::Unsupported,
+                "native SSH transport does not support proxy negotiation yet",
+            ));
+        }
+        let plan = RealSshAdapter.plan_connection(config)?;
+        let mut attempt = RealConnectionAttempt::prepared(plan);
+        let session = connect_authenticated_native_session(&mut attempt)?;
+        session.set_timeout(session_timeout_ms(config.connect_timeout));
+        Ok(Self {
+            session,
+            connect_timeout: config.connect_timeout,
+            closed: Arc::new(AtomicBool::new(false)),
+        })
+    }
+
+    /// Wraps an already-authenticated session (tests / future connection sharing).
+    pub fn from_session(session: Session, connect_timeout: Duration) -> Self {
+        Self {
+            session,
+            connect_timeout,
+            closed: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    #[must_use]
+    pub fn session(&self) -> &Session {
+        &self.session
+    }
+
+    #[must_use]
+    pub fn is_connected(&self) -> bool {
+        !self.closed.load(Ordering::SeqCst) && self.session.authenticated()
+    }
+
+    /// Marks the transport dead after a fatal channel/transport error.
+    pub fn mark_closed(&self) {
+        self.closed.store(true, Ordering::SeqCst);
+    }
+
+    /// Puts the session in the blocking/timeout mode expected by the SFTP
+    /// backend. SFTP operations are synchronous and may wait on the network.
+    pub fn configure_sftp(&self) -> SshResult<()> {
+        if self.closed.load(Ordering::SeqCst) {
+            return Err(SshError::new(
+                SshErrorKind::Io,
+                "SSH transport is closed".to_owned(),
+            ));
+        }
+        self.session
+            .set_timeout(session_timeout_ms(self.connect_timeout));
+        self.session.set_blocking(true);
+        Ok(())
+    }
+
+    /// Opens a shell channel on this transport.
+    ///
+    /// The terminal shell runs non-blocking after setup (the UI polls it); the
+    /// transport remains alive when the shell is closed so SFTP can take over.
+    pub fn open_shell(&self, pty: &PtyConfig) -> SshResult<Box<dyn ShellSession>> {
+        if self.closed.load(Ordering::SeqCst) {
+            return Err(SshError::new(
+                SshErrorKind::Io,
+                "SSH transport is closed".to_owned(),
+            ));
+        }
+        self.session
+            .set_timeout(session_timeout_ms(self.connect_timeout));
+        self.session.set_blocking(true);
+        notify_connection_stage(RealConnectionStage::PtyRequest);
+        let mut channel = self.session.channel_session().map_err(|error| {
+            SshError::new(
+                SshErrorKind::Channel,
+                format!("failed to open SSH session channel: {error}"),
+            )
+        })?;
+        channel
+            .request_pty(
+                &pty.term,
+                None,
+                Some((
+                    pty.size.columns as u32,
+                    pty.size.rows as u32,
+                    pty.size.pixel_width as u32,
+                    pty.size.pixel_height as u32,
+                )),
+            )
+            .map_err(|error| {
+                SshError::new(
+                    SshErrorKind::Channel,
+                    format!("failed to request PTY: {error}"),
+                )
+            })?;
+        notify_connection_stage(RealConnectionStage::ShellOpen);
+        channel.shell().map_err(|error| {
+            SshError::new(
+                SshErrorKind::Channel,
+                format!("failed to start interactive shell: {error}"),
+            )
+        })?;
+        self.session.set_timeout(0);
+        self.session
+            .set_keepalive(true, NATIVE_SSH_KEEPALIVE_INTERVAL_SECS);
+        self.session.set_blocking(false);
+        notify_connection_stage(RealConnectionStage::Connected);
+        Ok(Box::new(SshTransportShellSession {
+            transport: self.clone(),
+            channel,
+            closed: false,
+            pending_output: VecDeque::new(),
+        }))
+    }
+
+    /// Sends a disconnect message and marks the transport unusable.
+    pub fn close(&self) {
+        self.closed.store(true, Ordering::SeqCst);
+        let _ = self.session.disconnect(None, "closed by yshell", None);
+    }
+}
+
+/// Interactive shell channel backed by [`SshTransport`].
+///
+/// Compared with [`RealNativeShellSession`] this type does not own the SSH
+/// session: closing the shell only closes the channel, while the underlying
+/// transport stays available for an SFTP switch.
+struct SshTransportShellSession {
+    transport: SshTransport,
+    channel: Channel,
+    closed: bool,
+    pending_output: VecDeque<Vec<u8>>,
+}
+
+impl std::fmt::Debug for SshTransportShellSession {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SshTransportShellSession")
+            .field("connected", &self.is_connected())
+            .finish()
+    }
+}
+
+impl ShellSession for SshTransportShellSession {
+    fn is_connected(&self) -> bool {
+        !self.closed && !self.channel.eof()
+    }
+
+    fn poll_output(&mut self) -> SshResult<Vec<u8>> {
+        if self.closed {
+            return Ok(Vec::new());
+        }
+        if let Err(error) = self.transport.session().keepalive_send() {
+            if ssh2_error_code(&error) != Some(LIBSSH2_ERROR_EAGAIN) {
+                self.closed = true;
+                self.transport.mark_closed();
+                return Err(SshError::new(
+                    SshErrorKind::Io,
+                    format!("SSH keepalive failed: {error}"),
+                ));
+            }
+        }
+        if let Err(error) = drain_channel_stream(&mut self.channel, &mut self.pending_output) {
+            self.closed = true;
+            self.transport.mark_closed();
+            return Err(error);
+        }
+        let mut stderr = self.channel.stderr();
+        if let Err(error) = drain_read_stream(&mut stderr, &mut self.pending_output) {
+            self.closed = true;
+            self.transport.mark_closed();
+            return Err(error);
+        }
+        Ok(self.pending_output.pop_front().unwrap_or_default())
+    }
+
+    fn write_input(&mut self, bytes: &[u8]) -> SshResult<()> {
+        if self.closed {
+            return Err(SshError::new(
+                SshErrorKind::Io,
+                "cannot write to a closed SSH shell".to_owned(),
+            ));
+        }
+        let mut remaining = bytes;
+        let mut retries = 0u32;
+        while !remaining.is_empty() {
+            match self.channel.write(remaining) {
+                Ok(0) => {
+                    self.closed = true;
+                    self.transport.mark_closed();
+                    return Err(SshError::new(
+                        SshErrorKind::Io,
+                        "SSH shell accepted zero bytes while writing input".to_owned(),
+                    ));
+                }
+                Ok(written) => {
+                    remaining = &remaining[written..];
+                    retries = 0;
+                }
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                    retries += 1;
+                    if retries > 500 {
+                        return Err(SshError::new(
+                            SshErrorKind::Io,
+                            "SSH shell input stalled while waiting for backpressure to clear"
+                                .to_owned(),
+                        ));
+                    }
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+                Err(error) => {
+                    self.closed = true;
+                    self.transport.mark_closed();
+                    return Err(SshError::new(
+                        SshErrorKind::Io,
+                        format!("failed to write bytes into SSH shell: {error}"),
+                    ));
+                }
+            }
+        }
+        retries = 0;
+        loop {
+            match self.channel.flush() {
+                Ok(()) => return Ok(()),
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                    retries += 1;
+                    if retries > 500 {
+                        return Err(SshError::new(
+                            SshErrorKind::Io,
+                            "SSH shell flush stalled while waiting for backpressure to clear"
+                                .to_owned(),
+                        ));
+                    }
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+                Err(error) => {
+                    self.closed = true;
+                    self.transport.mark_closed();
+                    return Err(SshError::new(
+                        SshErrorKind::Io,
+                        format!("failed to flush bytes into SSH shell: {error}"),
+                    ));
+                }
+            }
+        }
+    }
+
+    fn resize_pty(&mut self, size: PtySize) -> SshResult<()> {
+        self.channel
+            .request_pty_size(
+                size.columns as u32,
+                size.rows as u32,
+                Some(size.pixel_width as u32),
+                Some(size.pixel_height as u32),
+            )
+            .map_err(|error| {
+                SshError::new(
+                    SshErrorKind::Channel,
+                    format!(
+                        "failed to resize SSH PTY to {}x{}: {error}",
+                        size.columns, size.rows
+                    ),
+                )
+            })
+    }
+
+    fn disconnect(&mut self) -> SshResult<()> {
+        if self.closed {
+            return Ok(());
+        }
+        self.transport.session().set_blocking(true);
+        let close_result = self.channel.close().map_err(|error| {
+            SshError::new(
+                SshErrorKind::Channel,
+                format!("failed to close SSH channel: {error}"),
+            )
+        });
+        if close_result.is_ok() {
+            let _ = self.channel.wait_close();
+        }
+        self.closed = true;
+        self.transport.session().set_blocking(false);
+        close_result
     }
 }
 
@@ -1644,16 +1995,14 @@ fn establish_native_session(attempt: &mut RealConnectionAttempt) -> SshResult<Se
     session.set_timeout(session_timeout_ms(attempt.plan.connect_timeout));
     // Prefer modern KEX before handshake to avoid DH-GEX-first Session(-5) failures.
     apply_preferred_kex_methods(&session);
-    session
-        .handshake()
-        .map_err(|error| {
-            native_stage_error(
-                attempt,
-                RealConnectionStage::SshHandshake,
-                SshErrorKind::Handshake,
-                format!("SSH handshake failed: {error}"),
-            )
-        })?;
+    session.handshake().map_err(|error| {
+        native_stage_error(
+            attempt,
+            RealConnectionStage::SshHandshake,
+            SshErrorKind::Handshake,
+            format!("SSH handshake failed: {error}"),
+        )
+    })?;
     attempt.record_action(
         RealTransportAction::PerformSshHandshake {
             server: format!("{}:{}", attempt.plan.host, attempt.plan.port),
@@ -1908,7 +2257,10 @@ fn native_host_key_problem(
     }
 }
 
-fn authenticate_native_session(session: &Session, attempt: &mut RealConnectionAttempt) -> SshResult<()> {
+fn authenticate_native_session(
+    session: &Session,
+    attempt: &mut RealConnectionAttempt,
+) -> SshResult<()> {
     let detail = match &attempt.plan.auth_strategy {
         RealAuthStrategy::Password => "native password authentication succeeded".to_owned(),
         RealAuthStrategy::PrivateKey { key_path, .. } => {
@@ -2214,7 +2566,10 @@ mod tests {
         assert_eq!(attempt.history.len(), 3);
         assert_eq!(attempt.action_log.len(), 1);
         assert_eq!(
-            attempt.latest_action_record().expect("action record").outcome,
+            attempt
+                .latest_action_record()
+                .expect("action record")
+                .outcome,
             RealTransportActionOutcome::Completed
         );
         assert!(attempt.history[2].note.contains("SSH handshake"));
@@ -2319,15 +2674,22 @@ mod tests {
             RealConnectionStage::TcpConnect,
             "Entering tcp-connect stage for action-summary testing.",
         );
-        assert_eq!(attempt.next_action().summary(), "tcp-connect:example.test:22");
+        assert_eq!(
+            attempt.next_action().summary(),
+            "tcp-connect:example.test:22"
+        );
 
         attempt.advance_to(
             RealConnectionStage::Authentication,
             "Synthetic auth stage for action-summary testing.",
         );
-        attempt.record_current_action_pending("Authentication implementation will use the configured agent.");
+        attempt.record_current_action_pending(
+            "Authentication implementation will use the configured agent.",
+        );
         assert_eq!(attempt.next_action().summary(), "auth:agent@alice");
-        assert!(attempt.current_summary().contains("pending:auth:agent@alice"));
+        assert!(attempt
+            .current_summary()
+            .contains("pending:auth:agent@alice"));
     }
 
     #[test]
@@ -2503,7 +2865,10 @@ mod tests {
         assert_eq!(error.kind, crate::error::SshErrorKind::TcpConnect);
         assert_eq!(attempt.stage, RealConnectionStage::Failed);
         assert_eq!(
-            attempt.latest_action_record().expect("action record").outcome,
+            attempt
+                .latest_action_record()
+                .expect("action record")
+                .outcome,
             RealTransportActionOutcome::Failed
         );
         assert!(attempt.current_summary().contains("failed"));
@@ -2534,7 +2899,9 @@ mod tests {
         let mut attempt =
             RealConnectionAttempt::prepared(adapter.plan_connection(&config).expect("plan"));
 
-        let error = adapter.exec(&mut attempt, "   ").expect_err("empty command should fail");
+        let error = adapter
+            .exec(&mut attempt, "   ")
+            .expect_err("empty command should fail");
 
         assert_eq!(error.kind, SshErrorKind::Configuration);
     }

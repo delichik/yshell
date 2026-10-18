@@ -31,5 +31,5 @@ pub use real::{
     with_connection_stage_hook, RealAuthStrategy, RealConnectionAttempt, RealConnectionPlan,
     RealConnectionSnapshot, RealConnectionStage, RealShellSessionPlaceholder, RealSshAdapter,
     RealTransportAction, RealTransportActionOutcome, RealTransportActionRecord,
-    RealTransportExecutionReport,
+    RealTransportExecutionReport, SshTransport,
 };

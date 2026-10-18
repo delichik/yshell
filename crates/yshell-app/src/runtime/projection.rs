@@ -23,12 +23,14 @@ impl AppRuntime {
         projection
     }
 
-    /// TAB-6：投影窗口是否显示 Quick Connect 覆盖层。
-    ///
-    /// 覆盖层是工作区级状态（不占标签），与窗口的标签集合/活动标签无关；零标签时
-    /// 关闭覆盖层就保持空工作区（D1，不再由"无标签"强制显示 QC 页）。
+    /// Whether the projected window's active tab is a New Tab page.
     fn projection_quick_connect_visible(&self) -> bool {
-        self.quick_connect_visible()
+        let tab_id = self.projection_active_tab_id();
+        if tab_id.is_empty() {
+            return false;
+        }
+        self.tab_index(&tab_id)
+            .is_some_and(|index| self.tabs[index].is_new_tab())
     }
 
     pub fn projection(&self) -> AppProjection {
@@ -59,8 +61,7 @@ impl AppRuntime {
             .is_some_and(|key_id| self.config_document.find_key(key_id).is_none());
         // NET-1：会话编辑器代理下拉（托管条目）+ legacy 只读摘要。
         let editor_proxy_options = self.managed_proxy_options();
-        let editor_selected_proxy_index =
-            self.editor_proxy_selected_index(&editor_proxy_options);
+        let editor_selected_proxy_index = self.editor_proxy_selected_index(&editor_proxy_options);
         let editor_proxy_selected_detail_text = self.editor_proxy_selected_detail();
         let editor_proxy_legacy_text = self.editor_proxy_legacy_text();
         let editor_proxy_selected_missing = self.editor_proxy_selected_missing();
@@ -82,12 +83,17 @@ impl AppRuntime {
         // N7：标签条只投影"当前投影窗口"的标签（`projection_window` 未设置时 =
         // 聚焦窗口；无窗口登记时 = 全部标签）。
         let tabs = self.tab_data_for_projection();
+        let active_tab_mode_text = tabs
+            .iter()
+            .find(|tab| tab.active)
+            .map(|tab| tab.mode_text.clone())
+            .unwrap_or_default();
         let tab_has_disconnected = self.has_disconnected_tabs();
         let projection_window_active_tab = self.projection_active_tab_id();
         let projection_window = self.projection_window_id();
         let workspace_split = self.workspace_split_projection();
-        let tab_menu_split_enabled =
-            !projection_window_active_tab.is_empty() && (!workspace_split.active || workspace_split.can_split);
+        let tab_menu_split_enabled = !projection_window_active_tab.is_empty()
+            && (!workspace_split.active || workspace_split.can_split);
         let tab_menu_close_pane_enabled = workspace_split.can_close_pane;
         let (
             tab_menu_close_others_enabled,
@@ -102,6 +108,9 @@ impl AppRuntime {
         // N7：标签右键"移动到新窗口 / 移动到主窗口"的启用条件。
         let (tab_menu_move_to_new_window_enabled, tab_menu_move_to_main_window_enabled) =
             self.tab_menu_move_flags();
+        let (tab_menu_mode_text, tab_menu_switch_mode_enabled) = self.tab_menu_switch_mode_flags();
+        let active_tab_can_switch_to_sftp = !projection_window_active_tab.is_empty()
+            && self.tab_can_switch_to_sftp(&projection_window_active_tab);
         let pending_close = self.pending_close_tabs.as_ref();
         let (terminal_search_kind_text, terminal_search_match_count, terminal_search_current_index) =
             self.terminal_search_summary_parts();
@@ -176,7 +185,8 @@ impl AppRuntime {
         ) = self.tab_menu_receive_key_input_flags();
         let input_sync_active = self.input_sync.is_active();
         let input_sync_mode_text = self.input_sync.mode.id().to_owned();
-        let input_sync_target_count = i32::try_from(self.input_sync.targets.len()).unwrap_or(i32::MAX);
+        let input_sync_target_count =
+            i32::try_from(self.input_sync.targets.len()).unwrap_or(i32::MAX);
         let input_sync_source_name_text = self.input_sync_source_name();
         let input_sync_notice_kind_text = self.input_sync.notice_kind.clone();
         let input_sync_notice_param_text = self.input_sync.notice_param.clone();
@@ -185,6 +195,8 @@ impl AppRuntime {
             self.quick_link_row_data(),
             self.quick_connect_summary_text(),
         );
+        let (quick_connect_input_text, quick_connect_error_text) =
+            self.new_tab_parts_for(&self.projection_active_tab_id());
         // D37：QC 摘要的 kind/参数（页面走 `TextFormats.status-message`；文本留作回退）。
         let (
             quick_connect_summary_kind_text,
@@ -204,22 +216,16 @@ impl AppRuntime {
         // TERM-4：Session Editor 外观分区的 live preview（仅打开且停在外观分区）。
         let session_editor_preview = self.session_editor_preview_frame();
         let settings_appearance_status_text = self.settings_appearance_status.display_text();
-        let settings_appearance_color_scheme_id = theme::resolved_global_scheme_id(
-            &self.config_document.terminal,
-            &self.theme_catalog,
-        );
-        let settings_appearance_color_scheme_name_text = theme::scheme_display_name(
-            &settings_appearance_color_scheme_id,
-            &self.theme_catalog,
-        );
+        let settings_appearance_color_scheme_id =
+            theme::resolved_global_scheme_id(&self.config_document.terminal, &self.theme_catalog);
+        let settings_appearance_color_scheme_name_text =
+            theme::scheme_display_name(&settings_appearance_color_scheme_id, &self.theme_catalog);
         let settings_appearance_color_scheme_builtin =
             yshell_config::ThemeCatalog::is_builtin(&settings_appearance_color_scheme_id);
         let settings_appearance_palette = palette_parts(self.settings_appearance_palette());
         // TERM-1: the independent Theme Manager list + preview.
-        let theme_manager_default_id = theme::resolved_global_scheme_id(
-            &self.config_document.terminal,
-            &self.theme_catalog,
-        );
+        let theme_manager_default_id =
+            theme::resolved_global_scheme_id(&self.config_document.terminal, &self.theme_catalog);
         let theme_manager_selected_id = self.theme_manager_selection_id();
         let theme_manager_rows = theme::theme_manager_rows(
             &self.theme_catalog,
@@ -230,13 +236,11 @@ impl AppRuntime {
             .iter()
             .position(|row| row.selected)
             .map_or(-1, |index| i32::try_from(index).unwrap_or(i32::MAX));
-        let theme_manager_builtin_count = i32::try_from(
-            theme_manager_rows.iter().filter(|row| row.builtin).count(),
-        )
-        .unwrap_or(i32::MAX);
-        let theme_manager_user_count =
-            i32::try_from(theme_manager_rows.len()).unwrap_or(i32::MAX)
-                - theme_manager_builtin_count;
+        let theme_manager_builtin_count =
+            i32::try_from(theme_manager_rows.iter().filter(|row| row.builtin).count())
+                .unwrap_or(i32::MAX);
+        let theme_manager_user_count = i32::try_from(theme_manager_rows.len()).unwrap_or(i32::MAX)
+            - theme_manager_builtin_count;
         let theme_manager_default_name_text =
             theme::scheme_display_name(&theme_manager_default_id, &self.theme_catalog);
         let theme_manager_selected_is_default =
@@ -377,10 +381,7 @@ impl AppRuntime {
             settings_appearance_font_options: self.settings_appearance.font_options(),
             settings_appearance_font_index: self.settings_appearance.font_index(),
             settings_appearance_font_size_text: self.settings_appearance.font_size_text.clone(),
-            settings_appearance_backup_font_text: self
-                .settings_appearance
-                .backup_font_text
-                .clone(),
+            settings_appearance_backup_font_text: self.settings_appearance.backup_font_text.clone(),
             settings_appearance_status_text,
             settings_appearance_palette_swatches: settings_appearance_palette,
             settings_appearance_preview,
@@ -489,6 +490,7 @@ impl AppRuntime {
             tab_count: i32::try_from(tabs.len()).unwrap_or(i32::MAX),
             tabs,
             active_tab_id: projection_window_active_tab,
+            active_tab_mode_text,
             tab_has_disconnected,
             close_tabs_confirm_visible: pending_close.is_some(),
             close_tabs_confirm_single: pending_close.is_some_and(|pending| pending.single),
@@ -512,6 +514,9 @@ impl AppRuntime {
             tab_menu_disconnect_enabled,
             tab_menu_move_to_new_window_enabled,
             tab_menu_move_to_main_window_enabled,
+            tab_menu_mode_text,
+            tab_menu_switch_mode_enabled,
+            active_tab_can_switch_to_sftp,
             // N7：窗口关闭确认（投影窗口的挂起状态；无窗口登记时不可见）。
             close_window_confirm_visible: projection_window
                 .is_some_and(|window_id| self.window_close_pending(window_id)),
@@ -573,6 +578,7 @@ impl AppRuntime {
             terminal_search_match_count,
             terminal_search_current_index,
             sftp_path_text: self.sftp_path.clone(),
+            sftp_column_ratio: self.sftp_column_ratio,
             sftp_listing_kind_text: self.sftp_listing.kind_id().to_owned(),
             sftp_listing_rows_text: self.sftp_listing.rows().to_owned(),
             sftp_listing_session_key_text: self.sftp_listing.session_key().to_owned(),
@@ -703,8 +709,8 @@ impl AppRuntime {
             layout: layout_projection(&panel_view),
             app_version_text: env!("CARGO_PKG_VERSION").to_owned(),
             quick_connect_visible: self.projection_quick_connect_visible(),
-            quick_connect_input_text: self.quick_connect_input.clone(),
-            quick_connect_error_text: self.quick_connect_error_text.clone(),
+            quick_connect_input_text,
+            quick_connect_error_text,
             quick_connect_last_target_text: self.quick_connect_last_target.clone(),
             quick_connect_history_enabled: self.config_document.quick_connect.enabled,
             quick_connect_summary_text,
@@ -1818,6 +1824,8 @@ pub struct AppProjection {
     pub tabs: Vec<TabData>,
     /// N0：活动标签 id（无标签时为空串）。
     pub active_tab_id: String,
+    /// `new` / `terminal` / `sftp` — active tab mode for the projected window.
+    pub active_tab_mode_text: String,
     pub tab_count: i32,
     /// N0：是否存在非 connected/connecting 的标签（`Close Disconnected Tabs` 启用条件）。
     pub tab_has_disconnected: bool,
@@ -1839,6 +1847,12 @@ pub struct AppProjection {
     /// N7：标签右键"移动到新窗口 / 移动到主窗口"的启用条件。
     pub tab_menu_move_to_new_window_enabled: bool,
     pub tab_menu_move_to_main_window_enabled: bool,
+    /// Mode of the right-clicked tab (`new`/`terminal`/`sftp`).
+    pub tab_menu_mode_text: String,
+    /// Right-clicked tab can switch between Terminal and SFTP.
+    pub tab_menu_switch_mode_enabled: bool,
+    /// Active tab can switch Terminal → SFTP (content context menu).
+    pub active_tab_can_switch_to_sftp: bool,
     // --- N7：窗口关闭确认（关闭带活动连接的窗口时）--------------------------------
     /// 该窗口正在等待"关闭并断开"确认。
     pub close_window_confirm_visible: bool,
@@ -1901,6 +1915,8 @@ pub struct AppProjection {
     pub terminal_search_match_count: i32,
     pub terminal_search_current_index: i32,
     pub sftp_path_text: String,
+    /// Per-SFTP-tab local/remote split ratio (0..1).
+    pub sftp_column_ratio: f32,
     pub sftp_listing_kind_text: String,
     pub sftp_listing_rows_text: String,
     pub sftp_listing_session_key_text: String,

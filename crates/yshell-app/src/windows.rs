@@ -31,9 +31,9 @@ use crate::bootstrap::{
     sanitize_scale_factor, terminal_size_from_viewport, wire_callbacks, FileDialogOutcome,
     TerminalSurface,
 };
+use crate::connect_jobs::ConnectJobMessage;
 use crate::error::{AppError, AppResult};
 use crate::runtime::AppRuntime;
-use crate::connect_jobs::ConnectJobMessage;
 use crate::sftp_jobs::{SftpJobHandle, SftpJobMessage};
 
 /// 应用级轮询间隔。
@@ -636,6 +636,20 @@ impl WindowManager {
                     tracing::warn!(target: "yshell::app", "terminal output poll failed: {error}");
                 }
             }
+        }
+
+        let requested_close = self
+            .runtime
+            .try_borrow_mut()
+            .ok()
+            .and_then(|mut runtime| runtime.take_requested_window_close());
+        if let Some(window_id) = requested_close {
+            if self.entry(window_id).is_some() {
+                // Closing the last tab behaves like clicking the window close
+                // button (confirm/quit flow included).
+                self.request_close_window(window_id);
+            }
+            return;
         }
 
         let window_ids: Vec<u64> = self.windows.iter().map(|entry| entry.id).collect();

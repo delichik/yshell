@@ -384,6 +384,8 @@ fn saved_session_password_auth_profile_prompts_without_keychain() {
             port: 2200,
             username: "root".to_owned(),
             auth_method: PendingPasswordAuthMethod::Password,
+            reuse_tab_id: None,
+            view_mode: crate::session_runtime::SessionViewMode::Terminal,
         }
     );
 }
@@ -578,6 +580,8 @@ fn cancel_password_prompt_clears_pending_state() {
         port: 22,
         username: "root".to_owned(),
         auth_method: PendingPasswordAuthMethod::KeyboardInteractive,
+        reuse_tab_id: None,
+        view_mode: crate::session_runtime::SessionViewMode::Terminal,
     });
     assert!(runtime.projection().password_prompt_visible);
     assert_eq!(
@@ -678,6 +682,8 @@ fn auth_prompt_host_shows_port_once() {
         port: 2200,
         username: "alice".to_owned(),
         auth_method: PendingPasswordAuthMethod::Password,
+        reuse_tab_id: None,
+        view_mode: crate::session_runtime::SessionViewMode::Terminal,
     };
     assert_eq!(prompt.host_text(), "alice@example.com:2200");
 }

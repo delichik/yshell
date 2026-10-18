@@ -16,7 +16,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use yshell_config::{parse_quick_connect, QuickConnectEntry, QuickConnectTarget};
 use yshell_core::SessionState;
 
-use crate::session_runtime::SessionSource;
+use crate::session_runtime::{SessionRuntime, SessionSource};
 
 use super::*;
 
@@ -45,55 +45,47 @@ pub struct QuickLinkRowData {
 }
 
 impl AppRuntime {
-    // ------------------------------------------- 工作区覆盖层开关（TAB-6 / §1.2）
-    /// `+` 按钮：总是新建一个本地终端标签（TAB-4），不再读取 `ui.new_tab_mode`。
+    // ------------------------------------------- 新标签页（原 Quick Connect）
+    /// `+` 按钮：新建一个 New Tab 页（快速连接作为标签内容，不再使用本地终端）。
     ///
     /// `Ctrl+N`（`start_new_saved_session_editor`）不经过这里，始终打开编辑器；
-    /// `Ctrl+O` 仍走 [`Self::toggle_quick_connect`]，与 `+` 解耦。
+    /// `Ctrl+O` 也创建/聚焦 New Tab。
     pub fn handle_new_tab_default(&mut self) -> AppProjection {
-        self.open_local_terminal()
+        self.open_new_tab()
     }
 
-    /// 打开 Quick Connect 覆盖层（D11：Ctrl+O 同路径；`+` 不再打开它）。
-    ///
-    /// 覆盖层是工作区状态，**不创建标签**（TAB-6）；打开/重复打开都不改变标签数量。
-    /// 已打开时只返回投影（Slint 侧继续聚焦输入框），状态栏文案区分首次打开/再次激活。
+    /// 打开 Quick Connect 页：聚焦当前 New Tab，没有则新建一个。
     pub fn open_quick_connect(&mut self) -> AppProjection {
-        let was_open = self.quick_connect_overlay_open;
-        self.quick_connect_overlay_open = true;
-        if was_open {
+        if self.quick_connect_visible() {
             self.set_status_kind(
                 "quick-connect-activated",
                 "Activated the Quick Connect page.".to_owned(),
                 String::new(),
                 String::new(),
             );
-        } else {
-            self.set_status_kind(
-                "quick-connect-opened",
-                "Opened the Quick Connect page.".to_owned(),
-                String::new(),
-                String::new(),
-            );
+            return self.projection();
         }
-        self.projection()
+        self.open_new_tab()
     }
 
-    /// 关闭 Quick Connect 覆盖层（覆盖层本身可见时）。
-    ///
-    /// 覆盖层没有持久的"关闭"入口文案需求，供 Esc / 菜单等显式 dismiss 使用；
-    /// 关闭后底层终端（若有）立即恢复可交互，标签数量不变。
+    /// 关闭当前 New Tab（等同于关闭标签）。
     pub fn dismiss_quick_connect(&mut self) -> AppProjection {
-        if self.quick_connect_overlay_open {
+        if self.quick_connect_visible() {
             self.close_quick_connect()
         } else {
             self.projection()
         }
     }
 
-    /// 关闭 Quick Connect 覆盖层（无论当前是否可见，用于重置/测试路径）。
+    /// 关闭当前 New Tab（无论当前模式，用于重置/测试路径）。
     pub fn close_quick_connect(&mut self) -> AppProjection {
-        self.quick_connect_overlay_open = false;
+        let Some(tab_id) = self.active_tab_id.clone().filter(|tab_id| {
+            self.tab_index(tab_id)
+                .is_some_and(|index| self.tabs[index].is_new_tab())
+        }) else {
+            return self.projection();
+        };
+        self.close_tab_immediate(&tab_id);
         self.set_status_kind(
             "quick-connect-closed",
             "Closed the Quick Connect page.".to_owned(),
@@ -103,45 +95,67 @@ impl AppRuntime {
         self.projection()
     }
 
-    /// Ctrl+O：覆盖层已打开时关闭，否则打开（聚焦由 Slint 侧 `changed` 处理）。
+    /// Ctrl+O：当前是 New Tab 时关闭，否则新建/聚焦 New Tab。
     pub fn toggle_quick_connect(&mut self) -> AppProjection {
-        if self.quick_connect_overlay_open {
+        if self.quick_connect_visible() {
             self.close_quick_connect()
         } else {
             self.open_quick_connect()
         }
     }
 
-    /// TAB-6：工作区是否显示 Quick Connect 覆盖层。
-    ///
-    /// **只**由覆盖层状态决定，与标签数量/活动标签无关：
-    /// * 启动时默认打开（第一帧仍显示 Quick Connect，但不再有 QC 标签）；
-    /// * 零标签时关闭覆盖层 → 空工作区（tab 栏只剩 `+`），不强制重开（D1）。
+    /// Whether the focused tab is a New Tab (Quick Connect) page.
     pub(crate) fn quick_connect_visible(&self) -> bool {
-        self.quick_connect_overlay_open
+        self.active_tab_id
+            .as_deref()
+            .and_then(|tab_id| self.tab_index(tab_id))
+            .is_some_and(|index| self.tabs[index].is_new_tab())
     }
 
     // -------------------------------------------------------- 输入与提交（§2）
-    /// 输入框逐键回传：保持运行时副本与页面一致（投影回写时不会吃掉用户输入）。
+    /// 输入框逐键回传：写入当前 New Tab 的独立输入状态。
     pub fn update_quick_connect_input(&mut self, value: &str) -> AppProjection {
-        self.quick_connect_input = value.to_owned();
-        self.quick_connect_error_text.clear();
+        if let Some(index) = self
+            .active_tab_id
+            .as_deref()
+            .and_then(|tab_id| self.tab_index(tab_id))
+            .filter(|index| self.tabs[*index].is_new_tab())
+        {
+            self.tabs[index].quick_connect_input = value.to_owned();
+            self.tabs[index].quick_connect_error.clear();
+        }
         self.projection()
     }
 
     /// Enter / "连接"：解析并直连。
     ///
-    /// * 解析失败：只更新内联错误文案，不建标签、不记录历史；覆盖层保持打开；
-    /// * 解析成功：走既有 `handle_quick_connect`（与 CLI 同一条连接路径），
-    ///   连接成功后收起覆盖层（TAB-6：成功 = 关闭），历史由
-    ///   `record_connect_success` 落库（含主机密钥/密码重试后成功）。
+    /// * 解析失败：只更新当前 New Tab 的内联错误，不改标签模式；
+    /// * 解析成功：当前 New Tab 原地变成 Terminal，沿用同一 tab id；
+    /// * 需要密码/主机密钥确认时，弹窗流程结束后仍回到这个 tab。
     pub fn submit_quick_connect(&mut self, input: &str) -> AppResult<AppProjection> {
+        let mut active_new_tab = self
+            .active_tab_id
+            .as_deref()
+            .and_then(|tab_id| self.tab_index(tab_id))
+            .filter(|index| self.tabs[*index].is_new_tab());
+        // Robustness for non-UI callers: submitting a Quick Connect target
+        // always has a New Tab to live in.
+        if active_new_tab.is_none() {
+            self.open_new_tab();
+            active_new_tab = self
+                .active_tab_id
+                .as_deref()
+                .and_then(|tab_id| self.tab_index(tab_id))
+                .filter(|index| self.tabs[*index].is_new_tab());
+        }
         let target = match parse_quick_connect(input) {
             Ok(target) => target,
             Err(error) => {
-                self.quick_connect_input = input.to_owned();
                 let detail = error.to_string();
-                self.quick_connect_error_text = detail.clone();
+                if let Some(index) = active_new_tab {
+                    self.tabs[index].quick_connect_input = input.to_owned();
+                    self.tabs[index].quick_connect_error = detail.clone();
+                }
                 self.set_status_kind(
                     "quick-connect-error",
                     format!("Quick Connect error: {detail}"),
@@ -152,17 +166,22 @@ impl AppRuntime {
             }
         };
         let canonical = target.canonical();
-        self.quick_connect_input = input.to_owned();
-        self.quick_connect_error_text.clear();
         // D10："已连接目标"只由成功钩子写入；新的尝试先清掉上一次的标记，
         // 失败时页面不会再显示"Connected to …"（B 轮3 #15）。
         self.quick_connect_last_target.clear();
-        self.handle_quick_connect(input)?;
-        // TAB-6：提交成功即收起覆盖层；失败错误（`?` 提前返回）保持打开以便重试。
-        self.quick_connect_overlay_open = false;
+        let Some(index) = active_new_tab else {
+            return Ok(self.projection());
+        };
+        self.tabs[index].quick_connect_input = input.to_owned();
+        self.tabs[index].quick_connect_error.clear();
+        let tab_id = self.tabs[index].tab_id.clone();
+        let mut runtime =
+            SessionRuntime::from_quick_connect(target, self.allocate_runtime_ordinal());
+        runtime.retarget_tab_id(&tab_id);
+        self.pending_quick_connect_targets
+            .insert(runtime.session_id().as_str().to_owned(), canonical);
+        self.activate_runtime_session_bound(runtime, Some(tab_id))?;
         if let Some(session_key) = self.active_session_id.clone() {
-            self.pending_quick_connect_targets
-                .insert(session_key.clone(), canonical);
             // 测试壳/已就绪会话会同步连接成功：立即补一次成功钩子（异步路径由
             // `record_connect_success` 在 shell 连上时触发）。
             let connected = self
@@ -193,8 +212,6 @@ impl AppRuntime {
                 return;
             };
             self.quick_connect_last_target = target.clone();
-            self.quick_connect_input.clear();
-            self.quick_connect_error_text.clear();
             self.record_quick_connect_usage(&target);
             return;
         };

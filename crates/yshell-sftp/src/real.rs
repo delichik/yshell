@@ -12,7 +12,7 @@ use std::{
 use ssh2::{
     FileStat, KeyboardInteractivePrompt, OpenFlags, OpenType, Prompt, RenameFlags, Session, Sftp,
 };
-use yshell_ssh::{AuthMethod, ProxyConfig, SshConnectionConfig};
+use yshell_ssh::{AuthMethod, ProxyConfig, SshConnectionConfig, SshTransport};
 
 use crate::{
     client::SftpBackend,
@@ -38,8 +38,15 @@ struct LiveSftp {
     sftp: Sftp,
 }
 
+enum SftpConnectionSource {
+    /// Standalone SFTP connection built from a saved config (legacy / tests).
+    Config(Box<SshConnectionConfig>),
+    /// Reuse an already authenticated app-owned SSH transport (SFTP tabs).
+    Shared(SshTransport),
+}
+
 pub struct RealSftpBackend {
-    config: SshConnectionConfig,
+    source: SftpConnectionSource,
     live: RefCell<Option<LiveSftp>>,
 }
 
@@ -47,7 +54,13 @@ impl std::fmt::Debug for RealSftpBackend {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("RealSftpBackend")
-            .field("config", &self.config)
+            .field(
+                "source",
+                &match &self.source {
+                    SftpConnectionSource::Config(_) => "config",
+                    SftpConnectionSource::Shared(_) => "shared",
+                },
+            )
             .field("connected", &self.live.borrow().is_some())
             .finish()
     }
@@ -56,7 +69,17 @@ impl std::fmt::Debug for RealSftpBackend {
 impl RealSftpBackend {
     pub fn new(config: SshConnectionConfig) -> Self {
         Self {
-            config,
+            source: SftpConnectionSource::Config(Box::new(config)),
+            live: RefCell::new(None),
+        }
+    }
+
+    /// Uses an existing authenticated SSH transport instead of opening a new
+    /// TCP/SSH connection. This is what lets a terminal tab switch to SFTP
+    /// without reconnecting.
+    pub fn with_transport(transport: SshTransport) -> Self {
+        Self {
+            source: SftpConnectionSource::Shared(transport),
             live: RefCell::new(None),
         }
     }
@@ -70,26 +93,57 @@ impl RealSftpBackend {
         if self.live.borrow().is_some() {
             return Ok(());
         }
-        self.config.validate().map_err(map_ssh_error)?;
-        if !matches!(self.config.proxy, ProxyConfig::None) {
-            return Err(SftpError::new(
-                SftpErrorKind::Backend,
-                "native SFTP backend does not support proxy negotiation yet",
-            ));
+        match &self.source {
+            SftpConnectionSource::Shared(transport) => {
+                if !transport.is_connected() {
+                    return Err(SftpError::new(
+                        SftpErrorKind::Backend,
+                        "shared SSH transport is not connected",
+                    ));
+                }
+                transport.configure_sftp().map_err(|error| {
+                    SftpError::new(
+                        SftpErrorKind::Backend,
+                        format!("shared SSH transport is unusable: {error}"),
+                    )
+                })?;
+                let sftp = transport.session().sftp().map_err(|error| {
+                    SftpError::new(
+                        SftpErrorKind::Backend,
+                        format!(
+                            "failed to open native SFTP channel on the shared transport for {operation}: {error}"
+                        ),
+                    )
+                })?;
+                *self.live.borrow_mut() = Some(LiveSftp {
+                    _session: transport.session().clone(),
+                    sftp,
+                });
+                Ok(())
+            }
+            SftpConnectionSource::Config(config) => {
+                config.validate().map_err(map_ssh_error)?;
+                if !matches!(config.proxy, ProxyConfig::None) {
+                    return Err(SftpError::new(
+                        SftpErrorKind::Backend,
+                        "native SFTP backend does not support proxy negotiation yet",
+                    ));
+                }
+                let tcp = connect_tcp_stream(config)?;
+                let session = connect_session(config, tcp)?;
+                let sftp = session.sftp().map_err(|error| {
+                    SftpError::new(
+                        SftpErrorKind::Backend,
+                        format!("failed to open native SFTP channel for {operation}: {error}"),
+                    )
+                })?;
+                *self.live.borrow_mut() = Some(LiveSftp {
+                    _session: session,
+                    sftp,
+                });
+                Ok(())
+            }
         }
-        let tcp = connect_tcp_stream(&self.config)?;
-        let session = connect_session(&self.config, tcp)?;
-        let sftp = session.sftp().map_err(|error| {
-            SftpError::new(
-                SftpErrorKind::Backend,
-                format!("failed to open native SFTP channel for {operation}: {error}"),
-            )
-        })?;
-        *self.live.borrow_mut() = Some(LiveSftp {
-            _session: session,
-            sftp,
-        });
-        Ok(())
     }
 
     fn with_sftp_client<T>(
@@ -396,12 +450,14 @@ fn verify_host_key(session: &Session, config: &SshConnectionConfig) -> SftpResul
 fn authenticate_session(session: &Session, config: &SshConnectionConfig) -> SftpResult<()> {
     match &config.auth {
         AuthMethod::Password { username, password } => {
-            session.userauth_password(username, password).map_err(|error| {
-                SftpError::new(
-                    SftpErrorKind::PermissionDenied,
-                    format!("native SFTP password authentication failed: {error}"),
-                )
-            })?;
+            session
+                .userauth_password(username, password)
+                .map_err(|error| {
+                    SftpError::new(
+                        SftpErrorKind::PermissionDenied,
+                        format!("native SFTP password authentication failed: {error}"),
+                    )
+                })?;
         }
         AuthMethod::PrivateKey {
             username,
@@ -473,14 +529,23 @@ impl SftpKeyboardInteractivePrompt {
 }
 
 impl KeyboardInteractivePrompt for SftpKeyboardInteractivePrompt {
-    fn prompt<'a>(&mut self, username: &str, instructions: &str, prompts: &[Prompt<'a>]) -> Vec<String> {
+    fn prompt<'a>(
+        &mut self,
+        username: &str,
+        instructions: &str,
+        prompts: &[Prompt<'a>],
+    ) -> Vec<String> {
         self.prompt_log.clear();
         if !instructions.trim().is_empty() {
             self.prompt_log
                 .push(format!("instructions={}", instructions.trim()));
         }
         self.prompt_log.extend(prompts.iter().map(|prompt| {
-            format!("user={username} prompt=`{}` echo={}", prompt.text.trim(), prompt.echo)
+            format!(
+                "user={username} prompt=`{}` echo={}",
+                prompt.text.trim(),
+                prompt.echo
+            )
         }));
         prompts
             .iter()
@@ -633,7 +698,10 @@ mod tests {
 
     #[test]
     fn permission_bits_map_to_directory_entries() {
-        assert_eq!(entry_kind_from_perm(Some(FILE_TYPE_DIRECTORY | 0o755)), crate::FsEntryKind::Directory);
+        assert_eq!(
+            entry_kind_from_perm(Some(FILE_TYPE_DIRECTORY | 0o755)),
+            crate::FsEntryKind::Directory
+        );
     }
 
     #[test]
@@ -665,7 +733,10 @@ mod tests {
             .upload_file(&local_upload_path, &remote_uploaded)
             .expect("upload");
         let listing = client.list_dir(&remote_dir).expect("list dir");
-        assert!(listing.entries.iter().any(|entry| entry.name == "upload.txt"));
+        assert!(listing
+            .entries
+            .iter()
+            .any(|entry| entry.name == "upload.txt"));
         client.chmod(&remote_uploaded, 0o600).expect("chmod");
         client
             .rename(&remote_uploaded, &remote_renamed)
@@ -719,11 +790,16 @@ mod tests {
             format!("{remote_tree_root}/a.txt"),
             format!("{remote_tree_root}/nested/b.txt"),
         ]);
-        assert!(results.iter().all(crate::BatchOpResult::is_ok), "{results:?}");
+        assert!(
+            results.iter().all(crate::BatchOpResult::is_ok),
+            "{results:?}"
+        );
         client
             .remove_dir(&format!("{remote_tree_root}/nested"))
             .expect("remove nested");
-        client.remove_dir(&remote_tree_root).expect("remove tree root");
+        client
+            .remove_dir(&remote_tree_root)
+            .expect("remove tree root");
 
         client.delete(&remote_renamed).expect("delete file");
         client.remove_dir(&remote_dir).expect("delete dir");

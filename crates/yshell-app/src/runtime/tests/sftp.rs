@@ -32,7 +32,7 @@ fn sftp_lifecycle_tracks_runtime_session_state() {
 
     let draft = runtime.handle_new_session();
     assert_eq!(draft.sftp_session_status_kind_text, "disconnected");
-    assert_eq!(draft.sftp_listing_kind_text, "draft-disconnected");
+    assert_eq!(draft.sftp_listing_kind_text, "refresh-needs-session");
 }
 
 #[test]
@@ -129,9 +129,7 @@ fn disconnected_session_gates_sftp_mutation_entry_points() {
     runtime
         .handle_quick_connect("alice@example.com:2200")
         .expect("quick connect");
-    runtime
-        .disconnect_active_session()
-        .expect("disconnect");
+    runtime.disconnect_active_session().expect("disconnect");
     runtime.set_sftp_operation_inputs("", "/srv/source.txt", "renamed.txt", "755");
 
     let mkdir = runtime.create_sftp_directory().expect("mkdir gate");

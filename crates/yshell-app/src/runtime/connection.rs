@@ -3,7 +3,7 @@
 
 use crate::{
     error::AppError, error::AppResult, session_runtime::SessionRuntime,
-    session_runtime::SessionSource,
+    session_runtime::SessionSource, session_runtime::SessionViewMode,
 };
 use std::path::PathBuf;
 use yshell_config::{parse_quick_connect, AuthMethod as ConfigAuthMethod};
@@ -70,8 +70,7 @@ impl AppRuntime {
     }
 
     pub fn prepare_desktop_startup_projection(&mut self) -> AppProjection {
-        // TAB-6：启动首帧仍显示 Quick Connect（工作区覆盖层，不创建 QC 标签）。
-        self.quick_connect_overlay_open = true;
+        // Startup creates the first New Tab in `prepare_desktop_startup_workspace`.
         self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
         self.sftp_listing = SftpListingState::ConnectReal;
         self.projection()
@@ -173,8 +172,11 @@ impl AppRuntime {
             .ok_or_else(|| AppError::new("no host key confirmation is pending"))?;
         let changed = prompt.mode() == HostKeyPromptMode::Changed;
         if changed {
-            self.persistent_known_hosts
-                .replace(&prompt.host, prompt.port, prompt.presented.clone());
+            self.persistent_known_hosts.replace(
+                &prompt.host,
+                prompt.port,
+                prompt.presented.clone(),
+            );
         } else {
             self.persistent_known_hosts
                 .pin(&prompt.host, prompt.port, prompt.presented.clone());
@@ -247,6 +249,13 @@ impl AppRuntime {
             .ok_or_else(|| AppError::new("active runtime session is missing"))?;
         Self::apply_session_events(&session_id, runtime, events);
         let sftp_status = self.sync_sftp_lifecycle_for_session(session_key, false);
+        if self
+            .sessions
+            .get(session_key)
+            .is_some_and(|runtime| runtime.is_sftp())
+        {
+            self.mark_sftp_tab_disconnected(session_key);
+        }
         tracing::debug!(
             target: "yshell::runtime",
             session = %session_key,
@@ -361,6 +370,10 @@ impl AppRuntime {
             runtime.begin_connection_overlay("tcp");
             runtime.log_runtime_event("Queued SSH connect on the background worker.");
         }
+        let open_shell = self
+            .sessions
+            .get(session_key)
+            .is_none_or(|runtime| !runtime.is_sftp());
         let submitted = self
             .connect_jobs
             .as_mut()
@@ -370,6 +383,7 @@ impl AppRuntime {
                     ssh_config: effective,
                     password_retry,
                     is_reconnect,
+                    open_shell,
                 })
             })
             .unwrap_or(false);
@@ -480,6 +494,119 @@ impl AppRuntime {
         Ok(self.projection())
     }
 
+    /// Attaches a transport opened on the connect worker.
+    ///
+    /// Terminal tabs arrive with a shell channel; SFTP tabs arrive with the
+    /// authenticated transport only and open the SFTP subsystem lazily.
+    fn finish_transport_attach(
+        &mut self,
+        session_key: &str,
+        session_id: &yshell_core::SessionId,
+        transport: yshell_ssh::SshTransport,
+        shell: Option<Box<dyn yshell_ssh::ShellSession>>,
+        password_retry: bool,
+        is_reconnect: bool,
+    ) -> AppResult<AppProjection> {
+        let sftp_mode = self
+            .sessions
+            .get(session_key)
+            .is_some_and(SessionRuntime::is_sftp);
+        let shell_connected = shell.as_ref().is_some_and(|shell| shell.is_connected());
+        let logging_notice = {
+            let runtime = self
+                .sessions
+                .get_mut(session_key)
+                .ok_or_else(|| AppError::new("active runtime session is missing"))?;
+            runtime.clear_connection_overlay();
+            runtime.attach_transport(transport);
+            if let Some(shell) = shell {
+                runtime.attach_shell_session(shell);
+                let _ = runtime.poll_shell_output().map_err(AppError::from_error)?;
+            }
+            runtime.take_logging_notice()
+        };
+        if let Some(notice) = logging_notice {
+            self.fold_logging_notice_into_status(notice);
+        }
+        if sftp_mode || shell_connected {
+            let connected_events = self
+                .dispatcher
+                .dispatch(SessionCommand::SetSessionState {
+                    session_id: session_id.clone(),
+                    state: yshell_core::SessionState::Connected,
+                })
+                .map_err(AppError::from_error)?;
+            let runtime = self
+                .sessions
+                .get_mut(session_key)
+                .ok_or_else(|| AppError::new("active runtime session is missing"))?;
+            Self::apply_session_events(session_id, runtime, connected_events);
+            if self
+                .pending_auth_prompt
+                .as_ref()
+                .is_some_and(|prompt| prompt.session_key == session_key)
+            {
+                self.pending_auth_prompt = None;
+            }
+        }
+        let sftp_status = if sftp_mode {
+            if let Some(tab_id) = self.sftp_tab_id_for_session(session_key) {
+                self.mark_sftp_tab_connected(&tab_id, session_key);
+            }
+            self.sftp_session.legacy_status_text()
+        } else {
+            String::new()
+        };
+        let host_text = self
+            .sessions
+            .get(session_key)
+            .map(SessionRuntime::connection_target_text)
+            .unwrap_or_default();
+        let (kind, base_text) = if sftp_mode {
+            if is_reconnect {
+                (
+                    "session-reconnected",
+                    format!("Reconnected SFTP to {host_text}."),
+                )
+            } else {
+                (
+                    "session-connected",
+                    format!("Connected SFTP to {host_text}."),
+                )
+            }
+        } else if shell_connected {
+            if is_reconnect {
+                (
+                    "session-reconnected",
+                    format!("Reconnected to {host_text}."),
+                )
+            } else {
+                ("session-connected", format!("Connected to {host_text}."))
+            }
+        } else if is_reconnect {
+            (
+                "session-reopened",
+                format!("Reopened the session for {host_text}, but the shell is not live."),
+            )
+        } else {
+            (
+                "session-connecting",
+                format!("Connecting to {host_text} ..."),
+            )
+        };
+        self.set_status_kind(
+            kind,
+            format!("{base_text} {sftp_status}"),
+            host_text,
+            String::new(),
+        );
+        self.fold_logging_notice_from_session(session_key);
+        if (sftp_mode || shell_connected) && !password_retry && !is_reconnect {
+            self.record_connect_success(session_key);
+        }
+        Ok(self.projection())
+    }
+
     /// Drain path for [`crate::connect_jobs::ConnectJobMessage`] (app Timer).
     pub fn apply_connect_job_message(
         &mut self,
@@ -523,21 +650,20 @@ impl AppRuntime {
                             String::new(),
                         );
                     }
-                    ConnectJobOutcome::Succeeded { shell } => {
+                    ConnectJobOutcome::Succeeded { transport, shell } => {
                         let session_id = self
                             .sessions
                             .get(&session_key)
                             .map(|session| session.session_id().clone());
                         if let Some(session_id) = session_id {
-                            let _ = self.finish_shell_attach(
+                            let _ = self.finish_transport_attach(
                                 &session_key,
                                 &session_id,
+                                transport,
                                 shell,
                                 password_retry,
                                 is_reconnect,
                             );
-                        } else {
-                            let _ = shell;
                         }
                     }
                     ConnectJobOutcome::Failed { error } => {
@@ -547,8 +673,7 @@ impl AppRuntime {
                             .map(|session| session.session_id().clone());
                         if let Some(runtime) = self.sessions.get_mut(&session_key) {
                             runtime.connection_in_flight = false;
-                            runtime.connection_stage =
-                                overlay_stage_from_error(&error).to_owned();
+                            runtime.connection_stage = overlay_stage_from_error(&error).to_owned();
                             runtime.connection_error = error.to_string();
                         }
                         if let Some(session_id) = session_id {
@@ -692,7 +817,8 @@ impl AppRuntime {
         }
         if let Some(runtime) = self.sessions.get_mut(session_key) {
             runtime.connection_in_flight = false;
-            runtime.connection_stage = crate::connect_jobs::overlay_stage_from_error(&error).to_owned();
+            runtime.connection_stage =
+                crate::connect_jobs::overlay_stage_from_error(&error).to_owned();
             if handled {
                 runtime.connection_stage = "host-key".to_owned();
                 runtime.connection_error.clear();
@@ -817,6 +943,8 @@ impl AppRuntime {
                 .clone()
                 .unwrap_or_else(|| "user".to_owned()),
             auth_method,
+            reuse_tab_id: None,
+            view_mode: runtime.view_mode,
         })
     }
 
@@ -864,22 +992,45 @@ impl AppRuntime {
         }
         let ssh_config =
             self.build_ssh_config_from_resolved_session_with_password(&resolved, password)?;
-        let runtime = SessionRuntime::from_profile(&profile, self.allocate_runtime_ordinal());
+        let mut runtime = SessionRuntime::from_profile(&profile, self.allocate_runtime_ordinal());
+        runtime.set_view_mode(prompt.view_mode);
+        if let Some(tab_id) = prompt.reuse_tab_id.as_deref() {
+            runtime.retarget_tab_id(tab_id);
+        }
         // 先清挂起状态再连接：连接路径返回的投影必须显示弹窗已关闭。
         self.pending_password_prompt = None;
-        self.activate_runtime_session_after_password(runtime, ssh_config)
+        self.activate_runtime_session_after_password_bound(
+            runtime,
+            ssh_config,
+            prompt.reuse_tab_id.clone(),
+        )
     }
 
     pub(crate) fn activate_runtime_session(
         &mut self,
         runtime: SessionRuntime,
     ) -> AppResult<AppProjection> {
+        self.activate_runtime_session_bound(runtime, None)
+    }
+
+    /// Activates a runtime, optionally reusing an existing New Tab (Quick
+    /// Connect submit converts that tab in place).
+    pub(crate) fn activate_runtime_session_bound(
+        &mut self,
+        mut runtime: SessionRuntime,
+        reuse_tab_id: Option<String>,
+    ) -> AppResult<AppProjection> {
+        if let Some(tab_id) = reuse_tab_id.as_deref() {
+            runtime.retarget_tab_id(tab_id);
+        }
         if let SessionSource::SavedSession { profile_id } = &runtime.source {
             self.selected_saved_session_id = Some(profile_id.clone());
         }
         // W5：密码型认证在密钥库里找不到密码时不报错，改为挂起并让 UI 弹输入框；
         // 用户 `submit_password` 后走 `activate_runtime_session_with_ssh_config` 重试。
-        if let Some(prompt) = self.pending_password_prompt_for_runtime(&runtime) {
+        if let Some(mut prompt) = self.pending_password_prompt_for_runtime(&runtime) {
+            prompt.reuse_tab_id = reuse_tab_id.clone();
+            prompt.view_mode = runtime.view_mode;
             // D7：TOFU 顺序——密码之前先完成主机密钥确认。只有原生后端才会
             // 探测（离线测试壳没有握手，无从取得指纹）。
             if self.probe_host_key_before_password(&runtime, &prompt)? {
@@ -896,7 +1047,7 @@ impl AppRuntime {
             return Ok(self.projection());
         }
         let ssh_config = self.resolve_runtime_ssh_config(&runtime)?;
-        self.activate_runtime_session_with_ssh_config(runtime, ssh_config)
+        self.activate_runtime_session_with_ssh_config_bound(runtime, ssh_config, reuse_tab_id)
     }
 
     /// D7：主机密钥确认完成后的续接。
@@ -971,20 +1122,46 @@ impl AppRuntime {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn activate_runtime_session_with_ssh_config(
         &mut self,
         runtime: SessionRuntime,
         ssh_config: SshConnectionConfig,
     ) -> AppResult<AppProjection> {
-        self.activate_runtime_session_inner(runtime, ssh_config, false)
+        self.activate_runtime_session_with_ssh_config_bound(runtime, ssh_config, None)
     }
 
+    pub(crate) fn activate_runtime_session_with_ssh_config_bound(
+        &mut self,
+        mut runtime: SessionRuntime,
+        ssh_config: SshConnectionConfig,
+        reuse_tab_id: Option<String>,
+    ) -> AppResult<AppProjection> {
+        if let Some(tab_id) = reuse_tab_id.as_deref() {
+            runtime.retarget_tab_id(tab_id);
+        }
+        self.activate_runtime_session_inner(runtime, ssh_config, false, reuse_tab_id)
+    }
+
+    #[allow(dead_code)]
     pub(crate) fn activate_runtime_session_after_password(
         &mut self,
         runtime: SessionRuntime,
         ssh_config: SshConnectionConfig,
     ) -> AppResult<AppProjection> {
-        self.activate_runtime_session_inner(runtime, ssh_config, true)
+        self.activate_runtime_session_after_password_bound(runtime, ssh_config, None)
+    }
+
+    pub(crate) fn activate_runtime_session_after_password_bound(
+        &mut self,
+        mut runtime: SessionRuntime,
+        ssh_config: SshConnectionConfig,
+        reuse_tab_id: Option<String>,
+    ) -> AppResult<AppProjection> {
+        if let Some(tab_id) = reuse_tab_id.as_deref() {
+            runtime.retarget_tab_id(tab_id);
+        }
+        self.activate_runtime_session_inner(runtime, ssh_config, true, reuse_tab_id)
     }
 
     pub(crate) fn activate_runtime_session_inner(
@@ -992,6 +1169,7 @@ impl AppRuntime {
         mut runtime: SessionRuntime,
         ssh_config: SshConnectionConfig,
         password_retry: bool,
+        reuse_tab_id: Option<String>,
     ) -> AppResult<AppProjection> {
         let session_id = runtime.session_id().clone();
         // N5/D17：创建时冻结外观（之后的主题改动不影响本会话）。
@@ -1039,14 +1217,54 @@ impl AppRuntime {
             Self::apply_session_events(&session_id, &mut runtime, connecting_events);
             runtime.begin_connection_overlay("tcp");
             let logging_notice = runtime.take_logging_notice();
+            let sftp_mode = runtime.is_sftp();
             self.record_recent_session(&session_key);
             self.sessions.insert(session_key.clone(), runtime);
-            self.attach_tab(&tab_id_text, &session_key);
+            self.attach_or_bind_runtime_tab(
+                reuse_tab_id.as_deref(),
+                &tab_id_text,
+                &session_key,
+                sftp_mode,
+            );
             let _ = self.sync_sftp_lifecycle_for_session(&session_key, false);
             if let Some(notice) = logging_notice {
                 self.fold_logging_notice_into_status(notice);
             }
             return self.submit_connect_job(&session_key, ssh_config, password_retry, false);
+        }
+
+        // SFTP-only tabs do not open a shell. The synchronous path is used by
+        // unit tests (desktop installs the connect worker), so mark the
+        // transport-ready state without touching the network.
+        if runtime.is_sftp() {
+            let connected_events = self
+                .dispatcher
+                .dispatch(SessionCommand::SetSessionState {
+                    session_id: session_id.clone(),
+                    state: yshell_core::SessionState::Connected,
+                })
+                .map_err(AppError::from_error)?;
+            Self::apply_session_events(&session_id, &mut runtime, connected_events);
+            let logging_notice = runtime.take_logging_notice();
+            self.record_recent_session(&session_key);
+            self.sessions.insert(session_key.clone(), runtime);
+            self.attach_or_bind_runtime_tab(
+                reuse_tab_id.as_deref(),
+                &tab_id_text,
+                &session_key,
+                true,
+            );
+            let _ = self.sync_sftp_lifecycle_for_session(&session_key, true);
+            if let Some(notice) = logging_notice {
+                self.fold_logging_notice_into_status(notice);
+            }
+            self.set_status_kind(
+                "session-connected",
+                format!("Connected SFTP to {host_text}."),
+                host_text,
+                String::new(),
+            );
+            return Ok(self.projection());
         }
 
         // 密码重试失败时把 shell 的真实错误带进状态栏（普通路径保持原中性文案）。
@@ -1145,7 +1363,7 @@ impl AppRuntime {
         }
         let logging_notice = runtime.take_logging_notice();
         self.sessions.insert(session_key.clone(), runtime);
-        self.attach_tab(&tab_id_text, &session_key);
+        self.attach_or_bind_runtime_tab(reuse_tab_id.as_deref(), &tab_id_text, &session_key, false);
         let sftp_status = self.sync_sftp_lifecycle_for_session(&session_key, false);
         // D15：用户向的连接状态文案（kind 供 Slint 侧 @tr 模板映射）。
         let (kind, base_text) = if shell_open_error.is_some() {
@@ -1218,6 +1436,10 @@ pub(crate) struct PendingPasswordPrompt {
     pub(crate) port: u16,
     pub(crate) username: String,
     pub(crate) auth_method: PendingPasswordAuthMethod,
+    /// Quick Connect in-place conversion: reuse this New Tab for the terminal.
+    pub(crate) reuse_tab_id: Option<String>,
+    /// Terminal or SFTP page mode for the resumed runtime.
+    pub(crate) view_mode: SessionViewMode,
 }
 
 impl PendingPasswordPrompt {
@@ -1950,12 +2172,7 @@ impl AppRuntime {
     /// 把英文细节作为参数保留）。
     fn set_auth_retry_error_status(&mut self, message: String) {
         if message.starts_with("The connection target is gone") {
-            self.set_status_kind(
-                "auth-target-gone",
-                message,
-                String::new(),
-                String::new(),
-            );
+            self.set_status_kind("auth-target-gone", message, String::new(), String::new());
         } else {
             self.set_status_kind(
                 "auth-prompt-error",

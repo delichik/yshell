@@ -1424,18 +1424,13 @@ fn default_left_panels() -> Vec<PanelSlot> {
 }
 
 fn default_right_panels() -> Vec<PanelSlot> {
-    [
-        PanelId::Local,
-        PanelId::Sftp,
-        PanelId::Tunnels,
-        PanelId::QuickCommands,
-    ]
-    .into_iter()
-    .map(|panel| PanelSlot {
-        panel,
-        collapsed: false,
-    })
-    .collect()
+    [PanelId::Tunnels, PanelId::QuickCommands]
+        .into_iter()
+        .map(|panel| PanelSlot {
+            panel,
+            collapsed: false,
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -1829,7 +1824,10 @@ fallback_fonts = ["/fonts/session-only.ttf"]
         let (parsed, warnings) = ConfigDocument::from_toml_str_with_warnings(input).expect("parse");
 
         // Primary font survives; only the first legacy entry becomes the backup.
-        assert_eq!(parsed.terminal.font_family.as_deref(), Some("JetBrains Mono"));
+        assert_eq!(
+            parsed.terminal.font_family.as_deref(),
+            Some("JetBrains Mono")
+        );
         assert_eq!(parsed.terminal.font_size, Some(15));
         assert_eq!(
             parsed.terminal.backup_font.as_deref(),
@@ -1848,7 +1846,10 @@ fallback_fonts = ["/fonts/session-only.ttf"]
 
         // Resolution keeps the primary font and the nearest backup font.
         let resolved = parsed.resolve_session("legacy-session").expect("resolve");
-        assert_eq!(resolved.terminal.font_family.as_deref(), Some("JetBrains Mono"));
+        assert_eq!(
+            resolved.terminal.font_family.as_deref(),
+            Some("JetBrains Mono")
+        );
         assert_eq!(
             resolved.terminal.backup_font.as_deref(),
             Some("/fonts/session-only.ttf")
@@ -1881,7 +1882,10 @@ fallback_fonts = ["/fonts/only.ttf"]
 "#;
         let (single, warnings) =
             ConfigDocument::from_toml_str_with_warnings(single).expect("parse single");
-        assert_eq!(single.terminal.backup_font.as_deref(), Some("/fonts/only.ttf"));
+        assert_eq!(
+            single.terminal.backup_font.as_deref(),
+            Some("/fonts/only.ttf")
+        );
         assert!(!warnings
             .iter()
             .any(|warning| matches!(warning, ConfigWarning::MultipleFallbackFonts { .. })));
@@ -1915,14 +1919,6 @@ fallback_fonts = ["/fonts/only.ttf"]
         assert_eq!(
             defaulted.ui.layout.right,
             vec![
-                PanelSlot {
-                    panel: PanelId::Local,
-                    collapsed: false
-                },
-                PanelSlot {
-                    panel: PanelId::Sftp,
-                    collapsed: false
-                },
                 PanelSlot {
                     panel: PanelId::Tunnels,
                     collapsed: false

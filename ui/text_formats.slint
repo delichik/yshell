@@ -555,6 +555,18 @@ export global TextFormats {
         if kind == "tab-activated" {
             return @tr("MainWindow" => "Activated tab `{0}`.", param_1);
         }
+        if kind == "tab-activated-new" {
+            return @tr("MainWindow" => "Activated tab `{0}`.", param_1);
+        }
+        if kind == "tab-new" {
+            return @tr("MainWindow" => "Opened a new tab.");
+        }
+        if kind == "tab-switched-sftp" {
+            return @tr("MainWindow" => "Switched tab `{0}` to SFTP.", param_1);
+        }
+        if kind == "tab-switched-terminal" {
+            return @tr("MainWindow" => "Switched tab `{0}` to Terminal.", param_1);
+        }
         if kind == "tab-activated-loading-sftp" {
             return @tr("MainWindow" => "Activated tab `{0}`. Loading SFTP listing…", param_1);
         }

@@ -97,7 +97,10 @@ fn fanout_writes_every_target_once_in_source_order_without_feedback() {
         );
         let first = text.find("received input: first").expect("first write");
         let second = text.find("received input: second").expect("second write");
-        assert!(first < second, "fan-out order must follow source input order");
+        assert!(
+            first < second,
+            "fan-out order must follow source input order"
+        );
     }
     // 目标回显不再回灌源：源只看到自己的一次写入。
     let source_text = target_text(&runtime, &sessions[0]);
@@ -114,10 +117,7 @@ fn stop_input_sync_clears_state_and_stops_fanout() {
     assert!(!stopped.input_sync_active);
     assert_eq!(stopped.input_sync_target_count, 0);
     assert!(!stopped.terminal_sync_stop_enabled);
-    assert!(stopped
-        .tabs
-        .iter()
-        .all(|tab| tab.sync_role_text.is_empty()));
+    assert!(stopped.tabs.iter().all(|tab| tab.sync_role_text.is_empty()));
     assert_eq!(stopped.status_kind, "input-sync-stopped");
 
     let before = target_text(&runtime, &sessions[1]);
@@ -142,11 +142,10 @@ fn closing_target_tab_removes_it_but_keeps_sync() {
     assert!(projection.input_sync_active);
     assert_eq!(projection.input_sync_target_count, 1);
     assert_eq!(projection.input_sync_notice_kind_text, "target-removed");
-    assert!(projection.input_sync_notice_param_text.contains("Session 2"));
     assert!(projection
-        .tabs
-        .iter()
-        .all(|tab| tab.title != "Session 2"));
+        .input_sync_notice_param_text
+        .contains("Session 2"));
+    assert!(projection.tabs.iter().all(|tab| tab.title != "Session 2"));
 
     runtime
         .send_active_terminal_input("still\n")
@@ -192,7 +191,10 @@ fn disconnecting_target_or_source_reconciles_the_sync_state() {
         .disconnect_tab_session(&tabs[0])
         .expect("disconnect source");
     assert!(!after_source.input_sync_active);
-    assert_eq!(after_source.input_sync_notice_kind_text, "source-disconnected");
+    assert_eq!(
+        after_source.input_sync_notice_kind_text,
+        "source-disconnected"
+    );
 }
 
 #[test]
@@ -336,7 +338,9 @@ fn input_to_non_source_tab_is_not_broadcast() {
     );
 
     // 切回源标签：广播恢复。
-    runtime.activate_tab(&tabs[0]).expect("activate source again");
+    runtime
+        .activate_tab(&tabs[0])
+        .expect("activate source again");
     runtime
         .send_active_terminal_input("broadcast-again\n")
         .expect("type on source");
@@ -356,25 +360,22 @@ fn no_targets_start_is_reported_without_ghost_sync() {
     assert!(runtime.start_input_sync_mode("bogus").is_err());
 }
 
-/// TAB-6：Quick Connect 覆盖层是工作区状态，不占标签、不切换活动会话，也不影响
-/// 同步发送按键状态（覆盖层可见时终端不可交互由 UI 层负责，运行时语义不变）。
+/// New Tab 是标签页，不破坏已有的输入同步状态；关闭后同步仍保持。
 #[test]
-fn quick_connect_overlay_does_not_change_tabs_or_input_sync_state() {
+fn new_tab_does_not_change_input_sync_state() {
     let (_temp, mut runtime, tabs, _sessions) = sync_setup(2);
     runtime.activate_tab(&tabs[0]).expect("activate source");
     runtime.start_input_sync_mode("all").expect("start sync");
 
     let opened = runtime.open_quick_connect();
     assert!(opened.quick_connect_visible);
-    assert_eq!(opened.tab_count, 2);
-    assert_eq!(opened.active_tab_id, tabs[0]);
+    assert_eq!(opened.tab_count, 3);
     assert!(opened.input_sync_active);
     assert_eq!(opened.input_sync_target_count, 1);
 
     let closed = runtime.dismiss_quick_connect();
     assert!(!closed.quick_connect_visible);
     assert_eq!(closed.tab_count, 2);
-    assert_eq!(closed.active_tab_id, tabs[0]);
     assert!(closed.input_sync_active);
     assert_eq!(closed.input_sync_target_count, 1);
     assert_tab_invariants(&runtime);

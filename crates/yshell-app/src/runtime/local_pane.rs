@@ -267,9 +267,7 @@ impl AppRuntime {
         let path_text = entry.path.display().to_string();
         self.set_status_kind(
             "local-file-selected",
-            format!(
-                "Selected local file `{path_text}`. Drag it to the remote pane or use Upload."
-            ),
+            format!("Selected local file `{path_text}`. Drag it to the remote pane or use Upload."),
             path_text,
             String::new(),
         );
@@ -278,19 +276,7 @@ impl AppRuntime {
 
     /// Row model for the Slint list (selection flags applied).
     pub(crate) fn local_rows(&self) -> Vec<LocalRowData> {
-        let Some(listing) = &self.local_pane.listing else {
-            return Vec::new();
-        };
-        listing
-            .rows
-            .iter()
-            .map(|row| {
-                let mut row = row.clone();
-                row.selected =
-                    !row.is_parent && self.local_pane.selected.contains(Path::new(&row.path_text));
-                row
-            })
-            .collect()
+        local_rows_for(&self.local_pane)
     }
 
     /// Selected real paths, in listing order.
@@ -370,6 +356,23 @@ impl AppRuntime {
             }
         }
     }
+}
+
+/// Row model for any local pane state (used by the focused SFTP tab and by
+/// split-pane snapshots alike).
+pub(crate) fn local_rows_for(state: &LocalPaneState) -> Vec<LocalRowData> {
+    let Some(listing) = &state.listing else {
+        return Vec::new();
+    };
+    listing
+        .rows
+        .iter()
+        .map(|row| {
+            let mut row = row.clone();
+            row.selected = !row.is_parent && state.selected.contains(Path::new(&row.path_text));
+            row
+        })
+        .collect()
 }
 
 /// Inclusive range between two visible entries (used by Shift selection).

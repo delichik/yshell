@@ -229,6 +229,30 @@ impl AppRuntime {
         self.activate_runtime_session(runtime)
     }
 
+    /// Opens a saved session directly as a two-column SFTP tab.
+    ///
+    /// The connection is established through the normal SSH transport path, so
+    /// host-key/password/auth prompts behave exactly like a terminal connection.
+    pub fn open_saved_session_sftp(&mut self, profile_id: &str) -> AppResult<AppProjection> {
+        let profile = self
+            .config_document
+            .find_session(profile_id)
+            .cloned()
+            .ok_or_else(|| AppError::new(format!("saved session `{profile_id}` was not found")))?;
+        let mut runtime = SessionRuntime::from_profile(&profile, self.allocate_runtime_ordinal());
+        runtime.set_view_mode(crate::session_runtime::SessionViewMode::Sftp);
+        self.activate_runtime_session(runtime)
+    }
+
+    /// Saved-session context menu: Open SFTP for the selected profile.
+    pub fn open_selected_saved_session_sftp(&mut self) -> AppResult<AppProjection> {
+        let profile_id = self
+            .selected_saved_session_id
+            .clone()
+            .ok_or_else(|| AppError::new("no saved session is currently selected"))?;
+        self.open_saved_session_sftp(&profile_id)
+    }
+
     pub fn open_first_saved_session(&mut self) -> AppResult<AppProjection> {
         let first_profile_id = self
             .first_saved_session_id()

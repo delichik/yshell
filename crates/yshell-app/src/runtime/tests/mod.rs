@@ -144,8 +144,16 @@ pub(crate) fn assert_tab_invariants(runtime: &AppRuntime) {
             assert_eq!(tab.session_id(), Some(session_id.as_str()));
         }
         (Some(tab_id), None) => {
-            // TAB-6：Quick Connect 不再占标签，活动标签必须绑定运行时会话。
-            panic!("active tab `{tab_id}` has no runtime session (Quick Connect is an overlay)");
+            // New Tab pages have no runtime session; any other tab must.
+            let tab = runtime
+                .tabs
+                .iter()
+                .find(|tab| &tab.tab_id == tab_id)
+                .expect("active tab must exist in tabs");
+            assert!(
+                tab.is_new_tab(),
+                "active tab `{tab_id}` has no runtime session but is not a New Tab"
+            );
         }
         (None, None) => {}
         (tab_id, session_id) => {

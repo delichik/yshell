@@ -55,8 +55,7 @@ impl AppRuntime {
                     // 后台会话的瞬时错误不打断整个 tick（活动会话的错误照旧上报）。
                     if let Ok(outcome) = self.poll_session_output(&session_key) {
                         background_state_changed |= outcome.state_changed;
-                        if outcome.output_changed
-                            && self.mark_tab_unread_for_session(&session_key)
+                        if outcome.output_changed && self.mark_tab_unread_for_session(&session_key)
                         {
                             background_state_changed = true;
                         }
@@ -81,6 +80,15 @@ impl AppRuntime {
         &mut self,
         session_key: &str,
     ) -> AppResult<SessionPollOutcome> {
+        // SFTP tabs have no shell channel; terminal polling must not classify
+        // their (intentionally empty) shell slot as a closed terminal.
+        if self
+            .sessions
+            .get(session_key)
+            .is_some_and(SessionRuntime::is_sftp)
+        {
+            return Ok(SessionPollOutcome::default());
+        }
         let Some((previous_terminal, previous_state)) = self
             .sessions
             .get(session_key)
@@ -159,22 +167,21 @@ impl AppRuntime {
         let Some(index) = self.tab_index(tab_id) else {
             return Err(AppError::new(format!("tab `{tab_id}` was not found")));
         };
-        // TAB-6：Quick Connect 是工作区覆盖层，不占标签，因此这里只有终端标签。
-        let Some(session_id) = self.tabs[index].session_id().map(str::to_owned) else {
-            return Err(AppError::new(format!(
-                "tab `{tab_id}` has no runtime session"
-            )));
-        };
-        if !self.sessions.contains_key(&session_id) {
-            return Err(AppError::new(format!(
-                "runtime session for tab `{tab_id}` is missing"
-            )));
+        // New Tab pages have no runtime session; terminal/SFTP tabs do.
+        let session_id = self.tabs[index].session_id().map(str::to_owned);
+        if let Some(session_id) = &session_id {
+            if !self.sessions.contains_key(session_id) {
+                return Err(AppError::new(format!(
+                    "runtime session for tab `{tab_id}` is missing"
+                )));
+            }
         }
+        self.park_active_sftp_tab();
         let window_id = self.window_of_tab(tab_id);
         self.activate_tab_in_window(tab_id);
         if window_id.is_none_or(|id| self.focused_window == Some(id)) {
             self.active_tab_id = Some(tab_id.to_owned());
-            self.active_session_id = Some(session_id.clone());
+            self.active_session_id = session_id.clone();
         }
         self.tabs[index].unread = 0;
         if !self.focus_pane_for_tab(tab_id) {
@@ -182,31 +189,23 @@ impl AppRuntime {
         }
         self.refresh_terminal_search_for_active_session();
         let title = self.tab_display_title(tab_id);
-        // D16：切换会话时停放上一个会话的 SFTP 面板；不要在 UI 线程同步 list_dir /
-        // 重建 TCP+SSH——那是切已连接 tab 体感极慢的主因。
-        let sftp_session_changed = self.sftp_session.status_session_key() != session_id.as_str();
-        if sftp_session_changed {
-            self.snapshot_sftp_view_to_cache();
-            self.reset_sftp_view_state();
-        }
-        let sftp_status = self.sync_sftp_lifecycle_for_session(&session_id, false);
-        tracing::debug!(
-            target: "yshell::app",
-            "activated tab `{title}`; {sftp_status}"
-        );
-        if sftp_session_changed {
-            if self.restore_sftp_view_from_cache(&session_id) {
-                self.set_status_kind(
-                    "tab-activated",
-                    format!("Activated tab `{title}`. {sftp_status}"),
-                    title,
-                    String::new(),
-                );
-            } else if matches!(
-                self.sftp_session,
-                super::SftpSessionLifecycle::Ready { .. }
-            ) {
-                // 首次进入该会话：先完成标签切换，列目录放到下一 tick。
+        let Some(session_id) = session_id else {
+            self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
+            self.sftp_listing = SftpListingState::RefreshNeedsSession;
+            self.set_status_kind(
+                "tab-activated-new",
+                format!("Activated tab `{title}`."),
+                title,
+                String::new(),
+            );
+            return Ok(self.projection());
+        };
+        if self.tabs[index].is_sftp() {
+            self.restore_sftp_tab(tab_id);
+            let sftp_status = self.sync_sftp_lifecycle_for_session(&session_id, false);
+            if matches!(self.sftp_listing, SftpListingState::ConnectReal) {
+                // First activation of this SFTP tab: defer the listing to the
+                // next UI tick so tab switching stays instant.
                 self.sftp_listing_pending = true;
                 self.set_status_kind(
                     "tab-activated-loading-sftp",
@@ -222,14 +221,17 @@ impl AppRuntime {
                     String::new(),
                 );
             }
-        } else {
-            self.set_status_kind(
-                "tab-activated",
-                format!("Activated tab `{title}`. {sftp_status}"),
-                title,
-                String::new(),
-            );
+            return Ok(self.projection());
         }
+        // Terminal/New Tab pages no longer show the docked SFTP panel.
+        self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
+        self.sftp_listing = SftpListingState::RefreshNeedsSession;
+        self.set_status_kind(
+            "tab-activated",
+            format!("Activated tab `{title}`."),
+            title,
+            String::new(),
+        );
         Ok(self.projection())
     }
 
@@ -337,19 +339,12 @@ impl AppRuntime {
         } else {
             let (text, log_path) = match stopped_log_path {
                 Some(path) => (
-                    format!(
-                        "Closed {target_count} tab(s). Stopped logging; log file: `{path}`."
-                    ),
+                    format!("Closed {target_count} tab(s). Stopped logging; log file: `{path}`."),
                     path,
                 ),
                 None => (format!("Closed {target_count} tab(s)."), String::new()),
             };
-            self.set_status_kind(
-                "tabs-closed",
-                text,
-                target_count.to_string(),
-                log_path,
-            );
+            self.set_status_kind("tabs-closed", text, target_count.to_string(), log_path);
         }
         // TAB-6：关闭标签不改变 Quick Connect 覆盖层状态；零标签 = 空工作区（D1）。
         Ok(self.projection())
@@ -482,10 +477,26 @@ impl AppRuntime {
         if let Some(custom) = self.tabs[index].custom_title.as_ref() {
             return custom.clone();
         }
+        if self.tabs[index].is_new_tab() {
+            return "New Tab".to_owned();
+        }
         self.tabs[index]
             .session_id()
             .and_then(|session_id| self.sessions.get(session_id))
             .map(|runtime| runtime.display_name.clone())
+            .unwrap_or_default()
+    }
+
+    /// Input text / inline error of a specific New Tab page.
+    pub(crate) fn new_tab_parts_for(&self, tab_id: &str) -> (String, String) {
+        self.tab_index(tab_id)
+            .filter(|index| self.tabs[*index].is_new_tab())
+            .map(|index| {
+                (
+                    self.tabs[index].quick_connect_input.clone(),
+                    self.tabs[index].quick_connect_error.clone(),
+                )
+            })
             .unwrap_or_default()
     }
 
@@ -565,12 +576,14 @@ impl AppRuntime {
                 .map_err(AppError::new)?;
             window.active_tab = Some(tab_id.to_owned());
         }
+        self.park_active_sftp_tab();
         self.compact_window_split(window_id)?;
         if self.focused_window == Some(window_id) {
             self.active_tab_id = Some(tab_id.to_owned());
             self.active_session_id = self
                 .tab_index(tab_id)
                 .and_then(|index| self.tabs[index].session_id().map(str::to_owned));
+            self.refresh_active_view_mirrors();
         }
         if let Some(index) = self.tab_index(tab_id) {
             self.tabs[index].unread = 0;
@@ -635,22 +648,18 @@ impl AppRuntime {
                     .as_mut()
                     .ok_or_else(|| AppError::new("workspace is not split"))?;
                 split
-                    .split_leaf_with_tab(
-                        target,
-                        orientation,
-                        ratio,
-                        dragged_is_first,
-                        tab_id,
-                    )
+                    .split_leaf_with_tab(target, orientation, ratio, dragged_is_first, tab_id)
                     .map_err(AppError::new)?;
                 window.active_tab = Some(tab_id.to_owned());
             }
+            self.park_active_sftp_tab();
             self.compact_window_split(window_id)?;
             if self.focused_window == Some(window_id) {
                 self.active_tab_id = Some(tab_id.to_owned());
                 self.active_session_id = self
                     .tab_index(tab_id)
                     .and_then(|index| self.tabs[index].session_id().map(str::to_owned));
+                self.refresh_active_view_mirrors();
             }
             if let Some(index) = self.tab_index(tab_id) {
                 self.tabs[index].unread = 0;
@@ -666,17 +675,14 @@ impl AppRuntime {
         }
 
         // 未分屏：需要邻接标签；若只有一个终端标签则先复制一份。
-        let neighbor = self
-            .windows
-            .get(&window_id)
-            .and_then(|window| {
-                window
-                    .tabs
-                    .iter()
-                    .rev()
-                    .find(|id| id.as_str() != tab_id)
-                    .cloned()
-            });
+        let neighbor = self.windows.get(&window_id).and_then(|window| {
+            window
+                .tabs
+                .iter()
+                .rev()
+                .find(|id| id.as_str() != tab_id)
+                .cloned()
+        });
         let neighbor = if let Some(neighbor) = neighbor {
             neighbor
         } else {
@@ -1002,13 +1008,7 @@ impl AppRuntime {
                     pane.active_tab = Some(neighbor.clone());
                 }
                 split
-                    .split_leaf_with_tab(
-                        focused,
-                        orientation,
-                        0.5,
-                        false,
-                        &active_tab,
-                    )
+                    .split_leaf_with_tab(focused, orientation, 0.5, false, &active_tab)
                     .map_err(AppError::new)?;
                 window.active_tab = Some(active_tab.clone());
             }
@@ -1060,9 +1060,17 @@ impl AppRuntime {
 
     /// 为分屏再开一份同源独立会话（新 tab + 新 runtime）。
     fn open_sibling_session_for_split(&mut self, source_tab_id: &str) -> AppResult<()> {
-        let session_id = self
-            .tab_index(source_tab_id)
-            .and_then(|index| self.tabs[index].session_id().map(str::to_owned))
+        let Some(source_index) = self.tab_index(source_tab_id) else {
+            return Err(AppError::new("split source tab was not found"));
+        };
+        if self.tabs[source_index].is_new_tab() {
+            self.open_new_tab();
+            return Ok(());
+        }
+        let sftp = self.tabs[source_index].is_sftp();
+        let session_id = self.tabs[source_index]
+            .session_id()
+            .map(str::to_owned)
             .ok_or_else(|| {
                 AppError::new("split needs a terminal session; open or connect a session first")
             })?;
@@ -1085,7 +1093,11 @@ impl AppRuntime {
             .ok_or_else(|| AppError::new("active session runtime is missing"))?;
         match source {
             SiblingSplitSource::Saved(profile_id) => {
-                self.open_saved_session(&profile_id)?;
+                if sftp {
+                    self.open_saved_session_sftp(&profile_id)?;
+                } else {
+                    self.open_saved_session(&profile_id)?;
+                }
             }
             SiblingSplitSource::QuickConnect {
                 host,
@@ -1097,8 +1109,11 @@ impl AppRuntime {
                     host,
                     port,
                 };
-                let runtime =
+                let mut runtime =
                     SessionRuntime::from_quick_connect(target, self.allocate_runtime_ordinal());
+                if sftp {
+                    runtime.set_view_mode(crate::session_runtime::SessionViewMode::Sftp);
+                }
                 self.activate_runtime_session(runtime)?;
             }
             SiblingSplitSource::Unsupported => {
@@ -1124,6 +1139,7 @@ impl AppRuntime {
         {
             return Ok(self.projection());
         }
+        self.park_active_sftp_tab();
         let tab_id = {
             let window = self
                 .windows
@@ -1154,6 +1170,19 @@ impl AppRuntime {
                 self.active_session_id = self
                     .tab_index(tab_id)
                     .and_then(|index| self.tabs[index].session_id().map(str::to_owned));
+                if self.is_sftp_tab(tab_id) {
+                    self.restore_sftp_tab(tab_id);
+                    if let Some(session_key) = self.active_session_id.clone() {
+                        let _ = self.sync_sftp_lifecycle_for_session(&session_key, false);
+                        if matches!(self.sftp_listing, SftpListingState::ConnectReal) {
+                            self.sftp_listing_pending = true;
+                        }
+                    }
+                } else {
+                    self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
+                    self.sftp_listing = SftpListingState::RefreshNeedsSession;
+                    self.sftp_listing_pending = false;
+                }
             }
             self.refresh_terminal_search_for_active_session();
         }
@@ -1172,6 +1201,7 @@ impl AppRuntime {
             .focused_window
             .or_else(|| self.main_window_id())
             .ok_or_else(|| AppError::new("no window is available"))?;
+        self.park_active_sftp_tab();
         let closed_id = {
             let window = self
                 .windows
@@ -1214,6 +1244,7 @@ impl AppRuntime {
                 self.active_session_id = self
                     .tab_index(&tab_id)
                     .and_then(|index| self.tabs[index].session_id().map(str::to_owned));
+                self.refresh_active_view_mirrors();
             }
             if let Some(index) = self.tab_index(&tab_id) {
                 self.tabs[index].unread = 0;
@@ -1274,12 +1305,43 @@ impl AppRuntime {
         let Some(split) = &window.split else {
             return WorkspaceSplitProjection::default();
         };
-        let overlay_open = self.quick_connect_visible();
         let (laid_leaves, laid_splitters) = split.layout();
         let leaves = laid_leaves
             .iter()
             .map(|leaf| {
                 let tab_id = leaf.pane.active_tab.clone().unwrap_or_default();
+                let focused = leaf.pane_id == split.focused_pane;
+                let tab = self.tab_index(&tab_id).map(|index| &self.tabs[index]);
+                let mode_text = tab
+                    .map(|tab| tab.kind.mode_text().to_owned())
+                    .unwrap_or_default();
+                let (quick_connect_input_text, quick_connect_error_text) = tab
+                    .map(|tab| {
+                        (
+                            tab.quick_connect_input.clone(),
+                            tab.quick_connect_error.clone(),
+                        )
+                    })
+                    .unwrap_or_default();
+                let sftp = if tab.is_some_and(|tab| tab.is_sftp()) {
+                    let state = if focused && self.active_tab_id.as_deref() == Some(tab_id.as_str())
+                    {
+                        Some(self.capture_live_sftp_state())
+                    } else {
+                        self.sftp_tab_states.get(&tab_id).cloned()
+                    };
+                    let session_connected = tab
+                        .and_then(|tab| tab.session_id())
+                        .and_then(|session_id| self.sessions.get(session_id))
+                        .is_some_and(|runtime| runtime.state == SessionState::Connected);
+                    state
+                        .map(|state| {
+                            super::sftp::SftpPaneProjection::from_state(&state, session_connected)
+                        })
+                        .unwrap_or_default()
+                } else {
+                    Default::default()
+                };
                 WorkspacePaneLeafProjection {
                     pane_id: i32::try_from(leaf.pane_id).unwrap_or(0),
                     x: leaf.rect.x,
@@ -1287,14 +1349,18 @@ impl AppRuntime {
                     w: leaf.rect.w,
                     h: leaf.rect.h,
                     empty: leaf.pane.active_tab.is_none(),
-                    focused: leaf.pane_id == split.focused_pane,
-                    quick_connect: overlay_open && leaf.pane_id == split.focused_pane,
+                    focused,
+                    quick_connect: false,
                     tab_id: tab_id.clone(),
                     title_text: if tab_id.is_empty() {
                         String::new()
                     } else {
                         self.tab_display_title(&tab_id)
                     },
+                    mode_text,
+                    quick_connect_input_text,
+                    quick_connect_error_text,
+                    sftp,
                     tabs: self.pane_tab_data(&leaf.pane),
                 }
             })
@@ -1394,6 +1460,7 @@ impl AppRuntime {
                     .unwrap_or_else(|| self.active_tab_id.as_deref() == Some(tab.tab_id.as_str()));
                 // N9：同步发送按键的源/目标角标（源不在 targets 内，两者互斥）。
                 let sync_role_text = self.tab_sync_role_text(&tab.tab_id);
+                let mode_text = tab.kind.mode_text().to_owned();
                 let (default_title, state_text, connected) = match tab
                     .session_id()
                     .and_then(|session_id| self.sessions.get(session_id))
@@ -1403,6 +1470,7 @@ impl AppRuntime {
                         runtime.state_label().to_owned(),
                         runtime.state == SessionState::Connected,
                     ),
+                    None if tab.is_new_tab() => ("New Tab".to_owned(), String::new(), false),
                     None => (tab.tab_id.clone(), "failed".to_owned(), false),
                 };
                 let title = tab.custom_title.clone().unwrap_or(default_title);
@@ -1410,6 +1478,7 @@ impl AppRuntime {
                     id: tab.tab_id.clone(),
                     title,
                     state_text,
+                    mode_text,
                     connected,
                     active,
                     // N6：标签角标 REC（该会话正在写日志时）。
@@ -1448,6 +1517,7 @@ impl AppRuntime {
                 id: tab_id.to_owned(),
                 title: String::new(),
                 state_text: String::new(),
+                mode_text: "terminal".to_owned(),
                 connected: false,
                 active,
                 logging: false,
@@ -1457,6 +1527,7 @@ impl AppRuntime {
         };
         let tab = &self.tabs[index];
         let sync_role_text = self.tab_sync_role_text(&tab.tab_id);
+        let mode_text = tab.kind.mode_text().to_owned();
         let (default_title, state_text, connected) = match tab
             .session_id()
             .and_then(|session_id| self.sessions.get(session_id))
@@ -1466,6 +1537,7 @@ impl AppRuntime {
                 runtime.state_label().to_owned(),
                 runtime.state == SessionState::Connected,
             ),
+            None if tab.is_new_tab() => ("New Tab".to_owned(), String::new(), false),
             None => (tab.tab_id.clone(), "failed".to_owned(), false),
         };
         let title = tab.custom_title.clone().unwrap_or(default_title);
@@ -1473,6 +1545,7 @@ impl AppRuntime {
             id: tab.tab_id.clone(),
             title,
             state_text,
+            mode_text,
             connected,
             active,
             logging: tab
@@ -1592,11 +1665,18 @@ impl AppRuntime {
     pub(crate) fn close_tab_immediate(&mut self, tab_id: &str) -> Option<String> {
         let index = self.tab_index(tab_id)?;
         let session_id = self.tabs[index].session_id().map(str::to_owned);
+        let was_sftp = self.tabs[index].is_sftp();
+        self.drop_sftp_tab_state(tab_id);
         // N6：标签关闭/会话断开前先停止日志并 flush（设计 §3：关闭后不自动恢复）。
         let stopped_log_path = session_id
             .as_deref()
             .and_then(|session_id| self.stop_session_logging_for_close(session_id));
         let was_active = self.active_tab_id.as_deref() == Some(tab_id);
+        if was_active && was_sftp {
+            self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
+            self.sftp_listing = SftpListingState::RefreshNeedsSession;
+            self.sftp_listing_pending = false;
+        }
         // N9：被关闭的标签若是同步源/目标，先抓住显示名（移除后就查不到了），
         // 再让收敛逻辑停/移除并写状态栏提示。
         let sync_closed_title = self
@@ -1646,6 +1726,14 @@ impl AppRuntime {
             if window_id == self.focused_window {
                 self.sync_active_from_focused_window();
             }
+            // Closing the last tab behaves like clicking the window close button.
+            if window_id.is_some_and(|id| {
+                self.windows
+                    .get(&id)
+                    .is_some_and(|window| window.tabs.is_empty())
+            }) {
+                self.requested_window_close = window_id;
+            }
         } else if was_active {
             let neighbor = self
                 .tabs
@@ -1666,6 +1754,7 @@ impl AppRuntime {
                     self.active_session_id = None;
                 }
             }
+            self.refresh_active_view_mirrors();
         }
         if self.tab_menu_tab_id.as_deref() == Some(tab_id) {
             self.tab_menu_tab_id = None;
@@ -1728,18 +1817,109 @@ impl AppRuntime {
         if let Some(profile_id) = profile_id {
             self.drop_inventory_placeholder(&profile_id);
         }
-        self.tabs
-            .push(TabEntry::terminal(tab_id.to_owned(), session_id.to_owned()));
+        self.attach_tab_entry(
+            TabEntry::terminal(tab_id.to_owned(), session_id.to_owned()),
+            Some(session_id),
+        );
+    }
+
+    /// Converts an existing New Tab into a terminal tab bound to `session_id`.
+    ///
+    /// Quick Connect submit keeps the same tab id and position instead of
+    /// opening a second terminal tab.
+    pub(crate) fn bind_runtime_tab(&mut self, tab_id: &str, session_id: &str) {
+        if let Some(index) = self.tab_index(tab_id) {
+            if self.tabs[index].is_new_tab() {
+                self.tabs[index].kind = TabKind::Terminal {
+                    session_id: session_id.to_owned(),
+                };
+                self.tabs[index].quick_connect_input.clear();
+                self.tabs[index].quick_connect_error.clear();
+                self.tabs[index].unread = 0;
+                self.register_tab_in_focused_window(tab_id);
+                self.active_tab_id = Some(tab_id.to_owned());
+                self.active_session_id = Some(session_id.to_owned());
+                self.assign_tab_to_focused_pane(tab_id);
+                self.tab_menu_tab_id = None;
+                return;
+            }
+            if self.tabs[index].session_id() == Some(session_id) {
+                self.active_tab_id = Some(tab_id.to_owned());
+                self.active_session_id = Some(session_id.to_owned());
+                return;
+            }
+        }
+        self.attach_tab(tab_id, session_id);
+    }
+
+    /// Binds a freshly created runtime to either its new tab or an existing
+    /// New Tab that is being converted in place.
+    pub(crate) fn attach_or_bind_runtime_tab(
+        &mut self,
+        reuse_tab_id: Option<&str>,
+        tab_id: &str,
+        session_id: &str,
+        sftp: bool,
+    ) {
+        if let Some(reuse_tab_id) = reuse_tab_id {
+            self.bind_runtime_tab(reuse_tab_id, session_id);
+        } else if sftp {
+            self.attach_sftp_tab(tab_id, session_id);
+        } else {
+            self.attach_tab(tab_id, session_id);
+        }
+    }
+
+    /// Adds an SFTP tab for an already registered runtime session.
+    pub(crate) fn attach_sftp_tab(&mut self, tab_id: &str, session_id: &str) {
+        if let Some(profile_id) = self.sessions.get(session_id).and_then(|runtime| {
+            if let SessionSource::SavedSession { profile_id } = &runtime.source {
+                Some(profile_id.clone())
+            } else {
+                None
+            }
+        }) {
+            self.drop_inventory_placeholder(&profile_id);
+        }
+        self.ensure_sftp_tab_state(tab_id);
+        self.attach_tab_entry(
+            TabEntry::sftp(tab_id.to_owned(), session_id.to_owned()),
+            Some(session_id),
+        );
+        self.restore_sftp_tab(tab_id);
+    }
+
+    /// Adds a New Tab (Quick Connect) tab. New Tabs have no runtime session.
+    pub(crate) fn attach_new_tab(&mut self, tab_id: &str) {
+        self.attach_tab_entry(TabEntry::new_tab(tab_id.to_owned()), None);
+    }
+
+    /// `+` / Ctrl+O / startup: open a fresh New Tab page.
+    pub fn open_new_tab(&mut self) -> AppProjection {
+        let ordinal = self.allocate_runtime_ordinal();
+        let tab_id = format!("tab-new-{ordinal}");
+        self.attach_new_tab(&tab_id);
+        self.set_status_kind(
+            "tab-new",
+            "Opened a new tab.".to_owned(),
+            String::new(),
+            String::new(),
+        );
+        self.projection()
+    }
+
+    fn attach_tab_entry(&mut self, entry: TabEntry, session_id: Option<&str>) {
+        self.park_active_sftp_tab();
+        let tab_id = entry.tab_id.clone();
+        self.tabs.push(entry);
         // N7：新标签登记到当前交互窗口（键盘/菜单回调已把焦点切到该窗口）。
-        self.register_tab_in_focused_window(tab_id);
-        self.active_tab_id = Some(tab_id.to_owned());
-        self.active_session_id = Some(session_id.to_owned());
+        self.register_tab_in_focused_window(&tab_id);
+        self.active_tab_id = Some(tab_id.clone());
+        self.active_session_id = session_id.map(str::to_owned);
         self.tab_menu_tab_id = None;
-        // TAB-6：新终端标签出现即收起 Quick Connect 覆盖层（打开/连接会话 = 显示终端；
-        // 启动/`+` 需要时再由上层显式 open）。提交 QC 成功的关闭也由这里保证。
-        self.quick_connect_overlay_open = false;
         // 分屏时新标签归入当前聚焦 pane 的标签条。
-        self.assign_tab_to_focused_pane(tab_id);
+        self.assign_tab_to_focused_pane(&tab_id);
+        self.refresh_active_view_mirrors();
     }
 
     pub(crate) fn drop_inventory_placeholder(&mut self, profile_id: &str) {
@@ -1876,11 +2056,13 @@ impl AppRuntime {
             .windows
             .get(&window_id)
             .and_then(|window| window.active_tab.clone());
+        self.park_active_sftp_tab();
         self.active_tab_id = active_tab.clone();
         self.active_session_id = active_tab
             .as_deref()
             .and_then(|tab_id| self.tab_index(tab_id))
             .and_then(|index| self.tabs[index].session_id().map(str::to_owned));
+        self.refresh_active_view_mirrors();
     }
 
     /// N7：把新标签登记到当前窗口（返回窗口 id）；无窗口时登记隐式窗口 0。
@@ -1983,6 +2165,11 @@ impl AppRuntime {
         self.pending_close_windows.contains(&window_id)
     }
 
+    /// Drains "last tab closed → close the window" requests for the UI tick.
+    pub(crate) fn take_requested_window_close(&mut self) -> Option<u64> {
+        self.requested_window_close.take()
+    }
+
     /// N7：标记/清除窗口关闭确认（每窗口同时最多一个）。
     pub(crate) fn set_window_close_pending(&mut self, window_id: u64, pending: bool) {
         if pending {
@@ -2018,6 +2205,9 @@ impl AppRuntime {
         }
         self.windows.remove(&window_id);
         self.pending_close_windows.remove(&window_id);
+        if self.requested_window_close == Some(window_id) {
+            self.requested_window_close = None;
+        }
         if self.focused_window == Some(window_id) {
             self.focused_window = self.windows.keys().next().copied();
             self.sync_active_from_focused_window();
@@ -2028,13 +2218,25 @@ impl AppRuntime {
 
 /// N0/N2：标签承载的内容。
 ///
-/// TAB-6：Quick Connect 不再占标签（工作区覆盖层），因此目前只有终端标签；
-/// TAB-4 会在这里加入本地/SSH 后端区分。
+/// The workspace has three equal tab modes:
+/// * `NewTab` — the Quick Connect start page (no runtime session);
+/// * `Terminal` — an interactive terminal page;
+/// * `Sftp` — the two-column local/remote SFTP page.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum TabKind {
-    Terminal {
-        session_id: String,
-    },
+    NewTab,
+    Terminal { session_id: String },
+    Sftp { session_id: String },
+}
+
+impl TabKind {
+    pub(crate) const fn mode_text(&self) -> &'static str {
+        match self {
+            Self::NewTab => "new",
+            Self::Terminal { .. } => "terminal",
+            Self::Sftp { .. } => "sftp",
+        }
+    }
 }
 
 /// N0：一个标签的运行时条目；`tabs` 的顺序就是标签条的显示顺序。
@@ -2046,23 +2248,61 @@ pub(crate) struct TabEntry {
     pub(crate) unread: u32,
     /// WP4：标签显示名覆盖（仅内存，会话生命周期内有效；不落盘）。
     pub(crate) custom_title: Option<String>,
+    /// New Tab mode: per-tab Quick Connect input text (multiple New Tabs are
+    /// independent, including when split across panes).
+    pub(crate) quick_connect_input: String,
+    /// New Tab mode: inline parse error shown under the input.
+    pub(crate) quick_connect_error: String,
 }
 
 impl TabEntry {
+    pub(crate) fn new_tab(tab_id: String) -> Self {
+        Self {
+            tab_id,
+            kind: TabKind::NewTab,
+            unread: 0,
+            custom_title: None,
+            quick_connect_input: String::new(),
+            quick_connect_error: String::new(),
+        }
+    }
+
     pub(crate) fn terminal(tab_id: String, session_id: String) -> Self {
         Self {
             tab_id,
             kind: TabKind::Terminal { session_id },
             unread: 0,
             custom_title: None,
+            quick_connect_input: String::new(),
+            quick_connect_error: String::new(),
         }
     }
 
-    /// 标签对应的运行时会话 key（TAB-6 起所有标签都有会话）。
+    pub(crate) fn sftp(tab_id: String, session_id: String) -> Self {
+        Self {
+            tab_id,
+            kind: TabKind::Sftp { session_id },
+            unread: 0,
+            custom_title: None,
+            quick_connect_input: String::new(),
+            quick_connect_error: String::new(),
+        }
+    }
+
+    /// 标签对应的运行时会话 key（New Tab 没有会话）。
     pub(crate) fn session_id(&self) -> Option<&str> {
         match &self.kind {
-            TabKind::Terminal { session_id } => Some(session_id),
+            TabKind::NewTab => None,
+            TabKind::Terminal { session_id } | TabKind::Sftp { session_id } => Some(session_id),
         }
+    }
+
+    pub(crate) fn is_new_tab(&self) -> bool {
+        matches!(self.kind, TabKind::NewTab)
+    }
+
+    pub(crate) fn is_sftp(&self) -> bool {
+        matches!(self.kind, TabKind::Sftp { .. })
     }
 }
 
@@ -2074,6 +2314,8 @@ pub struct TabData {
     pub title: String,
     /// 会话状态枚举 id（`idle`/`connecting`/...）。
     pub state_text: String,
+    /// `new` / `terminal` / `sftp`（Slint 标签图标与菜单分流）。
+    pub mode_text: String,
     /// 是否处于 `connected`（Slint 侧标签样式/菜单启用条件用）。
     pub connected: bool,
     pub active: bool,
@@ -2118,6 +2360,13 @@ pub struct WorkspacePaneLeafProjection {
     pub quick_connect: bool,
     pub tab_id: String,
     pub title_text: String,
+    /// `new` / `terminal` / `sftp`.
+    pub mode_text: String,
+    /// Per-New-Tab Quick Connect input state (split panes are independent).
+    pub quick_connect_input_text: String,
+    pub quick_connect_error_text: String,
+    /// Per-SFTP-tab pane data (default for terminal/New Tab leaves).
+    pub sftp: super::sftp::SftpPaneProjection,
     pub tabs: Vec<TabData>,
 }
 

@@ -108,7 +108,9 @@ fn from_local_uses_local_ids_and_shell_name_targets() {
     assert_eq!(runtime.connection_target_text(), "zsh");
     assert_eq!(runtime.host_label(), "zsh");
     assert_eq!(runtime.username_label(), "");
-    assert!(runtime.shell_is_connected().is_some_and(|connected| connected));
+    assert!(runtime
+        .shell_is_connected()
+        .is_some_and(|connected| connected));
 }
 
 #[test]
@@ -186,20 +188,20 @@ fn local_shell_spawn_failure_is_reported_without_a_broken_tab() {
     let mut runtime = tab_runtime(temp.path(), 0);
     runtime.dismiss_quick_connect();
 
-    let failed = runtime.open_local_terminal_with_config(LocalPtyConfig::new(
-        "/nonexistent/yshell-local-shell",
-    ));
+    let failed = runtime
+        .open_local_terminal_with_config(LocalPtyConfig::new("/nonexistent/yshell-local-shell"));
     assert_eq!(failed.tab_count, 0);
-    assert!(failed.status_text.contains("Could not start the local shell"));
+    assert!(failed
+        .status_text
+        .contains("Could not start the local shell"));
     assert!(runtime.tabs.is_empty());
     assert!(runtime.sessions.is_empty());
     assert!(!failed.has_active_session);
 
     // 失败后 `+` 仍可直接重试；这里用 /bin/sh 注入成功路径。
     runtime.config_document.ui.new_tab_mode = NewTabMode::SessionEditor;
-    let retried = runtime.open_local_terminal_with_config(
-        LocalPtyConfig::new("/bin/sh").with_size(90, 24),
-    );
+    let retried =
+        runtime.open_local_terminal_with_config(LocalPtyConfig::new("/bin/sh").with_size(90, 24));
     assert_eq!(retried.tab_count, 1);
     assert_eq!(retried.tabs[0].title, "sh");
     assert!(!retried.editor_modal_visible);
@@ -207,28 +209,25 @@ fn local_shell_spawn_failure_is_reported_without_a_broken_tab() {
 
 #[cfg(unix)]
 #[test]
-fn plus_always_creates_a_local_tab_and_ignores_new_tab_mode() {
-    let _guard = lock_env();
-    std::env::set_var("YSHELL_LOCAL_SHELL", "/bin/sh");
+fn plus_always_creates_a_new_tab_and_ignores_new_tab_mode() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 0);
-    runtime.dismiss_quick_connect();
 
     runtime.config_document.ui.new_tab_mode = NewTabMode::QuickConnect;
     let first = runtime.handle_new_tab_default();
     assert_eq!(first.tab_count, 1);
-    assert_eq!(first.tabs[0].title, "sh");
-    assert!(!first.quick_connect_visible);
+    assert_eq!(first.tabs[0].title, "New Tab");
+    assert_eq!(first.tabs[0].mode_text, "new");
+    assert!(first.quick_connect_visible);
     assert!(!first.editor_modal_visible);
 
     runtime.config_document.ui.new_tab_mode = NewTabMode::SessionEditor;
     let second = runtime.handle_new_tab_default();
     assert_eq!(second.tab_count, 2);
-    assert_eq!(second.tabs[1].title, "sh");
+    assert_eq!(second.tabs[1].title, "New Tab");
+    assert!(second.quick_connect_visible);
     assert!(!second.editor_modal_visible);
-    assert!(!second.quick_connect_visible);
 
-    std::env::remove_var("YSHELL_LOCAL_SHELL");
     assert_tab_invariants(&runtime);
 }
 
@@ -269,7 +268,7 @@ fn local_shell_accepts_input_and_returns_output_over_the_pty() {
 }
 
 #[test]
-fn startup_opens_one_local_tab_under_the_quick_connect_overlay() {
+fn startup_opens_one_new_tab() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 0);
     let dropped = Arc::new(AtomicBool::new(false));
@@ -281,13 +280,13 @@ fn startup_opens_one_local_tab_under_the_quick_connect_overlay() {
     );
     assert_eq!(projection.tab_count, 1);
     assert!(projection.quick_connect_visible);
-    assert!(projection.has_active_session);
-    assert_eq!(projection.active_tab_id, "tab-local-1");
-    assert_eq!(projection.tabs[0].title, "sh");
-    assert_eq!(runtime.sessions.len(), 1);
+    assert!(!projection.has_active_session);
+    assert_eq!(projection.tabs[0].title, "New Tab");
+    assert_eq!(projection.tabs[0].mode_text, "new");
+    assert!(runtime.sessions.is_empty());
     assert_eq!(runtime.tabs.len(), 1);
 
-    // 第二次启动/恢复调用不重复创建标签（覆盖层保持打开）。
+    // 第二次启动/恢复调用不重复创建标签。
     let second = runtime.prepare_desktop_startup_workspace_with_shell(
         "bash",
         test_size(120, 32),
@@ -295,33 +294,26 @@ fn startup_opens_one_local_tab_under_the_quick_connect_overlay() {
     );
     assert_eq!(second.tab_count, 1);
     assert!(second.quick_connect_visible);
-    assert_eq!(second.active_tab_id, "tab-local-1");
-    assert_eq!(runtime.sessions.len(), 1);
+    assert_eq!(runtime.sessions.len(), 0);
     assert_eq!(runtime.tabs.len(), 1);
-    assert!(!dropped.load(Ordering::SeqCst), "startup tab stays alive");
 }
 
-#[cfg(unix)]
 #[test]
-fn real_startup_path_creates_and_reopens_quick_connect_once() {
-    let _guard = lock_env();
-    std::env::set_var("YSHELL_LOCAL_SHELL", "/bin/sh");
+fn real_startup_path_creates_one_new_tab() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 0);
 
     let started = runtime.prepare_desktop_startup_workspace();
     assert_eq!(started.tab_count, 1);
     assert!(started.quick_connect_visible);
-    assert_eq!(started.tabs[0].title, "sh");
-    assert_eq!(started.tabs[0].state_text, "connected");
+    assert_eq!(started.tabs[0].title, "New Tab");
+    assert_eq!(started.tabs[0].mode_text, "new");
 
     let second = runtime.prepare_desktop_startup_workspace();
     assert_eq!(second.tab_count, 1);
     assert!(second.quick_connect_visible);
-    assert_eq!(runtime.sessions.len(), 1);
+    assert!(runtime.sessions.is_empty());
     assert_eq!(runtime.tabs.len(), 1);
-
-    std::env::remove_var("YSHELL_LOCAL_SHELL");
 }
 
 #[test]
@@ -378,12 +370,10 @@ fn local_sessions_guard_reconnect_menu_auth_and_sftp_paths() {
     assert!(runtime.status_text.contains("SFTP is unavailable"));
     assert!(runtime.sftp_live.is_empty());
 
-    assert!(
-        runtime
-            .prepare_active_sftp_operation("browsing remote files")
-            .expect("SFTP operation is guarded")
-            .is_none()
-    );
+    assert!(runtime
+        .prepare_active_sftp_operation("browsing remote files")
+        .expect("SFTP operation is guarded")
+        .is_none());
     assert!(runtime.status_text.contains("SFTP is unavailable"));
 
     // 认证/主机密钥弹窗不会为本地会话出现；密钥部署也不显示 SSH 目标。

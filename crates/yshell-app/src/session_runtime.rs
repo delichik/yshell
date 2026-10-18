@@ -11,7 +11,7 @@ use yshell_logging::{
     TranscriptDirection, TranscriptFormat, TransferLogger,
 };
 use yshell_ssh::{
-    AuthMethod, HostKeyPolicy, PtySize, ShellSession, SshConnectionConfig,
+    AuthMethod, HostKeyPolicy, PtySize, ShellSession, SshConnectionConfig, SshTransport,
 };
 use yshell_terminal::{
     GridPoint, SearchMatch, SearchQuery, SelectionRange, TerminalGrid, TerminalParser,
@@ -34,6 +34,7 @@ pub enum SessionSource {
     ///
     /// 本地会话不持有 SSH 连接：`ssh_config` 只是占位配置（端口 0 / 空用户名），
     /// 任何误入 SSH 路径的连接都会在配置校验阶段失败，而不是连到错误目标。
+    #[allow(dead_code)]
     Local,
 }
 
@@ -79,13 +80,37 @@ pub struct ManualLoggingOptions {
     pub include_input: bool,
 }
 
+/// Which workspace page owns this runtime session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionViewMode {
+    /// Interactive terminal page (shell channel).
+    Terminal,
+    /// SFTP page (local + remote columns; no shell channel).
+    Sftp,
+}
+
+impl SessionViewMode {
+    #[allow(dead_code)]
+    #[must_use]
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::Terminal => "terminal",
+            Self::Sftp => "sftp",
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct SessionRuntime {
     session_id: SessionId,
     tab_id: TabId,
     pub display_name: String,
     pub source: SessionSource,
+    /// Terminal/SFTP page mode for this runtime. New Tab pages have no runtime.
+    pub view_mode: SessionViewMode,
     pub ssh_config: SshConnectionConfig,
+    /// Authenticated SSH transport shared by terminal and SFTP modes.
+    pub transport: Option<SshTransport>,
     pub terminal_parser: TerminalParser,
     pub terminal_grid: TerminalGrid,
     pub shell_session: Option<Box<dyn ShellSession>>,
@@ -144,7 +169,9 @@ impl SessionRuntime {
             tab_id: TabId::new(format!("tab-quick-connect-{ordinal}")),
             display_name,
             source: SessionSource::QuickConnect,
+            view_mode: SessionViewMode::Terminal,
             ssh_config,
+            transport: None,
             terminal_parser: TerminalParser::new(),
             terminal_grid: TerminalGrid::new(120, 32),
             shell_session: None,
@@ -198,7 +225,9 @@ impl SessionRuntime {
             source: SessionSource::SavedSession {
                 profile_id: profile.id.clone(),
             },
+            view_mode: SessionViewMode::Terminal,
             ssh_config,
+            transport: None,
             terminal_parser: TerminalParser::new(),
             terminal_grid: TerminalGrid::new(120, 32),
             shell_session: None,
@@ -230,6 +259,7 @@ impl SessionRuntime {
     /// `display_name` 是 shell 名（`bash` / `pwsh` / `cmd`…），也是标签标题与状态栏
     /// 目标文案。`ssh_config` 只作占位：host 固定为 `local`、端口 0、空用户名，
     /// 任何误入 SSH 路径的代码都会在 `SshConnectionConfig::validate` 处失败。
+    #[allow(dead_code)]
     pub fn from_local(
         ordinal: usize,
         display_name: String,
@@ -250,7 +280,9 @@ impl SessionRuntime {
             tab_id: TabId::new(format!("tab-local-{ordinal}")),
             display_name,
             source: SessionSource::Local,
+            view_mode: SessionViewMode::Terminal,
             ssh_config,
+            transport: None,
             terminal_parser: TerminalParser::new(),
             terminal_grid: TerminalGrid::new(120, 32),
             shell_session: None,
@@ -291,6 +323,7 @@ impl SessionRuntime {
             tab_id: TabId::new(format!("tab-draft-{ordinal}")),
             display_name: "New Session".to_owned(),
             source: SessionSource::Draft,
+            view_mode: SessionViewMode::Terminal,
             ssh_config: SshConnectionConfig::new(
                 "example.com",
                 22,
@@ -298,6 +331,7 @@ impl SessionRuntime {
                     username: "user".to_owned(),
                 },
             ),
+            transport: None,
             terminal_parser: TerminalParser::new(),
             terminal_grid: TerminalGrid::new(120, 32),
             shell_session: None,
@@ -343,6 +377,40 @@ impl SessionRuntime {
     #[must_use]
     pub fn is_local(&self) -> bool {
         matches!(&self.source, SessionSource::Local)
+    }
+
+    /// Whether this runtime is currently rendering the SFTP page.
+    #[must_use]
+    pub const fn is_sftp(&self) -> bool {
+        matches!(self.view_mode, SessionViewMode::Sftp)
+    }
+
+    /// Attaches the authenticated SSH transport that both modes share.
+    pub fn attach_transport(&mut self, transport: SshTransport) {
+        self.transport = Some(transport);
+    }
+
+    /// Rebinds this runtime to an existing workspace tab (Quick Connect submit
+    /// converts the active New Tab in place).
+    pub fn retarget_tab_id(&mut self, tab_id: &str) {
+        self.tab_id = TabId::new(tab_id.to_owned());
+    }
+
+    pub fn set_view_mode(&mut self, mode: SessionViewMode) {
+        self.view_mode = mode;
+    }
+
+    /// Closes the shell channel but keeps the SSH transport for an SFTP switch.
+    ///
+    /// This is the "end the terminal session without dropping the connection"
+    /// half of the Terminal → SFTP conversion.
+    pub fn close_shell_channel(&mut self) -> Result<(), yshell_ssh::SshError> {
+        let Some(shell_session) = self.shell_session.as_mut() else {
+            return Ok(());
+        };
+        shell_session.disconnect()?;
+        self.shell_session = None;
+        Ok(())
     }
 
     pub fn clear_connection_overlay(&mut self) {
@@ -541,9 +609,7 @@ impl SessionRuntime {
             // Multi-cell ranges are always active. A single cell is active when
             // it holds copyable text (e.g. double-click on a one-character word).
             range.start != range.end
-                || !selection
-                    .copy_text_absolute(&self.terminal_grid)
-                    .is_empty()
+                || !selection.copy_text_absolute(&self.terminal_grid).is_empty()
         })
     }
 
@@ -941,7 +1007,9 @@ impl SessionRuntime {
         let Some(shell_session) = self.shell_session.as_mut() else {
             return Ok(());
         };
-        shell_session.disconnect()
+        shell_session.disconnect()?;
+        self.shell_session = None;
+        Ok(())
     }
 
     pub fn record_transfer(

@@ -17,6 +17,7 @@ use crate::{error::AppError, error::AppResult, session_runtime::SessionRuntime};
 
 use super::*;
 
+#[allow(dead_code)]
 impl AppRuntime {
     /// TAB-4：新建一个本地终端标签（`+` 的默认行为）。
     ///
@@ -150,29 +151,27 @@ impl AppRuntime {
         Ok(self.projection())
     }
 
-    /// TAB-5：冷启动工作区——无标签时创建恰好一个本地终端，并把 Quick Connect
-    /// 覆盖层重新打开到它上面（`attach_tab` 会收起覆盖层）。
+    /// 冷启动工作区：无标签时创建一个 New Tab（快速连接页）。
     ///
-    /// 已有标签（会话恢复/后续调用）时只返回投影，不重复创建。
+    /// Local terminal tabs no longer have a UI entry; the local shell code stays
+    /// available for tests and future explicit entry points.
     pub fn prepare_desktop_startup_workspace(&mut self) -> AppProjection {
         if self.tabs.is_empty() {
-            self.open_local_terminal();
-            self.quick_connect_overlay_open = true;
+            self.open_new_tab();
         }
         self.projection()
     }
 
-    /// 测试注入版本：[`Self::prepare_desktop_startup_workspace`] 不依赖用户 `$SHELL`。
+    /// 测试注入版本：启动默认仍是 New Tab；注入的 shell 不再被使用。
     #[cfg(test)]
     pub(crate) fn prepare_desktop_startup_workspace_with_shell(
         &mut self,
-        display_name: impl Into<String>,
-        size: PtySize,
-        shell_session: Box<dyn ShellSession>,
+        _display_name: impl Into<String>,
+        _size: PtySize,
+        _shell_session: Box<dyn ShellSession>,
     ) -> AppProjection {
         if self.tabs.is_empty() {
-            self.open_local_terminal_with_shell(display_name, size, shell_session);
-            self.quick_connect_overlay_open = true;
+            self.open_new_tab();
         }
         self.projection()
     }

@@ -3,14 +3,14 @@
 
 use std::collections::BTreeSet;
 
+use super::*;
 use crate::{
-    error::AppError, error::AppResult, sftp_view::format_sftp_modified,
+    error::AppError, error::AppResult, local_fs::LocalRowData, sftp_view::format_sftp_modified,
     sftp_view::format_sftp_permissions, sftp_view::format_sftp_permissions_octal,
     sftp_view::format_sftp_size, sftp_view::sftp_kind_text, sftp_view::visible_entries,
     sftp_view::SftpSortColumn,
 };
 use yshell_sftp::{DirectoryListing, FsEntry, FsEntryKind, RealSftpBackend, SftpClient};
-use super::*;
 
 /// UI-thread live SFTP client bound to one runtime session key.
 pub(crate) struct LiveSftpClient {
@@ -19,21 +19,258 @@ pub(crate) struct LiveSftpClient {
     pub(crate) client: SftpClient<RealSftpBackend>,
 }
 
-/// Per-session SFTP panel snapshot so tab switches restore instantly.
+/// Per-SFTP-tab view state parked while another tab is focused.
+///
+/// The active tab is mirrored into the `AppRuntime::sftp_*`/`local_pane`
+/// fields so the existing SFTP browsing/mutation code can keep operating on
+/// one set of fields. Switching tabs parks the current snapshot here and
+/// restores the next one.
 #[derive(Debug, Clone)]
-pub(crate) struct SftpViewCache {
+pub(crate) struct SftpTabState {
     pub(crate) path: String,
+    pub(crate) listing: SftpListingState,
     pub(crate) entries: Vec<FsEntry>,
     pub(crate) selected_index: Option<usize>,
-    pub(crate) selection: BTreeSet<String>,
-    pub(crate) selection_anchor: Option<String>,
     pub(crate) sort_column: SftpSortColumn,
     pub(crate) sort_ascending: bool,
     pub(crate) show_hidden: bool,
-    pub(crate) listing: SftpListingState,
+    pub(crate) selection: BTreeSet<String>,
+    pub(crate) selection_anchor: Option<String>,
+    pub(crate) session: SftpSessionLifecycle,
+    pub(crate) listing_pending: bool,
+    pub(crate) remote_edit_session: Option<RemoteEditSession>,
+    pub(crate) local: LocalPaneState,
+    /// Left local / right remote split ratio (0..1). Default 0.5, not
+    /// persisted and not shared between tabs.
+    pub(crate) column_ratio: f32,
 }
 
 impl AppRuntime {
+    /// Whether `tab_id` is currently a SFTP tab.
+    pub(crate) fn is_sftp_tab(&self, tab_id: &str) -> bool {
+        self.tab_index(tab_id)
+            .is_some_and(|index| self.tabs[index].is_sftp())
+    }
+
+    fn sftp_tab_session_key(&self, tab_id: &str) -> Option<String> {
+        self.tab_index(tab_id)
+            .and_then(|index| self.tabs[index].session_id().map(str::to_owned))
+    }
+
+    /// Creates the parked state for a new SFTP tab (local listing included).
+    fn fresh_sftp_tab_state(&self, tab_id: &str) -> SftpTabState {
+        let session_key = self.sftp_tab_session_key(tab_id);
+        let session = match &session_key {
+            Some(key) => {
+                let connected = self
+                    .sessions
+                    .get(key)
+                    .is_some_and(|runtime| runtime.state == yshell_core::SessionState::Connected);
+                if connected {
+                    SftpSessionLifecycle::Ready {
+                        session_key: key.clone(),
+                    }
+                } else {
+                    SftpSessionLifecycle::Disconnected {
+                        session_key: Some(key.clone()),
+                    }
+                }
+            }
+            None => SftpSessionLifecycle::Disconnected { session_key: None },
+        };
+        let mut local = LocalPaneState {
+            dir: self.default_local_dir.clone(),
+            ..LocalPaneState::default()
+        };
+        match crate::local_fs::list_pane(&local.dir, crate::local_fs::LocalPaneOptions::default()) {
+            Ok(listing) => {
+                local.listing = Some(listing);
+                local.error = None;
+            }
+            Err(error) => {
+                local.error = Some(error);
+            }
+        }
+        SftpTabState {
+            path: "/".to_owned(),
+            listing: SftpListingState::ConnectReal,
+            entries: Vec::new(),
+            selected_index: None,
+            sort_column: SftpSortColumn::Name,
+            sort_ascending: true,
+            show_hidden: false,
+            selection: BTreeSet::new(),
+            selection_anchor: None,
+            session,
+            listing_pending: false,
+            remote_edit_session: None,
+            local,
+            column_ratio: 0.5,
+        }
+    }
+
+    /// Ensures a parked state exists for `tab_id` (does not restore it).
+    pub(crate) fn ensure_sftp_tab_state(&mut self, tab_id: &str) {
+        if self.sftp_tab_states.contains_key(tab_id) {
+            return;
+        }
+        let state = self.fresh_sftp_tab_state(tab_id);
+        self.sftp_tab_states.insert(tab_id.to_owned(), state);
+    }
+
+    pub(crate) fn capture_live_sftp_state(&self) -> SftpTabState {
+        SftpTabState {
+            path: self.sftp_path.clone(),
+            listing: self.sftp_listing.clone(),
+            entries: self.sftp_entries.clone(),
+            selected_index: self.sftp_selected_index,
+            sort_column: self.sftp_sort_column,
+            sort_ascending: self.sftp_sort_ascending,
+            show_hidden: self.sftp_show_hidden,
+            selection: self.sftp_selection.clone(),
+            selection_anchor: self.sftp_selection_anchor.clone(),
+            session: self.sftp_session.clone(),
+            listing_pending: self.sftp_listing_pending,
+            remote_edit_session: self.remote_edit_session.clone(),
+            local: self.local_pane.clone(),
+            column_ratio: self.sftp_column_ratio,
+        }
+    }
+
+    fn apply_sftp_tab_state(&mut self, state: &SftpTabState) {
+        self.sftp_column_ratio = state.column_ratio;
+        self.sftp_path = state.path.clone();
+        self.sftp_listing = state.listing.clone();
+        self.sftp_entries = state.entries.clone();
+        self.sftp_selected_index = state.selected_index;
+        self.sftp_sort_column = state.sort_column;
+        self.sftp_sort_ascending = state.sort_ascending;
+        self.sftp_show_hidden = state.show_hidden;
+        self.sftp_selection = state.selection.clone();
+        self.sftp_selection_anchor = state.selection_anchor.clone();
+        self.sftp_session = state.session.clone();
+        self.sftp_listing_pending = state.listing_pending;
+        self.remote_edit_session = state.remote_edit_session.clone();
+        self.local_pane = state.local.clone();
+    }
+
+    /// Parks the focused SFTP tab's live mirrors into `sftp_tab_states`.
+    pub(crate) fn park_active_sftp_tab(&mut self) {
+        let Some(tab_id) = self.active_tab_id.clone() else {
+            return;
+        };
+        if !self.is_sftp_tab(&tab_id) {
+            return;
+        }
+        let state = self.capture_live_sftp_state();
+        self.sftp_tab_states.insert(tab_id, state);
+    }
+
+    /// Restores a parked SFTP tab into the live mirrors. Returns false when
+    /// the tab has no parked state.
+    pub(crate) fn restore_sftp_tab(&mut self, tab_id: &str) -> bool {
+        let Some(state) = self.sftp_tab_states.get(tab_id).cloned() else {
+            return false;
+        };
+        self.apply_sftp_tab_state(&state);
+        true
+    }
+
+    /// After `active_tab_id` changes, restore the active SFTP tab's mirrors or
+    /// clear them for New Tab / Terminal pages.
+    pub(crate) fn refresh_active_view_mirrors(&mut self) {
+        let Some(tab_id) = self.active_tab_id.clone() else {
+            self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
+            self.sftp_listing = SftpListingState::RefreshNeedsSession;
+            self.sftp_listing_pending = false;
+            return;
+        };
+        if self.is_sftp_tab(&tab_id) {
+            self.restore_sftp_tab(&tab_id);
+            if let Some(session_key) = self.sftp_tab_session_key(&tab_id) {
+                let _ = self.sync_sftp_lifecycle_for_session(&session_key, false);
+                if matches!(self.sftp_listing, SftpListingState::ConnectReal) {
+                    self.sftp_listing_pending = true;
+                }
+            }
+        } else {
+            self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
+            self.sftp_listing = SftpListingState::RefreshNeedsSession;
+            self.sftp_listing_pending = false;
+        }
+    }
+
+    /// Drops the parked state and live client when an SFTP tab closes.
+    pub(crate) fn drop_sftp_tab_state(&mut self, tab_id: &str) {
+        self.sftp_tab_states.remove(tab_id);
+        if let Some(session_key) = self.sftp_tab_session_key(tab_id) {
+            self.sftp_live.remove(&session_key);
+        }
+    }
+
+    /// Sets the per-tab local/remote ratio (0.2..0.8).
+    pub fn set_sftp_column_ratio(&mut self, ratio: f32) -> AppProjection {
+        let clamped = ratio.clamp(0.2, 0.8);
+        self.sftp_column_ratio = clamped;
+        if let Some(tab_id) = self.active_tab_id.clone() {
+            if let Some(state) = self.sftp_tab_states.get_mut(&tab_id) {
+                state.column_ratio = clamped;
+            }
+        }
+        self.projection()
+    }
+
+    /// Marks an SFTP tab connected. The focused tab updates the live mirrors;
+    /// background tabs only update their parked state.
+    pub(crate) fn mark_sftp_tab_connected(&mut self, tab_id: &str, session_key: &str) {
+        if self.active_tab_id.as_deref() == Some(tab_id) {
+            let _ = self.sync_sftp_lifecycle_for_session(session_key, true);
+            self.park_active_sftp_tab();
+            return;
+        }
+        if let Some(state) = self.sftp_tab_states.get_mut(tab_id) {
+            state.session = SftpSessionLifecycle::Ready {
+                session_key: session_key.to_owned(),
+            };
+            state.listing_pending = true;
+            if matches!(
+                state.listing,
+                SftpListingState::SyncDisconnected
+                    | SftpListingState::RefreshNeedsSession
+                    | SftpListingState::ConnectReal
+            ) {
+                state.listing = SftpListingState::ConnectReal;
+            }
+        }
+    }
+
+    pub(crate) fn sftp_tab_id_for_session(&self, session_key: &str) -> Option<String> {
+        self.tabs
+            .iter()
+            .find(|tab| tab.is_sftp() && tab.session_id() == Some(session_key))
+            .map(|tab| tab.tab_id.clone())
+    }
+
+    /// Marks an SFTP tab disconnected/failed in its parked state.
+    pub(crate) fn mark_sftp_tab_disconnected(&mut self, session_key: &str) {
+        let Some(tab_id) = self.sftp_tab_id_for_session(session_key) else {
+            return;
+        };
+        if self.active_tab_id.as_deref() == Some(tab_id.as_str()) {
+            self.sftp_session = SftpSessionLifecycle::Disconnected {
+                session_key: Some(session_key.to_owned()),
+            };
+            self.sftp_listing = SftpListingState::SyncDisconnected;
+            self.park_active_sftp_tab();
+        } else if let Some(state) = self.sftp_tab_states.get_mut(&tab_id) {
+            state.session = SftpSessionLifecycle::Disconnected {
+                session_key: Some(session_key.to_owned()),
+            };
+            state.listing = SftpListingState::SyncDisconnected;
+            state.listing_pending = false;
+        }
+    }
+
     /// Drop every parked SFTP TCP/SSH session (backend switch / hard reset).
     #[allow(dead_code)]
     pub(crate) fn drop_sftp_live_client(&mut self) {
@@ -43,7 +280,6 @@ impl AppRuntime {
     /// Drop the live client for one session (disconnect / transport failure).
     pub(crate) fn drop_sftp_live_client_for(&mut self, session_key: &str) {
         self.sftp_live.remove(session_key);
-        self.sftp_view_cache.remove(session_key);
     }
 
     /// Reuse or create the live SFTP client for `session_key`.
@@ -65,17 +301,28 @@ impl AppRuntime {
             ));
         }
         if !self.sftp_live.contains_key(session_key) {
-            let ssh_config = {
-                let runtime = self.sessions.get(session_key).ok_or_else(|| {
-                    AppError::new("active runtime session is missing")
-                })?;
-                self.effective_ssh_config(&runtime.ssh_config)
+            let (transport, ssh_config) = {
+                let runtime = self
+                    .sessions
+                    .get(session_key)
+                    .ok_or_else(|| AppError::new("active runtime session is missing"))?;
+                (
+                    runtime.transport.clone(),
+                    self.effective_ssh_config(&runtime.ssh_config),
+                )
+            };
+            let client = match transport {
+                Some(transport) => SftpClient::with_shared_transport(transport),
+                // Test/legacy path: no app-owned transport (unit tests or a
+                // session that was never connected). Opening a fresh SSH
+                // connection keeps the existing behavior.
+                None => SftpClient::with_real_backend(ssh_config),
             };
             self.sftp_live.insert(
                 session_key.to_owned(),
                 LiveSftpClient {
                     session_key: session_key.to_owned(),
-                    client: SftpClient::with_real_backend(ssh_config),
+                    client,
                 },
             );
         }
@@ -83,68 +330,6 @@ impl AppRuntime {
             .get_mut(session_key)
             .map(|live| &mut live.client)
             .ok_or_else(|| AppError::new("SFTP live client missing after ensure"))
-    }
-
-    /// Snapshot the visible SFTP panel into the per-session cache (tab switch).
-    pub(crate) fn snapshot_sftp_view_to_cache(&mut self) {
-        let session_key = self.sftp_session.status_session_key();
-        if session_key.is_empty() {
-            return;
-        }
-        let session_key = session_key.to_owned();
-        self.sftp_view_cache.insert(
-            session_key,
-            SftpViewCache {
-                path: self.sftp_path.clone(),
-                entries: self.sftp_entries.clone(),
-                selected_index: self.sftp_selected_index,
-                selection: self.sftp_selection.clone(),
-                selection_anchor: self.sftp_selection_anchor.clone(),
-                sort_column: self.sftp_sort_column,
-                sort_ascending: self.sftp_sort_ascending,
-                show_hidden: self.sftp_show_hidden,
-                listing: self.sftp_listing.clone(),
-            },
-        );
-    }
-
-    /// Restore a parked SFTP panel for `session_key`. Returns whether a cache hit.
-    pub(crate) fn restore_sftp_view_from_cache(&mut self, session_key: &str) -> bool {
-        let Some(cache) = self.sftp_view_cache.get(session_key).cloned() else {
-            return false;
-        };
-        self.sftp_path = cache.path;
-        self.sftp_entries = cache.entries;
-        self.sftp_selected_index = cache.selected_index;
-        self.sftp_selection = cache.selection;
-        self.sftp_selection_anchor = cache.selection_anchor;
-        self.sftp_sort_column = cache.sort_column;
-        self.sftp_sort_ascending = cache.sort_ascending;
-        self.sftp_show_hidden = cache.show_hidden;
-        self.sftp_listing = cache.listing;
-        self.sftp_listing_pending = false;
-        true
-    }
-
-    /// Remember the current panel under the ready session key (after list/navigate).
-    fn remember_sftp_view_cache_for_ready_session(&mut self) {
-        let Some(session_key) = self.sftp_ready_session_key().map(str::to_owned) else {
-            return;
-        };
-        self.sftp_view_cache.insert(
-            session_key,
-            SftpViewCache {
-                path: self.sftp_path.clone(),
-                entries: self.sftp_entries.clone(),
-                selected_index: self.sftp_selected_index,
-                selection: self.sftp_selection.clone(),
-                selection_anchor: self.sftp_selection_anchor.clone(),
-                sort_column: self.sftp_sort_column,
-                sort_ascending: self.sftp_sort_ascending,
-                show_hidden: self.sftp_show_hidden,
-                listing: self.sftp_listing.clone(),
-            },
-        );
     }
 
     /// Drain a deferred listing requested by tab activation (non-blocking switch).
@@ -479,45 +664,17 @@ impl AppRuntime {
     }
 
     pub(crate) fn sftp_rows(&self) -> Vec<SftpRowData> {
-        self.visible_sftp_entries()
-            .iter()
-            .map(|entry| {
-                let is_dir = matches!(entry.kind, FsEntryKind::Directory);
-                SftpRowData {
-                    name: entry.name.clone(),
-                    path_text: entry.path.clone(),
-                    kind_text: sftp_kind_text(entry.kind).to_owned(),
-                    size_text: if is_dir {
-                        String::new()
-                    } else {
-                        format_sftp_size(entry.size_bytes)
-                    },
-                    modified_text: format_sftp_modified(entry.modified),
-                    permissions_text: format_sftp_permissions(entry.kind, entry.permissions),
-                    is_dir,
-                    is_symlink: matches!(entry.kind, FsEntryKind::Symlink),
-                    selected: self.sftp_selection.contains(&entry.path),
-                }
-            })
-            .collect()
+        sftp_rows_for(
+            &self.sftp_entries,
+            self.sftp_show_hidden,
+            self.sftp_sort_column,
+            self.sftp_sort_ascending,
+            &self.sftp_selection,
+        )
     }
 
     pub(crate) fn sftp_crumbs(&self) -> Vec<SftpCrumbData> {
-        let mut crumbs = vec![SftpCrumbData {
-            label: "/".to_owned(),
-            path: "/".to_owned(),
-        }];
-        let normalized = normalize_remote_path(&self.sftp_path).unwrap_or_else(|_| "/".to_owned());
-        let mut path = String::new();
-        for part in normalized.split('/').filter(|part| !part.is_empty()) {
-            path.push('/');
-            path.push_str(part);
-            crumbs.push(SftpCrumbData {
-                label: part.to_owned(),
-                path: path.clone(),
-            });
-        }
-        crumbs
+        sftp_crumbs_for(&self.sftp_path)
     }
 
     pub(crate) fn sftp_sort_legacy_text(&self) -> String {
@@ -587,7 +744,6 @@ impl AppRuntime {
         self.reconcile_sftp_selection(selected.as_deref());
         if listing.entries.is_empty() {
             self.sftp_listing = SftpListingState::EmptyDirectory;
-            self.remember_sftp_view_cache_for_ready_session();
             return;
         }
         if self.sftp_remote_target.trim().is_empty() {
@@ -619,7 +775,6 @@ impl AppRuntime {
                 .collect::<Vec<_>>()
                 .join("\n"),
         );
-        self.remember_sftp_view_cache_for_ready_session();
     }
 
     pub(crate) fn prepare_active_sftp_operation(
@@ -636,7 +791,9 @@ impl AppRuntime {
             );
             self.set_status_kind(
                 "sftp-not-ready",
-                format!("{lifecycle} Cannot continue {action} until a runtime session is connected."),
+                format!(
+                    "{lifecycle} Cannot continue {action} until a runtime session is connected."
+                ),
                 action_id.to_owned(),
                 String::new(),
             );
@@ -705,6 +862,18 @@ impl AppRuntime {
         if !refresh_listing {
             return self.sftp_session.legacy_status_text();
         }
+        // Unit tests use a fake shell and have no app-owned SSH transport; do
+        // not attempt a real TCP/SSH connection to the fixture host.
+        #[cfg(test)]
+        if self
+            .sessions
+            .get(session_key)
+            .is_some_and(|runtime| runtime.is_sftp() && runtime.transport.is_none())
+        {
+            self.sftp_listing = SftpListingState::EmptyDirectory;
+            self.sftp_listing_pending = false;
+            return self.sftp_session.legacy_status_text();
+        }
 
         let path = self.sftp_path.clone();
         let list_result = self
@@ -738,26 +907,10 @@ impl AppRuntime {
         }
     }
 
-    /// D16：清空 SFTP 面板视图状态（切换会话/切到无会话标签时调用）。
-    ///
-    /// 只清可见目录残留；**不**丢掉 per-session live TCP/SSH——切 tab 时销毁连接
-    /// 会在 UI 线程重做完整握手，体感极慢。生命周期由调用方随后用
-    /// [`Self::sync_sftp_lifecycle_for_session`] 重建。
-    pub(crate) fn reset_sftp_view_state(&mut self) {
-        self.sftp_entries.clear();
-        self.sftp_selection.clear();
-        self.sftp_selection_anchor = None;
-        self.sftp_selected_index = None;
-        self.sftp_path = "/".to_owned();
-        self.sftp_listing = SftpListingState::ConnectReal;
-        self.sftp_listing_pending = false;
-    }
-
     pub(crate) fn sftp_ready_session_key(&self) -> Option<&str> {
         match &self.sftp_session {
             SftpSessionLifecycle::Ready { session_key } => Some(session_key.as_str()),
-            SftpSessionLifecycle::Disconnected { .. }
-            | SftpSessionLifecycle::Failed { .. } => None,
+            SftpSessionLifecycle::Disconnected { .. } | SftpSessionLifecycle::Failed { .. } => None,
         }
     }
 
@@ -790,6 +943,274 @@ pub struct SftpRowData {
 pub struct SftpCrumbData {
     pub label: String,
     pub path: String,
+}
+
+fn sftp_rows_for(
+    entries: &[FsEntry],
+    show_hidden: bool,
+    sort_column: SftpSortColumn,
+    sort_ascending: bool,
+    selection: &BTreeSet<String>,
+) -> Vec<SftpRowData> {
+    visible_entries(entries, show_hidden, sort_column, sort_ascending)
+        .iter()
+        .map(|entry| sftp_row_from(entry, selection.contains(&entry.path)))
+        .collect()
+}
+
+fn sftp_row_from(entry: &FsEntry, selected: bool) -> SftpRowData {
+    let is_dir = matches!(entry.kind, FsEntryKind::Directory);
+    SftpRowData {
+        name: entry.name.clone(),
+        path_text: entry.path.clone(),
+        kind_text: sftp_kind_text(entry.kind).to_owned(),
+        size_text: if is_dir {
+            String::new()
+        } else {
+            format_sftp_size(entry.size_bytes)
+        },
+        modified_text: format_sftp_modified(entry.modified),
+        permissions_text: format_sftp_permissions(entry.kind, entry.permissions),
+        is_dir,
+        is_symlink: matches!(entry.kind, FsEntryKind::Symlink),
+        selected,
+    }
+}
+
+fn sftp_crumbs_for(path: &str) -> Vec<SftpCrumbData> {
+    let mut crumbs = vec![SftpCrumbData {
+        label: "/".to_owned(),
+        path: "/".to_owned(),
+    }];
+    let normalized = normalize_remote_path(path).unwrap_or_else(|_| "/".to_owned());
+    let mut current = String::new();
+    for part in normalized.split('/').filter(|part| !part.is_empty()) {
+        current.push('/');
+        current.push_str(part);
+        crumbs.push(SftpCrumbData {
+            label: part.to_owned(),
+            path: current.clone(),
+        });
+    }
+    crumbs
+}
+
+/// Per-SFTP-tab data used by split panes (and reusable for a single page).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SftpPaneProjection {
+    pub path_text: String,
+    pub rows: Vec<SftpRowData>,
+    pub crumbs: Vec<SftpCrumbData>,
+    pub selected_index: i32,
+    pub connected: bool,
+    pub sort_column_text: String,
+    pub sort_ascending: bool,
+    pub sort_text: String,
+    pub show_hidden: bool,
+    pub item_count: i32,
+    pub dir_count: i32,
+    pub selected_count: i32,
+    pub empty_text: String,
+    pub error_text: String,
+    pub remote_edit_active: bool,
+    pub remote_edit_text: String,
+    pub local_rows: Vec<LocalRowData>,
+    pub local_path_text: String,
+    pub local_sort_column_text: String,
+    pub local_sort_ascending: bool,
+    pub local_sort_text: String,
+    pub local_show_hidden: bool,
+    pub local_item_count: i32,
+    pub local_dir_count: i32,
+    pub local_selected_count: i32,
+    pub local_empty_text: String,
+    pub local_error_text: String,
+    pub local_retry_visible: bool,
+    pub local_selected_name_text: String,
+    pub local_selection_key: String,
+    pub sftp_selection_key: String,
+    pub column_ratio: f32,
+}
+
+impl Default for SftpPaneProjection {
+    fn default() -> Self {
+        Self {
+            path_text: "/".to_owned(),
+            rows: Vec::new(),
+            crumbs: Vec::new(),
+            selected_index: -1,
+            connected: false,
+            sort_column_text: "name".to_owned(),
+            sort_ascending: true,
+            sort_text: "Name ↑".to_owned(),
+            show_hidden: false,
+            item_count: 0,
+            dir_count: 0,
+            selected_count: 0,
+            empty_text: String::new(),
+            error_text: String::new(),
+            remote_edit_active: false,
+            remote_edit_text: String::new(),
+            local_rows: Vec::new(),
+            local_path_text: "/".to_owned(),
+            local_sort_column_text: "name".to_owned(),
+            local_sort_ascending: true,
+            local_sort_text: "Name ↑".to_owned(),
+            local_show_hidden: false,
+            local_item_count: 0,
+            local_dir_count: 0,
+            local_selected_count: 0,
+            local_empty_text: String::new(),
+            local_error_text: String::new(),
+            local_retry_visible: true,
+            local_selected_name_text: String::new(),
+            local_selection_key: String::new(),
+            sftp_selection_key: String::new(),
+            column_ratio: 0.5,
+        }
+    }
+}
+
+impl SftpPaneProjection {
+    /// Builds a pane projection from a parked per-tab state snapshot. This is
+    /// also used for the focused pane, so split panes never need to share the
+    /// mutable `sftp_*` mirrors.
+    pub(crate) fn from_state(state: &SftpTabState, session_connected: bool) -> Self {
+        let rows = sftp_rows_for(
+            &state.entries,
+            state.show_hidden,
+            state.sort_column,
+            state.sort_ascending,
+            &state.selection,
+        );
+        let visible = visible_entries(
+            &state.entries,
+            state.show_hidden,
+            state.sort_column,
+            state.sort_ascending,
+        );
+        let item_count = visible.len();
+        let dir_count = visible
+            .iter()
+            .filter(|entry| matches!(entry.kind, FsEntryKind::Directory))
+            .count();
+        let hidden_count = state
+            .entries
+            .iter()
+            .filter(|entry| entry.name.starts_with('.'))
+            .count();
+        let empty_text = if item_count > 0 {
+            String::new()
+        } else if hidden_count > 0 && !state.show_hidden {
+            "No visible files. Enable Hidden to include dotfiles.".to_owned()
+        } else {
+            "This directory is empty.".to_owned()
+        };
+        let selected_paths = state
+            .selection
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n");
+        let local_rows = crate::runtime::local_pane::local_rows_for(&state.local);
+        let local_selected_paths = state.local.selected.iter().collect::<Vec<_>>();
+        let local_selected_name_text = local_selected_paths
+            .iter()
+            .filter_map(|path| path.file_name())
+            .take(3)
+            .map(|name| name.to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let local_empty_text = match &state.local.listing {
+            Some(listing) if listing.entries.is_empty() => {
+                if listing.hidden_count > 0 && !state.local.show_hidden {
+                    "No visible files. Enable Hidden to include dotfiles.".to_owned()
+                } else {
+                    "This directory is empty.".to_owned()
+                }
+            }
+            _ => String::new(),
+        };
+        let local_error_text = state
+            .local
+            .error
+            .as_ref()
+            .map(ToString::to_string)
+            .unwrap_or_default();
+        let local_retry_visible = state
+            .local
+            .error
+            .as_ref()
+            .is_none_or(crate::local_fs::LocalFsError::retryable);
+        Self {
+            path_text: state.path.clone(),
+            rows,
+            crumbs: sftp_crumbs_for(&state.path),
+            selected_index: state
+                .selected_index
+                .and_then(|index| i32::try_from(index).ok())
+                .unwrap_or(-1),
+            connected: session_connected
+                && matches!(state.session, SftpSessionLifecycle::Ready { .. }),
+            sort_column_text: state.sort_column.label().to_ascii_lowercase(),
+            sort_ascending: state.sort_ascending,
+            sort_text: format!(
+                "{} {}",
+                state.sort_column.label(),
+                if state.sort_ascending { "↑" } else { "↓" }
+            ),
+            show_hidden: state.show_hidden,
+            item_count: i32::try_from(item_count).unwrap_or(i32::MAX),
+            dir_count: i32::try_from(dir_count).unwrap_or(i32::MAX),
+            selected_count: i32::try_from(state.selection.len()).unwrap_or(i32::MAX),
+            empty_text,
+            error_text: state.listing.error().to_owned(),
+            remote_edit_active: state.remote_edit_session.is_some(),
+            remote_edit_text: state
+                .remote_edit_session
+                .as_ref()
+                .map(|session| format!("{} → {}", session.remote_path, session.local_temp_path))
+                .unwrap_or_default(),
+            local_rows,
+            local_path_text: state.local.dir.display().to_string(),
+            local_sort_column_text: state.local.sort_column.label().to_ascii_lowercase(),
+            local_sort_ascending: state.local.sort_ascending,
+            local_sort_text: format!(
+                "{} {}",
+                state.local.sort_column.label(),
+                if state.local.sort_ascending {
+                    "↑"
+                } else {
+                    "↓"
+                }
+            ),
+            local_show_hidden: state.local.show_hidden,
+            local_item_count: state
+                .local
+                .listing
+                .as_ref()
+                .map(|listing| i32::try_from(listing.item_count).unwrap_or(i32::MAX))
+                .unwrap_or(0),
+            local_dir_count: state
+                .local
+                .listing
+                .as_ref()
+                .map(|listing| i32::try_from(listing.dir_count).unwrap_or(i32::MAX))
+                .unwrap_or(0),
+            local_selected_count: i32::try_from(state.local.selected.len()).unwrap_or(i32::MAX),
+            local_empty_text,
+            local_error_text,
+            local_retry_visible,
+            local_selected_name_text,
+            local_selection_key: local_selected_paths
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join("\n"),
+            sftp_selection_key: selected_paths,
+            column_ratio: state.column_ratio,
+        }
+    }
 }
 
 /// Value-only SFTP listing placeholder state (the row listing itself is data).

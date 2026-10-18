@@ -29,6 +29,7 @@ mod local_pane;
 mod local_terminal;
 mod logging;
 mod menus;
+mod mode_switch;
 mod panels;
 mod projection;
 mod proxies;
@@ -67,9 +68,10 @@ pub(crate) use sftp::normalize_remote_path;
 #[cfg(test)]
 pub(crate) use sftp::parent_remote_path;
 pub(crate) use sftp::parse_sftp_permissions;
-pub use sftp::SftpCrumbData;
 pub(crate) use sftp::LiveSftpClient;
+pub use sftp::SftpCrumbData;
 pub(crate) use sftp::SftpListingState;
+pub use sftp::SftpPaneProjection;
 pub use sftp::SftpRowData;
 pub(crate) use sftp::SftpSessionLifecycle;
 pub(crate) use ssh_config::tunnel_config_summary;
@@ -110,15 +112,15 @@ pub(crate) use logging::LoggingDialogState;
 pub(crate) use panels::SettingsTerminalStatus;
 pub use panels::TunnelRowData;
 // NET-1：代理管理器页与 session editor 代理选择共用。
+pub use projection::AppProjection;
+pub use projection::PanelFrameData;
+pub use projection::SplitHandleData;
 pub(crate) use proxies::is_legacy_proxy_profile_id;
 pub(crate) use proxies::proxy_protocol_display;
 pub(crate) use proxies::proxy_protocol_index;
 pub(crate) use proxies::ProxyProfileOptionData;
 pub(crate) use proxies::ProxyRowData;
 pub(crate) use proxies::ProxyTestMessage;
-pub use projection::AppProjection;
-pub use projection::PanelFrameData;
-pub use projection::SplitHandleData;
 pub use quick_connect::QuickConnectRowData;
 pub use quick_connect::QuickLinkRowData;
 // N5：外观/文件夹默认值（session_runtime、bootstrap、projection 消费）。
@@ -130,12 +132,10 @@ use crate::{
     error::AppError, error::AppResult, session_runtime::SessionRuntime, sftp_view::SftpSortColumn,
 };
 use std::{
-    cell::Cell, collections::BTreeMap, collections::BTreeSet, env, fmt, fs,
-    path::Path, path::PathBuf, sync::Arc,
+    cell::Cell, collections::BTreeMap, collections::BTreeSet, env, fmt, fs, path::Path,
+    path::PathBuf, sync::Arc,
 };
-use yshell_config::{
-    ConfigDocument, ConfigStore, LoadOutcome, PanelSide, QuickLink, ThemeCatalog,
-};
+use yshell_config::{ConfigDocument, ConfigStore, LoadOutcome, PanelSide, QuickLink, ThemeCatalog};
 use yshell_core::CommandDispatcher;
 use yshell_core::CoreCommandDispatcher;
 use yshell_core::SessionCommand;
@@ -165,10 +165,13 @@ impl AppRuntime {
         secret_store_kind: SecretStoreKind,
     ) -> AppResult<Self> {
         let config_store = ConfigStore::new(config_dir.clone());
-        let (LoadOutcome {
-            mut document,
-            recovered_from_backup,
-        }, load_warnings) = config_store
+        let (
+            LoadOutcome {
+                mut document,
+                recovered_from_backup,
+            },
+            load_warnings,
+        ) = config_store
             .load_or_recover_with_warnings()
             .map_err(AppError::from_error)?;
         let (mut theme_catalog, _theme_warnings) = ThemeCatalog::load(&config_dir);
@@ -184,6 +187,11 @@ impl AppRuntime {
         }
         let terminal = document.terminal.clone();
         let remembered_local_directory = document.ui.local_directory.clone();
+        let default_local_dir = remembered_local_directory
+            .as_deref()
+            .map(PathBuf::from)
+            .filter(|path| path.is_dir())
+            .unwrap_or_else(crate::local_fs::default_local_dir);
         let persistent_known_hosts = config_store
             .load_known_hosts()
             .map_err(AppError::from_error)?;
@@ -202,6 +210,7 @@ impl AppRuntime {
             focused_window: None,
             projection_window: Cell::new(None),
             pending_close_windows: BTreeSet::new(),
+            requested_window_close: None,
             ui_dirty: false,
             terminal_poll_cursor: 0,
             terminal_viewport_hint: (120, 32),
@@ -253,22 +262,18 @@ impl AppRuntime {
             sftp_sort_column: SftpSortColumn::Name,
             sftp_sort_ascending: true,
             sftp_show_hidden: false,
+            sftp_column_ratio: 0.5,
             sftp_session: SftpSessionLifecycle::Disconnected { session_key: None },
             sftp_live: BTreeMap::new(),
-            sftp_view_cache: BTreeMap::new(),
+            sftp_tab_states: BTreeMap::new(),
+            default_local_dir: default_local_dir.clone(),
             sftp_listing_pending: false,
             remote_edit_session: None,
             transfer_queue: TransferQueue::default(),
             next_transfer_ordinal: 1,
-            local_pane: {
-                let mut pane = LocalPaneState::default();
-                if let Some(path) = remembered_local_directory {
-                    let candidate = std::path::PathBuf::from(path);
-                    if candidate.is_dir() {
-                        pane.dir = candidate;
-                    }
-                }
-                pane
+            local_pane: LocalPaneState {
+                dir: default_local_dir,
+                ..LocalPaneState::default()
             },
             sftp_selection: BTreeSet::new(),
             sftp_selection_anchor: None,
@@ -295,9 +300,6 @@ impl AppRuntime {
             keychain: keychain.map(RuntimeKeychain),
             logging_dialog: LoggingDialogState::default(),
             last_logging_directory: None,
-            quick_connect_input: String::new(),
-            quick_connect_overlay_open: true,
-            quick_connect_error_text: String::new(),
             quick_connect_last_target: String::new(),
             pending_quick_connect_targets: BTreeMap::new(),
             recent_saved_usage: Vec::new(),
@@ -490,6 +492,7 @@ impl AppRuntime {
     /// 窗口尚未创建/尚未同步视口时退回 `120x32`（`LocalPtyConfig` 默认尺寸为
     /// `80x24`，这里给一个更接近常见终端窗口的起点）。
     #[must_use]
+    #[allow(dead_code)]
     pub const fn local_terminal_initial_size(&self) -> (u16, u16) {
         self.terminal_viewport_hint
     }
@@ -526,6 +529,9 @@ pub struct AppRuntime {
     pub(crate) projection_window: Cell<Option<u64>>,
     /// N7：等待"关闭窗口 = 断开连接"确认的窗口集合。
     pub(crate) pending_close_windows: BTreeSet<u64>,
+    /// A window whose last tab was just closed; the WindowManager drains this
+    /// on the next tick and runs the normal window-close flow.
+    pub(crate) requested_window_close: Option<u64>,
     /// N7：UI 脏标记（窗口回调的任何变更置位；应用级定时器消费后广播所有窗口）。
     pub(crate) ui_dirty: bool,
     /// N0 轮询游标：非活动标签轮转的起点（对 `tabs` 顺序取模）。
@@ -596,6 +602,8 @@ pub struct AppRuntime {
     pub(crate) sftp_sort_column: SftpSortColumn,
     pub(crate) sftp_sort_ascending: bool,
     pub(crate) sftp_show_hidden: bool,
+    /// Focused SFTP tab's local/remote split ratio (default 0.5, per tab).
+    pub(crate) sftp_column_ratio: f32,
     pub(crate) sftp_session: SftpSessionLifecycle,
     /// UI-thread SFTP clients keyed by runtime session.
     ///
@@ -604,8 +612,14 @@ pub struct AppRuntime {
     /// across tab switches so revisiting a connected session stays instant;
     /// cleared on disconnect / transport failure for that session.
     pub(crate) sftp_live: BTreeMap<String, LiveSftpClient>,
-    /// Last visible SFTP panel per session (restored on tab activate).
-    pub(crate) sftp_view_cache: BTreeMap<String, sftp::SftpViewCache>,
+    /// Parked per-SFTP-tab view state, keyed by tab id.
+    ///
+    /// Only the focused SFTP tab is mirrored into the `sftp_*` fields above;
+    /// switching focus parks the current tab and restores the next one. Split
+    /// panes render non-focused SFTP tabs from these parked snapshots.
+    pub(crate) sftp_tab_states: BTreeMap<String, sftp::SftpTabState>,
+    /// Default directory for a freshly created SFTP tab's local column.
+    pub(crate) default_local_dir: PathBuf,
     /// Tab activate deferred the first listing for a session; drain on tick.
     pub(crate) sftp_listing_pending: bool,
     pub(crate) remote_edit_session: Option<RemoteEditSession>,
@@ -650,15 +664,6 @@ pub struct AppRuntime {
     pub(crate) logging_dialog: LoggingDialogState,
     /// N6："上次使用目录"：手动日志开启成功后记住，作为下次弹窗默认保存位置。
     pub(crate) last_logging_directory: Option<PathBuf>,
-    /// N2：Quick Connect 输入框内容（宿主与页面双向绑定）。
-    pub(crate) quick_connect_input: String,
-    /// TAB-6：Quick Connect 覆盖层是否打开（工作区级状态，不占标签）。
-    ///
-    /// 启动时默认打开（第一帧仍显示 Quick Connect）；关闭后即使零标签也不强制重开
-    /// （D1：零标签是合法工作区状态）。打开/关闭不改变 `tabs`。
-    pub(crate) quick_connect_overlay_open: bool,
-    /// N2：非法输入的内联提示（空 = 无错误）。
-    pub(crate) quick_connect_error_text: String,
     /// N2：最近一次连接成功的目标（"保存为会话…"入口）。
     pub(crate) quick_connect_last_target: String,
     /// N2：QC 直连的挂起目标（session key → canonical），连接成功后落历史。
@@ -890,12 +895,6 @@ impl fmt::Debug for AppRuntime {
             .field("keychain", &self.keychain)
             .field("logging_dialog", &self.logging_dialog)
             .field("last_logging_directory", &self.last_logging_directory)
-            .field("quick_connect_input", &self.quick_connect_input)
-            .field(
-                "quick_connect_overlay_open",
-                &self.quick_connect_overlay_open,
-            )
-            .field("quick_connect_error_text", &self.quick_connect_error_text)
             .field("quick_connect_last_target", &self.quick_connect_last_target)
             .field(
                 "pending_quick_connect_targets",

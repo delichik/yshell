@@ -5,7 +5,7 @@
 ## 1. 全局规则
 
 - 右键菜单只显示与当前上下文相关的操作。
-- 不适用的常用操作可以 disabled，但必须有 tooltip 说明原因。
+- 标签、终端、SFTP 等模式专属的菜单项在不适用的模式下直接隐藏；只有当前上下文仍可执行、但暂时不满足条件的常用项才 disabled，并必须有 tooltip 说明原因。
 - 危险操作使用红色文字或危险图标，并且点击后进入确认弹窗。
 - 菜单项顺序固定：打开/连接类、编辑类、发送/传输类、视图类、危险类。
 - macOS 支持 `Ctrl + 左键` 等同右键。
@@ -32,6 +32,7 @@
 | Clear Scrollback | scrollback 非空 | 打开 Clear Scrollback Confirmation。 | 危险操作。 |
 | Save Output As... | scrollback 非空 | 打开保存文件对话框。 | 保存 sanitized text。 |
 | Logging Settings... | 当前 session 可编辑 | 打开 Session Editor 的 Logging section。 | |
+| Switch to SFTP | 当前 active 标签为 connected SSH terminal | 关闭 shell 通道但复用同一 SSH transport，原标签原地变为 SFTP。 | 终端屏幕与滚动缓冲不保留。 |
 
 > 实现状态（2026-09-28，N9）：终端右键为「发送按键到全部标签 / 发送按键到可见标签 / 停止发送按键」；**不弹确认**（D23，替代 E-052 的 KEYS 确认流），改为状态栏 chip（`SYNC → n targets`）+ 一键停止；`Visible` 在分屏落地前等同「当前窗口全部已连接标签」（菜单 tooltip 已注明）。标签右键提供「接收按键输入」勾选；源/目标标签角标 `SRC`/`RCV`。控制键广播在 chip 上显示非阻塞警示（替代 E-054 的确认流）。
 
@@ -71,6 +72,8 @@
 
 触发区域：WorkspaceTabs 的标签主体。
 
+标签有三种模式：New Tab（快速连接）、Terminal、SFTP。分屏、拖拽、关闭、重命名、迁移等标签机制对三种模式一致；差异只体现在内容区、标签图标和模式专属菜单项。New Tab 只保留标签级操作（关闭 / 重命名 / 分屏 / 迁移）；Reconnect、Disconnect、Receive Key Input、Switch 等会话/模式操作在 New Tab 上直接隐藏。SFTP 标签隐藏 Receive Key Input。
+
 | 菜单项 | 启用条件 | 左键点击行为 |
 |---|---|---|
 | Reconnect | 标签断开或错误 | 重连该标签的 session。 |
@@ -82,12 +85,16 @@
 | Split Right | pane 数小于 4 | 移到右侧新 pane。 |
 | Split Down | pane 数小于 4 | 移到下方新 pane。 |
 | Move to Pane | 存在其它 pane | 展开 pane 子菜单。 |
+| Switch to SFTP | 标签为 connected SSH terminal | 关闭 shell 通道但保留同一 SSH transport，原标签原地转为 SFTP。 |
+| Switch to Terminal | 标签为 connected SFTP | 关闭 SFTP 通道，在同一 SSH transport 上打开新 shell，原标签原地转为 Terminal。 |
 | Close Others | 标签数大于 1 | 关闭其它标签。 |
 | Close Tabs to Left | 左侧有标签 | 关闭左侧标签。 |
 | Close Tabs to Right | 右侧有标签 | 关闭右侧标签。 |
 | Close All Tabs | 标签数大于 0 | 关闭当前 pane 内全部标签，活动会话逐个确认。 |
 | Close Disconnected Tabs | 存在 disconnected/error 标签 | 关闭所有已断开或错误标签。 |
 | Close | 始终启用 | 关闭当前标签。 |
+
+> 实现状态（2026-10-18）：标签右键已按 New Tab / Terminal / SFTP 三种模式过滤菜单项；Terminal 与 SFTP 可在原标签内双向切换，切换时复用同一 SSH transport，但会重建 shell / SFTP 通道。关闭窗口内最后一个标签等同触发窗口关闭（主窗口进入退出确认）。
 
 ## 4. SFTP 右键菜单
 
@@ -137,7 +144,10 @@
 | Refresh | SFTP connected | 刷新当前目录。 |
 | Show Hidden Files | SFTP connected | 切换隐藏文件显示。 |
 | Copy Current Path | SFTP connected | 复制当前远程目录。 |
+| Switch to Terminal | SFTP connected | 原标签原地转为 Terminal，复用同一 SSH transport。 |
 | Open Local Download Folder | 始终启用 | 打开默认下载目录。 |
+
+本地栏空白区域的右键菜单在文件操作之外也提供同一条 `Switch to Terminal`。
 
 ### 4.4 SFTP 多选
 
@@ -163,7 +173,7 @@
 | Open in New Tab | 始终启用 | 打开新标签。 |
 | Open in Split Right | 当前工作区 pane 数小于 4 | 新建右侧 pane 并连接。 |
 | Open in Split Down | 当前工作区 pane 数小于 4 | 新建下方 pane 并连接。 |
-| Open SFTP | 可连接 SSH | 连接后打开 SFTP。 |
+| Open SFTP | 可连接 SSH | 创建连接的 SFTP 标签，固定本地/远程左右两栏。 |
 | Edit Session... | 始终启用 | 打开 Session Editor。 |
 | Duplicate | 始终启用 | 复制 session，名称追加 `Copy`，并打开编辑器。 |
 | Duplicate Without Secrets | 始终启用 | 复制 session 但不复制 password/passphrase secret_ref。 |
