@@ -65,11 +65,21 @@ impl AppRuntime {
                 .save(&self.config_document)
                 .map_err(AppError::from_error)?;
         }
-        self.status_text = if enabled {
-            "Session close confirmation is enabled.".to_owned()
+        if enabled {
+            self.set_status_kind(
+                "settings-close-confirm-enabled",
+                "Session close confirmation is enabled.".to_owned(),
+                String::new(),
+                String::new(),
+            );
         } else {
-            "Session close confirmation is disabled.".to_owned()
-        };
+            self.set_status_kind(
+                "settings-close-confirm-disabled",
+                "Session close confirmation is disabled.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+        }
         Ok(self.projection())
     }
 
@@ -87,11 +97,21 @@ impl AppRuntime {
                 .save(&self.config_document)
                 .map_err(AppError::from_error)?;
         }
-        self.status_text = if enabled {
-            "Quit confirmation is enabled.".to_owned()
+        if enabled {
+            self.set_status_kind(
+                "settings-quit-confirm-enabled",
+                "Quit confirmation is enabled.".to_owned(),
+                String::new(),
+                String::new(),
+            );
         } else {
-            "Quit confirmation is disabled.".to_owned()
-        };
+            self.set_status_kind(
+                "settings-quit-confirm-disabled",
+                "Quit confirmation is disabled.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+        }
         Ok(self.projection())
     }
 
@@ -111,15 +131,23 @@ impl AppRuntime {
                 path = %yshell_logging::debug_log_path(&self.config_dir).display(),
                 "debug logging enabled"
             );
-            self.status_text = format!(
-                "Debug logging enabled. Writing to {}.",
-                dir.display()
+            let dir_text = dir.display().to_string();
+            self.set_status_kind(
+                "settings-debug-logging-enabled",
+                format!("Debug logging enabled. Writing to {dir_text}."),
+                dir_text,
+                String::new(),
             );
         } else {
             // Log while the writer is still enabled so the disable event is persisted.
             tracing::info!("debug logging disabled");
             yshell_logging::set_debug_logging_enabled(false);
-            self.status_text = "Debug logging disabled.".to_owned();
+            self.set_status_kind(
+                "settings-debug-logging-disabled",
+                "Debug logging disabled.".to_owned(),
+                String::new(),
+                String::new(),
+            );
         }
         Ok(self.projection())
     }
@@ -192,7 +220,13 @@ impl AppRuntime {
             lines: scrollback_lines,
             max_cells: scrollback_max_cells,
         };
-        self.status_text = self.settings_terminal_status.legacy_text();
+        let status_text = self.settings_terminal_status.legacy_text();
+        self.set_status_kind(
+            "settings-terminal-saved",
+            status_text,
+            scrollback_lines.to_string(),
+            scrollback_max_cells.to_string(),
+        );
         Ok(self.projection())
     }
 
@@ -213,7 +247,13 @@ impl AppRuntime {
         match self.toggle_panel_visible(panel) {
             Ok(projection) => projection,
             Err(error) => {
-                self.status_text = format!("Panel layout error: {error}");
+                let detail = error.to_string();
+                self.set_status_kind(
+                    "panel-layout-error",
+                    format!("Panel layout error: {detail}"),
+                    detail,
+                    String::new(),
+                );
                 self.projection()
             }
         }
@@ -278,23 +318,43 @@ impl AppRuntime {
                     .map(tunnel_config_summary);
                 (summary, session.state)
             });
-        self.status_text = match lookup {
-            None => "No active session to start a tunnel on.".to_owned(),
-            Some((None, _)) => format!("Unknown tunnel `{tunnel_id}`."),
-            Some((Some(summary), state)) if state != SessionState::Connected => {
-                format!("Connect the session before starting tunnel `{summary}`.")
-            }
-            Some((Some(summary), _)) => format!(
-                "Tunnel `{summary}` is configured, but SSH port forwarding is not provisioned by the runtime yet."
+        let (kind, text, param) = match lookup {
+            None => (
+                "tunnel-no-active-session",
+                "No active session to start a tunnel on.".to_owned(),
+                String::new(),
+            ),
+            Some((None, _)) => (
+                "tunnel-unknown",
+                format!("Unknown tunnel `{tunnel_id}`."),
+                tunnel_id.to_owned(),
+            ),
+            Some((Some(summary), state)) if state != SessionState::Connected => (
+                "tunnel-connect-first",
+                format!("Connect the session before starting tunnel `{summary}`."),
+                summary,
+            ),
+            Some((Some(summary), _)) => (
+                "tunnel-not-provisioned",
+                format!(
+                    "Tunnel `{summary}` is configured, but SSH port forwarding is not provisioned by the runtime yet."
+                ),
+                summary,
             ),
         };
+        self.set_status_kind(kind, text, param, String::new());
         self.projection()
     }
 
     /// Stop/Close a tunnel. No live forwarder state exists yet.
     pub fn stop_tunnel(&mut self, tunnel_id: &str) -> AppProjection {
-        self.status_text = format!(
-            "Tunnel `{tunnel_id}` is not running; port forwarding is not provisioned yet."
+        self.set_status_kind(
+            "tunnel-not-running",
+            format!(
+                "Tunnel `{tunnel_id}` is not running; port forwarding is not provisioned yet."
+            ),
+            tunnel_id.to_owned(),
+            String::new(),
         );
         self.projection()
     }

@@ -154,7 +154,12 @@ impl AppRuntime {
                 "Editing defaults for `{folder_name}`. Changes apply to terminals opened afterwards."
             ),
         };
-        self.status_text = format!("Opened folder defaults for `{folder_name}`.");
+        self.set_status_kind(
+            "folder-defaults-opened",
+            format!("Opened folder defaults for `{folder_name}`."),
+            folder_name,
+            String::new(),
+        );
         Ok(self.projection())
     }
 

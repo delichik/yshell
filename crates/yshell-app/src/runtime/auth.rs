@@ -21,21 +21,27 @@ impl AppRuntime {
     pub fn open_known_hosts_manager(&mut self) -> AppProjection {
         self.known_hosts_modal_visible = true;
         self.ensure_known_hosts_selection();
-        self.status_text = format!(
-            "Known hosts manager opened with {} persisted entr{}.",
-            self.known_host_entries().len(),
-            if self.known_host_entries().len() == 1 {
-                "y"
-            } else {
-                "ies"
-            }
+        let count = self.known_host_entries().len();
+        self.set_status_kind(
+            "known-hosts-opened",
+            format!(
+                "Known hosts manager opened with {count} persisted entr{}.",
+                if count == 1 { "y" } else { "ies" }
+            ),
+            count.to_string(),
+            String::new(),
         );
         self.projection()
     }
 
     pub fn close_known_hosts_manager(&mut self) -> AppProjection {
         self.known_hosts_modal_visible = false;
-        self.status_text = "Closed known hosts manager.".to_owned();
+        self.set_status_kind(
+            "known-hosts-closed",
+            "Closed known hosts manager.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -57,7 +63,7 @@ impl AppRuntime {
         } else {
             self.known_hosts_selected_key = Some(entries[0].key.clone());
         }
-        self.status_text = self.known_hosts_selection_legacy_text();
+        self.set_known_hosts_selection_status();
         self.projection()
     }
 
@@ -79,7 +85,7 @@ impl AppRuntime {
         } else {
             self.known_hosts_selected_key = Some(entries[0].key.clone());
         }
-        self.status_text = self.known_hosts_selection_legacy_text();
+        self.set_known_hosts_selection_status();
         self.projection()
     }
 
@@ -93,11 +99,13 @@ impl AppRuntime {
             .save_known_hosts(&self.persistent_known_hosts)
             .map_err(AppError::from_error)?;
         self.ensure_known_hosts_selection();
-        self.status_text = format!(
-            "Removed known host entry for {}:{} from `{}`.",
-            selected.host,
-            selected.port,
-            self.config_store.known_hosts_file().display()
+        let host_text = format!("{}:{}", selected.host, selected.port);
+        let path_text = self.config_store.known_hosts_file().display().to_string();
+        self.set_status_kind(
+            "known-hosts-removed",
+            format!("Removed known host entry for {host_text} from `{path_text}`."),
+            host_text,
+            path_text,
         );
         Ok(self.projection())
     }
@@ -119,9 +127,12 @@ impl AppRuntime {
             .map_err(AppError::from_error)?;
         self.known_hosts_selected_key = None;
         self.known_hosts_clear_confirmation.clear();
-        self.status_text = format!(
-            "Cleared all persisted known hosts from `{}`.",
-            self.config_store.known_hosts_file().display()
+        let path_text = self.config_store.known_hosts_file().display().to_string();
+        self.set_status_kind(
+            "known-hosts-cleared",
+            format!("Cleared all persisted known hosts from `{path_text}`."),
+            path_text,
+            String::new(),
         );
         Ok(self.projection())
     }
@@ -234,6 +245,33 @@ impl AppRuntime {
 
     pub(crate) fn known_hosts_selection_total(&self) -> i32 {
         i32::try_from(self.known_host_entries().len()).unwrap_or(i32::MAX)
+    }
+
+    /// I18N-1：把已知主机选择摘要投影成状态栏 kind。
+    pub(crate) fn set_known_hosts_selection_status(&mut self) {
+        let text = self.known_hosts_selection_legacy_text();
+        match self.known_hosts_selection_kind() {
+            "selected" => {
+                let host_text = format!(
+                    "{}:{}",
+                    self.known_hosts_selection_host_text(),
+                    self.known_hosts_selection_port_text()
+                );
+                self.set_status_kind("known-hosts-selected", text, host_text, String::new());
+            }
+            "empty" => {
+                self.set_status_kind(
+                    "known-hosts-empty",
+                    text,
+                    String::new(),
+                    String::new(),
+                );
+            }
+            _ => {
+                let total = self.known_hosts_selection_total().to_string();
+                self.set_status_kind("known-hosts-loaded", text, total, String::new());
+            }
+        }
     }
 
     pub(crate) fn known_hosts_selection_legacy_text(&self) -> String {
@@ -1151,9 +1189,14 @@ impl AppRuntime {
         self.private_keys_deploy_confirm_visible = false;
         self.ensure_private_keys_selection();
         let count = self.config_document.keys.len();
-        self.status_text = format!(
-            "Private keys manager opened with {count} managed key{}.",
-            if count == 1 { "" } else { "s" }
+        self.set_status_kind(
+            "private-keys-opened",
+            format!(
+                "Private keys manager opened with {count} managed key{}.",
+                if count == 1 { "" } else { "s" }
+            ),
+            count.to_string(),
+            String::new(),
         );
         self.projection()
     }
@@ -1165,7 +1208,12 @@ impl AppRuntime {
         self.private_keys_passphrase_input.clear();
         self.private_keys_remove_confirm_visible = false;
         self.private_keys_deploy_confirm_visible = false;
-        self.status_text = "Closed private keys manager.".to_owned();
+        self.set_status_kind(
+            "private-keys-closed",
+            "Closed private keys manager.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -1211,7 +1259,12 @@ impl AppRuntime {
         self.private_keys_test_result_text.clear();
         self.private_keys_remove_confirm_visible = false;
         self.private_keys_deploy_confirm_visible = false;
-        self.status_text = format!("Selected managed key `{}`.", row.label);
+        self.set_status_kind(
+            "private-key-selected",
+            format!("Selected managed key `{}`.", row.label),
+            row.label.clone(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -1531,9 +1584,12 @@ impl AppRuntime {
         self.host_keys_modal_visible = true;
         self.host_keys_import_visible = false;
         self.ensure_host_keys_selection();
-        self.status_text = format!(
-            "Host keys manager opened with {} persisted host key group(s).",
-            self.host_key_group_data().len()
+        let groups = self.host_key_group_data().len();
+        self.set_status_kind(
+            "host-keys-opened",
+            format!("Host keys manager opened with {groups} persisted host key group(s)."),
+            groups.to_string(),
+            String::new(),
         );
         self.projection()
     }
@@ -1542,7 +1598,12 @@ impl AppRuntime {
         self.host_keys_modal_visible = false;
         self.host_keys_import_visible = false;
         self.host_keys_import_text.clear();
-        self.status_text = "Closed host keys manager.".to_owned();
+        self.set_status_kind(
+            "host-keys-closed",
+            "Closed host keys manager.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -1560,9 +1621,13 @@ impl AppRuntime {
         self.host_keys_selected_group = Some(group_index);
         self.host_keys_selected_entry = Some(entry_index);
         let selected = &groups[group_index];
-        self.status_text = format!(
-            "Selected host key {}:{} ({}).",
-            selected.host, selected.port, selected.entries[entry_index].algorithm
+        let host_text = format!("{}:{}", selected.host, selected.port);
+        let algorithm = selected.entries[entry_index].algorithm.clone();
+        self.set_status_kind(
+            "host-key-selected",
+            format!("Selected host key {host_text} ({algorithm})."),
+            host_text,
+            algorithm,
         );
         self.projection()
     }
@@ -1663,16 +1728,34 @@ impl AppRuntime {
             }
             self.ensure_host_keys_selection();
         }
-        self.host_keys_status_text = if failures.is_empty() {
-            format!("Imported {imported} host key(s).")
+        if failures.is_empty() {
+            let status_text = format!("Imported {imported} host key(s).");
+            self.host_keys_status_text = status_text.clone();
+            self.set_status_kind(
+                "host-keys-imported",
+                status_text,
+                imported.to_string(),
+                String::new(),
+            );
         } else {
-            format!(
-                "Imported {imported} host key(s); {} line(s) skipped: {}",
-                failures.len(),
+            tracing::warn!(
+                target: "yshell::runtime",
+                "host key import skipped lines: {}",
                 failures.join("; ")
-            )
-        };
-        self.status_text = self.host_keys_status_text.clone();
+            );
+            let skipped = failures.len();
+            let status_text = format!(
+                "Imported {imported} host key(s); {skipped} line(s) skipped: {}",
+                failures.join("; ")
+            );
+            self.host_keys_status_text = status_text.clone();
+            self.set_status_kind(
+                "host-keys-imported",
+                status_text,
+                imported.to_string(),
+                skipped.to_string(),
+            );
+        }
         self.projection()
     }
 
@@ -1712,11 +1795,10 @@ impl AppRuntime {
             .save_known_hosts(&self.persistent_known_hosts)
             .map_err(AppError::from_error)?;
         self.ensure_host_keys_selection();
-        self.host_keys_status_text = format!(
-            "Removed the saved host key for {}:{}.",
-            selected.host, selected.port
-        );
-        self.status_text = self.host_keys_status_text.clone();
+        let host_text = format!("{}:{}", selected.host, selected.port);
+        let status_text = format!("Removed the saved host key for {host_text}.");
+        self.host_keys_status_text = status_text.clone();
+        self.set_status_kind("host-key-removed", status_text, host_text, String::new());
         Ok(self.projection())
     }
 
@@ -1727,8 +1809,14 @@ impl AppRuntime {
             .map_err(AppError::from_error)?;
         self.host_keys_selected_group = None;
         self.host_keys_selected_entry = None;
-        self.host_keys_status_text = "Cleared all saved host keys.".to_owned();
-        self.status_text = self.host_keys_status_text.clone();
+        let status_text = "Cleared all saved host keys.".to_owned();
+        self.host_keys_status_text = status_text.clone();
+        self.set_status_kind(
+            "host-keys-cleared",
+            status_text,
+            String::new(),
+            String::new(),
+        );
         Ok(self.projection())
     }
 

@@ -127,11 +127,17 @@ impl AppRuntime {
             self.start_new_proxy();
         }
         let count = self.config_document.proxy_profiles.len();
-        self.proxies_status_text = format!(
+        let status_text = format!(
             "Proxy manager opened with {count} managed profile{}.",
             if count == 1 { "" } else { "s" }
         );
-        self.status_text = self.proxies_status_text.clone();
+        self.proxies_status_text = status_text.clone();
+        self.set_status_kind(
+            "proxies-opened",
+            status_text,
+            count.to_string(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -142,7 +148,12 @@ impl AppRuntime {
         self.proxies_remove_confirm_visible = false;
         self.proxies_remove_blocked = false;
         self.proxies_referencing_text.clear();
-        self.status_text = "Closed proxy manager.".to_owned();
+        self.set_status_kind(
+            "proxies-closed",
+            "Closed proxy manager.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -157,8 +168,14 @@ impl AppRuntime {
         self.proxies_remove_blocked = false;
         self.proxies_referencing_text.clear();
         self.proxies_test_result_text.clear();
-        self.proxies_status_text = format!("Selected proxy profile `{}`.", row.name);
-        self.status_text = self.proxies_status_text.clone();
+        let status_text = format!("Selected proxy profile `{}`.", row.name);
+        self.proxies_status_text = status_text.clone();
+        self.set_status_kind(
+            "proxies-selected",
+            status_text,
+            row.name.clone(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -234,8 +251,9 @@ impl AppRuntime {
         }
         self.proxies_selected_id = Some(new_id);
         self.begin_edit_proxy();
-        self.proxies_status_text = format!("Duplicated proxy profile as `{name}`.");
-        self.status_text = self.proxies_status_text.clone();
+        let status_text = format!("Duplicated proxy profile as `{name}`.");
+        self.proxies_status_text = status_text.clone();
+        self.set_status_kind("proxies-duplicated", status_text, name, String::new());
         self.projection()
     }
 
@@ -295,12 +313,22 @@ impl AppRuntime {
                 self.proxies_editor_id = Some(id);
                 self.proxies_editor_password.clear();
                 self.proxies_remove_blocked = false;
-                self.proxies_status_text = if created {
+                let status_text = if created {
                     "Saved the new proxy profile.".to_owned()
                 } else {
                     "Saved proxy profile changes; all referencing sessions use them.".to_owned()
                 };
-                self.status_text = self.proxies_status_text.clone();
+                self.proxies_status_text = status_text.clone();
+                self.set_status_kind(
+                    if created {
+                        "proxies-saved-new"
+                    } else {
+                        "proxies-saved-changes"
+                    },
+                    status_text,
+                    String::new(),
+                    String::new(),
+                );
             }
             Err(error) => {
                 self.proxies_status_text = format!("Cannot save proxy profile: {error}");
@@ -409,20 +437,33 @@ impl AppRuntime {
             self.proxies_remove_blocked = false;
             self.proxies_referencing_text.clear();
             self.proxies_remove_confirm_visible = true;
-            self.proxies_status_text =
-                format!("Confirm deleting proxy profile `{}`.", profile.name);
+            let status_text = format!("Confirm deleting proxy profile `{}`.", profile.name);
+            self.proxies_status_text = status_text.clone();
+            self.set_status_kind(
+                "proxies-remove-confirm",
+                status_text,
+                profile.name,
+                String::new(),
+            );
         } else {
             self.proxies_remove_confirm_visible = false;
             self.proxies_remove_blocked = true;
-            self.proxies_referencing_text = references.join(", ");
-            self.proxies_status_text = format!(
+            let referencing = references.join(", ");
+            self.proxies_referencing_text = referencing.clone();
+            let status_text = format!(
                 "Cannot delete `{}`: it is used by {} saved session(s): {}. Set those sessions to No Proxy first.",
                 profile.name,
                 references.len(),
-                references.join(", ")
+                referencing
+            );
+            self.proxies_status_text = status_text.clone();
+            self.set_status_kind(
+                "proxies-remove-blocked",
+                status_text,
+                profile.name,
+                referencing,
             );
         }
-        self.status_text = self.proxies_status_text.clone();
         self.projection()
     }
 
@@ -457,8 +498,14 @@ impl AppRuntime {
                 if self.proxies_selected_id.is_some() {
                     self.begin_edit_proxy();
                 }
-                self.proxies_status_text = format!("Deleted proxy profile `{}`.", removed.name);
-                self.status_text = self.proxies_status_text.clone();
+                let status_text = format!("Deleted proxy profile `{}`.", removed.name);
+                self.proxies_status_text = status_text.clone();
+                self.set_status_kind(
+                    "proxies-deleted",
+                    status_text,
+                    removed.name,
+                    String::new(),
+                );
             }
             Err(error) => {
                 self.proxies_status_text = format!("Delete failed: {error}");
@@ -488,11 +535,17 @@ impl AppRuntime {
             Ok(()) => {
                 self.proxies_remove_blocked = false;
                 self.proxies_referencing_text.clear();
-                self.proxies_status_text = format!(
+                let status_text = format!(
                     "Cleared proxy `{}` from {cleared} saved session(s); they now use No Proxy.",
                     profile.name
                 );
-                self.status_text = self.proxies_status_text.clone();
+                self.proxies_status_text = status_text.clone();
+                self.set_status_kind(
+                    "proxies-cleared-from-sessions",
+                    status_text,
+                    profile.name,
+                    cleared.to_string(),
+                );
             }
             Err(error) => {
                 self.proxies_status_text = format!("Cannot update saved sessions: {error}");

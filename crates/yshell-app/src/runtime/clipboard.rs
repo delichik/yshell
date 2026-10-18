@@ -56,7 +56,12 @@ impl AppRuntime {
             .map(PathBuf::from)
             .collect::<Vec<_>>();
         if paths.is_empty() {
-            self.status_text = "Select remote entries before copying.".to_owned();
+            self.set_status_kind(
+                "sftp-select-remote-copy",
+                "Select remote entries before copying.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         }
         let count = paths.len();
@@ -65,17 +70,29 @@ impl AppRuntime {
             paths,
             cut: false,
         });
-        self.status_text = format!("Copied {count} remote entr{}.", plural_ies(count));
+        self.set_status_kind(
+            "clipboard-copied-remote",
+            format!("Copied {count} remote entr{}.", plural_ies(count)),
+            count.to_string(),
+            String::new(),
+        );
         self.projection()
     }
 
     /// Ctrl+X on the focused remote list.
     pub fn cut_remote_selection_to_clipboard(&mut self) -> AppProjection {
         let projection = self.copy_remote_selection_to_clipboard();
-        if let Some(clipboard) = self.file_clipboard.as_mut() {
+        let cut_count = self.file_clipboard.as_mut().map(|clipboard| {
             clipboard.cut = true;
-            let count = clipboard.paths.len();
-            self.status_text = format!("Cut {count} remote entr{}.", plural_ies(count));
+            clipboard.paths.len()
+        });
+        if let Some(count) = cut_count {
+            self.set_status_kind(
+                "clipboard-cut-remote",
+                format!("Cut {count} remote entr{}.", plural_ies(count)),
+                count.to_string(),
+                String::new(),
+            );
         }
         projection
     }
@@ -84,7 +101,12 @@ impl AppRuntime {
     pub fn copy_local_selection_to_clipboard(&mut self) -> AppProjection {
         let paths = self.local_selected_paths();
         if paths.is_empty() {
-            self.status_text = "Select local entries before copying.".to_owned();
+            self.set_status_kind(
+                "clipboard-select-local-copy",
+                "Select local entries before copying.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         }
         let count = paths.len();
@@ -93,17 +115,29 @@ impl AppRuntime {
             paths,
             cut: false,
         });
-        self.status_text = format!("Copied {count} local entr{}.", plural_ies(count));
+        self.set_status_kind(
+            "clipboard-copied-local",
+            format!("Copied {count} local entr{}.", plural_ies(count)),
+            count.to_string(),
+            String::new(),
+        );
         self.projection()
     }
 
     /// Ctrl+X on the focused local list.
     pub fn cut_local_selection_to_clipboard(&mut self) -> AppProjection {
         let projection = self.copy_local_selection_to_clipboard();
-        if let Some(clipboard) = self.file_clipboard.as_mut() {
+        let cut_count = self.file_clipboard.as_mut().map(|clipboard| {
             clipboard.cut = true;
-            let count = clipboard.paths.len();
-            self.status_text = format!("Cut {count} local entr{}.", plural_ies(count));
+            clipboard.paths.len()
+        });
+        if let Some(count) = cut_count {
+            self.set_status_kind(
+                "clipboard-cut-local",
+                format!("Cut {count} local entr{}.", plural_ies(count)),
+                count.to_string(),
+                String::new(),
+            );
         }
         projection
     }
@@ -133,7 +167,12 @@ impl AppRuntime {
             Some(ClipboardSide::Local) => self.paste_file_clipboard_into_remote(),
             Some(ClipboardSide::Remote) => self.paste_file_clipboard_into_local(),
             None => {
-                self.status_text = "The file clipboard is empty.".to_owned();
+                self.set_status_kind(
+                    "clipboard-empty",
+                    "The file clipboard is empty.".to_owned(),
+                    String::new(),
+                    String::new(),
+                );
                 self.projection()
             }
         }
@@ -142,7 +181,12 @@ impl AppRuntime {
     /// Ctrl+V: paste the clipboard into the current directory of the target pane.
     pub fn paste_file_clipboard_into_remote(&mut self) -> AppProjection {
         let Some(clipboard) = self.file_clipboard.clone() else {
-            self.status_text = "The file clipboard is empty.".to_owned();
+            self.set_status_kind(
+                "clipboard-empty",
+                "The file clipboard is empty.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         };
         match clipboard.side {
@@ -151,7 +195,13 @@ impl AppRuntime {
                 let ids = match self.submit_upload_paths(&paths, None, OverwritePolicy::Ask) {
                     Ok(ids) => ids,
                     Err(error) => {
-                        self.status_text = error.to_string();
+                        let detail = error.to_string();
+                        self.set_status_kind(
+                            "clipboard-upload-error",
+                            format!("File clipboard upload failed: {detail}"),
+                            detail,
+                            String::new(),
+                        );
                         return self.projection();
                     }
                 };
@@ -171,7 +221,13 @@ impl AppRuntime {
                 if let Err(error) =
                     self.submit_remote_copy_entries(&entries, &destination, OverwritePolicy::Ask)
                 {
-                    self.status_text = error.to_string();
+                    let detail = error.to_string();
+                    self.set_status_kind(
+                        "clipboard-copy-error",
+                        format!("File clipboard copy failed: {detail}"),
+                        detail,
+                        String::new(),
+                    );
                     return self.projection();
                 }
                 if clipboard.cut {
@@ -185,14 +241,24 @@ impl AppRuntime {
     /// Ctrl+V into the local pane.
     pub fn paste_file_clipboard_into_local(&mut self) -> AppProjection {
         let Some(clipboard) = self.file_clipboard.clone() else {
-            self.status_text = "The file clipboard is empty.".to_owned();
+            self.set_status_kind(
+                "clipboard-empty",
+                "The file clipboard is empty.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         };
         match clipboard.side {
             ClipboardSide::Remote => {
                 let entries = self.clipboard_remote_entries(&clipboard.paths);
                 if entries.is_empty() {
-                    self.status_text = "The copied remote entries are no longer listed.".to_owned();
+                    self.set_status_kind(
+                        "clipboard-remote-entries-missing",
+                        "The copied remote entries are no longer listed.".to_owned(),
+                        String::new(),
+                        String::new(),
+                    );
                     return self.projection();
                 }
                 let destination = self.local_pane.dir.clone();
@@ -203,7 +269,13 @@ impl AppRuntime {
                 ) {
                     Ok(ids) => ids,
                     Err(error) => {
-                        self.status_text = error.to_string();
+                        let detail = error.to_string();
+                        self.set_status_kind(
+                            "clipboard-download-error",
+                            format!("File clipboard download failed: {detail}"),
+                            detail,
+                            String::new(),
+                        );
                         return self.projection();
                     }
                 };
@@ -267,16 +339,31 @@ impl AppRuntime {
         if clipboard.cut {
             self.file_clipboard = None;
         }
-        self.status_text = if failures.is_empty() {
-            format!("Pasted {copied} local entr{}.", plural_ies(copied))
+        if failures.is_empty() {
+            self.set_status_kind(
+                "clipboard-pasted-local",
+                format!("Pasted {copied} local entr{}.", plural_ies(copied)),
+                copied.to_string(),
+                String::new(),
+            );
         } else {
-            format!(
-                "Pasted {copied} local entr{}; {} failed: {}",
-                plural_ies(copied),
-                failures.len(),
+            tracing::warn!(
+                target: "yshell::runtime",
+                "local clipboard paste failed for: {}",
                 failures.join("; ")
-            )
-        };
+            );
+            self.set_status_kind(
+                "clipboard-pasted-local",
+                format!(
+                    "Pasted {copied} local entr{}; {} failed: {}",
+                    plural_ies(copied),
+                    failures.len(),
+                    failures.join("; ")
+                ),
+                copied.to_string(),
+                failures.len().to_string(),
+            );
+        }
     }
 }
 

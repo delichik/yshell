@@ -61,11 +61,21 @@ impl AppRuntime {
     pub fn open_quick_connect(&mut self) -> AppProjection {
         let was_open = self.quick_connect_overlay_open;
         self.quick_connect_overlay_open = true;
-        self.status_text = if was_open {
-            "Activated the Quick Connect page.".to_owned()
+        if was_open {
+            self.set_status_kind(
+                "quick-connect-activated",
+                "Activated the Quick Connect page.".to_owned(),
+                String::new(),
+                String::new(),
+            );
         } else {
-            "Opened the Quick Connect page.".to_owned()
-        };
+            self.set_status_kind(
+                "quick-connect-opened",
+                "Opened the Quick Connect page.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+        }
         self.projection()
     }
 
@@ -84,7 +94,12 @@ impl AppRuntime {
     /// 关闭 Quick Connect 覆盖层（无论当前是否可见，用于重置/测试路径）。
     pub fn close_quick_connect(&mut self) -> AppProjection {
         self.quick_connect_overlay_open = false;
-        self.status_text = "Closed the Quick Connect page.".to_owned();
+        self.set_status_kind(
+            "quick-connect-closed",
+            "Closed the Quick Connect page.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -125,8 +140,14 @@ impl AppRuntime {
             Ok(target) => target,
             Err(error) => {
                 self.quick_connect_input = input.to_owned();
-                self.quick_connect_error_text = error.to_string();
-                self.status_text = format!("Quick Connect error: {error}");
+                let detail = error.to_string();
+                self.quick_connect_error_text = detail.clone();
+                self.set_status_kind(
+                    "quick-connect-error",
+                    format!("Quick Connect error: {detail}"),
+                    detail,
+                    String::new(),
+                );
                 return Ok(self.projection());
             }
         };
@@ -214,7 +235,7 @@ impl AppRuntime {
         history.truncate(limit);
         // D37：`quick-connect-history` 现被摘要模板占用（`TextFormats.status-message`），
         // 持久化失败改用独立 kind，避免被套进 "{0} recorded target(s)…" 模板。
-        self.persist_config_with_status("quick-connect-history-persist-failed");
+        self.persist_config_with_status();
     }
 
     fn mark_saved_session_used(&mut self, profile_id: &str) {
@@ -236,7 +257,12 @@ impl AppRuntime {
             .iter()
             .any(|link| link.target == canonical)
         {
-            self.status_text = format!("`{canonical}` is already a quick link.");
+            self.set_status_kind(
+                "quick-link-already",
+                format!("`{canonical}` is already a quick link."),
+                canonical.clone(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         // D13：快速链接只存目标；标签优先用同目标的已保存会话名。
@@ -257,8 +283,13 @@ impl AppRuntime {
             target: canonical.clone(),
             sort_order,
         });
-        self.persist_config_with_status("quick-connect-pin");
-        self.status_text = format!("Pinned `{canonical}` as a quick link.");
+        self.persist_config_with_status();
+        self.set_status_kind(
+            "quick-link-pinned",
+            format!("Pinned `{canonical}` as a quick link."),
+            canonical,
+            String::new(),
+        );
         Ok(self.projection())
     }
 
@@ -269,11 +300,21 @@ impl AppRuntime {
             .quick_links
             .retain(|link| link.id != id);
         if self.config_document.quick_links.len() == before {
-            self.status_text = format!("Quick link `{id}` was not found.");
+            self.set_status_kind(
+                "quick-link-missing",
+                format!("Quick link `{id}` was not found."),
+                id.to_owned(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
-        self.persist_config_with_status("quick-connect-unpin");
-        self.status_text = "Removed the quick link.".to_owned();
+        self.persist_config_with_status();
+        self.set_status_kind(
+            "quick-link-removed",
+            "Removed the quick link.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         Ok(self.projection())
     }
 
@@ -281,14 +322,24 @@ impl AppRuntime {
     pub fn quick_connect_history_clear(&mut self) -> AppResult<AppProjection> {
         let cleared = self.config_document.quick_connect.history.len();
         self.config_document.quick_connect.history.clear();
-        self.persist_config_with_status("quick-connect-clear");
-        self.status_text = format!("Cleared {cleared} Quick Connect history entrie(s).");
+        self.persist_config_with_status();
+        self.set_status_kind(
+            "quick-connect-history-cleared",
+            format!("Cleared {cleared} Quick Connect history entrie(s)."),
+            cleared.to_string(),
+            String::new(),
+        );
         Ok(self.projection())
     }
 
     /// 复制成功后的状态栏文案（剪贴板写入由 bootstrap 完成）。
     pub fn quick_connect_copied_status(&mut self, target: &str) -> AppProjection {
-        self.status_text = format!("Copied `{target}` to the clipboard.");
+        self.set_status_kind(
+            "quick-connect-copied",
+            format!("Copied `{target}` to the clipboard."),
+            target.to_owned(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -306,9 +357,12 @@ impl AppRuntime {
         self.editor_auth_test_status = EditorAuthTestStatus::Hint;
         self.editor_set_theme_baseline(None);
         self.editor_baseline = Some(self.editor.clone());
-        self.status_text = format!(
-            "Session editor opened with Quick Connect target `{}`.",
-            parsed.canonical()
+        let canonical = parsed.canonical();
+        self.set_status_kind(
+            "session-editor-qc-target",
+            format!("Session editor opened with Quick Connect target `{canonical}`."),
+            canonical,
+            String::new(),
         );
         Ok(self.projection())
     }
@@ -439,12 +493,13 @@ impl AppRuntime {
     }
 
     /// 写回配置；失败只更新状态栏（§1.5：保存失败不阻断连接）。
-    fn persist_config_with_status(&mut self, status_kind: &str) {
+    fn persist_config_with_status(&mut self) {
         if let Err(error) = self.config_store.save(&self.config_document) {
+            let detail = error.to_string();
             self.set_status_kind(
-                status_kind,
-                format!("Failed to persist Quick Connect state: {error}"),
-                String::new(),
+                "quick-connect-persist-failed",
+                format!("Failed to persist Quick Connect state: {detail}"),
+                detail,
                 String::new(),
             );
         }

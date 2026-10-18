@@ -345,10 +345,28 @@ impl AppRuntime {
             settings_appearance_status: SettingsAppearanceStatus::Hint,
             settings_appearance_visible: false,
             settings_preview_renderer: RefCell::new(None),
+            ui_scale_factor: yshell_terminal::DEFAULT_SCALE_FACTOR,
             theme_editor: None,
             folder_editor: folder_editor::FolderEditorState::default(),
         };
-        runtime.status_text = runtime.startup_status();
+        let startup_text = runtime.startup_status();
+        let saved_count = runtime.saved_session_count();
+        if let Some(backup_path) = runtime.recovered_from_backup.clone() {
+            runtime.set_status_kind(
+                "startup-recovered",
+                startup_text,
+                saved_count.to_string(),
+                backup_path.display().to_string(),
+            );
+        } else {
+            let config_path = runtime.config_dir.display().to_string();
+            runtime.set_status_kind(
+                "startup-ready",
+                startup_text,
+                config_path,
+                saved_count.to_string(),
+            );
+        }
         runtime.hydrate_saved_sessions();
         Ok(runtime)
     }
@@ -697,6 +715,12 @@ pub struct AppRuntime {
     pub(crate) settings_appearance_visible: bool,
     /// 预览专用渲染器（与活动终端渲染器分离，避免抢占 glyph 缓存）。
     pub(crate) settings_preview_renderer: RefCell<Option<yshell_terminal::TerminalRenderer>>,
+    /// TERM-2：聚焦窗口的设备像素比（`window.scale_factor()`）。
+    ///
+    /// Settings 的 live preview 用它按**物理像素**光栅化，与真实终端的
+    /// `TerminalRenderer`（`font_size * scale_factor`）保持同一套 DPI/字形度量；
+    /// 由 `windows.rs` 在窗口缩放/激活/视口同步时写入。
+    pub(crate) ui_scale_factor: f32,
     /// Inline theme editor draft (None when closed).
     pub(crate) theme_editor: Option<ThemeEditorDraft>,
     /// Folder Editor 表单状态。

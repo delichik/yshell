@@ -30,8 +30,12 @@ impl AppRuntime {
         self.editor_auth_test_status = EditorAuthTestStatus::Hint;
         self.editor_set_theme_baseline(None);
         self.editor_baseline = Some(self.editor.clone());
-        self.status_text =
-            "Session editor cleared. Fill in the fields to create a saved session.".to_owned();
+        self.set_status_kind(
+            "editor-started",
+            "Session editor cleared. Fill in the fields to create a saved session.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -50,7 +54,12 @@ impl AppRuntime {
         self.editor_modal_visible = true;
         self.editor_section = EditorSection::General;
         self.editor_auth_test_status = EditorAuthTestStatus::LoadedHint;
-        self.status_text = format!("Loaded saved session `{profile_id}` into the editor.");
+        self.set_status_kind(
+            "editor-loaded",
+            format!("Loaded saved session `{profile_id}` into the editor."),
+            profile_id,
+            String::new(),
+        );
         Ok(self.projection())
     }
 
@@ -58,7 +67,12 @@ impl AppRuntime {
     pub fn request_close_session_editor_modal(&mut self) -> AppProjection {
         if self.editor_is_dirty() {
             self.editor_discard_dialog_visible = true;
-            self.status_text = "Discard unsaved session editor changes?".to_owned();
+            self.set_status_kind(
+                "editor-discard-confirm",
+                "Discard unsaved session editor changes?".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         }
         self.close_session_editor_modal()
@@ -71,7 +85,12 @@ impl AppRuntime {
 
     pub fn cancel_discard_session_editor(&mut self) -> AppProjection {
         self.editor_discard_dialog_visible = false;
-        self.status_text = "Continued editing the session.".to_owned();
+        self.set_status_kind(
+            "editor-continued",
+            "Continued editing the session.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -79,7 +98,12 @@ impl AppRuntime {
         self.editor_modal_visible = false;
         self.editor_discard_dialog_visible = false;
         self.editor_baseline = None;
-        self.status_text = "Closed Session Editor.".to_owned();
+        self.set_status_kind(
+            "editor-closed",
+            "Closed Session Editor.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -146,14 +170,26 @@ impl AppRuntime {
     pub fn select_next_editor_folder(&mut self) -> AppProjection {
         self.rotate_editor_folder(true);
         self.editor_refresh_theme_for_folder();
-        self.status_text = format!("Editor target folder: {}", self.editor_folder_legacy_text());
+        let folder_text = self.editor_folder_legacy_text();
+        self.set_status_kind(
+            "editor-folder-target",
+            format!("Editor target folder: {folder_text}"),
+            folder_text,
+            String::new(),
+        );
         self.projection()
     }
 
     pub fn select_previous_editor_folder(&mut self) -> AppProjection {
         self.rotate_editor_folder(false);
         self.editor_refresh_theme_for_folder();
-        self.status_text = format!("Editor target folder: {}", self.editor_folder_legacy_text());
+        let folder_text = self.editor_folder_legacy_text();
+        self.set_status_kind(
+            "editor-folder-target",
+            format!("Editor target folder: {folder_text}"),
+            folder_text,
+            String::new(),
+        );
         self.projection()
     }
 
@@ -216,7 +252,12 @@ impl AppRuntime {
         self.editor.key_id = Some(entry.id.clone());
         self.editor.legacy_key_path.clear();
         self.editor.legacy_key_has_passphrase = false;
-        self.status_text = format!("Selected managed key `{}` for this session.", entry.label);
+        self.set_status_kind(
+            "editor-key-selected",
+            format!("Selected managed key `{}` for this session.", entry.label),
+            entry.label.clone(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -237,9 +278,11 @@ impl AppRuntime {
         };
         self.editor.proxy_mode = EditorProxyMode::Managed;
         self.editor.proxy_profile_id = Some(option.id.clone());
-        self.status_text = format!(
-            "Selected managed proxy `{}` for this session.",
-            option.label
+        self.set_status_kind(
+            "editor-proxy-selected",
+            format!("Selected managed proxy `{}` for this session.", option.label),
+            option.label.clone(),
+            String::new(),
         );
         self.projection()
     }
@@ -285,17 +328,29 @@ impl AppRuntime {
         self.editor.tunnel_bind_port_text.clear();
         self.editor.tunnel_target_host.clear();
         self.editor.tunnel_target_port_text.clear();
-        self.status_text = format!(
-            "Added {} tunnel {}.",
-            tunnel_kind_label(forward.kind),
-            tunnel_forward_summary(&forward)
+        let kind_text = tunnel_kind_label(forward.kind);
+        let summary = super::ssh_config::tunnel_forward_summary_body(&forward);
+        self.set_status_kind(
+            "editor-tunnel-added",
+            format!(
+                "Added {} tunnel {}.",
+                tunnel_kind_label(forward.kind),
+                tunnel_forward_summary(&forward)
+            ),
+            kind_text.to_owned(),
+            summary,
         );
         Ok(self.projection())
     }
 
     pub fn clear_editor_tunnels(&mut self) -> AppProjection {
         self.editor.tunnels.clear();
-        self.status_text = "Cleared all editor tunnel forwards.".to_owned();
+        self.set_status_kind(
+            "editor-tunnels-cleared",
+            "Cleared all editor tunnel forwards.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -306,7 +361,27 @@ impl AppRuntime {
                 error: error.to_string(),
             },
         };
-        self.status_text = status.legacy_text();
+        let (kind, param_1, param_2) = match &status {
+            EditorAuthTestStatus::Hint => ("editor-auth-test-hint", String::new(), String::new()),
+            EditorAuthTestStatus::LoadedHint => {
+                ("editor-auth-test-loaded", String::new(), String::new())
+            }
+            EditorAuthTestStatus::Success {
+                host_label,
+                startup_snippet,
+            } => (
+                "editor-auth-test-succeeded",
+                host_label.clone(),
+                startup_snippet.clone(),
+            ),
+            EditorAuthTestStatus::Failed { error } => (
+                "editor-auth-test-failed",
+                error.clone(),
+                String::new(),
+            ),
+        };
+        let text = status.legacy_text();
+        self.set_status_kind(kind, text, param_1, param_2);
         self.editor_auth_test_status = status;
         self.projection()
     }
@@ -314,7 +389,12 @@ impl AppRuntime {
     pub fn save_editor_to_saved_session(&mut self) -> AppResult<AppProjection> {
         let session_id = self.persist_editor_to_saved_session()?;
         self.editor_modal_visible = false;
-        self.status_text = format!("Saved session editor changes into `{session_id}`.");
+        self.set_status_kind(
+            "editor-saved",
+            format!("Saved session editor changes into `{session_id}`."),
+            session_id,
+            String::new(),
+        );
         Ok(self.projection())
     }
 

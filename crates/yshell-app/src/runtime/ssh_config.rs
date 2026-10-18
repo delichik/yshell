@@ -638,6 +638,23 @@ pub(crate) fn tunnel_forward_summary(forward: &TunnelForward) -> String {
     }
 }
 
+/// I18N-1：隧道端点摘要（不含 `local/remote/dynamic` 英文前缀）。
+///
+/// 状态栏模板把类型单独翻译（`TextFormats.tunnel-kind-label`），这里只保留
+/// `bind -> target` 这种与语言无关的技术参数。
+pub(crate) fn tunnel_forward_summary_body(forward: &TunnelForward) -> String {
+    match forward.kind {
+        TunnelForwardKind::Dynamic => format!("{}:{}", forward.bind_host, forward.bind_port),
+        TunnelForwardKind::Local | TunnelForwardKind::Remote => format!(
+            "{}:{} -> {}:{}",
+            forward.bind_host,
+            forward.bind_port,
+            forward.target_host,
+            forward.target_port
+        ),
+    }
+}
+
 pub(crate) fn tunnel_forward_to_config(forward: TunnelForward) -> TunnelConfig {
     TunnelConfig {
         id: format!(

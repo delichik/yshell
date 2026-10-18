@@ -55,8 +55,12 @@ impl AppRuntime {
             session_key: Some(session_id.clone()),
         };
         self.sftp_listing = SftpListingState::DraftDisconnected;
-        self.status_text =
-            "Created a runtime-backed session draft. Next step is wiring this draft into saved-session editing and real connect.".to_owned();
+        self.set_status_kind(
+            "session-draft-created",
+            "Created a runtime-backed session draft. Next step is wiring this draft into saved-session editing and real connect.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         if let Some(notice) = runtime.take_logging_notice() {
             self.fold_logging_notice_into_status(notice);
         }
@@ -75,9 +79,13 @@ impl AppRuntime {
 
     pub fn cancel_host_key_prompt(&mut self) -> AppProjection {
         self.pending_host_key_prompt = None;
-        self.status_text =
+        self.set_status_kind(
+            "session-hostkey-canceled",
             "Canceled host key confirmation. No changes were written and the connection was not started."
-                .to_owned();
+                .to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -115,8 +123,12 @@ impl AppRuntime {
 
     pub fn cancel_password_prompt(&mut self) -> AppProjection {
         self.pending_password_prompt = None;
-        self.status_text =
-            "Canceled the password prompt. The connection was not started.".to_owned();
+        self.set_status_kind(
+            "session-password-canceled",
+            "Canceled the password prompt. The connection was not started.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -136,9 +148,14 @@ impl AppRuntime {
         if let Some(resumed) = self.resume_password_prompt_after_host_key(&prompt) {
             return resumed;
         }
-        self.status_text = format!(
-            "Trusted the presented host key for {}:{} for this session only. Reconnecting.",
-            prompt.host, prompt.port
+        let host_target = format!("{}:{}", prompt.host, prompt.port);
+        self.set_status_kind(
+            "session-hostkey-trusted-once",
+            format!(
+                "Trusted the presented host key for {host_target} for this session only. Reconnecting."
+            ),
+            host_target,
+            String::new(),
         );
         self.reconnect_session_by_key(&prompt.session_key)
     }
@@ -171,21 +188,27 @@ impl AppRuntime {
         if let Some(resumed) = self.resume_password_prompt_after_host_key(&prompt) {
             return resumed;
         }
-        self.status_text = if changed {
-            format!(
-                "Replaced the stored host key for {}:{} in `{}` and reconnecting.",
-                prompt.host,
-                prompt.port,
-                prompt.known_hosts_path.display()
-            )
+        let host_target = format!("{}:{}", prompt.host, prompt.port);
+        let known_hosts_path = prompt.known_hosts_path.display().to_string();
+        if changed {
+            self.set_status_kind(
+                "session-hostkey-replaced",
+                format!(
+                    "Replaced the stored host key for {host_target} in `{known_hosts_path}` and reconnecting."
+                ),
+                host_target,
+                known_hosts_path,
+            );
         } else {
-            format!(
-                "Saved the presented host key for {}:{} to `{}` and reconnecting.",
-                prompt.host,
-                prompt.port,
-                prompt.known_hosts_path.display()
-            )
-        };
+            self.set_status_kind(
+                "session-hostkey-saved",
+                format!(
+                    "Saved the presented host key for {host_target} to `{known_hosts_path}` and reconnecting."
+                ),
+                host_target,
+                known_hosts_path,
+            );
+        }
         self.reconnect_session_by_key(&prompt.session_key)
     }
 
@@ -224,7 +247,17 @@ impl AppRuntime {
             .ok_or_else(|| AppError::new("active runtime session is missing"))?;
         Self::apply_session_events(&session_id, runtime, events);
         let sftp_status = self.sync_sftp_lifecycle_for_session(session_key, false);
-        self.status_text = format!("Disconnected the runtime session. {sftp_status}");
+        tracing::debug!(
+            target: "yshell::runtime",
+            session = %session_key,
+            "runtime session disconnected; {sftp_status}"
+        );
+        self.set_status_kind(
+            "session-disconnected",
+            format!("Disconnected the runtime session. {sftp_status}"),
+            String::new(),
+            String::new(),
+        );
         Ok(self.projection())
     }
 
@@ -237,7 +270,7 @@ impl AppRuntime {
             .is_some_and(|session| session.is_local())
         {
             self.set_status_kind(
-                "",
+                "session-local-reconnect-unavailable",
                 "Local terminal sessions cannot be reconnected. Open a new local tab with `+`."
                     .to_owned(),
                 String::new(),
@@ -481,7 +514,7 @@ impl AppRuntime {
                         }
                         let _ = self.mark_session_failed_after_connect(&session_key);
                         self.set_status_kind(
-                            "session-connect-failed",
+                            "session-connect-cancelled",
                             "Connection cancelled.".to_owned(),
                             self.sessions
                                 .get(&session_key)
@@ -578,7 +611,7 @@ impl AppRuntime {
             .map(SessionRuntime::connection_target_text)
             .unwrap_or_default();
         self.set_status_kind(
-            "session-connect-failed",
+            "session-connect-cancelled-target",
             format!("Cancelled the connection to {host_text}."),
             host_text,
             String::new(),
@@ -1849,7 +1882,12 @@ impl AppRuntime {
             AuthPromptMethod::Password => {
                 let password = prompt.password_text.trim().to_owned();
                 if password.is_empty() {
-                    self.status_text = "Password must not be empty.".to_owned();
+                    self.set_status_kind(
+                        "auth-password-empty",
+                        "Password must not be empty.".to_owned(),
+                        String::new(),
+                        String::new(),
+                    );
                     return self.projection();
                 }
                 AuthMethod::Password {
@@ -1863,12 +1901,31 @@ impl AppRuntime {
             AuthPromptMethod::PublicKey => match self.auth_prompt_private_key_method(&prompt) {
                 Ok(method) => method,
                 Err(message) => {
-                    self.status_text = message;
+                    if let Some(detail) = message.strip_prefix("Cannot prepare the managed key: ") {
+                        self.set_status_kind(
+                            "auth-managed-key-error",
+                            message.clone(),
+                            detail.to_owned(),
+                            String::new(),
+                        );
+                    } else {
+                        self.set_status_kind(
+                            "auth-key-selection-required",
+                            message.clone(),
+                            String::new(),
+                            String::new(),
+                        );
+                    }
                     return self.projection();
                 }
             },
             AuthPromptMethod::KeyboardInteractive => {
-                self.status_text = "Submit the keyboard-interactive round first.".to_owned();
+                self.set_status_kind(
+                    "auth-keyboard-round-pending",
+                    "Submit the keyboard-interactive round first.".to_owned(),
+                    String::new(),
+                    String::new(),
+                );
                 return self.projection();
             }
         };
@@ -1881,9 +1938,29 @@ impl AppRuntime {
         match self.retry_auth_prompt(&prompt, method) {
             Ok(projection) => projection,
             Err(message) => {
-                self.status_text = message;
+                self.set_auth_retry_error_status(message);
                 self.projection()
             }
+        }
+    }
+
+    /// I18N-1：认证重试失败的状态文案（已知目标丢失单独成 kind，其它错误
+    /// 把英文细节作为参数保留）。
+    fn set_auth_retry_error_status(&mut self, message: String) {
+        if message.starts_with("The connection target is gone") {
+            self.set_status_kind(
+                "auth-target-gone",
+                message,
+                String::new(),
+                String::new(),
+            );
+        } else {
+            self.set_status_kind(
+                "auth-prompt-error",
+                format!("Authentication failed: {message}"),
+                message,
+                String::new(),
+            );
         }
     }
 
@@ -1895,7 +1972,13 @@ impl AppRuntime {
         };
         let mut prompt = prompt;
         if let Err(error) = prompt.submit_keyboard_round() {
-            self.status_text = error.message();
+            let message = error.message();
+            self.set_status_kind(
+                "auth-prompt-error",
+                format!("Authentication failed: {message}"),
+                message,
+                String::new(),
+            );
             return self.projection();
         }
         let secret = prompt
@@ -1916,7 +1999,7 @@ impl AppRuntime {
         match self.retry_auth_prompt(&prompt, method) {
             Ok(projection) => projection,
             Err(message) => {
-                self.status_text = message;
+                self.set_auth_retry_error_status(message);
                 self.projection()
             }
         }
@@ -1927,8 +2010,12 @@ impl AppRuntime {
             prompt.cancel();
         }
         self.pending_auth_prompt = None;
-        self.status_text =
-            "Canceled the authentication prompt. The connection was not started.".to_owned();
+        self.set_status_kind(
+            "auth-prompt-canceled",
+            "Canceled the authentication prompt. The connection was not started.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -1978,7 +2065,13 @@ impl AppRuntime {
         };
         let password = prompt.password_text.clone();
         if let Err(error) = self.store_secret_value(&secret_key, &password) {
-            self.status_text = format!("Could not remember the password: {error}");
+            let detail = error.to_string();
+            self.set_status_kind(
+                "auth-remember-password-failed",
+                format!("Could not remember the password: {detail}"),
+                detail,
+                String::new(),
+            );
         }
     }
 

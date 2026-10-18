@@ -365,7 +365,64 @@ export global TextFormats {
         return stage;
     }
 
-    public pure function status-message(kind: string, param_1: string, param_2: string, fallback: string) -> string {
+    // --- I18N-1：状态栏模板用的小型标签函数（Rust 只传稳定 id）---------------
+    /// 分屏方向（`Split pane 2 horizontally.` 的方向槽位）。
+    public pure function split-orientation-label(orientation: string) -> string {
+        if (orientation == "vertical") {
+            return @tr("MainWindow" => "vertically");
+        }
+        return @tr("MainWindow" => "horizontally");
+    }
+
+    /// SFTP 操作名（`Cannot continue {action}.` 的 action 槽位）。
+    public pure function sftp-action-label(action: string) -> string {
+        if (action == "upload") { return @tr("MainWindow" => "uploading through SFTP"); }
+        if (action == "download") { return @tr("MainWindow" => "downloading through SFTP"); }
+        if (action == "delete") { return @tr("MainWindow" => "deleting through SFTP"); }
+        if (action == "rename") { return @tr("MainWindow" => "renaming paths through SFTP"); }
+        if (action == "chmod") { return @tr("MainWindow" => "changing permissions through SFTP"); }
+        if (action == "mkdir") { return @tr("MainWindow" => "creating directories through SFTP"); }
+        if (action == "remote-edit") { return @tr("MainWindow" => "starting remote file edit"); }
+        if (action == "remote-edit-save") { return @tr("MainWindow" => "saving remote file edit"); }
+        return action;
+    }
+
+    /// 覆盖策略（冲突对话框 / 状态栏）。
+    public pure function overwrite-policy-label(policy: string) -> string {
+        if (policy == "overwrite") { return @tr("MainWindow" => "overwrite"); }
+        if (policy == "rename") { return @tr("MainWindow" => "rename"); }
+        if (policy == "skip") { return @tr("MainWindow" => "skip"); }
+        return @tr("MainWindow" => "ask");
+    }
+
+    /// 传输队列状态 id（Rust `TransferStatus` → 用户可读标签）。
+    public pure function transfer-status-label(status: string) -> string {
+        if (status == "queued") { return @tr("MainWindow" => "queued"); }
+        if (status == "running") { return @tr("MainWindow" => "running"); }
+        if (status == "paused") { return @tr("MainWindow" => "paused"); }
+        if (status == "completed") { return @tr("MainWindow" => "completed"); }
+        if (status == "failed") { return @tr("MainWindow" => "failed"); }
+        if (status == "cancelled") { return @tr("MainWindow" => "cancelled"); }
+        return status;
+    }
+
+    /// 日志开关状态（参数 `on`/`off`）。
+    public pure function logging-state-label(state: string) -> string {
+        return state == "on"
+            ? @tr("MainWindow" => "enabled")
+            : @tr("MainWindow" => "disabled");
+    }
+
+    /// 编辑器里的隧道类型（`Added local tunnel ...`）。
+    public pure function tunnel-kind-label(kind: string) -> string {
+        if (kind == "remote") { return @tr("MainWindow" => "remote"); }
+        if (kind == "dynamic") { return @tr("MainWindow" => "dynamic"); }
+        return @tr("MainWindow" => "local");
+    }
+
+
+    // I18N-1：status-message 分组（避免单个函数体过深）。
+    public pure function status-message-core(kind: string, param_1: string, param_2: string, fallback: string) -> string {
         if kind == "sftp-sorted" {
             return @tr("MainWindow" => "Sorted SFTP entries by {0}.", sftp-sort-summary(param_1, param_2 == "ascending"));
         }
@@ -487,6 +544,810 @@ export global TextFormats {
             return @tr("MainWindow" => "`{0}` no longer receives key input.", param_1);
         }
         return fallback;
+    }
+
+    // I18N-1：status-message 分组（避免单个函数体过深）。
+    public pure function status-message-tabs(kind: string, param_1: string, param_2: string, fallback: string) -> string {
+        // --- I18N-1：标签 / 分屏 / 关闭 ------------------------------------------
+        if kind == "session-live-shell-closed" {
+            return @tr("MainWindow" => "The active live shell closed while the terminal was refreshing.");
+        }
+        if kind == "tab-activated" {
+            return @tr("MainWindow" => "Activated tab `{0}`.", param_1);
+        }
+        if kind == "tab-activated-loading-sftp" {
+            return @tr("MainWindow" => "Activated tab `{0}`. Loading SFTP listing…", param_1);
+        }
+        if kind == "tab-close-confirm" {
+            return @tr("MainWindow" => "Confirm closing tab `{0}`: the session is still active.", param_1);
+        }
+        if kind == "tab-closed" {
+            if param_2 != "" {
+                return @tr("MainWindow" => "Closed tab `{0}`. Stopped logging; log file: `{1}`.", param_1, param_2);
+            }
+            return @tr("MainWindow" => "Closed tab `{0}`.", param_1);
+        }
+        if kind == "tabs-close-none" {
+            return @tr("MainWindow" => "No tabs matched the close request.");
+        }
+        if kind == "tabs-close-confirm" {
+            return @tr("MainWindow" => "Confirm closing {n} tab" | "Confirm closing {n} tabs" % round(param_1.to-float()), round(param_1.to-float()))
+                + ": " + @tr("MainWindow" => "{n} still active connection" | "{n} still active connections" % round(param_2.to-float()), round(param_2.to-float())) + ".";
+        }
+        if kind == "tabs-closed" {
+            if param_2 != "" {
+                return @tr("MainWindow" => "Closed {n} tab." | "Closed {n} tabs." % round(param_1.to-float()), round(param_1.to-float()))
+                    + " " + @tr("MainWindow" => "Stopped logging; log file: `{0}`.", param_2);
+            }
+            return @tr("MainWindow" => "Closed {n} tab." | "Closed {n} tabs." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "tabs-closed-active" {
+            return @tr("MainWindow" => "Closed {n} tab." | "Closed {n} tabs." % round(param_1.to-float()), round(param_1.to-float()))
+                + " " + @tr("MainWindow" => "{n} active connection was disconnected without confirmation." | "{n} active connections were disconnected without confirmation." % round(param_2.to-float()), round(param_2.to-float()));
+        }
+        if kind == "tab-close-canceled" {
+            return @tr("MainWindow" => "Canceled the tab close confirmation.");
+        }
+        if kind == "tab-renamed" {
+            return @tr("MainWindow" => "Renamed tab to `{0}`.", param_1);
+        }
+        if kind == "tab-duplicate-auth-needed" {
+            return @tr("MainWindow" => "Authenticate the new session to finish duplicating.");
+        }
+        if kind == "tab-duplicated" {
+            return @tr("MainWindow" => "Duplicated session as `{0}`.", param_1);
+        }
+        if kind == "tab-moved-pane" {
+            return @tr("MainWindow" => "Moved tab to pane {0}.", param_1);
+        }
+        if kind == "split-pane" {
+            return @tr("MainWindow" => "Split pane {0} {1}.", param_1, split-orientation-label(param_2));
+        }
+        if kind == "split-workspace" {
+            return @tr("MainWindow" => "Split workspace {0}.", split-orientation-label(param_1));
+        }
+        if kind == "split-auth-drag-needed" {
+            return @tr("MainWindow" => "Authenticate the new session, then drag the tab to split.");
+        }
+        if kind == "split-auth-menu-needed" {
+            return @tr("MainWindow" => "Authenticate the new session, then choose Split again.");
+        }
+        if kind == "pane-focused" {
+            return @tr("MainWindow" => "Focused pane {0}.", param_1);
+        }
+        if kind == "pane-closed" {
+            return @tr("MainWindow" => "Closed pane {0}.", param_1);
+        }
+        if kind == "terminal-poll-empty" {
+            return @tr("MainWindow" => "Polled the active terminal, but no new output was available.");
+        }
+        // --- I18N-1：Quick Connect ----------------------------------------------
+        if kind == "quick-connect-opened" {
+            return @tr("MainWindow" => "Opened the Quick Connect page.");
+        }
+        if kind == "quick-connect-activated" {
+            return @tr("MainWindow" => "Activated the Quick Connect page.");
+        }
+        if kind == "quick-connect-closed" {
+            return @tr("MainWindow" => "Closed the Quick Connect page.");
+        }
+        if kind == "quick-link-already" {
+            return @tr("MainWindow" => "`{0}` is already a quick link.", param_1);
+        }
+        if kind == "quick-link-pinned" {
+            return @tr("MainWindow" => "Pinned `{0}` as a quick link.", param_1);
+        }
+        if kind == "quick-link-missing" {
+            return @tr("MainWindow" => "Quick link `{0}` was not found.", param_1);
+        }
+        if kind == "quick-link-removed" {
+            return @tr("MainWindow" => "Removed the quick link.");
+        }
+        if kind == "quick-connect-history-cleared" {
+            return @tr("MainWindow" => "Cleared {n} Quick Connect history entry." | "Cleared {n} Quick Connect history entries." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "quick-connect-copied" {
+            return @tr("MainWindow" => "Copied `{0}` to the clipboard.", param_1);
+        }
+        if kind == "session-editor-qc-target" {
+            return @tr("MainWindow" => "Session editor opened with Quick Connect target `{0}`.", param_1);
+        }
+        if kind == "quick-connect-persist-failed" {
+            return @tr("MainWindow" => "Failed to persist Quick Connect state: {0}", param_1);
+        }
+        return fallback;
+    }
+
+    // I18N-1：status-message 分组（避免单个函数体过深）。
+    public pure function status-message-sftp(kind: string, param_1: string, param_2: string, fallback: string) -> string {
+        // --- I18N-1：SFTP 面板 / 生命周期 ---------------------------------------
+        if kind == "sftp-disconnected" {
+            if param_1 == "" {
+                return @tr("MainWindow" => "SFTP session disconnected. Connect a runtime session first.");
+            }
+            return @tr("MainWindow" => "SFTP session disconnected for runtime session `{0}`.", param_1);
+        }
+        if kind == "sftp-unavailable-local" {
+            return @tr("MainWindow" => "SFTP is unavailable for local terminal sessions.");
+        }
+        if kind == "sftp-not-ready" {
+            return @tr("MainWindow" => "SFTP is not ready. Cannot continue {0}.", sftp-action-label(param_1));
+        }
+        if kind == "sftp-properties-requires-selection" {
+            return @tr("MainWindow" => "Select an SFTP entry before opening its properties.");
+        }
+        if kind == "sftp-open-requires-selection" {
+            return @tr("MainWindow" => "Select an SFTP entry before opening it.");
+        }
+        if kind == "sftp-unknown-sort-column" {
+            return @tr("MainWindow" => "Unknown SFTP sort column `{0}`.", param_1);
+        }
+        if kind == "sftp-hidden-shown" {
+            return @tr("MainWindow" => "SFTP hidden files are now shown.");
+        }
+        if kind == "sftp-hidden-hidden" {
+            return @tr("MainWindow" => "SFTP hidden files are now hidden.");
+        }
+        if kind == "sftp-breadcrumb-missing" {
+            return @tr("MainWindow" => "That SFTP breadcrumb is no longer available.");
+        }
+        // --- I18N-1：SFTP 操作 ---------------------------------------------------
+        if kind == "sftp-folder-name-empty" {
+            return @tr("MainWindow" => "New SFTP folder name must not be empty.");
+        }
+        if kind == "sftp-name-empty" {
+            return @tr("MainWindow" => "New SFTP name must not be empty.");
+        }
+        if kind == "sftp-rename-requires-selection" {
+            return @tr("MainWindow" => "Select an SFTP entry before renaming it.");
+        }
+        if kind == "sftp-delete-requires-selection" {
+            return @tr("MainWindow" => "Select an SFTP entry before deleting it.");
+        }
+        if kind == "sftp-deleted" {
+            return @tr("MainWindow" => "Deleted `{0}` through SFTP.", param_1);
+        }
+        if kind == "sftp-chmod-requires-selection" {
+            return @tr("MainWindow" => "Select an SFTP entry before changing permissions.");
+        }
+        if kind == "sftp-upload-path-empty" {
+            return @tr("MainWindow" => "Local upload path must not be empty.");
+        }
+        if kind == "sftp-download-requires-selection" {
+            return @tr("MainWindow" => "Select an SFTP entry before downloading it.");
+        }
+        if kind == "sftp-download-path-empty" {
+            return @tr("MainWindow" => "Local download path must not be empty.");
+        }
+        if kind == "sftp-remote-edit-requires-file" {
+            return @tr("MainWindow" => "Select an SFTP file before starting remote edit.");
+        }
+        if kind == "sftp-upload-error" {
+            return @tr("MainWindow" => "SFTP upload error: {0}", param_1);
+        }
+        if kind == "sftp-uploaded" {
+            return @tr("MainWindow" => "Uploaded `{0}` to `{1}` through the live SFTP backend.", param_1, param_2);
+        }
+        if kind == "sftp-download-error" {
+            return @tr("MainWindow" => "SFTP download error: {0}", param_1);
+        }
+        if kind == "sftp-downloaded" {
+            return @tr("MainWindow" => "Downloaded `{0}` to `{1}` through the live SFTP backend.", param_1, param_2);
+        }
+        if kind == "sftp-remote-edit-download-error" {
+            return @tr("MainWindow" => "SFTP remote edit download error: {0}", param_1);
+        }
+        if kind == "sftp-remote-edit-ready" {
+            return @tr("MainWindow" => "Remote edit ready for `{0}`. Edit local temp file `{1}` and then save remote edit.", param_1, param_2);
+        }
+        if kind == "sftp-remote-edit-save-missing" {
+            return @tr("MainWindow" => "No active remote edit session to save. Start remote edit first.");
+        }
+        if kind == "sftp-remote-edit-upload-error" {
+            return @tr("MainWindow" => "SFTP remote edit upload error: {0}", param_1);
+        }
+        if kind == "sftp-remote-edit-saved" {
+            return @tr("MainWindow" => "Saved remote edit `{0}` from local temp file `{1}`.", param_1, param_2);
+        }
+        if kind == "sftp-remote-edit-cancel-missing" {
+            return @tr("MainWindow" => "No active remote edit session to cancel. Start remote edit first.");
+        }
+        if kind == "sftp-remote-edit-canceled" {
+            return @tr("MainWindow" => "Canceled remote edit for `{0}` and removed temp file `{1}`.", param_1, param_2);
+        }
+        if kind == "sftp-remote-edit-canceled-gone" {
+            return @tr("MainWindow" => "Canceled remote edit for `{0}`. Temp file was already gone.", param_1);
+        }
+        if kind == "sftp-remote-edit-canceled-error" {
+            return @tr("MainWindow" => "Canceled remote edit for `{0}`, but the temp file could not be removed: {1}", param_1, param_2);
+        }
+        if kind == "sftp-mkdir-created" {
+            return @tr("MainWindow" => "Created remote directory `{0}` through SFTP.", param_1);
+        }
+        if kind == "sftp-renamed" {
+            return @tr("MainWindow" => "Renamed `{0}` to `{1}` through SFTP.", param_1, param_2);
+        }
+        if kind == "sftp-chmod-applied" {
+            return @tr("MainWindow" => "Applied chmod {0} to `{1}` through SFTP.", param_1, param_2);
+        }
+        if kind == "sftp-upload-queued" {
+            return @tr("MainWindow" => "Queued {n} upload job into `{1}`." | "Queued {n} upload jobs into `{1}`." % round(param_1.to-float()), param_1, param_2);
+        }
+        if kind == "sftp-download-queued" {
+            return @tr("MainWindow" => "Queued {n} download job into `{1}`." | "Queued {n} download jobs into `{1}`." % round(param_1.to-float()), param_1, param_2);
+        }
+        if kind == "sftp-remote-copy-queued" {
+            return @tr("MainWindow" => "Queued {n} remote copy job into `{1}`." | "Queued {n} remote copy jobs into `{1}`." % round(param_1.to-float()), param_1, param_2);
+        }
+        if kind == "sftp-remote-move-queued" {
+            return @tr("MainWindow" => "Queued a move of {n} entry into `{1}`." | "Queued a move of {n} entries into `{1}`." % round(param_1.to-float()), param_1, param_2);
+        }
+        if kind == "sftp-remote-delete-queued" {
+            return @tr("MainWindow" => "Queued a delete of {n} remote entry." | "Queued a delete of {n} remote entries." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "sftp-remote-chmod-queued" {
+            return @tr("MainWindow" => "Queued chmod {0} for {n} remote entry." | "Queued chmod {0} for {n} remote entries." % round(param_2.to-float()), param_1);
+        }
+        if kind == "sftp-select-local-upload" {
+            return @tr("MainWindow" => "Select local entries before uploading.");
+        }
+        if kind == "sftp-select-local-move" {
+            return @tr("MainWindow" => "Select local entries before moving.");
+        }
+        if kind == "sftp-select-remote-download" {
+            return @tr("MainWindow" => "Select remote entries before downloading.");
+        }
+        if kind == "sftp-select-remote-delete" {
+            return @tr("MainWindow" => "Select remote entries before deleting.");
+        }
+        if kind == "sftp-select-remote-chmod" {
+            return @tr("MainWindow" => "Select remote entries before changing permissions.");
+        }
+        if kind == "sftp-select-remote-copy" {
+            return @tr("MainWindow" => "Select remote entries before copying.");
+        }
+        if kind == "sftp-no-pending-conflict" {
+            return @tr("MainWindow" => "There is no pending conflict to resolve.");
+        }
+        if kind == "sftp-conflict-rerun" {
+            return @tr("MainWindow" => "Re-running the transfer with `{0}` for {n} conflicting path." | "Re-running the transfer with `{0}` for {n} conflicting paths." % round(param_2.to-float()), overwrite-policy-label(param_1));
+        }
+        if kind == "sftp-conflict-canceled" {
+            return @tr("MainWindow" => "Kept {n} conflicting path skipped." | "Kept {n} conflicting paths skipped." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "sftp-transfer-failed" {
+            return @tr("MainWindow" => "SFTP transfer failed: {0}", param_1);
+        }
+        if kind == "sftp-drag-no-local-paths" {
+            return @tr("MainWindow" => "The drag payload has no local paths.");
+        }
+        if kind == "sftp-dropped-no-local-paths" {
+            return @tr("MainWindow" => "The dropped transfer has no local file paths.");
+        }
+        if kind == "sftp-local-moved" {
+            if param_2 != "" {
+                return @tr("MainWindow" => "Moved {n} local entry." | "Moved {n} local entries." % round(param_1.to-float()), round(param_1.to-float()))
+                    + " " + @tr("MainWindow" => "{n} failed." | "{n} failed." % round(param_2.to-float()), round(param_2.to-float()));
+            }
+            return @tr("MainWindow" => "Moved {n} local entry." | "Moved {n} local entries." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "sftp-local-copied" {
+            if param_2 != "" {
+                return @tr("MainWindow" => "Copied {n} local entry." | "Copied {n} local entries." % round(param_1.to-float()), round(param_1.to-float()))
+                    + " " + @tr("MainWindow" => "{n} failed." | "{n} failed." % round(param_2.to-float()), round(param_2.to-float()));
+            }
+            return @tr("MainWindow" => "Copied {n} local entry." | "Copied {n} local entries." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "sftp-move-cleanup-moved" {
+            return @tr("MainWindow" => "Moved {n} local entry to the remote pane." | "Moved {n} local entries to the remote pane." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "sftp-move-cleanup-failed" {
+            return @tr("MainWindow" => "Uploaded, but removing {0} of {1} local sources failed.", param_1, param_2);
+        }
+        if kind == "sftp-move-cleanup-remote-failed" {
+            return @tr("MainWindow" => "Uploaded, but the remote source cleanup failed: {0}", param_1);
+        }
+        if kind == "sftp-tree-uploaded" {
+            return @tr("MainWindow" => "Uploaded tree `{0}` through SFTP.", param_1);
+        }
+        if kind == "sftp-tree-downloaded" {
+            return @tr("MainWindow" => "Downloaded tree `{0}` through SFTP.", param_1);
+        }
+        return fallback;
+    }
+
+    // I18N-1：status-message 分组（避免单个函数体过深）。
+    public pure function status-message-transfer(kind: string, param_1: string, param_2: string, fallback: string) -> string {
+        // --- I18N-1：传输队列 ------------------------------------------------
+        if kind == "transfer-paused" {
+            return @tr("MainWindow" => "Paused transfer `{0}`.", param_1);
+        }
+        if kind == "transfer-not-pausable" {
+            return @tr("MainWindow" => "Transfer `{0}` is not queued or running, so it was not paused.", param_1);
+        }
+        if kind == "transfer-resumed" {
+            return @tr("MainWindow" => "Resumed transfer `{0}`.", param_1);
+        }
+        if kind == "transfer-not-paused" {
+            return @tr("MainWindow" => "Transfer `{0}` is not paused, so it was not resumed.", param_1);
+        }
+        if kind == "transfer-requeued" {
+            return @tr("MainWindow" => "Re-queued transfer `{0}` for another attempt.", param_1);
+        }
+        if kind == "transfer-retries-exhausted" {
+            return @tr("MainWindow" => "Transfer `{0}` already used its {1} retries.", param_1, param_2);
+        }
+        if kind == "transfer-not-failed" {
+            return @tr("MainWindow" => "Only failed transfers can be retried; `{0}` is {1}.", param_1, transfer-status-label(param_2));
+        }
+        if kind == "transfer-already-terminal" {
+            return @tr("MainWindow" => "Transfer `{0}` is already {1}, so it was not cancelled.", param_1, transfer-status-label(param_2));
+        }
+        if kind == "transfer-cancelled" {
+            return @tr("MainWindow" => "Cancelled transfer `{0}`.", param_1);
+        }
+        if kind == "transfer-removed" {
+            return @tr("MainWindow" => "Removed transfer `{0}` from the queue.", param_1);
+        }
+        if kind == "transfers-cleared" {
+            return @tr("MainWindow" => "Cleared {n} completed transfer." | "Cleared {n} completed transfers." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "transfers-none-completed" {
+            return @tr("MainWindow" => "No completed transfers to clear.");
+        }
+        // --- I18N-1：文件剪贴板 ----------------------------------------------
+        if kind == "clipboard-select-local-copy" {
+            return @tr("MainWindow" => "Select local entries before copying.");
+        }
+        if kind == "clipboard-copied-remote" {
+            return @tr("MainWindow" => "Copied {n} remote entry." | "Copied {n} remote entries." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "clipboard-cut-remote" {
+            return @tr("MainWindow" => "Cut {n} remote entry." | "Cut {n} remote entries." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "clipboard-copied-local" {
+            return @tr("MainWindow" => "Copied {n} local entry." | "Copied {n} local entries." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "clipboard-cut-local" {
+            return @tr("MainWindow" => "Cut {n} local entry." | "Cut {n} local entries." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "clipboard-empty" {
+            return @tr("MainWindow" => "The file clipboard is empty.");
+        }
+        if kind == "clipboard-upload-error" {
+            return @tr("MainWindow" => "File clipboard upload failed: {0}", param_1);
+        }
+        if kind == "clipboard-copy-error" {
+            return @tr("MainWindow" => "File clipboard copy failed: {0}", param_1);
+        }
+        if kind == "clipboard-download-error" {
+            return @tr("MainWindow" => "File clipboard download failed: {0}", param_1);
+        }
+        if kind == "clipboard-remote-entries-missing" {
+            return @tr("MainWindow" => "The copied remote entries are no longer listed.");
+        }
+        if kind == "clipboard-pasted-local" {
+            if param_2 != "" {
+                return @tr("MainWindow" => "Pasted {n} local entry." | "Pasted {n} local entries." % round(param_1.to-float()), round(param_1.to-float()))
+                    + " " + @tr("MainWindow" => "{n} failed." | "{n} failed." % round(param_2.to-float()), round(param_2.to-float()));
+            }
+            return @tr("MainWindow" => "Pasted {n} local entry." | "Pasted {n} local entries." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        // --- I18N-1：终端剪贴板 / 选择 / 搜索 ---------------------------------
+        if kind == "terminal-copied-visible" {
+            return @tr("MainWindow" => "Copied {n} character from the visible terminal view into the app clipboard." | "Copied {n} characters from the visible terminal view into the app clipboard." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "terminal-copied-visible-empty" {
+            return @tr("MainWindow" => "Copied visible terminal view, but it was empty.");
+        }
+        if kind == "terminal-clipboard-empty" {
+            return @tr("MainWindow" => "Terminal clipboard is empty, so nothing was pasted.");
+        }
+        if kind == "clipboard-empty-paste" {
+            return @tr("MainWindow" => "Clipboard is empty, so nothing was pasted.");
+        }
+        if kind == "terminal-cleared" {
+            return @tr("MainWindow" => "Cleared the visible terminal view.");
+        }
+        if kind == "terminal-scrollback-cleared" {
+            return @tr("MainWindow" => "Cleared terminal scrollback. Live screen kept.");
+        }
+        if kind == "terminal-scrollback-empty" {
+            return @tr("MainWindow" => "Scrollback is already empty.");
+        }
+        if kind == "terminal-copied-line" {
+            return @tr("MainWindow" => "Copied {n} character from the current line." | "Copied {n} characters from the current line." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "terminal-line-empty" {
+            return @tr("MainWindow" => "Copied the current line, but it was empty.");
+        }
+        if kind == "terminal-select-none" {
+            return @tr("MainWindow" => "No active terminal to select.");
+        }
+        if kind == "terminal-selected-screen" {
+            return @tr("MainWindow" => "Selected {n} character from the visible screen." | "Selected {n} characters from the visible screen." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "terminal-screen-empty" {
+            return @tr("MainWindow" => "Visible screen is empty.");
+        }
+        if kind == "terminal-search-prompt" {
+            return @tr("MainWindow" => "Find in terminal");
+        }
+        if kind == "terminal-search-empty" {
+            return @tr("MainWindow" => "No matches for `{0}` in the visible terminal.", param_1);
+        }
+        if kind == "terminal-search-found" {
+            return @tr("MainWindow" => "Found {n} match for `{0}` in the visible terminal." | "Found {n} matches for `{0}` in the visible terminal." % round(param_2.to-float()), param_1);
+        }
+        if kind == "terminal-search-invalid" {
+            return @tr("MainWindow" => "Search failed: {0}", param_1);
+        }
+        if kind == "terminal-scroll-none" {
+            return @tr("MainWindow" => "No active terminal to scroll.");
+        }
+        if kind == "terminal-scrolled-bottom" {
+            return @tr("MainWindow" => "Terminal scrolled to the live bottom.");
+        }
+        if kind == "terminal-scrolled-back" {
+            return @tr("MainWindow" => "Terminal scrolled back {n} line into scrollback." | "Terminal scrolled back {n} lines into scrollback." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "terminal-scroll-top" {
+            return @tr("MainWindow" => "Terminal is already at the top of the scrollback buffer.");
+        }
+        if kind == "terminal-selected-all" {
+            return @tr("MainWindow" => "Selected {n} character from the terminal." | "Selected {n} characters from the terminal." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "terminal-copy-none" {
+            return @tr("MainWindow" => "No terminal selection to copy.");
+        }
+        if kind == "terminal-copied-selection" {
+            return @tr("MainWindow" => "Copied {n} character from the terminal selection." | "Copied {n} characters from the terminal selection." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        return fallback;
+    }
+
+    // I18N-1：status-message 分组（避免单个函数体过深）。
+    public pure function status-message-terminal(kind: string, param_1: string, param_2: string, fallback: string) -> string {
+        // --- I18N-1：本地文件栏 ----------------------------------------------
+        if kind == "local-dir-error" {
+            return @tr("MainWindow" => "Could not load the local directory: {0}", param_1);
+        }
+        if kind == "local-open-error" {
+            return @tr("MainWindow" => "Could not open the local path: {0}", param_1);
+        }
+        if kind == "local-root" {
+            return @tr("MainWindow" => "Already at the local filesystem root.");
+        }
+        if kind == "local-hidden-shown" {
+            return @tr("MainWindow" => "Local hidden files are now shown.");
+        }
+        if kind == "local-hidden-hidden" {
+            return @tr("MainWindow" => "Local hidden files are now hidden.");
+        }
+        if kind == "local-unknown-sort" {
+            return @tr("MainWindow" => "Unknown local sort column `{0}`.", param_1);
+        }
+        if kind == "local-file-selected" {
+            return @tr("MainWindow" => "Selected local file `{0}`. Drag it to the remote pane or use Upload.", param_1);
+        }
+        // --- I18N-1：日志设置 -------------------------------------------------
+        if kind == "logging-toggle" {
+            return @tr("MainWindow" => "Global logging is now {0}. Save logging settings to persist this policy.", logging-state-label(param_1));
+        }
+        if kind == "logging-format-raw" {
+            return @tr("MainWindow" => "Global logging format set to raw transcript. Save logging settings to persist.");
+        }
+        if kind == "logging-format-sanitized" {
+            return @tr("MainWindow" => "Global logging format set to sanitized text. Save logging settings to persist.");
+        }
+        if kind == "logging-notice" {
+            return @tr("MainWindow" => "Logging notice: {0}", param_1);
+        }
+        // --- I18N-1：连接 / 主机密钥 / 密码 / 认证 -----------------------------
+        if kind == "session-draft-created" {
+            return @tr("MainWindow" => "Created a runtime-backed session draft.");
+        }
+        if kind == "session-hostkey-canceled" {
+            return @tr("MainWindow" => "Canceled host key confirmation. No changes were written and the connection was not started.");
+        }
+        if kind == "session-password-canceled" {
+            return @tr("MainWindow" => "Canceled the password prompt. The connection was not started.");
+        }
+        if kind == "session-hostkey-trusted-once" {
+            return @tr("MainWindow" => "Trusted the presented host key for {0} for this session only. Reconnecting.", param_1);
+        }
+        if kind == "session-hostkey-replaced" {
+            return @tr("MainWindow" => "Replaced the stored host key for {0} in `{1}` and reconnecting.", param_1, param_2);
+        }
+        if kind == "session-hostkey-saved" {
+            return @tr("MainWindow" => "Saved the presented host key for {0} to `{1}` and reconnecting.", param_1, param_2);
+        }
+        if kind == "session-disconnected" {
+            return @tr("MainWindow" => "Disconnected the runtime session.");
+        }
+        if kind == "session-local-reconnect-unavailable" {
+            return @tr("MainWindow" => "Local terminal sessions cannot be reconnected. Open a new local tab with `+`.");
+        }
+        if kind == "session-connect-cancelled" {
+            return @tr("MainWindow" => "Connection cancelled.");
+        }
+        if kind == "session-connect-cancelled-target" {
+            return @tr("MainWindow" => "Cancelled the connection to {0}.", param_1);
+        }
+        if kind == "auth-password-empty" {
+            return @tr("MainWindow" => "Password must not be empty.");
+        }
+        if kind == "auth-keyboard-round-pending" {
+            return @tr("MainWindow" => "Submit the keyboard-interactive round first.");
+        }
+        if kind == "auth-key-selection-required" {
+            return @tr("MainWindow" => "Select a managed private key or browse for a key file.");
+        }
+        if kind == "auth-target-gone" {
+            return @tr("MainWindow" => "The connection target is gone; open the session again.");
+        }
+        if kind == "auth-managed-key-error" {
+            return @tr("MainWindow" => "Cannot prepare the managed key: {0}", param_1);
+        }
+        if kind == "auth-prompt-canceled" {
+            return @tr("MainWindow" => "Canceled the authentication prompt. The connection was not started.");
+        }
+        if kind == "auth-remember-password-failed" {
+            return @tr("MainWindow" => "Could not remember the password: {0}", param_1);
+        }
+        if kind == "auth-prompt-error" {
+            return @tr("MainWindow" => "Authentication failed: {0}", param_1);
+        }
+        if kind == "local-terminal-start-failed" {
+            return @tr("MainWindow" => "Could not start the local shell `{0}`: {1}", param_1, param_2);
+        }
+        if kind == "local-terminal-attach-failed" {
+            return @tr("MainWindow" => "Could not open the local terminal: {0}", param_1);
+        }
+        return fallback;
+    }
+
+    // I18N-1：status-message 分组（避免单个函数体过深）。
+    public pure function status-message-sessions(kind: string, param_1: string, param_2: string, fallback: string) -> string {
+        // --- I18N-1：会话编辑器 / 保存的会话 ----------------------------------
+        if kind == "editor-started" {
+            return @tr("MainWindow" => "Session editor cleared. Fill in the fields to create a saved session.");
+        }
+        if kind == "editor-loaded" {
+            return @tr("MainWindow" => "Loaded saved session `{0}` into the editor.", param_1);
+        }
+        if kind == "editor-discard-confirm" {
+            return @tr("MainWindow" => "Discard unsaved session editor changes?");
+        }
+        if kind == "editor-continued" {
+            return @tr("MainWindow" => "Continued editing the session.");
+        }
+        if kind == "editor-closed" {
+            return @tr("MainWindow" => "Closed Session Editor.");
+        }
+        if kind == "editor-folder-target" {
+            return @tr("MainWindow" => "Editor target folder: {0}", param_1);
+        }
+        if kind == "editor-key-selected" {
+            return @tr("MainWindow" => "Selected managed key `{0}` for this session.", param_1);
+        }
+        if kind == "editor-proxy-selected" {
+            return @tr("MainWindow" => "Selected managed proxy `{0}` for this session.", param_1);
+        }
+        if kind == "editor-tunnel-added" {
+            return @tr("MainWindow" => "Added {0} tunnel {1}.", tunnel-kind-label(param_1), param_2);
+        }
+        if kind == "editor-tunnels-cleared" {
+            return @tr("MainWindow" => "Cleared all editor tunnel forwards.");
+        }
+        if kind == "editor-auth-test-hint" {
+            return @tr("MainWindow" => "Run Auth Test to validate the current editor fields without saving.");
+        }
+        if kind == "editor-auth-test-loaded" {
+            return @tr("MainWindow" => "Loaded saved session into the editor. Run Auth Test before saving if you want to validate the current form.");
+        }
+        if kind == "editor-auth-test-succeeded" {
+            if param_2 != "" {
+                return @tr("MainWindow" => "Auth test succeeded for {0}. Startup: {1}", param_1, param_2);
+            }
+            return @tr("MainWindow" => "Auth test succeeded for {0}.", param_1);
+        }
+        if kind == "editor-auth-test-failed" {
+            return @tr("MainWindow" => "Auth test failed: {0}", param_1);
+        }
+        if kind == "editor-saved" {
+            return @tr("MainWindow" => "Saved session editor changes into `{0}`.", param_1);
+        }
+        if kind == "session-folder-created" {
+            return @tr("MainWindow" => "Created folder `{0}` under `{1}` and selected it for the editor.", param_1, param_2);
+        }
+        if kind == "session-folder-created-root" {
+            return @tr("MainWindow" => "Created folder `{0}` in the session tree root and persisted the updated config.", param_1);
+        }
+        if kind == "session-new-in-folder" {
+            return @tr("MainWindow" => "New session will be saved into the selected folder.");
+        }
+        if kind == "sessions-reloaded" {
+            return @tr("MainWindow" => "Reloaded saved sessions from config.toml. Saved sessions discovered: {0}.", param_1);
+        }
+        if kind == "session-updated" {
+            return @tr("MainWindow" => "Updated saved session `{0}` from the active runtime session.", param_1);
+        }
+        if kind == "session-selected" {
+            return @tr("MainWindow" => "Selected saved session: {0}", param_1);
+        }
+        if kind == "session-folder-selected" {
+            return @tr("MainWindow" => "Selected saved-session folder `{0}`.", param_1);
+        }
+        if kind == "session-folder-collapsed" {
+            return @tr("MainWindow" => "Collapsed saved-session folder `{0}`.", param_1);
+        }
+        if kind == "session-folder-expanded" {
+            return @tr("MainWindow" => "Expanded saved-session folder `{0}`.", param_1);
+        }
+        if kind == "session-selection-cleared" {
+            return @tr("MainWindow" => "Cleared the saved-session selection.");
+        }
+        if kind == "session-tree-node-missing" {
+            return @tr("MainWindow" => "Saved-session tree node `{0}` was not found.", param_1);
+        }
+        if kind == "session-search-cleared" {
+            return @tr("MainWindow" => "Session search cleared.");
+        }
+        if kind == "session-search-filtering" {
+            return @tr("MainWindow" => "Filtering saved sessions for `{0}`.", param_1);
+        }
+        // --- I18N-1：设置 / 面板 / 隧道 / 启动 ---------------------------------
+        if kind == "settings-close-confirm-enabled" {
+            return @tr("MainWindow" => "Session close confirmation is enabled.");
+        }
+        if kind == "settings-close-confirm-disabled" {
+            return @tr("MainWindow" => "Session close confirmation is disabled.");
+        }
+        if kind == "settings-quit-confirm-enabled" {
+            return @tr("MainWindow" => "Quit confirmation is enabled.");
+        }
+        if kind == "settings-quit-confirm-disabled" {
+            return @tr("MainWindow" => "Quit confirmation is disabled.");
+        }
+        if kind == "settings-debug-logging-enabled" {
+            return @tr("MainWindow" => "Debug logging enabled. Writing to {0}.", param_1);
+        }
+        if kind == "settings-debug-logging-disabled" {
+            return @tr("MainWindow" => "Debug logging disabled.");
+        }
+        if kind == "settings-terminal-saved" {
+            return @tr("MainWindow" => "Saved terminal settings: scrollback={0} lines, cap={1} cells.", param_1, param_2);
+        }
+        if kind == "panel-layout-error" {
+            return @tr("MainWindow" => "Panel layout error: {0}", param_1);
+        }
+        if kind == "tunnel-no-active-session" {
+            return @tr("MainWindow" => "No active session to start a tunnel on.");
+        }
+        if kind == "tunnel-unknown" {
+            return @tr("MainWindow" => "Unknown tunnel `{0}`.", param_1);
+        }
+        if kind == "tunnel-connect-first" {
+            return @tr("MainWindow" => "Connect the session before starting tunnel `{0}`.", param_1);
+        }
+        if kind == "tunnel-not-provisioned" {
+            return @tr("MainWindow" => "Tunnel `{0}` is configured, but SSH port forwarding is not provisioned by the runtime yet.", param_1);
+        }
+        if kind == "tunnel-not-running" {
+            return @tr("MainWindow" => "Tunnel `{0}` is not running; port forwarding is not provisioned yet.", param_1);
+        }
+        if kind == "startup-ready" {
+            return @tr("MainWindow" => "Runtime initialized. Config: {0}. Saved sessions discovered: {1}.", param_1, param_2);
+        }
+        if kind == "startup-recovered" {
+            return @tr("MainWindow" => "Recovered configuration from backup. Saved sessions: {0}. Backup: {1}", param_1, param_2);
+        }
+        return fallback;
+    }
+
+    // I18N-1：status-message 分组（避免单个函数体过深）。
+    public pure function status-message-managers(kind: string, param_1: string, param_2: string, fallback: string) -> string {
+        // --- I18N-1：密钥管理器 / 代理 / 主题 / 文件夹默认值 -------------------
+        if kind == "known-hosts-opened" {
+            return @tr("MainWindow" => "Known hosts manager opened with {n} persisted entry." | "Known hosts manager opened with {n} persisted entries." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "known-hosts-closed" {
+            return @tr("MainWindow" => "Closed known hosts manager.");
+        }
+        if kind == "known-hosts-selected" {
+            return @tr("MainWindow" => "Selected known host {0}.", param_1);
+        }
+        if kind == "known-hosts-empty" {
+            return @tr("MainWindow" => "No persisted known hosts are available.");
+        }
+        if kind == "known-hosts-loaded" {
+            return @tr("MainWindow" => "Known hosts manager loaded {n} entry." | "Known hosts manager loaded {n} entries." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "known-hosts-removed" {
+            return @tr("MainWindow" => "Removed known host entry for {0} from `{1}`.", param_1, param_2);
+        }
+        if kind == "known-hosts-cleared" {
+            return @tr("MainWindow" => "Cleared all persisted known hosts from `{0}`.", param_1);
+        }
+        if kind == "private-keys-opened" {
+            return @tr("MainWindow" => "Private keys manager opened with {n} managed key." | "Private keys manager opened with {n} managed keys." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "private-keys-closed" {
+            return @tr("MainWindow" => "Closed private keys manager.");
+        }
+        if kind == "private-key-selected" {
+            return @tr("MainWindow" => "Selected managed key `{0}`.", param_1);
+        }
+        if kind == "host-keys-opened" {
+            return @tr("MainWindow" => "Host keys manager opened with {n} persisted host key group." | "Host keys manager opened with {n} persisted host key groups." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "host-keys-closed" {
+            return @tr("MainWindow" => "Closed host keys manager.");
+        }
+        if kind == "host-key-selected" {
+            return @tr("MainWindow" => "Selected host key {0} ({1}).", param_1, param_2);
+        }
+        if kind == "host-key-removed" {
+            return @tr("MainWindow" => "Removed the saved host key for {0}.", param_1);
+        }
+        if kind == "host-keys-cleared" {
+            return @tr("MainWindow" => "Cleared all saved host keys.");
+        }
+        if kind == "host-keys-imported" {
+            if param_2 != "" {
+                return @tr("MainWindow" => "Imported {n} host key; {0} line was skipped." | "Imported {n} host keys; {0} lines were skipped." % round(param_1.to-float()), param_2);
+            }
+            return @tr("MainWindow" => "Imported {n} host key." | "Imported {n} host keys." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "proxies-opened" {
+            return @tr("MainWindow" => "Proxy manager opened with {n} managed profile." | "Proxy manager opened with {n} managed profiles." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "proxies-closed" {
+            return @tr("MainWindow" => "Closed proxy manager.");
+        }
+        if kind == "proxies-selected" {
+            return @tr("MainWindow" => "Selected proxy profile `{0}`.", param_1);
+        }
+        if kind == "proxies-duplicated" {
+            return @tr("MainWindow" => "Duplicated proxy profile as `{0}`.", param_1);
+        }
+        if kind == "proxies-saved-new" {
+            return @tr("MainWindow" => "Saved the new proxy profile.");
+        }
+        if kind == "proxies-saved-changes" {
+            return @tr("MainWindow" => "Saved proxy profile changes; all referencing sessions use them.");
+        }
+        if kind == "proxies-remove-confirm" {
+            return @tr("MainWindow" => "Confirm deleting proxy profile `{0}`.", param_1);
+        }
+        if kind == "proxies-remove-blocked" {
+            return @tr("MainWindow" => "Cannot delete `{0}`: it is used by saved sessions: {1}. Set those sessions to No Proxy first.", param_1, param_2);
+        }
+        if kind == "proxies-deleted" {
+            return @tr("MainWindow" => "Deleted proxy profile `{0}`.", param_1);
+        }
+        if kind == "proxies-no-references" {
+            return @tr("MainWindow" => "No saved session references `{0}` anymore.", param_1);
+        }
+        if kind == "proxies-cleared-from-sessions" {
+            return @tr("MainWindow" => "Cleared proxy `{0}` from {n} saved session; they now use No Proxy." | "Cleared proxy `{0}` from {n} saved sessions; they now use No Proxy." % round(param_2.to-float()), param_1);
+        }
+        if kind == "terminal-appearance-saved" {
+            return @tr("MainWindow" => "Saved the global terminal appearance defaults.");
+        }
+        if kind == "folder-defaults-saved" {
+            return @tr("MainWindow" => "Saved folder defaults for `{0}`.", param_1);
+        }
+        if kind == "folder-defaults-opened" {
+            return @tr("MainWindow" => "Opened folder defaults for `{0}`.", param_1);
+        }
+        return fallback;
+    }
+
+    /// 状态栏模板入口：Rust 只传稳定 kind/参数；未覆盖的 kind 回退英文 status_text。
+    public pure function status-message(kind: string, param_1: string, param_2: string, fallback: string) -> string {
+        return status-message-core(kind, param_1, param_2, status-message-tabs(kind, param_1, param_2, status-message-sftp(kind, param_1, param_2, status-message-transfer(kind, param_1, param_2, status-message-terminal(kind, param_1, param_2, status-message-sessions(kind, param_1, param_2, status-message-managers(kind, param_1, param_2, fallback)))))));
     }
 
     // --- N0：标签关闭确认弹窗文案 -------------------------------------------

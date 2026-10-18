@@ -22,7 +22,12 @@ impl AppRuntime {
     pub fn create_sftp_folder_named(&mut self, name: &str) -> AppResult<AppProjection> {
         let name = name.trim();
         if name.is_empty() {
-            self.status_text = "New SFTP folder name must not be empty.".to_owned();
+            self.set_status_kind(
+                "sftp-folder-name-empty",
+                "New SFTP folder name must not be empty.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         let target = self.sftp_relative_or_absolute_path(name);
@@ -35,11 +40,21 @@ impl AppRuntime {
     pub fn rename_sftp_selected(&mut self, new_name: &str) -> AppResult<AppProjection> {
         let new_name = new_name.trim();
         if new_name.is_empty() {
-            self.status_text = "New SFTP name must not be empty.".to_owned();
+            self.set_status_kind(
+                "sftp-name-empty",
+                "New SFTP name must not be empty.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         let Some(entry) = self.selected_sftp_entry() else {
-            self.status_text = "Select an SFTP entry before renaming it.".to_owned();
+            self.set_status_kind(
+                "sftp-rename-requires-selection",
+                "Select an SFTP entry before renaming it.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         };
         let target = self.sftp_relative_or_absolute_path(new_name);
@@ -52,10 +67,15 @@ impl AppRuntime {
 
     pub fn delete_sftp_selected(&mut self) -> AppResult<AppProjection> {
         let Some(entry) = self.selected_sftp_entry() else {
-            self.status_text = "Select an SFTP entry before deleting it.".to_owned();
+            self.set_status_kind(
+                "sftp-delete-requires-selection",
+                "Select an SFTP entry before deleting it.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         };
-        let Some(session_key) = self.prepare_active_sftp_operation("deleting through SFTP")? else {
+        let Some(session_key) = self.prepare_active_sftp_operation("delete")? else {
             return Ok(self.projection());
         };
         self.sftp_live_client_mut(&session_key)?
@@ -63,13 +83,23 @@ impl AppRuntime {
             .map_err(AppError::from_error)?;
         self.sftp_remote_target = entry.path.clone();
         let _ = self.refresh_active_sftp_listing()?;
-        self.status_text = format!("Deleted `{}` through SFTP.", entry.path);
+        self.set_status_kind(
+            "sftp-deleted",
+            format!("Deleted `{}` through SFTP.", entry.path),
+            entry.path,
+            String::new(),
+        );
         Ok(self.projection())
     }
 
     pub fn chmod_sftp_selected(&mut self, permissions: &str) -> AppResult<AppProjection> {
         let Some(entry) = self.selected_sftp_entry() else {
-            self.status_text = "Select an SFTP entry before changing permissions.".to_owned();
+            self.set_status_kind(
+                "sftp-chmod-requires-selection",
+                "Select an SFTP entry before changing permissions.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         };
         self.sftp_remote_target = entry.path;
@@ -80,7 +110,12 @@ impl AppRuntime {
     pub fn upload_sftp_into_current(&mut self, local_path: &str) -> AppResult<AppProjection> {
         let local_path = local_path.trim();
         if local_path.is_empty() {
-            self.status_text = "Local upload path must not be empty.".to_owned();
+            self.set_status_kind(
+                "sftp-upload-path-empty",
+                "Local upload path must not be empty.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         self.sftp_local_path = local_path.to_owned();
@@ -93,7 +128,12 @@ impl AppRuntime {
 
     pub fn download_sftp_selected(&mut self, local_path: &str) -> AppResult<AppProjection> {
         let Some(entry) = self.selected_sftp_entry() else {
-            self.status_text = "Select an SFTP entry before downloading it.".to_owned();
+            self.set_status_kind(
+                "sftp-download-requires-selection",
+                "Select an SFTP entry before downloading it.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         };
         let local_path = local_path.trim();
@@ -101,7 +141,12 @@ impl AppRuntime {
             self.sftp_local_path = local_path.to_owned();
         }
         if self.sftp_local_path.trim().is_empty() {
-            self.status_text = "Local download path must not be empty.".to_owned();
+            self.set_status_kind(
+                "sftp-download-path-empty",
+                "Local download path must not be empty.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         self.sftp_remote_target = entry.path;
@@ -110,7 +155,12 @@ impl AppRuntime {
 
     pub fn edit_sftp_selected(&mut self) -> AppResult<AppProjection> {
         let Some(entry) = self.selected_sftp_entry() else {
-            self.status_text = "Select an SFTP file before starting remote edit.".to_owned();
+            self.set_status_kind(
+                "sftp-remote-edit-requires-file",
+                "Select an SFTP file before starting remote edit.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         };
         self.sftp_remote_target = entry.path;
@@ -132,8 +182,7 @@ impl AppRuntime {
     }
 
     pub fn upload_sftp_file(&mut self) -> AppResult<AppProjection> {
-        let Some(session_key) = self.prepare_active_sftp_operation("uploading through SFTP")?
-        else {
+        let Some(session_key) = self.prepare_active_sftp_operation("upload")? else {
             return Ok(self.projection());
         };
         let local_path = PathBuf::from(self.sftp_local_path.trim());
@@ -155,8 +204,14 @@ impl AppRuntime {
             .upload_file(&local_path, &remote_path)
         {
             let app_error = AppError::from_error(error);
-            self.fail_sftp_transfer(&transfer_id, app_error.to_string());
-            self.status_text = format!("SFTP upload error: {app_error}");
+            let detail = app_error.to_string();
+            self.fail_sftp_transfer(&transfer_id, detail.clone());
+            self.set_status_kind(
+                "sftp-upload-error",
+                format!("SFTP upload error: {detail}"),
+                detail,
+                String::new(),
+            );
             return Ok(self.projection());
         }
         self.complete_sftp_transfer(&transfer_id, transfer_bytes);
@@ -170,18 +225,19 @@ impl AppRuntime {
         }
         self.sftp_remote_target = remote_path.clone();
         let _ = self.refresh_active_sftp_listing()?;
-        self.status_text = format!(
-            "Uploaded `{}` to `{}` through the live SFTP backend.",
-            local_path.display(),
-            remote_path
+        let local_text = local_path.display().to_string();
+        self.set_status_kind(
+            "sftp-uploaded",
+            format!("Uploaded `{local_text}` to `{remote_path}` through the live SFTP backend."),
+            local_text,
+            remote_path,
         );
         self.fold_logging_notice_from_session(&session_key);
         Ok(self.projection())
     }
 
     pub fn download_sftp_file(&mut self) -> AppResult<AppProjection> {
-        let Some(session_key) = self.prepare_active_sftp_operation("downloading through SFTP")?
-        else {
+        let Some(session_key) = self.prepare_active_sftp_operation("download")? else {
             return Ok(self.projection());
         };
         if self.sftp_local_path.trim().is_empty() {
@@ -200,8 +256,14 @@ impl AppRuntime {
             .download_file(&remote_path, &local_path)
         {
             let app_error = AppError::from_error(error);
-            self.fail_sftp_transfer(&transfer_id, app_error.to_string());
-            self.status_text = format!("SFTP download error: {app_error}");
+            let detail = app_error.to_string();
+            self.fail_sftp_transfer(&transfer_id, detail.clone());
+            self.set_status_kind(
+                "sftp-download-error",
+                format!("SFTP download error: {detail}"),
+                detail,
+                String::new(),
+            );
             return Ok(self.projection());
         }
         let transfer_bytes = fs::metadata(&local_path)
@@ -216,18 +278,19 @@ impl AppRuntime {
                 transfer_bytes,
             );
         }
-        self.status_text = format!(
-            "Downloaded `{}` to `{}` through the live SFTP backend.",
+        let local_text = local_path.display().to_string();
+        self.set_status_kind(
+            "sftp-downloaded",
+            format!("Downloaded `{remote_path}` to `{local_text}` through the live SFTP backend."),
             remote_path,
-            local_path.display()
+            local_text,
         );
         self.fold_logging_notice_from_session(&session_key);
         Ok(self.projection())
     }
 
     pub fn start_sftp_remote_edit(&mut self) -> AppResult<AppProjection> {
-        let Some(session_key) = self.prepare_active_sftp_operation("starting remote file edit")?
-        else {
+        let Some(session_key) = self.prepare_active_sftp_operation("remote-edit")? else {
             return Ok(self.projection());
         };
         let remote_path = self.sftp_download_target()?;
@@ -246,8 +309,14 @@ impl AppRuntime {
             .download_file(&remote_path, &local_path)
         {
             let app_error = AppError::from_error(error);
-            self.fail_sftp_transfer(&transfer_id, app_error.to_string());
-            self.status_text = format!("SFTP remote edit download error: {app_error}");
+            let detail = app_error.to_string();
+            self.fail_sftp_transfer(&transfer_id, detail.clone());
+            self.set_status_kind(
+                "sftp-remote-edit-download-error",
+                format!("SFTP remote edit download error: {detail}"),
+                detail,
+                String::new(),
+            );
             return Ok(self.projection());
         }
         let transfer_bytes = fs::metadata(&local_path)
@@ -265,9 +334,14 @@ impl AppRuntime {
                 transfer_bytes,
             );
         }
-        self.status_text = format!(
-            "Remote edit ready for `{remote_path}`. Edit local temp file `{}` and then save remote edit.",
-            local_path.display()
+        let local_text = local_path.display().to_string();
+        self.set_status_kind(
+            "sftp-remote-edit-ready",
+            format!(
+                "Remote edit ready for `{remote_path}`. Edit local temp file `{local_text}` and then save remote edit."
+            ),
+            remote_path,
+            local_text,
         );
         self.fold_logging_notice_from_session(&session_key);
         Ok(self.projection())
@@ -275,12 +349,15 @@ impl AppRuntime {
 
     pub fn save_sftp_remote_edit(&mut self) -> AppResult<AppProjection> {
         let Some(edit_session) = self.remote_edit_session.clone() else {
-            self.status_text =
-                "No active remote edit session to save. Start remote edit first.".to_owned();
+            self.set_status_kind(
+                "sftp-remote-edit-save-missing",
+                "No active remote edit session to save. Start remote edit first.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         };
-        let Some(session_key) = self.prepare_active_sftp_operation("saving remote file edit")?
-        else {
+        let Some(session_key) = self.prepare_active_sftp_operation("remote-edit-save")? else {
             return Ok(self.projection());
         };
         let local_path = PathBuf::from(&edit_session.local_temp_path);
@@ -303,8 +380,14 @@ impl AppRuntime {
             .upload_file(&local_path, &edit_session.remote_path)
         {
             let app_error = AppError::from_error(error);
-            self.fail_sftp_transfer(&transfer_id, app_error.to_string());
-            self.status_text = format!("SFTP remote edit upload error: {app_error}");
+            let detail = app_error.to_string();
+            self.fail_sftp_transfer(&transfer_id, detail.clone());
+            self.set_status_kind(
+                "sftp-remote-edit-upload-error",
+                format!("SFTP remote edit upload error: {detail}"),
+                detail,
+                String::new(),
+            );
             return Ok(self.projection());
         }
         self.complete_sftp_transfer(&transfer_id, transfer_bytes);
@@ -318,10 +401,15 @@ impl AppRuntime {
         }
         self.sftp_remote_target = edit_session.remote_path.clone();
         let _ = self.refresh_active_sftp_listing()?;
-        self.status_text = format!(
-            "Saved remote edit `{}` from local temp file `{}`.",
+        let local_text = local_path.display().to_string();
+        self.set_status_kind(
+            "sftp-remote-edit-saved",
+            format!(
+                "Saved remote edit `{}` from local temp file `{local_text}`.",
+                edit_session.remote_path
+            ),
             edit_session.remote_path,
-            local_path.display()
+            local_text,
         );
         self.fold_logging_notice_from_session(&session_key);
         Ok(self.projection())
@@ -329,27 +417,44 @@ impl AppRuntime {
 
     pub fn cancel_sftp_remote_edit(&mut self) -> AppResult<AppProjection> {
         let Some(edit_session) = self.remote_edit_session.take() else {
-            self.status_text =
-                "No active remote edit session to cancel. Start remote edit first.".to_owned();
+            self.set_status_kind(
+                "sftp-remote-edit-cancel-missing",
+                "No active remote edit session to cancel. Start remote edit first.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         };
+        let remote_path = edit_session.remote_path.clone();
+        let local_temp_path = edit_session.local_temp_path.clone();
         match fs::remove_file(&edit_session.local_temp_path) {
             Ok(()) => {
-                self.status_text = format!(
-                    "Canceled remote edit for `{}` and removed temp file `{}`.",
-                    edit_session.remote_path, edit_session.local_temp_path
+                self.set_status_kind(
+                    "sftp-remote-edit-canceled",
+                    format!(
+                        "Canceled remote edit for `{remote_path}` and removed temp file `{local_temp_path}`."
+                    ),
+                    remote_path,
+                    local_temp_path,
                 );
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                self.status_text = format!(
-                    "Canceled remote edit for `{}`. Temp file was already gone.",
-                    edit_session.remote_path
+                self.set_status_kind(
+                    "sftp-remote-edit-canceled-gone",
+                    format!("Canceled remote edit for `{remote_path}`. Temp file was already gone."),
+                    remote_path,
+                    String::new(),
                 );
             }
             Err(error) => {
-                self.status_text = format!(
-                    "Canceled remote edit for `{}`, but temp file `{}` could not be removed: {error}",
-                    edit_session.remote_path, edit_session.local_temp_path
+                let detail = error.to_string();
+                self.set_status_kind(
+                    "sftp-remote-edit-canceled-error",
+                    format!(
+                        "Canceled remote edit for `{remote_path}`, but temp file `{local_temp_path}` could not be removed: {detail}"
+                    ),
+                    remote_path,
+                    detail,
                 );
             }
         }
@@ -357,9 +462,7 @@ impl AppRuntime {
     }
 
     pub fn create_sftp_directory(&mut self) -> AppResult<AppProjection> {
-        let Some(session_key) =
-            self.prepare_active_sftp_operation("creating directories through SFTP")?
-        else {
+        let Some(session_key) = self.prepare_active_sftp_operation("mkdir")? else {
             return Ok(self.projection());
         };
         let remote_path = self.sftp_secondary_target_path("new SFTP directory path is empty")?;
@@ -368,14 +471,17 @@ impl AppRuntime {
             .map_err(AppError::from_error)?;
         self.sftp_remote_target = remote_path.clone();
         let _ = self.refresh_active_sftp_listing()?;
-        self.status_text = format!("Created remote directory `{remote_path}` through SFTP.");
+        self.set_status_kind(
+            "sftp-mkdir-created",
+            format!("Created remote directory `{remote_path}` through SFTP."),
+            remote_path,
+            String::new(),
+        );
         Ok(self.projection())
     }
 
     pub fn rename_sftp_path(&mut self) -> AppResult<AppProjection> {
-        let Some(session_key) =
-            self.prepare_active_sftp_operation("renaming paths through SFTP")?
-        else {
+        let Some(session_key) = self.prepare_active_sftp_operation("rename")? else {
             return Ok(self.projection());
         };
         let from_path = self.sftp_download_target()?;
@@ -385,14 +491,17 @@ impl AppRuntime {
             .map_err(AppError::from_error)?;
         self.sftp_remote_target = to_path.clone();
         let _ = self.refresh_active_sftp_listing()?;
-        self.status_text = format!("Renamed `{from_path}` to `{to_path}` through SFTP.");
+        self.set_status_kind(
+            "sftp-renamed",
+            format!("Renamed `{from_path}` to `{to_path}` through SFTP."),
+            from_path,
+            to_path,
+        );
         Ok(self.projection())
     }
 
     pub fn chmod_sftp_path(&mut self) -> AppResult<AppProjection> {
-        let Some(session_key) =
-            self.prepare_active_sftp_operation("changing permissions through SFTP")?
-        else {
+        let Some(session_key) = self.prepare_active_sftp_operation("chmod")? else {
             return Ok(self.projection());
         };
         let remote_path = self.sftp_download_target()?;
@@ -401,9 +510,12 @@ impl AppRuntime {
             .chmod(&remote_path, permissions)
             .map_err(AppError::from_error)?;
         let _ = self.refresh_active_sftp_listing()?;
-        self.status_text = format!(
-            "Applied chmod {:03o} to `{remote_path}` through SFTP.",
-            permissions
+        let mode_text = format!("{permissions:03o}");
+        self.set_status_kind(
+            "sftp-chmod-applied",
+            format!("Applied chmod {mode_text} to `{remote_path}` through SFTP."),
+            mode_text,
+            remote_path,
         );
         Ok(self.projection())
     }
@@ -550,10 +662,15 @@ impl AppRuntime {
             };
             transfer_ids.push(self.submit_sftp_spec(spec)?);
         }
-        self.status_text = format!(
-            "Queued {} upload job{} into `{destination_dir}`.",
-            transfer_ids.len(),
-            if transfer_ids.len() == 1 { "" } else { "s" }
+        let count = transfer_ids.len();
+        self.set_status_kind(
+            "sftp-upload-queued",
+            format!(
+                "Queued {count} upload job{} into `{destination_dir}`.",
+                if count == 1 { "" } else { "s" }
+            ),
+            count.to_string(),
+            destination_dir,
         );
         Ok(transfer_ids)
     }
@@ -602,11 +719,16 @@ impl AppRuntime {
             };
             transfer_ids.push(self.submit_sftp_spec(spec)?);
         }
-        self.status_text = format!(
-            "Queued {} download job{} into `{}`.",
-            transfer_ids.len(),
-            if transfer_ids.len() == 1 { "" } else { "s" },
-            local_dir.display()
+        let count = transfer_ids.len();
+        let local_dir_text = local_dir.display().to_string();
+        self.set_status_kind(
+            "sftp-download-queued",
+            format!(
+                "Queued {count} download job{} into `{local_dir_text}`.",
+                if count == 1 { "" } else { "s" }
+            ),
+            count.to_string(),
+            local_dir_text,
         );
         Ok(transfer_ids)
     }
@@ -659,9 +781,14 @@ impl AppRuntime {
                 "the destination is already the source directory",
             ));
         }
-        self.status_text = format!(
-            "Queued {submitted} remote copy job{} into `{destination_dir}`.",
-            if submitted == 1 { "" } else { "s" }
+        self.set_status_kind(
+            "sftp-remote-copy-queued",
+            format!(
+                "Queued {submitted} remote copy job{} into `{destination_dir}`.",
+                if submitted == 1 { "" } else { "s" }
+            ),
+            submitted.to_string(),
+            destination_dir,
         );
         Ok(submitted)
     }
@@ -706,9 +833,14 @@ impl AppRuntime {
             moves,
             options,
         })?;
-        self.status_text = format!(
-            "Queued a move of {count} entr{} into `{destination_dir}`.",
-            if count == 1 { "y" } else { "ies" }
+        self.set_status_kind(
+            "sftp-remote-move-queued",
+            format!(
+                "Queued a move of {count} entr{} into `{destination_dir}`.",
+                if count == 1 { "y" } else { "ies" }
+            ),
+            count.to_string(),
+            destination_dir,
         );
         Ok(count)
     }
@@ -727,9 +859,14 @@ impl AppRuntime {
             config,
             entries: entries.to_vec(),
         })?;
-        self.status_text = format!(
-            "Queued a delete of {count} remote entr{}.",
-            if count == 1 { "y" } else { "ies" }
+        self.set_status_kind(
+            "sftp-remote-delete-queued",
+            format!(
+                "Queued a delete of {count} remote entr{}.",
+                if count == 1 { "y" } else { "ies" }
+            ),
+            count.to_string(),
+            String::new(),
         );
         Ok(count)
     }
@@ -754,9 +891,15 @@ impl AppRuntime {
             paths,
             permissions,
         })?;
-        self.status_text = format!(
-            "Queued chmod {permissions:03o} for {count} remote entr{}.",
-            if count == 1 { "y" } else { "ies" }
+        let mode_text = format!("{permissions:03o}");
+        self.set_status_kind(
+            "sftp-remote-chmod-queued",
+            format!(
+                "Queued chmod {mode_text} for {count} remote entr{}.",
+                if count == 1 { "y" } else { "ies" }
+            ),
+            mode_text,
+            count.to_string(),
         );
         Ok(count)
     }
@@ -787,7 +930,12 @@ impl AppRuntime {
     ) -> AppResult<AppProjection> {
         let paths = self.local_selected_paths();
         if paths.is_empty() {
-            self.status_text = "Select local entries before uploading.".to_owned();
+            self.set_status_kind(
+                "sftp-select-local-upload",
+                "Select local entries before uploading.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         self.upload_local_paths_to_remote(&paths, policy_id)
@@ -798,7 +946,12 @@ impl AppRuntime {
     pub fn move_local_selection_to_remote(&mut self) -> AppResult<AppProjection> {
         let paths = self.local_selected_paths();
         if paths.is_empty() {
-            self.status_text = "Select local entries before moving.".to_owned();
+            self.set_status_kind(
+                "sftp-select-local-move",
+                "Select local entries before moving.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         let target = self.sftp_path.clone();
@@ -814,7 +967,12 @@ impl AppRuntime {
     ) -> AppResult<AppProjection> {
         let path = path.trim();
         if path.is_empty() {
-            self.status_text = "Local upload path must not be empty.".to_owned();
+            self.set_status_kind(
+                "sftp-upload-path-empty",
+                "Local upload path must not be empty.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         let policy = Self::policy_from_id(policy_id)?;
@@ -831,7 +989,12 @@ impl AppRuntime {
     ) -> AppResult<AppProjection> {
         let entries = self.selection_entry_pairs();
         if entries.is_empty() {
-            self.status_text = "Select remote entries before downloading.".to_owned();
+            self.set_status_kind(
+                "sftp-select-remote-download",
+                "Select remote entries before downloading.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         self.download_sftp_entries(&entries, local_dir, policy_id)
@@ -862,7 +1025,12 @@ impl AppRuntime {
     pub fn delete_sftp_selection(&mut self) -> AppResult<AppProjection> {
         let entries = self.selection_entry_pairs();
         if entries.is_empty() {
-            self.status_text = "Select remote entries before deleting.".to_owned();
+            self.set_status_kind(
+                "sftp-select-remote-delete",
+                "Select remote entries before deleting.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         self.submit_remote_delete_entries(&entries)?;
@@ -874,7 +1042,12 @@ impl AppRuntime {
         let permissions = parse_sftp_permissions(permissions)?;
         let entries = self.selection_entry_pairs();
         if entries.is_empty() {
-            self.status_text = "Select remote entries before changing permissions.".to_owned();
+            self.set_status_kind(
+                "sftp-select-remote-chmod",
+                "Select remote entries before changing permissions.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         self.submit_remote_chmod_entries(&entries, permissions)?;
@@ -890,7 +1063,12 @@ impl AppRuntime {
         let policy = Self::policy_from_id(policy_id)?;
         let entries = self.selection_entry_pairs();
         if entries.is_empty() {
-            self.status_text = "Select remote entries before copying.".to_owned();
+            self.set_status_kind(
+                "sftp-select-remote-copy",
+                "Select remote entries before copying.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         self.submit_remote_copy_entries(&entries, destination_dir, policy)?;
@@ -900,7 +1078,12 @@ impl AppRuntime {
     /// Re-runs the job that hit Ask-policy conflicts with an explicit policy.
     pub fn resolve_sftp_conflict(&mut self, policy_id: &str) -> AppResult<AppProjection> {
         let Some(prompt) = self.pending_sftp_conflict.take() else {
-            self.status_text = "There is no pending conflict to resolve.".to_owned();
+            self.set_status_kind(
+                "sftp-no-pending-conflict",
+                "There is no pending conflict to resolve.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         };
         let Some(policy) = overwrite_policy_from_id(policy_id) else {
@@ -913,9 +1096,14 @@ impl AppRuntime {
         let spec = (*prompt.spec).with_overwrite(policy);
         let count = prompt.conflicts.len();
         self.submit_sftp_spec(spec)?;
-        self.status_text = format!(
-            "Re-running the transfer with `{}` for {count} conflicting path(s).",
-            overwrite_policy_label(policy)
+        self.set_status_kind(
+            "sftp-conflict-rerun",
+            format!(
+                "Re-running the transfer with `{}` for {count} conflicting path(s).",
+                overwrite_policy_label(policy)
+            ),
+            overwrite_policy_id(policy).to_owned(),
+            count.to_string(),
         );
         Ok(self.projection())
     }
@@ -924,9 +1112,12 @@ impl AppRuntime {
     /// entries stay skipped).
     pub fn cancel_sftp_conflict(&mut self) -> AppProjection {
         if let Some(prompt) = self.pending_sftp_conflict.take() {
-            self.status_text = format!(
-                "Kept {} conflicting path(s) skipped.",
-                prompt.conflicts.len()
+            let count = prompt.conflicts.len();
+            self.set_status_kind(
+                "sftp-conflict-canceled",
+                format!("Kept {count} conflicting path(s) skipped."),
+                count.to_string(),
+                String::new(),
             );
         }
         self.projection()
@@ -986,12 +1177,30 @@ impl AppRuntime {
                         moved_cleanly = !report.cancelled
                             && report.failed.is_empty()
                             && report.conflicts.is_empty();
-                        self.status_text =
+                        // 计数明细只进 tracing；状态栏用 kind 模板 + 目标路径。
+                        let summary =
                             tree_transfer_status_text(&report, direction, &destination);
+                        tracing::info!(target: "yshell::app", "{summary}");
+                        let (kind, text) = match direction {
+                            TransferDirection::Upload => (
+                                "sftp-tree-uploaded",
+                                format!("Uploaded tree `{destination}` through SFTP."),
+                            ),
+                            TransferDirection::Download => (
+                                "sftp-tree-downloaded",
+                                format!("Downloaded tree `{destination}` through SFTP."),
+                            ),
+                        };
+                        self.set_status_kind(kind, text, destination, String::new());
                     }
                     SftpJobOutcome::Cancelled(report) => {
                         apply_sftp_tree_report(&mut self.transfer_queue, &id, &report);
-                        self.status_text = format!("Cancelled transfer `{id}`.");
+                        self.set_status_kind(
+                            "transfer-cancelled",
+                            format!("Cancelled transfer `{id}`."),
+                            id.clone(),
+                            String::new(),
+                        );
                     }
                     SftpJobOutcome::Failed { reason, report } => {
                         let _ = self.transfer_queue.fail(&id, reason.clone());
@@ -1009,7 +1218,12 @@ impl AppRuntime {
                                 }
                             }
                         }
-                        self.status_text = format!("SFTP transfer failed: {reason}");
+                        self.set_status_kind(
+                            "sftp-transfer-failed",
+                            format!("SFTP transfer failed: {reason}"),
+                            reason,
+                            String::new(),
+                        );
                     }
                 }
                 if moved_cleanly {
@@ -1058,7 +1272,12 @@ impl AppRuntime {
         move_source: bool,
     ) -> AppResult<AppProjection> {
         if paths.is_empty() {
-            self.status_text = "The drag payload has no local paths.".to_owned();
+            self.set_status_kind(
+                "sftp-drag-no-local-paths",
+                "The drag payload has no local paths.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         let target_dir = normalize_remote_path(target_dir)?;
@@ -1116,7 +1335,12 @@ impl AppRuntime {
         move_source: bool,
     ) -> AppProjection {
         if paths.is_empty() {
-            self.status_text = "The drag payload has no local paths.".to_owned();
+            self.set_status_kind(
+                "sftp-drag-no-local-paths",
+                "The drag payload has no local paths.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         }
         let destination_dir = self.local_pane.dir.clone();
@@ -1141,21 +1365,43 @@ impl AppRuntime {
             }
         }
         self.refresh_local_pane();
-        self.status_text = if failures.is_empty() {
-            format!(
-                "{} {changed} local entr{}.",
-                if move_source { "Moved" } else { "Copied" },
-                if changed == 1 { "y" } else { "ies" }
-            )
+        let verb = if move_source { "Moved" } else { "Copied" };
+        if failures.is_empty() {
+            self.set_status_kind(
+                if move_source {
+                    "sftp-local-moved"
+                } else {
+                    "sftp-local-copied"
+                },
+                format!(
+                    "{verb} {changed} local entr{}.",
+                    if changed == 1 { "y" } else { "ies" }
+                ),
+                changed.to_string(),
+                String::new(),
+            );
         } else {
-            format!(
-                "{} {changed} local entr{}; {} failed: {}",
-                if move_source { "Moved" } else { "Copied" },
-                if changed == 1 { "y" } else { "ies" },
-                failures.len(),
+            tracing::warn!(
+                target: "yshell::runtime",
+                "local drop failed for: {}",
                 failures.join("; ")
-            )
-        };
+            );
+            self.set_status_kind(
+                if move_source {
+                    "sftp-local-moved"
+                } else {
+                    "sftp-local-copied"
+                },
+                format!(
+                    "{verb} {changed} local entr{}; {} failed: {}",
+                    if changed == 1 { "y" } else { "ies" },
+                    failures.len(),
+                    failures.join("; ")
+                ),
+                changed.to_string(),
+                failures.len().to_string(),
+            );
+        }
         self.projection()
     }
 
@@ -1166,7 +1412,12 @@ impl AppRuntime {
         target_dir: &str,
     ) -> AppResult<AppProjection> {
         if paths.is_empty() {
-            self.status_text = "The dropped transfer has no local file paths.".to_owned();
+            self.set_status_kind(
+                "sftp-dropped-no-local-paths",
+                "The dropped transfer has no local file paths.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         let target_dir = normalize_remote_path(target_dir)?;
@@ -1197,23 +1448,43 @@ impl AppRuntime {
                     }
                 }
                 if failures.is_empty() {
-                    self.status_text = format!(
-                        "Moved {removed} local entr{} to the remote pane.",
-                        if removed == 1 { "y" } else { "ies" }
+                    self.set_status_kind(
+                        "sftp-move-cleanup-moved",
+                        format!(
+                            "Moved {removed} local entr{} to the remote pane.",
+                            if removed == 1 { "y" } else { "ies" }
+                        ),
+                        removed.to_string(),
+                        String::new(),
                     );
                 } else {
-                    self.status_text = format!(
-                        "Uploaded, but removing {}/{} local source(s) failed: {}",
-                        failures.len(),
-                        paths.len(),
+                    tracing::warn!(
+                        target: "yshell::runtime",
+                        "local move cleanup failed for: {}",
                         failures.join("; ")
+                    );
+                    self.set_status_kind(
+                        "sftp-move-cleanup-failed",
+                        format!(
+                            "Uploaded, but removing {}/{} local source(s) failed: {}",
+                            failures.len(),
+                            paths.len(),
+                            failures.join("; ")
+                        ),
+                        failures.len().to_string(),
+                        paths.len().to_string(),
                     );
                 }
             }
             MoveCleanup::RemoteEntries(entries) => {
                 if let Err(error) = self.submit_remote_delete_entries(&entries) {
-                    self.status_text =
-                        format!("Uploaded, but the remote source cleanup failed: {error}");
+                    let detail = error.to_string();
+                    self.set_status_kind(
+                        "sftp-move-cleanup-remote-failed",
+                        format!("Uploaded, but the remote source cleanup failed: {detail}"),
+                        detail,
+                        String::new(),
+                    );
                 }
             }
         }

@@ -167,7 +167,8 @@ impl AppRuntime {
         let Some(session_key) = self.active_session_id.clone() else {
             self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
             self.sftp_listing = SftpListingState::RefreshNeedsSession;
-            self.status_text = self.sftp_session.legacy_status_text();
+            let text = self.sftp_session.legacy_status_text();
+            self.set_status_kind("sftp-disconnected", text, String::new(), String::new());
             return Ok(self.projection());
         };
         let status_text = self.sync_sftp_lifecycle_for_session(&session_key, true);
@@ -187,7 +188,8 @@ impl AppRuntime {
             let reason = self.sftp_session.status_detail().to_owned();
             self.set_status_kind("sftp-failed", text, session_key, reason);
         } else {
-            self.status_text = text;
+            let session_key = self.sftp_session.status_session_key().to_owned();
+            self.set_status_kind("sftp-disconnected", text, session_key, String::new());
         }
     }
 
@@ -305,7 +307,12 @@ impl AppRuntime {
     /// Opens the Properties dialog for the current remote selection.
     pub fn open_sftp_properties(&mut self) -> AppProjection {
         if self.selected_sftp_entry().is_none() {
-            self.status_text = "Select an SFTP entry before opening its properties.".to_owned();
+            self.set_status_kind(
+                "sftp-properties-requires-selection",
+                "Select an SFTP entry before opening its properties.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         }
         self.sftp_properties_open = true;
@@ -333,7 +340,12 @@ impl AppRuntime {
 
     pub fn activate_sftp_entry(&mut self) -> AppResult<AppProjection> {
         let Some(entry) = self.selected_sftp_entry() else {
-            self.status_text = "Select an SFTP entry before opening it.".to_owned();
+            self.set_status_kind(
+                "sftp-open-requires-selection",
+                "Select an SFTP entry before opening it.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         };
         if matches!(entry.kind, FsEntryKind::Directory) {
@@ -344,7 +356,13 @@ impl AppRuntime {
 
     pub fn sort_sftp_by(&mut self, column: &str) -> AppProjection {
         let Some(column) = SftpSortColumn::from_label(column) else {
-            self.status_text = format!("Unknown SFTP sort column `{}`.", column.trim());
+            let column_text = column.trim().to_owned();
+            self.set_status_kind(
+                "sftp-unknown-sort-column",
+                format!("Unknown SFTP sort column `{column_text}`."),
+                column_text,
+                String::new(),
+            );
             return self.projection();
         };
         let selected = self.selected_sftp_entry().map(|entry| entry.path);
@@ -375,11 +393,21 @@ impl AppRuntime {
         let selected = self.selected_sftp_entry().map(|entry| entry.path);
         self.sftp_show_hidden = !self.sftp_show_hidden;
         self.reconcile_sftp_selection(selected.as_deref());
-        self.status_text = if self.sftp_show_hidden {
-            "SFTP hidden files are now shown.".to_owned()
+        if self.sftp_show_hidden {
+            self.set_status_kind(
+                "sftp-hidden-shown",
+                "SFTP hidden files are now shown.".to_owned(),
+                String::new(),
+                String::new(),
+            );
         } else {
-            "SFTP hidden files are now hidden.".to_owned()
-        };
+            self.set_status_kind(
+                "sftp-hidden-hidden",
+                "SFTP hidden files are now hidden.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+        }
         self.projection()
     }
 
@@ -389,7 +417,12 @@ impl AppRuntime {
             .ok()
             .and_then(|index| crumbs.get(index))
         else {
-            self.status_text = "That SFTP breadcrumb is no longer available.".to_owned();
+            self.set_status_kind(
+                "sftp-breadcrumb-missing",
+                "That SFTP breadcrumb is no longer available.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         };
         let path = crumb.path.clone();
@@ -589,13 +622,21 @@ impl AppRuntime {
 
     pub(crate) fn prepare_active_sftp_operation(
         &mut self,
-        action: &str,
+        action_id: &str,
     ) -> AppResult<Option<String>> {
+        let action = sftp_action_english_label(action_id);
         let Some(session_key) = self.active_session_id.clone() else {
             self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
-            self.status_text = format!(
-                "{} Cannot continue {action} until a runtime session is connected.",
-                self.sftp_session.legacy_status_text()
+            let lifecycle = self.sftp_session.legacy_status_text();
+            tracing::info!(
+                target: "yshell::runtime",
+                "SFTP operation blocked because no runtime session is active: {lifecycle}"
+            );
+            self.set_status_kind(
+                "sftp-not-ready",
+                format!("{lifecycle} Cannot continue {action} until a runtime session is connected."),
+                action_id.to_owned(),
+                String::new(),
             );
             return Ok(None);
         };
@@ -603,7 +644,16 @@ impl AppRuntime {
         if self.sftp_ready_session_key().is_some() {
             Ok(Some(session_key))
         } else {
-            self.status_text = format!("{message} Cannot continue {action}.");
+            tracing::info!(
+                target: "yshell::runtime",
+                "SFTP operation `{action_id}` cannot continue: {message}"
+            );
+            self.set_status_kind(
+                "sftp-not-ready",
+                format!("{message} Cannot continue {action}."),
+                action_id.to_owned(),
+                String::new(),
+            );
             Ok(None)
         }
     }
@@ -880,6 +930,24 @@ impl SftpSessionLifecycle {
                 None => format!("SFTP session failed: {reason}"),
             },
         }
+    }
+}
+
+/// I18N-1：SFTP 操作 id → 英文回退文案里的动作短语。
+///
+/// 只用于 `status_text` 的英文回退；界面句子由
+/// `TextFormats.sftp-action-label` 按同一个 id 翻译。
+fn sftp_action_english_label(action_id: &str) -> &'static str {
+    match action_id {
+        "upload" => "uploading through SFTP",
+        "download" => "downloading through SFTP",
+        "delete" => "deleting through SFTP",
+        "rename" => "renaming paths through SFTP",
+        "chmod" => "changing permissions through SFTP",
+        "mkdir" => "creating directories through SFTP",
+        "remote-edit" => "starting remote file edit",
+        "remote-edit-save" => "saving remote file edit",
+        _ => "using SFTP",
     }
 }
 

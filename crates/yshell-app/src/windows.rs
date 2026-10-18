@@ -464,8 +464,19 @@ impl WindowManager {
     }
 
     /// 把窗口标记为交互窗口（键盘/窗口激活回调；不产生投影）。
+    ///
+    /// TERM-2：同时把该窗口的设备像素比写进 runtime，Settings 的 live preview
+    /// 与真实终端用同一个 DPR 光栅化（多窗口跨不同 DPI 显示器时以聚焦窗口为准）。
     pub(crate) fn note_window_activation(&mut self, window_id: u64) {
         self.runtime.borrow_mut().focus_window(window_id);
+        if let Some(scale_factor) = self
+            .windows
+            .iter()
+            .find(|entry| entry.id == window_id)
+            .map(|entry| entry.surface.scale_factor())
+        {
+            self.runtime.borrow_mut().note_ui_scale_factor(scale_factor);
+        }
     }
 
     /// 在指定窗口的状态栏写一条纯文本提示（错误路径用；窗口不存在时忽略）。
@@ -514,6 +525,10 @@ impl WindowManager {
         {
             dirty = true;
         }
+        // TERM-2：聚焦窗口（启动早期尚未有聚焦窗口时取首个窗口）的 DPR 是
+        // Settings live preview 的渲染基准；`sync_scale_factor` 之后读取，
+        // 保证预览与终端用同一帧的新 cell 度量。
+        let scale_factor = self.windows[index].surface.scale_factor();
         let (columns, rows) = {
             let entry = &self.windows[index];
             terminal_size_from_viewport(
@@ -532,6 +547,9 @@ impl WindowManager {
             let Ok(mut runtime) = self.runtime.try_borrow_mut() else {
                 return dirty;
             };
+            if focused.is_none() || focused == Some(window_id) {
+                runtime.note_ui_scale_factor(scale_factor);
+            }
             // TAB-4：记住聚焦窗口的视口尺寸，供 `+` 新建本地终端时作为 PTY 初始尺寸。
             if focused == Some(window_id) {
                 runtime.note_terminal_viewport_size(columns, rows);

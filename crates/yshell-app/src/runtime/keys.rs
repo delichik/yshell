@@ -71,20 +71,35 @@ impl AppRuntime {
             .map(SessionRuntime::visible_text)
             .ok_or_else(|| AppError::new("active runtime session is missing"))?;
         self.terminal_clipboard = visible;
-        self.status_text = if self.terminal_clipboard.trim().is_empty() {
-            "Copied visible terminal view, but it was empty.".to_owned()
+        if self.terminal_clipboard.trim().is_empty() {
+            self.set_status_kind(
+                "terminal-copied-visible-empty",
+                "Copied visible terminal view, but it was empty.".to_owned(),
+                String::new(),
+                String::new(),
+            );
         } else {
-            format!(
-                "Copied {} characters from the visible terminal view into the app clipboard.",
-                self.terminal_clipboard.chars().count()
-            )
-        };
+            let characters = self.terminal_clipboard.chars().count();
+            self.set_status_kind(
+                "terminal-copied-visible",
+                format!(
+                    "Copied {characters} characters from the visible terminal view into the app clipboard."
+                ),
+                characters.to_string(),
+                String::new(),
+            );
+        }
         Ok(self.projection())
     }
 
     pub fn paste_terminal_clipboard(&mut self) -> AppResult<AppProjection> {
         if self.terminal_clipboard.is_empty() {
-            self.status_text = "Terminal clipboard is empty, so nothing was pasted.".to_owned();
+            self.set_status_kind(
+                "terminal-clipboard-empty",
+                "Terminal clipboard is empty, so nothing was pasted.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         let mut payload = self.terminal_clipboard.clone();
@@ -96,7 +111,12 @@ impl AppRuntime {
 
     pub fn paste_text_into_terminal(&mut self, text: &str) -> AppResult<AppProjection> {
         if text.is_empty() {
-            self.status_text = "Clipboard is empty, so nothing was pasted.".to_owned();
+            self.set_status_kind(
+                "clipboard-empty-paste",
+                "Clipboard is empty, so nothing was pasted.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         self.terminal_clipboard = text.to_owned();
@@ -111,7 +131,12 @@ impl AppRuntime {
     /// shells that honor bracketed paste.
     pub fn paste_text_into_terminal_bracketed(&mut self, text: &str) -> AppResult<AppProjection> {
         if text.is_empty() {
-            self.status_text = "Clipboard is empty, so nothing was pasted.".to_owned();
+            self.set_status_kind(
+                "clipboard-empty-paste",
+                "Clipboard is empty, so nothing was pasted.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         self.terminal_clipboard = text.to_owned();
@@ -133,7 +158,12 @@ impl AppRuntime {
         self.terminal_search_matches.clear();
         self.terminal_search_current_index = None;
         self.terminal_search_error.clear();
-        self.status_text = "Cleared the visible terminal view.".to_owned();
+        self.set_status_kind(
+            "terminal-cleared",
+            "Cleared the visible terminal view.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         Ok(self.projection())
     }
 
@@ -148,9 +178,19 @@ impl AppRuntime {
             self.terminal_search_matches.clear();
             self.terminal_search_current_index = None;
             self.terminal_search_error.clear();
-            self.status_text = "Cleared terminal scrollback. Live screen kept.".to_owned();
+            self.set_status_kind(
+                "terminal-scrollback-cleared",
+                "Cleared terminal scrollback. Live screen kept.".to_owned(),
+                String::new(),
+                String::new(),
+            );
         } else {
-            self.status_text = "Scrollback is already empty.".to_owned();
+            self.set_status_kind(
+                "terminal-scrollback-empty",
+                "Scrollback is already empty.".to_owned(),
+                String::new(),
+                String::new(),
+            );
         }
         Ok(self.projection())
     }
@@ -163,20 +203,33 @@ impl AppRuntime {
             .map(SessionRuntime::current_line_text)
             .ok_or_else(|| AppError::new("active runtime session is missing"))?;
         self.terminal_clipboard = line;
-        self.status_text = if self.terminal_clipboard.trim().is_empty() {
-            "Copied the current line, but it was empty.".to_owned()
+        if self.terminal_clipboard.trim().is_empty() {
+            self.set_status_kind(
+                "terminal-line-empty",
+                "Copied the current line, but it was empty.".to_owned(),
+                String::new(),
+                String::new(),
+            );
         } else {
-            format!(
-                "Copied {} characters from the current line.",
-                self.terminal_clipboard.chars().count()
-            )
-        };
+            let characters = self.terminal_clipboard.chars().count();
+            self.set_status_kind(
+                "terminal-copied-line",
+                format!("Copied {characters} characters from the current line."),
+                characters.to_string(),
+                String::new(),
+            );
+        }
         Ok(self.projection())
     }
 
     pub fn select_screen_active_terminal(&mut self) -> AppResult<AppProjection> {
         let Some(session_key) = self.active_session_id.clone() else {
-            self.status_text = "No active terminal to select.".to_owned();
+            self.set_status_kind(
+                "terminal-select-none",
+                "No active terminal to select.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         };
         let runtime = self
@@ -184,12 +237,20 @@ impl AppRuntime {
             .get_mut(&session_key)
             .ok_or_else(|| AppError::new("active runtime session is missing"))?;
         if runtime.select_screen_terminal() {
-            self.status_text = format!(
-                "Selected {} characters from the visible screen.",
-                runtime.terminal_selection_text().chars().count()
+            let characters = runtime.terminal_selection_text().chars().count();
+            self.set_status_kind(
+                "terminal-selected-screen",
+                format!("Selected {characters} characters from the visible screen."),
+                characters.to_string(),
+                String::new(),
             );
         } else {
-            self.status_text = "Visible screen is empty.".to_owned();
+            self.set_status_kind(
+                "terminal-screen-empty",
+                "Visible screen is empty.".to_owned(),
+                String::new(),
+                String::new(),
+            );
         }
         Ok(self.projection())
     }
@@ -197,26 +258,26 @@ impl AppRuntime {
     pub fn find_in_active_terminal(&mut self, query: &str) -> AppResult<AppProjection> {
         self.terminal_search_query = query.to_owned();
         self.refresh_terminal_search_for_active_session();
-        self.status_text = self.terminal_search_summary_legacy_text();
+        self.set_terminal_search_status();
         Ok(self.projection())
     }
 
     pub fn set_terminal_search_regex(&mut self, regex: bool) -> AppResult<AppProjection> {
         self.terminal_search_regex = regex;
         self.refresh_terminal_search_for_active_session();
-        self.status_text = self.terminal_search_summary_legacy_text();
+        self.set_terminal_search_status();
         Ok(self.projection())
     }
 
     pub fn select_next_terminal_match(&mut self) -> AppResult<AppProjection> {
         self.rotate_terminal_match(true);
-        self.status_text = self.terminal_search_summary_legacy_text();
+        self.set_terminal_search_status();
         Ok(self.projection())
     }
 
     pub fn select_previous_terminal_match(&mut self) -> AppResult<AppProjection> {
         self.rotate_terminal_match(false);
-        self.status_text = self.terminal_search_summary_legacy_text();
+        self.set_terminal_search_status();
         Ok(self.projection())
     }
 
@@ -283,24 +344,44 @@ impl AppRuntime {
 
     pub fn scroll_active_terminal(&mut self, delta: i32) -> AppResult<AppProjection> {
         let Some(session_key) = self.active_session_id.clone() else {
-            self.status_text = "No active terminal to scroll.".to_owned();
+            self.set_status_kind(
+                "terminal-scroll-none",
+                "No active terminal to scroll.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         };
-        let runtime = self
-            .sessions
-            .get_mut(&session_key)
-            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
-        let changed = runtime.scroll_terminal(delta);
-        self.status_text = if runtime.viewport_offset() == 0 {
-            "Terminal scrolled to the live bottom.".to_owned()
-        } else if changed {
-            format!(
-                "Terminal scrolled back {} line(s) into scrollback.",
-                runtime.viewport_offset()
-            )
-        } else {
-            "Terminal is already at the top of the scrollback buffer.".to_owned()
+        let (offset, changed) = {
+            let runtime = self
+                .sessions
+                .get_mut(&session_key)
+                .ok_or_else(|| AppError::new("active runtime session is missing"))?;
+            let changed = runtime.scroll_terminal(delta);
+            (runtime.viewport_offset(), changed)
         };
+        if offset == 0 {
+            self.set_status_kind(
+                "terminal-scrolled-bottom",
+                "Terminal scrolled to the live bottom.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+        } else if changed {
+            self.set_status_kind(
+                "terminal-scrolled-back",
+                format!("Terminal scrolled back {offset} line(s) into scrollback."),
+                offset.to_string(),
+                String::new(),
+            );
+        } else {
+            self.set_status_kind(
+                "terminal-scroll-top",
+                "Terminal is already at the top of the scrollback buffer.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+        }
         Ok(self.projection())
     }
 
@@ -312,7 +393,12 @@ impl AppRuntime {
             .active_terminal_viewport_metrics()
             .map(|metrics| metrics.top_absolute_row)
         else {
-            self.status_text = "No active terminal to scroll.".to_owned();
+            self.set_status_kind(
+                "terminal-scroll-none",
+                "No active terminal to scroll.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         };
         let target = usize::try_from(line_from_top.max(0)).unwrap_or(usize::MAX);
@@ -329,15 +415,26 @@ impl AppRuntime {
 
     pub fn scroll_active_terminal_to_bottom(&mut self) -> AppResult<AppProjection> {
         let Some(session_key) = self.active_session_id.clone() else {
-            self.status_text = "No active terminal to scroll.".to_owned();
+            self.set_status_kind(
+                "terminal-scroll-none",
+                "No active terminal to scroll.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         };
-        let runtime = self
+        let scrolled = self
             .sessions
             .get_mut(&session_key)
-            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
-        if runtime.scroll_terminal_to_bottom() {
-            self.status_text = "Terminal scrolled to the live bottom.".to_owned();
+            .ok_or_else(|| AppError::new("active runtime session is missing"))?
+            .scroll_terminal_to_bottom();
+        if scrolled {
+            self.set_status_kind(
+                "terminal-scrolled-bottom",
+                "Terminal scrolled to the live bottom.".to_owned(),
+                String::new(),
+                String::new(),
+            );
         }
         Ok(self.projection())
     }
@@ -386,17 +483,29 @@ impl AppRuntime {
 
     pub fn select_all_active_terminal(&mut self) -> AppResult<AppProjection> {
         let Some(session_key) = self.active_session_id.clone() else {
-            self.status_text = "No active terminal to select.".to_owned();
+            self.set_status_kind(
+                "terminal-select-none",
+                "No active terminal to select.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         };
-        let runtime = self
-            .sessions
-            .get_mut(&session_key)
-            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
-        if runtime.select_all_terminal() {
-            self.status_text = format!(
-                "Selected {} characters from the terminal.",
-                runtime.terminal_selection_text().chars().count()
+        let characters = {
+            let runtime = self
+                .sessions
+                .get_mut(&session_key)
+                .ok_or_else(|| AppError::new("active runtime session is missing"))?;
+            runtime
+                .select_all_terminal()
+                .then(|| runtime.terminal_selection_text().chars().count())
+        };
+        if let Some(characters) = characters {
+            self.set_status_kind(
+                "terminal-selected-all",
+                format!("Selected {characters} characters from the terminal."),
+                characters.to_string(),
+                String::new(),
             );
         }
         Ok(self.projection())
@@ -406,13 +515,21 @@ impl AppRuntime {
         self.active_session_key()?;
         let text = self.active_terminal_selection_text();
         if text.is_empty() {
-            self.status_text = "No terminal selection to copy.".to_owned();
+            self.set_status_kind(
+                "terminal-copy-none",
+                "No terminal selection to copy.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         self.terminal_clipboard = text;
-        self.status_text = format!(
-            "Copied {} characters from the terminal selection.",
-            self.terminal_clipboard.chars().count()
+        let characters = self.terminal_clipboard.chars().count();
+        self.set_status_kind(
+            "terminal-copied-selection",
+            format!("Copied {characters} characters from the terminal selection."),
+            characters.to_string(),
+            String::new(),
         );
         Ok(self.projection())
     }
@@ -592,6 +709,38 @@ impl AppRuntime {
                 self.terminal_search_current_index.unwrap_or(0) + 1,
                 self.terminal_search_matches.len()
             ),
+        }
+    }
+
+    /// I18N-1：把搜索摘要投影成状态栏 kind（`TextFormats.status-message`）。
+    pub(crate) fn set_terminal_search_status(&mut self) {
+        let (kind, count, _current) = self.terminal_search_summary_parts();
+        let query = self.terminal_search_query.clone();
+        let text = self.terminal_search_summary_legacy_text();
+        match kind {
+            "invalid" => {
+                let detail = self.terminal_search_error.clone();
+                self.set_status_kind("terminal-search-invalid", text, detail, String::new());
+            }
+            "prompt" => {
+                self.set_status_kind(
+                    "terminal-search-prompt",
+                    text,
+                    String::new(),
+                    String::new(),
+                );
+            }
+            "empty" => {
+                self.set_status_kind("terminal-search-empty", text, query, String::new());
+            }
+            _ => {
+                self.set_status_kind(
+                    "terminal-search-found",
+                    text,
+                    query,
+                    count.to_string(),
+                );
+            }
         }
     }
 }

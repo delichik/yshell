@@ -135,11 +135,21 @@ impl AppRuntime {
             .transfer_queue
             .pause(transfer_id)
             .map_err(AppError::from_error)?;
-        self.status_text = if changed {
-            format!("Paused transfer `{transfer_id}`.")
+        if changed {
+            self.set_status_kind(
+                "transfer-paused",
+                format!("Paused transfer `{transfer_id}`."),
+                transfer_id.to_owned(),
+                String::new(),
+            );
         } else {
-            format!("Transfer `{transfer_id}` is not queued or running, so it was not paused.")
-        };
+            self.set_status_kind(
+                "transfer-not-pausable",
+                format!("Transfer `{transfer_id}` is not queued or running, so it was not paused."),
+                transfer_id.to_owned(),
+                String::new(),
+            );
+        }
         Ok(self.projection())
     }
 
@@ -151,10 +161,19 @@ impl AppRuntime {
             .map_err(AppError::from_error)?;
         if changed {
             let _ = self.transfer_queue.start_next();
-            self.status_text = format!("Resumed transfer `{transfer_id}`.");
+            self.set_status_kind(
+                "transfer-resumed",
+                format!("Resumed transfer `{transfer_id}`."),
+                transfer_id.to_owned(),
+                String::new(),
+            );
         } else {
-            self.status_text =
-                format!("Transfer `{transfer_id}` is not paused, so it was not resumed.");
+            self.set_status_kind(
+                "transfer-not-paused",
+                format!("Transfer `{transfer_id}` is not paused, so it was not resumed."),
+                transfer_id.to_owned(),
+                String::new(),
+            );
         }
         Ok(self.projection())
     }
@@ -169,15 +188,30 @@ impl AppRuntime {
             .map_err(AppError::from_error)?;
         if retried {
             let _ = self.transfer_queue.start_next();
-            self.status_text = format!("Re-queued transfer `{transfer_id}` for another attempt.");
+            self.set_status_kind(
+                "transfer-requeued",
+                format!("Re-queued transfer `{transfer_id}` for another attempt."),
+                transfer_id.to_owned(),
+                String::new(),
+            );
         } else if status == TransferStatus::Failed {
-            self.status_text = format!(
-                "Transfer `{transfer_id}` already used its {retry_count}/{max_retries} retries."
+            self.set_status_kind(
+                "transfer-retries-exhausted",
+                format!(
+                    "Transfer `{transfer_id}` already used its {retry_count}/{max_retries} retries."
+                ),
+                transfer_id.to_owned(),
+                format!("{retry_count}/{max_retries}"),
             );
         } else {
-            self.status_text = format!(
-                "Only failed transfers can be retried; `{transfer_id}` is {}.",
-                transfer_status_label(status)
+            self.set_status_kind(
+                "transfer-not-failed",
+                format!(
+                    "Only failed transfers can be retried; `{transfer_id}` is {}.",
+                    transfer_status_label(status)
+                ),
+                transfer_id.to_owned(),
+                transfer_status_label(status).to_owned(),
             );
         }
         Ok(self.projection())
@@ -190,9 +224,14 @@ impl AppRuntime {
             status,
             TransferStatus::Completed | TransferStatus::Cancelled
         ) {
-            self.status_text = format!(
-                "Transfer `{transfer_id}` is already {}, so it was not cancelled.",
-                transfer_status_label(status)
+            self.set_status_kind(
+                "transfer-already-terminal",
+                format!(
+                    "Transfer `{transfer_id}` is already {}, so it was not cancelled.",
+                    transfer_status_label(status)
+                ),
+                transfer_id.to_owned(),
+                transfer_status_label(status).to_owned(),
             );
             return Ok(self.projection());
         }
@@ -204,7 +243,12 @@ impl AppRuntime {
         if let Some(handle) = self.sftp_jobs.as_mut() {
             handle.cancel(transfer_id);
         }
-        self.status_text = format!("Cancelled transfer `{transfer_id}`.");
+        self.set_status_kind(
+            "transfer-cancelled",
+            format!("Cancelled transfer `{transfer_id}`."),
+            transfer_id.to_owned(),
+            String::new(),
+        );
         Ok(self.projection())
     }
 
@@ -213,18 +257,33 @@ impl AppRuntime {
         self.transfer_queue
             .remove(transfer_id)
             .map_err(AppError::from_error)?;
-        self.status_text = format!("Removed transfer `{transfer_id}` from the queue.");
+        self.set_status_kind(
+            "transfer-removed",
+            format!("Removed transfer `{transfer_id}` from the queue."),
+            transfer_id.to_owned(),
+            String::new(),
+        );
         Ok(self.projection())
     }
 
     /// Drops every completed transfer; returns how many were cleared.
     pub fn clear_completed_sftp_transfers(&mut self) -> AppResult<AppProjection> {
         let removed = self.transfer_queue.clear_completed();
-        self.status_text = if removed == 0 {
-            "No completed transfers to clear.".to_owned()
+        if removed == 0 {
+            self.set_status_kind(
+                "transfers-none-completed",
+                "No completed transfers to clear.".to_owned(),
+                String::new(),
+                String::new(),
+            );
         } else {
-            format!("Cleared {removed} completed transfer(s).")
-        };
+            self.set_status_kind(
+                "transfers-cleared",
+                format!("Cleared {removed} completed transfer(s)."),
+                removed.to_string(),
+                String::new(),
+            );
+        }
         Ok(self.projection())
     }
 

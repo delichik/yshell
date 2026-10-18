@@ -572,8 +572,9 @@ fn preview_lines_keep_the_wide_cell_and_preview_width_conventions() {
         "continuation cells must not duplicate the glyph"
     );
 
-    // The old preview was 29 columns wide; the added samples must not make the
-    // renderer image wider than the fixed Settings preview box.
+    // The sample must stay within the preview surface at the default font/DPI:
+    // 29 cells × 10 physical px = 290 px, well inside the 420 px bitmap area
+    // (`SETTINGS_PREVIEW_AREA_PX`); larger fonts shrink the rendered grid.
     let widest = lines.iter().map(Vec::len).max().unwrap_or(0);
     assert!(
         widest <= 29,
@@ -600,4 +601,263 @@ fn preview_lines_follow_explicit_language_values() {
             "language {language:?} must select the English sample: {texts:?}"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// TERM-2: Settings live preview vs. real terminal rendering
+// ---------------------------------------------------------------------------
+
+/// RGBA of one cell's centre pixel in a rendered frame.
+fn frame_cell_pixel(frame: &yshell_terminal::TerminalFrame, column: u16, row: u16) -> [u8; 4] {
+    let cell_width = frame.cell_width as usize;
+    let cell_height = frame.cell_height as usize;
+    let x = usize::from(column) * cell_width + cell_width / 2;
+    let y = usize::from(row) * cell_height + cell_height / 2;
+    let index = (y * frame.width as usize + x) * 4;
+    [
+        frame.rgba[index],
+        frame.rgba[index + 1],
+        frame.rgba[index + 2],
+        frame.rgba[index + 3],
+    ]
+}
+
+fn color_rgba(color: TerminalColor) -> [u8; 4] {
+    [color.red, color.green, color.blue, 255]
+}
+
+fn preview_frame(runtime: &AppRuntime) -> yshell_terminal::TerminalFrame {
+    runtime
+        .projection()
+        .settings_appearance_preview
+        .expect("Settings preview frame")
+}
+
+#[test]
+fn settings_preview_uses_the_window_scale_factor() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime.open_settings_appearance();
+
+    let default_frame = preview_frame(&runtime);
+    let one_x = yshell_terminal::TerminalRenderer::with_scale_factor(16.0, 1.0).cell_size();
+    assert_eq!(
+        (default_frame.cell_width, default_frame.cell_height),
+        one_x,
+        "default 1.0 DPR must use the live-terminal cell metrics"
+    );
+
+    // The same preview at 125% / 150% / 200% DPI must rasterize with the same
+    // physical cell metrics as the live terminal (e.g. 12x24, 15x29, 19x38 for
+    // DejaVu 16px), never an upscaled 1x bitmap or a resampled image.
+    for scale in [1.25_f32, 1.5, 2.0] {
+        runtime.note_ui_scale_factor(scale);
+        assert_eq!(runtime.ui_scale_factor(), scale);
+        let scaled = preview_frame(&runtime);
+        let expected =
+            yshell_terminal::TerminalRenderer::with_scale_factor(16.0, scale).cell_size();
+        assert_eq!(
+            (scaled.cell_width, scaled.cell_height),
+            expected,
+            "preview cell metrics must match the live terminal at {scale}x DPI"
+        );
+        assert_ne!(
+            (scaled.cell_width, scaled.cell_height),
+            (default_frame.cell_width, default_frame.cell_height),
+            "high-DPI preview must not reuse the 1x cell size (scale {scale})"
+        );
+
+        // 1:1 physical-pixel contract: the bitmap is an exact multiple of the
+        // physical cell and floors into the preview area (never stretched).
+        let (columns, rows) = crate::runtime::theme::preview_grid_size(
+            crate::runtime::theme::SETTINGS_PREVIEW_AREA_PX,
+            scale,
+            expected,
+        );
+        assert_eq!(scaled.width, u32::from(columns) * u32::from(expected.0));
+        assert_eq!(scaled.height, u32::from(rows) * u32::from(expected.1));
+        assert!(
+            scaled.width as f32 <= crate::runtime::theme::SETTINGS_PREVIEW_AREA_PX.0 * scale,
+            "preview bitmap must fit the surface at {scale}x DPI"
+        );
+        assert!(
+            scaled.height as f32 <= crate::runtime::theme::SETTINGS_PREVIEW_AREA_PX.1 * scale,
+            "preview bitmap must fit the surface at {scale}x DPI"
+        );
+    }
+
+    // Invalid DPRs fall back to 1.0 (same sanitizing as the terminal renderer).
+    runtime.note_ui_scale_factor(f32::NAN);
+    assert_eq!(runtime.ui_scale_factor(), 1.0);
+    runtime.note_ui_scale_factor(0.0);
+    assert_eq!(runtime.ui_scale_factor(), 1.0);
+    runtime.note_ui_scale_factor(-2.0);
+    assert_eq!(runtime.ui_scale_factor(), 1.0);
+}
+
+#[test]
+fn settings_preview_does_not_clamp_the_profile_font_size() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime.open_settings_appearance();
+    runtime.note_ui_scale_factor(1.0);
+    let area = crate::runtime::theme::SETTINGS_PREVIEW_AREA_PX;
+
+    // 40 px used to be clamped to 20 px for the preview only.
+    runtime.update_settings_appearance_font_size("40");
+    let frame = preview_frame(&runtime);
+    let forty = yshell_terminal::TerminalRenderer::with_font_size(40.0).cell_size();
+    let twenty = yshell_terminal::TerminalRenderer::with_font_size(20.0).cell_size();
+    assert_eq!((frame.cell_width, frame.cell_height), forty);
+    assert!(
+        frame.cell_width > twenty.0,
+        "preview font size must not be clamped to 20 px"
+    );
+
+    // The fixed preview box cannot hold the full sample at 40 px: the grid is
+    // reduced (fewer rows/columns) instead of the bitmap being scaled.
+    let (columns, rows) = crate::runtime::theme::preview_grid_size(area, 1.0, forty);
+    assert_eq!(frame.width, u32::from(columns) * u32::from(forty.0));
+    assert_eq!(frame.height, u32::from(rows) * u32::from(forty.1));
+    assert!(frame.width as f32 <= area.0);
+    assert!(frame.height as f32 <= area.1);
+
+    // The old 8 px preview floor is gone as well: 6 px is a valid profile size.
+    runtime.update_settings_appearance_font_size("6");
+    let frame = preview_frame(&runtime);
+    let six = yshell_terminal::TerminalRenderer::with_font_size(6.0).cell_size();
+    assert_eq!((frame.cell_width, frame.cell_height), six);
+}
+
+#[test]
+fn preview_content_keeps_language_cjk_rows_and_wide_pairs_when_trimmed() {
+    let palette = TerminalPalette::DEFAULT;
+
+    // Four rows cannot hold the eight-row sample; the localized line and the
+    // fixed CJK fallback line (TERM-3) must survive the row reduction.
+    let fitted = crate::runtime::theme::preview_content(palette, "zh-CN", 40, 4);
+    assert_eq!(fitted.lines.len(), 4);
+    let texts: Vec<String> = preview_texts(&fitted.lines)
+        .into_iter()
+        .map(|line| line.trim_end().to_owned())
+        .collect();
+    assert!(
+        texts.iter().any(|line| line == "你好，世界 · 终端主题预览"),
+        "localized sample row must survive row reduction: {texts:?}"
+    );
+    assert!(
+        texts.iter().any(|line| line == "CJK fallback: 你好，世界"),
+        "CJK fallback row must survive row reduction: {texts:?}"
+    );
+    // Prompt row is kept (0,1,6,7), the selection row is not.
+    assert!(fitted.cursor.is_some());
+    assert!(fitted.selection.is_none());
+    assert!(fitted.lines.iter().all(|line| line.len() == 40));
+
+    // Truncation never leaves half of a wide (CJK) pair at the right edge.
+    let narrow = crate::runtime::theme::preview_content(palette, "zh-CN", 15, 40);
+    for line in &narrow.lines {
+        assert_eq!(line.len(), 15);
+        for (index, cell) in line.iter().enumerate() {
+            let wide_lead = !cell.wide_continuation
+                && crate::runtime::theme::preview_char_width(
+                    cell.grapheme.chars().next().unwrap_or(' '),
+                ) >= 2;
+            if wide_lead {
+                assert!(
+                    line.get(index + 1)
+                        .is_some_and(|next| next.wide_continuation),
+                    "wide lead at column {index} lost its continuation cell"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn settings_preview_paints_cursor_selection_and_palette_colors() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime.open_settings_appearance();
+    runtime.note_ui_scale_factor(1.0);
+    let palette = runtime.settings_appearance_palette();
+    let frame = preview_frame(&runtime);
+    let columns = u16::try_from(frame.width / frame.cell_width).expect("columns");
+    let rows = u16::try_from(frame.height / frame.cell_height).expect("rows");
+    let content =
+        crate::runtime::theme::preview_content(palette, runtime.ui_language(), columns, rows);
+
+    // Bitmap background is the terminal palette background (the surface token
+    // only shows in the padding/remainder gutter).
+    assert_eq!(
+        frame_cell_pixel(&frame, columns - 1, rows - 1),
+        color_rgba(palette.background),
+        "preview cell padding must use the palette background"
+    );
+
+    // Block cursor on the prompt's trailing cell uses the palette cursor color,
+    // exactly like the live terminal renderer.
+    assert_eq!(content.cursor, Some((23, 1)), "cursor on the prompt row");
+    let (cursor_column, cursor_row) = content.cursor.expect("cursor");
+    assert_eq!(
+        frame_cell_pixel(&frame, cursor_column, cursor_row),
+        color_rgba(palette.cursor)
+    );
+
+    // The sample's selection row is highlighted through the renderer's normal
+    // selection path (solid palette.selection behind the glyphs).
+    let selection = content.selection.expect("selection");
+    assert_eq!(selection.start.row, 4);
+    assert_eq!(
+        frame_cell_pixel(&frame, 9, selection.start.row),
+        color_rgba(palette.selection),
+        "selection highlight must use palette.selection"
+    );
+
+    // ANSI swatches keep their palette entries (background + foreground cell).
+    assert_eq!(
+        frame_cell_pixel(&frame, 5, 3),
+        color_rgba(palette.ansi(0)),
+        "ANSI swatch cell must use the palette ANSI entry"
+    );
+}
+
+#[test]
+fn settings_preview_updates_immediately_on_theme_change() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime.open_settings_appearance();
+    runtime.note_ui_scale_factor(1.0);
+
+    runtime.select_settings_appearance_scheme("dracula");
+    let palette = runtime.settings_appearance_palette();
+    let dracula = color_scheme("dracula").expect("dracula scheme").palette;
+    assert_eq!(palette.background, dracula.background);
+    assert_ne!(palette.background, TerminalPalette::DEFAULT.background);
+
+    let frame = preview_frame(&runtime);
+    let columns = u16::try_from(frame.width / frame.cell_width).expect("columns");
+    let rows = u16::try_from(frame.height / frame.cell_height).expect("rows");
+    // The last viewport row is padding, so the whole row is palette background.
+    assert_eq!(
+        frame_cell_pixel(&frame, columns - 1, rows - 1),
+        color_rgba(dracula.background)
+    );
+
+    // Font/fallback-font edits also re-render the preview on the same call.
+    runtime.update_settings_appearance_font_size("22");
+    let cell = preview_frame(&runtime);
+    assert_eq!(
+        (cell.cell_width, cell.cell_height),
+        yshell_terminal::TerminalRenderer::with_font_size(22.0).cell_size()
+    );
+    runtime.update_settings_appearance_backup_font("/nonexistent/preview-font.ttf");
+    assert!(
+        runtime.projection().settings_appearance_preview.is_some(),
+        "invalid fallback fonts must not remove the preview"
+    );
 }

@@ -132,13 +132,20 @@ impl AppRuntime {
             return Ok(SessionPollOutcome::default());
         }
         if shell_closed {
-            if is_active {
-                self.status_text =
-                    "The active live shell closed while the terminal was refreshing.".to_owned();
-            }
             let sftp_status = self.sync_sftp_lifecycle_for_session(session_key, false);
             if is_active {
-                self.status_text = format!("{} {}", self.status_text, sftp_status);
+                tracing::info!(
+                    target: "yshell::app",
+                    "active live shell closed; {sftp_status}"
+                );
+                self.set_status_kind(
+                    "session-live-shell-closed",
+                    format!(
+                        "The active live shell closed while the terminal was refreshing. {sftp_status}"
+                    ),
+                    String::new(),
+                    String::new(),
+                );
             }
         }
         self.fold_logging_notice_from_session(session_key);
@@ -183,23 +190,45 @@ impl AppRuntime {
             self.reset_sftp_view_state();
         }
         let sftp_status = self.sync_sftp_lifecycle_for_session(&session_id, false);
+        tracing::debug!(
+            target: "yshell::app",
+            "activated tab `{title}`; {sftp_status}"
+        );
         if sftp_session_changed {
             if self.restore_sftp_view_from_cache(&session_id) {
-                self.status_text = format!("Activated tab `{title}`. {sftp_status}");
+                self.set_status_kind(
+                    "tab-activated",
+                    format!("Activated tab `{title}`. {sftp_status}"),
+                    title,
+                    String::new(),
+                );
             } else if matches!(
                 self.sftp_session,
                 super::SftpSessionLifecycle::Ready { .. }
             ) {
                 // 首次进入该会话：先完成标签切换，列目录放到下一 tick。
                 self.sftp_listing_pending = true;
-                self.status_text = format!(
-                    "Activated tab `{title}`. {sftp_status} Loading SFTP listing…"
+                self.set_status_kind(
+                    "tab-activated-loading-sftp",
+                    format!("Activated tab `{title}`. {sftp_status} Loading SFTP listing…"),
+                    title,
+                    String::new(),
                 );
             } else {
-                self.status_text = format!("Activated tab `{title}`. {sftp_status}");
+                self.set_status_kind(
+                    "tab-activated",
+                    format!("Activated tab `{title}`. {sftp_status}"),
+                    title,
+                    String::new(),
+                );
             }
         } else {
-            self.status_text = format!("Activated tab `{title}`. {sftp_status}");
+            self.set_status_kind(
+                "tab-activated",
+                format!("Activated tab `{title}`. {sftp_status}"),
+                title,
+                String::new(),
+            );
         }
         Ok(self.projection())
     }
@@ -219,18 +248,24 @@ impl AppRuntime {
                 single: true,
                 active_connections: 1,
             });
-            self.status_text =
-                format!("Confirm closing tab `{title}`: the session is still active.");
+            self.set_status_kind(
+                "tab-close-confirm",
+                format!("Confirm closing tab `{title}`: the session is still active."),
+                title,
+                String::new(),
+            );
             return Ok(self.projection());
         }
         let title = self.tab_display_title(tab_id);
         let stopped_log_path = self.close_tab_immediate(tab_id);
-        self.status_text = match stopped_log_path {
-            Some(path) => {
-                format!("Closed tab `{title}`. Stopped logging; log file: `{path}`.")
-            }
-            None => format!("Closed tab `{title}`."),
+        let (text, log_path) = match stopped_log_path {
+            Some(path) => (
+                format!("Closed tab `{title}`. Stopped logging; log file: `{path}`."),
+                path,
+            ),
+            None => (format!("Closed tab `{title}`."), String::new()),
         };
+        self.set_status_kind("tab-closed", text, title, log_path);
         // TAB-6：关闭标签不改变 Quick Connect 覆盖层状态；零标签 = 空工作区（D1）。
         Ok(self.projection())
     }
@@ -238,7 +273,12 @@ impl AppRuntime {
     pub fn request_close_tabs(&mut self, scope: &str) -> AppResult<AppProjection> {
         let targets = self.close_scope_targets(scope)?;
         if targets.is_empty() {
-            self.status_text = "No tabs matched the close request.".to_owned();
+            self.set_status_kind(
+                "tabs-close-none",
+                "No tabs matched the close request.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         let active_connections = targets
@@ -261,8 +301,13 @@ impl AppRuntime {
                 single: false,
                 active_connections,
             });
-            self.status_text = format!(
-                "Confirm closing {target_count} tab(s): {active_connections} still active connection(s)."
+            self.set_status_kind(
+                "tabs-close-confirm",
+                format!(
+                    "Confirm closing {target_count} tab(s): {active_connections} still active connection(s)."
+                ),
+                target_count.to_string(),
+                active_connections.to_string(),
             );
             return Ok(self.projection());
         }
@@ -272,17 +317,40 @@ impl AppRuntime {
                 stopped_log_path = Some(path);
             }
         }
-        let base_status = if active_connections > 0 {
-            format!(
+        if active_connections > 0 {
+            tracing::info!(
+                target: "yshell::app",
+                "closed {target_count} tab(s) without confirmation; {active_connections} active connection(s) disconnected"
+            );
+            let mut text = format!(
                 "Closed {target_count} tab(s); {active_connections} active connection(s) were disconnected without confirmation."
-            )
+            );
+            if let Some(path) = &stopped_log_path {
+                text.push_str(&format!(" Stopped logging; log file: `{path}`."));
+            }
+            self.set_status_kind(
+                "tabs-closed-active",
+                text,
+                target_count.to_string(),
+                active_connections.to_string(),
+            );
         } else {
-            format!("Closed {target_count} tab(s).")
-        };
-        self.status_text = match stopped_log_path {
-            Some(path) => format!("{base_status} Stopped logging; log file: `{path}`."),
-            None => base_status,
-        };
+            let (text, log_path) = match stopped_log_path {
+                Some(path) => (
+                    format!(
+                        "Closed {target_count} tab(s). Stopped logging; log file: `{path}`."
+                    ),
+                    path,
+                ),
+                None => (format!("Closed {target_count} tab(s)."), String::new()),
+            };
+            self.set_status_kind(
+                "tabs-closed",
+                text,
+                target_count.to_string(),
+                log_path,
+            );
+        }
         // TAB-6：关闭标签不改变 Quick Connect 覆盖层状态；零标签 = 空工作区（D1）。
         Ok(self.projection())
     }
@@ -321,16 +389,29 @@ impl AppRuntime {
         if dont_ask_again {
             self.set_confirm_close_session(false)?;
         }
-        self.status_text = match stopped_log_path {
-            Some(path) => format!("{base_status} Stopped logging; log file: `{path}`."),
-            None => base_status,
+        let (text, log_path) = match stopped_log_path {
+            Some(path) => (
+                format!("{base_status} Stopped logging; log file: `{path}`."),
+                path,
+            ),
+            None => (base_status, String::new()),
         };
+        if pending.single {
+            self.set_status_kind("tab-closed", text, single_title, log_path);
+        } else {
+            self.set_status_kind("tabs-closed", text, closed.to_string(), log_path);
+        }
         Ok(self.projection())
     }
 
     pub fn cancel_close_tabs(&mut self) -> AppProjection {
         self.pending_close_tabs = None;
-        self.status_text = "Canceled the tab close confirmation.".to_owned();
+        self.set_status_kind(
+            "tab-close-canceled",
+            "Canceled the tab close confirmation.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -419,9 +500,12 @@ impl AppRuntime {
         } else {
             Some(trimmed.to_owned())
         };
-        self.status_text = format!(
-            "Renamed tab to `{}`.",
-            self.tab_display_title(tab_id)
+        let title = self.tab_display_title(tab_id);
+        self.set_status_kind(
+            "tab-renamed",
+            format!("Renamed tab to `{title}`."),
+            title,
+            String::new(),
         );
         Ok(self.projection())
     }
@@ -434,8 +518,12 @@ impl AppRuntime {
         let before = self.tabs.len();
         self.open_sibling_session_for_split(tab_id)?;
         if self.tabs.len() <= before {
-            self.status_text =
-                "Authenticate the new session to finish duplicating.".to_owned();
+            self.set_status_kind(
+                "tab-duplicate-auth-needed",
+                "Authenticate the new session to finish duplicating.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return Ok(self.projection());
         }
         let new_tab = self
@@ -443,9 +531,12 @@ impl AppRuntime {
             .clone()
             .ok_or_else(|| AppError::new("duplicated tab is missing"))?;
         self.assign_tab_to_focused_pane(&new_tab);
-        self.status_text = format!(
-            "Duplicated session as `{}`.",
-            self.tab_display_title(&new_tab)
+        let title = self.tab_display_title(&new_tab);
+        self.set_status_kind(
+            "tab-duplicated",
+            format!("Duplicated session as `{title}`."),
+            title,
+            String::new(),
         );
         Ok(self.projection())
     }
@@ -485,7 +576,12 @@ impl AppRuntime {
             self.tabs[index].unread = 0;
         }
         self.refresh_terminal_search_for_active_session();
-        self.status_text = format!("Moved tab to pane {pane_id}.");
+        self.set_status_kind(
+            "tab-moved-pane",
+            format!("Moved tab to pane {pane_id}."),
+            pane_id.to_string(),
+            String::new(),
+        );
         Ok(self.projection())
     }
 
@@ -560,7 +656,12 @@ impl AppRuntime {
                 self.tabs[index].unread = 0;
             }
             self.refresh_terminal_search_for_active_session();
-            self.status_text = format!("Split pane {target} {}.", orientation.as_str());
+            self.set_status_kind(
+                "split-pane",
+                format!("Split pane {target} {}.", orientation.as_str()),
+                target.to_string(),
+                orientation.as_str().to_owned(),
+            );
             return Ok(self.projection());
         }
 
@@ -582,8 +683,12 @@ impl AppRuntime {
             let before = self.tabs.len();
             self.open_sibling_session_for_split(tab_id)?;
             if self.tabs.len() <= before {
-                self.status_text =
-                    "Authenticate the new session, then drag the tab to split.".to_owned();
+                self.set_status_kind(
+                    "split-auth-drag-needed",
+                    "Authenticate the new session, then drag the tab to split.".to_owned(),
+                    String::new(),
+                    String::new(),
+                );
                 return Ok(self.projection());
             }
             self.windows
@@ -647,7 +752,12 @@ impl AppRuntime {
             }
         }
         self.refresh_terminal_search_for_active_session();
-        self.status_text = format!("Split workspace {}.", orientation.as_str());
+        self.set_status_kind(
+            "split-workspace",
+            format!("Split workspace {}.", orientation.as_str()),
+            orientation.as_str().to_owned(),
+            String::new(),
+        );
         Ok(self.projection())
     }
 
@@ -832,8 +942,12 @@ impl AppRuntime {
             let tab_count_before = self.tabs.len();
             self.open_sibling_session_for_split(&original_tab)?;
             if self.tabs.len() <= tab_count_before {
-                self.status_text =
-                    "Authenticate the new session, then choose Split again.".to_owned();
+                self.set_status_kind(
+                    "split-auth-menu-needed",
+                    "Authenticate the new session, then choose Split again.".to_owned(),
+                    String::new(),
+                    String::new(),
+                );
                 return Ok(self.projection());
             }
         }
@@ -935,7 +1049,12 @@ impl AppRuntime {
                 self.tabs[index].unread = 0;
             }
         }
-        self.status_text = format!("Split workspace {}.", orientation.as_str());
+        self.set_status_kind(
+            "split-workspace",
+            format!("Split workspace {}.", orientation.as_str()),
+            orientation.as_str().to_owned(),
+            String::new(),
+        );
         Ok(self.projection())
     }
 
@@ -1038,7 +1157,12 @@ impl AppRuntime {
             }
             self.refresh_terminal_search_for_active_session();
         }
-        self.status_text = format!("Focused pane {pane_id}.");
+        self.set_status_kind(
+            "pane-focused",
+            format!("Focused pane {pane_id}."),
+            pane_id.to_string(),
+            String::new(),
+        );
         Ok(self.projection())
     }
 
@@ -1096,7 +1220,12 @@ impl AppRuntime {
             }
             self.refresh_terminal_search_for_active_session();
         }
-        self.status_text = format!("Closed pane {closed_id}.");
+        self.set_status_kind(
+            "pane-closed",
+            format!("Closed pane {closed_id}."),
+            closed_id.to_string(),
+            String::new(),
+        );
         Ok(self.projection())
     }
 
@@ -2052,8 +2181,12 @@ impl AppRuntime {
         if let Some(projection) = self.poll_all_terminal_outputs()? {
             return Ok(projection);
         }
-        self.status_text =
-            "Polled the active terminal, but no new output was available.".to_owned();
+        self.set_status_kind(
+            "terminal-poll-empty",
+            "Polled the active terminal, but no new output was available.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         Ok(self.projection())
     }
 }

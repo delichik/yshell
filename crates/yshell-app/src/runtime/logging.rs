@@ -25,30 +25,40 @@ use super::*;
 impl AppRuntime {
     pub fn toggle_global_logging_enabled(&mut self) -> AppProjection {
         self.config_document.logging.enabled = !self.config_document.logging.enabled;
-        self.status_text = format!(
-            "Global logging is now {}. Save logging settings to persist this policy.",
-            if self.config_document.logging.enabled {
-                "enabled"
-            } else {
-                "disabled"
-            }
+        let enabled = self.config_document.logging.enabled;
+        self.set_status_kind(
+            "logging-toggle",
+            format!(
+                "Global logging is now {}. Save logging settings to persist this policy.",
+                if enabled { "enabled" } else { "disabled" }
+            ),
+            if enabled { "on" } else { "off" }.to_owned(),
+            String::new(),
         );
         self.projection()
     }
 
     pub fn set_global_logging_format_raw(&mut self) -> AppProjection {
         self.config_document.logging.format = "raw".to_owned();
-        self.status_text =
+        self.set_status_kind(
+            "logging-format-raw",
             "Global logging format set to raw transcript. Save logging settings to persist."
-                .to_owned();
+                .to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
     pub fn set_global_logging_format_sanitized(&mut self) -> AppProjection {
         self.config_document.logging.format = "sanitized".to_owned();
-        self.status_text =
+        self.set_status_kind(
+            "logging-format-sanitized",
             "Global logging format set to sanitized text. Save logging settings to persist."
-                .to_owned();
+                .to_owned(),
+            String::new(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -156,11 +166,12 @@ impl AppRuntime {
     }
 
     pub(crate) fn fold_logging_notice_into_status(&mut self, notice: String) {
-        if self.status_text.is_empty() {
-            self.status_text = format!("Logging notice: {notice}");
+        let text = if self.status_text.is_empty() {
+            format!("Logging notice: {notice}")
         } else {
-            self.status_text = format!("{} Logging notice: {}", self.status_text, notice);
-        }
+            format!("{} Logging notice: {}", self.status_text, notice)
+        };
+        self.set_status_kind("logging-notice", text, notice, String::new());
     }
 }
 

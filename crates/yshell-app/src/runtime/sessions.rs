@@ -49,8 +49,13 @@ impl AppRuntime {
             .map_err(AppError::from_error)?;
         self.editor.target_folder_id = new_folder_id;
         self.new_folder_name.clear();
-        self.status_text = format!(
-            "Created folder `{folder_name}` under `{parent_label}` and selected it for the editor."
+        self.set_status_kind(
+            "session-folder-created",
+            format!(
+                "Created folder `{folder_name}` under `{parent_label}` and selected it for the editor."
+            ),
+            folder_name,
+            parent_label,
         );
         Ok(self.projection())
     }
@@ -82,8 +87,13 @@ impl AppRuntime {
         self.config_store
             .save(&self.config_document)
             .map_err(AppError::from_error)?;
-        self.status_text = format!(
-            "Created folder `{folder_name}` in the session tree root and persisted the updated config."
+        self.set_status_kind(
+            "session-folder-created-root",
+            format!(
+                "Created folder `{folder_name}` in the session tree root and persisted the updated config."
+            ),
+            folder_name,
+            String::new(),
         );
         Ok(self.projection())
     }
@@ -103,7 +113,12 @@ impl AppRuntime {
         self.editor.target_folder_id = folder_id.to_owned();
         self.editor_set_theme_baseline(None);
         self.editor_baseline = Some(self.editor.clone());
-        self.status_text = "New session will be saved into the selected folder.".to_owned();
+        self.set_status_kind(
+            "session-new-in-folder",
+            "New session will be saved into the selected folder.".to_owned(),
+            String::new(),
+            String::new(),
+        );
         Ok(self.projection())
     }
 
@@ -152,9 +167,14 @@ impl AppRuntime {
         let config_document = &self.config_document;
         self.collapsed_saved_folders
             .retain(|id| config_document.find_folder(id).is_some());
-        self.status_text = format!(
-            "Reloaded saved sessions from config.toml. Saved sessions discovered: {}.",
-            self.saved_session_count()
+        let saved_count = self.saved_session_count();
+        self.set_status_kind(
+            "sessions-reloaded",
+            format!(
+                "Reloaded saved sessions from config.toml. Saved sessions discovered: {saved_count}."
+            ),
+            saved_count.to_string(),
+            String::new(),
         );
         Ok(self.projection())
     }
@@ -253,8 +273,12 @@ impl AppRuntime {
         self.config_store
             .save(&self.config_document)
             .map_err(AppError::from_error)?;
-        self.status_text =
-            format!("Updated saved session `{profile_id}` from the active runtime session.");
+        self.set_status_kind(
+            "session-updated",
+            format!("Updated saved session `{profile_id}` from the active runtime session."),
+            profile_id,
+            String::new(),
+        );
         Ok(self.projection())
     }
 
@@ -313,18 +337,24 @@ impl AppRuntime {
 
     pub fn select_next_saved_session(&mut self) -> AppProjection {
         self.rotate_saved_session_selection(true);
-        self.status_text = format!(
-            "Selected saved session: {}",
-            self.saved_session_selection_legacy_text()
+        let selection = self.saved_session_selection_legacy_text();
+        self.set_status_kind(
+            "session-selected",
+            format!("Selected saved session: {selection}"),
+            selection,
+            String::new(),
         );
         self.projection()
     }
 
     pub fn select_previous_saved_session(&mut self) -> AppProjection {
         self.rotate_saved_session_selection(false);
-        self.status_text = format!(
-            "Selected saved session: {}",
-            self.saved_session_selection_legacy_text()
+        let selection = self.saved_session_selection_legacy_text();
+        self.set_status_kind(
+            "session-selected",
+            format!("Selected saved session: {selection}"),
+            selection,
+            String::new(),
         );
         self.projection()
     }
@@ -338,11 +368,21 @@ impl AppRuntime {
         if !self.collapsed_saved_folders.remove(folder_id) {
             self.collapsed_saved_folders.insert(folder_id.to_owned());
         }
-        self.status_text = if self.collapsed_saved_folders.contains(folder_id) {
-            format!("Collapsed saved-session folder `{folder_id}`.")
+        if self.collapsed_saved_folders.contains(folder_id) {
+            self.set_status_kind(
+                "session-folder-collapsed",
+                format!("Collapsed saved-session folder `{folder_id}`."),
+                folder_id.to_owned(),
+                String::new(),
+            );
         } else {
-            format!("Expanded saved-session folder `{folder_id}`.")
-        };
+            self.set_status_kind(
+                "session-folder-expanded",
+                format!("Expanded saved-session folder `{folder_id}`."),
+                folder_id.to_owned(),
+                String::new(),
+            );
+        }
         Ok(self.projection())
     }
 
@@ -353,7 +393,12 @@ impl AppRuntime {
         self.selected_saved_session_id = None;
         self.selected_saved_folder_id = None;
         if had_selection {
-            self.status_text = "Cleared the saved-session selection.".to_owned();
+            self.set_status_kind(
+                "session-selection-cleared",
+                "Cleared the saved-session selection.".to_owned(),
+                String::new(),
+                String::new(),
+            );
         }
         self.projection()
     }
@@ -362,17 +407,32 @@ impl AppRuntime {
         if self.config_document.find_folder(id).is_some() {
             self.selected_saved_folder_id = Some(id.to_owned());
             self.selected_saved_session_id = None;
-            self.status_text = format!("Selected saved-session folder `{id}`.");
+            self.set_status_kind(
+                "session-folder-selected",
+                format!("Selected saved-session folder `{id}`."),
+                id.to_owned(),
+                String::new(),
+            );
             return self.projection();
         }
         if let Some(profile) = self.config_document.find_session(id) {
             let label = profile.name.clone();
             self.selected_saved_folder_id = None;
             self.selected_saved_session_id = Some(id.to_owned());
-            self.status_text = format!("Selected saved session: {label}");
+            self.set_status_kind(
+                "session-selected",
+                format!("Selected saved session: {label}"),
+                label,
+                String::new(),
+            );
             return self.projection();
         }
-        self.status_text = format!("Saved-session tree node `{id}` was not found.");
+        self.set_status_kind(
+            "session-tree-node-missing",
+            format!("Saved-session tree node `{id}` was not found."),
+            id.to_owned(),
+            String::new(),
+        );
         self.projection()
     }
 
@@ -398,14 +458,22 @@ impl AppRuntime {
             // behind a folder the user collapsed before searching.
             self.collapsed_saved_folders.clear();
         }
-        self.status_text = if self.session_search_query.trim().is_empty() {
-            "Session search cleared.".to_owned()
+        if self.session_search_query.trim().is_empty() {
+            self.set_status_kind(
+                "session-search-cleared",
+                "Session search cleared.".to_owned(),
+                String::new(),
+                String::new(),
+            );
         } else {
-            format!(
-                "Filtering saved sessions for `{}`.",
-                self.session_search_query
-            )
-        };
+            let query = self.session_search_query.trim().to_owned();
+            self.set_status_kind(
+                "session-search-filtering",
+                format!("Filtering saved sessions for `{query}`."),
+                query,
+                String::new(),
+            );
+        }
         self.projection()
     }
 

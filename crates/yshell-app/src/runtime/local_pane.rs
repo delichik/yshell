@@ -97,7 +97,13 @@ impl AppRuntime {
                 self.local_pane.listing = Some(listing);
             }
             Err(error) => {
-                self.status_text = error.to_string();
+                let detail = error.to_string();
+                self.set_status_kind(
+                    "local-dir-error",
+                    format!("Could not load the local directory: {detail}"),
+                    detail,
+                    String::new(),
+                );
                 self.local_pane.error = Some(error);
             }
         }
@@ -121,7 +127,13 @@ impl AppRuntime {
                 self.refresh_local_pane()
             }
             Err(error) => {
-                self.status_text = error.to_string();
+                let detail = error.to_string();
+                self.set_status_kind(
+                    "local-open-error",
+                    format!("Could not open the local path: {detail}"),
+                    detail,
+                    String::new(),
+                );
                 self.local_pane.error = Some(error);
                 self.projection()
             }
@@ -131,7 +143,12 @@ impl AppRuntime {
     /// `..`: lexical parent, no symlink resolution.
     pub fn open_local_parent(&mut self) -> AppProjection {
         let Some(parent) = local_fs::parent_dir(&self.local_pane.dir) else {
-            self.status_text = "Already at the local filesystem root.".to_owned();
+            self.set_status_kind(
+                "local-root",
+                "Already at the local filesystem root.".to_owned(),
+                String::new(),
+                String::new(),
+            );
             return self.projection();
         };
         let parent = parent.display().to_string();
@@ -146,17 +163,33 @@ impl AppRuntime {
 
     pub fn toggle_local_hidden(&mut self) -> AppProjection {
         self.local_pane.show_hidden = !self.local_pane.show_hidden;
-        self.status_text = if self.local_pane.show_hidden {
-            "Local hidden files are now shown.".to_owned()
+        if self.local_pane.show_hidden {
+            self.set_status_kind(
+                "local-hidden-shown",
+                "Local hidden files are now shown.".to_owned(),
+                String::new(),
+                String::new(),
+            );
         } else {
-            "Local hidden files are now hidden.".to_owned()
-        };
+            self.set_status_kind(
+                "local-hidden-hidden",
+                "Local hidden files are now hidden.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+        }
         self.refresh_local_pane()
     }
 
     pub fn sort_local_by(&mut self, column: &str) -> AppProjection {
         let Some(column) = LocalSortColumn::from_label(column) else {
-            self.status_text = format!("Unknown local sort column `{}`.", column.trim());
+            let column_text = column.trim().to_owned();
+            self.set_status_kind(
+                "local-unknown-sort",
+                format!("Unknown local sort column `{column_text}`."),
+                column_text,
+                String::new(),
+            );
             return self.projection();
         };
         if self.local_pane.sort_column == column {
@@ -231,9 +264,14 @@ impl AppRuntime {
         if entry.kind.is_dir() {
             return self.open_local_path(&entry.path.display().to_string());
         }
-        self.status_text = format!(
-            "Selected local file `{}`. Drag it to the remote pane or use Upload.",
-            entry.path.display()
+        let path_text = entry.path.display().to_string();
+        self.set_status_kind(
+            "local-file-selected",
+            format!(
+                "Selected local file `{path_text}`. Drag it to the remote pane or use Upload."
+            ),
+            path_text,
+            String::new(),
         );
         self.projection()
     }

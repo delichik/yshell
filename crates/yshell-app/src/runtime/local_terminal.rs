@@ -50,10 +50,10 @@ impl AppRuntime {
                 );
                 // 不创建标签、不插入会话：失败不会留下抢输入的坏标签。
                 self.set_status_kind(
-                    "",
+                    "local-terminal-start-failed",
                     format!("Could not start the local shell `{display_name}`: {error}"),
-                    String::new(),
-                    String::new(),
+                    display_name.to_string(),
+                    error.to_string(),
                 );
                 self.projection()
             }
@@ -81,9 +81,9 @@ impl AppRuntime {
                     "failed to attach the local terminal to the runtime"
                 );
                 self.set_status_kind(
-                    "",
+                    "local-terminal-attach-failed",
                     format!("Could not open the local terminal: {error}"),
-                    String::new(),
+                    error.to_string(),
                     String::new(),
                 );
                 self.projection()

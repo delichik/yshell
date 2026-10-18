@@ -15,9 +15,9 @@ use yshell_config::{
     ThemeCatalog,
 };
 use yshell_terminal::{
-    color_scheme, FontFamilyFaces, FontSelection, PrimaryFont, TerminalCell, TerminalColor,
-    TerminalFrame, TerminalPalette, TerminalRenderer, TerminalSnapshot, COLOR_SCHEMES,
-    DEFAULT_FONT_SIZE,
+    color_scheme, FontFamilyFaces, FontSelection, GridPoint, PrimaryFont, SelectionRange,
+    TerminalCell, TerminalColor, TerminalFrame, TerminalPalette, TerminalRenderer,
+    TerminalSnapshot, COLOR_SCHEMES, DEFAULT_FONT_SIZE, DEFAULT_SCALE_FACTOR,
 };
 
 use super::*;
@@ -1652,10 +1652,41 @@ impl AppRuntime {
         self.settings_appearance.palette(&self.theme_catalog)
     }
 
+    /// Device pixel ratio the Settings live preview must rasterize at.
+    ///
+    /// This is the focused window's `window.scale_factor()` (updated by
+    /// `windows.rs` when a window is shown, activated or re-scaled), so the
+    /// preview glyph metrics match the live terminal on the same display.
+    pub(crate) fn ui_scale_factor(&self) -> f32 {
+        preview_scale_factor(self.ui_scale_factor)
+    }
+
+    /// Records the focused window's device pixel ratio (TERM-2).
+    ///
+    /// Invalid values fall back to [`DEFAULT_SCALE_FACTOR`]. A change while the
+    /// Appearance section is open re-renders the preview on the next UI refresh.
+    pub(crate) fn note_ui_scale_factor(&mut self, scale_factor: f32) {
+        let scale_factor = preview_scale_factor(scale_factor);
+        if (self.ui_scale_factor - scale_factor).abs() <= f32::EPSILON {
+            return;
+        }
+        self.ui_scale_factor = scale_factor;
+        if self.settings_appearance_visible {
+            self.mark_ui_dirty();
+        }
+    }
+
     /// Renders the live preview frame for the Settings Appearance section.
     ///
     /// Returns `None` while the draft is inactive. The dedicated preview
     /// renderer keeps the live terminal's glyph cache untouched.
+    ///
+    /// Parity with the live terminal (TERM-2):
+    /// * the window's real scale factor is applied, so cell metrics and glyphs
+    ///   are rasterized at `font_size * scale_factor` physical pixels;
+    /// * the profile's resolved font size is used as-is (no preview-only clamp);
+    /// * the grid is floored into [`SETTINGS_PREVIEW_AREA_PX`], so a font that
+    ///   does not fit yields fewer rows/columns instead of a stretched bitmap.
     pub(crate) fn settings_appearance_preview_frame(&self) -> Option<TerminalFrame> {
         if !self.settings_appearance_visible {
             return None;
@@ -1663,21 +1694,92 @@ impl AppRuntime {
         let palette = self.settings_appearance_palette();
         let font = self.settings_appearance.font_selection();
         let font_size = resolve_font_size(self.settings_appearance.font_size());
+        let scale_factor = self.ui_scale_factor();
         let mut renderer = self.settings_preview_renderer.borrow_mut();
         let renderer = renderer.get_or_insert_with(TerminalRenderer::new);
-        renderer.set_font_size(font_size.clamp(8.0, 20.0));
+        // `set_scale_factor` always re-measures; only pay for it when the DPR
+        // actually changed (moving the window between monitors).
+        if (renderer.scale_factor() - scale_factor).abs() > f32::EPSILON {
+            renderer.set_scale_factor(scale_factor);
+        }
+        renderer.set_font_size(font_size);
         renderer.apply_appearance(palette, font);
-        let lines = preview_lines(palette, self.ui_language());
+        let (columns, rows) =
+            preview_grid_size(SETTINGS_PREVIEW_AREA_PX, scale_factor, renderer.cell_size());
+        let content = preview_content(palette, self.ui_language(), columns, rows);
         let snapshot = TerminalSnapshot {
-            lines: lines
+            lines: content
+                .lines
                 .iter()
                 .map(|line| std::borrow::Cow::Borrowed(line.as_slice()))
                 .collect(),
-            cursor: Some((12, 1)),
-            selection: None,
+            cursor: content.cursor,
+            selection: content.selection,
         };
         Some(renderer.render(&snapshot))
     }
+}
+
+// ---------------------------------------------------------------------------
+// Settings live preview geometry (TERM-2)
+// ---------------------------------------------------------------------------
+
+/// Logical-pixel bitmap area of the Settings live preview surface.
+///
+/// Mirrors `ui/pages/settings.slint`: the preview surface spans the Settings
+/// card content width (434 px = 760 dialog − 40 body padding − 240 navigation −
+/// 12 gap − 2 card border − 32 card padding) and is 200 px tall; subtracting
+/// the surface border (1 px) and the terminal horizontal padding
+/// (`Theme.terminal-padding-x`, 6 px per side) leaves 420 × 198 logical pixels.
+///
+/// The renderer **floors** the grid into this area exactly like the live
+/// terminal floors its PTY grid: when a font/DPI combination does not fit, the
+/// preview drops columns/rows and keeps the bitmap at 1:1 physical pixels; the
+/// remainder stays as surface background (never a stretched image).
+pub(crate) const SETTINGS_PREVIEW_AREA_PX: (f32, f32) = (420.0, 198.0);
+
+/// Sanitizes a device pixel ratio for preview rasterization.
+fn preview_scale_factor(scale_factor: f32) -> f32 {
+    if scale_factor.is_finite() && scale_factor > 0.0 {
+        scale_factor
+    } else {
+        DEFAULT_SCALE_FACTOR
+    }
+}
+
+/// Columns/rows of the preview bitmap that fit `area_logical` at `scale_factor`.
+///
+/// `cell_size` is already in physical pixels (the renderer measures it at
+/// `font_size * scale_factor`), so the area is converted to physical pixels
+/// first and the quotient is floored. Always returns at least one cell so the
+/// bitmap stays non-empty (the surface clips any overflow).
+pub(crate) fn preview_grid_size(
+    area_logical: (f32, f32),
+    scale_factor: f32,
+    cell_size: (u32, u32),
+) -> (u16, u16) {
+    let scale_factor = preview_scale_factor(scale_factor);
+    let physical_width = area_logical.0.max(0.0) * scale_factor;
+    let physical_height = area_logical.1.max(0.0) * scale_factor;
+    let cell_width = cell_size.0.max(1);
+    let cell_height = cell_size.1.max(1);
+    let columns = (physical_width.floor() as u32 / cell_width).max(1);
+    let rows = (physical_height.floor() as u32 / cell_height).max(1);
+    (
+        u16::try_from(columns).unwrap_or(u16::MAX),
+        u16::try_from(rows).unwrap_or(u16::MAX),
+    )
+}
+
+/// One fitted preview: viewport rows plus the cursor/selection decorations the
+/// real terminal renderer paints.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PreviewContent {
+    pub(crate) lines: Vec<Vec<TerminalCell>>,
+    /// Block cursor at the end of the sample prompt (viewport coordinates).
+    pub(crate) cursor: Option<(u16, u16)>,
+    /// Highlight over the sample's “selection row” (viewport coordinates).
+    pub(crate) selection: Option<SelectionRange>,
 }
 
 /// Rewrites every `color_scheme` reference from `from_id` to `to_id`.
@@ -1747,7 +1849,7 @@ fn preview_language_lines(language: &str) -> [&'static str; 2] {
 /// full-width punctuation used below. Wide characters are expanded to a lead
 /// cell followed by a `wide_continuation` cell, matching the terminal grid
 /// convention the renderer expects.
-fn preview_char_width(character: char) -> usize {
+pub(crate) fn preview_char_width(character: char) -> usize {
     match character as u32 {
         0x1100..=0x115F
         | 0x2E80..=0x303E
@@ -1772,6 +1874,10 @@ fn preview_char_width(character: char) -> usize {
 /// `language` is the configured UI language preference (`system` / `zh-CN` /
 /// `en-US`). The localized line and the fixed CJK fallback line are appended
 /// after the existing rows so the cursor row stays on the prompt.
+///
+/// The prompt ends with a trailing blank cell: the renderer paints the block
+/// cursor on that cell, mirroring a real prompt whose command has been typed
+/// (the cursor sits after the text, never past the line's last cell).
 pub(crate) fn preview_lines(palette: TerminalPalette, language: &str) -> Vec<Vec<TerminalCell>> {
     let cell = |text: &str, foreground: TerminalColor, bold: bool| {
         let mut cell = TerminalCell {
@@ -1796,6 +1902,8 @@ pub(crate) fn preview_lines(palette: TerminalPalette, language: &str) -> Vec<Vec
     };
     let mut prompt = line("user@host:~$ ", palette.ansi(2));
     prompt.extend(line("ls --color", palette.foreground));
+    // The blank cell under the block cursor (column = prompt.len() - 1).
+    prompt.extend(line(" ", palette.foreground));
     let mut listing = line("drwxr-xr-x  ", palette.foreground);
     listing.extend(line("src", palette.ansi(4)));
     listing.extend(line("   notes.md", palette.foreground));
@@ -1820,4 +1928,98 @@ pub(crate) fn preview_lines(palette: TerminalPalette, language: &str) -> Vec<Vec
         line(language_line, palette.foreground),
         line(cjk_line, palette.foreground),
     ]
+}
+
+/// Row of the sample prompt (and its block cursor) inside [`preview_lines`].
+const PREVIEW_PROMPT_ROW: usize = 1;
+/// Row of the sample selection inside [`preview_lines`].
+const PREVIEW_SELECTION_ROW: usize = 4;
+
+/// Fits the preview sample into a `columns × rows` terminal viewport.
+///
+/// The grid comes from [`preview_grid_size`]: when the preview surface cannot
+/// hold the whole sample (large font / high DPI), rows are dropped from the
+/// middle while the localized line and the fixed CJK fallback line (TERM-3)
+/// stay visible, and each line is truncated at the last full cell (a wide CJK
+/// pair is never split). The result is padded to the full viewport, exactly
+/// like a live terminal frame; the bitmap is never scaled.
+pub(crate) fn preview_content(
+    palette: TerminalPalette,
+    language: &str,
+    columns: u16,
+    rows: u16,
+) -> PreviewContent {
+    let columns = usize::from(columns.max(1));
+    let rows = usize::from(rows.max(1));
+    let sample = preview_lines(palette, language);
+    let total = sample.len();
+    let kept: Vec<usize> = if total <= rows {
+        (0..total).collect()
+    } else if rows <= 1 {
+        // Degenerate box: keep one informative row (the CJK fallback sample).
+        vec![total.saturating_sub(1)]
+    } else {
+        let mut kept: Vec<usize> = (0..rows - 2).collect();
+        kept.extend(total.saturating_sub(2)..total);
+        kept
+    };
+    let mut lines: Vec<Vec<TerminalCell>> = kept
+        .iter()
+        .map(|index| fit_preview_line(&sample[*index], columns))
+        .collect();
+    // Pad the viewport (missing rows are terminal background).
+    while lines.len() < rows {
+        lines.push(vec![TerminalCell::default(); columns]);
+    }
+    let fitted_row = |sample_row: usize| -> Option<u16> {
+        kept.iter()
+            .position(|index| *index == sample_row)
+            .and_then(|row| u16::try_from(row).ok())
+    };
+    // Block cursor on the prompt's trailing blank cell (same cell model as the
+    // live terminal cursor: never beyond the last cell of the row).
+    let cursor = fitted_row(PREVIEW_PROMPT_ROW).and_then(|row| {
+        let column = sample
+            .get(PREVIEW_PROMPT_ROW)
+            .and_then(|line| line.len().checked_sub(1))
+            .and_then(|column| u16::try_from(column).ok())?;
+        (usize::from(column) < columns).then_some((column, row))
+    });
+    // Selection highlight on the sample's “selection row”, using the renderer's
+    // `SelectionRange` (the same type/painting path as the live terminal).
+    let selection = fitted_row(PREVIEW_SELECTION_ROW).and_then(|row| {
+        let width = sample
+            .get(PREVIEW_SELECTION_ROW)
+            .map(|line| line.len().min(columns))
+            .unwrap_or(0);
+        let end = u16::try_from(width.checked_sub(1)?).ok()?;
+        Some(SelectionRange {
+            start: GridPoint { column: 0, row },
+            end: GridPoint { column: end, row },
+        })
+    });
+    PreviewContent {
+        lines,
+        cursor,
+        selection,
+    }
+}
+
+/// Truncates/pads one sample line to `columns` cells without splitting a wide
+/// (two-cell) glyph at the right edge.
+fn fit_preview_line(line: &[TerminalCell], columns: usize) -> Vec<TerminalCell> {
+    let end = line.len().min(columns);
+    let mut cells = line[..end].to_vec();
+    // A wide lead cell needs its continuation cell; when the truncation cut the
+    // pair in half, drop the lead instead of painting half a glyph.
+    if end < line.len()
+        && cells.last().is_some_and(|cell| {
+            !cell.wide_continuation
+                && preview_char_width(cell.grapheme.chars().next().unwrap_or(' ')) >= 2
+        })
+    {
+        cells.pop();
+    }
+    cells.resize(columns, TerminalCell::default());
+    cells
 }
