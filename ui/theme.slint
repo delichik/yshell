@@ -147,8 +147,10 @@ export global Theme {
     out property <color> terminal-surface: dark ? #050505 : #FFFFFF;
     out property <color> terminal-chrome-fill: dark ? #FFFFFF0A : #00000005;
     out property <color> terminal-border: dark ? #FFFFFF14 : #0000000F;
-    /// 终端表面内容区内边距（§5.17；相对旧 12px 收紧为 6，避免顶边看起来像空行）。
-    out property <length> terminal-padding: 6px;
+    /// 终端表面内容区左右内边距（§5.17；相对旧 12px 收紧为 6）。
+    out property <length> terminal-padding-x: 6px;
+    /// 终端表面内容区上下内边距（UI-1 / D9：pane 贴边，上下不再留白）。
+    out property <length> terminal-padding-y: 0px;
 
     // -------------------------------------------------------------------- 字阶
     out property <length> font-caption: 12px;

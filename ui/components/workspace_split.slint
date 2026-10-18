@@ -112,9 +112,11 @@ component SplitPaneLeaf inherits Rectangle {
     min-height: 0px;
     clip: true;
     // 描边宽度固定：聚焦只换色，避免切换 active 时内容区被挤高/挤矮。
+    // UI-1：pane 直角；底边 2px 会压住终端表面底部，viewport chrome 在
+    // terminal_workspace.slint 里按 split-leaf-border 扣掉这一条底边。
     border-width: 2px;
     border-color: root.focused ? Theme.accent : Theme.control-stroke;
-    border-radius: Theme.radius-control;
+    border-radius: 0px;
     background: Theme.window-background;
 
     public function focus-terminal() {

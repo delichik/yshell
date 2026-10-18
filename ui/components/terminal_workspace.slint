@@ -45,7 +45,10 @@ export component TerminalWorkspace inherits VerticalLayout {
     /// WP2：正则查找开关。
     in-out property <bool> search-regex: false;
 
-    // 分屏视口：宿主写入聚焦叶归一化几何；本地扣 chrome（描边 + TV pad + tab 栏）。
+    // 分屏视口：宿主写入聚焦叶归一化几何；本地扣 chrome。
+    // UI-1：host 8px padding 已移除；叶描边左右边压在 TerminalView 的 6px 左右
+    // pad 上，不占 cell 区；只有叶底边会盖住终端内容，所以宽度 chrome 只算 TV
+    // 左右 pad，高度 chrome = TV 上下 pad + tab 栏 + 叶底边描边（避免裁掉末行）。
     in property <float> split-focused-leaf-w: 1.0;
     in property <float> split-focused-leaf-h: 1.0;
     in property <float> split-focused-leaf-x: 0.0;
@@ -56,14 +59,20 @@ export component TerminalWorkspace inherits VerticalLayout {
     in property <float> split-qc-leaf-y: 0.0;
     in property <float> split-qc-leaf-w: 0.0;
     in property <float> split-qc-leaf-h: 0.0;
-    property <float> split-host-pad-px: 2.0 * Theme.spacing-8 / 1px;
-    property <float> split-leaf-border-px: 4.0;
-    property <float> split-tv-pad-px: 2.0 * Theme.terminal-padding / 1px;
+    property <float> split-tv-pad-x-px: 2.0 * Theme.terminal-padding-x / 1px;
+    property <float> split-tv-pad-y-px: 2.0 * Theme.terminal-padding-y / 1px;
     property <float> split-tab-bar-px: Theme.bar-height-tabs / 1px;
-    property <float> split-pane-chrome-w-px: root.split-leaf-border-px + root.split-tv-pad-px;
-    property <float> split-pane-chrome-h-px: root.split-leaf-border-px + root.split-tv-pad-px + root.split-tab-bar-px;
-    property <float> split-inner-width-px: Math.max(split_host.width / 1px - root.split-host-pad-px, 1.0);
-    property <float> split-inner-height-px: Math.max(split_host.height / 1px - root.split-host-pad-px, 1.0);
+    /// 叶描边宽度（与 workspace_split.slint 的 SplitPaneLeaf.border-width 一致）。
+    property <length> split-leaf-border: 2px;
+    property <float> split-leaf-bottom-border-px: root.split-leaf-border / 1px;
+    property <float> split-pane-chrome-w-px: root.split-tv-pad-x-px;
+    property <float> split-pane-chrome-h-px:
+        root.split-tv-pad-y-px + root.split-tab-bar-px + root.split-leaf-bottom-border-px;
+    property <float> split-inner-width-px: Math.max(split_host.width / 1px, 1.0);
+    property <float> split-inner-height-px: Math.max(split_host.height / 1px, 1.0);
+    /// 单窗格 single_unit 的 1px 描边同样压住终端表面底边，视口高度要扣掉。
+    property <length> single-pane-border: 1px;
+    property <float> single-pane-bottom-border-px: root.single-pane-border / 1px;
 
     /// 单终端：取 TerminalView；分屏：聚焦叶几何 × 内区 − chrome。
     out property <float> terminal-viewport-width-px: root.split-active
@@ -71,7 +80,7 @@ export component TerminalWorkspace inherits VerticalLayout {
         : terminal_view.terminal-viewport-width-px;
     out property <float> terminal-viewport-height-px: root.split-active
         ? Math.max(root.split-inner-height-px * root.split-focused-leaf-h - root.split-pane-chrome-h-px, 1.0)
-        : terminal_view.terminal-viewport-height-px;
+        : Math.max(terminal_view.terminal-viewport-height-px - root.single-pane-bottom-border-px, 1.0);
     /// W5-A2：终端是否持有键盘焦点（模态弹窗关闭后的焦点恢复据此避让终端）。
     /// P1：分屏时读聚焦叶子里的 TerminalView。
     out property <bool> terminal-focused: root.split-active
@@ -233,9 +242,9 @@ export component TerminalWorkspace inherits VerticalLayout {
         return "right:small";
     }
 
-    property <length> split-leaf-border: 2px;
-    property <length> split-inner-w: split_host.width - 2 * Theme.spacing-8;
-    property <length> split-inner-h: split_host.height - 2 * Theme.spacing-8;
+    // split-leaf-border 已在上方声明（视口 chrome 与 QC overlay 共用）。
+    property <length> split-inner-w: split_host.width;
+    property <length> split-inner-h: split_host.height;
     /// 次 pane 视口（取第一个非聚焦叶近似；多叶时宿主可再细化）。
     in property <float> split-secondary-leaf-w: 0.5;
     in property <float> split-secondary-leaf-h: 1.0;
@@ -254,16 +263,17 @@ export component TerminalWorkspace inherits VerticalLayout {
         max-height: root.terminal-visible && !root.split-active ? 100000px : 0px;
         background: Theme.window-background;
         VerticalLayout {
-            padding: Theme.spacing-8;
+            padding: 0px;
             spacing: 0;
 
             // 同框：描边包住 tab+terminal；预览盖满整框按实际占比。
+            // UI-1：pane 直角贴边，不再有 8px 外边距与圆角卡片观感。
             single_unit := Rectangle {
                 vertical-stretch: 1;
                 min-height: 0px;
-                border-width: 1px;
+                border-width: root.single-pane-border;
                 border-color: Theme.terminal-border;
-                border-radius: Theme.radius-panel;
+                border-radius: 0px;
                 background: Theme.window-background;
                 clip: true;
 
@@ -384,7 +394,7 @@ export component TerminalWorkspace inherits VerticalLayout {
         background: Theme.window-background;
 
         VerticalLayout {
-            padding: Theme.spacing-8;
+            padding: 0px;
             split_view := WorkspaceSplitView {
                 vertical-stretch: 1;
                 leaves: root.split-leaves;
@@ -448,9 +458,10 @@ export component TerminalWorkspace inherits VerticalLayout {
         }
 
         // QC 叠在对应叶子 terminal 内容区（几何由宿主按叶子归一化坐标写入）。
+        // UI-1：host 8px padding 已移除，base 为 0；2px 内缩仅为避开叶描边。
         split_qc_page := QuickConnectPage {
-            x: Theme.spacing-8 + root.split-inner-w * root.split-qc-leaf-x + root.split-leaf-border;
-            y: Theme.spacing-8 + root.split-inner-h * root.split-qc-leaf-y + root.split-leaf-border + Theme.bar-height-tabs;
+            x: root.split-inner-w * root.split-qc-leaf-x + root.split-leaf-border;
+            y: root.split-inner-h * root.split-qc-leaf-y + root.split-leaf-border + Theme.bar-height-tabs;
             width: !root.split-qc-shown ? 0px
                 : root.split-inner-w * root.split-qc-leaf-w - 2 * root.split-leaf-border;
             height: !root.split-qc-shown ? 0px
