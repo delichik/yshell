@@ -349,11 +349,14 @@ impl AppRuntime {
             .and_then(|tab_id| self.tab_index(tab_id))
             .and_then(|index| self.tabs[index].session_id());
         match session_key.and_then(|key| self.sessions.get(key)) {
+            // TAB-4：本地终端没有可重连的 SSH 连接，Reconnect 永远禁用；Disconnect
+            // 仍可用（结束本地 shell 进程）。
             Some(runtime) => (
-                matches!(
-                    runtime.state,
-                    SessionState::Idle | SessionState::Disconnected | SessionState::Failed
-                ),
+                !runtime.is_local()
+                    && matches!(
+                        runtime.state,
+                        SessionState::Idle | SessionState::Disconnected | SessionState::Failed
+                    ),
                 matches!(
                     runtime.state,
                     SessionState::Connected | SessionState::Connecting
@@ -956,7 +959,9 @@ impl AppRuntime {
                     port: runtime.ssh_config.port,
                     username: runtime.ssh_config.username().to_owned(),
                 },
-                SessionSource::Draft => SiblingSplitSource::Unsupported,
+                // TAB-4：本地终端的复制/分屏暂不派生同源 SSH 会话（避免误触网络），
+                // 与旧 Draft 一样走 Unsupported；`+` 可再开一个本地标签。
+                SessionSource::Draft | SessionSource::Local => SiblingSplitSource::Unsupported,
             })
             .ok_or_else(|| AppError::new("active session runtime is missing"))?;
         match source {

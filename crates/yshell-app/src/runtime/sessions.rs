@@ -161,6 +161,16 @@ impl AppRuntime {
 
     pub fn save_active_session(&mut self) -> AppResult<AppProjection> {
         let session_key = self.active_session_key()?;
+        // TAB-4：本地终端没有可保存的 SSH 目标，避免写出占位 host/port 的配置。
+        if self
+            .sessions
+            .get(&session_key)
+            .is_some_and(SessionRuntime::is_local)
+        {
+            return Err(AppError::new(
+                "local terminal sessions cannot be saved as SSH sessions",
+            ));
+        }
         let active_runtime = self
             .sessions
             .get(&session_key)
@@ -220,6 +230,16 @@ impl AppRuntime {
             .clone()
             .ok_or_else(|| AppError::new("no saved session is currently selected"))?;
         let session_key = self.active_session_key()?;
+        // TAB-4：本地终端不能覆盖已保存的 SSH 会话配置。
+        if self
+            .sessions
+            .get(&session_key)
+            .is_some_and(SessionRuntime::is_local)
+        {
+            return Err(AppError::new(
+                "local terminal sessions cannot update saved SSH sessions",
+            ));
+        }
         let active_runtime = self
             .sessions
             .get(&session_key)

@@ -26,10 +26,12 @@ mod editor;
 mod folder_editor;
 mod keys;
 mod local_pane;
+mod local_terminal;
 mod logging;
 mod menus;
 mod panels;
 mod projection;
+mod proxies;
 mod quick_connect;
 mod sessions;
 mod sftp;
@@ -72,7 +74,6 @@ pub(crate) use sftp::LiveSftpClient;
 pub(crate) use sftp::SftpListingState;
 pub use sftp::SftpRowData;
 pub(crate) use sftp::SftpSessionLifecycle;
-pub(crate) use ssh_config::proxy_protocol_label;
 pub(crate) use ssh_config::tunnel_config_summary;
 pub(crate) use ssh_config::tunnel_forward_summary;
 pub(crate) use ssh_config::tunnel_kind_label;
@@ -110,6 +111,13 @@ pub(crate) use editor::SessionEditorDraft;
 pub(crate) use logging::LoggingDialogState;
 pub(crate) use panels::SettingsTerminalStatus;
 pub use panels::TunnelRowData;
+// NET-1：代理管理器页与 session editor 代理选择共用。
+pub(crate) use proxies::is_legacy_proxy_profile_id;
+pub(crate) use proxies::proxy_protocol_display;
+pub(crate) use proxies::proxy_protocol_index;
+pub(crate) use proxies::ProxyProfileOptionData;
+pub(crate) use proxies::ProxyRowData;
+pub(crate) use proxies::ProxyTestMessage;
 pub use projection::AppProjection;
 pub use projection::PanelFrameData;
 pub use projection::SplitHandleData;
@@ -181,6 +189,7 @@ impl AppRuntime {
         let persistent_known_hosts = config_store
             .load_known_hosts()
             .map_err(AppError::from_error)?;
+        let (proxy_test_tx, proxy_test_rx) = proxies::proxy_test_channel();
         let mut runtime = Self {
             config_dir: config_dir.clone(),
             config_store,
@@ -197,6 +206,7 @@ impl AppRuntime {
             pending_close_windows: BTreeSet::new(),
             ui_dirty: false,
             terminal_poll_cursor: 0,
+            terminal_viewport_hint: (120, 32),
             pending_close_tabs: None,
             tab_menu_tab_id: None,
             input_sync: tabs::InputSyncState::default(),
@@ -304,6 +314,24 @@ impl AppRuntime {
             private_keys_deploy_confirm_visible: false,
             private_keys_status_text: String::new(),
             private_keys_test_result_text: String::new(),
+            proxies_modal_visible: false,
+            proxies_selected_id: None,
+            proxies_editor_id: None,
+            proxies_editor_name: String::new(),
+            proxies_editor_protocol: yshell_config::ProxyProtocol::Socks5,
+            proxies_editor_host: String::new(),
+            proxies_editor_port_text: String::new(),
+            proxies_editor_username: String::new(),
+            proxies_editor_password: String::new(),
+            proxies_editor_dns_by_proxy: true,
+            proxies_status_text: String::new(),
+            proxies_test_result_text: String::new(),
+            proxies_remove_confirm_visible: false,
+            proxies_remove_blocked: false,
+            proxies_referencing_text: String::new(),
+            proxy_test_tx: Some(proxy_test_tx),
+            proxy_test_rx: Some(proxy_test_rx),
+            proxy_test_in_flight: None,
             host_keys_modal_visible: false,
             host_keys_selected_group: None,
             host_keys_selected_entry: None,
@@ -420,6 +448,22 @@ impl AppRuntime {
         ordinal
     }
 
+    /// TAB-4：记录窗口布局同步出的终端视口尺寸（本地 PTY 初始尺寸提示）。
+    pub(crate) fn note_terminal_viewport_size(&mut self, columns: u16, rows: u16) {
+        if columns > 0 && rows > 0 {
+            self.terminal_viewport_hint = (columns, rows);
+        }
+    }
+
+    /// TAB-4：新建本地终端时使用的初始 PTY 尺寸。
+    ///
+    /// 窗口尚未创建/尚未同步视口时退回 `120x32`（`LocalPtyConfig` 默认尺寸为
+    /// `80x24`，这里给一个更接近常见终端窗口的起点）。
+    #[must_use]
+    pub const fn local_terminal_initial_size(&self) -> (u16, u16) {
+        self.terminal_viewport_hint
+    }
+
     pub(crate) fn active_session_key(&self) -> AppResult<String> {
         self.active_session_id
             .clone()
@@ -456,6 +500,11 @@ pub struct AppRuntime {
     pub(crate) ui_dirty: bool,
     /// N0 轮询游标：非活动标签轮转的起点（对 `tabs` 顺序取模）。
     pub(crate) terminal_poll_cursor: usize,
+    /// TAB-4：最近一次窗口布局同步得到的终端视口尺寸（列, 行）。
+    ///
+    /// 新建本地终端时用作 PTY 初始尺寸（窗口尚未创建时保持 `(120, 32)`）；
+    /// 每个 tick 的视口同步会刷新它。
+    pub(crate) terminal_viewport_hint: (u16, u16),
     /// N0：等待确认的关闭请求（单关/批量复用同一个确认弹窗）。
     pub(crate) pending_close_tabs: Option<PendingCloseTabs>,
     /// N0：右键菜单针对的标签 id（`prepare_tab_context_menu` 设置）。
@@ -602,6 +651,33 @@ pub struct AppRuntime {
     pub(crate) private_keys_deploy_confirm_visible: bool,
     pub(crate) private_keys_status_text: String,
     pub(crate) private_keys_test_result_text: String,
+    // --- NET-1：代理管理器页 -------------------------------------------------
+    /// Proxy manager modal visibility.
+    pub(crate) proxies_modal_visible: bool,
+    /// Selected profile id in the list.
+    pub(crate) proxies_selected_id: Option<String>,
+    /// Profile currently loaded into the edit form (`None` = new draft).
+    pub(crate) proxies_editor_id: Option<String>,
+    pub(crate) proxies_editor_name: String,
+    pub(crate) proxies_editor_protocol: yshell_config::ProxyProtocol,
+    pub(crate) proxies_editor_host: String,
+    pub(crate) proxies_editor_port_text: String,
+    pub(crate) proxies_editor_username: String,
+    /// Write-only password input (empty = keep existing when editing).
+    pub(crate) proxies_editor_password: String,
+    pub(crate) proxies_editor_dns_by_proxy: bool,
+    /// Inline page feedback (validation errors, delete guidance, test state).
+    pub(crate) proxies_status_text: String,
+    pub(crate) proxies_test_result_text: String,
+    pub(crate) proxies_remove_confirm_visible: bool,
+    /// D8: deletion is blocked because saved sessions still reference the profile.
+    pub(crate) proxies_remove_blocked: bool,
+    /// Comma-separated session names shown when deletion is blocked.
+    pub(crate) proxies_referencing_text: String,
+    /// Background proxy-test worker plumbing (None in tests that skip it).
+    pub(crate) proxy_test_tx: Option<std::sync::mpsc::Sender<ProxyTestMessage>>,
+    pub(crate) proxy_test_rx: Option<std::sync::mpsc::Receiver<ProxyTestMessage>>,
+    pub(crate) proxy_test_in_flight: Option<String>,
     /// 主机密钥页可见性。
     pub(crate) host_keys_modal_visible: bool,
     pub(crate) host_keys_selected_group: Option<usize>,
@@ -773,6 +849,9 @@ impl fmt::Debug for AppRuntime {
                 &self.private_keys_modal_visible,
             )
             .field("private_keys_selected_id", &self.private_keys_selected_id)
+            .field("proxies_modal_visible", &self.proxies_modal_visible)
+            .field("proxies_selected_id", &self.proxies_selected_id)
+            .field("proxies_editor_id", &self.proxies_editor_id)
             .field("host_keys_modal_visible", &self.host_keys_modal_visible)
             .field("pending_auth_prompt", &self.pending_auth_prompt)
             .finish()

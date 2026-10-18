@@ -27,6 +27,7 @@ import { SessionEditor } from "pages/session_editor.slint";
 import { KnownHostsPage } from "pages/known_hosts.slint";
 import { QuickConnectRow, QuickLinkRow } from "pages/quick_connect.slint";
 import { PrivateKeysPage, PrivateKeyRow } from "pages/private_keys.slint";
+import { ProxiesPage, ProxyRow, ProxyProfileOption } from "pages/proxies.slint";
 import { HostKeysPage, HostKeyGroup, HostKeyEntry } from "pages/host_keys.slint";
 import { AuthPromptDialog, AuthKeyOption, AuthKeyboardPrompt } from "components/auth_prompt_dialog.slint";
 import { LoggingDialog } from "components/logging_dialog.slint";
@@ -86,7 +87,6 @@ export component MainWindow inherits Window {
     in-out property <string> editor_legacy_key_path_text: "";
     in-out property <bool> editor_legacy_key_has_passphrase: false;
     in-out property <bool> editor_has_stored_password: false;
-    in-out property <bool> editor_has_stored_proxy_password: false;
     in-out property <string> editor_target_text: "Creating new saved session";
     in-out property <bool> editor_modal_visible: false;
     in-out property <bool> editor_discard_dialog_visible: false;
@@ -127,6 +127,28 @@ export component MainWindow inherits Window {
     in-out property <string> private_keys_passphrase_text: "";
     in-out property <bool> private_keys_passphrase_stored: false;
     in-out property <bool> private_keys_passphrase_manage_enabled: false;
+    // --- NET-1：代理管理器页 -------------------------------------------------
+    in-out property <bool> proxies_modal_visible: false;
+    in-out property <[ProxyRow]> proxies_rows: [];
+    in-out property <int> proxies_selected_index: -1;
+    in-out property <string> proxies_summary_text: "";
+    in-out property <string> proxies_status_text: "";
+    in-out property <string> proxies_test_result_text: "";
+    in-out property <bool> proxies_remove_confirm_visible: false;
+    in-out property <bool> proxies_remove_blocked: false;
+    in-out property <string> proxies_referencing_text: "";
+    in-out property <bool> proxies_editor_is_new: true;
+    in-out property <string> proxies_editor_id_text: "";
+    in-out property <string> proxies_editor_name_text: "";
+    in-out property <int> proxies_editor_protocol_index: 2;
+    in-out property <string> proxies_editor_host_text: "";
+    in-out property <string> proxies_editor_port_text: "";
+    in-out property <string> proxies_editor_username_text: "";
+    in-out property <string> proxies_editor_password_text: "";
+    in-out property <bool> proxies_editor_dns_by_proxy: true;
+    in-out property <bool> proxies_editor_password_stored: false;
+    in-out property <bool> proxies_editor_save_enabled: false;
+    in-out property <bool> proxies_test_in_flight: false;
     // --- N4：主机密钥页 -----------------------------------------------------
     in-out property <bool> host_keys_modal_visible: false;
     in-out property <[HostKeyGroup]> host_keys_groups: [];
@@ -172,13 +194,12 @@ export component MainWindow inherits Window {
     in-out property <bool> auth_prompt_keyboard_final_round: false;
     in-out property <bool> auth_prompt_keyboard_submit_enabled: false;
     in-out property <string> editor_proxy_mode_text: "none";
-    in-out property <string> editor_proxy_protocol_text: "socks5";
-    in-out property <string> editor_proxy_host_text: "";
-    in-out property <string> editor_proxy_port_text: "";
-    in-out property <string> editor_proxy_username_text: "";
-    in-out property <string> editor_proxy_password_text: "";
-    in-out property <bool> editor_proxy_dns_by_proxy: true;
-    in-out property <string> editor_proxy_summary_text: "Proxy disabled for this editor session.";
+    // NET-1：托管代理下拉 + legacy 只读摘要。
+    in-out property <[ProxyProfileOption]> editor_proxy_options: [];
+    in-out property <int> editor_selected_proxy_index: -1;
+    in-out property <string> editor_proxy_selected_detail_text: "";
+    in-out property <string> editor_proxy_legacy_text: "";
+    in-out property <bool> editor_proxy_selected_missing: false;
     in-out property <string> editor_tunnel_kind_text: "local";
     in-out property <string> editor_tunnel_bind_host_text: "127.0.0.1";
     in-out property <string> editor_tunnel_bind_port_text: "";
@@ -215,8 +236,8 @@ export component MainWindow inherits Window {
     in-out property <string> host_key_prompt_expected_fingerprint_text: "";
     in-out property <string> tab_text: "Welcome  idle";
     in-out property <string> terminal_title_text: "YShell terminal";
-    in-out property <string> terminal_body_text: "Runtime is ready. Open a Quick Connect target or create a draft session.";
-    in-out property <[string]> terminal_visible_lines: ["Runtime is ready. Open a Quick Connect target or create a draft session."];
+    in-out property <string> terminal_body_text: "Runtime is ready. Open a Quick Connect target or create a local terminal tab with +.";
+    in-out property <[string]> terminal_visible_lines: ["Runtime is ready. Open a Quick Connect target or create a local terminal tab with +."];
     in-out property <image> terminal_image;
     /// WP4：非聚焦 pane 终端位图。
     in-out property <image> terminal_image_secondary;
@@ -349,9 +370,6 @@ export component MainWindow inherits Window {
     in-out property <string> editor_auth_test_backend_text: "";
     in-out property <string> editor_auth_test_startup_text: "";
     in-out property <string> editor_auth_test_error_text: "";
-    in-out property <string> editor_proxy_summary_kind_text: "none";
-    in-out property <string> editor_proxy_summary_address_text: "";
-    in-out property <string> editor_proxy_summary_user_text: "";
     in-out property <string> editor_tunnel_summary_kind_text: "none";
     in-out property <string> editor_tunnel_summary_rows_text: "";
     in-out property <int> editor_tunnel_summary_count: 0;
@@ -699,7 +717,7 @@ export component MainWindow inherits Window {
     callback quick_connect_save_as_session(string);
     /// D12：清空连接历史。
     callback quick_connect_clear_history();
-    /// `+` 按钮：按 `ui.new_tab_mode` 打开 QC 覆盖层或 Session Editor。
+    /// `+` 按钮：总是新建一个本地终端标签（Ctrl+N 仍打开 Session Editor）。
     callback new_tab_default();
     // --- N3：面板停靠（语义动作全部交给 Rust：布局是全局持久化状态）-----------
     /// ⋯ 菜单动作：id + "move-left"/"move-right"/"collapse"/"expand"/"hide"。
@@ -968,16 +986,30 @@ export component MainWindow inherits Window {
     callback update_editor_password(string);
     callback select_editor_key(int);
     callback set_editor_proxy_mode_none();
-    callback set_editor_proxy_mode_custom();
-    callback set_editor_proxy_protocol_socks4();
-    callback set_editor_proxy_protocol_socks4a();
-    callback set_editor_proxy_protocol_socks5();
-    callback set_editor_proxy_protocol_http_connect();
-    callback update_editor_proxy_host(string);
-    callback update_editor_proxy_port(string);
-    callback update_editor_proxy_username(string);
-    callback update_editor_proxy_password(string);
-    callback toggle_editor_proxy_dns_by_proxy();
+    callback select_editor_proxy(int);
+    callback manage_editor_proxies();
+    // --- NET-1：代理管理器页 -------------------------------------------------
+    callback open_proxies_manager();
+    callback close_proxies_manager();
+    callback select_proxy(int);
+    callback start_new_proxy();
+    callback begin_edit_proxy();
+    callback duplicate_proxy();
+    callback save_proxy_editor();
+    callback cancel_proxy_editor();
+    callback request_remove_proxy();
+    callback confirm_remove_proxy();
+    callback cancel_remove_proxy();
+    callback clear_proxy_references();
+    callback dismiss_proxy_warning();
+    callback test_proxy();
+    callback update_proxy_editor_name(string);
+    callback select_proxy_editor_protocol(int);
+    callback update_proxy_editor_host(string);
+    callback update_proxy_editor_port(string);
+    callback update_proxy_editor_username(string);
+    callback update_proxy_editor_password(string);
+    callback toggle_proxy_editor_dns();
     callback set_editor_tunnel_kind_local();
     callback set_editor_tunnel_kind_remote();
     callback set_editor_tunnel_kind_dynamic();
@@ -1337,9 +1369,10 @@ export component MainWindow inherits Window {
             tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
         },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
-        // N4：两个同级、独立入口（私钥页 / 主机密钥页）。
+        // N4：两个同级、独立入口（私钥页 / 主机密钥页）；NET-1 增加代理管理器。
         { label: @tr("Host Keys..."), shortcut: "", enabled: true, checked: false, separator: false },
-        { label: @tr("Private Keys..."), shortcut: "", enabled: true, checked: false, separator: false }
+        { label: @tr("Private Keys..."), shortcut: "", enabled: true, checked: false, separator: false },
+        { label: @tr("Proxy Manager..."), shortcut: "", enabled: true, checked: false, separator: false }
     ];
     property <[MenuEntry]> view_menu_entries: [
         { label: @tr("Session Manager"), shortcut: root.shortcut-toggle-sidebar, enabled: true, checked: root.sessions_visible, separator: false },
@@ -1848,6 +1881,7 @@ export component MainWindow inherits Window {
             }
             else if (index == 7) { root.open_host_keys_manager(); }
             else if (index == 8) { root.open_private_keys_manager(); }
+            else if (index == 9) { root.open_proxies_manager(); }
         } else if (menu == 3) {
             // View：面板可见性/位置统一入口（隐藏过的按默认侧恢复）。
             if (index == 0) { root.toggle_panel("sessions"); }
@@ -2082,6 +2116,10 @@ export component MainWindow inherits Window {
             auth_prompt_dialog.focus-dialog();
         } else if (root.host_key_prompt_visible) {
             host_key_dialog.focus-dialog();
+        } else if (root.proxies_remove_confirm_visible) {
+            proxies_remove_dialog.focus-dialog();
+        } else if (root.proxies_modal_visible) {
+            proxies_page.focus-dialog();
         } else if (root.private_keys_remove_confirm_visible) {
             private_keys_remove_dialog.focus-dialog();
         } else if (root.private_keys_deploy_confirm_visible) {
@@ -2671,6 +2709,7 @@ export component MainWindow inherits Window {
         }
         open-host-keys() => { root.open_host_keys_manager(); }
         open-private-keys() => { root.open_private_keys_manager(); }
+        open-proxies() => { root.open_proxies_manager(); }
         update-scrollback-lines(value) => { root.update_settings_scrollback_lines(value); }
         update-scrollback-max-cells(value) => { root.update_settings_scrollback_max_cells(value); }
         reset-terminal-defaults() => { root.reset_settings_terminal_defaults(); }
@@ -2992,14 +3031,11 @@ export component MainWindow inherits Window {
         has-stored-password: root.editor_has_stored_password;
         auth-test-status-text: TextFormats.editor-auth-test-status(root.editor_auth_test_kind_text, root.editor_auth_test_host_text, root.editor_auth_test_backend_text, root.editor_auth_test_startup_text, root.editor_auth_test_error_text);
         proxy-mode-text: root.editor_proxy_mode_text;
-        proxy-protocol-text: root.editor_proxy_protocol_text;
-        proxy-host-text <=> root.editor_proxy_host_text;
-        proxy-port-text <=> root.editor_proxy_port_text;
-        proxy-username-text <=> root.editor_proxy_username_text;
-        proxy-password-text <=> root.editor_proxy_password_text;
-        has-stored-proxy-password: root.editor_has_stored_proxy_password;
-        proxy-dns-by-proxy: root.editor_proxy_dns_by_proxy;
-        proxy-summary-text: TextFormats.proxy-summary-text(root.editor_proxy_summary_kind_text, root.editor_proxy_protocol_text, root.editor_proxy_summary_address_text, root.editor_proxy_summary_user_text, root.editor_proxy_dns_by_proxy);
+        proxy-options: root.editor_proxy_options;
+        selected-proxy-index <=> root.editor_selected_proxy_index;
+        proxy-selected-detail-text: root.editor_proxy_selected_detail_text;
+        proxy-legacy-text: root.editor_proxy_legacy_text;
+        proxy-selected-missing: root.editor_proxy_selected_missing;
         tunnel-kind-text: root.editor_tunnel_kind_text;
         tunnel-bind-host-text <=> root.editor_tunnel_bind_host_text;
         tunnel-bind-port-text <=> root.editor_tunnel_bind_port_text;
@@ -3035,16 +3071,8 @@ export component MainWindow inherits Window {
         manage-keys() => { root.open_private_keys_manager(); }
         test-auth() => { root.test_editor_auth(); }
         set-proxy-mode-none() => { root.set_editor_proxy_mode_none(); }
-        set-proxy-mode-custom() => { root.set_editor_proxy_mode_custom(); }
-        set-proxy-protocol-socks4() => { root.set_editor_proxy_protocol_socks4(); }
-        set-proxy-protocol-socks4a() => { root.set_editor_proxy_protocol_socks4a(); }
-        set-proxy-protocol-socks5() => { root.set_editor_proxy_protocol_socks5(); }
-        set-proxy-protocol-http-connect() => { root.set_editor_proxy_protocol_http_connect(); }
-        update-proxy-host(value) => { root.update_editor_proxy_host(value); }
-        update-proxy-port(value) => { root.update_editor_proxy_port(value); }
-        update-proxy-username(value) => { root.update_editor_proxy_username(value); }
-        update-proxy-password(value) => { root.update_editor_proxy_password(value); }
-        toggle-proxy-dns-by-proxy() => { root.toggle_editor_proxy_dns_by_proxy(); }
+        select-proxy-profile(index) => { root.select_editor_proxy(index); }
+        manage-proxies() => { root.manage_editor_proxies(); }
         set-tunnel-kind-local() => { root.set_editor_tunnel_kind_local(); }
         set-tunnel-kind-remote() => { root.set_editor_tunnel_kind_remote(); }
         set-tunnel-kind-dynamic() => { root.set_editor_tunnel_kind_dynamic(); }
@@ -3172,6 +3200,69 @@ export component MainWindow inherits Window {
         }
         canceled() => {
             root.cancel_private_key_deploy();
+            root.focus-top-dialog();
+        }
+    }
+
+    // NET-1：代理管理器页（Session > Proxy Manager… / Settings / 会话编辑器）。
+    // 声明在 Session Editor 之后：从编辑器打开时绘制在其上方。
+    proxies_page := ProxiesPage {
+        open: root.proxies_modal_visible;
+        proxies: root.proxies_rows;
+        selected-index <=> root.proxies_selected_index;
+        list-summary-text: root.proxies_summary_text;
+        status-text: root.proxies_status_text;
+        test-result-text: root.proxies_test_result_text;
+        test-in-flight: root.proxies_test_in_flight;
+        remove-blocked: root.proxies_remove_blocked;
+        referencing-text: root.proxies_referencing_text;
+        editor-is-new: root.proxies_editor_is_new;
+        editor-id-text: root.proxies_editor_id_text;
+        editor-name-text <=> root.proxies_editor_name_text;
+        editor-host-text <=> root.proxies_editor_host_text;
+        editor-port-text <=> root.proxies_editor_port_text;
+        editor-username-text <=> root.proxies_editor_username_text;
+        editor-password-text <=> root.proxies_editor_password_text;
+        editor-password-stored: root.proxies_editor_password_stored;
+        editor-dns-by-proxy: root.proxies_editor_dns_by_proxy;
+        editor-protocol-index <=> root.proxies_editor_protocol_index;
+        editor-save-enabled: root.proxies_editor_save_enabled;
+        close() => {
+            root.close_proxies_manager();
+            root.focus-top-dialog();
+        }
+        select-proxy(index) => { root.select_proxy(index); }
+        start-new-proxy() => { root.start_new_proxy(); }
+        begin-edit-proxy() => { root.begin_edit_proxy(); }
+        duplicate-proxy() => { root.duplicate_proxy(); }
+        request-remove-proxy() => { root.request_remove_proxy(); }
+        clear-proxy-references() => { root.clear_proxy_references(); }
+        dismiss-proxy-warning() => { root.dismiss_proxy_warning(); }
+        test-proxy() => { root.test_proxy(); }
+        save-proxy-editor() => { root.save_proxy_editor(); }
+        cancel-proxy-editor() => { root.cancel_proxy_editor(); }
+        update-proxy-name(value) => { root.update_proxy_editor_name(value); }
+        update-proxy-host(value) => { root.update_proxy_editor_host(value); }
+        update-proxy-port(value) => { root.update_proxy_editor_port(value); }
+        update-proxy-username(value) => { root.update_proxy_editor_username(value); }
+        update-proxy-password(value) => { root.update_proxy_editor_password(value); }
+        select-proxy-protocol(index) => { root.select_proxy_editor_protocol(index); }
+        toggle-proxy-dns() => { root.toggle_proxy_editor_dns(); }
+    }
+
+    // NET-1：删除未被引用的代理（被引用时宿主阻止并显示 D8 说明，不走本弹窗）。
+    proxies_remove_dialog := ConfirmDialog {
+        open: root.proxies_remove_confirm_visible;
+        destructive: true;
+        title-text: @tr("Delete Proxy Profile");
+        message-text: @tr("This removes the managed proxy profile and its saved password from the secret store.");
+        confirm-label: @tr("Delete");
+        confirmed() => {
+            root.confirm_remove_proxy();
+            root.focus-top-dialog();
+        }
+        canceled() => {
+            root.cancel_remove_proxy();
             root.focus-top-dialog();
         }
     }

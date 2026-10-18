@@ -83,7 +83,7 @@ export global TextFormats {
 
     public pure function terminal-body-display(kind: string, body: string) -> string {
         return kind == "ready"
-            ? @tr("MainWindow" => "Runtime is ready. Open a Quick Connect target or create a draft session.")
+            ? @tr("MainWindow" => "Runtime is ready. Open a Quick Connect target or create a local terminal tab with +.")
             : (kind == "no-output"
                 ? @tr("MainWindow" => "Terminal runtime is initialized but no output is available yet.")
                 : body);
@@ -143,16 +143,6 @@ export global TextFormats {
             return @tr("MainWindow" => "Auth test succeeded for {0}.", host);
         }
         return @tr("MainWindow" => "Auth test succeeded for {0}. Startup: {1}", host, startup);
-    }
-
-    public pure function proxy-summary-text(kind: string, protocol: string, address: string, user: string, dns: bool) -> string {
-        if kind == "none" {
-            return @tr("MainWindow" => "Proxy disabled for this editor session.");
-        }
-        if kind == "incomplete" {
-            return @tr("MainWindow" => "Custom proxy draft: {0} (address incomplete).", protocol);
-        }
-        return @tr("MainWindow" => "Custom proxy draft: {0} {1} user={2} dns-by-proxy={3}", protocol, address, user, dns ? "on" : "off");
     }
 
     pure function settings-terminal-field-label(field: string) -> string {

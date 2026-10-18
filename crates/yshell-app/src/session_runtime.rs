@@ -20,16 +20,21 @@ use yshell_terminal::{
 
 use crate::runtime::{config_host_key_policy_to_runtime, TerminalAppearance};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionSource {
     QuickConnect,
     SavedSession {
         profile_id: String,
     },
-    /// 草稿会话（旧 `+` 行为）。N2 起 `+` 走 Quick Connect 页 / Session Editor，
-    /// 暂无可达 UI 入口；保留变体以维持既有生命周期代码与测试（后续可整体清理）。
+    /// 草稿会话（历史 `+` 行为）。TAB-4 起 `+` 新建本地终端，草稿标签暂无可达 UI
+    /// 入口；保留变体以维持既有生命周期代码与测试（后续可整体清理）。
     #[allow(dead_code)]
     Draft,
+    /// 应用内本地 PTY 终端（`yshell-local`，TAB-4/TAB-5）。
+    ///
+    /// 本地会话不持有 SSH 连接：`ssh_config` 只是占位配置（端口 0 / 空用户名），
+    /// 任何误入 SSH 路径的连接都会在配置校验阶段失败，而不是连到错误目标。
+    Local,
 }
 
 /// Everything the app layer needs to map pixels to grid cells.
@@ -220,10 +225,65 @@ impl SessionRuntime {
         runtime
     }
 
+    /// TAB-4：本地 PTY 终端会话（不经过 SSH）。
+    ///
+    /// `display_name` 是 shell 名（`bash` / `pwsh` / `cmd`…），也是标签标题与状态栏
+    /// 目标文案。`ssh_config` 只作占位：host 固定为 `local`、端口 0、空用户名，
+    /// 任何误入 SSH 路径的代码都会在 `SshConnectionConfig::validate` 处失败。
+    pub fn from_local(
+        ordinal: usize,
+        display_name: String,
+        shell_session: Box<dyn ShellSession>,
+    ) -> Self {
+        let mut ssh_config = SshConnectionConfig::new(
+            "local",
+            0,
+            AuthMethod::Agent {
+                username: String::new(),
+            },
+        );
+        // 连接建立前 `current_pty_size` 就应反映本地 shell 的初始尺寸；实际尺寸由
+        // `open_local_terminal` 在 attach 时用 spawn 配置覆盖。
+        ssh_config.pty.size = PtySize::default();
+        let mut runtime = Self {
+            session_id: SessionId::new(format!("local-{ordinal}")),
+            tab_id: TabId::new(format!("tab-local-{ordinal}")),
+            display_name,
+            source: SessionSource::Local,
+            ssh_config,
+            terminal_parser: TerminalParser::new(),
+            terminal_grid: TerminalGrid::new(120, 32),
+            shell_session: None,
+            state: SessionState::Connected,
+            session_logger: None,
+            transfer_logger: None,
+            logging_notice: None,
+            manual_logging: None,
+            auto_logging_suppressed: false,
+            last_logging_path: None,
+            terminal_limits: (DEFAULT_SCROLLBACK_LINES, DEFAULT_SCROLLBACK_MAX_CELLS),
+            viewport_offset: 0,
+            selection: None,
+            selection_anchor: None,
+            selection_drag_moved: false,
+            frame_id: 0,
+            appearance: TerminalAppearance::default(),
+            connection_stage: String::new(),
+            connection_error: String::new(),
+            connection_in_flight: false,
+            pty_force_resync: false,
+        };
+        // 本地 shell 已由调用方 spawn 并确认连接；`attach_shell_session` 同时置位
+        // `pty_force_resync`，让下一次视口同步把真实窗口尺寸推给 PTY。
+        runtime.attach_shell_session(shell_session);
+        runtime.log_runtime_event("Local PTY shell attached to the runtime session.");
+        runtime
+    }
+
     /// 旧 `+` 行为：新建一个草稿终端标签。
     ///
-    /// N2 起 `+` 走 `handle_new_tab_default()`（Quick Connect 页 / Session Editor），
-    /// 草稿标签暂无可达 UI 入口；保留实现与测试覆盖，便于后续恢复"临时会话"入口。
+    /// TAB-4 起 `+` 走 [`SessionRuntime::from_local`]（本地 PTY 终端），草稿标签暂
+    /// 无可达 UI 入口；保留实现与测试覆盖，便于后续恢复"临时会话"入口。
     #[allow(dead_code)]
     pub fn draft(ordinal: usize) -> Self {
         let runtime = Self {
@@ -265,13 +325,24 @@ impl SessionRuntime {
     }
 
     /// `user@host:port` for overlay / status bar target summary.
+    ///
+    /// TAB-4：本地终端没有 `user@host`，目标文案就是 shell 名（如 `bash`）。
     pub fn connection_target_text(&self) -> String {
+        if self.is_local() {
+            return self.display_name.clone();
+        }
         format!(
             "{}@{}:{}",
             self.username_label(),
             self.ssh_config.host,
             self.ssh_config.port
         )
+    }
+
+    /// TAB-4：是否是应用内本地 PTY 终端（无 SSH 连接）。
+    #[must_use]
+    pub fn is_local(&self) -> bool {
+        matches!(&self.source, SessionSource::Local)
     }
 
     pub fn clear_connection_overlay(&mut self) {
@@ -295,10 +366,16 @@ impl SessionRuntime {
     }
 
     pub fn host_label(&self) -> String {
+        if self.is_local() {
+            return self.display_name.clone();
+        }
         format!("{}:{}", self.ssh_config.host, self.ssh_config.port)
     }
 
     pub fn username_label(&self) -> &str {
+        if self.is_local() {
+            return "";
+        }
         self.ssh_config.username()
     }
 
@@ -689,6 +766,7 @@ impl SessionRuntime {
             SessionSource::QuickConnect => "quick-connect",
             SessionSource::SavedSession { .. } => "saved",
             SessionSource::Draft => "draft",
+            SessionSource::Local => "local",
         };
         format!("{} [{}] {}", self.display_name, self.state_label(), source)
     }

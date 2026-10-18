@@ -52,6 +52,16 @@ impl AppRuntime {
         &mut self,
         session_key: &str,
     ) -> AppResult<&mut SftpClient<RealSftpBackend>> {
+        // TAB-4：本地终端没有 SSH/SFTP 后端；任何误入的 SFTP 操作直接失败。
+        if self
+            .sessions
+            .get(session_key)
+            .is_some_and(|runtime| runtime.is_local())
+        {
+            return Err(AppError::new(
+                "SFTP is unavailable for local terminal sessions",
+            ));
+        }
         if !self.sftp_live.contains_key(session_key) {
             let ssh_config = {
                 let runtime = self.sessions.get(session_key).ok_or_else(|| {
@@ -603,7 +613,11 @@ impl AppRuntime {
         session_key: &str,
         refresh_listing: bool,
     ) -> String {
-        let Some(session_state) = self.sessions.get(session_key).map(|runtime| runtime.state) else {
+        let Some((session_state, is_local)) = self
+            .sessions
+            .get(session_key)
+            .map(|runtime| (runtime.state, runtime.is_local()))
+        else {
             self.drop_sftp_live_client_for(session_key);
             self.sftp_session = SftpSessionLifecycle::Failed {
                 session_key: Some(session_key.to_owned()),
@@ -612,6 +626,17 @@ impl AppRuntime {
             self.sftp_listing = SftpListingState::SyncMissingSession;
             return self.sftp_session.legacy_status_text();
         };
+
+        // TAB-4：本地终端没有远端文件系统；生命周期固定为 disconnected，
+        // 不建 SFTP 连接（即使 shell 本身处于 connected）。
+        if is_local {
+            self.drop_sftp_live_client_for(session_key);
+            self.sftp_session = SftpSessionLifecycle::Disconnected {
+                session_key: Some(session_key.to_owned()),
+            };
+            self.sftp_listing = SftpListingState::SyncDisconnected;
+            return "SFTP is unavailable for local terminal sessions.".to_owned();
+        }
 
         if session_state != yshell_core::SessionState::Connected {
             self.drop_sftp_live_client_for(session_key);

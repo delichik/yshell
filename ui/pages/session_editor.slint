@@ -1,8 +1,9 @@
 import { Theme } from "../theme.slint";
-import { WinButton, WinIconButton, WinNavItem, WinToggle, WinScrollIndicator } from "../components/basic/controls.slint";
+import { WinButton, WinIconButton, WinNavItem, WinScrollIndicator } from "../components/basic/controls.slint";
 import { Icon } from "../components/basic/icons.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { AuthKeyOption } from "../components/auth_prompt_dialog.slint";
+import { ProxyProfileOption } from "proxies.slint";
 import { TriStateField, TriStateFieldSection } from "./folder_editor.slint";
 
 // 表单行：左侧固定宽度标签 + 右侧控件（子元素放进右侧横向布局）
@@ -237,6 +238,156 @@ component ManagedKeyPicker inherits Rectangle {
     }
 }
 
+// NET-1：托管代理下拉。列表项显示名称 + 协议/地址/口令状态；会话只保存
+// profile id，编辑管理器条目会影响所有引用会话。
+component ProxyPicker inherits Rectangle {
+    in property <[ProxyProfileOption]> options: [];
+    in-out property <int> selected-index: -1;
+    in property <string> placeholder-text: "";
+    callback selected(int);
+
+    private property <bool> has-selection:
+        root.selected-index >= 0 && root.selected-index < root.options.length;
+    private property <string> selected-label:
+        root.has-selection ? root.options[root.selected-index].label : "";
+
+    height: Theme.control-height;
+    min-width: 0px;
+    preferred-width: 0px;
+    border-radius: Theme.radius-control;
+    border-width: 1px;
+    border-color: (picker_focus.has-focus || picker_touch.has-hover) ? Theme.accent : Theme.control-stroke;
+    background: picker_touch.pressed ? Theme.control-fill-pressed
+        : picker_touch.has-hover ? Theme.control-fill-hover
+        : Theme.control-fill;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+    animate border-color { duration: Theme.duration-faster; easing: ease-out; }
+
+    accessible-role: combobox;
+    accessible-label: root.has-selection ? root.selected-label : root.placeholder-text;
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-12;
+        padding-right: Theme.spacing-8;
+        spacing: Theme.spacing-8;
+
+        Text {
+            text: root.has-selection ? root.selected-label : root.placeholder-text;
+            color: root.has-selection ? Theme.text-primary : Theme.text-tertiary;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        Rectangle {
+            width: Theme.icon-size-small;
+            vertical-stretch: 1;
+            background: transparent;
+
+            Icon {
+                name: "chevron-down";
+                icon-color: Theme.text-secondary;
+                icon-size: Theme.icon-size-small;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+    }
+
+    picker_focus := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Space || event.text == Key.Return) {
+                picker.show();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    picker_touch := TouchArea {
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                picker_focus.focus();
+            }
+        }
+        clicked => { picker.show(); }
+    }
+
+    picker := PopupWindow {
+        width: max(root.width, 280px);
+        y: root.height + 2px;
+        close-policy: close-on-click-outside;
+
+        Rectangle {
+            background: Theme.flyout-background;
+            border-width: 1px;
+            border-color: Theme.layer-stroke;
+            border-radius: Theme.radius-panel;
+            drop-shadow-blur: Theme.shadow-blur;
+            drop-shadow-color: Theme.shadow-color;
+            drop-shadow-offset-y: Theme.shadow-offset-y;
+            height: min(options_layout.preferred-height + 8px, 224px);
+
+            Flickable {
+                width: parent.width;
+                height: parent.height;
+                interactive: self.content-height > self.height;
+                content-width: self.width;
+                content-height: options_layout.preferred-height;
+
+                options_layout := VerticalLayout {
+                    padding: 4px;
+                    spacing: 0px;
+
+                    for option[index] in root.options : Rectangle {
+                        height: 44px;
+                        border-radius: Theme.radius-control;
+                        background: option_touch.has-hover ? Theme.subtle-hover
+                            : index == root.selected-index ? Theme.subtle-selected
+                            : transparent;
+
+                        VerticalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            padding-top: 5px;
+                            padding-bottom: 5px;
+                            spacing: 1px;
+
+                            Text {
+                                text: option.label;
+                                color: Theme.text-primary;
+                                font-size: Theme.font-body;
+                                font-weight: index == root.selected-index ? Theme.weight-semibold : 400;
+                                wrap: no-wrap;
+                                overflow: elide;
+                            }
+
+                            Text {
+                                text: option.detail;
+                                color: Theme.text-tertiary;
+                                font-size: Theme.font-caption;
+                                font-family: Theme.font-mono;
+                                wrap: no-wrap;
+                                overflow: elide;
+                            }
+                        }
+
+                        option_touch := TouchArea {
+                            clicked => {
+                                root.selected-index = index;
+                                root.selected(index);
+                                picker.close();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 export component SessionEditor inherits Rectangle {
     in property <bool> open: false;
     in property <string> section: "general";
@@ -258,14 +409,12 @@ export component SessionEditor inherits Rectangle {
     in property <bool> has-stored-password: false;
     in property <string> auth-test-status-text: "";
     in property <string> proxy-mode-text: "none";
-    in property <string> proxy-protocol-text: "socks5";
-    in-out property <string> proxy-host-text: "";
-    in-out property <string> proxy-port-text: "";
-    in-out property <string> proxy-username-text: "";
-    in-out property <string> proxy-password-text: "";
-    in property <bool> has-stored-proxy-password: false;
-    in property <bool> proxy-dns-by-proxy: true;
-    in property <string> proxy-summary-text: "";
+    // NET-1：托管代理下拉 + legacy 只读摘要；不再有 per-session 自定义字段。
+    in property <[ProxyProfileOption]> proxy-options: [];
+    in-out property <int> selected-proxy-index: -1;
+    in property <string> proxy-selected-detail-text: "";
+    in property <string> proxy-legacy-text: "";
+    in property <bool> proxy-selected-missing: false;
     in property <string> tunnel-kind-text: "local";
     in-out property <string> tunnel-bind-host-text: "127.0.0.1";
     in-out property <string> tunnel-bind-port-text: "";
@@ -295,16 +444,8 @@ export component SessionEditor inherits Rectangle {
     callback manage-keys();
     callback test-auth();
     callback set-proxy-mode-none();
-    callback set-proxy-mode-custom();
-    callback set-proxy-protocol-socks4();
-    callback set-proxy-protocol-socks4a();
-    callback set-proxy-protocol-socks5();
-    callback set-proxy-protocol-http-connect();
-    callback update-proxy-host(string);
-    callback update-proxy-port(string);
-    callback update-proxy-username(string);
-    callback update-proxy-password(string);
-    callback toggle-proxy-dns-by-proxy();
+    callback select-proxy-profile(int);
+    callback manage-proxies();
     callback set-tunnel-kind-local();
     callback set-tunnel-kind-remote();
     callback set-tunnel-kind-dynamic();
@@ -326,7 +467,6 @@ export component SessionEditor inherits Rectangle {
     private property <bool> show-password-auth:
         root.auth-method-text == "password" || root.auth-method-text == "keyboard_interactive";
     private property <bool> show-key-auth: root.auth-method-text == "private_key";
-    private property <bool> show-proxy-custom: root.proxy-mode-text == "custom";
     private property <bool> show-tunnel-target: root.tunnel-kind-text != "dynamic";
     // SSH-1：Key 认证要么选中托管密钥，要么保留旧 path-only 会话（legacy）。
     private property <bool> has-selected-key:
@@ -705,78 +845,91 @@ export component SessionEditor inherits Rectangle {
                                             FormRow {
                                                 label: @tr("Mode");
 
-                                                WinButton { text: @tr("No Proxy"); accent: root.proxy-mode-text == "none"; clicked => { root.set-proxy-mode-none(); } }
-                                                WinButton { text: @tr("Custom"); accent: root.proxy-mode-text == "custom"; clicked => { root.set-proxy-mode-custom(); } }
-                                            }
+                                                WinButton {
+                                                    text: @tr("No Proxy");
+                                                    accent: root.proxy-mode-text == "none";
+                                                    clicked => { root.set-proxy-mode-none(); }
+                                                }
 
-                                            if root.show-proxy-custom : FormRow {
-                                                label: @tr("Protocol");
-
-                                                WinButton { text: @tr("SOCKS4"); accent: root.proxy-protocol-text == "socks4"; clicked => { root.set-proxy-protocol-socks4(); } }
-                                                WinButton { text: @tr("SOCKS4a"); accent: root.proxy-protocol-text == "socks4a"; clicked => { root.set-proxy-protocol-socks4a(); } }
-                                            }
-
-                                            if root.show-proxy-custom : FormRow {
-                                                label: "";
-
-                                                WinButton { text: @tr("SOCKS5"); accent: root.proxy-protocol-text == "socks5"; clicked => { root.set-proxy-protocol-socks5(); } }
-                                                WinButton { text: @tr("HTTP"); accent: root.proxy-protocol-text == "http-connect"; clicked => { root.set-proxy-protocol-http-connect(); } }
-                                            }
-
-                                            if root.show-proxy-custom : FormRow {
-                                                label: @tr("Proxy host");
-
-                                                WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    text <=> root.proxy-host-text;
-                                                    placeholder-text: @tr("Proxy host");
-                                                    edited => { root.update-proxy-host(self.text); }
+                                                WinButton {
+                                                    text: @tr("Manage proxies…");
+                                                    subtle: true;
+                                                    clicked => { root.manage-proxies(); }
                                                 }
                                             }
 
-                                            if root.show-proxy-custom : FormRow {
-                                                label: @tr("Proxy port");
+                                            if root.proxy-options.length > 0 : FormRow {
+                                                label: @tr("Profile");
 
-                                                WinTextInput {
+                                                ProxyPicker {
                                                     horizontal-stretch: 1;
-                                                    text <=> root.proxy-port-text;
-                                                    placeholder-text: @tr("Proxy port");
-                                                    edited => { root.update-proxy-port(self.text); }
+                                                    options: root.proxy-options;
+                                                    selected-index <=> root.selected-proxy-index;
+                                                    placeholder-text: @tr("Choose a managed proxy");
+                                                    selected(index) => { root.select-proxy-profile(index); }
                                                 }
                                             }
 
-                                            if root.show-proxy-custom : FormRow {
-                                                label: @tr("Username");
+                                            if root.proxy-options.length == 0 : FormRow {
+                                                label: @tr("Profile");
 
-                                                WinTextInput {
+                                                Text {
+                                                    text: @tr("No managed proxies yet.");
+                                                    color: Theme.text-tertiary;
+                                                    font-size: Theme.font-body;
                                                     horizontal-stretch: 1;
-                                                    text <=> root.proxy-username-text;
-                                                    placeholder-text: @tr("Proxy username");
-                                                    edited => { root.update-proxy-username(self.text); }
+                                                    height: Theme.control-height;
+                                                    vertical-alignment: center;
+                                                    wrap: no-wrap;
+                                                    overflow: elide;
                                                 }
                                             }
 
-                                            if root.show-proxy-custom : FormRow {
-                                                label: @tr("Password");
+                                            // 选中托管代理：只读摘要（条目在管理器里编辑）。
+                                            if root.proxy-mode-text == "managed" && root.proxy-selected-detail-text != "" : Text {
+                                                text: root.proxy-selected-detail-text;
+                                                color: Theme.text-tertiary;
+                                                font-size: Theme.font-caption;
+                                                font-family: Theme.font-mono;
+                                                wrap: no-wrap;
+                                                overflow: elide;
+                                            }
 
-                                                WinTextInput {
+                                            if root.proxy-selected-missing : Text {
+                                                text: @tr("The selected managed proxy is no longer available. Choose another proxy or No Proxy.");
+                                                color: Theme.critical;
+                                                font-size: Theme.font-caption;
+                                                wrap: word-wrap;
+                                            }
+
+                                            // 旧 per-session / 悬空引用：只读展示并标记 legacy，保持可连接。
+                                            if root.proxy-mode-text == "legacy" && root.proxy-legacy-text != "" : FormRow {
+                                                label: @tr("Legacy proxy");
+
+                                                Text {
+                                                    text: root.proxy-legacy-text;
+                                                    color: Theme.text-secondary;
+                                                    font-size: Theme.font-body;
+                                                    font-family: Theme.font-mono;
                                                     horizontal-stretch: 1;
-                                                    text <=> root.proxy-password-text;
-                                                    input-type: password;
-                                                    placeholder-text: root.has-stored-proxy-password
-                                                        ? @tr("Leave blank to keep saved password")
-                                                        : @tr("Proxy password");
-                                                    edited => { root.update-proxy-password(self.text); }
+                                                    height: Theme.control-height;
+                                                    vertical-alignment: center;
+                                                    wrap: no-wrap;
+                                                    overflow: elide;
                                                 }
                                             }
 
-                                            if root.show-proxy-custom : WinToggle {
-                                                text: root.proxy-dns-by-proxy ? @tr("DNS via Proxy: On") : @tr("DNS via Proxy: Off");
-                                                checked: root.proxy-dns-by-proxy;
-                                                toggled => { root.toggle-proxy-dns-by-proxy(); }
+                                            if root.proxy-mode-text == "legacy" : HintText {
+                                                hint: @tr("Legacy per-session proxy. Select a managed proxy to migrate this session, or choose No Proxy.");
                                             }
 
-                                            HintText { hint: root.proxy-summary-text; }
+                                            if root.proxy-mode-text == "managed" : HintText {
+                                                hint: @tr("Uses a managed proxy profile. Edits in the Proxy Manager apply to every session that references it.");
+                                            }
+
+                                            if root.proxy-mode-text == "none" : HintText {
+                                                hint: @tr("Proxy disabled for this editor session.");
+                                            }
                                         }
                                         if root.section == "tunnels" : VerticalLayout {
                                             alignment: start;

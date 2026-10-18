@@ -25,8 +25,8 @@ impl AppRuntime {
 
     /// 旧 `+` 行为：新建一个草稿终端标签（`SessionRuntime::draft`）。
     ///
-    /// N2 起 `+` 走 `handle_new_tab_default()`（Quick Connect 页 / Session Editor），
-    /// 本方法暂无可达 UI 入口；保留实现与测试覆盖（runtime 测试仍覆盖草稿路径）。
+    /// TAB-4 起 `+` 走 [`Self::open_local_terminal`]（本地 PTY 终端），本方法暂无可达
+    /// UI 入口；保留实现与测试覆盖（runtime 测试仍覆盖草稿路径）。
     #[allow(dead_code)]
     pub fn handle_new_session(&mut self) -> AppProjection {
         let mut runtime = SessionRuntime::draft(self.allocate_runtime_ordinal());
@@ -230,6 +230,21 @@ impl AppRuntime {
 
     pub fn reconnect_active_session(&mut self) -> AppResult<AppProjection> {
         let session_key = self.active_session_key()?;
+        // TAB-4：本地终端不是 SSH 会话，重连没有意义也绝不能触发网络路径。
+        if self
+            .sessions
+            .get(&session_key)
+            .is_some_and(|session| session.is_local())
+        {
+            self.set_status_kind(
+                "",
+                "Local terminal sessions cannot be reconnected. Open a new local tab with `+`."
+                    .to_owned(),
+                String::new(),
+                String::new(),
+            );
+            return Ok(self.projection());
+        }
         let session_id = self
             .sessions
             .get(&session_key)

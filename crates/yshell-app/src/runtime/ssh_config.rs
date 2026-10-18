@@ -6,8 +6,7 @@ use crate::{
     session_runtime::SessionSource,
 };
 use yshell_config::{
-    AuthMethod as ConfigAuthMethod, ProxyProfile, ProxyProtocol, ResolvedSessionProfile,
-    TunnelForward, TunnelForwardKind,
+    AuthMethod as ConfigAuthMethod, ResolvedSessionProfile, TunnelForward, TunnelForwardKind,
 };
 use yshell_ssh::{
     AuthMethod, ForwardingKind, HostKeyPolicy, ProxyConfig, SshConnectionConfig, TunnelConfig,
@@ -53,13 +52,7 @@ impl AppRuntime {
             legacy_key_has_passphrase: false,
             has_stored_password: false,
             proxy_mode: EditorProxyMode::None,
-            proxy_protocol: ProxyProtocol::Socks5,
-            proxy_host: String::new(),
-            proxy_port_text: String::new(),
-            proxy_username: String::new(),
-            proxy_password: String::new(),
-            has_stored_proxy_password: false,
-            proxy_dns_by_proxy: true,
+            proxy_profile_id: None,
             tunnel_kind: TunnelForwardKind::Local,
             tunnel_bind_host: "127.0.0.1".to_owned(),
             tunnel_bind_port_text: String::new(),
@@ -105,14 +98,16 @@ impl AppRuntime {
                 }
             }
         }
-        if let Some(proxy) = &resolved.proxy {
-            draft.proxy_mode = EditorProxyMode::Custom;
-            draft.proxy_protocol = proxy.protocol;
-            draft.proxy_host = proxy.host.clone();
-            draft.proxy_port_text = proxy.port.to_string();
-            draft.proxy_username = proxy.username.clone().unwrap_or_default();
-            draft.proxy_dns_by_proxy = proxy.resolve_dns_by_proxy;
-            draft.has_stored_proxy_password = proxy.password_secret_key.is_some();
+        // NET-1：托管代理（proxy_profile_id → 管理器条目）与旧 per-session 代理
+        // （`<session_id>-proxy` 或悬空引用）分开呈现；legacy 保持只读但可连接。
+        if let Some(proxy_id) = resolved.session.proxy_profile_id.as_deref() {
+            draft.proxy_profile_id = Some(proxy_id.to_owned());
+            if resolved.proxy.is_some() && !is_legacy_proxy_profile_id(&resolved.session.id, proxy_id)
+            {
+                draft.proxy_mode = EditorProxyMode::Managed;
+            } else {
+                draft.proxy_mode = EditorProxyMode::Legacy;
+            }
         }
         draft
     }
@@ -148,6 +143,10 @@ impl AppRuntime {
                 self.build_ssh_config_from_resolved_session(&resolved)
             }
             SessionSource::QuickConnect | SessionSource::Draft => Ok(runtime.ssh_config.clone()),
+            // TAB-4：本地终端没有 SSH 配置；误入连接路径时直接失败，绝不发网络请求。
+            SessionSource::Local => Err(AppError::new(
+                "local terminal sessions do not have an SSH configuration",
+            )),
         }
     }
 
@@ -338,64 +337,33 @@ impl AppRuntime {
         let Some(proxy) = &resolved.proxy else {
             return Ok(ProxyConfig::None);
         };
-        let address = format!("{}:{}", proxy.host, proxy.port);
-        let username = proxy.username.clone();
-        let password = proxy
-            .password_secret_key
-            .as_ref()
-            .map(|secret_key| self.resolve_secret_value(secret_key))
-            .transpose()?;
-        Ok(match proxy.protocol {
-            ProxyProtocol::Socks4 => ProxyConfig::Socks4 { address, username },
-            ProxyProtocol::Socks4a => ProxyConfig::Socks4a { address, username },
-            ProxyProtocol::Socks5 => ProxyConfig::Socks5 {
-                address,
-                username,
-                password,
-                resolve_dns_by_proxy: proxy.resolve_dns_by_proxy,
-            },
-            ProxyProtocol::HttpConnect => ProxyConfig::HttpConnect {
-                address,
-                username,
-                password,
-            },
-        })
+        self.proxy_config_from_profile(proxy)
     }
 
+    /// NET-1：会话编辑器草稿的代理配置。
+    ///
+    /// `Managed` 从管理器条目解析；`Legacy` 保留旧 per-session 引用（仍可连接）；
+    /// `None` 关闭代理。编辑会话永远不会创建/改写代理条目。
     pub(crate) fn build_proxy_config_from_editor(&self) -> AppResult<ProxyConfig> {
-        if self.editor.proxy_mode == EditorProxyMode::None {
-            return Ok(ProxyConfig::None);
-        }
-        let host = self.editor.proxy_host.trim();
-        if host.is_empty() {
-            return Err(AppError::new("proxy host must not be empty"));
-        }
-        let port = parse_port_field(
-            &self.editor.proxy_port_text,
-            "proxy port must be a valid integer between 1 and 65535",
-        )?;
-        let address = format!("{host}:{port}");
-        let username = if self.editor.proxy_username.trim().is_empty() {
-            None
-        } else {
-            Some(self.editor.proxy_username.trim().to_owned())
+        let proxy_id = match self.editor.proxy_mode {
+            EditorProxyMode::None => return Ok(ProxyConfig::None),
+            EditorProxyMode::Managed | EditorProxyMode::Legacy => self
+                .editor
+                .proxy_profile_id
+                .as_deref()
+                .ok_or_else(|| AppError::new("select a proxy profile or choose No Proxy"))?,
         };
-        let password = self.resolve_editor_proxy_password_secret()?;
-        Ok(match self.editor.proxy_protocol {
-            ProxyProtocol::Socks4 => ProxyConfig::Socks4 { address, username },
-            ProxyProtocol::Socks4a => ProxyConfig::Socks4a { address, username },
-            ProxyProtocol::Socks5 => ProxyConfig::Socks5 {
-                address,
-                username,
-                password,
-                resolve_dns_by_proxy: self.editor.proxy_dns_by_proxy,
-            },
-            ProxyProtocol::HttpConnect => ProxyConfig::HttpConnect {
-                address,
-                username,
-                password,
-            },
-        })
+        let Some(profile) = self.config_document.proxy_profiles.get(proxy_id) else {
+            return Err(AppError::new(match self.editor.proxy_mode {
+                EditorProxyMode::Legacy => format!(
+                    "this session references a legacy proxy `{proxy_id}` that no longer exists; choose No Proxy or a managed proxy"
+                ),
+                _ => format!(
+                    "the selected managed proxy `{proxy_id}` is no longer available; choose another proxy"
+                ),
+            }));
+        };
+        self.proxy_config_from_profile(profile)
     }
 
     pub(crate) fn build_auth_profile_for_editor(
@@ -468,56 +436,6 @@ impl AppRuntime {
             name: format!("Auth for {}", self.editor.name.trim()),
             method,
         })
-    }
-
-    pub(crate) fn build_proxy_profile_for_editor(
-        &self,
-        proxy_profile_id: &str,
-    ) -> AppResult<Option<ProxyProfile>> {
-        if self.editor.proxy_mode == EditorProxyMode::None {
-            return Ok(None);
-        }
-        let host = self.editor.proxy_host.trim();
-        if host.is_empty() {
-            return Err(AppError::new("proxy host must not be empty"));
-        }
-        let port = parse_port_field(
-            &self.editor.proxy_port_text,
-            "proxy port must be a valid integer between 1 and 65535",
-        )?;
-        let existing = self.config_document.proxy_profiles.get(proxy_profile_id);
-        let password_secret_key = match self.editor.proxy_protocol {
-            ProxyProtocol::Socks4 | ProxyProtocol::Socks4a => None,
-            ProxyProtocol::Socks5 | ProxyProtocol::HttpConnect => {
-                if !self.editor.proxy_password.trim().is_empty() {
-                    let secret_key = format!("local://yshell/{proxy_profile_id}/password");
-                    self.store_secret_value(&secret_key, self.editor.proxy_password.trim())?;
-                    Some(secret_key)
-                } else if self.editor.has_stored_proxy_password {
-                    existing
-                        .and_then(|profile| profile.password_secret_key.clone())
-                        .or_else(|| {
-                            Some(format!("local://yshell/{proxy_profile_id}/password"))
-                        })
-                } else {
-                    None
-                }
-            }
-        };
-        Ok(Some(ProxyProfile {
-            id: proxy_profile_id.to_owned(),
-            name: format!("Proxy for {}", self.editor.name.trim()),
-            protocol: self.editor.proxy_protocol,
-            host: host.to_owned(),
-            port,
-            username: if self.editor.proxy_username.trim().is_empty() {
-                None
-            } else {
-                Some(self.editor.proxy_username.trim().to_owned())
-            },
-            resolve_dns_by_proxy: self.editor.proxy_dns_by_proxy,
-            password_secret_key,
-        }))
     }
 
     /// Resolves the typed password, or the stored secret when editing and the
@@ -624,28 +542,6 @@ impl AppRuntime {
         }))
     }
 
-    fn resolve_editor_proxy_password_secret(&self) -> AppResult<Option<String>> {
-        if !self.editor.proxy_password.trim().is_empty() {
-            return Ok(Some(self.editor.proxy_password.trim().to_owned()));
-        }
-        if !self.editor.has_stored_proxy_password {
-            return Ok(None);
-        }
-        let Some(session_id) = self.editor.target_session_id.as_deref() else {
-            return Ok(None);
-        };
-        let proxy_profile_id = format!("{session_id}-proxy");
-        let Some(secret_key) = self
-            .config_document
-            .proxy_profiles
-            .get(&proxy_profile_id)
-            .and_then(|profile| profile.password_secret_key.clone())
-        else {
-            return Ok(None);
-        };
-        Ok(Some(self.resolve_secret_value(&secret_key)?))
-    }
-
     pub(crate) fn run_editor_auth_test(&mut self) -> AppResult<EditorAuthTestStatus> {
         let ssh_config = self.build_ssh_config_from_editor()?;
         let host_label = format!(
@@ -720,15 +616,6 @@ pub(crate) fn tunnel_kind_label(kind: TunnelForwardKind) -> &'static str {
         TunnelForwardKind::Local => "local",
         TunnelForwardKind::Remote => "remote",
         TunnelForwardKind::Dynamic => "dynamic",
-    }
-}
-
-pub(crate) fn proxy_protocol_label(protocol: ProxyProtocol) -> &'static str {
-    match protocol {
-        ProxyProtocol::Socks4 => "socks4",
-        ProxyProtocol::Socks4a => "socks4a",
-        ProxyProtocol::Socks5 => "socks5",
-        ProxyProtocol::HttpConnect => "http-connect",
     }
 }
 

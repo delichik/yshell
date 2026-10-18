@@ -25,7 +25,7 @@ pub use client::{
 pub use error::{HostKeyProblem, SshError, SshErrorKind, SshResult};
 pub use forwarding::{ForwardingKind, TunnelConfig, TunnelState};
 pub use host_key::{HostKeyDecision, HostKeyFingerprint, HostKeyPolicy, KnownHosts};
-pub use proxy::{ProxyConfig, ProxyState};
+pub use proxy::{probe_proxy_connectivity, ProxyConfig, ProxyProbeReport, ProxyState};
 pub use pty::{PtyConfig, PtySize};
 pub use real::{
     with_connection_stage_hook, RealAuthStrategy, RealConnectionAttempt, RealConnectionPlan,

@@ -57,8 +57,13 @@ impl AppRuntime {
             .key_id
             .as_deref()
             .is_some_and(|key_id| self.config_document.find_key(key_id).is_none());
-        let (proxy_summary_kind_text, proxy_summary_address_text, proxy_summary_user_text) =
-            self.editor_proxy_summary_parts();
+        // NET-1：会话编辑器代理下拉（托管条目）+ legacy 只读摘要。
+        let editor_proxy_options = self.managed_proxy_options();
+        let editor_selected_proxy_index =
+            self.editor_proxy_selected_index(&editor_proxy_options);
+        let editor_proxy_selected_detail_text = self.editor_proxy_selected_detail();
+        let editor_proxy_legacy_text = self.editor_proxy_legacy_text();
+        let editor_proxy_selected_missing = self.editor_proxy_selected_missing();
         let (tunnels_summary_kind_text, tunnels_summary_rows_text) = self.tunnels_summary_parts();
         let tunnel_rows = self.tunnel_rows();
         let (session_summary_rows_text, session_summary_hidden_count) =
@@ -191,6 +196,7 @@ impl AppRuntime {
         // N3：内容区 px 布局（Rust 计算 → 投影下发；Slint 侧不再从 window.width 反推）。
         let panel_view = self.panel_layout_view();
         let private_keys = self.private_keys_projection_parts();
+        let proxies = self.proxies_projection_parts();
         let host_keys = self.host_keys_projection_parts();
         let auth_prompt = self.auth_prompt_projection_parts();
         // N5：终端外观（Settings Appearance 内联 / Folder Editor / Session Editor）。
@@ -280,16 +286,11 @@ impl AppRuntime {
                 .to_owned(),
             editor_auth_test_error_text: self.editor_auth_test_status.error().to_owned(),
             editor_proxy_mode_text: self.editor.proxy_mode.label().to_owned(),
-            editor_proxy_protocol_text: proxy_protocol_label(self.editor.proxy_protocol).to_owned(),
-            editor_proxy_host_text: self.editor.proxy_host.clone(),
-            editor_proxy_port_text: self.editor.proxy_port_text.clone(),
-            editor_proxy_username_text: self.editor.proxy_username.clone(),
-            editor_proxy_password_text: self.editor.proxy_password.clone(),
-            editor_has_stored_proxy_password: self.editor.has_stored_proxy_password,
-            editor_proxy_dns_by_proxy: self.editor.proxy_dns_by_proxy,
-            editor_proxy_summary_kind_text: proxy_summary_kind_text,
-            editor_proxy_summary_address_text: proxy_summary_address_text,
-            editor_proxy_summary_user_text: proxy_summary_user_text,
+            editor_proxy_options,
+            editor_selected_proxy_index,
+            editor_proxy_selected_detail_text,
+            editor_proxy_legacy_text,
+            editor_proxy_selected_missing,
             editor_tunnel_kind_text: tunnel_kind_label(self.editor.tunnel_kind).to_owned(),
             editor_tunnel_bind_host_text: self.editor.tunnel_bind_host.clone(),
             editor_tunnel_bind_port_text: self.editor.tunnel_bind_port_text.clone(),
@@ -670,6 +671,27 @@ impl AppRuntime {
             private_keys_passphrase_text: private_keys.passphrase_text,
             private_keys_passphrase_stored: private_keys.passphrase_stored,
             private_keys_passphrase_manage_enabled: private_keys.passphrase_manage_enabled,
+            proxies_modal_visible: proxies.visible,
+            proxies_rows: proxies.rows,
+            proxies_selected_index: proxies.selected_index,
+            proxies_summary_text: proxies.summary_text,
+            proxies_status_text: proxies.status_text,
+            proxies_test_result_text: proxies.test_result_text,
+            proxies_remove_confirm_visible: proxies.remove_confirm_visible,
+            proxies_remove_blocked: proxies.remove_blocked,
+            proxies_referencing_text: proxies.referencing_text,
+            proxies_editor_is_new: proxies.editor_is_new,
+            proxies_editor_id_text: proxies.editor_id_text,
+            proxies_editor_name_text: proxies.editor_name_text,
+            proxies_editor_protocol_index: proxies.editor_protocol_index,
+            proxies_editor_host_text: proxies.editor_host_text,
+            proxies_editor_port_text: proxies.editor_port_text,
+            proxies_editor_username_text: proxies.editor_username_text,
+            proxies_editor_password_text: proxies.editor_password_text,
+            proxies_editor_dns_by_proxy: proxies.editor_dns_by_proxy,
+            proxies_editor_password_stored: proxies.editor_password_stored,
+            proxies_editor_save_enabled: proxies.editor_save_enabled,
+            proxies_test_in_flight: proxies.test_in_flight,
             host_keys_modal_visible: host_keys.visible,
             host_keys_groups: host_keys.groups,
             host_keys_selected_group: host_keys.selected_group,
@@ -978,7 +1000,7 @@ impl AppRuntime {
             })
             .unwrap_or_else(|| {
                 vec![
-                    "Runtime is ready. Open a Quick Connect target or create a draft session."
+                    "Runtime is ready. Open a Quick Connect target or create a local terminal tab with +."
                         .to_owned(),
                 ]
             })
@@ -1107,6 +1129,31 @@ struct PrivateKeysProjectionParts {
     passphrase_text: String,
     passphrase_stored: bool,
     passphrase_manage_enabled: bool,
+}
+
+/// NET-1：代理管理器页投影。
+struct ProxiesProjectionParts {
+    visible: bool,
+    rows: Vec<ProxyRowData>,
+    selected_index: i32,
+    summary_text: String,
+    status_text: String,
+    test_result_text: String,
+    remove_confirm_visible: bool,
+    remove_blocked: bool,
+    referencing_text: String,
+    editor_is_new: bool,
+    editor_id_text: String,
+    editor_name_text: String,
+    editor_protocol_index: i32,
+    editor_host_text: String,
+    editor_port_text: String,
+    editor_username_text: String,
+    editor_password_text: String,
+    editor_dns_by_proxy: bool,
+    editor_password_stored: bool,
+    editor_save_enabled: bool,
+    test_in_flight: bool,
 }
 
 /// N4：主机密钥页投影。
@@ -1281,9 +1328,63 @@ impl AppRuntime {
         }
     }
 
+    /// NET-1：代理管理器页投影。
+    fn proxies_projection_parts(&self) -> ProxiesProjectionParts {
+        let rows = self.proxy_row_data();
+        let selected_index = rows
+            .iter()
+            .position(|row| row.selected)
+            .map(|index| i32::try_from(index).unwrap_or(i32::MAX))
+            .unwrap_or(-1);
+        let referenced = self
+            .proxy_used_by()
+            .values()
+            .filter(|names| !names.is_empty())
+            .count();
+        let summary_text = format!(
+            "{} profile(s) · {} referenced by saved sessions",
+            rows.len(),
+            referenced
+        );
+        let editing = self
+            .proxies_editor_id
+            .as_deref()
+            .and_then(|id| self.config_document.proxy_profiles.get(id));
+        ProxiesProjectionParts {
+            visible: self.proxies_modal_visible,
+            rows,
+            selected_index,
+            summary_text,
+            status_text: self.proxies_status_text.clone(),
+            test_result_text: self.proxies_test_result_text.clone(),
+            remove_confirm_visible: self.proxies_remove_confirm_visible,
+            remove_blocked: self.proxies_remove_blocked,
+            referencing_text: self.proxies_referencing_text.clone(),
+            editor_is_new: self.proxies_editor_id.is_none(),
+            editor_id_text: self.proxies_editor_id.clone().unwrap_or_default(),
+            editor_name_text: self.proxies_editor_name.clone(),
+            editor_protocol_index: proxy_protocol_index(self.proxies_editor_protocol),
+            editor_host_text: self.proxies_editor_host.clone(),
+            editor_port_text: self.proxies_editor_port_text.clone(),
+            editor_username_text: self.proxies_editor_username.clone(),
+            editor_password_text: self.proxies_editor_password.clone(),
+            editor_dns_by_proxy: self.proxies_editor_dns_by_proxy,
+            editor_password_stored: editing
+                .is_some_and(|profile| profile.password_secret_key.is_some()),
+            editor_save_enabled: !self.proxies_editor_name.trim().is_empty()
+                && !self.proxies_editor_host.trim().is_empty()
+                && !self.proxies_editor_port_text.trim().is_empty(),
+            test_in_flight: self.proxy_test_in_flight.is_some(),
+        }
+    }
+
     fn active_deploy_target(&self) -> Option<String> {
         let session_key = self.focus_session_key()?;
         let session = self.sessions.get(session_key)?;
+        // TAB-4：本地终端没有 SSH 目标，密钥部署入口不应显示可用目标。
+        if session.is_local() {
+            return None;
+        }
         Some(format!(
             "{}@{}:{}",
             session.username_label(),
@@ -1454,16 +1555,15 @@ pub struct AppProjection {
     pub editor_auth_test_startup_text: String,
     pub editor_auth_test_error_text: String,
     pub editor_proxy_mode_text: String,
-    pub editor_proxy_protocol_text: String,
-    pub editor_proxy_host_text: String,
-    pub editor_proxy_port_text: String,
-    pub editor_proxy_username_text: String,
-    pub editor_proxy_password_text: String,
-    pub editor_has_stored_proxy_password: bool,
-    pub editor_proxy_dns_by_proxy: bool,
-    pub editor_proxy_summary_kind_text: String,
-    pub editor_proxy_summary_address_text: String,
-    pub editor_proxy_summary_user_text: String,
+    /// NET-1：可选的托管代理（id/label/detail）。
+    pub editor_proxy_options: Vec<ProxyProfileOptionData>,
+    pub editor_selected_proxy_index: i32,
+    /// 选中托管代理的只读摘要（协议 · 地址 · 用户名 · 口令状态）。
+    pub editor_proxy_selected_detail_text: String,
+    /// 旧 per-session / 悬空代理引用的只读摘要（非 legacy 时为空）。
+    pub editor_proxy_legacy_text: String,
+    /// 选中的托管代理已从管理器删除（保存会被拒绝）。
+    pub editor_proxy_selected_missing: bool,
     pub editor_tunnel_kind_text: String,
     pub editor_tunnel_bind_host_text: String,
     pub editor_tunnel_bind_port_text: String,
@@ -1845,6 +1945,30 @@ pub struct AppProjection {
     pub private_keys_passphrase_text: String,
     pub private_keys_passphrase_stored: bool,
     pub private_keys_passphrase_manage_enabled: bool,
+    // --- NET-1：代理管理器页 ---------------------------------------------------
+    pub proxies_modal_visible: bool,
+    pub proxies_rows: Vec<ProxyRowData>,
+    pub proxies_selected_index: i32,
+    pub proxies_summary_text: String,
+    pub proxies_status_text: String,
+    pub proxies_test_result_text: String,
+    pub proxies_remove_confirm_visible: bool,
+    /// D8：保存会话仍引用该代理，删除被阻止。
+    pub proxies_remove_blocked: bool,
+    /// 被阻止时的引用会话名（逗号分隔）。
+    pub proxies_referencing_text: String,
+    pub proxies_editor_is_new: bool,
+    pub proxies_editor_id_text: String,
+    pub proxies_editor_name_text: String,
+    pub proxies_editor_protocol_index: i32,
+    pub proxies_editor_host_text: String,
+    pub proxies_editor_port_text: String,
+    pub proxies_editor_username_text: String,
+    pub proxies_editor_password_text: String,
+    pub proxies_editor_dns_by_proxy: bool,
+    pub proxies_editor_password_stored: bool,
+    pub proxies_editor_save_enabled: bool,
+    pub proxies_test_in_flight: bool,
     // --- N4：主机密钥页 ------------------------------------------------------
     pub host_keys_modal_visible: bool,
     pub host_keys_groups: Vec<HostKeyGroupData>,

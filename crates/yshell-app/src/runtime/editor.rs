@@ -3,7 +3,7 @@
 
 use crate::{error::AppError, error::AppResult};
 use yshell_config::{
-    FolderProfile, LoggingProfile, ProxyProtocol, SessionProfile, TerminalProfile, ThemeCatalog,
+    FolderProfile, LoggingProfile, ProxyProfile, SessionProfile, TerminalProfile, ThemeCatalog,
     TunnelForward, TunnelForwardKind, TunnelProfile,
 };
 
@@ -222,56 +222,25 @@ impl AppRuntime {
 
     pub fn set_editor_proxy_mode_none(&mut self) -> AppProjection {
         self.editor.proxy_mode = EditorProxyMode::None;
+        self.editor.proxy_profile_id = None;
         self.projection()
     }
 
-    pub fn set_editor_proxy_mode_custom(&mut self) -> AppProjection {
-        self.editor.proxy_mode = EditorProxyMode::Custom;
-        self.projection()
-    }
-
-    pub fn set_editor_proxy_protocol_socks4(&mut self) -> AppProjection {
-        self.editor.proxy_protocol = ProxyProtocol::Socks4;
-        self.projection()
-    }
-
-    pub fn set_editor_proxy_protocol_socks4a(&mut self) -> AppProjection {
-        self.editor.proxy_protocol = ProxyProtocol::Socks4a;
-        self.projection()
-    }
-
-    pub fn set_editor_proxy_protocol_socks5(&mut self) -> AppProjection {
-        self.editor.proxy_protocol = ProxyProtocol::Socks5;
-        self.projection()
-    }
-
-    pub fn set_editor_proxy_protocol_http_connect(&mut self) -> AppProjection {
-        self.editor.proxy_protocol = ProxyProtocol::HttpConnect;
-        self.projection()
-    }
-
-    pub fn update_editor_proxy_host(&mut self, value: &str) -> AppProjection {
-        self.editor.proxy_host = value.to_owned();
-        self.projection()
-    }
-
-    pub fn update_editor_proxy_port(&mut self, value: &str) -> AppProjection {
-        self.editor.proxy_port_text = value.to_owned();
-        self.projection()
-    }
-
-    pub fn update_editor_proxy_username(&mut self, value: &str) -> AppProjection {
-        self.editor.proxy_username = value.to_owned();
-        self.projection()
-    }
-
-    pub fn update_editor_proxy_password(&mut self, value: &str) -> AppProjection {
-        self.editor.proxy_password = value.to_owned();
-        self.projection()
-    }
-
-    pub fn toggle_editor_proxy_dns_by_proxy(&mut self) -> AppProjection {
-        self.editor.proxy_dns_by_proxy = !self.editor.proxy_dns_by_proxy;
+    /// NET-1：从托管代理清单选择一条（选择即迁移，保存只写 `proxy_profile_id`）。
+    pub fn select_editor_proxy(&mut self, index: i32) -> AppProjection {
+        let options = self.managed_proxy_options();
+        let Some(option) = usize::try_from(index)
+            .ok()
+            .and_then(|index| options.get(index))
+        else {
+            return self.projection();
+        };
+        self.editor.proxy_mode = EditorProxyMode::Managed;
+        self.editor.proxy_profile_id = Some(option.id.clone());
+        self.status_text = format!(
+            "Selected managed proxy `{}` for this session.",
+            option.label
+        );
         self.projection()
     }
 
@@ -379,8 +348,28 @@ impl AppRuntime {
             .editor_auth_profile_id()
             .unwrap_or_else(|| format!("{session_id}-auth"));
         let auth_profile = self.build_auth_profile_for_editor(&auth_profile_id)?;
-        let proxy_profile_id = format!("{session_id}-proxy");
-        let proxy_profile = self.build_proxy_profile_for_editor(&proxy_profile_id)?;
+        // NET-1：saving a session only writes `proxy_profile_id`; it never creates
+        // or overwrites a proxy profile. Legacy per-session references are kept
+        // until the user picks a managed profile (or No Proxy) explicitly.
+        let previous_proxy_id = self
+            .config_document
+            .find_session(&session_id)
+            .and_then(|profile| profile.proxy_profile_id.clone());
+        let proxy_profile_id = match self.editor.proxy_mode {
+            EditorProxyMode::None => None,
+            EditorProxyMode::Managed => {
+                let proxy_id = self.editor.proxy_profile_id.clone().ok_or_else(|| {
+                    AppError::new("select a managed proxy profile or choose No Proxy")
+                })?;
+                if !self.config_document.proxy_profiles.contains_key(&proxy_id) {
+                    return Err(AppError::new(format!(
+                        "the selected managed proxy `{proxy_id}` is no longer available; choose another proxy"
+                    )));
+                }
+                Some(proxy_id)
+            }
+            EditorProxyMode::Legacy => self.editor.proxy_profile_id.clone(),
+        };
         let target_folder_id = self.editor.target_folder_id.trim().to_owned();
         if target_folder_id.is_empty() {
             return Err(AppError::new("editor target folder must not be empty"));
@@ -403,7 +392,7 @@ impl AppRuntime {
         // 但用编辑器再保存会清掉该字段——这是有意的，Accept Any 不再是用户可选项；
         // 测试/自动化需要 accept-any 时走 `host_key_policy_override`。
         profile.auth_profile_id = Some(auth_profile_id.clone());
-        profile.proxy_profile_id = proxy_profile.as_ref().map(|_| proxy_profile_id.clone());
+        profile.proxy_profile_id = proxy_profile_id.clone();
         profile.tunnel = if self.editor.tunnels.is_empty() {
             None
         } else {
@@ -421,18 +410,6 @@ impl AppRuntime {
         self.config_document
             .auth_profiles
             .insert(auth_profile_id.clone(), auth_profile);
-        match proxy_profile {
-            Some(profile) => {
-                self.config_document
-                    .proxy_profiles
-                    .insert(proxy_profile_id, profile);
-            }
-            None => {
-                self.config_document
-                    .proxy_profiles
-                    .remove(&proxy_profile_id);
-            }
-        }
         let existing_folder_id = find_session_folder_id(&self.config_document.folders, &session_id);
         if existing_folder_id.as_deref() == Some(target_folder_id.as_str()) {
             if let Some(existing) = self.config_document.find_session_mut(&session_id) {
@@ -448,6 +425,12 @@ impl AppRuntime {
                 .sessions
                 .push(profile);
         }
+        // NET-1：迁移后清掉不再被任何会话引用的旧 `<session_id>-proxy`。
+        self.cleanup_legacy_proxy(
+            &session_id,
+            previous_proxy_id.as_deref(),
+            proxy_profile_id.as_deref(),
+        );
         self.config_store
             .save(&self.config_document)
             .map_err(AppError::from_error)?;
@@ -486,32 +469,64 @@ impl AppRuntime {
             .join("\n")
     }
 
-    pub(crate) fn editor_proxy_summary_parts(&self) -> (String, String, String) {
-        match self.editor.proxy_mode {
-            EditorProxyMode::None => ("none".to_owned(), String::new(), String::new()),
-            EditorProxyMode::Custom => {
-                let user = if self.editor.proxy_username.trim().is_empty() {
-                    "<none>".to_owned()
-                } else {
-                    self.editor.proxy_username.trim().to_owned()
-                };
-                if self.editor.proxy_host.trim().is_empty()
-                    || self.editor.proxy_port_text.trim().is_empty()
-                {
-                    ("incomplete".to_owned(), String::new(), user)
-                } else {
-                    (
-                        "custom".to_owned(),
-                        format!(
-                            "{}:{}",
-                            self.editor.proxy_host.trim(),
-                            self.editor.proxy_port_text.trim()
-                        ),
-                        user,
-                    )
-                }
-            }
+    /// NET-1：托管代理下拉的选中下标（无选中/legacy/悬空 → -1）。
+    pub(crate) fn editor_proxy_selected_index(
+        &self,
+        options: &[ProxyProfileOptionData],
+    ) -> i32 {
+        if self.editor.proxy_mode != EditorProxyMode::Managed {
+            return -1;
         }
+        self.editor
+            .proxy_profile_id
+            .as_deref()
+            .and_then(|proxy_id| options.iter().position(|option| option.id == proxy_id))
+            .map(|index| i32::try_from(index).unwrap_or(i32::MAX))
+            .unwrap_or(-1)
+    }
+
+    /// NET-1：选中托管代理的只读摘要（协议 · 地址 · 用户名 · 口令状态）。
+    pub(crate) fn editor_proxy_selected_detail(&self) -> String {
+        if self.editor.proxy_mode != EditorProxyMode::Managed {
+            return String::new();
+        }
+        let Some(proxy_id) = self.editor.proxy_profile_id.as_deref() else {
+            return String::new();
+        };
+        self.config_document
+            .proxy_profiles
+            .get(proxy_id)
+            .map(proxy_summary_line)
+            .unwrap_or_default()
+    }
+
+    /// NET-1：旧 per-session / 悬空代理引用的只读摘要；非 legacy 模式为空。
+    pub(crate) fn editor_proxy_legacy_text(&self) -> String {
+        if self.editor.proxy_mode != EditorProxyMode::Legacy {
+            return String::new();
+        }
+        let Some(proxy_id) = self.editor.proxy_profile_id.as_deref() else {
+            return String::new();
+        };
+        match self.config_document.proxy_profiles.get(proxy_id) {
+            Some(profile) => format!("{} (`{proxy_id}`)", proxy_summary_line(profile)),
+            None => format!(
+                "Missing proxy profile `{proxy_id}` (legacy per-session proxy reference)."
+            ),
+        }
+    }
+
+    /// Selected managed profile disappeared from the config (e.g. deleted while
+    /// the editor stayed open); saving would produce a dangling reference.
+    pub(crate) fn editor_proxy_selected_missing(&self) -> bool {
+        self.editor.proxy_mode == EditorProxyMode::Managed
+            && self
+                .editor
+                .proxy_profile_id
+                .as_deref()
+                .is_some_and(|proxy_id| {
+                    !self.config_document.proxy_profiles.contains_key(proxy_id)
+                })
     }
 
     pub(crate) fn editor_folder_parts(&self) -> (String, String, bool) {
@@ -954,8 +969,13 @@ pub(crate) enum EditorAuthMethod {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EditorProxyMode {
+    /// No proxy for this session.
     None,
-    Custom,
+    /// A managed profile selected from the proxy manager.
+    Managed,
+    /// Legacy per-session profile (or a dangling reference) kept readable and
+    /// connectable until the user picks a managed profile.
+    Legacy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -973,7 +993,8 @@ impl EditorProxyMode {
     pub(crate) const fn label(self) -> &'static str {
         match self {
             Self::None => "none",
-            Self::Custom => "custom",
+            Self::Managed => "managed",
+            Self::Legacy => "legacy",
         }
     }
 }
@@ -1026,14 +1047,9 @@ pub(crate) struct SessionEditorDraft {
     /// Empty password field means "keep existing" rather than "missing".
     pub(crate) has_stored_password: bool,
     pub(crate) proxy_mode: EditorProxyMode,
-    pub(crate) proxy_protocol: ProxyProtocol,
-    pub(crate) proxy_host: String,
-    pub(crate) proxy_port_text: String,
-    pub(crate) proxy_username: String,
-    pub(crate) proxy_password: String,
-    /// Edit mode: a proxy password is already stored.
-    pub(crate) has_stored_proxy_password: bool,
-    pub(crate) proxy_dns_by_proxy: bool,
+    /// NET-1: managed profile id (`Managed`) or legacy per-session id
+    /// (`Legacy`). Saving writes it verbatim to `SessionProfile.proxy_profile_id`.
+    pub(crate) proxy_profile_id: Option<String>,
     pub(crate) tunnel_kind: TunnelForwardKind,
     pub(crate) tunnel_bind_host: String,
     pub(crate) tunnel_bind_port_text: String,
@@ -1061,13 +1077,7 @@ impl Default for SessionEditorDraft {
             legacy_key_has_passphrase: false,
             has_stored_password: false,
             proxy_mode: EditorProxyMode::None,
-            proxy_protocol: ProxyProtocol::Socks5,
-            proxy_host: String::new(),
-            proxy_port_text: String::new(),
-            proxy_username: String::new(),
-            proxy_password: String::new(),
-            has_stored_proxy_password: false,
-            proxy_dns_by_proxy: true,
+            proxy_profile_id: None,
             tunnel_kind: TunnelForwardKind::Local,
             tunnel_bind_host: "127.0.0.1".to_owned(),
             tunnel_bind_port_text: String::new(),
@@ -1110,4 +1120,26 @@ pub(crate) fn parse_port_field(value: &str, invalid_message: &str) -> AppResult<
         return Err(AppError::new("port must be greater than zero"));
     }
     Ok(port)
+}
+
+/// NET-1：代理条目的只读摘要（会话编辑器用；不含口令明文）。
+pub(crate) fn proxy_summary_line(profile: &ProxyProfile) -> String {
+    let mut line = format!(
+        "{} · {}:{}",
+        proxy_protocol_display(profile.protocol),
+        profile.host.trim(),
+        profile.port
+    );
+    if let Some(username) = profile
+        .username
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        line.push_str(&format!(" · user={username}"));
+    }
+    if profile.password_secret_key.is_some() {
+        line.push_str(" · password saved");
+    }
+    line
 }

@@ -532,6 +532,10 @@ impl WindowManager {
             let Ok(mut runtime) = self.runtime.try_borrow_mut() else {
                 return dirty;
             };
+            // TAB-4：记住聚焦窗口的视口尺寸，供 `+` 新建本地终端时作为 PTY 初始尺寸。
+            if focused == Some(window_id) {
+                runtime.note_terminal_viewport_size(columns, rows);
+            }
             if focused == Some(window_id) {
                 // 沿用单窗口时代的路径（聚焦窗口的 resize 会写状态栏）。
                 matches!(
@@ -596,6 +600,10 @@ impl WindowManager {
             }
             while let Ok(message) = self.connect_job_rx.try_recv() {
                 let _ = runtime.apply_connect_job_message(message);
+                dirty = true;
+            }
+            // NET-1：代理管理器 "Test" 的后台探测结果。
+            if runtime.poll_proxy_test_result() {
                 dirty = true;
             }
             // 标签切换故意跳过同步 SFTP list_dir；这里补做首次/未缓存会话的列目录。

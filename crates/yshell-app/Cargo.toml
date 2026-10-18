@@ -24,6 +24,7 @@ rfd.workspace = true
 yshell-config = { path = "../yshell-config" }
 yshell-core = { path = "../yshell-core" }
 yshell-logging = { path = "../yshell-logging" }
+yshell-local = { path = "../yshell-local" }
 yshell-secret = { path = "../yshell-secret" }
 yshell-sftp = { path = "../yshell-sftp" }
 yshell-ssh = { path = "../yshell-ssh" }

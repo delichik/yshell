@@ -171,6 +171,7 @@ export component SettingsDialog inherits Rectangle {
     callback close();
     callback open-host-keys();
     callback open-private-keys();
+    callback open-proxies();
     callback update-scrollback-lines(string);
     callback update-scrollback-max-cells(string);
     callback reset-terminal-defaults();
@@ -900,6 +901,11 @@ export component SettingsDialog inherits Rectangle {
                                                 WinButton {
                                                     text: @tr("Open Private Keys…");
                                                     clicked => { root.open-private-keys(); }
+                                                }
+
+                                                WinButton {
+                                                    text: @tr("Open Proxy Manager…");
+                                                    clicked => { root.open-proxies(); }
                                                 }
                                             }
                                         }

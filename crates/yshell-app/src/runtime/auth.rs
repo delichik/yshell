@@ -1379,6 +1379,13 @@ impl AppRuntime {
             self.private_keys_status_text = "The active session is gone.".to_owned();
             return self.projection();
         };
+        // TAB-4：本地终端没有 SSH 目标，密钥部署绝不能拿占位配置去连网。
+        if session.is_local() {
+            self.private_keys_deploy_confirm_visible = false;
+            self.private_keys_status_text =
+                "Deploy requires an SSH session; the active tab is a local terminal.".to_owned();
+            return self.projection();
+        }
         let ssh_config = session.ssh_config.clone();
         let target = format!(
             "{}@{}:{}",

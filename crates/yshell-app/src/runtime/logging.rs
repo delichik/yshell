@@ -134,7 +134,7 @@ impl AppRuntime {
                 .resolve_session(profile_id)
                 .map(|resolved| resolved.logging)
                 .unwrap_or_else(|| self.config_document.logging.clone()),
-            SessionSource::QuickConnect | SessionSource::Draft => {
+            SessionSource::QuickConnect | SessionSource::Draft | SessionSource::Local => {
                 self.config_document.logging.clone()
             }
         }

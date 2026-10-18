@@ -23,9 +23,9 @@ use crate::app_state::AppState;
 use crate::error::{AppError, AppResult};
 use crate::runtime::{
     AppProjection, AppRuntime, AuthKeyOptionData, AuthPromptQuestionData, HostKeyGroupData,
-    PanelFrameData as RuntimePanelFrameData, PrivateKeyRowData, SftpCrumbData, SftpRowData,
-    SplitHandleData as RuntimeSplitHandleData, TabData, ThemeFieldAction, ThemeSchemeOption,
-    TransferRowData, TriStateFieldData, TunnelRowData,
+    PanelFrameData as RuntimePanelFrameData, PrivateKeyRowData, ProxyProfileOptionData,
+    ProxyRowData, SftpCrumbData, SftpRowData, SplitHandleData as RuntimeSplitHandleData, TabData,
+    ThemeFieldAction, ThemeSchemeOption, TransferRowData, TriStateFieldData, TunnelRowData,
 };
 
 pub(crate) mod generated_ui {
@@ -35,9 +35,10 @@ pub(crate) mod generated_ui {
 
 use generated_ui::{
     AuthKeyOption, AuthKeyboardPrompt, HostKeyEntry, HostKeyGroup, LocalRow, MainWindow, Palette,
-    PanelFrameData, PrivateKeyRow, QuickConnectRow, QuickLinkRow, SessionTreeRow,
-    SettingsSchemeOption, SftpCrumb, SftpRow, SftpTransferRow, SplitHandleData, TerminalScrollInfo,
-    Theme, TriStateField, TunnelRow, WorkspacePaneLeaf, WorkspaceSplitter, WorkspaceTab,
+    PanelFrameData, PrivateKeyRow, ProxyProfileOption, ProxyRow, QuickConnectRow, QuickLinkRow,
+    SessionTreeRow, SettingsSchemeOption, SftpCrumb, SftpRow, SftpTransferRow, SplitHandleData,
+    TerminalScrollInfo, Theme, TriStateField, TunnelRow, WorkspacePaneLeaf, WorkspaceSplitter,
+    WorkspaceTab,
 };
 
 /// Keeps the pixel-rendered terminal surface in sync with the runtime.
@@ -250,6 +251,11 @@ impl YShellApp {
         // TAB-6：启动首帧 = Quick Connect 覆盖层打开（工作区级状态，不创建 QC 标签；
         // 见 `AppRuntime::quick_connect_visible`）。
         let _ = self.runtime.borrow_mut().prepare_desktop_startup_projection();
+        // TAB-5：无恢复标签时先创建一个本地终端，再把 Quick Connect 覆盖层开在它上面。
+        let _ = self
+            .runtime
+            .borrow_mut()
+            .prepare_desktop_startup_workspace();
         // 本地栏首次列出（默认 home 目录）。
         self.runtime.borrow_mut().refresh_local_pane();
         let manager = crate::windows::WindowManager::new(Rc::clone(&self.runtime))?;
@@ -2490,6 +2496,59 @@ pub(crate) fn wire_callbacks(
         runtime.rename_selected_private_key(label.as_ref())
     });
 
+    // --- NET-1：代理管理器页 -------------------------------------------------
+    wire_n4!(on_open_proxies_manager, |runtime| runtime
+        .open_proxies_manager());
+    wire_n4!(on_close_proxies_manager, |runtime| runtime
+        .close_proxies_manager());
+    wire_n4!(on_select_proxy, |runtime, index: i32| runtime
+        .select_proxy(index));
+    wire_n4!(on_start_new_proxy, |runtime| runtime.start_new_proxy());
+    wire_n4!(on_begin_edit_proxy, |runtime| runtime.begin_edit_proxy());
+    wire_n4!(on_duplicate_proxy, |runtime| runtime
+        .duplicate_selected_proxy());
+    wire_n4!(on_save_proxy_editor, |runtime| runtime.save_proxy_editor());
+    wire_n4!(on_cancel_proxy_editor, |runtime| runtime
+        .cancel_proxy_editor());
+    wire_n4!(on_request_remove_proxy, |runtime| runtime
+        .request_proxy_remove());
+    wire_n4!(on_confirm_remove_proxy, |runtime| runtime
+        .confirm_proxy_remove());
+    wire_n4!(on_cancel_remove_proxy, |runtime| runtime
+        .cancel_proxy_remove());
+    wire_n4!(on_clear_proxy_references, |runtime| runtime
+        .set_referencing_sessions_to_no_proxy());
+    wire_n4!(on_dismiss_proxy_warning, |runtime| runtime
+        .dismiss_proxy_remove_warning());
+    wire_n4!(on_test_proxy, |runtime| runtime.test_selected_proxy());
+    wire_n4!(
+        on_update_proxy_editor_name,
+        |runtime, value: SharedString| runtime.update_proxy_editor_name(value.as_ref())
+    );
+    wire_n4!(
+        on_select_proxy_editor_protocol,
+        |runtime, index: i32| runtime.select_proxy_editor_protocol(index)
+    );
+    wire_n4!(
+        on_update_proxy_editor_host,
+        |runtime, value: SharedString| runtime.update_proxy_editor_host(value.as_ref())
+    );
+    wire_n4!(
+        on_update_proxy_editor_port,
+        |runtime, value: SharedString| runtime.update_proxy_editor_port(value.as_ref())
+    );
+    wire_n4!(
+        on_update_proxy_editor_username,
+        |runtime, value: SharedString| runtime.update_proxy_editor_username(value.as_ref())
+    );
+    wire_n4!(
+        on_update_proxy_editor_password,
+        |runtime, value: SharedString| runtime.update_proxy_editor_password(value.as_ref())
+    );
+    wire_n4!(on_toggle_proxy_editor_dns, |runtime| runtime
+        .toggle_proxy_editor_dns());
+
+
     // N4：浏览私钥文件（rfd；worker 线程 + mpsc 回填）。
     {
         let dialog_tx = dialog_tx.clone();
@@ -3098,9 +3157,9 @@ pub(crate) fn wire_callbacks(
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
     let surface = surface_source.clone();
-    window.on_set_editor_proxy_mode_custom(move || {
+    window.on_select_editor_proxy(move |index| {
         if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref.borrow_mut().set_editor_proxy_mode_custom();
+            let projection = runtime_ref.borrow_mut().select_editor_proxy(index);
             apply_projection(&window, &projection);
             surface.refresh(&window);
         }
@@ -3109,107 +3168,9 @@ pub(crate) fn wire_callbacks(
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
     let surface = surface_source.clone();
-    window.on_set_editor_proxy_protocol_socks4(move || {
+    window.on_manage_editor_proxies(move || {
         if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref.borrow_mut().set_editor_proxy_protocol_socks4();
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_set_editor_proxy_protocol_socks4a(move || {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref.borrow_mut().set_editor_proxy_protocol_socks4a();
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_set_editor_proxy_protocol_socks5(move || {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref.borrow_mut().set_editor_proxy_protocol_socks5();
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_set_editor_proxy_protocol_http_connect(move || {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref
-                .borrow_mut()
-                .set_editor_proxy_protocol_http_connect();
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_update_editor_proxy_host(move |value| {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref
-                .borrow_mut()
-                .update_editor_proxy_host(value.as_ref());
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_update_editor_proxy_port(move |value| {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref
-                .borrow_mut()
-                .update_editor_proxy_port(value.as_ref());
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_update_editor_proxy_username(move |value| {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref
-                .borrow_mut()
-                .update_editor_proxy_username(value.as_ref());
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_update_editor_proxy_password(move |value| {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref
-                .borrow_mut()
-                .update_editor_proxy_password(value.as_ref());
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_toggle_editor_proxy_dns_by_proxy(move || {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref.borrow_mut().toggle_editor_proxy_dns_by_proxy();
+            let projection = runtime_ref.borrow_mut().open_proxies_manager();
             apply_projection(&window, &projection);
             surface.refresh(&window);
         }
@@ -5727,6 +5688,76 @@ fn set_private_keys_rows_if_changed(window: &MainWindow, rows: &[PrivateKeyRowDa
     )));
 }
 
+// --- NET-1：代理管理器页 / 会话编辑器代理下拉的模型转换 ----------------------
+
+fn proxy_row_from(row: &ProxyRowData) -> ProxyRow {
+    ProxyRow {
+        id: row.id.clone().into(),
+        name: row.name.clone().into(),
+        protocol: row.protocol.clone().into(),
+        address: row.address.clone().into(),
+        username: row.username.clone().into(),
+        password_stored: row.password_stored,
+        used_by: row.used_by.clone().into(),
+        selected: row.selected,
+    }
+}
+
+fn proxy_row_matches(current: &ProxyRow, next: &ProxyRowData) -> bool {
+    current.id == next.id.as_str()
+        && current.name == next.name.as_str()
+        && current.protocol == next.protocol.as_str()
+        && current.address == next.address.as_str()
+        && current.username == next.username.as_str()
+        && current.password_stored == next.password_stored
+        && current.used_by == next.used_by.as_str()
+        && current.selected == next.selected
+}
+
+fn set_proxies_rows_if_changed(window: &MainWindow, rows: &[ProxyRowData]) {
+    let current = window.get_proxies_rows();
+    if current.row_count() == rows.len() {
+        let unchanged = (0..rows.len()).all(|index| {
+            current
+                .row_data(index)
+                .is_some_and(|row| proxy_row_matches(&row, &rows[index]))
+        });
+        if unchanged {
+            return;
+        }
+    }
+    window.set_proxies_rows(ModelRc::new(VecModel::from(
+        rows.iter().map(proxy_row_from).collect::<Vec<_>>(),
+    )));
+}
+
+fn proxy_option_from(option: &ProxyProfileOptionData) -> ProxyProfileOption {
+    ProxyProfileOption {
+        id: option.id.clone().into(),
+        label: option.label.clone().into(),
+        detail: option.detail.clone().into(),
+    }
+}
+
+fn set_editor_proxy_options_if_changed(window: &MainWindow, options: &[ProxyProfileOptionData]) {
+    let current = window.get_editor_proxy_options();
+    if current.row_count() == options.len() {
+        let unchanged = (0..options.len()).all(|index| {
+            current.row_data(index).is_some_and(|option| {
+                option.id == options[index].id.as_str()
+                    && option.label == options[index].label.as_str()
+                    && option.detail == options[index].detail.as_str()
+            })
+        });
+        if unchanged {
+            return;
+        }
+    }
+    window.set_editor_proxy_options(ModelRc::new(VecModel::from(
+        options.iter().map(proxy_option_from).collect::<Vec<_>>(),
+    )));
+}
+
 fn host_key_entry_from(entry: &crate::runtime::HostKeyEntryData) -> HostKeyEntry {
     HostKeyEntry {
         algorithm: entry.algorithm.clone().into(),
@@ -6155,22 +6186,13 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
             .into(),
     );
     window.set_editor_proxy_mode_text(projection.editor_proxy_mode_text.clone().into());
-    window.set_editor_proxy_protocol_text(projection.editor_proxy_protocol_text.clone().into());
-    window.set_editor_proxy_host_text(projection.editor_proxy_host_text.clone().into());
-    window.set_editor_proxy_port_text(projection.editor_proxy_port_text.clone().into());
-    window.set_editor_proxy_username_text(projection.editor_proxy_username_text.clone().into());
-    window.set_editor_proxy_password_text(projection.editor_proxy_password_text.clone().into());
-    window.set_editor_has_stored_proxy_password(projection.editor_has_stored_proxy_password);
-    window.set_editor_proxy_dns_by_proxy(projection.editor_proxy_dns_by_proxy);
-    window.set_editor_proxy_summary_kind_text(
-        projection.editor_proxy_summary_kind_text.clone().into(),
+    set_editor_proxy_options_if_changed(window, &projection.editor_proxy_options);
+    window.set_editor_selected_proxy_index(projection.editor_selected_proxy_index);
+    window.set_editor_proxy_selected_detail_text(
+        projection.editor_proxy_selected_detail_text.clone().into(),
     );
-    window.set_editor_proxy_summary_address_text(
-        projection.editor_proxy_summary_address_text.clone().into(),
-    );
-    window.set_editor_proxy_summary_user_text(
-        projection.editor_proxy_summary_user_text.clone().into(),
-    );
+    window.set_editor_proxy_legacy_text(projection.editor_proxy_legacy_text.clone().into());
+    window.set_editor_proxy_selected_missing(projection.editor_proxy_selected_missing);
     window.set_editor_tunnel_kind_text(projection.editor_tunnel_kind_text.clone().into());
     window.set_editor_tunnel_bind_host_text(projection.editor_tunnel_bind_host_text.clone().into());
     window.set_editor_tunnel_bind_port_text(projection.editor_tunnel_bind_port_text.clone().into());
@@ -6734,6 +6756,44 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_private_keys_passphrase_manage_enabled(
         projection.private_keys_passphrase_manage_enabled,
     );
+    // NET-1：代理管理器页。
+    window.set_proxies_modal_visible(projection.proxies_modal_visible);
+    set_proxies_rows_if_changed(window, &projection.proxies_rows);
+    window.set_proxies_selected_index(projection.proxies_selected_index);
+    window.set_proxies_summary_text(projection.proxies_summary_text.clone().into());
+    window.set_proxies_status_text(projection.proxies_status_text.clone().into());
+    window.set_proxies_test_result_text(projection.proxies_test_result_text.clone().into());
+    window.set_proxies_remove_confirm_visible(projection.proxies_remove_confirm_visible);
+    window.set_proxies_remove_blocked(projection.proxies_remove_blocked);
+    window.set_proxies_referencing_text(projection.proxies_referencing_text.clone().into());
+    window.set_proxies_editor_is_new(projection.proxies_editor_is_new);
+    window.set_proxies_editor_id_text(projection.proxies_editor_id_text.clone().into());
+    if window.get_proxies_editor_name_text().as_str() != projection.proxies_editor_name_text {
+        window.set_proxies_editor_name_text(projection.proxies_editor_name_text.clone().into());
+    }
+    window.set_proxies_editor_protocol_index(projection.proxies_editor_protocol_index);
+    if window.get_proxies_editor_host_text().as_str() != projection.proxies_editor_host_text {
+        window.set_proxies_editor_host_text(projection.proxies_editor_host_text.clone().into());
+    }
+    if window.get_proxies_editor_port_text().as_str() != projection.proxies_editor_port_text {
+        window.set_proxies_editor_port_text(projection.proxies_editor_port_text.clone().into());
+    }
+    if window.get_proxies_editor_username_text().as_str() != projection.proxies_editor_username_text
+    {
+        window.set_proxies_editor_username_text(
+            projection.proxies_editor_username_text.clone().into(),
+        );
+    }
+    if window.get_proxies_editor_password_text().as_str() != projection.proxies_editor_password_text
+    {
+        window.set_proxies_editor_password_text(
+            projection.proxies_editor_password_text.clone().into(),
+        );
+    }
+    window.set_proxies_editor_dns_by_proxy(projection.proxies_editor_dns_by_proxy);
+    window.set_proxies_editor_password_stored(projection.proxies_editor_password_stored);
+    window.set_proxies_editor_save_enabled(projection.proxies_editor_save_enabled);
+    window.set_proxies_test_in_flight(projection.proxies_test_in_flight);
     // N4：主机密钥页。
     window.set_host_keys_modal_visible(projection.host_keys_modal_visible);
     set_host_keys_groups_if_changed(window, &projection.host_keys_groups);

@@ -440,53 +440,243 @@ fn editor_built_ssh_config_uses_strict_policy_unless_testing_override() {
 }
 
 #[test]
-fn editor_can_create_proxy_profile_and_persist_secret() {
+fn editor_selects_managed_proxy_without_creating_profiles() {
     let _guard = lock_env();
     std::env::set_var("YSHELL_MASTER_PASSWORD", "proxy-master");
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
-    let _ = runtime.start_new_saved_session_editor();
-    let _ = runtime.update_editor_name("Proxy Session");
-    let _ = runtime.update_editor_host("proxy-session.example.test");
-    let _ = runtime.set_editor_proxy_mode_custom();
-    let _ = runtime.set_editor_proxy_protocol_socks5();
-    let _ = runtime.update_editor_proxy_host("127.0.0.1");
-    let _ = runtime.update_editor_proxy_port("1080");
-    let _ = runtime.update_editor_proxy_username("proxy-user");
-    let _ = runtime.update_editor_proxy_password("proxy-secret");
 
-    let projection = runtime
-        .save_editor_to_saved_session()
-        .expect("save proxy editor");
-
-    assert_eq!(projection.editor_proxy_summary_kind_text, "custom");
-    assert_eq!(projection.editor_proxy_protocol_text, "socks5");
-    assert_eq!(
-        projection.editor_proxy_summary_address_text,
-        "127.0.0.1:1080"
-    );
-    assert_eq!(projection.editor_proxy_summary_user_text, "proxy-user");
-    let saved = runtime.saved_session_profiles();
-    let saved_session = &saved[0];
-    let proxy = runtime
+    // NET-1：先通过代理管理器创建一条托管条目。
+    let _ = runtime.open_proxies_manager();
+    let _ = runtime.start_new_proxy();
+    let _ = runtime.update_proxy_editor_name("Corp SOCKS");
+    let _ = runtime.update_proxy_editor_host("127.0.0.1");
+    let _ = runtime.update_proxy_editor_port("1080");
+    let _ = runtime.update_proxy_editor_username("proxy-user");
+    let _ = runtime.update_proxy_editor_password("proxy-secret");
+    let projection = runtime.save_proxy_editor();
+    assert_eq!(runtime.config_document.proxy_profiles.len(), 1);
+    let proxy_id = runtime
         .config_document
         .proxy_profiles
-        .get(saved_session.proxy_profile_id.as_deref().expect("proxy id"))
-        .expect("proxy profile");
-    assert_eq!(proxy.protocol, ProxyProtocol::Socks5);
-    assert_eq!(proxy.host, "127.0.0.1");
-    assert_eq!(proxy.port, 1080);
-    assert_eq!(proxy.username.as_deref(), Some("proxy-user"));
-    let secret_key = proxy
+        .keys()
+        .next()
+        .cloned()
+        .expect("managed proxy id");
+    assert_eq!(projection.proxies_editor_id_text, proxy_id);
+    let _ = runtime.close_proxies_manager();
+
+    // 新建会话并从下拉里选择托管代理。
+    let _ = runtime.start_new_saved_session_editor();
+    let _ = runtime.update_editor_name("Managed Proxy Session");
+    let _ = runtime.update_editor_host("managed-proxy.example.test");
+    let projection = runtime.select_editor_proxy(0);
+    assert_eq!(projection.editor_proxy_mode_text, "managed");
+    assert_eq!(projection.editor_selected_proxy_index, 0);
+    assert!(projection
+        .editor_proxy_selected_detail_text
+        .contains("127.0.0.1:1080"));
+    runtime
+        .save_editor_to_saved_session()
+        .expect("save managed proxy session");
+
+    let saved = runtime.saved_session_profiles();
+    let saved_session = saved.first().expect("saved session");
+    assert_eq!(
+        saved_session.proxy_profile_id.as_deref(),
+        Some(proxy_id.as_str())
+    );
+    // 保存会话不再生成 `<session_id>-proxy`，也不复制管理器条目。
+    assert_eq!(runtime.config_document.proxy_profiles.len(), 1);
+    assert!(!runtime
+        .config_document
+        .proxy_profiles
+        .contains_key(&format!("{}-proxy", saved_session.id)));
+
+    // 密码落在 secret store，profile 只保存引用。
+    let profile = runtime
+        .config_document
+        .proxy_profiles
+        .get(&proxy_id)
+        .expect("managed profile");
+    let secret_key = profile
         .password_secret_key
         .as_deref()
         .expect("proxy password secret key");
+    assert_eq!(
+        runtime.resolve_secret_value(secret_key).expect("stored password"),
+        "proxy-secret"
+    );
     let store_contents =
         fs::read_to_string(temp.path().join("secret-store.toml")).expect("read store");
-    assert!(store_contents.contains(secret_key));
     assert!(!store_contents.contains("proxy-secret"));
 
+    // 重新加载会话：编辑器应投影为 managed，并且连接配置能解析出同一代理。
+    let _ = runtime
+        .load_selected_saved_session_into_editor()
+        .expect("reload editor");
+    let reloaded = runtime.projection();
+    assert_eq!(reloaded.editor_proxy_mode_text, "managed");
+    assert_eq!(reloaded.editor_selected_proxy_index, 0);
+    match &runtime
+        .build_ssh_config_from_editor()
+        .expect("editor proxy config")
+        .proxy
+    {
+        ProxyConfig::Socks5 {
+            address,
+            username,
+            password,
+            ..
+        } => {
+            assert_eq!(address, "127.0.0.1:1080");
+            assert_eq!(username.as_deref(), Some("proxy-user"));
+            assert_eq!(password.as_deref(), Some("proxy-secret"));
+        }
+        other => panic!("expected socks5 proxy, got {other:?}"),
+    }
+
+    // 切回 No Proxy：只清会话引用，托管条目本身保留。
+    let _ = runtime.set_editor_proxy_mode_none();
+    runtime
+        .save_editor_to_saved_session()
+        .expect("save without proxy");
+    let saved = runtime.saved_session_profiles();
+    assert!(saved[0].proxy_profile_id.is_none());
+    assert_eq!(runtime.config_document.proxy_profiles.len(), 1);
+
     std::env::remove_var("YSHELL_MASTER_PASSWORD");
+}
+
+#[test]
+fn legacy_per_session_proxy_loads_and_migrates_to_managed_profile() {
+    let temp = tempdir().expect("tempdir");
+    let keychain = Arc::new(FakeKeychain::new("proxy-master"));
+    keychain
+        .put(
+            SecretRef::new("local://yshell/legacy/saved-legacy-proxy/password"),
+            SecretString::from("legacy-secret"),
+        )
+        .expect("seed legacy proxy password");
+    let keychain: Arc<dyn Keychain> = keychain;
+    let store = ConfigStore::new(temp.path());
+    let mut document = ConfigDocument::default();
+    // 旧构建写入的 per-session 条目：id = `<session_id>-proxy`。
+    document.proxy_profiles.insert(
+        "saved-legacy-proxy".to_owned(),
+        ProxyProfile {
+            id: "saved-legacy-proxy".to_owned(),
+            name: "Proxy for Legacy Session".to_owned(),
+            protocol: ProxyProtocol::Socks5,
+            host: "127.0.0.1".to_owned(),
+            port: 1081,
+            username: Some("legacy-user".to_owned()),
+            resolve_dns_by_proxy: false,
+            password_secret_key: Some(
+                "local://yshell/legacy/saved-legacy-proxy/password".to_owned(),
+            ),
+        },
+    );
+    let mut session = SessionProfile::new(
+        "saved-legacy",
+        "Legacy Session",
+        "legacy-proxy.example.test",
+    );
+    session.proxy_profile_id = Some("saved-legacy-proxy".to_owned());
+    let mut folder = FolderProfile::new("saved-sessions", "Saved Sessions");
+    folder.sessions.push(session);
+    document.folders.push(folder);
+    // 管理器里另有一条可迁移的托管条目。
+    document.proxy_profiles.insert(
+        "proxy-1".to_owned(),
+        ProxyProfile {
+            id: "proxy-1".to_owned(),
+            name: "Managed SOCKS".to_owned(),
+            protocol: ProxyProtocol::Socks5,
+            host: "10.0.0.10".to_owned(),
+            port: 1080,
+            username: None,
+            resolve_dns_by_proxy: true,
+            password_secret_key: None,
+        },
+    );
+    store.save(&document).expect("save config");
+
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), Some(keychain)).expect("runtime");
+    let projection = runtime
+        .load_selected_saved_session_into_editor()
+        .expect("load legacy editor");
+    assert_eq!(projection.editor_proxy_mode_text, "legacy");
+    assert!(projection
+        .editor_proxy_legacy_text
+        .contains("127.0.0.1:1081"));
+    assert_eq!(runtime.editor.proxy_profile_id.as_deref(), Some("saved-legacy-proxy"));
+
+    // 旧配置仍可连接：legacy 引用解析到保存的口令。
+    match &runtime
+        .build_ssh_config_from_editor()
+        .expect("legacy proxy config")
+        .proxy
+    {
+        ProxyConfig::Socks5 {
+            address,
+            username,
+            password,
+            resolve_dns_by_proxy,
+        } => {
+            assert_eq!(address, "127.0.0.1:1081");
+            assert_eq!(username.as_deref(), Some("legacy-user"));
+            assert_eq!(password.as_deref(), Some("legacy-secret"));
+            assert!(!resolve_dns_by_proxy);
+        }
+        other => panic!("expected legacy socks5 proxy, got {other:?}"),
+    }
+
+    // 选择托管条目并保存 = 迁移；旧 `<session>-proxy` 不再被引用后清理。
+    // 下拉按名称排序（Managed SOCKS < Proxy for Legacy Session），托管条目在 0。
+    let projection = runtime.select_editor_proxy(0);
+    assert_eq!(projection.editor_proxy_mode_text, "managed");
+    runtime
+        .save_editor_to_saved_session()
+        .expect("save migrated session");
+    let saved = runtime.saved_session_profiles();
+    assert_eq!(saved[0].proxy_profile_id.as_deref(), Some("proxy-1"));
+    assert!(!runtime
+        .config_document
+        .proxy_profiles
+        .contains_key("saved-legacy-proxy"));
+    assert!(runtime.config_document.proxy_profiles.contains_key("proxy-1"));
+}
+
+#[test]
+fn dangling_legacy_proxy_reference_is_kept_readable_and_fails_readably() {
+    let temp = tempdir().expect("tempdir");
+    let store = ConfigStore::new(temp.path());
+    let mut document = ConfigDocument::default();
+    let mut session = SessionProfile::new(
+        "saved-dangling-proxy",
+        "Dangling Proxy",
+        "dangling-proxy.example.test",
+    );
+    session.proxy_profile_id = Some("saved-dangling-proxy-proxy".to_owned());
+    let mut folder = FolderProfile::new("saved-sessions", "Saved Sessions");
+    folder.sessions.push(session);
+    document.folders.push(folder);
+    store.save(&document).expect("save config");
+
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    let projection = runtime
+        .load_selected_saved_session_into_editor()
+        .expect("load dangling editor");
+    assert_eq!(projection.editor_proxy_mode_text, "legacy");
+    assert!(projection
+        .editor_proxy_legacy_text
+        .contains("saved-dangling-proxy-proxy"));
+    let error = runtime
+        .build_ssh_config_from_editor()
+        .expect_err("dangling proxy must fail with a readable error");
+    assert!(error.to_string().contains("no longer exists"));
 }
 
 #[test]

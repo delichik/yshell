@@ -13,7 +13,7 @@
 use std::collections::BTreeSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use yshell_config::{parse_quick_connect, NewTabMode, QuickConnectEntry, QuickConnectTarget};
+use yshell_config::{parse_quick_connect, QuickConnectEntry, QuickConnectTarget};
 use yshell_core::SessionState;
 
 use crate::session_runtime::SessionSource;
@@ -46,17 +46,15 @@ pub struct QuickLinkRowData {
 
 impl AppRuntime {
     // ------------------------------------------- 工作区覆盖层开关（TAB-6 / §1.2）
-    /// `+` 按钮：按 `ui.new_tab_mode` 打开 Quick Connect 覆盖层或 Session Editor。
+    /// `+` 按钮：总是新建一个本地终端标签（TAB-4），不再读取 `ui.new_tab_mode`。
     ///
-    /// `Ctrl+N`（`start_new_saved_session_editor`）不经过这里，始终打开编辑器。
+    /// `Ctrl+N`（`start_new_saved_session_editor`）不经过这里，始终打开编辑器；
+    /// `Ctrl+O` 仍走 [`Self::toggle_quick_connect`]，与 `+` 解耦。
     pub fn handle_new_tab_default(&mut self) -> AppProjection {
-        match self.config_document.ui.new_tab_mode {
-            NewTabMode::QuickConnect => self.open_quick_connect(),
-            NewTabMode::SessionEditor => self.start_new_saved_session_editor(),
-        }
+        self.open_local_terminal()
     }
 
-    /// 打开 Quick Connect 覆盖层（D11：`+` 默认、Ctrl+O 同路径）。
+    /// 打开 Quick Connect 覆盖层（D11：Ctrl+O 同路径；`+` 不再打开它）。
     ///
     /// 覆盖层是工作区状态，**不创建标签**（TAB-6）；打开/重复打开都不改变标签数量。
     /// 已打开时只返回投影（Slint 侧继续聚焦输入框），状态栏文案区分首次打开/再次激活。
@@ -166,8 +164,8 @@ impl AppRuntime {
         let saved_profile_id = match self.sessions.get(session_id).map(|runtime| &runtime.source) {
             Some(SessionSource::QuickConnect) => None,
             Some(SessionSource::SavedSession { profile_id }) => Some(profile_id.clone()),
-            // 草稿会话不计入 Quick Connect 历史。
-            Some(SessionSource::Draft) | None => return,
+            // 草稿/本地终端不计入 Quick Connect 历史。
+            Some(SessionSource::Draft | SessionSource::Local) | None => return,
         };
         let Some(profile_id) = saved_profile_id else {
             let Some(target) = self.pending_quick_connect_targets.remove(session_id) else {

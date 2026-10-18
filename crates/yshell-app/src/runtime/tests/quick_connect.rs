@@ -1,7 +1,6 @@
 //! N2：Quick Connect 页（标签、历史、快速链接、行投影、`+` 行为）。
 
 use tempfile::tempdir;
-use yshell_config::NewTabMode;
 
 use super::*;
 
@@ -408,27 +407,6 @@ fn underlying_terminal_stays_alive_while_the_overlay_is_open() {
     assert_eq!(runtime.active_tab_id.as_deref(), Some(tab.as_str()));
     assert_eq!(runtime.active_session_id.as_deref(), Some(session.as_str()));
     assert_tab_invariants(&runtime);
-}
-
-#[test]
-fn new_tab_default_follows_ui_mode() {
-    let temp = tempdir().expect("tempdir");
-    let mut runtime = tab_runtime(temp.path(), 0);
-    runtime.dismiss_quick_connect();
-
-    // 默认 quick-connect：`+` 只打开覆盖层，不创建标签。
-    let projection = runtime.handle_new_tab_default();
-    assert!(projection.quick_connect_visible);
-    assert_eq!(projection.tab_count, 0);
-    assert!(!projection.editor_modal_visible);
-
-    // session-editor：`+` 打开 Session Editor（Ctrl+N 同一条路径）。
-    runtime.config_document.ui.new_tab_mode = NewTabMode::SessionEditor;
-    let projection = runtime.handle_new_tab_default();
-    assert!(projection.editor_modal_visible);
-    assert_eq!(projection.tab_count, 0);
-    // 编辑器只是模态弹窗，覆盖层保持原状态（打开）。
-    assert!(projection.quick_connect_visible);
 }
 
 #[test]

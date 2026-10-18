@@ -6911,6 +6911,7 @@ dependencies = [
  "windows-sys 0.59.0",
  "yshell-config",
  "yshell-core",
+ "yshell-local",
  "yshell-logging",
  "yshell-secret",
  "yshell-sftp",

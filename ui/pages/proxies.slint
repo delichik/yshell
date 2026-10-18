@@ -1,0 +1,686 @@
+// NET-1：代理管理器页（D6 模态页面，与 Known Hosts / Private Keys 一致）。
+//
+// 与宿主（Rust / main_window）的约定：
+//   * `open` 由宿主投影驱动；`close`（Esc / 遮罩点击 / Close 按钮）走同一条路径。
+//   * `proxies` 是按名称排序的行模型；`selected-index` 为宿主与页面共享的选择。
+//   * 表单字段由页面编辑、经 `update-*` 回调写回宿主；密码只写不读（placeholder 仅
+//     提示"已保存"，从不回显内容）。
+//   * 破坏性操作走 `request-remove-proxy`：被已保存会话引用时宿主阻止删除并在页面
+//     内说明（D8），同时提供"设为无代理"的显式动作。
+//   * "Test" 由宿主在后台线程执行 TCP/协议探测，结果通过 `test-result-text` 回填。
+//
+// 规范：docs/product/ui-winui3-design-language.md §5.10（ContentDialog 形态）。
+
+import { Theme } from "../theme.slint";
+import {
+    WinButton, WinCard, WinCardHeader, WinComboBox, WinIconButton, WinScrollIndicator, WinToggle,
+} from "../components/basic/controls.slint";
+import { WinTextInput } from "../components/basic/text_input.slint";
+
+/// 代理清单行（Rust `ProxyRowData` 的 Slint 镜像）。
+export struct ProxyRow {
+    id: string,
+    name: string,
+    /// 预格式化的协议名（SOCKS5 / HTTP CONNECT …）。
+    protocol: string,
+    /// 预格式化的 `host:port`。
+    address: string,
+    username: string,
+    password-stored: bool,
+    /// 预格式化的引用会话名（"Prod, Staging" / ""）。
+    used-by: string,
+    selected: bool,
+}
+
+/// 会话编辑器代理下拉选项（Rust `ProxyProfileOptionData` 的 Slint 镜像）。
+export struct ProxyProfileOption {
+    id: string,
+    label: string,
+    detail: string,
+}
+
+/// 单条代理清单行：名称 + 协议/地址 + 认证/引用状态（三行 56px）。
+component ProxyListItem inherits Rectangle {
+    in property <ProxyRow> node;
+    in property <bool> selected: false;
+    callback clicked();
+
+    height: 56px;
+    border-radius: Theme.radius-control;
+    background: selected ? Theme.subtle-selected
+        : touch.has-hover ? Theme.subtle-hover
+        : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    private property <string> auth-text:
+        node.username == "" ? @tr("No username") : node.username;
+    private property <string> secret-text:
+        node.password-stored ? @tr("password saved") : @tr("no password");
+    private property <string> usage-text:
+        node.used-by == "" ? @tr("not used") : node.used-by;
+
+    VerticalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+        spacing: 2px;
+
+        Text {
+            text: node.name;
+            color: Theme.text-primary;
+            font-size: Theme.font-body;
+            font-weight: node.selected ? Theme.weight-semibold : 400;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        Text {
+            text: node.protocol + " · " + node.address;
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            font-family: Theme.font-mono;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        Text {
+            text: root.auth-text + " · " + root.secret-text + " · " + root.usage-text;
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+/// 表单行：左侧固定宽度标签 + 右侧控件（与 Session Editor 同构）。
+component ProxyFormRow inherits Rectangle {
+    in property <string> label: "";
+    in property <length> label-width: Theme.form-label-width;
+    height: Theme.control-height;
+    background: transparent;
+
+    HorizontalLayout {
+        spacing: Theme.spacing-12;
+
+        Text {
+            text: root.label;
+            color: Theme.text-secondary;
+            font-size: Theme.font-body;
+            width: root.label-width;
+            height: root.height;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+            background: transparent;
+
+            HorizontalLayout {
+                spacing: Theme.spacing-8;
+                @children
+            }
+        }
+    }
+}
+
+export component ProxiesPage inherits Rectangle {
+    in property <bool> open: false;
+    in property <[ProxyRow]> proxies: [];
+    in property <string> list-summary-text: "";
+    in property <string> empty-text: @tr("No managed proxies yet. Create one to use it in a session.");
+    in property <string> status-text: "";
+    in property <string> test-result-text: "";
+    in property <bool> test-in-flight: false;
+
+    in-out property <int> selected-index: -1;
+
+    // D8：被引用代理的删除阻止说明 + 显式"设为无代理"动作。
+    in property <bool> remove-blocked: false;
+    in property <string> referencing-text: "";
+
+    // 编辑表单（密码只写：空 = 保留已保存口令）
+    in property <bool> editor-is-new: true;
+    in property <string> editor-id-text: "";
+    in-out property <string> editor-name-text: "";
+    in-out property <string> editor-host-text: "";
+    in-out property <string> editor-port-text: "";
+    in-out property <string> editor-username-text: "";
+    in-out property <string> editor-password-text: "";
+    in property <bool> editor-password-stored: false;
+    in property <bool> editor-dns-by-proxy: true;
+    in-out property <int> editor-protocol-index: 2;    in property <bool> editor-save-enabled: false;
+
+    callback close();
+    callback select-proxy(int);
+    callback start-new-proxy();
+    callback begin-edit-proxy();
+    callback duplicate-proxy();
+    callback request-remove-proxy();
+    callback clear-proxy-references();
+    callback dismiss-proxy-warning();
+    callback test-proxy();
+    callback save-proxy-editor();
+    callback cancel-proxy-editor();
+    callback update-proxy-name(string);
+    callback update-proxy-host(string);
+    callback update-proxy-port(string);
+    callback update-proxy-username(string);
+    callback update-proxy-password(string);
+    callback select-proxy-protocol(int);
+    callback toggle-proxy-dns();
+
+    visible: self.open;
+    background: Theme.scrim;
+
+    private property <bool> has-selection:
+        root.selected-index >= 0 && root.selected-index < root.proxies.length;
+    private property <string> selected-name:
+        root.has-selection ? root.proxies[root.selected-index].name : "";
+    private property <[string]> protocol-options: [
+        "SOCKS4", "SOCKS4a", "SOCKS5", "HTTP CONNECT"
+    ];
+
+    dialog_scope := FocusScope {
+        width: parent.width;
+        height: parent.height;
+
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.close();
+                return accept;
+            }
+            return reject;
+        }
+
+        TouchArea {
+            clicked => { root.close(); }
+        }
+
+        Rectangle {
+            x: (parent.width - 760px) / 2;
+            y: max((parent.height - self.height) / 2, 44px);
+            width: 760px;
+            height: min(parent.height - 88px, 640px);
+            background: Theme.panel-background;
+            border-radius: Theme.radius-panel;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
+            clip: true;
+
+            TouchArea { }
+
+            VerticalLayout {
+                padding: Theme.spacing-20;
+                spacing: Theme.spacing-12;
+
+                // 标题行
+                HorizontalLayout {
+                    spacing: Theme.spacing-12;
+
+                    Text {
+                        text: @tr("Proxy Manager");
+                        color: Theme.text-primary;
+                        font-size: Theme.font-subtitle;
+                        font-weight: Theme.weight-semibold;
+                        vertical-alignment: center;
+                    }
+
+                    Text {
+                        text: root.list-summary-text;
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-body;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    WinIconButton {
+                        icon: "close";
+                        accessible-name: @tr("Close");
+                        clicked => { root.close(); }
+                    }
+                }
+
+                Rectangle {
+                    height: 1px;
+                    background: Theme.divider;
+                }
+
+                HorizontalLayout {
+                    spacing: Theme.spacing-16;
+
+                    // --- 左：清单 + 动作 -------------------------------------------
+                    Rectangle {
+                        width: 300px;
+                        clip: true;
+                        background: transparent;
+
+                        left-scroll := Flickable {
+                            width: parent.width;
+                            height: parent.height;
+                            interactive: true;
+                            content-width: self.width;
+                            content-height: left-column.preferred-height;
+
+                            left-column := VerticalLayout {
+                                spacing: Theme.spacing-12;
+
+                                WinCard {
+                                    vertical-stretch: 0;
+
+                                    WinCardHeader {
+                                        title: @tr("Managed Proxies");
+                                        icon: "globe";
+                                    }
+
+                                    Rectangle {
+                                        height: max(120px, min(root.proxies.length * 56px + 4px, 200px));
+                                        clip: true;
+                                        background: Theme.panel-background;
+                                        border-radius: Theme.radius-control;
+                                        border-width: 1px;
+                                        border-color: Theme.divider;
+
+                                        proxies-list := Flickable {
+                                            visible: root.proxies.length > 0;
+                                            width: parent.width;
+                                            height: parent.height;
+                                            interactive: true;
+                                            content-width: self.width;
+                                            content-height: rows.preferred-height;
+
+                                            rows := VerticalLayout {
+                                                padding: 2px;
+                                                spacing: 2px;
+
+                                                for row[i] in root.proxies : ProxyListItem {
+                                                    node: row;
+                                                    selected: i == root.selected-index;
+                                                    clicked => {
+                                                        root.selected-index = i;
+                                                        root.select-proxy(i);
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        WinScrollIndicator {
+                                            visible: root.proxies.length > 0;
+                                            x: parent.width - self.width - Theme.spacing-4;
+                                            y: Theme.spacing-4;
+                                            height: parent.height - 2 * Theme.spacing-4;
+                                            viewport-position: proxies-list.content-y;
+                                            content-extent: proxies-list.content-height;
+                                            viewport-extent: proxies-list.height;
+                                            thumb-min-length: 24px;
+                                        }
+
+                                        empty := VerticalLayout {
+                                            visible: root.proxies.length == 0;
+                                            y: max((parent.height - self.preferred-height) / 2, Theme.spacing-12);
+                                            width: parent.width;
+                                            padding-left: Theme.spacing-16;
+                                            padding-right: Theme.spacing-16;
+                                            spacing: Theme.spacing-12;
+                                            alignment: center;
+
+                                            Text {
+                                                width: min(parent.width - 2 * Theme.spacing-16, 250px);
+                                                text: root.empty-text;
+                                                color: Theme.text-tertiary;
+                                                font-size: Theme.font-caption;
+                                                horizontal-alignment: center;
+                                                wrap: word-wrap;
+                                            }
+
+                                            HorizontalLayout {
+                                                alignment: center;
+
+                                                WinButton {
+                                                    text: @tr("New");
+                                                    icon: "plus";
+                                                    accent: true;
+                                                    clicked => { root.start-new-proxy(); }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    HorizontalLayout {
+                                        spacing: Theme.spacing-8;
+                                        vertical-stretch: 0;
+
+                                        WinButton {
+                                            text: @tr("New");
+                                            icon: "plus";
+                                            accent: true;
+                                            clicked => { root.start-new-proxy(); }
+                                        }
+
+                                        WinButton {
+                                            text: @tr("Edit");
+                                            icon: "edit";
+                                            enabled: root.has-selection;
+                                            clicked => { root.begin-edit-proxy(); }
+                                        }
+
+                                        WinButton {
+                                            text: @tr("Duplicate");
+                                            icon: "copy";
+                                            enabled: root.has-selection;
+                                            clicked => { root.duplicate-proxy(); }
+                                        }
+                                    }
+
+                                    HorizontalLayout {
+                                        spacing: Theme.spacing-8;
+                                        vertical-stretch: 0;
+
+                                        WinButton {
+                                            text: @tr("Delete");
+                                            icon: "trash";
+                                            critical: true;
+                                            enabled: root.has-selection;
+                                            clicked => { root.request-remove-proxy(); }
+                                        }
+
+                                        WinButton {
+                                            text: @tr("Test");
+                                            icon: "check";
+                                            enabled: root.has-selection && !root.test-in-flight;
+                                            clicked => { root.test-proxy(); }
+                                        }
+                                    }
+                                }
+
+                                // D8：删除被阻止时说明引用方并提供显式迁移动作。
+                                if root.remove-blocked : Rectangle {
+                                    background: Theme.banner-warning-background;
+                                    border-radius: Theme.radius-control;
+                                    border-width: 1px;
+                                    border-color: Theme.banner-warning-stroke;
+
+                                    VerticalLayout {
+                                        padding: Theme.spacing-12;
+                                        spacing: Theme.spacing-8;
+
+                                        Text {
+                                            text: @tr("Cannot delete “{0}”: it is used by saved sessions.", root.selected-name);
+                                            color: Theme.banner-warning-text;
+                                            font-size: Theme.font-caption;
+                                            font-weight: Theme.weight-semibold;
+                                            wrap: word-wrap;
+                                        }
+
+                                        Text {
+                                            text: root.referencing-text;
+                                            color: Theme.banner-warning-text;
+                                            font-size: Theme.font-caption;
+                                            wrap: word-wrap;
+                                        }
+
+                                        HorizontalLayout {
+                                            spacing: Theme.spacing-8;
+                                            alignment: start;
+
+                                            WinButton {
+                                                text: @tr("Set Sessions to No Proxy");
+                                                icon: "clear";
+                                                clicked => { root.clear-proxy-references(); }
+                                            }
+
+                                            WinButton {
+                                                text: @tr("Dismiss");
+                                                subtle: true;
+                                                clicked => { root.dismiss-proxy-warning(); }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            WinScrollIndicator {
+                                x: parent.width - self.width - Theme.spacing-4;
+                                y: Theme.spacing-4;
+                                height: parent.height - 2 * Theme.spacing-4;
+                                viewport-position: left-scroll.content-y;
+                                content-extent: left-scroll.content-height;
+                                viewport-extent: left-scroll.height;
+                                thumb-min-length: 24px;
+                            }
+                        }
+                    }
+
+                    // --- 右：编辑表单 / 测试结果 -----------------------------------
+                    // 表单可滚动；Cancel/Save 固定在底部，880×600 下无需滚动即可保存。
+                    Rectangle {
+                        clip: true;
+                        background: transparent;
+
+                        VerticalLayout {
+                            spacing: Theme.spacing-8;
+
+                            Rectangle {
+                                vertical-stretch: 1;
+                                clip: true;
+                                background: transparent;
+
+                                scroll := Flickable {
+                                    width: parent.width;
+                                    height: parent.height;
+                                    interactive: true;
+                                    content-width: self.width;
+                                    content-height: sections.preferred-height;
+
+                                    sections := VerticalLayout {
+                                        spacing: Theme.spacing-12;
+
+                                        WinCard {
+                                            WinCardHeader {
+                                                title: root.editor-is-new ? @tr("New Proxy") : @tr("Edit Proxy");
+                                                icon: "globe";
+                                            }
+
+                                            ProxyFormRow {
+                                                label: @tr("Name");
+
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.editor-name-text;
+                                                    placeholder-text: @tr("Proxy name");
+                                                    edited => { root.update-proxy-name(self.text); }
+                                                }
+                                            }
+
+                                            ProxyFormRow {
+                                                label: @tr("Protocol");
+
+                                                WinComboBox {
+                                                    horizontal-stretch: 1;
+                                                    model: root.protocol-options;
+                                                    current-index <=> root.editor-protocol-index;
+                                                    selected(index) => {
+                                                        root.select-proxy-protocol(index);
+                                                    }
+                                                }
+                                            }
+
+                                            // Host + Port 同一行：减少 880×600 下的表单高度。
+                                            ProxyFormRow {
+                                                label: @tr("Host");
+
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.editor-host-text;
+                                                    placeholder-text: @tr("Proxy host");
+                                                    edited => { root.update-proxy-host(self.text); }
+                                                }
+
+                                                WinTextInput {
+                                                    width: 92px;
+                                                    text <=> root.editor-port-text;
+                                                    placeholder-text: "1080";
+                                                    edited => { root.update-proxy-port(self.text); }
+                                                }
+                                            }
+
+                                            ProxyFormRow {
+                                                label: @tr("Username");
+
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.editor-username-text;
+                                                    placeholder-text: @tr("Proxy username (optional)");
+                                                    edited => { root.update-proxy-username(self.text); }
+                                                }
+                                            }
+
+                                            ProxyFormRow {
+                                                label: @tr("Password");
+
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.editor-password-text;
+                                                    input-type: password;
+                                                    placeholder-text: root.editor-password-stored
+                                                        ? @tr("Leave blank to keep the saved password")
+                                                        : @tr("Proxy password (optional)");
+                                                    edited => { root.update-proxy-password(self.text); }
+                                                }
+                                            }
+
+                                            WinToggle {
+                                                text: root.editor-dns-by-proxy
+                                                    ? @tr("DNS through Proxy: On")
+                                                    : @tr("DNS through Proxy: Off");
+                                                checked: root.editor-dns-by-proxy;
+                                                toggled => { root.toggle-proxy-dns(); }
+                                            }
+
+                                            Text {
+                                                visible: !root.editor-is-new && root.editor-id-text != "";
+                                                text: @tr("Profile id: {0}", root.editor-id-text);
+                                                color: Theme.text-tertiary;
+                                                font-size: Theme.font-caption;
+                                                font-family: Theme.font-mono;
+                                                wrap: no-wrap;
+                                                overflow: elide;
+                                            }
+                                        }
+
+                                        WinCard {
+                                            vertical-stretch: 0;
+
+                                            WinCardHeader {
+                                                title: @tr("Status");
+                                                icon: "settings";
+                                            }
+
+                                            Text {
+                                                text: root.status-text;
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-caption;
+                                                wrap: word-wrap;
+                                            }
+
+                                            if root.test-result-text != "" : Rectangle {
+                                                background: Theme.panel-background;
+                                                border-radius: Theme.radius-control;
+                                                border-width: 1px;
+                                                border-color: Theme.divider;
+
+                                                Text {
+                                                    x: 10px;
+                                                    y: 8px;
+                                                    width: parent.width - 20px;
+                                                    text: root.test-result-text;
+                                                    color: Theme.text-secondary;
+                                                    font-size: Theme.font-caption;
+                                                    font-family: Theme.font-mono;
+                                                    wrap: word-wrap;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                WinScrollIndicator {
+                                    x: parent.width - self.width - Theme.spacing-4;
+                                    y: Theme.spacing-4;
+                                    height: parent.height - 2 * Theme.spacing-4;
+                                    viewport-position: scroll.content-y;
+                                    content-extent: scroll.content-height;
+                                    viewport-extent: scroll.height;
+                                    thumb-min-length: 24px;
+                                }
+                            }
+
+                            // 固定状态行（完整测试详情在滚动区 Status 卡里）。
+                            Text {
+                                height: Theme.control-height;
+                                text: root.status-text;
+                                color: Theme.text-secondary;
+                                font-size: Theme.font-caption;
+                                vertical-alignment: center;
+                                wrap: no-wrap;
+                                overflow: elide;
+                            }
+
+                            HorizontalLayout {
+                                spacing: Theme.spacing-8;
+                                alignment: end;
+
+                                WinButton {
+                                    text: @tr("Cancel");
+                                    clicked => { root.cancel-proxy-editor(); }
+                                }
+
+                                WinButton {
+                                    text: @tr("Save");
+                                    icon: "check";
+                                    accent: true;
+                                    enabled: root.editor-save-enabled;
+                                    clicked => { root.save-proxy-editor(); }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    height: 1px;
+                    background: Theme.divider;
+                }
+
+                HorizontalLayout {
+                    alignment: end;
+
+                    WinButton {
+                        text: @tr("Close");
+                        clicked => { root.close(); }
+                    }
+                }
+            }
+        }
+    }
+
+    /// 宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
+    public function focus-dialog() {
+        dialog_scope.focus();
+    }
+
+    changed open => {
+        if (root.open) {
+            dialog_scope.focus();
+        }
+    }
+}
