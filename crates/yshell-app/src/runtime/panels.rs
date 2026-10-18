@@ -1293,7 +1293,7 @@ fn stack_heights(
         return heights;
     }
 
-    if let Some(fractions) = resolve_fractions(ratios, count.saturating_sub(1)) {
+    let ratios_allocated = if let Some(fractions) = resolve_fractions(ratios, count.saturating_sub(1)) {
         let weights: Vec<f32> = slots
             .iter()
             .enumerate()
@@ -1319,6 +1319,7 @@ fn stack_heights(
                 flex / expanded.len() as f32
             };
         }
+        true
     } else {
         let fills: Vec<usize> = expanded
             .iter()
@@ -1343,11 +1344,66 @@ fn stack_heights(
             // 默认布局下内容尺寸面板（Tunnels/Quick Commands）不套 120px 下限，
             // 保持与旧 WinCard 相同的内容高度；「填充」面板仍受最小高度约束。
             enforce_min_heights(&mut heights, &fills);
-            return heights;
+        }
+        false
+    };
+    // 显式比例布局沿用「所有展开面板 >= 120px」的既有契约；默认布局只抬填充
+    // 面板（Tunnels/Quick Commands 保持 preferred，避免改变 1440×900 基线）。
+    if ratios_allocated {
+        enforce_min_heights(&mut heights, &expanded);
+    }
+    // PANEL-2：最小高度只会把面板抬到 120px，空间连所有下限都放不下时（例如
+    // 880×600 下右栏 4 个展开面板），旧实现会让栈总高超出内容区，末尾面板被
+    // 状态栏遮住且无法点到。这里在分配后统一做一次「绝不越界」校正：
+    //   1) 先从高于各自下限的面板里按余量比例回收（优先牺牲可压缩的 Tunnels）；
+    //   2) 仍然放不下（总下限 > 可用高度）时，所有展开面板等比缩小，进入各组件的
+    //      小高度降级布局，而不是让底部溢出。
+    fit_stack_to_height(&mut heights, slots, &expanded, flex);
+    heights
+}
+
+/// 面板在「正常」布局下的期望下限：填充面板 = 120px；内容尺寸面板取自身
+/// preferred（Quick Commands 89px）与 120px 的较小值（保持既有 89px 紧凑高度）。
+fn panel_height_floor(panel: PanelId) -> f32 {
+    auto_panel_height(panel).map_or(PANEL_MIN_HEIGHT, |height| height.min(PANEL_MIN_HEIGHT))
+}
+
+/// 把展开面板总高钳到 `budget`（= 内容区可用高度）；不改变折叠面板的 32px。
+fn fit_stack_to_height(heights: &mut [f32], slots: &[PanelSlot], expanded: &[usize], budget: f32) {
+    if expanded.is_empty() {
+        return;
+    }
+    let budget = budget.max(0.0);
+    let total: f32 = expanded.iter().map(|&index| heights[index]).sum();
+    if total <= budget + 0.01 {
+        return;
+    }
+    let mut overflow = total - budget;
+
+    // 1) 先回收「高于下限」的余量，按余量比例分摊（填充面板通常已在下限，不动）。
+    let slack: Vec<f32> = expanded
+        .iter()
+        .map(|&index| (heights[index] - panel_height_floor(slots[index].panel)).max(0.0))
+        .collect();
+    let slack_total: f32 = slack.iter().sum();
+    if slack_total > 0.0 {
+        for (position, &index) in expanded.iter().enumerate() {
+            let take = (overflow * slack[position] / slack_total).min(slack[position]);
+            heights[index] -= take;
+        }
+        overflow = expanded.iter().map(|&index| heights[index]).sum::<f32>() - budget;
+    }
+
+    // 2) 连下限都放不下：等比缩小（退化布局由各 pane 的 shows-* 阈值承接）。
+    if overflow > 0.01 {
+        let current: f32 = expanded.iter().map(|&index| heights[index]).sum();
+        if current > 0.0 {
+            let scale = (budget / current).clamp(0.0, 1.0);
+            for &index in expanded {
+                heights[index] *= scale;
+            }
         }
     }
-    enforce_min_heights(&mut heights, &expanded);
-    heights
 }
 
 /// 把低于最小高度的展开面板抬到 120px，并从有富余的面板按比例扣减。
@@ -2143,6 +2199,66 @@ mod tests {
         let tunnels = *view.frame(PanelId::Tunnels).expect("tunnels");
         assert!(approx(sftp.height, PANEL_MIN_HEIGHT));
         assert!(approx(tunnels.height, 472.0 - PANEL_MIN_HEIGHT));
+    }
+
+    #[test]
+    fn short_content_area_keeps_panel_stack_inside_bounds() {
+        // 880×600 最小窗口：菜单栏 40 + 状态栏 26 → 内容区 534。右栏默认在
+        // <1120px 自动折叠，这里模拟用户手动展开（+ 左栏图标条）。
+        let area_height = 600.0 - 40.0 - 26.0;
+        let view = compute_panel_layout(
+            &LayoutProfile::default(),
+            880.0,
+            area_height,
+            Some(PanelSide::Right),
+        );
+        let right: Vec<PanelFrameView> = view
+            .frames
+            .iter()
+            .filter(|frame| frame.placement == PanelPlacement::Right && frame.visible)
+            .copied()
+            .collect();
+        assert_eq!(right.len(), 4, "默认右栏 Local/SFTP/Tunnels/QuickCommands");
+        // 不越界：最后一个面板底边最多到内容区底部留白之上。
+        for frame in &right {
+            assert!(
+                frame.y + frame.height <= area_height - 12.0 + 0.01,
+                "{} 越界: y={} h={}",
+                frame.panel,
+                frame.y,
+                frame.height
+            );
+            // 120px 是填充面板的下限；Quick Commands 保持 89px 紧凑高度。
+            assert!(
+                frame.height >= 89.0 - 0.01,
+                "{} 被压到不可用高度: {}",
+                frame.panel,
+                frame.height
+            );
+        }
+        let sftp = *view.frame(PanelId::Sftp).expect("sftp");
+        assert!(approx(sftp.height, PANEL_MIN_HEIGHT), "sftp = {}", sftp.height);
+
+        // 极短内容区：总下限也放不下时等比压缩，仍然不得越过内容区底边。
+        let tiny = compute_panel_layout(
+            &LayoutProfile::default(),
+            880.0,
+            300.0,
+            Some(PanelSide::Right),
+        );
+        for frame in tiny
+            .frames
+            .iter()
+            .filter(|frame| frame.placement == PanelPlacement::Right && frame.visible)
+        {
+            assert!(
+                frame.height > 0.0 && frame.y + frame.height <= 300.0 - 12.0 + 0.01,
+                "{} 越界: y={} h={}",
+                frame.panel,
+                frame.y,
+                frame.height
+            );
+        }
     }
 
     #[test]

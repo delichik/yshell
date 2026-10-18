@@ -11,6 +11,14 @@
 //   * `@children` 是中间工作区槽（main_window 把 TerminalWorkspace 放进来）。
 //   * Popup 实例放在 `ToolDockPopups` 里，必须在 main_window 的
 //     "内容之后、模态弹窗之前"实例化，保持原有绘制层级。
+//
+// PANEL-2 小高度契约：面板几何仍由 Rust 分配（`stack_heights` +
+// `fit_stack_to_height`），展开面板的正常下限是 120px；880×600 等空间不足的
+// 场景下总高会被钳到内容区高度（不再把最后一个面板推到状态栏后面）。各面板
+// 内容在此高度下按自身 `shows-*` 阈值隐藏次级行、保留底部操作，详见
+// `local_pane.slint`（PANEL-1）与 `sftp_panel.slint` / `session_sidebar.slint`
+// / `transfer_queue.slint` 的 PANEL-2 注释。本文件只负责把 Rust 下发的
+// 几何原样渲染，不再另算高度。
 import { Theme } from "../theme.slint";
 import { MenuEntry, MenuPopup } from "menu_popup.slint";
 import { PanelFrame, PanelSplitHandle } from "panel_frame.slint";
@@ -415,7 +423,9 @@ export component ToolDock inherits Rectangle {
 
         SessionSidebarContent {
             width: parent.width;
-            height: parent.height;
+            // PANEL-2：PanelFrame 的 content-padding 8 占掉上下各 8px；子项用
+            // `parent.height` 会让底部 16px 溢出 content slot 的 clip。显式扣掉。
+            height: max(0px, parent.height - 2 * Theme.spacing-8);
             search-text <=> root.session-search-text;
             tree-rows: root.session-tree-rows;
             selected-id: root.session-selected-id;
@@ -589,7 +599,8 @@ export component ToolDock inherits Rectangle {
 
         TunnelPanel {
             width: parent.width;
-            height: parent.height;
+            // 同上：content-padding 12 已由 PanelFrame 占用，避免底部 24px 被裁。
+            height: max(0px, parent.height - 2 * Theme.spacing-12);
             rows: root.tunnel-rows;
             empty-kind: root.tunnels-empty-kind;
             start-tunnel(id) => { root.start-tunnel(id); }
@@ -617,11 +628,18 @@ export component ToolDock inherits Rectangle {
 
         // B15：卡片尚未实现内容，用明确的"本版本未提供"空态替代会让人误以为
         // 正在加载的占位文案；不新造入口（Tunnels 同理由 Rust 空态文案承载）。
+        // PANEL-2：面板很矮时（如默认 89px 高）只显示单行省略文案；否则空态
+        // 会以 preferred-height 顶出 PanelFrame 的 clip，出现半行文字。
         Text {
             text: @tr("MainWindow" => "Command presets are not available in this build yet.");
             color: Theme.text-secondary;
             font-size: Theme.font-caption;
-            wrap: word-wrap;
+            height: max(0px, root.quick-commands-frame.height - 44px
+                - 2 * Theme.spacing-12);
+            wrap: root.quick-commands-frame.height - 44px - 2 * Theme.spacing-12
+                >= 2 * Theme.line-body ? word-wrap : no-wrap;
+            overflow: elide;
+            vertical-alignment: center;
         }
     }
 

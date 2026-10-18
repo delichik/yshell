@@ -27,6 +27,12 @@ export component TunnelPanel inherits Rectangle {
 
     background: transparent;
 
+    // PANEL-2：行高必须容纳内部两行（padding 4+4 + 名称行 14 + 间距 2 +
+    // 动作行 24 = 48px）。旧值 `row-height-list + spacing-8` = 40px 会让每行
+    // 内容向下溢出 8px、与下一行文字重叠；这里改由 token 推导。
+    private property <length> row-height: 2 * Theme.spacing-4
+        + (Theme.font-caption + 2px) + 2px + Theme.control-height-compact;
+
     if root.rows.length == 0 : Text {
         text: root.empty-kind == "none"
             ? @tr("No configured tunnels for the active session.")
@@ -34,9 +40,9 @@ export component TunnelPanel inherits Rectangle {
         color: Theme.text-secondary;
         font-size: Theme.font-caption;
         x: 0;
-        y: 0;
         width: parent.width;
-        height: parent.height;
+        height: min(parent.height, self.preferred-height);
+        y: (parent.height - self.height) / 2;
         vertical-alignment: center;
         wrap: word-wrap;
     }
@@ -48,9 +54,14 @@ export component TunnelPanel inherits Rectangle {
 
         tunnel_list := ListView {
             vertical-scrollbar-policy: ScrollBarPolicy.always-off;
+            // PANEL-2：视口按行高整数倍对齐，底部不出现被腰斩的半行；空间
+            // 不足一行时仍保留可滚动视口（而不是 0 高度导致完全无法滚动）。
+            height: min(root.height,
+                max(root.row-height, floor(max(0px, root.height) / root.row-height)
+                    * root.row-height));
 
             for row[index] in root.rows : Rectangle {
-                height: Theme.row-height-list + Theme.spacing-8;
+                height: root.row-height;
                 border-radius: Theme.radius-control;
                 background: Math.mod(index, 2) == 0 ? transparent : Theme.card-fill;
 

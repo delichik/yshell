@@ -159,6 +159,20 @@ export component SessionSidebarContent inherits Rectangle {
 
     background: transparent;
 
+    // ---------------------------------------------------- 小高度降级（PANEL-2）
+    // 面板契约：搜索框（工具行）与 SAVED 标签（说明文字）是可隐藏的次级内容，
+    // 会话树始终保留（SessionTree 自带 2 行 = 56px 的最小高度）。阈值由 token
+    // 行高推导：
+    //   96  = 搜索 32 + 间距 8 + 树 2 行 56（再低连搜索也让位，只留树）
+    //   120 = 96 + SAVED 16 + 间距 8（>=120 才恢复 SAVED）
+    // 120px 面板（PanelFrame 头 44 + 内容 padding 16 → 内容 60）下两者都隐藏，
+    // 树仍有 60px；不会出现搜索框/标签把树挤出面板的半行裁切。
+    private property <bool> shows-search: root.height >= Theme.control-height
+        + Theme.spacing-8 + 2 * Theme.row-height-tree;
+    private property <bool> shows-saved: root.shows-search
+        && root.height >= Theme.control-height + 2 * Theme.spacing-8
+            + Theme.line-caption + 2 * Theme.row-height-tree;
+
     // S1：左栏背景右键 = 会话树空白区菜单（树内空白处由 SessionTree
     // 自己上报；这里兜住树下方/侧栏其余空白）。
     // A9：左键 = 清空选中（与右键菜单同一片命中区）。
@@ -181,6 +195,7 @@ export component SessionSidebarContent inherits Rectangle {
         alignment: start;
 
         WinTextInput {
+            visible: root.shows-search;
             text <=> root.search-text;
             placeholder-text: @tr("MainWindow" => "Search sessions");
             edited => { root.update-search(self.text); }
@@ -189,6 +204,7 @@ export component SessionSidebarContent inherits Rectangle {
         // 已保存会话：完整树结构（展开/折叠、单击选中、双击打开、
         // 右键菜单、搜索过滤都在组件内完成；旧的多行文本投影不再渲染）
         Text {
+            visible: root.shows-saved;
             text: @tr("MainWindow" => "SAVED");
             color: Theme.text-tertiary;
             font-size: Theme.font-caption;

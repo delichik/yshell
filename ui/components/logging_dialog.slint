@@ -18,7 +18,7 @@
 // 都走 `cancel()`）。
 
 import { Theme } from "../theme.slint";
-import { WinButton, WinToggle, WinInfoBar } from "basic/controls.slint";
+import { WinButton, WinToggle, WinInfoBar, WinScrollIndicator } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 import { Icon } from "basic/icons.slint";
 
@@ -140,7 +140,8 @@ export component LoggingDialog inherits Rectangle {
             x: (parent.width - root.dialog-width) / 2;
             y: max((parent.height - self.height) / 2, 32px);
             width: root.dialog-width;
-            height: min(body.preferred-height, parent.height - 2 * Theme.spacing-24);
+            height: min(body.preferred-height, max(0px,
+                parent.height - 2 * Theme.spacing-24));
             background: Theme.panel-background;
             border-radius: Theme.radius-panel;
             border-width: 1px;
@@ -168,6 +169,30 @@ export component LoggingDialog inherits Rectangle {
                     wrap: no-wrap;
                     overflow: elide;
                 }
+
+                // PANEL-2：标题/会话行与底部操作固定，中间内容在窗口变矮时滚动。
+                // 旧实现把整列都塞进 body，窗口低于 body.preferred-height 时
+                // Start/Stop 行会被底部裁掉。这里 scroll 区吃剩余高度（min-height:0），
+                // footer 永远完整可见；`content-height` 与内容实际高度同步。
+                Rectangle {
+                    vertical-stretch: 1;
+                    min-height: 0px;
+                    // 自然高度 = 表单内容高度；窗口变矮时由下面的 dialog height
+                    // 上限压缩，VerticalLayout 把剩余空间分给滚动区。
+                    preferred-height: dialog_content.preferred-height;
+                    clip: true;
+                    background: transparent;
+
+                    dialog_scroll := Flickable {
+                        width: parent.width;
+                        height: parent.height;
+                        interactive: true;
+                        content-width: self.width;
+                        content-height: dialog_content.preferred-height;
+
+                        dialog_content := VerticalLayout {
+                            alignment: start;
+                            spacing: Theme.spacing-12;
 
                 // ------------------------------------------------- 停止提示视图
                 if root.logging-active : VerticalLayout {
@@ -364,6 +389,20 @@ export component LoggingDialog inherits Rectangle {
                         font-size: Theme.font-caption;
                         wrap: word-wrap;
                         width: root.content-width;
+                    }
+                }
+                        }
+                    }
+
+                    // 滚动提示：窗口足够高、内容不溢出时自动隐藏。
+                    WinScrollIndicator {
+                        x: dialog_scroll.width - self.width - Theme.spacing-4;
+                        y: Theme.spacing-4;
+                        height: dialog_scroll.height - 2 * Theme.spacing-4;
+                        viewport-position: dialog_scroll.content-y;
+                        content-extent: dialog_scroll.content-height;
+                        viewport-extent: dialog_scroll.height;
+                        thumb-min-length: 24px;
                     }
                 }
 

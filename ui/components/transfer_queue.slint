@@ -99,9 +99,13 @@ export component TransferQueue inherits Rectangle {
         Rectangle {
             vertical-stretch: 1;
             clip: true;
-            min-height: 48px;
+            // PANEL-2：不再强制 48px 下限——面板最小高度（120px）下可用列表区
+            // 约 40px，48px 会把底边顶出 PanelFrame 的 clip。列表本身可滚动，
+            // 空态文案在不足一行时隐藏，避免半行文字。
+            min-height: 0px;
 
             if root.rows.length == 0 : Text {
+                visible: parent.height >= Theme.line-caption;
                 text: @tr("No transfer tasks yet");
                 color: Theme.text-tertiary;
                 font-size: Theme.font-caption;
@@ -118,6 +122,12 @@ export component TransferQueue inherits Rectangle {
 
                 transfer_list := ListView {
                     vertical-scrollbar-policy: ScrollBarPolicy.always-off;
+                    // PANEL-2：视口按行高整数倍对齐，底部不出现被腰斩的半行；
+                    // 空间不足一行时仍保留可滚动视口（而不是 0 高度）。
+                    height: min(parent.height,
+                        max(Theme.row-height-list,
+                            floor(max(0px, parent.height) / Theme.row-height-list)
+                                * Theme.row-height-list));
 
                     for row[index] in root.rows : Rectangle {
                         height: Theme.row-height-list;

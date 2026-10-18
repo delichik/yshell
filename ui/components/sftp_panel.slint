@@ -162,16 +162,76 @@ component SftpRemotePane inherits Rectangle {
         + (root.shows-permissions ? root.column-gap + root.column-permissions-width : 0px);
     // 窄宽（右栏 280px 级别）只保留最后两段面包屑。
     private property <bool> compact-crumbs: root.available-width < 360px;
-    // 列表视口顶部固定偏移（头部 32 + 间距 4 + 路径输入 32 + 间距 4
-    // [+ 错误条 28 + 间距 4] + 列头 28 + 间距 4）。
-    private property <length> list-top: 104px + (root.error-text != "" ? 32px : 0px);
-    // 列表底部固定占用（间距 4 + 汇总行 16 [+ 远程编辑行 32 + 间距 4]）。
-    private property <length> list-footer: Theme.spacing-4 + Theme.line-caption
-        + (root.remote-edit-active ? Theme.control-height + Theme.spacing-4 : 0px);
-    // 视口高度向下取整到行高的整数倍：底部不出现被腰斩的半行（B7）。
-    private property <length> list-height: max(0px,
-        floor(max(0px, root.height - root.list-top - root.list-footer) / Theme.row-height-list)
-        * Theme.row-height-list);
+
+    // ---------------------------------------------------- 小高度降级布局（PANEL-2）
+    // 与 LocalPane（PANEL-1）同一契约：可选行按「路径输入 → 列头 → 错误条」的
+    // 优先级隐藏，列表占剩余高度并向下取整到整数行，汇总行底部锚定，footer
+    // 永不被外层 clip 裁掉。remote edit 的 Save/Cancel 是核心操作，优先于汇总行。
+    //
+    // 行高全部来自 token（默认值，单位 px）：header 32 / path 32 / error 28 /
+    // column 28 / edit 32 / summary 16 / gap 4 / list row 32。阈值推导：
+    //   52  = 头部 32 + 间距 4 + 汇总行 16（列表 0 行）
+    //   88  = 52 + 列表 1 行 32 + 间距 4（无任何可选行）
+    //   120 = 88 + 错误条 28 + 间距 4（列头同样 120）
+    //   152 = 120 + 错误条 28 + 间距 4（错误条 + 列头同时出现）
+    //   156 / 188 = 再加路径行 32 + 间距 4（错误条已显示时 188）
+    // 隐藏顺序（高度下降）：路径行 → 列头 → 错误条；低于 52px 时头部也让位，
+    // 只保留汇总行。每个可选行只在「它 + 一行列表 + 固定 footer」都放得下时出现。
+    private property <length> layout-gap: Theme.spacing-4;
+    private property <length> header-height: Theme.control-height;
+    private property <length> path-height: Theme.control-height;
+    private property <length> error-height: Theme.row-height-tree;
+    private property <length> column-height: Theme.row-height-tree;
+    private property <length> edit-height: Theme.control-height;
+    private property <length> summary-height: Theme.line-caption;
+
+    private property <bool> shows-edit: root.remote-edit-active;
+    private property <bool> shows-summary: !root.remote-edit-active
+        || root.height >= root.edit-height + root.layout-gap + root.summary-height;
+    private property <length> edit-visible-height: root.shows-edit
+        ? min(root.edit-height, max(0px, root.height
+            - (root.shows-summary ? root.summary-height + root.layout-gap : 0px)))
+        : 0px;
+    private property <length> footer-height: (root.shows-edit ? root.edit-visible-height
+            + (root.shows-summary ? root.layout-gap : 0px) : 0px)
+        + (root.shows-summary ? root.summary-height : 0px);
+    private property <bool> shows-header: root.height >= root.footer-height
+        + root.layout-gap + root.header-height;
+    private property <length> min-height-no-option:
+        (root.shows-header ? root.header-height + root.layout-gap : 0px)
+        + root.footer-height;
+    // 错误条 / 列头 / 路径行的阈值：都要求再加一行列表仍放得下。
+    private property <bool> shows-error: root.error-text != ""
+        && root.height >= root.min-height-no-option + root.error-height + root.layout-gap
+            + Theme.row-height-list + root.layout-gap;
+    private property <bool> shows-column-header:
+        root.height >= root.min-height-no-option + Theme.row-height-list + root.layout-gap
+            + root.column-height + root.layout-gap
+            + (root.shows-error ? root.error-height + root.layout-gap : 0px);
+    private property <bool> shows-path: root.shows-header && root.shows-column-header
+        && root.height >= root.min-height-no-option + Theme.row-height-list + root.layout-gap
+            + root.column-height + root.layout-gap
+            + root.path-height + root.layout-gap
+            + (root.shows-error ? root.error-height + root.layout-gap : 0px);
+
+    // 各行 y 坐标（绝对定位；list-top/list-height 是行 DropArea 的唯一几何来源）。
+    private property <length> path-y:
+        root.shows-header ? root.header-height + root.layout-gap : 0px;
+    private property <length> error-y: root.path-y
+        + (root.shows-path ? root.path-height + root.layout-gap : 0px);
+    private property <length> column-y: root.error-y
+        + (root.shows-error ? root.error-height + root.layout-gap : 0px);
+    private property <length> list-top: root.column-y
+        + (root.shows-column-header ? root.column-height + root.layout-gap : 0px);
+    // 汇总行 / edit 行底部锚定；列表底边 = footer 顶部 - 间距。
+    private property <length> summary-y: max(0px, root.height - root.summary-height);
+    private property <length> edit-y: root.shows-summary
+        ? max(0px, root.summary-y - root.layout-gap - root.edit-visible-height)
+        : max(0px, root.height - root.edit-visible-height);
+    private property <length> list-bottom: max(root.list-top,
+        root.height - root.footer-height - root.layout-gap);
+    private property <length> list-height: floor(max(0px, root.list-bottom - root.list-top)
+        / Theme.row-height-list) * Theme.row-height-list;
 
     /// 面包屑分隔符：前一段不是根 `/` 时显示。
     pure function shows-crumb-separator(index: int) -> bool {
@@ -189,12 +249,21 @@ component SftpRemotePane inherits Rectangle {
         return index >= root.crumbs.length - 2;
     }
 
-    VerticalLayout {
-        spacing: Theme.spacing-4;
+    // 绝对定位容器：顶部行、列表视口、底部 footer 都用上面推导的 y/height，
+    // 保证 list-top/list-height 与行 DropArea 严格一致（同 LocalPane，PANEL-2）。
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
 
         // --- 头部第 1 行：标题 + 面包屑 + 导航 + 显隐 + ⋯ -----------------
         HorizontalLayout {
-            height: Theme.control-height;
+            x: 0;
+            y: 0;
+            width: root.width;
+            height: root.header-height;
+            visible: root.shows-header;
             spacing: Theme.spacing-4;
 
             // 展开态也显示「远端」标题，与本地栏在视觉上区分（B10）。
@@ -304,8 +373,12 @@ component SftpRemotePane inherits Rectangle {
             }
         }
 
-        // --- 头部第 2 行：路径输入（回车打开）----------------------------
-        WinTextInput {
+        // --- 头部第 2 行：路径输入（回车打开；低高度时最先隐藏）----------
+        if root.shows-path : WinTextInput {
+            x: 0;
+            y: root.path-y;
+            width: root.width;
+            height: root.path-height;
             text <=> root.path-text;
             placeholder-text: "/remote/path";
             font-family: Theme.font-mono;
@@ -314,8 +387,11 @@ component SftpRemotePane inherits Rectangle {
         }
 
         // --- 内联错误条 + 重试 -------------------------------------------
-        if root.error-text != "" : Rectangle {
-            height: Theme.row-height-tree;
+        if root.shows-error : Rectangle {
+            x: 0;
+            y: root.error-y;
+            width: root.width;
+            height: root.error-height;
             background: Theme.attention-background;
             border-radius: Theme.radius-control;
             border-width: 1px;
@@ -344,9 +420,13 @@ component SftpRemotePane inherits Rectangle {
             }
         }
 
-        // --- 列头 --------------------------------------------------------
+        // --- 列头（低高度第二优先隐藏，排序状态仍在汇总行可见）-----------
         Rectangle {
-            height: Theme.row-height-tree;
+            x: 0;
+            y: root.column-y;
+            width: root.width;
+            height: root.column-height;
+            visible: root.shows-column-header;
             background: transparent;
 
             SftpColumnHeader {
@@ -401,10 +481,13 @@ component SftpRemotePane inherits Rectangle {
 
         // --- 列表（ListView 虚拟化 + 空态 + 行拖动/放置）------------------
         Rectangle {
-            clip: true;
-            // 高度取行高的整数倍（B7）：底部不出现被腰斩的半行。面板在两个
-            // 布局分支里都给本组件显式高度，因此这里的绑定不会形成布局回环。
+            x: 0;
+            y: root.list-top;
+            width: root.width;
             height: root.list-height;
+            clip: true;
+            // 高度取行高的整数倍（B7）：底部不出现被腰斩的半行；列表底边由
+            // 底部锚定的 footer 反推（PANEL-2），外层 DropArea 与本视口严格重合。
 
             // 列表级 DropArea：空白处落下 = 移动到当前目录 / 外部文件导入。
             // 注意：`dropped` 的 `event.proposed-action` 已经是 can-drop 的协商结果，
@@ -568,9 +651,12 @@ component SftpRemotePane inherits Rectangle {
             }
         }
 
-        // --- 远程编辑进行中：细条 + Save/Cancel --------------------------
-        if root.remote-edit-active : HorizontalLayout {
-            height: Theme.control-height;
+        // --- 远程编辑进行中：细条 + Save/Cancel（核心操作，优先保留）-----
+        if root.shows-edit : HorizontalLayout {
+            x: 0;
+            y: root.edit-y;
+            width: root.width;
+            height: root.edit-visible-height;
             spacing: Theme.spacing-4;
 
             Text {
@@ -594,14 +680,19 @@ component SftpRemotePane inherits Rectangle {
         }
 
         // --- 汇总行：计数 + 选中 + 排序 ----------------------------------
-        // 行高固定为 line-caption：列表视口按整数行对齐时用它算底部占用（B7）。
+        // 底部锚定（y = 高度 - 汇总行高）：低高度时只压列表，绝不裁本行；
+        // 低于 16px 时高度同步收缩，避免把 footer 顶出面板。
         Text {
+            x: 0;
+            y: root.summary-y;
+            width: root.width;
+            height: min(root.summary-height, root.height);
+            visible: root.shows-summary;
             text: root.selected-count > 0
                 ? @tr("{0} · {1} selected · {2}", root.item-summary-display(), root.selected-count, root.sort-text)
                 : @tr("{0} · {1}", root.item-summary-display(), root.sort-text);
             color: Theme.text-tertiary;
             font-size: Theme.font-caption;
-            height: Theme.line-caption;
             vertical-alignment: center;
             wrap: no-wrap;
             overflow: elide;
@@ -639,6 +730,21 @@ component SftpTransferDrawer inherits Rectangle {
     in property <int> failed-count: 0;
     in property <int> completed-count: 0;
     in property <int> retryable-count: 0;
+    /// PANEL-2：抽屉可占用的高度（SftpPanel 按剩余空间下发）。展开列表最多
+    /// 分到「可用高度 − 摘要行」，低面板里不会再把内容撑出面板、盖住远端栏。
+    in property <length> available-height: 100000px;
+
+    private property <length> desired-list-height: root.rows.length == 0 ? 96px
+        : min(root.rows.length * Theme.row-height-list + Theme.spacing-4, 240px);
+    private property <length> available-list-height: max(0px,
+        root.available-height - Theme.control-height);
+    // PANEL-2：视口按行高整数倍对齐（保留 4px 底部余量），低面板收缩时
+    // 也不会出现半行任务；不足一行时把列表归零（摘要行仍完整可见）。
+    private property <length> expanded-list-height: min(
+        root.desired-list-height,
+        root.available-list-height < Theme.spacing-4 ? 0px
+            : floor((root.available-list-height - Theme.spacing-4) / Theme.row-height-list)
+                * Theme.row-height-list + Theme.spacing-4);
 
     callback toggle-expanded();
     callback pause(string);
@@ -708,8 +814,9 @@ component SftpTransferDrawer inherits Rectangle {
             clip: true;
             // 空队列展开也要有明确反馈（B3）：0 条时固定 96px 的空态区，
             // 而不是旧的 `min(0*32+4, 240) = 4px`；有条目时按行数取高。
-            height: root.rows.length == 0 ? 96px
-                : min(root.rows.length * Theme.row-height-list + Theme.spacing-4, 240px);
+            // PANEL-2：最终高度再受 `available-height` 约束，低面板下宁可
+            // 列表变矮（仍可滚动）也不把抽屉底边裁出面板。
+            height: root.expanded-list-height;
 
             if root.rows.length == 0 : Text {
                 text: @tr("No transfer tasks yet");
@@ -1092,8 +1199,8 @@ export component SftpPanel inherits Rectangle {
     /// 宽面板（并排）阈值：两栏各 ≥ 280px。
     private property <bool> side-by-side: root.show-local && root.width >= 600px;
     private property <length> local-column-width: max(240px, root.width * 0.42);
-    /// 传输抽屉占位高度（与 SftpTransferDrawer 内部公式一致；空队列固定 96px）。
-    private property <length> drawer-reserve-height: root.transfer-expanded
+    /// 传输抽屉的期望高度（摘要行 + 展开列表）。
+    private property <length> drawer-desired-height: root.transfer-expanded
         ? Theme.control-height + (root.transfer-rows.length == 0 ? 96px
             : min(root.transfer-rows.length * Theme.row-height-list + Theme.spacing-4, 240px))
         : Theme.control-height;
@@ -1105,6 +1212,29 @@ export component SftpPanel inherits Rectangle {
     private property <length> side-space: max(0px, root.content-space - Theme.spacing-4);
     /// 远端栏压缩下限：面包屑/路径/列头/汇总 + 两行列表。
     private property <length> remote-min-height: 124px + 2 * Theme.row-height-list;
+    /// PANEL-2：为远端栏保留的最低高度 = 头部 32 + 间距 4 + 汇总行 16。
+    /// 低于此时 SftpRemotePane 会隐藏头部，只保留底部汇总行（列表 0 行）。
+    /// 抽屉展开时先满足这个下限，再按剩余空间压缩任务列表，避免底边越界。
+    private property <length> remote-reserve-height: Theme.control-height
+        + Theme.spacing-4 + Theme.line-caption;
+    /// 抽屉最多能占的高度：内容区 − 一个间隔 − 远端栏保留高度（不小于摘要行）。
+    private property <length> drawer-available-height: max(Theme.control-height,
+        root.content-space - Theme.spacing-4 - root.remote-reserve-height);
+    /// 抽屉展开列表的期望高度（与 SftpTransferDrawer 内部公式一致）。
+    private property <length> drawer-desired-list-height: max(0px,
+        root.drawer-desired-height - Theme.control-height);
+    private property <length> drawer-available-list-height: max(0px,
+        root.drawer-available-height - Theme.control-height);
+    /// PANEL-2：展开列表按行高整数倍收缩（与抽屉内部一致的 4px 底部余量），
+    /// 保证「预留高度 == 抽屉首选高度」，不会把抽屉底边或远端栏挤出面板。
+    private property <length> drawer-list-height: min(
+        root.drawer-desired-list-height,
+        root.drawer-available-list-height < Theme.spacing-4 ? 0px
+            : floor((root.drawer-available-list-height - Theme.spacing-4)
+                / Theme.row-height-list) * Theme.row-height-list + Theme.spacing-4);
+    /// 抽屉占位高度（与 SftpTransferDrawer 的 available-height 一致）。
+    private property <length> drawer-reserve-height:
+        Theme.control-height + root.drawer-list-height;
     /// 本地栏展开态下限：头部/路径/列头/汇总 + 一行列表。
     private property <length> local-min-height: 140px + Theme.row-height-list;
     /// 极端矮高：远端栏最小内容（124px）+ 抽屉 + 48px 紧凑条都放不下时，
@@ -1116,8 +1246,6 @@ export component SftpPanel inherits Rectangle {
     private property <bool> local-compact: root.local-collapsed
         || !root.stacked-remote-fits
         || root.stacked-space - root.drawer-reserve-height - root.remote-min-height < root.local-min-height;
-    /// 折叠态只剩一行头部：padding 8 + 头部 32 + padding 8。
-    private property <length> local-min-block: root.local-compact ? 48px : root.local-min-height;
     /// 本地栏展开时的期望高度（原 1/3 比例）。
     private property <length> local-preferred-block: root.local-compact
         ? 48px
@@ -1128,14 +1256,16 @@ export component SftpPanel inherits Rectangle {
     private property <int> stacked-remote-rows: clamp(
         round(floor((root.stacked-space - root.drawer-reserve-height - root.local-preferred-block - 124px) / Theme.row-height-list)),
         0, 24);
-    /// 叠放时远端栏高度（无内嵌本地栏时吃满剩余空间）。
+    /// 叠放时远端栏高度（无内嵌本地栏时吃满剩余空间，并扣掉与抽屉之间的间隔；
+    /// 旧实现漏扣这个 4px，抽屉底边会被 SftpPanel 的 clip 裁掉一条）。
     private property <length> stacked-remote-height: !root.show-local
-        ? max(0px, root.content-space - root.drawer-reserve-height)
+        ? max(0px, root.content-space - root.drawer-reserve-height - Theme.spacing-4)
         : 124px + Theme.row-height-list * root.stacked-remote-rows;
     /// 本地栏高度 = 剩余高度（紧凑态下限 48px；放不下时归零，见 stacked-remote-fits）。
+    /// PANEL-2：不再用 `max(local-min-block, …)` 强行抬高——低高度下让本地栏
+    /// 拿真实剩余高度，由 LocalPane 自己的降级布局兜底，避免把抽屉顶出面板。
     private property <length> local-section-height: !root.stacked-remote-fits ? 0px
-        : max(root.local-min-block,
-              root.stacked-space - root.drawer-reserve-height - root.stacked-remote-height);
+        : max(0px, root.stacked-space - root.drawer-reserve-height - root.stacked-remote-height);
     /// 并排两栏的高度（扣掉抽屉）。
     private property <length> column-height: max(0px, root.side-space - root.drawer-reserve-height);
     /// 本地栏折叠开关：仅当展开空间足够时可用（避免点了没反应的死开关）。
@@ -1303,6 +1433,7 @@ export component SftpPanel inherits Rectangle {
             SftpTransferDrawer {
                 rows: root.transfer-rows;
                 expanded: root.transfer-expanded;
+                available-height: root.drawer-reserve-height;
                 total-count: root.transfer-total-count;
                 active-count: root.transfer-active-count;
                 paused-count: root.transfer-paused-count;
