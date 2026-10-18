@@ -1,4 +1,21 @@
 fn main() {
+    // Cargo runs build scripts on the platform's main-thread stack. On Windows
+    // MSVC that is ~1 MB, and slint-build's recursive parser/layout passes over
+    // the full UI tree can exhaust it (STATUS_STACK_OVERFLOW, 0xc00000fd).
+    // Give the build work a dedicated large stack so the host OS stack limit is
+    // irrelevant; the final binary's stack is configured separately below.
+    let result = std::thread::Builder::new()
+        .name("yshell-build-script".into())
+        .stack_size(32 * 1024 * 1024)
+        .spawn(run)
+        .expect("spawn yshell build-script thread")
+        .join();
+    if result.is_err() {
+        std::process::exit(1);
+    }
+}
+
+fn run() {
     // slint-build emits rerun-if-changed for the .slint files it compiles, but
     // not for the .po files it embeds: without this, editing translations would
     // leave a stale translation table in the binary.
