@@ -858,37 +858,33 @@ msgctxt "HostKeyDialog"
 msgid "Close"
 msgstr "Close"
 
-#: ui/components/host_key_dialog.slint:99
+#: ui/components/host_key_dialog.slint:190
 msgctxt "HostKeyDialog"
 msgid ""
 "The presented key does not match the stored key. This may indicate a man-in-"
-"the-middle attack; replace it only if you verified the new key elsewhere."
-msgstr "The presented key does not match the stored key. This may indicate a man-in-the-middle attack; replace it only if you verified the new key elsewhere."
+"the-middle attack. Replace and Trust will overwrite the stored key; do so "
+"only if you verified the new key elsewhere."
+msgstr "The presented key does not match the stored key. This may indicate a man-in-the-middle attack. Replace and Trust will overwrite the stored key; do so only if you verified the new key elsewhere."
 
-#: ui/components/host_key_dialog.slint:105
+#: ui/components/host_key_dialog.slint:203
 msgctxt "HostKeyDialog"
-msgid "Type REPLACE"
-msgstr "Type REPLACE"
+msgid "Cancel Connection"
+msgstr "Cancel Connection"
 
-#: ui/components/host_key_dialog.slint:116
-msgctxt "HostKeyDialog"
-msgid "Cancel"
-msgstr "Cancel"
-
-#: ui/components/host_key_dialog.slint:121
+#: ui/components/host_key_dialog.slint:209
 msgctxt "HostKeyDialog"
 msgid "Trust Once"
 msgstr "Trust Once"
 
-#: ui/components/host_key_dialog.slint:126
+#: ui/components/host_key_dialog.slint:217
+msgctxt "HostKeyDialog"
+msgid "Replace and Trust"
+msgstr "Replace and Trust"
+
+#: ui/components/host_key_dialog.slint:218
 msgctxt "HostKeyDialog"
 msgid "Trust and Save"
 msgstr "Trust and Save"
-
-#: ui/components/host_key_dialog.slint:132
-msgctxt "HostKeyDialog"
-msgid "Replace Key"
-msgstr "Replace Key"
 
 #: ui/components/password_prompt_dialog.slint:23
 msgctxt "PasswordPromptDialog"
@@ -3446,15 +3442,15 @@ msgctxt "TerminalAppearanceDialog"
 msgid "Font size"
 msgstr "Font size"
 
-#: ui/pages/settings.slint:778
+#: ui/pages/settings.slint:698
 msgctxt "TerminalAppearanceDialog"
-msgid "Fallback fonts"
-msgstr "Fallback fonts"
+msgid "Fallback font"
+msgstr "Fallback font"
 
-#: ui/pages/settings.slint:786
+#: ui/pages/settings.slint:703
 msgctxt "TerminalAppearanceDialog"
-msgid "One font file per line"
-msgstr "One font file per line"
+msgid "Font file path"
+msgstr "Font file path"
 
 #: ui/pages/settings.slint:799 ui/pages/settings.slint:1196
 msgctxt "TerminalAppearanceDialog"
@@ -3512,8 +3508,8 @@ msgstr "Fallback font files, separated by ;"
 
 #: ui/pages/settings.slint:1192
 msgctxt "TerminalAppearanceDialog"
-msgid "Add Fallback…"
-msgstr "Add Fallback…"
+msgid "Select File…"
+msgstr "Select File…"
 
 #: ui/pages/settings.slint:1215
 msgctxt "TerminalAppearanceDialog"
@@ -3745,8 +3741,8 @@ msgstr "Font size"
 
 #: ui/text_formats.slint:462
 msgctxt "MainWindow"
-msgid "Fallback fonts"
-msgstr "Fallback fonts"
+msgid "Fallback font"
+msgstr "Fallback font"
 
 #: ui/text_formats.slint:465
 msgctxt "MainWindow"
@@ -3785,8 +3781,8 @@ msgstr "Logical pixels"
 
 #: ui/text_formats.slint:482
 msgctxt "MainWindow"
-msgid "Font files tried in order before the bundled CJK face"
-msgstr "Font files tried in order before the bundled CJK face"
+msgid "One font file tried before the bundled CJK face"
+msgstr "One font file tried before the bundled CJK face"
 
 #: ui/text_formats.slint:483
 msgctxt "MainWindow"
@@ -4062,4 +4058,19 @@ msgstr "Confirm before closing a session"
 msgctxt "SettingsDialog"
 msgid "Confirm before quitting YShell"
 msgstr "Confirm before quitting YShell"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Fallback font"
+msgstr "Fallback font"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Font file path"
+msgstr "Font file path"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Select File…"
+msgstr "Select File…"
 

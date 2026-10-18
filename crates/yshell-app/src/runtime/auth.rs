@@ -1081,14 +1081,6 @@ pub(crate) struct KnownHostEntryInfo {
     pub(crate) fingerprint: String,
 }
 
-pub(crate) fn config_host_key_policy_label(policy: ConfigHostKeyPolicy) -> &'static str {
-    match policy {
-        ConfigHostKeyPolicy::Strict => "strict",
-        ConfigHostKeyPolicy::TrustOnFirstUse => "trust-on-first-use",
-        ConfigHostKeyPolicy::AcceptAnyForTesting => "accept-any-for-testing",
-    }
-}
-
 pub(crate) fn config_host_key_policy_to_runtime(policy: ConfigHostKeyPolicy) -> HostKeyPolicy {
     match policy {
         ConfigHostKeyPolicy::Strict => HostKeyPolicy::Strict,

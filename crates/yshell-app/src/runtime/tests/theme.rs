@@ -39,7 +39,7 @@ fn palette_resolution_uses_named_theme_and_legacy_overrides() {
         foreground: Some("#112233".to_owned()),
         font_family: Some("/tmp/does-not-exist-font.ttf".to_owned()),
         font_size: Some(18),
-        fallback_fonts: Some(vec!["/tmp/missing-fallback.ttf".to_owned()]),
+        backup_font: Some("/tmp/missing-fallback.ttf".to_owned()),
         ..TerminalProfile::default()
     };
     let appearance = crate::runtime::theme::terminal_appearance(&profile, &catalog);
@@ -152,6 +152,71 @@ fn settings_appearance_form_validates_and_persists() {
         reset.settings_appearance_color_scheme_text,
         "yshell-default"
     );
+}
+
+#[test]
+fn settings_appearance_backup_font_is_single_value() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+
+    let first = temp.path().join("first-fallback.ttf");
+    let second = temp.path().join("second-fallback.ttf");
+    std::fs::write(&first, b"not a real font").expect("write first");
+    std::fs::write(&second, b"not a real font").expect("write second");
+    let first_text = first.display().to_string();
+    let second_text = second.display().to_string();
+
+    // A pasted multi-line value collapses to the first font at the save boundary.
+    runtime.update_settings_appearance_backup_font(&format!("{first_text}\n{second_text}"));
+    let saved = runtime.save_settings_appearance().expect("save appearance");
+    assert_eq!(saved.settings_appearance_backup_font_text, first_text);
+
+    let persisted = ConfigStore::new(temp.path())
+        .load_or_recover()
+        .expect("reload")
+        .document
+        .terminal;
+    assert_eq!(persisted.backup_font.as_deref(), Some(first_text.as_str()));
+    let toml = std::fs::read_to_string(ConfigStore::new(temp.path()).config_file()).expect("read");
+    assert!(toml.contains("backup_font ="));
+    assert!(!toml.contains("fallback_fonts"));
+
+    // The picker replaces the previous value; Clear empties the field.
+    runtime.set_settings_appearance_backup_font(&second_text);
+    assert_eq!(runtime.settings_appearance.backup_font_text, second_text);
+    let cleared = runtime.clear_settings_appearance_backup_font();
+    assert_eq!(cleared.settings_appearance_backup_font_text, "");
+}
+
+#[test]
+fn legacy_fallback_fonts_load_as_one_backup_font() {
+    let temp = tempdir().expect("tempdir");
+    let config = r#"
+schema_version = 2
+
+[terminal]
+font_family = "JetBrains Mono"
+font_size = 15
+fallback_fonts = ["/tmp/first.ttf", "/tmp/second.ttf"]
+"#;
+    std::fs::write(temp.path().join("config.toml"), config).expect("write config");
+
+    let runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+
+    assert_eq!(
+        runtime.config_document.terminal.font_family.as_deref(),
+        Some("JetBrains Mono")
+    );
+    assert_eq!(runtime.config_document.terminal.font_size, Some(15));
+    assert_eq!(
+        runtime.config_document.terminal.backup_font.as_deref(),
+        Some("/tmp/first.ttf")
+    );
+    // Startup persists the migrated single-value form (one-shot warning).
+    let toml = std::fs::read_to_string(temp.path().join("config.toml")).expect("read config");
+    assert!(toml.contains("backup_font = \"/tmp/first.ttf\""));
+    assert!(!toml.contains("fallback_fonts"));
 }
 
 #[test]

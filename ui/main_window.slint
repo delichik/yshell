@@ -78,7 +78,6 @@ export component MainWindow inherits Window {
     in-out property <string> editor_port_text: "22";
     in-out property <string> editor_username_text: "";
     in-out property <string> editor_auth_method_text: "agent";
-    in-out property <string> editor_host_key_policy_text: "strict";
     in-out property <string> editor_password_text: "";
     in-out property <string> editor_key_path_text: "";
     in-out property <string> editor_passphrase_text: "";
@@ -202,7 +201,6 @@ export component MainWindow inherits Window {
     in-out property <bool> host_key_prompt_visible: false;
     in-out property <string> host_key_prompt_text: "";
     in-out property <string> host_key_prompt_mode_text: "";
-    in-out property <string> host_key_prompt_confirmation_text: "";
     // A35：主机密钥弹窗的拆分字段（WS-D 投影 → WS-C 的 HostKeyDialog 渲染）。
     // 全部 `in-out`（与既有 host_key_prompt_* 一致），Rust 未投影时保持空串，
     // 弹窗回退到上面的一体化 `host_key_prompt_text`。
@@ -926,8 +924,6 @@ export component MainWindow inherits Window {
     callback cancel_host_key_prompt();
     callback trust_host_key_once();
     callback trust_host_key_and_save();
-    callback update_host_key_replace_confirmation(string);
-    callback replace_host_key_and_connect();
     callback start_new_saved_session_editor();
     // A27（D12）：文件夹右键 "New Session Here"（bootstrap 由 WS-D Part 2 接线）。
     callback start_new_saved_session_editor_in_folder(string);
@@ -962,9 +958,6 @@ export component MainWindow inherits Window {
     callback set_editor_auth_method_password();
     callback set_editor_auth_method_keyboard_interactive();
     callback set_editor_auth_method_private_key();
-    callback set_editor_host_key_policy_strict();
-    callback set_editor_host_key_policy_trust_on_first_use();
-    callback set_editor_host_key_policy_accept_any_for_testing();
     callback update_editor_password(string);
     callback update_editor_key_path(string);
     callback update_editor_passphrase(string);
@@ -2170,12 +2163,10 @@ export component MainWindow inherits Window {
             }
 
             // --- 主机密钥确认：已改为模态弹窗 HostKeyDialog（见文件末尾）------
-            // 旧的内嵌 InfoBar 横幅整块移除：属性/回调（host_key_prompt_visible、
-            // host_key_prompt_text、host_key_prompt_mode_text、
-            // host_key_prompt_confirmation_text、cancel_host_key_prompt、
-            // trust_host_key_once、trust_host_key_and_save、
-            // replace_host_key_and_connect、update_host_key_replace_confirmation）
-            // 全部保留，由 HostKeyDialog 复用。
+            // 旧的内嵌 InfoBar 横幅整块移除：host_key_prompt_* 属性与
+            // cancel_host_key_prompt / trust_host_key_once / trust_host_key_and_save
+            // 回调由 HostKeyDialog 复用；SSH-3 起两种模式都只有三个动作，
+            // 不再有 REPLACE 确认词属性/回调。
 
             // --- N3：面板停靠容器（左右面板栈 + 工作区槽；几何全部来自 Rust）-----
             // 面板框绝对定位、内容常驻；中间 `@children` 槽放 TerminalWorkspace。
@@ -2962,7 +2953,6 @@ export component MainWindow inherits Window {
         port-text <=> root.editor_port_text;
         username-text <=> root.editor_username_text;
         auth-method-text: root.editor_auth_method_text;
-        host-key-policy-text: root.editor_host_key_policy_text;
         password-text <=> root.editor_password_text;
         key-path-text <=> root.editor_key_path_text;
         passphrase-text <=> root.editor_passphrase_text;
@@ -3008,9 +2998,6 @@ export component MainWindow inherits Window {
         set-auth-method-password() => { root.set_editor_auth_method_password(); }
         set-auth-method-keyboard-interactive() => { root.set_editor_auth_method_keyboard_interactive(); }
         set-auth-method-private-key() => { root.set_editor_auth_method_private_key(); }
-        set-host-key-policy-strict() => { root.set_editor_host_key_policy_strict(); }
-        set-host-key-policy-trust-on-first-use() => { root.set_editor_host_key_policy_trust_on_first_use(); }
-        set-host-key-policy-accept-any-for-testing() => { root.set_editor_host_key_policy_accept_any_for_testing(); }
         update-password(value) => { root.update_editor_password(value); }
         update-key-path(value) => { root.update_editor_key_path(value); }
         update-passphrase(value) => { root.update_editor_passphrase(value); }
@@ -3276,7 +3263,7 @@ export component MainWindow inherits Window {
 
     // 主机密钥确认：与其它模态弹窗同一层，放在最后以保证绘制在最上层
     // （安全确认不应被其它模态遮挡）。属性/回调沿用 main_window 的
-    // host_key_prompt_* API，Rust 侧无需改动；`open` 与其它弹窗命名一致。
+    // host_key_prompt_* API；SSH-3 起两种模式都只有三个动作。
     host_key_dialog := HostKeyDialog {
         open: root.host_key_prompt_visible;
         prompt-text: root.host_key_prompt_text;
@@ -3288,7 +3275,6 @@ export component MainWindow inherits Window {
         fingerprint-text: root.host_key_prompt_fingerprint_text;
         expected-algorithm-text: root.host_key_prompt_expected_algorithm_text;
         expected-fingerprint-text: root.host_key_prompt_expected_fingerprint_text;
-        confirmation-text <=> root.host_key_prompt_confirmation_text;
         cancel() => {
             root.cancel_host_key_prompt();
             root.focus-top-dialog();
@@ -3301,11 +3287,6 @@ export component MainWindow inherits Window {
             root.trust_host_key_and_save();
             root.focus-top-dialog();
         }
-        replace-key() => {
-            root.replace_host_key_and_connect();
-            root.focus-top-dialog();
-        }
-        confirmation-edited(value) => { root.update_host_key_replace_confirmation(value); }
         dismissed() => {
             root.cancel_host_key_prompt();
             root.focus-top-dialog();

@@ -246,8 +246,6 @@ impl AppRuntime {
             editor_port_text: self.editor.port_text.clone(),
             editor_username_text: self.editor.username.clone(),
             editor_auth_method_text: self.editor.auth_method.label().to_owned(),
-            editor_host_key_policy_text: config_host_key_policy_label(self.editor.host_key_policy)
-                .to_owned(),
             editor_password_text: self.editor.password.clone(),
             editor_key_path_text: self.editor.key_path.clone(),
             editor_passphrase_text: self.editor.passphrase.clone(),
@@ -311,9 +309,9 @@ impl AppRuntime {
             settings_appearance_font_options: self.settings_appearance.font_options(),
             settings_appearance_font_index: self.settings_appearance.font_index(),
             settings_appearance_font_size_text: self.settings_appearance.font_size_text.clone(),
-            settings_appearance_fallback_fonts_text: self
+            settings_appearance_backup_font_text: self
                 .settings_appearance
-                .fallback_fonts_text
+                .backup_font_text
                 .clone(),
             settings_appearance_status_text,
             settings_appearance_schemes,
@@ -401,7 +399,6 @@ impl AppRuntime {
             host_key_prompt_expected_algorithm_text: host_key_prompt.expected_algorithm,
             host_key_prompt_expected_fingerprint_text: host_key_prompt.expected_fingerprint,
             host_key_prompt_mode_text: self.host_key_prompt_mode_text().to_owned(),
-            host_key_prompt_confirmation_text: self.host_key_replace_confirmation.clone(),
             password_prompt_visible: self.pending_password_prompt.is_some(),
             password_prompt_host_text: self.password_prompt_host_text(),
             tab_name_text,
@@ -989,7 +986,7 @@ impl AppRuntime {
         };
         match &prompt.expected {
             Some(expected) => format!(
-                "Host key changed for {}@{}:{}.\nKnown hosts: {}\nExpected: {} {}\nPresented: {} {}\nType REPLACE to enable replacement.",
+                "Host key changed for {}@{}:{}.\nKnown hosts: {}\nExpected: {} {}\nPresented: {} {}\nChoose Trust Once or Replace and Trust.",
                 prompt.username,
                 prompt.host,
                 prompt.port,
@@ -1416,7 +1413,6 @@ pub struct AppProjection {
     pub editor_port_text: String,
     pub editor_username_text: String,
     pub editor_auth_method_text: String,
-    pub editor_host_key_policy_text: String,
     pub editor_password_text: String,
     pub editor_key_path_text: String,
     pub editor_passphrase_text: String,
@@ -1476,7 +1472,8 @@ pub struct AppProjection {
     pub settings_appearance_font_options: Vec<String>,
     pub settings_appearance_font_index: i32,
     pub settings_appearance_font_size_text: String,
-    pub settings_appearance_fallback_fonts_text: String,
+    /// Single backup font path shown in Settings (TERM-5).
+    pub settings_appearance_backup_font_text: String,
     pub settings_appearance_status_text: String,
     pub settings_appearance_schemes: Vec<theme::ThemeSchemeOption>,
     pub settings_appearance_palette_swatches: Vec<[u8; 3]>,
@@ -1572,7 +1569,6 @@ pub struct AppProjection {
     pub host_key_prompt_expected_algorithm_text: String,
     pub host_key_prompt_expected_fingerprint_text: String,
     pub host_key_prompt_mode_text: String,
-    pub host_key_prompt_confirmation_text: String,
     /// W5：连接需要密码而密钥库无法提供时挂起输入（仅本次连接使用，不落盘）。
     pub password_prompt_visible: bool,
     /// 密码弹窗文案里的 `user@host:port`（由挂起目标组装）。

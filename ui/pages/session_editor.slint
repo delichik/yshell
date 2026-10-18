@@ -94,7 +94,6 @@ export component SessionEditor inherits Rectangle {
     in-out property <string> port-text: "22";
     in-out property <string> username-text: "";
     in property <string> auth-method-text: "agent";
-    in property <string> host-key-policy-text: "strict";
     in-out property <string> password-text: "";
     in-out property <string> key-path-text: "";
     in-out property <string> passphrase-text: "";
@@ -134,9 +133,6 @@ export component SessionEditor inherits Rectangle {
     callback set-auth-method-password();
     callback set-auth-method-keyboard-interactive();
     callback set-auth-method-private-key();
-    callback set-host-key-policy-strict();
-    callback set-host-key-policy-trust-on-first-use();
-    callback set-host-key-policy-accept-any-for-testing();
     callback update-password(string);
     callback update-key-path(string);
     callback update-passphrase(string);
@@ -418,14 +414,8 @@ export component SessionEditor inherits Rectangle {
                                                 WinButton { text: @tr("Key"); accent: root.auth-method-text == "private_key"; clicked => { root.set-auth-method-private-key(); } }
                                             }
 
-                                            FormRow {
-                                                label: @tr("Host key");
-
-                                                WinButton { text: @tr("Strict"); accent: root.host-key-policy-text == "strict"; clicked => { root.set-host-key-policy-strict(); } }
-                                                WinButton { text: @tr("TOFU"); accent: root.host-key-policy-text == "trust-on-first-use"; clicked => { root.set-host-key-policy-trust-on-first-use(); } }
-                                                WinButton { text: @tr("Accept Any"); accent: root.host-key-policy-text == "accept-any-for-testing"; clicked => { root.set-host-key-policy-accept-any-for-testing(); } }
-                                            }
-
+                                            // 主机密钥策略不在会话编辑器中暴露：所有会话默认走严格
+                                            // known_hosts 校验；首次/变更密钥由主机密钥确认对话框询问。
                                             if root.show-password-auth : FormRow {
                                                 label: @tr("Password");
 

@@ -101,6 +101,9 @@ fn host_key_prompt_split_fields_track_prompt_state() {
         changed.host_key_prompt_expected_fingerprint_text,
         "0011 2233 4455 6677"
     );
+    // SSH-3：变更模式回退正文不再提 REPLACE，而是三个动作里的 Replace and Trust。
+    assert!(changed.host_key_prompt_text.contains("Replace and Trust"));
+    assert!(!changed.host_key_prompt_text.contains("REPLACE"));
 
     // first-trust：expected 侧为空（空值行在弹窗里丝坠佝）。
     runtime

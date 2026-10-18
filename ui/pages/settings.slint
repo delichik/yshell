@@ -41,7 +41,7 @@ component SettingsNavItem inherits Rectangle {
 }
 
 // Appearance 表单的标签 + 控件行（右对齐标签列，消除自由文本时代的错位）。
-// 标签列 128px：比 Theme.form-label-width 略宽，容纳 Foreground / Fallback fonts。
+// 标签列 128px：比 Theme.form-label-width 略宽，容纳 Foreground / Fallback font。
 component AppearanceFieldRow inherits HorizontalLayout {
     in property <string> label: "";
     spacing: Theme.spacing-12;
@@ -696,11 +696,11 @@ export component SettingsDialog inherits Rectangle {
                                             }
 
                                             AppearanceFieldRow {
-                                                label: @tr("Fallback fonts");
+                                                label: @tr("Fallback font");
                                                 WinTextInput {
                                                     horizontal-stretch: 1;
                                                     text <=> root.appearance-fallback-fonts-text;
-                                                    placeholder-text: @tr("One font file per line");
+                                                    placeholder-text: @tr("Font file path");
                                                     edited => { root.update-appearance-fallback-fonts(self.text); }
                                                 }
                                             }
@@ -711,7 +711,7 @@ export component SettingsDialog inherits Rectangle {
                                                 alignment: start;
 
                                                 WinButton {
-                                                    text: @tr("Add Fallback…");
+                                                    text: @tr("Select File…");
                                                     clicked => { root.browse-appearance-fallback-font(); }
                                                 }
                                                 WinButton {

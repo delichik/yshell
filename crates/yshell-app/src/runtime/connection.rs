@@ -71,15 +71,11 @@ impl AppRuntime {
         self.projection()
     }
 
-    pub fn update_host_key_replace_confirmation(&mut self, confirmation: &str) -> AppProjection {
-        self.host_key_replace_confirmation = confirmation.to_owned();
-        self.projection()
-    }
-
     pub fn cancel_host_key_prompt(&mut self) -> AppProjection {
         self.pending_host_key_prompt = None;
-        self.host_key_replace_confirmation.clear();
-        self.status_text = "Canceled host key confirmation. Connection remains blocked.".to_owned();
+        self.status_text =
+            "Canceled host key confirmation. No changes were written and the connection was not started."
+                .to_owned();
         self.projection()
     }
 
@@ -122,90 +118,72 @@ impl AppRuntime {
         self.projection()
     }
 
+    /// 仅本次信任：把呈现的 key 写入内存临时 known_hosts（永不落盘）。
+    ///
+    /// SSH-3：首次信任与变更模式都允许。变更模式下临时表会覆盖持久表的旧条目
+    /// （`effective_ssh_config` 先克隆持久表再 merge 临时表），所以本次连接能通过
+    /// 校验，但重启后仍会再次提示变更。
     pub fn trust_host_key_once(&mut self) -> AppResult<AppProjection> {
         let prompt = self
             .pending_host_key_prompt
             .clone()
             .ok_or_else(|| AppError::new("no host key confirmation is pending"))?;
-        if prompt.mode() != HostKeyPromptMode::FirstTrust {
-            return Err(AppError::new(
-                "trust once is only available for a first-seen host key",
-            ));
-        }
         self.temporary_known_hosts
             .pin(&prompt.host, prompt.port, prompt.presented.clone());
         self.pending_host_key_prompt = None;
-        self.host_key_replace_confirmation.clear();
         if let Some(resumed) = self.resume_password_prompt_after_host_key(&prompt) {
             return resumed;
         }
         self.status_text = format!(
-            "Trusted the presented host key for {}:{} once. Reconnecting.",
+            "Trusted the presented host key for {}:{} for this session only. Reconnecting.",
             prompt.host, prompt.port
         );
         self.reconnect_session_by_key(&prompt.session_key)
     }
 
+    /// 信任并写入 known_hosts（首次信任 = 新增条目；变更 = 替换旧条目）。
+    ///
+    /// SSH-3：变更模式下"信任"在安全语义上就是替换已保存的 key，因此这里用
+    /// `persistent_known_hosts.replace(...)`；首次信任仍用 `pin(...)`。保存成功后才
+    /// 关闭弹窗并重连；同时清掉同主机的临时 Trust Once 条目，避免它继续覆盖刚保存的
+    /// 条目。
     pub fn trust_host_key_and_save(&mut self) -> AppResult<AppProjection> {
         let prompt = self
             .pending_host_key_prompt
             .clone()
             .ok_or_else(|| AppError::new("no host key confirmation is pending"))?;
-        if prompt.mode() != HostKeyPromptMode::FirstTrust {
-            return Err(AppError::new(
-                "trust and save is only available for a first-seen host key",
-            ));
+        let changed = prompt.mode() == HostKeyPromptMode::Changed;
+        if changed {
+            self.persistent_known_hosts
+                .replace(&prompt.host, prompt.port, prompt.presented.clone());
+        } else {
+            self.persistent_known_hosts
+                .pin(&prompt.host, prompt.port, prompt.presented.clone());
         }
-        self.persistent_known_hosts
-            .pin(&prompt.host, prompt.port, prompt.presented.clone());
         self.config_store
             .save_known_hosts(&self.persistent_known_hosts)
             .map_err(AppError::from_error)?;
+        // 持久化成功后，持久表是该主机的权威来源；移除可能残留的临时 Trust Once 条目。
+        let _ = self.temporary_known_hosts.remove(&prompt.host, prompt.port);
         self.pending_host_key_prompt = None;
-        self.host_key_replace_confirmation.clear();
         if let Some(resumed) = self.resume_password_prompt_after_host_key(&prompt) {
             return resumed;
         }
-        self.status_text = format!(
-            "Saved the presented host key for {}:{} to `{}` and reconnecting.",
-            prompt.host,
-            prompt.port,
-            prompt.known_hosts_path.display()
-        );
-        self.reconnect_session_by_key(&prompt.session_key)
-    }
-
-    pub fn replace_host_key_and_connect(&mut self) -> AppResult<AppProjection> {
-        let prompt = self
-            .pending_host_key_prompt
-            .clone()
-            .ok_or_else(|| AppError::new("no host key confirmation is pending"))?;
-        if prompt.mode() != HostKeyPromptMode::Changed {
-            return Err(AppError::new(
-                "replace key is only available for a changed host key",
-            ));
-        }
-        if self.host_key_replace_confirmation.trim() != "REPLACE" {
-            return Err(AppError::new(
-                "type REPLACE before replacing the stored host key",
-            ));
-        }
-        self.persistent_known_hosts
-            .replace(&prompt.host, prompt.port, prompt.presented.clone());
-        self.config_store
-            .save_known_hosts(&self.persistent_known_hosts)
-            .map_err(AppError::from_error)?;
-        self.pending_host_key_prompt = None;
-        self.host_key_replace_confirmation.clear();
-        if let Some(resumed) = self.resume_password_prompt_after_host_key(&prompt) {
-            return resumed;
-        }
-        self.status_text = format!(
-            "Replaced the stored host key for {}:{} in `{}` and reconnecting.",
-            prompt.host,
-            prompt.port,
-            prompt.known_hosts_path.display()
-        );
+        self.status_text = if changed {
+            format!(
+                "Replaced the stored host key for {}:{} in `{}` and reconnecting.",
+                prompt.host,
+                prompt.port,
+                prompt.known_hosts_path.display()
+            )
+        } else {
+            format!(
+                "Saved the presented host key for {}:{} to `{}` and reconnecting.",
+                prompt.host,
+                prompt.port,
+                prompt.known_hosts_path.display()
+            )
+        };
         self.reconnect_session_by_key(&prompt.session_key)
     }
 
@@ -410,7 +388,10 @@ impl AppRuntime {
                 self.pending_auth_prompt = None;
             }
         }
-        let sftp_status = self.sync_sftp_lifecycle_for_session(session_key, shell_connected);
+        // Do not eagerly list SFTP on (re)connect: the synchronous test shell has no
+        // SSH/SFTP backend, and a real list can block the UI thread. Mark the
+        // lifecycle ready and let the SFTP panel request its listing on demand.
+        let sftp_status = self.sync_sftp_lifecycle_for_session(session_key, false);
         let host_text = self
             .sessions
             .get(session_key)
@@ -759,7 +740,6 @@ impl AppRuntime {
             },
         };
         self.pending_host_key_prompt = Some(prompt);
-        self.host_key_replace_confirmation.clear();
         true
     }
 

@@ -47,7 +47,6 @@ pub(crate) use split_tree::{
 #[cfg(test)]
 mod tests;
 
-pub(crate) use auth::config_host_key_policy_label;
 pub(crate) use auth::config_host_key_policy_to_runtime;
 pub(crate) use auth::runtime_host_key_policy_to_config;
 // N1 Phase 2：本地栏 / 队列抽屉 / 冲突策略的运行时接口。
@@ -160,16 +159,21 @@ impl AppRuntime {
         secret_store_kind: SecretStoreKind,
     ) -> AppResult<Self> {
         let config_store = ConfigStore::new(config_dir.clone());
-        let LoadOutcome {
+        let (LoadOutcome {
             mut document,
             recovered_from_backup,
-        } = config_store
-            .load_or_recover()
+        }, load_warnings) = config_store
+            .load_or_recover_with_warnings()
             .map_err(AppError::from_error)?;
         let (mut theme_catalog, _theme_warnings) = ThemeCatalog::load(&config_dir);
-        let migration_warnings =
-            theme::migrate_inline_color_overrides(&mut document, &mut theme_catalog);
+        let mut migration_warnings = load_warnings;
+        migration_warnings.extend(theme::migrate_inline_color_overrides(
+            &mut document,
+            &mut theme_catalog,
+        ));
         if !migration_warnings.is_empty() {
+            // Persist migrations/sanitizing (e.g. legacy fallback-font lists →
+            // single backup font) so the warning is not reported on every start.
             let _ = config_store.save(&document);
         }
         let terminal = document.terminal.clone();
@@ -274,7 +278,6 @@ impl AppRuntime {
             known_hosts_selected_key: None,
             known_hosts_clear_confirmation: String::new(),
             pending_host_key_prompt: None,
-            host_key_replace_confirmation: String::new(),
             pending_password_prompt: None,
             editor_modal_visible: false,
             editor_section: EditorSection::General,
@@ -555,7 +558,6 @@ pub struct AppRuntime {
     pub(crate) known_hosts_selected_key: Option<String>,
     pub(crate) known_hosts_clear_confirmation: String,
     pub(crate) pending_host_key_prompt: Option<PendingHostKeyPrompt>,
-    pub(crate) host_key_replace_confirmation: String,
     /// W5：密码型认证缺少密钥时的挂起目标（仅内存；重试连接用）。
     pub(crate) pending_password_prompt: Option<PendingPasswordPrompt>,
     pub(crate) editor_modal_visible: bool,

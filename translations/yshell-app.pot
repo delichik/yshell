@@ -628,81 +628,72 @@ msgctxt "ConfirmDialog"
 msgid "Don't ask again"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:113
+#: ui/components/host_key_dialog.slint:110
 msgctxt "HostKeyDialog"
 msgid "Host Key Confirmation"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:123
+#: ui/components/host_key_dialog.slint:120
 msgctxt "HostKeyDialog"
 msgid "Close"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:151
+#: ui/components/host_key_dialog.slint:148
 msgctxt "HostKeyDialog"
 msgid "Host key changed for {0}."
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:152
+#: ui/components/host_key_dialog.slint:149
 msgctxt "HostKeyDialog"
 msgid "First-time host key for {0}."
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:156
+#: ui/components/host_key_dialog.slint:153
 msgctxt "HostKeyDialog"
 msgid "Known hosts: {0}"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:161
+#: ui/components/host_key_dialog.slint:158
 msgctxt "HostKeyDialog"
 msgid "Expected: {0} {1}"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:165
+#: ui/components/host_key_dialog.slint:162
 msgctxt "HostKeyDialog"
 msgid "Presented: {0} {1}"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:169
-msgctxt "HostKeyDialog"
-msgid "Type REPLACE to enable replacement."
-msgstr ""
-
-#: ui/components/host_key_dialog.slint:173
+#: ui/components/host_key_dialog.slint:166
 msgctxt "HostKeyDialog"
 msgid "Choose Trust Once or Trust and Save."
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:197
+#: ui/components/host_key_dialog.slint:190
 msgctxt "HostKeyDialog"
 msgid ""
 "The presented key does not match the stored key. This may indicate a man-in-"
-"the-middle attack; replace it only if you verified the new key elsewhere."
+"the-middle attack. Replace and Trust will overwrite the stored key; do so "
+"only if you verified the new key elsewhere."
 msgstr ""
 
 #: ui/components/host_key_dialog.slint:203
 msgctxt "HostKeyDialog"
-msgid "Type REPLACE"
+msgid "Cancel Connection"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:214
-msgctxt "HostKeyDialog"
-msgid "Cancel"
-msgstr ""
-
-#: ui/components/host_key_dialog.slint:219
+#: ui/components/host_key_dialog.slint:209
 msgctxt "HostKeyDialog"
 msgid "Trust Once"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:224
+#: ui/components/host_key_dialog.slint:217
 msgctxt "HostKeyDialog"
-msgid "Trust and Save"
+msgid "Replace and Trust"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:230
+#: ui/components/host_key_dialog.slint:218
 msgctxt "HostKeyDialog"
-msgid "Replace Key"
+msgid "Trust and Save"
 msgstr ""
 
 #: ui/components/local_pane.slint:112
@@ -2876,14 +2867,19 @@ msgctxt "TerminalAppearanceDialog"
 msgid "Logical pixels (6-72)"
 msgstr ""
 
-#: ui/pages/settings.slint:704
+#: ui/pages/settings.slint:699
 msgctxt "TerminalAppearanceDialog"
-msgid "One font file per line"
+msgid "Fallback font"
 msgstr ""
 
-#: ui/pages/settings.slint:708
+#: ui/pages/settings.slint:703
 msgctxt "TerminalAppearanceDialog"
-msgid "Add Fallback…"
+msgid "Font file path"
+msgstr ""
+
+#: ui/pages/settings.slint:714
+msgctxt "TerminalAppearanceDialog"
+msgid "Select File…"
 msgstr ""
 
 #: ui/pages/settings.slint:712
@@ -3648,9 +3644,9 @@ msgctxt "MainWindow"
 msgid "Font size"
 msgstr ""
 
-#: ui/text_formats.slint:538
+#: ui/text_formats.slint:552
 msgctxt "MainWindow"
-msgid "Fallback fonts"
+msgid "Fallback font"
 msgstr ""
 
 #: ui/text_formats.slint:541
@@ -3688,9 +3684,9 @@ msgctxt "MainWindow"
 msgid "Logical pixels"
 msgstr ""
 
-#: ui/text_formats.slint:558
+#: ui/text_formats.slint:572
 msgctxt "MainWindow"
-msgid "Font files tried in order before the bundled CJK face"
+msgid "One font file tried before the bundled CJK face"
 msgstr ""
 
 #: ui/text_formats.slint:559

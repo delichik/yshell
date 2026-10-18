@@ -6,8 +6,8 @@ use crate::{
     session_runtime::SessionSource,
 };
 use yshell_config::{
-    AuthMethod as ConfigAuthMethod, HostKeyPolicy as ConfigHostKeyPolicy, ProxyProfile,
-    ProxyProtocol, ResolvedSessionProfile, TunnelForward, TunnelForwardKind,
+    AuthMethod as ConfigAuthMethod, ProxyProfile, ProxyProtocol, ResolvedSessionProfile,
+    TunnelForward, TunnelForwardKind,
 };
 use yshell_ssh::{
     AuthMethod, ForwardingKind, HostKeyPolicy, ProxyConfig, SshConnectionConfig, TunnelConfig,
@@ -46,10 +46,6 @@ impl AppRuntime {
             port_text: resolved.session.port.to_string(),
             username: resolved.session.username.clone().unwrap_or_default(),
             auth_method: EditorAuthMethod::Agent,
-            host_key_policy: resolved
-                .session
-                .host_key_policy
-                .unwrap_or(ConfigHostKeyPolicy::Strict),
             password: String::new(),
             key_path: String::new(),
             passphrase: String::new(),
@@ -248,7 +244,11 @@ impl AppRuntime {
             }
         };
         let mut config = SshConnectionConfig::new(host.to_owned(), port, auth);
-        config.host_key_policy = config_host_key_policy_to_runtime(self.editor.host_key_policy);
+        // 会话编辑器不再选择主机密钥策略：`SshConnectionConfig::new` 的默认值即
+        // Strict（known_hosts 严格校验）；测试/自动化的 accept-any 覆盖由
+        // `effective_ssh_config` 的 `host_key_policy_override` 统一施加。
+        // 旧配置里的 `host_key_policy` 仅在按已保存会话解析时生效（见上方
+        // `build_ssh_config_from_resolved_session_inner`），编辑器草稿不携带它。
         config.proxy = self.build_proxy_config_from_editor()?;
         config.tunnels = self
             .editor

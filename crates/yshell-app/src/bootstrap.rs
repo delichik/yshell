@@ -2676,36 +2676,6 @@ pub(crate) fn wire_callbacks(
         }
     });
 
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_update_host_key_replace_confirmation(move |value| {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref
-                .borrow_mut()
-                .update_host_key_replace_confirmation(&value);
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_replace_host_key_and_connect(move || {
-        let Some(window) = weak.upgrade() else {
-            return;
-        };
-        let result = runtime_ref.borrow_mut().replace_host_key_and_connect();
-        match result {
-            Ok(projection) => {
-                apply_projection(&window, &projection);
-                surface.refresh(&window);
-            }
-            Err(error) => set_error_status(&window, "Host key operation failed.", &error),
-        }
-    });
-
     // --- W5：连接密码弹窗回调 ------------------------------------------------
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
@@ -3748,10 +3718,10 @@ pub(crate) fn wire_callbacks(
     wire_n4!(
         on_update_settings_appearance_fallback_fonts,
         |runtime, value: SharedString| runtime
-            .update_settings_appearance_fallback_fonts(value.as_ref())
+            .update_settings_appearance_backup_font(value.as_ref())
     );
     wire_n4!(on_clear_settings_appearance_fallbacks, |runtime| runtime
-        .clear_settings_appearance_fallback_fonts());
+        .clear_settings_appearance_backup_font());
     wire_n4!(on_reset_settings_appearance_defaults, |runtime| runtime
         .reset_settings_appearance_defaults());
     wire_n4_result!(
@@ -3845,14 +3815,15 @@ pub(crate) fn wire_callbacks(
             if !file_dialogs_available() {
                 let mut runtime = runtime_ref.borrow_mut();
                 runtime.status_text =
-                    "No display server was found; type the fallback font path instead.".to_owned();
+                    "No display server was found; type the fallback font file path instead."
+                        .to_owned();
                 let projection = runtime.projection();
                 apply_projection(&window, &projection);
                 return;
             }
             spawn_pick_file(
                 dialog_tx.clone(),
-                DialogKind::TerminalFontFallback,
+                DialogKind::TerminalFontBackup,
                 "Select a fallback font file",
             );
         });
@@ -3901,43 +3872,6 @@ pub(crate) fn wire_callbacks(
             let projection = runtime_ref
                 .borrow_mut()
                 .set_editor_auth_method_private_key();
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_set_editor_host_key_policy_strict(move || {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref.borrow_mut().set_editor_host_key_policy_strict();
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_set_editor_host_key_policy_trust_on_first_use(move || {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref
-                .borrow_mut()
-                .set_editor_host_key_policy_trust_on_first_use();
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_set_editor_host_key_policy_accept_any_for_testing(move || {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref
-                .borrow_mut()
-                .set_editor_host_key_policy_accept_any_for_testing();
             apply_projection(&window, &projection);
             surface.refresh(&window);
         }
@@ -4559,8 +4493,8 @@ pub(crate) enum DialogKind {
     SftpDownloadFolder,
     /// N5：终端外观的主字体文件（pick_file）。
     TerminalFontPrimary,
-    /// N5：终端外观的备用字体文件（pick_file）。
-    TerminalFontFallback,
+    /// N5：终端外观的备用字体文件（pick_file，单值，选中即替换）。
+    TerminalFontBackup,
 }
 
 /// rfd 的 GTK 后端是单个全局线程：并发/重复调用会在同一 GTK 主循环上嵌套对话框。
@@ -4984,8 +4918,8 @@ pub(crate) fn apply_dialog_outcome(
             DialogKind::TerminalFontPrimary => {
                 runtime.update_settings_appearance_font_family(&path)
             }
-            DialogKind::TerminalFontFallback => {
-                runtime.add_settings_appearance_fallback_font(&path)
+            DialogKind::TerminalFontBackup => {
+                runtime.set_settings_appearance_backup_font(&path)
             }
         },
         FileDialogOutcome::Saved { kind, path, error } => {
@@ -6129,7 +6063,6 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_editor_port_text(projection.editor_port_text.clone().into());
     window.set_editor_username_text(projection.editor_username_text.clone().into());
     window.set_editor_auth_method_text(projection.editor_auth_method_text.clone().into());
-    window.set_editor_host_key_policy_text(projection.editor_host_key_policy_text.clone().into());
     window.set_editor_password_text(projection.editor_password_text.clone().into());
     window.set_editor_key_path_text(projection.editor_key_path_text.clone().into());
     window.set_editor_passphrase_text(projection.editor_passphrase_text.clone().into());
@@ -6277,7 +6210,7 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     );
     window.set_settings_appearance_fallback_fonts_text(
         projection
-            .settings_appearance_fallback_fonts_text
+            .settings_appearance_backup_font_text
             .clone()
             .into(),
     );
@@ -6413,9 +6346,6 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
             .host_key_prompt_expected_fingerprint_text
             .clone()
             .into(),
-    );
-    window.set_host_key_prompt_confirmation_text(
-        projection.host_key_prompt_confirmation_text.clone().into(),
     );
     // W5：密码弹窗（仅本次连接使用）；关闭后清空输入，避免残留上一次的密码。
     window.set_password_prompt_visible(projection.password_prompt_visible);

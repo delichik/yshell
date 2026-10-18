@@ -8,7 +8,7 @@ use yshell_config::{
     SessionProfile, TunnelForward, TunnelForwardKind, TunnelProfile,
 };
 use yshell_secret::{FakeKeychain, Keychain, SecretRef, SecretString};
-use yshell_ssh::{ForwardingKind, ProxyConfig};
+use yshell_ssh::{ForwardingKind, HostKeyPolicy, ProxyConfig};
 
 use super::*;
 
@@ -33,6 +33,8 @@ fn selected_saved_session_can_be_loaded_into_editor() {
     .into_session_profile("saved-editor");
     profile.name = "Editor Session".to_owned();
     profile.auth_profile_id = Some("auth-agent".to_owned());
+    // 兼容性：旧配置/导入的会话仍可携带 `host_key_policy`；编辑器不再读取/暴露它，
+    // 但加载旧会话不得报错（策略只在连接解析时生效）。
     profile.host_key_policy = Some(ConfigHostKeyPolicy::AcceptAnyForTesting);
     let mut folder = FolderProfile::new("folder-ops", "Ops");
     let mut nested = FolderProfile::new("folder-prod", "Prod");
@@ -51,10 +53,6 @@ fn selected_saved_session_can_be_loaded_into_editor() {
     assert_eq!(runtime.editor.port_text, "2202");
     assert_eq!(runtime.editor.username, "ops");
     assert_eq!(runtime.editor.auth_method, EditorAuthMethod::Agent);
-    assert_eq!(
-        runtime.editor.host_key_policy,
-        ConfigHostKeyPolicy::AcceptAnyForTesting
-    );
     assert_eq!(runtime.editor.target_folder_id, "folder-prod");
     let (folder_label, folder_id, folder_known) = runtime.editor_folder_parts();
     assert!(folder_label.contains("Ops / Prod"));
@@ -334,7 +332,6 @@ fn editor_can_add_tunnel_forward_and_persist_it() {
     let _ = runtime.update_editor_name("Tunnel Session");
     let _ = runtime.update_editor_host("tunnel.example.test");
     let _ = runtime.update_editor_username("ops");
-    let _ = runtime.set_editor_host_key_policy_trust_on_first_use();
     let _ = runtime.set_editor_tunnel_kind_local();
     let _ = runtime.update_editor_tunnel_bind_host("127.0.0.1");
     let _ = runtime.update_editor_tunnel_bind_port("15432");
@@ -360,14 +357,39 @@ fn editor_can_add_tunnel_forward_and_persist_it() {
         .expect("saved profile");
     let tunnel = profile.tunnel.expect("saved tunnel profile");
     assert_eq!(tunnel.forwards.len(), 1);
-    assert_eq!(
-        profile.host_key_policy,
-        Some(ConfigHostKeyPolicy::TrustOnFirstUse)
+    // 编辑器不再写主机密钥策略：保存后保持为空，运行时解析回退到 Strict。
+    assert!(
+        profile.host_key_policy.is_none(),
+        "editor must not persist a host key policy"
     );
     assert_eq!(tunnel.forwards[0].kind, TunnelForwardKind::Local);
     assert_eq!(tunnel.forwards[0].bind_port, 15432);
     assert_eq!(tunnel.forwards[0].target_host, "db.internal");
     assert_eq!(tunnel.forwards[0].target_port, 5432);
+}
+
+#[test]
+fn editor_built_ssh_config_uses_strict_policy_unless_testing_override() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    let _ = runtime.start_new_saved_session_editor();
+    let _ = runtime.update_editor_host("strict-default.example.test");
+
+    // 编辑器不再携带策略：默认解析为严格 known_hosts 校验。
+    let config = runtime
+        .build_ssh_config_from_editor()
+        .expect("build editor ssh config");
+    assert_eq!(config.host_key_policy, HostKeyPolicy::Strict);
+
+    // 受控测试路径：accept-any 只能通过显式 override 注入，不是用户选项。
+    runtime.set_host_key_policy_override_for_testing(HostKeyPolicy::AcceptAnyForTesting);
+    let overridden = runtime
+        .build_ssh_config_from_editor()
+        .expect("build editor ssh config with override");
+    assert_eq!(
+        overridden.host_key_policy,
+        HostKeyPolicy::AcceptAnyForTesting
+    );
 }
 
 #[test]

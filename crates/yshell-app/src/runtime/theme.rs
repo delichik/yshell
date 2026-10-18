@@ -426,13 +426,12 @@ pub(crate) fn resolve_font(profile: &TerminalProfile) -> (FontSelection, Vec<Str
         Some(name) => primary_font_from_name(name),
     };
     let fallback_files = profile
-        .fallback_fonts
-        .clone()
-        .unwrap_or_default()
-        .into_iter()
-        .map(|path| path.trim().to_owned())
+        .backup_font
+        .as_deref()
+        .map(str::trim)
         .filter(|path| !path.is_empty())
         .map(PathBuf::from)
+        .into_iter()
         .collect();
     let font = FontSelection {
         primary,
@@ -444,6 +443,17 @@ pub(crate) fn resolve_font(profile: &TerminalProfile) -> (FontSelection, Vec<Str
         .map(|error| error.face_name().to_owned())
         .collect();
     (font, rejected)
+}
+
+/// Normalizes user/legacy font text into the single backup font value.
+///
+/// The Settings field is single-line, but pasted or programmatic text may still
+/// carry several lines; only the first non-empty line is kept (TERM-5).
+pub(crate) fn normalize_backup_font(text: &str) -> Option<String> {
+    text.lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(str::to_owned)
 }
 
 /// Logical font size in pixels; missing/zero falls back to the default.
@@ -622,7 +632,7 @@ pub(crate) struct ThemeDraft {
     pub(crate) color_scheme: ThemeFieldDraft,
     pub(crate) font_family: ThemeFieldDraft,
     pub(crate) font_size: ThemeFieldDraft,
-    pub(crate) fallback_fonts: ThemeFieldDraft,
+    pub(crate) backup_font: ThemeFieldDraft,
 }
 
 impl ThemeDraft {
@@ -662,13 +672,9 @@ impl ThemeDraft {
                 own.font_size.map(|size| size.to_string()),
                 resolve_font_size(resolved.font_size).round().to_string(),
             ),
-            fallback_fonts: merge(
-                own.fallback_fonts.map(|paths| paths.join("\n")),
-                resolved
-                    .fallback_fonts
-                    .clone()
-                    .unwrap_or_default()
-                    .join("\n"),
+            backup_font: merge(
+                own.backup_font,
+                resolved.backup_font.clone().unwrap_or_default(),
             ),
         }
     }
@@ -706,12 +712,8 @@ impl ThemeDraft {
             resolve_font_size(resolved.font_size).round().to_string(),
         );
         update(
-            &mut self.fallback_fonts,
-            resolved
-                .fallback_fonts
-                .clone()
-                .unwrap_or_default()
-                .join("\n"),
+            &mut self.backup_font,
+            resolved.backup_font.clone().unwrap_or_default(),
         );
     }
 
@@ -721,7 +723,7 @@ impl ThemeDraft {
             &self.color_scheme,
             &self.font_family,
             &self.font_size,
-            &self.fallback_fonts,
+            &self.backup_font,
         ]
         .into_iter()
         .any(|field| field.explicit)
@@ -733,7 +735,7 @@ impl ThemeDraft {
             KEY_COLOR_SCHEME => Some(&mut self.color_scheme),
             KEY_FONT_FAMILY => Some(&mut self.font_family),
             KEY_FONT_SIZE => Some(&mut self.font_size),
-            KEY_FALLBACK_FONTS => Some(&mut self.fallback_fonts),
+            KEY_BACKUP_FONT => Some(&mut self.backup_font),
             _ => None,
         }
     }
@@ -778,18 +780,10 @@ impl ThemeDraft {
         } else {
             inherited.font_size
         };
-        profile.fallback_fonts = if self.fallback_fonts.explicit {
-            let paths: Vec<String> = self
-                .fallback_fonts
-                .text
-                .lines()
-                .map(str::trim)
-                .filter(|line| !line.is_empty())
-                .map(str::to_owned)
-                .collect();
-            (!paths.is_empty()).then_some(paths)
+        profile.backup_font = if self.backup_font.explicit {
+            normalize_backup_font(&self.backup_font.text)
         } else {
-            inherited.fallback_fonts.clone()
+            inherited.backup_font.clone()
         };
         Ok(())
     }
@@ -892,7 +886,7 @@ impl TriStateFieldData {
 pub(crate) const KEY_COLOR_SCHEME: &str = "appearance.color_scheme";
 pub(crate) const KEY_FONT_FAMILY: &str = "appearance.font_family";
 pub(crate) const KEY_FONT_SIZE: &str = "appearance.font_size";
-pub(crate) const KEY_FALLBACK_FONTS: &str = "appearance.fallback_fonts";
+pub(crate) const KEY_BACKUP_FONT: &str = "appearance.backup_font";
 pub(crate) const KEY_SCROLLBACK_LINES: &str = "terminal.scrollback_lines";
 pub(crate) const KEY_SCROLLBACK_MAX_CELLS: &str = "terminal.scrollback_max_cells";
 pub(crate) const KEY_LOGGING_ENABLED: &str = "logging.enabled";
@@ -924,7 +918,7 @@ pub(crate) struct ThemeSources {
     pub(crate) color_scheme: ThemeSource,
     pub(crate) font_family: ThemeSource,
     pub(crate) font_size: ThemeSource,
-    pub(crate) fallback_fonts: ThemeSource,
+    pub(crate) backup_font: ThemeSource,
     pub(crate) scrollback_lines: ThemeSource,
     pub(crate) scrollback_max_cells: ThemeSource,
     pub(crate) logging_enabled: ThemeSource,
@@ -974,7 +968,7 @@ impl ThemeSources {
             color_scheme: terminal(&|profile| profile.color_scheme.is_some()),
             font_family: terminal(&|profile| profile.font_family.is_some()),
             font_size: terminal(&|profile| profile.font_size.is_some()),
-            fallback_fonts: terminal(&|profile| profile.fallback_fonts.is_some()),
+            backup_font: terminal(&|profile| profile.backup_font.is_some()),
             scrollback_lines: concrete(
                 global.scrollback_lines,
                 builtin.scrollback_lines,
@@ -1010,7 +1004,7 @@ impl ThemeSources {
             KEY_COLOR_SCHEME => &self.color_scheme,
             KEY_FONT_FAMILY => &self.font_family,
             KEY_FONT_SIZE => &self.font_size,
-            KEY_FALLBACK_FONTS => &self.fallback_fonts,
+            KEY_BACKUP_FONT => &self.backup_font,
             KEY_SCROLLBACK_LINES => &self.scrollback_lines,
             KEY_SCROLLBACK_MAX_CELLS => &self.scrollback_max_cells,
             KEY_LOGGING_ENABLED => &self.logging_enabled,
@@ -1087,11 +1081,11 @@ pub(crate) fn theme_field_rows(
             &draft.font_size,
         ),
         row(
-            KEY_FALLBACK_FONTS,
-            "Fallback fonts",
-            "One font file per line, tried in order",
+            KEY_BACKUP_FONT,
+            "Fallback font",
+            "One optional font file tried before the bundled CJK face",
             "text",
-            &draft.fallback_fonts,
+            &draft.backup_font,
         ),
     ]
 }
@@ -1161,7 +1155,8 @@ pub(crate) struct SettingsAppearanceDraft {
     pub(crate) color_scheme: String,
     pub(crate) font_family: String,
     pub(crate) font_size_text: String,
-    pub(crate) fallback_fonts_text: String,
+    /// Single backup font path (TERM-5); the form offers exactly one value.
+    pub(crate) backup_font_text: String,
 }
 
 impl Default for SettingsAppearanceDraft {
@@ -1214,11 +1209,7 @@ impl SettingsAppearanceDraft {
                 PrimaryFont::File(path) => path.display().to_string(),
             },
             font_size_text: resolve_font_size(profile.font_size).round().to_string(),
-            fallback_fonts_text: profile
-                .fallback_fonts
-                .clone()
-                .unwrap_or_default()
-                .join("\n"),
+            backup_font_text: profile.backup_font.clone().unwrap_or_default(),
         }
     }
 
@@ -1230,12 +1221,9 @@ impl SettingsAppearanceDraft {
     pub(crate) fn font_selection(&self) -> FontSelection {
         FontSelection {
             primary: primary_font_from_name(&self.font_family),
-            fallback_files: self
-                .fallback_fonts_text
-                .lines()
-                .map(str::trim)
-                .filter(|line| !line.is_empty())
+            fallback_files: normalize_backup_font(&self.backup_font_text)
                 .map(PathBuf::from)
+                .into_iter()
                 .collect(),
         }
     }
@@ -1285,19 +1273,13 @@ impl SettingsAppearanceDraft {
                 ));
             }
         }
-        let fallback_fonts: Vec<String> = self
-            .fallback_fonts_text
-            .lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-            .map(str::to_owned)
-            .collect();
-        if let Some(missing) = fallback_fonts
-            .iter()
-            .find(|path| !Path::new(path.as_str()).is_file())
+        let backup_font = normalize_backup_font(&self.backup_font_text);
+        if let Some(missing) = backup_font
+            .as_deref()
+            .filter(|path| !Path::new(path).is_file())
         {
             return Err(ThemeFieldError::new(
-                "appearance.fallback_fonts",
+                "appearance.backup_font",
                 format!("font file `{missing}` was not found"),
             ));
         }
@@ -1305,7 +1287,7 @@ impl SettingsAppearanceDraft {
             color_scheme: self.color_scheme.clone(),
             font_family,
             font_size: Some(font_size),
-            fallback_fonts: (!fallback_fonts.is_empty()).then_some(fallback_fonts),
+            backup_font,
         })
     }
 }
@@ -1316,7 +1298,7 @@ pub(crate) struct SettingsAppearanceTheme {
     pub(crate) color_scheme: String,
     pub(crate) font_family: Option<String>,
     pub(crate) font_size: Option<u16>,
-    pub(crate) fallback_fonts: Option<Vec<String>>,
+    pub(crate) backup_font: Option<String>,
 }
 
 /// Draft state while editing a user color theme (or previewing a built-in).
@@ -1592,30 +1574,28 @@ impl AppRuntime {
         self.projection()
     }
 
-    pub fn update_settings_appearance_fallback_fonts(&mut self, value: &str) -> AppProjection {
-        self.settings_appearance.fallback_fonts_text = value.to_owned();
+    /// Updates the single backup font field (free text; one value only).
+    pub fn update_settings_appearance_backup_font(&mut self, value: &str) -> AppProjection {
+        self.settings_appearance.backup_font_text = value.to_owned();
         self.settings_appearance_status = SettingsAppearanceStatus::Hint;
         self.projection()
     }
 
-    /// Appends one picked fallback font file (rfd result).
-    pub fn add_settings_appearance_fallback_font(&mut self, path: &str) -> AppProjection {
+    /// Replaces the backup font with one picked file (rfd result). The picker
+    /// always overwrites the previous value: exactly one font is allowed.
+    pub fn set_settings_appearance_backup_font(&mut self, path: &str) -> AppProjection {
         let path = path.trim();
         if !path.is_empty() {
-            let text = &mut self.settings_appearance.fallback_fonts_text;
-            if !text.lines().any(|line| line.trim() == path) {
-                if !text.is_empty() && !text.ends_with('\n') {
-                    text.push('\n');
-                }
-                text.push_str(path);
-            }
+            self.settings_appearance.backup_font_text = path.to_owned();
         }
         self.settings_appearance_status = SettingsAppearanceStatus::Hint;
         self.projection()
     }
 
-    pub fn clear_settings_appearance_fallback_fonts(&mut self) -> AppProjection {
-        self.settings_appearance.fallback_fonts_text.clear();
+    /// Clears the backup font (the bundled CJK face still serves missing glyphs).
+    pub fn clear_settings_appearance_backup_font(&mut self) -> AppProjection {
+        self.settings_appearance.backup_font_text.clear();
+        self.settings_appearance_status = SettingsAppearanceStatus::Hint;
         self.projection()
     }
 
@@ -1643,7 +1623,10 @@ impl AppRuntime {
         clear_color_overrides(terminal);
         terminal.font_family = theme.font_family;
         terminal.font_size = theme.font_size;
-        terminal.fallback_fonts = theme.fallback_fonts;
+        terminal.backup_font = theme.backup_font;
+        // TERM-5: drop the legacy list if it is still around, so a save always
+        // writes the single-value field only.
+        terminal.legacy_fallback_fonts = None;
         self.config_store
             .save(&self.config_document)
             .map_err(AppError::from_error)?;

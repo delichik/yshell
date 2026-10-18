@@ -3,8 +3,8 @@
 
 use crate::{error::AppError, error::AppResult};
 use yshell_config::{
-    FolderProfile, HostKeyPolicy as ConfigHostKeyPolicy, LoggingProfile, ProxyProtocol,
-    SessionProfile, TerminalProfile, ThemeCatalog, TunnelForward, TunnelForwardKind, TunnelProfile,
+    FolderProfile, LoggingProfile, ProxyProtocol, SessionProfile, TerminalProfile, ThemeCatalog,
+    TunnelForward, TunnelForwardKind, TunnelProfile,
 };
 
 use super::panels::{
@@ -194,21 +194,6 @@ impl AppRuntime {
 
     pub fn set_editor_auth_method_private_key(&mut self) -> AppProjection {
         self.editor.auth_method = EditorAuthMethod::PrivateKey;
-        self.projection()
-    }
-
-    pub fn set_editor_host_key_policy_strict(&mut self) -> AppProjection {
-        self.editor.host_key_policy = ConfigHostKeyPolicy::Strict;
-        self.projection()
-    }
-
-    pub fn set_editor_host_key_policy_trust_on_first_use(&mut self) -> AppProjection {
-        self.editor.host_key_policy = ConfigHostKeyPolicy::TrustOnFirstUse;
-        self.projection()
-    }
-
-    pub fn set_editor_host_key_policy_accept_any_for_testing(&mut self) -> AppProjection {
-        self.editor.host_key_policy = ConfigHostKeyPolicy::AcceptAnyForTesting;
         self.projection()
     }
 
@@ -402,7 +387,11 @@ impl AppRuntime {
         } else {
             Some(self.editor.username.trim().to_owned())
         };
-        profile.host_key_policy = Some(self.editor.host_key_policy);
+        // 主机密钥策略不属于编辑器状态：保存时保持 `SessionProfile::host_key_policy`
+        // 为 None，运行时解析回退到 Strict（known_hosts 严格校验）。
+        // 兼容性：旧配置/导入的会话仍可带 `host_key_policy`（见 `yshell_config`），
+        // 但用编辑器再保存会清掉该字段——这是有意的，Accept Any 不再是用户可选项；
+        // 测试/自动化需要 accept-any 时走 `host_key_policy_override`。
         profile.auth_profile_id = Some(auth_profile_id.clone());
         profile.proxy_profile_id = proxy_profile.as_ref().map(|_| proxy_profile_id.clone());
         profile.tunnel = if self.editor.tunnels.is_empty() {
@@ -1001,7 +990,6 @@ pub(crate) struct SessionEditorDraft {
     pub(crate) port_text: String,
     pub(crate) username: String,
     pub(crate) auth_method: EditorAuthMethod,
-    pub(crate) host_key_policy: ConfigHostKeyPolicy,
     pub(crate) password: String,
     pub(crate) key_path: String,
     pub(crate) passphrase: String,
@@ -1039,7 +1027,6 @@ impl Default for SessionEditorDraft {
             port_text: "22".to_owned(),
             username: String::new(),
             auth_method: EditorAuthMethod::Agent,
-            host_key_policy: ConfigHostKeyPolicy::Strict,
             password: String::new(),
             key_path: String::new(),
             passphrase: String::new(),

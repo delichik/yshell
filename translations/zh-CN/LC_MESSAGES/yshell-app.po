@@ -862,37 +862,33 @@ msgctxt "HostKeyDialog"
 msgid "Close"
 msgstr "关闭"
 
-#: ui/components/host_key_dialog.slint:99
+#: ui/components/host_key_dialog.slint:190
 msgctxt "HostKeyDialog"
 msgid ""
 "The presented key does not match the stored key. This may indicate a man-in-"
-"the-middle attack; replace it only if you verified the new key elsewhere."
-msgstr "呈现的密钥与已保存的密钥不一致。这可能意味着中间人攻击；只有在其它渠道核实过新密钥后才替换。"
+"the-middle attack. Replace and Trust will overwrite the stored key; do so "
+"only if you verified the new key elsewhere."
+msgstr "呈现的密钥与已保存的密钥不一致。这可能意味着中间人攻击。“替换并信任”会覆盖已保存的密钥；只有在其它渠道核实过新密钥后才这样做。"
 
-#: ui/components/host_key_dialog.slint:105
+#: ui/components/host_key_dialog.slint:203
 msgctxt "HostKeyDialog"
-msgid "Type REPLACE"
-msgstr "输入 REPLACE"
+msgid "Cancel Connection"
+msgstr "取消连接"
 
-#: ui/components/host_key_dialog.slint:116
-msgctxt "HostKeyDialog"
-msgid "Cancel"
-msgstr "取消"
-
-#: ui/components/host_key_dialog.slint:121
+#: ui/components/host_key_dialog.slint:209
 msgctxt "HostKeyDialog"
 msgid "Trust Once"
 msgstr "仅信任一次"
 
-#: ui/components/host_key_dialog.slint:126
+#: ui/components/host_key_dialog.slint:217
+msgctxt "HostKeyDialog"
+msgid "Replace and Trust"
+msgstr "替换并信任"
+
+#: ui/components/host_key_dialog.slint:218
 msgctxt "HostKeyDialog"
 msgid "Trust and Save"
 msgstr "信任并保存"
-
-#: ui/components/host_key_dialog.slint:132
-msgctxt "HostKeyDialog"
-msgid "Replace Key"
-msgstr "替换密钥"
 
 #: ui/components/password_prompt_dialog.slint:23
 msgctxt "PasswordPromptDialog"
@@ -3427,15 +3423,15 @@ msgctxt "TerminalAppearanceDialog"
 msgid "Font size"
 msgstr "字号"
 
-#: ui/pages/settings.slint:778
+#: ui/pages/settings.slint:698
 msgctxt "TerminalAppearanceDialog"
-msgid "Fallback fonts"
-msgstr "回退字体"
+msgid "Fallback font"
+msgstr "备用字体"
 
-#: ui/pages/settings.slint:786
+#: ui/pages/settings.slint:703
 msgctxt "TerminalAppearanceDialog"
-msgid "One font file per line"
-msgstr "每行一个字体文件"
+msgid "Font file path"
+msgstr "字体文件路径"
 
 #: ui/pages/settings.slint:799 ui/pages/settings.slint:1196
 msgctxt "TerminalAppearanceDialog"
@@ -3491,8 +3487,8 @@ msgstr "回退字体文件，以 ; 分隔"
 
 #: ui/pages/settings.slint:1192
 msgctxt "TerminalAppearanceDialog"
-msgid "Add Fallback…"
-msgstr "添加回退字体…"
+msgid "Select File…"
+msgstr "选择文件…"
 
 #: ui/pages/settings.slint:1215
 msgctxt "TerminalAppearanceDialog"
@@ -3723,8 +3719,8 @@ msgstr "字号"
 
 #: ui/text_formats.slint:462
 msgctxt "MainWindow"
-msgid "Fallback fonts"
-msgstr "回退字体"
+msgid "Fallback font"
+msgstr "备用字体"
 
 #: ui/text_formats.slint:465
 msgctxt "MainWindow"
@@ -3763,8 +3759,8 @@ msgstr "逻辑像素"
 
 #: ui/text_formats.slint:482
 msgctxt "MainWindow"
-msgid "Font files tried in order before the bundled CJK face"
-msgstr "按顺序尝试的字体文件，位于内置 CJK 字体之前"
+msgid "One font file tried before the bundled CJK face"
+msgstr "在内置 CJK 字体之前尝试的一个字体文件"
 
 #: ui/text_formats.slint:483
 msgctxt "MainWindow"
@@ -4037,4 +4033,19 @@ msgstr "关闭会话前确认"
 msgctxt "SettingsDialog"
 msgid "Confirm before quitting YShell"
 msgstr "退出 YShell 前确认"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Fallback font"
+msgstr "备用字体"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Font file path"
+msgstr "字体文件路径"
+
+#: ui/pages/settings.slint
+msgctxt "SettingsDialog"
+msgid "Select File…"
+msgstr "选择文件…"
 

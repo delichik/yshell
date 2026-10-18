@@ -8,18 +8,19 @@
 // 与 Rust 侧的约定：
 //   * `mode-text` 取 "first-trust" / "changed"（无待确认提示时为空串）。
 //   * 信息文本由 Rust 投影（多行），等宽展示，最多 8 行后内部滚动。
-//   * changed 模式必须输入 REPLACE；Rust 侧 `replace_host_key_and_connect`
-//     同样校验 `trim() == "REPLACE"`，这里同步禁用按钮，避免无谓的错误状态。
+//   * 两种模式都只有三个动作：Trust Once（仅本次、不落盘）、
+//     Trust and Save / Replace and Trust（写入 / 替换 known_hosts）、Cancel Connection。
+//     变更模式的"信任"在安全语义上就是替换已保存的 key，所以按钮文案明确写
+//     Replace and Trust，不再要求输入 REPLACE。
 //
 // L2（对话框 Esc / 遮罩点击关闭）：
 //   * `open` 由宿主投影驱动（`visible: self.open`，与其它模态弹窗一致）。
-//   * `Esc` / 遮罩点击 = Cancel（`cancel()`，Rust 侧同时清空 REPLACE 确认词）；
-//     面板内空白处点击由面板 TouchArea 吞掉，不会穿透到遮罩误触取消。
-//   * 危险操作默认焦点在根 FocusScope（不是 Replace Key 按钮），Enter 不误确认。
+//   * `Esc` / 遮罩点击 = Cancel（`cancel()`），Rust 侧不写 known_hosts。
+//   * 默认焦点在 Cancel Connection（安全动作），`Enter` 不会误触发信任。
+//   * 面板内空白处点击由面板 TouchArea 吞掉，不会穿透到遮罩误触取消。
 
 import { Theme } from "../theme.slint";
 import { WinButton, WinIconButton, WinScrollIndicator } from "basic/controls.slint";
-import { WinTextInput } from "basic/text_input.slint";
 
 // 正文行（等宽；与 Rust 拆分字段一一对应）。
 // 注意：同一文件内的局部组件必须先声明后使用。
@@ -48,14 +49,10 @@ export component HostKeyDialog inherits Rectangle {
     /// changed 模式：已保存的算法 / 指纹（其它模式为空）
     in property <string> expected-algorithm-text: "";
     in property <string> expected-fingerprint-text: "";
-    /// changed 模式的确认词（in-out：弹窗内编辑，宿主可读写）
-    in-out property <string> confirmation-text: "";
 
     callback cancel();
     callback trust-once();
     callback trust-and-save();
-    callback replace-key();
-    callback confirmation-edited(string);
     /// 右上角 × 关闭，语义与 cancel() 相同（宿主自行决定处理方式）
     callback dismissed();
 
@@ -165,10 +162,6 @@ export component HostKeyDialog inherits Rectangle {
                                 hint: @tr("Presented: {0} {1}", root.algorithm-text, root.fingerprint-text);
                             }
 
-                            if root.detail-visible && root.mode-text == "changed" : PromptLine {
-                                hint: @tr("Type REPLACE to enable replacement.");
-                            }
-
                             if root.detail-visible && root.mode-text != "changed" : PromptLine {
                                 hint: @tr("Choose Trust Once or Trust and Save.");
                             }
@@ -192,46 +185,40 @@ export component HostKeyDialog inherits Rectangle {
                     }
                 }
 
-                // changed 模式：警示文案 + REPLACE 确认输入
+                // changed 模式：阻断式警告（critical，加粗），明确说明"信任 = 替换旧 key"。
                 if root.mode-text == "changed" : Text {
-                    text: @tr("The presented key does not match the stored key. This may indicate a man-in-the-middle attack; replace it only if you verified the new key elsewhere.");
+                    text: @tr("The presented key does not match the stored key. This may indicate a man-in-the-middle attack. Replace and Trust will overwrite the stored key; do so only if you verified the new key elsewhere.");
                     color: Theme.critical;
+                    font-weight: Theme.weight-semibold;
                     wrap: word-wrap;
                 }
 
-                if root.mode-text == "changed" : WinTextInput {
-                    placeholder-text: @tr("Type REPLACE");
-                    text <=> root.confirmation-text;
-                    edited => { root.confirmation-edited(self.text); }
-                }
-
-                // 操作区：右对齐，主操作在最右
+                // 操作区：右对齐，主操作在最右。
+                // 两种模式都恰好三个动作；Cancel Connection 是默认焦点（安全动作）。
                 HorizontalLayout {
                     alignment: end;
                     spacing: Theme.spacing-8;
 
-                    WinButton {
-                        text: @tr("Cancel");
+                    cancel_button := WinButton {
+                        text: @tr("Cancel Connection");
                         clicked => { root.cancel(); }
                     }
 
-                    if root.mode-text == "first-trust" : WinButton {
+                    // 仅本次信任：不写 known_hosts；changed 模式也只写本次运行时的临时表。
+                    WinButton {
                         text: @tr("Trust Once");
                         clicked => { root.trust-once(); }
                     }
 
-                    if root.mode-text == "first-trust" : WinButton {
-                        text: @tr("Trust and Save");
-                        accent: true;
+                    // 首次信任 = 保存；变更 = 替换旧条目。变更模式属破坏性操作，
+                    // 用 critical 文案色（不做红色实底）。
+                    WinButton {
+                        text: root.mode-text == "changed"
+                            ? @tr("Replace and Trust")
+                            : @tr("Trust and Save");
+                        accent: root.mode-text != "changed";
+                        critical: root.mode-text == "changed";
                         clicked => { root.trust-and-save(); }
-                    }
-
-                    if root.mode-text == "changed" : WinButton {
-                        text: @tr("Replace Key");
-                        // 破坏性操作：critical 文案色（不做红色实底），且需输入 REPLACE
-                        critical: true;
-                        enabled: root.confirmation-text == "REPLACE";
-                        clicked => { root.replace-key(); }
                     }
                 }
             }
@@ -240,13 +227,13 @@ export component HostKeyDialog inherits Rectangle {
 
     /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
     public function focus-dialog() {
-        dialog_scope.focus();
+        cancel_button.focus-button();
     }
 
-    // 打开时聚焦弹窗（Esc 需要焦点在弹窗内）。
+    // 打开时把焦点放到安全动作 Cancel Connection（Esc / Enter 都不会误信任）。
     changed open => {
         if (root.open) {
-            dialog_scope.focus();
+            cancel_button.focus-button();
         }
     }
 }

@@ -472,9 +472,20 @@ pub struct TerminalProfile {
     /// Primary font size in logical pixels.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub font_size: Option<u16>,
-    /// Fallback font families tried in order for missing glyphs.
+    /// Single backup/fallback font file tried for glyphs missing from the
+    /// primary face. Only one value is supported (TERM-5); the terminal
+    /// renderer loads it before the bundled CJK face.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub fallback_fonts: Option<Vec<String>>,
+    pub backup_font: Option<String>,
+    /// Legacy `fallback_fonts = [...]` list from older configs.
+    ///
+    /// Read-only migration input: [`ConfigDocument::sanitize`] keeps the first
+    /// non-empty entry as [`Self::backup_font`], records a
+    /// [`ConfigWarning::MultipleFallbackFonts`] when extra entries are dropped,
+    /// and clears this field. It is never serialized again, so saving writes the
+    /// single-value field.
+    #[serde(default, rename = "fallback_fonts", skip_serializing)]
+    pub legacy_fallback_fonts: Option<Vec<String>>,
 }
 
 impl TerminalProfile {
@@ -492,9 +503,7 @@ impl TerminalProfile {
         self.ansi = self.ansi.or_else(|| fallback.ansi.clone());
         self.font_family = self.font_family.or_else(|| fallback.font_family.clone());
         self.font_size = self.font_size.or(fallback.font_size);
-        self.fallback_fonts = self
-            .fallback_fonts
-            .or_else(|| fallback.fallback_fonts.clone());
+        self.backup_font = self.backup_font.or_else(|| fallback.backup_font.clone());
         self
     }
 }
@@ -512,7 +521,8 @@ impl Default for TerminalProfile {
             ansi: None,
             font_family: None,
             font_size: None,
-            fallback_fonts: None,
+            backup_font: None,
+            legacy_fallback_fonts: None,
         }
     }
 }
@@ -1013,6 +1023,7 @@ impl ConfigDocument {
             });
 
         sanitize_terminal_colors(&mut self.terminal, "terminal", &mut warnings);
+        sanitize_terminal_fonts(&mut self.terminal, "terminal", &mut warnings);
         for folder in &mut self.folders {
             let prefix = format!("folders[{}]", folder.id);
             sanitize_folder(folder, &prefix, &mut warnings);
@@ -1084,6 +1095,13 @@ pub enum ConfigWarning {
     },
     /// A font size of `0` was cleared.
     InvalidFontSize { location: String },
+    /// A legacy `fallback_fonts` list held more than one entry; only the first
+    /// became `backup_font` (TERM-5).
+    MultipleFallbackFonts {
+        location: String,
+        kept: String,
+        dropped: usize,
+    },
     /// Inline color overrides were promoted into a named user theme.
     MigratedColorOverrides {
         location: String,
@@ -1122,6 +1140,15 @@ impl fmt::Display for ConfigWarning {
             Self::InvalidFontSize { location } => {
                 write!(f, "cleared font size 0 at {location}.font_size")
             }
+            Self::MultipleFallbackFonts {
+                location,
+                kept,
+                dropped,
+            } => write!(
+                f,
+                "kept only fallback font '{kept}' at {location}; dropped {dropped} extra entr{}",
+                if *dropped == 1 { "y" } else { "ies" }
+            ),
             Self::MigratedColorOverrides {
                 location,
                 theme_id,
@@ -1267,16 +1294,68 @@ fn sanitize_terminal_colors(
     }
 }
 
+/// Migrates the legacy multi-value `fallback_fonts` list into the single
+/// `backup_font` field (TERM-5) and normalizes the single value.
+///
+/// The first non-empty legacy entry is kept; extra entries are dropped with a
+/// [`ConfigWarning::MultipleFallbackFonts`] warning. The legacy field is always
+/// cleared so the next save writes the single-value schema.
+fn sanitize_terminal_fonts(
+    terminal: &mut TerminalProfile,
+    location: &str,
+    warnings: &mut Vec<ConfigWarning>,
+) {
+    if let Some(legacy) = terminal.legacy_fallback_fonts.take() {
+        let entries: Vec<String> = legacy
+            .into_iter()
+            .map(|entry| entry.trim().to_owned())
+            .filter(|entry| !entry.is_empty())
+            .collect();
+        if terminal.backup_font.is_none() {
+            terminal.backup_font = entries.first().cloned();
+        }
+        if entries.len() > 1 {
+            let kept_is_entry = terminal
+                .backup_font
+                .as_ref()
+                .is_some_and(|kept| entries.iter().any(|entry| entry == kept));
+            let dropped = entries.len() - usize::from(kept_is_entry);
+            if dropped > 0 {
+                warnings.push(ConfigWarning::MultipleFallbackFonts {
+                    location: location.to_owned(),
+                    kept: terminal.backup_font.clone().unwrap_or_default(),
+                    dropped,
+                });
+            }
+        }
+    }
+
+    if terminal
+        .backup_font
+        .as_deref()
+        .is_some_and(|value| value.trim().is_empty())
+    {
+        terminal.backup_font = None;
+    } else if let Some(value) = terminal.backup_font.as_mut() {
+        let trimmed = value.trim().to_owned();
+        if *value != trimmed {
+            *value = trimmed;
+        }
+    }
+}
+
 /// Recursively sanitizes a folder and every session/descendant folder.
 fn sanitize_folder(folder: &mut FolderProfile, prefix: &str, warnings: &mut Vec<ConfigWarning>) {
     if let Some(section) = folder.terminal.as_mut() {
         let location = format!("{prefix}.terminal");
         sanitize_terminal_colors(section, &location, warnings);
+        sanitize_terminal_fonts(section, &location, warnings);
     }
     for session in &mut folder.sessions {
         if let Some(section) = session.terminal.as_mut() {
             let location = format!("{prefix}.sessions[{}].terminal", session.id);
             sanitize_terminal_colors(section, &location, warnings);
+            sanitize_terminal_fonts(section, &location, warnings);
         }
     }
     for child in &mut folder.folders {
@@ -1469,7 +1548,7 @@ mod tests {
             ansi: Some(std::array::from_fn(|_| "#000000".to_owned())),
             font_family: Some("JetBrains Mono".to_owned()),
             font_size: Some(14),
-            fallback_fonts: Some(vec!["Noto Sans Mono CJK".to_owned()]),
+            backup_font: Some("Noto Sans Mono CJK".to_owned()),
             ..TerminalProfile::default()
         });
 
@@ -1722,6 +1801,95 @@ path = "/home/me/.ssh/id_ed25519"
             Some("/home/me/.ssh/id_ed25519")
         );
         assert_eq!(auth.method.private_key_id(), None);
+    }
+
+    #[test]
+    fn migrates_multiple_fallback_fonts_to_one_backup_font() {
+        let input = r#"
+schema_version = 2
+
+[terminal]
+font_family = "JetBrains Mono"
+font_size = 15
+fallback_fonts = ["/fonts/first.ttf", "/fonts/second.ttf", "  "]
+
+[[folders]]
+id = "root"
+name = "Root"
+
+[[folders.sessions]]
+id = "legacy-session"
+name = "Legacy"
+host = "example.test"
+
+[folders.sessions.terminal]
+fallback_fonts = ["/fonts/session-only.ttf"]
+"#;
+
+        let (parsed, warnings) = ConfigDocument::from_toml_str_with_warnings(input).expect("parse");
+
+        // Primary font survives; only the first legacy entry becomes the backup.
+        assert_eq!(parsed.terminal.font_family.as_deref(), Some("JetBrains Mono"));
+        assert_eq!(parsed.terminal.font_size, Some(15));
+        assert_eq!(
+            parsed.terminal.backup_font.as_deref(),
+            Some("/fonts/first.ttf")
+        );
+        assert_eq!(parsed.terminal.legacy_fallback_fonts, None);
+        let session_terminal = parsed
+            .find_session("legacy-session")
+            .and_then(|session| session.terminal.as_ref())
+            .expect("session terminal override");
+        assert_eq!(
+            session_terminal.backup_font.as_deref(),
+            Some("/fonts/session-only.ttf")
+        );
+        assert_eq!(session_terminal.legacy_fallback_fonts, None);
+
+        // Resolution keeps the primary font and the nearest backup font.
+        let resolved = parsed.resolve_session("legacy-session").expect("resolve");
+        assert_eq!(resolved.terminal.font_family.as_deref(), Some("JetBrains Mono"));
+        assert_eq!(
+            resolved.terminal.backup_font.as_deref(),
+            Some("/fonts/session-only.ttf")
+        );
+
+        // The dropped extra entry is reported once, with the kept value.
+        let dropped: Vec<&ConfigWarning> = warnings
+            .iter()
+            .filter(|warning| matches!(warning, ConfigWarning::MultipleFallbackFonts { .. }))
+            .collect();
+        assert_eq!(dropped.len(), 1, "warnings: {warnings:?}");
+        let ConfigWarning::MultipleFallbackFonts {
+            location,
+            kept,
+            dropped,
+        } = dropped[0]
+        else {
+            unreachable!()
+        };
+        assert_eq!(location, "terminal");
+        assert_eq!(kept, "/fonts/first.ttf");
+        assert_eq!(*dropped, 1);
+
+        // A single legacy entry migrates silently (no warning).
+        let single = r#"
+schema_version = 2
+
+[terminal]
+fallback_fonts = ["/fonts/only.ttf"]
+"#;
+        let (single, warnings) =
+            ConfigDocument::from_toml_str_with_warnings(single).expect("parse single");
+        assert_eq!(single.terminal.backup_font.as_deref(), Some("/fonts/only.ttf"));
+        assert!(!warnings
+            .iter()
+            .any(|warning| matches!(warning, ConfigWarning::MultipleFallbackFonts { .. })));
+
+        // Saving writes the single-value field and never the legacy array.
+        let toml = parsed.to_toml_string().expect("serialize");
+        assert!(toml.contains("backup_font = \"/fonts/first.ttf\""));
+        assert!(!toml.contains("fallback_fonts"));
     }
 
     #[test]
@@ -2236,6 +2404,7 @@ key_id = "key-1"
         let farther = TerminalProfile {
             font_size: Some(11),
             font_family: Some("Farther".to_owned()),
+            backup_font: Some("/fonts/farther.ttf".to_owned()),
             scrollback_lines: 777,
             ..TerminalProfile::default()
         };
@@ -2244,6 +2413,7 @@ key_id = "key-1"
 
         assert_eq!(merged.font_size, Some(14));
         assert_eq!(merged.font_family.as_deref(), Some("Farther"));
+        assert_eq!(merged.backup_font.as_deref(), Some("/fonts/farther.ttf"));
         // Scrollback is concrete and always comes from the nearer profile.
         assert_eq!(merged.scrollback_lines, 10_000);
     }

@@ -104,38 +104,173 @@ fn trust_host_key_and_save_persists_known_hosts_and_reconnects() {
     assert!(persisted.get("example.com", 2200).is_some());
 }
 
-#[test]
-fn replace_host_key_requires_confirmation_text() {
-    let temp = tempdir().expect("tempdir");
-    let mut runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), None)
-        .expect("runtime without keychain");
+fn runtime_with_stored_host_key(config_dir: &std::path::Path) -> AppRuntime {
+    let store = ConfigStore::new(config_dir);
+    let mut known_hosts = KnownHosts::new();
+    known_hosts.pin(
+        "example.com",
+        2200,
+        HostKeyFingerprint {
+            algorithm: "ssh-ed25519".to_owned(),
+            fingerprint: "sha256:old".to_owned(),
+        },
+    );
+    store
+        .save_known_hosts(&known_hosts)
+        .expect("seed known_hosts with the old key");
+    AppRuntime::new_with_keychain(config_dir.to_path_buf(), None)
+        .expect("runtime without keychain")
+}
+
+/// 挂起一次主机密钥确认（`expected = Some(..)` 即 changed 模式）。
+/// 返回活动会话 key，供测试检查重连时使用的 effective known_hosts。
+fn queue_host_key_prompt(
+    runtime: &mut AppRuntime,
+    presented_fingerprint: &str,
+    expected_fingerprint: Option<&str>,
+) -> String {
     runtime
         .handle_quick_connect("alice@example.com:2200")
         .expect("quick connect");
     let session_key = runtime.active_session_key().expect("active session");
     runtime.pending_host_key_prompt = Some(PendingHostKeyPrompt {
-        session_key,
+        session_key: session_key.clone(),
         host: "example.com".to_owned(),
         port: 2200,
         username: "alice".to_owned(),
         presented: HostKeyFingerprint {
             algorithm: "ssh-ed25519".to_owned(),
-            fingerprint: "sha256:new".to_owned(),
+            fingerprint: presented_fingerprint.to_owned(),
         },
-        expected: Some(HostKeyFingerprint {
+        expected: expected_fingerprint.map(|fingerprint| HostKeyFingerprint {
             algorithm: "ssh-ed25519".to_owned(),
-            fingerprint: "sha256:old".to_owned(),
+            fingerprint: fingerprint.to_owned(),
         }),
         known_hosts_path: runtime.config_store.known_hosts_file(),
         resume_password: None,
     });
+    session_key
+}
 
-    let error = runtime
-        .replace_host_key_and_connect()
-        .expect_err("replace should require confirmation");
+/// SSH-3：变更模式点"Replace and Trust"= 直接替换旧条目，不再要求输入 REPLACE。
+#[test]
+fn changed_host_key_trust_and_save_replaces_stored_entry() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = runtime_with_stored_host_key(temp.path());
+    queue_host_key_prompt(&mut runtime, "sha256:new", Some("sha256:old"));
 
-    assert!(error.message.contains("type REPLACE"));
-    assert!(runtime.pending_host_key_prompt.is_some());
+    let projection = runtime
+        .trust_host_key_and_save()
+        .expect("changed host key should be replaceable without a REPLACE token");
+
+    assert!(!projection.host_key_prompt_visible);
+    assert_eq!(projection.tab_state_text, "connected");
+    let persisted = runtime
+        .config_store
+        .load_known_hosts()
+        .expect("load persisted known_hosts");
+    let stored = persisted.get("example.com", 2200).expect("stored entry");
+    assert_eq!(stored.fingerprint, "sha256:new");
+    assert!(runtime.pending_host_key_prompt.is_none());
+}
+
+/// SSH-3：变更模式点"Trust Once"只写本次运行时的临时表，绝不落盘。
+#[test]
+fn changed_host_key_trust_once_does_not_persist() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = runtime_with_stored_host_key(temp.path());
+    let session_key = queue_host_key_prompt(&mut runtime, "sha256:new", Some("sha256:old"));
+
+    let projection = runtime
+        .trust_host_key_once()
+        .expect("trust once must be available for a changed host key");
+
+    assert!(!projection.host_key_prompt_visible);
+    assert_eq!(projection.tab_state_text, "connected");
+    // 重连使用的 effective known_hosts 里，临时表覆盖了持久表的旧条目。
+    let session_ssh_config = runtime
+        .sessions
+        .get(&session_key)
+        .expect("runtime session")
+        .ssh_config
+        .clone();
+    let effective = runtime.effective_ssh_config(&session_ssh_config);
+    assert_eq!(
+        effective
+            .known_hosts
+            .get("example.com", 2200)
+            .expect("effective entry")
+            .fingerprint,
+        "sha256:new"
+    );
+    let persisted = runtime
+        .config_store
+        .load_known_hosts()
+        .expect("load persisted known_hosts");
+    assert_eq!(
+        persisted
+            .get("example.com", 2200)
+            .expect("old entry remains")
+            .fingerprint,
+        "sha256:old"
+    );
+    let temporary = runtime
+        .temporary_known_hosts
+        .get("example.com", 2200)
+        .expect("temporary pin exists for this session");
+    assert_eq!(temporary.fingerprint, "sha256:new");
+    assert!(runtime.pending_host_key_prompt.is_none());
+}
+
+/// SSH-3：取消不写任何 known_hosts（持久/临时都不写），也不继续连接。
+#[test]
+fn canceling_changed_host_key_writes_nothing() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = runtime_with_stored_host_key(temp.path());
+    queue_host_key_prompt(&mut runtime, "sha256:new", Some("sha256:old"));
+
+    let projection = runtime.cancel_host_key_prompt();
+
+    assert!(!projection.host_key_prompt_visible);
+    assert!(projection
+        .status_text
+        .contains("Canceled host key confirmation"));
+    assert!(runtime.pending_host_key_prompt.is_none());
+    let persisted = runtime
+        .config_store
+        .load_known_hosts()
+        .expect("load persisted known_hosts");
+    assert_eq!(
+        persisted
+            .get("example.com", 2200)
+            .expect("old entry remains")
+            .fingerprint,
+        "sha256:old"
+    );
+    assert!(runtime.temporary_known_hosts.get("example.com", 2200).is_none());
+}
+
+/// SSH-3：首次信任的 "Trust Once" 同样只写临时表，不落盘。
+#[test]
+fn first_trust_once_does_not_persist() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), None)
+        .expect("runtime without keychain");
+    queue_host_key_prompt(&mut runtime, "sha256:first", None);
+
+    let projection = runtime.trust_host_key_once().expect("trust first key once");
+
+    assert!(!projection.host_key_prompt_visible);
+    let persisted = runtime
+        .config_store
+        .load_known_hosts()
+        .expect("load persisted known_hosts");
+    assert!(persisted.get("example.com", 2200).is_none());
+    let temporary = runtime
+        .temporary_known_hosts
+        .get("example.com", 2200)
+        .expect("temporary pin exists for this session");
+    assert_eq!(temporary.fingerprint, "sha256:first");
 }
 
 #[test]
