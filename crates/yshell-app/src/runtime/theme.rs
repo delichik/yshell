@@ -8,6 +8,7 @@
 //! their whole lifetime; later theme edits only affect terminals opened
 //! afterwards.
 
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
 use yshell_config::{
@@ -1661,17 +1662,21 @@ impl AppRuntime {
         preview_scale_factor(self.ui_scale_factor)
     }
 
-    /// Records the focused window's device pixel ratio (TERM-2).
+    /// Records the focused window's device pixel ratio (TERM-2/TERM-4).
     ///
-    /// Invalid values fall back to [`DEFAULT_SCALE_FACTOR`]. A change while the
-    /// Appearance section is open re-renders the preview on the next UI refresh.
+    /// Invalid values fall back to [`DEFAULT_SCALE_FACTOR`]. A change while a
+    /// live preview is visible (Settings Appearance or the Session Editor
+    /// Appearance section) re-renders that preview on the next UI refresh.
     pub(crate) fn note_ui_scale_factor(&mut self, scale_factor: f32) {
         let scale_factor = preview_scale_factor(scale_factor);
         if (self.ui_scale_factor - scale_factor).abs() <= f32::EPSILON {
             return;
         }
         self.ui_scale_factor = scale_factor;
-        if self.settings_appearance_visible {
+        if self.settings_appearance_visible
+            || (self.editor_modal_visible
+                && matches!(self.editor_section, EditorSection::Appearance))
+        {
             self.mark_ui_dirty();
         }
     }
@@ -1694,29 +1699,54 @@ impl AppRuntime {
         let palette = self.settings_appearance_palette();
         let font = self.settings_appearance.font_selection();
         let font_size = resolve_font_size(self.settings_appearance.font_size());
-        let scale_factor = self.ui_scale_factor();
-        let mut renderer = self.settings_preview_renderer.borrow_mut();
-        let renderer = renderer.get_or_insert_with(TerminalRenderer::new);
-        // `set_scale_factor` always re-measures; only pay for it when the DPR
-        // actually changed (moving the window between monitors).
-        if (renderer.scale_factor() - scale_factor).abs() > f32::EPSILON {
-            renderer.set_scale_factor(scale_factor);
+        Some(self.settings_preview_renderer.render(
+            palette,
+            font,
+            font_size,
+            self.ui_scale_factor(),
+            SETTINGS_PREVIEW_AREA_PX,
+            self.ui_language(),
+        ))
+    }
+
+    /// Renders the live preview frame for the Session Editor Appearance section
+    /// (TERM-4).
+    ///
+    /// The frame is produced only while the editor modal is open **and** the
+    /// Appearance section is active; closing the editor or switching sections
+    /// yields `None`, so the host drops the bitmap and rasterization stops.
+    ///
+    /// The render path is deliberately the Settings one (and reusable by the
+    /// future theme manager, TERM-1):
+    /// * the current editor draft is resolved exactly like saving would resolve
+    ///   it (inherit → parent, explicit → draft value), so the preview follows
+    ///   the combo/font choices immediately;
+    /// * the real window DPR is applied and the profile font size is used
+    ///   as-is (no preview-only 8–20 clamp);
+    /// * the grid is floored into [`SESSION_EDITOR_PREVIEW_AREA_PX`], so a
+    ///   large font yields fewer rows/columns instead of a stretched bitmap;
+    /// * the localized + CJK sample, block cursor and selection decorations
+    ///   come from the same helpers as Settings and the live terminal.
+    ///
+    /// Cancel/discard never writes the draft, so reopening the editor renders
+    /// the persisted theme again.
+    pub(crate) fn session_editor_preview_frame(&self) -> Option<TerminalFrame> {
+        if !self.editor_modal_visible
+            || !matches!(self.editor_section, EditorSection::Appearance)
+        {
+            return None;
         }
-        renderer.set_font_size(font_size);
-        renderer.apply_appearance(palette, font);
-        let (columns, rows) =
-            preview_grid_size(SETTINGS_PREVIEW_AREA_PX, scale_factor, renderer.cell_size());
-        let content = preview_content(palette, self.ui_language(), columns, rows);
-        let snapshot = TerminalSnapshot {
-            lines: content
-                .lines
-                .iter()
-                .map(|line| std::borrow::Cow::Borrowed(line.as_slice()))
-                .collect(),
-            cursor: content.cursor,
-            selection: content.selection,
-        };
-        Some(renderer.render(&snapshot))
+        let resolved = self.editor_theme_resolved_terminal();
+        let palette = resolve_palette(&resolved, &self.theme_catalog);
+        let (font, _rejected) = resolve_font(&resolved);
+        Some(self.editor_preview_renderer.render(
+            palette,
+            font,
+            resolve_font_size(resolved.font_size),
+            self.ui_scale_factor(),
+            SESSION_EDITOR_PREVIEW_AREA_PX,
+            self.ui_language(),
+        ))
     }
 }
 
@@ -1737,6 +1767,83 @@ impl AppRuntime {
 /// preview drops columns/rows and keeps the bitmap at 1:1 physical pixels; the
 /// remainder stays as surface background (never a stretched image).
 pub(crate) const SETTINGS_PREVIEW_AREA_PX: (f32, f32) = (420.0, 198.0);
+
+/// Logical-pixel bitmap area of the Session Editor live preview surface.
+///
+/// Mirrors `ui/pages/session_editor.slint`: the Session Editor card content is
+/// 760 dialog − 40 body padding − 180 navigation − 12 gap − 2 card border −
+/// 32 card padding = 494 px wide, and the fixed preview surface is 100 px tall.
+/// The surface border (1 px) and `Theme.terminal-padding-x` (6 px per side)
+/// leave this 480 × 98 px bitmap area.
+///
+/// The renderer **floors** the grid into this area exactly like Settings and
+/// the live terminal: a font/DPI combination that does not fit drops
+/// columns/rows and keeps the bitmap at 1:1 physical pixels (never a stretched
+/// image).
+pub(crate) const SESSION_EDITOR_PREVIEW_AREA_PX: (f32, f32) = (480.0, 98.0);
+
+/// Dedicated renderer for one live-preview surface.
+///
+/// Settings, the Session Editor (TERM-4) and the upcoming theme manager
+/// (TERM-1) each own one instance, so preview rasterization never touches the
+/// live terminal's glyph cache or renderer state. The inner renderer is
+/// created lazily and only re-measures cells when the DPR actually changed.
+pub(crate) struct LivePreviewRenderer {
+    renderer: RefCell<Option<TerminalRenderer>>,
+}
+
+impl LivePreviewRenderer {
+    pub(crate) fn new() -> Self {
+        Self {
+            renderer: RefCell::new(None),
+        }
+    }
+
+    /// Renders the shared live-preview sample into `area_logical` at 1:1
+    /// physical pixels for `scale_factor`.
+    ///
+    /// `area_logical` is the bitmap area in Slint logical pixels; the grid is
+    /// floored after converting to physical pixels with the renderer's cell
+    /// metrics (which already include `font_size * scale_factor`).
+    pub(crate) fn render(
+        &self,
+        palette: TerminalPalette,
+        font: FontSelection,
+        font_size: f32,
+        scale_factor: f32,
+        area_logical: (f32, f32),
+        language: &str,
+    ) -> TerminalFrame {
+        let scale_factor = preview_scale_factor(scale_factor);
+        let mut renderer = self.renderer.borrow_mut();
+        let renderer = renderer.get_or_insert_with(TerminalRenderer::new);
+        // `set_scale_factor` always re-measures; only pay for it when the DPR
+        // actually changed (moving the window between monitors).
+        if (renderer.scale_factor() - scale_factor).abs() > f32::EPSILON {
+            renderer.set_scale_factor(scale_factor);
+        }
+        renderer.set_font_size(font_size);
+        renderer.apply_appearance(palette, font);
+        let (columns, rows) = preview_grid_size(area_logical, scale_factor, renderer.cell_size());
+        let content = preview_content(palette, language, columns, rows);
+        let snapshot = TerminalSnapshot {
+            lines: content
+                .lines
+                .iter()
+                .map(|line| std::borrow::Cow::Borrowed(line.as_slice()))
+                .collect(),
+            cursor: content.cursor,
+            selection: content.selection,
+        };
+        renderer.render(&snapshot)
+    }
+}
+
+impl Default for LivePreviewRenderer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// Sanitizes a device pixel ratio for preview rasterization.
 fn preview_scale_factor(scale_factor: f32) -> f32 {

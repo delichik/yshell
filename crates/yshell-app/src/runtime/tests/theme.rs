@@ -861,3 +861,313 @@ fn settings_preview_updates_immediately_on_theme_change() {
         "invalid fallback fonts must not remove the preview"
     );
 }
+
+// ---------------------------------------------------------------------------
+// TERM-4: Session Editor appearance - ComboBox rows + live preview
+// ---------------------------------------------------------------------------
+
+fn session_editor_preview(runtime: &AppRuntime) -> yshell_terminal::TerminalFrame {
+    runtime
+        .projection()
+        .session_editor_preview
+        .expect("Session Editor preview frame")
+}
+
+fn editor_appearance_row<'a>(
+    projection: &'a AppProjection,
+    key: &str,
+) -> &'a crate::runtime::TriStateFieldData {
+    projection
+        .editor_appearance_fields
+        .iter()
+        .find(|field| field.key == key)
+        .unwrap_or_else(|| panic!("Session Editor appearance row `{key}`"))
+}
+
+fn folder_editor_row(
+    fields: &[crate::runtime::TriStateFieldData],
+    key: &str,
+) -> crate::runtime::TriStateFieldData {
+    fields
+        .iter()
+        .find(|field| field.key == key)
+        .unwrap_or_else(|| panic!("Folder Editor row `{key}`"))
+        .clone()
+}
+
+/// Index of one option label; the WinComboBox model is exactly `options`, so
+/// this is also the index the combo reports through `selected(index)`.
+fn choice_index(field: &crate::runtime::TriStateFieldData, label: &str) -> i32 {
+    let index = field
+        .options
+        .iter()
+        .position(|option| option == label)
+        .unwrap_or_else(|| panic!("option `{label}` missing from {:?}", field.options));
+    i32::try_from(index).expect("option index fits i32")
+}
+
+#[test]
+fn session_editor_preview_only_renders_while_appearance_is_active() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime.note_ui_scale_factor(1.0);
+
+    let opened = runtime.start_new_saved_session_editor();
+    assert!(opened.editor_modal_visible);
+    assert_eq!(opened.editor_section_text, "general");
+    assert!(
+        opened.session_editor_preview.is_none(),
+        "the editor preview must not render outside the Appearance section"
+    );
+
+    let appearance = runtime.select_session_editor_appearance();
+    assert_eq!(appearance.editor_section_text, "appearance");
+    let frame = appearance
+        .session_editor_preview
+        .expect("Session Editor preview on the Appearance section");
+
+    // Same physical cell metrics as the live terminal at the same DPR + font
+    // (16 px default), i.e. no preview-only clamp.
+    let expected = yshell_terminal::TerminalRenderer::with_scale_factor(16.0, 1.0).cell_size();
+    assert_eq!((frame.cell_width, frame.cell_height), expected);
+    // 1:1 physical-pixel bitmap floored into the fixed surface area.
+    let area = crate::runtime::theme::SESSION_EDITOR_PREVIEW_AREA_PX;
+    let (columns, rows) = crate::runtime::theme::preview_grid_size(area, 1.0, expected);
+    assert_eq!(frame.width, u32::from(columns) * u32::from(expected.0));
+    assert_eq!(frame.height, u32::from(rows) * u32::from(expected.1));
+    assert!(frame.width as f32 <= area.0);
+    assert!(frame.height as f32 <= area.1);
+
+    // The editor preview follows the window DPR like Settings (125% / 200%).
+    for scale in [1.25_f32, 2.0] {
+        runtime.note_ui_scale_factor(scale);
+        let scaled = session_editor_preview(&runtime);
+        let expected =
+            yshell_terminal::TerminalRenderer::with_scale_factor(16.0, scale).cell_size();
+        assert_eq!(
+            (scaled.cell_width, scaled.cell_height),
+            expected,
+            "editor preview cell metrics must match the live terminal at {scale}x DPI"
+        );
+        let (columns, rows) = crate::runtime::theme::preview_grid_size(area, scale, expected);
+        assert_eq!(scaled.width, u32::from(columns) * u32::from(expected.0));
+        assert_eq!(scaled.height, u32::from(rows) * u32::from(expected.1));
+        assert!(scaled.width as f32 <= area.0 * scale);
+        assert!(scaled.height as f32 <= area.1 * scale);
+    }
+    runtime.note_ui_scale_factor(1.0);
+
+    // Moving to another section drops the frame (no rasterization while the
+    // preview is not visible).
+    let general = runtime.select_session_editor_general();
+    assert!(general.session_editor_preview.is_none());
+
+    // Closing the editor drops it as well.
+    runtime.select_session_editor_appearance();
+    let closed = runtime.request_close_session_editor_modal();
+    assert!(!closed.editor_modal_visible);
+    assert!(closed.session_editor_preview.is_none());
+}
+
+#[test]
+fn session_editor_choice_combo_updates_the_draft_and_preview() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime.note_ui_scale_factor(1.0);
+    runtime.start_new_saved_session_editor();
+    let opened = runtime.select_session_editor_appearance();
+
+    // A new session inherits the resolved theme; the row exposes the resolved
+    // display name plus a ComboBox model of every scheme.
+    let scheme_row = editor_appearance_row(&opened, "appearance.color_scheme");
+    assert_eq!(scheme_row.kind, "choice");
+    assert_eq!(scheme_row.state, "inherit");
+    assert_eq!(scheme_row.selected, 0);
+    assert_eq!(scheme_row.options[0], "YShell Default");
+    assert_eq!(scheme_row.value, "YShell Default");
+
+    // Selecting an index (what WinComboBox reports) flips the field to explicit,
+    // stores the scheme id in the draft and re-renders the preview immediately.
+    let dracula_index = choice_index(scheme_row, "Dracula");
+    let selected = runtime.select_editor_scheme_index(dracula_index);
+    let row = editor_appearance_row(&selected, "appearance.color_scheme").clone();
+    assert_eq!(row.state, "explicit");
+    assert_eq!(row.selected, dracula_index);
+    assert_eq!(row.value, "dracula");
+    assert_eq!(runtime.editor.theme.theme.color_scheme.text, "dracula");
+    assert!(runtime.editor.theme.theme.color_scheme.explicit);
+
+    let dracula = color_scheme("dracula").expect("dracula palette").palette;
+    let frame = session_editor_preview(&runtime);
+    let columns = u16::try_from(frame.width / frame.cell_width).expect("columns");
+    let rows = u16::try_from(frame.height / frame.cell_height).expect("rows");
+    // The last viewport row is padding, so the whole row is palette background.
+    assert_eq!(
+        frame_cell_pixel(&frame, columns - 1, rows - 1),
+        color_rgba(dracula.background),
+        "the preview must show the selected scheme immediately"
+    );
+
+    // Font family is a choice too: picking an index stores that preset label in
+    // the draft (what save resolves) and keeps the preview rendered.
+    let font_row = editor_appearance_row(&selected, "appearance.font_family").clone();
+    assert_eq!(font_row.kind, "choice");
+    assert!(font_row.selected >= 0);
+    let font_index = font_row.selected;
+    let font_label = font_row.options[usize::try_from(font_index).expect("index")].clone();
+    let font_selected = runtime.select_editor_font_index(font_index);
+    let row = editor_appearance_row(&font_selected, "appearance.font_family").clone();
+    assert_eq!(row.state, "explicit");
+    assert_eq!(row.value, font_label);
+    assert!(font_selected.session_editor_preview.is_some());
+
+    // Font-size edits change the preview cell metrics on the same call; there is
+    // no preview-only 8-20 clamp.
+    let resized = runtime.update_editor_theme_field("appearance.font_size", "22");
+    let frame = resized
+        .session_editor_preview
+        .expect("preview after a font-size edit");
+    assert_eq!(
+        (frame.cell_width, frame.cell_height),
+        yshell_terminal::TerminalRenderer::with_font_size(22.0).cell_size()
+    );
+    let huge = runtime.update_editor_theme_field("appearance.font_size", "40");
+    let frame = huge.session_editor_preview.expect("preview at 40 px");
+    assert_eq!(
+        (frame.cell_width, frame.cell_height),
+        yshell_terminal::TerminalRenderer::with_font_size(40.0).cell_size(),
+        "large sizes must not be clamped to 20 px for the preview"
+    );
+
+    // Invalid text keeps the inherited size and the preview alive (save still
+    // reports the error later).
+    runtime.update_editor_theme_field("appearance.font_size", "0");
+    assert!(runtime.projection().session_editor_preview.is_some());
+}
+
+#[test]
+fn session_editor_discard_restores_the_persisted_theme() {
+    let temp = tempdir().expect("tempdir");
+    store_with_prod_folder(temp.path());
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime.note_ui_scale_factor(1.0);
+
+    runtime.select_saved_session_by_id("saved-one");
+    runtime
+        .load_selected_saved_session_into_editor()
+        .expect("load editor");
+    let opened = runtime.select_session_editor_appearance();
+    let baseline = editor_appearance_row(&opened, "appearance.color_scheme").clone();
+    assert_eq!(baseline.state, "inherit");
+    let baseline_index = baseline.selected;
+
+    let dracula_index = choice_index(&baseline, "Dracula");
+    runtime.select_editor_scheme_index(dracula_index);
+    let dirty = runtime.projection();
+    assert!(dirty.editor_is_dirty);
+    assert!(dirty.session_editor_preview.is_some());
+    assert_eq!(
+        editor_appearance_row(&dirty, "appearance.color_scheme").state,
+        "explicit"
+    );
+
+    // Cancel -> Discard Changes: no save happens, the preview disappears and the
+    // saved session keeps its inherited theme.
+    runtime.request_close_session_editor_modal();
+    let closed = runtime.confirm_discard_session_editor();
+    assert!(!closed.editor_modal_visible);
+    assert!(closed.session_editor_preview.is_none());
+    assert!(
+        runtime
+            .config_document
+            .find_session("saved-one")
+            .expect("saved session")
+            .terminal
+            .is_none(),
+        "discard must not write the draft theme"
+    );
+
+    // Reopening renders the persisted state again.
+    runtime
+        .load_selected_saved_session_into_editor()
+        .expect("reload editor");
+    let reopened = runtime.select_session_editor_appearance();
+    let scheme = editor_appearance_row(&reopened, "appearance.color_scheme");
+    assert_eq!(scheme.state, "inherit");
+    assert_eq!(scheme.selected, baseline_index);
+    assert!(reopened.session_editor_preview.is_some());
+}
+
+#[test]
+fn folder_editor_choice_rows_feed_the_combo_box() {
+    let temp = tempdir().expect("tempdir");
+    store_with_prod_folder(temp.path());
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+
+    let opened = runtime
+        .open_folder_editor("folder-prod")
+        .expect("open folder editor");
+    let scheme_row = folder_editor_row(
+        &opened.folder_editor_appearance_fields,
+        "appearance.color_scheme",
+    );
+    assert_eq!(scheme_row.kind, "choice");
+    assert_eq!(scheme_row.state, "explicit");
+    assert_eq!(scheme_row.value, "nord");
+    assert_eq!(scheme_row.selected, choice_index(&scheme_row, "Nord"));
+
+    // Picking another option by index updates the folder draft (the same path
+    // WinComboBox uses) and keeps the row's selected index in sync.
+    let dracula_index = choice_index(&scheme_row, "Dracula");
+    let selected = runtime.select_folder_editor_scheme_index(dracula_index);
+    let row = folder_editor_row(
+        &selected.folder_editor_appearance_fields,
+        "appearance.color_scheme",
+    );
+    assert_eq!(row.selected, dracula_index);
+    assert_eq!(row.value, "dracula");
+    assert!(runtime.folder_editor.theme.color_scheme.explicit);
+
+    // Logging format is the other Folder Editor choice row.
+    let format_row = folder_editor_row(
+        &opened.folder_editor_logging_fields,
+        "logging.format",
+    );
+    assert_eq!(format_row.kind, "choice");
+    assert_eq!(
+        format_row.options,
+        vec!["raw".to_owned(), "sanitized".to_owned()]
+    );
+    let selected = runtime.select_folder_editor_log_format_index(1);
+    let format_row = folder_editor_row(
+        &selected.folder_editor_logging_fields,
+        "logging.format",
+    );
+    assert_eq!(format_row.selected, 1);
+    assert_eq!(format_row.value, "sanitized");
+
+    // Saving still works with the combo-driven draft.
+    runtime.save_folder_editor().expect("save folder defaults");
+    let folder = runtime
+        .config_document
+        .find_folder("folder-prod")
+        .expect("folder");
+    assert_eq!(
+        folder
+            .terminal
+            .as_ref()
+            .and_then(|terminal| terminal.color_scheme.as_deref()),
+        Some("dracula")
+    );
+    assert_eq!(
+        folder
+            .logging
+            .as_ref()
+            .map(|logging| logging.format.as_str()),
+        Some("sanitized")
+    );
+}

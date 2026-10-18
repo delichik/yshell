@@ -388,6 +388,8 @@ export component MainWindow inherits Window {
     in property <[SettingsSchemeOption]> settings_appearance_schemes: [];
     in property <[color]> settings_appearance_palette_swatches: [];
     in property <image> settings_appearance_preview;
+    // TERM-4：Session Editor 外观分区的 live preview（关闭/切出分区时为空）。
+    in property <image> session_editor_preview;
     in property <bool> theme_editor_open: false;
     in property <bool> theme_editor_builtin: false;
     in property <string> theme_editor_id: "";
@@ -3043,6 +3045,7 @@ export component MainWindow inherits Window {
         tunnel-target-port-text <=> root.editor_tunnel_target_port_text;
         tunnel-summary-text: TextFormats.editor-tunnel-summary-display(root.editor_tunnel_summary_count, root.editor_tunnel_summary_rows_text);
         editor-appearance-fields: root.editor_appearance_fields;
+        preview-frame: root.session_editor_preview;
         close() => {
             // Dirty drafts open Discard Changes; clean drafts close immediately.
             root.close_session_editor_modal();

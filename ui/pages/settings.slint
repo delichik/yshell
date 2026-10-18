@@ -1,6 +1,7 @@
 import { Theme } from "../theme.slint";
 import { WinButton, WinComboBox, WinIconButton, WinNavItem, WinScrollIndicator, WinToggle } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
+import { TerminalPreview } from "../components/terminal_preview.slint";
 
 // N5：配色方案选项（Settings → Appearance 分区的方案卡片）。
 export struct SettingsSchemeOption {
@@ -730,32 +731,16 @@ export component SettingsDialog inherits Rectangle {
                                                 font-weight: Theme.weight-semibold;
                                             }
 
-                                            // TERM-2：live preview 与真实终端（terminal_view.slint）
-                                            // 同一像素契约——Rust 按物理像素光栅化（font_size ×
-                                            // window.scale_factor），这里用 `1phx` 让 1 图像像素 = 1
-                                            // 设备像素，并禁用 smooth 插值；绝不缩放位图。
-                                            // 尺寸契约：卡内容宽 434px − 2px 边框 − 2×6px 终端内边距 =
-                                            // 420px；高 200px − 2px 边框 = 198px，对应 Rust 侧
-                                            // `SETTINGS_PREVIEW_AREA_PX`（放不下时 Rust 减少渲染行列）。
-                                            // 背景/描边/圆角/内边距与终端表面 token 一致。
-                                            Rectangle {
-                                                background: Theme.terminal-surface;
-                                                border-radius: Theme.radius-panel;
-                                                border-width: 1px;
-                                                border-color: Theme.terminal-border;
-                                                height: 200px;
-                                                clip: true;
-
-                                                Image {
-                                                    source: root.appearance-preview;
-                                                    width: root.appearance-preview.width * 1phx;
-                                                    height: root.appearance-preview.height * 1phx;
-                                                    x: Theme.terminal-padding-x;
-                                                    y: Theme.terminal-padding-y;
-                                                    horizontal-alignment: left;
-                                                    vertical-alignment: top;
-                                                    image-rendering: pixelated;
-                                                }
+                                            // TERM-2：live preview 与真实终端共用
+                                            // `TerminalPreview` 的像素契约（Rust 按物理
+                                            // 像素光栅化，1phx 1:1 显示、pixelated、绝不
+                                            // 缩放）。尺寸契约：卡内容宽 434px − 2px 边框
+                                            // − 2×6px 终端内边距 = 420px；高 200px − 2px
+                                            // 边框 = 198px，对应 Rust 侧
+                                            // `SETTINGS_PREVIEW_AREA_PX`（放不下时 Rust
+                                            // 减少渲染行列）。
+                                            TerminalPreview {
+                                                frame: root.appearance-preview;
                                             }
 
                                             Text {

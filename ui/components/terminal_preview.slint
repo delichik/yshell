@@ -1,0 +1,39 @@
+import { Theme } from "../theme.slint";
+
+// TERM-2 / TERM-4：终端 live preview 表面（Settings 外观 + Session Editor 外观）。
+//
+// 与真实终端（`terminal_view.slint`）共用同一像素契约：
+//   * Rust 按物理像素光栅化（font_size × window.scale_factor）；
+//   * 这里用 `1phx` 让 1 个图像像素 = 1 个设备像素，并禁用平滑插值
+//     （`image-rendering: pixelated`），绝不再缩放整张位图；
+//   * 位图放不下时由 Rust 侧减少渲染行列，固定框剩余部分保持终端背景色。
+// 背景/描边/圆角/内边距与终端表面 token 一致。
+//
+// 尺寸契约：位图可用区域 = 表面逻辑宽 − 2×1px 边框 − 2×`terminal-padding-x`、
+// 表面逻辑高 − 2×1px 边框 − 2×`terminal-padding-y`。调用方必须让位图区域与
+// Rust 侧的 `*_PREVIEW_AREA_PX` 常量一致（宽由外层布局决定，`surface-height`
+// 由调用方传入）。
+export component TerminalPreview inherits Rectangle {
+    /// Rust 投影的位图；空图像时表面只显示终端背景色。
+    in property <image> frame;
+    /// 预览表面的逻辑高度（宽度跟随外层布局）。
+    in property <length> surface-height: 200px;
+
+    height: root.surface-height;
+    background: Theme.terminal-surface;
+    border-radius: Theme.radius-panel;
+    border-width: 1px;
+    border-color: Theme.terminal-border;
+    clip: true;
+
+    Image {
+        source: root.frame;
+        width: root.frame.width * 1phx;
+        height: root.frame.height * 1phx;
+        x: Theme.terminal-padding-x;
+        y: Theme.terminal-padding-y;
+        horizontal-alignment: left;
+        vertical-alignment: top;
+        image-rendering: pixelated;
+    }
+}

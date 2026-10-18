@@ -1,7 +1,7 @@
 import { Theme } from "../theme.slint";
 import { TextFormats } from "../text_formats.slint";
 import { Icon } from "../components/basic/icons.slint";
-import { WinButton, WinIconButton, WinToggle, WinScrollIndicator } from "../components/basic/controls.slint";
+import { WinButton, WinComboBox, WinIconButton, WinToggle, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 
 // Folder Editor（最小版）：文件夹级 Appearance / Terminal / Logging 默认值。
@@ -238,43 +238,15 @@ component FieldRow inherits Rectangle {
                             toggled => { root.toggled(); }
                         }
 
-                        // choice：字体 / 配色等枚举字段只允许选项切换，禁止退回自由文本。
-                        if root.data.kind == "choice" : HorizontalLayout {
-                            spacing: Theme.spacing-4;
-                            alignment: start;
-
-                            if root.data.options.length > 0 : WinIconButton {
-                                icon: "chevron-left";
-                                accessible-name: @tr("Previous option");
-                                enabled: root.data.selected > 0;
-                                clicked => { root.selected(root.data.selected - 1); }
-                            }
-
-                            Rectangle {
-                                width: 168px;
-                                height: Theme.control-height;
-                                border-radius: Theme.radius-control;
-                                border-width: 1px;
-                                border-color: Theme.control-stroke;
-                                background: Theme.control-fill;
-
-                                Text {
-                                    text: root.data.value == "" ? @tr("(not set)") : root.data.value;
-                                    color: Theme.text-primary;
-                                    font-size: Theme.font-body;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                    wrap: no-wrap;
-                                    overflow: elide;
-                                }
-                            }
-
-                            if root.data.options.length > 0 : WinIconButton {
-                                icon: "chevron-right";
-                                accessible-name: @tr("Next option");
-                                enabled: root.data.selected < root.data.options.length - 1;
-                                clicked => { root.selected(root.data.selected + 1); }
-                            }
+                        // choice：字体 / 配色等枚举字段改用下拉框（TERM-4）：
+                        // 一次点开列表、键盘可操作；只允许选项切换，禁止自由文本。
+                        // 继承态不显示该控件（上方展示 resolved 值 + 来源）。
+                        if root.data.kind == "choice" : WinComboBox {
+                            horizontal-stretch: 1;
+                            model: root.data.options;
+                            current-index: root.data.selected;
+                            placeholder-text: root.data.value == "" ? @tr("(not set)") : root.data.value;
+                            selected(option-index) => { root.selected(option-index); }
                         }
 
                         // 仅纯字符串 / 数字允许手动输入；hex 颜色也禁止自由输入（走色板/方案选择）。

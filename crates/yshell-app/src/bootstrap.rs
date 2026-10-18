@@ -6315,6 +6315,12 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window
         .set_editor_appearance_fields(tri_state_field_model(&projection.editor_appearance_fields));
     window.set_editor_terminal_fields(tri_state_field_model(&projection.editor_terminal_fields));
+    // TERM-4：Session Editor 外观分区的 live preview。关闭编辑器 / 切出外观分区时
+    // 用空图像清掉旧的位图（Slint 的 image 属性没有 Option），避免继续占内存。
+    match projection.session_editor_preview.as_ref() {
+        Some(preview) => window.set_session_editor_preview(frame_image(preview)),
+        None => window.set_session_editor_preview(slint::Image::default()),
+    }
     window.set_active_session_kind_text(projection.active_session_kind_text.clone().into());
     window.set_active_session_name_text(projection.active_session_name_text.clone().into());
     window.set_active_session_state_text(projection.active_session_state_text.clone().into());

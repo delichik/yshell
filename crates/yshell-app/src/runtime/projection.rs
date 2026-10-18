@@ -201,6 +201,8 @@ impl AppRuntime {
         let auth_prompt = self.auth_prompt_projection_parts();
         // N5：终端外观（Settings Appearance 内联 / Folder Editor / Session Editor）。
         let settings_appearance_preview = self.settings_appearance_preview_frame();
+        // TERM-4：Session Editor 外观分区的 live preview（仅打开且停在外观分区）。
+        let session_editor_preview = self.session_editor_preview_frame();
         let settings_appearance_status_text = self.settings_appearance_status.display_text();
         let settings_appearance_schemes = theme::scheme_options(&self.theme_catalog);
         let settings_appearance_palette = palette_parts(self.settings_appearance_palette());
@@ -355,6 +357,7 @@ impl AppRuntime {
             saved_folder_selected: self.selected_saved_folder_id.is_some(),
             editor_appearance_fields,
             editor_terminal_fields,
+            session_editor_preview,
             editor_modal_visible: self.editor_modal_visible,
             editor_discard_dialog_visible: self.editor_discard_dialog_visible,
             editor_is_dirty: self.editor_is_dirty(),
@@ -1628,6 +1631,9 @@ pub struct AppProjection {
     // --- N5：Session Editor 外观/终端覆盖 ----------------------------------------
     pub editor_appearance_fields: Vec<TriStateFieldData>,
     pub editor_terminal_fields: Vec<TriStateFieldData>,
+    /// TERM-4：外观分区 live preview（编辑器关闭或停在其它分区时为 `None`）。
+    /// 与 `settings_appearance_preview` 共用同一渲染路径与像素契约。
+    pub session_editor_preview: Option<yshell_terminal::TerminalFrame>,
     pub editor_modal_visible: bool,
     pub editor_discard_dialog_visible: bool,
     pub editor_is_dirty: bool,

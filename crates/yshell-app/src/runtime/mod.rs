@@ -132,7 +132,7 @@ use crate::{
     error::AppError, error::AppResult, session_runtime::SessionRuntime, sftp_view::SftpSortColumn,
 };
 use std::{
-    cell::Cell, cell::RefCell, collections::BTreeMap, collections::BTreeSet, env, fmt, fs,
+    cell::Cell, collections::BTreeMap, collections::BTreeSet, env, fmt, fs,
     path::Path, path::PathBuf, sync::Arc,
 };
 use yshell_config::{
@@ -344,7 +344,8 @@ impl AppRuntime {
             settings_appearance: SettingsAppearanceDraft::default(),
             settings_appearance_status: SettingsAppearanceStatus::Hint,
             settings_appearance_visible: false,
-            settings_preview_renderer: RefCell::new(None),
+            settings_preview_renderer: theme::LivePreviewRenderer::new(),
+            editor_preview_renderer: theme::LivePreviewRenderer::new(),
             ui_scale_factor: yshell_terminal::DEFAULT_SCALE_FACTOR,
             theme_editor: None,
             folder_editor: folder_editor::FolderEditorState::default(),
@@ -714,7 +715,9 @@ pub struct AppRuntime {
     pub(crate) settings_appearance_status: SettingsAppearanceStatus,
     pub(crate) settings_appearance_visible: bool,
     /// 预览专用渲染器（与活动终端渲染器分离，避免抢占 glyph 缓存）。
-    pub(crate) settings_preview_renderer: RefCell<Option<yshell_terminal::TerminalRenderer>>,
+    pub(crate) settings_preview_renderer: theme::LivePreviewRenderer,
+    /// TERM-4：Session Editor 外观分区的预览渲染器（与 Settings 分离）。
+    pub(crate) editor_preview_renderer: theme::LivePreviewRenderer,
     /// TERM-2：聚焦窗口的设备像素比（`window.scale_factor()`）。
     ///
     /// Settings 的 live preview 用它按**物理像素**光栅化，与真实终端的
