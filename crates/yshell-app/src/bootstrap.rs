@@ -499,6 +499,17 @@ pub(crate) fn wire_callbacks(
         };
     }
 
+    // WIN-2/WIN-3：Windows 标题栏原生拖动（menu_bar.slint 的 TitleBarDragTouch）。
+    // 回调只捕获 weak；实际拖动发生在 UI 线程的输入回调里。
+    {
+        let weak = window.as_weak();
+        window.on_title_drag_requested(move || {
+            if let Some(window) = weak.upgrade() {
+                crate::win_chrome::start_native_window_move(window.window());
+            }
+        });
+    }
+
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
     let surface = surface_source.clone();

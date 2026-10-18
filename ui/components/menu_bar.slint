@@ -3,7 +3,7 @@
 // 无系统装饰（MainWindow.no-frame）时本行同时承担：
 //   * 最左应用图标
 //   * 一级菜单 File / Edit / Session / View / Help（左对齐）
-//   * 空白区拖动（WindowMoveArea）与双击最大化
+//   * 空白区拖动（非 Windows 用 WindowMoveArea；Windows 走原生移动循环）与双击最大化
 //   * 窄窗右栏 chevron
 //   * 最小化 / 最大化·还原 / 关闭
 //
@@ -12,6 +12,66 @@ import { Theme } from "../theme.slint";
 import { WinIconButton } from "basic/controls.slint";
 import { Icon } from "basic/icons.slint";
 import { MenuEntry, MenuPopup } from "menu_popup.slint";
+
+// Windows 原生标题栏拖动检测：`MenuBar.native-title-drag` 为 true 时
+// `WindowMoveArea` 关闭，由本组件在空白区/应用图标上接管左键拖动。
+//
+// 按下后移动超过阈值才上报 `drag-requested`，单击（收起菜单）与双击（最大化）
+// 仍是普通 TouchArea 行为。系统移动循环会吞掉按键释放，Slint 之后可能补发一次
+// clicked；用 drag-triggered 吞掉那一次，避免拖动结束时误触单击动作。
+component TitleBarDragTouch inherits TouchArea {
+    in property <bool> native-drag: false;
+    callback clicked-blank();
+    callback double-clicked-blank();
+    callback drag-requested();
+
+    private property <length> press-x: 0px;
+    private property <length> press-y: 0px;
+    private property <bool> armed: false;
+    private property <bool> drag-triggered: false;
+
+    pure function abs-length(value: length) -> length {
+        value < 0px ? -value : value;
+    }
+
+    pointer-event(event) => {
+        if (!root.native-drag) {
+            return;
+        }
+        if (event.button == PointerEventButton.left) {
+            if (event.kind == PointerEventKind.down) {
+                root.drag-triggered = false;
+                root.press-x = self.mouse-x;
+                root.press-y = self.mouse-y;
+                root.armed = true;
+            } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
+                root.armed = false;
+            }
+        }
+    }
+
+    moved => {
+        if (root.native-drag && root.armed
+            && (root.abs-length(self.mouse-x - root.press-x) >= 4px
+                || root.abs-length(self.mouse-y - root.press-y) >= 4px)) {
+            root.armed = false;
+            root.drag-triggered = true;
+            root.drag-requested();
+        }
+    }
+
+    clicked => {
+        if (root.drag-triggered) {
+            root.drag-triggered = false;
+        } else {
+            root.clicked-blank();
+        }
+    }
+
+    double-clicked => {
+        root.double-clicked-blank();
+    }
+}
 
 // 菜单栏项（WinUI 3 MenuBar 形态）：24px 行高、4px 圆角、展开态高亮
 component MenuTitle inherits Rectangle {
@@ -154,6 +214,9 @@ export component MenuBar inherits Rectangle {
     in property <bool> right-collapsed: false;
     /// 宿主 Window.maximized，驱动还原字形。
     in property <bool> window-maximized: false;
+    /// Windows：标题栏拖动走 Win32 原生移动循环（见 win_chrome.rs），
+    /// 不再使用 WindowMoveArea → winit drag_window()。
+    in property <bool> native-title-drag: false;
 
     /// 点击一级菜单：index = 0..4，anchor-x = 该项的窗口绝对 x。
     callback menu-activated(int, length);
@@ -161,6 +224,8 @@ export component MenuBar inherits Rectangle {
     callback menu-hovered(int, length);
     /// 点击菜单栏空白（非一级标题）：收起已展开的菜单。
     callback menu-dismiss-requested();
+    /// Windows 原生拖动：标题栏空白/应用图标上的左键拖动已过阈值。
+    callback title-drag-requested();
     callback toggle-right-side();
     callback minimize-requested();
     callback maximize-toggle-requested();
@@ -188,7 +253,12 @@ export component MenuBar inherits Rectangle {
         // 注意：内层必须用 alignment: stretch（不能用 center）。center 会忽略
         // horizontal-stretch，把菜单整组居中，并把弹性拖动区压成 0 宽，导致
         // 拖动/双击最大化失效，菜单也不在左边。
+        //
+        // WIN-2/WIN-3：Windows 下禁用 WindowMoveArea（winit drag_window() 的
+        // dragging 守卫在最大化/还原循环后可能卡住），改由下方 TitleBarDragTouch
+        // 上报 title-drag-requested，交给 win32 原生移动循环。
         WindowMoveArea {
+            enabled: !root.native-title-drag;
             horizontal-stretch: 1;
             height: 100%;
 
@@ -215,6 +285,13 @@ export component MenuBar inherits Rectangle {
                         icon-size: Theme.icon-size-small;
                         x: (parent.width - self.width) / 2;
                         y: (parent.height - self.height) / 2;
+                    }
+
+                    // Windows 原生拖动模式下图标也是标题栏拖动区；非原生模式由
+                    // 外层 WindowMoveArea 处理，这里不创建覆盖层。
+                    if root.native-title-drag : TitleBarDragTouch {
+                        native-drag: true;
+                        drag-requested() => { root.title-drag-requested(); }
                     }
                 }
 
@@ -260,17 +337,21 @@ export component MenuBar inherits Rectangle {
                 }
 
                 // 弹性空白：拖动主区域；双击切换最大化；菜单展开时单击收起。
+                // Windows 原生拖动模式下由 TitleBarDragTouch 过阈值后上报
+                // title-drag-requested（WindowMoveArea 已禁用）。
                 // 同时保证窗口 max-width 无界（见 main_window 尺寸约束说明）。
                 Rectangle {
                     horizontal-stretch: 1;
                     height: 100%;
-                    TouchArea {
-                        clicked => {
+                    TitleBarDragTouch {
+                        native-drag: root.native-title-drag;
+                        clicked-blank() => {
                             if (root.open-index >= 0) {
                                 root.menu-dismiss-requested();
                             }
                         }
-                        double-clicked => { root.maximize-toggle-requested(); }
+                        double-clicked-blank() => { root.maximize-toggle-requested(); }
+                        drag-requested() => { root.title-drag-requested(); }
                     }
                 }
 

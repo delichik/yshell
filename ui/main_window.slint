@@ -40,8 +40,16 @@ export component MainWindow inherits Window {
     // 阶段 B：自绘标题栏（无系统装饰）。拖动/窗口按钮见 components/menu_bar.slint；
     // 无框时可拖边缩放（winit）。关闭走 close() → on_close_requested（既有确认）。
     // resize-border-width：边沿命中带；过窄时难抓，8px 与常见无框窗一致。
+    // WIN-1：Slint/winit 的缩放命中只判断"无框 + 可缩放"，不排除最大化；最大化时
+    // 必须把命中带设成 0，否则四边/四角仍会切成 resize 光标并抢走按压事件。
     no-frame: true;
-    resize-border-width: 8px;
+    resize-border-width: root.maximized ? 0px : 8px;
+    // WIN-2/WIN-3：Windows 下标题栏拖动改走 Win32 原生移动循环（绕开 winit
+    // `drag_window()` 的 dragging 守卫，见 win_chrome::start_native_window_move）。
+    // 由 Rust 在窗口创建时按 cfg!(windows) 写入；非 Windows 保持 false，
+    // menu_bar.slint 继续使用 WindowMoveArea。
+    in-out property <bool> native_title_drag: false;
+    callback title_drag_requested();
     // §4.2 / §12：默认 1440×900，最小 880×600
     // （<1120 自动折叠右栏，<960 左导航变 48px 图标条，因此 880×600 是安全下限）
     //
@@ -2150,6 +2158,8 @@ export component MainWindow inherits Window {
                 dock-toggle-visible: root.layout_dock_toggle_visible;
                 right-collapsed: root.layout_dock_collapsed;
                 window-maximized: root.maximized;
+                native-title-drag: root.native_title_drag;
+                title-drag-requested() => { root.title_drag_requested(); }
                 menu-activated(index, anchor_x) => { root.toggle_menu(index, anchor_x); }
                 menu-hovered(index, anchor_x) => { root.hover_menu(index, anchor_x); }
                 menu-dismiss-requested() => { root.dismiss-overlays(); }

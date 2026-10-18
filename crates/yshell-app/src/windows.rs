@@ -199,6 +199,9 @@ impl WindowManager {
                 }
             };
             let window = MainWindow::new().map_err(AppError::from_error)?;
+            // WIN-2/WIN-3：Windows 下标题栏拖动改走 Win32 原生移动循环（见
+            // win_chrome::start_native_window_move）；非 Windows 继续用 WindowMoveArea。
+            window.set_native_title_drag(cfg!(windows));
             // 语言必须在"第一个组件创建之后、窗口显示之前"选择：bundled translations
             // 挂在首个组件创建出来的全局上下文里（提前调用会报 NoTranslationsBundled，
             // 界面整体回退英文），而晚于 show() 会先闪一帧英文。重复调用是幂等的。
