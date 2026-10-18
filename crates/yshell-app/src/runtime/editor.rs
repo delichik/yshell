@@ -202,13 +202,21 @@ impl AppRuntime {
         self.projection()
     }
 
-    pub fn update_editor_key_path(&mut self, value: &str) -> AppProjection {
-        self.editor.key_path = value.to_owned();
-        self.projection()
-    }
-
-    pub fn update_editor_passphrase(&mut self, value: &str) -> AppProjection {
-        self.editor.passphrase = value.to_owned();
+    /// SSH-1：Key 认证改为从托管密钥清单选择（`label + algorithm/fingerprint`）。
+    ///
+    /// 选择即视为迁移：草稿里的 legacy path 标记被清除，保存时只写 `key_id`。
+    pub fn select_editor_key(&mut self, index: i32) -> AppProjection {
+        let entries = self.private_key_entries();
+        let Some(entry) = usize::try_from(index)
+            .ok()
+            .and_then(|index| entries.get(index))
+        else {
+            return self.projection();
+        };
+        self.editor.key_id = Some(entry.id.clone());
+        self.editor.legacy_key_path.clear();
+        self.editor.legacy_key_has_passphrase = false;
+        self.status_text = format!("Selected managed key `{}` for this session.", entry.label);
         self.projection()
     }
 
@@ -367,7 +375,9 @@ impl AppRuntime {
             .target_session_id
             .clone()
             .unwrap_or_else(|| self.next_saved_profile_id(&self.editor.host));
-        let auth_profile_id = format!("{session_id}-auth");
+        let auth_profile_id = self
+            .editor_auth_profile_id()
+            .unwrap_or_else(|| format!("{session_id}-auth"));
         let auth_profile = self.build_auth_profile_for_editor(&auth_profile_id)?;
         let proxy_profile_id = format!("{session_id}-proxy");
         let proxy_profile = self.build_proxy_profile_for_editor(&proxy_profile_id)?;
@@ -410,7 +420,7 @@ impl AppRuntime {
 
         self.config_document
             .auth_profiles
-            .insert(auth_profile_id, auth_profile);
+            .insert(auth_profile_id.clone(), auth_profile);
         match proxy_profile {
             Some(profile) => {
                 self.config_document
@@ -443,6 +453,7 @@ impl AppRuntime {
             .map_err(AppError::from_error)?;
         self.selected_saved_session_id = Some(session_id.clone());
         self.editor.target_session_id = Some(session_id.clone());
+        self.editor.auth_profile_id = Some(auth_profile_id);
         self.editor.target_folder_id = target_folder_id;
         Ok(session_id)
     }
@@ -452,6 +463,17 @@ impl AppRuntime {
             Some(id) => (true, id.clone()),
             None => (false, String::new()),
         }
+    }
+
+    /// 被编辑会话的 auth profile id：优先沿用加载时记录的 id（兼容自定义 id 的
+    /// 旧配置），新会话回退到 `{session_id}-auth` 约定。
+    pub(crate) fn editor_auth_profile_id(&self) -> Option<String> {
+        self.editor.auth_profile_id.clone().or_else(|| {
+            self.editor
+                .target_session_id
+                .as_deref()
+                .map(|session_id| format!("{session_id}-auth"))
+        })
     }
 
     pub(crate) fn editor_tunnel_summary_rows_text(&self) -> String {
@@ -984,6 +1006,8 @@ impl EditorAuthMethod {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SessionEditorDraft {
     pub(crate) target_session_id: Option<String>,
+    /// 被编辑会话当前引用的 auth profile id（保留自定义 id，保存时原地更新）。
+    pub(crate) auth_profile_id: Option<String>,
     pub(crate) target_folder_id: String,
     pub(crate) name: String,
     pub(crate) host: String,
@@ -991,13 +1015,16 @@ pub(crate) struct SessionEditorDraft {
     pub(crate) username: String,
     pub(crate) auth_method: EditorAuthMethod,
     pub(crate) password: String,
-    pub(crate) key_path: String,
-    pub(crate) passphrase: String,
+    /// 选中的托管私钥 id（`AuthMethod::PrivateKey::key_id`）；保存时优先写它。
+    pub(crate) key_id: Option<String>,
+    /// 旧配置里 path-only 的私钥路径：只读展示，保存时原样保留以便旧会话仍可连接。
+    /// 用户从选择器里选中托管密钥后该字段清空（迁移）。
+    pub(crate) legacy_key_path: String,
+    /// 旧 path-only 私钥在 secret store 里是否有已保存口令（只读提示/连接时复用）。
+    pub(crate) legacy_key_has_passphrase: bool,
     /// Edit mode: a password / keyboard-interactive secret is already stored.
     /// Empty password field means "keep existing" rather than "missing".
     pub(crate) has_stored_password: bool,
-    /// Edit mode: a private-key passphrase is already stored.
-    pub(crate) has_stored_passphrase: bool,
     pub(crate) proxy_mode: EditorProxyMode,
     pub(crate) proxy_protocol: ProxyProtocol,
     pub(crate) proxy_host: String,
@@ -1021,6 +1048,7 @@ impl Default for SessionEditorDraft {
     fn default() -> Self {
         Self {
             target_session_id: None,
+            auth_profile_id: None,
             target_folder_id: SAVED_SESSIONS_FOLDER_ID.to_owned(),
             name: String::new(),
             host: String::new(),
@@ -1028,10 +1056,10 @@ impl Default for SessionEditorDraft {
             username: String::new(),
             auth_method: EditorAuthMethod::Agent,
             password: String::new(),
-            key_path: String::new(),
-            passphrase: String::new(),
+            key_id: None,
+            legacy_key_path: String::new(),
+            legacy_key_has_passphrase: false,
             has_stored_password: false,
-            has_stored_passphrase: false,
             proxy_mode: EditorProxyMode::None,
             proxy_protocol: ProxyProtocol::Socks5,
             proxy_host: String::new(),

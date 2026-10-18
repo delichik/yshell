@@ -8,9 +8,56 @@ use yshell_config::{
     SessionProfile, TunnelForward, TunnelForwardKind, TunnelProfile,
 };
 use yshell_secret::{FakeKeychain, Keychain, SecretRef, SecretString};
-use yshell_ssh::{ForwardingKind, HostKeyPolicy, ProxyConfig};
+use yshell_ssh::{AuthMethod as SshAuthMethod, ForwardingKind, HostKeyPolicy, ProxyConfig};
 
 use super::*;
+
+/// D0c spike 生成的一次性 Ed25519 测试密钥（与 runtime::auth 单测同一份 fixture）。
+const TEST_ED25519_PRIVATE_KEY: &str = concat!(
+    "-----BEGIN OPENSSH PRIVATE KEY-----\n",
+    "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n",
+    "QyNTUxOQAAACBSYrC396PBUCm8lAJ7daz70WfJiRWrxGkVfMeR9mqo7QAAAJgld3oAJXd6\n",
+    "AAAAAAtzc2gtZWQyNTUxOQAAACBSYrC396PBUCm8lAJ7daz70WfJiRWrxGkVfMeR9mqo7Q\n",
+    "AAAEBjQwofDuXa019zF7tFRxguRzCAMmLfd6RLo4WsAftZh1JisLf3o8FQKbyUAnt1rPvR\n",
+    "Z8mJFavEaRV8x5H2aqjtAAAAE3NwaWtlLWVkMjU1MTktcGxhaW4BAg==\n",
+    "-----END OPENSSH PRIVATE KEY-----\n",
+);
+const TEST_ED25519_FINGERPRINT: &str = "SHA256:gufPep5T6QepKH9Ggl3KT9znGwIxL0pWn3fxvDUxNPA";
+const LEGACY_KEY_PATH: &str = "/legacy/id_ed25519";
+
+/// 旧配置形态：`AuthMethod::PrivateKey { key_id: None, path, .. }`（SSH-1 legacy）。
+fn legacy_private_key_store(
+    config_dir: &std::path::Path,
+    passphrase_secret_key: Option<&str>,
+) -> ConfigStore {
+    let store = ConfigStore::new(config_dir);
+    let mut document = ConfigDocument::default();
+    document.auth_profiles.insert(
+        "saved-legacy-auth".to_owned(),
+        AuthProfile {
+            id: "saved-legacy-auth".to_owned(),
+            name: "Legacy Key".to_owned(),
+            method: ConfigAuthMethod::PrivateKey {
+                key_id: None,
+                path: LEGACY_KEY_PATH.to_owned(),
+                passphrase_secret_key: passphrase_secret_key.map(str::to_owned),
+            },
+        },
+    );
+    let mut profile = QuickConnectTarget {
+        username: Some("deploy".to_owned()),
+        host: "legacy-key.example.test".to_owned(),
+        port: 22,
+    }
+    .into_session_profile("saved-legacy-key");
+    profile.name = "Legacy Key Session".to_owned();
+    profile.auth_profile_id = Some("saved-legacy-auth".to_owned());
+    let mut folder = FolderProfile::new("saved-sessions", "Saved Sessions");
+    folder.sessions.push(profile);
+    document.folders.push(folder);
+    store.save(&document).expect("save legacy config");
+    store
+}
 
 #[test]
 fn selected_saved_session_can_be_loaded_into_editor() {
@@ -839,4 +886,264 @@ fn session_search_filters_hierarchical_inventory() {
     assert!(!filtered
         .saved_session_inventory_rows_text
         .contains("dev.example.test"));
+}
+
+#[test]
+fn editor_key_auth_lists_managed_keys_and_saves_key_id() {
+    let temp = tempdir().expect("tempdir");
+    let keychain: Arc<dyn Keychain> = Arc::new(FakeKeychain::new("editor-master"));
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), Some(keychain)).expect("runtime");
+    let entry = runtime
+        .import_private_key("Work key", TEST_ED25519_PRIVATE_KEY, None, false)
+        .expect("import managed key");
+
+    let _ = runtime.start_new_saved_session_editor();
+    let _ = runtime.update_editor_name("Managed Key Session");
+    let _ = runtime.update_editor_host("managed-key.example.test");
+    let _ = runtime.update_editor_username("deploy");
+    let _ = runtime.set_editor_auth_method_private_key();
+
+    let listed = runtime.projection();
+    assert_eq!(listed.editor_auth_method_text, "private_key");
+    assert_eq!(listed.editor_key_options.len(), 1);
+    assert_eq!(listed.editor_key_options[0].id, entry.id);
+    assert_eq!(listed.editor_key_options[0].label, "Work key");
+    assert!(listed.editor_key_options[0]
+        .detail
+        .contains(TEST_ED25519_FINGERPRINT));
+    assert_eq!(listed.editor_selected_key_index, -1);
+    assert!(!listed.editor_selected_key_missing);
+    assert!(listed.editor_legacy_key_path_text.is_empty());
+
+    let selected = runtime.select_editor_key(0);
+    assert_eq!(selected.editor_selected_key_index, 0);
+    assert!(selected.editor_legacy_key_path_text.is_empty());
+
+    // Test Connection / draft connection path materializes the managed key material.
+    let ssh_config = runtime
+        .build_ssh_config_from_editor()
+        .expect("build managed-key ssh config");
+    match ssh_config.auth {
+        SshAuthMethod::PrivateKey {
+            ref key_path,
+            ref passphrase,
+            ..
+        } => {
+            assert!(
+                key_path.ends_with("key-1.key"),
+                "unexpected materialized key path {key_path}"
+            );
+            assert!(std::path::Path::new(key_path).is_file());
+            assert!(passphrase.is_none());
+        }
+        other => panic!("expected private key auth, got {other:?}"),
+    }
+
+    let _ = runtime
+        .save_editor_to_saved_session()
+        .expect("save managed-key session");
+    let session = runtime
+        .saved_session_profiles()
+        .into_iter()
+        .find(|session| session.host == "managed-key.example.test")
+        .expect("saved session");
+    let auth = runtime
+        .config_document
+        .auth_profiles
+        .get(session.auth_profile_id.as_deref().expect("auth id"))
+        .expect("auth profile");
+    match &auth.method {
+        ConfigAuthMethod::PrivateKey {
+            key_id,
+            path,
+            passphrase_secret_key,
+        } => {
+            assert_eq!(key_id.as_deref(), Some(entry.id.as_str()));
+            assert!(path.is_empty(), "managed save must not write a key path");
+            assert!(
+                passphrase_secret_key.is_none(),
+                "managed save must not write a per-session passphrase secret"
+            );
+        }
+        other => panic!("expected private key auth, got {other:?}"),
+    }
+
+    // 引用保护：已保存会话使用该 key 时，删除必须走确认/阻断路径。
+    let error = runtime
+        .remove_private_key(&entry.id, false)
+        .expect_err("referenced key must not be removed without confirmation");
+    assert!(error.message.contains("still used"));
+    assert_eq!(
+        runtime
+            .private_key_entry(&entry.id)
+            .expect("key entry")
+            .used_by,
+        vec!["Managed Key Session".to_owned()]
+    );
+}
+
+#[test]
+fn editor_key_auth_without_managed_keys_shows_empty_list() {
+    let temp = tempdir().expect("tempdir");
+    let keychain: Arc<dyn Keychain> = Arc::new(FakeKeychain::new("editor-master"));
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), Some(keychain)).expect("runtime");
+
+    let _ = runtime.start_new_saved_session_editor();
+    let _ = runtime.update_editor_name("No Key Session");
+    let _ = runtime.update_editor_host("no-key.example.test");
+    let projection = runtime.set_editor_auth_method_private_key();
+
+    assert_eq!(projection.editor_auth_method_text, "private_key");
+    assert!(projection.editor_key_options.is_empty());
+    assert_eq!(projection.editor_selected_key_index, -1);
+    assert!(!projection.editor_selected_key_missing);
+    assert!(projection.editor_legacy_key_path_text.is_empty());
+
+    // 空清单 + 无 legacy path：连接与保存都必须给出可读错误，而不是写出空密钥。
+    let error = runtime
+        .build_ssh_config_from_editor()
+        .expect_err("key auth without a key must fail");
+    assert!(error.message.contains("managed key"));
+    let error = runtime
+        .save_editor_to_saved_session()
+        .expect_err("key auth without a key must not save");
+    assert!(error.message.contains("managed key"));
+}
+
+#[test]
+fn legacy_path_key_session_is_marked_and_stays_connectable() {
+    let temp = tempdir().expect("tempdir");
+    let passphrase_ref = SecretRef::new("fake://yshell/legacy-key-passphrase");
+    let keychain_inner = FakeKeychain::new("editor-master");
+    keychain_inner
+        .put(passphrase_ref.clone(), SecretString::from("open-sesame"))
+        .expect("seed legacy passphrase");
+    let keychain: Arc<dyn Keychain> = Arc::new(keychain_inner);
+    legacy_private_key_store(temp.path(), Some(passphrase_ref.as_str()));
+
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), Some(keychain)).expect("runtime");
+    let _ = runtime.select_saved_session_by_id("saved-legacy-key");
+    let loaded = runtime
+        .load_selected_saved_session_into_editor()
+        .expect("load legacy session into editor");
+
+    assert_eq!(loaded.editor_auth_method_text, "private_key");
+    assert_eq!(loaded.editor_legacy_key_path_text, LEGACY_KEY_PATH);
+    assert!(loaded.editor_legacy_key_has_passphrase);
+    assert!(loaded.editor_key_options.is_empty());
+    assert_eq!(loaded.editor_selected_key_index, -1);
+
+    // 旧 path-only 草稿仍可连接：path 原样使用，口令从 secret store 解析。
+    let ssh_config = runtime
+        .build_ssh_config_from_editor()
+        .expect("legacy editor ssh config");
+    match ssh_config.auth {
+        SshAuthMethod::PrivateKey {
+            ref key_path,
+            ref passphrase,
+            ..
+        } => {
+            assert_eq!(key_path, LEGACY_KEY_PATH);
+            assert_eq!(passphrase.as_deref(), Some("open-sesame"));
+        }
+        other => panic!("expected private key auth, got {other:?}"),
+    }
+
+    // 仅改名保存时保留 legacy path 与已保存口令的 secret 引用（不会破坏旧配置）。
+    let _ = runtime.update_editor_name("Legacy Key Session Renamed");
+    let _ = runtime
+        .save_editor_to_saved_session()
+        .expect("save renamed legacy session");
+    let auth = runtime
+        .config_document
+        .auth_profiles
+        .get("saved-legacy-auth")
+        .expect("legacy auth profile");
+    match &auth.method {
+        ConfigAuthMethod::PrivateKey {
+            key_id,
+            path,
+            passphrase_secret_key,
+        } => {
+            assert!(key_id.is_none());
+            assert_eq!(path, LEGACY_KEY_PATH);
+            assert_eq!(
+                passphrase_secret_key.as_deref(),
+                Some(passphrase_ref.as_str())
+            );
+        }
+        other => panic!("expected retained legacy private key auth, got {other:?}"),
+    }
+}
+
+#[test]
+fn legacy_path_key_session_migrates_to_managed_key_when_picked() {
+    let temp = tempdir().expect("tempdir");
+    legacy_private_key_store(temp.path(), None);
+    let keychain: Arc<dyn Keychain> = Arc::new(FakeKeychain::new("editor-master"));
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), Some(keychain)).expect("runtime");
+    let entry = runtime
+        .import_private_key("Migrated key", TEST_ED25519_PRIVATE_KEY, None, false)
+        .expect("import managed key");
+    let _ = runtime.select_saved_session_by_id("saved-legacy-key");
+    let loaded = runtime
+        .load_selected_saved_session_into_editor()
+        .expect("load legacy session into editor");
+    assert_eq!(loaded.editor_legacy_key_path_text, LEGACY_KEY_PATH);
+    assert_eq!(loaded.editor_key_options.len(), 1);
+
+    let selected = runtime.select_editor_key(0);
+    assert_eq!(selected.editor_selected_key_index, 0);
+    assert!(selected.editor_legacy_key_path_text.is_empty());
+    assert!(!selected.editor_legacy_key_has_passphrase);
+
+    let _ = runtime
+        .save_editor_to_saved_session()
+        .expect("save migrated session");
+    let auth = runtime
+        .config_document
+        .auth_profiles
+        .get("saved-legacy-auth")
+        .expect("migrated auth profile");
+    match &auth.method {
+        ConfigAuthMethod::PrivateKey {
+            key_id,
+            path,
+            passphrase_secret_key,
+        } => {
+            assert_eq!(key_id.as_deref(), Some(entry.id.as_str()));
+            assert!(path.is_empty());
+            assert!(passphrase_secret_key.is_none());
+        }
+        other => panic!("expected migrated managed key auth, got {other:?}"),
+    }
+}
+
+#[test]
+fn deleting_selected_managed_key_clears_editor_selection() {
+    let temp = tempdir().expect("tempdir");
+    let keychain: Arc<dyn Keychain> = Arc::new(FakeKeychain::new("editor-master"));
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), Some(keychain)).expect("runtime");
+    let entry = runtime
+        .import_private_key("Draft key", TEST_ED25519_PRIVATE_KEY, None, false)
+        .expect("import managed key");
+    let _ = runtime.start_new_saved_session_editor();
+    let _ = runtime.set_editor_auth_method_private_key();
+    let _ = runtime.select_editor_key(0);
+    assert_eq!(runtime.editor.key_id.as_deref(), Some(entry.id.as_str()));
+
+    // 未保存草稿不算 used_by：强制删除后必须清掉选择，避免保存出悬空 key_id。
+    let _ = runtime
+        .remove_private_key(&entry.id, true)
+        .expect("remove draft key");
+    let projection = runtime.projection();
+    assert!(projection.editor_key_options.is_empty());
+    assert_eq!(projection.editor_selected_key_index, -1);
+    assert!(!projection.editor_selected_key_missing);
+    assert!(runtime.editor.key_id.is_none());
 }

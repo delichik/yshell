@@ -79,10 +79,13 @@ export component MainWindow inherits Window {
     in-out property <string> editor_username_text: "";
     in-out property <string> editor_auth_method_text: "agent";
     in-out property <string> editor_password_text: "";
-    in-out property <string> editor_key_path_text: "";
-    in-out property <string> editor_passphrase_text: "";
+    // SSH-1：Key 认证从托管密钥清单选择（label + 算法/指纹），旧 path 只读标记 legacy。
+    in-out property <[AuthKeyOption]> editor_key_options: [];
+    in-out property <int> editor_selected_key_index: -1;
+    in-out property <bool> editor_selected_key_missing: false;
+    in-out property <string> editor_legacy_key_path_text: "";
+    in-out property <bool> editor_legacy_key_has_passphrase: false;
     in-out property <bool> editor_has_stored_password: false;
-    in-out property <bool> editor_has_stored_passphrase: false;
     in-out property <bool> editor_has_stored_proxy_password: false;
     in-out property <string> editor_target_text: "Creating new saved session";
     in-out property <bool> editor_modal_visible: false;
@@ -959,8 +962,7 @@ export component MainWindow inherits Window {
     callback set_editor_auth_method_keyboard_interactive();
     callback set_editor_auth_method_private_key();
     callback update_editor_password(string);
-    callback update_editor_key_path(string);
-    callback update_editor_passphrase(string);
+    callback select_editor_key(int);
     callback set_editor_proxy_mode_none();
     callback set_editor_proxy_mode_custom();
     callback set_editor_proxy_protocol_socks4();
@@ -2954,10 +2956,12 @@ export component MainWindow inherits Window {
         username-text <=> root.editor_username_text;
         auth-method-text: root.editor_auth_method_text;
         password-text <=> root.editor_password_text;
-        key-path-text <=> root.editor_key_path_text;
-        passphrase-text <=> root.editor_passphrase_text;
+        key-options: root.editor_key_options;
+        selected-key-index <=> root.editor_selected_key_index;
+        selected-key-missing: root.editor_selected_key_missing;
+        legacy-key-path-text: root.editor_legacy_key_path_text;
+        legacy-key-has-passphrase: root.editor_legacy_key_has_passphrase;
         has-stored-password: root.editor_has_stored_password;
-        has-stored-passphrase: root.editor_has_stored_passphrase;
         auth-test-status-text: TextFormats.editor-auth-test-status(root.editor_auth_test_kind_text, root.editor_auth_test_host_text, root.editor_auth_test_backend_text, root.editor_auth_test_startup_text, root.editor_auth_test_error_text);
         proxy-mode-text: root.editor_proxy_mode_text;
         proxy-protocol-text: root.editor_proxy_protocol_text;
@@ -2999,8 +3003,8 @@ export component MainWindow inherits Window {
         set-auth-method-keyboard-interactive() => { root.set_editor_auth_method_keyboard_interactive(); }
         set-auth-method-private-key() => { root.set_editor_auth_method_private_key(); }
         update-password(value) => { root.update_editor_password(value); }
-        update-key-path(value) => { root.update_editor_key_path(value); }
-        update-passphrase(value) => { root.update_editor_passphrase(value); }
+        select-key(index) => { root.select_editor_key(index); }
+        manage-keys() => { root.open_private_keys_manager(); }
         test-auth() => { root.test_editor_auth(); }
         set-proxy-mode-none() => { root.set_editor_proxy_mode_none(); }
         set-proxy-mode-custom() => { root.set_editor_proxy_mode_custom(); }

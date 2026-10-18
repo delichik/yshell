@@ -1452,20 +1452,55 @@ msgctxt "SessionEditor"
 msgid "Private key"
 msgstr "私钥"
 
-#: ui/pages/session_editor.slint:392
+#: ui/pages/session_editor.slint:609
 msgctxt "SessionEditor"
-msgid "Private key path"
-msgstr "私钥路径"
+msgid "Choose a managed key"
+msgstr "选择托管密钥"
 
-#: ui/pages/session_editor.slint:398
+#: ui/pages/session_editor.slint:614 ui/pages/session_editor.slint:635
 msgctxt "SessionEditor"
-msgid "Passphrase"
-msgstr "口令"
+msgid "Manage keys…"
+msgstr "管理密钥…"
 
-#: ui/pages/session_editor.slint:403
+#: ui/pages/session_editor.slint:624
 msgctxt "SessionEditor"
-msgid "Private key passphrase"
-msgstr "私钥口令"
+msgid "No managed private keys yet."
+msgstr "尚无托管私钥。"
+
+#: ui/pages/session_editor.slint:642
+msgctxt "SessionEditor"
+msgid ""
+"Import an OpenSSH private key in the Private Keys manager, then pick it here."
+msgstr "在私钥管理器中导入 OpenSSH 私钥，然后在此选择。"
+
+#: ui/pages/session_editor.slint:655
+msgctxt "SessionEditor"
+msgid ""
+"The selected managed key is no longer available. Choose another key or open "
+"Manage keys…."
+msgstr "所选托管密钥已不可用。请选择其他密钥或打开“管理密钥…”。"
+
+#: ui/pages/session_editor.slint:664
+msgctxt "SessionEditor"
+msgid "Legacy key"
+msgstr "旧版密钥"
+
+#: ui/pages/session_editor.slint:681
+msgctxt "SessionEditor"
+msgid ""
+"Legacy key path with a stored passphrase. Select a managed key to migrate "
+"this session."
+msgstr "旧版密钥路径（已保存口令）。选择托管密钥可将此会话迁移。"
+
+#: ui/pages/session_editor.slint:682
+msgctxt "SessionEditor"
+msgid "Legacy key path. Select a managed key to migrate this session."
+msgstr "旧版密钥路径。选择托管密钥可将此会话迁移。"
+
+#: ui/pages/session_editor.slint:686
+msgctxt "SessionEditor"
+msgid "Choose a managed private key before saving."
+msgstr "保存前请选择托管私钥。"
 
 #: ui/pages/session_editor.slint:412
 msgctxt "SessionEditor"

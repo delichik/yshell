@@ -4,7 +4,7 @@ use std::{fs, sync::Arc};
 use tempfile::tempdir;
 use yshell_config::{
     AuthMethod as ConfigAuthMethod, AuthProfile, ConfigDocument, ConfigStore, FolderProfile,
-    HostKeyPolicy as ConfigHostKeyPolicy, QuickConnectTarget,
+    HostKeyPolicy as ConfigHostKeyPolicy, KeyProfile, QuickConnectTarget,
 };
 use yshell_secret::{FakeKeychain, Keychain, SecretRef, SecretString};
 use yshell_ssh::{AuthMethod as SshAuthMethod, HostKeyPolicy};
@@ -680,4 +680,142 @@ fn auth_prompt_host_shows_port_once() {
         auth_method: PendingPasswordAuthMethod::Password,
     };
     assert_eq!(prompt.host_text(), "alice@example.com:2200");
+}
+
+/// SSH-1：保存的会话只写 `key_id`；连接时由运行时物化托管密钥材料并复用密钥管理器
+/// 里保存的口令（secret store）。
+#[test]
+fn saved_session_managed_key_resolves_material_and_stored_passphrase() {
+    let temp = tempdir().expect("tempdir");
+    let material_ref = "local://yshell/keys/key-1/material";
+    let passphrase_ref = "local://yshell/keys/key-1/passphrase";
+    let material = "-----BEGIN OPENSSH PRIVATE KEY-----\nmanaged-key-material\n-----END OPENSSH PRIVATE KEY-----\n";
+    let keychain_inner = FakeKeychain::new("master");
+    keychain_inner
+        .put(SecretRef::new(material_ref), SecretString::from(material))
+        .expect("seed key material");
+    keychain_inner
+        .put(
+            SecretRef::new(passphrase_ref),
+            SecretString::from("key-pass"),
+        )
+        .expect("seed key passphrase");
+    let keychain: Arc<dyn Keychain> = Arc::new(keychain_inner);
+
+    let store = ConfigStore::new(temp.path());
+    let mut document = ConfigDocument::default();
+    document.keys.push(KeyProfile {
+        id: "key-1".to_owned(),
+        label: "Managed".to_owned(),
+        algorithm: "ssh-ed25519".to_owned(),
+        fingerprint: "SHA256:test".to_owned(),
+        public_key: String::new(),
+        secret_ref: material_ref.to_owned(),
+        comment: None,
+    });
+    document.auth_profiles.insert(
+        "auth-key".to_owned(),
+        AuthProfile {
+            id: "auth-key".to_owned(),
+            name: "Managed Key".to_owned(),
+            method: ConfigAuthMethod::PrivateKey {
+                key_id: Some("key-1".to_owned()),
+                path: String::new(),
+                passphrase_secret_key: None,
+            },
+        },
+    );
+    let mut profile = QuickConnectTarget {
+        username: Some("deploy".to_owned()),
+        host: "managed-key.example.test".to_owned(),
+        port: 22,
+    }
+    .into_session_profile("saved-managed-key");
+    profile.auth_profile_id = Some("auth-key".to_owned());
+    let mut folder = FolderProfile::new("saved-sessions", "Saved Sessions");
+    folder.sessions.push(profile);
+    document.folders.push(folder);
+    store.save(&document).expect("save config");
+
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), Some(keychain)).expect("runtime");
+    let _ = runtime
+        .open_saved_session("saved-managed-key")
+        .expect("open managed-key session");
+
+    let session_key = runtime.active_session_key().expect("active session");
+    let session = runtime.sessions.get(&session_key).expect("runtime session");
+    match &session.ssh_config.auth {
+        SshAuthMethod::PrivateKey {
+            key_path,
+            passphrase,
+            ..
+        } => {
+            let expected_path = temp.path().join("keys").join("key-1.key");
+            assert_eq!(key_path, &expected_path.display().to_string());
+            assert_eq!(
+                fs::read_to_string(&expected_path).expect("materialized key"),
+                material
+            );
+            assert_eq!(passphrase.as_deref(), Some("key-pass"));
+        }
+        other => panic!("expected private key auth, got {other:?}"),
+    }
+}
+
+/// SSH-1：旧 path-only 配置继续可连接（不回退到空路径），口令仍从 secret store 解析。
+#[test]
+fn saved_session_legacy_key_path_stays_connectable() {
+    let temp = tempdir().expect("tempdir");
+    let secret_ref = SecretRef::new("fake://yshell/legacy-key-passphrase");
+    let keychain: Arc<dyn Keychain> = Arc::new(FakeKeychain::new("master"));
+    keychain
+        .put(secret_ref.clone(), SecretString::from("open-sesame"))
+        .expect("put secret");
+
+    let store = ConfigStore::new(temp.path());
+    let mut document = ConfigDocument::default();
+    document.auth_profiles.insert(
+        "auth-key".to_owned(),
+        AuthProfile {
+            id: "auth-key".to_owned(),
+            name: "Legacy Key".to_owned(),
+            method: ConfigAuthMethod::PrivateKey {
+                key_id: None,
+                path: "/legacy/id_ed25519".to_owned(),
+                passphrase_secret_key: Some(secret_ref.as_str().to_owned()),
+            },
+        },
+    );
+    let mut profile = QuickConnectTarget {
+        username: Some("deploy".to_owned()),
+        host: "legacy-key.example.test".to_owned(),
+        port: 22,
+    }
+    .into_session_profile("saved-legacy-key");
+    profile.auth_profile_id = Some("auth-key".to_owned());
+    let mut folder = FolderProfile::new("saved-sessions", "Saved Sessions");
+    folder.sessions.push(profile);
+    document.folders.push(folder);
+    store.save(&document).expect("save config");
+
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), Some(keychain)).expect("runtime");
+    let _ = runtime
+        .open_saved_session("saved-legacy-key")
+        .expect("open legacy-key session");
+
+    let session_key = runtime.active_session_key().expect("active session");
+    let session = runtime.sessions.get(&session_key).expect("runtime session");
+    match &session.ssh_config.auth {
+        SshAuthMethod::PrivateKey {
+            key_path,
+            passphrase,
+            ..
+        } => {
+            assert_eq!(key_path, "/legacy/id_ed25519");
+            assert_eq!(passphrase.as_deref(), Some("open-sesame"));
+        }
+        other => panic!("expected legacy private key auth, got {other:?}"),
+    }
 }

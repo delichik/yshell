@@ -40,6 +40,7 @@ impl AppRuntime {
         );
         let mut draft = SessionEditorDraft {
             target_session_id: Some(resolved.session.id.clone()),
+            auth_profile_id: resolved.auth.as_ref().map(|auth| auth.id.clone()),
             target_folder_id,
             name: resolved.session.name.clone(),
             host: resolved.session.host.clone(),
@@ -47,10 +48,10 @@ impl AppRuntime {
             username: resolved.session.username.clone().unwrap_or_default(),
             auth_method: EditorAuthMethod::Agent,
             password: String::new(),
-            key_path: String::new(),
-            passphrase: String::new(),
+            key_id: None,
+            legacy_key_path: String::new(),
+            legacy_key_has_passphrase: false,
             has_stored_password: false,
-            has_stored_passphrase: false,
             proxy_mode: EditorProxyMode::None,
             proxy_protocol: ProxyProtocol::Socks5,
             proxy_host: String::new(),
@@ -81,13 +82,26 @@ impl AppRuntime {
                     draft.has_stored_password = true;
                 }
                 ConfigAuthMethod::PrivateKey {
+                    key_id,
                     path,
                     passphrase_secret_key,
-                    ..
                 } => {
                     draft.auth_method = EditorAuthMethod::PrivateKey;
-                    draft.key_path = path.clone();
-                    draft.has_stored_passphrase = passphrase_secret_key.is_some();
+                    // SSH-1：优先按 key_id 呈现托管密钥；缺失的 key_id 回退到旧 path
+                    // （与 `ConfigDocument::resolve_private_key_source` 一致），旧 path
+                    // 只读展示并标记 legacy。
+                    let managed_key_id = key_id
+                        .as_deref()
+                        .filter(|key_id| self.config_document.find_key(key_id).is_some());
+                    if let Some(key_id) = managed_key_id {
+                        draft.key_id = Some(key_id.to_owned());
+                    } else if !path.is_empty() {
+                        draft.legacy_key_path = path.clone();
+                        draft.legacy_key_has_passphrase = passphrase_secret_key.is_some();
+                    } else if let Some(key_id) = key_id {
+                        // 悬空 key_id（没有 legacy path 可回退）：投影为"选中密钥已不可用"。
+                        draft.key_id = Some(key_id.clone());
+                    }
                 }
             }
         }
@@ -175,17 +189,15 @@ impl AppRuntime {
                 }
             }
             Some(ConfigAuthMethod::PrivateKey {
+                key_id,
                 path,
                 passphrase_secret_key,
-                ..
-            }) => AuthMethod::PrivateKey {
+            }) => self.resolve_private_key_auth(
                 username,
-                key_path: path.clone(),
-                passphrase: passphrase_secret_key
-                    .as_ref()
-                    .map(|secret_key| self.resolve_secret_value(secret_key))
-                    .transpose()?,
-            },
+                key_id.as_deref(),
+                path,
+                passphrase_secret_key.as_deref(),
+            )?,
             Some(ConfigAuthMethod::Agent) | None => AuthMethod::Agent { username },
         };
         let mut config =
@@ -204,6 +216,47 @@ impl AppRuntime {
             .map(tunnel_forward_to_config)
             .collect();
         Ok(config)
+    }
+
+    /// SSH-1：把保存的 `AuthMethod::PrivateKey` 解析成运行时可用的私钥认证。
+    ///
+    /// 托管密钥优先：私钥材料从 secret store 取出并物化为 `0600` 文件，口令使用密钥
+    /// 管理器里保存的口令；只有 `key_id` 缺失/悬空时才回退到旧 `path`（legacy）。
+    fn resolve_private_key_auth(
+        &self,
+        username: String,
+        key_id: Option<&str>,
+        legacy_path: &str,
+        passphrase_secret_key: Option<&str>,
+    ) -> AppResult<AuthMethod> {
+        if let Some(key_id) =
+            key_id.filter(|key_id| self.config_document.find_key(key_id).is_some())
+        {
+            let key_path = self.materialize_private_key_file(key_id)?;
+            return Ok(AuthMethod::PrivateKey {
+                username,
+                key_path: key_path.display().to_string(),
+                passphrase: self.private_key_passphrase(key_id),
+            });
+        }
+        if !legacy_path.is_empty() {
+            let passphrase = passphrase_secret_key
+                .map(|secret_key| self.resolve_secret_value(secret_key))
+                .transpose()?;
+            return Ok(AuthMethod::PrivateKey {
+                username,
+                key_path: legacy_path.to_owned(),
+                passphrase,
+            });
+        }
+        match key_id {
+            Some(key_id) => Err(AppError::new(format!(
+                "saved session references managed key `{key_id}`, but it no longer exists; edit the session and choose another key"
+            ))),
+            None => Err(AppError::new(
+                "private key auth has neither a managed key nor a legacy key path",
+            )),
+        }
     }
 
     pub(crate) fn build_ssh_config_from_editor(&self) -> AppResult<SshConnectionConfig> {
@@ -233,13 +286,31 @@ impl AppRuntime {
                 AuthMethod::KeyboardInteractive { username, secret }
             }
             EditorAuthMethod::PrivateKey => {
-                if self.editor.key_path.trim().is_empty() {
-                    return Err(AppError::new("private key auth requires a key path"));
-                }
-                AuthMethod::PrivateKey {
-                    username,
-                    key_path: self.editor.key_path.trim().to_owned(),
-                    passphrase: self.resolve_editor_passphrase_secret()?,
+                if let Some(key_id) = self.editor.key_id.as_deref() {
+                    if self.config_document.find_key(key_id).is_none() {
+                        return Err(AppError::new(format!(
+                            "the selected managed key `{key_id}` is no longer available; choose another key"
+                        )));
+                    }
+                    // 与保存的托管密钥会话走同一条解析路径（材料物化 + 已存口令）。
+                    AuthMethod::PrivateKey {
+                        username,
+                        key_path: self
+                            .materialize_private_key_file(key_id)?
+                            .display()
+                            .to_string(),
+                        passphrase: self.private_key_passphrase(key_id),
+                    }
+                } else if !self.editor.legacy_key_path.trim().is_empty() {
+                    AuthMethod::PrivateKey {
+                        username,
+                        key_path: self.editor.legacy_key_path.trim().to_owned(),
+                        passphrase: self.resolve_editor_legacy_passphrase_secret()?,
+                    }
+                } else {
+                    return Err(AppError::new(
+                        "private key auth requires selecting a managed key",
+                    ));
                 }
             }
         };
@@ -353,17 +424,42 @@ impl AppRuntime {
                 ConfigAuthMethod::KeyboardInteractive { secret_key }
             }
             EditorAuthMethod::PrivateKey => {
-                if self.editor.key_path.trim().is_empty() {
-                    return Err(AppError::new("private key auth requires a key path"));
-                }
-                let passphrase_secret_key = self.resolve_or_store_editor_passphrase_secret(
-                    auth_profile_id,
-                    existing,
-                )?;
-                ConfigAuthMethod::PrivateKey {
-                    key_id: None,
-                    path: self.editor.key_path.trim().to_owned(),
-                    passphrase_secret_key,
+                if let Some(key_id) = self.editor.key_id.as_deref() {
+                    if self.config_document.find_key(key_id).is_none() {
+                        return Err(AppError::new(format!(
+                            "the selected managed key `{key_id}` is no longer available; choose another key"
+                        )));
+                    }
+                    // SSH-1：会话只保存 key_id；私钥材料/口令由密钥管理器与 secret store
+                    // 负责，不再写入会话级 path/passphrase。
+                    ConfigAuthMethod::PrivateKey {
+                        key_id: Some(key_id.to_owned()),
+                        path: String::new(),
+                        passphrase_secret_key: None,
+                    }
+                } else if !self.editor.legacy_key_path.trim().is_empty() {
+                    // 旧 path-only 会话保持可连接：未选择托管密钥时原样保留 path（以及
+                    // 已保存口令的 secret 引用），避免仅改名/改端口就破坏旧配置。
+                    let passphrase_secret_key = if self.editor.legacy_key_has_passphrase {
+                        existing.and_then(|profile| match &profile.method {
+                            ConfigAuthMethod::PrivateKey {
+                                passphrase_secret_key,
+                                ..
+                            } => passphrase_secret_key.clone(),
+                            _ => None,
+                        })
+                    } else {
+                        None
+                    };
+                    ConfigAuthMethod::PrivateKey {
+                        key_id: None,
+                        path: self.editor.legacy_key_path.trim().to_owned(),
+                        passphrase_secret_key,
+                    }
+                } else {
+                    return Err(AppError::new(
+                        "private key auth requires selecting a managed key",
+                    ));
                 }
             }
         };
@@ -437,14 +533,13 @@ impl AppRuntime {
                 "password auth requires a password value"
             }));
         }
-        let Some(session_id) = self.editor.target_session_id.as_deref() else {
+        let Some(auth_profile_id) = self.editor_auth_profile_id() else {
             return Err(AppError::new(if keyboard_interactive {
                 "keyboard-interactive auth requires a response value"
             } else {
                 "password auth requires a password value"
             }));
         };
-        let auth_profile_id = format!("{session_id}-auth");
         let secret_key = self
             .config_document
             .auth_profiles
@@ -468,17 +563,14 @@ impl AppRuntime {
         self.resolve_secret_value(secret_key)
     }
 
-    fn resolve_editor_passphrase_secret(&self) -> AppResult<Option<String>> {
-        if !self.editor.passphrase.trim().is_empty() {
-            return Ok(Some(self.editor.passphrase.trim().to_owned()));
-        }
-        if !self.editor.has_stored_passphrase {
+    /// SSH-1：legacy path-only 私钥的已存口令（旧会话保持可连接）。
+    fn resolve_editor_legacy_passphrase_secret(&self) -> AppResult<Option<String>> {
+        if !self.editor.legacy_key_has_passphrase {
             return Ok(None);
         }
-        let Some(session_id) = self.editor.target_session_id.as_deref() else {
+        let Some(auth_profile_id) = self.editor_auth_profile_id() else {
             return Ok(None);
         };
-        let auth_profile_id = format!("{session_id}-auth");
         let Some(secret_key) = self
             .config_document
             .auth_profiles
@@ -552,33 +644,6 @@ impl AppRuntime {
             return Ok(None);
         };
         Ok(Some(self.resolve_secret_value(&secret_key)?))
-    }
-
-    fn resolve_or_store_editor_passphrase_secret(
-        &self,
-        auth_profile_id: &str,
-        existing: Option<&yshell_config::AuthProfile>,
-    ) -> AppResult<Option<String>> {
-        if !self.editor.passphrase.trim().is_empty() {
-            let secret_key = format!("local://yshell/{auth_profile_id}/passphrase");
-            self.store_secret_value(&secret_key, self.editor.passphrase.trim())?;
-            return Ok(Some(secret_key));
-        }
-        if !self.editor.has_stored_passphrase {
-            return Ok(None);
-        }
-        if let Some(profile) = existing {
-            if let ConfigAuthMethod::PrivateKey {
-                passphrase_secret_key: Some(secret_key),
-                ..
-            } = &profile.method
-            {
-                return Ok(Some(secret_key.clone()));
-            }
-        }
-        Ok(Some(format!(
-            "local://yshell/{auth_profile_id}/passphrase"
-        )))
     }
 
     pub(crate) fn run_editor_auth_test(&mut self) -> AppResult<EditorAuthTestStatus> {

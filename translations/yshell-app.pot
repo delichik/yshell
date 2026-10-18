@@ -2443,19 +2443,54 @@ msgctxt "SessionEditor"
 msgid "Private key"
 msgstr ""
 
-#: ui/pages/session_editor.slint:485
+#: ui/pages/session_editor.slint:609
 msgctxt "SessionEditor"
-msgid "Private key path"
+msgid "Choose a managed key"
 msgstr ""
 
-#: ui/pages/session_editor.slint:491
+#: ui/pages/session_editor.slint:614 ui/pages/session_editor.slint:635
 msgctxt "SessionEditor"
-msgid "Passphrase"
+msgid "Manage keys…"
 msgstr ""
 
-#: ui/pages/session_editor.slint:496
+#: ui/pages/session_editor.slint:624
 msgctxt "SessionEditor"
-msgid "Private key passphrase"
+msgid "No managed private keys yet."
+msgstr ""
+
+#: ui/pages/session_editor.slint:642
+msgctxt "SessionEditor"
+msgid ""
+"Import an OpenSSH private key in the Private Keys manager, then pick it here."
+msgstr ""
+
+#: ui/pages/session_editor.slint:655
+msgctxt "SessionEditor"
+msgid ""
+"The selected managed key is no longer available. Choose another key or open "
+"Manage keys…."
+msgstr ""
+
+#: ui/pages/session_editor.slint:664
+msgctxt "SessionEditor"
+msgid "Legacy key"
+msgstr ""
+
+#: ui/pages/session_editor.slint:681
+msgctxt "SessionEditor"
+msgid ""
+"Legacy key path with a stored passphrase. Select a managed key to migrate "
+"this session."
+msgstr ""
+
+#: ui/pages/session_editor.slint:682
+msgctxt "SessionEditor"
+msgid "Legacy key path. Select a managed key to migrate this session."
+msgstr ""
+
+#: ui/pages/session_editor.slint:686
+msgctxt "SessionEditor"
+msgid "Choose a managed private key before saving."
 msgstr ""
 
 #: ui/pages/session_editor.slint:504

@@ -41,6 +41,28 @@ impl AppRuntime {
         let (editor_folder_label_text, editor_folder_id_text, editor_folder_known) =
             self.editor_folder_parts();
         let (editor_target_editing, editor_target_session_id_text) = self.editor_target_parts();
+        // SSH-1：会话编辑器 Key 认证的托管密钥清单与选中项。
+        let editor_key_entries = self.private_key_entries();
+        let editor_key_options = editor_key_entries
+            .iter()
+            .map(auth_key_option_data)
+            .collect::<Vec<_>>();
+        let editor_selected_key_index = self
+            .editor
+            .key_id
+            .as_deref()
+            .and_then(|key_id| {
+                editor_key_entries
+                    .iter()
+                    .position(|entry| entry.id == key_id)
+            })
+            .map(|index| i32::try_from(index).unwrap_or(i32::MAX))
+            .unwrap_or(-1);
+        let editor_selected_key_missing = self
+            .editor
+            .key_id
+            .as_deref()
+            .is_some_and(|key_id| self.config_document.find_key(key_id).is_none());
         let (proxy_summary_kind_text, proxy_summary_address_text, proxy_summary_user_text) =
             self.editor_proxy_summary_parts();
         let (tunnels_summary_kind_text, tunnels_summary_rows_text) = self.tunnels_summary_parts();
@@ -247,10 +269,12 @@ impl AppRuntime {
             editor_username_text: self.editor.username.clone(),
             editor_auth_method_text: self.editor.auth_method.label().to_owned(),
             editor_password_text: self.editor.password.clone(),
-            editor_key_path_text: self.editor.key_path.clone(),
-            editor_passphrase_text: self.editor.passphrase.clone(),
+            editor_key_options,
+            editor_selected_key_index,
+            editor_selected_key_missing,
+            editor_legacy_key_path_text: self.editor.legacy_key_path.clone(),
+            editor_legacy_key_has_passphrase: self.editor.legacy_key_has_passphrase,
             editor_has_stored_password: self.editor.has_stored_password,
-            editor_has_stored_passphrase: self.editor.has_stored_passphrase,
             editor_target_session_id_text,
             editor_target_editing,
             editor_auth_test_kind_text: self.editor_auth_test_status.kind_id().to_owned(),
@@ -1169,6 +1193,15 @@ struct AuthPromptProjectionParts {
     keyboard_submit_enabled: bool,
 }
 
+/// 托管密钥 → 认证弹窗/会话编辑器共用的下拉选项（`detail` = 算法 · 指纹）。
+fn auth_key_option_data(entry: &PrivateKeyEntryInfo) -> AuthKeyOptionData {
+    AuthKeyOptionData {
+        id: entry.id.clone(),
+        label: entry.label.clone(),
+        detail: format!("{} · {}", entry.algorithm, entry.fingerprint),
+    }
+}
+
 impl AppRuntime {
     fn private_keys_projection_parts(&self) -> PrivateKeysProjectionParts {
         let rows = self.private_key_row_data();
@@ -1303,11 +1336,7 @@ impl AppRuntime {
         let key_entries = self.private_key_entries();
         let key_options = key_entries
             .iter()
-            .map(|entry| AuthKeyOptionData {
-                id: entry.id.clone(),
-                label: entry.label.clone(),
-                detail: format!("{} · {}", entry.algorithm, entry.fingerprint),
-            })
+            .map(auth_key_option_data)
             .collect::<Vec<_>>();
         let selected_key_index = prompt
             .map(|prompt| prompt.selected_key_index(&key_entries))
@@ -1414,10 +1443,15 @@ pub struct AppProjection {
     pub editor_username_text: String,
     pub editor_auth_method_text: String,
     pub editor_password_text: String,
-    pub editor_key_path_text: String,
-    pub editor_passphrase_text: String,
+    /// SSH-1：Key 认证可选的托管密钥（`AuthKeyOptionData`: id/label/detail）。
+    pub editor_key_options: Vec<AuthKeyOptionData>,
+    pub editor_selected_key_index: i32,
+    /// 选中的 `key_id` 已从配置中消失（例如在密钥管理器里被删除）。
+    pub editor_selected_key_missing: bool,
+    /// 旧 path-only 私钥路径（只读 legacy 提示；空 = 非 legacy）。
+    pub editor_legacy_key_path_text: String,
+    pub editor_legacy_key_has_passphrase: bool,
     pub editor_has_stored_password: bool,
-    pub editor_has_stored_passphrase: bool,
     pub editor_target_session_id_text: String,
     pub editor_target_editing: bool,
     pub editor_auth_test_kind_text: String,

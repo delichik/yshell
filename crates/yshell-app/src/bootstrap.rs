@@ -3049,24 +3049,9 @@ pub(crate) fn wire_callbacks(
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
     let surface = surface_source.clone();
-    window.on_update_editor_key_path(move |value| {
+    window.on_select_editor_key(move |index| {
         if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref
-                .borrow_mut()
-                .update_editor_key_path(value.as_ref());
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_update_editor_passphrase(move |value| {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref
-                .borrow_mut()
-                .update_editor_passphrase(value.as_ref());
+            let projection = runtime_ref.borrow_mut().select_editor_key(index);
             apply_projection(&window, &projection);
             surface.refresh(&window);
         }
@@ -5797,6 +5782,26 @@ fn set_auth_key_options_if_changed(window: &MainWindow, options: &[AuthKeyOption
     )));
 }
 
+/// SSH-1：会话编辑器的托管密钥下拉模型（与认证弹窗同构，独立模型避免互相覆盖）。
+fn set_editor_key_options_if_changed(window: &MainWindow, options: &[AuthKeyOptionData]) {
+    let current = window.get_editor_key_options();
+    if current.row_count() == options.len() {
+        let unchanged = (0..options.len()).all(|index| {
+            current.row_data(index).is_some_and(|option| {
+                option.id == options[index].id.as_str()
+                    && option.label == options[index].label.as_str()
+                    && option.detail == options[index].detail.as_str()
+            })
+        });
+        if unchanged {
+            return;
+        }
+    }
+    window.set_editor_key_options(ModelRc::new(VecModel::from(
+        options.iter().map(auth_key_option_from).collect::<Vec<_>>(),
+    )));
+}
+
 fn auth_keyboard_prompt_from(prompt: &AuthPromptQuestionData) -> AuthKeyboardPrompt {
     AuthKeyboardPrompt {
         text: prompt.text.clone().into(),
@@ -6064,10 +6069,14 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_editor_username_text(projection.editor_username_text.clone().into());
     window.set_editor_auth_method_text(projection.editor_auth_method_text.clone().into());
     window.set_editor_password_text(projection.editor_password_text.clone().into());
-    window.set_editor_key_path_text(projection.editor_key_path_text.clone().into());
-    window.set_editor_passphrase_text(projection.editor_passphrase_text.clone().into());
+    set_editor_key_options_if_changed(window, &projection.editor_key_options);
+    window.set_editor_selected_key_index(projection.editor_selected_key_index);
+    window.set_editor_selected_key_missing(projection.editor_selected_key_missing);
+    window.set_editor_legacy_key_path_text(
+        projection.editor_legacy_key_path_text.clone().into(),
+    );
+    window.set_editor_legacy_key_has_passphrase(projection.editor_legacy_key_has_passphrase);
     window.set_editor_has_stored_password(projection.editor_has_stored_password);
-    window.set_editor_has_stored_passphrase(projection.editor_has_stored_passphrase);
     window
         .set_editor_target_session_id_text(projection.editor_target_session_id_text.clone().into());
     window.set_editor_target_editing(projection.editor_target_editing);

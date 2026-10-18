@@ -1451,20 +1451,60 @@ msgctxt "SessionEditor"
 msgid "Private key"
 msgstr "Private key"
 
-#: ui/pages/session_editor.slint:392
+#: ui/pages/session_editor.slint:609
 msgctxt "SessionEditor"
-msgid "Private key path"
-msgstr "Private key path"
+msgid "Choose a managed key"
+msgstr "Choose a managed key"
 
-#: ui/pages/session_editor.slint:398
+#: ui/pages/session_editor.slint:614 ui/pages/session_editor.slint:635
 msgctxt "SessionEditor"
-msgid "Passphrase"
-msgstr "Passphrase"
+msgid "Manage keys…"
+msgstr "Manage keys…"
 
-#: ui/pages/session_editor.slint:403
+#: ui/pages/session_editor.slint:624
 msgctxt "SessionEditor"
-msgid "Private key passphrase"
-msgstr "Private key passphrase"
+msgid "No managed private keys yet."
+msgstr "No managed private keys yet."
+
+#: ui/pages/session_editor.slint:642
+msgctxt "SessionEditor"
+msgid ""
+"Import an OpenSSH private key in the Private Keys manager, then pick it here."
+msgstr ""
+"Import an OpenSSH private key in the Private Keys manager, then pick it here."
+
+#: ui/pages/session_editor.slint:655
+msgctxt "SessionEditor"
+msgid ""
+"The selected managed key is no longer available. Choose another key or open "
+"Manage keys…."
+msgstr ""
+"The selected managed key is no longer available. Choose another key or open "
+"Manage keys…."
+
+#: ui/pages/session_editor.slint:664
+msgctxt "SessionEditor"
+msgid "Legacy key"
+msgstr "Legacy key"
+
+#: ui/pages/session_editor.slint:681
+msgctxt "SessionEditor"
+msgid ""
+"Legacy key path with a stored passphrase. Select a managed key to migrate "
+"this session."
+msgstr ""
+"Legacy key path with a stored passphrase. Select a managed key to migrate "
+"this session."
+
+#: ui/pages/session_editor.slint:682
+msgctxt "SessionEditor"
+msgid "Legacy key path. Select a managed key to migrate this session."
+msgstr "Legacy key path. Select a managed key to migrate this session."
+
+#: ui/pages/session_editor.slint:686
+msgctxt "SessionEditor"
+msgid "Choose a managed private key before saving."
+msgstr "Choose a managed private key before saving."
 
 #: ui/pages/session_editor.slint:412
 msgctxt "SessionEditor"

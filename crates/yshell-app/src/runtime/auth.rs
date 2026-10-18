@@ -508,6 +508,11 @@ impl AppRuntime {
         self.config_store
             .save(&self.config_document)
             .map_err(AppError::from_error)?;
+        // SSH-1：正在编辑的会话草稿若引用了这个 key，清掉选择，避免保存出悬空
+        // key_id（密钥管理器页面不把未保存草稿计入 used_by）。
+        if self.editor.key_id.as_deref() == Some(key_id) {
+            self.editor.key_id = None;
+        }
         Ok(entry)
     }
 

@@ -1,6 +1,8 @@
 import { Theme } from "../theme.slint";
 import { WinButton, WinIconButton, WinNavItem, WinToggle, WinScrollIndicator } from "../components/basic/controls.slint";
+import { Icon } from "../components/basic/icons.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
+import { AuthKeyOption } from "../components/auth_prompt_dialog.slint";
 import { TriStateField, TriStateFieldSection } from "./folder_editor.slint";
 
 // 表单行：左侧固定宽度标签 + 右侧控件（子元素放进右侧横向布局）
@@ -84,6 +86,157 @@ component EditorNavItem inherits Rectangle {
     }
 }
 
+// SSH-1：托管私钥下拉。选 Key 认证后只允许从密钥管理器条目里选择；不再提供
+// 手输路径/口令。展开行显示 label + 算法/指纹（与认证弹窗同一 `AuthKeyOption`）。
+component ManagedKeyPicker inherits Rectangle {
+    in property <[AuthKeyOption]> options: [];
+    in-out property <int> selected-index: -1;
+    in property <string> placeholder-text: "";
+    callback selected(int);
+
+    private property <bool> has-selection:
+        root.selected-index >= 0 && root.selected-index < root.options.length;
+    private property <string> selected-label:
+        root.has-selection ? root.options[root.selected-index].label : "";
+
+    height: Theme.control-height;
+    min-width: 0px;
+    preferred-width: 0px;
+    border-radius: Theme.radius-control;
+    border-width: 1px;
+    border-color: (picker_focus.has-focus || picker_touch.has-hover) ? Theme.accent : Theme.control-stroke;
+    background: picker_touch.pressed ? Theme.control-fill-pressed
+        : picker_touch.has-hover ? Theme.control-fill-hover
+        : Theme.control-fill;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+    animate border-color { duration: Theme.duration-faster; easing: ease-out; }
+
+    accessible-role: combobox;
+    accessible-label: root.has-selection ? root.selected-label : root.placeholder-text;
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-12;
+        padding-right: Theme.spacing-8;
+        spacing: Theme.spacing-8;
+
+        Text {
+            text: root.has-selection ? root.selected-label : root.placeholder-text;
+            color: root.has-selection ? Theme.text-primary : Theme.text-tertiary;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        Rectangle {
+            width: Theme.icon-size-small;
+            vertical-stretch: 1;
+            background: transparent;
+
+            Icon {
+                name: "chevron-down";
+                icon-color: Theme.text-secondary;
+                icon-size: Theme.icon-size-small;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+    }
+
+    picker_focus := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Space || event.text == Key.Return) {
+                picker.show();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    picker_touch := TouchArea {
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                picker_focus.focus();
+            }
+        }
+        clicked => { picker.show(); }
+    }
+
+    // close-on-click-outside：点选项本身由选项回调关闭（与 WinComboBox 一致）。
+    picker := PopupWindow {
+        width: max(root.width, 280px);
+        y: root.height + 2px;
+        close-policy: close-on-click-outside;
+
+        Rectangle {
+            background: Theme.flyout-background;
+            border-width: 1px;
+            border-color: Theme.layer-stroke;
+            border-radius: Theme.radius-panel;
+            drop-shadow-blur: Theme.shadow-blur;
+            drop-shadow-color: Theme.shadow-color;
+            drop-shadow-offset-y: Theme.shadow-offset-y;
+            height: min(options_layout.preferred-height + 8px, 224px);
+
+            Flickable {
+                width: parent.width;
+                height: parent.height;
+                interactive: self.content-height > self.height;
+                content-width: self.width;
+                content-height: options_layout.preferred-height;
+
+                options_layout := VerticalLayout {
+                    padding: 4px;
+                    spacing: 0px;
+
+                    for option[index] in root.options : Rectangle {
+                        height: 44px;
+                        border-radius: Theme.radius-control;
+                        background: option_touch.has-hover ? Theme.subtle-hover
+                            : index == root.selected-index ? Theme.subtle-selected
+                            : transparent;
+
+                        VerticalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            padding-top: 5px;
+                            padding-bottom: 5px;
+                            spacing: 1px;
+
+                            Text {
+                                text: option.label;
+                                color: Theme.text-primary;
+                                font-size: Theme.font-body;
+                                font-weight: index == root.selected-index ? Theme.weight-semibold : 400;
+                                wrap: no-wrap;
+                                overflow: elide;
+                            }
+
+                            Text {
+                                text: option.detail;
+                                color: Theme.text-tertiary;
+                                font-size: Theme.font-caption;
+                                font-family: Theme.font-mono;
+                                wrap: no-wrap;
+                                overflow: elide;
+                            }
+                        }
+
+                        option_touch := TouchArea {
+                            clicked => {
+                                root.selected-index = index;
+                                root.selected(index);
+                                picker.close();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 export component SessionEditor inherits Rectangle {
     in property <bool> open: false;
     in property <string> section: "general";
@@ -95,10 +248,14 @@ export component SessionEditor inherits Rectangle {
     in-out property <string> username-text: "";
     in property <string> auth-method-text: "agent";
     in-out property <string> password-text: "";
-    in-out property <string> key-path-text: "";
-    in-out property <string> passphrase-text: "";
+    // SSH-1：Key 认证的托管密钥选择（`AuthKeyOption`: id/label/detail）。
+    in property <[AuthKeyOption]> key-options: [];
+    in-out property <int> selected-key-index: -1;
+    in property <bool> selected-key-missing: false;
+    // 旧 path-only 私钥：只读展示并标记 legacy；选中托管密钥后迁移。
+    in property <string> legacy-key-path-text: "";
+    in property <bool> legacy-key-has-passphrase: false;
     in property <bool> has-stored-password: false;
-    in property <bool> has-stored-passphrase: false;
     in property <string> auth-test-status-text: "";
     in property <string> proxy-mode-text: "none";
     in property <string> proxy-protocol-text: "socks5";
@@ -134,8 +291,8 @@ export component SessionEditor inherits Rectangle {
     callback set-auth-method-keyboard-interactive();
     callback set-auth-method-private-key();
     callback update-password(string);
-    callback update-key-path(string);
-    callback update-passphrase(string);
+    callback select-key(int);
+    callback manage-keys();
     callback test-auth();
     callback set-proxy-mode-none();
     callback set-proxy-mode-custom();
@@ -171,6 +328,13 @@ export component SessionEditor inherits Rectangle {
     private property <bool> show-key-auth: root.auth-method-text == "private_key";
     private property <bool> show-proxy-custom: root.proxy-mode-text == "custom";
     private property <bool> show-tunnel-target: root.tunnel-kind-text != "dynamic";
+    // SSH-1：Key 认证要么选中托管密钥，要么保留旧 path-only 会话（legacy）。
+    private property <bool> has-selected-key:
+        root.selected-key-index >= 0 && root.selected-key-index < root.key-options.length;
+    private property <string> selected-key-detail:
+        root.has-selected-key ? root.key-options[root.selected-key-index].detail : "";
+    private property <bool> key-selection-valid:
+        !root.show-key-auth || root.has-selected-key || root.legacy-key-path-text != "";
 
     // 面板高度固定（B 轮3 #13）：原实现按各分区内容收缩，切换分区时整块面板（含左侧导航）
     // 上下跳动、鼠标下的导航项会移位。现在取最高分区所需高度并给伪本地化留余量，
@@ -181,7 +345,9 @@ export component SessionEditor inherits Rectangle {
 
     // 保存校验（B 轮3 #16）：运行时要求会话名与主机非空；这里同步禁用并用就地提示替代
     // 只写在状态栏的英文错误（状态栏文案的本地化由 WS-D 处理）。
-    private property <bool> save-blocked: root.name-text == "" || root.host-text == "";
+    // SSH-1：Key 认证还要求选中托管密钥（或保留旧 path-only legacy 会话）。
+    private property <bool> save-blocked:
+        root.name-text == "" || root.host-text == "" || !root.key-selection-valid;
 
     visible: self.open;
     background: Theme.scrim;
@@ -430,29 +596,96 @@ export component SessionEditor inherits Rectangle {
                                                 }
                                             }
 
-                                            if root.show-key-auth : FormRow {
+                                            // SSH-1：Key 认证只从密钥管理器选择，不再手输路径/口令；
+                                            // 空清单显示“去导入”引导，不渲染空下拉。
+                                            if root.show-key-auth && root.key-options.length > 0 : FormRow {
                                                 label: @tr("Private key");
 
-                                                WinTextInput {
+                                                ManagedKeyPicker {
                                                     horizontal-stretch: 1;
-                                                    text <=> root.key-path-text;
-                                                    placeholder-text: @tr("Private key path");
-                                                    edited => { root.update-key-path(self.text); }
+                                                    options: root.key-options;
+                                                    selected-index <=> root.selected-key-index;
+                                                    placeholder-text: @tr("Choose a managed key");
+                                                    selected(index) => { root.select-key(index); }
+                                                }
+
+                                                WinButton {
+                                                    text: @tr("Manage keys…");
+                                                    subtle: true;
+                                                    clicked => { root.manage-keys(); }
                                                 }
                                             }
 
-                                            if root.show-key-auth : FormRow {
-                                                label: @tr("Passphrase");
+                                            if root.show-key-auth && root.key-options.length == 0 : FormRow {
+                                                label: @tr("Private key");
 
-                                                WinTextInput {
+                                                Text {
+                                                    text: @tr("No managed private keys yet.");
+                                                    color: Theme.text-tertiary;
+                                                    font-size: Theme.font-body;
                                                     horizontal-stretch: 1;
-                                                    text <=> root.passphrase-text;
-                                                    input-type: password;
-                                                    placeholder-text: root.has-stored-passphrase
-                                                        ? @tr("Leave blank to keep saved passphrase")
-                                                        : @tr("Private key passphrase");
-                                                    edited => { root.update-passphrase(self.text); }
+                                                    height: Theme.control-height;
+                                                    vertical-alignment: center;
+                                                    wrap: no-wrap;
+                                                    overflow: elide;
                                                 }
+
+                                                WinButton {
+                                                    text: @tr("Manage keys…");
+                                                    subtle: true;
+                                                    clicked => { root.manage-keys(); }
+                                                }
+                                            }
+
+                                            if root.show-key-auth && root.key-options.length == 0 : HintText {
+                                                hint: @tr("Import an OpenSSH private key in the Private Keys manager, then pick it here.");
+                                            }
+
+                                            if root.show-key-auth && root.has-selected-key : Text {
+                                                text: root.selected-key-detail;
+                                                color: Theme.text-tertiary;
+                                                font-size: Theme.font-caption;
+                                                font-family: Theme.font-mono;
+                                                wrap: no-wrap;
+                                                overflow: elide;
+                                            }
+
+                                            if root.show-key-auth && root.selected-key-missing : Text {
+                                                text: @tr("The selected managed key is no longer available. Choose another key or open Manage keys….");
+                                                color: Theme.critical;
+                                                font-size: Theme.font-caption;
+                                                wrap: word-wrap;
+                                            }
+
+                                            // 旧 path-only 配置仍可连接：只读显示并标记 legacy；
+                                            // 选中托管密钥后保存即迁移（草稿清空 path）。
+                                            if root.show-key-auth && root.legacy-key-path-text != "" : FormRow {
+                                                label: @tr("Legacy key");
+
+                                                Text {
+                                                    text: root.legacy-key-path-text;
+                                                    color: Theme.text-secondary;
+                                                    font-size: Theme.font-body;
+                                                    font-family: Theme.font-mono;
+                                                    horizontal-stretch: 1;
+                                                    height: Theme.control-height;
+                                                    vertical-alignment: center;
+                                                    wrap: no-wrap;
+                                                    overflow: elide;
+                                                }
+                                            }
+
+                                            if root.show-key-auth && root.legacy-key-path-text != "" : HintText {
+                                                hint: root.legacy-key-has-passphrase
+                                                    ? @tr("Legacy key path with a stored passphrase. Select a managed key to migrate this session.")
+                                                    : @tr("Legacy key path. Select a managed key to migrate this session.");
+                                            }
+
+                                            if root.show-key-auth && !root.key-selection-valid : Text {
+                                                text: @tr("Choose a managed private key before saving.");
+                                                color: Theme.critical;
+                                                font-size: Theme.font-caption;
+                                                wrap: word-wrap;
                                             }
 
                                             FormRow {
