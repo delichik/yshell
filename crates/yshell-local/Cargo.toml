@@ -1,0 +1,21 @@
+[package]
+name = "yshell-local"
+version = "0.1.0"
+description = "Local PTY shell backend for YShell"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+portable-pty = "0.9"
+tracing.workspace = true
+yshell-ssh = { path = "../yshell-ssh" }
+
+[dev-dependencies]
+tempfile.workspace = true
