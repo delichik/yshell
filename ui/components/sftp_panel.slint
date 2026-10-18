@@ -914,7 +914,7 @@ export component LocalFilesSection inherits Rectangle {
 
     background: transparent;
 
-    // 列表几何直接取 LocalPane 的实际值（含 32px 整数行对齐与错误条偏移），
+    // 列表几何直接取 LocalPane 的实际值（小高度降级后的顶部偏移 + 整数行对齐），
     // 让外层 DropArea 与列表视口严格重合。
     private property <length> list-top: pane.list-top;
     private property <length> list-height: pane.list-height;

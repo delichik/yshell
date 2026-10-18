@@ -181,16 +181,78 @@ export component LocalPane inherits Rectangle {
         + (root.shows-modified ? root.column-gap + root.column-modified-width : 0px)
         + (root.shows-permissions ? root.column-gap + root.column-permissions-width : 0px);
 
-    // 列表视口顶部固定偏移（padding-top 8 + 头部 32 + 间距 4 + 路径输入 32 + 间距 4
-    // [+ 错误条 28 + 间距 4] + 列头 28 + 间距 4）。外层 DropArea 也用这组值。
-    out property <length> list-top: 112px + (root.error-text != "" ? 32px : 0px);
-    // 列表底部固定占用（间距 4 + 汇总行 16 + 底部内边距 8）。
-    private property <length> list-footer: Theme.spacing-4 + Theme.line-caption + Theme.spacing-8;
-    // 视口高度向下取整到行高的整数倍：底部不出现被腰斩的半行（B7），
-    // 余量留给汇总行下方的留白。
-    out property <length> list-height: max(0px,
-        floor(max(0px, root.height - root.list-top - root.list-footer) / Theme.row-height-list)
-        * Theme.row-height-list);
+    // ---------------------------------------------------- 小高度降级布局（PANEL-1）
+    // 布局契约：头部 / 路径输入 / 错误条 / 列头自上而下，列表占剩余空间，汇总行
+    // 底部锚定；高度不足时按「路径行 → 列头 → 错误条」的优先级隐藏可选行，
+    // 列表视口向下取整到整数行，汇总行始终完整可见（不被 clip 裁切）。
+    // 不再用「固定 list-top + 固定底部占用」反推列表高度（旧值 112/28 在低高度
+    // 下会把汇总行留在 y≈116px，116–132px 只露半行、<116px 完全不可见）。
+    //
+    // 行高全部来自 token，阈值由固定行高推导（默认 token 下，单位 px）：
+    //   68  = 上下内边距 16 + 头部 32 + 间距 4 + 汇总行 16（列表 0 行）
+    //   104 = 68 + 列表 1 行 32 + 间距 4（无任何可选行）
+    //   136 = 104 + 错误条 28 + 间距 4（错误条出现；列头出现也是 136）
+    //   168 = 136 + 错误条 32（错误条 + 列头同时出现）
+    //   172 = 136 + 路径行 32 + 间距 4（列头 + 路径行，无错误条）
+    //   204 = 172 + 错误条 32（全部行 + 1 行列表）
+    // 隐藏顺序（高度下降时）：路径行 → 列头 → 错误条。每个可选行只在「它 +
+    // 一行列表 + 汇总行」都放得下时出现，所以 104–135px 连错误条也隐藏、保留
+    // 1 行列表（错误详情仍由状态栏携带）；低于 104px 才把列表压缩到 0 行。
+    // 因此 120/128px 只保留头部 + 1 行列表 + 汇总，140/160px 恢复列头，
+    // 路径行要到 172px 才出现；汇总行在以上所有高度下均完整可见。
+    private property <length> layout-padding-top: Theme.spacing-8;
+    private property <length> layout-padding-bottom: Theme.spacing-8;
+    private property <length> layout-gap: Theme.spacing-4;
+    private property <length> header-height: Theme.control-height;
+    private property <length> path-height: Theme.control-height;
+    private property <length> error-height: Theme.row-height-tree;
+    private property <length> column-height: Theme.row-height-tree;
+    private property <length> summary-height: Theme.line-caption;
+
+    // 展开态「零可选行、列表 0 行」的最小高度：内边距 + 头部 + 间距 + 汇总行。
+    private property <length> min-height-no-option: root.layout-padding-top
+        + root.layout-padding-bottom + root.header-height + root.layout-gap
+        + root.summary-height;
+
+    // 降级阈值（保留优先级：错误条 > 列头 > 路径行，即路径行最先隐藏）。
+    // 错误条也只在「它 + 一行列表 + 汇总行」放得下（136px 起）时出现：低高度
+    // 先保住 1 行列表，错误详情仍由状态栏携带，而不是让列表变成 0 行。
+    private property <bool> shows-error: !root.collapsed && root.error-text != ""
+        && root.height >= root.min-height-no-option + root.error-height + root.layout-gap
+            + Theme.row-height-list + root.layout-gap;
+    private property <bool> shows-column-header: !root.collapsed
+        && root.height >= root.min-height-no-option + Theme.row-height-list + root.layout-gap
+            + root.column-height + root.layout-gap
+            + (root.shows-error ? root.error-height + root.layout-gap : 0px);
+    // 路径行最后恢复：只有列头已显示且再加一行路径仍能保住 1 行列表时才出现。
+    private property <bool> shows-path: root.shows-column-header
+        && root.height >= root.min-height-no-option + Theme.row-height-list + root.layout-gap
+            + root.column-height + root.layout-gap
+            + root.path-height + root.layout-gap
+            + (root.shows-error ? root.error-height + root.layout-gap : 0px);
+    // 低于 68px（展开态）连头部都放不下：只保留汇总行，避免头部把汇总行顶出可视区。
+    private property <bool> shows-header: root.collapsed || root.height >= root.min-height-no-option;
+
+    // 各行 y 坐标（绝对定位；下面的 list-top 是它们的唯一推导结果，DropArea 复用）。
+    private property <length> path-y: root.layout-padding-top
+        + (root.shows-header ? root.header-height + root.layout-gap : 0px);
+    private property <length> error-y: root.path-y
+        + (root.shows-path ? root.path-height + root.layout-gap : 0px);
+    private property <length> column-y: root.error-y
+        + (root.shows-error ? root.error-height + root.layout-gap : 0px);
+    // 列表视口顶部：外层 DropArea 用这个值（不再有硬编码 112px）。
+    out property <length> list-top: root.column-y
+        + (root.shows-column-header ? root.column-height + root.layout-gap : 0px);
+
+    // 汇总行底部锚定（底部内边距之上）；列表底边 = 汇总行顶部 - 间距。
+    private property <length> summary-y: max(0px,
+        root.height - root.layout-padding-bottom - root.summary-height);
+    private property <length> list-bottom: max(root.list-top, root.summary-y - root.layout-gap);
+    // 视口高度按行高整数倍向下取整：底部不出现被腰斩的半行（B7）；余量（< 1 行）
+    // 留在列表与汇总行之间，汇总行本身始终保持完整高度。
+    out property <length> list-height: root.collapsed ? 0px
+        : floor(max(0px, root.list-bottom - root.list-top) / Theme.row-height-list)
+            * Theme.row-height-list;
 
     // 汇总行："{n} item(s) · {m} dir(s)"；Rust 只投影计数，禁止在 Slint 拼句（§7.2）。
     private property <string> item-summary-display:
@@ -214,21 +276,27 @@ export component LocalPane inherits Rectangle {
         }
     }
 
-    VerticalLayout {
-        // 左右内边距由外层（sftp_panel 面板层）统一提供，这里不再叠加 4px，
-        // 否则同一张卡片里远端栏与本地栏的列头/列表会错开 4px（B5）。
-        padding-left: 0px;
-        padding-right: 0px;
-        padding-top: Theme.spacing-8;
-        padding-bottom: Theme.spacing-8;
-        spacing: Theme.spacing-4;
+    // 绝对定位容器：顶部行、列表视口、底部汇总行都用上面推导的 y/height，
+    // 保证 list-top/list-height 与 sftp_panel 的 DropArea 严格一致（PANEL-1）。
+    // 左右内边距由外层（sftp_panel 面板层）统一提供，这里不再叠加 4px，
+    // 否则同一张卡片里远端栏与本地栏的列头/列表会错开 4px（B5）。
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
 
         // --- 头部第 1 行：折叠开关 + 标题 + 导航 + 显隐 ---------------------
         // 展开态也显示「本地」标题（B10）；路径输入单独一行：280px 下与 5 个
         // 按钮同排会被输入框的首选宽度撑爆（右侧控件被裁掉），拆行后与
         // sftp_panel 的"工具行 + 路径行"结构一致。
         HorizontalLayout {
-            height: Theme.control-height;
+            x: 0;
+            y: root.layout-padding-top;
+            width: root.width;
+            height: root.header-height;
+            // 极低高度（< 68px）时连头部一起让位，避免把汇总行顶出可视区。
+            visible: root.shows-header;
             spacing: Theme.spacing-4;
 
             // 独立 Local dock 面板时关闭内嵌折叠（由 PanelFrame 负责）。
@@ -286,8 +354,12 @@ export component LocalPane inherits Rectangle {
             }
         }
 
-        // --- 头部第 2 行：路径输入（回车打开）-------------------------------
-        if !root.collapsed : WinTextInput {
+        // --- 头部第 2 行：路径输入（回车打开；低高度时最先隐藏）-------------
+        if root.shows-path : WinTextInput {
+            x: 0;
+            y: root.path-y;
+            width: root.width;
+            height: root.path-height;
             text <=> root.path-text;
             placeholder-text: "/local/path";
             font-family: Theme.font-mono;
@@ -295,8 +367,11 @@ export component LocalPane inherits Rectangle {
         }
 
         // --- 内联错误条：错误文本 + 重试（不弹连续弹窗）-------------------
-        if !root.collapsed && root.error-text != "" : Rectangle {
-            height: Theme.row-height-tree;
+        if root.shows-error : Rectangle {
+            x: 0;
+            y: root.error-y;
+            width: root.width;
+            height: root.error-height;
             background: Theme.attention-background;
             border-radius: Theme.radius-control;
             border-width: 1px;
@@ -325,9 +400,12 @@ export component LocalPane inherits Rectangle {
             }
         }
 
-        // --- 列头（点击排序）-----------------------------------------------
-        if !root.collapsed : Rectangle {
-            height: Theme.row-height-tree;
+        // --- 列头（点击排序；低高度第二优先隐藏，排序状态仍在汇总行可见）---
+        if root.shows-column-header : Rectangle {
+            x: 0;
+            y: root.column-y;
+            width: root.width;
+            height: root.column-height;
             background: transparent;
 
             LocalColumnHeader {
@@ -384,10 +462,12 @@ export component LocalPane inherits Rectangle {
 
         // --- 文件列表（ListView 虚拟化，空态居中提示）-----------------------
         if !root.collapsed : Rectangle {
+            x: 0;
+            y: root.list-top;
+            width: root.width;
             clip: true;
-            // 高度取行高的整数倍（B7）：底部不出现被腰斩的半行，余量留在
-            // 汇总行下方。本组件只被 sftp_panel 绝对定位实例化（高度外部给定），
-            // 因此这里的绑定不会形成布局回环。
+            // 高度取行高的整数倍（B7）：底部不出现被腰斩的半行；列表底边由
+            // 汇总行反推，余量（< 1 行）留在列表与汇总行之间。
             height: root.list-height;
 
             Text {
@@ -536,8 +616,12 @@ export component LocalPane inherits Rectangle {
         // --- 汇总行：计数 + 选中名 + 排序列 ---------------------------------
         // 窄宽（280px）下只留计数：完整句子会以省略号结尾，反而读不出信息；
         // 排序列在列头 `Name ↑` 处仍有可见反馈。
-        // 行高固定为 line-caption：列表视口按整数行对齐时用它算底部占用（B7）。
+        // 底部锚定（y = 高度 - 底部内边距 - 行高）：低高度时只压列表，绝不裁本行。
         if !root.collapsed : Text {
+            x: 0;
+            y: root.summary-y;
+            width: root.width;
+            height: min(root.summary-height, root.height);
             text: root.width < 340px
                 ? root.item-summary-display
                 : (root.selected-name-text != ""
@@ -545,7 +629,6 @@ export component LocalPane inherits Rectangle {
                     : @tr("{0} · {1}", root.item-summary-display, root.sort-text));
             color: Theme.text-tertiary;
             font-size: Theme.font-caption;
-            height: Theme.line-caption;
             vertical-alignment: center;
             wrap: no-wrap;
             overflow: elide;
