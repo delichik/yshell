@@ -7,3 +7,6 @@
 # IDE / local tooling data
 /.idea/
 /.codegraph/
+
+# Local problem-tracking file (must never be committed).
+problems.md
