@@ -674,6 +674,15 @@ mod tests {
         assert!(crumbs
             .iter()
             .all(|crumb| !crumb.label.is_empty() && !crumb.path.is_empty()));
+
+        // The separator follows the platform: `\` on Windows, `/` elsewhere.
+        let separator = crate::runtime::local_path_separator();
+        assert_eq!(separator, if cfg!(windows) { "\\" } else { "/" });
+        if cfg!(windows) {
+            assert!(crumbs
+                .iter()
+                .any(|crumb| crumb.path.contains('\\')));
+        }
     }
 
     #[test]

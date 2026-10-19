@@ -306,6 +306,8 @@ export component MainWindow inherits Window {
     // --- N1 Phase 2：本地栏 / 队列抽屉 / 冲突 / 属性 / 剪贴板 -----------------
     in-out property <[FileRow]> local_rows;
     in-out property <string> local_path_text: "/";
+    /// 本地路径分段之间的分隔符（Windows 是 \）。
+    in-out property <string> local_path_separator: "";
     in-out property <string> local_sort_column_text: "name";
     in-out property <bool> local_sort_ascending: true;
     in-out property <bool> local_show_hidden: false;
@@ -2439,6 +2441,7 @@ export component MainWindow inherits Window {
                     sftp-local-rows: root.local_rows;
                     sftp-local-crumbs: root.local_crumbs;
                     sftp-local-path-text: root.local_path_text;
+                    sftp-local-path-separator: root.local_path_separator;
                     sftp-local-show-hidden: root.local_show_hidden;
                     sftp-local-sort-column: root.local_sort_column_text;
                     sftp-local-sort-ascending: root.local_sort_ascending;
@@ -2618,6 +2621,7 @@ export component MainWindow inherits Window {
                     sftp-path-text <=> root.sftp_path_text;
                     local-rows: root.local_rows;
                     local-path-text: root.local_path_text;
+                    local-path-separator: root.local_path_separator;
                     local-show-hidden: root.local_show_hidden;
                     local-sort-column-text: root.local_sort_column_text;
                     local-sort-ascending: root.local_sort_ascending;

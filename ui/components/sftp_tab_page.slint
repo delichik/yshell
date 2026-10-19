@@ -29,6 +29,7 @@ export struct SftpPaneData {
     local_rows: [FileRow],
     local_crumbs: [FileCrumb],
     local_path_text: string,
+    local_path_separator: string,
     local_sort_column_text: string,
     local_sort_ascending: bool,
     local_sort_text: string,
@@ -71,6 +72,7 @@ export component SftpTabPage inherits Rectangle {
     in property <[FileRow]> local-rows;
     in property <[FileCrumb]> local-crumbs;
     in property <string> local-path-text: "/";
+    in property <string> local-path-separator: "/";
     in property <bool> local-show-hidden: false;
     in property <string> local-sort-column: "name";
     in property <bool> local-sort-ascending: true;
@@ -157,6 +159,7 @@ export component SftpTabPage inherits Rectangle {
         local-rows: root.local-rows;
         local-crumbs: root.local-crumbs;
         local-path-text: root.local-path-text;
+        local-path-separator: root.local-path-separator;
         local-show-hidden: root.local-show-hidden;
         local-sort-column: root.local-sort-column;
         local-sort-ascending: root.local-sort-ascending;

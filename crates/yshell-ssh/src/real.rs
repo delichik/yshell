@@ -76,7 +76,14 @@ fn notify_connection_stage(stage: RealConnectionStage) {
 /// unsupported we try a shorter list. Keep `ext-info-c` /
 /// `kex-strict-c-v00@openssh.com` out of these strings — libssh2 1.11.1+
 /// re-appends them inside `method_pref`.
-fn apply_preferred_kex_methods(session: &Session) {
+/// Applies the preferred KEX method list to a session before the handshake.
+///
+/// The native terminal path does this to avoid DH-GEX-first handshake failures
+/// (libssh2 "Session(-5)"). The SFTP backend opens its own connection for
+/// transfer jobs, so it needs the same treatment — otherwise every upload /
+/// download / delete job fails on servers that require modern KEX, while
+/// browsing (which reuses the terminal's transport) keeps working.
+pub fn apply_preferred_kex_methods(session: &Session) {
     const PREFS: &[&str] = &[
         "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group16-sha512,diffie-hellman-group14-sha256,diffie-hellman-group-exchange-sha256",
         "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,diffie-hellman-group14-sha256",
@@ -507,21 +514,6 @@ const LIBSSH2_ERROR_METHOD_NOT_SUPPORTED: i32 = -33;
 /// Seconds of idle SSH I/O before libssh2 sends a keepalive probe.
 /// Matches common client defaults (OpenSSH `ServerAliveInterval` style).
 const NATIVE_SSH_KEEPALIVE_INTERVAL_SECS: u32 = 15;
-
-/// libssh2 error code for a socket timeout.
-const LIBSSH2_ERROR_SOCKET_TIMEOUT: i32 = -30;
-/// Whether a libssh2 error means the TCP connection is really gone.
-///
-/// The socket errors are `-1` (none) to `-5` (disconnect); `-30` is the socket
-/// timeout. Every other code is a transport hiccup that a later read/write
-/// will report again — killing a healthy session because one keepalive probe
-/// failed is what made connections drop ("SSH connection lost").
-fn ssh2_error_means_connection_lost(code: Option<i32>) -> bool {
-    match code {
-        Some(code) => (-5..=-1).contains(&code) || code == LIBSSH2_ERROR_SOCKET_TIMEOUT,
-        None => false,
-    }
-}
 
 fn ssh2_error_code(error: &ssh2::Error) -> Option<i32> {
     match error.code() {
@@ -1514,19 +1506,13 @@ impl RealNativeShellSession {
         // keepalive_send is a no-op until the configured idle interval elapses;
         // call it every poll so probes actually go out on the UI tick.
         //
-        // A failing probe is only fatal when the socket is really gone: the
-        // send buffer may be full for a moment (EAGAIN) and libssh2 reports
-        // transient hiccups the same way. Marking the session closed here is
-        // what made healthy sessions drop ("SSH connection lost"); the real
-        // failure shows up in the channel read below, which is authoritative.
+        // A failing probe is NEVER fatal: the socket send buffer can be full
+        // for a moment (EAGAIN) and libssh2 reports that as a socket error,
+        // so killing the session here is what made healthy connections drop
+        // ("SSH connection lost"). The channel read below is the authoritative
+        // signal: a really dead socket makes `recv` return 0, which libssh2
+        // reports as "socket disconnected".
         if let Err(error) = self.session.keepalive_send() {
-            if ssh2_error_means_connection_lost(ssh2_error_code(&error)) {
-                self.mark_closed_after_transport_error();
-                return Err(SshError::new(
-                    SshErrorKind::Io,
-                    format!("SSH keepalive failed: {error}"),
-                ));
-            }
             tracing::debug!(
                 target: "yshell::ssh",
                 "SSH keepalive probe failed (continuing): {error}"
@@ -1792,6 +1778,17 @@ impl SshTransport {
         self.shell_attached.load(Ordering::SeqCst)
     }
 
+    /// Overrides the I/O timeout of the underlying session.
+    ///
+    /// Used by short-lived probes (the SFTP liveness check) so a dead
+    /// connection is noticed in seconds instead of the full connect timeout.
+    pub fn set_io_timeout(&self, timeout: Duration) {
+        if self.closed.load(Ordering::SeqCst) {
+            return;
+        }
+        self.session.set_timeout(session_timeout_ms(timeout));
+    }
+
     /// Opens a shell channel on this transport.
     ///
     /// The terminal shell runs non-blocking after setup (the UI polls it); the
@@ -1888,18 +1885,10 @@ impl ShellSession for SshTransportShellSession {
         if self.closed {
             return Ok(Vec::new());
         }
-        // A failing keepalive probe is only fatal when the socket is gone (see
-        // `RealNativeShellSession`); the channel read below decides whether the
+        // A failing keepalive probe is never fatal (see
+        // `RealNativeShellSession`): the channel read below decides whether the
         // session is really dead.
         if let Err(error) = self.transport.session().keepalive_send() {
-            if ssh2_error_means_connection_lost(ssh2_error_code(&error)) {
-                self.closed = true;
-                self.transport.mark_closed();
-                return Err(SshError::new(
-                    SshErrorKind::Io,
-                    format!("SSH keepalive failed: {error}"),
-                ));
-            }
             tracing::debug!(
                 target: "yshell::ssh",
                 "SSH keepalive probe failed (continuing): {error}"

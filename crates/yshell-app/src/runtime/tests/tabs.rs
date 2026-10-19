@@ -7,6 +7,43 @@ use yshell_core::SessionState;
 use super::*;
 
 #[test]
+fn the_connection_badge_replaces_the_state_text_on_the_tab() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 2);
+    let tab_id = open_saved_tab(&mut runtime, "saved-0");
+
+    let connected = runtime.projection();
+    let tab = connected
+        .tabs
+        .iter()
+        .find(|tab| tab.id == tab_id)
+        .expect("tab");
+    assert_eq!(tab.connection_badge, "connected");
+    assert_eq!(tab.state_text, "connected");
+
+    // 断开后：红叉角标，状态文字仍然是 "disconnected"（UI 侧有角标就不显示文字）。
+    let session_id = runtime
+        .tabs
+        .iter()
+        .find(|entry| entry.tab_id == tab_id)
+        .and_then(|entry| entry.session_id())
+        .expect("session id")
+        .to_owned();
+    runtime
+        .disconnect_session_by_key(&session_id)
+        .expect("disconnect");
+    let disconnected = runtime.projection();
+    let tab = disconnected
+        .tabs
+        .iter()
+        .find(|tab| tab.id == tab_id)
+        .expect("tab");
+    assert_eq!(tab.connection_badge, "disconnected");
+    assert_eq!(tab.state_text, "disconnected");
+    assert!(!tab.connected);
+}
+
+#[test]
 fn tabs_open_activate_and_project_in_display_order() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 3);
@@ -29,6 +66,8 @@ fn tabs_open_activate_and_project_in_display_order() {
     assert_eq!(projection.tabs[1].title, "Session 1");
     assert!(projection.tabs.iter().all(|tab| tab.connected));
     assert_eq!(projection.tabs[0].state_text, "connected");
+    // connected/disconnected/failed 由图标右下角的角标表达，标签上不再显示文字。
+    assert_eq!(projection.tabs[0].connection_badge, "connected");
     assert!(!projection.tabs[0].active);
     assert!(projection.tabs[1].active);
     assert!(projection.has_active_session);

@@ -215,6 +215,7 @@ export component ToolDock inherits Rectangle {
     in property <[FileRow]> local-rows: [];
     in property <[FileCrumb]> local-crumbs: [];
     in property <string> local-path-text: "/";
+    in property <string> local-path-separator: "/";
     in property <bool> local-show-hidden: false;
     in property <string> local-sort-column-text: "name";
     in property <bool> local-sort-ascending: true;
@@ -465,6 +466,7 @@ export component ToolDock inherits Rectangle {
             rows: root.local-rows;
             crumbs: root.local-crumbs;
             path-text: root.local-path-text;
+            path-separator: root.local-path-separator;
             path-placeholder-text: "/local/path";
             show-hidden: root.local-show-hidden;
             sort-column: root.local-sort-column-text;
@@ -480,8 +482,6 @@ export component ToolDock inherits Rectangle {
             toggle-enabled: false;
             title-text: "";
             selected-name-text: root.local-selected-name-text;
-            show-home-button: true;
-            home() => { root.local-home(); }
             refresh() => { root.local-refresh(); }
             open-path(path) => { root.local-open-path(path); }
             sort-by(column) => { root.local-sort-by(column); }
@@ -530,6 +530,7 @@ export component ToolDock inherits Rectangle {
         rows: root.sftp-rows;
             crumbs: root.sftp-crumbs;
             local-crumbs: root.local-crumbs;
+            local-path-separator: root.local-path-separator;
             selected-index: root.sftp-selected-index;
             sort-column: root.sftp-sort-column-text;
             sort-ascending: root.sftp-sort-ascending;

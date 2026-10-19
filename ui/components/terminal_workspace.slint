@@ -72,6 +72,7 @@ export component TerminalWorkspace inherits VerticalLayout {
     in property <[FileRow]> sftp-local-rows;
     in property <[FileCrumb]> sftp-local-crumbs;
     in property <string> sftp-local-path-text: "/";
+    in property <string> sftp-local-path-separator: "/";
     in property <bool> sftp-local-show-hidden: false;
     in property <string> sftp-local-sort-column: "name";
     in property <bool> sftp-local-sort-ascending: true;
@@ -500,6 +501,7 @@ export component TerminalWorkspace inherits VerticalLayout {
                             local-rows: root.sftp-local-rows;
                             local-crumbs: root.sftp-local-crumbs;
                             local-path-text: root.sftp-local-path-text;
+                            local-path-separator: root.sftp-local-path-separator;
                             local-show-hidden: root.sftp-local-show-hidden;
                             local-sort-column: root.sftp-local-sort-column;
                             local-sort-ascending: root.sftp-local-sort-ascending;

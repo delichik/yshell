@@ -21,7 +21,7 @@ export component WorkspaceTabItem inherits Rectangle {
     /// E11：在标签左缘之后画 1px 分隔线（位于 4px 标签间距中央）。
     in property <bool> show-divider: false;
     /// 会话连接态：决定图标右下角的绿勾/红叉角标（New Tab 不显示角标）。
-    in property <bool> connected: false;
+    in property <string> connection-badge: "";
 
     /// 拖拽载荷（宿主按 tab-id 构建 `TabDragPayload`）。
     in property <data-transfer> drag-payload;
@@ -94,20 +94,25 @@ export component WorkspaceTabItem inherits Rectangle {
                 y: (parent.height - self.height) / 2;
             }
 
-            // 连接状态角标：图标右下角的绿勾（已连接）/ 红叉（未连接）。
+            // 连接状态角标：图标**右下角**的绿勾（已连接）/ 红叉（未连接）。
             // New Tab 没有会话，不画角标。
-            if root.tab-mode-text != "new" : Rectangle {
+            //
+            // 角标锚在图标字形的右下角（不是标签的右下角）：标签底部 2px 是活动
+            // 标签的强调条，角标压在上面会把它挡住。
+            if root.connection-badge != "" : Rectangle {
                 x: parent.width - 9px;
-                y: parent.height - 9px;
-                width: 10px;
-                height: 10px;
-                border-radius: 5px;
-                background: Theme.window-background;
+                y: parent.height / 2 + 3px;
+                width: 12px;
+                height: 12px;
+                border-radius: 6px;
+                background: root.connection-badge == "connected" ? Theme.success : Theme.critical;
+                border-width: 1px;
+                border-color: Theme.window-background;
 
                 Icon {
-                    name: root.connected ? "check" : "close";
-                    icon-color: root.connected ? Theme.success : Theme.critical;
-                    icon-size: 8px;
+                    name: root.connection-badge == "connected" ? "check" : "close";
+                    icon-color: Theme.window-background;
+                    icon-size: 9px;
                     x: (parent.width - self.width) / 2;
                     y: (parent.height - self.height) / 2;
                 }
@@ -126,7 +131,7 @@ export component WorkspaceTabItem inherits Rectangle {
 
         // E11：状态独立成段（8px spacing + text-tertiary），不再用两个字面空格拼接
         //（B 轮4：实测两个字面空格会留出约 19px 空洞）。
-        if root.tab-state-text != "" : Text {
+        if root.tab-state-text != "" && root.connection-badge == "" : Text {
             text: root.tab-state-text;
             color: Theme.text-tertiary;
             font-size: Theme.font-caption;

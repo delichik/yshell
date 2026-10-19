@@ -232,10 +232,8 @@ export component FilePane inherits Rectangle {
     in property <bool> collapsed: false;
     /// 折叠/展开开关是否可用（可用高度不足时由面板置 false）。
     in property <bool> toggle-enabled: true;
-    /// 是否显示「家目录」按钮（本地栏有，远端用根目录菜单项代替）。
-    in property <bool> show-home-button: false;
-    /// 是否显示「⋯」面板菜单（远端栏有）。
-    in property <bool> show-panel-menu: false;
+    /// 面包屑段之间的分隔符：远端是 `/`，Windows 本地是 `\`。
+    in property <string> path-separator: "/";
     /// 远端编辑进行中：底部细条 + Save/Cancel。
     in property <bool> remote-edit-active: false;
     in property <string> remote-edit-text: "";
@@ -245,7 +243,6 @@ export component FilePane inherits Rectangle {
     // ---- 回调 -------------------------------------------------------------
     callback toggle-collapsed();
     callback refresh();
-    callback home();
     callback open-path(string);
     callback open-crumb(int);
     callback sort-by(string);
@@ -253,7 +250,6 @@ export component FilePane inherits Rectangle {
     callback select-row(int, bool, bool);
     callback activate-row(int);
     callback context-menu-requested(int, length, length);
-    callback panel-menu-requested(length, length);
     callback retry();
     callback save-edit();
     callback cancel-edit();
@@ -461,7 +457,7 @@ export component FilePane inherits Rectangle {
                         spacing: 0;
 
                         if root.shows-crumb-separator(i) && root.crumb-visible(i) : Text {
-                            text: "/";
+                            text: root.path-separator;
                             color: Theme.text-tertiary;
                             font-size: Theme.font-caption;
                             vertical-alignment: center;
@@ -522,28 +518,12 @@ export component FilePane inherits Rectangle {
                 enabled: root.connected;
                 clicked => { root.refresh(); }
             }
-            if root.show-home-button : WinIconButton {
-                icon: "home";
-                accessible-name: @tr("Home directory");
-                clicked => { root.home(); }
-            }
             WinToggle {
                 text: "";
                 icon: "eye";
                 checked: root.show-hidden;
                 accessible-name: @tr("Show hidden files");
                 toggled => { root.toggle-hidden(); }
-            }
-            if root.show-panel-menu : WinIconButton {
-                icon: "more";
-                accessible-name: @tr("SFTP operations");
-                enabled: root.connected;
-                clicked => {
-                    root.panel-menu-requested(
-                        self.absolute-position.x,
-                        self.absolute-position.y + self.height
-                    );
-                }
             }
         }
 
@@ -642,7 +622,10 @@ export component FilePane inherits Rectangle {
 
                 for row[index] in root.rows : Rectangle {
                     // 行宽 = 内容宽度：内容宽于视口时 ListView 允许横向滚动。
+                    // `min-width` 必须一起给：ListView 是用行的 **min-width** 推
+                    // 内容宽度的，只设 `width` 的话内容宽度仍是视口宽，横向滚不动。
                     width: root.content-width;
+                    min-width: root.content-width;
                     height: Theme.row-height-list;
                     border-radius: Theme.radius-control;
                     background: row.selected || index == root.selected-index ? Theme.subtle-selected
@@ -660,7 +643,10 @@ export component FilePane inherits Rectangle {
                         y: (parent.height - self.height) / 2;
                     }
 
-                    // 文件名：头部可省略，尾部（后缀 + 后缀前 3 个字符）永远可见。
+                    // 文件名（访达行为）：
+                    //   * 完整名字放得下 → 原样显示，不加任何省略号；
+                    //   * 放不下 → 只显示 "…" + 尾段（后缀 + 后缀前 3 个字符），
+                    //     前导省略号，片段左对齐——前面那一截根本不画。
                     Rectangle {
                         x: root.icon-column-width;
                         y: 0;
@@ -668,12 +654,20 @@ export component FilePane inherits Rectangle {
                         height: parent.height;
                         clip: true;
 
-                        head_text := Text {
+                        // 测量完整名字的宽度（不显示）。
+                        name_measure := Text {
+                            text: row.name;
+                            wrap: no-wrap;
+                            opacity: 0;
+                        }
+
+                        Text {
+                            visible: name_measure.preferred-width <= parent.width;
                             x: 0;
                             y: 0;
-                            width: max(0px, parent.width - tail_measure.preferred-width);
+                            width: parent.width;
                             height: parent.height;
-                            text: row.name-head;
+                            text: row.name;
                             color: row.is-parent ? Theme.text-secondary : Theme.text-primary;
                             font-size: Theme.font-body;
                             vertical-alignment: center;
@@ -681,24 +675,18 @@ export component FilePane inherits Rectangle {
                             overflow: elide;
                         }
 
-                        // 量出尾部宽度（不参与显示）。
-                        tail_measure := Text {
-                            text: row.name-tail;
-                            wrap: no-wrap;
-                            opacity: 0;
-                        }
-
-                        tail_text := Text {
-                            x: max(0px, parent.width - tail_measure.preferred-width);
+                        Text {
+                            visible: name_measure.preferred-width > parent.width;
+                            x: 0;
                             y: 0;
-                            width: tail_measure.preferred-width;
+                            width: parent.width;
                             height: parent.height;
-                            text: row.name-tail;
+                            text: "…" + row.name-tail;
                             color: row.is-parent ? Theme.text-secondary : Theme.text-primary;
                             font-size: Theme.font-body;
                             vertical-alignment: center;
                             wrap: no-wrap;
-                            overflow: clip;
+                            overflow: elide;
                         }
                     }
 

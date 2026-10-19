@@ -2,6 +2,7 @@
 //! lifecycle tracking.
 
 use std::collections::BTreeSet;
+use std::time::Duration;
 
 use super::*;
 use crate::{
@@ -973,7 +974,91 @@ impl AppRuntime {
             None => (String::new(), String::new()),
         }
     }
+
+    /// 探活当前 SFTP 标签的连接。
+    ///
+    /// libssh2 的 `session.authenticated()` 在 TCP 断开之后**仍然是 true**（它只
+    /// 反映认证握手是否成功），所以它判断不了连接是否还活着——这正是断线后
+    /// 标签还显示"已连接"的原因。真正的信号是一次 SFTP 操作失败：这里对当前
+    /// 目录做一次廉价的 `stat` 探针。
+    ///
+    /// 返回 true 表示连接状态变了（调用方需要重新投影）。
+    pub(crate) fn poll_sftp_connection(&mut self) -> bool {
+        let Some(tab_id) = self.active_tab_id.clone() else {
+            return false;
+        };
+        if !self.is_sftp_tab(&tab_id) {
+            return false;
+        }
+        let Some(session_key) = self.sftp_tab_session_key(&tab_id) else {
+            return false;
+        };
+        let Some(runtime) = self.sessions.get(&session_key) else {
+            return false;
+        };
+        if runtime.state != yshell_core::SessionState::Connected {
+            return false;
+        }
+        let now = std::time::Instant::now();
+        if now.duration_since(self.sftp_last_probe) < Duration::from_millis(SFTP_PROBE_INTERVAL_MS)
+        {
+            return false;
+        }
+        self.sftp_last_probe = now;
+
+        // 探针用短超时：连接已经黑洞掉时不能按 connect timeout 卡住 UI。
+        let path = self.sftp_path.clone();
+        let transport = self
+            .sessions
+            .get(&session_key)
+            .and_then(|runtime| runtime.transport.clone());
+        if let Some(transport) = &transport {
+            transport.set_io_timeout(Duration::from_secs(SFTP_PROBE_TIMEOUT_SECS));
+        }
+        let probe = match self.sftp_live_client_mut(&session_key) {
+            Ok(client) => client.entry_kind(&path),
+            Err(_) => return self.mark_sftp_session_disconnected(&session_key),
+        };
+        // 恢复常规超时与 SFTP 的阻塞模式。
+        if let Some(transport) = &transport {
+            let _ = transport.configure_sftp();
+        }
+        match probe {
+            Ok(_) => false,
+            // 只有传输层错误才算连接断开；"目录不存在"之类不算。
+            Err(error) if error.kind == yshell_sftp::SftpErrorKind::Backend => {
+                self.mark_sftp_session_disconnected(&session_key)
+            }
+            Err(_) => false,
+        }
+    }
+
+    /// 把 SFTP 会话标记为断开：会话状态、SFTP 生命周期、状态栏一起更新。
+    ///
+    /// 状态是 `Disconnected`（不是 `Failed`）：`Failed` 会弹出整屏的连接横幅，
+    /// 而一个掉线的远端只需要标签角标上的一个红叉。
+    fn mark_sftp_session_disconnected(&mut self, session_key: &str) -> bool {
+        if let Some(runtime) = self.sessions.get_mut(session_key) {
+            runtime.set_state(yshell_core::SessionState::Disconnected);
+            runtime.log_runtime_event("SFTP transport closed; the connection was dropped.");
+        }
+        self.mark_sftp_tab_disconnected(session_key);
+        let status = self.sync_sftp_lifecycle_for_session(session_key, false);
+        self.set_status_kind(
+            "session-sftp-transport-closed",
+            format!("The SFTP connection was closed. {status}"),
+            String::new(),
+            String::new(),
+        );
+        true
+    }
 }
+
+/// SFTP 连接探活的间隔（毫秒）。
+const SFTP_PROBE_INTERVAL_MS: u64 = 5_000;
+
+/// 探活时的 I/O 超时（秒）——探针必须快速失败。
+const SFTP_PROBE_TIMEOUT_SECS: u64 = 3;
 
 /// One visible SFTP file-list row, ready for the Slint model.
 ///
@@ -1098,6 +1183,8 @@ pub struct SftpPaneProjection {
     pub remote_edit_text: String,
     pub local_rows: Vec<LocalRowData>,
     pub local_crumbs: Vec<FileCrumbData>,
+    /// Separator between the local path segments (`\` on Windows).
+    pub local_path_separator: String,
     pub local_path_text: String,
     pub local_sort_column_text: String,
     pub local_sort_ascending: bool,
@@ -1136,6 +1223,7 @@ impl Default for SftpPaneProjection {
             remote_edit_text: String::new(),
             local_rows: Vec::new(),
             local_crumbs: Vec::new(),
+            local_path_separator: crate::runtime::local_path_separator(),
             local_path_text: "/".to_owned(),
             local_sort_column_text: "name".to_owned(),
             local_sort_ascending: true,
@@ -1259,6 +1347,7 @@ impl SftpPaneProjection {
                 .unwrap_or_default(),
             local_rows,
             local_crumbs: local_crumbs_for(&state.local.dir),
+            local_path_separator: crate::runtime::local_path_separator(),
             local_path_text: state.local.dir.display().to_string(),
             local_sort_column_text: state.local.sort_column.label().to_ascii_lowercase(),
             local_sort_ascending: state.local.sort_ascending,

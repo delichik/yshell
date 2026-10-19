@@ -621,6 +621,7 @@ impl AppRuntime {
             local_path_text: self.local_pane.dir.display().to_string(),
             local_rows,
             local_crumbs: self.local_crumbs(),
+            local_path_separator: local_path_separator(),
             local_sort_column_text: self.local_pane.sort_column.id().to_owned(),
             local_sort_ascending: self.local_pane.sort_ascending,
             local_show_hidden: self.local_pane.show_hidden,
@@ -1326,6 +1327,15 @@ struct AuthPromptProjectionParts {
     keyboard_submit_enabled: bool,
 }
 
+/// Separator used between the local path segments: `\` on Windows, `/` elsewhere.
+pub(crate) fn local_path_separator() -> String {
+    if cfg!(windows) {
+        "\\".to_owned()
+    } else {
+        "/".to_owned()
+    }
+}
+
 /// 托管密钥 → 认证弹窗/会话编辑器共用的下拉选项（`detail` = 算法 · 指纹）。
 fn auth_key_option_data(entry: &PrivateKeyEntryInfo) -> AuthKeyOptionData {
     AuthKeyOptionData {
@@ -1680,8 +1690,7 @@ pub struct AppProjection {
     pub settings_scrollback_lines_text: String,
     pub settings_scrollback_max_cells_text: String,
     /// Settings page field: max parallel SFTP transfers.
-    pub settings_sftp_max_parallel_transfers_text: String,
-    /// UI language preference: `system` / `zh-CN` / `en-US`.
+    pub settings_sftp_max_parallel_transfers_text: String,    /// UI language preference: `system` / `zh-CN` / `en-US`.
     pub settings_language_text: String,
     /// Whether process debug logs are written under `{config_dir}/logs`.
     pub settings_debug_logging_enabled: bool,
@@ -1964,6 +1973,8 @@ pub struct AppProjection {
     pub local_rows: Vec<crate::local_fs::LocalRowData>,
     /// Local pane breadcrumb segments (same shape as the remote ones).
     pub local_crumbs: Vec<crate::runtime::FileCrumbData>,
+    /// Separator between the local breadcrumb segments (`\` on Windows).
+    pub local_path_separator: String,
     pub local_sort_column_text: String,
     pub local_sort_ascending: bool,
     pub local_show_hidden: bool,

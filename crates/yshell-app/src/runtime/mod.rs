@@ -59,6 +59,7 @@ pub(crate) use connection::PendingPasswordAuthMethod;
 pub(crate) use connection::PendingPasswordPrompt;
 pub(crate) use local_pane::LocalPaneState;
 pub(crate) use local_pane::local_crumbs_for;
+pub(crate) use projection::local_path_separator;
 pub(crate) use sessions::collect_session_inventory_lines;
 pub(crate) use sessions::find_session_folder_id;
 pub use sessions::SessionTreeRow;
@@ -263,6 +264,7 @@ impl AppRuntime {
             sftp_permissions: "644".to_owned(),
             sftp_entries: Vec::new(),
             sftp_selected_index: None,
+            sftp_last_probe: std::time::Instant::now(),
             sftp_sort_column: SftpSortColumn::Name,
             sftp_sort_ascending: true,
             sftp_show_hidden: false,
@@ -605,6 +607,8 @@ pub struct AppRuntime {
     pub(crate) sftp_permissions: String,
     pub(crate) sftp_entries: Vec<FsEntry>,
     pub(crate) sftp_selected_index: Option<usize>,
+    /// 上次 SFTP 连接探活的时间（探活间隔见 `sftp::SFTP_PROBE_INTERVAL_MS`）。
+    pub(crate) sftp_last_probe: std::time::Instant,
     pub(crate) sftp_sort_column: SftpSortColumn,
     pub(crate) sftp_sort_ascending: bool,
     pub(crate) sftp_show_hidden: bool,

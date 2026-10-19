@@ -170,6 +170,12 @@ impl RealSftpBackend {
                 Err(error)
                     if !attempted_reconnect && matches!(error.kind, SftpErrorKind::Backend) =>
                 {
+                    // 传输层错误 = 连接没了。把共享 transport 标记为关闭，App
+                    // 才能把会话标成断开——`session.authenticated()` 在 TCP 断开
+                    // 之后仍然是 true，光看它永远发现不了掉线。
+                    if let SftpConnectionSource::Shared(transport) = &self.source {
+                        transport.mark_closed();
+                    }
                     // Stale TCP/SSH session: drop and retry the op once.
                     self.invalidate();
                     attempted_reconnect = true;
@@ -402,6 +408,10 @@ fn connect_session(config: &SshConnectionConfig, tcp: TcpStream) -> SftpResult<S
     })?;
     session.set_timeout(session_timeout_ms(config.connect_timeout));
     session.set_tcp_stream(tcp);
+    // 与终端连接用同一套 KEX 偏好：不设的话 libssh2 会先试 DH-GEX，在部分服务器上
+    // 握手直接失败（"Session(-5)"）——浏览（复用终端的 transport）不受影响，但
+    // 自己开连接的传输任务（上传/下载/删除）会全部失败。
+    yshell_ssh::real::apply_preferred_kex_methods(&session);
     session.handshake().map_err(|error| {
         SftpError::new(
             SftpErrorKind::Backend,

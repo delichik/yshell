@@ -2,7 +2,11 @@
 export struct WorkspaceTab {
     id: string,
     title: string,
+    /// 状态文字（`connected`/`disconnected` 已改为角标，这里只剩 `connecting`）。
     state_text: string,
+    /// 图标右下角的连接状态角标（`connected` / `disconnected` / `failed` /
+    /// 空 = 不显示角标）。
+    connection_badge: string,
     /// `new` / `terminal` / `sftp` — drives the tab icon.
     mode_text: string,
     connected: bool,

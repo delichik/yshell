@@ -5006,6 +5006,7 @@ fn dispatch_sftp_menu_action(
             }
         }
         "local-refresh" => Ok(runtime.refresh_local_pane()),
+        "local-home" => Ok(runtime.open_local_home()),
         "toggle-hidden" => {
             if local_scope {
                 Ok(runtime.toggle_local_hidden())
@@ -5483,33 +5484,59 @@ fn file_row_from(row: &crate::sftp_view::FileRowData) -> FileRow {
     }
 }
 
-fn file_row_matches(current: &FileRow, next: &crate::sftp_view::FileRowData) -> bool {
+/// Row comparison that ignores the multi-select flag.
+///
+/// The selection must not force a model replacement: Slint resets its
+/// double-click counter whenever the item under the cursor is replaced
+/// (i-slint-core `window.rs`: `last_top_item != top_item` → `click_state.reset()`),
+/// so rebuilding the row model on every selection change turns a double click
+/// into two single clicks — the folder only opens after it was selected once
+/// ("select first, then double click to enter").
+fn file_row_content_matches(current: &FileRow, next: &crate::sftp_view::FileRowData) -> bool {
     current.name.as_str() == next.name
         && current.path_text.as_str() == next.path_text
+        && current.kind_text.as_str() == next.kind_text
         && current.size_text.as_str() == next.size_text
         && current.modified_text.as_str() == next.modified_text
         && current.permissions_text.as_str() == next.permissions_text
         && current.is_dir == next.is_dir
         && current.is_symlink == next.is_symlink
         && current.is_parent == next.is_parent
-        && current.selected == next.selected
         && current.name_head.as_str() == next.name_head
         && current.name_tail.as_str() == next.name_tail
 }
 
-fn set_local_rows_if_changed(window: &MainWindow, rows: &[crate::local_fs::LocalRowData]) {
-    let current = window.get_local_rows();
-    if current.row_count() == rows.len()
-        && current
+/// Applies a row model, keeping the model instance (and therefore the row
+/// items) when only the selection changed.
+fn apply_file_rows(
+    current: &ModelRc<FileRow>,
+    rows: &[crate::sftp_view::FileRowData],
+    replace: impl FnOnce(Vec<FileRow>),
+) {
+    let current_rows: Vec<FileRow> = current.iter().collect();
+    if current_rows.len() == rows.len()
+        && current_rows
             .iter()
             .zip(rows.iter())
-            .all(|(current, next)| file_row_matches(&current, next))
+            .all(|(current, next)| file_row_content_matches(current, next))
     {
+        // Only the selection changed: patch the affected rows in place so the
+        // row items (and Slint's double-click counter) survive.
+        for (index, next) in rows.iter().enumerate() {
+            if current_rows[index].selected != next.selected {
+                current.set_row_data(index, file_row_from(next));
+            }
+        }
         return;
     }
-    window.set_local_rows(ModelRc::new(VecModel::from(
-        rows.iter().map(file_row_from).collect::<Vec<_>>(),
-    )));
+    replace(rows.iter().map(file_row_from).collect::<Vec<_>>());
+}
+
+fn set_local_rows_if_changed(window: &MainWindow, rows: &[crate::local_fs::LocalRowData]) {
+    let current = window.get_local_rows();
+    apply_file_rows(&current, rows, |values| {
+        window.set_local_rows(ModelRc::new(VecModel::from(values)));
+    });
 }
 
 fn transfer_row_from(row: &TransferRowData) -> SftpTransferRow {
@@ -5640,6 +5667,7 @@ fn sftp_pane_data_from(pane: &crate::runtime::SftpPaneProjection) -> SftpPaneDat
             pane.local_crumbs.iter().map(sftp_crumb_from).collect::<Vec<_>>(),
         )),
         local_path_text: pane.local_path_text.clone().into(),
+        local_path_separator: pane.local_path_separator.clone().into(),
         local_sort_column_text: pane.local_sort_column_text.clone().into(),
         local_sort_ascending: pane.local_sort_ascending,
         local_sort_text: pane.local_sort_text.clone().into(),
@@ -5664,19 +5692,14 @@ fn sftp_crumb_matches(current: &FileCrumb, next: &SftpCrumbData) -> bool {
 /// Replaces the row model only when the projected rows changed, so that
 /// selecting/sorting-adjacent updates do not recreate every list row instance
 /// (which would break click counting and reset the ListView scroll state).
+///
+/// A selection-only change is patched in place (see [`apply_file_rows`]) so the
+/// rows keep their identity and a double click still registers.
 fn set_sftp_rows_if_changed(window: &MainWindow, rows: &[SftpRowData]) {
     let current = window.get_sftp_rows();
-    let unchanged = current.row_count() == rows.len()
-        && current
-            .iter()
-            .zip(rows)
-            .all(|(current, next)| file_row_matches(&current, next));
-    if unchanged {
-        return;
-    }
-    window.set_sftp_rows(ModelRc::new(VecModel::from(
-        rows.iter().map(file_row_from).collect::<Vec<_>>(),
-    )));
+    apply_file_rows(&current, rows, |values| {
+        window.set_sftp_rows(ModelRc::new(VecModel::from(values)));
+    });
 }
 
 fn set_sftp_crumbs_if_changed(window: &MainWindow, crumbs: &[SftpCrumbData]) {
@@ -5715,6 +5738,7 @@ fn workspace_tab_from(tab: &TabData) -> WorkspaceTab {
         id: tab.id.clone().into(),
         title: tab.title.clone().into(),
         state_text: tab.state_text.clone().into(),
+        connection_badge: tab.connection_badge.clone().into(),
         mode_text: tab.mode_text.clone().into(),
         connected: tab.connected,
         active: tab.active,
@@ -6946,6 +6970,7 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     // N1 Phase 2：本地栏 / 队列抽屉 / 冲突 / 属性 / 剪贴板。
     set_local_rows_if_changed(window, &projection.local_rows);
     set_local_crumbs_if_changed(window, &projection.local_crumbs);
+    window.set_local_path_separator(projection.local_path_separator.clone().into());
     window.set_local_path_text(projection.local_path_text.clone().into());
     window.set_local_sort_column_text(projection.local_sort_column_text.clone().into());
     window.set_local_sort_ascending(projection.local_sort_ascending);

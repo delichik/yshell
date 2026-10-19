@@ -82,15 +82,15 @@ impl AppRuntime {
     ) -> AppResult<SessionPollOutcome> {
         // SFTP tabs have no shell channel; terminal polling must not classify
         // their (intentionally empty) shell slot as a closed terminal. Their
-        // SSH transport can still die though, so the transport state is
-        // checked separately (otherwise the pane kept showing a stale listing
-        // of a connection that was gone).
+        // connection liveness is checked separately by
+        // `AppRuntime::poll_sftp_connection` (a real SFTP probe — the
+        // libssh2 `authenticated()` flag stays true after a TCP drop).
         if self
             .sessions
             .get(session_key)
             .is_some_and(SessionRuntime::is_sftp)
         {
-            return self.poll_sftp_transport_state(session_key);
+            return Ok(SessionPollOutcome::default());
         }
         let Some((previous_terminal, previous_state)) = self
             .sessions
@@ -163,50 +163,6 @@ impl AppRuntime {
         Ok(SessionPollOutcome {
             output_changed,
             state_changed,
-        })
-    }
-
-    /// Watches the SSH transport of an SFTP tab.
-    ///
-    /// SFTP tabs have no shell channel to poll, so a dropped connection used
-    /// to go unnoticed: the pane kept showing a stale listing and claimed to
-    /// be connected. The transport's own state is the only reliable signal.
-    fn poll_sftp_transport_state(
-        &mut self,
-        session_key: &str,
-    ) -> AppResult<SessionPollOutcome> {
-        let Some(runtime) = self.sessions.get(session_key) else {
-            return Ok(SessionPollOutcome::default());
-        };
-        let previous_state = runtime.state;
-        if previous_state != yshell_core::SessionState::Connected {
-            return Ok(SessionPollOutcome::default());
-        }
-        let transport_alive = runtime
-            .transport
-            .as_ref()
-            .map(yshell_ssh::SshTransport::is_connected)
-            .unwrap_or(false);
-        if transport_alive {
-            return Ok(SessionPollOutcome::default());
-        }
-        if let Some(runtime) = self.sessions.get_mut(session_key) {
-            runtime.set_state(yshell_core::SessionState::Disconnected);
-            runtime.log_runtime_event("SFTP transport closed while the app was polling.");
-        }
-        self.mark_sftp_tab_disconnected(session_key);
-        let sftp_status = self.sync_sftp_lifecycle_for_session(session_key, false);
-        if self.active_session_id.as_deref() == Some(session_key) {
-            self.set_status_kind(
-                "session-sftp-transport-closed",
-                format!("The SFTP connection was closed. {sftp_status}"),
-                String::new(),
-                String::new(),
-            );
-        }
-        Ok(SessionPollOutcome {
-            output_changed: false,
-            state_changed: true,
         })
     }
 
@@ -1508,7 +1464,7 @@ impl AppRuntime {
                 // N9：同步发送按键的源/目标角标（源不在 targets 内，两者互斥）。
                 let sync_role_text = self.tab_sync_role_text(&tab.tab_id);
                 let mode_text = tab.kind.mode_text().to_owned();
-                let (default_title, state_text, connected) = match tab
+                let (default_title, _state_text, connected) = match tab
                     .session_id()
                     .and_then(|session_id| self.sessions.get(session_id))
                 {
@@ -1520,11 +1476,20 @@ impl AppRuntime {
                     None if tab.is_new_tab() => ("New Tab".to_owned(), String::new(), false),
                     None => (tab.tab_id.clone(), "failed".to_owned(), false),
                 };
+                let (connection_badge, state_text) = match tab
+                    .session_id()
+                    .and_then(|session_id| self.sessions.get(session_id))
+                {
+                    Some(runtime) => tab_connection_state(runtime.state),
+                    None if tab.is_new_tab() => (String::new(), String::new()),
+                    None => ("failed".to_owned(), String::new()),
+                };
                 let title = tab.custom_title.clone().unwrap_or(default_title);
                 TabData {
                     id: tab.tab_id.clone(),
                     title,
                     state_text,
+                    connection_badge,
                     mode_text,
                     connected,
                     active,
@@ -1564,6 +1529,7 @@ impl AppRuntime {
                 id: tab_id.to_owned(),
                 title: String::new(),
                 state_text: String::new(),
+                connection_badge: String::new(),
                 mode_text: "terminal".to_owned(),
                 connected: false,
                 active,
@@ -1575,7 +1541,7 @@ impl AppRuntime {
         let tab = &self.tabs[index];
         let sync_role_text = self.tab_sync_role_text(&tab.tab_id);
         let mode_text = tab.kind.mode_text().to_owned();
-        let (default_title, state_text, connected) = match tab
+        let (default_title, _state_text, connected) = match tab
             .session_id()
             .and_then(|session_id| self.sessions.get(session_id))
         {
@@ -1587,11 +1553,20 @@ impl AppRuntime {
             None if tab.is_new_tab() => ("New Tab".to_owned(), String::new(), false),
             None => (tab.tab_id.clone(), "failed".to_owned(), false),
         };
+        let (connection_badge, state_text) = match tab
+            .session_id()
+            .and_then(|session_id| self.sessions.get(session_id))
+        {
+            Some(runtime) => tab_connection_state(runtime.state),
+            None if tab.is_new_tab() => (String::new(), String::new()),
+            None => ("failed".to_owned(), String::new()),
+        };
         let title = tab.custom_title.clone().unwrap_or(default_title);
         TabData {
             id: tab.tab_id.clone(),
             title,
             state_text,
+            connection_badge,
             mode_text,
             connected,
             active,
@@ -2353,6 +2328,20 @@ impl TabEntry {
     }
 }
 
+/// 标签上的连接状态：图标右下角的角标 + 是否还显示状态文字。
+///
+/// `connected`/`disconnected`/`failed` **只**用角标表达（绿勾 / 红叉）：标签上
+/// 同时出现 "connected" 和一个绿勾既重复又难看。"改成符号" 就是替换掉文字。
+fn tab_connection_state(state: SessionState) -> (String, String) {
+    match state {
+        SessionState::Connected => ("connected".to_owned(), "connected".to_owned()),
+        SessionState::Disconnected => ("disconnected".to_owned(), "disconnected".to_owned()),
+        SessionState::Failed => ("failed".to_owned(), "failed".to_owned()),
+        SessionState::Connecting => (String::new(), "connecting".to_owned()),
+        SessionState::Idle => (String::new(), "idle".to_owned()),
+    }
+}
+
 /// N0：单个标签的只读投影（Slint 标签条模型）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TabData {
@@ -2360,7 +2349,13 @@ pub struct TabData {
     pub id: String,
     pub title: String,
     /// 会话状态枚举 id（`idle`/`connecting`/...）。
+    ///
+    /// `connected`/`disconnected`/`failed` 不再以文字出现——它们由图标右下角的
+    /// 角标表达（见 `connection_badge`）。
     pub state_text: String,
+    /// 图标右下角的连接状态角标（`connected` / `disconnected` / `failed` /
+    /// 空 = 不显示角标）。
+    pub connection_badge: String,
     /// `new` / `terminal` / `sftp`（Slint 标签图标与菜单分流）。
     pub mode_text: String,
     /// 是否处于 `connected`（Slint 侧标签样式/菜单启用条件用）。

@@ -643,6 +643,11 @@ impl WindowManager {
                     tracing::warn!(target: "yshell::app", "terminal output poll failed: {error}");
                 }
             }
+            // SFTP 标签的连接探活：libssh2 的 `authenticated()` 在 TCP 断开后仍
+            // 然是 true，只有一次真实的 SFTP 操作失败才能证明连接没了。
+            if runtime.poll_sftp_connection() {
+                dirty = true;
+            }
         }
 
         let requested_close = self
