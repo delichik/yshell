@@ -10,7 +10,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: yshell\n"
-"POT-Creation-Date: 2026-10-18 09:55+0000\n"
+"POT-Creation-Date: 2026-10-19 14:38+0000\n"
 "PO-Revision-Date: 2026-09-27 00:00+0000\n"
 "Last-Translator: YShell\n"
 "Language-Team: YShell\n"
@@ -20,681 +20,696 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: ui/main_window.slint:364
+#: ui/main_window.slint:371
 msgctxt "MainWindow"
 msgid "Password required"
 msgstr "Password required"
 
-#: ui/main_window.slint:368
+#: ui/main_window.slint:375
 msgctxt "MainWindow"
 msgid "Enter the password to continue."
 msgstr "Enter the password to continue."
 
-#: ui/main_window.slint:369
+#: ui/main_window.slint:376
 msgctxt "MainWindow"
 msgid "Enter the password for {0} to connect."
 msgstr "Enter the password for {0} to connect."
 
-#: ui/main_window.slint:1324 ui/main_window.slint:1703 ui/main_window.slint:1764 ui/components/tool_dock.slint:418
+#: ui/main_window.slint:1348 ui/main_window.slint:1753 ui/main_window.slint:1814 ui/components/tool_dock.slint:419
 msgctxt "MainWindow"
 msgid "New Session"
 msgstr "New Session"
 
-#: ui/main_window.slint:1325
+#: ui/main_window.slint:1349
 msgctxt "MainWindow"
 msgid "Quick Connect"
 msgstr "Quick Connect"
 
 #. W5-A3：没有活动会话时无处保存。
-#: ui/main_window.slint:1328
+#: ui/main_window.slint:1352
 msgctxt "MainWindow"
 msgid "Save Active Session"
 msgstr "Save Active Session"
 
-#: ui/main_window.slint:1331
+#: ui/main_window.slint:1355
 msgctxt "MainWindow"
 msgid "Open a session before saving it."
 msgstr "Open a session before saving it."
 
-#: ui/main_window.slint:1334
+#: ui/main_window.slint:1358
 msgctxt "MainWindow"
 msgid "Settings..."
 msgstr "Settings..."
 
-#: ui/main_window.slint:1335 ui/main_window.slint:2851
+#: ui/main_window.slint:1359 ui/main_window.slint:2989
 msgctxt "MainWindow"
 msgid "Quit"
 msgstr "Quit"
 
 #. W5-A3：无选区 / 无活动会话时禁用。
-#: ui/main_window.slint:1340 ui/main_window.slint:1463
+#: ui/main_window.slint:1364 ui/main_window.slint:1482
 msgctxt "MainWindow"
 msgid "Copy"
 msgstr "Copy"
 
-#: ui/main_window.slint:1342 ui/main_window.slint:1465
+#: ui/main_window.slint:1366 ui/main_window.slint:1484
 msgctxt "MainWindow"
 msgid "Select text in the terminal first."
 msgstr "Select text in the terminal first."
 
-#: ui/main_window.slint:1345 ui/main_window.slint:1478
+#: ui/main_window.slint:1369 ui/main_window.slint:1497
 msgctxt "MainWindow"
 msgid "Paste"
 msgstr "Paste"
 
-#: ui/main_window.slint:1347 ui/main_window.slint:1356 ui/main_window.slint:1366 ui/main_window.slint:1392 ui/main_window.slint:1480 ui/main_window.slint:1499 ui/main_window.slint:1514
+#: ui/main_window.slint:1371 ui/main_window.slint:1380 ui/main_window.slint:1390 ui/main_window.slint:1416 ui/main_window.slint:1499 ui/main_window.slint:1518 ui/main_window.slint:1533
 msgctxt "MainWindow"
 msgid "Open a session first."
 msgstr "Open a session first."
 
-#: ui/main_window.slint:1350 ui/main_window.slint:1483
+#: ui/main_window.slint:1374 ui/main_window.slint:1502
 msgctxt "MainWindow"
 msgid "Paste as Bracketed"
 msgstr "Paste as Bracketed"
 
-#: ui/main_window.slint:1354 ui/main_window.slint:1487
+#: ui/main_window.slint:1378 ui/main_window.slint:1506
 msgctxt "MainWindow"
 msgid "Wraps paste in CSI 200~/201~ for shells that honor bracketed paste."
 msgstr "Wraps paste in CSI 200~/201~ for shells that honor bracketed paste."
 
-#: ui/main_window.slint:1355 ui/main_window.slint:1488
+#: ui/main_window.slint:1379 ui/main_window.slint:1507
 msgctxt "MainWindow"
 msgid "Connect the session first."
 msgstr "Connect the session first."
 
-#: ui/main_window.slint:1359 ui/main_window.slint:1497
+#: ui/main_window.slint:1383 ui/main_window.slint:1516
 msgctxt "MainWindow"
 msgid "Select All"
 msgstr "Select All"
 
-#: ui/main_window.slint:1364 ui/main_window.slint:1502
+#: ui/main_window.slint:1388 ui/main_window.slint:1521
 msgctxt "MainWindow"
 msgid "Clear Terminal"
 msgstr "Clear Terminal"
 
-#: ui/main_window.slint:1369 ui/main_window.slint:1507 ui/main_window.slint:2809
+#: ui/main_window.slint:1393 ui/main_window.slint:1526 ui/main_window.slint:2947
 msgctxt "MainWindow"
 msgid "Clear Scrollback"
 msgstr "Clear Scrollback"
 
-#: ui/main_window.slint:1371 ui/main_window.slint:1509
+#: ui/main_window.slint:1395 ui/main_window.slint:1528
 msgctxt "MainWindow"
 msgid "Scrollback is empty."
 msgstr "Scrollback is empty."
 
-#: ui/main_window.slint:1375 ui/main_window.slint:1512
+#: ui/main_window.slint:1399 ui/main_window.slint:1531
 msgctxt "MainWindow"
 msgid "Find..."
 msgstr "Find..."
 
 #. W5-A3：已连接才能断开；有活动会话（且未连接）才能重连。
-#: ui/main_window.slint:1383 ui/main_window.slint:1629
+#: ui/main_window.slint:1407 ui/main_window.slint:1660
 msgctxt "MainWindow"
 msgid "Disconnect"
 msgstr "Disconnect"
 
-#: ui/main_window.slint:1385
+#: ui/main_window.slint:1409
 msgctxt "MainWindow"
 msgid "The active session is not connected."
 msgstr "The active session is not connected."
 
-#: ui/main_window.slint:1388 ui/main_window.slint:1624
+#: ui/main_window.slint:1412 ui/main_window.slint:1654
 msgctxt "MainWindow"
 msgid "Reconnect"
 msgstr "Reconnect"
 
-#: ui/main_window.slint:1391
+#: ui/main_window.slint:1415
 msgctxt "MainWindow"
 msgid "The active session is already connected."
 msgstr "The active session is already connected."
 
 #. W5-A3：Edit / Delete 需要选中的已保存会话；Update 还需要活动会话作为来源。
-#: ui/main_window.slint:1397
+#: ui/main_window.slint:1421
 msgctxt "MainWindow"
 msgid "Edit Selected Session..."
 msgstr "Edit Selected Session..."
 
-#: ui/main_window.slint:1399 ui/main_window.slint:1406 ui/main_window.slint:1683 ui/main_window.slint:1695
+#: ui/main_window.slint:1423 ui/main_window.slint:1430 ui/main_window.slint:1728 ui/main_window.slint:1738 ui/main_window.slint:1750
 msgctxt "MainWindow"
 msgid "Select a saved session first."
 msgstr "Select a saved session first."
 
-#: ui/main_window.slint:1402
+#: ui/main_window.slint:1426
 msgctxt "MainWindow"
 msgid "Update Selected From Active"
 msgstr "Update Selected From Active"
 
-#: ui/main_window.slint:1405 ui/main_window.slint:1694
+#: ui/main_window.slint:1429 ui/main_window.slint:1744
 msgctxt "MainWindow"
 msgid "Open the active session first."
 msgstr "Open the active session first."
 
-#: ui/main_window.slint:1409
+#: ui/main_window.slint:1433
 msgctxt "MainWindow"
 msgid "Delete Selected Session..."
 msgstr "Delete Selected Session..."
 
 #. N4：两个同级、独立入口（私钥页 / 主机密钥页）。
-#: ui/main_window.slint:1415
+#: ui/main_window.slint:1439
 msgctxt "MainWindow"
 msgid "Host Keys..."
 msgstr "Host Keys..."
 
-#: ui/main_window.slint:1416
+#: ui/main_window.slint:1440
 msgctxt "MainWindow"
 msgid "Private Keys..."
 msgstr "Private Keys..."
 
-#: ui/main_window.slint:1417
+#: ui/main_window.slint:1441
 msgctxt "MainWindow"
 msgid "Proxy Manager..."
 msgstr "Proxy Manager..."
 
-#: ui/main_window.slint:1418
+#: ui/main_window.slint:1442
 msgctxt "MainWindow"
 msgid "Theme Manager..."
 msgstr "Theme Manager..."
 
-#: ui/main_window.slint:1421
+#: ui/main_window.slint:1445
 msgctxt "MainWindow"
 msgid "Session Manager"
 msgstr "Session Manager"
 
-#: ui/main_window.slint:1423
-msgctxt "MainWindow"
-msgid "Local Files"
-msgstr "Local Files"
-
-#: ui/main_window.slint:1424
-msgctxt "MainWindow"
-msgid "Browse local folders; download/upload targets use this directory."
-msgstr "Browse local folders; download/upload targets use this directory."
-
-#: ui/main_window.slint:1426
-msgctxt "MainWindow"
-msgid "SFTP Panel"
-msgstr "SFTP Panel"
-
-#: ui/main_window.slint:1428 ui/components/tool_dock.slint:593
+#: ui/main_window.slint:1447 ui/components/tool_dock.slint:596
 msgctxt "MainWindow"
 msgid "Tunnels"
 msgstr "Tunnels"
 
-#: ui/main_window.slint:1429
+#: ui/main_window.slint:1448
 msgctxt "MainWindow"
 msgid "Configured tunnels for the active session."
 msgstr "Configured tunnels for the active session."
 
-#: ui/main_window.slint:1432 ui/components/tool_dock.slint:622
+#: ui/main_window.slint:1451 ui/components/tool_dock.slint:625
 msgctxt "MainWindow"
 msgid "Quick Commands"
 msgstr "Quick Commands"
 
-#: ui/main_window.slint:1433 ui/components/tool_dock.slint:634
+#: ui/main_window.slint:1452 ui/components/tool_dock.slint:637
 msgctxt "MainWindow"
 msgid "Command presets are not available in this build yet."
 msgstr "Command presets are not available in this build yet."
 
-#: ui/main_window.slint:1436 ui/components/tool_dock.slint:657
+#: ui/main_window.slint:1455 ui/components/tool_dock.slint:660
 msgctxt "MainWindow"
 msgid "Transfers"
 msgstr "Transfers"
 
-#: ui/main_window.slint:1437
+#: ui/main_window.slint:1456
 msgctxt "MainWindow"
-msgid "Transfer queue with pause/resume/retry; shares the SFTP drawer model."
-msgstr "Transfer queue with pause/resume/retry; shares the SFTP drawer model."
+msgid "Transfer queue with pause/resume/retry."
+msgstr "Transfer queue with pause/resume/retry."
 
-#: ui/main_window.slint:1442 ui/main_window.slint:1640
+#: ui/main_window.slint:1461 ui/main_window.slint:1672
 msgctxt "MainWindow"
 msgid "Split Right"
 msgstr "Split Right"
 
-#: ui/main_window.slint:1444 ui/main_window.slint:1449 ui/main_window.slint:1647
+#: ui/main_window.slint:1463 ui/main_window.slint:1468 ui/main_window.slint:1679
 msgctxt "MainWindow"
 msgid "Open a terminal session before splitting, or close a pane (max 4)."
 msgstr "Open a terminal session before splitting, or close a pane (max 4)."
 
-#: ui/main_window.slint:1447 ui/main_window.slint:1645
+#: ui/main_window.slint:1466 ui/main_window.slint:1677
 msgctxt "MainWindow"
 msgid "Split Down"
 msgstr "Split Down"
 
-#: ui/main_window.slint:1452
+#: ui/main_window.slint:1471
 msgctxt "MainWindow"
 msgid "Close Current Pane"
 msgstr "Close Current Pane"
 
-#: ui/main_window.slint:1454
+#: ui/main_window.slint:1473
 msgctxt "MainWindow"
 msgid "Split the workspace first."
 msgstr "Split the workspace first."
 
-#: ui/main_window.slint:1458
+#: ui/main_window.slint:1477
 msgctxt "MainWindow"
 msgid "About YShell"
 msgstr "About YShell"
 
-#: ui/main_window.slint:1468
+#: ui/main_window.slint:1487
 msgctxt "MainWindow"
 msgid "Copy Current Line"
 msgstr "Copy Current Line"
 
-#: ui/main_window.slint:1473
+#: ui/main_window.slint:1492
 msgctxt "MainWindow"
 msgid "Copy Screen"
 msgstr "Copy Screen"
 
-#: ui/main_window.slint:1475 ui/main_window.slint:1494
+#: ui/main_window.slint:1494 ui/main_window.slint:1513
 msgctxt "MainWindow"
 msgid "Visible screen is empty."
 msgstr "Visible screen is empty."
 
-#: ui/main_window.slint:1492
+#: ui/main_window.slint:1511
 msgctxt "MainWindow"
 msgid "Select Screen"
 msgstr "Select Screen"
 
-#: ui/main_window.slint:1517
+#: ui/main_window.slint:1536
 msgctxt "MainWindow"
 msgid "Find Regex..."
 msgstr "Find Regex..."
 
-#: ui/main_window.slint:1524 ui/main_window.slint:1568
+#: ui/main_window.slint:1543 ui/main_window.slint:1597
 msgctxt "MainWindow"
 msgid "Start Logging..."
 msgstr "Start Logging..."
 
-#: ui/main_window.slint:1526 ui/main_window.slint:1570
+#: ui/main_window.slint:1545 ui/main_window.slint:1599
 msgctxt "MainWindow"
 msgid "Open a session that is not logging yet."
 msgstr "Open a session that is not logging yet."
 
-#: ui/main_window.slint:1529 ui/main_window.slint:1573
+#: ui/main_window.slint:1548 ui/main_window.slint:1602
 msgctxt "MainWindow"
 msgid "Stop Logging"
 msgstr "Stop Logging"
 
-#: ui/main_window.slint:1531 ui/main_window.slint:1575
+#: ui/main_window.slint:1550 ui/main_window.slint:1604
 msgctxt "MainWindow"
 msgid "This session is not logging."
 msgstr "This session is not logging."
 
-#: ui/main_window.slint:1534 ui/main_window.slint:1578
+#: ui/main_window.slint:1553 ui/main_window.slint:1607
 msgctxt "MainWindow"
 msgid "Open Log File"
 msgstr "Open Log File"
 
-#: ui/main_window.slint:1536 ui/main_window.slint:1580
+#: ui/main_window.slint:1555 ui/main_window.slint:1609
 msgctxt "MainWindow"
 msgid "No log file has been written yet."
 msgstr "No log file has been written yet."
 
-#: ui/main_window.slint:1539 ui/main_window.slint:1583
+#: ui/main_window.slint:1558 ui/main_window.slint:1612
 msgctxt "MainWindow"
 msgid "Open Log Folder"
 msgstr "Open Log Folder"
 
-#: ui/main_window.slint:1541 ui/main_window.slint:1585
+#: ui/main_window.slint:1560 ui/main_window.slint:1614
 msgctxt "MainWindow"
 msgid "No log folder is available yet."
 msgstr "No log folder is available yet."
 
-#: ui/main_window.slint:1546
+#: ui/main_window.slint:1565
 msgctxt "MainWindow"
 msgid "Send Key Input to All Tabs"
 msgstr "Send Key Input to All Tabs"
 
 # --- N9：同步发送按键（新增条目）---
-#: ui/main_window.slint:1548 ui/main_window.slint:1555
+#: ui/main_window.slint:1567 ui/main_window.slint:1574
 msgctxt "MainWindow"
 msgid "Connect a terminal session first."
 msgstr "Connect a terminal session first."
 
-#: ui/main_window.slint:1551
+#: ui/main_window.slint:1570
 msgctxt "MainWindow"
 msgid "Send Key Input to Visible Tabs"
 msgstr "Send Key Input to Visible Tabs"
 
-#: ui/main_window.slint:1558
+#: ui/main_window.slint:1577
 msgctxt "MainWindow"
 msgid "Stop Sending Key Input"
 msgstr "Stop Sending Key Input"
 
-#: ui/main_window.slint:1560
+#: ui/main_window.slint:1579
 msgctxt "MainWindow"
 msgid "Key input sync is not active."
 msgstr "Key input sync is not active."
 
-#: ui/main_window.slint:1591 ui/main_window.slint:2883
+#: ui/main_window.slint:1584 ui/main_window.slint:1712
+msgctxt "MainWindow"
+msgid "Switch to SFTP"
+msgstr "Switch to SFTP"
+
+#: ui/main_window.slint:1589
+msgctxt "MainWindow"
+msgid "Connect the terminal before switching to SFTP."
+msgstr "Connect the terminal before switching to SFTP."
+
+#: ui/main_window.slint:1620 ui/main_window.slint:3021
 msgctxt "MainWindow"
 msgid "Close"
 msgstr "Close"
 
-#: ui/main_window.slint:1594
+#: ui/main_window.slint:1623
 msgctxt "MainWindow"
 msgid "Close Others"
 msgstr "Close Others"
 
-#: ui/main_window.slint:1596
+#: ui/main_window.slint:1625
 msgctxt "MainWindow"
 msgid "Only one tab is open."
 msgstr "Only one tab is open."
 
-#: ui/main_window.slint:1599
+#: ui/main_window.slint:1628
 msgctxt "MainWindow"
 msgid "Close Tabs to Left"
 msgstr "Close Tabs to Left"
 
-#: ui/main_window.slint:1601
+#: ui/main_window.slint:1630
 msgctxt "MainWindow"
 msgid "There are no tabs to the left."
 msgstr "There are no tabs to the left."
 
-#: ui/main_window.slint:1604
+#: ui/main_window.slint:1633
 msgctxt "MainWindow"
 msgid "Close Tabs to Right"
 msgstr "Close Tabs to Right"
 
-#: ui/main_window.slint:1606
+#: ui/main_window.slint:1635
 msgctxt "MainWindow"
 msgid "There are no tabs to the right."
 msgstr "There are no tabs to the right."
 
-#: ui/main_window.slint:1609
+#: ui/main_window.slint:1638
 msgctxt "MainWindow"
 msgid "Close All"
 msgstr "Close All"
 
-#: ui/main_window.slint:1611
+#: ui/main_window.slint:1640
 msgctxt "MainWindow"
 msgid "No tabs are open."
 msgstr "No tabs are open."
 
-#: ui/main_window.slint:1614
+#: ui/main_window.slint:1643
 msgctxt "MainWindow"
 msgid "Close Disconnected Tabs"
 msgstr "Close Disconnected Tabs"
 
-#: ui/main_window.slint:1616
+#: ui/main_window.slint:1645
 msgctxt "MainWindow"
 msgid "No disconnected or failed tabs to close."
 msgstr "No disconnected or failed tabs to close."
 
-#: ui/main_window.slint:1626
+#: ui/main_window.slint:1657
 msgctxt "MainWindow"
 msgid "This tab is already connected."
 msgstr "This tab is already connected."
 
-#: ui/main_window.slint:1631
+#: ui/main_window.slint:1663
 msgctxt "MainWindow"
 msgid "This tab is already disconnected."
 msgstr "This tab is already disconnected."
 
-#: ui/main_window.slint:1636 ui/main_window.slint:1721
+#: ui/main_window.slint:1668 ui/main_window.slint:1771
 msgctxt "MainWindow"
 msgid "Rename..."
 msgstr "Rename..."
 
-#: ui/main_window.slint:1652
+#: ui/main_window.slint:1685
 msgctxt "MainWindow"
 msgid "Receive Key Input"
 msgstr "Receive Key Input"
 
-#: ui/main_window.slint:1662
+#: ui/main_window.slint:1696
 msgctxt "MainWindow"
 msgid "Move to New Window"
 msgstr "Move to New Window"
 
-#: ui/main_window.slint:1666
+#: ui/main_window.slint:1700
 msgctxt "MainWindow"
 msgid "Open a tab before moving it to a new window."
 msgstr "Open a tab before moving it to a new window."
 
-#: ui/main_window.slint:1669
+#: ui/main_window.slint:1703
 msgctxt "MainWindow"
 msgid "Move to Main Window"
 msgstr "Move to Main Window"
 
-#: ui/main_window.slint:1673
+#: ui/main_window.slint:1707
 msgctxt "MainWindow"
 msgid "This tab is already in the main window."
 msgstr "This tab is already in the main window."
 
+#: ui/main_window.slint:1712
+msgctxt "MainWindow"
+msgid "Switch to Terminal"
+msgstr "Switch to Terminal"
+
+#: ui/main_window.slint:1718
+msgctxt "MainWindow"
+msgid "Connect the session before switching modes."
+msgstr "Connect the session before switching modes."
+
 #. W5-A3：没有选中的已保存会话时，各项操作禁用。
-#: ui/main_window.slint:1681
+#: ui/main_window.slint:1726
 msgctxt "Session"
 msgid "Open"
 msgstr "Open"
 
-#: ui/main_window.slint:1686
+#: ui/main_window.slint:1731
+msgctxt "MainWindow"
+msgid "Open SFTP"
+msgstr "Open SFTP"
+
+#: ui/main_window.slint:1736
 msgctxt "MainWindow"
 msgid "Edit..."
 msgstr "Edit..."
 
-#: ui/main_window.slint:1691
+#: ui/main_window.slint:1741
 msgctxt "MainWindow"
 msgid "Update From Active"
 msgstr "Update From Active"
 
-#: ui/main_window.slint:1698 ui/main_window.slint:1725
+#: ui/main_window.slint:1748 ui/main_window.slint:1775
 msgctxt "MainWindow"
 msgid "Delete..."
 msgstr "Delete..."
 
-#: ui/main_window.slint:1712
+#: ui/main_window.slint:1762
 msgctxt "MainWindow"
 msgid "New Session Here"
 msgstr "New Session Here"
 
-#: ui/main_window.slint:1714 ui/main_window.slint:1735
+#: ui/main_window.slint:1764 ui/main_window.slint:1785
 msgctxt "MainWindow"
 msgid "Right-click a folder first."
 msgstr "Right-click a folder first."
 
-#: ui/main_window.slint:1717 ui/main_window.slint:1742
+#: ui/main_window.slint:1767 ui/main_window.slint:1792
 msgctxt "MainWindow"
 msgid "New Folder..."
 msgstr "New Folder..."
 
-#: ui/main_window.slint:1718 ui/main_window.slint:1722 ui/main_window.slint:1730
+#: ui/main_window.slint:1768 ui/main_window.slint:1772 ui/main_window.slint:1780
 msgctxt "MainWindow"
 msgid "Not available in this version."
 msgstr "Not available in this version."
 
-#: ui/main_window.slint:1729
+#: ui/main_window.slint:1779
 msgctxt "MainWindow"
 msgid "Connect All"
 msgstr "Connect All"
 
-#: ui/main_window.slint:1733
+#: ui/main_window.slint:1783
 msgctxt "MainWindow"
 msgid "Edit Folder Defaults…"
 msgstr "Edit Folder Defaults…"
 
-#: ui/main_window.slint:1745
+#: ui/main_window.slint:1795
 msgctxt "MainWindow"
 msgid "Import Config..."
 msgstr "Import Config..."
 
-#: ui/main_window.slint:1747
+#: ui/main_window.slint:1797
 msgctxt "MainWindow"
 msgid "Importing configuration files is not available in this build."
 msgstr "Importing configuration files is not available in this build."
 
-#: ui/main_window.slint:1750
+#: ui/main_window.slint:1800
 msgctxt "MainWindow"
 msgid "Expand All"
 msgstr "Expand All"
 
-#: ui/main_window.slint:1752
+#: ui/main_window.slint:1802
 msgctxt "MainWindow"
 msgid "Expand All is not available in this build."
 msgstr "Expand All is not available in this build."
 
-#: ui/main_window.slint:1755
+#: ui/main_window.slint:1805
 msgctxt "MainWindow"
 msgid "Collapse All"
 msgstr "Collapse All"
 
-#: ui/main_window.slint:1757
+#: ui/main_window.slint:1807
 msgctxt "MainWindow"
 msgid "Collapse All is not available in this build."
 msgstr "Collapse All is not available in this build."
 
-#: ui/main_window.slint:1760
+#: ui/main_window.slint:1810
 msgctxt "MainWindow"
 msgid "Refresh"
 msgstr "Refresh"
 
-#: ui/main_window.slint:1765 ui/components/session_sidebar.slint:241
+#: ui/main_window.slint:1815 ui/components/session_sidebar.slint:241
 msgctxt "MainWindow"
 msgid "Expand navigation"
 msgstr "Expand navigation"
 
-#: ui/main_window.slint:2808
+#: ui/main_window.slint:2452 ui/components/tool_dock.slint:455
+msgctxt "MainWindow"
+msgid "Local"
+msgstr "Local"
+
+#: ui/main_window.slint:2946
 msgctxt "MainWindow"
 msgid "Clear the terminal scrollback buffer? The live screen stays as-is."
 msgstr "Clear the terminal scrollback buffer? The live screen stays as-is."
 
-#: ui/main_window.slint:2826
+#: ui/main_window.slint:2964
 msgctxt "MainWindow"
 msgid "Delete Saved Session"
 msgstr "Delete Saved Session"
 
-#: ui/main_window.slint:2827
+#: ui/main_window.slint:2965
 msgctxt "MainWindow"
 msgid "This permanently removes the selected saved session from disk."
 msgstr "This permanently removes the selected saved session from disk."
 
-#: ui/main_window.slint:2828 ui/main_window.slint:3300
+#: ui/main_window.slint:2966 ui/main_window.slint:3438
 msgctxt "MainWindow"
 msgid "Delete"
 msgstr "Delete"
 
-#: ui/main_window.slint:2849
+#: ui/main_window.slint:2987
 msgctxt "MainWindow"
 msgid "Quit YShell"
 msgstr "Quit YShell"
 
-#: ui/main_window.slint:2850
+#: ui/main_window.slint:2988
 msgctxt "MainWindow"
 msgid "Quit YShell now? Active runtime sessions will be disconnected."
 msgstr "Quit YShell now? Active runtime sessions will be disconnected."
 
-#: ui/main_window.slint:2904
+#: ui/main_window.slint:3042
 msgctxt "MainWindow"
 msgid "Close Window"
 msgstr "Close Window"
 
-#: ui/main_window.slint:2905
+#: ui/main_window.slint:3043
 msgctxt "MainWindow"
 msgid "Close this window? {n} active session will be disconnected."
 msgid_plural "Close this window? {n} active sessions will be disconnected."
 msgstr[0] "Close this window? {n} active session will be disconnected."
 msgstr[1] "Close this window? {n} active sessions will be disconnected."
 
-#: ui/main_window.slint:2923
+#: ui/main_window.slint:3061
 msgctxt "MainWindow"
 msgid "Rename Tab"
 msgstr "Rename Tab"
 
-#: ui/main_window.slint:2924
+#: ui/main_window.slint:3062
 msgctxt "MainWindow"
 msgid "Display name for this tab only (not saved to disk). Applies for this session."
 msgstr "Display name for this tab only (not saved to disk). Applies for this session."
 
-#: ui/main_window.slint:2926
+#: ui/main_window.slint:3064
 msgctxt "MainWindow"
 msgid "Rename"
 msgstr "Rename"
 
-#: ui/main_window.slint:3127
+#: ui/main_window.slint:3265
 msgctxt "MainWindow"
 msgid "Discard Changes"
 msgstr "Discard Changes"
 
-#: ui/main_window.slint:3128
+#: ui/main_window.slint:3266
 msgctxt "MainWindow"
 msgid "Discard unsaved changes to this session?"
 msgstr "Discard unsaved changes to this session?"
 
-#: ui/main_window.slint:3129
+#: ui/main_window.slint:3267
 msgctxt "MainWindow"
 msgid "Discard"
 msgstr "Discard"
 
-#: ui/main_window.slint:3214
+#: ui/main_window.slint:3352
 msgctxt "MainWindow"
 msgid "Remove Managed Key"
 msgstr "Remove Managed Key"
 
-#: ui/main_window.slint:3216 ui/main_window.slint:3431
+#: ui/main_window.slint:3354 ui/main_window.slint:3569
 msgctxt "MainWindow"
 msgid "Remove"
 msgstr "Remove"
 
-#: ui/main_window.slint:3230
+#: ui/main_window.slint:3368
 msgctxt "MainWindow"
 msgid "Deploy Public Key"
 msgstr "Deploy Public Key"
 
-#: ui/main_window.slint:3234
+#: ui/main_window.slint:3372
 msgctxt "MainWindow"
 msgid "Deploy"
 msgstr "Deploy"
 
-#: ui/main_window.slint:3298
+#: ui/main_window.slint:3436
 msgctxt "MainWindow"
 msgid "Delete Proxy Profile"
 msgstr "Delete Proxy Profile"
 
-#: ui/main_window.slint:3299
+#: ui/main_window.slint:3437
 msgctxt "MainWindow"
 msgid "This removes the managed proxy profile and its saved password from the secret store."
 msgstr "This removes the managed proxy profile and its saved password from the secret store."
 
-#: ui/main_window.slint:3353
+#: ui/main_window.slint:3491
 msgctxt "MainWindow"
 msgid "Delete Theme"
 msgstr "Delete Theme"
 
-#: ui/main_window.slint:3355
+#: ui/main_window.slint:3493
 msgctxt "MainWindow"
 msgid "Delete “{0}”? {1} theme reference(s) will switch to the built-in default theme."
 msgstr "Delete “{0}”? {1} theme reference(s) will switch to the built-in default theme."
 
-#: ui/main_window.slint:3356
+#: ui/main_window.slint:3494
 msgctxt "MainWindow"
 msgid "Delete “{0}”? This removes the user theme file and cannot be undone."
 msgstr "Delete “{0}”? This removes the user theme file and cannot be undone."
 
-#: ui/main_window.slint:3409
+#: ui/main_window.slint:3547
 msgctxt "MainWindow"
 msgid "Clear All Host Keys"
 msgstr "Clear All Host Keys"
 
-#: ui/main_window.slint:3410
+#: ui/main_window.slint:3548
 msgctxt "MainWindow"
 msgid "Remove every saved host key from disk? This cannot be undone."
 msgstr "Remove every saved host key from disk? This cannot be undone."
 
-#: ui/main_window.slint:3411
+#: ui/main_window.slint:3549
 msgctxt "MainWindow"
 msgid "Clear All"
 msgstr "Clear All"
 
-#: ui/main_window.slint:3427
+#: ui/main_window.slint:3565
 msgctxt "MainWindow"
 msgid "Remove Host Keys"
 msgstr "Remove Host Keys"
 
-#: ui/main_window.slint:3429
+#: ui/main_window.slint:3567
 msgctxt "MainWindow"
 msgid "Remove all saved keys for {0}? This deletes the entire host:port group, not just the selected key."
 msgstr "Remove all saved keys for {0}? This deletes the entire host:port group, not just the selected key."
 
-#: ui/main_window.slint:3430
+#: ui/main_window.slint:3568
 msgctxt "MainWindow"
 msgid "Remove all saved keys for the selected host:port? This deletes the entire group, not just the selected key."
 msgstr "Remove all saved keys for the selected host:port? This deletes the entire group, not just the selected key."
@@ -801,6 +816,115 @@ msgctxt "ConfirmDialog"
 msgid "Don't ask again"
 msgstr "Don't ask again"
 
+#: ui/components/file_pane.slint:187
+msgctxt "FileColumnHeader"
+msgid "{0} ↑"
+msgstr "{0} ↑"
+
+#: ui/components/file_pane.slint:187
+msgctxt "FileColumnHeader"
+msgid "{0} ↓"
+msgstr "{0} ↓"
+
+#: ui/components/file_pane.slint:367 ui/components/file_pane.slint:925
+msgctxt "FilePane"
+msgid "{0} · {1}"
+msgstr "{0} · {1}"
+
+#: ui/components/file_pane.slint:368
+msgctxt "FilePane"
+msgid "{n} item"
+msgid_plural "{n} items"
+msgstr[0] "{n} item"
+msgstr[1] "{n} items"
+
+#: ui/components/file_pane.slint:369
+msgctxt "FilePane"
+msgid "{n} dir"
+msgid_plural "{n} dirs"
+msgstr[0] "{n} dir"
+msgstr[1] "{n} dirs"
+
+#: ui/components/file_pane.slint:410
+msgctxt "FilePane"
+msgid "Expand local pane"
+msgstr "Expand local pane"
+
+#: ui/components/file_pane.slint:410
+msgctxt "FilePane"
+msgid "Collapse local pane"
+msgstr "Collapse local pane"
+
+#: ui/components/file_pane.slint:453
+msgctxt "FilePane"
+msgid "…"
+msgstr "…"
+
+#: ui/components/file_pane.slint:521
+msgctxt "FilePane"
+msgid "Refresh"
+msgstr "Refresh"
+
+#: ui/components/file_pane.slint:527
+msgctxt "FilePane"
+msgid "Home directory"
+msgstr "Home directory"
+
+#: ui/components/file_pane.slint:534
+msgctxt "FilePane"
+msgid "Show hidden files"
+msgstr "Show hidden files"
+
+#: ui/components/file_pane.slint:539
+msgctxt "FilePane"
+msgid "SFTP operations"
+msgstr "SFTP operations"
+
+#: ui/components/file_pane.slint:577
+msgctxt "FilePane"
+msgid "Retry"
+msgstr "Retry"
+
+#: ui/components/file_pane.slint:829
+msgctxt "FilePane"
+msgid "Name"
+msgstr "Name"
+
+#: ui/components/file_pane.slint:838
+msgctxt "FilePane"
+msgid "Size"
+msgstr "Size"
+
+#: ui/components/file_pane.slint:848
+msgctxt "FilePane"
+msgid "Modified"
+msgstr "Modified"
+
+#: ui/components/file_pane.slint:858
+msgctxt "FilePane"
+msgid "Perm"
+msgstr "Perm"
+
+#: ui/components/file_pane.slint:903
+msgctxt "FilePane"
+msgid "Save Edit"
+msgstr "Save Edit"
+
+#: ui/components/file_pane.slint:908
+msgctxt "FilePane"
+msgid "Cancel Edit"
+msgstr "Cancel Edit"
+
+#: ui/components/file_pane.slint:922
+msgctxt "FilePane"
+msgid "{0} · selected: {1} · {2}"
+msgstr "{0} · selected: {1} · {2}"
+
+#: ui/components/file_pane.slint:924
+msgctxt "FilePane"
+msgid "{0} · {1} selected · {2}"
+msgstr "{0} · {1} selected · {2}"
+
 #: ui/components/host_key_dialog.slint:110
 msgctxt "HostKeyDialog"
 msgid "Host Key Confirmation"
@@ -865,95 +989,6 @@ msgstr "Replace and Trust"
 msgctxt "HostKeyDialog"
 msgid "Trust and Save"
 msgstr "Trust and Save"
-
-#: ui/components/local_pane.slint:112
-msgctxt "LocalColumnHeader"
-msgid "{0} ↑"
-msgstr "{0} ↑"
-
-#: ui/components/local_pane.slint:112
-msgctxt "LocalColumnHeader"
-msgid "{0} ↓"
-msgstr "{0} ↓"
-
-#: ui/components/local_pane.slint:259 ui/components/local_pane.slint:629
-msgctxt "LocalPane"
-msgid "{0} · {1}"
-msgstr "{0} · {1}"
-
-#: ui/components/local_pane.slint:260
-msgctxt "LocalPane"
-msgid "{n} item"
-msgid_plural "{n} items"
-msgstr[0] "{n} item"
-msgstr[1] "{n} items"
-
-#: ui/components/local_pane.slint:261
-msgctxt "LocalPane"
-msgid "{n} dir"
-msgid_plural "{n} dirs"
-msgstr[0] "{n} dir"
-msgstr[1] "{n} dirs"
-
-#: ui/components/local_pane.slint:305
-msgctxt "LocalPane"
-msgid "Expand local pane"
-msgstr "Expand local pane"
-
-#: ui/components/local_pane.slint:305
-msgctxt "LocalPane"
-msgid "Collapse local pane"
-msgstr "Collapse local pane"
-
-#: ui/components/local_pane.slint:320
-msgctxt "LocalPane"
-msgid "Parent directory"
-msgstr "Parent directory"
-
-#: ui/components/local_pane.slint:325
-msgctxt "LocalPane"
-msgid "Refresh"
-msgstr "Refresh"
-
-#: ui/components/local_pane.slint:330
-msgctxt "LocalPane"
-msgid "Home directory"
-msgstr "Home directory"
-
-#: ui/components/local_pane.slint:352
-msgctxt "LocalPane"
-msgid "Show hidden files"
-msgstr "Show hidden files"
-
-#: ui/components/local_pane.slint:396
-msgctxt "LocalPane"
-msgid "Retry"
-msgstr "Retry"
-
-#: ui/components/local_pane.slint:415
-msgctxt "LocalPane"
-msgid "Name"
-msgstr "Name"
-
-#: ui/components/local_pane.slint:425
-msgctxt "LocalPane"
-msgid "Size"
-msgstr "Size"
-
-#: ui/components/local_pane.slint:436
-msgctxt "LocalPane"
-msgid "Modified"
-msgstr "Modified"
-
-#: ui/components/local_pane.slint:447
-msgctxt "LocalPane"
-msgid "Perm"
-msgstr "Perm"
-
-#: ui/components/local_pane.slint:628
-msgctxt "LocalPane"
-msgid "{0} · selected: {1} · {2}"
-msgstr "{0} · selected: {1} · {2}"
 
 #: ui/components/logging_dialog.slint:158
 msgctxt "LoggingDialog"
@@ -1240,614 +1275,510 @@ msgctxt "MainWindow"
 msgid "SAVED"
 msgstr "SAVED"
 
-#: ui/components/sftp_panel.slint:84
-msgctxt "SftpColumnHeader"
-msgid "{0} ↑"
-msgstr "{0} ↑"
-
-#: ui/components/sftp_panel.slint:84
-msgctxt "SftpColumnHeader"
-msgid "{0} ↓"
-msgstr "{0} ↓"
-
-#: ui/components/sftp_panel.slint:125
-msgctxt "SftpRemotePane"
-msgid "Remote"
-msgstr "Remote"
-
-#: ui/components/sftp_panel.slint:295
-msgctxt "SftpRemotePane"
-msgid "…"
-msgstr "…"
-
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:346
-msgctxt "SftpRemotePane"
-msgid "Parent directory"
-msgstr "Parent directory"
-
-# N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:352
-msgctxt "SftpRemotePane"
-msgid "Refresh"
-msgstr "Refresh"
-
-# N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:360
-msgctxt "SftpRemotePane"
-msgid "Show hidden files"
-msgstr "Show hidden files"
-
-# N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:365
-msgctxt "SftpRemotePane"
-msgid "SFTP operations"
-msgstr "SFTP operations"
-
-# N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:416
-msgctxt "SftpRemotePane"
-msgid "Retry"
-msgstr "Retry"
-
-# N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:437
-msgctxt "SftpRemotePane"
-msgid "Name"
-msgstr "Name"
-
-# N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:446
-msgctxt "SftpRemotePane"
-msgid "Size"
-msgstr "Size"
-
-# N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:456
-msgctxt "SftpRemotePane"
-msgid "Modified"
-msgstr "Modified"
-
-# N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:466
-msgctxt "SftpRemotePane"
-msgid "Perm"
-msgstr "Perm"
-
-# N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:672
-msgctxt "SftpRemotePane"
-msgid "Save Edit"
-msgstr "Save Edit"
-
-# N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:677
-msgctxt "SftpRemotePane"
-msgid "Cancel Edit"
-msgstr "Cancel Edit"
-
-# N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:692
-msgctxt "SftpRemotePane"
-msgid "{0} · {1} selected · {2}"
-msgstr "{0} · {1} selected · {2}"
-
-# N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:693 ui/components/sftp_panel.slint:704
-msgctxt "SftpRemotePane"
-msgid "{0} · {1}"
-msgstr "{0} · {1}"
-
-# N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:705
-msgctxt "SftpRemotePane"
-msgid "{n} item"
-msgid_plural "{n} items"
-msgstr[0] "{n} item"
-msgstr[1] "{n} items"
-
-# N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:706
-msgctxt "SftpRemotePane"
-msgid "{n} dir"
-msgid_plural "{n} dirs"
-msgstr[0] "{n} dir"
-msgstr[1] "{n} dirs"
-
-# N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:772
+#: ui/components/sftp_panel.slint:104
 msgctxt "SftpTransferDrawer"
 msgid "Hide transfers"
 msgstr "Hide transfers"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:772
+#: ui/components/sftp_panel.slint:104
 msgctxt "SftpTransferDrawer"
 msgid "Show transfers"
 msgstr "Show transfers"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:807
+#: ui/components/sftp_panel.slint:139
 msgctxt "SftpTransferDrawer"
 msgid "Clear completed"
 msgstr "Clear completed"
 
-#: ui/components/sftp_panel.slint:822
+#: ui/components/sftp_panel.slint:154
 msgctxt "SftpTransferDrawer"
 msgid "No transfer tasks yet"
 msgstr "No transfer tasks yet"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:914
+#: ui/components/sftp_panel.slint:246
 msgctxt "SftpTransferDrawer"
 msgid "Pause transfer"
 msgstr "Pause transfer"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:919
+#: ui/components/sftp_panel.slint:251
 msgctxt "SftpTransferDrawer"
 msgid "Resume transfer"
 msgstr "Resume transfer"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:924
+#: ui/components/sftp_panel.slint:256
 msgctxt "SftpTransferDrawer"
 msgid "Retry transfer"
 msgstr "Retry transfer"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:929
+#: ui/components/sftp_panel.slint:261
 msgctxt "SftpTransferDrawer"
 msgid "Cancel transfer"
 msgstr "Cancel transfer"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:934
+#: ui/components/sftp_panel.slint:266
 msgctxt "SftpTransferDrawer"
 msgid "Remove transfer"
 msgstr "Remove transfer"
 
-#: ui/components/sftp_panel.slint:972
+#: ui/components/sftp_panel.slint:304
 msgctxt "SftpTransferDrawer"
 msgid "{0} transfer(s)"
 msgstr "{0} transfer(s)"
 
-#: ui/components/sftp_panel.slint:973
+#: ui/components/sftp_panel.slint:305
 msgctxt "SftpTransferDrawer"
 msgid " · {0} active"
 msgstr " · {0} active"
 
-#: ui/components/sftp_panel.slint:974
+#: ui/components/sftp_panel.slint:306
 msgctxt "SftpTransferDrawer"
 msgid " · {0} paused"
 msgstr " · {0} paused"
 
-#: ui/components/sftp_panel.slint:975
+#: ui/components/sftp_panel.slint:307
 msgctxt "SftpTransferDrawer"
 msgid " · {0} failed"
 msgstr " · {0} failed"
 
-#: ui/components/sftp_panel.slint:976
+#: ui/components/sftp_panel.slint:308
 msgctxt "SftpTransferDrawer"
 msgid " · {0} completed"
 msgstr " · {0} completed"
 
+#: ui/components/sftp_panel.slint:636 ui/components/sftp_panel.slint:677
+msgctxt "SftpPanel"
+msgid "Remote"
+msgstr "Remote"
+
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1516 ui/components/sftp_panel.slint:1533
+#: ui/components/sftp_panel.slint:785 ui/components/sftp_panel.slint:802
 msgctxt "SftpContextMenu"
 msgid "Open"
 msgstr "Open"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1517
+#: ui/components/sftp_panel.slint:786
 msgctxt "SftpContextMenu"
 msgid "Edit Remote File"
 msgstr "Edit Remote File"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1518 ui/components/sftp_panel.slint:1534
+#: ui/components/sftp_panel.slint:787 ui/components/sftp_panel.slint:803
 msgctxt "SftpContextMenu"
 msgid "Download"
 msgstr "Download"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1519 ui/components/sftp_panel.slint:1535
+#: ui/components/sftp_panel.slint:788 ui/components/sftp_panel.slint:804
 msgctxt "SftpContextMenu"
 msgid "Download To..."
 msgstr "Download To..."
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1520 ui/components/sftp_panel.slint:1536
+#: ui/components/sftp_panel.slint:789 ui/components/sftp_panel.slint:805
 msgctxt "SftpContextMenu"
 msgid "Copy To..."
 msgstr "Copy To..."
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1522 ui/components/sftp_panel.slint:1540
+#: ui/components/sftp_panel.slint:791 ui/components/sftp_panel.slint:809
 msgctxt "SftpContextMenu"
 msgid "Rename..."
 msgstr "Rename..."
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1523 ui/components/sftp_panel.slint:1541
+#: ui/components/sftp_panel.slint:792 ui/components/sftp_panel.slint:810
 msgctxt "SftpContextMenu"
 msgid "Delete..."
 msgstr "Delete..."
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1524 ui/components/sftp_panel.slint:1542
+#: ui/components/sftp_panel.slint:793 ui/components/sftp_panel.slint:811
 msgctxt "SftpContextMenu"
 msgid "Chmod..."
 msgstr "Chmod..."
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1526 ui/components/sftp_panel.slint:1544 ui/components/sftp_panel.slint:1578
+#: ui/components/sftp_panel.slint:795 ui/components/sftp_panel.slint:813 ui/components/sftp_panel.slint:849
 msgctxt "SftpContextMenu"
 msgid "Copy"
 msgstr "Copy"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1527 ui/components/sftp_panel.slint:1545
+#: ui/components/sftp_panel.slint:796 ui/components/sftp_panel.slint:814
 msgctxt "SftpContextMenu"
 msgid "Copy Remote Path"
 msgstr "Copy Remote Path"
 
-#: ui/components/sftp_panel.slint:1527 ui/components/sftp_panel.slint:1529 ui/components/sftp_panel.slint:1547 ui/components/sftp_panel.slint:1572
+#: ui/components/sftp_panel.slint:796 ui/components/sftp_panel.slint:798 ui/components/sftp_panel.slint:816 ui/components/sftp_panel.slint:833 ui/components/sftp_panel.slint:856
 msgctxt "SftpContextMenu"
 msgid "Connect to the remote host first."
 msgstr "Connect to the remote host first."
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1529 ui/components/sftp_panel.slint:1547
+#: ui/components/sftp_panel.slint:798 ui/components/sftp_panel.slint:816
 msgctxt "SftpContextMenu"
 msgid "Properties"
 msgstr "Properties"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1537
+#: ui/components/sftp_panel.slint:806
 msgctxt "SftpContextMenu"
 msgid "Upload Here..."
 msgstr "Upload Here..."
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1538 ui/components/sftp_panel.slint:1552
+#: ui/components/sftp_panel.slint:807 ui/components/sftp_panel.slint:821
 msgctxt "SftpContextMenu"
 msgid "New Folder"
 msgstr "New Folder"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1551
+#: ui/components/sftp_panel.slint:820
 msgctxt "SftpContextMenu"
 msgid "Upload Files..."
 msgstr "Upload Files..."
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1554 ui/components/sftp_panel.slint:1583
+#: ui/components/sftp_panel.slint:823 ui/components/sftp_panel.slint:853
 msgctxt "SftpContextMenu"
 msgid "Refresh"
 msgstr "Refresh"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1555 ui/components/sftp_panel.slint:1584
+#: ui/components/sftp_panel.slint:824 ui/components/sftp_panel.slint:854
 msgctxt "SftpContextMenu"
 msgid "Show Hidden Files"
 msgstr "Show Hidden Files"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1556
+#: ui/components/sftp_panel.slint:825 ui/components/sftp_panel.slint:864
 msgctxt "SftpContextMenu"
 msgid "Copy Current Path"
 msgstr "Copy Current Path"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1558 ui/components/sftp_panel.slint:1581
+#: ui/components/sftp_panel.slint:827 ui/components/sftp_panel.slint:866
 msgctxt "SftpContextMenu"
 msgid "Paste"
 msgstr "Paste"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1560
+#: ui/components/sftp_panel.slint:829
 msgctxt "SftpContextMenu"
 msgid "Parent directory"
 msgstr "Parent directory"
 
-#: ui/components/sftp_panel.slint:1562
+#: ui/components/sftp_panel.slint:831
 msgctxt "SftpContextMenu"
 msgid "Root directory (/)"
 msgstr "Root directory (/)"
 
+#: ui/components/sftp_panel.slint:833 ui/components/sftp_panel.slint:856
+msgctxt "SftpContextMenu"
+msgid "Switch to Terminal"
+msgstr "Switch to Terminal"
+
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1566
+#: ui/components/sftp_panel.slint:837
 msgctxt "SftpContextMenu"
 msgid "Download Selected"
 msgstr "Download Selected"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1568
+#: ui/components/sftp_panel.slint:839 ui/components/sftp_panel.slint:851
 msgctxt "SftpContextMenu"
 msgid "Delete Selected"
 msgstr "Delete Selected"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1569
+#: ui/components/sftp_panel.slint:840
 msgctxt "SftpContextMenu"
 msgid "Chmod Selected..."
 msgstr "Chmod Selected..."
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1572
+#: ui/components/sftp_panel.slint:843
 msgctxt "SftpContextMenu"
 msgid "Copy Remote Paths"
 msgstr "Copy Remote Paths"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1576
+#: ui/components/sftp_panel.slint:847
 msgctxt "SftpContextMenu"
 msgid "Upload to Remote"
 msgstr "Upload to Remote"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1577
+#: ui/components/sftp_panel.slint:848
 msgctxt "SftpContextMenu"
 msgid "Move to Remote"
 msgstr "Move to Remote"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1579
+#: ui/components/sftp_panel.slint:850
 msgctxt "SftpContextMenu"
 msgid "Copy Path"
 msgstr "Copy Path"
 
-#: ui/components/sftp_panel.slint:1723
+#: ui/components/sftp_panel.slint:1022
 msgctxt "SftpEntryDialog"
 msgid "New Folder"
 msgstr "New Folder"
 
-#: ui/components/sftp_panel.slint:1724 ui/components/sftp_panel.slint:1761
+#: ui/components/sftp_panel.slint:1023 ui/components/sftp_panel.slint:1060
 msgctxt "SftpEntryDialog"
 msgid "Rename"
 msgstr "Rename"
 
-#: ui/components/sftp_panel.slint:1725
+#: ui/components/sftp_panel.slint:1024
 msgctxt "SftpEntryDialog"
 msgid "Change Permissions"
 msgstr "Change Permissions"
 
-#: ui/components/sftp_panel.slint:1726 ui/components/sftp_panel.slint:1763
+#: ui/components/sftp_panel.slint:1025 ui/components/sftp_panel.slint:1062
 msgctxt "SftpEntryDialog"
 msgid "Delete"
 msgstr "Delete"
 
-#: ui/components/sftp_panel.slint:1727
+#: ui/components/sftp_panel.slint:1026
 msgctxt "SftpEntryDialog"
 msgid "Upload File"
 msgstr "Upload File"
 
-#: ui/components/sftp_panel.slint:1728 ui/components/sftp_panel.slint:1765
+#: ui/components/sftp_panel.slint:1027 ui/components/sftp_panel.slint:1064
 msgctxt "SftpEntryDialog"
 msgid "Download"
 msgstr "Download"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1729
+#: ui/components/sftp_panel.slint:1028
 msgctxt "SftpEntryDialog"
 msgid "Copy To..."
 msgstr "Copy To..."
 
-#: ui/components/sftp_panel.slint:1730
+#: ui/components/sftp_panel.slint:1029
 msgctxt "SftpEntryDialog"
 msgid "SFTP"
 msgstr "SFTP"
 
-#: ui/components/sftp_panel.slint:1734
+#: ui/components/sftp_panel.slint:1033
 msgctxt "SftpEntryDialog"
 msgid "Relative names are created inside the current remote directory."
 msgstr "Relative names are created inside the current remote directory."
 
-#: ui/components/sftp_panel.slint:1735
+#: ui/components/sftp_panel.slint:1034
 msgctxt "SftpEntryDialog"
 msgid "Relative names stay inside the current remote directory."
 msgstr "Relative names stay inside the current remote directory."
 
-#: ui/components/sftp_panel.slint:1736
+#: ui/components/sftp_panel.slint:1035
 msgctxt "SftpEntryDialog"
 msgid "Three-digit octal permissions, for example 644 or 755."
 msgstr "Three-digit octal permissions, for example 644 or 755."
 
-#: ui/components/sftp_panel.slint:1739
+#: ui/components/sftp_panel.slint:1038
 msgctxt "SftpEntryDialog"
 msgid "This permanently removes the {0} selected remote entries, directories recursively."
 msgstr "This permanently removes the {0} selected remote entries, directories recursively."
 
-#: ui/components/sftp_panel.slint:1740
+#: ui/components/sftp_panel.slint:1039
 msgctxt "SftpEntryDialog"
 msgid "This permanently removes the remote entry."
 msgstr "This permanently removes the remote entry."
 
-#: ui/components/sftp_panel.slint:1742
+#: ui/components/sftp_panel.slint:1041
 msgctxt "SftpEntryDialog"
 msgid "Uploads the local file or directory into the current remote directory using its name."
 msgstr "Uploads the local file or directory into the current remote directory using its name."
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1743
+#: ui/components/sftp_panel.slint:1042
 msgctxt "SftpEntryDialog"
 msgid "Downloads the selected remote entries into this local directory."
 msgstr "Downloads the selected remote entries into this local directory."
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1744
+#: ui/components/sftp_panel.slint:1043
 msgctxt "SftpEntryDialog"
 msgid "Downloads to a temporary copy and uploads it into this remote directory."
 msgstr "Downloads to a temporary copy and uploads it into this remote directory."
 
-#: ui/components/sftp_panel.slint:1749
+#: ui/components/sftp_panel.slint:1048
 msgctxt "SftpEntryDialog"
 msgid "Folder name"
 msgstr "Folder name"
 
-#: ui/components/sftp_panel.slint:1750
+#: ui/components/sftp_panel.slint:1049
 msgctxt "SftpEntryDialog"
 msgid "New name"
 msgstr "New name"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1754
+#: ui/components/sftp_panel.slint:1053
 msgctxt "SftpEntryDialog"
 msgid "Local file or directory"
 msgstr "Local file or directory"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1755
+#: ui/components/sftp_panel.slint:1054
 msgctxt "SftpEntryDialog"
 msgid "Remote destination directory"
 msgstr "Remote destination directory"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1756
+#: ui/components/sftp_panel.slint:1055
 msgctxt "SftpEntryDialog"
 msgid "Local destination directory"
 msgstr "Local destination directory"
 
-#: ui/components/sftp_panel.slint:1760
+#: ui/components/sftp_panel.slint:1059
 msgctxt "SftpEntryDialog"
 msgid "Create Folder"
 msgstr "Create Folder"
 
-#: ui/components/sftp_panel.slint:1762
+#: ui/components/sftp_panel.slint:1061
 msgctxt "SftpEntryDialog"
 msgid "Apply"
 msgstr "Apply"
 
-#: ui/components/sftp_panel.slint:1764
+#: ui/components/sftp_panel.slint:1063
 msgctxt "SftpEntryDialog"
 msgid "Upload"
 msgstr "Upload"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1766
+#: ui/components/sftp_panel.slint:1065
 msgctxt "SftpEntryDialog"
 msgid "Copy"
 msgstr "Copy"
 
-#: ui/components/sftp_panel.slint:1767
+#: ui/components/sftp_panel.slint:1066
 msgctxt "SftpEntryDialog"
 msgid "Run"
 msgstr "Run"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1850
+#: ui/components/sftp_panel.slint:1149
 msgctxt "SftpEntryDialog"
 msgid "{0} entries"
 msgstr "{0} entries"
 
-#: ui/components/sftp_panel.slint:1879
+#: ui/components/sftp_panel.slint:1178
 msgctxt "SftpEntryDialog"
 msgid "Permissions (octal)"
 msgstr "Permissions (octal)"
 
-#: ui/components/sftp_panel.slint:1902
+#: ui/components/sftp_panel.slint:1201
 msgctxt "SftpEntryDialog"
 msgid "Cancel"
 msgstr "Cancel"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1982
+#: ui/components/sftp_panel.slint:1281
 msgctxt "SftpConflictDialog"
 msgid "Resolve name conflicts"
 msgstr "Resolve name conflicts"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1989
+#: ui/components/sftp_panel.slint:1288
 msgctxt "SftpConflictDialog"
 msgid "{0} destination path(s) already exist."
 msgstr "{0} destination path(s) already exist."
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1995
+#: ui/components/sftp_panel.slint:1294
 msgctxt "SftpConflictDialog"
 msgid "{0} → {1}"
 msgstr "{0} → {1}"
 
-#: ui/components/sftp_panel.slint:2021
+#: ui/components/sftp_panel.slint:1320
 msgctxt "SftpConflictDialog"
 msgid "Overwrite replaces them, Rename keeps both by adding a number, Skip leaves them untouched."
 msgstr "Overwrite replaces them, Rename keeps both by adding a number, Skip leaves them untouched."
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:2032
+#: ui/components/sftp_panel.slint:1331
 msgctxt "SftpConflictDialog"
 msgid "Cancel"
 msgstr "Cancel"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:2036
+#: ui/components/sftp_panel.slint:1335
 msgctxt "SftpConflictDialog"
 msgid "Skip"
 msgstr "Skip"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:2040
+#: ui/components/sftp_panel.slint:1339
 msgctxt "SftpConflictDialog"
 msgid "Rename"
 msgstr "Rename"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:2044
+#: ui/components/sftp_panel.slint:1343
 msgctxt "SftpConflictDialog"
 msgid "Overwrite"
 msgstr "Overwrite"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:2115
+#: ui/components/sftp_panel.slint:1414
 msgctxt "SftpPropertiesDialog"
 msgid "Properties"
 msgstr "Properties"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:2124
+#: ui/components/sftp_panel.slint:1423
 msgctxt "SftpPropertiesDialog"
 msgid "Name"
 msgstr "Name"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:2127
+#: ui/components/sftp_panel.slint:1426
 msgctxt "SftpPropertiesDialog"
 msgid "Path"
 msgstr "Path"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:2130
+#: ui/components/sftp_panel.slint:1429
 msgctxt "SftpPropertiesDialog"
 msgid "Kind"
 msgstr "Kind"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:2133
+#: ui/components/sftp_panel.slint:1432
 msgctxt "SftpPropertiesDialog"
 msgid "Size"
 msgstr "Size"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:2136
+#: ui/components/sftp_panel.slint:1435
 msgctxt "SftpPropertiesDialog"
 msgid "Modified"
 msgstr "Modified"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:2139
+#: ui/components/sftp_panel.slint:1438
 msgctxt "SftpPropertiesDialog"
 msgid "Permissions"
 msgstr "Permissions"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:2148
+#: ui/components/sftp_panel.slint:1447
 msgctxt "SftpPropertiesDialog"
 msgid "Copy Path"
 msgstr "Copy Path"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:2152
+#: ui/components/sftp_panel.slint:1451
 msgctxt "SftpPropertiesDialog"
 msgid "Close"
 msgstr "Close"
@@ -2029,17 +1960,12 @@ msgctxt "ThemeEditor"
 msgid "Discard Changes"
 msgstr "Discard Changes"
 
-#: ui/components/tool_dock.slint:414
+#: ui/components/tool_dock.slint:415
 msgctxt "MainWindow"
 msgid "Sessions"
 msgstr "Sessions"
 
-#: ui/components/tool_dock.slint:454
-msgctxt "MainWindow"
-msgid "Local"
-msgstr "Local"
-
-#: ui/components/tool_dock.slint:509
+#: ui/components/tool_dock.slint:511
 msgctxt "MainWindow"
 msgid "SFTP"
 msgstr "SFTP"
@@ -2129,32 +2055,42 @@ msgctxt "TunnelPanel"
 msgid "Stop tunnel"
 msgstr "Stop tunnel"
 
-#: ui/components/workspace_split.slint:194
+#: ui/components/workspace_split.slint:250
 msgctxt "SplitPaneLeaf"
 msgid "Activate a tab for this pane"
 msgstr "Activate a tab for this pane"
 
-#: ui/components/workspace_tab_bar.slint:96
+#: ui/components/workspace_split.slint:376
+msgctxt "SplitPaneLeaf"
+msgid "Local"
+msgstr "Local"
+
+#: ui/components/workspace_tab_bar.slint:98
 msgctxt "MainWindow"
 msgid "New session"
 msgstr "New session"
 
-#: ui/components/workspace_tab_item.slint:35
+#: ui/components/workspace_tab_item.slint:39
 msgctxt "WorkspaceTabItem"
 msgid "Key input source"
 msgstr "Key input source"
 
-#: ui/components/workspace_tab_item.slint:36
+#: ui/components/workspace_tab_item.slint:40
 msgctxt "WorkspaceTabItem"
 msgid "Receiving key input"
 msgstr "Receiving key input"
 
-#: ui/components/workspace_tab_item.slint:123
+#: ui/components/workspace_tab_item.slint:119
+msgctxt "WorkspaceTabItem"
+msgid "New Tab"
+msgstr "New Tab"
+
+#: ui/components/workspace_tab_item.slint:148
 msgctxt "WorkspaceTabItem"
 msgid "SRC"
 msgstr "SRC"
 
-#: ui/components/workspace_tab_item.slint:123
+#: ui/components/workspace_tab_item.slint:148
 msgctxt "WorkspaceTabItem"
 msgid "RCV"
 msgstr "RCV"
@@ -3180,277 +3116,297 @@ msgctxt "SessionEditor"
 msgid "Save and Connect"
 msgstr "Save and Connect"
 
-#: ui/pages/settings.slint:168
+#: ui/pages/settings.slint:172
 msgctxt "SettingsDialog"
 msgid "Settings"
 msgstr "Settings"
 
-#: ui/pages/settings.slint:178 ui/pages/settings.slint:822
+#: ui/pages/settings.slint:182 ui/pages/settings.slint:878
 msgctxt "SettingsDialog"
 msgid "Close"
 msgstr "Close"
 
-#: ui/pages/settings.slint:208
+#: ui/pages/settings.slint:212
 msgctxt "SettingsDialog"
 msgid "General"
 msgstr "General"
 
-#: ui/pages/settings.slint:214 ui/pages/settings.slint:364
+#: ui/pages/settings.slint:218 ui/pages/settings.slint:368
 msgctxt "SettingsDialog"
 msgid "Appearance"
 msgstr "Appearance"
 
-#: ui/pages/settings.slint:220 ui/pages/settings.slint:584
+#: ui/pages/settings.slint:224 ui/pages/settings.slint:588
 msgctxt "SettingsDialog"
 msgid "Terminal"
 msgstr "Terminal"
 
-#: ui/pages/settings.slint:226 ui/pages/settings.slint:678
+#: ui/pages/settings.slint:230 ui/pages/settings.slint:734
 msgctxt "SettingsDialog"
 msgid "Security"
 msgstr "Security"
 
-#: ui/pages/settings.slint:232 ui/pages/settings.slint:725
+#: ui/pages/settings.slint:236 ui/pages/settings.slint:781
 msgctxt "SettingsDialog"
 msgid "Advanced"
 msgstr "Advanced"
 
-#: ui/pages/settings.slint:238
+#: ui/pages/settings.slint:242 ui/pages/settings.slint:682
 msgctxt "SettingsDialog"
 msgid "SFTP"
 msgstr "SFTP"
 
-#: ui/pages/settings.slint:241 ui/pages/settings.slint:247
-msgctxt "SettingsDialog"
-msgid "Not available in this version."
-msgstr "Not available in this version."
-
-#: ui/pages/settings.slint:244
+#: ui/pages/settings.slint:248
 msgctxt "SettingsDialog"
 msgid "Shortcuts"
 msgstr "Shortcuts"
 
-#: ui/pages/settings.slint:287
+#: ui/pages/settings.slint:251
+msgctxt "SettingsDialog"
+msgid "Not available in this version."
+msgstr "Not available in this version."
+
+#: ui/pages/settings.slint:291
 msgctxt "SettingsDialog"
 msgid "Language"
 msgstr "Language"
 
-#: ui/pages/settings.slint:294
+#: ui/pages/settings.slint:298
 msgctxt "SettingsDialog"
 msgid "Default follows the operating system. Changes apply immediately."
 msgstr "Default follows the operating system. Changes apply immediately."
 
-#: ui/pages/settings.slint:304
+#: ui/pages/settings.slint:308
 msgctxt "SettingsDialog"
 msgid "System"
 msgstr "System"
 
-#: ui/pages/settings.slint:309
+#: ui/pages/settings.slint:313
 msgctxt "SettingsDialog"
 msgid "Chinese (Simplified)"
 msgstr "Chinese (Simplified)"
 
-#: ui/pages/settings.slint:314
+#: ui/pages/settings.slint:318
 msgctxt "SettingsDialog"
 msgid "English"
 msgstr "English"
 
-#: ui/pages/settings.slint:326
+#: ui/pages/settings.slint:330
 msgctxt "SettingsDialog"
 msgid "Confirmations"
 msgstr "Confirmations"
 
-#: ui/pages/settings.slint:333
+#: ui/pages/settings.slint:337
 msgctxt "SettingsDialog"
 msgid "Turn off a confirmation to close or quit without asking. You can turn it back on here at any time."
 msgstr "Turn off a confirmation to close or quit without asking. You can turn it back on here at any time."
 
-#: ui/pages/settings.slint:340
+#: ui/pages/settings.slint:344
 msgctxt "SettingsDialog"
 msgid "Confirm before closing a session"
 msgstr "Confirm before closing a session"
 
-#: ui/pages/settings.slint:349
+#: ui/pages/settings.slint:353
 msgctxt "SettingsDialog"
 msgid "Confirm before quitting YShell"
 msgstr "Confirm before quitting YShell"
 
-#: ui/pages/settings.slint:371
+#: ui/pages/settings.slint:375
 msgctxt "SettingsDialog"
 msgid "Global defaults for terminals opened after saving. Open terminals keep their theme."
 msgstr "Global defaults for terminals opened after saving. Open terminals keep their theme."
 
-#: ui/pages/settings.slint:378
+#: ui/pages/settings.slint:382
 msgctxt "SettingsDialog"
 msgid "Current theme"
 msgstr "Current theme"
 
-#: ui/pages/settings.slint:415
+#: ui/pages/settings.slint:419
 msgctxt "SettingsDialog"
 msgid "Built-in theme"
 msgstr "Built-in theme"
 
-#: ui/pages/settings.slint:416
+#: ui/pages/settings.slint:420
 msgctxt "SettingsDialog"
 msgid "Custom theme"
 msgstr "Custom theme"
 
-#: ui/pages/settings.slint:439
+#: ui/pages/settings.slint:443
 msgctxt "SettingsDialog"
 msgid "Manage themes…"
 msgstr "Manage themes…"
 
-#: ui/pages/settings.slint:447
+#: ui/pages/settings.slint:451
 msgctxt "SettingsDialog"
 msgid "Clone, edit and delete color themes in the Theme Manager. Font settings apply to every theme."
 msgstr "Clone, edit and delete color themes in the Theme Manager. Font settings apply to every theme."
 
-#: ui/pages/settings.slint:456
+#: ui/pages/settings.slint:460
 msgctxt "SettingsDialog"
 msgid "Font"
 msgstr "Font"
 
-#: ui/pages/settings.slint:463
+#: ui/pages/settings.slint:467
 msgctxt "SettingsDialog"
 msgid "Font family"
 msgstr "Font family"
 
-#: ui/pages/settings.slint:468
+#: ui/pages/settings.slint:472
 msgctxt "SettingsDialog"
 msgid "DejaVu Sans Mono"
 msgstr "DejaVu Sans Mono"
 
-#: ui/pages/settings.slint:472
+#: ui/pages/settings.slint:476
 msgctxt "SettingsDialog"
 msgid "Add Font File…"
 msgstr "Add Font File…"
 
-#: ui/pages/settings.slint:478
+#: ui/pages/settings.slint:482
 msgctxt "SettingsDialog"
 msgid "Font size"
 msgstr "Font size"
 
-#: ui/pages/settings.slint:483
+#: ui/pages/settings.slint:487
 msgctxt "SettingsDialog"
 msgid "Decrease font size"
 msgstr "Decrease font size"
 
-#: ui/pages/settings.slint:496
+#: ui/pages/settings.slint:500
 msgctxt "SettingsDialog"
 msgid "Increase font size"
 msgstr "Increase font size"
 
-#: ui/pages/settings.slint:500
+#: ui/pages/settings.slint:504
 msgctxt "SettingsDialog"
 msgid "Logical pixels (6-72)"
 msgstr "Logical pixels (6-72)"
 
-#: ui/pages/settings.slint:510
+#: ui/pages/settings.slint:514
 msgctxt "SettingsDialog"
 msgid "Fallback font"
 msgstr "Fallback font"
 
-#: ui/pages/settings.slint:514
+#: ui/pages/settings.slint:518
 msgctxt "SettingsDialog"
 msgid "Font file path"
 msgstr "Font file path"
 
-#: ui/pages/settings.slint:525
+#: ui/pages/settings.slint:529
 msgctxt "SettingsDialog"
 msgid "Select File…"
 msgstr "Select File…"
 
-#: ui/pages/settings.slint:529
+#: ui/pages/settings.slint:533
 msgctxt "SettingsDialog"
 msgid "Clear"
 msgstr "Clear"
 
-#: ui/pages/settings.slint:537
+#: ui/pages/settings.slint:541
 msgctxt "SettingsDialog"
 msgid "Live preview"
 msgstr "Live preview"
 
-#: ui/pages/settings.slint:567 ui/pages/settings.slint:653
+#: ui/pages/settings.slint:571 ui/pages/settings.slint:657
 msgctxt "SettingsDialog"
 msgid "Reset Defaults"
 msgstr "Reset Defaults"
 
-#: ui/pages/settings.slint:571
+#: ui/pages/settings.slint:575
 msgctxt "SettingsDialog"
 msgid "Save"
 msgstr "Save"
 
-#: ui/pages/settings.slint:597
+#: ui/pages/settings.slint:601
 msgctxt "SettingsDialog"
 msgid "Scrollback lines"
 msgstr "Scrollback lines"
 
-#: ui/pages/settings.slint:618
+#: ui/pages/settings.slint:622
 msgctxt "SettingsDialog"
 msgid "Scrollback memory cap (cells)"
 msgstr "Scrollback memory cap (cells)"
 
-#: ui/pages/settings.slint:635
+#: ui/pages/settings.slint:639
 msgctxt "SettingsDialog"
 msgid "Scrollback is stored compressed (about 3 MB per session at the defaults). Both the line count and the total cell count are enforced."
 msgstr "Scrollback is stored compressed (about 3 MB per session at the defaults). Both the line count and the total cell count are enforced."
 
-#: ui/pages/settings.slint:642
+#: ui/pages/settings.slint:646
 msgctxt "SettingsDialog"
 msgid "Allowed range: 100-1000000 lines, 100000-100000000 cells."
 msgstr "Allowed range: 100-1000000 lines, 100000-100000000 cells."
 
-#: ui/pages/settings.slint:658
+#: ui/pages/settings.slint:662
 msgctxt "SettingsDialog"
 msgid "Save Terminal Settings"
 msgstr "Save Terminal Settings"
 
-#: ui/pages/settings.slint:692
+#: ui/pages/settings.slint:689
+msgctxt "SettingsDialog"
+msgid "How many uploads and downloads may run at the same time. A higher value is faster on fast links but uses more bandwidth."
+msgstr "How many uploads and downloads may run at the same time. A higher value is faster on fast links but uses more bandwidth."
+
+#: ui/pages/settings.slint:696
+msgctxt "SettingsDialog"
+msgid "Max parallel transfers"
+msgstr "Max parallel transfers"
+
+#: ui/pages/settings.slint:710
+msgctxt "SettingsDialog"
+msgid "Allowed range: 1-16 transfers."
+msgstr "Allowed range: 1-16 transfers."
+
+#: ui/pages/settings.slint:721
+msgctxt "SettingsDialog"
+msgid "Save SFTP Settings"
+msgstr "Save SFTP Settings"
+
+#: ui/pages/settings.slint:748
 msgctxt "SettingsDialog"
 msgid "Config directory: {0}"
 msgstr "Config directory: {0}"
 
-#: ui/pages/settings.slint:703
+#: ui/pages/settings.slint:759
 msgctxt "SettingsDialog"
 msgid "Open Host Keys…"
 msgstr "Open Host Keys…"
 
-#: ui/pages/settings.slint:708
+#: ui/pages/settings.slint:764
 msgctxt "SettingsDialog"
 msgid "Open Private Keys…"
 msgstr "Open Private Keys…"
 
-#: ui/pages/settings.slint:713
+#: ui/pages/settings.slint:769
 msgctxt "SettingsDialog"
 msgid "Open Proxy Manager…"
 msgstr "Open Proxy Manager…"
 
-#: ui/pages/settings.slint:732
+#: ui/pages/settings.slint:788
 msgctxt "SettingsDialog"
 msgid "Config directory"
 msgstr "Config directory"
 
-#: ui/pages/settings.slint:746
+#: ui/pages/settings.slint:802
 msgctxt "SettingsDialog"
 msgid "Application data, sessions, and related files live under this directory."
 msgstr "Application data, sessions, and related files live under this directory."
 
-#: ui/pages/settings.slint:755
+#: ui/pages/settings.slint:811
 msgctxt "SettingsDialog"
 msgid "Debug logging"
 msgstr "Debug logging"
 
-#: ui/pages/settings.slint:762
+#: ui/pages/settings.slint:818
 msgctxt "SettingsDialog"
 msgid "When enabled, diagnostic logs are written under the config directory. The console window stays hidden."
 msgstr "When enabled, diagnostic logs are written under the config directory. The console window stays hidden."
 
-#: ui/pages/settings.slint:769
+#: ui/pages/settings.slint:825
 msgctxt "SettingsDialog"
 msgid "Record debug logs"
 msgstr "Record debug logs"
 
-#: ui/pages/settings.slint:789
+#: ui/pages/settings.slint:845
 msgctxt "SettingsDialog"
 msgid "Open Log Folder"
 msgstr "Open Log Folder"
@@ -3675,37 +3631,37 @@ msgctxt "MainWindow"
 msgid "Secret store disabled. Set YSHELL_MASTER_PASSWORD to enable the local encrypted store or use the operating system keychain."
 msgstr "Secret store disabled. Set YSHELL_MASTER_PASSWORD to enable the local encrypted store or use the operating system keychain."
 
-#: ui/text_formats.slint:134 ui/text_formats.slint:1144
+#: ui/text_formats.slint:134 ui/text_formats.slint:1186
 msgctxt "MainWindow"
 msgid "Run Auth Test to validate the current editor fields without saving."
 msgstr "Run Auth Test to validate the current editor fields without saving."
 
-#: ui/text_formats.slint:137 ui/text_formats.slint:1147
+#: ui/text_formats.slint:137 ui/text_formats.slint:1189
 msgctxt "MainWindow"
 msgid "Loaded saved session into the editor. Run Auth Test before saving if you want to validate the current form."
 msgstr "Loaded saved session into the editor. Run Auth Test before saving if you want to validate the current form."
 
-#: ui/text_formats.slint:140 ui/text_formats.slint:1156
+#: ui/text_formats.slint:140 ui/text_formats.slint:1198
 msgctxt "MainWindow"
 msgid "Auth test failed: {0}"
 msgstr "Auth test failed: {0}"
 
-#: ui/text_formats.slint:143 ui/text_formats.slint:1153
+#: ui/text_formats.slint:143 ui/text_formats.slint:1195
 msgctxt "MainWindow"
 msgid "Auth test succeeded for {0}."
 msgstr "Auth test succeeded for {0}."
 
-#: ui/text_formats.slint:145 ui/text_formats.slint:1151
+#: ui/text_formats.slint:145 ui/text_formats.slint:1193
 msgctxt "MainWindow"
 msgid "Auth test succeeded for {0}. Startup: {1}"
 msgstr "Auth test succeeded for {0}. Startup: {1}"
 
-#: ui/text_formats.slint:150 ui/text_formats.slint:1617
+#: ui/text_formats.slint:150 ui/text_formats.slint:1659
 msgctxt "MainWindow"
 msgid "Scrollback memory cap"
 msgstr "Scrollback memory cap"
 
-#: ui/text_formats.slint:152 ui/text_formats.slint:1616
+#: ui/text_formats.slint:152 ui/text_formats.slint:1658
 msgctxt "MainWindow"
 msgid "Scrollback lines"
 msgstr "Scrollback lines"
@@ -3720,7 +3676,7 @@ msgctxt "MainWindow"
 msgid "Defaults loaded. Click Save to apply."
 msgstr "Defaults loaded. Click Save to apply."
 
-#: ui/text_formats.slint:163 ui/text_formats.slint:1220
+#: ui/text_formats.slint:163 ui/text_formats.slint:1262
 msgctxt "MainWindow"
 msgid "Saved terminal settings: scrollback={0} lines, cap={1} cells."
 msgstr "Saved terminal settings: scrollback={0} lines, cap={1} cells."
@@ -3730,7 +3686,7 @@ msgctxt "MainWindow"
 msgid "{0} must not be empty."
 msgstr "{0} must not be empty."
 
-#: ui/text_formats.slint:169 ui/text_formats.slint:1521
+#: ui/text_formats.slint:169 ui/text_formats.slint:1563
 msgctxt "MainWindow"
 msgid "{0} must be a whole number."
 msgstr "{0} must be a whole number."
@@ -3745,14 +3701,14 @@ msgctxt "MainWindow"
 msgid "Selected known host {0}:{1} ({2} of {3})."
 msgstr "Selected known host {0}:{1} ({2} of {3})."
 
-#: ui/text_formats.slint:179 ui/text_formats.slint:1265
+#: ui/text_formats.slint:179 ui/text_formats.slint:1307
 msgctxt "MainWindow"
 msgid "Known hosts manager loaded {n} entry."
 msgid_plural "Known hosts manager loaded {n} entries."
 msgstr[0] "Known hosts manager loaded {n} entry."
 msgstr[1] "Known hosts manager loaded {n} entries."
 
-#: ui/text_formats.slint:181 ui/text_formats.slint:1262
+#: ui/text_formats.slint:181 ui/text_formats.slint:1304
 msgctxt "MainWindow"
 msgid "No persisted known hosts are available."
 msgstr "No persisted known hosts are available."
@@ -3767,12 +3723,12 @@ msgctxt "MainWindow"
 msgid "No saved session selected"
 msgstr "No saved session selected"
 
-#: ui/text_formats.slint:196 ui/text_formats.slint:977
+#: ui/text_formats.slint:196 ui/text_formats.slint:1019
 msgctxt "MainWindow"
 msgid "No matches for `{0}` in the visible terminal."
 msgstr "No matches for `{0}` in the visible terminal."
 
-#: ui/text_formats.slint:199 ui/text_formats.slint:980
+#: ui/text_formats.slint:199 ui/text_formats.slint:1022
 msgctxt "MainWindow"
 msgid "Found {n} match for `{0}` in the visible terminal."
 msgid_plural "Found {n} matches for `{0}` in the visible terminal."
@@ -3784,7 +3740,7 @@ msgctxt "MainWindow"
 msgid "Showing {0}/{1}."
 msgstr "Showing {0}/{1}."
 
-#: ui/text_formats.slint:202 ui/text_formats.slint:974
+#: ui/text_formats.slint:202 ui/text_formats.slint:1016
 msgctxt "MainWindow"
 msgid "Find in terminal"
 msgstr "Find in terminal"
@@ -3839,12 +3795,12 @@ msgctxt "MainWindow"
 msgid "SFTP unavailable: {0}"
 msgstr "SFTP unavailable: {0}"
 
-#: ui/text_formats.slint:242 ui/text_formats.slint:666
+#: ui/text_formats.slint:242 ui/text_formats.slint:678
 msgctxt "MainWindow"
 msgid "SFTP session disconnected. Connect a runtime session first."
 msgstr "SFTP session disconnected. Connect a runtime session first."
 
-#: ui/text_formats.slint:244 ui/text_formats.slint:668
+#: ui/text_formats.slint:244 ui/text_formats.slint:680
 msgctxt "MainWindow"
 msgid "SFTP session disconnected for runtime session `{0}`."
 msgstr "SFTP session disconnected for runtime session `{0}`."
@@ -4317,1795 +4273,1800 @@ msgctxt "MainWindow"
 msgid "The active live shell closed while the terminal was refreshing."
 msgstr "The active live shell closed while the terminal was refreshing."
 
-#: ui/text_formats.slint:556
+#: ui/text_formats.slint:556 ui/text_formats.slint:559
 msgctxt "MainWindow"
 msgid "Activated tab `{0}`."
 msgstr "Activated tab `{0}`."
 
-#: ui/text_formats.slint:559
+#: ui/text_formats.slint:562
+msgctxt "MainWindow"
+msgid "Opened a new tab."
+msgstr "Opened a new tab."
+
+#: ui/text_formats.slint:565
+msgctxt "MainWindow"
+msgid "Switched tab `{0}` to SFTP."
+msgstr "Switched tab `{0}` to SFTP."
+
+#: ui/text_formats.slint:568
+msgctxt "MainWindow"
+msgid "Switched tab `{0}` to Terminal."
+msgstr "Switched tab `{0}` to Terminal."
+
+#: ui/text_formats.slint:571
 msgctxt "MainWindow"
 msgid "Activated tab `{0}`. Loading SFTP listing…"
 msgstr "Activated tab `{0}`. Loading SFTP listing…"
 
-#: ui/text_formats.slint:562
+#: ui/text_formats.slint:574
 msgctxt "MainWindow"
 msgid "Confirm closing tab `{0}`: the session is still active."
 msgstr "Confirm closing tab `{0}`: the session is still active."
 
-#: ui/text_formats.slint:566
+#: ui/text_formats.slint:578
 msgctxt "MainWindow"
 msgid "Closed tab `{0}`. Stopped logging; log file: `{1}`."
 msgstr "Closed tab `{0}`. Stopped logging; log file: `{1}`."
 
-#: ui/text_formats.slint:568
+#: ui/text_formats.slint:580
 msgctxt "MainWindow"
 msgid "Closed tab `{0}`."
 msgstr "Closed tab `{0}`."
 
-#: ui/text_formats.slint:571
+#: ui/text_formats.slint:583
 msgctxt "MainWindow"
 msgid "No tabs matched the close request."
 msgstr "No tabs matched the close request."
 
-#: ui/text_formats.slint:574
+#: ui/text_formats.slint:586
 msgctxt "MainWindow"
 msgid "Confirm closing {n} tab"
 msgid_plural "Confirm closing {n} tabs"
 msgstr[0] "Confirm closing {n} tab"
 msgstr[1] "Confirm closing {n} tabs"
 
-#: ui/text_formats.slint:575
+#: ui/text_formats.slint:587
 msgctxt "MainWindow"
 msgid "{n} still active connection"
 msgid_plural "{n} still active connections"
 msgstr[0] "{n} still active connection"
 msgstr[1] "{n} still active connections"
 
-#: ui/text_formats.slint:579 ui/text_formats.slint:582
+#: ui/text_formats.slint:591 ui/text_formats.slint:594
 msgctxt "MainWindow"
 msgid "Closed {n} tab."
 msgid_plural "Closed {n} tabs."
 msgstr[0] "Closed {n} tab."
 msgstr[1] "Closed {n} tabs."
 
-#: ui/text_formats.slint:580
+#: ui/text_formats.slint:592
 msgctxt "MainWindow"
 msgid "Stopped logging; log file: `{0}`."
 msgstr "Stopped logging; log file: `{0}`."
 
-#: ui/text_formats.slint:586
+#: ui/text_formats.slint:598
 msgctxt "MainWindow"
 msgid "{n} active connection was disconnected without confirmation."
 msgid_plural "{n} active connections were disconnected without confirmation."
 msgstr[0] "{n} active connection was disconnected without confirmation."
 msgstr[1] "{n} active connections were disconnected without confirmation."
 
-#: ui/text_formats.slint:589
+#: ui/text_formats.slint:601
 msgctxt "MainWindow"
 msgid "Canceled the tab close confirmation."
 msgstr "Canceled the tab close confirmation."
 
-#: ui/text_formats.slint:592
+#: ui/text_formats.slint:604
 msgctxt "MainWindow"
 msgid "Renamed tab to `{0}`."
 msgstr "Renamed tab to `{0}`."
 
-#: ui/text_formats.slint:595
+#: ui/text_formats.slint:607
 msgctxt "MainWindow"
 msgid "Authenticate the new session to finish duplicating."
 msgstr "Authenticate the new session to finish duplicating."
 
-#: ui/text_formats.slint:598
+#: ui/text_formats.slint:610
 msgctxt "MainWindow"
 msgid "Duplicated session as `{0}`."
 msgstr "Duplicated session as `{0}`."
 
-#: ui/text_formats.slint:601
+#: ui/text_formats.slint:613
 msgctxt "MainWindow"
 msgid "Moved tab to pane {0}."
 msgstr "Moved tab to pane {0}."
 
-#: ui/text_formats.slint:604
+#: ui/text_formats.slint:616
 msgctxt "MainWindow"
 msgid "Split pane {0} {1}."
 msgstr "Split pane {0} {1}."
 
-#: ui/text_formats.slint:607
+#: ui/text_formats.slint:619
 msgctxt "MainWindow"
 msgid "Split workspace {0}."
 msgstr "Split workspace {0}."
 
-#: ui/text_formats.slint:610
+#: ui/text_formats.slint:622
 msgctxt "MainWindow"
 msgid "Authenticate the new session, then drag the tab to split."
 msgstr "Authenticate the new session, then drag the tab to split."
 
-#: ui/text_formats.slint:613
+#: ui/text_formats.slint:625
 msgctxt "MainWindow"
 msgid "Authenticate the new session, then choose Split again."
 msgstr "Authenticate the new session, then choose Split again."
 
-#: ui/text_formats.slint:616
+#: ui/text_formats.slint:628
 msgctxt "MainWindow"
 msgid "Focused pane {0}."
 msgstr "Focused pane {0}."
 
-#: ui/text_formats.slint:619
+#: ui/text_formats.slint:631
 msgctxt "MainWindow"
 msgid "Closed pane {0}."
 msgstr "Closed pane {0}."
 
-#: ui/text_formats.slint:622
+#: ui/text_formats.slint:634
 msgctxt "MainWindow"
 msgid "Polled the active terminal, but no new output was available."
 msgstr "Polled the active terminal, but no new output was available."
 
-#: ui/text_formats.slint:626
+#: ui/text_formats.slint:638
 msgctxt "MainWindow"
 msgid "Opened the Quick Connect page."
 msgstr "Opened the Quick Connect page."
 
-#: ui/text_formats.slint:629
+#: ui/text_formats.slint:641
 msgctxt "MainWindow"
 msgid "Activated the Quick Connect page."
 msgstr "Activated the Quick Connect page."
 
-#: ui/text_formats.slint:632
+#: ui/text_formats.slint:644
 msgctxt "MainWindow"
 msgid "Closed the Quick Connect page."
 msgstr "Closed the Quick Connect page."
 
-#: ui/text_formats.slint:635
+#: ui/text_formats.slint:647
 msgctxt "MainWindow"
 msgid "`{0}` is already a quick link."
 msgstr "`{0}` is already a quick link."
 
-#: ui/text_formats.slint:638
+#: ui/text_formats.slint:650
 msgctxt "MainWindow"
 msgid "Pinned `{0}` as a quick link."
 msgstr "Pinned `{0}` as a quick link."
 
-#: ui/text_formats.slint:641
+#: ui/text_formats.slint:653
 msgctxt "MainWindow"
 msgid "Quick link `{0}` was not found."
 msgstr "Quick link `{0}` was not found."
 
-#: ui/text_formats.slint:644
+#: ui/text_formats.slint:656
 msgctxt "MainWindow"
 msgid "Removed the quick link."
 msgstr "Removed the quick link."
 
-#: ui/text_formats.slint:647
+#: ui/text_formats.slint:659
 msgctxt "MainWindow"
 msgid "Cleared {n} Quick Connect history entry."
 msgid_plural "Cleared {n} Quick Connect history entries."
 msgstr[0] "Cleared {n} Quick Connect history entry."
 msgstr[1] "Cleared {n} Quick Connect history entries."
 
-#: ui/text_formats.slint:650
+#: ui/text_formats.slint:662
 msgctxt "MainWindow"
 msgid "Copied `{0}` to the clipboard."
 msgstr "Copied `{0}` to the clipboard."
 
-#: ui/text_formats.slint:653
+#: ui/text_formats.slint:665
 msgctxt "MainWindow"
 msgid "Session editor opened with Quick Connect target `{0}`."
 msgstr "Session editor opened with Quick Connect target `{0}`."
 
-#: ui/text_formats.slint:656
+#: ui/text_formats.slint:668
 msgctxt "MainWindow"
 msgid "Failed to persist Quick Connect state: {0}"
 msgstr "Failed to persist Quick Connect state: {0}"
 
-#: ui/text_formats.slint:671
+#: ui/text_formats.slint:683
 msgctxt "MainWindow"
 msgid "SFTP is unavailable for local terminal sessions."
 msgstr "SFTP is unavailable for local terminal sessions."
 
-#: ui/text_formats.slint:674
+#: ui/text_formats.slint:686
 msgctxt "MainWindow"
 msgid "SFTP is not ready. Cannot continue {0}."
 msgstr "SFTP is not ready. Cannot continue {0}."
 
-#: ui/text_formats.slint:677
+#: ui/text_formats.slint:689
 msgctxt "MainWindow"
 msgid "Select an SFTP entry before opening its properties."
 msgstr "Select an SFTP entry before opening its properties."
 
-#: ui/text_formats.slint:680
+#: ui/text_formats.slint:692
 msgctxt "MainWindow"
 msgid "Select an SFTP entry before opening it."
 msgstr "Select an SFTP entry before opening it."
 
-#: ui/text_formats.slint:683
+#: ui/text_formats.slint:695
 msgctxt "MainWindow"
 msgid "Unknown SFTP sort column `{0}`."
 msgstr "Unknown SFTP sort column `{0}`."
 
-#: ui/text_formats.slint:686
+#: ui/text_formats.slint:698
 msgctxt "MainWindow"
 msgid "SFTP hidden files are now shown."
 msgstr "SFTP hidden files are now shown."
 
-#: ui/text_formats.slint:689
+#: ui/text_formats.slint:701
 msgctxt "MainWindow"
 msgid "SFTP hidden files are now hidden."
 msgstr "SFTP hidden files are now hidden."
 
-#: ui/text_formats.slint:692
+#: ui/text_formats.slint:704
 msgctxt "MainWindow"
 msgid "That SFTP breadcrumb is no longer available."
 msgstr "That SFTP breadcrumb is no longer available."
 
-#: ui/text_formats.slint:696
+#: ui/text_formats.slint:708
 msgctxt "MainWindow"
 msgid "New SFTP folder name must not be empty."
 msgstr "New SFTP folder name must not be empty."
 
-#: ui/text_formats.slint:699
+#: ui/text_formats.slint:711
 msgctxt "MainWindow"
 msgid "New SFTP name must not be empty."
 msgstr "New SFTP name must not be empty."
 
-#: ui/text_formats.slint:702
+#: ui/text_formats.slint:714
 msgctxt "MainWindow"
 msgid "Select an SFTP entry before renaming it."
 msgstr "Select an SFTP entry before renaming it."
 
-#: ui/text_formats.slint:705
+#: ui/text_formats.slint:717
 msgctxt "MainWindow"
 msgid "Select an SFTP entry before deleting it."
 msgstr "Select an SFTP entry before deleting it."
 
-#: ui/text_formats.slint:708
+#: ui/text_formats.slint:720
 msgctxt "MainWindow"
 msgid "Deleted `{0}` through SFTP."
 msgstr "Deleted `{0}` through SFTP."
 
-#: ui/text_formats.slint:711
+#: ui/text_formats.slint:723
+msgctxt "MainWindow"
+msgid "Deleted {0} remote entries."
+msgstr "Deleted {0} remote entries."
+
+#: ui/text_formats.slint:726
+msgctxt "MainWindow"
+msgid "Deleted {0} remote entries, but some failed: {1}"
+msgstr "Deleted {0} remote entries, but some failed: {1}"
+
+#: ui/text_formats.slint:729
+msgctxt "MainWindow"
+msgid "The SFTP connection was closed. {0}"
+msgstr "The SFTP connection was closed. {0}"
+
+#: ui/text_formats.slint:732
+msgctxt "MainWindow"
+msgid "Changed permissions on {0} remote entries, but some failed: {1}"
+msgstr "Changed permissions on {0} remote entries, but some failed: {1}"
+
+#: ui/text_formats.slint:735
+msgctxt "MainWindow"
+msgid "Deleted {0} local entries."
+msgstr "Deleted {0} local entries."
+
+#: ui/text_formats.slint:738
+msgctxt "MainWindow"
+msgid "Deleted {0} local entries, but some failed: {1}"
+msgstr "Deleted {0} local entries, but some failed: {1}"
+
+#: ui/text_formats.slint:741
+msgctxt "MainWindow"
+msgid "Select local entries before deleting them."
+msgstr "Select local entries before deleting them."
+
+#: ui/text_formats.slint:744 ui/text_formats.slint:1594
+msgctxt "MainWindow"
+msgid "Copied `{0}`."
+msgstr "Copied `{0}`."
+
+#: ui/text_formats.slint:747
+msgctxt "MainWindow"
+msgid "SFTP transfers now run {0} at a time."
+msgstr "SFTP transfers now run {0} at a time."
+
+#: ui/text_formats.slint:750
+msgctxt "MainWindow"
+msgid "The number of parallel SFTP transfers must be between 1 and 16."
+msgstr "The number of parallel SFTP transfers must be between 1 and 16."
+
+#: ui/text_formats.slint:753
 msgctxt "MainWindow"
 msgid "Select an SFTP entry before changing permissions."
 msgstr "Select an SFTP entry before changing permissions."
 
-#: ui/text_formats.slint:714
+#: ui/text_formats.slint:756
 msgctxt "MainWindow"
 msgid "Local upload path must not be empty."
 msgstr "Local upload path must not be empty."
 
-#: ui/text_formats.slint:717
+#: ui/text_formats.slint:759
 msgctxt "MainWindow"
 msgid "Select an SFTP entry before downloading it."
 msgstr "Select an SFTP entry before downloading it."
 
-#: ui/text_formats.slint:720
+#: ui/text_formats.slint:762
 msgctxt "MainWindow"
 msgid "Local download path must not be empty."
 msgstr "Local download path must not be empty."
 
-#: ui/text_formats.slint:723
+#: ui/text_formats.slint:765
 msgctxt "MainWindow"
 msgid "Select an SFTP file before starting remote edit."
 msgstr "Select an SFTP file before starting remote edit."
 
-#: ui/text_formats.slint:726
+#: ui/text_formats.slint:768
 msgctxt "MainWindow"
 msgid "SFTP upload error: {0}"
 msgstr "SFTP upload error: {0}"
 
-#: ui/text_formats.slint:729
+#: ui/text_formats.slint:771
 msgctxt "MainWindow"
 msgid "Uploaded `{0}` to `{1}` through the live SFTP backend."
 msgstr "Uploaded `{0}` to `{1}` through the live SFTP backend."
 
-#: ui/text_formats.slint:732
+#: ui/text_formats.slint:774
 msgctxt "MainWindow"
 msgid "SFTP download error: {0}"
 msgstr "SFTP download error: {0}"
 
-#: ui/text_formats.slint:735
+#: ui/text_formats.slint:777
 msgctxt "MainWindow"
 msgid "Downloaded `{0}` to `{1}` through the live SFTP backend."
 msgstr "Downloaded `{0}` to `{1}` through the live SFTP backend."
 
-#: ui/text_formats.slint:738
+#: ui/text_formats.slint:780
 msgctxt "MainWindow"
 msgid "SFTP remote edit download error: {0}"
 msgstr "SFTP remote edit download error: {0}"
 
-#: ui/text_formats.slint:741
+#: ui/text_formats.slint:783
 msgctxt "MainWindow"
 msgid "Remote edit ready for `{0}`. Edit local temp file `{1}` and then save remote edit."
 msgstr "Remote edit ready for `{0}`. Edit local temp file `{1}` and then save remote edit."
 
-#: ui/text_formats.slint:744
+#: ui/text_formats.slint:786
 msgctxt "MainWindow"
 msgid "No active remote edit session to save. Start remote edit first."
 msgstr "No active remote edit session to save. Start remote edit first."
 
-#: ui/text_formats.slint:747
+#: ui/text_formats.slint:789
 msgctxt "MainWindow"
 msgid "SFTP remote edit upload error: {0}"
 msgstr "SFTP remote edit upload error: {0}"
 
-#: ui/text_formats.slint:750
+#: ui/text_formats.slint:792
 msgctxt "MainWindow"
 msgid "Saved remote edit `{0}` from local temp file `{1}`."
 msgstr "Saved remote edit `{0}` from local temp file `{1}`."
 
-#: ui/text_formats.slint:753
+#: ui/text_formats.slint:795
 msgctxt "MainWindow"
 msgid "No active remote edit session to cancel. Start remote edit first."
 msgstr "No active remote edit session to cancel. Start remote edit first."
 
-#: ui/text_formats.slint:756
+#: ui/text_formats.slint:798
 msgctxt "MainWindow"
 msgid "Canceled remote edit for `{0}` and removed temp file `{1}`."
 msgstr "Canceled remote edit for `{0}` and removed temp file `{1}`."
 
-#: ui/text_formats.slint:759
+#: ui/text_formats.slint:801
 msgctxt "MainWindow"
 msgid "Canceled remote edit for `{0}`. Temp file was already gone."
 msgstr "Canceled remote edit for `{0}`. Temp file was already gone."
 
-#: ui/text_formats.slint:762
+#: ui/text_formats.slint:804
 msgctxt "MainWindow"
 msgid "Canceled remote edit for `{0}`, but the temp file could not be removed: {1}"
 msgstr "Canceled remote edit for `{0}`, but the temp file could not be removed: {1}"
 
-#: ui/text_formats.slint:765
+#: ui/text_formats.slint:807
 msgctxt "MainWindow"
 msgid "Created remote directory `{0}` through SFTP."
 msgstr "Created remote directory `{0}` through SFTP."
 
-#: ui/text_formats.slint:768
+#: ui/text_formats.slint:810
 msgctxt "MainWindow"
 msgid "Renamed `{0}` to `{1}` through SFTP."
 msgstr "Renamed `{0}` to `{1}` through SFTP."
 
-#: ui/text_formats.slint:771
+#: ui/text_formats.slint:813
 msgctxt "MainWindow"
 msgid "Applied chmod {0} to `{1}` through SFTP."
 msgstr "Applied chmod {0} to `{1}` through SFTP."
 
-#: ui/text_formats.slint:774
+#: ui/text_formats.slint:816
 msgctxt "MainWindow"
 msgid "Queued {n} upload job into `{1}`."
 msgid_plural "Queued {n} upload jobs into `{1}`."
 msgstr[0] "Queued {n} upload job into `{1}`."
 msgstr[1] "Queued {n} upload jobs into `{1}`."
 
-#: ui/text_formats.slint:777
+#: ui/text_formats.slint:819
 msgctxt "MainWindow"
 msgid "Queued {n} download job into `{1}`."
 msgid_plural "Queued {n} download jobs into `{1}`."
 msgstr[0] "Queued {n} download job into `{1}`."
 msgstr[1] "Queued {n} download jobs into `{1}`."
 
-#: ui/text_formats.slint:780
+#: ui/text_formats.slint:822
 msgctxt "MainWindow"
 msgid "Queued {n} remote copy job into `{1}`."
 msgid_plural "Queued {n} remote copy jobs into `{1}`."
 msgstr[0] "Queued {n} remote copy job into `{1}`."
 msgstr[1] "Queued {n} remote copy jobs into `{1}`."
 
-#: ui/text_formats.slint:783
+#: ui/text_formats.slint:825
 msgctxt "MainWindow"
 msgid "Queued a move of {n} entry into `{1}`."
 msgid_plural "Queued a move of {n} entries into `{1}`."
 msgstr[0] "Queued a move of {n} entry into `{1}`."
 msgstr[1] "Queued a move of {n} entries into `{1}`."
 
-#: ui/text_formats.slint:786
+#: ui/text_formats.slint:828
 msgctxt "MainWindow"
 msgid "Queued a delete of {n} remote entry."
 msgid_plural "Queued a delete of {n} remote entries."
 msgstr[0] "Queued a delete of {n} remote entry."
 msgstr[1] "Queued a delete of {n} remote entries."
 
-#: ui/text_formats.slint:789
+#: ui/text_formats.slint:831
 msgctxt "MainWindow"
 msgid "Queued chmod {0} for {n} remote entry."
 msgid_plural "Queued chmod {0} for {n} remote entries."
 msgstr[0] "Queued chmod {0} for {n} remote entry."
 msgstr[1] "Queued chmod {0} for {n} remote entries."
 
-#: ui/text_formats.slint:792
+#: ui/text_formats.slint:834
 msgctxt "MainWindow"
 msgid "Select local entries before uploading."
 msgstr "Select local entries before uploading."
 
-#: ui/text_formats.slint:795
+#: ui/text_formats.slint:837
 msgctxt "MainWindow"
 msgid "Select local entries before moving."
 msgstr "Select local entries before moving."
 
-#: ui/text_formats.slint:798
+#: ui/text_formats.slint:840
 msgctxt "MainWindow"
 msgid "Select remote entries before downloading."
 msgstr "Select remote entries before downloading."
 
-#: ui/text_formats.slint:801
+#: ui/text_formats.slint:843
 msgctxt "MainWindow"
 msgid "Select remote entries before deleting."
 msgstr "Select remote entries before deleting."
 
-#: ui/text_formats.slint:804
+#: ui/text_formats.slint:846
 msgctxt "MainWindow"
 msgid "Select remote entries before changing permissions."
 msgstr "Select remote entries before changing permissions."
 
-#: ui/text_formats.slint:807
+#: ui/text_formats.slint:849
 msgctxt "MainWindow"
 msgid "Select remote entries before copying."
 msgstr "Select remote entries before copying."
 
-#: ui/text_formats.slint:810
+#: ui/text_formats.slint:852
 msgctxt "MainWindow"
 msgid "There is no pending conflict to resolve."
 msgstr "There is no pending conflict to resolve."
 
-#: ui/text_formats.slint:813
+#: ui/text_formats.slint:855
 msgctxt "MainWindow"
 msgid "Re-running the transfer with `{0}` for {n} conflicting path."
 msgid_plural "Re-running the transfer with `{0}` for {n} conflicting paths."
 msgstr[0] "Re-running the transfer with `{0}` for {n} conflicting path."
 msgstr[1] "Re-running the transfer with `{0}` for {n} conflicting paths."
 
-#: ui/text_formats.slint:816
+#: ui/text_formats.slint:858
 msgctxt "MainWindow"
 msgid "Kept {n} conflicting path skipped."
 msgid_plural "Kept {n} conflicting paths skipped."
 msgstr[0] "Kept {n} conflicting path skipped."
 msgstr[1] "Kept {n} conflicting paths skipped."
 
-#: ui/text_formats.slint:819
+#: ui/text_formats.slint:861
 msgctxt "MainWindow"
 msgid "SFTP transfer failed: {0}"
 msgstr "SFTP transfer failed: {0}"
 
-#: ui/text_formats.slint:822
+#: ui/text_formats.slint:864
 msgctxt "MainWindow"
 msgid "The drag payload has no local paths."
 msgstr "The drag payload has no local paths."
 
-#: ui/text_formats.slint:825
+#: ui/text_formats.slint:867
 msgctxt "MainWindow"
 msgid "The dropped transfer has no local file paths."
 msgstr "The dropped transfer has no local file paths."
 
-#: ui/text_formats.slint:829 ui/text_formats.slint:832
+#: ui/text_formats.slint:871 ui/text_formats.slint:874
 msgctxt "MainWindow"
 msgid "Moved {n} local entry."
 msgid_plural "Moved {n} local entries."
 msgstr[0] "Moved {n} local entry."
 msgstr[1] "Moved {n} local entries."
 
-#: ui/text_formats.slint:830 ui/text_formats.slint:837
+#: ui/text_formats.slint:872 ui/text_formats.slint:879
 msgctxt "MainWindow"
 msgid "{n} failed."
 msgid_plural "{n} failed."
 msgstr[0] "{n} failed."
 msgstr[1] "{n} failed."
 
-#: ui/text_formats.slint:836 ui/text_formats.slint:839
+#: ui/text_formats.slint:878 ui/text_formats.slint:881
 msgctxt "MainWindow"
 msgid "Copied {n} local entry."
 msgid_plural "Copied {n} local entries."
 msgstr[0] "Copied {n} local entry."
 msgstr[1] "Copied {n} local entries."
 
-#: ui/text_formats.slint:842
+#: ui/text_formats.slint:884
 msgctxt "MainWindow"
 msgid "Moved {n} local entry to the remote pane."
 msgid_plural "Moved {n} local entries to the remote pane."
 msgstr[0] "Moved {n} local entry to the remote pane."
 msgstr[1] "Moved {n} local entries to the remote pane."
 
-#: ui/text_formats.slint:845
+#: ui/text_formats.slint:887
 msgctxt "MainWindow"
 msgid "Uploaded, but removing {0} of {1} local sources failed."
 msgstr "Uploaded, but removing {0} of {1} local sources failed."
 
-#: ui/text_formats.slint:848
+#: ui/text_formats.slint:890
 msgctxt "MainWindow"
 msgid "Uploaded, but the remote source cleanup failed: {0}"
 msgstr "Uploaded, but the remote source cleanup failed: {0}"
 
-#: ui/text_formats.slint:851
+#: ui/text_formats.slint:893
 msgctxt "MainWindow"
 msgid "Uploaded tree `{0}` through SFTP."
 msgstr "Uploaded tree `{0}` through SFTP."
 
-#: ui/text_formats.slint:854
+#: ui/text_formats.slint:896
 msgctxt "MainWindow"
 msgid "Downloaded tree `{0}` through SFTP."
 msgstr "Downloaded tree `{0}` through SFTP."
 
-#: ui/text_formats.slint:863
+#: ui/text_formats.slint:905
 msgctxt "MainWindow"
 msgid "Paused transfer `{0}`."
 msgstr "Paused transfer `{0}`."
 
-#: ui/text_formats.slint:866
+#: ui/text_formats.slint:908
 msgctxt "MainWindow"
 msgid "Transfer `{0}` is not queued or running, so it was not paused."
 msgstr "Transfer `{0}` is not queued or running, so it was not paused."
 
-#: ui/text_formats.slint:869
+#: ui/text_formats.slint:911
 msgctxt "MainWindow"
 msgid "Resumed transfer `{0}`."
 msgstr "Resumed transfer `{0}`."
 
-#: ui/text_formats.slint:872
+#: ui/text_formats.slint:914
 msgctxt "MainWindow"
 msgid "Transfer `{0}` is not paused, so it was not resumed."
 msgstr "Transfer `{0}` is not paused, so it was not resumed."
 
-#: ui/text_formats.slint:875
+#: ui/text_formats.slint:917
 msgctxt "MainWindow"
 msgid "Re-queued transfer `{0}` for another attempt."
 msgstr "Re-queued transfer `{0}` for another attempt."
 
-#: ui/text_formats.slint:878
+#: ui/text_formats.slint:920
 msgctxt "MainWindow"
 msgid "Transfer `{0}` already used its {1} retries."
 msgstr "Transfer `{0}` already used its {1} retries."
 
-#: ui/text_formats.slint:881
+#: ui/text_formats.slint:923
 msgctxt "MainWindow"
 msgid "Only failed transfers can be retried; `{0}` is {1}."
 msgstr "Only failed transfers can be retried; `{0}` is {1}."
 
-#: ui/text_formats.slint:884
+#: ui/text_formats.slint:926
 msgctxt "MainWindow"
 msgid "Transfer `{0}` is already {1}, so it was not cancelled."
 msgstr "Transfer `{0}` is already {1}, so it was not cancelled."
 
-#: ui/text_formats.slint:887
+#: ui/text_formats.slint:929
 msgctxt "MainWindow"
 msgid "Cancelled transfer `{0}`."
 msgstr "Cancelled transfer `{0}`."
 
-#: ui/text_formats.slint:890
+#: ui/text_formats.slint:932
 msgctxt "MainWindow"
 msgid "Removed transfer `{0}` from the queue."
 msgstr "Removed transfer `{0}` from the queue."
 
-#: ui/text_formats.slint:893
+#: ui/text_formats.slint:935
 msgctxt "MainWindow"
 msgid "Cleared {n} completed transfer."
 msgid_plural "Cleared {n} completed transfers."
 msgstr[0] "Cleared {n} completed transfer."
 msgstr[1] "Cleared {n} completed transfers."
 
-#: ui/text_formats.slint:896
+#: ui/text_formats.slint:938
 msgctxt "MainWindow"
 msgid "No completed transfers to clear."
 msgstr "No completed transfers to clear."
 
-#: ui/text_formats.slint:900
+#: ui/text_formats.slint:942
 msgctxt "MainWindow"
 msgid "Select local entries before copying."
 msgstr "Select local entries before copying."
 
-#: ui/text_formats.slint:903
+#: ui/text_formats.slint:945
 msgctxt "MainWindow"
 msgid "Copied {n} remote entry."
 msgid_plural "Copied {n} remote entries."
 msgstr[0] "Copied {n} remote entry."
 msgstr[1] "Copied {n} remote entries."
 
-#: ui/text_formats.slint:906
+#: ui/text_formats.slint:948
 msgctxt "MainWindow"
 msgid "Cut {n} remote entry."
 msgid_plural "Cut {n} remote entries."
 msgstr[0] "Cut {n} remote entry."
 msgstr[1] "Cut {n} remote entries."
 
-#: ui/text_formats.slint:912
+#: ui/text_formats.slint:954
 msgctxt "MainWindow"
 msgid "Cut {n} local entry."
 msgid_plural "Cut {n} local entries."
 msgstr[0] "Cut {n} local entry."
 msgstr[1] "Cut {n} local entries."
 
-#: ui/text_formats.slint:915
+#: ui/text_formats.slint:957
 msgctxt "MainWindow"
 msgid "The file clipboard is empty."
 msgstr "The file clipboard is empty."
 
-#: ui/text_formats.slint:918
+#: ui/text_formats.slint:960
 msgctxt "MainWindow"
 msgid "File clipboard upload failed: {0}"
 msgstr "File clipboard upload failed: {0}"
 
-#: ui/text_formats.slint:921
+#: ui/text_formats.slint:963
 msgctxt "MainWindow"
 msgid "File clipboard copy failed: {0}"
 msgstr "File clipboard copy failed: {0}"
 
-#: ui/text_formats.slint:924
+#: ui/text_formats.slint:966
 msgctxt "MainWindow"
 msgid "File clipboard download failed: {0}"
 msgstr "File clipboard download failed: {0}"
 
-#: ui/text_formats.slint:927
+#: ui/text_formats.slint:969
 msgctxt "MainWindow"
 msgid "The copied remote entries are no longer listed."
 msgstr "The copied remote entries are no longer listed."
 
-#: ui/text_formats.slint:931 ui/text_formats.slint:934
+#: ui/text_formats.slint:973 ui/text_formats.slint:976
 msgctxt "MainWindow"
 msgid "Pasted {n} local entry."
 msgid_plural "Pasted {n} local entries."
 msgstr[0] "Pasted {n} local entry."
 msgstr[1] "Pasted {n} local entries."
 
-#: ui/text_formats.slint:938
+#: ui/text_formats.slint:980
 msgctxt "MainWindow"
 msgid "Copied {n} character from the visible terminal view into the app clipboard."
 msgid_plural "Copied {n} characters from the visible terminal view into the app clipboard."
 msgstr[0] "Copied {n} character from the visible terminal view into the app clipboard."
 msgstr[1] "Copied {n} characters from the visible terminal view into the app clipboard."
 
-#: ui/text_formats.slint:941
+#: ui/text_formats.slint:983
 msgctxt "MainWindow"
 msgid "Copied visible terminal view, but it was empty."
 msgstr "Copied visible terminal view, but it was empty."
 
-#: ui/text_formats.slint:944
+#: ui/text_formats.slint:986
 msgctxt "MainWindow"
 msgid "Terminal clipboard is empty, so nothing was pasted."
 msgstr "Terminal clipboard is empty, so nothing was pasted."
 
-#: ui/text_formats.slint:947
+#: ui/text_formats.slint:989
 msgctxt "MainWindow"
 msgid "Clipboard is empty, so nothing was pasted."
 msgstr "Clipboard is empty, so nothing was pasted."
 
-#: ui/text_formats.slint:950
+#: ui/text_formats.slint:992
 msgctxt "MainWindow"
 msgid "Cleared the visible terminal view."
 msgstr "Cleared the visible terminal view."
 
-#: ui/text_formats.slint:953
+#: ui/text_formats.slint:995
 msgctxt "MainWindow"
 msgid "Cleared terminal scrollback. Live screen kept."
 msgstr "Cleared terminal scrollback. Live screen kept."
 
-#: ui/text_formats.slint:956
+#: ui/text_formats.slint:998
 msgctxt "MainWindow"
 msgid "Scrollback is already empty."
 msgstr "Scrollback is already empty."
 
-#: ui/text_formats.slint:959
+#: ui/text_formats.slint:1001
 msgctxt "MainWindow"
 msgid "Copied {n} character from the current line."
 msgid_plural "Copied {n} characters from the current line."
 msgstr[0] "Copied {n} character from the current line."
 msgstr[1] "Copied {n} characters from the current line."
 
-#: ui/text_formats.slint:962
+#: ui/text_formats.slint:1004
 msgctxt "MainWindow"
 msgid "Copied the current line, but it was empty."
 msgstr "Copied the current line, but it was empty."
 
-#: ui/text_formats.slint:965
+#: ui/text_formats.slint:1007
 msgctxt "MainWindow"
 msgid "No active terminal to select."
 msgstr "No active terminal to select."
 
-#: ui/text_formats.slint:968
+#: ui/text_formats.slint:1010
 msgctxt "MainWindow"
 msgid "Selected {n} character from the visible screen."
 msgid_plural "Selected {n} characters from the visible screen."
 msgstr[0] "Selected {n} character from the visible screen."
 msgstr[1] "Selected {n} characters from the visible screen."
 
-#: ui/text_formats.slint:983
+#: ui/text_formats.slint:1025
 msgctxt "MainWindow"
 msgid "Search failed: {0}"
 msgstr "Search failed: {0}"
 
-#: ui/text_formats.slint:986
+#: ui/text_formats.slint:1028
 msgctxt "MainWindow"
 msgid "No active terminal to scroll."
 msgstr "No active terminal to scroll."
 
-#: ui/text_formats.slint:989
+#: ui/text_formats.slint:1031
 msgctxt "MainWindow"
 msgid "Terminal scrolled to the live bottom."
 msgstr "Terminal scrolled to the live bottom."
 
-#: ui/text_formats.slint:992
+#: ui/text_formats.slint:1034
 msgctxt "MainWindow"
 msgid "Terminal scrolled back {n} line into scrollback."
 msgid_plural "Terminal scrolled back {n} lines into scrollback."
 msgstr[0] "Terminal scrolled back {n} line into scrollback."
 msgstr[1] "Terminal scrolled back {n} lines into scrollback."
 
-#: ui/text_formats.slint:995
+#: ui/text_formats.slint:1037
 msgctxt "MainWindow"
 msgid "Terminal is already at the top of the scrollback buffer."
 msgstr "Terminal is already at the top of the scrollback buffer."
 
-#: ui/text_formats.slint:998
+#: ui/text_formats.slint:1040
 msgctxt "MainWindow"
 msgid "Selected {n} character from the terminal."
 msgid_plural "Selected {n} characters from the terminal."
 msgstr[0] "Selected {n} character from the terminal."
 msgstr[1] "Selected {n} characters from the terminal."
 
-#: ui/text_formats.slint:1001
+#: ui/text_formats.slint:1043
 msgctxt "MainWindow"
 msgid "No terminal selection to copy."
 msgstr "No terminal selection to copy."
 
-#: ui/text_formats.slint:1004
+#: ui/text_formats.slint:1046
 msgctxt "MainWindow"
 msgid "Copied {n} character from the terminal selection."
 msgid_plural "Copied {n} characters from the terminal selection."
 msgstr[0] "Copied {n} character from the terminal selection."
 msgstr[1] "Copied {n} characters from the terminal selection."
 
-#: ui/text_formats.slint:1013
+#: ui/text_formats.slint:1055
 msgctxt "MainWindow"
 msgid "Could not load the local directory: {0}"
 msgstr "Could not load the local directory: {0}"
 
-#: ui/text_formats.slint:1016
+#: ui/text_formats.slint:1058
 msgctxt "MainWindow"
 msgid "Could not open the local path: {0}"
 msgstr "Could not open the local path: {0}"
 
-#: ui/text_formats.slint:1019
+#: ui/text_formats.slint:1061
 msgctxt "MainWindow"
 msgid "Already at the local filesystem root."
 msgstr "Already at the local filesystem root."
 
-#: ui/text_formats.slint:1022
+#: ui/text_formats.slint:1064
 msgctxt "MainWindow"
 msgid "Local hidden files are now shown."
 msgstr "Local hidden files are now shown."
 
-#: ui/text_formats.slint:1025
+#: ui/text_formats.slint:1067
 msgctxt "MainWindow"
 msgid "Local hidden files are now hidden."
 msgstr "Local hidden files are now hidden."
 
-#: ui/text_formats.slint:1028
+#: ui/text_formats.slint:1070
 msgctxt "MainWindow"
 msgid "Unknown local sort column `{0}`."
 msgstr "Unknown local sort column `{0}`."
 
-#: ui/text_formats.slint:1031
+#: ui/text_formats.slint:1073
 msgctxt "MainWindow"
 msgid "Selected local file `{0}`. Drag it to the remote pane or use Upload."
 msgstr "Selected local file `{0}`. Drag it to the remote pane or use Upload."
 
-#: ui/text_formats.slint:1035
+#: ui/text_formats.slint:1077
 msgctxt "MainWindow"
 msgid "Global logging is now {0}. Save logging settings to persist this policy."
 msgstr "Global logging is now {0}. Save logging settings to persist this policy."
 
-#: ui/text_formats.slint:1038
+#: ui/text_formats.slint:1080
 msgctxt "MainWindow"
 msgid "Global logging format set to raw transcript. Save logging settings to persist."
 msgstr "Global logging format set to raw transcript. Save logging settings to persist."
 
-#: ui/text_formats.slint:1041
+#: ui/text_formats.slint:1083
 msgctxt "MainWindow"
 msgid "Global logging format set to sanitized text. Save logging settings to persist."
 msgstr "Global logging format set to sanitized text. Save logging settings to persist."
 
-#: ui/text_formats.slint:1044
+#: ui/text_formats.slint:1086
 msgctxt "MainWindow"
 msgid "Logging notice: {0}"
 msgstr "Logging notice: {0}"
 
-#: ui/text_formats.slint:1048
+#: ui/text_formats.slint:1090
 msgctxt "MainWindow"
 msgid "Created a runtime-backed session draft."
 msgstr "Created a runtime-backed session draft."
 
-#: ui/text_formats.slint:1051
+#: ui/text_formats.slint:1093
 msgctxt "MainWindow"
 msgid "Canceled host key confirmation. No changes were written and the connection was not started."
 msgstr "Canceled host key confirmation. No changes were written and the connection was not started."
 
-#: ui/text_formats.slint:1054
+#: ui/text_formats.slint:1096
 msgctxt "MainWindow"
 msgid "Canceled the password prompt. The connection was not started."
 msgstr "Canceled the password prompt. The connection was not started."
 
-#: ui/text_formats.slint:1057
+#: ui/text_formats.slint:1099
 msgctxt "MainWindow"
 msgid "Trusted the presented host key for {0} for this session only. Reconnecting."
 msgstr "Trusted the presented host key for {0} for this session only. Reconnecting."
 
-#: ui/text_formats.slint:1060
+#: ui/text_formats.slint:1102
 msgctxt "MainWindow"
 msgid "Replaced the stored host key for {0} in `{1}` and reconnecting."
 msgstr "Replaced the stored host key for {0} in `{1}` and reconnecting."
 
-#: ui/text_formats.slint:1063
+#: ui/text_formats.slint:1105
 msgctxt "MainWindow"
 msgid "Saved the presented host key for {0} to `{1}` and reconnecting."
 msgstr "Saved the presented host key for {0} to `{1}` and reconnecting."
 
-#: ui/text_formats.slint:1066
+#: ui/text_formats.slint:1108
 msgctxt "MainWindow"
 msgid "Disconnected the runtime session."
 msgstr "Disconnected the runtime session."
 
-#: ui/text_formats.slint:1069
+#: ui/text_formats.slint:1111
 msgctxt "MainWindow"
 msgid "Local terminal sessions cannot be reconnected. Open a new local tab with `+`."
 msgstr "Local terminal sessions cannot be reconnected. Open a new local tab with `+`."
 
-#: ui/text_formats.slint:1072
+#: ui/text_formats.slint:1114
 msgctxt "MainWindow"
 msgid "Connection cancelled."
 msgstr "Connection cancelled."
 
-#: ui/text_formats.slint:1075
+#: ui/text_formats.slint:1117
 msgctxt "MainWindow"
 msgid "Cancelled the connection to {0}."
 msgstr "Cancelled the connection to {0}."
 
-#: ui/text_formats.slint:1078
+#: ui/text_formats.slint:1120
 msgctxt "MainWindow"
 msgid "Password must not be empty."
 msgstr "Password must not be empty."
 
-#: ui/text_formats.slint:1081
+#: ui/text_formats.slint:1123
 msgctxt "MainWindow"
 msgid "Submit the keyboard-interactive round first."
 msgstr "Submit the keyboard-interactive round first."
 
-#: ui/text_formats.slint:1084
+#: ui/text_formats.slint:1126
 msgctxt "MainWindow"
 msgid "Select a managed private key or browse for a key file."
 msgstr "Select a managed private key or browse for a key file."
 
-#: ui/text_formats.slint:1087
+#: ui/text_formats.slint:1129
 msgctxt "MainWindow"
 msgid "The connection target is gone; open the session again."
 msgstr "The connection target is gone; open the session again."
 
-#: ui/text_formats.slint:1090
+#: ui/text_formats.slint:1132
 msgctxt "MainWindow"
 msgid "Cannot prepare the managed key: {0}"
 msgstr "Cannot prepare the managed key: {0}"
 
-#: ui/text_formats.slint:1093
+#: ui/text_formats.slint:1135
 msgctxt "MainWindow"
 msgid "Canceled the authentication prompt. The connection was not started."
 msgstr "Canceled the authentication prompt. The connection was not started."
 
-#: ui/text_formats.slint:1096
+#: ui/text_formats.slint:1138
 msgctxt "MainWindow"
 msgid "Could not remember the password: {0}"
 msgstr "Could not remember the password: {0}"
 
-#: ui/text_formats.slint:1099
+#: ui/text_formats.slint:1141
 msgctxt "MainWindow"
 msgid "Authentication failed: {0}"
 msgstr "Authentication failed: {0}"
 
-#: ui/text_formats.slint:1102
+#: ui/text_formats.slint:1144
 msgctxt "MainWindow"
 msgid "Could not start the local shell `{0}`: {1}"
 msgstr "Could not start the local shell `{0}`: {1}"
 
-#: ui/text_formats.slint:1105
+#: ui/text_formats.slint:1147
 msgctxt "MainWindow"
 msgid "Could not open the local terminal: {0}"
 msgstr "Could not open the local terminal: {0}"
 
-#: ui/text_formats.slint:1114
+#: ui/text_formats.slint:1156
 msgctxt "MainWindow"
 msgid "Session editor cleared. Fill in the fields to create a saved session."
 msgstr "Session editor cleared. Fill in the fields to create a saved session."
 
-#: ui/text_formats.slint:1117
+#: ui/text_formats.slint:1159
 msgctxt "MainWindow"
 msgid "Loaded saved session `{0}` into the editor."
 msgstr "Loaded saved session `{0}` into the editor."
 
-#: ui/text_formats.slint:1120
+#: ui/text_formats.slint:1162
 msgctxt "MainWindow"
 msgid "Discard unsaved session editor changes?"
 msgstr "Discard unsaved session editor changes?"
 
-#: ui/text_formats.slint:1123
+#: ui/text_formats.slint:1165
 msgctxt "MainWindow"
 msgid "Continued editing the session."
 msgstr "Continued editing the session."
 
-#: ui/text_formats.slint:1126
+#: ui/text_formats.slint:1168
 msgctxt "MainWindow"
 msgid "Closed Session Editor."
 msgstr "Closed Session Editor."
 
-#: ui/text_formats.slint:1129
+#: ui/text_formats.slint:1171
 msgctxt "MainWindow"
 msgid "Editor target folder: {0}"
 msgstr "Editor target folder: {0}"
 
-#: ui/text_formats.slint:1132
+#: ui/text_formats.slint:1174
 msgctxt "MainWindow"
 msgid "Selected managed key `{0}` for this session."
 msgstr "Selected managed key `{0}` for this session."
 
-#: ui/text_formats.slint:1135
+#: ui/text_formats.slint:1177
 msgctxt "MainWindow"
 msgid "Selected managed proxy `{0}` for this session."
 msgstr "Selected managed proxy `{0}` for this session."
 
-#: ui/text_formats.slint:1138
+#: ui/text_formats.slint:1180
 msgctxt "MainWindow"
 msgid "Added {0} tunnel {1}."
 msgstr "Added {0} tunnel {1}."
 
-#: ui/text_formats.slint:1141
+#: ui/text_formats.slint:1183
 msgctxt "MainWindow"
 msgid "Cleared all editor tunnel forwards."
 msgstr "Cleared all editor tunnel forwards."
 
-#: ui/text_formats.slint:1159
+#: ui/text_formats.slint:1201
 msgctxt "MainWindow"
 msgid "Saved session editor changes into `{0}`."
 msgstr "Saved session editor changes into `{0}`."
 
-#: ui/text_formats.slint:1162
+#: ui/text_formats.slint:1204
 msgctxt "MainWindow"
 msgid "Created folder `{0}` under `{1}` and selected it for the editor."
 msgstr "Created folder `{0}` under `{1}` and selected it for the editor."
 
-#: ui/text_formats.slint:1165
+#: ui/text_formats.slint:1207
 msgctxt "MainWindow"
 msgid "Created folder `{0}` in the session tree root and persisted the updated config."
 msgstr "Created folder `{0}` in the session tree root and persisted the updated config."
 
-#: ui/text_formats.slint:1168
+#: ui/text_formats.slint:1210
 msgctxt "MainWindow"
 msgid "New session will be saved into the selected folder."
 msgstr "New session will be saved into the selected folder."
 
-#: ui/text_formats.slint:1171
+#: ui/text_formats.slint:1213
 msgctxt "MainWindow"
 msgid "Reloaded saved sessions from config.toml. Saved sessions discovered: {0}."
 msgstr "Reloaded saved sessions from config.toml. Saved sessions discovered: {0}."
 
-#: ui/text_formats.slint:1174
+#: ui/text_formats.slint:1216
 msgctxt "MainWindow"
 msgid "Updated saved session `{0}` from the active runtime session."
 msgstr "Updated saved session `{0}` from the active runtime session."
 
-#: ui/text_formats.slint:1177
+#: ui/text_formats.slint:1219
 msgctxt "MainWindow"
 msgid "Selected saved session: {0}"
 msgstr "Selected saved session: {0}"
 
-#: ui/text_formats.slint:1180
+#: ui/text_formats.slint:1222
 msgctxt "MainWindow"
 msgid "Selected saved-session folder `{0}`."
 msgstr "Selected saved-session folder `{0}`."
 
-#: ui/text_formats.slint:1183
+#: ui/text_formats.slint:1225
 msgctxt "MainWindow"
 msgid "Collapsed saved-session folder `{0}`."
 msgstr "Collapsed saved-session folder `{0}`."
 
-#: ui/text_formats.slint:1186
+#: ui/text_formats.slint:1228
 msgctxt "MainWindow"
 msgid "Expanded saved-session folder `{0}`."
 msgstr "Expanded saved-session folder `{0}`."
 
-#: ui/text_formats.slint:1189
+#: ui/text_formats.slint:1231
 msgctxt "MainWindow"
 msgid "Cleared the saved-session selection."
 msgstr "Cleared the saved-session selection."
 
-#: ui/text_formats.slint:1192
+#: ui/text_formats.slint:1234
 msgctxt "MainWindow"
 msgid "Saved-session tree node `{0}` was not found."
 msgstr "Saved-session tree node `{0}` was not found."
 
-#: ui/text_formats.slint:1195
+#: ui/text_formats.slint:1237
 msgctxt "MainWindow"
 msgid "Session search cleared."
 msgstr "Session search cleared."
 
-#: ui/text_formats.slint:1198
+#: ui/text_formats.slint:1240
 msgctxt "MainWindow"
 msgid "Filtering saved sessions for `{0}`."
 msgstr "Filtering saved sessions for `{0}`."
 
-#: ui/text_formats.slint:1202
+#: ui/text_formats.slint:1244
 msgctxt "MainWindow"
 msgid "Session close confirmation is enabled."
 msgstr "Session close confirmation is enabled."
 
-#: ui/text_formats.slint:1205
+#: ui/text_formats.slint:1247
 msgctxt "MainWindow"
 msgid "Session close confirmation is disabled."
 msgstr "Session close confirmation is disabled."
 
-#: ui/text_formats.slint:1208
+#: ui/text_formats.slint:1250
 msgctxt "MainWindow"
 msgid "Quit confirmation is enabled."
 msgstr "Quit confirmation is enabled."
 
-#: ui/text_formats.slint:1211
+#: ui/text_formats.slint:1253
 msgctxt "MainWindow"
 msgid "Quit confirmation is disabled."
 msgstr "Quit confirmation is disabled."
 
-#: ui/text_formats.slint:1214
+#: ui/text_formats.slint:1256
 msgctxt "MainWindow"
 msgid "Debug logging enabled. Writing to {0}."
 msgstr "Debug logging enabled. Writing to {0}."
 
-#: ui/text_formats.slint:1217
+#: ui/text_formats.slint:1259
 msgctxt "MainWindow"
 msgid "Debug logging disabled."
 msgstr "Debug logging disabled."
 
-#: ui/text_formats.slint:1223
+#: ui/text_formats.slint:1265
 msgctxt "MainWindow"
 msgid "Panel layout error: {0}"
 msgstr "Panel layout error: {0}"
 
-#: ui/text_formats.slint:1226
+#: ui/text_formats.slint:1268
 msgctxt "MainWindow"
 msgid "No active session to start a tunnel on."
 msgstr "No active session to start a tunnel on."
 
-#: ui/text_formats.slint:1229
+#: ui/text_formats.slint:1271
 msgctxt "MainWindow"
 msgid "Unknown tunnel `{0}`."
 msgstr "Unknown tunnel `{0}`."
 
-#: ui/text_formats.slint:1232
+#: ui/text_formats.slint:1274
 msgctxt "MainWindow"
 msgid "Connect the session before starting tunnel `{0}`."
 msgstr "Connect the session before starting tunnel `{0}`."
 
-#: ui/text_formats.slint:1235
+#: ui/text_formats.slint:1277
 msgctxt "MainWindow"
 msgid "Tunnel `{0}` is configured, but SSH port forwarding is not provisioned by the runtime yet."
 msgstr "Tunnel `{0}` is configured, but SSH port forwarding is not provisioned by the runtime yet."
 
-#: ui/text_formats.slint:1238
+#: ui/text_formats.slint:1280
 msgctxt "MainWindow"
 msgid "Tunnel `{0}` is not running; port forwarding is not provisioned yet."
 msgstr "Tunnel `{0}` is not running; port forwarding is not provisioned yet."
 
-#: ui/text_formats.slint:1241
+#: ui/text_formats.slint:1283
 msgctxt "MainWindow"
 msgid "Runtime initialized. Config: {0}. Saved sessions discovered: {1}."
 msgstr "Runtime initialized. Config: {0}. Saved sessions discovered: {1}."
 
-#: ui/text_formats.slint:1244
+#: ui/text_formats.slint:1286
 msgctxt "MainWindow"
 msgid "Recovered configuration from backup. Saved sessions: {0}. Backup: {1}"
 msgstr "Recovered configuration from backup. Saved sessions: {0}. Backup: {1}"
 
-#: ui/text_formats.slint:1253
+#: ui/text_formats.slint:1295
 msgctxt "MainWindow"
 msgid "Known hosts manager opened with {n} persisted entry."
 msgid_plural "Known hosts manager opened with {n} persisted entries."
 msgstr[0] "Known hosts manager opened with {n} persisted entry."
 msgstr[1] "Known hosts manager opened with {n} persisted entries."
 
-#: ui/text_formats.slint:1256
+#: ui/text_formats.slint:1298
 msgctxt "MainWindow"
 msgid "Closed known hosts manager."
 msgstr "Closed known hosts manager."
 
-#: ui/text_formats.slint:1259
+#: ui/text_formats.slint:1301
 msgctxt "MainWindow"
 msgid "Selected known host {0}."
 msgstr "Selected known host {0}."
 
-#: ui/text_formats.slint:1268
+#: ui/text_formats.slint:1310
 msgctxt "MainWindow"
 msgid "Removed known host entry for {0} from `{1}`."
 msgstr "Removed known host entry for {0} from `{1}`."
 
-#: ui/text_formats.slint:1271
+#: ui/text_formats.slint:1313
 msgctxt "MainWindow"
 msgid "Cleared all persisted known hosts from `{0}`."
 msgstr "Cleared all persisted known hosts from `{0}`."
 
-#: ui/text_formats.slint:1274
+#: ui/text_formats.slint:1316
 msgctxt "MainWindow"
 msgid "Private keys manager opened with {n} managed key."
 msgid_plural "Private keys manager opened with {n} managed keys."
 msgstr[0] "Private keys manager opened with {n} managed key."
 msgstr[1] "Private keys manager opened with {n} managed keys."
 
-#: ui/text_formats.slint:1277
+#: ui/text_formats.slint:1319
 msgctxt "MainWindow"
 msgid "Closed private keys manager."
 msgstr "Closed private keys manager."
 
-#: ui/text_formats.slint:1280
+#: ui/text_formats.slint:1322
 msgctxt "MainWindow"
 msgid "Selected managed key `{0}`."
 msgstr "Selected managed key `{0}`."
 
-#: ui/text_formats.slint:1283
+#: ui/text_formats.slint:1325
 msgctxt "MainWindow"
 msgid "Host keys manager opened with {n} persisted host key group."
 msgid_plural "Host keys manager opened with {n} persisted host key groups."
 msgstr[0] "Host keys manager opened with {n} persisted host key group."
 msgstr[1] "Host keys manager opened with {n} persisted host key groups."
 
-#: ui/text_formats.slint:1286
+#: ui/text_formats.slint:1328
 msgctxt "MainWindow"
 msgid "Closed host keys manager."
 msgstr "Closed host keys manager."
 
-#: ui/text_formats.slint:1289
+#: ui/text_formats.slint:1331
 msgctxt "MainWindow"
 msgid "Selected host key {0} ({1})."
 msgstr "Selected host key {0} ({1})."
 
-#: ui/text_formats.slint:1292
+#: ui/text_formats.slint:1334
 msgctxt "MainWindow"
 msgid "Removed the saved host key for {0}."
 msgstr "Removed the saved host key for {0}."
 
-#: ui/text_formats.slint:1295
+#: ui/text_formats.slint:1337
 msgctxt "MainWindow"
 msgid "Cleared all saved host keys."
 msgstr "Cleared all saved host keys."
 
-#: ui/text_formats.slint:1299
+#: ui/text_formats.slint:1341
 msgctxt "MainWindow"
 msgid "Imported {n} host key; {0} line was skipped."
 msgid_plural "Imported {n} host keys; {0} lines were skipped."
 msgstr[0] "Imported {n} host key; {0} line was skipped."
 msgstr[1] "Imported {n} host keys; {0} lines were skipped."
 
-#: ui/text_formats.slint:1301
+#: ui/text_formats.slint:1343
 msgctxt "MainWindow"
 msgid "Imported {n} host key."
 msgid_plural "Imported {n} host keys."
 msgstr[0] "Imported {n} host key."
 msgstr[1] "Imported {n} host keys."
 
-#: ui/text_formats.slint:1304
+#: ui/text_formats.slint:1346
 msgctxt "MainWindow"
 msgid "Proxy manager opened with {n} managed profile."
 msgid_plural "Proxy manager opened with {n} managed profiles."
 msgstr[0] "Proxy manager opened with {n} managed profile."
 msgstr[1] "Proxy manager opened with {n} managed profiles."
 
-#: ui/text_formats.slint:1307
+#: ui/text_formats.slint:1349
 msgctxt "MainWindow"
 msgid "Closed proxy manager."
 msgstr "Closed proxy manager."
 
-#: ui/text_formats.slint:1310
+#: ui/text_formats.slint:1352
 msgctxt "MainWindow"
 msgid "Selected proxy profile `{0}`."
 msgstr "Selected proxy profile `{0}`."
 
-#: ui/text_formats.slint:1313
+#: ui/text_formats.slint:1355
 msgctxt "MainWindow"
 msgid "Duplicated proxy profile as `{0}`."
 msgstr "Duplicated proxy profile as `{0}`."
 
-#: ui/text_formats.slint:1316
+#: ui/text_formats.slint:1358
 msgctxt "MainWindow"
 msgid "Saved the new proxy profile."
 msgstr "Saved the new proxy profile."
 
-#: ui/text_formats.slint:1319
+#: ui/text_formats.slint:1361
 msgctxt "MainWindow"
 msgid "Saved proxy profile changes; all referencing sessions use them."
 msgstr "Saved proxy profile changes; all referencing sessions use them."
 
-#: ui/text_formats.slint:1322
+#: ui/text_formats.slint:1364
 msgctxt "MainWindow"
 msgid "Confirm deleting proxy profile `{0}`."
 msgstr "Confirm deleting proxy profile `{0}`."
 
-#: ui/text_formats.slint:1325
+#: ui/text_formats.slint:1367
 msgctxt "MainWindow"
 msgid "Cannot delete `{0}`: it is used by saved sessions: {1}. Set those sessions to No Proxy first."
 msgstr "Cannot delete `{0}`: it is used by saved sessions: {1}. Set those sessions to No Proxy first."
 
-#: ui/text_formats.slint:1328
+#: ui/text_formats.slint:1370
 msgctxt "MainWindow"
 msgid "Deleted proxy profile `{0}`."
 msgstr "Deleted proxy profile `{0}`."
 
-#: ui/text_formats.slint:1331
+#: ui/text_formats.slint:1373
 msgctxt "MainWindow"
 msgid "No saved session references `{0}` anymore."
 msgstr "No saved session references `{0}` anymore."
 
-#: ui/text_formats.slint:1334
+#: ui/text_formats.slint:1376
 msgctxt "MainWindow"
 msgid "Cleared proxy `{0}` from {n} saved session; they now use No Proxy."
 msgid_plural "Cleared proxy `{0}` from {n} saved sessions; they now use No Proxy."
 msgstr[0] "Cleared proxy `{0}` from {n} saved session; they now use No Proxy."
 msgstr[1] "Cleared proxy `{0}` from {n} saved sessions; they now use No Proxy."
 
-#: ui/text_formats.slint:1337
+#: ui/text_formats.slint:1379
 msgctxt "MainWindow"
 msgid "Saved the global terminal appearance defaults."
 msgstr "Saved the global terminal appearance defaults."
 
-#: ui/text_formats.slint:1340
+#: ui/text_formats.slint:1382
 msgctxt "MainWindow"
 msgid "Saved folder defaults for `{0}`."
 msgstr "Saved folder defaults for `{0}`."
 
-#: ui/text_formats.slint:1343
+#: ui/text_formats.slint:1385
 msgctxt "MainWindow"
 msgid "Opened folder defaults for `{0}`."
 msgstr "Opened folder defaults for `{0}`."
 
-#: ui/text_formats.slint:1347
+#: ui/text_formats.slint:1389
 msgctxt "MainWindow"
 msgid "Enter or browse a private key file path first."
 msgstr "Enter or browse a private key file path first."
 
-#: ui/text_formats.slint:1350
+#: ui/text_formats.slint:1392
 msgctxt "MainWindow"
 msgid "Failed to read `{0}`: {1}"
 msgstr "Failed to read `{0}`: {1}"
 
-#: ui/text_formats.slint:1353
+#: ui/text_formats.slint:1395
 msgctxt "MainWindow"
 msgid "Imported `{0}` ({1})."
 msgstr "Imported `{0}` ({1})."
 
-#: ui/text_formats.slint:1356
+#: ui/text_formats.slint:1398
 msgctxt "MainWindow"
 msgid "Import failed: {0}"
 msgstr "Import failed: {0}"
 
-#: ui/text_formats.slint:1359
+#: ui/text_formats.slint:1401
 msgctxt "MainWindow"
 msgid "Select a managed key first."
 msgstr "Select a managed key first."
 
-#: ui/text_formats.slint:1362
+#: ui/text_formats.slint:1404
 msgctxt "MainWindow"
 msgid "Key test passed for `{0}`."
 msgstr "Key test passed for `{0}`."
 
-#: ui/text_formats.slint:1365
+#: ui/text_formats.slint:1407
 msgctxt "MainWindow"
 msgid "Key test failed: {0}"
 msgstr "Key test failed: {0}"
 
-#: ui/text_formats.slint:1368
+#: ui/text_formats.slint:1410
 msgctxt "MainWindow"
 msgid "Confirm removal of `{0}` in the Danger Zone."
 msgstr "Confirm removal of `{0}` in the Danger Zone."
 
-#: ui/text_formats.slint:1371
+#: ui/text_formats.slint:1413
 msgctxt "MainWindow"
 msgid "Removed managed key `{0}`."
 msgstr "Removed managed key `{0}`."
 
-#: ui/text_formats.slint:1374
+#: ui/text_formats.slint:1416
 msgctxt "MainWindow"
 msgid "Remove failed: {0}"
 msgstr "Remove failed: {0}"
 
-#: ui/text_formats.slint:1377
+#: ui/text_formats.slint:1419
 msgctxt "MainWindow"
 msgid "Deploy failed: {0}"
 msgstr "Deploy failed: {0}"
 
-#: ui/text_formats.slint:1380
+#: ui/text_formats.slint:1422
 msgctxt "MainWindow"
 msgid "Deploy requires an active session to the target host."
 msgstr "Deploy requires an active session to the target host."
 
-#: ui/text_formats.slint:1383
+#: ui/text_formats.slint:1425
 msgctxt "MainWindow"
 msgid "The active session is gone."
 msgstr "The active session is gone."
 
-#: ui/text_formats.slint:1386
+#: ui/text_formats.slint:1428
 msgctxt "MainWindow"
 msgid "Deploy requires an SSH session; the active tab is a local terminal."
 msgstr "Deploy requires an SSH session; the active tab is a local terminal."
 
-#: ui/text_formats.slint:1389
+#: ui/text_formats.slint:1431
 msgctxt "MainWindow"
 msgid "Deployed `{0}` to {1} (idempotent append, exit status 0)."
 msgstr "Deployed `{0}` to {1} (idempotent append, exit status 0)."
 
-#: ui/text_formats.slint:1392
+#: ui/text_formats.slint:1434
 msgctxt "MainWindow"
 msgid "Deploy command failed on {0} with exit status {1}."
 msgstr "Deploy command failed on {0} with exit status {1}."
 
-#: ui/text_formats.slint:1395
+#: ui/text_formats.slint:1437
 msgctxt "MainWindow"
 msgid "Deploy failed on {0}: {1}"
 msgstr "Deploy failed on {0}: {1}"
 
-#: ui/text_formats.slint:1398
+#: ui/text_formats.slint:1440
 msgctxt "MainWindow"
 msgid "Passphrase saved for `{0}` (validated against the stored key)."
 msgstr "Passphrase saved for `{0}` (validated against the stored key)."
 
-#: ui/text_formats.slint:1401
+#: ui/text_formats.slint:1443
 msgctxt "MainWindow"
 msgid "Cannot save passphrase: {0}"
 msgstr "Cannot save passphrase: {0}"
 
-#: ui/text_formats.slint:1404
+#: ui/text_formats.slint:1446
 msgctxt "MainWindow"
 msgid "Forgot the saved passphrase for `{0}`."
 msgstr "Forgot the saved passphrase for `{0}`."
 
-#: ui/text_formats.slint:1407
+#: ui/text_formats.slint:1449
 msgctxt "MainWindow"
 msgid "Cannot forget passphrase: {0}"
 msgstr "Cannot forget passphrase: {0}"
 
-#: ui/text_formats.slint:1410
+#: ui/text_formats.slint:1452
 msgctxt "MainWindow"
 msgid "Renamed managed key to `{0}`."
 msgstr "Renamed managed key to `{0}`."
 
-#: ui/text_formats.slint:1413
+#: ui/text_formats.slint:1455
 msgctxt "MainWindow"
 msgid "Rename failed: {0}"
 msgstr "Rename failed: {0}"
 
-#: ui/text_formats.slint:1416
+#: ui/text_formats.slint:1458
 msgctxt "MainWindow"
 msgid "Copied the derived public key ({0} chars) to the clipboard."
 msgstr "Copied the derived public key ({0} chars) to the clipboard."
 
-#: ui/text_formats.slint:1419
+#: ui/text_formats.slint:1461
 msgctxt "MainWindow"
 msgid "Could not access the system clipboard; select the key text manually."
 msgstr "Could not access the system clipboard; select the key text manually."
 
-#: ui/text_formats.slint:1422
+#: ui/text_formats.slint:1464
 msgctxt "MainWindow"
 msgid "Copy failed: {0}"
 msgstr "Copy failed: {0}"
 
-#: ui/text_formats.slint:1425
+#: ui/text_formats.slint:1467
 msgctxt "MainWindow"
 msgid "Exported the public key to `{0}`."
 msgstr "Exported the public key to `{0}`."
 
-#: ui/text_formats.slint:1428 ui/text_formats.slint:1450
+#: ui/text_formats.slint:1470 ui/text_formats.slint:1492
 msgctxt "MainWindow"
 msgid "Export failed: {0}"
 msgstr "Export failed: {0}"
 
-#: ui/text_formats.slint:1431
+#: ui/text_formats.slint:1473
 msgctxt "MainWindow"
 msgid "Saved to `{0}`."
 msgstr "Saved to `{0}`."
 
-#: ui/text_formats.slint:1434
+#: ui/text_formats.slint:1476
 msgctxt "MainWindow"
 msgid "Dialog failed: {0}"
 msgstr "Dialog failed: {0}"
 
-#: ui/text_formats.slint:1438
+#: ui/text_formats.slint:1480
 msgctxt "MainWindow"
 msgid "Import failed to read `{0}`: {1}"
 msgstr "Import failed to read `{0}`: {1}"
 
-#: ui/text_formats.slint:1441
+#: ui/text_formats.slint:1483
 msgctxt "MainWindow"
 msgid "Import failed to persist: {0}"
 msgstr "Import failed to persist: {0}"
 
-#: ui/text_formats.slint:1444
+#: ui/text_formats.slint:1486
 msgctxt "MainWindow"
 msgid "Imported {n} host key; skipped lines: {0}"
 msgid_plural "Imported {n} host keys; skipped lines: {0}"
 msgstr[0] "Imported {n} host key; skipped lines: {0}"
 msgstr[1] "Imported {n} host keys; skipped lines: {0}"
 
-#: ui/text_formats.slint:1447
+#: ui/text_formats.slint:1489
 msgctxt "MainWindow"
 msgid "Exported host keys to `{0}`."
 msgstr "Exported host keys to `{0}`."
 
-#: ui/text_formats.slint:1454
+#: ui/text_formats.slint:1496
 msgctxt "MainWindow"
 msgid "New proxy profile draft."
 msgstr "New proxy profile draft."
 
-#: ui/text_formats.slint:1457
+#: ui/text_formats.slint:1499
 msgctxt "MainWindow"
 msgid "Editing proxy profile `{0}`."
 msgstr "Editing proxy profile `{0}`."
 
-#: ui/text_formats.slint:1460
+#: ui/text_formats.slint:1502
 msgctxt "MainWindow"
 msgid "Select a proxy profile to edit."
 msgstr "Select a proxy profile to edit."
 
-#: ui/text_formats.slint:1463
+#: ui/text_formats.slint:1505
 msgctxt "MainWindow"
 msgid "Select a proxy profile to duplicate."
 msgstr "Select a proxy profile to duplicate."
 
-#: ui/text_formats.slint:1466
+#: ui/text_formats.slint:1508
 msgctxt "MainWindow"
 msgid "Duplicate saved without its password: {0}"
 msgstr "Duplicate saved without its password: {0}"
 
-#: ui/text_formats.slint:1469
+#: ui/text_formats.slint:1511
 msgctxt "MainWindow"
 msgid "Duplicate failed: {0}"
 msgstr "Duplicate failed: {0}"
 
-#: ui/text_formats.slint:1472
+#: ui/text_formats.slint:1514
 msgctxt "MainWindow"
 msgid "Discarded proxy editor changes."
 msgstr "Discarded proxy editor changes."
 
-#: ui/text_formats.slint:1475
+#: ui/text_formats.slint:1517
 msgctxt "MainWindow"
 msgid "Cannot save proxy profile: {0}"
 msgstr "Cannot save proxy profile: {0}"
 
-#: ui/text_formats.slint:1478
+#: ui/text_formats.slint:1520
 msgctxt "MainWindow"
 msgid "Select a proxy profile to delete."
 msgstr "Select a proxy profile to delete."
 
-#: ui/text_formats.slint:1481
+#: ui/text_formats.slint:1523
 msgctxt "MainWindow"
 msgid "Delete failed: {0}"
 msgstr "Delete failed: {0}"
 
-#: ui/text_formats.slint:1484
+#: ui/text_formats.slint:1526
 msgctxt "MainWindow"
 msgid "Cannot update saved sessions: {0}"
 msgstr "Cannot update saved sessions: {0}"
 
-#: ui/text_formats.slint:1487
+#: ui/text_formats.slint:1529
 msgctxt "MainWindow"
 msgid "A proxy test is already running."
 msgstr "A proxy test is already running."
 
-#: ui/text_formats.slint:1490
+#: ui/text_formats.slint:1532
 msgctxt "MainWindow"
 msgid "Select a proxy profile to test."
 msgstr "Select a proxy profile to test."
 
-#: ui/text_formats.slint:1493
+#: ui/text_formats.slint:1535
 msgctxt "MainWindow"
 msgid "Test failed before connecting: {0}"
 msgstr "Test failed before connecting: {0}"
 
-#: ui/text_formats.slint:1496
+#: ui/text_formats.slint:1538
 msgctxt "MainWindow"
 msgid "Test is unavailable: the proxy-test worker was not started."
 msgstr "Test is unavailable: the proxy-test worker was not started."
 
-#: ui/text_formats.slint:1499
+#: ui/text_formats.slint:1541
 msgctxt "MainWindow"
 msgid "Test could not start its worker thread: {0}"
 msgstr "Test could not start its worker thread: {0}"
 
-#: ui/text_formats.slint:1502
+#: ui/text_formats.slint:1544
 msgctxt "MainWindow"
 msgid "Testing {0} at {1}…"
 msgstr "Testing {0} at {1}…"
 
-#: ui/text_formats.slint:1505
+#: ui/text_formats.slint:1547
 msgctxt "MainWindow"
 msgid "Test passed: {0} answered from {1}."
 msgstr "Test passed: {0} answered from {1}."
 
-#: ui/text_formats.slint:1508
+#: ui/text_formats.slint:1550
 msgctxt "MainWindow"
 msgid "Test failed: {0}"
 msgstr "Test failed: {0}"
 
-#: ui/text_formats.slint:1512
+#: ui/text_formats.slint:1554
 msgctxt "MainWindow"
 msgid "Editing defaults for `{0}`. Changes apply to terminals opened afterwards."
 msgstr "Editing defaults for `{0}`. Changes apply to terminals opened afterwards."
 
-#: ui/text_formats.slint:1515
+#: ui/text_formats.slint:1557
 msgctxt "MainWindow"
 msgid "Cleared every override for this folder; Save persists the reset."
 msgstr "Cleared every override for this folder; Save persists the reset."
 
-#: ui/text_formats.slint:1518
+#: ui/text_formats.slint:1560
 msgctxt "MainWindow"
 msgid "Unknown color scheme id `{0}`."
 msgstr "Unknown color scheme id `{0}`."
 
-#: ui/text_formats.slint:1524
+#: ui/text_formats.slint:1566
 msgctxt "MainWindow"
 msgid "{0} must be between {1}."
 msgstr "{0} must be between {1}."
 
-#: ui/text_formats.slint:1527
+#: ui/text_formats.slint:1569
 msgctxt "MainWindow"
 msgid "{0}: {1}"
 msgstr "{0}: {1}"
 
-#: ui/text_formats.slint:1530
+#: ui/text_formats.slint:1572
 msgctxt "MainWindow"
 msgid "Session logging: `{0}` is not `on` or `off`."
 msgstr "Session logging: `{0}` is not `on` or `off`."
 
-#: ui/text_formats.slint:1533
+#: ui/text_formats.slint:1575
 msgctxt "MainWindow"
 msgid "Format: format must be `raw` or `sanitized`."
 msgstr "Format: format must be `raw` or `sanitized`."
 
-#: ui/text_formats.slint:1536
+#: ui/text_formats.slint:1578
 msgctxt "MainWindow"
 msgid "Saved folder defaults for `{0}`. New terminals use them; open terminals keep their theme."
 msgstr "Saved folder defaults for `{0}`. New terminals use them; open terminals keep their theme."
 
-#: ui/text_formats.slint:1540
+#: ui/text_formats.slint:1582
 msgctxt "MainWindow"
 msgid "No display server was found; type the font file path instead."
 msgstr "No display server was found; type the font file path instead."
 
-#: ui/text_formats.slint:1543
+#: ui/text_formats.slint:1585
 msgctxt "MainWindow"
 msgid "No display server was found; type the fallback font file path instead."
 msgstr "No display server was found; type the fallback font file path instead."
 
-#: ui/text_formats.slint:1546
+#: ui/text_formats.slint:1588
 msgctxt "MainWindow"
 msgid "Copied {n} path."
 msgid_plural "Copied {n} paths."
 msgstr[0] "Copied {n} path."
 msgstr[1] "Copied {n} paths."
 
-#: ui/text_formats.slint:1549
+#: ui/text_formats.slint:1591
 msgctxt "MainWindow"
 msgid "Copied local path(s)."
 msgstr "Copied local path(s)."
 
-#: ui/text_formats.slint:1552
-msgctxt "MainWindow"
-msgid "Copied `{0}`."
-msgstr "Copied `{0}`."
-
-#: ui/text_formats.slint:1555
+#: ui/text_formats.slint:1597
 msgctxt "MainWindow"
 msgid "Unknown SFTP menu action `{0}`."
 msgstr "Unknown SFTP menu action `{0}`."
 
-#: ui/text_formats.slint:1568
+#: ui/text_formats.slint:1610
 msgctxt "MainWindow"
 msgid "Close Session"
 msgstr "Close Session"
 
-#: ui/text_formats.slint:1569
+#: ui/text_formats.slint:1611
 msgctxt "MainWindow"
 msgid "Close Tabs"
 msgstr "Close Tabs"
 
-#: ui/text_formats.slint:1574
+#: ui/text_formats.slint:1616
 msgctxt "MainWindow"
 msgid "Close `{0}`? Its active connection will be disconnected."
 msgstr "Close `{0}`? Its active connection will be disconnected."
 
-#: ui/text_formats.slint:1576
+#: ui/text_formats.slint:1618
 msgctxt "MainWindow"
 msgid "Close {n} tab"
 msgid_plural "Close {n} tabs"
 msgstr[0] "Close {n} tab"
 msgstr[1] "Close {n} tabs"
 
-#: ui/text_formats.slint:1578
+#: ui/text_formats.slint:1620
 msgctxt "MainWindow"
 msgid "{n} of them has an active connection and will be disconnected."
 msgid_plural "{n} of them have active connections and will be disconnected."
 msgstr[0] "{n} of them has an active connection and will be disconnected."
 msgstr[1] "{n} of them have active connections and will be disconnected."
 
-#: ui/text_formats.slint:1586
+#: ui/text_formats.slint:1628
 msgctxt "MainWindow"
 msgid "Built-in default"
 msgstr "Built-in default"
 
-#: ui/text_formats.slint:1589
+#: ui/text_formats.slint:1631
 msgctxt "MainWindow"
 msgid "From global settings"
 msgstr "From global settings"
 
-#: ui/text_formats.slint:1592
+#: ui/text_formats.slint:1634
 msgctxt "MainWindow"
 msgid "From folder: {0}"
 msgstr "From folder: {0}"
 
-#: ui/text_formats.slint:1595
+#: ui/text_formats.slint:1637
 msgctxt "MainWindow"
 msgid "From color scheme: {0}"
 msgstr "From color scheme: {0}"
 
-#: ui/text_formats.slint:1598
+#: ui/text_formats.slint:1640
 msgctxt "MainWindow"
 msgid "Set in this folder"
 msgstr "Set in this folder"
 
-#: ui/text_formats.slint:1601
+#: ui/text_formats.slint:1643
 msgctxt "MainWindow"
 msgid "Set for this session"
 msgstr "Set for this session"
 
-#: ui/text_formats.slint:1608
+#: ui/text_formats.slint:1650
 msgctxt "MainWindow"
 msgid "Color scheme"
 msgstr "Color scheme"
 
-#: ui/text_formats.slint:1609
+#: ui/text_formats.slint:1651
 msgctxt "MainWindow"
 msgid "Foreground"
 msgstr "Foreground"
 
-#: ui/text_formats.slint:1610
+#: ui/text_formats.slint:1652
 msgctxt "MainWindow"
 msgid "Background"
 msgstr "Background"
 
-#: ui/text_formats.slint:1611
+#: ui/text_formats.slint:1653
 msgctxt "MainWindow"
 msgid "Cursor"
 msgstr "Cursor"
 
-#: ui/text_formats.slint:1612
+#: ui/text_formats.slint:1654
 msgctxt "MainWindow"
 msgid "Selection"
 msgstr "Selection"
 
-#: ui/text_formats.slint:1613
+#: ui/text_formats.slint:1655
 msgctxt "MainWindow"
 msgid "Font family"
 msgstr "Font family"
 
-#: ui/text_formats.slint:1614
+#: ui/text_formats.slint:1656
 msgctxt "MainWindow"
 msgid "Font size"
 msgstr "Font size"
 
-#: ui/text_formats.slint:1615
+#: ui/text_formats.slint:1657
 msgctxt "MainWindow"
 msgid "Fallback font"
 msgstr "Fallback font"
 
-#: ui/text_formats.slint:1618
+#: ui/text_formats.slint:1660
 msgctxt "MainWindow"
 msgid "Session logging"
 msgstr "Session logging"
 
-#: ui/text_formats.slint:1619
+#: ui/text_formats.slint:1661
 msgctxt "MainWindow"
 msgid "Format"
 msgstr "Format"
 
-#: ui/text_formats.slint:1620
+#: ui/text_formats.slint:1662
 msgctxt "MainWindow"
 msgid "Directory"
 msgstr "Directory"
 
-#: ui/text_formats.slint:1631
+#: ui/text_formats.slint:1673
 msgctxt "MainWindow"
 msgid "Built-in palette"
 msgstr "Built-in palette"
 
-#: ui/text_formats.slint:1636
+#: ui/text_formats.slint:1678
 msgctxt "MainWindow"
 msgid "Hex color"
 msgstr "Hex color"
 
-#: ui/text_formats.slint:1638
+#: ui/text_formats.slint:1680
 msgctxt "MainWindow"
 msgid "Bundled DejaVu or an imported file"
 msgstr "Bundled DejaVu or an imported file"
 
-#: ui/text_formats.slint:1639
+#: ui/text_formats.slint:1681
 msgctxt "MainWindow"
 msgid "Logical pixels"
 msgstr "Logical pixels"
 
-#: ui/text_formats.slint:1640
+#: ui/text_formats.slint:1682
 msgctxt "MainWindow"
 msgid "One font file tried before the bundled CJK face"
 msgstr "One font file tried before the bundled CJK face"
 
-#: ui/text_formats.slint:1641
+#: ui/text_formats.slint:1683
 msgctxt "MainWindow"
 msgid "Per session"
 msgstr "Per session"
 
-#: ui/text_formats.slint:1642
+#: ui/text_formats.slint:1684
 msgctxt "MainWindow"
 msgid "Cells kept per session"
 msgstr "Cells kept per session"
 
-#: ui/text_formats.slint:1643
+#: ui/text_formats.slint:1685
 msgctxt "MainWindow"
 msgid "Write sessions to disk"
 msgstr "Write sessions to disk"
 
-#: ui/text_formats.slint:1644
+#: ui/text_formats.slint:1686
 msgctxt "MainWindow"
 msgid "Raw keeps escape sequences"
 msgstr "Raw keeps escape sequences"
 
-#: ui/text_formats.slint:1645
+#: ui/text_formats.slint:1687
 msgctxt "MainWindow"
 msgid "Log output directory"
 msgstr "Log output directory"
-
-#: ui/main_window.slint
-msgctxt "MainWindow"
-msgid "Open SFTP"
-msgstr "Open SFTP"
-
-#: ui/main_window.slint
-msgctxt "MainWindow"
-msgid "Switch to SFTP"
-msgstr "Switch to SFTP"
-
-#: ui/main_window.slint
-msgctxt "MainWindow"
-msgid "Switch to Terminal"
-msgstr "Switch to Terminal"
-
-#: ui/main_window.slint
-msgctxt "MainWindow"
-msgid "Connect the session before switching modes."
-msgstr "Connect the session before switching modes."
-
-#: ui/main_window.slint
-msgctxt "MainWindow"
-msgid "Connect the terminal before switching to SFTP."
-msgstr "Connect the terminal before switching to SFTP."
-
-#: ui/components/workspace_tab_item.slint
-msgctxt "WorkspaceTabItem"
-msgid "New Tab"
-msgstr "New Tab"
-
-#: ui/components/workspace_split.slint
-msgctxt "SplitPaneLeaf"
-msgid "Local"
-msgstr "Local"
-
-#: ui/components/sftp_panel.slint
-msgctxt "SftpContextMenu"
-msgid "Switch to Terminal"
-msgstr "Switch to Terminal"
-
-#: ui/text_formats.slint
-msgctxt "MainWindow"
-msgid "Switched tab `{0}` to SFTP."
-msgstr "Switched tab `{0}` to SFTP."
-
-#: ui/text_formats.slint
-msgctxt "MainWindow"
-msgid "Switched tab `{0}` to Terminal."
-msgstr "Switched tab `{0}` to Terminal."
-
-#: ui/text_formats.slint
-msgctxt "MainWindow"
-msgid "Opened a new tab."
-msgstr "Opened a new tab."
