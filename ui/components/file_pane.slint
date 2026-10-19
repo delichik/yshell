@@ -1,0 +1,947 @@
+// 通用文件栏：本地目录栏与远端 SFTP 栏共用**同一个**组件。
+//
+// 结构（自上而下）：
+//   头部行：标题 + 分段路径（面包屑）+ 刷新/显隐/家目录/⋯
+//   内联错误条
+//   列头（Name / Size / Modified / Perm；与列表一起横向滚动）
+//   列表（`..` 行固定在最上面 + 条目行；支持横向滚动与拖放）
+//   远端编辑条（仅远端栏）
+//   汇总行
+//
+// 关键行为：
+//   * 上级目录是列表第一行的 `..`（不再是头部里的专用按钮），本地与远端一致。
+//   * 路径用分段（面包屑）显示；点击路径条空白处即可直接编辑路径（回车提交）。
+//   * 两栏都支持横向滚动：内容宽度大于视口时出现水平滚动条，Shift+滚轮也能
+//     横向滚动（Slint 的 Flickable 自带该行为）。
+//   * 文件名永远显示「后缀 + 后缀前 3 个字符」（没有后缀则显示最后 3 个字符），
+//     与 macOS 访达一致；前面的部分在窄列里被省略号截断。
+//
+// 规范：docs/product/ui-winui3-design-language.md §5.2 / §5.5 / §5.11 / §5.14
+// 约定：颜色与尺寸只引用 Theme token。
+import { ListView } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { Icon } from "basic/icons.slint";
+import { WinButton, WinIconButton, WinToggle } from "basic/controls.slint";
+import { WinTextInput } from "basic/text_input.slint";
+
+// ---------------------------------------------------------------- 数据结构
+
+/// Slint-facing mirror of the runtime file row (local + remote share it).
+export struct FileRow {
+    name: string,
+    path-text: string,
+    kind-text: string,
+    size-text: string,
+    modified-text: string,
+    permissions-text: string,
+    is-dir: bool,
+    is-symlink: bool,
+    /// 伪 `..` 行：跳到上级目录（不参与选择与批量操作）。
+    is-parent: bool,
+    /// 多选高亮（外层按 Ctrl/Shift 计算；selected-index 只是焦点行）。
+    selected: bool,
+    /// 文件名头部：窄列里被省略号截断的部分。
+    name-head: string,
+    /// 文件名尾部：永远可见（后缀 + 后缀前 3 个字符）。
+    name-tail: string,
+}
+
+/// Slint-facing mirror of the runtime breadcrumb segment.
+export struct FileCrumb {
+    label: string,
+    path: string,
+}
+
+// ---------------------------------------------------------------- 滚动条
+
+/// 文件列表滚动条（自绘，替代 std-widgets 的 2px 低对比滑块，B8）：
+/// 常态 4px / 悬停 6px，`text-tertiary` 在深浅两套主题下与列表底的对比度均 ≥ 4.5:1；
+/// 拖动滑块按比例回写 `content-y`（ListView 的滚动位置）。
+///
+/// 宿主用法：给 ListView 设 `vertical-scrollbar-policy: ScrollBarPolicy.always-off;`
+/// 关掉 std-widgets 的滚动条，再把本组件叠在列表右缘并双向绑定 `content-y`。
+export component ListScrollBar inherits Rectangle {
+    in property <length> content-height: 0px;
+    in property <length> visible-height: 0px;
+    in-out property <length> content-y: 0px;
+    in property <bool> scroll-enabled: true;
+
+    private property <length> maximum: max(0px, root.content-height - root.visible-height);
+    private property <length> track-height: max(0px, root.height);
+    private property <length> thumb-height: root.maximum <= 0px ? root.track-height
+        : max(Theme.control-height-compact,
+              min(root.track-height, root.track-height * root.visible-height / max(1px, root.content-height)));
+    private property <length> thumb-travel: max(0px, root.track-height - root.thumb-height);
+    private property <float> progress: root.maximum <= 0px ? 0.0 : clamp(-root.content-y / root.maximum, 0.0, 1.0);
+    private property <bool> dragging: false;
+    private property <length> drag-anchor-y: 0px;
+    private property <length> drag-anchor-content-y: 0px;
+
+    visible: root.scroll-enabled && root.maximum > 0px && root.track-height > Theme.control-height-compact;
+    width: 6px;
+    background: transparent;
+
+    // 滑块（布局占位，无需 id）
+    Rectangle {
+        x: parent.width - self.width;
+        y: root.thumb-travel * root.progress;
+        width: track_touch.has-hover || root.dragging ? parent.width : Theme.spacing-4;
+        height: root.thumb-height;
+        border-radius: self.width / 2;
+        background: track_touch.has-hover || root.dragging ? Theme.text-secondary : Theme.text-tertiary;
+        animate width { duration: Theme.duration-faster; easing: ease-out; }
+    }
+
+    // 仅拖动滑块：滚轮/键盘滚动仍由 ListView 处理。
+    track_touch := TouchArea {
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                root.dragging = true;
+                root.drag-anchor-y = self.mouse-y;
+                root.drag-anchor-content-y = root.content-y;
+            } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
+                root.dragging = false;
+            }
+        }
+        moved => {
+            if (root.dragging && root.maximum > 0px && root.thumb-travel > 0px) {
+                root.content-y = clamp(
+                    root.drag-anchor-content-y - (self.mouse-y - root.drag-anchor-y) * root.maximum / root.thumb-travel,
+                    -root.maximum,
+                    0px
+                );
+            }
+        }
+    }
+}
+
+/// 水平滚动条（两栏横向滚动的入口；与 ListScrollBar 同一形态，只是横置）。
+export component HorizontalScrollBar inherits Rectangle {
+    in property <length> content-width: 0px;
+    in property <length> visible-width: 0px;
+    in-out property <length> content-x: 0px;
+    in property <bool> scroll-enabled: true;
+
+    private property <length> maximum: max(0px, root.content-width - root.visible-width);
+    private property <length> track-width: max(0px, root.width);
+    private property <length> thumb-width: root.maximum <= 0px ? root.track-width
+        : max(Theme.control-height-compact,
+              min(root.track-width, root.track-width * root.visible-width / max(1px, root.content-width)));
+    private property <length> thumb-travel: max(0px, root.track-width - root.thumb-width);
+    private property <float> progress: root.maximum <= 0px ? 0.0 : clamp(-root.content-x / root.maximum, 0.0, 1.0);
+    private property <bool> dragging: false;
+    private property <length> drag-anchor-x: 0px;
+    private property <length> drag-anchor-content-x: 0px;
+
+    visible: root.scroll-enabled && root.maximum > 0px && root.track-width > Theme.control-height-compact;
+    height: 10px;
+    background: transparent;
+
+    Rectangle {
+        x: root.thumb-travel * root.progress;
+        y: (parent.height - self.height) / 2;
+        width: root.thumb-width;
+        height: Theme.spacing-4;
+        border-radius: Theme.spacing-4 / 2;
+        background: track_touch.has-hover || root.dragging ? Theme.text-secondary : Theme.text-tertiary;
+    }
+
+    track_touch := TouchArea {
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                root.dragging = true;
+                root.drag-anchor-x = self.mouse-x;
+                root.drag-anchor-content-x = root.content-x;
+            } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
+                root.dragging = false;
+            }
+        }
+        moved => {
+            if (root.dragging && root.maximum > 0px && root.thumb-travel > 0px) {
+                root.content-x = clamp(
+                    root.drag-anchor-content-x - (self.mouse-x - root.drag-anchor-x) * root.maximum / root.thumb-travel,
+                    -root.maximum,
+                    0px
+                );
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- 列头
+
+/// 可点击排序的列头：28px 高、caption 字号；排序列 text-primary + ↑/↓。
+component FileColumnHeader inherits Rectangle {
+    in property <string> label: "";
+    in property <bool> active: false;
+    in property <bool> ascending: true;
+    in property <bool> right-aligned: false;
+    callback activated();
+
+    height: Theme.row-height-tree;
+    border-radius: Theme.radius-control;
+    background: header-touch.has-hover ? Theme.subtle-hover : transparent;
+
+    Text {
+        text: root.active
+            ? (root.ascending ? @tr("{0} ↑", root.label) : @tr("{0} ↓", root.label))
+            : root.label;
+        color: root.active ? Theme.text-primary : Theme.text-tertiary;
+        font-size: Theme.font-caption;
+        font-weight: root.active ? Theme.weight-semibold : 400;
+        x: 0;
+        width: parent.width;
+        height: parent.height;
+        vertical-alignment: center;
+        horizontal-alignment: root.right-aligned ? right : left;
+        wrap: no-wrap;
+        overflow: elide;
+    }
+
+    header_touch := TouchArea {
+        clicked => { root.activated(); }
+    }
+}
+
+// ---------------------------------------------------------------- 文件栏
+
+/// 通用文件栏：本地目录与远端 SFTP 目录共用。
+export component FilePane inherits Rectangle {
+    // ---- 数据投影 ---------------------------------------------------------
+    in property <[FileRow]> rows;
+    in property <[FileCrumb]> crumbs;
+    in property <int> selected-index: -1;
+    in property <string> sort-column: "name";
+    in property <bool> sort-ascending: true;
+    in property <string> sort-text: "Name ↑";
+    in property <bool> show-hidden: false;
+    in property <int> item-count: 0;
+    in property <int> dir-count: 0;
+    in property <int> selected-count: 0;
+    in property <string> empty-text: "";
+    in property <string> error-text: "";
+    in property <bool> retry-visible: true;
+    /// 栏标题（展开态也显示，与对侧栏区分，B10）。
+    in property <string> title-text: "";
+    in property <string> selected-name-text: "";
+    /// 当前路径；编辑态下与路径输入框双向绑定。
+    in-out property <string> path-text: "/";
+    /// 远端栏用：未连接时禁用导航/刷新。
+    in property <bool> connected: true;
+    /// 折叠态（本地栏）。
+    in property <bool> collapsed: false;
+    /// 折叠/展开开关是否可用（可用高度不足时由面板置 false）。
+    in property <bool> toggle-enabled: true;
+    /// 是否显示「家目录」按钮（本地栏有，远端用根目录菜单项代替）。
+    in property <bool> show-home-button: false;
+    /// 是否显示「⋯」面板菜单（远端栏有）。
+    in property <bool> show-panel-menu: false;
+    /// 远端编辑进行中：底部细条 + Save/Cancel。
+    in property <bool> remote-edit-active: false;
+    in property <string> remote-edit-text: "";
+    /// 拖动载荷：`selection-key` 只是依赖（载荷由外层按当前选择生成）。
+    in property <string> selection-key: "";
+
+    // ---- 回调 -------------------------------------------------------------
+    callback toggle-collapsed();
+    callback refresh();
+    callback home();
+    callback open-path(string);
+    callback open-crumb(int);
+    callback sort-by(string);
+    callback toggle-hidden();
+    callback select-row(int, bool, bool);
+    callback activate-row(int);
+    callback context-menu-requested(int, length, length);
+    callback panel-menu-requested(length, length);
+    callback retry();
+    callback save-edit();
+    callback cancel-edit();
+    callback focus-requested();
+    pure callback drag-payload(string) -> data-transfer;
+    callback drop-on-row(int, data-transfer, DragAction);
+    callback drop-on-blank(data-transfer, DragAction);
+
+    background: transparent;
+
+    // ---------------------------------------------------- 列宽与内容宽度
+    private property <length> column-gap: Theme.spacing-8;
+    private property <length> column-size-width: 56px;
+    private property <length> column-modified-width: 116px;
+    private property <length> column-permissions-width: 56px;
+    /// 元数据区总宽（Size / Modified / Perm 恒在内容里，窄栏靠横向滚动查看）。
+    private property <length> meta-width: root.column-size-width + root.column-gap
+        + root.column-modified-width + root.column-gap + root.column-permissions-width;
+    /// 图标列 + 间距。
+    private property <length> icon-column-width: Theme.icon-size-small + Theme.spacing-8;
+    /// 名称列最小宽度：窄于此值时内容变宽、出现水平滚动条。
+    private property <length> name-min-width: 160px;
+    /// 列表内容宽度（= 视口宽度与"最小内容宽度"中的较大者）。
+    private property <length> content-width: max(root.width, root.icon-column-width
+        + root.name-min-width + root.meta-width);
+    /// 名称列宽度（内容里剩余的全部空间）。
+    private property <length> name-width: max(0px, root.content-width - root.icon-column-width - root.meta-width);
+    /// 内容是否比视口宽（决定水平滚动条是否出现）。
+    private property <bool> has-horizontal-overflow: root.content-width > root.width;
+
+    // ---------------------------------------------------- 小高度降级布局
+    // 布局契约：头部 / 错误条 / 列头自上而下，列表占剩余空间，汇总行底部锚定；
+    // 高度不足时按「列头 → 错误条」的优先级隐藏可选行，列表视口向下取整到
+    // 整数行，汇总行始终完整可见（不被 clip 裁切）。
+    private property <length> layout-gap: Theme.spacing-4;
+    private property <length> header-height: Theme.control-height;
+    private property <length> error-height: Theme.row-height-tree;
+    private property <length> column-height: Theme.row-height-tree;
+    private property <length> edit-height: Theme.control-height;
+    private property <length> summary-height: Theme.line-caption;
+    private property <length> scrollbar-height: 10px;
+
+    private property <bool> shows-edit: root.remote-edit-active;
+    private property <bool> shows-summary: !root.remote-edit-active
+        || root.height >= root.edit-height + root.layout-gap + root.summary-height;
+    private property <length> edit-visible-height: root.shows-edit
+        ? min(root.edit-height, max(0px, root.height
+            - (root.shows-summary ? root.summary-height + root.layout-gap : 0px)))
+        : 0px;
+    private property <length> footer-height: (root.shows-edit ? root.edit-visible-height
+            + (root.shows-summary ? root.layout-gap : 0px) : 0px)
+        + (root.shows-summary ? root.summary-height : 0px);
+    private property <bool> shows-header: root.collapsed || root.height >= root.footer-height
+        + root.layout-gap + root.header-height;
+    private property <length> min-height-no-option: (root.shows-header
+            ? root.header-height + root.layout-gap : 0px)
+        + root.footer-height;
+    private property <bool> shows-error: !root.collapsed && root.error-text != ""
+        && root.height >= root.min-height-no-option + root.error-height + root.layout-gap
+            + Theme.row-height-list + root.layout-gap;
+    private property <bool> shows-column-header: !root.collapsed
+        && root.height >= root.min-height-no-option + Theme.row-height-list + root.layout-gap
+            + root.column-height + root.layout-gap
+            + (root.shows-error ? root.error-height + root.layout-gap : 0px);
+
+    // 各行 y 坐标（绝对定位；list-top 是行 DropArea 的唯一几何来源）。
+    private property <length> error-y: root.shows-header
+        ? root.header-height + root.layout-gap : 0px;
+    private property <length> column-y: root.error-y
+        + (root.shows-error ? root.error-height + root.layout-gap : 0px);
+    private property <length> list-top: root.column-y
+        + (root.shows-column-header ? root.column-height + root.layout-gap : 0px);
+    private property <length> summary-y: max(0px, root.height - root.summary-height);
+    private property <length> edit-y: root.shows-summary
+        ? max(0px, root.summary-y - root.layout-gap - root.edit-visible-height)
+        : max(0px, root.height - root.edit-visible-height);
+    /// 水平滚动条占位（在列表与汇总行之间）。
+    private property <length> hscroll-height: root.has-horizontal-overflow
+        && !root.collapsed ? root.scrollbar-height + root.layout-gap : 0px;
+    private property <length> list-bottom: max(root.list-top,
+        root.height - root.footer-height - root.layout-gap - root.hscroll-height);
+    private property <length> list-height: root.collapsed ? 0px
+        : floor(max(0px, root.list-bottom - root.list-top) / Theme.row-height-list)
+            * Theme.row-height-list;
+
+    /// 路径编辑态：点路径条空白处进入，回车提交。
+    private property <bool> path-editing: false;
+    /// 编辑中的路径文本（组件本地副本：后台投影不会把用户正在输入的内容覆盖掉）。
+    private property <string> path-edit-text: "";
+
+    /// 面包屑分隔符：前一段不是根 `/` 时显示。
+    pure function shows-crumb-separator(index: int) -> bool {
+        if (index <= 0) {
+            return false;
+        }
+        return root.crumbs[index - 1].label != "/";
+    }
+
+    /// 窄宽折叠：只显示最后两段（`… / 上级 / 当前` 语义）。
+    pure function crumb-visible(index: int) -> bool {
+        if (!root.compact-crumbs) {
+            return true;
+        }
+        return index >= root.crumbs.length - 2;
+    }
+
+    private property <bool> compact-crumbs: root.width < 360px;
+
+    /// 汇总：`{n} item(s) · {m} dir(s)`（Rust 只投影计数，句子在这里组装）。
+    private property <string> item-summary-display:
+        @tr("{0} · {1}",
+            @tr("{n} item" | "{n} items" % root.item-count),
+            @tr("{n} dir" | "{n} dirs" % root.dir-count));
+
+    /// 切换到路径编辑态（点路径条空白处）。
+    public function start-path-editing() {
+        root.path-edit-text = root.path-text;
+        root.path-editing = true;
+    }
+
+    /// 提交路径编辑（回车）。
+    public function commit-path(text: string) {
+        root.path-editing = false;
+        root.open-path(text);
+    }
+
+    changed path-editing => {
+        if (root.path-editing) {
+            path_input.focus-input();
+            path_input.select-all();
+        }
+    }
+
+    // 绝对定位容器：顶部行、列表视口、底部 footer 都用上面推导的 y/height。
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        background: transparent;
+
+        // --- 头部行：标题 + 面包屑 + 刷新/显隐/家目录/⋯ --------------------
+        HorizontalLayout {
+            x: 0;
+            y: 0;
+            width: root.width;
+            height: root.header-height;
+            visible: root.shows-header;
+            spacing: Theme.spacing-4;
+
+            // 独立 Local dock 面板时关闭内嵌折叠（由 PanelFrame 负责）。
+            if root.toggle-enabled : WinIconButton {
+                icon: root.collapsed ? "chevron-right" : "chevron-down";
+                accessible-name: root.collapsed ? @tr("Expand local pane") : @tr("Collapse local pane");
+                clicked => { root.toggle-collapsed(); }
+            }
+
+            if root.title-text != "" : Text {
+                text: root.title-text;
+                color: Theme.text-primary;
+                font-size: Theme.font-body;
+                font-weight: Theme.weight-semibold;
+                vertical-alignment: center;
+                wrap: no-wrap;
+            }
+
+            // 路径条：分段（面包屑）+ 空白处点击直接编辑。
+            Rectangle {
+                horizontal-stretch: 1;
+                height: Theme.control-height;
+                background: Theme.control-fill;
+                border-radius: Theme.radius-control;
+                border-width: 1px;
+                border-color: Theme.control-stroke;
+                clip: true;
+
+                // 空白处点击 = 进入路径编辑（声明在分段之前 = 位于分段之下）。
+                breadcrumb_blank_touch := TouchArea {
+                    x: 0;
+                    y: 0;
+                    width: parent.width;
+                    height: parent.height;
+                    enabled: !root.path-editing;
+                    clicked => { root.start-path-editing(); }
+                }
+
+                if !root.path-editing : HorizontalLayout {
+                    x: 0;
+                    y: 0;
+                    width: parent.width;
+                    height: parent.height;
+                    padding-left: Theme.spacing-4;
+                    padding-right: Theme.spacing-4;
+                    spacing: 0;
+
+                    if root.compact-crumbs : Text {
+                        text: @tr("…");
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                    }
+
+                    for crumb[i] in root.crumbs : HorizontalLayout {
+                        visible: root.crumb-visible(i);
+                        spacing: 0;
+
+                        if root.shows-crumb-separator(i) && root.crumb-visible(i) : Text {
+                            text: "/";
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            vertical-alignment: center;
+                        }
+
+                        // 单个面包屑段（布局占位，无需 id）
+                        Rectangle {
+                            border-radius: Theme.radius-control;
+                            background: crumb_hit.has-hover ? Theme.subtle-hover : transparent;
+
+                            HorizontalLayout {
+                                padding-left: Theme.spacing-4;
+                                padding-right: Theme.spacing-4;
+
+                                Text {
+                                    text: crumb.label;
+                                    color: i == root.crumbs.length - 1 ? Theme.text-primary : Theme.text-secondary;
+                                    font-size: Theme.font-caption;
+                                    vertical-alignment: center;
+                                    wrap: no-wrap;
+                                    // 长路径段省略号截断，而不是被容器硬裁（B11）。
+                                    overflow: elide;
+                                }
+                            }
+
+                            crumb_hit := TouchArea {
+                                enabled: root.connected;
+                                clicked => {
+                                    root.path-editing = false;
+                                    root.open-crumb(i);
+                                }
+                            }
+                        }
+                    }
+
+                    // 弹簧：把面包屑顶到左侧、吃掉多余宽度（无 id 的布局占位）。
+                    Rectangle { horizontal-stretch: 1; }
+                }
+
+                // 路径输入（编辑态覆盖分段；始终实例化以便聚焦）。
+                path_input := WinTextInput {
+                    x: 0;
+                    y: 0;
+                    width: parent.width;
+                    height: parent.height;
+                    visible: root.path-editing;
+                    // 与 `path-text` 解绑：编辑期间后台投影不会覆盖用户输入。
+                    text <=> root.path-edit-text;
+                    placeholder-text: root.path-placeholder-text;
+                    font-family: Theme.font-mono;
+                    accepted => { root.commit-path(self.text); }
+                }
+            }
+
+            WinIconButton {
+                icon: "refresh";
+                accessible-name: @tr("Refresh");
+                enabled: root.connected;
+                clicked => { root.refresh(); }
+            }
+            if root.show-home-button : WinIconButton {
+                icon: "home";
+                accessible-name: @tr("Home directory");
+                clicked => { root.home(); }
+            }
+            WinToggle {
+                text: "";
+                icon: "eye";
+                checked: root.show-hidden;
+                accessible-name: @tr("Show hidden files");
+                toggled => { root.toggle-hidden(); }
+            }
+            if root.show-panel-menu : WinIconButton {
+                icon: "more";
+                accessible-name: @tr("SFTP operations");
+                enabled: root.connected;
+                clicked => {
+                    root.panel-menu-requested(
+                        self.absolute-position.x,
+                        self.absolute-position.y + self.height
+                    );
+                }
+            }
+        }
+
+        // --- 内联错误条 + 重试 --------------------------------------------
+        if root.shows-error : Rectangle {
+            x: 0;
+            y: root.error-y;
+            width: root.width;
+            height: root.error-height;
+            background: Theme.attention-background;
+            border-radius: Theme.radius-control;
+            border-width: 1px;
+            border-color: Theme.attention-stroke;
+
+            HorizontalLayout {
+                padding-left: Theme.spacing-8;
+                padding-right: Theme.spacing-4;
+                spacing: Theme.spacing-8;
+
+                Text {
+                    text: root.error-text;
+                    color: Theme.attention-text;
+                    font-size: Theme.font-caption;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                    overflow: elide;
+                    horizontal-stretch: 1;
+                }
+
+                if root.retry-visible : WinButton {
+                    text: @tr("Retry");
+                    subtle: true;
+                    clicked => { root.retry(); }
+                }
+            }
+        }
+
+        // --- 列表（ListView 虚拟化 + 空态 + 行拖动/放置）------------------
+        Rectangle {
+            x: 0;
+            y: root.list-top;
+            width: root.width;
+            height: root.list-height;
+            clip: true;
+
+            // 列表级 DropArea：空白处落下 = 移动到当前目录 / 外部文件导入。
+            // 注意：`dropped` 的 `event.proposed-action` 已经是 can-drop 的协商结果，
+            // 不能再做一次映射（否则 Copy/Move 会被反转两次）。
+            DropArea {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: parent.height;
+                can-drop(event) => { return root.drop-action(event.proposed-action); }
+                dropped(event) => {
+                    root.drop-on-blank(event.data, event.proposed-action);
+                    return event.proposed-action;
+                }
+            }
+
+            // 列表空白处右键 = 空白菜单（远端栏此前没有这个入口）。
+            // 声明在 ListView 之前 = 位于行之下：落在行上的右键仍由行处理。
+            blank_touch := TouchArea {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: parent.height;
+                pointer-event(event) => {
+                    if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                        root.context-menu-requested(
+                            -1,
+                            self.absolute-position.x + self.mouse-x,
+                            self.absolute-position.y + self.mouse-y
+                        );
+                    }
+                }
+            }
+
+            Text {
+                visible: root.rows.length == 0 && root.error-text == "";
+                text: root.empty-text;
+                color: Theme.text-tertiary;
+                font-size: Theme.font-caption;
+                x: Theme.spacing-8;
+                width: parent.width - 2 * Theme.spacing-8;
+                height: parent.height;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+            }
+
+            list := ListView {
+                // std-widgets 的滑块只有 2px、对比度 1.26:1；这里改用自绘滚动条（B8）。
+                vertical-scrollbar-policy: ScrollBarPolicy.always-off;
+                horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
+
+                for row[index] in root.rows : Rectangle {
+                    // 行宽 = 内容宽度：内容宽于视口时 ListView 允许横向滚动。
+                    width: root.content-width;
+                    height: Theme.row-height-list;
+                    border-radius: Theme.radius-control;
+                    background: row.selected || index == root.selected-index ? Theme.subtle-selected
+                        : row_hit.has-hover ? Theme.subtle-hover
+                        : transparent;
+
+                    Icon {
+                        name: row.is-parent ? "up"
+                            : row.is-symlink ? "link"
+                            : row.is-dir ? "folder"
+                            : "file";
+                        icon-color: row.selected || index == root.selected-index ? Theme.accent : Theme.text-secondary;
+                        icon-size: Theme.icon-size-small;
+                        x: 0;
+                        y: (parent.height - self.height) / 2;
+                    }
+
+                    // 文件名：头部可省略，尾部（后缀 + 后缀前 3 个字符）永远可见。
+                    Rectangle {
+                        x: root.icon-column-width;
+                        y: 0;
+                        width: root.name-width;
+                        height: parent.height;
+                        clip: true;
+
+                        head_text := Text {
+                            x: 0;
+                            y: 0;
+                            width: max(0px, parent.width - tail_measure.preferred-width);
+                            height: parent.height;
+                            text: row.name-head;
+                            color: row.is-parent ? Theme.text-secondary : Theme.text-primary;
+                            font-size: Theme.font-body;
+                            vertical-alignment: center;
+                            wrap: no-wrap;
+                            overflow: elide;
+                        }
+
+                        // 量出尾部宽度（不参与显示）。
+                        tail_measure := Text {
+                            text: row.name-tail;
+                            wrap: no-wrap;
+                            opacity: 0;
+                        }
+
+                        tail_text := Text {
+                            x: max(0px, parent.width - tail_measure.preferred-width);
+                            y: 0;
+                            width: tail_measure.preferred-width;
+                            height: parent.height;
+                            text: row.name-tail;
+                            color: row.is-parent ? Theme.text-secondary : Theme.text-primary;
+                            font-size: Theme.font-body;
+                            vertical-alignment: center;
+                            wrap: no-wrap;
+                            overflow: clip;
+                        }
+                    }
+
+                    Text {
+                        x: parent.width - root.meta-width;
+                        width: root.column-size-width;
+                        height: parent.height;
+                        text: row.size-text;
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        horizontal-alignment: right;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+                    Text {
+                        x: parent.width - root.meta-width + root.column-size-width + root.column-gap;
+                        width: root.column-modified-width;
+                        height: parent.height;
+                        text: row.modified-text;
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        horizontal-alignment: right;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+                    Text {
+                        x: parent.width - root.column-permissions-width;
+                        width: root.column-permissions-width;
+                        height: parent.height;
+                        text: row.permissions-text;
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: center;
+                        horizontal-alignment: right;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
+
+                    // 目录行接住"拖到目录上 = 移动进目录"。
+                    // `dropped` 的 proposed-action 同样是协商结果，直接透传。
+                    if row.is-dir && !row.is-parent : DropArea {
+                        x: 0;
+                        y: 0;
+                        width: parent.width;
+                        height: parent.height;
+                        can-drop(event) => { return root.drop-action(event.proposed-action); }
+                        dropped(event) => {
+                            root.drop-on-row(index, event.data, event.proposed-action);
+                            return event.proposed-action;
+                        }
+                    }
+
+                    // 行主体 = DragArea（拖动载荷由宿主按当前选择生成）+
+                    // TouchArea（按下即选、双击激活、右键菜单）。
+                    DragArea {
+                        x: 0;
+                        y: 0;
+                        width: parent.width;
+                        height: parent.height;
+                        enabled: !row.is-parent;
+                        data: root.drag-payload(root.selection-key);
+                        allow-copy: true;
+                        allow-move: true;
+
+                        row_hit := TouchArea {
+                            pointer-event(event) => {
+                                if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                                    // 右键落在已选中的行上时保留多选（B18），
+                                    // 否则先切换为单行选择再弹菜单。
+                                    if (!(row.selected || index == root.selected-index)) {
+                                        root.select-row(index, false, false);
+                                    }
+                                    root.context-menu-requested(
+                                        index,
+                                        self.absolute-position.x + self.mouse-x,
+                                        self.absolute-position.y + self.mouse-y
+                                    );
+                                } else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                                    root.focus-requested();
+                                    root.select-row(
+                                        index,
+                                        event.modifiers.control || event.modifiers.meta,
+                                        event.modifiers.shift
+                                    );
+                                }
+                            }
+                            double-clicked => { root.activate-row(index); }
+                        }
+                    }
+                }
+            }
+
+            // 自绘滚动条（B8）：叠在列表右缘，双向绑定滚动位置。
+            ListScrollBar {
+                x: parent.width - self.width;
+                y: 0;
+                height: parent.height;
+                content-height: list.content-height;
+                visible-height: list.visible-height;
+                content-y <=> list.content-y;
+                scroll-enabled: list.enabled;
+            }
+        }
+
+        // --- 列头（与列表一起横向滚动；排序状态仍在汇总行可见）------------
+        if root.shows-column-header : Rectangle {
+            x: 0;
+            y: root.column-y;
+            width: root.width;
+            height: root.column-height;
+            visible: root.shows-column-header;
+            background: transparent;
+            clip: true;
+
+            // 列头内容随列表一起横向滚动（content-x ≤ 0）。
+            Rectangle {
+                x: list.content-x;
+                y: 0;
+                width: root.content-width;
+                height: parent.height;
+
+                FileColumnHeader {
+                    x: root.icon-column-width;
+                    width: root.name-width;
+                    height: parent.height;
+                    label: @tr("Name");
+                    active: root.sort-column == "name";
+                    ascending: root.sort-ascending;
+                    activated => { root.sort-by("name"); }
+                }
+                FileColumnHeader {
+                    x: parent.width - root.meta-width;
+                    width: root.column-size-width;
+                    height: parent.height;
+                    label: @tr("Size");
+                    active: root.sort-column == "size";
+                    ascending: root.sort-ascending;
+                    right-aligned: true;
+                    activated => { root.sort-by("size"); }
+                }
+                FileColumnHeader {
+                    x: parent.width - root.meta-width + root.column-size-width + root.column-gap;
+                    width: root.column-modified-width;
+                    height: parent.height;
+                    label: @tr("Modified");
+                    active: root.sort-column == "modified";
+                    ascending: root.sort-ascending;
+                    right-aligned: true;
+                    activated => { root.sort-by("modified"); }
+                }
+                FileColumnHeader {
+                    x: parent.width - root.column-permissions-width;
+                    width: root.column-permissions-width;
+                    height: parent.height;
+                    label: @tr("Perm");
+                    active: root.sort-column == "permissions";
+                    ascending: root.sort-ascending;
+                    right-aligned: true;
+                    activated => { root.sort-by("permissions"); }
+                }
+            }
+
+            Rectangle {
+                x: 0;
+                y: parent.height - 1px;
+                width: parent.width;
+                height: 1px;
+                background: Theme.divider;
+            }
+        }
+
+        // --- 水平滚动条（内容宽于视口时出现）------------------------------
+        if root.has-horizontal-overflow && !root.collapsed : HorizontalScrollBar {
+            x: 0;
+            y: root.list-bottom;
+            width: root.width;
+            content-width: root.content-width;
+            visible-width: root.width;
+            content-x <=> list.content-x;
+        }
+
+        // --- 远端编辑进行中：细条 + Save/Cancel（核心操作，优先保留）-----
+        if root.shows-edit : HorizontalLayout {
+            x: 0;
+            y: root.edit-y;
+            width: root.width;
+            height: root.edit-visible-height;
+            spacing: Theme.spacing-4;
+
+            Text {
+                text: root.remote-edit-text;
+                color: Theme.caution;
+                font-size: Theme.font-caption;
+                vertical-alignment: center;
+                wrap: no-wrap;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+            WinButton {
+                text: @tr("Save Edit");
+                accent: true;
+                clicked => { root.save-edit(); }
+            }
+            WinButton {
+                text: @tr("Cancel Edit");
+                clicked => { root.cancel-edit(); }
+            }
+        }
+
+        // --- 汇总行：计数 + 选中 + 排序 ------------------------------------
+        // 底部锚定（y = 高度 - 汇总行高）：低高度时只压列表，绝不裁本行。
+        Text {
+            x: 0;
+            y: root.summary-y;
+            width: root.width;
+            height: min(root.summary-height, root.height);
+            visible: root.shows-summary;
+            text: root.selected-name-text != ""
+                ? @tr("{0} · selected: {1} · {2}", root.item-summary-display, root.selected-name-text, root.sort-text)
+                : (root.selected-count > 0
+                    ? @tr("{0} · {1} selected · {2}", root.item-summary-display, root.selected-count, root.sort-text)
+                    : @tr("{0} · {1}", root.item-summary-display, root.sort-text));
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+    }
+
+    /// 路径输入框的占位文案（本地/远端不同）。
+    in property <string> path-placeholder-text: "/remote/path";
+
+    /// N1 语义：无修饰键（Slint 提议 move）= 复制；Ctrl（提议 copy）= 移动。
+    pure function drop-action(proposed: DragAction) -> DragAction {
+        if (proposed == DragAction.move) {
+            return DragAction.copy;
+        }
+        if (proposed == DragAction.copy) {
+            return DragAction.move;
+        }
+        return DragAction.none;
+    }
+}

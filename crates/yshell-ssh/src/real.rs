@@ -503,11 +503,25 @@ const LIBSSH2_ERROR_METHOD_NONE: i32 = -17;
 const LIBSSH2_ERROR_AUTHENTICATION_FAILED: i32 = -18;
 const LIBSSH2_ERROR_PUBLICKEY_UNVERIFIED: i32 = -19;
 const LIBSSH2_ERROR_METHOD_NOT_SUPPORTED: i32 = -33;
-const LIBSSH2_ERROR_EAGAIN: i32 = -37;
 
 /// Seconds of idle SSH I/O before libssh2 sends a keepalive probe.
 /// Matches common client defaults (OpenSSH `ServerAliveInterval` style).
 const NATIVE_SSH_KEEPALIVE_INTERVAL_SECS: u32 = 15;
+
+/// libssh2 error code for a socket timeout.
+const LIBSSH2_ERROR_SOCKET_TIMEOUT: i32 = -30;
+/// Whether a libssh2 error means the TCP connection is really gone.
+///
+/// The socket errors are `-1` (none) to `-5` (disconnect); `-30` is the socket
+/// timeout. Every other code is a transport hiccup that a later read/write
+/// will report again — killing a healthy session because one keepalive probe
+/// failed is what made connections drop ("SSH connection lost").
+fn ssh2_error_means_connection_lost(code: Option<i32>) -> bool {
+    match code {
+        Some(code) => (-5..=-1).contains(&code) || code == LIBSSH2_ERROR_SOCKET_TIMEOUT,
+        None => false,
+    }
+}
 
 fn ssh2_error_code(error: &ssh2::Error) -> Option<i32> {
     match error.code() {
@@ -1499,14 +1513,24 @@ impl RealNativeShellSession {
         }
         // keepalive_send is a no-op until the configured idle interval elapses;
         // call it every poll so probes actually go out on the UI tick.
+        //
+        // A failing probe is only fatal when the socket is really gone: the
+        // send buffer may be full for a moment (EAGAIN) and libssh2 reports
+        // transient hiccups the same way. Marking the session closed here is
+        // what made healthy sessions drop ("SSH connection lost"); the real
+        // failure shows up in the channel read below, which is authoritative.
         if let Err(error) = self.session.keepalive_send() {
-            if ssh2_error_code(&error) != Some(LIBSSH2_ERROR_EAGAIN) {
+            if ssh2_error_means_connection_lost(ssh2_error_code(&error)) {
                 self.mark_closed_after_transport_error();
                 return Err(SshError::new(
                     SshErrorKind::Io,
                     format!("SSH keepalive failed: {error}"),
                 ));
             }
+            tracing::debug!(
+                target: "yshell::ssh",
+                "SSH keepalive probe failed (continuing): {error}"
+            );
         }
         if let Err(error) = drain_channel_stream(&mut self.channel, queue) {
             self.mark_closed_after_transport_error();
@@ -1659,6 +1683,13 @@ pub struct SshTransport {
     session: Session,
     connect_timeout: Duration,
     closed: Arc<AtomicBool>,
+    /// True while an interactive shell channel is attached to this transport.
+    ///
+    /// SFTP operations need the session in blocking mode; an attached shell
+    /// needs it back in non-blocking mode afterwards. Without this flag the
+    /// session stayed blocking and the terminal's polling read blocked until
+    /// the libssh2 timeout fired — which surfaced as a "disconnected" session.
+    shell_attached: Arc<AtomicBool>,
 }
 
 impl std::fmt::Debug for SshTransport {
@@ -1692,6 +1723,7 @@ impl SshTransport {
             session,
             connect_timeout: config.connect_timeout,
             closed: Arc::new(AtomicBool::new(false)),
+            shell_attached: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -1701,6 +1733,7 @@ impl SshTransport {
             session,
             connect_timeout,
             closed: Arc::new(AtomicBool::new(false)),
+            shell_attached: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -1732,6 +1765,31 @@ impl SshTransport {
             .set_timeout(session_timeout_ms(self.connect_timeout));
         self.session.set_blocking(true);
         Ok(())
+    }
+
+    /// Restores the interactive (non-blocking) session mode.
+    ///
+    /// SFTP operations put the session into blocking mode. When the same
+    /// transport also carries an interactive shell, the shell must get the
+    /// non-blocking mode back — otherwise its polling read blocks until the
+    /// libssh2 timeout expires and the session is reported as disconnected.
+    pub fn restore_interactive_mode(&self) {
+        if self.closed.load(Ordering::SeqCst) {
+            return;
+        }
+        if !self.shell_attached.load(Ordering::SeqCst) {
+            return;
+        }
+        self.session.set_timeout(0);
+        self.session
+            .set_keepalive(true, NATIVE_SSH_KEEPALIVE_INTERVAL_SECS);
+        self.session.set_blocking(false);
+    }
+
+    /// Whether an interactive shell channel is currently attached.
+    #[must_use]
+    pub fn has_shell(&self) -> bool {
+        self.shell_attached.load(Ordering::SeqCst)
     }
 
     /// Opens a shell channel on this transport.
@@ -1783,6 +1841,7 @@ impl SshTransport {
         self.session
             .set_keepalive(true, NATIVE_SSH_KEEPALIVE_INTERVAL_SECS);
         self.session.set_blocking(false);
+        self.shell_attached.store(true, Ordering::SeqCst);
         notify_connection_stage(RealConnectionStage::Connected);
         Ok(Box::new(SshTransportShellSession {
             transport: self.clone(),
@@ -1829,8 +1888,11 @@ impl ShellSession for SshTransportShellSession {
         if self.closed {
             return Ok(Vec::new());
         }
+        // A failing keepalive probe is only fatal when the socket is gone (see
+        // `RealNativeShellSession`); the channel read below decides whether the
+        // session is really dead.
         if let Err(error) = self.transport.session().keepalive_send() {
-            if ssh2_error_code(&error) != Some(LIBSSH2_ERROR_EAGAIN) {
+            if ssh2_error_means_connection_lost(ssh2_error_code(&error)) {
                 self.closed = true;
                 self.transport.mark_closed();
                 return Err(SshError::new(
@@ -1838,6 +1900,10 @@ impl ShellSession for SshTransportShellSession {
                     format!("SSH keepalive failed: {error}"),
                 ));
             }
+            tracing::debug!(
+                target: "yshell::ssh",
+                "SSH keepalive probe failed (continuing): {error}"
+            );
         }
         if let Err(error) = drain_channel_stream(&mut self.channel, &mut self.pending_output) {
             self.closed = true;
@@ -1958,6 +2024,7 @@ impl ShellSession for SshTransportShellSession {
             let _ = self.channel.wait_close();
         }
         self.closed = true;
+        self.transport.shell_attached.store(false, Ordering::SeqCst);
         self.transport.session().set_blocking(false);
         close_result
     }

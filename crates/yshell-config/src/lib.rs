@@ -12,12 +12,13 @@ pub mod themes;
 pub use paths::{discover_config_dir, ConfigPathError, ConfigPathResolver, OperatingSystem};
 pub use quick_connect::{parse_quick_connect, QuickConnectError, QuickConnectTarget};
 pub use schema::{
-    migrate_value, migrate_value_with_warnings, AppearanceProfile, AuthMethod, AuthProfile,
-    ConfigDocument, ConfigSchemaError, ConfigWarning, FolderProfile, HostKeyPolicy, KeyProfile,
-    LayoutProfile, LoggingProfile, NewTabMode, PanelId, PanelSide, PanelSlot, PrivateKeySource,
-    ProxyProfile, ProxyProtocol, QuickConnectEntry, QuickConnectProfile, QuickLink,
-    ResolvedSessionProfile, SessionBasicEdit, SessionProfile, SftpProfile, TerminalProfile,
-    TunnelForward, TunnelForwardKind, TunnelProfile, UiProfile, SCHEMA_VERSION,
+    clamp_sftp_max_parallel_transfers, migrate_value, migrate_value_with_warnings,
+    AppearanceProfile, AuthMethod, AuthProfile, ConfigDocument, ConfigSchemaError, ConfigWarning,
+    FolderProfile, HostKeyPolicy, KeyProfile, LayoutProfile, LoggingProfile, NewTabMode, PanelId,
+    PanelSide, PanelSlot, PrivateKeySource, ProxyProfile, ProxyProtocol, QuickConnectEntry,
+    QuickConnectProfile, QuickLink, ResolvedSessionProfile, SessionBasicEdit, SessionProfile,
+    SftpProfile, TerminalProfile, TunnelForward, TunnelForwardKind, TunnelProfile, UiProfile,
+    SFTP_MAX_PARALLEL_TRANSFERS_MAX, SFTP_MAX_PARALLEL_TRANSFERS_MIN, SCHEMA_VERSION,
 };
 pub use store::{ConfigStore, ConfigStoreError, LoadOutcome};
 pub use themes::{

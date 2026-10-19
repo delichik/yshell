@@ -19,7 +19,7 @@ use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::{Receiver, Sender},
-        Arc,
+        Arc, Condvar, Mutex,
     },
 };
 
@@ -81,12 +81,6 @@ pub enum SftpJobSpec {
         config: SshConnectionConfig,
         entries: Vec<(String, bool)>,
     },
-    /// Batch chmod.
-    RemoteChmod {
-        config: SshConnectionConfig,
-        paths: Vec<String>,
-        permissions: u32,
-    },
 }
 
 impl SftpJobSpec {
@@ -100,7 +94,7 @@ impl SftpJobSpec {
             | Self::RemoteCopyFile { options, .. }
             | Self::RemoteCopyTree { options, .. }
             | Self::RemoteMove { options, .. } => options,
-            Self::RemoteDelete { .. } | Self::RemoteChmod { .. } => return None,
+            Self::RemoteDelete { .. } => return None,
         };
         Some(options.overwrite)
     }
@@ -115,7 +109,7 @@ impl SftpJobSpec {
             | Self::RemoteCopyFile { options, .. }
             | Self::RemoteCopyTree { options, .. }
             | Self::RemoteMove { options, .. } => options,
-            Self::RemoteDelete { .. } | Self::RemoteChmod { .. } => return self,
+            Self::RemoteDelete { .. } => return self,
         };
         options.overwrite = overwrite;
         self
@@ -135,8 +129,7 @@ impl SftpJobSpec {
             Self::RemoteCopyFile { .. }
             | Self::RemoteCopyTree { .. }
             | Self::RemoteMove { .. }
-            | Self::RemoteDelete { .. }
-            | Self::RemoteChmod { .. } => yshell_sftp::TransferDirection::Download,
+            | Self::RemoteDelete { .. } => yshell_sftp::TransferDirection::Download,
         }
     }
 
@@ -162,7 +155,6 @@ impl SftpJobSpec {
                 .first()
                 .map(|(path, _)| path.clone())
                 .unwrap_or_default(),
-            Self::RemoteChmod { paths, .. } => paths.first().cloned().unwrap_or_default(),
         }
     }
 
@@ -186,7 +178,6 @@ impl SftpJobSpec {
                 .first()
                 .map(|(path, _)| path.clone())
                 .unwrap_or_default(),
-            Self::RemoteChmod { paths, .. } => paths.first().cloned().unwrap_or_default(),
         }
     }
 }
@@ -237,15 +228,24 @@ pub struct SftpJobHandle {
     /// Submitted specs, kept so a finished job that reported Ask-policy
     /// conflicts can be re-run with an explicit policy.
     specs: HashMap<String, SftpJobSpec>,
+    limiter: Arc<TransferLimiter>,
 }
 
 impl SftpJobHandle {
-    pub fn new(tx: Sender<SftpJob>) -> Self {
+    /// Handle with an explicit concurrency limit (the "max parallel transfers"
+    /// setting).
+    pub fn with_limiter(tx: Sender<SftpJob>, limiter: Arc<TransferLimiter>) -> Self {
         Self {
             tx,
             cancels: HashMap::new(),
             specs: HashMap::new(),
+            limiter,
         }
+    }
+
+    /// Changes how many transfers may run at the same time.
+    pub fn set_parallel_limit(&self, limit: usize) {
+        self.limiter.set_limit(limit);
     }
 
     /// Submits a job and returns whether the worker accepted it.
@@ -288,24 +288,116 @@ impl SftpJobHandle {
     }
 }
 
-/// Spawns the transfer worker thread and returns the submit/drain endpoints.
-pub fn start_sftp_job_worker() -> (Sender<SftpJob>, Receiver<SftpJobMessage>) {
-    let (job_tx, job_rx) = std::sync::mpsc::channel::<SftpJob>();
-    let (msg_tx, msg_rx) = std::sync::mpsc::channel::<SftpJobMessage>();
-    let spawned = std::thread::Builder::new()
-        .name("yshell-sftp-jobs".to_owned())
-        .spawn(move || worker_loop(job_rx, msg_tx));
-    if spawned.is_err() {
-        // The channel still works; submissions are dropped by the sender when
-        // the receiver is gone, and the UI reports the failure.
-    }
-    (job_tx, msg_rx)
+/// Concurrency limiter shared by the transfer workers.
+///
+/// The workers themselves are a fixed pool; the limiter decides how many of
+/// them may run a transfer at the same time ("max parallel uploads/downloads").
+#[derive(Debug)]
+pub struct TransferLimiter {
+    state: Mutex<LimiterState>,
+    changed: Condvar,
 }
 
-fn worker_loop(job_rx: Receiver<SftpJob>, msg_tx: Sender<SftpJobMessage>) {
-    while let Ok(job) = job_rx.recv() {
+#[derive(Debug)]
+struct LimiterState {
+    limit: usize,
+    in_flight: usize,
+}
+
+impl TransferLimiter {
+    pub fn new(limit: usize) -> Self {
+        Self {
+            state: Mutex::new(LimiterState {
+                limit: limit.max(1),
+                in_flight: 0,
+            }),
+            changed: Condvar::new(),
+        }
+    }
+
+    /// Changes the limit; running transfers are not interrupted.
+    pub fn set_limit(&self, limit: usize) {
+        let mut state = self.state.lock().expect("transfer limiter poisoned");
+        state.limit = limit.max(1);
+        self.changed.notify_all();
+    }
+
+    /// The current limit.
+    #[allow(dead_code)]
+    pub fn limit(&self) -> usize {
+        let state = self.state.lock().expect("transfer limiter poisoned");
+        state.limit
+    }
+
+    /// Waits until a slot is free and takes it.
+    fn acquire(&self) {
+        let mut state = self.state.lock().expect("transfer limiter poisoned");
+        while state.in_flight >= state.limit {
+            state = self
+                .changed
+                .wait(state)
+                .expect("transfer limiter poisoned");
+        }
+        state.in_flight += 1;
+    }
+
+    /// Gives the slot back.
+    fn release(&self) {
+        let mut state = self.state.lock().expect("transfer limiter poisoned");
+        state.in_flight = state.in_flight.saturating_sub(1);
+        self.changed.notify_all();
+    }
+}
+
+/// Spawns the transfer workers with an explicit concurrency limit.
+///
+/// Several worker threads are started so that raising the limit actually
+/// enables parallel transfers; the shared limiter keeps the number of
+/// simultaneously running transfers at the configured value. The limiter is
+/// returned so the UI thread can change the limit at runtime.
+pub fn start_sftp_job_worker_with_limit(
+    limit: usize,
+) -> (Sender<SftpJob>, Receiver<SftpJobMessage>, Arc<TransferLimiter>) {
+    let (job_tx, job_rx) = std::sync::mpsc::channel::<SftpJob>();
+    let (msg_tx, msg_rx) = std::sync::mpsc::channel::<SftpJobMessage>();
+    let shared_rx = Arc::new(Mutex::new(job_rx));
+    let limiter = Arc::new(TransferLimiter::new(limit));
+    for index in 0..MAX_TRANSFER_WORKERS {
+        let shared_rx = Arc::clone(&shared_rx);
+        let msg_tx = msg_tx.clone();
+        let limiter = Arc::clone(&limiter);
+        let spawned = std::thread::Builder::new()
+            .name(format!("yshell-sftp-jobs-{index}"))
+            .spawn(move || worker_loop(shared_rx, limiter, msg_tx));
+        if spawned.is_err() {
+            // The channel still works; submissions are dropped by the sender when
+            // the receiver is gone, and the UI reports the failure.
+            break;
+        }
+    }
+    (job_tx, msg_rx, limiter)
+}
+
+/// Upper bound of worker threads (the effective limit is the configured one).
+const MAX_TRANSFER_WORKERS: usize = 16;
+
+fn worker_loop(
+    job_rx: Arc<Mutex<Receiver<SftpJob>>>,
+    limiter: Arc<TransferLimiter>,
+    msg_tx: Sender<SftpJobMessage>,
+) {
+    loop {
+        let job = {
+            let receiver = job_rx.lock().expect("sftp job queue poisoned");
+            match receiver.recv() {
+                Ok(job) => job,
+                Err(_) => return,
+            }
+        };
+        limiter.acquire();
         let id = job.id.clone();
         let outcome = run_job(&job, &msg_tx);
+        limiter.release();
         if msg_tx
             .send(SftpJobMessage::Finished { id, outcome })
             .is_err()
@@ -409,9 +501,6 @@ fn run_job(job: &SftpJob, msg_tx: &Sender<SftpJobMessage>) -> SftpJobOutcome {
         SftpJobSpec::RemoteDelete { entries, .. } => {
             run_remote_delete(&mut client, entries, &job.cancel)
         }
-        SftpJobSpec::RemoteChmod {
-            paths, permissions, ..
-        } => run_remote_chmod(&mut client, paths, *permissions),
     }
 }
 
@@ -424,8 +513,7 @@ fn spec_config(spec: &SftpJobSpec) -> &SshConnectionConfig {
         | SftpJobSpec::RemoteCopyFile { config, .. }
         | SftpJobSpec::RemoteCopyTree { config, .. }
         | SftpJobSpec::RemoteMove { config, .. }
-        | SftpJobSpec::RemoteDelete { config, .. }
-        | SftpJobSpec::RemoteChmod { config, .. } => config,
+        | SftpJobSpec::RemoteDelete { config, .. } => config,
     }
 }
 
@@ -844,22 +932,6 @@ pub(crate) fn delete_remote_entry<B: yshell_sftp::SftpBackend>(
     }
 }
 
-fn run_remote_chmod(
-    client: &mut SftpClient<yshell_sftp::RealSftpBackend>,
-    paths: &[String],
-    permissions: u32,
-) -> SftpJobOutcome {
-    let results = client.chmod_many(paths, permissions);
-    let mut report = TreeTransferReport::default();
-    for result in results {
-        match result.error_message() {
-            Some(error) => report.failed.push((result.path, error)),
-            None => report.completed += 1,
-        }
-    }
-    SftpJobOutcome::Completed(report)
-}
-
 fn remote_exists(client: &mut SftpClient<yshell_sftp::RealSftpBackend>, path: &str) -> bool {
     client
         .entry_kind(path)
@@ -915,13 +987,15 @@ fn numbered_name(name: &str, index: u32) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, sync::atomic::AtomicBool};
+    use std::{path::PathBuf, sync::atomic::AtomicBool, sync::Arc};
 
     use tempfile::tempdir;
     use yshell_sftp::{InMemorySftpBackend, FsEntry, SftpClient, TreeTransferOptions};
     use yshell_ssh::SshConnectionConfig;
 
-    use super::{delete_remote_entry, join_remote, numbered_name, split_remote, SftpJobSpec};
+    use super::{
+        delete_remote_entry, join_remote, numbered_name, split_remote, SftpJobSpec, TransferLimiter,
+    };
 
     fn in_memory_client(entries: &[FsEntry]) -> SftpClient<InMemorySftpBackend> {
         let mut backend = InMemorySftpBackend::default();
@@ -1042,5 +1116,35 @@ mod tests {
         // test documents the naming so files from parallel runs stay isolated.
         let dir = tempdir().expect("tempdir");
         assert!(dir.path().is_dir());
+    }
+
+    #[test]
+    fn the_transfer_limiter_caps_the_number_of_parallel_jobs() {
+        let limiter = Arc::new(TransferLimiter::new(2));
+        assert_eq!(limiter.limit(), 2);
+        limiter.acquire();
+        limiter.acquire();
+        assert_eq!(limiter.limit(), 2);
+
+        // The third slot has to wait for a running transfer to finish.
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        let wait_limiter = Arc::clone(&limiter);
+        let waiter = std::thread::spawn(move || {
+            wait_limiter.acquire();
+            tx.send(()).expect("signal");
+            wait_limiter.release();
+        });
+        assert!(rx
+            .recv_timeout(std::time::Duration::from_millis(50))
+            .is_err());
+        limiter.release();
+        assert!(rx.recv_timeout(std::time::Duration::from_secs(5)).is_ok());
+        waiter.join().expect("waiter");
+
+        // Raising the limit lets more transfers run at the same time.
+        limiter.set_limit(4);
+        assert_eq!(limiter.limit(), 4);
+        limiter.release();
+        limiter.release();
     }
 }

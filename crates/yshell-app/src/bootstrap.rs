@@ -34,9 +34,9 @@ pub(crate) mod generated_ui {
 }
 
 use generated_ui::{
-    AuthKeyOption, AuthKeyboardPrompt, HostKeyEntry, HostKeyGroup, LocalRow, MainWindow, Palette,
-    PanelFrameData, PrivateKeyRow, ProxyProfileOption, ProxyRow, QuickConnectRow, QuickLinkRow,
-    SessionTreeRow, SftpCrumb, SftpPaneData, SftpRow, SftpTransferRow, SplitHandleData,
+    AuthKeyOption, AuthKeyboardPrompt, FileCrumb, FileRow, HostKeyEntry, HostKeyGroup, MainWindow,
+    Palette, PanelFrameData, PrivateKeyRow, ProxyProfileOption, ProxyRow, QuickConnectRow,
+    QuickLinkRow, SessionTreeRow, SftpPaneData, SftpTransferRow, SplitHandleData,
     TerminalScrollInfo, Theme, ThemeManagerRow, TriStateField, TunnelRow, WorkspacePaneLeaf,
     WorkspaceSplitter, WorkspaceTab,
 };
@@ -2084,6 +2084,25 @@ pub(crate) fn wire_callbacks(
         }
     });
 
+    // 双击远端行：按行号直接进入（`..` 行回到上级、目录进入、文件远程编辑），
+    // 不要求用户先选中该行。
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_activate_sftp_row(move |index| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let result = runtime_ref.borrow_mut().activate_sftp_row(index);
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not open the remote entry.", &error),
+        }
+    });
+
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
     window.on_sort_sftp(move |column| {
@@ -3407,6 +3426,36 @@ pub(crate) fn wire_callbacks(
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
     let surface = surface_source.clone();
+    window.on_update_settings_sftp_max_parallel_transfers(move |value| {
+        if let Some(window) = weak.upgrade() {
+            let projection = runtime_ref
+                .borrow_mut()
+                .update_settings_sftp_max_parallel_transfers(value.as_ref());
+            apply_projection(&window, &projection);
+            surface.refresh(&window);
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_save_settings_sftp(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let result = runtime_ref.borrow_mut().save_settings_sftp();
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not save the SFTP settings.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
     window.on_set_ui_language(move |value| {
         let Some(window) = weak.upgrade() else {
             return;
@@ -4323,6 +4372,11 @@ fn wire_n1_sftp_callbacks(
     );
     wire_projection!(on_local_activate_row, |runtime, index: i32| runtime
         .activate_local_row(index));
+    wire_result!(
+        on_delete_local_selection,
+        "Could not delete the local entries.",
+        |runtime| runtime.delete_local_selection()
+    );
     wire_projection!(on_local_toggle_collapsed, |runtime| runtime
         .toggle_local_collapsed());
     wire_projection!(on_local_retry, |runtime| runtime.retry_local_pane());
@@ -4919,6 +4973,18 @@ fn dispatch_sftp_menu_action(
             );
             Ok(runtime.projection())
         }
+        "copy-local-path-current" => {
+            let path = runtime.local_pane.dir.display().to_string();
+            copy_text_to_clipboard(clipboard, &path);
+            runtime.set_status_kind(
+                "local-copied-path",
+                format!("Copied `{path}`."),
+                path,
+                String::new(),
+            );
+            Ok(runtime.projection())
+        }
+        "delete-local-selection" => runtime.delete_local_selection(),
         "copy-path-current" => {
             copy_text_to_clipboard(clipboard, &runtime.sftp_path);
             let path = runtime.sftp_path.clone();
@@ -5398,8 +5464,10 @@ fn handle_terminal_key(
         .send_active_terminal_key(text, ctrl, alt, shift, meta)
 }
 
-fn local_row_from(row: &crate::local_fs::LocalRowData) -> LocalRow {
-    LocalRow {
+/// Local and remote rows share one Slint model (`FileRow`), so one converter
+/// serves both panes.
+fn file_row_from(row: &crate::sftp_view::FileRowData) -> FileRow {
+    FileRow {
         name: row.name.clone().into(),
         path_text: row.path_text.clone().into(),
         kind_text: row.kind_text.clone().into(),
@@ -5410,10 +5478,12 @@ fn local_row_from(row: &crate::local_fs::LocalRowData) -> LocalRow {
         is_symlink: row.is_symlink,
         is_parent: row.is_parent,
         selected: row.selected,
+        name_head: row.name_head.clone().into(),
+        name_tail: row.name_tail.clone().into(),
     }
 }
 
-fn local_row_matches(current: &LocalRow, next: &crate::local_fs::LocalRowData) -> bool {
+fn file_row_matches(current: &FileRow, next: &crate::sftp_view::FileRowData) -> bool {
     current.name.as_str() == next.name
         && current.path_text.as_str() == next.path_text
         && current.size_text.as_str() == next.size_text
@@ -5423,6 +5493,8 @@ fn local_row_matches(current: &LocalRow, next: &crate::local_fs::LocalRowData) -
         && current.is_symlink == next.is_symlink
         && current.is_parent == next.is_parent
         && current.selected == next.selected
+        && current.name_head.as_str() == next.name_head
+        && current.name_tail.as_str() == next.name_tail
 }
 
 fn set_local_rows_if_changed(window: &MainWindow, rows: &[crate::local_fs::LocalRowData]) {
@@ -5431,12 +5503,12 @@ fn set_local_rows_if_changed(window: &MainWindow, rows: &[crate::local_fs::Local
         && current
             .iter()
             .zip(rows.iter())
-            .all(|(current, next)| local_row_matches(&current, next))
+            .all(|(current, next)| file_row_matches(&current, next))
     {
         return;
     }
     window.set_local_rows(ModelRc::new(VecModel::from(
-        rows.iter().map(local_row_from).collect::<Vec<_>>(),
+        rows.iter().map(file_row_from).collect::<Vec<_>>(),
     )));
 }
 
@@ -5532,22 +5604,8 @@ fn set_tunnel_rows_if_changed(window: &MainWindow, rows: &[TunnelRowData]) {
     )));
 }
 
-fn sftp_row_from(row: &SftpRowData) -> SftpRow {
-    SftpRow {
-        name: row.name.clone().into(),
-        path_text: row.path_text.clone().into(),
-        kind_text: row.kind_text.clone().into(),
-        size_text: row.size_text.clone().into(),
-        modified_text: row.modified_text.clone().into(),
-        permissions_text: row.permissions_text.clone().into(),
-        is_dir: row.is_dir,
-        is_symlink: row.is_symlink,
-        selected: row.selected,
-    }
-}
-
-fn sftp_crumb_from(crumb: &SftpCrumbData) -> SftpCrumb {
-    SftpCrumb {
+fn sftp_crumb_from(crumb: &SftpCrumbData) -> FileCrumb {
+    FileCrumb {
         label: crumb.label.clone().into(),
         path: crumb.path.clone().into(),
     }
@@ -5557,7 +5615,7 @@ fn sftp_pane_data_from(pane: &crate::runtime::SftpPaneProjection) -> SftpPaneDat
     SftpPaneData {
         path_text: pane.path_text.clone().into(),
         rows: ModelRc::new(VecModel::from(
-            pane.rows.iter().map(sftp_row_from).collect::<Vec<_>>(),
+            pane.rows.iter().map(file_row_from).collect::<Vec<_>>(),
         )),
         crumbs: ModelRc::new(VecModel::from(
             pane.crumbs.iter().map(sftp_crumb_from).collect::<Vec<_>>(),
@@ -5576,10 +5634,10 @@ fn sftp_pane_data_from(pane: &crate::runtime::SftpPaneProjection) -> SftpPaneDat
         remote_edit_active: pane.remote_edit_active,
         remote_edit_text: pane.remote_edit_text.clone().into(),
         local_rows: ModelRc::new(VecModel::from(
-            pane.local_rows
-                .iter()
-                .map(local_row_from)
-                .collect::<Vec<_>>(),
+            pane.local_rows.iter().map(file_row_from).collect::<Vec<_>>(),
+        )),
+        local_crumbs: ModelRc::new(VecModel::from(
+            pane.local_crumbs.iter().map(sftp_crumb_from).collect::<Vec<_>>(),
         )),
         local_path_text: pane.local_path_text.clone().into(),
         local_sort_column_text: pane.local_sort_column_text.clone().into(),
@@ -5599,18 +5657,7 @@ fn sftp_pane_data_from(pane: &crate::runtime::SftpPaneProjection) -> SftpPaneDat
     }
 }
 
-fn sftp_row_matches(current: &SftpRow, next: &SftpRowData) -> bool {
-    current.name.as_str() == next.name
-        && current.kind_text.as_str() == next.kind_text
-        && current.size_text.as_str() == next.size_text
-        && current.modified_text.as_str() == next.modified_text
-        && current.permissions_text.as_str() == next.permissions_text
-        && current.is_dir == next.is_dir
-        && current.is_symlink == next.is_symlink
-        && current.selected == next.selected
-}
-
-fn sftp_crumb_matches(current: &SftpCrumb, next: &SftpCrumbData) -> bool {
+fn sftp_crumb_matches(current: &FileCrumb, next: &SftpCrumbData) -> bool {
     current.label.as_str() == next.label && current.path.as_str() == next.path
 }
 
@@ -5623,12 +5670,12 @@ fn set_sftp_rows_if_changed(window: &MainWindow, rows: &[SftpRowData]) {
         && current
             .iter()
             .zip(rows)
-            .all(|(current, next)| sftp_row_matches(&current, next));
+            .all(|(current, next)| file_row_matches(&current, next));
     if unchanged {
         return;
     }
     window.set_sftp_rows(ModelRc::new(VecModel::from(
-        rows.iter().map(sftp_row_from).collect::<Vec<_>>(),
+        rows.iter().map(file_row_from).collect::<Vec<_>>(),
     )));
 }
 
@@ -5643,6 +5690,22 @@ fn set_sftp_crumbs_if_changed(window: &MainWindow, crumbs: &[SftpCrumbData]) {
         return;
     }
     window.set_sftp_crumbs(ModelRc::new(VecModel::from(
+        crumbs.iter().map(sftp_crumb_from).collect::<Vec<_>>(),
+    )));
+}
+
+/// The local pane's breadcrumb segments (same shape as the remote ones).
+fn set_local_crumbs_if_changed(window: &MainWindow, crumbs: &[SftpCrumbData]) {
+    let current = window.get_local_crumbs();
+    let unchanged = current.row_count() == crumbs.len()
+        && current
+            .iter()
+            .zip(crumbs)
+            .all(|(current, next)| sftp_crumb_matches(&current, next));
+    if unchanged {
+        return;
+    }
+    window.set_local_crumbs(ModelRc::new(VecModel::from(
         crumbs.iter().map(sftp_crumb_from).collect::<Vec<_>>(),
     )));
 }
@@ -6443,6 +6506,12 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_settings_scrollback_max_cells_text(
         projection.settings_scrollback_max_cells_text.clone().into(),
     );
+    window.set_settings_sftp_max_parallel_transfers_text(
+        projection
+            .settings_sftp_max_parallel_transfers_text
+            .clone()
+            .into(),
+    );
     window.set_settings_language_text(projection.settings_language_text.clone().into());
     window.set_settings_debug_logging_enabled(projection.settings_debug_logging_enabled);
     window.set_settings_confirm_close_session(projection.settings_confirm_close_session);
@@ -6876,6 +6945,7 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_transfer_queue_empty(projection.transfer_queue_empty);
     // N1 Phase 2：本地栏 / 队列抽屉 / 冲突 / 属性 / 剪贴板。
     set_local_rows_if_changed(window, &projection.local_rows);
+    set_local_crumbs_if_changed(window, &projection.local_crumbs);
     window.set_local_path_text(projection.local_path_text.clone().into());
     window.set_local_sort_column_text(projection.local_sort_column_text.clone().into());
     window.set_local_sort_ascending(projection.local_sort_ascending);

@@ -162,6 +162,10 @@ impl RealSftpBackend {
                     .sftp;
                 run(sftp)
             };
+            // SFTP runs the session in blocking mode; an interactive shell on
+            // the same transport needs the non-blocking mode back, otherwise
+            // its polling read blocks and the session is reported as dropped.
+            self.restore_interactive_mode();
             match result {
                 Err(error)
                     if !attempted_reconnect && matches!(error.kind, SftpErrorKind::Backend) =>
@@ -172,6 +176,13 @@ impl RealSftpBackend {
                 }
                 other => return other,
             }
+        }
+    }
+
+    /// Gives an attached interactive shell its non-blocking session mode back.
+    fn restore_interactive_mode(&self) {
+        if let SftpConnectionSource::Shared(transport) = &self.source {
+            transport.restore_interactive_mode();
         }
     }
 }

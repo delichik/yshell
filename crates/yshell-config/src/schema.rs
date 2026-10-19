@@ -554,6 +554,13 @@ pub struct UiProfile {
     /// Confirm before quitting the application (last window close / Quit).
     #[serde(default = "default_true")]
     pub confirm_quit_app: bool,
+    /// Maximum number of SFTP transfers (uploads and downloads) that run at
+    /// the same time.
+    ///
+    /// The transfer worker keeps this many jobs in flight; everything else
+    /// waits in the queue. `1` means "one transfer at a time".
+    #[serde(default = "default_sftp_max_parallel_transfers")]
+    pub sftp_max_parallel_transfers: usize,
 }
 
 impl Default for UiProfile {
@@ -567,8 +574,30 @@ impl Default for UiProfile {
             debug_logging: false,
             confirm_close_session: true,
             confirm_quit_app: true,
+            sftp_max_parallel_transfers: default_sftp_max_parallel_transfers(),
         }
     }
+}
+
+/// Default number of SFTP transfers that run at the same time.
+pub const fn default_sftp_max_parallel_transfers() -> usize {
+    4
+}
+
+/// Smallest accepted number of parallel SFTP transfers.
+pub const SFTP_MAX_PARALLEL_TRANSFERS_MIN: usize = 1;
+
+/// Largest accepted number of parallel SFTP transfers.
+pub const SFTP_MAX_PARALLEL_TRANSFERS_MAX: usize = 16;
+
+/// Clamps a configured parallel-transfer count into the supported range.
+#[must_use]
+pub fn clamp_sftp_max_parallel_transfers(value: usize) -> usize {
+    value
+        .clamp(
+            SFTP_MAX_PARALLEL_TRANSFERS_MIN,
+            SFTP_MAX_PARALLEL_TRANSFERS_MAX,
+        )
 }
 
 fn default_ui_language() -> String {
@@ -1024,6 +1053,8 @@ impl ConfigDocument {
 
         sanitize_terminal_colors(&mut self.terminal, "terminal", &mut warnings);
         sanitize_terminal_fonts(&mut self.terminal, "terminal", &mut warnings);
+        self.ui.sftp_max_parallel_transfers =
+            clamp_sftp_max_parallel_transfers(self.ui.sftp_max_parallel_transfers);
         for folder in &mut self.folders {
             let prefix = format!("folders[{}]", folder.id);
             sanitize_folder(folder, &prefix, &mut warnings);

@@ -75,6 +75,7 @@ export component WorkspaceTabBar inherits Rectangle {
                                 tab-logging: tab.logging;
                                 tab-sync-role-text: tab.sync_role_text;
                                 tab-unread: tab.unread;
+                                connected: tab.connected;
                                 drag-enabled: true;
                                 drag-payload: root.drag-tab-transfer(tab.id);
                                 show-divider: i > 0 && !tab.active && !root.tabs[i - 1].active;

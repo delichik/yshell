@@ -24,8 +24,8 @@ import { MenuEntry, MenuPopup } from "menu_popup.slint";
 import { PanelFrame, PanelSplitHandle } from "panel_frame.slint";
 import { SessionSidebarContent, SessionSidebarHandle, SessionSidebarRail } from "session_sidebar.slint";
 import { SessionTreeRow } from "session_tree.slint";
-import { LocalRow } from "local_pane.slint";
-import { LocalFilesSection, SftpCrumb, SftpPanel, SftpRow, SftpTransferRow } from "sftp_panel.slint";
+import { FileCrumb, FilePane, FileRow, ListScrollBar } from "file_pane.slint";
+import { SftpPanel, SftpTransferRow } from "sftp_panel.slint";
 import { TunnelPanel, TunnelRow } from "tunnel_panel.slint";
 import { TransferQueue } from "transfer_queue.slint";
 
@@ -196,8 +196,8 @@ export component ToolDock inherits Rectangle {
     callback transfer-open-sftp-drawer();
 
     // ---- N1：SftpPanel 投影透传（面板壳只提供弹性高度与标题条）--------------
-    in property <[SftpRow]> sftp-rows: [];
-    in property <[SftpCrumb]> sftp-crumbs: [];
+    in property <[FileRow]> sftp-rows: [];
+    in property <[FileCrumb]> sftp-crumbs: [];
     in property <int> sftp-selected-index: -1;
     in property <string> sftp-sort-column-text: "name";
     in property <bool> sftp-sort-ascending: true;
@@ -212,7 +212,8 @@ export component ToolDock inherits Rectangle {
     in property <bool> sftp-remote-edit-active: false;
     in property <string> sftp-remote-edit-text: "";
     in-out property <string> sftp-path-text: "/";
-    in property <[LocalRow]> local-rows: [];
+    in property <[FileRow]> local-rows: [];
+    in property <[FileCrumb]> local-crumbs: [];
     in property <string> local-path-text: "/";
     in property <bool> local-show-hidden: false;
     in property <string> local-sort-column-text: "name";
@@ -458,11 +459,13 @@ export component ToolDock inherits Rectangle {
         collapse-toggled() => { root.panel-collapse-requested("local"); }
         hide-requested() => { root.panel-hide-requested("local"); }
 
-        LocalFilesSection {
+        FilePane {
             width: parent.width;
             height: parent.height;
             rows: root.local-rows;
+            crumbs: root.local-crumbs;
             path-text: root.local-path-text;
+            path-placeholder-text: "/local/path";
             show-hidden: root.local-show-hidden;
             sort-column: root.local-sort-column-text;
             sort-ascending: root.local-sort-ascending;
@@ -477,8 +480,7 @@ export component ToolDock inherits Rectangle {
             toggle-enabled: false;
             title-text: "";
             selected-name-text: root.local-selected-name-text;
-            selection-key: root.local-selection-key;
-            up() => { root.local-up(); }
+            show-home-button: true;
             home() => { root.local-home(); }
             refresh() => { root.local-refresh(); }
             open-path(path) => { root.local-open-path(path); }
@@ -489,7 +491,7 @@ export component ToolDock inherits Rectangle {
             context-menu-requested(index, x, y) => { root.local-context-menu-requested(index, x, y); }
             retry() => { root.local-retry(); }
             drag-payload(key) => { return root.drag-local-transfer(key); }
-            drop-received(data, action) => { root.drop-on-local(data, action); }
+            drop-on-blank(data, action) => { root.drop-on-local(data, action); }
             toggle-collapsed() => { }
             focus-requested() => { }
         }
@@ -527,6 +529,7 @@ export component ToolDock inherits Rectangle {
 
         rows: root.sftp-rows;
             crumbs: root.sftp-crumbs;
+            local-crumbs: root.local-crumbs;
             selected-index: root.sftp-selected-index;
             sort-column: root.sftp-sort-column-text;
             sort-ascending: root.sftp-sort-ascending;

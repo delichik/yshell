@@ -58,6 +58,7 @@ pub(crate) use connection::PendingHostKeyPrompt;
 pub(crate) use connection::PendingPasswordAuthMethod;
 pub(crate) use connection::PendingPasswordPrompt;
 pub(crate) use local_pane::LocalPaneState;
+pub(crate) use local_pane::local_crumbs_for;
 pub(crate) use sessions::collect_session_inventory_lines;
 pub(crate) use sessions::find_session_folder_id;
 pub use sessions::SessionTreeRow;
@@ -69,6 +70,7 @@ pub(crate) use sftp::normalize_remote_path;
 pub(crate) use sftp::parent_remote_path;
 pub(crate) use sftp::parse_sftp_permissions;
 pub(crate) use sftp::LiveSftpClient;
+pub use sftp::FileCrumbData;
 pub use sftp::SftpCrumbData;
 pub(crate) use sftp::SftpListingState;
 pub use sftp::SftpPaneProjection;
@@ -186,6 +188,7 @@ impl AppRuntime {
             let _ = config_store.save(&document);
         }
         let terminal = document.terminal.clone();
+        let sftp_max_parallel_transfers = document.ui.sftp_max_parallel_transfers;
         let remembered_local_directory = document.ui.local_directory.clone();
         let default_local_dir = remembered_local_directory
             .as_deref()
@@ -244,6 +247,7 @@ impl AppRuntime {
             status_kind_source: String::new(),
             settings_scrollback_lines_text: terminal.scrollback_lines.to_string(),
             settings_scrollback_max_cells_text: terminal.scrollback_max_cells.to_string(),
+            settings_sftp_max_parallel_transfers_text: sftp_max_parallel_transfers.to_string(),
             settings_terminal_status: SettingsTerminalStatus::Hint,
             terminal_clipboard: String::new(),
             terminal_search_query: String::new(),
@@ -584,6 +588,8 @@ pub struct AppRuntime {
     pub(crate) status_kind_source: String,
     pub(crate) settings_scrollback_lines_text: String,
     pub(crate) settings_scrollback_max_cells_text: String,
+    /// 设置页里的「SFTP 上传/下载最大并行数」（文本形式，便于直接编辑）。
+    pub(crate) settings_sftp_max_parallel_transfers_text: String,
     pub(crate) settings_terminal_status: SettingsTerminalStatus,
     pub(crate) terminal_clipboard: String,
     pub(crate) terminal_search_query: String,

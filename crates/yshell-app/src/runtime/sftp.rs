@@ -7,8 +7,8 @@ use super::*;
 use crate::{
     error::AppError, error::AppResult, local_fs::LocalRowData, sftp_view::format_sftp_modified,
     sftp_view::format_sftp_permissions, sftp_view::format_sftp_permissions_octal,
-    sftp_view::format_sftp_size, sftp_view::sftp_kind_text, sftp_view::visible_entries,
-    sftp_view::SftpSortColumn,
+    sftp_view::format_sftp_size, sftp_view::sftp_kind_text, sftp_view::split_file_name,
+    sftp_view::visible_entries, sftp_view::FileRowData, sftp_view::SftpSortColumn,
 };
 use yshell_sftp::{DirectoryListing, FsEntry, FsEntryKind, RealSftpBackend, SftpClient};
 
@@ -406,14 +406,23 @@ impl AppRuntime {
             self.sftp_selection_anchor = None;
             return self.projection();
         }
+        let offset = i32::try_from(self.sftp_row_offset()).unwrap_or(0);
+        // The synthetic `..` row is navigation, not an operation target: it
+        // clears the selection instead of adding one (same as the local pane).
+        if index < offset {
+            self.sftp_selected_index = None;
+            self.sftp_selection.clear();
+            self.sftp_selection_anchor = None;
+            return self.projection();
+        }
         let visible = self.visible_sftp_entries();
-        let Ok(row_index) = usize::try_from(index) else {
+        let Ok(row_index) = usize::try_from(index - offset) else {
             return self.projection();
         };
         let Some(entry) = visible.get(row_index).cloned() else {
             return self.projection();
         };
-        self.sftp_selected_index = Some(row_index);
+        self.sftp_selected_index = Some(row_index + offset as usize);
         let path = entry.path.clone();
         if shift {
             if let Some(anchor) = self.sftp_selection_anchor.clone() {
@@ -541,6 +550,29 @@ impl AppRuntime {
         self.edit_sftp_selected()
     }
 
+    /// Double click on a remote row.
+    ///
+    /// The row index is resolved directly instead of going through the
+    /// selection, so a double click enters a folder right away — the user
+    /// does not have to select it first. The synthetic `..` row navigates up.
+    pub fn activate_sftp_row(&mut self, index: i32) -> AppResult<AppProjection> {
+        let offset = self.sftp_row_offset();
+        let Ok(row_index) = usize::try_from(index) else {
+            return Ok(self.projection());
+        };
+        if row_index < offset {
+            return self.open_sftp_parent();
+        }
+        let Some(entry) = self.sftp_visible_entry_at(index) else {
+            return Ok(self.projection());
+        };
+        if matches!(entry.kind, FsEntryKind::Directory) {
+            return self.open_sftp_path(&entry.path);
+        }
+        self.sftp_remote_target = entry.path;
+        self.start_sftp_remote_edit()
+    }
+
     pub fn sort_sftp_by(&mut self, column: &str) -> AppProjection {
         let Some(column) = SftpSortColumn::from_label(column) else {
             let column_text = column.trim().to_owned();
@@ -625,33 +657,53 @@ impl AppRuntime {
         )
     }
 
+    /// Number of rows that sit in front of the real entries: the synthetic
+    /// `..` row exists whenever the remote path is not the root.
+    pub(crate) fn sftp_row_offset(&self) -> usize {
+        usize::from(sftp_parent_row(&self.sftp_path).is_some())
+    }
+
+    /// The synthetic `..` row of the remote pane (`None` at the remote root).
+    pub(crate) fn sftp_parent_row(&self) -> Option<SftpRowData> {
+        sftp_parent_row(&self.sftp_path)
+    }
+
+    /// The entry the focused row points at (`None` for the `..` row).
     pub(crate) fn selected_sftp_entry(&self) -> Option<FsEntry> {
         let index = self.sftp_selected_index?;
-        self.visible_sftp_entries().into_iter().nth(index)
+        let entry_index = index.checked_sub(self.sftp_row_offset())?;
+        self.visible_sftp_entries().into_iter().nth(entry_index)
     }
 
     /// Visible entry at a row index (drop targets resolve rows through this).
     pub(crate) fn sftp_visible_entry_at(&self, index: i32) -> Option<FsEntry> {
         let index = usize::try_from(index).ok()?;
-        self.visible_sftp_entries().into_iter().nth(index)
+        let entry_index = index.checked_sub(self.sftp_row_offset())?;
+        self.visible_sftp_entries().into_iter().nth(entry_index)
     }
 
     pub(crate) fn reconcile_sftp_selection(&mut self, preferred_path: Option<&str>) {
         let visible = self.visible_sftp_entries();
-        self.sftp_selected_index =
-            preferred_path.and_then(|path| visible.iter().position(|entry| entry.path == path));
+        let offset = self.sftp_row_offset();
+        self.sftp_selected_index = preferred_path.and_then(|path| {
+            visible
+                .iter()
+                .position(|entry| entry.path == path)
+                .map(|index| index + offset)
+        });
     }
 
     pub(crate) fn reselect_sftp_path(&mut self, path: &str) {
         if path.is_empty() {
             return;
         }
+        let offset = self.sftp_row_offset();
         if let Some(index) = self
             .visible_sftp_entries()
             .iter()
             .position(|entry| entry.path == path)
         {
-            self.sftp_selected_index = Some(index);
+            self.sftp_selected_index = Some(index + offset);
         }
     }
 
@@ -670,6 +722,7 @@ impl AppRuntime {
             self.sftp_sort_column,
             self.sftp_sort_ascending,
             &self.sftp_selection,
+            self.sftp_parent_row(),
         )
     }
 
@@ -923,27 +976,23 @@ impl AppRuntime {
 }
 
 /// One visible SFTP file-list row, ready for the Slint model.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SftpRowData {
-    pub name: String,
-    /// Absolute remote path (drag payloads / path actions).
-    pub path_text: String,
-    pub kind_text: String,
-    pub size_text: String,
-    pub modified_text: String,
-    pub permissions_text: String,
-    pub is_dir: bool,
-    pub is_symlink: bool,
-    /// Multi-select highlight (the runtime owns the selection set).
-    pub selected: bool,
-}
+///
+/// The remote pane shares the row shape with the local pane (and therefore
+/// the same Slint component).
+pub type SftpRowData = FileRowData;
 
-/// One clickable breadcrumb of the current remote path.
+/// One clickable breadcrumb of the current path.
+///
+/// The local and the remote pane share the segmented path bar, so both sides
+/// produce the very same shape.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SftpCrumbData {
+pub struct FileCrumbData {
     pub label: String,
     pub path: String,
 }
+
+/// The remote pane's breadcrumb rows (same shape as the local ones).
+pub type SftpCrumbData = FileCrumbData;
 
 fn sftp_rows_for(
     entries: &[FsEntry],
@@ -951,15 +1000,23 @@ fn sftp_rows_for(
     sort_column: SftpSortColumn,
     sort_ascending: bool,
     selection: &BTreeSet<String>,
+    parent: Option<SftpRowData>,
 ) -> Vec<SftpRowData> {
-    visible_entries(entries, show_hidden, sort_column, sort_ascending)
-        .iter()
-        .map(|entry| sftp_row_from(entry, selection.contains(&entry.path)))
-        .collect()
+    let mut rows = Vec::new();
+    if let Some(parent) = parent {
+        rows.push(parent);
+    }
+    rows.extend(
+        visible_entries(entries, show_hidden, sort_column, sort_ascending)
+            .iter()
+            .map(|entry| sftp_row_from(entry, selection.contains(&entry.path))),
+    );
+    rows
 }
 
 fn sftp_row_from(entry: &FsEntry, selected: bool) -> SftpRowData {
     let is_dir = matches!(entry.kind, FsEntryKind::Directory);
+    let (name_head, name_tail) = split_file_name(&entry.name);
     SftpRowData {
         name: entry.name.clone(),
         path_text: entry.path.clone(),
@@ -973,8 +1030,33 @@ fn sftp_row_from(entry: &FsEntry, selected: bool) -> SftpRowData {
         permissions_text: format_sftp_permissions(entry.kind, entry.permissions),
         is_dir,
         is_symlink: matches!(entry.kind, FsEntryKind::Symlink),
+        is_parent: false,
         selected,
+        name_head,
+        name_tail,
     }
+}
+
+/// The synthetic `..` row of the remote pane (`None` at the remote root).
+pub(crate) fn sftp_parent_row(path: &str) -> Option<SftpRowData> {
+    let parent = parent_remote_path(path);
+    if parent == path {
+        return None;
+    }
+    Some(SftpRowData {
+        name: "..".to_owned(),
+        path_text: parent,
+        kind_text: "Directory".to_owned(),
+        size_text: String::new(),
+        modified_text: String::new(),
+        permissions_text: String::new(),
+        is_dir: true,
+        is_symlink: false,
+        is_parent: true,
+        selected: false,
+        name_head: String::new(),
+        name_tail: "..".to_owned(),
+    })
 }
 
 fn sftp_crumbs_for(path: &str) -> Vec<SftpCrumbData> {
@@ -1015,6 +1097,7 @@ pub struct SftpPaneProjection {
     pub remote_edit_active: bool,
     pub remote_edit_text: String,
     pub local_rows: Vec<LocalRowData>,
+    pub local_crumbs: Vec<FileCrumbData>,
     pub local_path_text: String,
     pub local_sort_column_text: String,
     pub local_sort_ascending: bool,
@@ -1052,6 +1135,7 @@ impl Default for SftpPaneProjection {
             remote_edit_active: false,
             remote_edit_text: String::new(),
             local_rows: Vec::new(),
+            local_crumbs: Vec::new(),
             local_path_text: "/".to_owned(),
             local_sort_column_text: "name".to_owned(),
             local_sort_ascending: true,
@@ -1076,12 +1160,14 @@ impl SftpPaneProjection {
     /// also used for the focused pane, so split panes never need to share the
     /// mutable `sftp_*` mirrors.
     pub(crate) fn from_state(state: &SftpTabState, session_connected: bool) -> Self {
+        let parent_row = sftp_parent_row(&state.path);
         let rows = sftp_rows_for(
             &state.entries,
             state.show_hidden,
             state.sort_column,
             state.sort_ascending,
             &state.selection,
+            parent_row,
         );
         let visible = visible_entries(
             &state.entries,
@@ -1172,6 +1258,7 @@ impl SftpPaneProjection {
                 .map(|session| format!("{} → {}", session.remote_path, session.local_temp_path))
                 .unwrap_or_default(),
             local_rows,
+            local_crumbs: local_crumbs_for(&state.local.dir),
             local_path_text: state.local.dir.display().to_string(),
             local_sort_column_text: state.local.sort_column.label().to_ascii_lowercase(),
             local_sort_ascending: state.local.sort_ascending,

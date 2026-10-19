@@ -19,8 +19,8 @@ import { WorkspaceTab } from "workspace_tab_model.slint";
 import { WorkspaceTabBar } from "workspace_tab_bar.slint";
 import { WorkspacePaneLeaf, WorkspaceSplitter } from "workspace_pane_model.slint";
 import { QuickConnectPage, QuickConnectRow, QuickLinkRow } from "../pages/quick_connect.slint";
-import { SftpCrumb, SftpRow } from "sftp_panel.slint";
-import { LocalRow } from "local_pane.slint";
+import { SftpPanel } from "sftp_panel.slint";
+import { FileCrumb, FileRow } from "file_pane.slint";
 import { SftpTabPage } from "sftp_tab_page.slint";
 
 export { WorkspaceTab }
@@ -53,8 +53,8 @@ export component TerminalWorkspace inherits VerticalLayout {
     in-out property <bool> search-regex: false;
 
     // --- SFTP tab page projection (focused tab). -------------------------
-    in property <[SftpRow]> sftp-rows;
-    in property <[SftpCrumb]> sftp-crumbs;
+    in property <[FileRow]> sftp-rows;
+    in property <[FileCrumb]> sftp-crumbs;
     in property <int> sftp-selected-index: -1;
     in property <string> sftp-sort-column: "name";
     in property <bool> sftp-sort-ascending: true;
@@ -69,7 +69,8 @@ export component TerminalWorkspace inherits VerticalLayout {
     in property <bool> sftp-remote-edit-active: false;
     in property <string> sftp-remote-edit-text: "";
     in-out property <string> sftp-path-text: "/";
-    in property <[LocalRow]> sftp-local-rows;
+    in property <[FileRow]> sftp-local-rows;
+    in property <[FileCrumb]> sftp-local-crumbs;
     in property <string> sftp-local-path-text: "/";
     in property <bool> sftp-local-show-hidden: false;
     in property <string> sftp-local-sort-column: "name";
@@ -497,6 +498,7 @@ export component TerminalWorkspace inherits VerticalLayout {
                             remote-edit-text: root.sftp-remote-edit-text;
                             path-text <=> root.sftp-path-text;
                             local-rows: root.sftp-local-rows;
+                            local-crumbs: root.sftp-local-crumbs;
                             local-path-text: root.sftp-local-path-text;
                             local-show-hidden: root.sftp-local-show-hidden;
                             local-sort-column: root.sftp-local-sort-column;

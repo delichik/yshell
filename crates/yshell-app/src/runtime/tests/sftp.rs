@@ -215,22 +215,26 @@ fn sftp_selection_sorting_and_breadcrumbs_follow_visible_rows() {
     ];
 
     let initial = runtime.projection();
-    assert_eq!(initial.sftp_rows.len(), 4);
-    assert!(initial.sftp_rows[0].is_dir);
+    // Row 0 is the synthetic `..` row (the parent directory), the real
+    // entries follow — the same shape the local pane uses.
+    assert_eq!(initial.sftp_rows.len(), 5);
+    assert!(initial.sftp_rows[0].is_parent);
+    assert_eq!(initial.sftp_rows[0].name, "..");
     assert!(initial.sftp_rows[1].is_dir);
+    assert!(initial.sftp_rows[2].is_dir);
     assert_eq!(initial.sftp_selected_index, -1);
     assert_eq!(initial.sftp_item_summary_text, "4 items · 2 dirs");
     assert_eq!(initial.sftp_sort_column_text, "name");
     assert!(initial.sftp_sort_ascending);
     assert_eq!(initial.sftp_empty_text, "");
-    assert_eq!(initial.sftp_rows[0].size_text, "");
-    assert_eq!(initial.sftp_rows[0].permissions_text, "drwxr-xr-x");
-    assert_eq!(initial.sftp_rows[2].kind_text, "File");
-    assert_eq!(initial.sftp_rows[2].size_text, "1.0 KB");
-    assert_eq!(initial.sftp_rows[2].modified_text, "2023-11-14 22:13");
+    assert_eq!(initial.sftp_rows[1].size_text, "");
+    assert_eq!(initial.sftp_rows[1].permissions_text, "drwxr-xr-x");
+    assert_eq!(initial.sftp_rows[3].kind_text, "File");
+    assert_eq!(initial.sftp_rows[3].size_text, "1.0 KB");
+    assert_eq!(initial.sftp_rows[3].modified_text, "2023-11-14 22:13");
 
-    let selected = runtime.select_sftp_entry(1);
-    assert_eq!(selected.sftp_selected_index, 1);
+    let selected = runtime.select_sftp_entry(2);
+    assert_eq!(selected.sftp_selected_index, 2);
     assert_eq!(selected.sftp_selected_name_text, "zeta");
     assert_eq!(selected.sftp_selected_path_text, "/demo/zeta");
     assert_eq!(selected.sftp_selected_permissions_text, "755");
@@ -239,7 +243,7 @@ fn sftp_selection_sorting_and_breadcrumbs_follow_visible_rows() {
     let sorted = runtime.sort_sftp_by("name");
     assert_eq!(sorted.sftp_sort_column_text, "name");
     assert!(!sorted.sftp_sort_ascending);
-    assert_eq!(sorted.sftp_selected_index, 0);
+    assert_eq!(sorted.sftp_selected_index, 1);
     assert_eq!(sorted.sftp_selected_name_text, "zeta");
 
     // Size sorting keeps directories first and preserves the selection.
@@ -252,9 +256,9 @@ fn sftp_selection_sorting_and_breadcrumbs_follow_visible_rows() {
             .iter()
             .map(|row| row.name.as_str())
             .collect::<Vec<_>>(),
-        vec!["sub", "zeta", "a.txt", "b.txt"]
+        vec!["..", "sub", "zeta", "a.txt", "b.txt"]
     );
-    assert_eq!(by_size.sftp_selected_index, 1);
+    assert_eq!(by_size.sftp_selected_index, 2);
     assert_eq!(by_size.sftp_selected_name_text, "zeta");
     let bogus = runtime.sort_sftp_by("bogus").sftp_sort_column_text;
     assert_eq!(bogus, "size");
@@ -270,9 +274,9 @@ fn sftp_selection_sorting_and_breadcrumbs_follow_visible_rows() {
         ("demo", "/demo")
     );
 
-    // Activating a directory navigates into it even without a live session.
-    runtime.select_sftp_entry(0);
-    let activated = runtime.activate_sftp_entry().expect("activate directory");
+    // A double click on the row enters the directory directly — the row does
+    // not have to be selected first.
+    let activated = runtime.activate_sftp_row(1).expect("activate directory");
     assert_eq!(activated.sftp_path_text, "/demo/sub");
     assert_eq!(activated.sftp_crumbs.len(), 3);
 
@@ -290,6 +294,35 @@ fn sftp_selection_sorting_and_breadcrumbs_follow_visible_rows() {
 }
 
 #[test]
+fn sftp_parent_row_navigates_up_without_selecting_an_entry() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    runtime.sftp_path = "/demo/logs".to_owned();
+    runtime.sftp_entries = vec![demo_file("/demo/logs/a.txt", 10)];
+
+    // The `..` row sits at index 0 and is not an operation target.
+    let rows = runtime.projection().sftp_rows;
+    assert_eq!(rows.len(), 2);
+    assert!(rows[0].is_parent);
+    assert_eq!(rows[0].path_text, "/demo");
+
+    // Selecting it clears the selection instead of picking an entry.
+    let selected = runtime.select_sftp_entry(0);
+    assert_eq!(selected.sftp_selected_index, -1);
+    assert_eq!(selected.sftp_selected_name_text, "");
+
+    // Activating it walks one level up.
+    let parent = runtime.activate_sftp_row(0).expect("activate parent row");
+    assert_eq!(parent.sftp_path_text, "/demo");
+
+    // At the remote root there is no `..` row at all.
+    runtime.sftp_path = "/".to_owned();
+    let root_rows = runtime.projection().sftp_rows;
+    assert_eq!(root_rows.len(), 1);
+    assert!(!root_rows[0].is_parent);
+}
+
+#[test]
 fn sftp_hidden_toggle_filters_dotfiles_and_reports_empty_state() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
@@ -301,33 +334,35 @@ fn sftp_hidden_toggle_filters_dotfiles_and_reports_empty_state() {
 
     let hidden_off = runtime.projection();
     assert!(!hidden_off.sftp_show_hidden);
-    assert_eq!(hidden_off.sftp_rows.len(), 1);
-    assert_eq!(hidden_off.sftp_rows[0].name, "readme.txt");
+    assert_eq!(hidden_off.sftp_rows.len(), 2);
+    assert_eq!(hidden_off.sftp_rows[0].name, "..");
+    assert_eq!(hidden_off.sftp_rows[1].name, "readme.txt");
     assert_eq!(hidden_off.sftp_item_summary_text, "1 item · 0 dirs");
 
     let shown = runtime.toggle_sftp_hidden_files();
     assert!(shown.sftp_show_hidden);
     assert!(shown.status_text.contains("now shown"));
-    assert_eq!(shown.sftp_rows.len(), 2);
-    assert_eq!(shown.sftp_rows[0].name, ".secret");
+    assert_eq!(shown.sftp_rows.len(), 3);
+    assert_eq!(shown.sftp_rows[1].name, ".secret");
 
     // Selecting the visible dotfile and hiding hidden files clears it again.
-    runtime.select_sftp_entry(0);
+    runtime.select_sftp_entry(1);
     assert_eq!(runtime.projection().sftp_selected_name_text, ".secret");
     let rehidden = runtime.toggle_sftp_hidden_files();
     assert!(!rehidden.sftp_show_hidden);
     assert!(rehidden.status_text.contains("now hidden"));
     assert_eq!(rehidden.sftp_selected_index, -1);
-    assert_eq!(rehidden.sftp_rows.len(), 1);
+    assert_eq!(rehidden.sftp_rows.len(), 2);
 
     // A directory with only dotfiles explains why the list is empty.
     runtime.sftp_entries = vec![demo_file("/demo/.only", 1)];
     let empty = runtime.projection();
-    assert!(empty.sftp_rows.is_empty());
+    assert_eq!(empty.sftp_rows.len(), 1);
+    assert!(empty.sftp_rows[0].is_parent);
     assert!(empty.sftp_empty_text.contains("Enable Hidden"));
     runtime.toggle_sftp_hidden_files();
     let revealed = runtime.projection();
-    assert_eq!(revealed.sftp_rows.len(), 1);
+    assert_eq!(revealed.sftp_rows.len(), 2);
     assert!(revealed.sftp_empty_text.is_empty());
 }
 
@@ -346,7 +381,8 @@ fn sftp_selection_operations_assemble_existing_operation_inputs() {
         FsEntry::directory("/demo/sub"),
         demo_file("/demo/readme.txt", 2_048),
     ];
-    runtime.select_sftp_entry(1);
+    // Row 0 is the `..` marker, so the file lives at row index 2.
+    runtime.select_sftp_entry(2);
 
     let rename = runtime
         .rename_sftp_selected("renamed.txt")

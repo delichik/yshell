@@ -30,6 +30,7 @@ use yshell_sftp::FsEntryKind;
 
 use crate::sftp_view::{
     format_sftp_modified, format_sftp_permissions, format_sftp_size, sftp_kind_text,
+    split_file_name, FileRowData,
 };
 
 /// What a local entry is. Symlinks keep their own kind even when the target is
@@ -202,21 +203,12 @@ impl std::error::Error for LocalFsError {}
 /// One local file-list row, ready for the Slint model. The `..` marker row has
 /// `is_parent = true`, `is_dir = true` and an empty size/modified/permissions.
 ///
+/// The local and the remote pane share the same row shape (and the same Slint
+/// component), so the row model lives in [`crate::sftp_view::FileRowData`].
+///
 /// `selected` is filled in by the runtime (multi-select state), not by
 /// [`row_data`]: a raw listing has no selection.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LocalRowData {
-    pub name: String,
-    pub path_text: String,
-    pub kind_text: String,
-    pub size_text: String,
-    pub modified_text: String,
-    pub permissions_text: String,
-    pub is_dir: bool,
-    pub is_symlink: bool,
-    pub is_parent: bool,
-    pub selected: bool,
-}
+pub type LocalRowData = FileRowData;
 
 /// Options carried by the local pane session (path/sort/hidden are separate
 /// from the remote pane's state per the N1 design).
@@ -339,6 +331,7 @@ pub fn hidden_count(entries: &[LocalEntry]) -> usize {
 /// Builds one UI row from an entry.
 pub fn row_data(entry: &LocalEntry) -> LocalRowData {
     let is_dir = entry.kind.is_dir();
+    let (name_head, name_tail) = split_file_name(&entry.name);
     LocalRowData {
         name: entry.name.clone(),
         path_text: entry.path.display().to_string(),
@@ -356,6 +349,8 @@ pub fn row_data(entry: &LocalEntry) -> LocalRowData {
         // Multi-select state is applied by the runtime; a raw row starts
         // unselected.
         selected: false,
+        name_head,
+        name_tail,
     }
 }
 
@@ -372,6 +367,8 @@ pub fn parent_row_data(parent: &Path) -> LocalRowData {
         is_symlink: false,
         is_parent: true,
         selected: false,
+        name_head: String::new(),
+        name_tail: "..".to_owned(),
     }
 }
 

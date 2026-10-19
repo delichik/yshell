@@ -362,6 +362,9 @@ impl AppRuntime {
             logging_directory_display_text: self.logging_directory_display_text(),
             settings_scrollback_lines_text: self.settings_scrollback_lines_text.clone(),
             settings_scrollback_max_cells_text: self.settings_scrollback_max_cells_text.clone(),
+            settings_sftp_max_parallel_transfers_text: self
+                .settings_sftp_max_parallel_transfers_text
+                .clone(),
             settings_language_text: self.config_document.ui.language.clone(),
             settings_debug_logging_enabled: self.config_document.ui.debug_logging,
             settings_confirm_close_session: self.config_document.ui.confirm_close_session,
@@ -617,6 +620,7 @@ impl AppRuntime {
             // --- N1 Phase 2 -------------------------------------------------
             local_path_text: self.local_pane.dir.display().to_string(),
             local_rows,
+            local_crumbs: self.local_crumbs(),
             local_sort_column_text: self.local_pane.sort_column.id().to_owned(),
             local_sort_ascending: self.local_pane.sort_ascending,
             local_show_hidden: self.local_pane.show_hidden,
@@ -1675,6 +1679,8 @@ pub struct AppProjection {
     pub logging_directory_display_text: String,
     pub settings_scrollback_lines_text: String,
     pub settings_scrollback_max_cells_text: String,
+    /// Settings page field: max parallel SFTP transfers.
+    pub settings_sftp_max_parallel_transfers_text: String,
     /// UI language preference: `system` / `zh-CN` / `en-US`.
     pub settings_language_text: String,
     /// Whether process debug logs are written under `{config_dir}/logs`.
@@ -1956,6 +1962,8 @@ pub struct AppProjection {
     pub local_path_text: String,
     /// Local pane rows, including the leading `..` marker.
     pub local_rows: Vec<crate::local_fs::LocalRowData>,
+    /// Local pane breadcrumb segments (same shape as the remote ones).
+    pub local_crumbs: Vec<crate::runtime::FileCrumbData>,
     pub local_sort_column_text: String,
     pub local_sort_ascending: bool,
     pub local_show_hidden: bool,

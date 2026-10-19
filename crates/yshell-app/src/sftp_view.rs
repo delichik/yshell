@@ -11,6 +11,70 @@ use std::{
 
 use yshell_sftp::{FsEntry, FsEntryKind};
 
+/// One visible file-list row, ready for the Slint model.
+///
+/// The local pane and the remote pane share this shape (and therefore the
+/// same Slint component): the only difference between the two sides is which
+/// directory the `path_text` points at.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileRowData {
+    /// Full entry name (`..` for the synthetic parent row).
+    pub name: String,
+    /// Absolute path (drag payloads / path actions).
+    pub path_text: String,
+    pub kind_text: String,
+    pub size_text: String,
+    pub modified_text: String,
+    pub permissions_text: String,
+    pub is_dir: bool,
+    pub is_symlink: bool,
+    /// Synthetic `..` row: navigation to the parent directory, never a
+    /// selection or operation target.
+    pub is_parent: bool,
+    /// Multi-select highlight (the runtime owns the selection set).
+    pub selected: bool,
+    /// Name part that may be shortened when the column is narrow.
+    pub name_head: String,
+    /// Name part that always stays visible: the extension plus the three
+    /// characters right before it (the last three characters when the name
+    /// has no extension). Mirrors the macOS Finder column behaviour.
+    pub name_tail: String,
+}
+
+/// Splits a file name into the part that may be elided and the part that must
+/// always stay visible.
+///
+/// The tail keeps the extension plus the three characters right before it, or
+/// the last three characters when the name has no extension, so a narrow
+/// column still shows which file a row is about (macOS Finder rule).
+///
+/// ```
+/// # use yshell_app::sftp_view::split_file_name;
+/// assert_eq!(split_file_name("report.txt"), ("repo".to_owned(), "rt.txt".to_owned()));
+/// assert_eq!(split_file_name("Makefile"), ("Mak".to_owned(), "efile".to_owned()));
+/// ```
+#[must_use]
+pub fn split_file_name(name: &str) -> (String, String) {
+    let characters: Vec<char> = name.chars().collect();
+    // The extension is the last dot that is neither the first nor the last
+    // character: a leading dot marks a hidden file, not an extension.
+    let extension_start = characters
+        .iter()
+        .rposition(|character| *character == '.')
+        .filter(|index| *index > 0 && *index + 1 < characters.len());
+    let stem_length = extension_start.unwrap_or(characters.len());
+    let (stem, extension) = characters.split_at(stem_length);
+    if stem.len() > 3 {
+        let split = stem.len() - 3;
+        (
+            stem[..split].iter().collect(),
+            stem[split..].iter().chain(extension.iter()).collect(),
+        )
+    } else {
+        (String::new(), stem.iter().chain(extension.iter()).collect())
+    }
+}
+
 /// Sortable SFTP list columns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SftpSortColumn {
@@ -189,7 +253,7 @@ mod tests {
 
     use super::{
         format_sftp_modified, format_sftp_permissions, format_sftp_permissions_octal,
-        format_sftp_size, visible_entries, SftpSortColumn,
+        format_sftp_size, split_file_name, visible_entries, SftpSortColumn,
     };
 
     fn file(name: &str, size: u64, permissions: u32, modified: Option<u64>) -> FsEntry {
@@ -334,6 +398,36 @@ mod tests {
         assert_eq!(format_sftp_permissions(FsEntryKind::Other, 0), "----------");
         assert_eq!(format_sftp_permissions_octal(0o600), "600");
         assert_eq!(format_sftp_permissions_octal(0o100644 & 0o777), "644");
+    }
+
+    #[test]
+    fn file_names_keep_the_extension_and_three_leading_characters() {
+        assert_eq!(
+            split_file_name("report.txt"),
+            ("rep".to_owned(), "ort.txt".to_owned())
+        );
+        assert_eq!(
+            split_file_name("archive.tar.gz"),
+            ("archive.".to_owned(), "tar.gz".to_owned())
+        );
+        // No extension: the last three characters stay visible.
+        assert_eq!(
+            split_file_name("Makefile"),
+            ("Makef".to_owned(), "ile".to_owned())
+        );
+        // Short stems have no head at all.
+        assert_eq!(split_file_name("a.txt"), (String::new(), "a.txt".to_owned()));
+        assert_eq!(split_file_name("ab"), (String::new(), "ab".to_owned()));
+        // A leading dot is a hidden-file marker, not an extension.
+        assert_eq!(
+            split_file_name(".gitignore"),
+            (".gitign".to_owned(), "ore".to_owned())
+        );
+        // Multi-byte names keep their characters intact.
+        assert_eq!(
+            split_file_name("配置说明.md"),
+            ("配".to_owned(), "置说明.md".to_owned())
+        );
     }
 
     #[test]

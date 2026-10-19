@@ -81,13 +81,16 @@ impl AppRuntime {
         session_key: &str,
     ) -> AppResult<SessionPollOutcome> {
         // SFTP tabs have no shell channel; terminal polling must not classify
-        // their (intentionally empty) shell slot as a closed terminal.
+        // their (intentionally empty) shell slot as a closed terminal. Their
+        // SSH transport can still die though, so the transport state is
+        // checked separately (otherwise the pane kept showing a stale listing
+        // of a connection that was gone).
         if self
             .sessions
             .get(session_key)
             .is_some_and(SessionRuntime::is_sftp)
         {
-            return Ok(SessionPollOutcome::default());
+            return self.poll_sftp_transport_state(session_key);
         }
         let Some((previous_terminal, previous_state)) = self
             .sessions
@@ -160,6 +163,50 @@ impl AppRuntime {
         Ok(SessionPollOutcome {
             output_changed,
             state_changed,
+        })
+    }
+
+    /// Watches the SSH transport of an SFTP tab.
+    ///
+    /// SFTP tabs have no shell channel to poll, so a dropped connection used
+    /// to go unnoticed: the pane kept showing a stale listing and claimed to
+    /// be connected. The transport's own state is the only reliable signal.
+    fn poll_sftp_transport_state(
+        &mut self,
+        session_key: &str,
+    ) -> AppResult<SessionPollOutcome> {
+        let Some(runtime) = self.sessions.get(session_key) else {
+            return Ok(SessionPollOutcome::default());
+        };
+        let previous_state = runtime.state;
+        if previous_state != yshell_core::SessionState::Connected {
+            return Ok(SessionPollOutcome::default());
+        }
+        let transport_alive = runtime
+            .transport
+            .as_ref()
+            .map(yshell_ssh::SshTransport::is_connected)
+            .unwrap_or(false);
+        if transport_alive {
+            return Ok(SessionPollOutcome::default());
+        }
+        if let Some(runtime) = self.sessions.get_mut(session_key) {
+            runtime.set_state(yshell_core::SessionState::Disconnected);
+            runtime.log_runtime_event("SFTP transport closed while the app was polling.");
+        }
+        self.mark_sftp_tab_disconnected(session_key);
+        let sftp_status = self.sync_sftp_lifecycle_for_session(session_key, false);
+        if self.active_session_id.as_deref() == Some(session_key) {
+            self.set_status_kind(
+                "session-sftp-transport-closed",
+                format!("The SFTP connection was closed. {sftp_status}"),
+                String::new(),
+                String::new(),
+            );
+        }
+        Ok(SessionPollOutcome {
+            output_changed: false,
+            state_changed: true,
         })
     }
 

@@ -719,6 +719,36 @@ export global TextFormats {
         if kind == "sftp-deleted" {
             return @tr("MainWindow" => "Deleted `{0}` through SFTP.", param_1);
         }
+        if kind == "sftp-deleted-batch" {
+            return @tr("MainWindow" => "Deleted {0} remote entries.", param_1);
+        }
+        if kind == "sftp-delete-failed" {
+            return @tr("MainWindow" => "Deleted {0} remote entries, but some failed: {1}", param_1, param_2);
+        }
+        if kind == "session-sftp-transport-closed" {
+            return @tr("MainWindow" => "The SFTP connection was closed. {0}", param_1);
+        }
+        if kind == "sftp-chmod-failed" {
+            return @tr("MainWindow" => "Changed permissions on {0} remote entries, but some failed: {1}", param_1, param_2);
+        }
+        if kind == "local-deleted" {
+            return @tr("MainWindow" => "Deleted {0} local entries.", param_1);
+        }
+        if kind == "local-delete-failed" {
+            return @tr("MainWindow" => "Deleted {0} local entries, but some failed: {1}", param_1, param_2);
+        }
+        if kind == "local-delete-requires-selection" {
+            return @tr("MainWindow" => "Select local entries before deleting them.");
+        }
+        if kind == "local-copied-path" {
+            return @tr("MainWindow" => "Copied `{0}`.", param_1);
+        }
+        if kind == "settings-sftp-saved" {
+            return @tr("MainWindow" => "SFTP transfers now run {0} at a time.", param_1);
+        }
+        if kind == "settings-sftp-invalid-parallel-transfers" {
+            return @tr("MainWindow" => "The number of parallel SFTP transfers must be between 1 and 16.");
+        }
         if kind == "sftp-chmod-requires-selection" {
             return @tr("MainWindow" => "Select an SFTP entry before changing permissions.");
         }

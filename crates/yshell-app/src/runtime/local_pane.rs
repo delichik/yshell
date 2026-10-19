@@ -9,7 +9,7 @@
 
 use std::{
     collections::BTreeSet,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 
 use crate::local_fs::{
@@ -279,6 +279,72 @@ impl AppRuntime {
         local_rows_for(&self.local_pane)
     }
 
+    /// Breadcrumb segments of the local pane.
+    ///
+    /// The local and the remote pane share the same segmented path bar, so
+    /// the local side produces the very same shape as the remote one.
+    pub(crate) fn local_crumbs(&self) -> Vec<FileCrumbData> {
+        local_crumbs_for(&self.local_pane.dir)
+    }
+
+    /// Deletes the local selection (files and directories, recursively).
+    ///
+    /// The local pane had no delete entry before; the action is exposed by the
+    /// shared context menu and mirrors the remote delete semantics.
+    pub fn delete_local_selection(&mut self) -> AppResult<AppProjection> {
+        let paths = self.local_selected_paths();
+        if paths.is_empty() {
+            self.set_status_kind(
+                "local-delete-requires-selection",
+                "Select local entries before deleting them.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+            return Ok(self.projection());
+        }
+        let mut removed = 0usize;
+        let mut failures = Vec::new();
+        for path in &paths {
+            let result = if path.is_dir() {
+                std::fs::remove_dir_all(path)
+            } else {
+                std::fs::remove_file(path)
+            };
+            match result {
+                Ok(()) => removed += 1,
+                Err(error) => failures.push(format!("{}: {error}", path.display())),
+            }
+        }
+        self.local_pane.selected.clear();
+        self.local_pane.anchor = None;
+        // 刷新列表（这一步会改写状态栏，所以放在设置删除状态之前）。
+        let _ = self.refresh_local_pane();
+        if failures.is_empty() {
+            self.set_status_kind(
+                "local-deleted",
+                format!(
+                    "Deleted {removed} local entr{}.",
+                    if removed == 1 { "y" } else { "ies" }
+                ),
+                removed.to_string(),
+                String::new(),
+            );
+        } else {
+            self.set_status_kind(
+                "local-delete-failed",
+                format!(
+                    "Deleted {removed} of {} local entr{}; {} failed.",
+                    paths.len(),
+                    if paths.len() == 1 { "y" } else { "ies" },
+                    failures.join("; ")
+                ),
+                removed.to_string(),
+                failures.join("; "),
+            );
+        }
+        Ok(self.projection())
+    }
+
     /// Selected real paths, in listing order.
     pub(crate) fn local_selected_paths(&self) -> Vec<PathBuf> {
         let Some(listing) = &self.local_pane.listing else {
@@ -373,6 +439,48 @@ pub(crate) fn local_rows_for(state: &LocalPaneState) -> Vec<LocalRowData> {
             row
         })
         .collect()
+}
+
+/// Breadcrumb segments of a local directory.
+///
+/// The segments mirror the remote ones: the first crumb is the filesystem
+/// root (`/` or the drive), every following crumb is one path component.
+pub(crate) fn local_crumbs_for(dir: &Path) -> Vec<FileCrumbData> {
+    let mut crumbs = Vec::new();
+    let mut current = PathBuf::new();
+    for component in dir.components() {
+        match component {
+            Component::Prefix(prefix) => {
+                // The drive letter is part of the root crumb, not its own.
+                current.push(prefix.as_os_str());
+            }
+            Component::RootDir => {
+                current.push(Component::RootDir.as_os_str());
+                crumbs.push(FileCrumbData {
+                    label: current.display().to_string(),
+                    path: current.display().to_string(),
+                });
+            }
+            Component::CurDir => {}
+            Component::ParentDir => {
+                current.push("..");
+            }
+            Component::Normal(name) => {
+                current.push(name);
+                crumbs.push(FileCrumbData {
+                    label: name.to_string_lossy().into_owned(),
+                    path: current.display().to_string(),
+                });
+            }
+        }
+    }
+    if crumbs.is_empty() {
+        crumbs.push(FileCrumbData {
+            label: dir.display().to_string(),
+            path: dir.display().to_string(),
+        });
+    }
+    crumbs
 }
 
 /// Inclusive range between two visible entries (used by Shift selection).
@@ -548,5 +656,61 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["a.txt", "b.txt"]
         );
+    }
+
+    #[test]
+    fn local_pane_exposes_breadcrumb_segments() {
+        let temp = tempdir().expect("tempdir");
+        let pane = pane_dir(&temp);
+        let mut runtime = runtime_with_local(&temp);
+        runtime.refresh_local_pane();
+
+        // The crumbs mirror the remote ones: a root crumb plus one per segment.
+        let crumbs = runtime.local_crumbs();
+        assert!(!crumbs.is_empty());
+        assert_eq!(crumbs.last().map(|crumb| crumb.path.clone()), Some(
+            pane.display().to_string()
+        ));
+        assert!(crumbs
+            .iter()
+            .all(|crumb| !crumb.label.is_empty() && !crumb.path.is_empty()));
+    }
+
+    #[test]
+    fn local_pane_deletes_the_selection() {
+        let temp = tempdir().expect("tempdir");
+        let pane = pane_dir(&temp);
+        fs::write(pane.join("a.txt"), b"a").expect("write");
+        fs::create_dir(pane.join("dir")).expect("mkdir");
+        fs::write(pane.join("dir/b.txt"), b"b").expect("write");
+
+        let mut runtime = runtime_with_local(&temp);
+        runtime.refresh_local_pane();
+        // Rows: 0 = `..`, 1 = a.txt, 2 = dir.
+        runtime.select_local_row(1, false, false);
+        runtime.select_local_row(2, true, false);
+        assert_eq!(runtime.local_selection_count(), 2);
+
+        let deleted = runtime
+            .delete_local_selection()
+            .expect("delete local selection");
+        assert!(!pane.join("a.txt").exists());
+        assert!(!pane.join("dir").exists());
+        assert_eq!(deleted.local_selected_count, 0);
+        assert!(deleted.status_text.contains("Deleted 2 local"));
+        assert_eq!(deleted.local_item_count, 0);
+    }
+
+    #[test]
+    fn local_pane_delete_without_selection_is_rejected() {
+        let temp = tempdir().expect("tempdir");
+        let _pane = pane_dir(&temp);
+        let mut runtime = runtime_with_local(&temp);
+        runtime.refresh_local_pane();
+
+        let rejected = runtime
+            .delete_local_selection()
+            .expect("delete without selection");
+        assert!(rejected.status_text.contains("Select local entries"));
     }
 }

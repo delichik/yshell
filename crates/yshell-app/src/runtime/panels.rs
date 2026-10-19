@@ -169,6 +169,60 @@ impl AppRuntime {
         self.projection()
     }
 
+    /// Edits the "max parallel SFTP transfers" field (settings page).
+    pub fn update_settings_sftp_max_parallel_transfers(&mut self, value: &str) -> AppProjection {
+        self.settings_sftp_max_parallel_transfers_text = value.to_owned();
+        self.projection()
+    }
+
+    /// Saves the "max parallel SFTP transfers" setting and applies it to the
+    /// running transfer worker.
+    pub fn save_settings_sftp(&mut self) -> AppResult<AppProjection> {
+        let requested = self
+            .settings_sftp_max_parallel_transfers_text
+            .trim()
+            .parse::<usize>()
+            .unwrap_or(0);
+        if !(yshell_config::SFTP_MAX_PARALLEL_TRANSFERS_MIN
+            ..=yshell_config::SFTP_MAX_PARALLEL_TRANSFERS_MAX)
+            .contains(&requested)
+        {
+            self.set_status_kind(
+                "settings-sftp-invalid-parallel-transfers",
+                format!(
+                    "The number of parallel SFTP transfers must be between {} and {}.",
+                    yshell_config::SFTP_MAX_PARALLEL_TRANSFERS_MIN,
+                    yshell_config::SFTP_MAX_PARALLEL_TRANSFERS_MAX
+                ),
+                self.settings_sftp_max_parallel_transfers_text.clone(),
+                String::new(),
+            );
+            return Ok(self.projection());
+        }
+        self.config_document.ui.sftp_max_parallel_transfers = requested;
+        self.config_store
+            .save(&self.config_document)
+            .map_err(AppError::from_error)?;
+        self.set_sftp_parallel_transfer_limit(requested);
+        self.settings_sftp_max_parallel_transfers_text = requested.to_string();
+        self.set_status_kind(
+            "settings-sftp-saved",
+            format!("SFTP transfers now run {requested} at a time."),
+            requested.to_string(),
+            String::new(),
+        );
+        Ok(self.projection())
+    }
+
+    /// Applies the parallel-transfer limit to the running transfer worker.
+    pub fn set_sftp_parallel_transfer_limit(&mut self, limit: usize) {
+        let limit = yshell_config::clamp_sftp_max_parallel_transfers(limit);
+        self.settings_sftp_max_parallel_transfers_text = limit.to_string();
+        if let Some(handle) = self.sftp_jobs.as_ref() {
+            handle.set_parallel_limit(limit);
+        }
+    }
+
     pub fn reset_settings_terminal_defaults(&mut self) -> AppProjection {
         self.settings_scrollback_lines_text = DEFAULT_SCROLLBACK_LINES.to_string();
         self.settings_scrollback_max_cells_text = DEFAULT_SCROLLBACK_MAX_CELLS.to_string();

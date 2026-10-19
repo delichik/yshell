@@ -1,11 +1,9 @@
 // SFTP 面板（N1 紧凑化 + 双栏 + 拖放 + 队列抽屉）。
 //
-// 结构（自上而下，窄宽上下叠放 / 宽面板左右并排）：
-//   远端栏：紧凑头部（面包屑 + ↑ + 刷新 + 显隐 + ⋯）→ 路径输入 → 内联错误条
-//           → 列头 → 列表（行 = DragArea + 多选 TouchArea；目录行与空白 = DropArea）
-//           → 汇总行
+// 结构（自上而下 / 窄宽上下叠放 / 宽面板左右并排）：
+//   远端栏：components/file_pane.slint 的 FilePane（分段路径 + 列表 + 汇总）
 //   传输抽屉：摘要一行（展开开关 + 计数 + Clear completed）→ 任务列表（行内操作）
-//   本地栏：components/local_pane.slint（只读接线）+ 拖动图标槽 + 整栏 DropArea
+//   本地栏：同一个 FilePane（本地数据）→ 两栏用的是同一个组件
 //
 // 规范：docs/product/ui-winui3-design-language.md §5.2 / §5.5 / §5.11 / §5.14
 //       docs/product/context-menu-design.md §4（四套行菜单）/ §6（队列动作）
@@ -17,28 +15,11 @@ import { Icon } from "basic/icons.slint";
 import { WinButton, WinIconButton, WinToggle } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 import { MenuEntry, MenuPopup } from "menu_popup.slint";
-import { LocalPane, LocalRow, ListScrollBar } from "local_pane.slint";
+import { FileCrumb, FilePane, FileRow, ListScrollBar } from "file_pane.slint";
+
+export { FileCrumb, FileRow } from "file_pane.slint";
 
 // ---------------------------------------------------------------- 数据结构
-
-/// Slint-facing mirror of the runtime SFTP row data.
-export struct SftpRow {
-    name: string,
-    path-text: string,
-    kind-text: string,
-    size-text: string,
-    modified-text: string,
-    permissions-text: string,
-    is-dir: bool,
-    is-symlink: bool,
-    selected: bool,
-}
-
-/// Slint-facing mirror of the runtime breadcrumb data.
-export struct SftpCrumb {
-    label: string,
-    path: string,
-}
 
 /// Slint-facing mirror of `runtime::transfer::TransferRowData`.
 export struct SftpTransferRow {
@@ -67,656 +48,7 @@ export struct SftpTransferRow {
 
 // ---------------------------------------------------------------- 通用件
 
-/// 可点击排序的列头：28px 高、caption 字号；排序列 text-primary + ↑/↓。
-component SftpColumnHeader inherits Rectangle {
-    in property <string> label: "";
-    in property <bool> active: false;
-    in property <bool> ascending: true;
-    in property <bool> right-aligned: false;
-    callback activated();
-
-    height: Theme.row-height-tree;
-    border-radius: Theme.radius-control;
-    background: header-touch.has-hover ? Theme.subtle-hover : transparent;
-
-    Text {
-        text: root.active
-            ? (root.ascending ? @tr("{0} ↑", root.label) : @tr("{0} ↓", root.label))
-            : root.label;
-        color: root.active ? Theme.text-primary : Theme.text-tertiary;
-        font-size: Theme.font-caption;
-        font-weight: root.active ? Theme.weight-semibold : 400;
-        x: 0;
-        width: parent.width;
-        height: parent.height;
-        vertical-alignment: center;
-        horizontal-alignment: root.right-aligned ? right : left;
-        wrap: no-wrap;
-        overflow: elide;
-    }
-
-    header_touch := TouchArea {
-        clicked => { root.activated(); }
-    }
-}
-
-// ---------------------------------------------------------------- 远端栏
-
-/// 远端单栏：紧凑头部 + 列表 + 内联错误 + 汇总行。
-component SftpRemotePane inherits Rectangle {
-    /// Host-provided width for the responsive column/breadcrumb decisions.
-    /// Using `self.width` here would loop: this pane's width is layout-derived
-    /// from children whose visibility depends on the decision.
-    in property <length> available-width: 0px;
-    in property <[SftpRow]> rows;
-    in property <[SftpCrumb]> crumbs;
-    in property <int> selected-index: -1;
-    in property <string> sort-column: "name";
-    in property <bool> sort-ascending: true;
-    in property <string> sort-text: "Name ↑";
-    in property <bool> show-hidden: false;
-    in property <int> item-count: 0;
-    in property <int> dir-count: 0;
-    in property <int> selected-count: 0;
-    in property <string> empty-text: "";
-    in property <string> error-text: "";
-    in property <bool> connected: false;
-    /// 栏标题（展开态也显示，与本地栏区分，B10）。
-    in property <string> title-text: @tr("Remote");
-    in property <bool> remote-edit-active: false;
-    in property <string> remote-edit-text: "";
-    in-out property <string> path-text: "/";
-    /// 键盘剪贴板焦点（点击行/列表后由宿主 scope 持有）。
-    callback focus-requested();
-
-    callback refresh();
-    callback up();
-    callback home();
-    callback open-path(string);
-    callback open-crumb(int);
-    callback sort-by(string);
-    callback toggle-hidden();
-    callback select-row(int, bool, bool);
-    callback activate-row(int);
-    callback context-menu-requested(int, length, length);
-    callback panel-menu-requested(length, length);
-    callback save-edit();
-    callback cancel-edit();
-    pure callback drag-payload(string) -> data-transfer;
-    /// 选择路径串（仅作为 data 绑定的依赖；载荷由宿主生成）。
-    in property <string> selection-key: "";
-    callback drop-on-row(int, data-transfer, DragAction);
-    callback drop-on-blank(data-transfer, DragAction);
-
-    background: transparent;
-
-    // 元数据列宽：Name 恒显，Modified/Permissions 窄宽隐藏（→ Properties 弹窗）。
-    private property <bool> shows-modified: root.available-width >= 360px;
-    private property <bool> shows-permissions: root.available-width >= 460px;
-    private property <length> column-gap: Theme.spacing-8;
-    private property <length> column-size-width: 56px;
-    private property <length> column-modified-width: 116px;
-    private property <length> column-permissions-width: 56px;
-    private property <length> meta-width: root.column-size-width
-        + (root.shows-modified ? root.column-gap + root.column-modified-width : 0px)
-        + (root.shows-permissions ? root.column-gap + root.column-permissions-width : 0px);
-    // 窄宽（右栏 280px 级别）只保留最后两段面包屑。
-    private property <bool> compact-crumbs: root.available-width < 360px;
-
-    // ---------------------------------------------------- 小高度降级布局（PANEL-2）
-    // 与 LocalPane（PANEL-1）同一契约：可选行按「路径输入 → 列头 → 错误条」的
-    // 优先级隐藏，列表占剩余高度并向下取整到整数行，汇总行底部锚定，footer
-    // 永不被外层 clip 裁掉。remote edit 的 Save/Cancel 是核心操作，优先于汇总行。
-    //
-    // 行高全部来自 token（默认值，单位 px）：header 32 / path 32 / error 28 /
-    // column 28 / edit 32 / summary 16 / gap 4 / list row 32。阈值推导：
-    //   52  = 头部 32 + 间距 4 + 汇总行 16（列表 0 行）
-    //   88  = 52 + 列表 1 行 32 + 间距 4（无任何可选行）
-    //   120 = 88 + 错误条 28 + 间距 4（列头同样 120）
-    //   152 = 120 + 错误条 28 + 间距 4（错误条 + 列头同时出现）
-    //   156 / 188 = 再加路径行 32 + 间距 4（错误条已显示时 188）
-    // 隐藏顺序（高度下降）：路径行 → 列头 → 错误条；低于 52px 时头部也让位，
-    // 只保留汇总行。每个可选行只在「它 + 一行列表 + 固定 footer」都放得下时出现。
-    private property <length> layout-gap: Theme.spacing-4;
-    private property <length> header-height: Theme.control-height;
-    private property <length> path-height: Theme.control-height;
-    private property <length> error-height: Theme.row-height-tree;
-    private property <length> column-height: Theme.row-height-tree;
-    private property <length> edit-height: Theme.control-height;
-    private property <length> summary-height: Theme.line-caption;
-
-    private property <bool> shows-edit: root.remote-edit-active;
-    private property <bool> shows-summary: !root.remote-edit-active
-        || root.height >= root.edit-height + root.layout-gap + root.summary-height;
-    private property <length> edit-visible-height: root.shows-edit
-        ? min(root.edit-height, max(0px, root.height
-            - (root.shows-summary ? root.summary-height + root.layout-gap : 0px)))
-        : 0px;
-    private property <length> footer-height: (root.shows-edit ? root.edit-visible-height
-            + (root.shows-summary ? root.layout-gap : 0px) : 0px)
-        + (root.shows-summary ? root.summary-height : 0px);
-    private property <bool> shows-header: root.height >= root.footer-height
-        + root.layout-gap + root.header-height;
-    private property <length> min-height-no-option:
-        (root.shows-header ? root.header-height + root.layout-gap : 0px)
-        + root.footer-height;
-    // 错误条 / 列头 / 路径行的阈值：都要求再加一行列表仍放得下。
-    private property <bool> shows-error: root.error-text != ""
-        && root.height >= root.min-height-no-option + root.error-height + root.layout-gap
-            + Theme.row-height-list + root.layout-gap;
-    private property <bool> shows-column-header:
-        root.height >= root.min-height-no-option + Theme.row-height-list + root.layout-gap
-            + root.column-height + root.layout-gap
-            + (root.shows-error ? root.error-height + root.layout-gap : 0px);
-    private property <bool> shows-path: root.shows-header && root.shows-column-header
-        && root.height >= root.min-height-no-option + Theme.row-height-list + root.layout-gap
-            + root.column-height + root.layout-gap
-            + root.path-height + root.layout-gap
-            + (root.shows-error ? root.error-height + root.layout-gap : 0px);
-
-    // 各行 y 坐标（绝对定位；list-top/list-height 是行 DropArea 的唯一几何来源）。
-    private property <length> path-y:
-        root.shows-header ? root.header-height + root.layout-gap : 0px;
-    private property <length> error-y: root.path-y
-        + (root.shows-path ? root.path-height + root.layout-gap : 0px);
-    private property <length> column-y: root.error-y
-        + (root.shows-error ? root.error-height + root.layout-gap : 0px);
-    private property <length> list-top: root.column-y
-        + (root.shows-column-header ? root.column-height + root.layout-gap : 0px);
-    // 汇总行 / edit 行底部锚定；列表底边 = footer 顶部 - 间距。
-    private property <length> summary-y: max(0px, root.height - root.summary-height);
-    private property <length> edit-y: root.shows-summary
-        ? max(0px, root.summary-y - root.layout-gap - root.edit-visible-height)
-        : max(0px, root.height - root.edit-visible-height);
-    private property <length> list-bottom: max(root.list-top,
-        root.height - root.footer-height - root.layout-gap);
-    private property <length> list-height: floor(max(0px, root.list-bottom - root.list-top)
-        / Theme.row-height-list) * Theme.row-height-list;
-
-    /// 面包屑分隔符：前一段不是根 `/` 时显示。
-    pure function shows-crumb-separator(index: int) -> bool {
-        if (index <= 0) {
-            return false;
-        }
-        return root.crumbs[index - 1].label != "/";
-    }
-
-    /// 窄宽折叠：只显示最后两段（`… / 上级 / 当前` 语义）。
-    pure function crumb-visible(index: int) -> bool {
-        if (!root.compact-crumbs) {
-            return true;
-        }
-        return index >= root.crumbs.length - 2;
-    }
-
-    // 绝对定位容器：顶部行、列表视口、底部 footer 都用上面推导的 y/height，
-    // 保证 list-top/list-height 与行 DropArea 严格一致（同 LocalPane，PANEL-2）。
-    Rectangle {
-        x: 0;
-        y: 0;
-        width: root.width;
-        height: root.height;
-
-        // --- 头部第 1 行：标题 + 面包屑 + 导航 + 显隐 + ⋯ -----------------
-        HorizontalLayout {
-            x: 0;
-            y: 0;
-            width: root.width;
-            height: root.header-height;
-            visible: root.shows-header;
-            spacing: Theme.spacing-4;
-
-            // 展开态也显示「远端」标题，与本地栏在视觉上区分（B10）。
-            Text {
-                text: root.title-text;
-                color: Theme.text-primary;
-                font-size: Theme.font-body;
-                font-weight: Theme.weight-semibold;
-                vertical-alignment: center;
-                wrap: no-wrap;
-            }
-
-            // 面包屑容器：吃掉剩余宽度，内部横向排布。
-            Rectangle {
-                horizontal-stretch: 1;
-                height: Theme.control-height;
-                background: Theme.control-fill;
-                border-radius: Theme.radius-control;
-                border-width: 1px;
-                border-color: Theme.control-stroke;
-                clip: true;
-
-                HorizontalLayout {
-                    padding-left: Theme.spacing-4;
-                    padding-right: Theme.spacing-4;
-                    spacing: 0;
-
-                    if root.compact-crumbs : Text {
-                        text: @tr("…");
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-caption;
-                        vertical-alignment: center;
-                    }
-
-                    for crumb[i] in root.crumbs : HorizontalLayout {
-                        visible: root.crumb-visible(i);
-                        spacing: 0;
-
-                        if root.shows-crumb-separator(i) && root.crumb-visible(i) : Text {
-                            text: "/";
-                            color: Theme.text-tertiary;
-                            font-size: Theme.font-caption;
-                            vertical-alignment: center;
-                        }
-
-                        // 单个面包屑段（布局占位，无需 id）
-                        Rectangle {
-                            border-radius: Theme.radius-control;
-                            background: crumb_hit_touch.has-hover ? Theme.subtle-hover : transparent;
-
-                            HorizontalLayout {
-                                padding-left: Theme.spacing-4;
-                                padding-right: Theme.spacing-4;
-
-                                Text {
-                                    text: crumb.label;
-                                    color: i == root.crumbs.length - 1 ? Theme.text-primary : Theme.text-secondary;
-                                    font-size: Theme.font-caption;
-                                    vertical-alignment: center;
-                                    wrap: no-wrap;
-                                    // 长路径段省略号截断，而不是被容器硬裁（B11）。
-                                    overflow: elide;
-                                }
-                            }
-
-                            crumb_hit_touch := TouchArea {
-                                enabled: root.connected;
-                                clicked => { root.open-crumb(i); }
-                            }
-                        }
-                    }
-
-                    // 弹簧：把面包屑顶到左侧、吃掉多余宽度（无 id 的布局占位）。
-                    Rectangle { horizontal-stretch: 1; }
-                }
-            }
-
-            WinIconButton {
-                icon: "up";
-                accessible-name: @tr("Parent directory");
-                enabled: root.connected;
-                clicked => { root.up(); }
-            }
-            WinIconButton {
-                icon: "refresh";
-                accessible-name: @tr("Refresh");
-                enabled: root.connected;
-                clicked => { root.refresh(); }
-            }
-            WinToggle {
-                text: "";
-                icon: "eye";
-                checked: root.show-hidden;
-                accessible-name: @tr("Show hidden files");
-                toggled => { root.toggle-hidden(); }
-            }
-            WinIconButton {
-                icon: "more";
-                accessible-name: @tr("SFTP operations");
-                enabled: root.connected;
-                clicked => {
-                    root.panel-menu-requested(
-                        self.absolute-position.x,
-                        self.absolute-position.y + self.height
-                    );
-                }
-            }
-        }
-
-        // --- 头部第 2 行：路径输入（回车打开；低高度时最先隐藏）----------
-        if root.shows-path : WinTextInput {
-            x: 0;
-            y: root.path-y;
-            width: root.width;
-            height: root.path-height;
-            text <=> root.path-text;
-            placeholder-text: "/remote/path";
-            font-family: Theme.font-mono;
-            enabled: root.connected;
-            accepted => { root.open-path(self.text); }
-        }
-
-        // --- 内联错误条 + 重试 -------------------------------------------
-        if root.shows-error : Rectangle {
-            x: 0;
-            y: root.error-y;
-            width: root.width;
-            height: root.error-height;
-            background: Theme.attention-background;
-            border-radius: Theme.radius-control;
-            border-width: 1px;
-            border-color: Theme.attention-stroke;
-
-            HorizontalLayout {
-                padding-left: Theme.spacing-8;
-                padding-right: Theme.spacing-4;
-                spacing: Theme.spacing-8;
-
-                Text {
-                    text: root.error-text;
-                    color: Theme.attention-text;
-                    font-size: Theme.font-caption;
-                    vertical-alignment: center;
-                    wrap: no-wrap;
-                    overflow: elide;
-                    horizontal-stretch: 1;
-                }
-
-                WinButton {
-                    text: @tr("Retry");
-                    subtle: true;
-                    clicked => { root.refresh(); }
-                }
-            }
-        }
-
-        // --- 列头（低高度第二优先隐藏，排序状态仍在汇总行可见）-----------
-        Rectangle {
-            x: 0;
-            y: root.column-y;
-            width: root.width;
-            height: root.column-height;
-            visible: root.shows-column-header;
-            background: transparent;
-
-            SftpColumnHeader {
-                // 与行内文件名共用同一组 x/width（图标 16 + 间距 8），B6。
-                x: Theme.icon-size-small + Theme.spacing-8;
-                width: parent.width - root.meta-width - Theme.icon-size-small - 2 * Theme.spacing-8;
-                height: parent.height;
-                label: @tr("Name");
-                active: root.sort-column == "name";
-                ascending: root.sort-ascending;
-                activated => { root.sort-by("name"); }
-            }
-            SftpColumnHeader {
-                x: parent.width - root.meta-width;
-                width: root.column-size-width;
-                height: parent.height;
-                label: @tr("Size");
-                active: root.sort-column == "size";
-                ascending: root.sort-ascending;
-                right-aligned: true;
-                activated => { root.sort-by("size"); }
-            }
-            if root.shows-modified : SftpColumnHeader {
-                x: parent.width - root.meta-width + root.column-size-width + root.column-gap;
-                width: root.column-modified-width;
-                height: parent.height;
-                label: @tr("Modified");
-                active: root.sort-column == "modified";
-                ascending: root.sort-ascending;
-                right-aligned: true;
-                activated => { root.sort-by("modified"); }
-            }
-            if root.shows-permissions : SftpColumnHeader {
-                x: parent.width - root.column-permissions-width;
-                width: root.column-permissions-width;
-                height: parent.height;
-                label: @tr("Perm");
-                active: root.sort-column == "permissions";
-                ascending: root.sort-ascending;
-                right-aligned: true;
-                activated => { root.sort-by("permissions"); }
-            }
-
-            Rectangle {
-                x: 0;
-                y: parent.height - 1px;
-                width: parent.width;
-                height: 1px;
-                background: Theme.divider;
-            }
-        }
-
-        // --- 列表（ListView 虚拟化 + 空态 + 行拖动/放置）------------------
-        Rectangle {
-            x: 0;
-            y: root.list-top;
-            width: root.width;
-            height: root.list-height;
-            clip: true;
-            // 高度取行高的整数倍（B7）：底部不出现被腰斩的半行；列表底边由
-            // 底部锚定的 footer 反推（PANEL-2），外层 DropArea 与本视口严格重合。
-
-            // 列表级 DropArea：空白处落下 = 移动到当前目录 / 外部文件导入。
-            // 注意：`dropped` 的 `event.proposed-action` 已经是 can-drop 的协商结果，
-            // 不能再做一次映射（否则 Copy/Move 会被反转两次）。
-            DropArea {
-                x: 0;
-                y: 0;
-                width: parent.width;
-                height: parent.height;
-                can-drop(event) => { return root.drop-action(event.proposed-action); }
-                dropped(event) => {
-                    root.drop-on-blank(event.data, event.proposed-action);
-                    return event.proposed-action;
-                }
-            }
-
-            Text {
-                visible: root.rows.length == 0 && root.error-text == "";
-                text: root.empty-text;
-                color: Theme.text-tertiary;
-                font-size: Theme.font-caption;
-                x: Theme.spacing-8;
-                width: parent.width - 2 * Theme.spacing-8;
-                height: parent.height;
-                vertical-alignment: center;
-                horizontal-alignment: center;
-                wrap: word-wrap;
-            }
-
-            list := ListView {
-                // std-widgets 的滑块只有 2px、对比度 1.26:1；这里改用自绘滚动条（B8）。
-                vertical-scrollbar-policy: ScrollBarPolicy.always-off;
-
-                for row[index] in root.rows : Rectangle {
-                    height: Theme.row-height-list;
-                    border-radius: Theme.radius-control;
-                    background: row.selected || index == root.selected-index ? Theme.subtle-selected
-                        : row_hit.has-hover ? Theme.subtle-hover
-                        : transparent;
-
-                    Icon {
-                        name: row.is-dir ? "folder" : (row.is-symlink ? "link" : "file");
-                        icon-color: row.selected || index == root.selected-index ? Theme.accent : Theme.text-secondary;
-                        icon-size: Theme.icon-size-small;
-                        x: 0;
-                        y: (parent.height - self.height) / 2;
-                    }
-
-                    Text {
-                        x: Theme.icon-size-small + Theme.spacing-8;
-                        y: 0;
-                        width: parent.width - root.meta-width - Theme.icon-size-small - 2 * Theme.spacing-8;
-                        height: parent.height;
-                        text: row.name;
-                        color: Theme.text-primary;
-                        font-size: Theme.font-body;
-                        vertical-alignment: center;
-                        wrap: no-wrap;
-                        overflow: elide;
-                    }
-
-                    Text {
-                        x: parent.width - root.meta-width;
-                        width: root.column-size-width;
-                        height: parent.height;
-                        text: row.size-text;
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-caption;
-                        vertical-alignment: center;
-                        horizontal-alignment: right;
-                        wrap: no-wrap;
-                        overflow: elide;
-                    }
-                    if root.shows-modified : Text {
-                        x: parent.width - root.meta-width + root.column-size-width + root.column-gap;
-                        width: root.column-modified-width;
-                        height: parent.height;
-                        text: row.modified-text;
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-caption;
-                        vertical-alignment: center;
-                        horizontal-alignment: right;
-                        wrap: no-wrap;
-                        overflow: elide;
-                    }
-                    if root.shows-permissions : Text {
-                        x: parent.width - root.column-permissions-width;
-                        width: root.column-permissions-width;
-                        height: parent.height;
-                        text: row.permissions-text;
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-caption;
-                        vertical-alignment: center;
-                        horizontal-alignment: right;
-                        wrap: no-wrap;
-                        overflow: elide;
-                    }
-
-                    // 目录行接住"拖到目录上 = 移动进目录"。
-                    // `dropped` 的 proposed-action 同样是协商结果，直接透传。
-                    if row.is-dir : DropArea {
-                        x: 0;
-                        y: 0;
-                        width: parent.width;
-                        height: parent.height;
-                        can-drop(event) => { return root.drop-action(event.proposed-action); }
-                        dropped(event) => {
-                            root.drop-on-row(index, event.data, event.proposed-action);
-                            return event.proposed-action;
-                        }
-                    }
-
-                    // 行主体 = DragArea（拖动载荷由宿主按当前选择生成）+
-                    // TouchArea（按下即选、双击激活、右键菜单）。
-                    DragArea {
-                        x: 0;
-                        y: 0;
-                        width: parent.width;
-                        height: parent.height;
-                        data: root.drag-payload(root.selection-key);
-                        allow-copy: true;
-                        allow-move: true;
-
-                        row_hit := TouchArea {
-                            pointer-event(event) => {
-                                if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
-                                    // 右键落在已选中的行上时保留多选（B18），
-                                    // 否则先切换为单行选择再弹菜单。
-                                    if (!(row.selected || index == root.selected-index)) {
-                                        root.select-row(index, false, false);
-                                    }
-                                    root.context-menu-requested(
-                                        index,
-                                        self.absolute-position.x + self.mouse-x,
-                                        self.absolute-position.y + self.mouse-y
-                                    );
-                                } else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
-                                    root.focus-requested();
-                                    root.select-row(
-                                        index,
-                                        event.modifiers.control || event.modifiers.meta,
-                                        event.modifiers.shift
-                                    );
-                                }
-                            }
-                            double-clicked => { root.activate-row(index); }
-                        }
-                    }
-                }
-            }
-
-            // 自绘滚动条（B8）：叠在列表右缘，双向绑定滚动位置。
-            ListScrollBar {
-                x: parent.width - self.width;
-                y: 0;
-                height: parent.height;
-                content-height: list.content-height;
-                visible-height: list.visible-height;
-                content-y <=> list.content-y;
-                scroll-enabled: list.enabled;
-            }
-        }
-
-        // --- 远程编辑进行中：细条 + Save/Cancel（核心操作，优先保留）-----
-        if root.shows-edit : HorizontalLayout {
-            x: 0;
-            y: root.edit-y;
-            width: root.width;
-            height: root.edit-visible-height;
-            spacing: Theme.spacing-4;
-
-            Text {
-                text: root.remote-edit-text;
-                color: Theme.caution;
-                font-size: Theme.font-caption;
-                vertical-alignment: center;
-                wrap: no-wrap;
-                overflow: elide;
-                horizontal-stretch: 1;
-            }
-            WinButton {
-                text: @tr("Save Edit");
-                accent: true;
-                clicked => { root.save-edit(); }
-            }
-            WinButton {
-                text: @tr("Cancel Edit");
-                clicked => { root.cancel-edit(); }
-            }
-        }
-
-        // --- 汇总行：计数 + 选中 + 排序 ----------------------------------
-        // 底部锚定（y = 高度 - 汇总行高）：低高度时只压列表，绝不裁本行；
-        // 低于 16px 时高度同步收缩，避免把 footer 顶出面板。
-        Text {
-            x: 0;
-            y: root.summary-y;
-            width: root.width;
-            height: min(root.summary-height, root.height);
-            visible: root.shows-summary;
-            text: root.selected-count > 0
-                ? @tr("{0} · {1} selected · {2}", root.item-summary-display(), root.selected-count, root.sort-text)
-                : @tr("{0} · {1}", root.item-summary-display(), root.sort-text);
-            color: Theme.text-tertiary;
-            font-size: Theme.font-caption;
-            vertical-alignment: center;
-            wrap: no-wrap;
-            overflow: elide;
-        }
-    }
-
-    /// 汇总：`{n} item(s) · {m} dir(s)`（Rust 只投影计数，句子在这里组装）。
-    pure function item-summary-display() -> string {
-        return @tr("{0} · {1}",
-            @tr("{n} item" | "{n} items" % root.item-count),
-            @tr("{n} dir" | "{n} dirs" % root.dir-count));
-    }
-
-    /// N1 语义：无修饰键（Slint 提议 move）= 复制；Ctrl（提议 copy）= 移动。
-    pure function drop-action(proposed: DragAction) -> DragAction {
-        if (proposed == DragAction.move) {
-            return DragAction.copy;
-        }
-        if (proposed == DragAction.copy) {
-            return DragAction.move;
-        }
-        return DragAction.none;
-    }
-}
+// 远端栏与本地栏都用 components/file_pane.slint 的 FilePane（同一个组件）。
 
 // ---------------------------------------------------------------- 队列抽屉
 
@@ -977,130 +309,13 @@ component SftpTransferDrawer inherits Rectangle {
     }
 }
 
-// ---------------------------------------------------------------- 本地栏
-
-/// 本地文件栏：LocalPane（只读接线，行内 DragArea）+ 整栏 DropArea。
-/// 可供独立 Local panel 与（可选）SFTP 内嵌栏复用。
-export component LocalFilesSection inherits Rectangle {
-    in property <[LocalRow]> rows;
-    in property <string> path-text: "/";
-    in property <bool> show-hidden: false;
-    in property <string> sort-column: "name";
-    in property <bool> sort-ascending: true;
-    in property <string> sort-text: "Name ↑";
-    in property <int> item-count: 0;
-    in property <int> dir-count: 0;
-    in property <int> selected-count: 0;
-    in property <string> empty-text: "";
-    in property <string> error-text: "";
-    in property <bool> retry-visible: true;
-    in property <bool> collapsed: false;
-    /// 折叠/展开开关是否可用（可用高度不足时由面板置 false）。
-    in property <bool> toggle-enabled: true;
-    in property <string> title-text: "";
-    in property <string> selected-name-text: "";
-
-    callback toggle-collapsed();
-    callback up();
-    callback home();
-    callback refresh();
-    callback open-path(string);
-    callback sort-by(string);
-    callback toggle-hidden();
-    callback select-row(int, bool, bool);
-    callback activate-row(int);
-    callback context-menu-requested(int, length, length);
-    callback retry();
-    /// 拖动载荷：`selection-key` 是当前选择的路径串（仅用作依赖，载荷由宿主按
-    /// 同一状态生成）。**必须带依赖**：Slint 会缓存无依赖的绑定，第一次求值
-    /// （通常是选中之前）之后 `data` 永远为空，拖动再也起不来。
-    pure callback drag-payload(string) -> data-transfer;
-    in property <string> selection-key: "";
-    callback drop-received(data-transfer, DragAction);
-    callback focus-requested();
-
-    background: transparent;
-
-    // 列表几何直接取 LocalPane 的实际值（小高度降级后的顶部偏移 + 整数行对齐），
-    // 让外层 DropArea 与列表视口严格重合。
-    private property <length> list-top: pane.list-top;
-    private property <length> list-height: pane.list-height;
-
-    pane := LocalPane {
-        x: 0;
-        y: 0;
-        width: parent.width;
-        height: parent.height;
-
-        rows: root.rows;
-        selected-index: -1;
-        show-hidden: root.show-hidden;
-        sort-column: root.sort-column;
-        sort-ascending: root.sort-ascending;
-        sort-text: root.sort-text;
-        item-count: root.item-count;
-        dir-count: root.dir-count;
-        empty-text: root.empty-text;
-        error-text: root.error-text;
-        retry-visible: root.retry-visible;
-        collapsed: root.collapsed;
-        toggle-enabled: root.toggle-enabled;
-        title-text: root.title-text;
-        selected-name-text: root.selected-name-text;
-        path-text: root.path-text;
-        selection-key: root.selection-key;
-
-        toggle-collapsed => { root.toggle-collapsed(); }
-        up => { root.up(); }
-        home => { root.home(); }
-        refresh => { root.refresh(); }
-        open-path(path) => { root.open-path(path); }
-        sort-by(column) => { root.sort-by(column); }
-        toggle-hidden => { root.toggle-hidden(); }
-        select-row(index, ctrl, shift) => {
-            root.focus-requested();
-            root.select-row(index, ctrl, shift);
-        }
-        activate-row(index) => { root.activate-row(index); }
-        context-menu-requested(index, x, y) => { root.context-menu-requested(index, x, y); }
-        retry => { root.retry(); }
-        drag-payload(key) => { return root.drag-payload(key); }
-    }
-
-    // 整栏 DropArea（远端 → 本地 / 系统文件）：声明在 LocalPane 之后（同层里
-    // 靠后 = 在上层），点击会向下转发给 LocalPane（DropArea 只处理拖放事件）。
-    // 折叠时几何归零 + 禁用。（布局占位，无需 id）
-    DropArea {
-        x: 0px;
-        y: root.list-top;
-        width: parent.width;
-        height: root.collapsed ? 0px : root.list-height;
-        enabled: !root.collapsed;
-        can-drop(event) => { return root.drop-action(event.proposed-action); }
-        dropped(event) => {
-            root.drop-received(event.data, event.proposed-action);
-            return event.proposed-action;
-        }
-    }
-
-    pure function drop-action(proposed: DragAction) -> DragAction {
-        if (proposed == DragAction.move) {
-            return DragAction.copy;
-        }
-        if (proposed == DragAction.copy) {
-            return DragAction.move;
-        }
-        return DragAction.none;
-    }
-}
-
 // ---------------------------------------------------------------- 主面板
 
 /// 双栏 SFTP 面板：远端栏 + 传输抽屉 + 本地栏（宽面板并排、窄面板上下叠放）。
 export component SftpPanel inherits Rectangle {
     // 远端投影
-    in property <[SftpRow]> rows;
-    in property <[SftpCrumb]> crumbs;
+    in property <[FileRow]> rows;
+    in property <[FileCrumb]> crumbs;
     in property <int> selected-index: -1;
     in property <string> session-status-text: "";
     in property <string> sort-column: "name";
@@ -1117,7 +332,8 @@ export component SftpPanel inherits Rectangle {
     in property <string> remote-edit-text: "";
     in-out property <string> path-text: "/";
     // 本地栏投影
-    in property <[LocalRow]> local-rows;
+    in property <[FileRow]> local-rows;
+    in property <[FileCrumb]> local-crumbs;
     in property <string> local-path-text: "/";
     in property <bool> local-show-hidden: false;
     in property <string> local-sort-column: "name";
@@ -1276,7 +492,7 @@ export component SftpPanel inherits Rectangle {
         : 124px + Theme.row-height-list * root.stacked-remote-rows;
     /// 本地栏高度 = 剩余高度（紧凑态下限 48px；放不下时归零，见 stacked-remote-fits）。
     /// PANEL-2：不再用 `max(local-min-block, …)` 强行抬高——低高度下让本地栏
-    /// 拿真实剩余高度，由 LocalPane 自己的降级布局兜底，避免把抽屉顶出面板。
+    /// 拿真实剩余高度，由 FilePane 自己的降级布局兜底，避免把抽屉顶出面板。
     private property <length> local-section-height: !root.stacked-remote-fits ? 0px
         : max(0px, root.stacked-space - root.drawer-reserve-height - root.stacked-remote-height);
     /// 并排两栏的高度（扣掉抽屉）。
@@ -1327,11 +543,13 @@ export component SftpPanel inherits Rectangle {
                 spacing: 0px;
 
                 // Fixed order: local on the left, remote on the right.
-                if root.show-local : LocalFilesSection {
+                if root.show-local : FilePane {
                     width: root.local-column-width;
                     height: root.column-height;
                     rows: root.local-rows;
+                    crumbs: root.local-crumbs;
                     path-text: root.local-path-text;
+                    path-placeholder-text: "/local/path";
                     show-hidden: root.local-show-hidden;
                     sort-column: root.local-sort-column;
                     sort-ascending: root.local-sort-ascending;
@@ -1346,8 +564,8 @@ export component SftpPanel inherits Rectangle {
                     toggle-enabled: root.local-toggle-enabled;
                     title-text: root.local-title-text;
                     selected-name-text: root.local-selected-name-text;
+                    show-home-button: true;
                     toggle-collapsed => { root.local-toggle-collapsed(); }
-                    up => { root.local-up(); }
                     home => { root.local-home(); }
                     refresh => { root.local-refresh(); }
                     open-path(path) => { root.local-open-path(path); }
@@ -1359,7 +577,7 @@ export component SftpPanel inherits Rectangle {
                     retry => { root.local-retry(); }
                     selection-key: root.local-selection-key;
                     drag-payload(key) => { return root.drag-local-transfer(key); }
-                    drop-received(data, action) => { root.drop-on-local(data, action); }
+                    drop-on-blank(data, action) => { root.drop-on-local(data, action); }
                     focus-requested => { pane_scope.focus(); }
                 }
 
@@ -1395,12 +613,11 @@ export component SftpPanel inherits Rectangle {
                     }
                 }
 
-                SftpRemotePane {
+                FilePane {
                     horizontal-stretch: 1;
                     // 高度由面板显式给出（而非布局反推）：栏内列表按整数行对齐时
                     // 不会形成布局回环（B7/B9）。
                     height: root.column-height;
-                    available-width: max(120px, root.width - root.local-column-width - 16px);
                     rows: root.rows;
                     crumbs: root.crumbs;
                     selected-index: root.selected-index;
@@ -1416,10 +633,12 @@ export component SftpPanel inherits Rectangle {
                     connected: root.connected;
                     remote-edit-active: root.remote-edit-active;
                     remote-edit-text: root.remote-edit-text;
+                    title-text: @tr("Remote");
+                    path-placeholder-text: "/remote/path";
+                    show-panel-menu: true;
                     path-text <=> root.path-text;
                     focus-requested => { pane_scope.focus(); }
                     refresh => { root.refresh(); }
-                    up => { root.up(); }
                     home => { root.home(); }
                     open-path(path) => { root.open-path(path); }
                     open-crumb(index) => { root.open-crumb(index); }
@@ -1438,9 +657,8 @@ export component SftpPanel inherits Rectangle {
                 }
             }
 
-            if !root.side-by-side : SftpRemotePane {
+            if !root.side-by-side : FilePane {
                 height: root.stacked-remote-height;
-                available-width: max(120px, root.width - Theme.spacing-8);
                 rows: root.rows;
                 crumbs: root.crumbs;
                 selected-index: root.selected-index;
@@ -1456,10 +674,12 @@ export component SftpPanel inherits Rectangle {
                 connected: root.connected;
                 remote-edit-active: root.remote-edit-active;
                 remote-edit-text: root.remote-edit-text;
+                title-text: @tr("Remote");
+                path-placeholder-text: "/remote/path";
+                show-panel-menu: true;
                 path-text <=> root.path-text;
                 focus-requested => { pane_scope.focus(); }
                 refresh => { root.refresh(); }
-                up => { root.up(); }
                 home => { root.home(); }
                 open-path(path) => { root.open-path(path); }
                 open-crumb(index) => { root.open-crumb(index); }
@@ -1496,10 +716,12 @@ export component SftpPanel inherits Rectangle {
                 clear-completed => { root.transfer-clear-completed(); }
             }
 
-            if root.show-local && !root.side-by-side : LocalFilesSection {
+            if root.show-local && !root.side-by-side : FilePane {
                 height: root.local-section-height;
                 rows: root.local-rows;
+                crumbs: root.local-crumbs;
                 path-text: root.local-path-text;
+                path-placeholder-text: "/local/path";
                 show-hidden: root.local-show-hidden;
                 sort-column: root.local-sort-column;
                 sort-ascending: root.local-sort-ascending;
@@ -1514,8 +736,8 @@ export component SftpPanel inherits Rectangle {
                 toggle-enabled: root.local-toggle-enabled;
                 title-text: root.local-title-text;
                 selected-name-text: root.local-selected-name-text;
+                show-home-button: true;
                 toggle-collapsed => { root.local-toggle-collapsed(); }
-                up => { root.local-up(); }
                 home => { root.local-home(); }
                 refresh => { root.local-refresh(); }
                 open-path(path) => { root.local-open-path(path); }
@@ -1527,7 +749,7 @@ export component SftpPanel inherits Rectangle {
                 retry => { root.local-retry(); }
                 selection-key: root.local-selection-key;
                 drag-payload(key) => { return root.drag-local-transfer(key); }
-                drop-received(data, action) => { root.drop-on-local(data, action); }
+                drop-on-blank(data, action) => { root.drop-on-local(data, action); }
                 focus-requested => { pane_scope.focus(); }
             }
         }
@@ -1626,8 +848,7 @@ export component SftpContextMenu inherits Rectangle {
         { label: @tr("Move to Remote"), shortcut: "", enabled: root.connected && root.has-selection, checked: false, separator: false },
         { label: @tr("Copy"), shortcut: "", enabled: root.has-selection, checked: false, separator: false },
         { label: @tr("Copy Path"), shortcut: "", enabled: root.has-selection, checked: false, separator: false },
-        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
-        { label: @tr("Paste"), shortcut: "", enabled: root.clipboard-has-remote, checked: false, separator: false },
+        { label: @tr("Delete Selected"), shortcut: "", enabled: root.has-selection, checked: false, separator: false },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         { label: @tr("Refresh"), shortcut: "", enabled: true, checked: false, separator: false },
         { label: @tr("Show Hidden Files"), shortcut: "", enabled: true, checked: root.show-hidden, separator: false },
@@ -1635,10 +856,23 @@ export component SftpContextMenu inherits Rectangle {
         { label: @tr("Switch to Terminal"), shortcut: "", enabled: root.connected, checked: false, separator: false, tooltip: root.connected ? "" : @tr("Connect to the remote host first.") }
     ];
 
+    /// 本地栏空白处：与"选中文件"菜单分开（此前两者共用一套，导致空白处右键
+    /// 弹出的也是文件菜单）。
+    private property <[MenuEntry]> local-blank-entries: [
+        { label: @tr("Refresh"), shortcut: "", enabled: true, checked: false, separator: false },
+        { label: @tr("Show Hidden Files"), shortcut: "", enabled: true, checked: root.show-hidden, separator: false },
+        { label: @tr("Copy Current Path"), shortcut: "", enabled: true, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Paste"), shortcut: "", enabled: root.clipboard-has-remote, checked: false, separator: false },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        { label: @tr("Switch to Terminal"), shortcut: "", enabled: root.connected, checked: false, separator: false, tooltip: root.connected ? "" : @tr("Connect to the remote host first.") }
+    ];
+
     private property <[MenuEntry]> entries: root.target-kind == "file" ? root.file-entries
         : root.target-kind == "dir" ? root.dir-entries
         : root.target-kind == "multi" ? root.multi-entries
-        : root.target-kind == "local" || root.target-kind == "local-blank" ? root.local-entries
+        : root.target-kind == "local" ? root.local-entries
+        : root.target-kind == "local-blank" ? root.local-blank-entries
         : root.blank-entries;
 
     pure function action(index: int) -> string {
@@ -1651,8 +885,11 @@ export component SftpContextMenu inherits Rectangle {
         if (root.target-kind == "multi") {
             return root.multi-action(index);
         }
-        if (root.target-kind == "local" || root.target-kind == "local-blank") {
+        if (root.target-kind == "local") {
             return root.local-action(index);
+        }
+        if (root.target-kind == "local-blank") {
+            return root.local-blank-action(index);
         }
         return root.blank-action(index);
     }
@@ -1716,10 +953,19 @@ export component SftpContextMenu inherits Rectangle {
         if (index == 1) { return "move-selection"; }
         if (index == 2) { return "copy-local"; }
         if (index == 3) { return "copy-local-path"; }
-        if (index == 5) { return "paste-into-local"; }
-        if (index == 7) { return "local-refresh"; }
-        if (index == 8) { return "local-toggle-hidden"; }
-        if (index == 10) { return "switch-to-terminal"; }
+        if (index == 4) { return "delete-local-selection"; }
+        if (index == 6) { return "local-refresh"; }
+        if (index == 7) { return "local-toggle-hidden"; }
+        if (index == 9) { return "switch-to-terminal"; }
+        return "";
+    }
+
+    pure function local-blank-action(index: int) -> string {
+        if (index == 0) { return "local-refresh"; }
+        if (index == 1) { return "local-toggle-hidden"; }
+        if (index == 2) { return "copy-local-path-current"; }
+        if (index == 4) { return "paste-into-local"; }
+        if (index == 6) { return "switch-to-terminal"; }
         return "";
     }
 

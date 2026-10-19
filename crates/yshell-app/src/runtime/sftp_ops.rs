@@ -871,39 +871,6 @@ impl AppRuntime {
         Ok(count)
     }
 
-    /// Batch chmod.
-    pub(crate) fn submit_remote_chmod_entries(
-        &mut self,
-        entries: &[(String, bool)],
-        permissions: u32,
-    ) -> AppResult<usize> {
-        if entries.is_empty() {
-            return Err(AppError::new("no remote entries to chmod"));
-        }
-        let config = self.active_sftp_job_config()?;
-        let paths = entries
-            .iter()
-            .map(|(path, _)| path.clone())
-            .collect::<Vec<_>>();
-        let count = paths.len();
-        self.submit_sftp_spec(SftpJobSpec::RemoteChmod {
-            config,
-            paths,
-            permissions,
-        })?;
-        let mode_text = format!("{permissions:03o}");
-        self.set_status_kind(
-            "sftp-remote-chmod-queued",
-            format!(
-                "Queued chmod {mode_text} for {count} remote entr{}.",
-                if count == 1 { "y" } else { "ies" }
-            ),
-            mode_text,
-            count.to_string(),
-        );
-        Ok(count)
-    }
-
     fn policy_from_id(policy_id: &str) -> AppResult<OverwritePolicy> {
         overwrite_policy_from_id(policy_id)
             .ok_or_else(|| AppError::new(format!("unknown overwrite policy `{policy_id}`")))
@@ -1022,6 +989,12 @@ impl AppRuntime {
     }
 
     /// Batch delete of the current remote selection (recursive).
+    ///
+    /// The delete runs on the **live** SFTP client — the very connection the
+    /// pane already uses — instead of a worker job. Metadata operations are
+    /// fast, and a worker job would have to open a *second* SSH connection
+    /// (with its own host-key check and authentication), which is exactly why
+    /// the delete used to appear to do nothing.
     pub fn delete_sftp_selection(&mut self) -> AppResult<AppProjection> {
         let entries = self.selection_entry_pairs();
         if entries.is_empty() {
@@ -1033,11 +1006,52 @@ impl AppRuntime {
             );
             return Ok(self.projection());
         }
-        self.submit_remote_delete_entries(&entries)?;
+        let Some(session_key) = self.prepare_active_sftp_operation("delete")? else {
+            return Ok(self.projection());
+        };
+        let total = entries.len();
+        let mut deleted = 0usize;
+        let mut failures: Vec<String> = Vec::new();
+        for (path, is_dir) in &entries {
+            let client = self.sftp_live_client_mut(&session_key)?;
+            let item_failures = client.delete_recursive(path, *is_dir);
+            if item_failures.is_empty() {
+                deleted += 1;
+            } else {
+                failures.extend(item_failures);
+            }
+        }
+        // 列表刷新：删除完成后远端栏立即反映最新状态（此前只在 worker 任务
+        // 结束时刷新，任务失败就看不到任何变化）。
+        let _ = self.refresh_active_sftp_listing()?;
+        if failures.is_empty() {
+            self.set_status_kind(
+                "sftp-deleted-batch",
+                format!(
+                    "Deleted {deleted} remote entr{}.",
+                    if deleted == 1 { "y" } else { "ies" }
+                ),
+                deleted.to_string(),
+                String::new(),
+            );
+        } else {
+            self.set_status_kind(
+                "sftp-delete-failed",
+                format!(
+                    "Deleted {deleted} of {total} remote entries; {} failed.",
+                    failures.join("; ")
+                ),
+                deleted.to_string(),
+                failures.join("; "),
+            );
+        }
         Ok(self.projection())
     }
 
     /// Batch chmod of the current remote selection.
+    ///
+    /// Like the delete, chmod runs on the live SFTP client (the connection the
+    /// pane already uses) instead of opening a second SSH connection.
     pub fn chmod_sftp_selection(&mut self, permissions: &str) -> AppResult<AppProjection> {
         let permissions = parse_sftp_permissions(permissions)?;
         let entries = self.selection_entry_pairs();
@@ -1050,7 +1064,42 @@ impl AppRuntime {
             );
             return Ok(self.projection());
         }
-        self.submit_remote_chmod_entries(&entries, permissions)?;
+        let Some(session_key) = self.prepare_active_sftp_operation("chmod")? else {
+            return Ok(self.projection());
+        };
+        let paths = entries
+            .iter()
+            .map(|(path, _)| path.clone())
+            .collect::<Vec<_>>();
+        let results = self
+            .sftp_live_client_mut(&session_key)?
+            .chmod_many(&paths, permissions);
+        let failures = results
+            .iter()
+            .filter_map(|result| result.error_message())
+            .collect::<Vec<_>>();
+        let applied = results.len() - failures.len();
+        // 权限变化后刷新远端栏，让 Perm 列立即反映新值。
+        let _ = self.refresh_active_sftp_listing()?;
+        if failures.is_empty() {
+            self.set_status_kind(
+                "sftp-chmod-applied",
+                format!("Applied permissions {permissions:03o} to {applied} remote entries."),
+                format!("{permissions:03o}"),
+                applied.to_string(),
+            );
+        } else {
+            self.set_status_kind(
+                "sftp-chmod-failed",
+                format!(
+                    "Applied permissions {permissions:03o} to {applied} of {} remote entries; {} failed.",
+                    results.len(),
+                    failures.join("; ")
+                ),
+                format!("{permissions:03o}"),
+                failures.join("; "),
+            );
+        }
         Ok(self.projection())
     }
 
@@ -1242,7 +1291,6 @@ impl AppRuntime {
                             | SftpJobSpec::RemoteCopyTree { .. }
                             | SftpJobSpec::RemoteMove { .. }
                             | SftpJobSpec::RemoteDelete { .. }
-                            | SftpJobSpec::RemoteChmod { .. }
                     )
                 }) {
                     let _ = self.refresh_active_sftp_listing();

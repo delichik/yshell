@@ -34,7 +34,7 @@ use crate::bootstrap::{
 use crate::connect_jobs::ConnectJobMessage;
 use crate::error::{AppError, AppResult};
 use crate::runtime::AppRuntime;
-use crate::sftp_jobs::{SftpJobHandle, SftpJobMessage};
+use crate::sftp_jobs::SftpJobMessage;
 
 /// 应用级轮询间隔。
 ///
@@ -147,12 +147,19 @@ impl WindowManager {
     /// 创建管理器并打开初始窗口（主窗口 id = 0）。
     pub(crate) fn new(runtime: Rc<RefCell<AppRuntime>>) -> AppResult<Rc<RefCell<Self>>> {
         let (dialog_tx, dialog_rx) = std::sync::mpsc::channel();
-        let (sftp_job_tx, sftp_job_rx) = crate::sftp_jobs::start_sftp_job_worker();
+        let (sftp_job_tx, sftp_job_rx, sftp_limiter) =
+            crate::sftp_jobs::start_sftp_job_worker_with_limit(1);
         let (connect_jobs, connect_job_rx) = crate::connect_jobs::start_connect_job_worker();
         {
             let mut runtime = runtime.borrow_mut();
-            runtime.sftp_jobs = Some(SftpJobHandle::new(sftp_job_tx));
+            runtime.sftp_jobs = Some(crate::sftp_jobs::SftpJobHandle::with_limiter(
+                sftp_job_tx,
+                sftp_limiter,
+            ));
             runtime.connect_jobs = Some(connect_jobs);
+            // 应用配置里的并行传输数立即生效（不必重启）。
+            let limit = runtime.config_document.ui.sftp_max_parallel_transfers;
+            runtime.set_sftp_parallel_transfer_limit(limit);
         }
         let manager = Rc::new(RefCell::new(Self {
             runtime,

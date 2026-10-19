@@ -166,6 +166,37 @@ where
     pub fn chmod_many(&mut self, paths: &[String], permissions: u32) -> Vec<BatchOpResult> {
         self.backend.chmod_many(paths, permissions)
     }
+
+    /// Recursively deletes a remote entry (directories are emptied first).
+    ///
+    /// The recursion is post-order: children are removed before their parent
+    /// directory. The returned list carries one message per failed item so the
+    /// caller can report partial failures.
+    pub fn delete_recursive(&mut self, path: &str, is_dir: bool) -> Vec<String> {
+        let mut failures = Vec::new();
+        self.delete_recursive_inner(path, is_dir, &mut failures);
+        failures
+    }
+
+    fn delete_recursive_inner(&mut self, path: &str, is_dir: bool, failures: &mut Vec<String>) {
+        if is_dir {
+            match self.backend.list_dir(path) {
+                Ok(listing) => {
+                    for entry in listing.entries {
+                        let child_is_dir = entry.kind == FsEntryKind::Directory;
+                        self.delete_recursive_inner(&entry.path, child_is_dir, failures);
+                    }
+                }
+                Err(error) => {
+                    failures.push(format!("{path}: {error}"));
+                    return;
+                }
+            }
+        }
+        if let Err(error) = self.backend.delete(path) {
+            failures.push(format!("{path}: {error}"));
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

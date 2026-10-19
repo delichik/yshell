@@ -5,14 +5,14 @@
 // `terminal_workspace.slint`; the actual chrome/list widgets are the existing
 // `SftpPanel` panes.
 import { Theme } from "../theme.slint";
-import { LocalRow } from "local_pane.slint";
-import { SftpPanel, SftpRow, SftpCrumb } from "sftp_panel.slint";
+import { FileCrumb, FileRow } from "file_pane.slint";
+import { SftpPanel } from "sftp_panel.slint";
 
 /// Per-SFTP-tab data used by split-pane leaves (and reusable for a single page).
 export struct SftpPaneData {
     path_text: string,
-    rows: [SftpRow],
-    crumbs: [SftpCrumb],
+    rows: [FileRow],
+    crumbs: [FileCrumb],
     selected_index: int,
     connected: bool,
     sort_column_text: string,
@@ -26,7 +26,8 @@ export struct SftpPaneData {
     error_text: string,
     remote_edit_active: bool,
     remote_edit_text: string,
-    local_rows: [LocalRow],
+    local_rows: [FileRow],
+    local_crumbs: [FileCrumb],
     local_path_text: string,
     local_sort_column_text: string,
     local_sort_ascending: bool,
@@ -49,8 +50,8 @@ export component SftpTabPage inherits Rectangle {
     clip: true;
 
     // Remote projection.
-    in property <[SftpRow]> rows;
-    in property <[SftpCrumb]> crumbs;
+    in property <[FileRow]> rows;
+    in property <[FileCrumb]> crumbs;
     in property <int> selected-index: -1;
     in property <string> sort-column: "name";
     in property <bool> sort-ascending: true;
@@ -67,7 +68,8 @@ export component SftpTabPage inherits Rectangle {
     in-out property <string> path-text: "/";
 
     // Local projection (per SFTP tab).
-    in property <[LocalRow]> local-rows;
+    in property <[FileRow]> local-rows;
+    in property <[FileCrumb]> local-crumbs;
     in property <string> local-path-text: "/";
     in property <bool> local-show-hidden: false;
     in property <string> local-sort-column: "name";
@@ -153,6 +155,7 @@ export component SftpTabPage inherits Rectangle {
         remote-edit-text: root.remote-edit-text;
         path-text <=> root.path-text;
         local-rows: root.local-rows;
+        local-crumbs: root.local-crumbs;
         local-path-text: root.local-path-text;
         local-show-hidden: root.local-show-hidden;
         local-sort-column: root.local-sort-column;

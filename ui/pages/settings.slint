@@ -66,6 +66,8 @@ export component SettingsDialog inherits Rectangle {
     in property <string> secret-store-status-text: "";
     in-out property <string> scrollback-lines-text: "";
     in-out property <string> scrollback-max-cells-text: "";
+    /// 设置页「SFTP」分区的最大并行传输数。
+    in-out property <string> settings-sftp-max-parallel-transfers-text: "4";
     in property <string> terminal-status-text: "";
     /// UI language preference: `system` / `zh-CN` / `en-US`.
     in property <string> language-text: "system";
@@ -98,6 +100,8 @@ export component SettingsDialog inherits Rectangle {
     callback open-theme-manager();
     callback update-scrollback-lines(string);
     callback update-scrollback-max-cells(string);
+    callback update-settings-sftp-max-parallel-transfers(string);
+    callback save-settings-sftp();
     callback reset-terminal-defaults();
     callback save-terminal-settings();
     callback set-language(string);
@@ -237,8 +241,8 @@ export component SettingsDialog inherits Rectangle {
                             SettingsNavItem {
                                 text: @tr("SFTP");
                                 icon: "folder";
-                                enabled: false;
-                                hint: @tr("Not available in this version.");
+                                selected: root.section == "sftp";
+                                clicked => { root.section = "sftp"; }
                             }
                             SettingsNavItem {
                                 text: @tr("Shortcuts");
@@ -666,6 +670,58 @@ export component SettingsDialog inherits Rectangle {
                                                 color: Theme.text-tertiary;
                                                 font-size: Theme.font-caption;
                                                 wrap: word-wrap;
+                                            }
+                                        }
+
+                                        // --- SFTP --------------------------------------------
+                                        if root.section == "sftp" : VerticalLayout {
+                                            alignment: start;
+                                            spacing: Theme.spacing-12;
+
+                                            Text {
+                                                text: @tr("SFTP");
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-body-large;
+                                                font-weight: Theme.weight-semibold;
+                                            }
+
+                                            Text {
+                                                text: @tr("How many uploads and downloads may run at the same time. A higher value is faster on fast links but uses more bandwidth.");
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-body;
+                                                wrap: word-wrap;
+                                            }
+
+                                            Text {
+                                                text: @tr("Max parallel transfers");
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-body;
+                                                font-weight: Theme.weight-semibold;
+                                            }
+
+                                            WinTextInput {
+                                                text <=> root.settings-sftp-max-parallel-transfers-text;
+                                                placeholder-text: "4";
+                                                font-family: Theme.font-mono;
+                                                edited(text) => { root.update-settings-sftp-max-parallel-transfers(text); }
+                                            }
+
+                                            Text {
+                                                text: @tr("Allowed range: 1-16 transfers.");
+                                                color: Theme.text-tertiary;
+                                                font-size: Theme.font-caption;
+                                                wrap: word-wrap;
+                                            }
+
+                                            HorizontalLayout {
+                                                spacing: Theme.spacing-8;
+                                                alignment: end;
+
+                                                WinButton {
+                                                    text: @tr("Save SFTP Settings");
+                                                    accent: true;
+                                                    clicked => { root.save-settings-sftp(); }
+                                                }
                                             }
                                         }
 
