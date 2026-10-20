@@ -207,10 +207,18 @@ impl AppRuntime {
     }
 
     /// Multi-select click: `ctrl` toggles, `shift` extends from the anchor.
+    ///
+    /// A negative index is the "clear the selection" signal (clicking the empty
+    /// area of the list), matching the remote pane.
     pub fn select_local_row(&mut self, index: i32, ctrl: bool, shift: bool) -> AppProjection {
         // 记住修饰键：随后的拖动按资源管理器语义决定复制/移动。
         self.drag_ctrl = ctrl;
         self.drag_shift = shift;
+        if index < 0 {
+            self.local_pane.selected.clear();
+            self.local_pane.anchor = None;
+            return self.projection();
+        }
         let Some(listing) = self.local_pane.listing.clone() else {
             return self.projection();
         };

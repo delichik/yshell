@@ -29,6 +29,12 @@ component TitleBarDragTouch inherits TouchArea {
     private property <length> press-y: 0px;
     private property <bool> armed: false;
     private property <bool> drag-triggered: false;
+    /// 按下是否落在标题栏自身范围内。
+    ///
+    /// 系统移动循环会吞掉鼠标释放，Slint 的抓取因此残留：之后的第一次点击
+    /// 仍被送进这个 TouchArea。若不判断位置，这一次点击会被当成拖动起点
+    /// （再动一下就变成拖窗口）。
+    private property <bool> press-in-bounds: false;
 
     pure function abs-length(value: length) -> length {
         value < 0px ? -value : value;
@@ -41,6 +47,13 @@ component TitleBarDragTouch inherits TouchArea {
         if (event.button == PointerEventButton.left) {
             if (event.kind == PointerEventKind.down) {
                 root.drag-triggered = false;
+                root.press-in-bounds = self.mouse-x >= 0px && self.mouse-x <= root.width
+                    && self.mouse-y >= 0px && self.mouse-y <= root.height;
+                if (!root.press-in-bounds) {
+                    // 抓取残留送来的按下（点在标题栏之外）：不当作拖动起点。
+                    root.armed = false;
+                    return;
+                }
                 root.press-x = self.mouse-x;
                 root.press-y = self.mouse-y;
                 root.armed = true;
@@ -63,13 +76,17 @@ component TitleBarDragTouch inherits TouchArea {
     clicked => {
         if (root.drag-triggered) {
             root.drag-triggered = false;
-        } else {
+        } else if (root.press-in-bounds) {
             root.clicked-blank();
         }
+        root.press-in-bounds = false;
     }
 
     double-clicked => {
-        root.double-clicked-blank();
+        if (root.press-in-bounds) {
+            root.double-clicked-blank();
+        }
+        root.press-in-bounds = false;
     }
 }
 

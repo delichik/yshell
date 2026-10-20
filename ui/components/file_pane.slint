@@ -420,50 +420,94 @@ export component FilePane inherits Rectangle {
     }
 
     // ---------------------------------------------------- 框选（橡皮筋）
-    /// 框选状态：空白处按下左键 → 拖出一个矩形 → 选中覆盖的行。
+    /// 框选状态：按下后拖出一个矩形 → 选中覆盖的行。
+    ///
+    /// 按下的位置是矩形的**一个角**：横向、纵向都能伸展（资源管理器的橡皮筋）。
     private property <bool> box-selecting: false;
+    private property <length> box-anchor-x: 0px;
     private property <length> box-anchor-y: 0px;
+    private property <length> box-current-x: 0px;
     private property <length> box-current-y: 0px;
-    /// 框选覆盖的行区间（结束时算出）。
-    private property <int> box-first-row: 0;
-    private property <int> box-last-row: 0;
-    /// 选区矩形的上边缘与高度（列表视口坐标）。
+    /// 框选期间行上的拖拽把手停用（否则 DragArea 会抢走手势变成拖文件）。
+    private property <bool> box-armed: false;
+    /// 选区矩形的左/上/宽/高（按下点是一个角）。
+    private property <length> box-left: root.box-current-x < root.box-anchor-x
+        ? root.box-current-x
+        : root.box-anchor-x;
     private property <length> box-top: root.box-current-y < root.box-anchor-y
         ? root.box-current-y
         : root.box-anchor-y;
+    private property <length> box-width: root.box-current-x < root.box-anchor-x
+        ? root.box-anchor-x - root.box-current-x
+        : root.box-current-x - root.box-anchor-x;
     private property <length> box-height: root.box-current-y < root.box-anchor-y
         ? root.box-anchor-y - root.box-current-y
         : root.box-current-y - root.box-anchor-y;
+    /// 框选覆盖的行区间（结束时算出）。
+    private property <int> box-first-row: 0;
+    private property <int> box-last-row: 0;
+    /// 按下时所在的行（区间选择的锚点）。
+    private property <int> box-anchor-row: 0;
+    /// 本次要选到的行（离锚点最远的一行）。
+    private property <int> box-target-row: 0;
+    /// 上一次已经应用选择的行（避免每次移动都重算选择）。
+    private property <int> box-applied-row: -1;
 
-    /// 开始框选（列表视口坐标）。
-    public function start-box-selection(y: length) {
+    /// 开始框选（列表视口坐标；按下点成为矩形的一个角）。
+    public function start-box-selection(x: length, y: length, anchor-row: int) {
+        root.box-anchor-x = x;
         root.box-anchor-y = y;
+        root.box-current-x = x;
         root.box-current-y = y;
+        root.box-anchor-row = anchor-row;
         root.box-selecting = true;
+        root.box-armed = true;
+        root.box-applied-row = -1;
     }
 
-    /// 更新框选。
-    public function update-box-selection(y: length) {
+    /// 行内坐标 → 列表视口坐标（行在滚动内容里，视口坐标才是画框用的）。
+    ///
+    /// 视口坐标 = 内容坐标 + 滚动偏移（`content-y`/`content-x` ≤ 0）。
+    public function viewport-y(row-index: int, y-in-row: length) -> length {
+        return row-index * Theme.row-height-list + y-in-row + list.content-y;
+    }
+
+    /// 行内横坐标 → 列表视口横坐标。
+    public function viewport-x(x-in-row: length) -> length {
+        return x-in-row + list.content-x;
+    }
+
+    /// 更新框选：矩形跟着鼠标走，并即时把覆盖的行设为选中。
+    public function update-box-selection(x: length, y: length) {
+        root.box-current-x = x;
         root.box-current-y = y;
+        root.apply-box-selection();
     }
 
     /// 结束框选：把矩形覆盖的行设为选中（`..` 导航行不参与）。
-    public function finish-box-selection(y: length) {
+    public function finish-box-selection(x: length, y: length) {
         if (!root.box-selecting) {
             return;
         }
         root.box-selecting = false;
+        root.box-armed = false;
+        root.box-current-x = x;
         root.box-current-y = y;
-        // 只是点了一下（没有拖出矩形）→ 不改选择。
+        // 只是点了一下（没有拖出矩形）→ 保留按下的那行的选择。
         if (root.box-height < Theme.row-height-list / 2) {
             return;
         }
-        // 行区间：视口坐标 + 列表滚动偏移。
+        root.apply-box-selection();
+    }
+
+    /// 把当前矩形覆盖的行设为选中（复用既有的 Shift 区间选择）。
+    public function apply-box-selection() {
+        // 行区间：视口坐标 → 内容坐标（减掉滚动偏移）。
         root.box-first-row = Math.floor(
-            (root.box-top + list.content-y) / Theme.row-height-list
+            (root.box-top - list.content-y) / Theme.row-height-list
         );
         root.box-last-row = Math.floor(
-            (root.box-top + root.box-height + list.content-y - 1px) / Theme.row-height-list
+            (root.box-top + root.box-height - list.content-y - 1px) / Theme.row-height-list
         );
         if (root.box-first-row < 0) {
             root.box-first-row = 0;
@@ -484,9 +528,23 @@ export component FilePane inherits Rectangle {
         if (root.box-last-row < root.box-first-row) {
             return;
         }
-        // 先落锚点（普通点击），再用 Shift 扩展到末行（复用既有的区间选择）。
-        root.select-row(root.box-first-row, false, false);
-        root.select-row(root.box-last-row, false, true);
+        // 选到离锚点最远的那一行：向上拖是首行，向下拖是末行。
+        // 区间选择（Shift）从锚点扩展到目标行 → 覆盖整段。
+        root.box-target-row = root.box-last-row;
+        if (root.box-first-row < root.box-anchor-row) {
+            root.box-target-row = root.box-first-row;
+        }
+        if (root.box-applied-row == root.box-target-row) {
+            return;
+        }
+        root.box-applied-row = root.box-target-row;
+        if (root.box-anchor-row < 0) {
+            // 从空白区起手：锚点落在最下面一行，再向上扩展。
+            root.select-row(root.box-last-row, false, false);
+            root.select-row(root.box-first-row, false, true);
+            return;
+        }
+        root.select-row(root.box-target-row, false, true);
     }
 
     /// 提交路径编辑（回车）。
@@ -709,14 +767,14 @@ export component FilePane inherits Rectangle {
                 }
             }
 
-            // 列表空白处右键 = 空白菜单（远端栏此前没有这个入口）。
-            // 声明在 ListView 之前 = 位于行之下：落在行上的右键仍由行处理。
-            // 左键拖动 = 框选（橡皮筋）：空白处按下并拖出矩形。
-            blank_touch := TouchArea {
+            // 列表内容下方的空白区：可滚动时 Flickable 会吃掉按下事件，
+            // 所以"清空选择/框选"的命中区必须盖在 ListView 之上（只盖空白部分，
+            // 不挡行）。
+            blank_band := TouchArea {
                 x: 0;
-                y: 0;
+                y: max(0px, root.rows.length * Theme.row-height-list + list.content-y);
                 width: parent.width;
-                height: parent.height;
+                height: max(0px, parent.height - self.y);
                 pointer-event(event) => {
                     if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
                         root.context-menu-requested(
@@ -726,15 +784,29 @@ export component FilePane inherits Rectangle {
                         );
                     } else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
                         root.focus-requested();
-                        root.start-box-selection(self.mouse-y);
+                        root.start-box-selection(
+                            root.viewport-x(self.mouse-x),
+                            self.y + self.mouse-y,
+                            -1
+                        );
                     } else if ((event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel)
                         && event.button == PointerEventButton.left) {
-                        root.finish-box-selection(self.mouse-y);
+                        root.finish-box-selection(
+                            root.viewport-x(self.mouse-x),
+                            self.y + self.mouse-y
+                        );
+                        // 单击空白 = 取消选择（负索引 = 清空）。
+                        if (root.box-height < Theme.row-height-list / 2) {
+                            root.select-row(-1, false, false);
+                        }
                     }
                 }
                 moved => {
                     if (root.box-selecting) {
-                        root.update-box-selection(self.mouse-y);
+                        root.update-box-selection(
+                            root.viewport-x(self.mouse-x),
+                            self.y + self.mouse-y
+                        );
                     }
                 }
             }
@@ -882,12 +954,16 @@ export component FilePane inherits Rectangle {
 
                     // 行主体 = DragArea（拖动载荷由宿主按当前选择生成）+
                     // TouchArea（按下即选、双击激活、右键菜单）。
+                    //
+                    // 手势分工：**按住图标 = 拖文件**（复制/移动），**行上其它位置
+                    // = 框选**。这样框选在列表被填满时也能用（远端栏常见）。
                     DragArea {
                         x: 0;
                         y: 0;
                         width: parent.width;
                         height: parent.height;
-                        enabled: !row.is-parent;
+                        // 框选期间停用：DragArea 会在越过阈值时截走手势。
+                        enabled: !row.is-parent && !root.box-armed;
                         data: root.drag-payload(root.selection-key);
                         allow-copy: true;
                         allow-move: true;
@@ -912,6 +988,29 @@ export component FilePane inherits Rectangle {
                                         event.modifiers.control || event.modifiers.meta,
                                         event.modifiers.shift
                                     );
+                                    // 图标是拖拽把手；行上其它位置开框选。
+                                    if (!row.is-parent && self.mouse-x > root.icon-column-width) {
+                                        root.start-box-selection(
+                                            root.viewport-x(self.mouse-x),
+                                            root.viewport-y(index, self.mouse-y),
+                                            index
+                                        );
+                                    }
+                                } else if (event.button == PointerEventButton.left
+                                    && (event.kind == PointerEventKind.up
+                                        || event.kind == PointerEventKind.cancel)) {
+                                    root.finish-box-selection(
+                                        root.viewport-x(self.mouse-x),
+                                        root.viewport-y(index, self.mouse-y)
+                                    );
+                                }
+                            }
+                            moved => {
+                                if (root.box-selecting) {
+                                    root.update-box-selection(
+                                        root.viewport-x(self.mouse-x),
+                                        root.viewport-y(index, self.mouse-y)
+                                    );
                                 }
                             }
                             double-clicked => { root.activate-row(index); }
@@ -920,11 +1019,11 @@ export component FilePane inherits Rectangle {
                 }
             }
 
-            // 框选矩形（画在行之上：选中的行由运行时的选择状态高亮）。
+            // 框选矩形（画在行之上：按下点是一个角，可向四个方向伸展）。
             if root.box-selecting : Rectangle {
-                x: 0px;
+                x: root.box-left;
                 y: root.box-top;
-                width: parent.width;
+                width: root.box-width;
                 height: root.box-height;
                 background: Theme.subtle-selected;
                 border-width: 1px;

@@ -727,6 +727,23 @@ fn opening_a_saved_session_keeps_a_live_tab_and_opens_another() {
 }
 
 #[test]
+fn opening_a_saved_session_never_consumes_the_quick_connect_page() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 2);
+    // 快速连接页（New Tab）是带输入框的工作区：连接已保存会话不能把它顶掉。
+    let quick_connect_tab = runtime.open_new_tab().active_tab_id.clone();
+
+    let projection = runtime.open_saved_session("saved-0").expect("open saved");
+    assert_eq!(runtime.tabs.len(), 2, "the quick connect page is kept");
+    assert!(runtime
+        .tabs
+        .iter()
+        .any(|tab| tab.tab_id == quick_connect_tab));
+    assert_ne!(projection.active_tab_id, quick_connect_tab);
+    assert_tab_invariants(&runtime);
+}
+
+#[test]
 fn place_tab_split_creates_two_pane_layout() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 2);

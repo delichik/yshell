@@ -166,7 +166,7 @@ StatusBar
 | 对象 | 左键单击 | 左键双击 | 右键单击 | 拖拽 |
 |---|---|---|---|---|
 | Folder | 选中。 | 展开/折叠。 | 菜单：New Session、New Folder、Rename、Delete、Export Folder。 | 可拖到其它 Folder 下。 |
-| Session | 选中并在详情区显示摘要。 | 连接：活动标签已断开/未连接时占用该标签，否则打开新标签。 | 菜单：Connect、Open in New Tab、Open SFTP、Edit、Duplicate、Favorite、Delete、Export。 | 可拖到 Folder 下或改变排序。 |
+| Session | 选中并在详情区显示摘要。 | 连接：活动标签已断开/未连接（且不是快速连接页）时占用该标签，否则打开新标签。 | 菜单：Connect、Open in New Tab、Open SFTP、Edit、Duplicate、Favorite、Delete、Export。 | 可拖到 Folder 下或改变排序。 |
 | Favorite Session | 选中。 | 打开新标签并连接。 | 菜单：Connect、Remove Favorite、Edit。 | 可在 Favorites 内排序。 |
 | Recent Session | 选中。 | 打开新标签并连接。 | 菜单：Connect、Pin to Favorites、Remove from Recent。 | 不支持拖拽。 |
 
@@ -391,6 +391,10 @@ SFTP 标签固定为左右两栏：左栏本地文件，右栏远程文件。顶
 | 多选文件 | Ctrl/Cmd 或 Shift 多选。 | 无。 | 打开批量菜单。 | 批量上传覆盖确认。 | 批量下载。 |
 | 空白区域 | 清空选择。 | 无。 | 打开目录菜单。 | 上传到当前目录。 | 无。 |
 | 空白区域拖动 | 框选（橡皮筋）：拖出的矩形覆盖的行被选中。 | 无。 | 无。 | 无。 | 无。 |
+
+框选的手势细节：按下的位置是矩形的**一个角**（横竖都能伸展）；行上按住
+**文件图标**才是"拖文件"（复制/移动），行上其它位置都是框选——这样列表被填满
+时也能框选。单击列表空白处取消选择。
 
 拖放的复制/移动语义与 Windows 资源管理器一致：同卷默认移动、跨卷默认复制；
 按住 Ctrl 强制复制、按住 Shift 强制移动。

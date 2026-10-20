@@ -2004,14 +2004,15 @@ impl AppRuntime {
 
     /// 标签是否可以就地承载新会话（不新开标签）。
     ///
-    /// New Tab（Quick Connect 页）与"已断开/未连接"的终端/SFTP 标签都可以复用；
-    /// 正在连接的标签不参与（连接在途，替换会打断握手）。
+    /// 只有"已断开/未连接"的终端/SFTP 标签可以复用。**New Tab（快速连接页）
+    /// 不参与**：它是带输入框的工作区，被新会话顶掉的话用户正在输入的目标
+    /// （以及那个输入框）就没了。
     pub(crate) fn tab_reusable_for_new_session(&self, tab_id: &str) -> bool {
         let Some(index) = self.tab_index(tab_id) else {
             return false;
         };
         if self.tabs[index].is_new_tab() {
-            return true;
+            return false;
         }
         let Some(session_id) = self.tabs[index].session_id() else {
             return false;
