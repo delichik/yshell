@@ -1046,10 +1046,22 @@ impl AppRuntime {
 // 算出每个面板框的 x/y/宽/高与断点标志。Slint 不再从 `window.width` 反推布局，
 // `nav_effective_width`/`dock_effective_width` 一类的绑定环随之消失。
 
-/// 折叠面板高度（设计 28–32px）。
-pub(crate) const PANEL_COLLAPSED_HEIGHT: f32 = 32.0;
+/// 折叠面板高度（= `Theme.bar-height-panel-header`，折叠态就是一条标题条）。
+///
+/// 之前这里是 32px，但 Slint 侧 `PanelFrame.min-height` 在折叠态被钉到
+/// `header-height`（44px），min-height 会钳掉 height —— 折叠卡片实际渲染 44px，
+/// 每折叠一个面板整列就多溢出 12px，底部面板被推出内容区。这里与标题条对齐。
+pub(crate) const PANEL_COLLAPSED_HEIGHT: f32 = 44.0;
 /// 同栏相邻面板之间的分栏把手高度。
-pub(crate) const PANEL_HANDLE_HEIGHT: f32 = 4.0;
+///
+/// 卡片间距（规范 §5.8「右侧面板的三段拆成独立卡片，间距 12」）。把手条本身
+/// 透明，间距就是两块卡片之间露出的窗口底色；12px 也让拖拽命中区更好抓。
+pub(crate) const PANEL_HANDLE_HEIGHT: f32 = 12.0;
+/// 卡片相对栏边缘的内缩（左右各 12px）。
+///
+/// 之前卡片左右零内缩、贴着窗口边，8px 圆角被窗口边界切掉一半；内缩后圆角
+/// 完整可见，且与上下 12px 留白、卡片间 12px 间距构成统一的 12px 节奏。
+pub(crate) const PANEL_CARD_INSET: f32 = 12.0;
 /// 展开面板最小高度（§4.3：每面板最小高度如 120px）。
 pub(crate) const PANEL_MIN_HEIGHT: f32 = 120.0;
 /// 右栏上下留白（与 W5-④ 的卡片留白一致）。
@@ -1360,9 +1372,11 @@ fn append_stack_frames(
         return;
     }
     let heights = stack_heights(slots, ratios, area_height, top_padding, bottom_padding);
+    // 卡片左右内缩 12px：圆角不再被窗口边切掉，整栏是统一的 12px 节奏。
+    let card_width = (effective_width - 2.0 * PANEL_CARD_INSET).max(0.0);
     let x = match side {
-        PanelSide::Left => 0.0,
-        PanelSide::Right => (area_width - effective_width).max(0.0),
+        PanelSide::Left => PANEL_CARD_INSET,
+        PanelSide::Right => (area_width - effective_width).max(0.0) + PANEL_CARD_INSET,
     };
     let mut y = top_padding;
     for (slot, height) in slots.iter().zip(heights) {
@@ -1373,7 +1387,7 @@ fn append_stack_frames(
             visible: column_visible,
             x,
             y,
-            width: effective_width.max(0.0),
+            width: card_width,
             height,
         });
         y += height + PANEL_HANDLE_HEIGHT;
@@ -1641,7 +1655,6 @@ impl AppRuntime {
         if !top.visible || !bottom.visible {
             return self.projection();
         }
-        let delta = pointer_y - bottom.y;
         let min_top = if top.collapsed {
             PANEL_COLLAPSED_HEIGHT
         } else {
@@ -1653,19 +1666,25 @@ impl AppRuntime {
             PANEL_MIN_HEIGHT
         };
         let mut heights: Vec<f32> = frames.iter().map(|frame| frame.height).collect();
+        let total: f32 = heights[boundary] + heights[boundary + 1];
+        // 分割线 = 上面板的底边（= 把手缝隙的上沿），跟随指针。
+        //
+        // 此前用 `delta = pointer_y - bottom.y`，而 bottom.y = 分割线 + 把手宽度，
+        // 等价于「面板边缘落在 pointer_y − 把手宽度」；把手加宽到 12px 后这个偏移
+        // 让面板边缘明显跟不上指针。现在直接以分割线为锚点。
         match (top.collapsed, bottom.collapsed) {
             (false, false) => {
-                let total = heights[boundary] + heights[boundary + 1];
-                let new_top =
-                    (heights[boundary] + delta).clamp(min_top, (total - min_bottom).max(min_top));
+                let new_top = (pointer_y - top.y).clamp(min_top, (total - min_bottom).max(min_top));
                 heights[boundary] = new_top;
                 heights[boundary + 1] = (total - new_top).max(min_bottom);
             }
             (false, true) => {
-                heights[boundary] = (heights[boundary] + delta).max(min_top);
+                heights[boundary] = (pointer_y - top.y).max(min_top);
             }
             (true, false) => {
-                heights[boundary + 1] = (heights[boundary + 1] - delta).max(min_bottom);
+                // 上面板已折叠（高度固定），指针改为指下面板的上沿。
+                heights[boundary + 1] =
+                    (bottom.y + heights[boundary + 1] - pointer_y).max(min_bottom);
             }
             (true, true) => return self.projection(),
         }
@@ -2224,9 +2243,15 @@ mod tests {
         let sessions = *view.frame(PanelId::Sessions).expect("sessions");
         assert_eq!(sessions.placement, PanelPlacement::Left);
         assert!(sessions.visible);
+        // 卡片左右内缩 PANEL_CARD_INSET（圆角不再被窗口边切）。
         assert_eq!(
             (sessions.x, sessions.y, sessions.width, sessions.height),
-            (0.0, 12.0, 240.0, 770.0)
+            (
+                PANEL_CARD_INSET,
+                12.0,
+                240.0 - 2.0 * PANEL_CARD_INSET,
+                770.0
+            )
         );
 
         // Local/SFTP are no longer dock panels; the remaining panels keep the
@@ -2234,10 +2259,17 @@ mod tests {
         assert!(view.frame(PanelId::Local).is_none());
         assert!(view.frame(PanelId::Sftp).is_none());
         let tunnels = *view.frame(PanelId::Tunnels).expect("tunnels");
-        assert_eq!((tunnels.x, tunnels.y, tunnels.width), (1100.0, 12.0, 340.0));
+        assert_eq!(
+            (tunnels.x, tunnels.y, tunnels.width),
+            (
+                1100.0 + PANEL_CARD_INSET,
+                12.0,
+                340.0 - 2.0 * PANEL_CARD_INSET
+            )
+        );
         assert!(tunnels.visible);
         let commands = *view.frame(PanelId::QuickCommands).expect("commands");
-        assert_eq!(commands.x, 1100.0);
+        assert_eq!(commands.x, 1100.0 + PANEL_CARD_INSET);
         assert!(commands.y > tunnels.y);
         assert!(commands.visible);
         assert!(view.frame(PanelId::Transfers).is_none());
@@ -2289,18 +2321,15 @@ mod tests {
         let view = compute_panel_layout(&layout, 1200.0, 500.0, None);
         let transfers = *view.frame(PanelId::Transfers).expect("transfers");
         let tunnels = *view.frame(PanelId::Tunnels).expect("tunnels");
-        // available = 500 − 24 留白 − 4 把手 = 472，对半 = 236。
+        // available = 500 − 24 留白 − PANEL_HANDLE_HEIGHT 把手，对半分。
+        let half = (500.0 - 24.0 - PANEL_HANDLE_HEIGHT) / 2.0;
         assert!(
-            approx(transfers.height, 236.0),
+            approx(transfers.height, half),
             "transfers = {}",
             transfers.height
         );
-        assert!(
-            approx(tunnels.height, 236.0),
-            "tunnels = {}",
-            tunnels.height
-        );
-        assert!(approx(tunnels.y, 12.0 + 236.0 + 4.0));
+        assert!(approx(tunnels.height, half), "tunnels = {}", tunnels.height);
+        assert!(approx(tunnels.y, 12.0 + half + PANEL_HANDLE_HEIGHT));
     }
 
     #[test]
@@ -2318,7 +2347,10 @@ mod tests {
         let transfers = *view.frame(PanelId::Transfers).expect("transfers");
         let tunnels = *view.frame(PanelId::Tunnels).expect("tunnels");
         assert!(approx(transfers.height, PANEL_MIN_HEIGHT));
-        assert!(approx(tunnels.height, 472.0 - PANEL_MIN_HEIGHT));
+        assert!(approx(
+            tunnels.height,
+            500.0 - 24.0 - PANEL_HANDLE_HEIGHT - PANEL_MIN_HEIGHT
+        ));
     }
 
     #[test]
@@ -2382,7 +2414,7 @@ mod tests {
     }
 
     #[test]
-    fn collapsed_panel_pins_to_32px() {
+    fn collapsed_panel_pins_to_header_height() {
         let layout = LayoutProfile {
             left: vec![slot(PanelId::Sessions, false)],
             right: vec![
@@ -2396,11 +2428,14 @@ mod tests {
         let tunnels = *view.frame(PanelId::Tunnels).expect("tunnels");
         assert!(transfers.collapsed);
         assert!(approx(transfers.height, PANEL_COLLAPSED_HEIGHT));
-        assert!(approx(tunnels.y, 12.0 + PANEL_COLLAPSED_HEIGHT + 4.0));
+        assert!(approx(
+            tunnels.y,
+            12.0 + PANEL_COLLAPSED_HEIGHT + PANEL_HANDLE_HEIGHT
+        ));
         // 唯一展开的面板吸收全部剩余高度（没有填充面板时等分）。
         assert!(approx(
             tunnels.height,
-            500.0 - 12.0 - 12.0 - 4.0 - PANEL_COLLAPSED_HEIGHT
+            500.0 - 12.0 - 12.0 - PANEL_HANDLE_HEIGHT - PANEL_COLLAPSED_HEIGHT
         ));
     }
 
@@ -2458,8 +2493,9 @@ mod tests {
         let before = std::fs::read_to_string(&config_path).expect("config before");
 
         runtime.set_panel_area_size(1200.0, 500.0);
-        // 左栈 = [Sessions, QuickCommands]（初始 407/89）；把把手拖到等高（248/248）处。
-        runtime.preview_panel_split_pixels(PanelSide::Left, 0, 252.0);
+        // 左栈 = [Sessions, QuickCommands]；把分割线（上卡片底边）拖到等高
+        // （232/232）处：分割线 y = top.y + 上面板高度 = 12 + 232 = 244。
+        runtime.preview_panel_split_pixels(PanelSide::Left, 0, 244.0);
         let after_preview = std::fs::read_to_string(&config_path).expect("config after preview");
         assert_eq!(before, after_preview, "preview 不应落盘");
         let view = runtime.panel_layout_view();

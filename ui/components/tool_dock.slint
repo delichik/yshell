@@ -417,7 +417,9 @@ export component ToolDock inherits Rectangle {
         max-height: 100000px;
         // P3：与其余面板统一 44px 头高，避免 Sessions 视觉矮一截。
         header-height: Theme.bar-height-panel-header;
-        content-padding: Theme.spacing-8;
+        // 全部面板统一 12px 内容内边距（规范 §5.8 卡片内边距 12–16）：
+        // 之前 Sessions 用 8、Transfers 用 0，同栏上下两块内容的左缘互相错开。
+        content-padding: Theme.spacing-12;
         title-text: @tr("MainWindow" => "Sessions");
         icon: "terminal";
         collapsed: root.sessions-frame.collapsed;
@@ -429,10 +431,13 @@ export component ToolDock inherits Rectangle {
         hide-requested() => { root.panel-hide-requested("sessions"); }
 
         SessionSidebarContent {
-            width: parent.width;
-            // PANEL-2：PanelFrame 的 content-padding 8 占掉上下各 8px；子项用
-            // `parent.height` 会让底部 16px 溢出 content slot 的 clip。显式扣掉。
-            height: max(0px, parent.height - 2 * Theme.spacing-8);
+            // 不显式写 `width: parent.width`：那是卡片内槽的宽度（不含 12px 内容
+            // 内边距），会让子项比可视内容区宽 24px、右端按钮被卡片裁掉。
+            // 交给 PanelFrame 的布局按 padding 后的内容宽度分配。
+            //
+            // PANEL-2：PanelFrame 的 content-padding 12 占掉上下各 12px；子项用
+            // `parent.height` 会让底部 24px 溢出 content slot 的 clip。显式扣掉。
+            height: max(0px, parent.height - 2 * Theme.spacing-12);
             search-text <=> root.session-search-text;
             tree-rows: root.session-tree-rows;
             selected-id: root.session-selected-id;
@@ -610,7 +615,8 @@ export component ToolDock inherits Rectangle {
         hide-requested() => { root.panel-hide-requested("tunnels"); }
 
         TunnelPanel {
-            width: parent.width;
+            // 宽度由 PanelFrame 的布局按 padding 后的内容宽度分配（见上）。
+            //
             // 同上：content-padding 12 已由 PanelFrame 占用，避免底部 24px 被裁。
             height: max(0px, parent.height - 2 * Theme.spacing-12);
             rows: root.tunnel-rows;
@@ -665,7 +671,7 @@ export component ToolDock inherits Rectangle {
         min-height: 0px;
         max-height: 100000px;
         header-height: Theme.bar-height-panel-header;
-        content-padding: 0px;
+        content-padding: Theme.spacing-12;
         title-text: @tr("MainWindow" => "Transfers");
         icon: "download";
         collapsed: root.transfers-frame.collapsed;
@@ -674,8 +680,10 @@ export component ToolDock inherits Rectangle {
         hide-requested() => { root.panel-hide-requested("transfers"); }
 
         TransferQueue {
-            width: parent.width;
-            height: parent.height;
+            // 宽度由 PanelFrame 的布局按 padding 后的内容宽度分配（见上）。
+            //
+            // 同上：content-padding 12 占掉上下各 12px，显式扣掉避免底部被裁。
+            height: max(0px, parent.height - 2 * Theme.spacing-12);
             rows: root.transfer-rows;
             total-count: root.transfer-total-count;
             active-count: root.transfer-active-count;

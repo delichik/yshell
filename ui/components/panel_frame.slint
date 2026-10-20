@@ -136,15 +136,10 @@ export component PanelFrame inherits Rectangle {
         }
     }
 
-    // 展开态标题条底部分隔线（折叠态不画，避免与卡片描边重叠）。
-    Rectangle {
-        visible: !root.collapsed;
-        x: Theme.spacing-12;
-        y: root.header-height;
-        width: parent.width - 2 * Theme.spacing-12;
-        height: 1px;
-        background: Theme.layer-stroke;
-    }
+    // 标题条与内容之间不再画分隔线：卡片本身已有 1px `card-stroke` 描边，
+    // 而 `layer-stroke` 与 `card-stroke` 取值完全相同（都是 #FFFFFF29 / #00000024），
+    // 两条同色同粗的线叠在一起会读成「框中框」——卡片像是被切开却没切干净。
+    // 现在靠 12px 内容内边距 + 标题的 `body-strong` 字重区分层级。
 
     // 内容槽：折叠时高度为 0（clip 裁剪；子内容保留实例与状态）。
     Rectangle {
@@ -165,11 +160,11 @@ export component PanelFrame inherits Rectangle {
     }
 }
 
-/// 同栏上下分栏的 4px 拖拽把手。
+/// 同栏上下分栏的拖拽把手（卡片之间的 12px 缝隙）。
 ///
 /// 与 nav/dock 的把手一致：组件只上报指针的窗口绝对 y（`drag-started/moved`），
 /// 宽高钳制与比例换算在宿主；`dragging` 由宿主回传用于高亮。
-/// 视觉条仍是 4px；命中区上下各扩 6px，方便抓住。
+/// 缝隙本身透明（露出窗口底色 = 卡片间距）；命中区就是整条 12px 缝隙。
 export component PanelSplitHandle inherits Rectangle {
     in property <bool> dragging: false;
 
@@ -181,16 +176,21 @@ export component PanelSplitHandle inherits Rectangle {
     background: transparent;
 
     // 视觉高亮条（拖拽/悬停时 accent）；命中区见下方更大的 TouchArea。
+    //
+    // 把手条现在是卡片之间的 12px 缝隙（规范 §5.8「间距 12」）。高亮画在缝隙
+    // **上沿**——也就是上卡片的底边：它就是两块卡片之间的分割线，高亮时把
+    // 这条线本身点亮，而不是在缝隙中央画一条新的线（那会让卡片看起来多出
+    // 一条边）。命中区覆盖整条 12px 缝隙，抓握区足够大。
     Rectangle {
+        y: 0px;
         width: parent.width;
-        height: parent.height;
+        height: 2px;
+        border-radius: 1px;
         background: root.dragging || split_touch.has-hover ? Theme.accent : transparent;
         animate background { duration: Theme.duration-faster; easing: ease-out; }
     }
 
     split_touch := TouchArea {
-        y: -6px;
-        height: parent.height + 12px;
         mouse-cursor: row-resize;
 
         pointer-event(event) => {

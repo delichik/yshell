@@ -149,8 +149,8 @@ export component NewFolderDialog inherits Rectangle {
 // 会话面板内容（N3）：标题条/折叠/⋯ 菜单由通用 `PanelFrame` 承担，本组件只渲染
 // 搜索框 + SAVED + 会话树。
 //
-// 几何节奏与拆分前保持一致（左栏 pad 8；PanelFrame 标题 40 + 内容 pad 8 恰好
-// 取代旧的自绘头部 8+40），保证会话树行坐标不变。
+// 几何节奏与拆分前保持一致（PanelFrame 标题 44 + 内容 pad 12），保证会话树
+// 行坐标不变。
 export component SessionSidebarContent inherits Rectangle {
     /// 搜索词：与宿主窗口属性双向绑定（`<=>`）。
     in-out property <string> search-text: "";

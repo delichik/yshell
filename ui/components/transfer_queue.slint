@@ -57,7 +57,8 @@ export component TransferQueue inherits Rectangle {
     }
 
     VerticalLayout {
-        padding: Theme.spacing-4;
+        // 外层 PanelFrame 已给 12px 内容内边距（与其余面板统一），这里不再叠加。
+        padding: 0px;
         spacing: Theme.spacing-4;
 
         HorizontalLayout {
