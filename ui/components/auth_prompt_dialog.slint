@@ -41,6 +41,7 @@ component AuthKeyListItem inherits Rectangle {
     height: 44px;
     border-radius: Theme.radius-control;
     background: selected ? Theme.subtle-selected
+        : touch.pressed ? Theme.subtle-pressed
         : touch.has-hover ? Theme.subtle-hover
         : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
@@ -137,11 +138,24 @@ export component AuthPromptDialog inherits Rectangle {
     // 面板宽度与正文列宽集中定义（宽度归一见 WS-C 报告）。正文类文本显式给宽度：
     // B 轮5 实测面板底部内边距塌成 2px（按钮行贴住下边框），根因是自动换行的正文在
     // 布局宽度未定时估算 preferred-height，少算了一行。
-    private property <length> dialog-width: 460px;
+    private property <length> dialog-width: Theme.dialog-width;
     private property <length> content-width:
         root.dialog-width - 2 * 1px - 2 * Theme.spacing-20;
 
-    visible: self.open;
+    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
+    //
+    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
+    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
+    states [
+        opened when root.open: {
+            opacity: 1.0;
+            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
+            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
+        }
+        closed when !root.open: { opacity: 0.0; }
+    ]
+    // 退场期间保持可见，等淡出结束再隐藏。
+    visible: root.open || self.opacity > 0.01;
     background: Theme.scrim;
 
     private property <bool> show-password:
@@ -230,6 +244,8 @@ export component AuthPromptDialog inherits Rectangle {
                     WinIconButton {
                         icon: "close";
                         accessible-name: @tr("Cancel");
+                        // 标题块两行（≈46px），按钮 32px 固定高 → 默认 stretch 贴行顶。
+                        cross-axis-self-alignment: center;
                         clicked => { root.cancel(); }
                     }
                 }

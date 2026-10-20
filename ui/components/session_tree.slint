@@ -38,6 +38,7 @@ component SessionTreeRowItem inherits Rectangle {
     height: Theme.row-height-tree;
     border-radius: Theme.radius-control;
     background: root.selected ? Theme.subtle-selected
+        : row_touch.pressed ? Theme.subtle-pressed
         : row_touch.has-hover ? Theme.subtle-hover
         : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }

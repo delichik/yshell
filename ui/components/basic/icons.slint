@@ -20,6 +20,9 @@ export component Icon inherits Image {
     height: icon-size;
     image-fit: contain;
     colorize: icon-color;
+    // §6.3 #1 / #11：图标着色随状态（hover / 选中 / 禁用）淡入淡出，
+    // 100ms / ease-out——否则图标会"啪"地变色，和周围文字的过渡不同步。
+    animate colorize { duration: Theme.duration-faster; easing: ease-out; }
 
     // E14：按显示尺寸选最近的 2× 资源（12→24、16→32、20→40），
     // 避免最近邻采样在非整数比（40/12≈3.33）下发虚。

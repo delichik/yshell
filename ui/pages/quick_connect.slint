@@ -63,7 +63,7 @@ component QuickConnectRowItem inherits Rectangle {
 
     height: Theme.row-height-nav;
     border-radius: Theme.radius-control;
-    background: row-hover.has-hover ? Theme.subtle-hover : transparent;
+    background: row-hover.pressed ? Theme.subtle-pressed : row-hover.has-hover ? Theme.subtle-hover : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
     // 悬停高亮 + 整行可点（B 轮2 #8 / M 轮2 中#8：原来整行是"空命中区"，
@@ -228,6 +228,9 @@ export component QuickConnectPage inherits Rectangle {
 
                 HorizontalLayout {
                     spacing: Theme.spacing-8;
+                    // 输入框 40px、按钮 32px：按钮是写死高度的固定尺寸子项，
+                    // 默认 stretch 会把它贴行顶（比输入框中线高 4px）→ 显式交叉轴居中。
+                    cross-axis-self-alignment: center;
 
                     target-input := WinTextInput {
                         height: Theme.row-height-nav;
@@ -245,6 +248,7 @@ export component QuickConnectPage inherits Rectangle {
                         accent: true;
                         // 空输入没有可解析的目标（与 W5-A3 的状态门限一致）。
                         enabled: root.input-text != "";
+                        cross-axis-self-alignment: center;
                         clicked => { root.submit(root.input-text); }
                     }
                 }

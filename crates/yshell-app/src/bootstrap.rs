@@ -317,6 +317,20 @@ pub(crate) fn apply_appearance(window: &MainWindow) {
         ThemeMode::Dark => 2,
     });
 
+    // §6.4.4 / §6.1.5："减少动画"总开关。设置页的开关直接写 Theme.animations-enabled，
+    // 这里只负责启动时的初值（`YSHELL_REDUCE_MOTION=1` 关闭所有过渡）。
+    if std::env::var("YSHELL_REDUCE_MOTION")
+        .ok()
+        .is_some_and(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+    {
+        theme.set_animations_enabled(false);
+    }
+
     // 显式浅色/深色时同步覆盖 std-widgets 的色板，保证整窗一致；跟随系统时不动。
     // T0：Slint 1.18.1 起 `slint::language::ColorScheme` 是公开类型（1.9 只能用
     // `private_unstable_api` 的 re-export）；W3 用自绘控件替换 std-widgets 后即可删除这段。

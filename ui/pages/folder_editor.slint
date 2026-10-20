@@ -147,7 +147,7 @@ component SwatchStrip inherits Rectangle {
 component FieldRow inherits Rectangle {
     in property <TriStateField> data;
     /// 标签列宽（窄表单可调小；默认与 Folder Editor 一致）
-    in property <length> label-width: 190px;
+    in property <length> label-width: Theme.form-label-width-wide;
     callback set-inherit();
     callback set-explicit();
     callback reset();
@@ -290,6 +290,9 @@ component FieldRow inherits Rectangle {
 
         TriStateControl {
             state: root.data.state;
+            // 三态控件 24px 固定高，字段行 44px → 默认 stretch 会贴行顶（高 10px）。
+            // 同行的 SwatchStrip 用的就是 cross-axis-self-alignment，这里对齐。
+            cross-axis-self-alignment: center;
             set-inherit => { root.set-inherit(); }
             set-explicit => { root.set-explicit(); }
             reset => { root.reset(); }
@@ -303,7 +306,7 @@ export component TriStateFieldSection inherits Rectangle {
     in property <string> hint: "";
     in property <[TriStateField]> fields: [];
     /// 透传给字段行的标签列宽（Session Editor 表单较窄，可调小）。
-    in property <length> label-width: 190px;
+    in property <length> label-width: Theme.form-label-width-wide;
     callback field-set-inherit(string);
     callback field-set-explicit(string);
     callback field-reset(string);
@@ -388,7 +391,20 @@ export component FolderEditor inherits Rectangle {
         + 2 * 1px
         + 2 * Theme.spacing-20;
 
-    visible: self.open;
+    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
+    //
+    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
+    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
+    states [
+        opened when root.open: {
+            opacity: 1.0;
+            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
+            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
+        }
+        closed when !root.open: { opacity: 0.0; }
+    ]
+    // 退场期间保持可见，等淡出结束再隐藏。
+    visible: root.open || self.opacity > 0.01;
     background: Theme.scrim;
 
     // Esc / 遮罩点击关闭；焦点在弹窗内（与 Settings / Session Editor 的 L2 行为一致）。
@@ -409,9 +425,9 @@ export component FolderEditor inherits Rectangle {
         }
 
         panel := Rectangle {
-            x: (parent.width - 820px) / 2;
+            x: (parent.width - Theme.dialog-width-wide) / 2;
             y: max((parent.height - self.height) / 2, Theme.spacing-24);
-            width: 820px;
+            width: Theme.dialog-width-wide;
             height: min(root.panel-height, parent.height - 2 * Theme.spacing-24);
             background: Theme.panel-background;
             border-radius: Theme.radius-panel;
@@ -434,6 +450,8 @@ export component FolderEditor inherits Rectangle {
                         height: self.width;
                         border-radius: Theme.radius-control;
                         background: Theme.accent-soft;
+                        // 徽标 36px / 标题块两行（≈46px）→ 默认 stretch 贴行顶。
+                        cross-axis-self-alignment: center;
 
                         Icon {
                             name: "folder";
@@ -470,6 +488,7 @@ export component FolderEditor inherits Rectangle {
                     WinIconButton {
                         icon: "close";
                         accessible-name: @tr("Close");
+                        cross-axis-self-alignment: center;
                         clicked => { root.close(); }
                     }
                 }

@@ -41,15 +41,27 @@ export component KnownHostsPage inherits Rectangle {
     private property <bool> detail-split-visible:
         root.detail-entry-visible || root.detail-path-text != "";
 
-    visible: self.open;
-    // 已由 Session > Host Keys…（HostKeysPage）取代日常入口；Settings 不再打开本页。
-    // 运行时 `open_known_hosts_manager()` / 单测仍可触达，待后续波次删除双轨。
+    // 已由 Session > Host Keys…（HostKeysPage）取代日常入口；Settings 不再打开本页。    // 运行时 `open_known_hosts_manager()` / 单测仍可触达，待后续波次删除双轨。
     // 原注释：B 轮3 #32：本弹窗**只**从 Settings 内部打开（`open_known_hosts_manager()` 唯一调用点
     // 在 settings 的「打开已知主机管理器」按钮），此时 Settings 自己的 scrim 已经压暗全窗；
     // 再叠一层会让遮罩明显更深（实测 45→9，其它弹窗 45→21）。这里不再画第二层遮罩，
     // 视觉与其它单层弹窗一致；点击"面板外"仍由 dialog_scope 的全窗 TouchArea 关闭本弹窗。
     // （若将来新增独立入口，需要恢复 `background: Theme.scrim;`。）
     background: transparent;
+
+    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
+    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，所以用 states。
+    // 本页不画第二层遮罩（见上），所以这里只淡入/淡出面板本身。
+    states [
+        opened when root.open: {
+            opacity: 1.0;
+            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
+            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
+        }
+        closed when !root.open: { opacity: 0.0; }
+    ]
+    // 退场期间保持可见，等淡出结束再隐藏。
+    visible: root.open || self.opacity > 0.01;
 
     // L2（对话框 Esc / 遮罩点击关闭）：根 FocusScope 包住整个弹窗；打开时聚焦，
     // Esc 沿焦点链冒泡到这里 → 与关闭按钮完全相同的 `root.close()` 路径；其余按键 reject。
@@ -72,9 +84,9 @@ export component KnownHostsPage inherits Rectangle {
         }
 
         Rectangle {
-            x: (parent.width - 760px) / 2;
+            x: (parent.width - Theme.dialog-width-wide) / 2;
             y: 52px;
-            width: 760px;
+            width: Theme.dialog-width-wide;
             height: parent.height - 104px;
             background: Theme.panel-background;
             border-radius: Theme.radius-panel;

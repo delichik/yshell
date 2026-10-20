@@ -45,7 +45,7 @@ export component MainWindow inherits Window {
     // WIN-1：Slint/winit 的缩放命中只判断"无框 + 可缩放"，不排除最大化；最大化时
     // 必须把命中带设成 0，否则四边/四角仍会切成 resize 光标并抢走按压事件。
     no-frame: true;
-    resize-border-width: root.maximized ? 0px : 8px;
+    resize-border-width: root.maximized ? 0px : Theme.resize-border-width;
     // WIN-2/WIN-3：Windows 下标题栏拖动改走 Win32 原生移动循环（绕开 winit
     // `drag_window()` 的 dragging 守卫，见 win_chrome::start_native_window_move）。
     // 由 Rust 在窗口创建时按 cfg!(windows) 写入；非 Windows 保持 false，

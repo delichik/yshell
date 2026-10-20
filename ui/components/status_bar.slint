@@ -68,13 +68,33 @@ export component StatusBar inherits Rectangle {
             background: root.connection-dot-color;
             opacity: root.connection-state == "connecting" ? 0.4 : 1.0;
             animate opacity {
-                duration: 1500ms;
+                // §6.3 连接中呼吸（1.5s 无限 alternate）。
+                // 时长必须绑 Theme token，否则"减少动画"关不掉它（§6.4.4）。
+                duration: Theme.duration-breathe;
                 easing: ease-in-out;
                 iteration-count: root.connection-state == "connecting" ? -1 : 0;
                 direction: alternate;
             }
             accessible-role: none;
             vertical-stretch: 0;
+        }
+
+        // §8「状态不靠颜色」：圆点之外补一个状态词，
+        // 否则绿点/黄点/红点只能靠颜色区分（读屏用户更是什么都拿不到）。
+        if root.connection-target != "" : Text {
+            text: root.connection-state == "connected" ? @tr("StatusBar" => "Connected")
+                : root.connection-state == "connecting" ? @tr("StatusBar" => "Connecting")
+                : root.connection-state == "pending" ? @tr("StatusBar" => "Pending")
+                : root.connection-state == "failed" ? @tr("StatusBar" => "Failed")
+                : @tr("StatusBar" => "Disconnected");
+            color: root.connection-state == "connected" ? Theme.text-primary
+                : root.connection-state == "failed" ? Theme.critical
+                : Theme.text-secondary;
+            font-size: Theme.font-caption;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+            horizontal-stretch: 0;
         }
 
         // 失败态状态文案已含 user@host，再显示 target 会叠成难辨的一长串。
@@ -137,8 +157,8 @@ export component StatusBar inherits Rectangle {
         if root.sync-active || root.sync-notice-text != "" : Rectangle {
             min-width: 32px;
             border-radius: Theme.radius-control;
-            background: sync-touch.has-hover
-                ? Theme.subtle-hover
+            background: sync-touch.pressed ? Theme.subtle-pressed
+                : sync-touch.has-hover ? Theme.subtle-hover
                 : (root.sync-notice-text != "" ? Theme.attention-background : transparent);
             animate background { duration: Theme.duration-faster; easing: ease-out; }
 
@@ -166,10 +186,12 @@ export component StatusBar inherits Rectangle {
                 }
 
                 // 一键停止的可点提示（步进/键盘可操作：整条 chip 是 button 角色的命中区）。
+                // 12px 图标是写死尺寸的子项 → 显式交叉轴居中，否则贴行顶、高于文字。
                 if root.sync-active : Icon {
                     name: "close";
                     icon-color: Theme.accent;
                     icon-size: 12px;
+                    cross-axis-self-alignment: center;
                 }
             }
 
@@ -188,7 +210,7 @@ export component StatusBar inherits Rectangle {
             // 受 bar-height-status token 限制（详见 WS-A 报告遗留）。
             min-width: 32px;
             border-radius: Theme.radius-control;
-            background: logging-touch.has-hover ? Theme.subtle-hover : transparent;
+            background: logging-touch.pressed ? Theme.subtle-pressed : logging-touch.has-hover ? Theme.subtle-hover : transparent;
             animate background { duration: Theme.duration-faster; easing: ease-out; }
 
             HorizontalLayout {
@@ -205,6 +227,8 @@ export component StatusBar inherits Rectangle {
                     height: 8px;
                     border-radius: 4px;
                     background: Theme.critical;
+                    // 写死 8px 的圆点 → 显式交叉轴居中（否则贴 chip 顶边）。
+                    cross-axis-self-alignment: center;
                 }
 
                 Text {

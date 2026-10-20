@@ -176,22 +176,42 @@ export global Theme {
     /// Cascadia Mono / Consolas / Menlo（与 `font-ui` 同机制）。
     in-out property <string> font-mono: "DejaVu Sans Mono";
     /// 表单标签列宽（对话框里的「标签 + 控件」两列布局）
-    out property <length> form-label-width: 116px;
+    out property <length> form-label-width: 120px;
+    /// 表单标签列宽分档：窄（表单两列挤）/ 宽（长标签，如 Scrollback memory cap）。
+    out property <length> form-label-width-narrow: 112px;
+    out property <length> form-label-width-medium: 128px;
+    out property <length> form-label-width-wide: 200px;
+    /// §5.10 ContentDialog 宽度：标准 / 表单类。
+    out property <length> dialog-width: 480px;
+    out property <length> dialog-width-form: 560px;
+    /// 管理型页面宽度（表格 / 双栏表单）。超出 §5.10 的 480/560，
+    /// 但这类页面需要横向空间；统一到一档，避免每个页面各写各的。
+    out property <length> dialog-width-wide: 760px;
 
     // -------------------------------------------------------------------- 尺寸
     out property <length> icon-size: 20px;
     out property <length> icon-size-small: 16px;
+    /// §3.3 大号图标（空态）。
+    out property <length> icon-size-large: 28px;
     out property <length> control-height: 32px;
     out property <length> control-height-compact: 24px;
     out property <length> row-height-nav: 40px;
     out property <length> row-height-list: 32px;
     out property <length> row-height-tree: 28px;
-    /// 自绘顶栏（菜单 + 窗口控件）：32px 控件 + 上下各 4px。
-    out property <length> bar-height-menubar: 40px;
+    /// 自绘顶栏（菜单 + 窗口控件）：§4.1 / §5.16 = 32px
+    /// （Win11 原生标题栏高度，caption 按钮 46×32 正好满高）。
+    out property <length> bar-height-menubar: 32px;
     /// 旧 CommandBar 高度（已并入菜单栏，保留 token 以免外部引用断裂）。
     out property <length> bar-height-commandbar: 48px;
     out property <length> bar-height-status: 26px;
     out property <length> bar-height-tabs: 32px;
+    /// 右侧面板头部高度（tool_dock 的 6 个面板头；§3.3 控件高 32，这里另有一档）。
+    out property <length> bar-height-panel-header: 44px;
+    /// 调色板小色块尺寸（§5.13 色板）。
+    out property <length> swatch-size: 14px;
+    out property <length> swatch-size-small: 12px;
+    /// 窗口缩放边框宽度（自绘无框窗口的 resize hit 区）。
+    out property <length> resize-border-width: 8px;
     out property <length> nav-width: 240px;
     out property <length> dock-width: 340px;
     /// 面板拖拽把手宽度（§4.2：4px，悬停变色）
@@ -206,14 +226,25 @@ export global Theme {
     out property <length> spacing-16: 16px;
     out property <length> spacing-20: 20px;
     out property <length> spacing-24: 24px;
+    /// §3.3 间距刻度含 32（4px 网格的最后一档）。
+    out property <length> spacing-32: 32px;
     out property <length> radius-control: 4px;
     out property <length> radius-panel: 8px;
     /// 自绘无框窗口圆角（Win11 DWM `DWMWCP_ROUND`；最大化时系统会拉直角）。
     out property <length> radius-window: 8px;
 
     // -------------------------------------------------------------------- 动效
-    // 时长在"减少动画"下统一为 0，动画声明处直接绑定这些 token
+    // §6.2 时长 / 缓动 token。
+    // 时长在"减少动画"下统一为 0，动画声明处直接绑定这些 token。
+    // 缓动不能做成 token（Slint 的 easing 只接受字面量）：
+    //   进入 → ease-out；退出 → ease-in；双向对称 → cubic-bezier(0.33, 0, 0.67, 1)。
     out property <duration> duration-faster: animations-enabled ? 100ms : 0ms;
     out property <duration> duration-fast: animations-enabled ? 167ms : 0ms;
     out property <duration> duration-normal: animations-enabled ? 250ms : 0ms;
+    /// §6.2 motion.slow（333ms）：空态 / 页面级切换（少用）。
+    out property <duration> duration-slow: animations-enabled ? 333ms : 0ms;
+    /// §6.2 motion.instant（0ms）：减少动画模式下的兜底。
+    out property <duration> duration-instant: 0ms;
+    /// §6.3 状态栏连接点呼吸（1.5s 无限 alternate）。
+    out property <duration> duration-breathe: animations-enabled ? 1500ms : 0ms;
 }

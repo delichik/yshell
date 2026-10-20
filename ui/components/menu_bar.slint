@@ -91,7 +91,7 @@ component MenuTitle inherits Rectangle {
     height: Theme.control-height-compact;
     width: title-text.preferred-width + 20px;
     border-radius: Theme.radius-control;
-    background: root.open ? Theme.subtle-selected : title-touch.has-hover ? Theme.subtle-hover : transparent;
+    background: root.open ? Theme.subtle-selected : title-touch.pressed ? Theme.subtle-pressed : title-touch.has-hover ? Theme.subtle-hover : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
     title-text := Text {
@@ -265,11 +265,11 @@ export component MenuBar inherits Rectangle {
             HorizontalLayout {
                 padding-left: 4px;
                 padding-right: 4px;
-                padding-top: 4px;
-                padding-bottom: 4px;
                 spacing: 2px;
                 alignment: stretch;
                 // 应用图标与 MenuTitle（24px）垂直居中，避免图标相对菜单文字偏上/偏下。
+                // 不设纵向 padding：顶栏已是 §4.1 的 32px，再留 4px 会把 32px 的
+                // 面板折叠按钮挤出内容区。
                 cross-axis-alignment: center;
 
                 // 最左应用图标（落在拖动区内，可拖窗；无独立点击）。

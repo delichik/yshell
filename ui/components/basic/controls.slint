@@ -200,6 +200,9 @@ export component WinSpinner inherits Rectangle {
 export component WinIconButton inherits Rectangle {
     in property <string> icon: "more";
     in property <string> accessible-name: "";
+    /// Tooltip 文案（§5.7：图标化操作必须带提示）。空 = 不显示。
+    /// 约定：与 `accessible-name` 用同一份文案，保证"看到的提示"和"读到的名字"一致。
+    in property <string> tooltip-text: "";
     in property <bool> enabled <=> touch.enabled;
     callback clicked();
     /// 键盘焦点（E1）
@@ -247,6 +250,11 @@ export component WinIconButton inherits Rectangle {
         icon-size: Theme.icon-size;
         x: (parent.width - self.width) / 2;
         y: (parent.height - self.height) / 2;
+    }
+
+    // §5.7：图标化操作要有 Tooltip。
+    if root.tooltip-text != "" : Tooltip {
+        text: @markdown("\{root.tooltip-text}");
     }
 
     touch := TouchArea {
@@ -337,11 +345,16 @@ export component WinToggle inherits Rectangle {
         alignment: center;
 
         // 文本模式的勾选框（三态：选中 accent 实底 + 勾 / 未选描边 / 禁用弱化）
+        //
+        // §5.3：CheckBox 20×20、圆角 4（控件圆角 token）。
+        // 交叉轴：勾选框是写死高度的固定尺寸子项，默认 stretch 会把它放在行顶
+        // （padding.begin），比标签文字高 8px → 用 cross-axis-self-alignment 居中。
         if root.text != "" : Rectangle {
-            width: Theme.icon-size-small;
-            height: Theme.icon-size-small;
-            border-radius: 3px;
+            width: Theme.icon-size;
+            height: Theme.icon-size;
+            border-radius: Theme.radius-control;
             border-width: 1px;
+            cross-axis-self-alignment: center;
             border-color: !root.enabled ? Theme.text-disabled : root.checked ? Theme.accent : Theme.text-secondary;
             background: root.checked ? (root.enabled ? Theme.accent : Theme.control-fill-disabled) : transparent;
             animate background { duration: Theme.duration-faster; easing: ease-out; }
@@ -485,6 +498,7 @@ export component WinNavItem inherits Rectangle {
     border-radius: Theme.radius-control;
     background: !enabled ? transparent
         : selected ? Theme.subtle-selected
+        : touch.pressed ? Theme.subtle-pressed
         : touch.has-hover ? Theme.subtle-hover : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
@@ -495,6 +509,31 @@ export component WinNavItem inherits Rectangle {
     accessible-description: root.detail;
     accessible-item-selectable: true;
     accessible-item-selected: root.selected;
+
+    // §8「焦点可见」：导航项必须键盘可达 + 有焦点环
+    // （此前分区导航完全没有 FocusScope，Tab 走不到、也没有焦点提示）。
+    FocusRing {
+        visible-ring: root.keyboard-focus && root.enabled;
+        radius: root.border-radius;
+        target-width: root.width;
+        target-height: root.height;
+    }
+
+    nav_focus := FocusScope {
+        enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (root.enabled && (event.text == Key.Space || event.text == Key.Return)) {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+        focus-gained(reason) => { root.keyboard-focus = reason != FocusReason.pointer-click; }
+        focus-lost(reason) => { root.keyboard-focus = false; }
+    }
+
+    private property <bool> keyboard-focus: false;
 
     // 选中指示条
     Rectangle {
@@ -552,6 +591,11 @@ export component WinNavItem inherits Rectangle {
     }
 
     touch := TouchArea {
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                nav_focus.focus();
+            }
+        }
         clicked => { if (root.enabled) { root.clicked(); } }
     }
 }
@@ -571,6 +615,7 @@ export component WinListRow inherits Rectangle {
     border-radius: Theme.radius-control;
     background: !enabled ? transparent
         : selected ? Theme.subtle-selected
+        : touch.pressed ? Theme.subtle-pressed
         : touch.has-hover ? Theme.subtle-hover
         : alternate ? Theme.card-fill : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
@@ -644,7 +689,7 @@ export component WinTab inherits Rectangle {
     height: Theme.bar-height-tabs;
     horizontal-stretch: 0;
     border-radius: Theme.radius-control;
-    background: active ? Theme.layer-fill : tab-hover.has-hover ? Theme.subtle-hover : transparent;
+    background: active ? Theme.layer-fill : tab-hover.pressed ? Theme.subtle-pressed : tab-hover.has-hover ? Theme.subtle-hover : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
     // E19：标签语义（参考 1.18 内建 Tab 的实现：tab + item-selected）
@@ -655,7 +700,9 @@ export component WinTab inherits Rectangle {
 
     // 活动标签底部强调条
     Rectangle {
-        visible: root.active;
+        // §6.3 #7：切换标签时强调条淡入淡出（100ms / ease-out）。
+        opacity: root.active ? 1.0 : 0.0;
+        animate opacity { duration: Theme.duration-faster; easing: ease-out; }
         x: 0;
         y: parent.height - 2px;
         width: parent.width;
@@ -695,12 +742,14 @@ export component WinTab inherits Rectangle {
         }
 
         if root.closable : Rectangle {
-            width: 18px;
-            height: 18px;
-            // 布局不设纵向 padding：显式居中，避免关闭按钮贴顶
-            y: (parent.height - self.height) / 2;
-            border-radius: 3px;
-            background: close-touch.has-hover ? Theme.control-fill-hover : transparent;
+            // §5.6：关闭按钮 16px、圆角 4；命中区仍是 32×32。
+            width: 16px;
+            height: 16px;
+            // 关闭钮是写死 16px 的固定尺寸子项 → 显式交叉轴居中。
+            // 不能用手写 `y:`：本行一旦出现 cross-axis-* 对齐，布局会绑定每个子项的 y。
+            cross-axis-self-alignment: center;
+            border-radius: Theme.radius-control;
+            background: close-touch.pressed ? Theme.subtle-pressed : close-touch.has-hover ? Theme.control-fill-hover : transparent;
 
             Icon {
                 name: "close";
@@ -753,7 +802,7 @@ export component WinPivotBar inherits Rectangle {
         for item[i] in root.items : Rectangle {
             height: Theme.control-height - Theme.spacing-4;
             border-radius: Theme.radius-control;
-            background: i == root.current ? Theme.layer-fill : pivot-touch.has-hover ? Theme.subtle-hover : transparent;
+            background: i == root.current ? Theme.layer-fill : pivot-touch.pressed ? Theme.subtle-pressed : pivot-touch.has-hover ? Theme.subtle-hover : transparent;
             animate background { duration: Theme.duration-faster; easing: ease-out; }
 
             HorizontalLayout {
@@ -1011,7 +1060,7 @@ export component WinComboBox inherits Rectangle {
                 for item[index] in root.model : Rectangle {
                     height: Theme.row-height-list;
                     border-radius: Theme.radius-control;
-                    background: item_touch.has-hover ? Theme.subtle-hover : transparent;
+                    background: item_touch.pressed ? Theme.subtle-pressed : item_touch.has-hover ? Theme.subtle-hover : transparent;
 
                     HorizontalLayout {
                         padding-left: Theme.spacing-8;

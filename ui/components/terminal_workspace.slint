@@ -420,6 +420,9 @@ export component TerminalWorkspace inherits VerticalLayout {
                                 height: 100%;
                                 embedded: true;
                                 view-visible: root.terminal-visible && !root.split-active;
+                                // §6.3 #7：切换工作区标签 = 内容 100ms 淡入（不做左右滑动，避免大面积重绘）。
+                                opacity: root.terminal-visible && !root.split-active ? 1.0 : 0.0;
+                                animate opacity { duration: Theme.duration-faster; easing: ease-out; }
                                 // TAB-3：QC 覆盖内容区时终端仍按满尺寸布局（视口 out 有效），
                                 // 但不再接收鼠标/键盘/焦点——输入归 QC 页。
                                 interactive: root.terminal-visible && !root.split-active;
@@ -487,6 +490,9 @@ export component TerminalWorkspace inherits VerticalLayout {
                             width: 100%;
                             height: 100%;
                             visible: root.active-tab-mode-text == "sftp";
+                            // §6.3 #7：切换工作区标签 = 内容 100ms 淡入。
+                            opacity: root.active-tab-mode-text == "sftp" ? 1.0 : 0.0;
+                            animate opacity { duration: Theme.duration-faster; easing: ease-out; }
                             rows: root.sftp-rows;
                             crumbs: root.sftp-crumbs;
                             selected-index: root.sftp-selected-index;
@@ -568,6 +574,9 @@ export component TerminalWorkspace inherits VerticalLayout {
                             width: 100%;
                             height: 100%;
                             visible: root.quick-connect-visible && !root.split-active;
+                            // §6.3 #7：切换工作区标签 = 内容 100ms 淡入。
+                            opacity: root.quick-connect-visible && !root.split-active ? 1.0 : 0.0;
+                            animate opacity { duration: Theme.duration-faster; easing: ease-out; }
                             input-text: root.quick-connect-input-text;
                             input-error-text: root.quick-connect-error-text;
                             summary-text: root.quick-connect-summary-text;

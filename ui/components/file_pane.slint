@@ -209,7 +209,7 @@ component FileColumnHeader inherits Rectangle {
 
     height: Theme.row-height-tree;
     border-radius: Theme.radius-control;
-    background: header-touch.has-hover ? Theme.subtle-hover : transparent;
+    background: header-touch.pressed ? Theme.subtle-pressed : header-touch.has-hover ? Theme.subtle-hover : transparent;
 
     Text {
         text: root.active
@@ -330,7 +330,9 @@ export component FilePane inherits Rectangle {
     // 整数行，汇总行始终完整可见（不被 clip 裁切）。
     private property <length> layout-gap: Theme.spacing-4;
     private property <length> header-height: Theme.control-height;
-    private property <length> error-height: Theme.row-height-tree;
+    // 错误条高度：装得下 32px 的「重试」按钮（§3.3 标准控件高度）。
+    // 原来用 28px（row-height-tree），32px 按钮会溢出错误条并被顶到行首。
+    private property <length> error-height: Theme.control-height;
     private property <length> column-height: Theme.row-height-tree;
     private property <length> edit-height: Theme.control-height;
     private property <length> summary-height: Theme.line-caption;
@@ -401,6 +403,9 @@ export component FilePane inherits Rectangle {
     }
 
     private property <bool> compact-crumbs: root.width < 360px;
+
+    /// 刷新按钮的无障碍名 / Tooltip 文案（§5.7：图标化操作要带提示）。
+    private property <string> refresh-text: @tr("Refresh");
 
     /// 汇总：`{n} item(s) · {m} dir(s)`（Rust 只投影计数，句子在这里组装）。
     private property <string> item-summary-display:
@@ -534,7 +539,11 @@ export component FilePane inherits Rectangle {
             Rectangle {
                 horizontal-stretch: 1;
                 height: Theme.control-height;
-                background: Theme.control-fill;
+                // 空白区悬停时整条路径条微微提亮——此前空白区**没有任何反馈**，
+                // 用户看不出"点空白处能编辑路径"。
+                // 面包屑段盖在空白命中区之上，悬停段上时这里拿不到 hover。
+                background: breadcrumb_blank_touch.has-hover ? Theme.control-fill-hover
+                    : Theme.control-fill;
                 border-radius: Theme.radius-control;
                 border-width: 1px;
                 border-color: Theme.control-stroke;
@@ -580,7 +589,7 @@ export component FilePane inherits Rectangle {
                         // 单个面包屑段（布局占位，无需 id）
                         Rectangle {
                             border-radius: Theme.radius-control;
-                            background: crumb_hit.has-hover ? Theme.subtle-hover : transparent;
+                            background: crumb_hit.pressed ? Theme.subtle-pressed : crumb_hit.has-hover ? Theme.subtle-hover : transparent;
 
                             HorizontalLayout {
                                 padding-left: Theme.spacing-4;
@@ -628,7 +637,8 @@ export component FilePane inherits Rectangle {
 
             WinIconButton {
                 icon: "refresh";
-                accessible-name: @tr("Refresh");
+                accessible-name: root.refresh-text;
+                tooltip-text: root.refresh-text;
                 enabled: root.connected;
                 clicked => { root.refresh(); }
             }
@@ -670,6 +680,7 @@ export component FilePane inherits Rectangle {
                 if root.retry-visible : WinButton {
                     text: @tr("Retry");
                     subtle: true;
+                    cross-axis-self-alignment: center;
                     clicked => { root.retry(); }
                 }
             }
@@ -755,7 +766,8 @@ export component FilePane inherits Rectangle {
                     height: Theme.row-height-list;
                     border-radius: Theme.radius-control;
                     background: row.selected || index == root.selected-index ? Theme.subtle-selected
-                        : row_hit.has-hover ? Theme.subtle-hover
+                        : row_hit.pressed ? Theme.subtle-pressed
+                : row_hit.has-hover ? Theme.subtle-hover
                         : transparent;
 
                     Icon {

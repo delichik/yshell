@@ -21,7 +21,7 @@ component ThemeFieldRow inherits HorizontalLayout {
 
     Text {
         text: root.label;
-        width: 128px;
+        width: Theme.form-label-width-medium;
         horizontal-alignment: right;
         color: Theme.text-secondary;
         font-size: Theme.font-body;
@@ -142,7 +142,7 @@ export component ThemeEditor inherits VerticalLayout {
 
     HorizontalLayout {
         spacing: Theme.spacing-8;
-        padding-left: 128px + Theme.spacing-12;
+        padding-left: Theme.form-label-width-medium + Theme.spacing-12;
         cross-axis-alignment: center;
 
         for swatch in root.palette-swatches : Rectangle {

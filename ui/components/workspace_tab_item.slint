@@ -42,7 +42,7 @@ export component WorkspaceTabItem inherits Rectangle {
     height: Theme.bar-height-tabs;
     horizontal-stretch: 0;
     border-radius: Theme.radius-control;
-    background: tab-active ? Theme.layer-fill : tab-hover.has-hover ? Theme.subtle-hover : transparent;
+    background: tab-active ? Theme.layer-fill : tab-hover.pressed ? Theme.subtle-pressed : tab-hover.has-hover ? Theme.subtle-hover : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
     // E19：标签语义（与 WinTab 一致）
@@ -63,7 +63,11 @@ export component WorkspaceTabItem inherits Rectangle {
 
     // 活动标签底部强调条
     Rectangle {
-        visible: root.tab-active;
+        // §6.3 #7：切换标签时强调条淡入淡出（100ms / ease-out）。
+        // 不做跨标签位移——每个 tab 自带一条指示条，位移需要标签条持有唯一指示条，
+        // 属于结构改动（见 problems.md）。
+        opacity: root.tab-active ? 1.0 : 0.0;
+        animate opacity { duration: Theme.duration-faster; easing: ease-out; }
         x: 0;
         y: parent.height - 2px;
         width: parent.width;
@@ -94,8 +98,13 @@ export component WorkspaceTabItem inherits Rectangle {
                 y: (parent.height - self.height) / 2;
             }
 
-            // 连接状态角标：图标**右下角**的绿勾（已连接）/ 红叉（未连接）。
+            // 连接状态角标：图标**右下角**的小徽标。
+            //   connected    → 绿底 + 白勾
+            //   failed       → 红底 + 白叉
+            //   disconnected → 灰底 + 白横杠（中性"未连接"，不是错误）
             // New Tab 没有会话，不画角标。
+            //
+            // §8：状态不能只靠颜色——三种态的底色 + 字形都不同。
             //
             // 角标锚在图标字形的右下角（不是标签的右下角）：标签底部 2px 是活动
             // 标签的强调条，角标压在上面会把它挡住。
@@ -105,12 +114,16 @@ export component WorkspaceTabItem inherits Rectangle {
                 width: 12px;
                 height: 12px;
                 border-radius: 6px;
-                background: root.connection-badge == "connected" ? Theme.success : Theme.critical;
+                background: root.connection-badge == "connected" ? Theme.success
+                    : root.connection-badge == "failed" ? Theme.critical
+                    : Theme.text-tertiary;
                 border-width: 1px;
                 border-color: Theme.window-background;
 
                 Icon {
-                    name: root.connection-badge == "connected" ? "check" : "close";
+                    name: root.connection-badge == "connected" ? "check"
+                        : root.connection-badge == "failed" ? "close"
+                        : "minus";
                     icon-color: Theme.window-background;
                     icon-size: 9px;
                     x: (parent.width - self.width) / 2;
@@ -141,6 +154,7 @@ export component WorkspaceTabItem inherits Rectangle {
         }
 
         // N9：同步发送按键角标（源 = accent 实底；目标 = accent-soft 底 + accent 描边）。
+        // 角标是写死 16px 的固定尺寸子项 → 显式交叉轴居中（默认 stretch 会贴行顶）。
         if root.tab-sync-role-text != "" : Rectangle {
             height: 16px;
             width: sync-badge-text.preferred-width + 10px;
@@ -148,6 +162,7 @@ export component WorkspaceTabItem inherits Rectangle {
             background: root.tab-sync-role-text == "source" ? Theme.accent : Theme.accent-soft;
             border-width: root.tab-sync-role-text == "source" ? 0px : 1px;
             border-color: Theme.accent;
+            cross-axis-self-alignment: center;
 
             sync-badge-text := Text {
                 text: root.tab-sync-role-text == "source" ? @tr("SRC") : @tr("RCV");
@@ -171,6 +186,7 @@ export component WorkspaceTabItem inherits Rectangle {
             width: Math.max(unread-badge-text.preferred-width + 8px, 16px);
             border-radius: 8px;
             background: Theme.accent;
+            cross-axis-self-alignment: center;
 
             unread-badge-text := Text {
                 text: root.tab-unread > 99 ? "99+" : root.tab-unread;
@@ -191,15 +207,19 @@ export component WorkspaceTabItem inherits Rectangle {
             height: 8px;
             border-radius: 4px;
             background: Theme.critical;
+            cross-axis-self-alignment: center;
         }
 
         Rectangle {
-            width: 18px;
-            height: 18px;
-            // 布局不设纵向 padding：显式居中，避免关闭按钮贴顶
-            y: (parent.height - self.height) / 2;
-            border-radius: 3px;
-            background: close-touch.has-hover ? Theme.control-fill-hover : transparent;
+            // §5.6：标签关闭按钮 16px、圆角 4（控件圆角 token）；命中区仍是 32×32。
+            width: 16px;
+            height: 16px;
+            // 关闭钮是写死 16px 的固定尺寸子项 → 显式交叉轴居中。
+            // 注意：不能用手写 `y:`——本行一旦出现 cross-axis-* 对齐，
+            // 布局就会给每个子项绑定 y，手写 y 会与之冲突（编译报错）。
+            cross-axis-self-alignment: center;
+            border-radius: Theme.radius-control;
+            background: close-touch.pressed ? Theme.subtle-pressed : close-touch.has-hover ? Theme.control-fill-hover : transparent;
 
             Icon {
                 name: "close";

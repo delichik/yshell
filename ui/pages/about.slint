@@ -9,7 +9,20 @@ export component AboutDialog inherits Rectangle {
 
     callback close();
 
-    visible: self.open;
+    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
+    //
+    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
+    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
+    states [
+        opened when root.open: {
+            opacity: 1.0;
+            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
+            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
+        }
+        closed when !root.open: { opacity: 0.0; }
+    ]
+    // 退场期间保持可见，等淡出结束再隐藏。
+    visible: root.open || self.opacity > 0.01;
     background: Theme.scrim;
 
     // L2（对话框 Esc / 遮罩点击关闭）：根 FocusScope 包住整个弹窗；打开时聚焦，
@@ -33,9 +46,9 @@ export component AboutDialog inherits Rectangle {
         }
 
         Rectangle {
-            x: (parent.width - 480px) / 2;
+            x: (parent.width - Theme.dialog-width) / 2;
             y: max((parent.height - self.height) / 2, Theme.spacing-24);
-            width: 480px;
+            width: Theme.dialog-width;
             height: min(body.preferred-height, parent.height - 2 * Theme.spacing-24);
             background: Theme.panel-background;
             border-radius: Theme.radius-panel;

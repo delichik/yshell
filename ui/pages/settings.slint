@@ -44,7 +44,7 @@ component AppearanceFieldRow inherits HorizontalLayout {
 
     Text {
         text: root.label;
-        width: 128px;
+        width: Theme.form-label-width-medium;
         horizontal-alignment: right;
         color: Theme.text-secondary;
         font-size: Theme.font-body;
@@ -123,9 +123,22 @@ export component SettingsDialog inherits Rectangle {
     callback save-appearance();
 
     private property <length> dialog-height: min(self.height - 80px, 640px);
-    private property <length> dialog-width: 760px;
+    private property <length> dialog-width: Theme.dialog-width-wide;
 
-    visible: self.open;
+    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
+    //
+    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
+    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
+    states [
+        opened when root.open: {
+            opacity: 1.0;
+            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
+            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
+        }
+        closed when !root.open: { opacity: 0.0; }
+    ]
+    // 退场期间保持可见，等淡出结束再隐藏。
+    visible: root.open || self.opacity > 0.01;
     background: Theme.scrim;
 
     // L2（对话框 Esc / 遮罩点击关闭）：根 FocusScope 包住整个弹窗；打开时聚焦，
@@ -359,6 +372,34 @@ export component SettingsDialog inherits Rectangle {
                                                 }
                                                 horizontal-stretch: 0;
                                             }
+
+                                            Rectangle {
+                                                height: 1px;
+                                                background: Theme.divider;
+                                            }
+
+                                            // §6.4：统一动画开关。Theme.animations-enabled
+                                            // 为 false 时所有 Theme.duration-* 归零，
+                                            // 界面只剩状态色即时切换（§6.1.5 / §6.2 motion.instant）。
+                                            Text {
+                                                text: @tr("Motion");
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-body-large;
+                                                font-weight: Theme.weight-semibold;
+                                            }
+
+                                            Text {
+                                                text: @tr("Reduce motion turns off transitions. State colors still change instantly.");
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-body;
+                                                wrap: word-wrap;
+                                            }
+
+                                            WinToggle {
+                                                text: @tr("Reduce motion");
+                                                checked <=> Theme.animations-enabled;
+                                                horizontal-stretch: 0;
+                                            }
                                         }
 
                                         // --- Appearance（内联；原嵌套弹窗主体迁入此分区）------
@@ -524,7 +565,7 @@ export component SettingsDialog inherits Rectangle {
 
                                             HorizontalLayout {
                                                 spacing: Theme.spacing-8;
-                                                padding-left: 128px + Theme.spacing-12;
+                                                padding-left: Theme.form-label-width-medium + Theme.spacing-12;
                                                 alignment: start;
 
                                                 WinButton {
@@ -597,12 +638,11 @@ export component SettingsDialog inherits Rectangle {
                                             HorizontalLayout {
                                                 spacing: Theme.spacing-12;
 
-                                                // 标签列：右对齐（B 轮2 #72 / 轮5 低：左对齐 + 220px 会在标签与输入框
-                                                // 之间留下 147px 空洞）。列宽不用 Theme.form-label-width（116px）——
-                                                // 这条 CJK 标签最长约 180px；后续如需统一，应由 Theme 增加宽标签 token。
+                                                // 标签列：右对齐。左对齐 + 固定宽会在标签与输入框之间留下空洞。
+                                                // 列宽用 Theme.form-label-width-wide（宽标签档），不再写死 220px。
                                                 Text {
                                                     text: @tr("Scrollback lines");
-                                                    width: 220px;
+                                                    width: Theme.form-label-width-wide;
                                                     horizontal-alignment: right;
                                                     color: Theme.text-secondary;
                                                     font-size: Theme.font-body;
@@ -623,7 +663,7 @@ export component SettingsDialog inherits Rectangle {
 
                                                 Text {
                                                     text: @tr("Scrollback memory cap (cells)");
-                                                    width: 220px;
+                                                    width: Theme.form-label-width-wide;
                                                     horizontal-alignment: right;
                                                     color: Theme.text-secondary;
                                                     font-size: Theme.font-body;

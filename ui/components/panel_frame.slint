@@ -52,6 +52,8 @@ export component PanelFrame inherits Rectangle {
     in property <string> header-action-icon: "";
     /// 头部主操作的无障碍名/提示文案。
     in property <string> header-action-label: "";
+    /// `⋯` 按钮的无障碍名 / Tooltip 文案（§5.7：图标化操作要带提示）。
+    private property <string> options-text: @tr("PanelFrame" => "Panel options");
 
     /// 头部主操作被点击（A8：Sessions 面板的 `+` 等常驻入口）。
     callback header-action();
@@ -110,15 +112,21 @@ export component PanelFrame inherits Rectangle {
         }
 
         // 可选头部主操作（仅 icon 非空时渲染，位于 ⋯ 之前）。
+        // 头部高 44px（tool_dock 传入），按钮是 32px 固定尺寸 → 必须显式交叉轴居中，
+        // 否则默认 stretch 会把按钮放在行顶、比 16px 标题图标高 6px。
         if root.header-action-icon != "" : WinIconButton {
             icon: root.header-action-icon;
             accessible-name: root.header-action-label;
+            tooltip-text: root.header-action-label;
+            cross-axis-self-alignment: center;
             clicked => { root.header-action(); }
         }
 
         WinIconButton {
             icon: "more";
-            accessible-name: @tr("PanelFrame" => "Panel options");
+            accessible-name: root.options-text;
+            tooltip-text: root.options-text;
+            cross-axis-self-alignment: center;
             clicked => {
                 root.menu-requested(
                     self.absolute-position.x,
@@ -146,7 +154,8 @@ export component PanelFrame inherits Rectangle {
         height: max(0px, parent.height - root.header-height);
         clip: true;
         opacity: root.collapsed ? 0.0 : 1.0;
-        animate opacity { duration: Theme.duration-faster; easing: ease-out; }
+        // §6.3 #6：面板折叠/展开 = 250ms / ease-out（不是 100ms）。
+        animate opacity { duration: Theme.duration-normal; easing: ease-out; }
 
         VerticalLayout {
             padding: root.content-padding;

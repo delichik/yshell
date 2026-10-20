@@ -39,7 +39,8 @@ component MenuPopupRow inherits Rectangle {
     // 禁用项：整行 36% 不透明（颜色不再额外套 text-disabled，避免双重变暗）
     opacity: (root.entry.enabled || root.entry.separator) ? 1.0 : 0.36;
     border-radius: Theme.radius-control;
-    background: (row-touch.has-hover && root.entry.enabled && !root.entry.separator) ? Theme.subtle-hover : transparent;
+    background: (row-touch.pressed && root.entry.enabled && !root.entry.separator) ? Theme.subtle-pressed
+        : (row-touch.has-hover && root.entry.enabled && !root.entry.separator) ? Theme.subtle-hover : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
     // 分隔线（上下各留 4px）
@@ -152,11 +153,18 @@ export component MenuPopup inherits Rectangle {
         panel := Rectangle {
             // A15：贴边留 8px（窗口右/下缘不再只剩 4–5px，圆角与描边不被裁）。
             x: min(max(root.anchor-x, 8px), max(root.width - root.panel-width - 8px, 8px));
-            y: min(max(root.anchor-y, 8px), max(root.height - self.height - 8px, 8px));
+            // 基准 y（与 x 同样贴边钳制）。
+            private property <length> base-y:
+                min(max(root.anchor-y, 8px), max(root.height - self.height - 8px, 8px));
+            // §6.3 #4：菜单出现 = 淡入 + 4px 上移，167ms / ease-out。
+            y: self.base-y + (root.open ? 0px : Theme.spacing-4);
+            animate y { duration: Theme.duration-fast; easing: ease-out; }
             width: root.panel-width;
             // 4px padding on each side; +8px guards against a one-row
             // preferred-height rounding error when hidden rows are collapsed.
             height: entries-layout.preferred-height + Theme.spacing-8;
+            opacity: root.open ? 1.0 : 0.0;
+            animate opacity { duration: Theme.duration-fast; easing: ease-out; }
             background: Theme.flyout-background;
             border-width: 1px;
             border-color: Theme.layer-stroke;

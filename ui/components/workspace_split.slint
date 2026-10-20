@@ -652,8 +652,12 @@ export component WorkspaceSplitView inherits Rectangle {
         y: root.height * handle.y;
         width: Math.max(root.width * handle.w, 4px);
         height: Math.max(root.height * handle.h, 4px);
-        background: Theme.divider;
-        TouchArea {
+        // 悬停/拖拽时高亮（与 PanelFrame 的把手同形）：此前是静态 divider 色，
+        // 用户看不出这里能拖。
+        background: split-touch.pressed ? Theme.accent
+            : split-touch.has-hover ? Theme.accent
+            : Theme.divider;
+        split-touch := TouchArea {
             width: handle.vertical ? 8px : parent.width;
             height: handle.vertical ? parent.height : 8px;
             x: handle.vertical ? -2px : 0;

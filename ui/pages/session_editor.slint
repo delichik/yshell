@@ -195,7 +195,8 @@ component ManagedKeyPicker inherits Rectangle {
                     for option[index] in root.options : Rectangle {
                         height: 44px;
                         border-radius: Theme.radius-control;
-                        background: option_touch.has-hover ? Theme.subtle-hover
+                        background: option_touch.pressed ? Theme.subtle-pressed
+                            : option_touch.has-hover ? Theme.subtle-hover
                             : index == root.selected-index ? Theme.subtle-selected
                             : transparent;
 
@@ -345,7 +346,8 @@ component ProxyPicker inherits Rectangle {
                     for option[index] in root.options : Rectangle {
                         height: 44px;
                         border-radius: Theme.radius-control;
-                        background: option_touch.has-hover ? Theme.subtle-hover
+                        background: option_touch.pressed ? Theme.subtle-pressed
+                            : option_touch.has-hover ? Theme.subtle-hover
                             : index == root.selected-index ? Theme.subtle-selected
                             : transparent;
 
@@ -487,8 +489,8 @@ export component SessionEditor inherits Rectangle {
     // 上下跳动、鼠标下的导航项会移位。现在取最高分区所需高度并给伪本地化留余量，
     // 表单区改为内部滚动（B 轮2 高#3），矮窗口下再收缩到窗口内。
     private property <length> dialog-height: min(self.height - 80px, 640px);
-    // 面板宽度（宽度归一见 WS-C 报告；此处集中定义便于后续统一到 560/640）
-    private property <length> dialog-width: 760px;
+    // 面板宽度（统一到 dialog-width-wide，便于各管理页保持一致）
+    private property <length> dialog-width: Theme.dialog-width-wide;
 
     // 保存校验（B 轮3 #16）：运行时要求会话名与主机非空；这里同步禁用并用就地提示替代
     // 只写在状态栏的英文错误（状态栏文案的本地化由 WS-D 处理）。
@@ -496,7 +498,20 @@ export component SessionEditor inherits Rectangle {
     private property <bool> save-blocked:
         root.name-text == "" || root.host-text == "" || !root.key-selection-valid;
 
-    visible: self.open;
+    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
+    //
+    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
+    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
+    states [
+        opened when root.open: {
+            opacity: 1.0;
+            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
+            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
+        }
+        closed when !root.open: { opacity: 0.0; }
+    ]
+    // 退场期间保持可见，等淡出结束再隐藏。
+    visible: root.open || self.opacity > 0.01;
     background: Theme.scrim;
 
     // L2（对话框 Esc / 遮罩点击关闭）：根 FocusScope 包住整个弹窗；打开时聚焦，
@@ -565,6 +580,8 @@ export component SessionEditor inherits Rectangle {
                     WinIconButton {
                         icon: "close";
                         accessible-name: @tr("Close");
+                        // 标题块两行（≈46px），按钮 32px 固定高 → 默认 stretch 贴行顶。
+                        cross-axis-self-alignment: center;
                         clicked => { root.close(); }
                     }
                 }
@@ -1045,7 +1062,7 @@ export component SessionEditor inherits Rectangle {
                                                 fields: root.editor-appearance-fields;
                                                 // TERM-4：下拉框需要完整的值区宽度；标签列收到
                                                 // 110px 后当前配色名不再被省略（最长标签约 86px）。
-                                                label-width: 110px;
+                                                label-width: Theme.form-label-width-narrow;
                                                 field-set-inherit(key) => { root.editor-theme-field-action(key, "inherit"); }
                                                 field-set-explicit(key) => { root.editor-theme-field-action(key, "explicit"); }
                                                 field-reset(key) => { root.editor-theme-field-action(key, "reset"); }

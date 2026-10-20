@@ -30,13 +30,22 @@ export component TransferQueue inherits Rectangle {
     // P3：进度条 + 文案列（原 64px 纯文字太弱）。
     private property <length> progress-column-width: 76px;
 
+    // 行内动作按钮的无障碍名 / Tooltip 文案（§5.7：图标化操作必须带提示）。
+    private property <string> pause-text: @tr("Pause transfer");
+    private property <string> resume-text: @tr("Resume transfer");
+    private property <string> retry-text: @tr("Retry transfer");
+    private property <string> cancel-text: @tr("Cancel transfer");
+    private property <string> remove-text: @tr("Remove transfer");
+
     pure function action-count(row: SftpTransferRow) -> int {
         return (row.can-pause ? 1 : 0) + (row.can-resume ? 1 : 0) + (row.can-retry ? 1 : 0)
              + (row.can-cancel ? 1 : 0) + (row.can-remove ? 1 : 0);
     }
 
     pure function action-width(row: SftpTransferRow) -> length {
-        return root.action-count(row) * Theme.control-height-compact;
+        // 动作按钮 32×32（§8 命中区 ≥32）+ 相邻 4px 间距（§8）。
+        return root.action-count(row) * Theme.control-height
+             + Math.max(0, root.action-count(row) - 1) * Theme.spacing-4;
     }
 
     pure function summary-text() -> string {
@@ -132,8 +141,12 @@ export component TransferQueue inherits Rectangle {
                     for row[index] in root.rows : Rectangle {
                         height: Theme.row-height-list;
                         border-radius: Theme.radius-control;
-                        background: row.is-failed ? Theme.attention-background
+                        // 失败行用错误色（§5.9）：此前借用 attention-*（警告黄），
+                        // 会把"传输失败"渲染成"警告"，与 InfoBar 的 error 档不一致。
+                        background: row.is-failed ? Theme.banner-error-background
                             : Math.mod(index, 2) == 0 ? transparent : Theme.card-fill;
+                        border-width: row.is-failed ? 1px : 0px;
+                        border-color: row.is-failed ? Theme.banner-error-stroke : transparent;
 
                         Text {
                             x: Theme.spacing-4;
@@ -142,7 +155,7 @@ export component TransferQueue inherits Rectangle {
                                 - root.progress-column-width - 2 * Theme.spacing-4);
                             height: parent.height;
                             text: row.file-name-text;
-                            color: Theme.text-primary;
+                            color: row.is-failed ? Theme.banner-error-text : Theme.text-primary;
                             font-size: Theme.font-caption;
                             vertical-alignment: center;
                             wrap: no-wrap;
@@ -187,42 +200,44 @@ export component TransferQueue inherits Rectangle {
                             y: 0;
                             width: root.action-width(row);
                             height: parent.height;
-                            spacing: 0;
+                            spacing: Theme.spacing-4;
                             alignment: end;
 
+                            // 动作按钮统一 32×32（与 SFTP 抽屉内的实现同形，
+                            // 原来这里是 24×24：命中区不足 32，且在 32px 行里贴顶）。
                             if row.can-pause : WinIconButton {
                                 icon: "pause";
-                                width: Theme.control-height-compact;
-                                height: Theme.control-height-compact;
-                                accessible-name: @tr("Pause transfer");
+                                accessible-name: root.pause-text;
+                                tooltip-text: root.pause-text;
+                                cross-axis-self-alignment: center;
                                 clicked => { root.pause(row.id); }
                             }
                             if row.can-resume : WinIconButton {
                                 icon: "play";
-                                width: Theme.control-height-compact;
-                                height: Theme.control-height-compact;
-                                accessible-name: @tr("Resume transfer");
+                                accessible-name: root.resume-text;
+                                tooltip-text: root.resume-text;
+                                cross-axis-self-alignment: center;
                                 clicked => { root.resume(row.id); }
                             }
                             if row.can-retry : WinIconButton {
                                 icon: "refresh";
-                                width: Theme.control-height-compact;
-                                height: Theme.control-height-compact;
-                                accessible-name: @tr("Retry transfer");
+                                accessible-name: root.retry-text;
+                                tooltip-text: root.retry-text;
+                                cross-axis-self-alignment: center;
                                 clicked => { root.retry(row.id); }
                             }
                             if row.can-cancel : WinIconButton {
                                 icon: "close";
-                                width: Theme.control-height-compact;
-                                height: Theme.control-height-compact;
-                                accessible-name: @tr("Cancel transfer");
+                                accessible-name: root.cancel-text;
+                                tooltip-text: root.cancel-text;
+                                cross-axis-self-alignment: center;
                                 clicked => { root.cancel(row.id); }
                             }
                             if row.can-remove : WinIconButton {
                                 icon: "trash";
-                                width: Theme.control-height-compact;
-                                height: Theme.control-height-compact;
-                                accessible-name: @tr("Remove transfer");
+                                accessible-name: root.remove-text;
+                                tooltip-text: root.remove-text;
+                                cross-axis-self-alignment: center;
                                 clicked => { root.remove(row.id); }
                             }
                         }

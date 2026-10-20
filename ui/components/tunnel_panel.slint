@@ -27,11 +27,15 @@ export component TunnelPanel inherits Rectangle {
 
     background: transparent;
 
+    // 启停按钮的无障碍名 / Tooltip 文案（§5.7：图标化操作必须带提示）。
+    private property <string> start-text: @tr("Start tunnel");
+    private property <string> stop-text: @tr("Stop tunnel");
+
     // PANEL-2：行高必须容纳内部两行（padding 4+4 + 名称行 14 + 间距 2 +
-    // 动作行 24 = 48px）。旧值 `row-height-list + spacing-8` = 40px 会让每行
+    // 动作行 32 = 56px）。旧值 `row-height-list + spacing-8` = 40px 会让每行
     // 内容向下溢出 8px、与下一行文字重叠；这里改由 token 推导。
     private property <length> row-height: 2 * Theme.spacing-4
-        + (Theme.font-caption + 2px) + 2px + Theme.control-height-compact;
+        + (Theme.font-caption + 2px) + 2px + Theme.control-height;
 
     if root.rows.length == 0 : Text {
         text: root.empty-kind == "none"
@@ -100,7 +104,7 @@ export component TunnelPanel inherits Rectangle {
 
                     HorizontalLayout {
                         spacing: Theme.spacing-8;
-                        height: Theme.control-height-compact;
+                        height: Theme.control-height;
 
                         Text {
                             text: row.summary-text;
@@ -112,19 +116,19 @@ export component TunnelPanel inherits Rectangle {
                             horizontal-stretch: 1;
                         }
 
-                        // P3：与 Transfers 行动作同形（紧凑图标按钮）。
+                        // P3：与 Transfers 行动作同形（32×32 图标按钮，命中区 ≥32）。
                         if row.can-start : WinIconButton {
                             icon: "play";
-                            width: Theme.control-height-compact;
-                            height: Theme.control-height-compact;
-                            accessible-name: @tr("Start tunnel");
+                            accessible-name: root.start-text;
+                            tooltip-text: root.start-text;
+                            cross-axis-self-alignment: center;
                             clicked => { root.start-tunnel(row.id); }
                         }
                         if row.can-stop : WinIconButton {
                             icon: "pause";
-                            width: Theme.control-height-compact;
-                            height: Theme.control-height-compact;
-                            accessible-name: @tr("Stop tunnel");
+                            accessible-name: root.stop-text;
+                            tooltip-text: root.stop-text;
+                            cross-axis-self-alignment: center;
                             clicked => { root.stop-tunnel(row.id); }
                         }
                         if !row.can-start && !row.can-stop : Text {

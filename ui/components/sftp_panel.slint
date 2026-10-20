@@ -168,8 +168,12 @@ component SftpTransferDrawer inherits Rectangle {
                 for row[index] in root.rows : Rectangle {
                     height: Theme.row-height-list;
                     border-radius: Theme.radius-control;
-                    background: row.is-failed ? Theme.attention-background
+                    // 失败行用错误色（§5.9）：此前借用 attention-*（警告黄），
+                    // 会把"传输失败"渲染成"警告"，与 InfoBar 的 error 档不一致。
+                    background: row.is-failed ? Theme.banner-error-background
                         : Math.mod(index, 2) == 0 ? transparent : Theme.card-fill;
+                    border-width: row.is-failed ? 1px : 0px;
+                    border-color: row.is-failed ? Theme.banner-error-stroke : transparent;
 
                     Text {
                         x: Theme.spacing-8;
@@ -192,7 +196,7 @@ component SftpTransferDrawer inherits Rectangle {
                             - root.progress-column-width - 2 * Theme.spacing-8);
                         height: parent.height;
                         text: row.file-name-text;
-                        color: Theme.text-primary;
+                        color: row.is-failed ? Theme.banner-error-text : Theme.text-primary;
                         font-size: Theme.font-caption;
                         vertical-alignment: center;
                         wrap: no-wrap;
@@ -238,32 +242,42 @@ component SftpTransferDrawer inherits Rectangle {
                         y: 0;
                         width: root.action-width(row);
                         height: parent.height;
-                        spacing: 0;
+                        spacing: Theme.spacing-4;
                         alignment: end;
 
                         if row.can-pause : WinIconButton {
                             icon: "pause";
-                            accessible-name: @tr("Pause transfer");
+                            accessible-name: root.pause-text;
+                            tooltip-text: root.pause-text;
+                            cross-axis-self-alignment: center;
                             clicked => { root.pause(row.id); }
                         }
                         if row.can-resume : WinIconButton {
                             icon: "play";
-                            accessible-name: @tr("Resume transfer");
+                            accessible-name: root.resume-text;
+                            tooltip-text: root.resume-text;
+                            cross-axis-self-alignment: center;
                             clicked => { root.resume(row.id); }
                         }
                         if row.can-retry : WinIconButton {
                             icon: "refresh";
-                            accessible-name: @tr("Retry transfer");
+                            accessible-name: root.retry-text;
+                            tooltip-text: root.retry-text;
+                            cross-axis-self-alignment: center;
                             clicked => { root.retry(row.id); }
                         }
                         if row.can-cancel : WinIconButton {
                             icon: "close";
-                            accessible-name: @tr("Cancel transfer");
+                            accessible-name: root.cancel-text;
+                            tooltip-text: root.cancel-text;
+                            cross-axis-self-alignment: center;
                             clicked => { root.cancel(row.id); }
                         }
                         if row.can-remove : WinIconButton {
                             icon: "trash";
-                            accessible-name: @tr("Remove transfer");
+                            accessible-name: root.remove-text;
+                            tooltip-text: root.remove-text;
+                            cross-axis-self-alignment: center;
                             clicked => { root.remove(row.id); }
                         }
                     }
@@ -286,6 +300,13 @@ component SftpTransferDrawer inherits Rectangle {
     /// P3：进度条 + 状态文案列。
     private property <length> progress-column-width: 76px;
 
+    // 行内动作按钮的无障碍名 / Tooltip 文案（§5.7：图标化操作必须带提示）。
+    private property <string> pause-text: @tr("Pause transfer");
+    private property <string> resume-text: @tr("Resume transfer");
+    private property <string> retry-text: @tr("Retry transfer");
+    private property <string> cancel-text: @tr("Cancel transfer");
+    private property <string> remove-text: @tr("Remove transfer");
+
     /// 该行实际可见的动作按钮数（最多 3 个：pause/retry/cancel 等互斥组合）。
     pure function action-count(row: SftpTransferRow) -> int {
         return (row.can-pause ? 1 : 0) + (row.can-resume ? 1 : 0) + (row.can-retry ? 1 : 0)
@@ -295,7 +316,9 @@ component SftpTransferDrawer inherits Rectangle {
     /// 动作列宽按该行实际可见的按钮数计算（1/2/3 个 → 32/64/96px，B2）：
     /// 不再恒定预留 3×32，1 个按钮时右侧不留 64px 死区。
     pure function action-width(row: SftpTransferRow) -> length {
-        return root.action-count(row) * Theme.control-height;
+        // 动作按钮 32×32（§8 命中区 ≥32）+ 相邻 4px 间距（§8）。
+        return root.action-count(row) * Theme.control-height
+             + Math.max(0, root.action-count(row) - 1) * Theme.spacing-4;
     }
 
     /// 摘要只列非零字段：字段全列时在 340px 面板里必然被省略号截掉
@@ -614,10 +637,13 @@ export component SftpPanel inherits Rectangle {
                         x: 2.5px;
                         width: 1px;
                         height: parent.height;
-                        background: Theme.divider;
+                        // 悬停/拖拽时高亮：此前是静态 divider 色，看不出能拖。
+                        background: column-touch.pressed ? Theme.accent
+                            : column-touch.has-hover ? Theme.accent
+                            : Theme.divider;
                     }
 
-                    TouchArea {
+                    column-touch := TouchArea {
                         x: -3px;
                         width: 12px;
                         height: 100%;
@@ -830,6 +856,10 @@ export component SftpContextMenu inherits Rectangle {
 
     visible: self.open;
     background: transparent;
+
+    // §6.3 #4：右键菜单出现 = 167ms 淡入（与 MenuPopup 同节奏）。
+    opacity: self.open ? 1.0 : 0.0;
+    animate opacity { duration: Theme.duration-fast; easing: ease-out; }
 
     private property <[MenuEntry]> file-entries: [
         { label: @tr("Open"), shortcut: "", enabled: root.connected, checked: false, separator: false },
@@ -1135,7 +1165,20 @@ export component SftpEntryDialog inherits Rectangle {
         else if (root.kind == "copy-to") { root.copy-to-selected(root.local-path-text); }
     }
 
-    visible: self.open;
+    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
+    //
+    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
+    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
+    states [
+        opened when root.open: {
+            opacity: 1.0;
+            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
+            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
+        }
+        closed when !root.open: { opacity: 0.0; }
+    ]
+    // 退场期间保持可见，等淡出结束再隐藏。
+    visible: root.open || self.opacity > 0.01;
     background: Theme.scrim;
 
     dialog_scope := FocusScope {
@@ -1165,9 +1208,9 @@ export component SftpEntryDialog inherits Rectangle {
         }
 
         Rectangle {
-            x: (parent.width - 520px) / 2;
+            x: (parent.width - Theme.dialog-width) / 2;
             y: max((parent.height - self.height) / 2, 40px);
-            width: 520px;
+            width: Theme.dialog-width;
             height: body.preferred-height;
             background: Theme.panel-background;
             border-radius: Theme.radius-panel;
@@ -1293,7 +1336,20 @@ export component SftpConflictDialog inherits Rectangle {
     callback resolve(string);
     callback canceled();
 
-    visible: self.open;
+    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
+    //
+    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
+    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
+    states [
+        opened when root.open: {
+            opacity: 1.0;
+            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
+            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
+        }
+        closed when !root.open: { opacity: 0.0; }
+    ]
+    // 退场期间保持可见，等淡出结束再隐藏。
+    visible: root.open || self.opacity > 0.01;
     background: Theme.scrim;
 
     dialog_scope := FocusScope {
@@ -1314,9 +1370,9 @@ export component SftpConflictDialog inherits Rectangle {
         TouchArea { }
 
         Rectangle {
-            x: (parent.width - 560px) / 2;
+            x: (parent.width - Theme.dialog-width-form) / 2;
             y: max((parent.height - self.height) / 2, 40px);
-            width: 560px;
+            width: Theme.dialog-width-form;
             height: body.preferred-height;
             background: Theme.panel-background;
             border-radius: Theme.radius-panel;
@@ -1427,7 +1483,20 @@ export component SftpPropertiesDialog inherits Rectangle {
     callback copy-path();
     callback canceled();
 
-    visible: self.open;
+    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
+    //
+    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
+    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
+    states [
+        opened when root.open: {
+            opacity: 1.0;
+            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
+            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
+        }
+        closed when !root.open: { opacity: 0.0; }
+    ]
+    // 退场期间保持可见，等淡出结束再隐藏。
+    visible: root.open || self.opacity > 0.01;
     background: Theme.scrim;
 
     dialog_scope := FocusScope {
@@ -1447,9 +1516,9 @@ export component SftpPropertiesDialog inherits Rectangle {
         }
 
         Rectangle {
-            x: (parent.width - 480px) / 2;
+            x: (parent.width - Theme.dialog-width) / 2;
             y: max((parent.height - self.height) / 2, 40px);
-            width: 480px;
+            width: Theme.dialog-width;
             height: body.preferred-height;
             background: Theme.panel-background;
             border-radius: Theme.radius-panel;
