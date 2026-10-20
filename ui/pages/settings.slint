@@ -378,9 +378,11 @@ export component SettingsDialog inherits Rectangle {
                                                 background: Theme.divider;
                                             }
 
-                                            // §6.4：统一动画开关。Theme.animations-enabled
-                                            // 为 false 时所有 Theme.duration-* 归零，
+                                            // §6.4：统一动画开关。Theme.reduce-motion
+                                            // 为 true 时所有 Theme.duration-* 归零，
                                             // 界面只剩状态色即时切换（§6.1.5 / §6.2 motion.instant）。
+                                            // 方向：勾上"减少动画"= 关掉动效（绑 reduce-motion，
+                                            // 不要直接绑 animations-enabled，那会把语义写反）。
                                             Text {
                                                 text: @tr("Motion");
                                                 color: Theme.text-primary;
@@ -397,7 +399,7 @@ export component SettingsDialog inherits Rectangle {
 
                                             WinToggle {
                                                 text: @tr("Reduce motion");
-                                                checked <=> Theme.animations-enabled;
+                                                checked <=> Theme.reduce-motion;
                                                 horizontal-stretch: 0;
                                             }
                                         }

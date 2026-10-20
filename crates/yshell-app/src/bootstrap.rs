@@ -317,7 +317,7 @@ pub(crate) fn apply_appearance(window: &MainWindow) {
         ThemeMode::Dark => 2,
     });
 
-    // §6.4.4 / §6.1.5："减少动画"总开关。设置页的开关直接写 Theme.animations-enabled，
+    // §6.4.4 / §6.1.5："减少动画"总开关。设置页的开关直接写 Theme.reduce-motion，
     // 这里只负责启动时的初值（`YSHELL_REDUCE_MOTION=1` 关闭所有过渡）。
     if std::env::var("YSHELL_REDUCE_MOTION")
         .ok()
@@ -328,7 +328,7 @@ pub(crate) fn apply_appearance(window: &MainWindow) {
             )
         })
     {
-        theme.set_animations_enabled(false);
+        theme.set_reduce_motion(true);
     }
 
     // 显式浅色/深色时同步覆盖 std-widgets 的色板，保证整窗一致；跟随系统时不动。
