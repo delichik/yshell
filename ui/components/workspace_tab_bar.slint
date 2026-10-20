@@ -14,7 +14,7 @@ export component WorkspaceTabBar inherits Rectangle {
 
     callback activate-tab(string);
     callback close-tab(string);
-    callback duplicate-tab(string);
+    callback tab-double-click(string);
     callback tab-context-menu-requested(string, string, length, length);
     callback new-session();
     pure callback drag-tab-transfer(string) -> data-transfer;
@@ -81,7 +81,7 @@ export component WorkspaceTabBar inherits Rectangle {
                                 show-divider: i > 0 && !tab.active && !root.tabs[i - 1].active;
                                 activate() => { root.activate-tab(tab.id); }
                                 close-requested() => { root.close-tab(tab.id); }
-                                duplicate-requested() => { root.duplicate-tab(tab.id); }
+                                double-click-requested() => { root.tab-double-click(tab.id); }
                                 context-menu-requested(x, y) => {
                                     root.tab-context-menu-requested(
                                         tab.id,

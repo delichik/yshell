@@ -232,7 +232,7 @@ export component TerminalWorkspace inherits VerticalLayout {
     /// 参数：tab id, 当前显示名, x, y。
     callback tab-context-menu-requested(string, string, length, length);
     /// 双击标签：复制 session（参数 = tab id）。
-    callback duplicate-tab-requested(string);
+    callback tab-double-click-requested(string);
     callback context-menu-requested(length, length);
     // WP4：分屏动作。
     callback focus-split-pane(int);
@@ -369,7 +369,7 @@ export component TerminalWorkspace inherits VerticalLayout {
                         drop-enabled: false;
                         activate-tab(id) => { root.activate-tab(id); }
                         close-tab(id) => { root.close-tab(id); }
-                        duplicate-tab(id) => { root.duplicate-tab-requested(id); }
+                        tab-double-click(id) => { root.tab-double-click-requested(id); }
                         tab-context-menu-requested(id, title, x, y) => {
                             root.tab-context-menu-requested(id, title, x, y);
                         }
@@ -640,7 +640,7 @@ export component TerminalWorkspace inherits VerticalLayout {
                 tab-split-dropped(data, pane-id, dir) => { root.drop-tab-split(data, pane-id, dir); }
                 activate-tab(id) => { root.activate-tab(id); }
                 close-tab(id) => { root.close-tab(id); }
-                duplicate-tab(id) => { root.duplicate-tab-requested(id); }
+                tab-double-click(id) => { root.tab-double-click-requested(id); }
                 tab-context-menu-requested(id, title, x, y) => {
                     root.tab-context-menu-requested(id, title, x, y);
                 }

@@ -166,7 +166,7 @@ StatusBar
 | 对象 | 左键单击 | 左键双击 | 右键单击 | 拖拽 |
 |---|---|---|---|---|
 | Folder | 选中。 | 展开/折叠。 | 菜单：New Session、New Folder、Rename、Delete、Export Folder。 | 可拖到其它 Folder 下。 |
-| Session | 选中并在详情区显示摘要。 | 打开新标签并连接。 | 菜单：Connect、Open in New Tab、Open SFTP、Edit、Duplicate、Favorite、Delete、Export。 | 可拖到 Folder 下或改变排序。 |
+| Session | 选中并在详情区显示摘要。 | 连接：活动标签已断开/未连接时占用该标签，否则打开新标签。 | 菜单：Connect、Open in New Tab、Open SFTP、Edit、Duplicate、Favorite、Delete、Export。 | 可拖到 Folder 下或改变排序。 |
 | Favorite Session | 选中。 | 打开新标签并连接。 | 菜单：Connect、Remove Favorite、Edit。 | 可在 Favorites 内排序。 |
 | Recent Session | 选中。 | 打开新标签并连接。 | 菜单：Connect、Pin to Favorites、Remove from Recent。 | 不支持拖拽。 |
 
@@ -192,7 +192,7 @@ StatusBar
 
 | 区域 | 左键单击 | 左键双击 | 右键单击 | 中键单击 | 拖拽 |
 |---|---|---|---|---|---|
-| 标签主体 | 切换到该标签。 | 重命名标签显示名。 | 打开标签上下文菜单。 | 关闭标签。 | 调整顺序或拖入分屏。 |
+| 标签主体 | 切换到该标签。 | 已断开/未连接的标签：重连该标签；仍连着的标签：复制同源会话（新标签）。 | 打开标签上下文菜单。 | 关闭标签。 | 调整顺序或拖入分屏。 |
 | 关闭按钮 `x` | 关闭标签。 | 无 | 无 | 无 | 无 |
 | 状态图标 | 显示状态 tooltip。 | 无 | 无 | 无 | 无 |
 
@@ -802,7 +802,7 @@ Host Keys / Private Keys 由 Session 菜单打开（与 Settings 同级独立弹
 | 起点 | 动作 | 目标 | 数据传递 |
 |---|---|---|---|
 | Quick Connect input | Enter | Quick Auth Dialog 或 Terminal Tab | 解析后的 host/port/username。 |
-| Session Tree Session | 双击 | Terminal Tab | SessionProfile id。 |
+| Session Tree Session | 双击 | Terminal Tab（活动标签已断开/未连接时占用该标签，否则新开） | SessionProfile id。 |
 | Terminal Tab | 切换为 SFTP / 点击 SFTP | SFTP Tab（同一标签） | 当前 SessionHandle id + SSH transport。 |
 | SFTP Tab | 切换为 Terminal | Terminal Tab（同一标签） | 当前 SessionHandle id + SSH transport。 |
 | SFTP 文件双击 | 文件 | Remote Edit Flow | remote path。 |

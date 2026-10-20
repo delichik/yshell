@@ -428,14 +428,8 @@ impl AppRuntime {
             .and_then(|tab_id| self.tab_index(tab_id))
             .and_then(|index| self.tabs[index].session_id());
         match session_key.and_then(|key| self.sessions.get(key)) {
-            // TAB-4：本地终端没有可重连的 SSH 连接，Reconnect 永远禁用；Disconnect
-            // 仍可用（结束本地 shell 进程）。
             Some(runtime) => (
-                !runtime.is_local()
-                    && matches!(
-                        runtime.state,
-                        SessionState::Idle | SessionState::Disconnected | SessionState::Failed
-                    ),
+                Self::session_reconnectable(runtime),
                 matches!(
                     runtime.state,
                     SessionState::Connected | SessionState::Connecting
@@ -443,6 +437,30 @@ impl AppRuntime {
             ),
             None => (false, false),
         }
+    }
+
+    /// 会话是否处于"可重连"状态（没连上、已断开或失败）。
+    ///
+    /// TAB-4：本地终端没有可重连的 SSH 连接，永远不算可重连。
+    fn session_reconnectable(runtime: &SessionRuntime) -> bool {
+        !runtime.is_local()
+            && matches!(
+                runtime.state,
+                SessionState::Idle | SessionState::Disconnected | SessionState::Failed
+            )
+    }
+
+    /// 标签是否可以直接重连（与右键菜单的 Reconnect 同一套判定）。
+    pub(crate) fn tab_reconnectable(&self, tab_id: &str) -> bool {
+        let Some(index) = self.tab_index(tab_id) else {
+            return false;
+        };
+        let Some(session_id) = self.tabs[index].session_id() else {
+            return false;
+        };
+        self.sessions
+            .get(session_id)
+            .is_some_and(Self::session_reconnectable)
     }
 
     /// D18：重连被右键的标签（复用会话级 reconnect）。
@@ -522,6 +540,21 @@ impl AppRuntime {
             String::new(),
         );
         Ok(self.projection())
+    }
+
+    /// 双击标签：已断开/未连接的标签直接重连，其它情况复制同源 session。
+    ///
+    /// 断开的标签里没有可用的终端内容，复制它没有意义；用户双击的意图是
+    /// "把它连回去"。可重连的判定与右键菜单的 Reconnect 同一套。
+    pub fn tab_double_click(&mut self, tab_id: &str) -> AppResult<AppProjection> {
+        if self.tab_index(tab_id).is_none() {
+            return Err(AppError::new(format!("tab `{tab_id}` was not found")));
+        }
+        if self.tab_reconnectable(tab_id) {
+            // `reconnect_session_by_key` 会顺带激活该标签（与右键 Reconnect 一致）。
+            return self.reconnect_tab_session(tab_id);
+        }
+        self.duplicate_tab(tab_id)
     }
 
     /// 双击标签：复制同源 session（新开独立标签 + runtime）。
@@ -1849,7 +1882,7 @@ impl AppRuntime {
     ///
     /// Quick Connect submit keeps the same tab id and position instead of
     /// opening a second terminal tab.
-    pub(crate) fn bind_runtime_tab(&mut self, tab_id: &str, session_id: &str) {
+    pub(crate) fn bind_runtime_tab(&mut self, tab_id: &str, session_id: &str, sftp: bool) {
         if let Some(index) = self.tab_index(tab_id) {
             if self.tabs[index].is_new_tab() {
                 self.tabs[index].kind = TabKind::Terminal {
@@ -1870,8 +1903,113 @@ impl AppRuntime {
                 self.active_session_id = Some(session_id.to_owned());
                 return;
             }
+            // 已有的终端/SFTP 标签：旧会话回收后原地换绑（标签数量与位置不变）。
+            self.rebind_runtime_tab(tab_id, session_id, sftp);
+            return;
         }
         self.attach_tab(tab_id, session_id);
+    }
+
+    /// 把已死的终端/SFTP 标签原地换成新会话（同一 tab id、同一位置）。
+    ///
+    /// 旧会话先被彻底回收（core 登记、shell、SFTP 客户端、日志），标签再绑定
+    /// 新会话；断开/未连接的标签因此可以"就地复活"，不会多出一个空标签。
+    pub(crate) fn rebind_runtime_tab(&mut self, tab_id: &str, session_id: &str, sftp: bool) {
+        let Some(index) = self.tab_index(tab_id) else {
+            return;
+        };
+        let old_session_id = self.tabs[index].session_id().map(str::to_owned);
+        if let Some(old_session_id) = old_session_id.as_deref() {
+            if old_session_id == session_id {
+                return;
+            }
+            self.release_tab_session(tab_id, old_session_id);
+        }
+        let entry = &mut self.tabs[index];
+        entry.kind = if sftp {
+            TabKind::Sftp {
+                session_id: session_id.to_owned(),
+            }
+        } else {
+            TabKind::Terminal {
+                session_id: session_id.to_owned(),
+            }
+        };
+        entry.unread = 0;
+        entry.custom_title = None;
+        entry.quick_connect_input.clear();
+        entry.quick_connect_error.clear();
+        self.register_tab_in_focused_window(tab_id);
+        self.active_tab_id = Some(tab_id.to_owned());
+        self.active_session_id = Some(session_id.to_owned());
+        self.assign_tab_to_focused_pane(tab_id);
+        self.tab_menu_tab_id = None;
+        if sftp {
+            self.ensure_sftp_tab_state(tab_id);
+            self.restore_sftp_tab(tab_id);
+        }
+        self.refresh_active_view_mirrors();
+    }
+
+    /// 回收标签上的旧会话（标签本身保留）：core 登记、shell、SFTP 客户端、日志。
+    fn release_tab_session(&mut self, tab_id: &str, session_id: &str) {
+        self.drop_sftp_tab_state(tab_id);
+        // N6：标签换绑前先停止日志并 flush（设计 §3：关闭后不自动恢复）。
+        let _ = self.stop_session_logging_for_close(session_id);
+        if let Some(core_tab_id) = self
+            .sessions
+            .get(session_id)
+            .map(|runtime| runtime.tab_id().clone())
+        {
+            let _ = self.dispatcher.dispatch(SessionCommand::CloseSession {
+                tab_id: core_tab_id,
+            });
+        }
+        if let Some(mut runtime) = self.sessions.remove(session_id) {
+            let _ = runtime.disconnect_shell();
+        }
+        self.recent_session_ids.retain(|id| id != session_id);
+        if self.sftp_session.status_session_key() == session_id {
+            self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
+            self.sftp_listing = SftpListingState::RefreshNeedsSession;
+        }
+        if self.sftp_ready_session_key().is_none() {
+            self.remote_edit_session = None;
+        }
+        // N9：旧会话可能是同步发送的源/目标，换绑后要收敛同步状态。
+        self.reconcile_input_sync();
+    }
+
+    /// 标签是否可以就地承载新会话（不新开标签）。
+    ///
+    /// New Tab（Quick Connect 页）与"已断开/未连接"的终端/SFTP 标签都可以复用；
+    /// 正在连接的标签不参与（连接在途，替换会打断握手）。
+    pub(crate) fn tab_reusable_for_new_session(&self, tab_id: &str) -> bool {
+        let Some(index) = self.tab_index(tab_id) else {
+            return false;
+        };
+        if self.tabs[index].is_new_tab() {
+            return true;
+        }
+        let Some(session_id) = self.tabs[index].session_id() else {
+            return false;
+        };
+        let Some(runtime) = self.sessions.get(session_id) else {
+            // 会话已经不在了（只剩一个空壳标签）：也可以复用。
+            return true;
+        };
+        matches!(
+            runtime.state,
+            SessionState::Idle | SessionState::Disconnected | SessionState::Failed
+        )
+    }
+
+    /// 当前活动标签是否可以就地承载新会话（返回标签 id）。
+    ///
+    /// 新会话不新开标签：活动标签已经断开/未连接时直接占用它（位置不变）。
+    pub(crate) fn reusable_active_tab_id(&self) -> Option<String> {
+        let tab_id = self.active_tab_id.clone()?;
+        self.tab_reusable_for_new_session(&tab_id).then_some(tab_id)
     }
 
     /// Binds a freshly created runtime to either its new tab or an existing
@@ -1884,7 +2022,7 @@ impl AppRuntime {
         sftp: bool,
     ) {
         if let Some(reuse_tab_id) = reuse_tab_id {
-            self.bind_runtime_tab(reuse_tab_id, session_id);
+            self.bind_runtime_tab(reuse_tab_id, session_id, sftp);
         } else if sftp {
             self.attach_sftp_tab(tab_id, session_id);
         } else {

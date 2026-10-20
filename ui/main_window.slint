@@ -798,7 +798,7 @@ export component MainWindow inherits Window {
     callback activate_tab(string);
     callback rename_tab(string, string);
     /// 双击标签：复制同源 session。
-    callback duplicate_tab(string);
+    callback tab_double_click(string);
     /// 标签拖拽载荷（`TabDragPayload`）。
     pure callback drag_tab_transfer(string) -> data-transfer;
     callback drop_tab_on_pane(int, data-transfer);
@@ -2522,7 +2522,7 @@ export component MainWindow inherits Window {
                     }
                     activate-tab(id) => { root.activate_tab(id); }
                     close-tab(id) => { root.close_tab(id); }
-                    duplicate-tab-requested(id) => { root.duplicate_tab(id); }
+                    tab-double-click-requested(id) => { root.tab_double_click(id); }
                     drag-tab-transfer(id) => { return root.drag_tab_transfer(id); }
                     drop-tab-on-pane(pane-id, data) => { root.drop_tab_on_pane(pane-id, data); }
                     drop-tab-split(data, pane-id, dir) => { root.drop_tab_split(data, pane-id, dir); }

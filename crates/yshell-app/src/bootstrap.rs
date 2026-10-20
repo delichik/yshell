@@ -680,20 +680,20 @@ pub(crate) fn wire_callbacks(
         }
     });
 
-    // 双击标签：复制 session。
+    // 双击标签：已断开/未连接就重连，否则复制 session。
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
     let surface = surface_source.clone();
-    window.on_duplicate_tab(move |tab_id| {
+    window.on_tab_double_click(move |tab_id| {
         let Some(window) = weak.upgrade() else {
             return;
         };
-        match runtime_ref.borrow_mut().duplicate_tab(tab_id.as_ref()) {
+        match runtime_ref.borrow_mut().tab_double_click(tab_id.as_ref()) {
             Ok(projection) => {
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_error_status(&window, "Could not duplicate the tab.", &error),
+            Err(error) => set_error_status(&window, "Could not open the tab.", &error),
         }
     });
 

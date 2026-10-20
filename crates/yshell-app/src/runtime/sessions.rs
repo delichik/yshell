@@ -226,7 +226,9 @@ impl AppRuntime {
             .cloned()
             .ok_or_else(|| AppError::new(format!("saved session `{profile_id}` was not found")))?;
         let runtime = SessionRuntime::from_profile(&profile, self.allocate_runtime_ordinal());
-        self.activate_runtime_session(runtime)
+        // 活动标签已经断开/未连接时直接占用它（不新开标签）。
+        let reuse_tab_id = self.reusable_active_tab_id();
+        self.activate_runtime_session_bound(runtime, reuse_tab_id)
     }
 
     /// Opens a saved session directly as a two-column SFTP tab.
@@ -241,7 +243,9 @@ impl AppRuntime {
             .ok_or_else(|| AppError::new(format!("saved session `{profile_id}` was not found")))?;
         let mut runtime = SessionRuntime::from_profile(&profile, self.allocate_runtime_ordinal());
         runtime.set_view_mode(crate::session_runtime::SessionViewMode::Sftp);
-        self.activate_runtime_session(runtime)
+        // 活动标签已经断开/未连接时直接占用它（不新开标签）。
+        let reuse_tab_id = self.reusable_active_tab_id();
+        self.activate_runtime_session_bound(runtime, reuse_tab_id)
     }
 
     /// Saved-session context menu: Open SFTP for the selected profile.

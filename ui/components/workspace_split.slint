@@ -114,7 +114,7 @@ component SplitPaneLeaf inherits Rectangle {
     callback tab-split-dropped(data-transfer, string);
     callback activate-tab(string);
     callback close-tab(string);
-    callback duplicate-tab(string);
+    callback tab-double-click(string);
     callback tab-context-menu-requested(string, string, length, length);
     callback new-session();
     pure callback drag-tab-transfer(string) -> data-transfer;
@@ -223,7 +223,7 @@ component SplitPaneLeaf inherits Rectangle {
                 drop-enabled: root.view-visible;
                 activate-tab(id) => { root.activate-tab(id); }
                 close-tab(id) => { root.close-tab(id); }
-                duplicate-tab(id) => { root.duplicate-tab(id); }
+                tab-double-click(id) => { root.tab-double-click(id); }
                 tab-context-menu-requested(id, title, x, y) => {
                     root.tab-context-menu-requested(id, title, x, y);
                 }
@@ -487,7 +487,7 @@ export component WorkspaceSplitView inherits Rectangle {
     callback tab-split-dropped(data-transfer, int, string);
     callback activate-tab(string);
     callback close-tab(string);
-    callback duplicate-tab(string);
+    callback tab-double-click(string);
     callback tab-context-menu-requested(string, string, length, length);
     callback new-session();
     pure callback drag-tab-transfer(string) -> data-transfer;
@@ -592,7 +592,7 @@ export component WorkspaceSplitView inherits Rectangle {
         tab-split-dropped(data, dir) => { root.tab-split-dropped(data, leaf.pane-id, dir); }
         activate-tab(id) => { root.activate-tab(id); }
         close-tab(id) => { root.close-tab(id); }
-        duplicate-tab(id) => { root.duplicate-tab(id); }
+        tab-double-click(id) => { root.tab-double-click(id); }
         tab-context-menu-requested(id, title, x, y) => {
             root.tab-context-menu-requested(id, title, x, y);
         }

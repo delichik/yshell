@@ -648,6 +648,85 @@ fn duplicate_tab_opens_sibling_session() {
 }
 
 #[test]
+fn double_clicking_a_disconnected_tab_reconnects_it() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 1);
+    let tab_id = open_saved_tab(&mut runtime, "saved-0");
+    let session_id = runtime.tabs[0]
+        .session_id()
+        .expect("terminal tab")
+        .to_owned();
+    runtime
+        .disconnect_session_by_key(&session_id)
+        .expect("disconnect");
+
+    // 断开的标签双击 = 重连：不新开标签。
+    let projection = runtime.tab_double_click(&tab_id).expect("double click");
+    assert_eq!(runtime.tabs.len(), 1);
+    assert_eq!(projection.active_tab_id, tab_id);
+    assert_eq!(
+        runtime.tabs[0].session_id(),
+        Some(session_id.as_str()),
+        "the same session is reconnected"
+    );
+    assert_tab_invariants(&runtime);
+}
+
+#[test]
+fn double_clicking_a_live_tab_duplicates_it() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 1);
+    let tab_id = open_saved_tab(&mut runtime, "saved-0");
+
+    // 还连着的标签双击 = 复制（新开一个标签）。
+    let projection = runtime.tab_double_click(&tab_id).expect("double click");
+    assert_eq!(runtime.tabs.len(), 2);
+    assert_ne!(projection.active_tab_id, tab_id);
+    assert_tab_invariants(&runtime);
+}
+
+#[test]
+fn opening_a_saved_session_reuses_a_disconnected_tab() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 2);
+    let tab_id = open_saved_tab(&mut runtime, "saved-0");
+    let old_session = runtime.tabs[0]
+        .session_id()
+        .expect("terminal tab")
+        .to_owned();
+    runtime
+        .disconnect_session_by_key(&old_session)
+        .expect("disconnect");
+
+    // 活动标签已断开：连接已保存会话时直接占用它（不新开标签）。
+    let projection = runtime.open_saved_session("saved-1").expect("open saved");
+    assert_eq!(runtime.tabs.len(), 1);
+    assert_eq!(projection.active_tab_id, tab_id);
+    let new_session = runtime.tabs[0]
+        .session_id()
+        .expect("terminal tab")
+        .to_owned();
+    assert_ne!(new_session, old_session);
+    // 旧会话被彻底回收。
+    assert!(!runtime.sessions.contains_key(&old_session));
+    assert_tab_invariants(&runtime);
+}
+
+#[test]
+fn opening_a_saved_session_keeps_a_live_tab_and_opens_another() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 2);
+    let tab_id = open_saved_tab(&mut runtime, "saved-0");
+
+    // 活动标签还连着：新会话另开标签，不动它。
+    let projection = runtime.open_saved_session("saved-1").expect("open saved");
+    assert_eq!(runtime.tabs.len(), 2);
+    assert_ne!(projection.active_tab_id, tab_id);
+    assert_eq!(projection.tabs[0].id, tab_id);
+    assert_tab_invariants(&runtime);
+}
+
+#[test]
 fn place_tab_split_creates_two_pane_layout() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 2);

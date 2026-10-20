@@ -32,7 +32,7 @@ export component WorkspaceTabItem inherits Rectangle {
     callback close-requested();
     callback context-menu-requested(length, length);
     /// 双击：复制 session（新建同源标签）。
-    callback duplicate-requested();
+    callback double-click-requested();
 
     /// N9：角标悬停提示（源/接收的完整说明；@markdown 插值用）。
     property <string> tab-sync-tooltip: root.tab-sync-role-text == "source"
@@ -235,7 +235,7 @@ export component WorkspaceTabItem inherits Rectangle {
             width: 100%;
             height: 100%;
             clicked => { root.activate(); }
-            double-clicked => { root.duplicate-requested(); }
+            double-clicked => { root.double-click-requested(); }
             pointer-event(event) => {
                 if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
                     root.context-menu-requested(
