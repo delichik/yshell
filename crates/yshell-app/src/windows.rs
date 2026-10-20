@@ -653,6 +653,10 @@ impl WindowManager {
             if runtime.quick_connect_relative_time_due() {
                 dirty = true;
             }
+            // N2：远端文件下载中：转圈相位按刷新推进（加载指示器）。
+            if runtime.pending_remote_edit.is_some() {
+                dirty = true;
+            }
         }
 
         let requested_close = self

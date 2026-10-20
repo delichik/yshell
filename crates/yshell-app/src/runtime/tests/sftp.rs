@@ -7,6 +7,18 @@ use yshell_sftp::{FsEntry, RemoteEditSession, TransferDirection};
 use super::*;
 
 #[test]
+fn drag_actions_follow_the_windows_explorer_rules() {
+    // 无修饰键：同卷移动、跨卷复制。
+    assert!(crate::runtime::resolve_drop_move(true, false, false));
+    assert!(!crate::runtime::resolve_drop_move(false, false, false));
+    // Ctrl = 复制、Shift = 移动（无视同卷/跨卷）。
+    assert!(!crate::runtime::resolve_drop_move(true, true, false));
+    assert!(!crate::runtime::resolve_drop_move(false, true, false));
+    assert!(crate::runtime::resolve_drop_move(false, false, true));
+    assert!(crate::runtime::resolve_drop_move(true, false, true));
+}
+
+#[test]
 fn connected_session_marks_sftp_lifecycle_ready_without_listing() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");

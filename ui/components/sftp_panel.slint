@@ -330,6 +330,11 @@ export component SftpPanel inherits Rectangle {
     in property <bool> connected: false;
     in property <bool> remote-edit-active: false;
     in property <string> remote-edit-text: "";
+    /// 远端栏加载中（打开远端文件时的下载指示器）。
+    in property <bool> remote-edit-loading: false;
+    in property <string> remote-edit-loading-text: "";
+    /// 转圈相位（宿主按刷新推进）。
+    in property <int> spinner-phase: 0;
     in-out property <string> path-text: "/";
     // 本地栏投影
     in property <[FileRow]> local-rows;
@@ -337,6 +342,8 @@ export component SftpPanel inherits Rectangle {
     in property <string> local-path-text: "/";
     /// 本地路径的分隔符（Windows 是 `\`，其它平台是 `/`）。
     in property <string> local-path-separator: "/";
+    /// 本地栏是否显示 Perm 列（Windows 本地没有 POSIX 权限位 → 不显示）。
+    in property <bool> local-permissions-visible: true;
     in property <bool> local-show-hidden: false;
     in property <string> local-sort-column: "name";
     in property <bool> local-sort-ascending: true;
@@ -376,6 +383,11 @@ export component SftpPanel inherits Rectangle {
     in property <int> transfer-retryable-count: 0;
 
     // --- 远端回调 ---------------------------------------------------------
+    /// 拖动来源与修饰键（资源管理器语义：同卷移动、跨卷复制；Ctrl/Shift 覆盖）。
+    private property <bool> drag-source-local: false;
+    private property <bool> drag-ctrl: false;
+    private property <bool> drag-shift: false;
+
     callback refresh();
     callback up();
     callback home();
@@ -552,6 +564,10 @@ export component SftpPanel inherits Rectangle {
                     crumbs: root.local-crumbs;
                     path-text: root.local-path-text;
                     path-separator: root.local-path-separator;
+                    show-permissions: root.local-permissions-visible;
+                    drag-ctrl: root.drag-ctrl;
+                    drag-shift: root.drag-shift;
+                    drop-default-move: root.drag-source-local;
                     path-placeholder-text: "/local/path";
                     show-hidden: root.local-show-hidden;
                     sort-column: root.local-sort-column;
@@ -572,7 +588,12 @@ export component SftpPanel inherits Rectangle {
                     open-path(path) => { root.local-open-path(path); }
                     sort-by(column) => { root.local-sort-by(column); }
                     toggle-hidden => { root.local-toggle-hidden(); }
-                    select-row(index, ctrl, shift) => { root.local-select-row(index, ctrl, shift); }
+                    select-row(index, ctrl, shift) => {
+                        root.drag-source-local = true;
+                        root.drag-ctrl = ctrl;
+                        root.drag-shift = shift;
+                        root.local-select-row(index, ctrl, shift);
+                    }
                     activate-row(index) => { root.local-activate-row(index); }
                     context-menu-requested(index, x, y) => { root.local-context-menu-requested(index, x, y); }
                     retry => { root.local-retry(); }
@@ -634,6 +655,14 @@ export component SftpPanel inherits Rectangle {
                     connected: root.connected;
                     remote-edit-active: root.remote-edit-active;
                     remote-edit-text: root.remote-edit-text;
+                    loading: root.remote-edit-loading;
+                    loading-text: root.remote-edit-loading-text != ""
+                        ? @tr("Loading {0}…", root.remote-edit-loading-text)
+                        : "";
+                    spinner-phase: root.spinner-phase;
+                    drag-ctrl: root.drag-ctrl;
+                    drag-shift: root.drag-shift;
+                    drop-default-move: !root.drag-source-local;
                     title-text: @tr("Remote");
                     path-placeholder-text: "/remote/path";
                     path-text <=> root.path-text;
@@ -643,7 +672,12 @@ export component SftpPanel inherits Rectangle {
                     open-crumb(index) => { root.open-crumb(index); }
                     sort-by(column) => { root.sort-by(column); }
                     toggle-hidden => { root.toggle-hidden(); }
-                    select-row(index, ctrl, shift) => { root.select-row(index, ctrl, shift); }
+                    select-row(index, ctrl, shift) => {
+                        root.drag-source-local = false;
+                        root.drag-ctrl = ctrl;
+                        root.drag-shift = shift;
+                        root.select-row(index, ctrl, shift);
+                    }
                     activate-row(index) => { root.activate-row(index); }
                     context-menu-requested(index, x, y) => { root.context-menu-requested(index, x, y); }
                     save-edit => { root.save-edit(); }
@@ -672,6 +706,14 @@ export component SftpPanel inherits Rectangle {
                 connected: root.connected;
                 remote-edit-active: root.remote-edit-active;
                 remote-edit-text: root.remote-edit-text;
+                loading: root.remote-edit-loading;
+                loading-text: root.remote-edit-loading-text != ""
+                    ? @tr("Loading {0}…", root.remote-edit-loading-text)
+                    : "";
+                spinner-phase: root.spinner-phase;
+                drag-ctrl: root.drag-ctrl;
+                drag-shift: root.drag-shift;
+                drop-default-move: !root.drag-source-local;
                 title-text: @tr("Remote");
                 path-placeholder-text: "/remote/path";
                 path-text <=> root.path-text;
@@ -681,7 +723,12 @@ export component SftpPanel inherits Rectangle {
                 open-crumb(index) => { root.open-crumb(index); }
                 sort-by(column) => { root.sort-by(column); }
                 toggle-hidden => { root.toggle-hidden(); }
-                select-row(index, ctrl, shift) => { root.select-row(index, ctrl, shift); }
+                select-row(index, ctrl, shift) => {
+                        root.drag-source-local = false;
+                        root.drag-ctrl = ctrl;
+                        root.drag-shift = shift;
+                        root.select-row(index, ctrl, shift);
+                    }
                 activate-row(index) => { root.activate-row(index); }
                 context-menu-requested(index, x, y) => { root.context-menu-requested(index, x, y); }
                 save-edit => { root.save-edit(); }
@@ -732,12 +779,21 @@ export component SftpPanel inherits Rectangle {
                 title-text: root.local-title-text;
                 selected-name-text: root.local-selected-name-text;
                 path-separator: root.local-path-separator;
+                show-permissions: root.local-permissions-visible;
+                drag-ctrl: root.drag-ctrl;
+                drag-shift: root.drag-shift;
+                drop-default-move: root.drag-source-local;
                 toggle-collapsed => { root.local-toggle-collapsed(); }
                 refresh => { root.local-refresh(); }
                 open-path(path) => { root.local-open-path(path); }
                 sort-by(column) => { root.local-sort-by(column); }
                 toggle-hidden => { root.local-toggle-hidden(); }
-                select-row(index, ctrl, shift) => { root.local-select-row(index, ctrl, shift); }
+                select-row(index, ctrl, shift) => {
+                        root.drag-source-local = true;
+                        root.drag-ctrl = ctrl;
+                        root.drag-shift = shift;
+                        root.local-select-row(index, ctrl, shift);
+                    }
                 activate-row(index) => { root.local-activate-row(index); }
                 context-menu-requested(index, x, y) => { root.local-context-menu-requested(index, x, y); }
                 retry => { root.local-retry(); }

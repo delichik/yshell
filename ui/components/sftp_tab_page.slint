@@ -26,10 +26,14 @@ export struct SftpPaneData {
     error_text: string,
     remote_edit_active: bool,
     remote_edit_text: string,
+    remote_edit_loading: bool,
+    remote_edit_loading_text: string,
+    spinner_phase: int,
     local_rows: [FileRow],
     local_crumbs: [FileCrumb],
     local_path_text: string,
     local_path_separator: string,
+    local_permissions_visible: bool,
     local_sort_column_text: string,
     local_sort_ascending: bool,
     local_sort_text: string,
@@ -66,6 +70,11 @@ export component SftpTabPage inherits Rectangle {
     in property <bool> connected: false;
     in property <bool> remote-edit-active: false;
     in property <string> remote-edit-text: "";
+    /// 远端栏加载中（打开远端文件时的下载指示器）。
+    in property <bool> remote-edit-loading: false;
+    in property <string> remote-edit-loading-text: "";
+    /// 转圈相位（宿主按刷新推进）。
+    in property <int> spinner-phase: 0;
     in-out property <string> path-text: "/";
 
     // Local projection (per SFTP tab).
@@ -73,6 +82,8 @@ export component SftpTabPage inherits Rectangle {
     in property <[FileCrumb]> local-crumbs;
     in property <string> local-path-text: "/";
     in property <string> local-path-separator: "/";
+    /// 本地栏是否显示 Perm 列（Windows 本地没有 POSIX 权限位 → 不显示）。
+    in property <bool> local-permissions-visible: true;
     in property <bool> local-show-hidden: false;
     in property <string> local-sort-column: "name";
     in property <bool> local-sort-ascending: true;
@@ -155,11 +166,15 @@ export component SftpTabPage inherits Rectangle {
         connected: root.connected;
         remote-edit-active: root.remote-edit-active;
         remote-edit-text: root.remote-edit-text;
+        remote-edit-loading: root.remote-edit-loading;
+        remote-edit-loading-text: root.remote-edit-loading-text;
+        spinner-phase: root.spinner-phase;
         path-text <=> root.path-text;
         local-rows: root.local-rows;
         local-crumbs: root.local-crumbs;
         local-path-text: root.local-path-text;
         local-path-separator: root.local-path-separator;
+        local-permissions-visible: root.local-permissions-visible;
         local-show-hidden: root.local-show-hidden;
         local-sort-column: root.local-sort-column;
         local-sort-ascending: root.local-sort-ascending;

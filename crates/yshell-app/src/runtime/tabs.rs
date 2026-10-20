@@ -1372,7 +1372,29 @@ impl AppRuntime {
                         .is_some_and(|runtime| runtime.state == SessionState::Connected);
                     state
                         .map(|state| {
-                            super::sftp::SftpPaneProjection::from_state(&state, session_connected)
+                            let mut pane = super::sftp::SftpPaneProjection::from_state(
+                                &state,
+                                session_connected,
+                            );
+                            // 远端文件下载中（加载指示器）：挂起态是全局的，
+                            // 只在活动标签上显示。
+                            if focused {
+                                pane.remote_edit_loading = self.pending_remote_edit.is_some();
+                                pane.remote_edit_loading_text = self
+                                    .pending_remote_edit
+                                    .as_ref()
+                                    .map(|pending| {
+                                        pending
+                                            .remote_path
+                                            .rsplit('/')
+                                            .next()
+                                            .unwrap_or(pending.remote_path.as_str())
+                                            .to_owned()
+                                    })
+                                    .unwrap_or_default();
+                                pane.spinner_phase = super::projection::spinner_phase();
+                            }
+                            pane
                         })
                         .unwrap_or_default()
                 } else {

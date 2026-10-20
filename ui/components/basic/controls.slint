@@ -151,6 +151,51 @@ export component WinButton inherits Rectangle {
     }
 }
 
+// 加载指示器：8 个点围成一圈，最亮的一个按相位绕圈（宿主每次刷新推进一格）。
+//
+// 点的位置写死（24×24 框、半径 10px、点 4px）：Slint 的 `Rectangle` 不支持旋转，
+// 用固定位置 + 亮度相位实现同样的"转圈"观感。
+export component WinSpinner inherits Rectangle {
+    /// 相位（0..7）：宿主每次刷新推进一格。
+    in property <int> phase: 0;
+    in property <color> dot-color: Theme.text-secondary;
+
+    width: 24px;
+    height: 24px;
+    background: transparent;
+
+    /// 第 i 个点的横坐标（8 个点均分圆周）。
+    pure function dot-x(index: int) -> length {
+        if (index == 1 || index == 2) { return 17px; }
+        if (index == 3 || index == 4) { return 10px; }
+        if (index == 5 || index == 6) { return 3px; }
+        return 20px;
+    }
+
+    /// 第 i 个点的纵坐标。
+    pure function dot-y(index: int) -> length {
+        if (index == 0 || index == 7) { return 0px; }
+        if (index == 1 || index == 2) { return 3px; }
+        if (index == 3 || index == 4) { return 17px; }
+        return 20px;
+    }
+
+    /// 亮度：相位领先的那个最亮，越靠后越淡。
+    pure function dot-opacity(index: int) -> float {
+        return 1.0 - Math.mod(index - root.phase + 8, 8) * 0.11;
+    }
+
+    for i in 8 : Rectangle {
+        x: root.dot-x(i);
+        y: root.dot-y(i);
+        width: 4px;
+        height: 4px;
+        border-radius: 2px;
+        background: root.dot-color;
+        opacity: root.dot-opacity(i);
+    }
+}
+
 // 图标按钮：32×32 方形，默认无底
 export component WinIconButton inherits Rectangle {
     in property <string> icon: "more";

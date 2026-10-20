@@ -37,6 +37,8 @@ mod quick_connect;
 mod sessions;
 mod sftp;
 mod sftp_ops;
+pub(crate) use sftp_ops::PendingRemoteEdit;
+pub(crate) use sftp_ops::{resolve_drop_move, same_local_volume};
 mod split_tree;
 mod ssh_config;
 mod tabs;
@@ -274,6 +276,9 @@ impl AppRuntime {
             default_local_dir: default_local_dir.clone(),
             sftp_listing_pending: false,
             remote_edit_session: None,
+            pending_remote_edit: None,
+            drag_ctrl: false,
+            drag_shift: false,
             transfer_queue: TransferQueue::default(),
             next_transfer_ordinal: 1,
             local_pane: LocalPaneState {
@@ -632,6 +637,11 @@ pub struct AppRuntime {
     /// Tab activate deferred the first listing for a session; drain on tick.
     pub(crate) sftp_listing_pending: bool,
     pub(crate) remote_edit_session: Option<RemoteEditSession>,
+    /// N2：远端编辑的挂起下载（打开远端文件时的加载态；下载在后台任务里跑）。
+    pub(crate) pending_remote_edit: Option<PendingRemoteEdit>,
+    /// N1：拖动起点按下的修饰键（Ctrl = 复制、Shift = 移动；资源管理器语义）。
+    pub(crate) drag_ctrl: bool,
+    pub(crate) drag_shift: bool,
     pub(crate) transfer_queue: TransferQueue,
     pub(crate) next_transfer_ordinal: usize,
     // --- N1 Phase 2：本地栏 / 远端多选 / 队列抽屉 / 冲突与属性 / 内部剪贴板 ------

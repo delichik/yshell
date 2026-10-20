@@ -4688,6 +4688,9 @@ fn spawn_save_text(
 struct SftpDragPayload {
     side: crate::runtime::ClipboardSide,
     paths: Vec<PathBuf>,
+    /// 拖动起点按下的修饰键（Ctrl = 复制、Shift = 移动；资源管理器语义）。
+    ctrl: bool,
+    shift: bool,
 }
 
 #[derive(Clone)]
@@ -4715,7 +4718,12 @@ fn build_drag_transfer(
             .collect(),
     };
     let mut transfer = slint::DataTransfer::default();
-    transfer.set_user_data(Rc::new(SftpDragPayload { side, paths }));
+    transfer.set_user_data(Rc::new(SftpDragPayload {
+        side,
+        paths,
+        ctrl: runtime.drag_ctrl,
+        shift: runtime.drag_shift,
+    }));
     transfer
 }
 
@@ -4744,20 +4752,27 @@ fn remote_drop_target(runtime: &AppRuntime, index: i32) -> String {
 fn handle_remote_drop(
     runtime: &mut AppRuntime,
     data: &slint::DataTransfer,
-    action: DragAction,
+    _action: DragAction,
     target_dir: &str,
 ) -> AppResult<AppProjection> {
-    let move_source = action == DragAction::Move;
     match drag_payload(data) {
         Some(payload) => match payload.side {
             crate::runtime::ClipboardSide::Local => {
-                // 本地 → 远端：默认复制，Ctrl（协商为 Move）= 移动。
-                runtime.drop_local_paths_on_remote(&payload.paths, target_dir, move_source)
+                // 本地 → 远端：跨卷 → 默认复制（Ctrl 复制、Shift 移动）。
+                runtime.drop_local_paths_on_remote(
+                    &payload.paths,
+                    target_dir,
+                    resolve_drop_move(false, payload.ctrl, payload.shift),
+                )
             }
             crate::runtime::ClipboardSide::Remote => {
-                // 远端内拖动 = 移动到目录（设计 §2），与修饰键无关。
+                // 远端内拖动 = 同一台服务器（同卷）→ 默认移动。
                 let entries = runtime.clipboard_remote_entries(&payload.paths);
-                runtime.drop_remote_entries_on_remote(&entries, target_dir, true)
+                runtime.drop_remote_entries_on_remote(
+                    &entries,
+                    target_dir,
+                    resolve_drop_move(true, payload.ctrl, payload.shift),
+                )
             }
         },
         None => {
@@ -4770,17 +4785,28 @@ fn handle_remote_drop(
 fn handle_local_drop(
     runtime: &mut AppRuntime,
     data: &slint::DataTransfer,
-    action: DragAction,
+    _action: DragAction,
 ) -> AppResult<AppProjection> {
-    let move_source = action == DragAction::Move;
     match drag_payload(data) {
         Some(payload) => match payload.side {
             crate::runtime::ClipboardSide::Local => {
-                Ok(runtime.drop_local_paths_on_local(&payload.paths, move_source))
+                // 本地 → 本地：同盘 → 默认移动，跨盘 → 复制。
+                let same_volume = payload
+                    .paths
+                    .iter()
+                    .all(|path| same_local_volume(path, &runtime.local_pane.dir));
+                Ok(runtime.drop_local_paths_on_local(
+                    &payload.paths,
+                    resolve_drop_move(same_volume, payload.ctrl, payload.shift),
+                ))
             }
             crate::runtime::ClipboardSide::Remote => {
+                // 远端 → 本地：跨卷 → 默认复制。
                 let entries = runtime.clipboard_remote_entries(&payload.paths);
-                runtime.drop_remote_entries_on_local(&entries, move_source)
+                runtime.drop_remote_entries_on_local(
+                    &entries,
+                    resolve_drop_move(false, payload.ctrl, payload.shift),
+                )
             }
         },
         None => {
@@ -4789,6 +4815,9 @@ fn handle_local_drop(
         }
     }
 }
+
+/// 拖放动作（与 Windows 资源管理器一致；实现见 `runtime::sftp_ops`）。
+use crate::runtime::{resolve_drop_move, same_local_volume};
 
 fn copy_text_to_clipboard(clipboard: &Rc<RefCell<Option<ClipboardContext>>>, text: &str) {
     if let Some(context) = clipboard.borrow_mut().as_mut() {
@@ -5625,6 +5654,9 @@ fn sftp_pane_data_from(pane: &crate::runtime::SftpPaneProjection) -> SftpPaneDat
         error_text: pane.error_text.clone().into(),
         remote_edit_active: pane.remote_edit_active,
         remote_edit_text: pane.remote_edit_text.clone().into(),
+        remote_edit_loading: pane.remote_edit_loading,
+        remote_edit_loading_text: pane.remote_edit_loading_text.clone().into(),
+        spinner_phase: pane.spinner_phase,
         local_rows: ModelRc::new(VecModel::from(
             pane.local_rows.iter().map(file_row_from).collect::<Vec<_>>(),
         )),
@@ -5633,6 +5665,7 @@ fn sftp_pane_data_from(pane: &crate::runtime::SftpPaneProjection) -> SftpPaneDat
         )),
         local_path_text: pane.local_path_text.clone().into(),
         local_path_separator: pane.local_path_separator.clone().into(),
+        local_permissions_visible: pane.local_permissions_visible,
         local_sort_column_text: pane.local_sort_column_text.clone().into(),
         local_sort_ascending: pane.local_sort_ascending,
         local_sort_text: pane.local_sort_text.clone().into(),
@@ -6904,6 +6937,11 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
         projection.sftp_selected_permissions_text.clone().into(),
     );
     window.set_sftp_remote_edit_active(projection.sftp_remote_edit_active);
+    // 远端文件下载中：加载指示器（转圈相位按刷新推进）。
+    window.set_sftp_remote_edit_loading(projection.sftp_remote_edit_loading);
+    window
+        .set_sftp_remote_edit_loading_text(projection.sftp_remote_edit_loading_text.clone().into());
+    window.set_sftp_spinner_phase(projection.sftp_spinner_phase);
     window.set_sftp_available(projection.sftp_available);
     window.set_transfer_queue_rows_text(projection.transfer_queue_rows_text.clone().into());
     window.set_transfer_queue_empty(projection.transfer_queue_empty);

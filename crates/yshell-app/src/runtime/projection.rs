@@ -11,6 +11,15 @@ use super::panels::{PanelFrameView, PanelLayoutView};
 use super::theme::palette_parts;
 use super::*;
 
+/// 加载指示器的转圈相位（8 步一圈；按墙钟推进，投影每次刷新都会带上新值）。
+pub(crate) fn spinner_phase() -> i32 {
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or_default();
+    i32::try_from((millis / 120) % 8).unwrap_or(0)
+}
+
 impl AppRuntime {
     /// N7：为指定窗口组装投影（终端/标签字段解析到该窗口的活动标签）。
     ///
@@ -619,6 +628,20 @@ impl AppRuntime {
             sftp_selected_path_text: self.sftp_selected_path_text(),
             sftp_selected_permissions_text: self.sftp_selected_permissions_text(),
             sftp_remote_edit_active: self.remote_edit_session.is_some(),
+            // 远端文件下载中（加载指示器）：只投影文件名，句子在 Slint 侧拼（可翻译）。
+            sftp_remote_edit_loading: self.pending_remote_edit.is_some(),
+            sftp_remote_edit_loading_text: self.pending_remote_edit.as_ref().map_or_else(
+                String::new,
+                |pending| {
+                    pending
+                        .remote_path
+                        .rsplit('/')
+                        .next()
+                        .unwrap_or(pending.remote_path.as_str())
+                        .to_owned()
+                },
+            ),
+            sftp_spinner_phase: spinner_phase(),
             sftp_available: self.sftp_ready_session_key().is_some(),
             transfer_queue_rows_text,
             transfer_queue_empty,
@@ -1971,6 +1994,11 @@ pub struct AppProjection {
     pub sftp_selected_path_text: String,
     pub sftp_selected_permissions_text: String,
     pub sftp_remote_edit_active: bool,
+    /// 远端文件下载中（加载指示器）。
+    pub sftp_remote_edit_loading: bool,
+    pub sftp_remote_edit_loading_text: String,
+    /// 转圈相位（宿主按刷新推进，8 步一圈）。
+    pub sftp_spinner_phase: i32,
     /// W5-A3：SFTP 生命周期是否就绪（`ready`）；SFTP 操作菜单项据此禁用。
     pub sftp_available: bool,
     pub transfer_queue_rows_text: String,

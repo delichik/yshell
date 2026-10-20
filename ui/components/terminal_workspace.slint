@@ -70,6 +70,11 @@ export component TerminalWorkspace inherits VerticalLayout {
     in property <bool> sftp-connected: false;
     in property <bool> sftp-remote-edit-active: false;
     in property <string> sftp-remote-edit-text: "";
+    /// 远端文件下载中（加载指示器）。
+    in property <bool> sftp-remote-edit-loading: false;
+    in property <string> sftp-remote-edit-loading-text: "";
+    /// 转圈相位（宿主按刷新推进）。
+    in property <int> sftp-spinner-phase: 0;
     in-out property <string> sftp-path-text: "/";
     in property <[FileRow]> sftp-local-rows;
     in property <[FileCrumb]> sftp-local-crumbs;
@@ -497,6 +502,9 @@ export component TerminalWorkspace inherits VerticalLayout {
                             connected: root.sftp-connected;
                             remote-edit-active: root.sftp-remote-edit-active;
                             remote-edit-text: root.sftp-remote-edit-text;
+                            remote-edit-loading: root.sftp-remote-edit-loading;
+                            remote-edit-loading-text: root.sftp-remote-edit-loading-text;
+                            spinner-phase: root.sftp-spinner-phase;
                             path-text <=> root.sftp-path-text;
                             local-rows: root.sftp-local-rows;
                             local-crumbs: root.sftp-local-crumbs;

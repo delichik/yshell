@@ -18,7 +18,152 @@ use super::{
     tree_transfer_status_text, update_sftp_transfer_progress,
 };
 
+/// 远端编辑的挂起下载（打开远端文件 → 后台下载 → 下载完成才启用编辑条）。
+#[derive(Debug, Clone)]
+pub(crate) struct PendingRemoteEdit {
+    /// 后台下载任务 id（完成消息按它配对）。
+    pub job_id: String,
+    /// 远端文件路径。
+    pub remote_path: String,
+    /// 本地临时文件路径。
+    pub local_path: PathBuf,
+    /// 下载完成后生效的远端编辑会话。
+    pub edit_session: RemoteEditSession,
+}
+
+/// 拖放动作（与 Windows 资源管理器一致）。
+///
+/// * Ctrl = 复制、Shift = 移动（无视同卷/跨卷）；
+/// * 无修饰键：同卷移动、跨卷复制。
+pub(crate) fn resolve_drop_move(default_move: bool, ctrl: bool, shift: bool) -> bool {
+    if ctrl {
+        return false;
+    }
+    if shift {
+        return true;
+    }
+    default_move
+}
+
+/// 本地路径与目标目录是否同卷（Windows：盘符相同即同卷）。
+pub(crate) fn same_local_volume(source: &Path, target_dir: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        fn drive(path: &Path) -> Option<String> {
+            path.components()
+                .next()
+                .and_then(|component| match component {
+                    std::path::Component::Prefix(prefix) => {
+                        Some(prefix.as_os_str().to_string_lossy().to_uppercase())
+                    }
+                    _ => None,
+                })
+        }
+        match (drive(source), drive(target_dir)) {
+            (Some(source_drive), Some(target_drive)) => source_drive == target_drive,
+            // 没有盘符（UNC / 相对路径）时按同卷处理。
+            _ => true,
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (source, target_dir);
+        true
+    }
+}
+
 impl AppRuntime {
+    /// 打开远端文件：下载放到后台任务，页面显示加载指示器。    ///
+    /// 远端文件可能很大/很慢：同步下载会把界面卡住，所以这里只排任务，
+    /// 真正就绪（下载完成）在 [`Self::apply_sftp_job_message`] 里落地。
+    pub fn start_sftp_remote_edit(&mut self) -> AppResult<AppProjection> {
+        let Some(session_key) = self.prepare_active_sftp_operation("remote-edit")? else {
+            return Ok(self.projection());
+        };
+        let remote_path = self.sftp_download_target()?;
+        let temp_root = self.config_dir.join("remote-edit");
+        let edit_session =
+            prepare_remote_edit_session(&temp_root, &remote_path).map_err(AppError::from_error)?;
+        let local_path = PathBuf::from(&edit_session.local_temp_path);
+        let config = self.active_sftp_job_config()?;
+        let spec = SftpJobSpec::DownloadFile {
+            config,
+            remote: remote_path.clone(),
+            local: local_path.clone(),
+            options: TreeTransferOptions {
+                overwrite: OverwritePolicy::Overwrite,
+                follow_symlinks: false,
+            },
+        };
+        let job_id = self.submit_sftp_spec(spec)?;
+        // 传输队列里也挂一条，方便用户在 Transfers 面板看到进度。
+        self.enqueue_sftp_transfer(
+            TransferDirection::Download,
+            remote_path.clone(),
+            local_path.display().to_string(),
+            None,
+        );
+        self.pending_remote_edit = Some(PendingRemoteEdit {
+            job_id: job_id.clone(),
+            remote_path: remote_path.clone(),
+            local_path,
+            edit_session,
+        });
+        self.set_status_kind(
+            "sftp-remote-edit-loading",
+            format!("Loading `{remote_path}` for editing…"),
+            remote_path,
+            String::new(),
+        );
+        let _ = session_key;
+        Ok(self.projection())
+    }
+
+    /// 远端编辑的挂起下载完成（成功/失败）。
+    fn finish_pending_remote_edit(&mut self, job_id: &str, outcome: &SftpJobOutcome) {
+        let Some(pending) = self.pending_remote_edit.clone() else {
+            return;
+        };
+        if pending.job_id != job_id {
+            return;
+        }
+        self.pending_remote_edit = None;
+        match outcome {
+            SftpJobOutcome::Completed(_) => {
+                let edit_session = pending.edit_session;
+                self.sftp_local_path = pending.local_path.display().to_string();
+                self.sftp_remote_target = pending.remote_path.clone();
+                self.remote_edit_session = Some(edit_session);
+                let local_text = pending.local_path.display().to_string();
+                self.set_status_kind(
+                    "sftp-remote-edit-ready",
+                    format!(
+                        "Remote edit ready for `{}`. Edit local temp file `{local_text}` and then save remote edit.",
+                        pending.remote_path
+                    ),
+                    pending.remote_path,
+                    local_text,
+                );
+            }
+            SftpJobOutcome::Failed { reason, .. } => {
+                self.set_status_kind(
+                    "sftp-remote-edit-download-error",
+                    format!("SFTP remote edit download error: {reason}"),
+                    reason.clone(),
+                    String::new(),
+                );
+            }
+            SftpJobOutcome::Cancelled(_) => {
+                self.set_status_kind(
+                    "transfer-cancelled",
+                    format!("Cancelled loading `{}` for editing.", pending.remote_path),
+                    pending.remote_path,
+                    String::new(),
+                );
+            }
+        }
+    }
+
     pub fn create_sftp_folder_named(&mut self, name: &str) -> AppResult<AppProjection> {
         let name = name.trim();
         if name.is_empty() {
@@ -282,64 +427,6 @@ impl AppRuntime {
         self.set_status_kind(
             "sftp-downloaded",
             format!("Downloaded `{remote_path}` to `{local_text}` through the live SFTP backend."),
-            remote_path,
-            local_text,
-        );
-        self.fold_logging_notice_from_session(&session_key);
-        Ok(self.projection())
-    }
-
-    pub fn start_sftp_remote_edit(&mut self) -> AppResult<AppProjection> {
-        let Some(session_key) = self.prepare_active_sftp_operation("remote-edit")? else {
-            return Ok(self.projection());
-        };
-        let remote_path = self.sftp_download_target()?;
-        let temp_root = self.config_dir.join("remote-edit");
-        let edit_session =
-            prepare_remote_edit_session(&temp_root, &remote_path).map_err(AppError::from_error)?;
-        let local_path = PathBuf::from(&edit_session.local_temp_path);
-        let transfer_id = self.enqueue_sftp_transfer(
-            edit_session.download_direction(),
-            remote_path.clone(),
-            local_path.display().to_string(),
-            None,
-        );
-        if let Err(error) = self
-            .sftp_live_client_mut(&session_key)?
-            .download_file(&remote_path, &local_path)
-        {
-            let app_error = AppError::from_error(error);
-            let detail = app_error.to_string();
-            self.fail_sftp_transfer(&transfer_id, detail.clone());
-            self.set_status_kind(
-                "sftp-remote-edit-download-error",
-                format!("SFTP remote edit download error: {detail}"),
-                detail,
-                String::new(),
-            );
-            return Ok(self.projection());
-        }
-        let transfer_bytes = fs::metadata(&local_path)
-            .map(|metadata| metadata.len())
-            .unwrap_or_default();
-        self.complete_sftp_transfer(&transfer_id, transfer_bytes);
-        self.sftp_local_path = local_path.display().to_string();
-        self.sftp_remote_target = remote_path.clone();
-        self.remote_edit_session = Some(edit_session);
-        if let Some(runtime) = self.sessions.get_mut(&session_key) {
-            runtime.record_transfer(
-                "remote-edit-download",
-                &local_path,
-                Path::new(&remote_path),
-                transfer_bytes,
-            );
-        }
-        let local_text = local_path.display().to_string();
-        self.set_status_kind(
-            "sftp-remote-edit-ready",
-            format!(
-                "Remote edit ready for `{remote_path}`. Edit local temp file `{local_text}` and then save remote edit."
-            ),
             remote_path,
             local_text,
         );
@@ -1192,6 +1279,8 @@ impl AppRuntime {
                 if let Some(handle) = self.sftp_jobs.as_mut() {
                     handle.forget(&id);
                 }
+                // 远端编辑的挂起下载：就绪后启用编辑条（下载在后台，页面不卡）。
+                self.finish_pending_remote_edit(&id, &outcome);
                 let direction = spec
                     .as_ref()
                     .map(SftpJobSpec::direction)

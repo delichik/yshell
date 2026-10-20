@@ -208,6 +208,9 @@ impl AppRuntime {
 
     /// Multi-select click: `ctrl` toggles, `shift` extends from the anchor.
     pub fn select_local_row(&mut self, index: i32, ctrl: bool, shift: bool) -> AppProjection {
+        // 记住修饰键：随后的拖动按资源管理器语义决定复制/移动。
+        self.drag_ctrl = ctrl;
+        self.drag_shift = shift;
         let Some(listing) = self.local_pane.listing.clone() else {
             return self.projection();
         };
@@ -445,9 +448,13 @@ pub(crate) fn local_rows_for(state: &LocalPaneState) -> Vec<LocalRowData> {
 ///
 /// The segments mirror the remote ones: the first crumb is the filesystem
 /// root (`/` or the drive), every following crumb is one path component.
+///
+/// Windows 盘符根（`C:\`）的**标签**去掉尾部分隔符：面包屑会在段之间补分隔符，
+/// 留着尾部分隔符会显示成 `C:\\Users`（双反斜杠）。根路径本身仍是 `C:\`。
 pub(crate) fn local_crumbs_for(dir: &Path) -> Vec<FileCrumbData> {
     let mut crumbs = Vec::new();
     let mut current = PathBuf::new();
+    let mut root_path = String::new();
     for component in dir.components() {
         match component {
             Component::Prefix(prefix) => {
@@ -456,9 +463,15 @@ pub(crate) fn local_crumbs_for(dir: &Path) -> Vec<FileCrumbData> {
             }
             Component::RootDir => {
                 current.push(Component::RootDir.as_os_str());
+                root_path = current.display().to_string();
+                let label = if cfg!(windows) {
+                    root_path.trim_end_matches('\\').to_owned()
+                } else {
+                    root_path.clone()
+                };
                 crumbs.push(FileCrumbData {
-                    label: current.display().to_string(),
-                    path: current.display().to_string(),
+                    label,
+                    path: root_path.clone(),
                 });
             }
             Component::CurDir => {}
@@ -479,6 +492,9 @@ pub(crate) fn local_crumbs_for(dir: &Path) -> Vec<FileCrumbData> {
             label: dir.display().to_string(),
             path: dir.display().to_string(),
         });
+    } else if crumbs.len() == 1 && cfg!(windows) {
+        // 只有根一段时保留尾部分隔符（`C:\`，与资源管理器一致）。
+        crumbs[0].label = root_path;
     }
     crumbs
 }
@@ -525,6 +541,29 @@ mod tests {
         let pane = temp.path().join("pane");
         fs::create_dir_all(&pane).expect("pane dir");
         pane
+    }
+
+    #[test]
+    fn local_crumbs_do_not_double_the_windows_separator() {
+        // Windows 盘符根的标签不带尾部分隔符：面包屑会自己补 → `C:\Users`，
+        // 不能显示成 `C:\\Users`（双反斜杠）。
+        let dir = if cfg!(windows) {
+            PathBuf::from(r"C:\Users\tester")
+        } else {
+            PathBuf::from("/Users/tester")
+        };
+        let crumbs = local_crumbs_for(&dir);
+        assert!(crumbs.len() >= 2, "root + segments");
+        if cfg!(windows) {
+            assert_eq!(crumbs[0].label, "C:");
+            assert!(!crumbs[0].label.ends_with('\\'));
+            // 根路径本身仍是 `C:\`（点击要能回到根）。
+            assert!(crumbs[0].path.ends_with('\\'));
+            assert_eq!(crumbs[1].label, "Users");
+        } else {
+            assert_eq!(crumbs[0].label, "/");
+            assert_eq!(crumbs[1].label, "Users");
+        }
     }
 
     #[test]

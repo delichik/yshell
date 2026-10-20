@@ -342,7 +342,12 @@ pub fn row_data(entry: &LocalEntry) -> LocalRowData {
             format_sftp_size(entry.size_bytes)
         },
         modified_text: format_sftp_modified(entry.modified),
-        permissions_text: format_sftp_permissions(fs_entry_kind(entry.kind), entry.permissions),
+        // Windows 本地没有 POSIX 权限位：显示空串（本地栏也不渲染 Perm 列）。
+        permissions_text: if cfg!(windows) {
+            String::new()
+        } else {
+            format_sftp_permissions(fs_entry_kind(entry.kind), entry.permissions)
+        },
         is_dir,
         is_symlink: matches!(entry.kind, LocalEntryKind::Symlink),
         is_parent: false,
@@ -746,14 +751,23 @@ mod tests {
         assert_eq!(dir_row.kind_text, "Directory");
         assert!(dir_row.is_dir);
         assert_eq!(dir_row.size_text, "");
-        assert_eq!(dir_row.permissions_text, "drwxr-xr-x");
+        // Windows 没有 POSIX 权限位：本地栏不显示权限（Perm 列也隐藏）。
+        if cfg!(windows) {
+            assert_eq!(dir_row.permissions_text, "");
+        } else {
+            assert_eq!(dir_row.permissions_text, "drwxr-xr-x");
+        }
         assert!(!dir_row.is_parent);
 
         let file_row = row_data(&file);
         assert_eq!(file_row.kind_text, "File");
         assert!(!file_row.is_dir);
         assert_eq!(file_row.size_text, "1.5 KB");
-        assert_eq!(file_row.permissions_text, "-rw-r--r--");
+        if cfg!(windows) {
+            assert_eq!(file_row.permissions_text, "");
+        } else {
+            assert_eq!(file_row.permissions_text, "-rw-r--r--");
+        }
         assert_eq!(file_row.modified_text, "2023-11-14 22:13");
 
         #[cfg(unix)]

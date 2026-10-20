@@ -21,7 +21,7 @@
 import { ListView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
-import { WinButton, WinIconButton, WinToggle } from "basic/controls.slint";
+import { WinButton, WinIconButton, WinSpinner, WinToggle } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 
 // ---------------------------------------------------------------- 数据结构
@@ -170,6 +170,35 @@ export component HorizontalScrollBar inherits Rectangle {
 
 // ---------------------------------------------------------------- 列头
 
+/// 列宽拖拽把手：列头左缘的窄条（col-resize 光标），拖动时回传位移量。
+component ColumnResizeHandle inherits Rectangle {
+    /// 拖动位移（像素；宿主据此调整列宽）。
+    callback resized(length);
+
+    width: 7px;
+    background: transparent;
+
+    private property <length> drag-start-x: 0px;
+
+    handle := TouchArea {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        mouse-cursor: MouseCursor.col-resize;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                root.drag-start-x = self.mouse-x;
+            }
+        }
+        moved => {
+            if (self.pressed) {
+                root.resized(self.mouse-x - root.drag-start-x);
+            }
+        }
+    }
+}
+
 /// 可点击排序的列头：28px 高、caption 字号；排序列 text-primary + ↑/↓。
 component FileColumnHeader inherits Rectangle {
     in property <string> label: "";
@@ -234,6 +263,23 @@ export component FilePane inherits Rectangle {
     in property <bool> toggle-enabled: true;
     /// 面包屑段之间的分隔符：远端是 `/`，Windows 本地是 `\`。
     in property <string> path-separator: "/";
+    /// 是否显示 Perm 列（Windows 本地栏没有 POSIX 权限位 → 不显示）。
+    in property <bool> show-permissions: true;
+    /// 加载中（远端文件下载可能很久 → 盖一层加载指示器）。
+    in property <bool> loading: false;
+    /// 加载提示文案（空 = 只显示转圈）。
+    in property <string> loading-text: "";
+    /// 转圈相位（宿主按刷新推进，8 步一圈）。
+    in property <int> spinner-phase: 0;
+    /// 拖动起点按下的修饰键（Ctrl = 复制、Shift = 移动；资源管理器语义）。
+    in property <bool> drag-ctrl: false;
+    in property <bool> drag-shift: false;
+    /// 落到本栏时的默认动作（同卷 = 移动、跨卷 = 复制；宿主按来源给出）。
+    in property <bool> drop-default-move: true;
+    /// 自定义列宽（拖动列头分隔线调整；Name 列吸收差值）。
+    in-out property <length> size-column-width: 56px;
+    in-out property <length> modified-column-width: 116px;
+    in-out property <length> permissions-column-width: 56px;
     /// 远端编辑进行中：底部细条 + Save/Cancel。
     in property <bool> remote-edit-active: false;
     in property <string> remote-edit-text: "";
@@ -262,12 +308,10 @@ export component FilePane inherits Rectangle {
 
     // ---------------------------------------------------- 列宽与内容宽度
     private property <length> column-gap: Theme.spacing-8;
-    private property <length> column-size-width: 56px;
-    private property <length> column-modified-width: 116px;
-    private property <length> column-permissions-width: 56px;
     /// 元数据区总宽（Size / Modified / Perm 恒在内容里，窄栏靠横向滚动查看）。
-    private property <length> meta-width: root.column-size-width + root.column-gap
-        + root.column-modified-width + root.column-gap + root.column-permissions-width;
+    private property <length> meta-width: root.size-column-width + root.column-gap
+        + root.modified-column-width + root.column-gap
+        + (root.show-permissions ? root.permissions-column-width + root.column-gap : 0px);
     /// 图标列 + 间距。
     private property <length> icon-column-width: Theme.icon-size-small + Theme.spacing-8;
     /// 名称列最小宽度：窄于此值时内容变宽、出现水平滚动条。
@@ -368,6 +412,76 @@ export component FilePane inherits Rectangle {
     public function start-path-editing() {
         root.path-edit-text = root.path-text;
         root.path-editing = true;
+    }
+
+    // ---------------------------------------------------- 框选（橡皮筋）
+    /// 框选状态：空白处按下左键 → 拖出一个矩形 → 选中覆盖的行。
+    private property <bool> box-selecting: false;
+    private property <length> box-anchor-y: 0px;
+    private property <length> box-current-y: 0px;
+    /// 框选覆盖的行区间（结束时算出）。
+    private property <int> box-first-row: 0;
+    private property <int> box-last-row: 0;
+    /// 选区矩形的上边缘与高度（列表视口坐标）。
+    private property <length> box-top: root.box-current-y < root.box-anchor-y
+        ? root.box-current-y
+        : root.box-anchor-y;
+    private property <length> box-height: root.box-current-y < root.box-anchor-y
+        ? root.box-anchor-y - root.box-current-y
+        : root.box-current-y - root.box-anchor-y;
+
+    /// 开始框选（列表视口坐标）。
+    public function start-box-selection(y: length) {
+        root.box-anchor-y = y;
+        root.box-current-y = y;
+        root.box-selecting = true;
+    }
+
+    /// 更新框选。
+    public function update-box-selection(y: length) {
+        root.box-current-y = y;
+    }
+
+    /// 结束框选：把矩形覆盖的行设为选中（`..` 导航行不参与）。
+    public function finish-box-selection(y: length) {
+        if (!root.box-selecting) {
+            return;
+        }
+        root.box-selecting = false;
+        root.box-current-y = y;
+        // 只是点了一下（没有拖出矩形）→ 不改选择。
+        if (root.box-height < Theme.row-height-list / 2) {
+            return;
+        }
+        // 行区间：视口坐标 + 列表滚动偏移。
+        root.box-first-row = Math.floor(
+            (root.box-top + list.content-y) / Theme.row-height-list
+        );
+        root.box-last-row = Math.floor(
+            (root.box-top + root.box-height + list.content-y - 1px) / Theme.row-height-list
+        );
+        if (root.box-first-row < 0) {
+            root.box-first-row = 0;
+        }
+        if (root.box-last-row > root.rows.length - 1) {
+            root.box-last-row = root.rows.length - 1;
+        }
+        if (root.box-last-row < root.box-first-row) {
+            return;
+        }
+        // `..` 行是导航行，不参与选择：首尾都跳过它。
+        if (root.rows[root.box-first-row].is-parent) {
+            root.box-first-row += 1;
+        }
+        if (root.rows[root.box-last-row].is-parent) {
+            root.box-last-row -= 1;
+        }
+        if (root.box-last-row < root.box-first-row) {
+            return;
+        }
+        // 先落锚点（普通点击），再用 Shift 扩展到末行（复用既有的区间选择）。
+        root.select-row(root.box-first-row, false, false);
+        root.select-row(root.box-last-row, false, true);
     }
 
     /// 提交路径编辑（回车）。
@@ -586,6 +700,7 @@ export component FilePane inherits Rectangle {
 
             // 列表空白处右键 = 空白菜单（远端栏此前没有这个入口）。
             // 声明在 ListView 之前 = 位于行之下：落在行上的右键仍由行处理。
+            // 左键拖动 = 框选（橡皮筋）：空白处按下并拖出矩形。
             blank_touch := TouchArea {
                 x: 0;
                 y: 0;
@@ -598,6 +713,17 @@ export component FilePane inherits Rectangle {
                             self.absolute-position.x + self.mouse-x,
                             self.absolute-position.y + self.mouse-y
                         );
+                    } else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                        root.focus-requested();
+                        root.start-box-selection(self.mouse-y);
+                    } else if ((event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel)
+                        && event.button == PointerEventButton.left) {
+                        root.finish-box-selection(self.mouse-y);
+                    }
+                }
+                moved => {
+                    if (root.box-selecting) {
+                        root.update-box-selection(self.mouse-y);
                     }
                 }
             }
@@ -692,7 +818,7 @@ export component FilePane inherits Rectangle {
 
                     Text {
                         x: parent.width - root.meta-width;
-                        width: root.column-size-width;
+                        width: root.size-column-width;
                         height: parent.height;
                         text: row.size-text;
                         color: Theme.text-tertiary;
@@ -703,8 +829,8 @@ export component FilePane inherits Rectangle {
                         overflow: elide;
                     }
                     Text {
-                        x: parent.width - root.meta-width + root.column-size-width + root.column-gap;
-                        width: root.column-modified-width;
+                        x: parent.width - root.meta-width + root.size-column-width + root.column-gap;
+                        width: root.modified-column-width;
                         height: parent.height;
                         text: row.modified-text;
                         color: Theme.text-tertiary;
@@ -715,8 +841,9 @@ export component FilePane inherits Rectangle {
                         overflow: elide;
                     }
                     Text {
-                        x: parent.width - root.column-permissions-width;
-                        width: root.column-permissions-width;
+                        visible: root.show-permissions;
+                        x: parent.width - root.permissions-column-width;
+                        width: root.permissions-column-width;
                         height: parent.height;
                         text: row.permissions-text;
                         color: Theme.text-tertiary;
@@ -781,6 +908,17 @@ export component FilePane inherits Rectangle {
                 }
             }
 
+            // 框选矩形（画在行之上：选中的行由运行时的选择状态高亮）。
+            if root.box-selecting : Rectangle {
+                x: 0px;
+                y: root.box-top;
+                width: parent.width;
+                height: root.box-height;
+                background: Theme.subtle-selected;
+                border-width: 1px;
+                border-color: Theme.accent;
+            }
+
             // 自绘滚动条（B8）：叠在列表右缘，双向绑定滚动位置。
             ListScrollBar {
                 x: parent.width - self.width;
@@ -790,6 +928,36 @@ export component FilePane inherits Rectangle {
                 visible-height: list.visible-height;
                 content-y <=> list.content-y;
                 scroll-enabled: list.enabled;
+            }
+        }
+
+        // --- 加载遮罩（远端打开文件时可能很久）----------------------------
+        if root.loading : Rectangle {
+            x: 0;
+            y: root.list-top;
+            width: root.width;
+            height: root.list-height;
+            background: Theme.scrim;
+
+            VerticalLayout {
+                width: parent.width;
+                height: parent.height;
+                alignment: center;
+                spacing: Theme.spacing-8;
+
+                WinSpinner {
+                    phase: root.spinner-phase;
+                    horizontal-stretch: 0;
+                }
+
+                if root.loading-text != "" : Text {
+                    text: root.loading-text;
+                    color: Theme.text-secondary;
+                    font-size: Theme.font-caption;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                    width: min(parent.width - 2 * Theme.spacing-16, 320px);
+                }
             }
         }
 
@@ -821,7 +989,7 @@ export component FilePane inherits Rectangle {
                 }
                 FileColumnHeader {
                     x: parent.width - root.meta-width;
-                    width: root.column-size-width;
+                    width: root.size-column-width;
                     height: parent.height;
                     label: @tr("Size");
                     active: root.sort-column == "size";
@@ -830,8 +998,8 @@ export component FilePane inherits Rectangle {
                     activated => { root.sort-by("size"); }
                 }
                 FileColumnHeader {
-                    x: parent.width - root.meta-width + root.column-size-width + root.column-gap;
-                    width: root.column-modified-width;
+                    x: parent.width - root.meta-width + root.size-column-width + root.column-gap;
+                    width: root.modified-column-width;
                     height: parent.height;
                     label: @tr("Modified");
                     active: root.sort-column == "modified";
@@ -840,14 +1008,52 @@ export component FilePane inherits Rectangle {
                     activated => { root.sort-by("modified"); }
                 }
                 FileColumnHeader {
-                    x: parent.width - root.column-permissions-width;
-                    width: root.column-permissions-width;
+                    visible: root.show-permissions;
+                    x: parent.width - root.permissions-column-width;
+                    width: root.permissions-column-width;
                     height: parent.height;
                     label: @tr("Perm");
                     active: root.sort-column == "permissions";
                     ascending: root.sort-ascending;
                     right-aligned: true;
                     activated => { root.sort-by("permissions"); }
+                }
+
+                // --- 列宽拖拽把手（列头左缘分隔线）--------------------------
+                // 声明在列头之后 = 位于列头之上；拖动改列宽，Name 列吸收差值。
+                size_handle := ColumnResizeHandle {
+                    x: parent.width - root.meta-width - 3px;
+                    height: parent.height;
+                    resized(delta) => {
+                        root.size-column-width = clamp(
+                            root.size-column-width + delta,
+                            32px,
+                            320px
+                        );
+                    }
+                }
+                modified_handle := ColumnResizeHandle {
+                    x: parent.width - root.meta-width + root.size-column-width + root.column-gap - 3px;
+                    height: parent.height;
+                    resized(delta) => {
+                        root.modified-column-width = clamp(
+                            root.modified-column-width + delta,
+                            64px,
+                            320px
+                        );
+                    }
+                }
+                permissions_handle := ColumnResizeHandle {
+                    visible: root.show-permissions;
+                    x: parent.width - root.permissions-column-width - 3px;
+                    height: parent.height;
+                    resized(delta) => {
+                        root.permissions-column-width = clamp(
+                            root.permissions-column-width + delta,
+                            32px,
+                            160px
+                        );
+                    }
                 }
             }
 
@@ -922,14 +1128,16 @@ export component FilePane inherits Rectangle {
     /// 路径输入框的占位文案（本地/远端不同）。
     in property <string> path-placeholder-text: "/remote/path";
 
-    /// N1 语义：无修饰键（Slint 提议 move）= 复制；Ctrl（提议 copy）= 移动。
+    /// 拖放动作（与 Windows 资源管理器一致）。
+    ///
+    /// Ctrl = 复制、Shift = 移动；无修饰键时按同卷/跨卷决定（宿主给出默认值）。
     pure function drop-action(proposed: DragAction) -> DragAction {
-        if (proposed == DragAction.move) {
+        if (root.drag-ctrl) {
             return DragAction.copy;
         }
-        if (proposed == DragAction.copy) {
+        if (root.drag-shift) {
             return DragAction.move;
         }
-        return DragAction.none;
+        return root.drop-default-move ? DragAction.move : DragAction.copy;
     }
 }

@@ -18,7 +18,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: yshell\n"
-"POT-Creation-Date: 2026-10-20 03:48+0000\n"
+"POT-Creation-Date: 2026-10-20 06:33+0000\n"
 "PO-Revision-Date: 2026-09-27 00:00+0000\n"
 "Last-Translator: YShell\n"
 "Language-Team: YShell\n"
@@ -28,695 +28,695 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: ui/main_window.slint:373
+#: ui/main_window.slint:382
 msgctxt "MainWindow"
 msgid "Password required"
 msgstr "需要密码"
 
-#: ui/main_window.slint:377
+#: ui/main_window.slint:386
 msgctxt "MainWindow"
 msgid "Enter the password to continue."
 msgstr "请输入密码以继续。"
 
-#: ui/main_window.slint:378
+#: ui/main_window.slint:387
 msgctxt "MainWindow"
 msgid "Enter the password for {0} to connect."
 msgstr "请输入 {0} 的密码以连接。"
 
-#: ui/main_window.slint:1342 ui/main_window.slint:1747 ui/main_window.slint:1808 ui/components/tool_dock.slint:420
+#: ui/main_window.slint:1357 ui/main_window.slint:1762 ui/main_window.slint:1823 ui/components/tool_dock.slint:425
 msgctxt "MainWindow"
 msgid "New Session"
 msgstr "新建会话"
 
-#: ui/main_window.slint:1343
+#: ui/main_window.slint:1358
 msgctxt "MainWindow"
 msgid "Quick Connect"
 msgstr "快速连接"
 
 #. W5-A3：没有活动会话时无处保存。
-#: ui/main_window.slint:1346
+#: ui/main_window.slint:1361
 msgctxt "MainWindow"
 msgid "Save Active Session"
 msgstr "保存活动会话"
 
-#: ui/main_window.slint:1349
+#: ui/main_window.slint:1364
 msgctxt "MainWindow"
 msgid "Open a session before saving it."
 msgstr "请先打开一个会话再保存。"
 
-#: ui/main_window.slint:1352
+#: ui/main_window.slint:1367
 msgctxt "MainWindow"
 msgid "Settings..."
 msgstr "设置…"
 
-#: ui/main_window.slint:1353 ui/main_window.slint:2980
+#: ui/main_window.slint:1368 ui/main_window.slint:3001
 msgctxt "MainWindow"
 msgid "Quit"
 msgstr "退出"
 
 #. W5-A3：无选区 / 无活动会话时禁用。
-#: ui/main_window.slint:1358 ui/main_window.slint:1476
+#: ui/main_window.slint:1373 ui/main_window.slint:1491
 msgctxt "MainWindow"
 msgid "Copy"
 msgstr "复制"
 
-#: ui/main_window.slint:1360 ui/main_window.slint:1478
+#: ui/main_window.slint:1375 ui/main_window.slint:1493
 msgctxt "MainWindow"
 msgid "Select text in the terminal first."
 msgstr "请先在终端中选择文本。"
 
-#: ui/main_window.slint:1363 ui/main_window.slint:1491
+#: ui/main_window.slint:1378 ui/main_window.slint:1506
 msgctxt "MainWindow"
 msgid "Paste"
 msgstr "粘贴"
 
-#: ui/main_window.slint:1365 ui/main_window.slint:1374 ui/main_window.slint:1384 ui/main_window.slint:1410 ui/main_window.slint:1493 ui/main_window.slint:1512 ui/main_window.slint:1527
+#: ui/main_window.slint:1380 ui/main_window.slint:1389 ui/main_window.slint:1399 ui/main_window.slint:1425 ui/main_window.slint:1508 ui/main_window.slint:1527 ui/main_window.slint:1542
 msgctxt "MainWindow"
 msgid "Open a session first."
 msgstr "请先打开一个会话。"
 
-#: ui/main_window.slint:1368 ui/main_window.slint:1496
+#: ui/main_window.slint:1383 ui/main_window.slint:1511
 msgctxt "MainWindow"
 msgid "Paste as Bracketed"
 msgstr "括号粘贴"
 
-#: ui/main_window.slint:1372 ui/main_window.slint:1500
+#: ui/main_window.slint:1387 ui/main_window.slint:1515
 msgctxt "MainWindow"
 msgid "Wraps paste in CSI 200~/201~ for shells that honor bracketed paste."
 msgstr "对支持括号粘贴的 shell，用 CSI 200~/201~ 包裹粘贴内容。"
 
-#: ui/main_window.slint:1373 ui/main_window.slint:1501
+#: ui/main_window.slint:1388 ui/main_window.slint:1516
 msgctxt "MainWindow"
 msgid "Connect the session first."
 msgstr "请先连接会话。"
 
-#: ui/main_window.slint:1377 ui/main_window.slint:1510
+#: ui/main_window.slint:1392 ui/main_window.slint:1525
 msgctxt "MainWindow"
 msgid "Select All"
 msgstr "全选"
 
-#: ui/main_window.slint:1382 ui/main_window.slint:1515
+#: ui/main_window.slint:1397 ui/main_window.slint:1530
 msgctxt "MainWindow"
 msgid "Clear Terminal"
 msgstr "清空终端"
 
-#: ui/main_window.slint:1387 ui/main_window.slint:1520 ui/main_window.slint:2938
+#: ui/main_window.slint:1402 ui/main_window.slint:1535 ui/main_window.slint:2959
 msgctxt "MainWindow"
 msgid "Clear Scrollback"
 msgstr "清除回滚缓冲"
 
-#: ui/main_window.slint:1389 ui/main_window.slint:1522
+#: ui/main_window.slint:1404 ui/main_window.slint:1537
 msgctxt "MainWindow"
 msgid "Scrollback is empty."
 msgstr "回滚缓冲为空。"
 
-#: ui/main_window.slint:1393 ui/main_window.slint:1525
+#: ui/main_window.slint:1408 ui/main_window.slint:1540
 msgctxt "MainWindow"
 msgid "Find..."
 msgstr "查找…"
 
 #. W5-A3：已连接才能断开；有活动会话（且未连接）才能重连。
-#: ui/main_window.slint:1401 ui/main_window.slint:1654
+#: ui/main_window.slint:1416 ui/main_window.slint:1669
 msgctxt "MainWindow"
 msgid "Disconnect"
 msgstr "断开连接"
 
-#: ui/main_window.slint:1403
+#: ui/main_window.slint:1418
 msgctxt "MainWindow"
 msgid "The active session is not connected."
 msgstr "当前会话未连接。"
 
-#: ui/main_window.slint:1406 ui/main_window.slint:1648
+#: ui/main_window.slint:1421 ui/main_window.slint:1663
 msgctxt "MainWindow"
 msgid "Reconnect"
 msgstr "重新连接"
 
-#: ui/main_window.slint:1409
+#: ui/main_window.slint:1424
 msgctxt "MainWindow"
 msgid "The active session is already connected."
 msgstr "当前会话已连接。"
 
 #. W5-A3：Edit / Delete 需要选中的已保存会话；Update 还需要活动会话作为来源。
-#: ui/main_window.slint:1415
+#: ui/main_window.slint:1430
 msgctxt "MainWindow"
 msgid "Edit Selected Session..."
 msgstr "编辑所选会话…"
 
-#: ui/main_window.slint:1417 ui/main_window.slint:1424 ui/main_window.slint:1722 ui/main_window.slint:1732 ui/main_window.slint:1744
+#: ui/main_window.slint:1432 ui/main_window.slint:1439 ui/main_window.slint:1737 ui/main_window.slint:1747 ui/main_window.slint:1759
 msgctxt "MainWindow"
 msgid "Select a saved session first."
 msgstr "请先选择一个已保存的会话。"
 
-#: ui/main_window.slint:1420
+#: ui/main_window.slint:1435
 msgctxt "MainWindow"
 msgid "Update Selected From Active"
 msgstr "从活动会话更新所选"
 
-#: ui/main_window.slint:1423 ui/main_window.slint:1738
+#: ui/main_window.slint:1438 ui/main_window.slint:1753
 msgctxt "MainWindow"
 msgid "Open the active session first."
 msgstr "请先打开当前会话。"
 
-#: ui/main_window.slint:1427
+#: ui/main_window.slint:1442
 msgctxt "MainWindow"
 msgid "Delete Selected Session..."
 msgstr "删除所选会话…"
 
 #. N4：两个同级、独立入口（私钥页 / 主机密钥页）。
-#: ui/main_window.slint:1433
+#: ui/main_window.slint:1448
 msgctxt "MainWindow"
 msgid "Host Keys..."
 msgstr "主机密钥…"
 
-#: ui/main_window.slint:1434
+#: ui/main_window.slint:1449
 msgctxt "MainWindow"
 msgid "Private Keys..."
 msgstr "私钥…"
 
-#: ui/main_window.slint:1435
+#: ui/main_window.slint:1450
 msgctxt "MainWindow"
 msgid "Proxy Manager..."
 msgstr "代理管理器…"
 
-#: ui/main_window.slint:1436
+#: ui/main_window.slint:1451
 msgctxt "MainWindow"
 msgid "Theme Manager..."
 msgstr "主题管理器..."
 
-#: ui/main_window.slint:1439
+#: ui/main_window.slint:1454
 msgctxt "MainWindow"
 msgid "Session Manager"
 msgstr "会话管理器"
 
-#: ui/main_window.slint:1441 ui/components/tool_dock.slint:597
+#: ui/main_window.slint:1456 ui/components/tool_dock.slint:605
 msgctxt "MainWindow"
 msgid "Tunnels"
 msgstr "隧道"
 
-#: ui/main_window.slint:1442
+#: ui/main_window.slint:1457
 msgctxt "MainWindow"
 msgid "Configured tunnels for the active session."
 msgstr "当前会话已配置的隧道。"
 
-#: ui/main_window.slint:1445 ui/components/tool_dock.slint:626
+#: ui/main_window.slint:1460 ui/components/tool_dock.slint:634
 msgctxt "MainWindow"
 msgid "Quick Commands"
 msgstr "快捷命令"
 
-#: ui/main_window.slint:1446 ui/components/tool_dock.slint:638
+#: ui/main_window.slint:1461 ui/components/tool_dock.slint:646
 msgctxt "MainWindow"
 msgid "Command presets are not available in this build yet."
 msgstr "此版本暂未提供命令预设。"
 
-#: ui/main_window.slint:1449 ui/components/tool_dock.slint:661
+#: ui/main_window.slint:1464 ui/components/tool_dock.slint:669
 msgctxt "MainWindow"
 msgid "Transfers"
 msgstr "传输"
 
-#: ui/main_window.slint:1450
+#: ui/main_window.slint:1465
 msgctxt "MainWindow"
 msgid "Transfer queue with pause/resume/retry."
 msgstr "传输队列，支持暂停/继续/重试。"
 
-#: ui/main_window.slint:1455 ui/main_window.slint:1666
+#: ui/main_window.slint:1470 ui/main_window.slint:1681
 msgctxt "MainWindow"
 msgid "Split Right"
 msgstr "向右分屏"
 
-#: ui/main_window.slint:1457 ui/main_window.slint:1462 ui/main_window.slint:1673
+#: ui/main_window.slint:1472 ui/main_window.slint:1477 ui/main_window.slint:1688
 msgctxt "MainWindow"
 msgid "Open a terminal session before splitting, or close a pane (max 4)."
 msgstr "分屏前请先打开终端会话，或关闭一个窗格（最多 4 个窗格）。"
 
-#: ui/main_window.slint:1460 ui/main_window.slint:1671
+#: ui/main_window.slint:1475 ui/main_window.slint:1686
 msgctxt "MainWindow"
 msgid "Split Down"
 msgstr "向下分屏"
 
-#: ui/main_window.slint:1465
+#: ui/main_window.slint:1480
 msgctxt "MainWindow"
 msgid "Close Current Pane"
 msgstr "关闭当前窗格"
 
-#: ui/main_window.slint:1467
+#: ui/main_window.slint:1482
 msgctxt "MainWindow"
 msgid "Split the workspace first."
 msgstr "请先拆分工作区。"
 
-#: ui/main_window.slint:1471
+#: ui/main_window.slint:1486
 msgctxt "MainWindow"
 msgid "About YShell"
 msgstr "关于 YShell"
 
-#: ui/main_window.slint:1481
+#: ui/main_window.slint:1496
 msgctxt "MainWindow"
 msgid "Copy Current Line"
 msgstr "复制当前行"
 
-#: ui/main_window.slint:1486
+#: ui/main_window.slint:1501
 msgctxt "MainWindow"
 msgid "Copy Screen"
 msgstr "复制屏幕内容"
 
-#: ui/main_window.slint:1488 ui/main_window.slint:1507
+#: ui/main_window.slint:1503 ui/main_window.slint:1522
 msgctxt "MainWindow"
 msgid "Visible screen is empty."
 msgstr "可见屏幕为空。"
 
-#: ui/main_window.slint:1505
+#: ui/main_window.slint:1520
 msgctxt "MainWindow"
 msgid "Select Screen"
 msgstr "选择屏幕内容"
 
-#: ui/main_window.slint:1530
+#: ui/main_window.slint:1545
 msgctxt "MainWindow"
 msgid "Find Regex..."
 msgstr "正则查找…"
 
-#: ui/main_window.slint:1537 ui/main_window.slint:1591
+#: ui/main_window.slint:1552 ui/main_window.slint:1606
 msgctxt "MainWindow"
 msgid "Start Logging..."
 msgstr "开始记录日志..."
 
-#: ui/main_window.slint:1539 ui/main_window.slint:1593
+#: ui/main_window.slint:1554 ui/main_window.slint:1608
 msgctxt "MainWindow"
 msgid "Open a session that is not logging yet."
 msgstr "请先打开一个尚未记录日志的会话。"
 
-#: ui/main_window.slint:1542 ui/main_window.slint:1596
+#: ui/main_window.slint:1557 ui/main_window.slint:1611
 msgctxt "MainWindow"
 msgid "Stop Logging"
 msgstr "停止记录日志"
 
-#: ui/main_window.slint:1544 ui/main_window.slint:1598
+#: ui/main_window.slint:1559 ui/main_window.slint:1613
 msgctxt "MainWindow"
 msgid "This session is not logging."
 msgstr "当前会话没有在记录日志。"
 
-#: ui/main_window.slint:1547 ui/main_window.slint:1601
+#: ui/main_window.slint:1562 ui/main_window.slint:1616
 msgctxt "MainWindow"
 msgid "Open Log File"
 msgstr "打开日志文件"
 
-#: ui/main_window.slint:1549 ui/main_window.slint:1603
+#: ui/main_window.slint:1564 ui/main_window.slint:1618
 msgctxt "MainWindow"
 msgid "No log file has been written yet."
 msgstr "还没有生成日志文件。"
 
-#: ui/main_window.slint:1552 ui/main_window.slint:1606
+#: ui/main_window.slint:1567 ui/main_window.slint:1621
 msgctxt "MainWindow"
 msgid "Open Log Folder"
 msgstr "打开日志文件夹"
 
-#: ui/main_window.slint:1554 ui/main_window.slint:1608
+#: ui/main_window.slint:1569 ui/main_window.slint:1623
 msgctxt "MainWindow"
 msgid "No log folder is available yet."
 msgstr "还没有可用的日志文件夹。"
 
-#: ui/main_window.slint:1559
+#: ui/main_window.slint:1574
 msgctxt "MainWindow"
 msgid "Send Key Input to All Tabs"
 msgstr "发送按键到全部标签"
 
 # --- N9：同步发送按键（新增条目）---
-#: ui/main_window.slint:1561 ui/main_window.slint:1568
+#: ui/main_window.slint:1576 ui/main_window.slint:1583
 msgctxt "MainWindow"
 msgid "Connect a terminal session first."
 msgstr "请先连接一个终端会话。"
 
-#: ui/main_window.slint:1564
+#: ui/main_window.slint:1579
 msgctxt "MainWindow"
 msgid "Send Key Input to Visible Tabs"
 msgstr "发送按键到可见标签"
 
-#: ui/main_window.slint:1571
+#: ui/main_window.slint:1586
 msgctxt "MainWindow"
 msgid "Stop Sending Key Input"
 msgstr "停止发送按键"
 
-#: ui/main_window.slint:1573
+#: ui/main_window.slint:1588
 msgctxt "MainWindow"
 msgid "Key input sync is not active."
 msgstr "按键同步未在进行。"
 
-#: ui/main_window.slint:1578 ui/main_window.slint:1706
+#: ui/main_window.slint:1593 ui/main_window.slint:1721
 msgctxt "MainWindow"
 msgid "Switch to SFTP"
 msgstr "切换为 SFTP"
 
-#: ui/main_window.slint:1583
+#: ui/main_window.slint:1598
 msgctxt "MainWindow"
 msgid "Connect the terminal before switching to SFTP."
 msgstr "请先连接终端再切换为 SFTP。"
 
-#: ui/main_window.slint:1614 ui/main_window.slint:3012
+#: ui/main_window.slint:1629 ui/main_window.slint:3033
 msgctxt "MainWindow"
 msgid "Close"
 msgstr "关闭"
 
-#: ui/main_window.slint:1617
+#: ui/main_window.slint:1632
 msgctxt "MainWindow"
 msgid "Close Others"
 msgstr "关闭其它标签"
 
-#: ui/main_window.slint:1619
+#: ui/main_window.slint:1634
 msgctxt "MainWindow"
 msgid "Only one tab is open."
 msgstr "当前只有一个标签。"
 
-#: ui/main_window.slint:1622
+#: ui/main_window.slint:1637
 msgctxt "MainWindow"
 msgid "Close Tabs to Left"
 msgstr "关闭左侧标签"
 
-#: ui/main_window.slint:1624
+#: ui/main_window.slint:1639
 msgctxt "MainWindow"
 msgid "There are no tabs to the left."
 msgstr "左侧没有标签。"
 
-#: ui/main_window.slint:1627
+#: ui/main_window.slint:1642
 msgctxt "MainWindow"
 msgid "Close Tabs to Right"
 msgstr "关闭右侧标签"
 
-#: ui/main_window.slint:1629
+#: ui/main_window.slint:1644
 msgctxt "MainWindow"
 msgid "There are no tabs to the right."
 msgstr "右侧没有标签。"
 
-#: ui/main_window.slint:1632
+#: ui/main_window.slint:1647
 msgctxt "MainWindow"
 msgid "Close All"
 msgstr "关闭全部标签"
 
-#: ui/main_window.slint:1634
+#: ui/main_window.slint:1649
 msgctxt "MainWindow"
 msgid "No tabs are open."
 msgstr "当前没有打开的标签。"
 
-#: ui/main_window.slint:1637
+#: ui/main_window.slint:1652
 msgctxt "MainWindow"
 msgid "Close Disconnected Tabs"
 msgstr "关闭已断开标签"
 
-#: ui/main_window.slint:1639
+#: ui/main_window.slint:1654
 msgctxt "MainWindow"
 msgid "No disconnected or failed tabs to close."
 msgstr "没有已断开或失败的标签可关闭。"
 
-#: ui/main_window.slint:1651
+#: ui/main_window.slint:1666
 msgctxt "MainWindow"
 msgid "This tab is already connected."
 msgstr "此标签已连接。"
 
-#: ui/main_window.slint:1657
+#: ui/main_window.slint:1672
 msgctxt "MainWindow"
 msgid "This tab is already disconnected."
 msgstr "此标签已断开连接。"
 
-#: ui/main_window.slint:1662 ui/main_window.slint:1765
+#: ui/main_window.slint:1677 ui/main_window.slint:1780
 msgctxt "MainWindow"
 msgid "Rename..."
 msgstr "重命名…"
 
-#: ui/main_window.slint:1679
+#: ui/main_window.slint:1694
 msgctxt "MainWindow"
 msgid "Receive Key Input"
 msgstr "接收按键输入"
 
-#: ui/main_window.slint:1690
+#: ui/main_window.slint:1705
 msgctxt "MainWindow"
 msgid "Move to New Window"
 msgstr "移动到新窗口"
 
-#: ui/main_window.slint:1694
+#: ui/main_window.slint:1709
 msgctxt "MainWindow"
 msgid "Open a tab before moving it to a new window."
 msgstr "请先打开一个标签再移动到新窗口。"
 
-#: ui/main_window.slint:1697
+#: ui/main_window.slint:1712
 msgctxt "MainWindow"
 msgid "Move to Main Window"
 msgstr "移动到主窗口"
 
-#: ui/main_window.slint:1701
+#: ui/main_window.slint:1716
 msgctxt "MainWindow"
 msgid "This tab is already in the main window."
 msgstr "此标签已在主窗口中。"
 
-#: ui/main_window.slint:1706
+#: ui/main_window.slint:1721
 msgctxt "MainWindow"
 msgid "Switch to Terminal"
 msgstr "切换为终端"
 
-#: ui/main_window.slint:1712
+#: ui/main_window.slint:1727
 msgctxt "MainWindow"
 msgid "Connect the session before switching modes."
 msgstr "请先连接会话再切换模式。"
 
 #. W5-A3：没有选中的已保存会话时，各项操作禁用。
-#: ui/main_window.slint:1720
+#: ui/main_window.slint:1735
 msgctxt "Session"
 msgid "Open"
 msgstr "打开"
 
-#: ui/main_window.slint:1725
+#: ui/main_window.slint:1740
 msgctxt "MainWindow"
 msgid "Open SFTP"
 msgstr "打开 SFTP"
 
-#: ui/main_window.slint:1730
+#: ui/main_window.slint:1745
 msgctxt "MainWindow"
 msgid "Edit..."
 msgstr "编辑…"
 
-#: ui/main_window.slint:1735
+#: ui/main_window.slint:1750
 msgctxt "MainWindow"
 msgid "Update From Active"
 msgstr "从活动会话更新"
 
-#: ui/main_window.slint:1742 ui/main_window.slint:1769
+#: ui/main_window.slint:1757 ui/main_window.slint:1784
 msgctxt "MainWindow"
 msgid "Delete..."
 msgstr "删除…"
 
-#: ui/main_window.slint:1756
+#: ui/main_window.slint:1771
 msgctxt "MainWindow"
 msgid "New Session Here"
 msgstr "在此新建会话"
 
-#: ui/main_window.slint:1758 ui/main_window.slint:1779
+#: ui/main_window.slint:1773 ui/main_window.slint:1794
 msgctxt "MainWindow"
 msgid "Right-click a folder first."
 msgstr "请先右键一个文件夹。"
 
-#: ui/main_window.slint:1761 ui/main_window.slint:1786
+#: ui/main_window.slint:1776 ui/main_window.slint:1801
 msgctxt "MainWindow"
 msgid "New Folder..."
 msgstr "新建文件夹…"
 
-#: ui/main_window.slint:1762 ui/main_window.slint:1766 ui/main_window.slint:1774
+#: ui/main_window.slint:1777 ui/main_window.slint:1781 ui/main_window.slint:1789
 msgctxt "MainWindow"
 msgid "Not available in this version."
 msgstr "此版本未提供。"
 
-#: ui/main_window.slint:1773
+#: ui/main_window.slint:1788
 msgctxt "MainWindow"
 msgid "Connect All"
 msgstr "全部连接"
 
-#: ui/main_window.slint:1777
+#: ui/main_window.slint:1792
 msgctxt "MainWindow"
 msgid "Edit Folder Defaults…"
 msgstr "编辑文件夹默认值…"
 
-#: ui/main_window.slint:1789
+#: ui/main_window.slint:1804
 msgctxt "MainWindow"
 msgid "Import Config..."
 msgstr "导入配置…"
 
-#: ui/main_window.slint:1791
+#: ui/main_window.slint:1806
 msgctxt "MainWindow"
 msgid "Importing configuration files is not available in this build."
 msgstr "本版本暂不支持导入配置文件。"
 
-#: ui/main_window.slint:1794
+#: ui/main_window.slint:1809
 msgctxt "MainWindow"
 msgid "Expand All"
 msgstr "全部展开"
 
-#: ui/main_window.slint:1796
+#: ui/main_window.slint:1811
 msgctxt "MainWindow"
 msgid "Expand All is not available in this build."
 msgstr "本版本暂不支持全部展开。"
 
-#: ui/main_window.slint:1799
+#: ui/main_window.slint:1814
 msgctxt "MainWindow"
 msgid "Collapse All"
 msgstr "全部折叠"
 
-#: ui/main_window.slint:1801
+#: ui/main_window.slint:1816
 msgctxt "MainWindow"
 msgid "Collapse All is not available in this build."
 msgstr "本版本暂不支持全部折叠。"
 
-#: ui/main_window.slint:1804
+#: ui/main_window.slint:1819
 msgctxt "MainWindow"
 msgid "Refresh"
 msgstr "刷新"
 
-#: ui/main_window.slint:1809 ui/components/session_sidebar.slint:241
+#: ui/main_window.slint:1824 ui/components/session_sidebar.slint:241
 msgctxt "MainWindow"
 msgid "Expand navigation"
 msgstr "展开导航"
 
-#: ui/main_window.slint:2447 ui/components/tool_dock.slint:456
+#: ui/main_window.slint:2462 ui/components/tool_dock.slint:461
 msgctxt "MainWindow"
 msgid "Local"
 msgstr "本地"
 
-#: ui/main_window.slint:2937
+#: ui/main_window.slint:2958
 msgctxt "MainWindow"
 msgid "Clear the terminal scrollback buffer? The live screen stays as-is."
 msgstr "清除终端回滚缓冲区？当前屏幕保持不变。"
 
-#: ui/main_window.slint:2955
+#: ui/main_window.slint:2976
 msgctxt "MainWindow"
 msgid "Delete Saved Session"
 msgstr "删除已保存会话"
 
-#: ui/main_window.slint:2956
+#: ui/main_window.slint:2977
 msgctxt "MainWindow"
 msgid "This permanently removes the selected saved session from disk."
 msgstr "这将从磁盘永久删除所选已保存会话。"
 
-#: ui/main_window.slint:2957 ui/main_window.slint:3429
+#: ui/main_window.slint:2978 ui/main_window.slint:3451
 msgctxt "MainWindow"
 msgid "Delete"
 msgstr "删除"
 
-#: ui/main_window.slint:2978
+#: ui/main_window.slint:2999
 msgctxt "MainWindow"
 msgid "Quit YShell"
 msgstr "退出 YShell"
 
-#: ui/main_window.slint:2979
+#: ui/main_window.slint:3000
 msgctxt "MainWindow"
 msgid "Quit YShell now? Active runtime sessions will be disconnected."
 msgstr "立即退出 YShell？活动运行时会话将被断开。"
 
-#: ui/main_window.slint:3033
+#: ui/main_window.slint:3054
 msgctxt "MainWindow"
 msgid "Close Window"
 msgstr "关闭窗口"
 
-#: ui/main_window.slint:3034
+#: ui/main_window.slint:3055
 msgctxt "MainWindow"
 msgid "Close this window? {n} active session will be disconnected."
 msgid_plural "Close this window? {n} active sessions will be disconnected."
 msgstr[0] "关闭此窗口？{n} 个活动会话将被断开。"
 
-#: ui/main_window.slint:3052
+#: ui/main_window.slint:3073
 msgctxt "MainWindow"
 msgid "Rename Tab"
 msgstr "重命名标签页"
 
-#: ui/main_window.slint:3053
+#: ui/main_window.slint:3074
 msgctxt "MainWindow"
 msgid "Display name for this tab only (not saved to disk). Applies for this session."
 msgstr "仅用于此标签页的显示名称（不写入磁盘），仅对本次会话生效。"
 
-#: ui/main_window.slint:3055
+#: ui/main_window.slint:3076
 msgctxt "MainWindow"
 msgid "Rename"
 msgstr "重命名"
 
-#: ui/main_window.slint:3256
+#: ui/main_window.slint:3278
 msgctxt "MainWindow"
 msgid "Discard Changes"
 msgstr "放弃更改"
 
-#: ui/main_window.slint:3257
+#: ui/main_window.slint:3279
 msgctxt "MainWindow"
 msgid "Discard unsaved changes to this session?"
 msgstr "放弃此会话的未保存更改？"
 
-#: ui/main_window.slint:3258
+#: ui/main_window.slint:3280
 msgctxt "MainWindow"
 msgid "Discard"
 msgstr "放弃"
 
-#: ui/main_window.slint:3343
+#: ui/main_window.slint:3365
 msgctxt "MainWindow"
 msgid "Remove Managed Key"
 msgstr "移除托管密钥"
 
-#: ui/main_window.slint:3345 ui/main_window.slint:3560
+#: ui/main_window.slint:3367 ui/main_window.slint:3583
 msgctxt "MainWindow"
 msgid "Remove"
 msgstr "移除"
 
-#: ui/main_window.slint:3359
+#: ui/main_window.slint:3381
 msgctxt "MainWindow"
 msgid "Deploy Public Key"
 msgstr "部署公钥"
 
-#: ui/main_window.slint:3363
+#: ui/main_window.slint:3385
 msgctxt "MainWindow"
 msgid "Deploy"
 msgstr "部署"
 
-#: ui/main_window.slint:3427
+#: ui/main_window.slint:3449
 msgctxt "MainWindow"
 msgid "Delete Proxy Profile"
 msgstr "删除代理配置"
 
-#: ui/main_window.slint:3428
+#: ui/main_window.slint:3450
 msgctxt "MainWindow"
 msgid "This removes the managed proxy profile and its saved password from the secret store."
 msgstr "这会从私密存储中删除托管代理配置及其已保存的密码。"
 
-#: ui/main_window.slint:3482
+#: ui/main_window.slint:3505
 msgctxt "MainWindow"
 msgid "Delete Theme"
 msgstr "删除主题"
 
-#: ui/main_window.slint:3484
+#: ui/main_window.slint:3507
 msgctxt "MainWindow"
 msgid "Delete “{0}”? {1} theme reference(s) will switch to the built-in default theme."
 msgstr "删除“{0}”？{1} 处主题引用将切换为内置默认主题。"
 
-#: ui/main_window.slint:3485
+#: ui/main_window.slint:3508
 msgctxt "MainWindow"
 msgid "Delete “{0}”? This removes the user theme file and cannot be undone."
 msgstr "删除“{0}”？此操作会移除用户主题文件且无法撤销。"
 
-#: ui/main_window.slint:3538
+#: ui/main_window.slint:3561
 msgctxt "MainWindow"
 msgid "Clear All Host Keys"
 msgstr "清空所有主机密钥"
 
-#: ui/main_window.slint:3539
+#: ui/main_window.slint:3562
 msgctxt "MainWindow"
 msgid "Remove every saved host key from disk? This cannot be undone."
 msgstr "从磁盘移除所有已保存的主机密钥？此操作无法撤销。"
 
-#: ui/main_window.slint:3540
+#: ui/main_window.slint:3563
 msgctxt "MainWindow"
 msgid "Clear All"
 msgstr "全部清空"
 
-#: ui/main_window.slint:3556
+#: ui/main_window.slint:3579
 msgctxt "MainWindow"
 msgid "Remove Host Keys"
 msgstr "移除主机密钥"
 
-#: ui/main_window.slint:3558
+#: ui/main_window.slint:3581
 msgctxt "MainWindow"
 msgid "Remove all saved keys for {0}? This deletes the entire host:port group, not just the selected key."
 msgstr "移除 {0} 的所有已保存密钥？这会删除整个 host:port 分组，而不只是所选密钥。"
 
-#: ui/main_window.slint:3559
+#: ui/main_window.slint:3582
 msgctxt "MainWindow"
 msgid "Remove all saved keys for the selected host:port? This deletes the entire group, not just the selected key."
 msgstr "移除所选 host:port 的所有已保存密钥？这会删除整个分组，而不只是所选密钥。"
@@ -823,99 +823,99 @@ msgctxt "ConfirmDialog"
 msgid "Don't ask again"
 msgstr "不再询问"
 
-#: ui/components/file_pane.slint:187
+#: ui/components/file_pane.slint:216
 msgctxt "FileColumnHeader"
 msgid "{0} ↑"
 msgstr "{0} ↑"
 
-#: ui/components/file_pane.slint:187
+#: ui/components/file_pane.slint:216
 msgctxt "FileColumnHeader"
 msgid "{0} ↓"
 msgstr "{0} ↓"
 
-#: ui/components/file_pane.slint:363 ui/components/file_pane.slint:913
+#: ui/components/file_pane.slint:407 ui/components/file_pane.slint:1119
 msgctxt "FilePane"
 msgid "{0} · {1}"
 msgstr "{0} · {1}"
 
-#: ui/components/file_pane.slint:364
+#: ui/components/file_pane.slint:408
 msgctxt "FilePane"
 msgid "{n} item"
 msgid_plural "{n} items"
 msgstr[0] "{n} 项"
 
-#: ui/components/file_pane.slint:365
+#: ui/components/file_pane.slint:409
 msgctxt "FilePane"
 msgid "{n} dir"
 msgid_plural "{n} dirs"
 msgstr[0] "{n} 个目录"
 
-#: ui/components/file_pane.slint:406
+#: ui/components/file_pane.slint:520
 msgctxt "FilePane"
 msgid "Expand local pane"
 msgstr "展开本地窗格"
 
-#: ui/components/file_pane.slint:406
+#: ui/components/file_pane.slint:520
 msgctxt "FilePane"
 msgid "Collapse local pane"
 msgstr "折叠本地窗格"
 
-#: ui/components/file_pane.slint:449
+#: ui/components/file_pane.slint:563
 msgctxt "FilePane"
 msgid "…"
 msgstr "…"
 
-#: ui/components/file_pane.slint:517
+#: ui/components/file_pane.slint:631
 msgctxt "FilePane"
 msgid "Refresh"
 msgstr "刷新"
 
-#: ui/components/file_pane.slint:525
+#: ui/components/file_pane.slint:639
 msgctxt "FilePane"
 msgid "Show hidden files"
 msgstr "显示隐藏文件"
 
-#: ui/components/file_pane.slint:557
+#: ui/components/file_pane.slint:671
 msgctxt "FilePane"
 msgid "Retry"
 msgstr "重试"
 
-#: ui/components/file_pane.slint:817
+#: ui/components/file_pane.slint:985
 msgctxt "FilePane"
 msgid "Name"
 msgstr "名称"
 
-#: ui/components/file_pane.slint:826
+#: ui/components/file_pane.slint:994
 msgctxt "FilePane"
 msgid "Size"
 msgstr "大小"
 
-#: ui/components/file_pane.slint:836
+#: ui/components/file_pane.slint:1004
 msgctxt "FilePane"
 msgid "Modified"
 msgstr "修改时间"
 
-#: ui/components/file_pane.slint:846
+#: ui/components/file_pane.slint:1015
 msgctxt "FilePane"
 msgid "Perm"
 msgstr "权限"
 
-#: ui/components/file_pane.slint:891
+#: ui/components/file_pane.slint:1097
 msgctxt "FilePane"
 msgid "Save Edit"
 msgstr "保存编辑"
 
-#: ui/components/file_pane.slint:896
+#: ui/components/file_pane.slint:1102
 msgctxt "FilePane"
 msgid "Cancel Edit"
 msgstr "取消编辑"
 
-#: ui/components/file_pane.slint:910
+#: ui/components/file_pane.slint:1116
 msgctxt "FilePane"
 msgid "{0} · selected: {1} · {2}"
 msgstr "{0} · 已选：{1} · {2}"
 
-#: ui/components/file_pane.slint:912
+#: ui/components/file_pane.slint:1118
 msgctxt "FilePane"
 msgid "{0} · {1} selected · {2}"
 msgstr "{0} · 已选 {1} · {2}"
@@ -1348,437 +1348,442 @@ msgctxt "SftpTransferDrawer"
 msgid " · {0} completed"
 msgstr " · {0} 已完成"
 
-#: ui/components/sftp_panel.slint:637 ui/components/sftp_panel.slint:675
+#: ui/components/sftp_panel.slint:660 ui/components/sftp_panel.slint:711
+msgctxt "SftpPanel"
+msgid "Loading {0}…"
+msgstr "正在加载 {0}…"
+
+#: ui/components/sftp_panel.slint:666 ui/components/sftp_panel.slint:717
 msgctxt "SftpPanel"
 msgid "Remote"
 msgstr "远端"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:779 ui/components/sftp_panel.slint:796
+#: ui/components/sftp_panel.slint:835 ui/components/sftp_panel.slint:852
 msgctxt "SftpContextMenu"
 msgid "Open"
 msgstr "打开"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:780
+#: ui/components/sftp_panel.slint:836
 msgctxt "SftpContextMenu"
 msgid "Edit Remote File"
 msgstr "编辑远端文件"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:781 ui/components/sftp_panel.slint:797
+#: ui/components/sftp_panel.slint:837 ui/components/sftp_panel.slint:853
 msgctxt "SftpContextMenu"
 msgid "Download"
 msgstr "下载"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:782 ui/components/sftp_panel.slint:798
+#: ui/components/sftp_panel.slint:838 ui/components/sftp_panel.slint:854
 msgctxt "SftpContextMenu"
 msgid "Download To..."
 msgstr "下载到…"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:783 ui/components/sftp_panel.slint:799
+#: ui/components/sftp_panel.slint:839 ui/components/sftp_panel.slint:855
 msgctxt "SftpContextMenu"
 msgid "Copy To..."
 msgstr "复制到…"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:785 ui/components/sftp_panel.slint:803
+#: ui/components/sftp_panel.slint:841 ui/components/sftp_panel.slint:859
 msgctxt "SftpContextMenu"
 msgid "Rename..."
 msgstr "重命名…"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:786 ui/components/sftp_panel.slint:804
+#: ui/components/sftp_panel.slint:842 ui/components/sftp_panel.slint:860
 msgctxt "SftpContextMenu"
 msgid "Delete..."
 msgstr "删除…"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:787 ui/components/sftp_panel.slint:805
+#: ui/components/sftp_panel.slint:843 ui/components/sftp_panel.slint:861
 msgctxt "SftpContextMenu"
 msgid "Chmod..."
 msgstr "改权限…"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:789 ui/components/sftp_panel.slint:807 ui/components/sftp_panel.slint:843
+#: ui/components/sftp_panel.slint:845 ui/components/sftp_panel.slint:863 ui/components/sftp_panel.slint:899
 msgctxt "SftpContextMenu"
 msgid "Copy"
 msgstr "复制"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:790 ui/components/sftp_panel.slint:808
+#: ui/components/sftp_panel.slint:846 ui/components/sftp_panel.slint:864
 msgctxt "SftpContextMenu"
 msgid "Copy Remote Path"
 msgstr "复制远端路径"
 
-#: ui/components/sftp_panel.slint:790 ui/components/sftp_panel.slint:792 ui/components/sftp_panel.slint:810 ui/components/sftp_panel.slint:827 ui/components/sftp_panel.slint:850
+#: ui/components/sftp_panel.slint:846 ui/components/sftp_panel.slint:848 ui/components/sftp_panel.slint:866 ui/components/sftp_panel.slint:883 ui/components/sftp_panel.slint:906
 msgctxt "SftpContextMenu"
 msgid "Connect to the remote host first."
 msgstr "请先连接远程主机。"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:792 ui/components/sftp_panel.slint:810
+#: ui/components/sftp_panel.slint:848 ui/components/sftp_panel.slint:866
 msgctxt "SftpContextMenu"
 msgid "Properties"
 msgstr "属性"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:800
+#: ui/components/sftp_panel.slint:856
 msgctxt "SftpContextMenu"
 msgid "Upload Here..."
 msgstr "上传到此处…"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:801 ui/components/sftp_panel.slint:815
+#: ui/components/sftp_panel.slint:857 ui/components/sftp_panel.slint:871
 msgctxt "SftpContextMenu"
 msgid "New Folder"
 msgstr "新建文件夹"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:814
+#: ui/components/sftp_panel.slint:870
 msgctxt "SftpContextMenu"
 msgid "Upload Files..."
 msgstr "上传文件…"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:817 ui/components/sftp_panel.slint:847
+#: ui/components/sftp_panel.slint:873 ui/components/sftp_panel.slint:903
 msgctxt "SftpContextMenu"
 msgid "Refresh"
 msgstr "刷新"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:818 ui/components/sftp_panel.slint:848
+#: ui/components/sftp_panel.slint:874 ui/components/sftp_panel.slint:904
 msgctxt "SftpContextMenu"
 msgid "Show Hidden Files"
 msgstr "显示隐藏文件"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:819 ui/components/sftp_panel.slint:858
+#: ui/components/sftp_panel.slint:875 ui/components/sftp_panel.slint:914
 msgctxt "SftpContextMenu"
 msgid "Copy Current Path"
 msgstr "复制当前路径"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:821 ui/components/sftp_panel.slint:861
+#: ui/components/sftp_panel.slint:877 ui/components/sftp_panel.slint:917
 msgctxt "SftpContextMenu"
 msgid "Paste"
 msgstr "粘贴"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:823
+#: ui/components/sftp_panel.slint:879
 msgctxt "SftpContextMenu"
 msgid "Parent directory"
 msgstr "上级目录"
 
-#: ui/components/sftp_panel.slint:825
+#: ui/components/sftp_panel.slint:881
 msgctxt "SftpContextMenu"
 msgid "Root directory (/)"
 msgstr "根目录 (/)"
 
-#: ui/components/sftp_panel.slint:827 ui/components/sftp_panel.slint:850
+#: ui/components/sftp_panel.slint:883 ui/components/sftp_panel.slint:906
 msgctxt "SftpContextMenu"
 msgid "Switch to Terminal"
 msgstr "切换为终端"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:831
+#: ui/components/sftp_panel.slint:887
 msgctxt "SftpContextMenu"
 msgid "Download Selected"
 msgstr "下载所选"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:833 ui/components/sftp_panel.slint:845
+#: ui/components/sftp_panel.slint:889 ui/components/sftp_panel.slint:901
 msgctxt "SftpContextMenu"
 msgid "Delete Selected"
 msgstr "删除所选"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:834
+#: ui/components/sftp_panel.slint:890
 msgctxt "SftpContextMenu"
 msgid "Chmod Selected..."
 msgstr "批量改权限…"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:837
+#: ui/components/sftp_panel.slint:893
 msgctxt "SftpContextMenu"
 msgid "Copy Remote Paths"
 msgstr "复制远端路径"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:841
+#: ui/components/sftp_panel.slint:897
 msgctxt "SftpContextMenu"
 msgid "Upload to Remote"
 msgstr "上传到远端"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:842
+#: ui/components/sftp_panel.slint:898
 msgctxt "SftpContextMenu"
 msgid "Move to Remote"
 msgstr "移动到远端"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:844
+#: ui/components/sftp_panel.slint:900
 msgctxt "SftpContextMenu"
 msgid "Copy Path"
 msgstr "复制路径"
 
-#: ui/components/sftp_panel.slint:859
+#: ui/components/sftp_panel.slint:915
 msgctxt "SftpContextMenu"
 msgid "Home directory"
 msgstr "主目录"
 
-#: ui/components/sftp_panel.slint:1018
+#: ui/components/sftp_panel.slint:1074
 msgctxt "SftpEntryDialog"
 msgid "New Folder"
 msgstr "新建文件夹"
 
-#: ui/components/sftp_panel.slint:1019 ui/components/sftp_panel.slint:1056
+#: ui/components/sftp_panel.slint:1075 ui/components/sftp_panel.slint:1112
 msgctxt "SftpEntryDialog"
 msgid "Rename"
 msgstr "重命名"
 
-#: ui/components/sftp_panel.slint:1020
+#: ui/components/sftp_panel.slint:1076
 msgctxt "SftpEntryDialog"
 msgid "Change Permissions"
 msgstr "修改权限"
 
-#: ui/components/sftp_panel.slint:1021 ui/components/sftp_panel.slint:1058
+#: ui/components/sftp_panel.slint:1077 ui/components/sftp_panel.slint:1114
 msgctxt "SftpEntryDialog"
 msgid "Delete"
 msgstr "删除"
 
-#: ui/components/sftp_panel.slint:1022
+#: ui/components/sftp_panel.slint:1078
 msgctxt "SftpEntryDialog"
 msgid "Upload File"
 msgstr "上传文件"
 
-#: ui/components/sftp_panel.slint:1023 ui/components/sftp_panel.slint:1060
+#: ui/components/sftp_panel.slint:1079 ui/components/sftp_panel.slint:1116
 msgctxt "SftpEntryDialog"
 msgid "Download"
 msgstr "下载"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1024
+#: ui/components/sftp_panel.slint:1080
 msgctxt "SftpEntryDialog"
 msgid "Copy To..."
 msgstr "复制到…"
 
-#: ui/components/sftp_panel.slint:1025
+#: ui/components/sftp_panel.slint:1081
 msgctxt "SftpEntryDialog"
 msgid "SFTP"
 msgstr "SFTP"
 
-#: ui/components/sftp_panel.slint:1029
+#: ui/components/sftp_panel.slint:1085
 msgctxt "SftpEntryDialog"
 msgid "Relative names are created inside the current remote directory."
 msgstr "相对名称将创建在当前远程目录内。"
 
-#: ui/components/sftp_panel.slint:1030
+#: ui/components/sftp_panel.slint:1086
 msgctxt "SftpEntryDialog"
 msgid "Relative names stay inside the current remote directory."
 msgstr "相对名称保持在当前远程目录内。"
 
-#: ui/components/sftp_panel.slint:1031
+#: ui/components/sftp_panel.slint:1087
 msgctxt "SftpEntryDialog"
 msgid "Three-digit octal permissions, for example 644 or 755."
 msgstr "三位八进制权限，例如 644 或 755。"
 
-#: ui/components/sftp_panel.slint:1034
+#: ui/components/sftp_panel.slint:1090
 msgctxt "SftpEntryDialog"
 msgid "This permanently removes the {0} selected remote entries, directories recursively."
 msgstr "这将永久删除选中的 {0} 个远端条目（目录会递归删除）。"
 
-#: ui/components/sftp_panel.slint:1035
+#: ui/components/sftp_panel.slint:1091
 msgctxt "SftpEntryDialog"
 msgid "This permanently removes the remote entry."
 msgstr "这将永久删除该远程条目。"
 
-#: ui/components/sftp_panel.slint:1037
+#: ui/components/sftp_panel.slint:1093
 msgctxt "SftpEntryDialog"
 msgid "Uploads the local file or directory into the current remote directory using its name."
 msgstr "将本地文件或目录按原名上传到当前远端目录。"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1038
+#: ui/components/sftp_panel.slint:1094
 msgctxt "SftpEntryDialog"
 msgid "Downloads the selected remote entries into this local directory."
 msgstr "把选中的远端条目下载到该本地目录。"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1039
+#: ui/components/sftp_panel.slint:1095
 msgctxt "SftpEntryDialog"
 msgid "Downloads to a temporary copy and uploads it into this remote directory."
 msgstr "先下载到临时副本，再上传到该远端目录。"
 
-#: ui/components/sftp_panel.slint:1044
+#: ui/components/sftp_panel.slint:1100
 msgctxt "SftpEntryDialog"
 msgid "Folder name"
 msgstr "文件夹名称"
 
-#: ui/components/sftp_panel.slint:1045
+#: ui/components/sftp_panel.slint:1101
 msgctxt "SftpEntryDialog"
 msgid "New name"
 msgstr "新名称"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1049
+#: ui/components/sftp_panel.slint:1105
 msgctxt "SftpEntryDialog"
 msgid "Local file or directory"
 msgstr "本地文件或目录"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1050
+#: ui/components/sftp_panel.slint:1106
 msgctxt "SftpEntryDialog"
 msgid "Remote destination directory"
 msgstr "远端目标目录"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1051
+#: ui/components/sftp_panel.slint:1107
 msgctxt "SftpEntryDialog"
 msgid "Local destination directory"
 msgstr "本地目标目录"
 
-#: ui/components/sftp_panel.slint:1055
+#: ui/components/sftp_panel.slint:1111
 msgctxt "SftpEntryDialog"
 msgid "Create Folder"
 msgstr "创建文件夹"
 
-#: ui/components/sftp_panel.slint:1057
+#: ui/components/sftp_panel.slint:1113
 msgctxt "SftpEntryDialog"
 msgid "Apply"
 msgstr "应用"
 
-#: ui/components/sftp_panel.slint:1059
+#: ui/components/sftp_panel.slint:1115
 msgctxt "SftpEntryDialog"
 msgid "Upload"
 msgstr "上传"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1061
+#: ui/components/sftp_panel.slint:1117
 msgctxt "SftpEntryDialog"
 msgid "Copy"
 msgstr "复制"
 
-#: ui/components/sftp_panel.slint:1062
+#: ui/components/sftp_panel.slint:1118
 msgctxt "SftpEntryDialog"
 msgid "Run"
 msgstr "运行"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1145
+#: ui/components/sftp_panel.slint:1201
 msgctxt "SftpEntryDialog"
 msgid "{0} entries"
 msgstr "{0} 个条目"
 
-#: ui/components/sftp_panel.slint:1174
+#: ui/components/sftp_panel.slint:1230
 msgctxt "SftpEntryDialog"
 msgid "Permissions (octal)"
 msgstr "权限（八进制）"
 
-#: ui/components/sftp_panel.slint:1197
+#: ui/components/sftp_panel.slint:1253
 msgctxt "SftpEntryDialog"
 msgid "Cancel"
 msgstr "取消"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1277
+#: ui/components/sftp_panel.slint:1333
 msgctxt "SftpConflictDialog"
 msgid "Resolve name conflicts"
 msgstr "解决命名冲突"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1284
+#: ui/components/sftp_panel.slint:1340
 msgctxt "SftpConflictDialog"
 msgid "{0} destination path(s) already exist."
 msgstr "已有 {0} 个目标路径存在。"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1290
+#: ui/components/sftp_panel.slint:1346
 msgctxt "SftpConflictDialog"
 msgid "{0} → {1}"
 msgstr "{0} → {1}"
 
-#: ui/components/sftp_panel.slint:1316
+#: ui/components/sftp_panel.slint:1372
 msgctxt "SftpConflictDialog"
 msgid "Overwrite replaces them, Rename keeps both by adding a number, Skip leaves them untouched."
 msgstr "覆盖会替换目标；重命名会加序号保留两者；跳过则不做处理。"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1327
+#: ui/components/sftp_panel.slint:1383
 msgctxt "SftpConflictDialog"
 msgid "Cancel"
 msgstr "取消"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1331
+#: ui/components/sftp_panel.slint:1387
 msgctxt "SftpConflictDialog"
 msgid "Skip"
 msgstr "跳过"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1335
+#: ui/components/sftp_panel.slint:1391
 msgctxt "SftpConflictDialog"
 msgid "Rename"
 msgstr "重命名"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1339
+#: ui/components/sftp_panel.slint:1395
 msgctxt "SftpConflictDialog"
 msgid "Overwrite"
 msgstr "覆盖"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1410
+#: ui/components/sftp_panel.slint:1466
 msgctxt "SftpPropertiesDialog"
 msgid "Properties"
 msgstr "属性"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1419
+#: ui/components/sftp_panel.slint:1475
 msgctxt "SftpPropertiesDialog"
 msgid "Name"
 msgstr "名称"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1422
+#: ui/components/sftp_panel.slint:1478
 msgctxt "SftpPropertiesDialog"
 msgid "Path"
 msgstr "路径"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1425
+#: ui/components/sftp_panel.slint:1481
 msgctxt "SftpPropertiesDialog"
 msgid "Kind"
 msgstr "类型"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1428
+#: ui/components/sftp_panel.slint:1484
 msgctxt "SftpPropertiesDialog"
 msgid "Size"
 msgstr "大小"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1431
+#: ui/components/sftp_panel.slint:1487
 msgctxt "SftpPropertiesDialog"
 msgid "Modified"
 msgstr "修改时间"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1434
+#: ui/components/sftp_panel.slint:1490
 msgctxt "SftpPropertiesDialog"
 msgid "Permissions"
 msgstr "权限"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1443
+#: ui/components/sftp_panel.slint:1499
 msgctxt "SftpPropertiesDialog"
 msgid "Copy Path"
 msgstr "复制路径"
 
 # N1 Phase 2: sftp_panel.slint / local_pane.slint
-#: ui/components/sftp_panel.slint:1447
+#: ui/components/sftp_panel.slint:1503
 msgctxt "SftpPropertiesDialog"
 msgid "Close"
 msgstr "关闭"
@@ -1818,78 +1823,78 @@ msgctxt "StatusBar"
 msgid "Logging — open logging menu"
 msgstr "日志 — 打开日志菜单"
 
-#: ui/components/terminal_view.slint:270
+#: ui/components/terminal_view.slint:275
 msgctxt "TerminalView"
 msgid "Connection failed"
 msgstr "连接失败"
 
-#: ui/components/terminal_view.slint:271
+#: ui/components/terminal_view.slint:276
 msgctxt "TerminalView"
 msgid "Connecting…"
 msgstr "正在连接…"
 
-#: ui/components/terminal_view.slint:301
+#: ui/components/terminal_view.slint:306
 msgctxt "TerminalView"
 msgid "Retry"
 msgstr "重试"
 
-#: ui/components/terminal_view.slint:307
+#: ui/components/terminal_view.slint:312
 msgctxt "TerminalView"
 msgid "Cancel"
 msgstr "取消"
 
-#: ui/components/terminal_view.slint:312
+#: ui/components/terminal_view.slint:317
 msgctxt "TerminalView"
 msgid "Copy error"
 msgstr "复制错误信息"
 
-#: ui/components/terminal_view.slint:340
+#: ui/components/terminal_view.slint:345
 msgctxt "TerminalView"
 msgid "scrolled back {n} line"
 msgid_plural "scrolled back {n} lines"
 msgstr[0] "已回滚 {n} 行"
 
-#: ui/components/terminal_view.slint:348
+#: ui/components/terminal_view.slint:353
 msgctxt "TerminalView"
 msgid "selection"
 msgstr "已选择"
 
-#: ui/components/terminal_view.slint:357
+#: ui/components/terminal_view.slint:362
 msgctxt "TerminalView"
 msgid "Bottom"
 msgstr "底部"
 
-#: ui/components/terminal_view.slint:509 ui/components/terminal_view.slint:547
+#: ui/components/terminal_view.slint:514 ui/components/terminal_view.slint:552
 msgctxt "TerminalView"
 msgid "Find"
 msgstr "查找"
 
-#: ui/components/terminal_view.slint:523
+#: ui/components/terminal_view.slint:528
 msgctxt "TerminalView"
 msgid "Regex (Rust syntax)"
 msgstr "正则表达式（Rust 语法）"
 
-#: ui/components/terminal_view.slint:524
+#: ui/components/terminal_view.slint:529
 msgctxt "TerminalView"
 msgid "Search visible terminal text"
 msgstr "搜索可见终端文本"
 
-#: ui/components/terminal_view.slint:534 ui/components/terminal_view.slint:535
+#: ui/components/terminal_view.slint:539 ui/components/terminal_view.slint:540
 msgctxt "TerminalView"
 msgid "Regex"
 msgstr "正则表达式"
 
-#: ui/components/terminal_view.slint:555
+#: ui/components/terminal_view.slint:560
 msgctxt "TerminalView"
 msgid "Prev"
 msgstr "上一个"
 
-#: ui/components/terminal_view.slint:563
+#: ui/components/terminal_view.slint:568
 msgctxt "TerminalView"
 msgid "Next"
 msgstr "下一个"
 
-#: ui/components/terminal_view.slint:584
+#: ui/components/terminal_view.slint:589
 msgctxt "TerminalView"
 msgid "Close find bar"
 msgstr "关闭查找栏"
@@ -1959,12 +1964,12 @@ msgctxt "ThemeEditor"
 msgid "Discard Changes"
 msgstr "放弃更改"
 
-#: ui/components/tool_dock.slint:416
+#: ui/components/tool_dock.slint:421
 msgctxt "MainWindow"
 msgid "Sessions"
 msgstr "会话"
 
-#: ui/components/tool_dock.slint:511
+#: ui/components/tool_dock.slint:516
 msgctxt "MainWindow"
 msgid "SFTP"
 msgstr "SFTP"
@@ -2054,12 +2059,12 @@ msgctxt "TunnelPanel"
 msgid "Stop tunnel"
 msgstr "停止隧道"
 
-#: ui/components/workspace_split.slint:245
+#: ui/components/workspace_split.slint:247
 msgctxt "SplitPaneLeaf"
 msgid "Activate a tab for this pane"
 msgstr "为此窗格激活一个标签页"
 
-#: ui/components/workspace_split.slint:367
+#: ui/components/workspace_split.slint:373
 msgctxt "SplitPaneLeaf"
 msgid "Local"
 msgstr "本地"
@@ -2765,602 +2770,602 @@ msgctxt "QuickConnectPage"
 msgid "Enable it in Settings to list recent targets here."
 msgstr "在设置中开启后，这里会列出最近的目标。"
 
-#: ui/pages/session_editor.slint:548
+#: ui/pages/session_editor.slint:550
 msgctxt "SessionEditor"
 msgid "Session Editor"
 msgstr "会话编辑器"
 
-#: ui/pages/session_editor.slint:565
+#: ui/pages/session_editor.slint:567
 msgctxt "SessionEditor"
 msgid "Close"
 msgstr "关闭"
 
-#: ui/pages/session_editor.slint:591 ui/pages/session_editor.slint:662
+#: ui/pages/session_editor.slint:593 ui/pages/session_editor.slint:665
 msgctxt "SessionEditor"
 msgid "General"
 msgstr "通用"
 
-#: ui/pages/session_editor.slint:592 ui/pages/session_editor.slint:738
+#: ui/pages/session_editor.slint:594 ui/pages/session_editor.slint:741
 msgctxt "SessionEditor"
 msgid "Authentication"
 msgstr "认证"
 
-#: ui/pages/session_editor.slint:594
+#: ui/pages/session_editor.slint:596
 msgctxt "SessionEditor"
 msgid "SFTP"
 msgstr "SFTP"
 
-#: ui/pages/session_editor.slint:594 ui/pages/session_editor.slint:597
+#: ui/pages/session_editor.slint:596 ui/pages/session_editor.slint:599
 msgctxt "SessionEditor"
 msgid "Not available in this version."
 msgstr "此版本未提供。"
 
-#: ui/pages/session_editor.slint:595 ui/pages/session_editor.slint:970
+#: ui/pages/session_editor.slint:597 ui/pages/session_editor.slint:973
 msgctxt "SessionEditor"
 msgid "Tunnels"
 msgstr "隧道"
 
-#: ui/pages/session_editor.slint:596 ui/pages/session_editor.slint:875
+#: ui/pages/session_editor.slint:598 ui/pages/session_editor.slint:878
 msgctxt "SessionEditor"
 msgid "Proxy"
 msgstr "代理"
 
-#: ui/pages/session_editor.slint:597
+#: ui/pages/session_editor.slint:599
 msgctxt "SessionEditor"
 msgid "Advanced"
 msgstr "高级"
 
-#: ui/pages/session_editor.slint:598 ui/pages/session_editor.slint:1037
+#: ui/pages/session_editor.slint:600 ui/pages/session_editor.slint:1040
 msgctxt "SessionEditor"
 msgid "Appearance"
 msgstr "外观"
 
-#: ui/pages/session_editor.slint:626
+#: ui/pages/session_editor.slint:628
 msgctxt "SessionEditor"
 msgid "Live preview"
 msgstr "实时预览"
 
-#: ui/pages/session_editor.slint:667
+#: ui/pages/session_editor.slint:670
 msgctxt "SessionEditor"
 msgid "Folder"
 msgstr "文件夹"
 
-#: ui/pages/session_editor.slint:682 ui/pages/session_editor.slint:687
+#: ui/pages/session_editor.slint:685 ui/pages/session_editor.slint:690
 msgctxt "SessionEditor"
 msgid "Session name"
 msgstr "会话名称"
 
-#: ui/pages/session_editor.slint:693 ui/pages/session_editor.slint:698
+#: ui/pages/session_editor.slint:696 ui/pages/session_editor.slint:701
 msgctxt "SessionEditor"
 msgid "Host"
 msgstr "主机"
 
-#: ui/pages/session_editor.slint:704
+#: ui/pages/session_editor.slint:707
 msgctxt "SessionEditor"
 msgid "Port"
 msgstr "端口"
 
-#: ui/pages/session_editor.slint:715 ui/pages/session_editor.slint:720
+#: ui/pages/session_editor.slint:718 ui/pages/session_editor.slint:723
 msgctxt "SessionEditor"
 msgid "Username"
 msgstr "用户名"
 
-#: ui/pages/session_editor.slint:728
+#: ui/pages/session_editor.slint:731
 msgctxt "SessionEditor"
 msgid "A session name and a host are required before saving."
 msgstr "保存前必须填写会话名称和主机。"
 
-#: ui/pages/session_editor.slint:742
+#: ui/pages/session_editor.slint:745
 msgctxt "SessionEditor"
 msgid "Method"
 msgstr "方式"
 
-#: ui/pages/session_editor.slint:744
+#: ui/pages/session_editor.slint:747
 msgctxt "SessionEditor"
 msgid "Agent"
 msgstr "认证代理"
 
-#: ui/pages/session_editor.slint:745 ui/pages/session_editor.slint:758
+#: ui/pages/session_editor.slint:748 ui/pages/session_editor.slint:761
 msgctxt "SessionEditor"
 msgid "Password"
 msgstr "密码"
 
-#: ui/pages/session_editor.slint:751
+#: ui/pages/session_editor.slint:754
 msgctxt "SessionEditor"
 msgid "Keyboard Interactive"
 msgstr "键盘交互"
 
-#: ui/pages/session_editor.slint:752
+#: ui/pages/session_editor.slint:755
 msgctxt "SessionEditor"
 msgid "Key"
 msgstr "密钥"
 
-#: ui/pages/session_editor.slint:765
+#: ui/pages/session_editor.slint:768
 msgctxt "SessionEditor"
 msgid "Leave blank to keep saved password"
 msgstr "留空以保留已保存的密码"
 
-#: ui/pages/session_editor.slint:766
+#: ui/pages/session_editor.slint:769
 msgctxt "SessionEditor"
 msgid "Password / keyboard-interactive secret"
 msgstr "密码 / 键盘交互口令"
 
-#: ui/pages/session_editor.slint:774 ui/pages/session_editor.slint:792
+#: ui/pages/session_editor.slint:777 ui/pages/session_editor.slint:795
 msgctxt "SessionEditor"
 msgid "Private key"
 msgstr "私钥"
 
-#: ui/pages/session_editor.slint:780
+#: ui/pages/session_editor.slint:783
 msgctxt "SessionEditor"
 msgid "Choose a managed key"
 msgstr "选择托管密钥"
 
-#: ui/pages/session_editor.slint:785 ui/pages/session_editor.slint:806
+#: ui/pages/session_editor.slint:788 ui/pages/session_editor.slint:809
 msgctxt "SessionEditor"
 msgid "Manage keys…"
 msgstr "管理密钥…"
 
-#: ui/pages/session_editor.slint:795
+#: ui/pages/session_editor.slint:798
 msgctxt "SessionEditor"
 msgid "No managed private keys yet."
 msgstr "尚无托管私钥。"
 
-#: ui/pages/session_editor.slint:813
+#: ui/pages/session_editor.slint:816
 msgctxt "SessionEditor"
 msgid "Import an OpenSSH private key in the Private Keys manager, then pick it here."
 msgstr "在私钥管理器中导入 OpenSSH 私钥，然后在此选择。"
 
-#: ui/pages/session_editor.slint:826
+#: ui/pages/session_editor.slint:829
 msgctxt "SessionEditor"
 msgid "The selected managed key is no longer available. Choose another key or open Manage keys…."
 msgstr "所选托管密钥已不可用。请选择其他密钥或打开“管理密钥…”。"
 
-#: ui/pages/session_editor.slint:835
+#: ui/pages/session_editor.slint:838
 msgctxt "SessionEditor"
 msgid "Legacy key"
 msgstr "旧版密钥"
 
-#: ui/pages/session_editor.slint:852
+#: ui/pages/session_editor.slint:855
 msgctxt "SessionEditor"
 msgid "Legacy key path with a stored passphrase. Select a managed key to migrate this session."
 msgstr "旧版密钥路径（已保存口令）。选择托管密钥可将此会话迁移。"
 
-#: ui/pages/session_editor.slint:853
+#: ui/pages/session_editor.slint:856
 msgctxt "SessionEditor"
 msgid "Legacy key path. Select a managed key to migrate this session."
 msgstr "旧版密钥路径。选择托管密钥可将此会话迁移。"
 
-#: ui/pages/session_editor.slint:857
+#: ui/pages/session_editor.slint:860
 msgctxt "SessionEditor"
 msgid "Choose a managed private key before saving."
 msgstr "保存前请选择托管私钥。"
 
-#: ui/pages/session_editor.slint:866
+#: ui/pages/session_editor.slint:869
 msgctxt "SessionEditor"
 msgid "Test Connection"
 msgstr "测试连接"
 
-#: ui/pages/session_editor.slint:878
+#: ui/pages/session_editor.slint:881
 msgctxt "SessionEditor"
 msgid "Mode"
 msgstr "模式"
 
-#: ui/pages/session_editor.slint:881
+#: ui/pages/session_editor.slint:884
 msgctxt "SessionEditor"
 msgid "No Proxy"
 msgstr "不使用代理"
 
-#: ui/pages/session_editor.slint:887
+#: ui/pages/session_editor.slint:890
 msgctxt "SessionEditor"
 msgid "Manage proxies…"
 msgstr "管理代理…"
 
-#: ui/pages/session_editor.slint:894 ui/pages/session_editor.slint:906
+#: ui/pages/session_editor.slint:897 ui/pages/session_editor.slint:909
 msgctxt "SessionEditor"
 msgid "Profile"
 msgstr "配置"
 
-#: ui/pages/session_editor.slint:900
+#: ui/pages/session_editor.slint:903
 msgctxt "SessionEditor"
 msgid "Choose a managed proxy"
 msgstr "选择托管代理"
 
-#: ui/pages/session_editor.slint:909
+#: ui/pages/session_editor.slint:912
 msgctxt "SessionEditor"
 msgid "No managed proxies yet."
 msgstr "还没有托管代理。"
 
-#: ui/pages/session_editor.slint:931
+#: ui/pages/session_editor.slint:934
 msgctxt "SessionEditor"
 msgid "The selected managed proxy is no longer available. Choose another proxy or No Proxy."
 msgstr "选中的托管代理已不可用。请选择其他代理或“无代理”。"
 
-#: ui/pages/session_editor.slint:939
+#: ui/pages/session_editor.slint:942
 msgctxt "SessionEditor"
 msgid "Legacy proxy"
 msgstr "旧版代理"
 
-#: ui/pages/session_editor.slint:955
+#: ui/pages/session_editor.slint:958
 msgctxt "SessionEditor"
 msgid "Legacy per-session proxy. Select a managed proxy to migrate this session, or choose No Proxy."
 msgstr "旧的按会话代理。选择托管代理可迁移此会话，或选择“无代理”。"
 
-#: ui/pages/session_editor.slint:959
+#: ui/pages/session_editor.slint:962
 msgctxt "SessionEditor"
 msgid "Uses a managed proxy profile. Edits in the Proxy Manager apply to every session that references it."
 msgstr "使用托管代理配置；在代理管理器中的修改会应用到所有引用它的会话。"
 
-#: ui/pages/session_editor.slint:963
+#: ui/pages/session_editor.slint:966
 msgctxt "SessionEditor"
 msgid "Proxy disabled for this editor session."
 msgstr "此编辑器会话已禁用代理。"
 
-#: ui/pages/session_editor.slint:973
+#: ui/pages/session_editor.slint:976
 msgctxt "SessionEditor"
 msgid "Kind"
 msgstr "类型"
 
-#: ui/pages/session_editor.slint:975
+#: ui/pages/session_editor.slint:978
 msgctxt "SessionEditor"
 msgid "Local"
 msgstr "本地"
 
-#: ui/pages/session_editor.slint:976
+#: ui/pages/session_editor.slint:979
 msgctxt "SessionEditor"
 msgid "Remote"
 msgstr "远程"
 
-#: ui/pages/session_editor.slint:977
+#: ui/pages/session_editor.slint:980
 msgctxt "SessionEditor"
 msgid "Dynamic"
 msgstr "动态"
 
-#: ui/pages/session_editor.slint:981
+#: ui/pages/session_editor.slint:984
 msgctxt "SessionEditor"
 msgid "Listen host"
 msgstr "监听主机"
 
-#: ui/pages/session_editor.slint:992 ui/pages/session_editor.slint:997
+#: ui/pages/session_editor.slint:995 ui/pages/session_editor.slint:1000
 msgctxt "SessionEditor"
 msgid "Listen port"
 msgstr "监听端口"
 
-#: ui/pages/session_editor.slint:1003 ui/pages/session_editor.slint:1008
+#: ui/pages/session_editor.slint:1006 ui/pages/session_editor.slint:1011
 msgctxt "SessionEditor"
 msgid "Target host"
 msgstr "目标主机"
 
-#: ui/pages/session_editor.slint:1014 ui/pages/session_editor.slint:1019
+#: ui/pages/session_editor.slint:1017 ui/pages/session_editor.slint:1022
 msgctxt "SessionEditor"
 msgid "Target port"
 msgstr "目标端口"
 
-#: ui/pages/session_editor.slint:1027
+#: ui/pages/session_editor.slint:1030
 msgctxt "SessionEditor"
 msgid "Add Tunnel"
 msgstr "添加隧道"
 
-#: ui/pages/session_editor.slint:1028
+#: ui/pages/session_editor.slint:1031
 msgctxt "SessionEditor"
 msgid "Clear Tunnels"
 msgstr "清空隧道"
 
-#: ui/pages/session_editor.slint:1039
+#: ui/pages/session_editor.slint:1042
 msgctxt "SessionEditor"
 msgid "Per-field overrides for this session. Inherited rows show the resolved value and where it comes from."
 msgstr "此会话的逐字段覆盖。继承的行显示解析后的值及其来源。"
 
-#: ui/pages/session_editor.slint:1063
+#: ui/pages/session_editor.slint:1066
 msgctxt "SessionEditor"
 msgid "Reset All"
 msgstr "全部重置"
 
-#: ui/pages/session_editor.slint:1093
+#: ui/pages/session_editor.slint:1096
 msgctxt "SessionEditor"
 msgid "Cancel"
 msgstr "取消"
 
-#: ui/pages/session_editor.slint:1096
+#: ui/pages/session_editor.slint:1099
 msgctxt "SessionEditor"
 msgid "Save"
 msgstr "保存"
 
-#: ui/pages/session_editor.slint:1097
+#: ui/pages/session_editor.slint:1100
 msgctxt "SessionEditor"
 msgid "Save and Connect"
 msgstr "保存并连接"
 
-#: ui/pages/settings.slint:172
+#: ui/pages/settings.slint:174
 msgctxt "SettingsDialog"
 msgid "Settings"
 msgstr "设置"
 
-#: ui/pages/settings.slint:182 ui/pages/settings.slint:878
+#: ui/pages/settings.slint:184 ui/pages/settings.slint:881
 msgctxt "SettingsDialog"
 msgid "Close"
 msgstr "关闭"
 
-#: ui/pages/settings.slint:212
+#: ui/pages/settings.slint:214
 msgctxt "SettingsDialog"
 msgid "General"
 msgstr "通用"
 
-#: ui/pages/settings.slint:218 ui/pages/settings.slint:368
+#: ui/pages/settings.slint:220 ui/pages/settings.slint:370
 msgctxt "SettingsDialog"
 msgid "Appearance"
 msgstr "外观"
 
-#: ui/pages/settings.slint:224 ui/pages/settings.slint:588
+#: ui/pages/settings.slint:226 ui/pages/settings.slint:591
 msgctxt "SettingsDialog"
 msgid "Terminal"
 msgstr "终端"
 
-#: ui/pages/settings.slint:230 ui/pages/settings.slint:734
+#: ui/pages/settings.slint:232 ui/pages/settings.slint:737
 msgctxt "SettingsDialog"
 msgid "Security"
 msgstr "安全"
 
-#: ui/pages/settings.slint:236 ui/pages/settings.slint:781
+#: ui/pages/settings.slint:238 ui/pages/settings.slint:784
 msgctxt "SettingsDialog"
 msgid "Advanced"
 msgstr "高级"
 
-#: ui/pages/settings.slint:242 ui/pages/settings.slint:682
+#: ui/pages/settings.slint:244 ui/pages/settings.slint:685
 msgctxt "SettingsDialog"
 msgid "SFTP"
 msgstr "SFTP"
 
-#: ui/pages/settings.slint:248
+#: ui/pages/settings.slint:250
 msgctxt "SettingsDialog"
 msgid "Shortcuts"
 msgstr "快捷键"
 
-#: ui/pages/settings.slint:251
+#: ui/pages/settings.slint:253
 msgctxt "SettingsDialog"
 msgid "Not available in this version."
 msgstr "此版本未提供。"
 
-#: ui/pages/settings.slint:291
+#: ui/pages/settings.slint:293
 msgctxt "SettingsDialog"
 msgid "Language"
 msgstr "语言"
 
-#: ui/pages/settings.slint:298
+#: ui/pages/settings.slint:300
 msgctxt "SettingsDialog"
 msgid "Default follows the operating system. Changes apply immediately."
 msgstr "默认跟随操作系统。更改立即生效。"
 
-#: ui/pages/settings.slint:308
+#: ui/pages/settings.slint:310
 msgctxt "SettingsDialog"
 msgid "System"
 msgstr "系统"
 
-#: ui/pages/settings.slint:313
+#: ui/pages/settings.slint:315
 msgctxt "SettingsDialog"
 msgid "Chinese (Simplified)"
 msgstr "简体中文"
 
-#: ui/pages/settings.slint:318
+#: ui/pages/settings.slint:320
 msgctxt "SettingsDialog"
 msgid "English"
 msgstr "English"
 
-#: ui/pages/settings.slint:330
+#: ui/pages/settings.slint:332
 msgctxt "SettingsDialog"
 msgid "Confirmations"
 msgstr "确认"
 
-#: ui/pages/settings.slint:337
+#: ui/pages/settings.slint:339
 msgctxt "SettingsDialog"
 msgid "Turn off a confirmation to close or quit without asking. You can turn it back on here at any time."
 msgstr "关闭某项确认后，关闭或退出时将不再询问。你可以随时在这里重新开启。"
 
-#: ui/pages/settings.slint:344
+#: ui/pages/settings.slint:346
 msgctxt "SettingsDialog"
 msgid "Confirm before closing a session"
 msgstr "关闭会话前确认"
 
-#: ui/pages/settings.slint:353
+#: ui/pages/settings.slint:355
 msgctxt "SettingsDialog"
 msgid "Confirm before quitting YShell"
 msgstr "退出 YShell 前确认"
 
-#: ui/pages/settings.slint:375
+#: ui/pages/settings.slint:377
 msgctxt "SettingsDialog"
 msgid "Global defaults for terminals opened after saving. Open terminals keep their theme."
 msgstr "保存后新开终端的全局默认值。已打开的终端保持原有外观。"
 
-#: ui/pages/settings.slint:382
+#: ui/pages/settings.slint:384
 msgctxt "SettingsDialog"
 msgid "Current theme"
 msgstr "当前主题"
 
-#: ui/pages/settings.slint:419
+#: ui/pages/settings.slint:421
 msgctxt "SettingsDialog"
 msgid "Built-in theme"
 msgstr "内置主题"
 
-#: ui/pages/settings.slint:420
+#: ui/pages/settings.slint:422
 msgctxt "SettingsDialog"
 msgid "Custom theme"
 msgstr "自定义主题"
 
-#: ui/pages/settings.slint:443
+#: ui/pages/settings.slint:445
 msgctxt "SettingsDialog"
 msgid "Manage themes…"
 msgstr "管理主题…"
 
-#: ui/pages/settings.slint:451
+#: ui/pages/settings.slint:453
 msgctxt "SettingsDialog"
 msgid "Clone, edit and delete color themes in the Theme Manager. Font settings apply to every theme."
 msgstr "在主题管理器中克隆、编辑和删除配色主题。字体设置适用于所有主题。"
 
-#: ui/pages/settings.slint:460
+#: ui/pages/settings.slint:462
 msgctxt "SettingsDialog"
 msgid "Font"
 msgstr "字体"
 
-#: ui/pages/settings.slint:467
+#: ui/pages/settings.slint:469
 msgctxt "SettingsDialog"
 msgid "Font family"
 msgstr "字体族"
 
-#: ui/pages/settings.slint:472
+#: ui/pages/settings.slint:474
 msgctxt "SettingsDialog"
 msgid "DejaVu Sans Mono"
 msgstr "DejaVu Sans Mono"
 
-#: ui/pages/settings.slint:476
+#: ui/pages/settings.slint:478
 msgctxt "SettingsDialog"
 msgid "Add Font File…"
 msgstr "添加字体文件…"
 
-#: ui/pages/settings.slint:482
+#: ui/pages/settings.slint:484
 msgctxt "SettingsDialog"
 msgid "Font size"
 msgstr "字号"
 
-#: ui/pages/settings.slint:487
+#: ui/pages/settings.slint:489
 msgctxt "SettingsDialog"
 msgid "Decrease font size"
 msgstr "减小字号"
 
-#: ui/pages/settings.slint:500
+#: ui/pages/settings.slint:502
 msgctxt "SettingsDialog"
 msgid "Increase font size"
 msgstr "增大字号"
 
-#: ui/pages/settings.slint:504
+#: ui/pages/settings.slint:506
 msgctxt "SettingsDialog"
 msgid "Logical pixels (6-72)"
 msgstr "逻辑像素 (6-72)"
 
-#: ui/pages/settings.slint:514
+#: ui/pages/settings.slint:516
 msgctxt "SettingsDialog"
 msgid "Fallback font"
 msgstr "备用字体"
 
-#: ui/pages/settings.slint:518
+#: ui/pages/settings.slint:520
 msgctxt "SettingsDialog"
 msgid "Font file path"
 msgstr "字体文件路径"
 
-#: ui/pages/settings.slint:529
+#: ui/pages/settings.slint:531
 msgctxt "SettingsDialog"
 msgid "Select File…"
 msgstr "选择文件…"
 
-#: ui/pages/settings.slint:533
+#: ui/pages/settings.slint:535
 msgctxt "SettingsDialog"
 msgid "Clear"
 msgstr "清除"
 
-#: ui/pages/settings.slint:541
+#: ui/pages/settings.slint:543
 msgctxt "SettingsDialog"
 msgid "Live preview"
 msgstr "实时预览"
 
-#: ui/pages/settings.slint:571 ui/pages/settings.slint:657
+#: ui/pages/settings.slint:574 ui/pages/settings.slint:660
 msgctxt "SettingsDialog"
 msgid "Reset Defaults"
 msgstr "恢复默认值"
 
-#: ui/pages/settings.slint:575
+#: ui/pages/settings.slint:578
 msgctxt "SettingsDialog"
 msgid "Save"
 msgstr "保存"
 
-#: ui/pages/settings.slint:601
+#: ui/pages/settings.slint:604
 msgctxt "SettingsDialog"
 msgid "Scrollback lines"
 msgstr "回滚缓冲行数"
 
-#: ui/pages/settings.slint:622
+#: ui/pages/settings.slint:625
 msgctxt "SettingsDialog"
 msgid "Scrollback memory cap (cells)"
 msgstr "回滚缓冲内存上限（单元格）"
 
-#: ui/pages/settings.slint:639
+#: ui/pages/settings.slint:642
 msgctxt "SettingsDialog"
 msgid "Scrollback is stored compressed (about 3 MB per session at the defaults). Both the line count and the total cell count are enforced."
 msgstr "回滚缓冲以压缩方式存储（默认值下每会话约 3 MB）。行数与总单元格数都会受到限制。"
 
-#: ui/pages/settings.slint:646
+#: ui/pages/settings.slint:649
 msgctxt "SettingsDialog"
 msgid "Allowed range: 100-1000000 lines, 100000-100000000 cells."
 msgstr "允许范围：100-1000000 行，100000-100000000 单元格。"
 
-#: ui/pages/settings.slint:662
+#: ui/pages/settings.slint:665
 msgctxt "SettingsDialog"
 msgid "Save Terminal Settings"
 msgstr "保存终端设置"
 
-#: ui/pages/settings.slint:689
+#: ui/pages/settings.slint:692
 msgctxt "SettingsDialog"
 msgid "How many uploads and downloads may run at the same time. A higher value is faster on fast links but uses more bandwidth."
 msgstr "同时可以运行多少个上传与下载任务。数值越大在高速链路上越快，但会占用更多带宽。"
 
-#: ui/pages/settings.slint:696
+#: ui/pages/settings.slint:699
 msgctxt "SettingsDialog"
 msgid "Max parallel transfers"
 msgstr "最大并行传输数"
 
-#: ui/pages/settings.slint:710
+#: ui/pages/settings.slint:713
 msgctxt "SettingsDialog"
 msgid "Allowed range: 1-16 transfers."
 msgstr "允许范围：1-16 个并行传输。"
 
-#: ui/pages/settings.slint:721
+#: ui/pages/settings.slint:724
 msgctxt "SettingsDialog"
 msgid "Save SFTP Settings"
 msgstr "保存 SFTP 设置"
 
-#: ui/pages/settings.slint:748
+#: ui/pages/settings.slint:751
 msgctxt "SettingsDialog"
 msgid "Config directory: {0}"
 msgstr "配置目录：{0}"
 
-#: ui/pages/settings.slint:759
+#: ui/pages/settings.slint:762
 msgctxt "SettingsDialog"
 msgid "Open Host Keys…"
 msgstr "打开主机密钥…"
 
-#: ui/pages/settings.slint:764
+#: ui/pages/settings.slint:767
 msgctxt "SettingsDialog"
 msgid "Open Private Keys…"
 msgstr "打开私钥…"
 
-#: ui/pages/settings.slint:769
+#: ui/pages/settings.slint:772
 msgctxt "SettingsDialog"
 msgid "Open Proxy Manager…"
 msgstr "打开代理管理器…"
 
-#: ui/pages/settings.slint:788
+#: ui/pages/settings.slint:791
 msgctxt "SettingsDialog"
 msgid "Config directory"
 msgstr "配置目录"
 
-#: ui/pages/settings.slint:802
+#: ui/pages/settings.slint:805
 msgctxt "SettingsDialog"
 msgid "Application data, sessions, and related files live under this directory."
 msgstr "应用数据、会话及相关文件保存在此目录下。"
 
-#: ui/pages/settings.slint:811
+#: ui/pages/settings.slint:814
 msgctxt "SettingsDialog"
 msgid "Debug logging"
 msgstr "调试日志"
 
-#: ui/pages/settings.slint:818
+#: ui/pages/settings.slint:821
 msgctxt "SettingsDialog"
 msgid "When enabled, diagnostic logs are written under the config directory. The console window stays hidden."
 msgstr "开启后，诊断日志会写入配置目录；启动时不再显示命令行窗口。"
 
-#: ui/pages/settings.slint:825
+#: ui/pages/settings.slint:828
 msgctxt "SettingsDialog"
 msgid "Record debug logs"
 msgstr "记录调试日志"
 
-#: ui/pages/settings.slint:845
+#: ui/pages/settings.slint:848
 msgctxt "SettingsDialog"
 msgid "Open Log Folder"
 msgstr "打开日志文件夹"
@@ -3405,42 +3410,42 @@ msgctxt "ThemeListRow"
 msgid "Built-in themes cannot be deleted or edited."
 msgstr "内置主题不能删除或编辑。"
 
-#: ui/pages/theme_manager.slint:288
+#: ui/pages/theme_manager.slint:290
 msgctxt "ThemeManagerPage"
 msgid "Theme Manager"
 msgstr "主题管理器"
 
-#: ui/pages/theme_manager.slint:297
+#: ui/pages/theme_manager.slint:299
 msgctxt "ThemeManagerPage"
 msgid "Built-in {0} · Custom {1}"
 msgstr "内置 {0} · 自定义 {1}"
 
-#: ui/pages/theme_manager.slint:307 ui/pages/theme_manager.slint:487
+#: ui/pages/theme_manager.slint:309 ui/pages/theme_manager.slint:490
 msgctxt "ThemeManagerPage"
 msgid "Close"
 msgstr "关闭"
 
-#: ui/pages/theme_manager.slint:336
+#: ui/pages/theme_manager.slint:339
 msgctxt "ThemeManagerPage"
 msgid "Current default: {0}"
 msgstr "当前默认：{0}"
 
-#: ui/pages/theme_manager.slint:346
+#: ui/pages/theme_manager.slint:349
 msgctxt "ThemeManagerPage"
 msgid "Set as Default"
 msgstr "设为默认"
 
-#: ui/pages/theme_manager.slint:408
+#: ui/pages/theme_manager.slint:411
 msgctxt "ThemeManagerPage"
 msgid "No themes available."
 msgstr "暂无主题。"
 
-#: ui/pages/theme_manager.slint:478
+#: ui/pages/theme_manager.slint:481
 msgctxt "ThemeManagerPage"
 msgid "The preview follows the draft. Save the theme to write it to disk; discard discards the draft."
 msgstr "预览会跟随草稿。保存主题后写入磁盘；放弃则丢弃草稿。"
 
-#: ui/pages/theme_manager.slint:479
+#: ui/pages/theme_manager.slint:482
 msgctxt "ThemeManagerPage"
 msgid "Click a theme to preview it. Set as default applies it to terminals opened afterwards."
 msgstr "单击主题可预览；设为默认后对之后打开的终端生效。"
@@ -3585,37 +3590,37 @@ msgctxt "MainWindow"
 msgid "Secret store disabled. Set YSHELL_MASTER_PASSWORD to enable the local encrypted store or use the operating system keychain."
 msgstr "密钥库已禁用。请设置 YSHELL_MASTER_PASSWORD 以启用本地加密存储，或使用操作系统钥匙串。"
 
-#: ui/text_formats.slint:134 ui/text_formats.slint:1171
+#: ui/text_formats.slint:134 ui/text_formats.slint:1174
 msgctxt "MainWindow"
 msgid "Run Auth Test to validate the current editor fields without saving."
 msgstr "运行认证测试可在不保存的情况下校验编辑器当前字段。"
 
-#: ui/text_formats.slint:137 ui/text_formats.slint:1174
+#: ui/text_formats.slint:137 ui/text_formats.slint:1177
 msgctxt "MainWindow"
 msgid "Loaded saved session into the editor. Run Auth Test before saving if you want to validate the current form."
 msgstr "已将已保存会话载入编辑器。如需校验当前表单，请在保存前运行认证测试。"
 
-#: ui/text_formats.slint:140 ui/text_formats.slint:1183
+#: ui/text_formats.slint:140 ui/text_formats.slint:1186
 msgctxt "MainWindow"
 msgid "Auth test failed: {0}"
 msgstr "认证测试失败：{0}"
 
-#: ui/text_formats.slint:143 ui/text_formats.slint:1180
+#: ui/text_formats.slint:143 ui/text_formats.slint:1183
 msgctxt "MainWindow"
 msgid "Auth test succeeded for {0}."
 msgstr "对 {0} 的认证测试成功。"
 
-#: ui/text_formats.slint:145 ui/text_formats.slint:1178
+#: ui/text_formats.slint:145 ui/text_formats.slint:1181
 msgctxt "MainWindow"
 msgid "Auth test succeeded for {0}. Startup: {1}"
 msgstr "对 {0} 的认证测试成功。启动：{1}"
 
-#: ui/text_formats.slint:150 ui/text_formats.slint:1644
+#: ui/text_formats.slint:150 ui/text_formats.slint:1647
 msgctxt "MainWindow"
 msgid "Scrollback memory cap"
 msgstr "回滚缓冲内存上限"
 
-#: ui/text_formats.slint:152 ui/text_formats.slint:1643
+#: ui/text_formats.slint:152 ui/text_formats.slint:1646
 msgctxt "MainWindow"
 msgid "Scrollback lines"
 msgstr "回滚缓冲行数"
@@ -3630,7 +3635,7 @@ msgctxt "MainWindow"
 msgid "Defaults loaded. Click Save to apply."
 msgstr "已载入默认值。点击保存以应用。"
 
-#: ui/text_formats.slint:163 ui/text_formats.slint:1247
+#: ui/text_formats.slint:163 ui/text_formats.slint:1250
 msgctxt "MainWindow"
 msgid "Saved terminal settings: scrollback={0} lines, cap={1} cells."
 msgstr "已保存终端设置：回滚缓冲={0} 行，上限={1} 单元格。"
@@ -3640,7 +3645,7 @@ msgctxt "MainWindow"
 msgid "{0} must not be empty."
 msgstr "{0} 不能为空。"
 
-#: ui/text_formats.slint:169 ui/text_formats.slint:1548
+#: ui/text_formats.slint:169 ui/text_formats.slint:1551
 msgctxt "MainWindow"
 msgid "{0} must be a whole number."
 msgstr "{0} 必须为整数。"
@@ -3655,13 +3660,13 @@ msgctxt "MainWindow"
 msgid "Selected known host {0}:{1} ({2} of {3})."
 msgstr "已知主机 {0}:{1}（第 {2} 项，共 {3} 项）。"
 
-#: ui/text_formats.slint:179 ui/text_formats.slint:1292
+#: ui/text_formats.slint:179 ui/text_formats.slint:1295
 msgctxt "MainWindow"
 msgid "Known hosts manager loaded {n} entry."
 msgid_plural "Known hosts manager loaded {n} entries."
 msgstr[0] "已知主机管理器已载入 {n} 条。"
 
-#: ui/text_formats.slint:181 ui/text_formats.slint:1289
+#: ui/text_formats.slint:181 ui/text_formats.slint:1292
 msgctxt "MainWindow"
 msgid "No persisted known hosts are available."
 msgstr "没有可用的已持久化已知主机。"
@@ -3676,12 +3681,12 @@ msgctxt "MainWindow"
 msgid "No saved session selected"
 msgstr "未选择已保存会话"
 
-#: ui/text_formats.slint:196 ui/text_formats.slint:1004
+#: ui/text_formats.slint:196 ui/text_formats.slint:1007
 msgctxt "MainWindow"
 msgid "No matches for `{0}` in the visible terminal."
 msgstr "可见终端中没有匹配 `{0}` 的内容。"
 
-#: ui/text_formats.slint:199 ui/text_formats.slint:1007
+#: ui/text_formats.slint:199 ui/text_formats.slint:1010
 msgctxt "MainWindow"
 msgid "Found {n} match for `{0}` in the visible terminal."
 msgid_plural "Found {n} matches for `{0}` in the visible terminal."
@@ -3692,7 +3697,7 @@ msgctxt "MainWindow"
 msgid "Showing {0}/{1}."
 msgstr "显示 {0}/{1}。"
 
-#: ui/text_formats.slint:202 ui/text_formats.slint:1001
+#: ui/text_formats.slint:202 ui/text_formats.slint:1004
 msgctxt "MainWindow"
 msgid "Find in terminal"
 msgstr "在终端中查找"
@@ -4486,7 +4491,7 @@ msgctxt "MainWindow"
 msgid "Select local entries before deleting them."
 msgstr "请先选择本地条目再删除。"
 
-#: ui/text_formats.slint:729 ui/text_formats.slint:1579
+#: ui/text_formats.slint:729 ui/text_formats.slint:1582
 msgctxt "MainWindow"
 msgid "Copied `{0}`."
 msgstr "已复制 `{0}`。"
@@ -4548,1409 +4553,1414 @@ msgstr "已通过实时 SFTP 后端将 `{0}` 下载到 `{1}`。"
 
 #: ui/text_formats.slint:765
 msgctxt "MainWindow"
+msgid "Loading `{0}` for editing…"
+msgstr "正在加载 `{0}` 以进行编辑…"
+
+#: ui/text_formats.slint:768
+msgctxt "MainWindow"
 msgid "SFTP remote edit download error: {0}"
 msgstr "SFTP 远程编辑下载错误：{0}"
 
-#: ui/text_formats.slint:768
+#: ui/text_formats.slint:771
 msgctxt "MainWindow"
 msgid "Remote edit ready for `{0}`. Edit local temp file `{1}` and then save remote edit."
 msgstr "`{0}` 的远程编辑已就绪。请编辑本地临时文件 `{1}`，然后保存远程编辑。"
 
-#: ui/text_formats.slint:771
+#: ui/text_formats.slint:774
 msgctxt "MainWindow"
 msgid "No active remote edit session to save. Start remote edit first."
 msgstr "没有可保存的远程编辑会话。请先开始远程编辑。"
 
-#: ui/text_formats.slint:774
+#: ui/text_formats.slint:777
 msgctxt "MainWindow"
 msgid "SFTP remote edit upload error: {0}"
 msgstr "SFTP 远程编辑上传错误：{0}"
 
-#: ui/text_formats.slint:777
+#: ui/text_formats.slint:780
 msgctxt "MainWindow"
 msgid "Saved remote edit `{0}` from local temp file `{1}`."
 msgstr "已从本地临时文件 `{1}` 保存远程编辑 `{0}`。"
 
-#: ui/text_formats.slint:780
+#: ui/text_formats.slint:783
 msgctxt "MainWindow"
 msgid "No active remote edit session to cancel. Start remote edit first."
 msgstr "没有可取消的远程编辑会话。请先开始远程编辑。"
 
-#: ui/text_formats.slint:783
+#: ui/text_formats.slint:786
 msgctxt "MainWindow"
 msgid "Canceled remote edit for `{0}` and removed temp file `{1}`."
 msgstr "已取消 `{0}` 的远程编辑并删除临时文件 `{1}`。"
 
-#: ui/text_formats.slint:786
+#: ui/text_formats.slint:789
 msgctxt "MainWindow"
 msgid "Canceled remote edit for `{0}`. Temp file was already gone."
 msgstr "已取消 `{0}` 的远程编辑。临时文件已不存在。"
 
-#: ui/text_formats.slint:789
+#: ui/text_formats.slint:792
 msgctxt "MainWindow"
 msgid "Canceled remote edit for `{0}`, but the temp file could not be removed: {1}"
 msgstr "已取消 `{0}` 的远程编辑，但无法删除临时文件：{1}"
 
-#: ui/text_formats.slint:792
+#: ui/text_formats.slint:795
 msgctxt "MainWindow"
 msgid "Created remote directory `{0}` through SFTP."
 msgstr "已通过 SFTP 创建远程目录 `{0}`。"
 
-#: ui/text_formats.slint:795
+#: ui/text_formats.slint:798
 msgctxt "MainWindow"
 msgid "Renamed `{0}` to `{1}` through SFTP."
 msgstr "已通过 SFTP 将 `{0}` 重命名为 `{1}`。"
 
-#: ui/text_formats.slint:798
+#: ui/text_formats.slint:801
 msgctxt "MainWindow"
 msgid "Applied chmod {0} to `{1}` through SFTP."
 msgstr "已通过 SFTP 对 `{1}` 应用 chmod {0}。"
 
-#: ui/text_formats.slint:801
+#: ui/text_formats.slint:804
 msgctxt "MainWindow"
 msgid "Queued {n} upload job into `{1}`."
 msgid_plural "Queued {n} upload jobs into `{1}`."
 msgstr[0] "已将 {n} 个上传任务加入 `{1}` 的队列。"
 
-#: ui/text_formats.slint:804
+#: ui/text_formats.slint:807
 msgctxt "MainWindow"
 msgid "Queued {n} download job into `{1}`."
 msgid_plural "Queued {n} download jobs into `{1}`."
 msgstr[0] "已将 {n} 个下载任务加入 `{1}` 的队列。"
 
-#: ui/text_formats.slint:807
+#: ui/text_formats.slint:810
 msgctxt "MainWindow"
 msgid "Queued {n} remote copy job into `{1}`."
 msgid_plural "Queued {n} remote copy jobs into `{1}`."
 msgstr[0] "已将 {n} 个远程复制任务加入 `{1}` 的队列。"
 
-#: ui/text_formats.slint:810
+#: ui/text_formats.slint:813
 msgctxt "MainWindow"
 msgid "Queued a move of {n} entry into `{1}`."
 msgid_plural "Queued a move of {n} entries into `{1}`."
 msgstr[0] "已将 {n} 个条目的移动操作加入 `{1}` 的队列。"
 
-#: ui/text_formats.slint:813
+#: ui/text_formats.slint:816
 msgctxt "MainWindow"
 msgid "Queued a delete of {n} remote entry."
 msgid_plural "Queued a delete of {n} remote entries."
 msgstr[0] "已将 {n} 个远程条目的删除操作加入队列。"
 
-#: ui/text_formats.slint:816
+#: ui/text_formats.slint:819
 msgctxt "MainWindow"
 msgid "Queued chmod {0} for {n} remote entry."
 msgid_plural "Queued chmod {0} for {n} remote entries."
 msgstr[0] "已将 {n} 个远程条目的 chmod {0} 操作加入队列。"
 
-#: ui/text_formats.slint:819
+#: ui/text_formats.slint:822
 msgctxt "MainWindow"
 msgid "Select local entries before uploading."
 msgstr "请先选择本地条目再上传。"
 
-#: ui/text_formats.slint:822
+#: ui/text_formats.slint:825
 msgctxt "MainWindow"
 msgid "Select local entries before moving."
 msgstr "请先选择本地条目再移动。"
 
-#: ui/text_formats.slint:825
+#: ui/text_formats.slint:828
 msgctxt "MainWindow"
 msgid "Select remote entries before downloading."
 msgstr "请先选择远程条目再下载。"
 
-#: ui/text_formats.slint:828
+#: ui/text_formats.slint:831
 msgctxt "MainWindow"
 msgid "Select remote entries before deleting."
 msgstr "请先选择远程条目再删除。"
 
-#: ui/text_formats.slint:831
+#: ui/text_formats.slint:834
 msgctxt "MainWindow"
 msgid "Select remote entries before changing permissions."
 msgstr "请先选择远程条目再修改权限。"
 
-#: ui/text_formats.slint:834
+#: ui/text_formats.slint:837
 msgctxt "MainWindow"
 msgid "Select remote entries before copying."
 msgstr "请先选择远程条目再复制。"
 
-#: ui/text_formats.slint:837
+#: ui/text_formats.slint:840
 msgctxt "MainWindow"
 msgid "There is no pending conflict to resolve."
 msgstr "没有待解决的冲突。"
 
-#: ui/text_formats.slint:840
+#: ui/text_formats.slint:843
 msgctxt "MainWindow"
 msgid "Re-running the transfer with `{0}` for {n} conflicting path."
 msgid_plural "Re-running the transfer with `{0}` for {n} conflicting paths."
 msgstr[0] "正在以 `{0}` 重新执行传输，涉及 {n} 个冲突路径。"
 
-#: ui/text_formats.slint:843
+#: ui/text_formats.slint:846
 msgctxt "MainWindow"
 msgid "Kept {n} conflicting path skipped."
 msgid_plural "Kept {n} conflicting paths skipped."
 msgstr[0] "已保留 {n} 个冲突路径为跳过状态。"
 
-#: ui/text_formats.slint:846
+#: ui/text_formats.slint:849
 msgctxt "MainWindow"
 msgid "SFTP transfer failed: {0}"
 msgstr "SFTP 传输失败：{0}"
 
-#: ui/text_formats.slint:849
+#: ui/text_formats.slint:852
 msgctxt "MainWindow"
 msgid "The drag payload has no local paths."
 msgstr "拖拽内容不包含本地路径。"
 
-#: ui/text_formats.slint:852
+#: ui/text_formats.slint:855
 msgctxt "MainWindow"
 msgid "The dropped transfer has no local file paths."
 msgstr "拖放的传输不包含本地文件路径。"
 
-#: ui/text_formats.slint:856 ui/text_formats.slint:859
+#: ui/text_formats.slint:859 ui/text_formats.slint:862
 msgctxt "MainWindow"
 msgid "Moved {n} local entry."
 msgid_plural "Moved {n} local entries."
 msgstr[0] "已移动 {n} 个本地条目。"
 
-#: ui/text_formats.slint:857 ui/text_formats.slint:864
+#: ui/text_formats.slint:860 ui/text_formats.slint:867
 msgctxt "MainWindow"
 msgid "{n} failed."
 msgid_plural "{n} failed."
 msgstr[0] "{n} 个失败。"
 
-#: ui/text_formats.slint:863 ui/text_formats.slint:866
+#: ui/text_formats.slint:866 ui/text_formats.slint:869
 msgctxt "MainWindow"
 msgid "Copied {n} local entry."
 msgid_plural "Copied {n} local entries."
 msgstr[0] "已复制 {n} 个本地条目。"
 
-#: ui/text_formats.slint:869
+#: ui/text_formats.slint:872
 msgctxt "MainWindow"
 msgid "Moved {n} local entry to the remote pane."
 msgid_plural "Moved {n} local entries to the remote pane."
 msgstr[0] "已将 {n} 个本地条目移动到远程窗格。"
 
-#: ui/text_formats.slint:872
+#: ui/text_formats.slint:875
 msgctxt "MainWindow"
 msgid "Uploaded, but removing {0} of {1} local sources failed."
 msgstr "已上传，但删除 {1} 个本地源中的 {0} 个失败。"
 
-#: ui/text_formats.slint:875
+#: ui/text_formats.slint:878
 msgctxt "MainWindow"
 msgid "Uploaded, but the remote source cleanup failed: {0}"
 msgstr "已上传，但清理远程源失败：{0}"
 
-#: ui/text_formats.slint:878
+#: ui/text_formats.slint:881
 msgctxt "MainWindow"
 msgid "Uploaded tree `{0}` through SFTP."
 msgstr "已通过 SFTP 上传目录树 `{0}`。"
 
-#: ui/text_formats.slint:881
+#: ui/text_formats.slint:884
 msgctxt "MainWindow"
 msgid "Downloaded tree `{0}` through SFTP."
 msgstr "已通过 SFTP 下载目录树 `{0}`。"
 
-#: ui/text_formats.slint:890
+#: ui/text_formats.slint:893
 msgctxt "MainWindow"
 msgid "Paused transfer `{0}`."
 msgstr "已暂停传输 `{0}`。"
 
-#: ui/text_formats.slint:893
+#: ui/text_formats.slint:896
 msgctxt "MainWindow"
 msgid "Transfer `{0}` is not queued or running, so it was not paused."
 msgstr "传输 `{0}` 不在排队或运行中，因此未暂停。"
 
-#: ui/text_formats.slint:896
+#: ui/text_formats.slint:899
 msgctxt "MainWindow"
 msgid "Resumed transfer `{0}`."
 msgstr "已恢复传输 `{0}`。"
 
-#: ui/text_formats.slint:899
+#: ui/text_formats.slint:902
 msgctxt "MainWindow"
 msgid "Transfer `{0}` is not paused, so it was not resumed."
 msgstr "传输 `{0}` 未暂停，因此未恢复。"
 
-#: ui/text_formats.slint:902
+#: ui/text_formats.slint:905
 msgctxt "MainWindow"
 msgid "Re-queued transfer `{0}` for another attempt."
 msgstr "已将传输 `{0}` 重新加入队列以再次尝试。"
 
-#: ui/text_formats.slint:905
+#: ui/text_formats.slint:908
 msgctxt "MainWindow"
 msgid "Transfer `{0}` already used its {1} retries."
 msgstr "传输 `{0}` 已用完其 {1} 次重试机会。"
 
-#: ui/text_formats.slint:908
+#: ui/text_formats.slint:911
 msgctxt "MainWindow"
 msgid "Only failed transfers can be retried; `{0}` is {1}."
 msgstr "只有失败的传输可以重试；`{0}` 当前为 {1}。"
 
-#: ui/text_formats.slint:911
+#: ui/text_formats.slint:914
 msgctxt "MainWindow"
 msgid "Transfer `{0}` is already {1}, so it was not cancelled."
 msgstr "传输 `{0}` 已经是 {1}，因此未取消。"
 
-#: ui/text_formats.slint:914
+#: ui/text_formats.slint:917
 msgctxt "MainWindow"
 msgid "Cancelled transfer `{0}`."
 msgstr "已取消传输 `{0}`。"
 
-#: ui/text_formats.slint:917
+#: ui/text_formats.slint:920
 msgctxt "MainWindow"
 msgid "Removed transfer `{0}` from the queue."
 msgstr "已从队列中移除传输 `{0}`。"
 
-#: ui/text_formats.slint:920
+#: ui/text_formats.slint:923
 msgctxt "MainWindow"
 msgid "Cleared {n} completed transfer."
 msgid_plural "Cleared {n} completed transfers."
 msgstr[0] "已清除 {n} 个已完成的传输。"
 
-#: ui/text_formats.slint:923
+#: ui/text_formats.slint:926
 msgctxt "MainWindow"
 msgid "No completed transfers to clear."
 msgstr "没有可清除的已完成传输。"
 
-#: ui/text_formats.slint:927
+#: ui/text_formats.slint:930
 msgctxt "MainWindow"
 msgid "Select local entries before copying."
 msgstr "请先选择本地条目再复制。"
 
-#: ui/text_formats.slint:930
+#: ui/text_formats.slint:933
 msgctxt "MainWindow"
 msgid "Copied {n} remote entry."
 msgid_plural "Copied {n} remote entries."
 msgstr[0] "已复制 {n} 个远程条目。"
 
-#: ui/text_formats.slint:933
+#: ui/text_formats.slint:936
 msgctxt "MainWindow"
 msgid "Cut {n} remote entry."
 msgid_plural "Cut {n} remote entries."
 msgstr[0] "已剪切 {n} 个远程条目。"
 
-#: ui/text_formats.slint:939
+#: ui/text_formats.slint:942
 msgctxt "MainWindow"
 msgid "Cut {n} local entry."
 msgid_plural "Cut {n} local entries."
 msgstr[0] "已剪切 {n} 个本地条目。"
 
-#: ui/text_formats.slint:942
+#: ui/text_formats.slint:945
 msgctxt "MainWindow"
 msgid "The file clipboard is empty."
 msgstr "文件剪贴板为空。"
 
-#: ui/text_formats.slint:945
+#: ui/text_formats.slint:948
 msgctxt "MainWindow"
 msgid "File clipboard upload failed: {0}"
 msgstr "文件剪贴板上传失败：{0}"
 
-#: ui/text_formats.slint:948
+#: ui/text_formats.slint:951
 msgctxt "MainWindow"
 msgid "File clipboard copy failed: {0}"
 msgstr "文件剪贴板复制失败：{0}"
 
-#: ui/text_formats.slint:951
+#: ui/text_formats.slint:954
 msgctxt "MainWindow"
 msgid "File clipboard download failed: {0}"
 msgstr "文件剪贴板下载失败：{0}"
 
-#: ui/text_formats.slint:954
+#: ui/text_formats.slint:957
 msgctxt "MainWindow"
 msgid "The copied remote entries are no longer listed."
 msgstr "已复制的远程条目不再出现在列表中。"
 
-#: ui/text_formats.slint:958 ui/text_formats.slint:961
+#: ui/text_formats.slint:961 ui/text_formats.slint:964
 msgctxt "MainWindow"
 msgid "Pasted {n} local entry."
 msgid_plural "Pasted {n} local entries."
 msgstr[0] "已粘贴 {n} 个本地条目。"
 
-#: ui/text_formats.slint:965
+#: ui/text_formats.slint:968
 msgctxt "MainWindow"
 msgid "Copied {n} character from the visible terminal view into the app clipboard."
 msgid_plural "Copied {n} characters from the visible terminal view into the app clipboard."
 msgstr[0] "已从可见终端视图复制 {n} 个字符到应用剪贴板。"
 
-#: ui/text_formats.slint:968
+#: ui/text_formats.slint:971
 msgctxt "MainWindow"
 msgid "Copied visible terminal view, but it was empty."
 msgstr "已复制可见终端视图，但内容为空。"
 
-#: ui/text_formats.slint:971
+#: ui/text_formats.slint:974
 msgctxt "MainWindow"
 msgid "Terminal clipboard is empty, so nothing was pasted."
 msgstr "终端剪贴板为空，未粘贴任何内容。"
 
-#: ui/text_formats.slint:974
+#: ui/text_formats.slint:977
 msgctxt "MainWindow"
 msgid "Clipboard is empty, so nothing was pasted."
 msgstr "剪贴板为空，未粘贴任何内容。"
 
-#: ui/text_formats.slint:977
+#: ui/text_formats.slint:980
 msgctxt "MainWindow"
 msgid "Cleared the visible terminal view."
 msgstr "已清空可见终端视图。"
 
-#: ui/text_formats.slint:980
+#: ui/text_formats.slint:983
 msgctxt "MainWindow"
 msgid "Cleared terminal scrollback. Live screen kept."
 msgstr "已清空终端回滚缓冲区，当前屏幕保留。"
 
-#: ui/text_formats.slint:983
+#: ui/text_formats.slint:986
 msgctxt "MainWindow"
 msgid "Scrollback is already empty."
 msgstr "回滚缓冲区已经为空。"
 
-#: ui/text_formats.slint:986
+#: ui/text_formats.slint:989
 msgctxt "MainWindow"
 msgid "Copied {n} character from the current line."
 msgid_plural "Copied {n} characters from the current line."
 msgstr[0] "已从当前行复制 {n} 个字符。"
 
-#: ui/text_formats.slint:989
+#: ui/text_formats.slint:992
 msgctxt "MainWindow"
 msgid "Copied the current line, but it was empty."
 msgstr "已复制当前行，但内容为空。"
 
-#: ui/text_formats.slint:992
+#: ui/text_formats.slint:995
 msgctxt "MainWindow"
 msgid "No active terminal to select."
 msgstr "没有可选择的终端。"
 
-#: ui/text_formats.slint:995
+#: ui/text_formats.slint:998
 msgctxt "MainWindow"
 msgid "Selected {n} character from the visible screen."
 msgid_plural "Selected {n} characters from the visible screen."
 msgstr[0] "已从可见屏幕选择 {n} 个字符。"
 
-#: ui/text_formats.slint:1010
+#: ui/text_formats.slint:1013
 msgctxt "MainWindow"
 msgid "Search failed: {0}"
 msgstr "搜索失败：{0}"
 
-#: ui/text_formats.slint:1013
+#: ui/text_formats.slint:1016
 msgctxt "MainWindow"
 msgid "No active terminal to scroll."
 msgstr "没有可滚动的终端。"
 
-#: ui/text_formats.slint:1016
+#: ui/text_formats.slint:1019
 msgctxt "MainWindow"
 msgid "Terminal scrolled to the live bottom."
 msgstr "终端已滚动到实时底部。"
 
-#: ui/text_formats.slint:1019
+#: ui/text_formats.slint:1022
 msgctxt "MainWindow"
 msgid "Terminal scrolled back {n} line into scrollback."
 msgid_plural "Terminal scrolled back {n} lines into scrollback."
 msgstr[0] "终端已向上滚动 {n} 行至回滚缓冲区。"
 
-#: ui/text_formats.slint:1022
+#: ui/text_formats.slint:1025
 msgctxt "MainWindow"
 msgid "Terminal is already at the top of the scrollback buffer."
 msgstr "终端已在回滚缓冲区的顶部。"
 
-#: ui/text_formats.slint:1025
+#: ui/text_formats.slint:1028
 msgctxt "MainWindow"
 msgid "Selected {n} character from the terminal."
 msgid_plural "Selected {n} characters from the terminal."
 msgstr[0] "已从终端选择 {n} 个字符。"
 
-#: ui/text_formats.slint:1028
+#: ui/text_formats.slint:1031
 msgctxt "MainWindow"
 msgid "No terminal selection to copy."
 msgstr "没有可复制的终端选择内容。"
 
-#: ui/text_formats.slint:1031
+#: ui/text_formats.slint:1034
 msgctxt "MainWindow"
 msgid "Copied {n} character from the terminal selection."
 msgid_plural "Copied {n} characters from the terminal selection."
 msgstr[0] "已从终端选择内容复制 {n} 个字符。"
 
-#: ui/text_formats.slint:1040
+#: ui/text_formats.slint:1043
 msgctxt "MainWindow"
 msgid "Could not load the local directory: {0}"
 msgstr "无法加载本地目录：{0}"
 
-#: ui/text_formats.slint:1043
+#: ui/text_formats.slint:1046
 msgctxt "MainWindow"
 msgid "Could not open the local path: {0}"
 msgstr "无法打开本地路径：{0}"
 
-#: ui/text_formats.slint:1046
+#: ui/text_formats.slint:1049
 msgctxt "MainWindow"
 msgid "Already at the local filesystem root."
 msgstr "已位于本地文件系统根目录。"
 
-#: ui/text_formats.slint:1049
+#: ui/text_formats.slint:1052
 msgctxt "MainWindow"
 msgid "Local hidden files are now shown."
 msgstr "现在显示本地隐藏文件。"
 
-#: ui/text_formats.slint:1052
+#: ui/text_formats.slint:1055
 msgctxt "MainWindow"
 msgid "Local hidden files are now hidden."
 msgstr "现在隐藏本地隐藏文件。"
 
-#: ui/text_formats.slint:1055
+#: ui/text_formats.slint:1058
 msgctxt "MainWindow"
 msgid "Unknown local sort column `{0}`."
 msgstr "未知的本地排序列 `{0}`。"
 
-#: ui/text_formats.slint:1058
+#: ui/text_formats.slint:1061
 msgctxt "MainWindow"
 msgid "Selected local file `{0}`. Drag it to the remote pane or use Upload."
 msgstr "已选择本地文件 `{0}`。将其拖到远程窗格或使用上传。"
 
-#: ui/text_formats.slint:1062
+#: ui/text_formats.slint:1065
 msgctxt "MainWindow"
 msgid "Global logging is now {0}. Save logging settings to persist this policy."
 msgstr "全局日志记录现已{0}。请保存日志设置以持久化此策略。"
 
-#: ui/text_formats.slint:1065
+#: ui/text_formats.slint:1068
 msgctxt "MainWindow"
 msgid "Global logging format set to raw transcript. Save logging settings to persist."
 msgstr "全局日志格式已设为原始记录。请保存日志设置以持久化。"
 
-#: ui/text_formats.slint:1068
+#: ui/text_formats.slint:1071
 msgctxt "MainWindow"
 msgid "Global logging format set to sanitized text. Save logging settings to persist."
 msgstr "全局日志格式已设为净化文本。请保存日志设置以持久化。"
 
-#: ui/text_formats.slint:1071
+#: ui/text_formats.slint:1074
 msgctxt "MainWindow"
 msgid "Logging notice: {0}"
 msgstr "日志提示：{0}"
 
-#: ui/text_formats.slint:1075
+#: ui/text_formats.slint:1078
 msgctxt "MainWindow"
 msgid "Created a runtime-backed session draft."
 msgstr "已创建由运行时支持的会话草稿。"
 
-#: ui/text_formats.slint:1078
+#: ui/text_formats.slint:1081
 msgctxt "MainWindow"
 msgid "Canceled host key confirmation. No changes were written and the connection was not started."
 msgstr "已取消主机密钥确认。未写入任何更改，也未启动连接。"
 
-#: ui/text_formats.slint:1081
+#: ui/text_formats.slint:1084
 msgctxt "MainWindow"
 msgid "Canceled the password prompt. The connection was not started."
 msgstr "已取消密码输入。连接未启动。"
 
-#: ui/text_formats.slint:1084
+#: ui/text_formats.slint:1087
 msgctxt "MainWindow"
 msgid "Trusted the presented host key for {0} for this session only. Reconnecting."
 msgstr "已仅针对本次会话信任 {0} 呈现的主机密钥。正在重新连接。"
 
-#: ui/text_formats.slint:1087
+#: ui/text_formats.slint:1090
 msgctxt "MainWindow"
 msgid "Replaced the stored host key for {0} in `{1}` and reconnecting."
 msgstr "已替换 `{1}` 中为 {0} 存储的主机密钥，正在重新连接。"
 
-#: ui/text_formats.slint:1090
+#: ui/text_formats.slint:1093
 msgctxt "MainWindow"
 msgid "Saved the presented host key for {0} to `{1}` and reconnecting."
 msgstr "已将 {0} 呈现的主机密钥保存到 `{1}`，正在重新连接。"
 
-#: ui/text_formats.slint:1093
+#: ui/text_formats.slint:1096
 msgctxt "MainWindow"
 msgid "Disconnected the runtime session."
 msgstr "已断开运行时会话。"
 
-#: ui/text_formats.slint:1096
+#: ui/text_formats.slint:1099
 msgctxt "MainWindow"
 msgid "Local terminal sessions cannot be reconnected. Open a new local tab with `+`."
 msgstr "本地终端会话无法重新连接。请使用 `+` 打开新的本地标签。"
 
-#: ui/text_formats.slint:1099
+#: ui/text_formats.slint:1102
 msgctxt "MainWindow"
 msgid "Connection cancelled."
 msgstr "连接已取消。"
 
-#: ui/text_formats.slint:1102
+#: ui/text_formats.slint:1105
 msgctxt "MainWindow"
 msgid "Cancelled the connection to {0}."
 msgstr "已取消到 {0} 的连接。"
 
-#: ui/text_formats.slint:1105
+#: ui/text_formats.slint:1108
 msgctxt "MainWindow"
 msgid "Password must not be empty."
 msgstr "密码不能为空。"
 
-#: ui/text_formats.slint:1108
+#: ui/text_formats.slint:1111
 msgctxt "MainWindow"
 msgid "Submit the keyboard-interactive round first."
 msgstr "请先提交键盘交互轮次。"
 
-#: ui/text_formats.slint:1111
+#: ui/text_formats.slint:1114
 msgctxt "MainWindow"
 msgid "Select a managed private key or browse for a key file."
 msgstr "请选择托管的私钥或浏览密钥文件。"
 
-#: ui/text_formats.slint:1114
+#: ui/text_formats.slint:1117
 msgctxt "MainWindow"
 msgid "The connection target is gone; open the session again."
 msgstr "连接目标已不存在；请重新打开会话。"
 
-#: ui/text_formats.slint:1117
+#: ui/text_formats.slint:1120
 msgctxt "MainWindow"
 msgid "Cannot prepare the managed key: {0}"
 msgstr "无法准备托管密钥：{0}"
 
-#: ui/text_formats.slint:1120
+#: ui/text_formats.slint:1123
 msgctxt "MainWindow"
 msgid "Canceled the authentication prompt. The connection was not started."
 msgstr "已取消认证提示。连接未启动。"
 
-#: ui/text_formats.slint:1123
+#: ui/text_formats.slint:1126
 msgctxt "MainWindow"
 msgid "Could not remember the password: {0}"
 msgstr "无法记住密码：{0}"
 
-#: ui/text_formats.slint:1126
+#: ui/text_formats.slint:1129
 msgctxt "MainWindow"
 msgid "Authentication failed: {0}"
 msgstr "认证失败：{0}"
 
-#: ui/text_formats.slint:1129
+#: ui/text_formats.slint:1132
 msgctxt "MainWindow"
 msgid "Could not start the local shell `{0}`: {1}"
 msgstr "无法启动本地 shell `{0}`：{1}"
 
-#: ui/text_formats.slint:1132
+#: ui/text_formats.slint:1135
 msgctxt "MainWindow"
 msgid "Could not open the local terminal: {0}"
 msgstr "无法打开本地终端：{0}"
 
-#: ui/text_formats.slint:1141
+#: ui/text_formats.slint:1144
 msgctxt "MainWindow"
 msgid "Session editor cleared. Fill in the fields to create a saved session."
 msgstr "会话编辑器已清空。填写字段以创建已保存会话。"
 
-#: ui/text_formats.slint:1144
+#: ui/text_formats.slint:1147
 msgctxt "MainWindow"
 msgid "Loaded saved session `{0}` into the editor."
 msgstr "已将已保存会话 `{0}` 加载到编辑器。"
 
-#: ui/text_formats.slint:1147
+#: ui/text_formats.slint:1150
 msgctxt "MainWindow"
 msgid "Discard unsaved session editor changes?"
 msgstr "放弃未保存的会话编辑器更改？"
 
-#: ui/text_formats.slint:1150
+#: ui/text_formats.slint:1153
 msgctxt "MainWindow"
 msgid "Continued editing the session."
 msgstr "已继续编辑会话。"
 
-#: ui/text_formats.slint:1153
+#: ui/text_formats.slint:1156
 msgctxt "MainWindow"
 msgid "Closed Session Editor."
 msgstr "已关闭会话编辑器。"
 
-#: ui/text_formats.slint:1156
+#: ui/text_formats.slint:1159
 msgctxt "MainWindow"
 msgid "Editor target folder: {0}"
 msgstr "编辑器目标文件夹：{0}"
 
-#: ui/text_formats.slint:1159
+#: ui/text_formats.slint:1162
 msgctxt "MainWindow"
 msgid "Selected managed key `{0}` for this session."
 msgstr "已为此会话选择托管密钥 `{0}`。"
 
-#: ui/text_formats.slint:1162
+#: ui/text_formats.slint:1165
 msgctxt "MainWindow"
 msgid "Selected managed proxy `{0}` for this session."
 msgstr "已为此会话选择托管代理 `{0}`。"
 
-#: ui/text_formats.slint:1165
+#: ui/text_formats.slint:1168
 msgctxt "MainWindow"
 msgid "Added {0} tunnel {1}."
 msgstr "已添加{0}隧道 {1}。"
 
-#: ui/text_formats.slint:1168
+#: ui/text_formats.slint:1171
 msgctxt "MainWindow"
 msgid "Cleared all editor tunnel forwards."
 msgstr "已清除编辑器的所有隧道转发。"
 
-#: ui/text_formats.slint:1186
+#: ui/text_formats.slint:1189
 msgctxt "MainWindow"
 msgid "Saved session editor changes into `{0}`."
 msgstr "已将会话编辑器更改保存到 `{0}`。"
 
-#: ui/text_formats.slint:1189
+#: ui/text_formats.slint:1192
 msgctxt "MainWindow"
 msgid "Created folder `{0}` under `{1}` and selected it for the editor."
 msgstr "已在 `{1}` 下创建文件夹 `{0}` 并为编辑器选中。"
 
-#: ui/text_formats.slint:1192
+#: ui/text_formats.slint:1195
 msgctxt "MainWindow"
 msgid "Created folder `{0}` in the session tree root and persisted the updated config."
 msgstr "已在会话树根目录创建文件夹 `{0}` 并持久化更新后的配置。"
 
-#: ui/text_formats.slint:1195
+#: ui/text_formats.slint:1198
 msgctxt "MainWindow"
 msgid "New session will be saved into the selected folder."
 msgstr "新会话将保存到所选文件夹。"
 
-#: ui/text_formats.slint:1198
+#: ui/text_formats.slint:1201
 msgctxt "MainWindow"
 msgid "Reloaded saved sessions from config.toml. Saved sessions discovered: {0}."
 msgstr "已从 config.toml 重新加载已保存会话。发现 {0} 个已保存会话。"
 
-#: ui/text_formats.slint:1201
+#: ui/text_formats.slint:1204
 msgctxt "MainWindow"
 msgid "Updated saved session `{0}` from the active runtime session."
 msgstr "已从活动运行时会话更新已保存会话 `{0}`。"
 
-#: ui/text_formats.slint:1204
+#: ui/text_formats.slint:1207
 msgctxt "MainWindow"
 msgid "Selected saved session: {0}"
 msgstr "已选择已保存会话：{0}"
 
-#: ui/text_formats.slint:1207
+#: ui/text_formats.slint:1210
 msgctxt "MainWindow"
 msgid "Selected saved-session folder `{0}`."
 msgstr "已选择已保存会话文件夹 `{0}`。"
 
-#: ui/text_formats.slint:1210
+#: ui/text_formats.slint:1213
 msgctxt "MainWindow"
 msgid "Collapsed saved-session folder `{0}`."
 msgstr "已折叠已保存会话文件夹 `{0}`。"
 
-#: ui/text_formats.slint:1213
+#: ui/text_formats.slint:1216
 msgctxt "MainWindow"
 msgid "Expanded saved-session folder `{0}`."
 msgstr "已展开已保存会话文件夹 `{0}`。"
 
-#: ui/text_formats.slint:1216
+#: ui/text_formats.slint:1219
 msgctxt "MainWindow"
 msgid "Cleared the saved-session selection."
 msgstr "已清除已保存会话选择。"
 
-#: ui/text_formats.slint:1219
+#: ui/text_formats.slint:1222
 msgctxt "MainWindow"
 msgid "Saved-session tree node `{0}` was not found."
 msgstr "未找到已保存会话树节点 `{0}`。"
 
-#: ui/text_formats.slint:1222
+#: ui/text_formats.slint:1225
 msgctxt "MainWindow"
 msgid "Session search cleared."
 msgstr "会话搜索已清除。"
 
-#: ui/text_formats.slint:1225
+#: ui/text_formats.slint:1228
 msgctxt "MainWindow"
 msgid "Filtering saved sessions for `{0}`."
 msgstr "正在筛选包含 `{0}` 的已保存会话。"
 
-#: ui/text_formats.slint:1229
+#: ui/text_formats.slint:1232
 msgctxt "MainWindow"
 msgid "Session close confirmation is enabled."
 msgstr "会话关闭确认已启用。"
 
-#: ui/text_formats.slint:1232
+#: ui/text_formats.slint:1235
 msgctxt "MainWindow"
 msgid "Session close confirmation is disabled."
 msgstr "会话关闭确认已禁用。"
 
-#: ui/text_formats.slint:1235
+#: ui/text_formats.slint:1238
 msgctxt "MainWindow"
 msgid "Quit confirmation is enabled."
 msgstr "退出确认已启用。"
 
-#: ui/text_formats.slint:1238
+#: ui/text_formats.slint:1241
 msgctxt "MainWindow"
 msgid "Quit confirmation is disabled."
 msgstr "退出确认已禁用。"
 
-#: ui/text_formats.slint:1241
+#: ui/text_formats.slint:1244
 msgctxt "MainWindow"
 msgid "Debug logging enabled. Writing to {0}."
 msgstr "调试日志已启用。正在写入 {0}。"
 
-#: ui/text_formats.slint:1244
+#: ui/text_formats.slint:1247
 msgctxt "MainWindow"
 msgid "Debug logging disabled."
 msgstr "调试日志已禁用。"
 
-#: ui/text_formats.slint:1250
+#: ui/text_formats.slint:1253
 msgctxt "MainWindow"
 msgid "Panel layout error: {0}"
 msgstr "面板布局错误：{0}"
 
-#: ui/text_formats.slint:1253
+#: ui/text_formats.slint:1256
 msgctxt "MainWindow"
 msgid "No active session to start a tunnel on."
 msgstr "没有可启动隧道的活动会话。"
 
-#: ui/text_formats.slint:1256
+#: ui/text_formats.slint:1259
 msgctxt "MainWindow"
 msgid "Unknown tunnel `{0}`."
 msgstr "未知隧道 `{0}`。"
 
-#: ui/text_formats.slint:1259
+#: ui/text_formats.slint:1262
 msgctxt "MainWindow"
 msgid "Connect the session before starting tunnel `{0}`."
 msgstr "请先连接会话再启动隧道 `{0}`。"
 
-#: ui/text_formats.slint:1262
+#: ui/text_formats.slint:1265
 msgctxt "MainWindow"
 msgid "Tunnel `{0}` is configured, but SSH port forwarding is not provisioned by the runtime yet."
 msgstr "隧道 `{0}` 已配置，但运行时尚未提供 SSH 端口转发。"
 
-#: ui/text_formats.slint:1265
+#: ui/text_formats.slint:1268
 msgctxt "MainWindow"
 msgid "Tunnel `{0}` is not running; port forwarding is not provisioned yet."
 msgstr "隧道 `{0}` 未运行；端口转发尚未提供。"
 
-#: ui/text_formats.slint:1268
+#: ui/text_formats.slint:1271
 msgctxt "MainWindow"
 msgid "Runtime initialized. Config: {0}. Saved sessions discovered: {1}."
 msgstr "运行时已初始化。配置：{0}。发现 {1} 个已保存会话。"
 
-#: ui/text_formats.slint:1271
+#: ui/text_formats.slint:1274
 msgctxt "MainWindow"
 msgid "Recovered configuration from backup. Saved sessions: {0}. Backup: {1}"
 msgstr "已从备份恢复配置。已保存会话：{0}。备份：{1}"
 
-#: ui/text_formats.slint:1280
+#: ui/text_formats.slint:1283
 msgctxt "MainWindow"
 msgid "Known hosts manager opened with {n} persisted entry."
 msgid_plural "Known hosts manager opened with {n} persisted entries."
 msgstr[0] "已打开已知主机管理器，共有 {n} 条持久化记录。"
 
-#: ui/text_formats.slint:1283
+#: ui/text_formats.slint:1286
 msgctxt "MainWindow"
 msgid "Closed known hosts manager."
 msgstr "已关闭已知主机管理器。"
 
-#: ui/text_formats.slint:1286
+#: ui/text_formats.slint:1289
 msgctxt "MainWindow"
 msgid "Selected known host {0}."
 msgstr "已选择已知主机 {0}。"
 
-#: ui/text_formats.slint:1295
+#: ui/text_formats.slint:1298
 msgctxt "MainWindow"
 msgid "Removed known host entry for {0} from `{1}`."
 msgstr "已从 `{1}` 移除 {0} 的已知主机记录。"
 
-#: ui/text_formats.slint:1298
+#: ui/text_formats.slint:1301
 msgctxt "MainWindow"
 msgid "Cleared all persisted known hosts from `{0}`."
 msgstr "已从 `{0}` 清除所有持久化的已知主机。"
 
-#: ui/text_formats.slint:1301
+#: ui/text_formats.slint:1304
 msgctxt "MainWindow"
 msgid "Private keys manager opened with {n} managed key."
 msgid_plural "Private keys manager opened with {n} managed keys."
 msgstr[0] "已打开私钥管理器，共有 {n} 个托管密钥。"
 
-#: ui/text_formats.slint:1304
+#: ui/text_formats.slint:1307
 msgctxt "MainWindow"
 msgid "Closed private keys manager."
 msgstr "已关闭私钥管理器。"
 
-#: ui/text_formats.slint:1307
+#: ui/text_formats.slint:1310
 msgctxt "MainWindow"
 msgid "Selected managed key `{0}`."
 msgstr "已选择托管密钥 `{0}`。"
 
-#: ui/text_formats.slint:1310
+#: ui/text_formats.slint:1313
 msgctxt "MainWindow"
 msgid "Host keys manager opened with {n} persisted host key group."
 msgid_plural "Host keys manager opened with {n} persisted host key groups."
 msgstr[0] "已打开主机密钥管理器，共有 {n} 个持久化主机密钥组。"
 
-#: ui/text_formats.slint:1313
+#: ui/text_formats.slint:1316
 msgctxt "MainWindow"
 msgid "Closed host keys manager."
 msgstr "已关闭主机密钥管理器。"
 
-#: ui/text_formats.slint:1316
+#: ui/text_formats.slint:1319
 msgctxt "MainWindow"
 msgid "Selected host key {0} ({1})."
 msgstr "已选择主机密钥 {0}（{1}）。"
 
-#: ui/text_formats.slint:1319
+#: ui/text_formats.slint:1322
 msgctxt "MainWindow"
 msgid "Removed the saved host key for {0}."
 msgstr "已移除 {0} 的已保存主机密钥。"
 
-#: ui/text_formats.slint:1322
+#: ui/text_formats.slint:1325
 msgctxt "MainWindow"
 msgid "Cleared all saved host keys."
 msgstr "已清除所有已保存的主机密钥。"
 
-#: ui/text_formats.slint:1326
+#: ui/text_formats.slint:1329
 msgctxt "MainWindow"
 msgid "Imported {n} host key; {0} line was skipped."
 msgid_plural "Imported {n} host keys; {0} lines were skipped."
 msgstr[0] "已导入 {n} 个主机密钥；跳过 {0} 行。"
 
-#: ui/text_formats.slint:1328
+#: ui/text_formats.slint:1331
 msgctxt "MainWindow"
 msgid "Imported {n} host key."
 msgid_plural "Imported {n} host keys."
 msgstr[0] "已导入 {n} 个主机密钥。"
 
-#: ui/text_formats.slint:1331
+#: ui/text_formats.slint:1334
 msgctxt "MainWindow"
 msgid "Proxy manager opened with {n} managed profile."
 msgid_plural "Proxy manager opened with {n} managed profiles."
 msgstr[0] "已打开代理管理器，共有 {n} 个托管配置。"
 
-#: ui/text_formats.slint:1334
+#: ui/text_formats.slint:1337
 msgctxt "MainWindow"
 msgid "Closed proxy manager."
 msgstr "已关闭代理管理器。"
 
-#: ui/text_formats.slint:1337
+#: ui/text_formats.slint:1340
 msgctxt "MainWindow"
 msgid "Selected proxy profile `{0}`."
 msgstr "已选择代理配置 `{0}`。"
 
-#: ui/text_formats.slint:1340
+#: ui/text_formats.slint:1343
 msgctxt "MainWindow"
 msgid "Duplicated proxy profile as `{0}`."
 msgstr "已将代理配置复制为 `{0}`。"
 
-#: ui/text_formats.slint:1343
+#: ui/text_formats.slint:1346
 msgctxt "MainWindow"
 msgid "Saved the new proxy profile."
 msgstr "已保存新的代理配置。"
 
-#: ui/text_formats.slint:1346
+#: ui/text_formats.slint:1349
 msgctxt "MainWindow"
 msgid "Saved proxy profile changes; all referencing sessions use them."
 msgstr "已保存代理配置更改；所有引用该配置的会话将使用新设置。"
 
-#: ui/text_formats.slint:1349
+#: ui/text_formats.slint:1352
 msgctxt "MainWindow"
 msgid "Confirm deleting proxy profile `{0}`."
 msgstr "确认删除代理配置 `{0}`。"
 
-#: ui/text_formats.slint:1352
+#: ui/text_formats.slint:1355
 msgctxt "MainWindow"
 msgid "Cannot delete `{0}`: it is used by saved sessions: {1}. Set those sessions to No Proxy first."
 msgstr "无法删除 `{0}`：以下已保存会话正在使用它：{1}。请先将这些会话设为无代理。"
 
-#: ui/text_formats.slint:1355
+#: ui/text_formats.slint:1358
 msgctxt "MainWindow"
 msgid "Deleted proxy profile `{0}`."
 msgstr "已删除代理配置 `{0}`。"
 
-#: ui/text_formats.slint:1358
+#: ui/text_formats.slint:1361
 msgctxt "MainWindow"
 msgid "No saved session references `{0}` anymore."
 msgstr "没有已保存会话再引用 `{0}`。"
 
-#: ui/text_formats.slint:1361
+#: ui/text_formats.slint:1364
 msgctxt "MainWindow"
 msgid "Cleared proxy `{0}` from {n} saved session; they now use No Proxy."
 msgid_plural "Cleared proxy `{0}` from {n} saved sessions; they now use No Proxy."
 msgstr[0] "已从 {n} 个已保存会话中清除代理 `{0}`；它们现在使用无代理。"
 
-#: ui/text_formats.slint:1364
+#: ui/text_formats.slint:1367
 msgctxt "MainWindow"
 msgid "Saved the global terminal appearance defaults."
 msgstr "已保存全局终端外观默认值。"
 
-#: ui/text_formats.slint:1367
+#: ui/text_formats.slint:1370
 msgctxt "MainWindow"
 msgid "Saved folder defaults for `{0}`."
 msgstr "已保存 `{0}` 的文件夹默认值。"
 
-#: ui/text_formats.slint:1370
+#: ui/text_formats.slint:1373
 msgctxt "MainWindow"
 msgid "Opened folder defaults for `{0}`."
 msgstr "已打开 `{0}` 的文件夹默认值。"
 
-#: ui/text_formats.slint:1374
+#: ui/text_formats.slint:1377
 msgctxt "MainWindow"
 msgid "Enter or browse a private key file path first."
 msgstr "请先输入或浏览私钥文件路径。"
 
-#: ui/text_formats.slint:1377
+#: ui/text_formats.slint:1380
 msgctxt "MainWindow"
 msgid "Failed to read `{0}`: {1}"
 msgstr "读取 `{0}` 失败：{1}"
 
-#: ui/text_formats.slint:1380
+#: ui/text_formats.slint:1383
 msgctxt "MainWindow"
 msgid "Imported `{0}` ({1})."
 msgstr "已导入 `{0}`（{1}）。"
 
-#: ui/text_formats.slint:1383
+#: ui/text_formats.slint:1386
 msgctxt "MainWindow"
 msgid "Import failed: {0}"
 msgstr "导入失败：{0}"
 
-#: ui/text_formats.slint:1386
+#: ui/text_formats.slint:1389
 msgctxt "MainWindow"
 msgid "Select a managed key first."
 msgstr "请先选择一个托管密钥。"
 
-#: ui/text_formats.slint:1389
+#: ui/text_formats.slint:1392
 msgctxt "MainWindow"
 msgid "Key test passed for `{0}`."
 msgstr "`{0}` 的密钥测试通过。"
 
-#: ui/text_formats.slint:1392
+#: ui/text_formats.slint:1395
 msgctxt "MainWindow"
 msgid "Key test failed: {0}"
 msgstr "密钥测试失败：{0}"
 
-#: ui/text_formats.slint:1395
+#: ui/text_formats.slint:1398
 msgctxt "MainWindow"
 msgid "Confirm removal of `{0}` in the Danger Zone."
 msgstr "请在危险区域确认移除 `{0}`。"
 
-#: ui/text_formats.slint:1398
+#: ui/text_formats.slint:1401
 msgctxt "MainWindow"
 msgid "Removed managed key `{0}`."
 msgstr "已移除托管密钥 `{0}`。"
 
-#: ui/text_formats.slint:1401
+#: ui/text_formats.slint:1404
 msgctxt "MainWindow"
 msgid "Remove failed: {0}"
 msgstr "移除失败：{0}"
 
-#: ui/text_formats.slint:1404
+#: ui/text_formats.slint:1407
 msgctxt "MainWindow"
 msgid "Deploy failed: {0}"
 msgstr "部署失败：{0}"
 
-#: ui/text_formats.slint:1407
+#: ui/text_formats.slint:1410
 msgctxt "MainWindow"
 msgid "Deploy requires an active session to the target host."
 msgstr "部署需要一条连接到目标主机的活动会话。"
 
-#: ui/text_formats.slint:1410
+#: ui/text_formats.slint:1413
 msgctxt "MainWindow"
 msgid "The active session is gone."
 msgstr "活动会话已不存在。"
 
-#: ui/text_formats.slint:1413
+#: ui/text_formats.slint:1416
 msgctxt "MainWindow"
 msgid "Deploy requires an SSH session; the active tab is a local terminal."
 msgstr "部署需要 SSH 会话；当前活动标签是本地终端。"
 
-#: ui/text_formats.slint:1416
+#: ui/text_formats.slint:1419
 msgctxt "MainWindow"
 msgid "Deployed `{0}` to {1} (idempotent append, exit status 0)."
 msgstr "已将 `{0}` 部署到 {1}（幂等追加，退出状态 0）。"
 
-#: ui/text_formats.slint:1419
+#: ui/text_formats.slint:1422
 msgctxt "MainWindow"
 msgid "Deploy command failed on {0} with exit status {1}."
 msgstr "部署命令在 {0} 上失败，退出状态为 {1}。"
 
-#: ui/text_formats.slint:1422
+#: ui/text_formats.slint:1425
 msgctxt "MainWindow"
 msgid "Deploy failed on {0}: {1}"
 msgstr "在 {0} 上部署失败：{1}"
 
-#: ui/text_formats.slint:1425
+#: ui/text_formats.slint:1428
 msgctxt "MainWindow"
 msgid "Passphrase saved for `{0}` (validated against the stored key)."
 msgstr "已为 `{0}` 保存口令（已用存储的密钥校验）。"
 
-#: ui/text_formats.slint:1428
+#: ui/text_formats.slint:1431
 msgctxt "MainWindow"
 msgid "Cannot save passphrase: {0}"
 msgstr "无法保存口令：{0}"
 
-#: ui/text_formats.slint:1431
+#: ui/text_formats.slint:1434
 msgctxt "MainWindow"
 msgid "Forgot the saved passphrase for `{0}`."
 msgstr "已忘记 `{0}` 的已保存口令。"
 
-#: ui/text_formats.slint:1434
+#: ui/text_formats.slint:1437
 msgctxt "MainWindow"
 msgid "Cannot forget passphrase: {0}"
 msgstr "无法忘记口令：{0}"
 
-#: ui/text_formats.slint:1437
+#: ui/text_formats.slint:1440
 msgctxt "MainWindow"
 msgid "Renamed managed key to `{0}`."
 msgstr "已将托管密钥重命名为 `{0}`。"
 
-#: ui/text_formats.slint:1440
+#: ui/text_formats.slint:1443
 msgctxt "MainWindow"
 msgid "Rename failed: {0}"
 msgstr "重命名失败：{0}"
 
-#: ui/text_formats.slint:1443
+#: ui/text_formats.slint:1446
 msgctxt "MainWindow"
 msgid "Copied the derived public key ({0} chars) to the clipboard."
 msgstr "已将派生公钥（{0} 个字符）复制到剪贴板。"
 
-#: ui/text_formats.slint:1446
+#: ui/text_formats.slint:1449
 msgctxt "MainWindow"
 msgid "Could not access the system clipboard; select the key text manually."
 msgstr "无法访问系统剪贴板；请手动选择密钥文本。"
 
-#: ui/text_formats.slint:1449
+#: ui/text_formats.slint:1452
 msgctxt "MainWindow"
 msgid "Copy failed: {0}"
 msgstr "复制失败：{0}"
 
-#: ui/text_formats.slint:1452
+#: ui/text_formats.slint:1455
 msgctxt "MainWindow"
 msgid "Exported the public key to `{0}`."
 msgstr "已将公钥导出到 `{0}`。"
 
-#: ui/text_formats.slint:1455 ui/text_formats.slint:1477
+#: ui/text_formats.slint:1458 ui/text_formats.slint:1480
 msgctxt "MainWindow"
 msgid "Export failed: {0}"
 msgstr "导出失败：{0}"
 
-#: ui/text_formats.slint:1458
+#: ui/text_formats.slint:1461
 msgctxt "MainWindow"
 msgid "Saved to `{0}`."
 msgstr "已保存到 `{0}`。"
 
-#: ui/text_formats.slint:1461
+#: ui/text_formats.slint:1464
 msgctxt "MainWindow"
 msgid "Dialog failed: {0}"
 msgstr "对话框操作失败：{0}"
 
-#: ui/text_formats.slint:1465
+#: ui/text_formats.slint:1468
 msgctxt "MainWindow"
 msgid "Import failed to read `{0}`: {1}"
 msgstr "导入时读取 `{0}` 失败：{1}"
 
-#: ui/text_formats.slint:1468
+#: ui/text_formats.slint:1471
 msgctxt "MainWindow"
 msgid "Import failed to persist: {0}"
 msgstr "导入后保存失败：{0}"
 
-#: ui/text_formats.slint:1471
+#: ui/text_formats.slint:1474
 msgctxt "MainWindow"
 msgid "Imported {n} host key; skipped lines: {0}"
 msgid_plural "Imported {n} host keys; skipped lines: {0}"
 msgstr[0] "已导入 {n} 个主机密钥；跳过行：{0}"
 
-#: ui/text_formats.slint:1474
+#: ui/text_formats.slint:1477
 msgctxt "MainWindow"
 msgid "Exported host keys to `{0}`."
 msgstr "已将主机密钥导出到 `{0}`。"
 
-#: ui/text_formats.slint:1481
+#: ui/text_formats.slint:1484
 msgctxt "MainWindow"
 msgid "New proxy profile draft."
 msgstr "新的代理配置草稿。"
 
-#: ui/text_formats.slint:1484
+#: ui/text_formats.slint:1487
 msgctxt "MainWindow"
 msgid "Editing proxy profile `{0}`."
 msgstr "正在编辑代理配置 `{0}`。"
 
-#: ui/text_formats.slint:1487
+#: ui/text_formats.slint:1490
 msgctxt "MainWindow"
 msgid "Select a proxy profile to edit."
 msgstr "请选择要编辑的代理配置。"
 
-#: ui/text_formats.slint:1490
+#: ui/text_formats.slint:1493
 msgctxt "MainWindow"
 msgid "Select a proxy profile to duplicate."
 msgstr "请选择要复制的代理配置。"
 
-#: ui/text_formats.slint:1493
+#: ui/text_formats.slint:1496
 msgctxt "MainWindow"
 msgid "Duplicate saved without its password: {0}"
 msgstr "副本已保存，但未包含其密码：{0}"
 
-#: ui/text_formats.slint:1496
+#: ui/text_formats.slint:1499
 msgctxt "MainWindow"
 msgid "Duplicate failed: {0}"
 msgstr "复制失败：{0}"
 
-#: ui/text_formats.slint:1499
+#: ui/text_formats.slint:1502
 msgctxt "MainWindow"
 msgid "Discarded proxy editor changes."
 msgstr "已放弃代理编辑器中的更改。"
 
-#: ui/text_formats.slint:1502
+#: ui/text_formats.slint:1505
 msgctxt "MainWindow"
 msgid "Cannot save proxy profile: {0}"
 msgstr "无法保存代理配置：{0}"
 
-#: ui/text_formats.slint:1505
+#: ui/text_formats.slint:1508
 msgctxt "MainWindow"
 msgid "Select a proxy profile to delete."
 msgstr "请选择要删除的代理配置。"
 
-#: ui/text_formats.slint:1508
+#: ui/text_formats.slint:1511
 msgctxt "MainWindow"
 msgid "Delete failed: {0}"
 msgstr "删除失败：{0}"
 
-#: ui/text_formats.slint:1511
+#: ui/text_formats.slint:1514
 msgctxt "MainWindow"
 msgid "Cannot update saved sessions: {0}"
 msgstr "无法更新已保存会话：{0}"
 
-#: ui/text_formats.slint:1514
+#: ui/text_formats.slint:1517
 msgctxt "MainWindow"
 msgid "A proxy test is already running."
 msgstr "代理测试已在运行。"
 
-#: ui/text_formats.slint:1517
+#: ui/text_formats.slint:1520
 msgctxt "MainWindow"
 msgid "Select a proxy profile to test."
 msgstr "请选择要测试的代理配置。"
 
-#: ui/text_formats.slint:1520
+#: ui/text_formats.slint:1523
 msgctxt "MainWindow"
 msgid "Test failed before connecting: {0}"
 msgstr "连接前测试失败：{0}"
 
-#: ui/text_formats.slint:1523
+#: ui/text_formats.slint:1526
 msgctxt "MainWindow"
 msgid "Test is unavailable: the proxy-test worker was not started."
 msgstr "测试不可用：代理测试工作线程未启动。"
 
-#: ui/text_formats.slint:1526
+#: ui/text_formats.slint:1529
 msgctxt "MainWindow"
 msgid "Test could not start its worker thread: {0}"
 msgstr "测试无法启动其工作线程：{0}"
 
-#: ui/text_formats.slint:1529
+#: ui/text_formats.slint:1532
 msgctxt "MainWindow"
 msgid "Testing {0} at {1}…"
 msgstr "正在测试 {1} 上的 {0}…"
 
-#: ui/text_formats.slint:1532
+#: ui/text_formats.slint:1535
 msgctxt "MainWindow"
 msgid "Test passed: {0} answered from {1}."
 msgstr "测试通过：{0} 已从 {1} 响应。"
 
-#: ui/text_formats.slint:1535
+#: ui/text_formats.slint:1538
 msgctxt "MainWindow"
 msgid "Test failed: {0}"
 msgstr "测试失败：{0}"
 
-#: ui/text_formats.slint:1539
+#: ui/text_formats.slint:1542
 msgctxt "MainWindow"
 msgid "Editing defaults for `{0}`. Changes apply to terminals opened afterwards."
 msgstr "正在编辑 `{0}` 的默认值。更改将应用于之后打开的终端。"
 
-#: ui/text_formats.slint:1542
+#: ui/text_formats.slint:1545
 msgctxt "MainWindow"
 msgid "Cleared every override for this folder; Save persists the reset."
 msgstr "已清除此文件夹的所有覆盖项；保存后重置才会生效。"
 
-#: ui/text_formats.slint:1545
+#: ui/text_formats.slint:1548
 msgctxt "MainWindow"
 msgid "Unknown color scheme id `{0}`."
 msgstr "未知配色方案 id `{0}`。"
 
-#: ui/text_formats.slint:1551
+#: ui/text_formats.slint:1554
 msgctxt "MainWindow"
 msgid "{0} must be between {1}."
 msgstr "{0} 必须介于 {1} 之间。"
 
-#: ui/text_formats.slint:1554
+#: ui/text_formats.slint:1557
 msgctxt "MainWindow"
 msgid "{0}: {1}"
 msgstr "{0}：{1}"
 
-#: ui/text_formats.slint:1557
+#: ui/text_formats.slint:1560
 msgctxt "MainWindow"
 msgid "Session logging: `{0}` is not `on` or `off`."
 msgstr "会话日志：`{0}` 不是 `on` 或 `off`。"
 
-#: ui/text_formats.slint:1560
+#: ui/text_formats.slint:1563
 msgctxt "MainWindow"
 msgid "Format: format must be `raw` or `sanitized`."
 msgstr "格式：格式必须是 `raw` 或 `sanitized`。"
 
-#: ui/text_formats.slint:1563
+#: ui/text_formats.slint:1566
 msgctxt "MainWindow"
 msgid "Saved folder defaults for `{0}`. New terminals use them; open terminals keep their theme."
 msgstr "已保存 `{0}` 的文件夹默认值。新终端将使用这些默认值；已打开的终端保留其主题。"
 
-#: ui/text_formats.slint:1567
+#: ui/text_formats.slint:1570
 msgctxt "MainWindow"
 msgid "No display server was found; type the font file path instead."
 msgstr "未找到显示服务器；请改为输入字体文件路径。"
 
-#: ui/text_formats.slint:1570
+#: ui/text_formats.slint:1573
 msgctxt "MainWindow"
 msgid "No display server was found; type the fallback font file path instead."
 msgstr "未找到显示服务器；请改为输入备用字体文件路径。"
 
-#: ui/text_formats.slint:1573
+#: ui/text_formats.slint:1576
 msgctxt "MainWindow"
 msgid "Copied {n} path."
 msgid_plural "Copied {n} paths."
 msgstr[0] "已复制 {n} 个路径。"
 
-#: ui/text_formats.slint:1576
+#: ui/text_formats.slint:1579
 msgctxt "MainWindow"
 msgid "Copied local path(s)."
 msgstr "已复制本地路径。"
 
-#: ui/text_formats.slint:1582
+#: ui/text_formats.slint:1585
 msgctxt "MainWindow"
 msgid "Unknown SFTP menu action `{0}`."
 msgstr "未知的 SFTP 菜单操作 `{0}`。"
 
-#: ui/text_formats.slint:1595
+#: ui/text_formats.slint:1598
 msgctxt "MainWindow"
 msgid "Close Session"
 msgstr "关闭会话"
 
-#: ui/text_formats.slint:1596
+#: ui/text_formats.slint:1599
 msgctxt "MainWindow"
 msgid "Close Tabs"
 msgstr "关闭标签"
 
-#: ui/text_formats.slint:1601
+#: ui/text_formats.slint:1604
 msgctxt "MainWindow"
 msgid "Close `{0}`? Its active connection will be disconnected."
 msgstr "关闭 `{0}`？其活动连接将被断开。"
 
-#: ui/text_formats.slint:1603
+#: ui/text_formats.slint:1606
 msgctxt "MainWindow"
 msgid "Close {n} tab"
 msgid_plural "Close {n} tabs"
 msgstr[0] "关闭 {n} 个标签"
 
-#: ui/text_formats.slint:1605
+#: ui/text_formats.slint:1608
 msgctxt "MainWindow"
 msgid "{n} of them has an active connection and will be disconnected."
 msgid_plural "{n} of them have active connections and will be disconnected."
 msgstr[0] "其中 {n} 个存在活动连接，将被断开。"
 
-#: ui/text_formats.slint:1613
+#: ui/text_formats.slint:1616
 msgctxt "MainWindow"
 msgid "Built-in default"
 msgstr "内置默认值"
 
-#: ui/text_formats.slint:1616
+#: ui/text_formats.slint:1619
 msgctxt "MainWindow"
 msgid "From global settings"
 msgstr "来自全局设置"
 
-#: ui/text_formats.slint:1619
+#: ui/text_formats.slint:1622
 msgctxt "MainWindow"
 msgid "From folder: {0}"
 msgstr "来自文件夹：{0}"
 
-#: ui/text_formats.slint:1622
+#: ui/text_formats.slint:1625
 msgctxt "MainWindow"
 msgid "From color scheme: {0}"
 msgstr "来自配色方案：{0}"
 
-#: ui/text_formats.slint:1625
+#: ui/text_formats.slint:1628
 msgctxt "MainWindow"
 msgid "Set in this folder"
 msgstr "在此文件夹中设置"
 
-#: ui/text_formats.slint:1628
+#: ui/text_formats.slint:1631
 msgctxt "MainWindow"
 msgid "Set for this session"
 msgstr "为此会话设置"
 
-#: ui/text_formats.slint:1635
+#: ui/text_formats.slint:1638
 msgctxt "MainWindow"
 msgid "Color scheme"
 msgstr "配色方案"
 
-#: ui/text_formats.slint:1636
+#: ui/text_formats.slint:1639
 msgctxt "MainWindow"
 msgid "Foreground"
 msgstr "前景色"
 
-#: ui/text_formats.slint:1637
+#: ui/text_formats.slint:1640
 msgctxt "MainWindow"
 msgid "Background"
 msgstr "背景色"
 
-#: ui/text_formats.slint:1638
+#: ui/text_formats.slint:1641
 msgctxt "MainWindow"
 msgid "Cursor"
 msgstr "光标"
 
-#: ui/text_formats.slint:1639
+#: ui/text_formats.slint:1642
 msgctxt "MainWindow"
 msgid "Selection"
 msgstr "选区"
 
-#: ui/text_formats.slint:1640
+#: ui/text_formats.slint:1643
 msgctxt "MainWindow"
 msgid "Font family"
 msgstr "字体族"
 
-#: ui/text_formats.slint:1641
+#: ui/text_formats.slint:1644
 msgctxt "MainWindow"
 msgid "Font size"
 msgstr "字号"
 
-#: ui/text_formats.slint:1642
+#: ui/text_formats.slint:1645
 msgctxt "MainWindow"
 msgid "Fallback font"
 msgstr "备用字体"
 
-#: ui/text_formats.slint:1645
+#: ui/text_formats.slint:1648
 msgctxt "MainWindow"
 msgid "Session logging"
 msgstr "会话日志"
 
-#: ui/text_formats.slint:1646
+#: ui/text_formats.slint:1649
 msgctxt "MainWindow"
 msgid "Format"
 msgstr "格式"
 
-#: ui/text_formats.slint:1647
+#: ui/text_formats.slint:1650
 msgctxt "MainWindow"
 msgid "Directory"
 msgstr "目录"
 
-#: ui/text_formats.slint:1658
+#: ui/text_formats.slint:1661
 msgctxt "MainWindow"
 msgid "Built-in palette"
 msgstr "内置调色板"
 
-#: ui/text_formats.slint:1663
+#: ui/text_formats.slint:1666
 msgctxt "MainWindow"
 msgid "Hex color"
 msgstr "十六进制颜色"
 
-#: ui/text_formats.slint:1665
+#: ui/text_formats.slint:1668
 msgctxt "MainWindow"
 msgid "Bundled DejaVu or an imported file"
 msgstr "内置 DejaVu 或导入的字体文件"
 
-#: ui/text_formats.slint:1666
+#: ui/text_formats.slint:1669
 msgctxt "MainWindow"
 msgid "Logical pixels"
 msgstr "逻辑像素"
 
-#: ui/text_formats.slint:1667
+#: ui/text_formats.slint:1670
 msgctxt "MainWindow"
 msgid "One font file tried before the bundled CJK face"
 msgstr "在内置 CJK 字体之前尝试的一个字体文件"
 
-#: ui/text_formats.slint:1668
+#: ui/text_formats.slint:1671
 msgctxt "MainWindow"
 msgid "Per session"
 msgstr "每个会话"
 
-#: ui/text_formats.slint:1669
+#: ui/text_formats.slint:1672
 msgctxt "MainWindow"
 msgid "Cells kept per session"
 msgstr "每个会话保留的单元格数"
 
-#: ui/text_formats.slint:1670
+#: ui/text_formats.slint:1673
 msgctxt "MainWindow"
 msgid "Write sessions to disk"
 msgstr "将会话写入磁盘"
 
-#: ui/text_formats.slint:1671
+#: ui/text_formats.slint:1674
 msgctxt "MainWindow"
 msgid "Raw keeps escape sequences"
 msgstr "原始格式保留转义序列"
 
-#: ui/text_formats.slint:1672
+#: ui/text_formats.slint:1675
 msgctxt "MainWindow"
 msgid "Log output directory"
 msgstr "日志输出目录"

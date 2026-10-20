@@ -307,6 +307,11 @@ export component MainWindow inherits Window {
     in-out property <string> sftp_selected_path_text: "";
     in-out property <string> sftp_selected_permissions_text: "";
     in-out property <bool> sftp_remote_edit_active: false;
+    /// 远端文件下载中（加载指示器）。
+    in-out property <bool> sftp_remote_edit_loading: false;
+    in-out property <string> sftp_remote_edit_loading_text: "";
+    /// 转圈相位（宿主按刷新推进）。
+    in-out property <int> sftp_spinner_phase: 0;
     // --- N1 Phase 2：本地栏 / 队列抽屉 / 冲突 / 属性 / 剪贴板 -----------------
     in-out property <[FileRow]> local_rows;
     in-out property <string> local_path_text: "/";
@@ -2617,6 +2622,9 @@ export component MainWindow inherits Window {
                     sftp-connected: root.sftp_available;
                     sftp-remote-edit-active: root.sftp_remote_edit_active;
                     sftp-remote-edit-text: TextFormats.sftp-remote-edit-display(root.sftp_remote_edit_active, root.sftp_remote_edit_remote_path_text, root.sftp_remote_edit_local_path_text);
+                    sftp-remote-edit-loading: root.sftp_remote_edit_loading;
+                    sftp-remote-edit-loading-text: root.sftp_remote_edit_loading_text;
+                    sftp-spinner-phase: root.sftp_spinner_phase;
                     sftp-path-text <=> root.sftp_path_text;
                     local-rows: root.local_rows;
                     local-path-text: root.local_path_text;

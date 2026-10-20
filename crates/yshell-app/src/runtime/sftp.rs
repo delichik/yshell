@@ -399,6 +399,9 @@ impl AppRuntime {
     /// Multi-select click on the remote list: `ctrl` toggles, `shift` extends
     /// the range from the anchor (both mirror the local pane's semantics).
     pub fn select_sftp_row(&mut self, index: i32, ctrl: bool, shift: bool) -> AppProjection {
+        // 记住修饰键：随后的拖动按资源管理器语义决定复制/移动。
+        self.drag_ctrl = ctrl;
+        self.drag_shift = shift;
         // A negative index is the "clear selection" signal used by the context
         // menu's blank-area path.
         if index < 0 {
@@ -1181,10 +1184,17 @@ pub struct SftpPaneProjection {
     pub error_text: String,
     pub remote_edit_active: bool,
     pub remote_edit_text: String,
+    /// 远端文件下载中（加载指示器）。
+    pub remote_edit_loading: bool,
+    pub remote_edit_loading_text: String,
+    /// 转圈相位（宿主按刷新推进）。
+    pub spinner_phase: i32,
     pub local_rows: Vec<LocalRowData>,
     pub local_crumbs: Vec<FileCrumbData>,
     /// Separator between the local path segments (`\` on Windows).
     pub local_path_separator: String,
+    /// Whether the local pane shows the Perm column (false on Windows).
+    pub local_permissions_visible: bool,
     pub local_path_text: String,
     pub local_sort_column_text: String,
     pub local_sort_ascending: bool,
@@ -1221,9 +1231,13 @@ impl Default for SftpPaneProjection {
             error_text: String::new(),
             remote_edit_active: false,
             remote_edit_text: String::new(),
+            remote_edit_loading: false,
+            remote_edit_loading_text: String::new(),
+            spinner_phase: 0,
             local_rows: Vec::new(),
             local_crumbs: Vec::new(),
             local_path_separator: crate::runtime::local_path_separator(),
+            local_permissions_visible: !cfg!(windows),
             local_path_text: "/".to_owned(),
             local_sort_column_text: "name".to_owned(),
             local_sort_ascending: true,
@@ -1345,9 +1359,15 @@ impl SftpPaneProjection {
                 .as_ref()
                 .map(|session| format!("{} → {}", session.remote_path, session.local_temp_path))
                 .unwrap_or_default(),
+            // 加载态由调用方按"挂起下载"填充（它是全局的，不在标签状态里）。
+            remote_edit_loading: false,
+            remote_edit_loading_text: String::new(),
+            spinner_phase: 0,
             local_rows,
             local_crumbs: local_crumbs_for(&state.local.dir),
             local_path_separator: crate::runtime::local_path_separator(),
+            // Windows 本地没有 POSIX 权限位：本地栏不显示 Perm 列。
+            local_permissions_visible: !cfg!(windows),
             local_path_text: state.local.dir.display().to_string(),
             local_sort_column_text: state.local.sort_column.label().to_ascii_lowercase(),
             local_sort_ascending: state.local.sort_ascending,
