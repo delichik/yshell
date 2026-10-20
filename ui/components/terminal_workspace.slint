@@ -39,6 +39,8 @@ export component TerminalWorkspace inherits VerticalLayout {
     /// 是否显示快速连接内容（非分屏全页，或分屏时叠在 QC 叶子上）。
     in property <bool> quick-connect-visible: false;
     in property <image> terminal-image;
+    /// 终端表面底色（跟随会话配色；见 `terminal_view.slint` 的同名属性）。
+    in property <color> terminal-surface-background: Theme.terminal-surface;
     in property <int> cursor-column: 0;
     in property <int> cursor-row: 0;
     in property <int> scroll-offset: 0;
@@ -286,6 +288,8 @@ export component TerminalWorkspace inherits VerticalLayout {
     in property <bool> split-active: false;
     in property <int> split-focused-pane: 0;
     in property <image> terminal-image-secondary;
+    /// 次 pane 的终端表面底色（跟随次 pane 会话的配色）。
+    in property <color> terminal-surface-background-secondary: Theme.terminal-surface;
     in property <[WorkspacePaneLeaf]> split-leaves: [];
     in property <[WorkspaceSplitter]> split-splitters: [];
     /// 未分屏拖拽分区：`dir:small|equal|major`。
@@ -418,6 +422,7 @@ export component TerminalWorkspace inherits VerticalLayout {
                                 log-output: root.body-text;
                                 visible-lines <=> root.visible-lines;
                                 terminal-image: root.terminal-image;
+                                surface-background: root.terminal-surface-background;
                                 cursor-column: root.cursor-column;
                                 cursor-row: root.cursor-row;
                                 scroll-offset: root.scroll-offset;
@@ -591,6 +596,8 @@ export component TerminalWorkspace inherits VerticalLayout {
                 focused-pane: root.split-focused-pane;
                 primary-image: root.terminal-image;
                 secondary-image: root.terminal-image-secondary;
+                primary-surface-background: root.terminal-surface-background;
+                secondary-surface-background: root.terminal-surface-background-secondary;
                 cursor-column: root.cursor-column;
                 cursor-row: root.cursor-row;
                 scroll-offset: root.scroll-offset;

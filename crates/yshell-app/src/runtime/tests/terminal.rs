@@ -43,6 +43,31 @@ fn terminal_projection_exposes_grid_lines_and_cursor_position() {
 }
 
 #[test]
+fn reconnecting_clears_the_terminal_view() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    runtime
+        .handle_quick_connect("alice@example.com:2200")
+        .expect("quick connect");
+    runtime
+        .send_active_terminal_input("echo grid\n")
+        .expect("send input");
+    assert!(runtime
+        .projection()
+        .terminal_visible_lines
+        .iter()
+        .any(|line| line.contains("test-shell received input")));
+
+    // 重连：旧连接的内容清空，新连接从干净屏幕开始。
+    runtime.reconnect_active_session().expect("reconnect");
+    assert!(!runtime
+        .projection()
+        .terminal_visible_lines
+        .iter()
+        .any(|line| line.contains("test-shell received input")));
+}
+
+#[test]
 fn active_terminal_resize_flows_through_shell_boundary() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");

@@ -429,6 +429,8 @@ export component SessionEditor inherits Rectangle {
     // 打开且停在外观分区时非空）。尺寸与 Rust 侧
     // `SESSION_EDITOR_PREVIEW_AREA_PX` 对应，1:1 物理像素显示、不拉伸。
     in property <image> preview-frame;
+    /// 预览表面底色（跟随预览配色；见 `terminal_preview.slint`）。
+    in property <color> preview-background: Theme.terminal-surface;
 
     callback close();
     callback select-general();
@@ -634,6 +636,7 @@ export component SessionEditor inherits Rectangle {
                                 // Rust 侧 `SESSION_EDITOR_PREVIEW_AREA_PX`。
                                 TerminalPreview {
                                     frame: root.preview-frame;
+                                    surface-background: root.preview-background;
                                     surface-height: 100px;
                                 }
                             }

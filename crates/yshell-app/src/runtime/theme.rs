@@ -486,6 +486,12 @@ pub(crate) fn palette_swatches(palette: TerminalPalette) -> Vec<[u8; 3]> {
     swatches
 }
 
+/// 预览表面的底色（跟随预览配色；见 `AppRuntime::*_preview_background`）。
+pub(crate) fn preview_background(palette: TerminalPalette) -> [u8; 3] {
+    let color = palette.background;
+    [color.red, color.green, color.blue]
+}
+
 /// Four role colors (used where horizontal space is tight, e.g. editor rows).
 pub(crate) fn palette_role_swatches(palette: TerminalPalette) -> Vec<[u8; 3]> {
     let rgb = |color: TerminalColor| [color.red, color.green, color.blue];
@@ -1906,6 +1912,25 @@ impl AppRuntime {
             return editor.palette();
         }
         self.settings_appearance.palette(&self.theme_catalog)
+    }
+
+    /// 预览表面的底色（跟随预览配色）。
+    ///
+    /// 预览位图按该配色的背景渲染；表面用同一个颜色，位图放不下的余量与
+    /// 内边距才不会露出主题黑底（浅色配色下的"黑边"）。
+    pub(crate) fn settings_appearance_preview_background(&self) -> [u8; 3] {
+        preview_background(self.settings_appearance_palette())
+    }
+
+    /// Session Editor 外观预览的表面底色（跟随该预览的配色）。
+    pub(crate) fn session_editor_preview_background(&self) -> [u8; 3] {
+        let resolved = self.editor_theme_resolved_terminal();
+        preview_background(resolve_palette(&resolved, &self.theme_catalog))
+    }
+
+    /// 主题管理器预览的表面底色（跟随该预览的配色）。
+    pub(crate) fn theme_manager_preview_background(&self) -> [u8; 3] {
+        preview_background(self.theme_manager_palette())
     }
 
     /// Device pixel ratio the Settings live preview must rasterize at.

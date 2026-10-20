@@ -16,7 +16,7 @@ use slint::language::ColorScheme;
 use slint::private_unstable_api::re_exports::DragAction;
 use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, SharedString, VecModel};
 use yshell_config::{PanelId, PanelSide};
-use yshell_terminal::TerminalRenderer;
+use yshell_terminal::{TerminalColor, TerminalRenderer};
 use yshell_ui::appearance::{self, AccentColors, ThemeMode};
 
 use crate::app_state::AppState;
@@ -110,7 +110,7 @@ impl TerminalSurface {
     ///
     /// Returns `true` when the renderer appearance changed: the cached frame is
     /// invalidated so the next `refresh` repaints with the new palette/font.
-    fn sync_appearance(&self) -> bool {
+    fn sync_appearance(&self, window: &MainWindow) -> bool {
         let appearance = {
             let Ok(runtime) = self.runtime.try_borrow() else {
                 return false;
@@ -120,6 +120,9 @@ impl TerminalSurface {
         let Some(appearance) = appearance else {
             return false;
         };
+        // 表面底色跟随会话配色：换配色方案后位图四周不再露出主题黑底（黑边）。
+        window
+            .set_terminal_surface_background(terminal_surface_color(appearance.palette.background));
         {
             let renderer = self.renderer.borrow();
             if renderer.palette() == appearance.palette
@@ -142,7 +145,7 @@ impl TerminalSurface {
 
     /// Re-render the terminal image when this window's active session frame changed.
     pub(crate) fn refresh(&self, window: &MainWindow) {
-        self.sync_appearance();
+        self.sync_appearance(window);
         let session = window.get_active_session().to_string();
         let frame_id = {
             let Ok(runtime) = self.runtime.try_borrow() else {
@@ -205,6 +208,10 @@ impl TerminalSurface {
             return;
         }
         if let Some(appearance) = runtime.window_secondary_terminal_appearance(self.window_id) {
+            // 次 pane 的表面底色同样跟随它自己的会话配色。
+            window.set_terminal_surface_background_secondary(terminal_surface_color(
+                appearance.palette.background,
+            ));
             let mut renderer = self.renderer.borrow_mut();
             let _ = renderer.apply_appearance(appearance.palette, appearance.font);
             renderer.set_font_size(appearance.font_size);
@@ -224,8 +231,13 @@ impl TerminalSurface {
         window.set_terminal_image_secondary(image);
         *self.last_secondary_frame.borrow_mut() = Some((session_key, frame_id));
         // 次 pane 渲染可能覆盖了渲染器外观；下一帧主 pane 通过 sync_appearance 恢复。
-        let _ = self.sync_appearance();
+        let _ = self.sync_appearance(window);
     }
+}
+
+/// 终端配色 → Slint 颜色（终端表面底色跟随会话配色时用）。
+fn terminal_surface_color(color: TerminalColor) -> slint::Color {
+    slint::Color::from_rgb_u8(color.red, color.green, color.blue)
 }
 
 pub struct YShellApp {
@@ -5185,6 +5197,11 @@ fn slint_color_from_hex(hex: &str) -> slint::Color {
     }
 }
 
+/// RGB 三元组 → Slint color（预览表面底色等）。
+fn slint_color_from_rgb(rgb: [u8; 3]) -> slint::Color {
+    slint::Color::from_rgb_u8(rgb[0], rgb[1], rgb[2])
+}
+
 /// Rasterized terminal frame → Slint image.
 fn frame_image(frame: &yshell_terminal::TerminalFrame) -> slint::Image {
     slint::Image::from_rgba8(SharedPixelBuffer::clone_from_slice(
@@ -6515,6 +6532,10 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     if let Some(preview) = projection.settings_appearance_preview.as_ref() {
         window.set_settings_appearance_preview(frame_image(preview));
     }
+    // 预览表面底色跟随预览配色（浅色配色不再露出黑边）。
+    window.set_settings_appearance_preview_background(slint_color_from_rgb(
+        projection.settings_appearance_preview_background,
+    ));
     // TERM-1：独立主题管理器（列表 / 选择 / 默认主题 / 删除确认 / 预览）。
     window.set_theme_manager_visible(projection.theme_manager_visible);
     set_theme_manager_rows_if_changed(window, &projection.theme_manager_rows);
@@ -6528,6 +6549,9 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     if let Some(preview) = projection.theme_manager_preview.as_ref() {
         window.set_theme_manager_preview(frame_image(preview));
     }
+    window.set_theme_manager_preview_background(slint_color_from_rgb(
+        projection.theme_manager_preview_background,
+    ));
     window
         .set_theme_manager_remove_confirm_visible(projection.theme_manager_remove_confirm_visible);
     window.set_theme_manager_remove_name_text(
@@ -6582,6 +6606,9 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
         Some(preview) => window.set_session_editor_preview(frame_image(preview)),
         None => window.set_session_editor_preview(slint::Image::default()),
     }
+    window.set_session_editor_preview_background(slint_color_from_rgb(
+        projection.session_editor_preview_background,
+    ));
     window.set_active_session_kind_text(projection.active_session_kind_text.clone().into());
     window.set_active_session_name_text(projection.active_session_name_text.clone().into());
     window.set_active_session_state_text(projection.active_session_state_text.clone().into());

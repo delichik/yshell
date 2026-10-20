@@ -307,6 +307,9 @@ impl AppRuntime {
             // Drop any previous shell before reconnecting.
             let _ = runtime.disconnect_shell();
             runtime.shell_session = None;
+            // 旧连接的内容不该留在新连接里：清屏（网格 + 解析器 + 选区），
+            // 新 shell 从干净的屏幕开始。
+            runtime.reset_terminal_view("Terminal view reset before reconnecting.");
         }
         let connecting_events = self
             .dispatcher

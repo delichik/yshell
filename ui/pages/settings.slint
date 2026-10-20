@@ -92,6 +92,8 @@ export component SettingsDialog inherits Rectangle {
     in-out property <string> appearance-fallback-fonts-text: "";
     in property <string> appearance-status-text: "";
     in property <image> appearance-preview;
+    /// 预览表面底色（跟随预览配色；见 `terminal_preview.slint`）。
+    in property <color> appearance-preview-background: Theme.terminal-surface;
 
     callback close();
     callback open-host-keys();
@@ -554,6 +556,7 @@ export component SettingsDialog inherits Rectangle {
                                             // 减少渲染行列）。
                                             TerminalPreview {
                                                 frame: root.appearance-preview;
+                                                surface-background: root.appearance-preview-background;
                                             }
 
                                             Text {

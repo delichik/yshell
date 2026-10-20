@@ -16,11 +16,16 @@ import { Theme } from "../theme.slint";
 export component TerminalPreview inherits Rectangle {
     /// Rust 投影的位图；空图像时表面只显示终端背景色。
     in property <image> frame;
+    /// 表面底色：跟随预览的终端配色（Rust 侧按预览配色投影）。
+    ///
+    /// 之前固定用主题的 `terminal-surface`（深色下近乎纯黑）：预览浅色配色时
+    /// 位图四周会露出一圈黑边。
+    in property <color> surface-background: Theme.terminal-surface;
     /// 预览表面的逻辑高度（宽度跟随外层布局）。
     in property <length> surface-height: 200px;
 
     height: root.surface-height;
-    background: Theme.terminal-surface;
+    background: root.surface-background;
     border-radius: Theme.radius-panel;
     border-width: 1px;
     border-color: Theme.terminal-border;

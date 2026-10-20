@@ -26,6 +26,8 @@ component SplitPaneLeaf inherits Rectangle {
     in property <[QuickConnectRow]> quick-connect-rows: [];
     in property <SftpPaneData> sftp;
     in property <image> terminal-image;
+    /// 终端表面底色（跟随会话配色；见 `terminal_view.slint` 的同名属性）。
+    in property <color> surface-background: Theme.terminal-surface;
     in property <int> pane-id: 0;
     in property <[WorkspaceTab]> tabs: [];
 
@@ -271,6 +273,7 @@ component SplitPaneLeaf inherits Rectangle {
                         title: "";
                         log-output: "";
                         terminal-image: root.terminal-image;
+                        surface-background: root.surface-background;
                         cursor-column: root.focused ? root.cursor-column : 0;
                         cursor-row: root.focused ? root.cursor-row : 0;
                         scroll-offset: root.focused ? root.scroll-offset : 0;
@@ -460,6 +463,9 @@ export component WorkspaceSplitView inherits Rectangle {
     in property <string> quick-connect-summary-text: "";
     in property <bool> quick-connect-history-enabled: true;
     in property <[QuickConnectRow]> quick-connect-rows: [];
+    /// 终端表面底色：聚焦叶用主 pane 的，其余叶用次 pane 的（跟随会话配色）。
+    in property <color> primary-surface-background: Theme.terminal-surface;
+    in property <color> secondary-surface-background: Theme.terminal-surface;
 
     callback focus-pane(int);
     callback terminal-key(string, bool, bool, bool, bool);
@@ -553,6 +559,7 @@ export component WorkspaceSplitView inherits Rectangle {
         tabs: leaf.tabs;
         focused: leaf.focused;
         terminal-image: leaf.focused ? root.primary-image : root.secondary-image;
+        surface-background: leaf.focused ? root.primary-surface-background : root.secondary-surface-background;
         cursor-column: root.cursor-column;
         cursor-row: root.cursor-row;
         scroll-offset: root.scroll-offset;

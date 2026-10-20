@@ -143,6 +143,8 @@ export global Theme {
     // E18（记录不改）：UI 主题的终端底色随深浅切换，但终端内的 16 色配色由
     // Rust 侧按 TerminalColorScheme（默认 Campbell，深色）单独选择；light 模式下
     // 终端仍是深色块属有意设计（终端可读性优先），如需"跟随主题"另开设计项。
+    // 终端表面底色只是兜底：活动会话的配色背景会覆盖它（`terminal_view.slint`
+    // 的 `surface-background`），否则换配色方案时位图四周会露出一圈黑边。
     out property <color> terminal-background: dark ? #0C0C0C : #FAFAFA;
     out property <color> terminal-surface: dark ? #050505 : #FFFFFF;
     out property <color> terminal-chrome-fill: dark ? #FFFFFF0A : #00000005;

@@ -98,6 +98,38 @@ fn migrate_inline_overrides_creates_user_theme() {
 }
 
 #[test]
+fn the_preview_surface_follows_the_previewed_palette() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime.open_settings_appearance();
+
+    // 预览表面底色 = 预览配色的背景（否则浅色配色会露出主题黑底）。
+    let palette = runtime.settings_appearance_palette();
+    let expected = [
+        palette.background.red,
+        palette.background.green,
+        palette.background.blue,
+    ];
+    assert_eq!(
+        runtime.projection().settings_appearance_preview_background,
+        expected
+    );
+
+    // 换配色方案后，表面底色跟着换。
+    runtime.select_settings_appearance_scheme("nord");
+    let palette = runtime.settings_appearance_palette();
+    assert_eq!(
+        runtime.projection().settings_appearance_preview_background,
+        [
+            palette.background.red,
+            palette.background.green,
+            palette.background.blue,
+        ]
+    );
+}
+
+#[test]
 fn settings_appearance_form_validates_and_persists() {
     let temp = tempdir().expect("tempdir");
     let mut runtime =

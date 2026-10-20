@@ -212,6 +212,8 @@ export component ThemeManagerPage inherits Rectangle {
     in property <int> user-count: 0;
     /// Rust 投影的 live preview 位图（仅在页面打开时生成）。
     in property <image> preview;
+    /// 预览表面底色（跟随预览配色；见 `terminal_preview.slint`）。
+    in property <color> preview-background: Theme.terminal-surface;
 
     // 编辑器状态（与 Settings 旧内联编辑器共用同一份宿主草稿）。
     in property <bool> theme-editor-open: false;
@@ -322,6 +324,7 @@ export component ThemeManagerPage inherits Rectangle {
                 TerminalPreview {
                     vertical-stretch: 0;
                     frame: root.preview;
+                    surface-background: root.preview-background;
                     surface-height: 120px;
                 }
 

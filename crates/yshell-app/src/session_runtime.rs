@@ -559,6 +559,13 @@ impl SessionRuntime {
     }
 
     pub fn clear_visible_terminal(&mut self) {
+        self.reset_terminal_view("Terminal view cleared. Live shell remains attached.");
+    }
+
+    /// 清空终端视图（网格 + 解析器 + 选区 + 视口偏移）。
+    ///
+    /// 重连时也用它：旧 shell 的内容不该留在新连接里（新 shell 从干净屏幕开始）。
+    pub fn reset_terminal_view(&mut self, reason: &str) {
         let columns = self.terminal_grid.columns;
         let rows = self.terminal_grid.rows;
         let (line_limit, cell_limit) = self.terminal_limits;
@@ -569,7 +576,7 @@ impl SessionRuntime {
         self.selection_anchor = None;
         self.selection_drag_moved = false;
         self.frame_id = self.frame_id.wrapping_add(1);
-        self.log_runtime_event("Terminal view cleared. Live shell remains attached.");
+        self.log_runtime_event(reason);
     }
 
     /// Clear scrollback only; keep the live screen cells and cursor.

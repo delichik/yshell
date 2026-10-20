@@ -255,8 +255,12 @@ export component MainWindow inherits Window {
     in-out property <string> terminal_body_text: "Runtime is ready. Open a Quick Connect target or create a local terminal tab with +.";
     in-out property <[string]> terminal_visible_lines: ["Runtime is ready. Open a Quick Connect target or create a local terminal tab with +."];
     in-out property <image> terminal_image;
+    /// 终端表面底色：跟随活动会话的终端配色（换配色方案时不再露出黑边）。
+    in-out property <color> terminal_surface_background: Theme.terminal-surface;
     /// WP4：非聚焦 pane 终端位图。
     in-out property <image> terminal_image_secondary;
+    /// WP4：非聚焦 pane 的终端表面底色。
+    in-out property <color> terminal_surface_background_secondary: Theme.terminal-surface;
     in-out property <int> terminal_cursor_column: 0;
     in-out property <int> terminal_cursor_row: 0;
     in-out property <int> terminal_viewport_columns: 0;
@@ -411,8 +415,12 @@ export component MainWindow inherits Window {
     in property <string> settings_appearance_status_text: "";
     in property <[color]> settings_appearance_palette_swatches: [];
     in property <image> settings_appearance_preview;
+    /// 预览表面底色（跟随预览配色；否则浅色配色会露出黑边）。
+    in property <color> settings_appearance_preview_background: Theme.terminal-surface;
     // TERM-4：Session Editor 外观分区的 live preview（关闭/切出分区时为空）。
     in property <image> session_editor_preview;
+    /// Session Editor 预览的表面底色。
+    in property <color> session_editor_preview_background: Theme.terminal-surface;
     // TERM-1：独立主题管理器（D6 模态页）与共享的用户主题编辑器草稿。
     in-out property <bool> theme_manager_visible: false;
     in-out property <[ThemeManagerRow]> theme_manager_rows: [];
@@ -422,6 +430,8 @@ export component MainWindow inherits Window {
     in property <int> theme_manager_builtin_count: 0;
     in property <int> theme_manager_user_count: 0;
     in property <image> theme_manager_preview;
+    /// 主题管理器预览的表面底色。
+    in property <color> theme_manager_preview_background: Theme.terminal-surface;
     in-out property <bool> theme_manager_remove_confirm_visible: false;
     in property <string> theme_manager_remove_name_text: "";
     in property <int> theme_manager_remove_reference_count: 0;
@@ -2493,6 +2503,8 @@ export component MainWindow inherits Window {
                     body-text: TextFormats.terminal-body-display(root.terminal_body_kind_text, root.terminal_body_text);
                     visible-lines <=> root.terminal_visible_lines;
                     terminal-image: root.terminal_image;
+                    terminal-surface-background: root.terminal_surface_background;
+                    terminal-surface-background-secondary: root.terminal_surface_background_secondary;
                     cursor-column: root.terminal_cursor_column;
                     cursor-row: root.terminal_cursor_row;
                     scroll-offset: root.terminal_scroll_offset;
@@ -2868,6 +2880,7 @@ export component MainWindow inherits Window {
         appearance-fallback-fonts-text <=> root.settings_appearance_fallback_fonts_text;
         appearance-status-text: root.settings_appearance_status_text;
         appearance-preview: root.settings_appearance_preview;
+        appearance-preview-background: root.settings_appearance_preview_background;
         close() => {
             root.settings_dialog_visible = false;
             root.close_settings_appearance();
@@ -3207,6 +3220,7 @@ export component MainWindow inherits Window {
         tunnel-summary-text: TextFormats.editor-tunnel-summary-display(root.editor_tunnel_summary_count, root.editor_tunnel_summary_rows_text);
         editor-appearance-fields: root.editor_appearance_fields;
         preview-frame: root.session_editor_preview;
+        preview-background: root.session_editor_preview_background;
         close() => {
             // Dirty drafts open Discard Changes; clean drafts close immediately.
             root.close_session_editor_modal();
@@ -3448,6 +3462,7 @@ export component MainWindow inherits Window {
         builtin-count: root.theme_manager_builtin_count;
         user-count: root.theme_manager_user_count;
         preview: root.theme_manager_preview;
+        preview-background: root.theme_manager_preview_background;
         theme-editor-open: root.theme_editor_open;
         theme-editor-builtin: root.theme_editor_builtin;
         theme-editor-id: root.theme_editor_id;

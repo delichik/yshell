@@ -23,6 +23,11 @@ export component TerminalView inherits Rectangle {
     in property <string> log-output: "";
     in property <[string]> visible-lines: [];
     in property <image> terminal-image;
+    /// 终端表面底色：跟随会话的终端配色背景（Rust 侧按活动会话投影）。
+    ///
+    /// 之前固定用主题的 `terminal-surface`（深色下近乎纯黑）：换成浅色配色方案
+    /// 时，位图四周会露出一圈黑边。位图放不下的余量与内边距都用这个颜色。
+    in property <color> surface-background: Theme.terminal-surface;
     in property <int> cursor-column: 0;
     in property <int> cursor-row: 0;
     in property <int> scroll-offset: 0;
@@ -105,7 +110,7 @@ export component TerminalView inherits Rectangle {
         spacing: root.embedded ? (root.find-visible ? Theme.spacing-4 : 0px) : Theme.spacing-8;
 
         terminal_surface := Rectangle {
-            background: Theme.terminal-surface;
+            background: root.surface-background;
             // 聚焦态不再换成 accent 描边：蓝框在深色终端上刺眼，且和键盘
             // FocusRing 叠出「双重选中」。聚焦只靠光标/输入反馈表达。
             border-color: root.embedded ? transparent : Theme.terminal-border;

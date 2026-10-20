@@ -212,8 +212,10 @@ impl AppRuntime {
         let auth_prompt = self.auth_prompt_projection_parts();
         // N5：终端外观（Settings Appearance 内联 / Folder Editor / Session Editor）。
         let settings_appearance_preview = self.settings_appearance_preview_frame();
+        let settings_appearance_preview_background = self.settings_appearance_preview_background();
         // TERM-4：Session Editor 外观分区的 live preview（仅打开且停在外观分区）。
         let session_editor_preview = self.session_editor_preview_frame();
+        let session_editor_preview_background = self.session_editor_preview_background();
         let settings_appearance_status_text = self.settings_appearance_status.display_text();
         let settings_appearance_color_scheme_id =
             theme::resolved_global_scheme_id(&self.config_document.terminal, &self.theme_catalog);
@@ -245,6 +247,7 @@ impl AppRuntime {
         let theme_manager_selected_is_default =
             theme_manager_selected_id == theme_manager_default_id;
         let theme_manager_preview = self.theme_manager_preview_frame();
+        let theme_manager_preview_background = self.theme_manager_preview_background();
         let theme_manager_pending_delete = self.theme_manager_pending_delete.as_deref();
         let theme_manager_remove_name_text = theme_manager_pending_delete
             .map(|id| theme::scheme_display_name(id, &self.theme_catalog))
@@ -387,6 +390,7 @@ impl AppRuntime {
             settings_appearance_status_text,
             settings_appearance_palette_swatches: settings_appearance_palette,
             settings_appearance_preview,
+            settings_appearance_preview_background,
             theme_manager_visible: self.theme_manager_visible,
             theme_manager_rows,
             theme_manager_selected_index,
@@ -395,6 +399,7 @@ impl AppRuntime {
             theme_manager_builtin_count,
             theme_manager_user_count,
             theme_manager_preview,
+            theme_manager_preview_background,
             theme_manager_remove_confirm_visible: self.theme_manager_pending_delete.is_some(),
             theme_manager_remove_name_text,
             theme_manager_remove_reference_count,
@@ -421,6 +426,7 @@ impl AppRuntime {
             editor_appearance_fields,
             editor_terminal_fields,
             session_editor_preview,
+            session_editor_preview_background,
             editor_modal_visible: self.editor_modal_visible,
             editor_discard_dialog_visible: self.editor_discard_dialog_visible,
             editor_is_dirty: self.editor_is_dirty(),
@@ -1715,6 +1721,8 @@ pub struct AppProjection {
     pub settings_appearance_status_text: String,
     pub settings_appearance_palette_swatches: Vec<[u8; 3]>,
     pub settings_appearance_preview: Option<yshell_terminal::TerminalFrame>,
+    /// Settings 预览的表面底色（跟随预览配色；否则浅色配色会露出黑边）。
+    pub settings_appearance_preview_background: [u8; 3],
     // --- TERM-1：独立主题管理器 ------------------------------------------------
     pub theme_manager_visible: bool,
     pub theme_manager_rows: Vec<ThemeManagerRowData>,
@@ -1724,6 +1732,8 @@ pub struct AppProjection {
     pub theme_manager_builtin_count: i32,
     pub theme_manager_user_count: i32,
     pub theme_manager_preview: Option<yshell_terminal::TerminalFrame>,
+    /// 主题管理器预览的表面底色（跟随预览配色）。
+    pub theme_manager_preview_background: [u8; 3],
     pub theme_manager_remove_confirm_visible: bool,
     pub theme_manager_remove_name_text: String,
     pub theme_manager_remove_reference_count: i32,
@@ -1756,6 +1766,8 @@ pub struct AppProjection {
     /// TERM-4：外观分区 live preview（编辑器关闭或停在其它分区时为 `None`）。
     /// 与 `settings_appearance_preview` 共用同一渲染路径与像素契约。
     pub session_editor_preview: Option<yshell_terminal::TerminalFrame>,
+    /// Session Editor 预览的表面底色（跟随预览配色）。
+    pub session_editor_preview_background: [u8; 3],
     pub editor_modal_visible: bool,
     pub editor_discard_dialog_visible: bool,
     pub editor_is_dirty: bool,
