@@ -114,6 +114,11 @@ export component MenuPopup inherits Rectangle {
     /// 点击落回菜单栏本身——否则展开菜单后点另一个一级菜单会被遮罩吃掉，
     /// 表现为"切菜单只留下标题高亮、弹层不渲染"。右键菜单保持 0（全窗遮罩）。
     in property <length> scrim-top: 0px;
+    /// 出现时的上移距离（§6.3 #4 的"4px 位移"）。
+    ///
+    /// 默认 0 = 只淡入、不位移：右键菜单贴着光标弹出，任何位移都显得"跳"。
+    /// 菜单栏下拉给一点位移才有"从标题栏落下来"的感觉，调用方按需设置。
+    in property <length> rise-offset: 0px;
 
     callback selected(int);
     callback dismissed();
@@ -156,8 +161,9 @@ export component MenuPopup inherits Rectangle {
             // 基准 y（与 x 同样贴边钳制）。
             private property <length> base-y:
                 min(max(root.anchor-y, 8px), max(root.height - self.height - 8px, 8px));
-            // §6.3 #4：菜单出现 = 淡入 + 4px 上移，167ms / ease-out。
-            y: self.base-y + (root.open ? 0px : Theme.spacing-4);
+            // §6.3 #4：菜单出现 = 淡入（167ms / ease-out）。
+            // 位移量由 rise-offset 决定：右键菜单 0（不跳），下拉菜单 2px。
+            y: self.base-y + (root.open ? 0px : root.rise-offset);
             animate y { duration: Theme.duration-fast; easing: ease-out; }
             width: root.panel-width;
             // 4px padding on each side; +8px guards against a one-row

@@ -857,9 +857,8 @@ export component SftpContextMenu inherits Rectangle {
     visible: self.open;
     background: transparent;
 
-    // §6.3 #4：右键菜单出现 = 167ms 淡入（与 MenuPopup 同节奏）。
-    opacity: self.open ? 1.0 : 0.0;
-    animate opacity { duration: Theme.duration-fast; easing: ease-out; }
+    // 注意：这里**不要**再叠一层淡入——内层的 MenuPopup 已经淡入，
+    // 两层相乘会让右键菜单的淡入变成二次曲线，起步明显拖沓。
 
     private property <[MenuEntry]> file-entries: [
         { label: @tr("Open"), shortcut: "", enabled: root.connected, checked: false, separator: false },
