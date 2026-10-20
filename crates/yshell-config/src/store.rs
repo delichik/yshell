@@ -68,7 +68,7 @@ impl ConfigStore {
 
     /// Loads the document and returns non-fatal warnings found while loading.
     ///
-    /// Warnings cover invalid Quick Connect/quick-link targets and invalid theme
+    /// Warnings cover invalid Quick Connect targets and invalid theme
     /// values that were dropped or cleared by [`ConfigDocument::sanitize`].
     pub fn load_or_recover_with_warnings(
         &self,

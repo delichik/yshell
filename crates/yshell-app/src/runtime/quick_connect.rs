@@ -1,14 +1,17 @@
-//! N2 Quick Connect：工作区覆盖层状态、输入态、历史/快速链接持久化与行投影。
+//! N2 Quick Connect：工作区覆盖层状态、输入态、历史持久化与行投影。
 //!
 //! 设计：`docs/product/yshell-next-n2-quick-connect.md` §1/§2/§4。
 //!
 //! TAB-6 起 Quick Connect 是**工作区级覆盖层**，不再占用标签页：
-//! * 开关只由 [`AppRuntime::quick_connect_overlay_open`] 驱动（打开/关闭/切换不改变
+//! * 开关由 [`AppRuntime::quick_connect_visible`] 驱动（打开/关闭/切换不改变
 //!   标签数量）；零标签时仍可打开覆盖层，关闭后保持空工作区（D1，不强制重开）。
 //! * 页面（`ui/pages/quick_connect.slint`）只渲染；本模块投影行数据、错误文案与摘要。
-//! * 历史/快速链接即时写回 `config.toml`；写失败只提示状态栏，不阻断连接（§1.5）。
+//! * 历史即时写回 `config.toml`；写失败只提示状态栏，不阻断连接（§1.5）。
 //! * 连接成功钩子由 `connection.rs` 在 shell 真正连上后调用
 //!   （`record_connect_success`），覆盖直连、密码重试与主机密钥信任三条路径。
+//! * "最近使用"是相对时间文案（Rust 侧拼装）：投影不发生文案就不会变，
+//!   所以 [`AppRuntime::quick_connect_relative_time_due`] 给出下一次刷新时刻，
+//!   由应用级 tick（`windows.rs`）在到期时触发一次重新投影。
 
 use std::collections::BTreeSet;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -34,14 +37,6 @@ pub struct QuickConnectRowData {
     pub title: String,
     pub target: String,
     pub last_used_text: String,
-}
-
-/// "快速链接"行（与 Slint `QuickLinkRow` 字段一一对应）。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct QuickLinkRowData {
-    pub id: String,
-    pub label: String,
-    pub target: String,
 }
 
 impl AppRuntime {
@@ -166,9 +161,6 @@ impl AppRuntime {
             }
         };
         let canonical = target.canonical();
-        // D10："已连接目标"只由成功钩子写入；新的尝试先清掉上一次的标记，
-        // 失败时页面不会再显示"Connected to …"（B 轮3 #15）。
-        self.quick_connect_last_target.clear();
         let Some(index) = active_new_tab else {
             return Ok(self.projection());
         };
@@ -197,8 +189,8 @@ impl AppRuntime {
 
     /// 连接成功钩子（由 `connection.rs` 在 shell 连上后调用）。
     ///
-    /// QC 直连：落 Quick Connect 历史 + 记录"最近一次成功目标"并清空输入；
-    /// 已保存会话：记录该 profile 的最近使用与历史（行投影据此合并去重）。
+    /// QC 直连：落 Quick Connect 历史；已保存会话：记录该 profile 的最近使用与
+    /// 历史（行投影据此合并去重）。
     pub(crate) fn record_connect_success(&mut self, session_id: &str) {
         // `SessionSource` 不实现 Clone，先取出需要的最小信息。
         let saved_profile_id = match self.sessions.get(session_id).map(|runtime| &runtime.source) {
@@ -211,7 +203,6 @@ impl AppRuntime {
             let Some(target) = self.pending_quick_connect_targets.remove(session_id) else {
                 return;
             };
-            self.quick_connect_last_target = target.clone();
             self.record_quick_connect_usage(&target);
             return;
         };
@@ -222,7 +213,6 @@ impl AppRuntime {
             canonical_target_text(profile.username.as_deref(), &profile.host, profile.port);
         self.mark_saved_session_used(&profile_id);
         self.record_quick_connect_usage(&canonical);
-        self.quick_connect_last_target = canonical;
     }
 
     /// 把目标写入 `quick_connect.history`（去重、前插、按 `limit` 截断、即时写回）。
@@ -264,77 +254,7 @@ impl AppRuntime {
         self.recent_saved_usage.truncate(RECENT_SAVED_USAGE_LIMIT);
     }
 
-    // ---------------------------------------------------- 快速链接 / 历史（§1.3/§1.4）
-    /// `pin-target`：把目标固定为快速链接（已存在时不重复添加）。
-    pub fn quick_connect_pin(&mut self, target: &str) -> AppResult<AppProjection> {
-        let canonical = canonicalize_target(target);
-        if self
-            .config_document
-            .quick_links
-            .iter()
-            .any(|link| link.target == canonical)
-        {
-            self.set_status_kind(
-                "quick-link-already",
-                format!("`{canonical}` is already a quick link."),
-                canonical.clone(),
-                String::new(),
-            );
-            return Ok(self.projection());
-        }
-        // D13：快速链接只存目标；标签优先用同目标的已保存会话名。
-        let label = self
-            .saved_session_label_for_target(&canonical)
-            .unwrap_or_else(|| canonical.clone());
-        let id = self.next_quick_link_id();
-        let sort_order = self
-            .config_document
-            .quick_links
-            .iter()
-            .map(|link| link.sort_order)
-            .max()
-            .map_or(0, |max| max.saturating_add(1));
-        self.config_document.quick_links.push(QuickLink {
-            id,
-            label,
-            target: canonical.clone(),
-            sort_order,
-        });
-        self.persist_config_with_status();
-        self.set_status_kind(
-            "quick-link-pinned",
-            format!("Pinned `{canonical}` as a quick link."),
-            canonical,
-            String::new(),
-        );
-        Ok(self.projection())
-    }
-
-    /// `remove-link`：按 id 移除快速链接。
-    pub fn quick_link_remove(&mut self, id: &str) -> AppResult<AppProjection> {
-        let before = self.config_document.quick_links.len();
-        self.config_document
-            .quick_links
-            .retain(|link| link.id != id);
-        if self.config_document.quick_links.len() == before {
-            self.set_status_kind(
-                "quick-link-missing",
-                format!("Quick link `{id}` was not found."),
-                id.to_owned(),
-                String::new(),
-            );
-            return Ok(self.projection());
-        }
-        self.persist_config_with_status();
-        self.set_status_kind(
-            "quick-link-removed",
-            "Removed the quick link.".to_owned(),
-            String::new(),
-            String::new(),
-        );
-        Ok(self.projection())
-    }
-
+    // ---------------------------------------------------- 历史（§1.4）
     /// `clear-history`（D12：可清空）。
     pub fn quick_connect_history_clear(&mut self) -> AppResult<AppProjection> {
         let cleared = self.config_document.quick_connect.history.len();
@@ -358,30 +278,6 @@ impl AppRuntime {
             String::new(),
         );
         self.projection()
-    }
-
-    /// `save-as-session`（§1.6）：打开 Session Editor 并预填目标。
-    pub fn start_quick_connect_session_editor(&mut self, target: &str) -> AppResult<AppProjection> {
-        let parsed = parse_quick_connect(target).map_err(AppError::from_error)?;
-        self.editor = SessionEditorDraft::default();
-        self.editor.host = parsed.host.clone();
-        self.editor.port_text = parsed.port.to_string();
-        self.editor.username = parsed.username.clone().unwrap_or_default();
-        self.new_folder_name.clear();
-        self.editor_discard_dialog_visible = false;
-        self.editor_modal_visible = true;
-        self.editor_section = EditorSection::General;
-        self.editor_auth_test_status = EditorAuthTestStatus::Hint;
-        self.editor_set_theme_baseline(None);
-        self.editor_baseline = Some(self.editor.clone());
-        let canonical = parsed.canonical();
-        self.set_status_kind(
-            "session-editor-qc-target",
-            format!("Session editor opened with Quick Connect target `{canonical}`."),
-            canonical,
-            String::new(),
-        );
-        Ok(self.projection())
     }
 
     // ------------------------------------------------------------ 投影辅助（§4）
@@ -436,24 +332,6 @@ impl AppRuntime {
         result
     }
 
-    /// "快速链接"行：按 `sort_order` 排序。
-    pub(crate) fn quick_link_row_data(&self) -> Vec<QuickLinkRowData> {
-        let mut links = self.config_document.quick_links.clone();
-        links.sort_by(|left, right| {
-            left.sort_order
-                .cmp(&right.sort_order)
-                .then_with(|| left.id.cmp(&right.id))
-        });
-        links
-            .into_iter()
-            .map(|link| QuickLinkRowData {
-                id: link.id,
-                label: link.label,
-                target: link.target,
-            })
-            .collect()
-    }
-
     /// 输入框下方的摘要（历史开关/条数/上限；回退文案，正式渲染走 `parts`）。
     pub(crate) fn quick_connect_summary_text(&self) -> String {
         let profile = &self.config_document.quick_connect;
@@ -484,31 +362,6 @@ impl AppRuntime {
         )
     }
 
-    fn saved_session_label_for_target(&self, canonical: &str) -> Option<String> {
-        self.saved_session_profiles()
-            .into_iter()
-            .find(|profile| {
-                canonical_target_text(profile.username.as_deref(), &profile.host, profile.port)
-                    == canonical
-            })
-            .map(|profile| profile.name)
-    }
-
-    fn next_quick_link_id(&self) -> String {
-        for index in 1..=usize::MAX {
-            let candidate = format!("quick-link-{index}");
-            if !self
-                .config_document
-                .quick_links
-                .iter()
-                .any(|link| link.id == candidate)
-            {
-                return candidate;
-            }
-        }
-        "quick-link".to_owned()
-    }
-
     /// 写回配置；失败只更新状态栏（§1.5：保存失败不阻断连接）。
     fn persist_config_with_status(&mut self) {
         if let Err(error) = self.config_store.save(&self.config_document) {
@@ -523,6 +376,50 @@ impl AppRuntime {
     }
 }
 
+// ------------------------------------------------- 相对时间刷新（"最近使用"）
+impl AppRuntime {
+    /// "最近使用"的相对时间是否到期需要刷新。
+    ///
+    /// 相对时间在投影时拼装，没有新投影就一直是旧文案（"just now" 卡住不动）。
+    /// 应用级 tick 调用这里：返回 true 表示该重新投影一次。
+    pub(crate) fn quick_connect_relative_time_due(&mut self) -> bool {
+        self.quick_connect_relative_time_due_at(now_epoch_seconds())
+    }
+
+    /// [`Self::quick_connect_relative_time_due`] 的可测版本（显式传入"现在"）。
+    pub(crate) fn quick_connect_relative_time_due_at(&mut self, now: i64) -> bool {
+        if !self.quick_connect_page_visible() {
+            return false;
+        }
+        let due = self
+            .quick_connect_next_refresh_at
+            .is_some_and(|deadline| now >= deadline);
+        // 每次都重算：历史/最近使用变化后，下一次刷新点必须跟着变。
+        self.quick_connect_next_refresh_at = self.next_relative_change_at(now);
+        due
+    }
+
+    /// QC 页当前是否可见（任一窗口/叶子上的 New Tab 页）。
+    fn quick_connect_page_visible(&self) -> bool {
+        self.tabs.iter().any(|tab| tab.is_new_tab())
+    }
+
+    /// 所有可见记录里，下一次相对时间文案变化的时刻（epoch 秒）。
+    fn next_relative_change_at(&self, now: i64) -> Option<i64> {
+        let history = self
+            .config_document
+            .quick_connect
+            .history
+            .iter()
+            .map(|entry| entry.last_used_at);
+        let saved = self.recent_saved_usage.iter().map(|(_, at)| *at);
+        history
+            .chain(saved)
+            .filter_map(|timestamp| next_relative_change_at(timestamp, now))
+            .min()
+    }
+}
+
 /// `[user@]host:port` 规范化（IPv6 加方括号，端口必带）。
 fn canonical_target_text(username: Option<&str>, host: &str, port: u16) -> String {
     QuickConnectTarget {
@@ -533,14 +430,7 @@ fn canonical_target_text(username: Option<&str>, host: &str, port: u16) -> Strin
     .canonical()
 }
 
-/// 尽力把用户/行数据里的目标规范化为 canonical 形式（解析失败时原样去空白）。
-fn canonicalize_target(target: &str) -> String {
-    parse_quick_connect(target)
-        .map(|parsed| parsed.canonical())
-        .unwrap_or_else(|_| target.trim().to_owned())
-}
-
-fn now_epoch_seconds() -> i64 {
+pub(crate) fn now_epoch_seconds() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| i64::try_from(duration.as_secs()).unwrap_or(i64::MAX))
@@ -548,7 +438,7 @@ fn now_epoch_seconds() -> i64 {
 }
 
 /// 最近使用时间的展示文案（相对时间；仅 Rust 侧拼装，不参与翻译）。
-fn format_relative_time(timestamp: i64, now: i64) -> String {
+pub(crate) fn format_relative_time(timestamp: i64, now: i64) -> String {
     if timestamp <= 0 {
         return String::new();
     }
@@ -577,4 +467,23 @@ fn format_relative_time(timestamp: i64, now: i64) -> String {
             format!("{days} days ago")
         }
     }
+}
+
+/// 单条记录的下一次文案变化时刻（epoch 秒）。
+///
+/// 文案按"秒 → 分 → 时 → 天"分段推进（桶宽 60s / 3600s / 86400s），所以下一次
+/// 变化落在当前桶的下一个整桶边界上，不必轮询比较文案本身。
+pub(crate) fn next_relative_change_at(timestamp: i64, now: i64) -> Option<i64> {
+    if timestamp <= 0 {
+        return None;
+    }
+    let delta = now.saturating_sub(timestamp).max(0);
+    let bucket: i64 = if delta < 3_600 {
+        60
+    } else if delta < 86_400 {
+        3_600
+    } else {
+        86_400
+    };
+    Some(timestamp + bucket * (delta / bucket + 1))
 }

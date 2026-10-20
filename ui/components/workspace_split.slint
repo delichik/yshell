@@ -8,7 +8,7 @@ import { TerminalView } from "terminal_view.slint";
 import { WorkspaceTab } from "workspace_tab_model.slint";
 import { WorkspaceTabBar } from "workspace_tab_bar.slint";
 import { WorkspacePaneLeaf, WorkspaceSplitter } from "workspace_pane_model.slint";
-import { QuickConnectPage, QuickConnectRow, QuickLinkRow } from "../pages/quick_connect.slint";
+import { QuickConnectPage, QuickConnectRow } from "../pages/quick_connect.slint";
 import { SftpPaneData, SftpTabPage } from "sftp_tab_page.slint";
 
 component SplitPaneLeaf inherits Rectangle {
@@ -23,9 +23,7 @@ component SplitPaneLeaf inherits Rectangle {
     in property <string> quick-connect-error-text: "";
     in property <string> quick-connect-summary-text: "";
     in property <bool> quick-connect-history-enabled: true;
-    in property <string> quick-connect-last-target-text: "";
     in property <[QuickConnectRow]> quick-connect-rows: [];
-    in property <[QuickLinkRow]> quick-link-rows: [];
     in property <SftpPaneData> sftp;
     in property <image> terminal-image;
     in property <int> pane-id: 0;
@@ -125,10 +123,7 @@ component SplitPaneLeaf inherits Rectangle {
     callback quick-connect-input-changed(string);
     callback quick-connect-submit(string);
     callback quick-connect-connect-target(string);
-    callback quick-connect-pin-target(string);
     callback quick-connect-copy-target(string);
-    callback quick-connect-remove-link(string);
-    callback quick-connect-save-as-session(string);
     callback quick-connect-clear-history();
 
     // --- SFTP page ------------------------------------------------------
@@ -324,19 +319,14 @@ component SplitPaneLeaf inherits Rectangle {
                     input-error-text: root.quick-connect-error-text;
                     summary-text: root.quick-connect-summary-text;
                     history-enabled: root.quick-connect-history-enabled;
-                    last-target-text: root.quick-connect-last-target-text;
                     recent-rows: root.quick-connect-rows;
-                    link-rows: root.quick-link-rows;
                     input-changed(text) => {
                         root.focus-requested();
                         root.quick-connect-input-changed(text);
                     }
                     submit(text) => { root.quick-connect-submit(text); }
                     connect-target(target) => { root.quick-connect-connect-target(target); }
-                    pin-target(target) => { root.quick-connect-pin-target(target); }
                     copy-target(target) => { root.quick-connect-copy-target(target); }
-                    remove-link(id) => { root.quick-connect-remove-link(id); }
-                    save-as-session(target) => { root.quick-connect-save-as-session(target); }
                     clear-history() => { root.quick-connect-clear-history(); }
                 }
 
@@ -469,9 +459,7 @@ export component WorkspaceSplitView inherits Rectangle {
     /// New Tab page data shared by every leaf (per-tab input lives in the leaf).
     in property <string> quick-connect-summary-text: "";
     in property <bool> quick-connect-history-enabled: true;
-    in property <string> quick-connect-last-target-text: "";
     in property <[QuickConnectRow]> quick-connect-rows: [];
-    in property <[QuickLinkRow]> quick-link-rows: [];
 
     callback focus-pane(int);
     callback terminal-key(string, bool, bool, bool, bool);
@@ -508,10 +496,7 @@ export component WorkspaceSplitView inherits Rectangle {
     callback quick-connect-input-changed(string);
     callback quick-connect-submit(string);
     callback quick-connect-connect-target(string);
-    callback quick-connect-pin-target(string);
     callback quick-connect-copy-target(string);
-    callback quick-connect-remove-link(string);
-    callback quick-connect-save-as-session(string);
     callback quick-connect-clear-history();
 
     // SFTP page.
@@ -562,9 +547,7 @@ export component WorkspaceSplitView inherits Rectangle {
         quick-connect-error-text: leaf.quick_connect_error_text;
         quick-connect-summary-text: root.quick-connect-summary-text;
         quick-connect-history-enabled: root.quick-connect-history-enabled;
-        quick-connect-last-target-text: root.quick-connect-last-target-text;
         quick-connect-rows: root.quick-connect-rows;
-        quick-link-rows: root.quick-link-rows;
         sftp: leaf.sftp;
         pane-id: leaf.pane-id;
         tabs: leaf.tabs;
@@ -618,10 +601,7 @@ export component WorkspaceSplitView inherits Rectangle {
         quick-connect-input-changed(text) => { root.quick-connect-input-changed(text); }
         quick-connect-submit(text) => { root.quick-connect-submit(text); }
         quick-connect-connect-target(target) => { root.quick-connect-connect-target(target); }
-        quick-connect-pin-target(target) => { root.quick-connect-pin-target(target); }
         quick-connect-copy-target(target) => { root.quick-connect-copy-target(target); }
-        quick-connect-remove-link(id) => { root.quick-connect-remove-link(id); }
-        quick-connect-save-as-session(target) => { root.quick-connect-save-as-session(target); }
         quick-connect-clear-history() => { root.quick-connect-clear-history(); }
         sftp-refresh() => { root.sftp-refresh(); }
         sftp-up() => { root.sftp-up(); }

@@ -25,7 +25,7 @@ import { AboutDialog } from "pages/about.slint";
 import { SettingsDialog } from "pages/settings.slint";
 import { SessionEditor } from "pages/session_editor.slint";
 import { KnownHostsPage } from "pages/known_hosts.slint";
-import { QuickConnectRow, QuickLinkRow } from "pages/quick_connect.slint";
+import { QuickConnectRow } from "pages/quick_connect.slint";
 import { PrivateKeysPage, PrivateKeyRow } from "pages/private_keys.slint";
 import { ProxiesPage, ProxyRow, ProxyProfileOption } from "pages/proxies.slint";
 import { ThemeManagerPage, ThemeManagerRow } from "pages/theme_manager.slint";
@@ -515,14 +515,10 @@ export component MainWindow inherits Window {
     in-out property <string> quick_connect_summary_kind_text: "";
     in-out property <string> quick_connect_summary_param_1_text: "";
     in-out property <string> quick_connect_summary_param_2_text: "";
-    /// 最近一次连接成功的目标（非空时显示"保存为会话…"）。
-    in-out property <string> quick_connect_last_target_text: "";
     /// D12：连接历史是否开启。
     in-out property <bool> quick_connect_history_enabled: true;
     /// "最近连接"行（历史 + 已保存会话最近使用，运行时已去重排序）。
     in-out property <[QuickConnectRow]> quick_connect_rows: [];
-    /// "快速链接"行（运行时已按 sort_order 排序）。
-    in-out property <[QuickLinkRow]> quick_links_rows: [];
     // 标签右键菜单针对的标签 id（scope 编码 = 前缀 + id）。
     in-out property <string> tab_menu_id: "";
     /// WP4：右键标签的当前显示名（Rename 弹窗预填；避免在 function 里遍历 tabs）。
@@ -755,12 +751,8 @@ export component MainWindow inherits Window {
     callback update_quick_connect_input(string);
     /// 输入框 Enter / "连接"按钮。
     callback submit_quick_connect(string);
-    /// 行操作：pin 为快速链接 / 移除快速链接（按 id）/ 复制目标。
-    callback quick_connect_pin(string);
-    callback quick_link_remove(string);
+    /// 行操作：连接目标 / 复制目标。
     callback quick_connect_copy(string);
-    /// "保存为会话…"：打开 Session Editor 并预填目标。
-    callback quick_connect_save_as_session(string);
     /// D12：清空连接历史。
     callback quick_connect_clear_history();
     /// `+` 按钮：总是新建一个本地终端标签（Ctrl+N 仍打开 Session Editor）。
@@ -2572,16 +2564,11 @@ export component MainWindow inherits Window {
                         root.quick_connect_summary_text
                     );
                     quick-connect-history-enabled: root.quick_connect_history_enabled;
-                    quick-connect-last-target-text: root.quick_connect_last_target_text;
                     quick-connect-rows: root.quick_connect_rows;
-                    quick-link-rows: root.quick_links_rows;
                     quick-connect-input-changed(text) => { root.update_quick_connect_input(text); }
                     quick-connect-submit(text) => { root.submit_quick_connect(text); }
                     quick-connect-connect-target(target) => { root.submit_quick_connect(target); }
-                    quick-connect-pin-target(target) => { root.quick_connect_pin(target); }
                     quick-connect-copy-target(target) => { root.quick_connect_copy(target); }
-                    quick-connect-remove-link(id) => { root.quick_link_remove(id); }
-                    quick-connect-save-as-session(target) => { root.quick_connect_save_as_session(target); }
                     quick-connect-clear-history() => { root.quick_connect_clear_history(); }
                     // N7：终端 FocusScope 拿到焦点（窗口激活 / 点击终端）→ 标记交互窗口。
                     window-activated() => { root.window_activated(); }

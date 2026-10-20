@@ -24,8 +24,8 @@ impl QuickConnectTarget {
 
     /// Formats the target as the canonical `[user@]host:port` string.
     ///
-    /// This is the representation persisted in `quick_connect.history` and
-    /// `quick_links`; IPv6 hosts are bracketed and the port is always included.
+    /// This is the representation persisted in `quick_connect.history`;
+    /// IPv6 hosts are bracketed and the port is always included.
     #[must_use]
     pub fn canonical(&self) -> String {
         let port = self.port;

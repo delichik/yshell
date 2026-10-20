@@ -190,9 +190,8 @@ impl AppRuntime {
         let input_sync_source_name_text = self.input_sync_source_name();
         let input_sync_notice_kind_text = self.input_sync.notice_kind.clone();
         let input_sync_notice_param_text = self.input_sync.notice_param.clone();
-        let (quick_connect_rows, quick_links_rows, quick_connect_summary_text) = (
+        let (quick_connect_rows, quick_connect_summary_text) = (
             self.quick_connect_row_data(),
-            self.quick_link_row_data(),
             self.quick_connect_summary_text(),
         );
         let (quick_connect_input_text, quick_connect_error_text) =
@@ -716,14 +715,12 @@ impl AppRuntime {
             quick_connect_visible: self.projection_quick_connect_visible(),
             quick_connect_input_text,
             quick_connect_error_text,
-            quick_connect_last_target_text: self.quick_connect_last_target.clone(),
             quick_connect_history_enabled: self.config_document.quick_connect.enabled,
             quick_connect_summary_text,
             quick_connect_summary_kind_text,
             quick_connect_summary_param_1_text,
             quick_connect_summary_param_2_text,
             quick_connect_rows,
-            quick_links_rows,
             private_keys_modal_visible: private_keys.visible,
             private_keys_rows: private_keys.rows,
             private_keys_selected_index: private_keys.selected_index,
@@ -2053,8 +2050,6 @@ pub struct AppProjection {
     pub quick_connect_input_text: String,
     /// 非法输入的内联错误（空 = 无错误）。
     pub quick_connect_error_text: String,
-    /// 最近一次连接成功的目标（"保存为会话…"入口；空 = 不显示）。
-    pub quick_connect_last_target_text: String,
     /// D12：连接历史是否开启。
     pub quick_connect_history_enabled: bool,
     /// 输入框下方的摘要（历史条数/上限；历史关闭时提示去设置里开启）。
@@ -2066,8 +2061,6 @@ pub struct AppProjection {
     pub quick_connect_summary_param_2_text: String,
     /// "最近连接"行（历史 + 已保存会话最近使用，已去重排序）。
     pub quick_connect_rows: Vec<QuickConnectRowData>,
-    /// "快速链接"行（已按 sort_order 排序）。
-    pub quick_links_rows: Vec<QuickLinkRowData>,
     // --- N4：私钥页 ----------------------------------------------------------
     pub private_keys_modal_visible: bool,
     pub private_keys_rows: Vec<PrivateKeyRowData>,

@@ -9,8 +9,8 @@ use crate::quick_connect::{parse_quick_connect, QuickConnectError};
 /// Current configuration schema version for newly-created stores.
 ///
 /// * `1` — original profile-based schema.
-/// * `2` — adds `[ui]`, `[quick_connect]`, `quick_links`, managed `keys`, folder
-///   profile overrides, and optional terminal theme fields.
+/// * `2` — adds `[ui]`, `[quick_connect]`, managed `keys`, folder profile
+///   overrides, and optional terminal theme fields.
 pub const SCHEMA_VERSION: u32 = 2;
 
 /// Root TOML document persisted by the configuration store.
@@ -48,9 +48,6 @@ pub struct ConfigDocument {
     /// Quick Connect availability, history limit, and history.
     #[serde(default)]
     pub quick_connect: QuickConnectProfile,
-    /// User-pinned quick links.
-    #[serde(default)]
-    pub quick_links: Vec<QuickLink>,
     /// Managed private key metadata; key material lives in the secret store.
     #[serde(default)]
     pub keys: Vec<KeyProfile>,
@@ -70,7 +67,6 @@ impl Default for ConfigDocument {
             terminal: TerminalProfile::default(),
             ui: UiProfile::default(),
             quick_connect: QuickConnectProfile::default(),
-            quick_links: Vec::new(),
             keys: Vec::new(),
         }
     }
@@ -747,21 +743,6 @@ pub struct QuickConnectEntry {
     pub use_count: u32,
 }
 
-/// A user-pinned connection shortcut (`quick_links`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct QuickLink {
-    /// Stable identifier used by the UI for rename/reorder/delete.
-    pub id: String,
-    /// User-visible label.
-    #[serde(default)]
-    pub label: String,
-    /// Normalized target (`user@host:port` form).
-    pub target: String,
-    /// Ascending sort key used to order the list.
-    #[serde(default)]
-    pub sort_order: i32,
-}
-
 /// Managed private key metadata (`keys`).
 ///
 /// The private key material and its passphrase live in the secret store and are
@@ -1009,13 +990,12 @@ impl ConfigDocument {
         Vec::new()
     }
 
-    /// Drops invalid Quick Connect/quick-link entries and clears invalid theme
-    /// values, returning a warning for every change.
+    /// Drops invalid Quick Connect entries and clears invalid theme values,
+    /// returning a warning for every change.
     ///
-    /// Invalid Quick Connect and quick-link targets are removed; valid targets
-    /// are rewritten to their canonical `user@host:port` form. Invalid colors
-    /// (`#RRGGBB` expected) are cleared so resolution falls back to the next
-    /// level.
+    /// Invalid Quick Connect targets are removed; valid targets are rewritten to
+    /// their canonical `user@host:port` form. Invalid colors (`#RRGGBB` expected)
+    /// are cleared so resolution falls back to the next level.
     pub fn sanitize(&mut self) -> Vec<ConfigWarning> {
         let mut warnings = Vec::new();
 
@@ -1029,22 +1009,6 @@ impl ConfigDocument {
                 Err(error) => {
                     warnings.push(ConfigWarning::InvalidQuickConnectTarget {
                         target: std::mem::take(&mut entry.target),
-                        error,
-                    });
-                    false
-                }
-            });
-
-        self.quick_links
-            .retain_mut(|link| match parse_quick_connect(&link.target) {
-                Ok(target) => {
-                    link.target = target.canonical();
-                    true
-                }
-                Err(error) => {
-                    warnings.push(ConfigWarning::InvalidQuickLinkTarget {
-                        id: std::mem::take(&mut link.id),
-                        target: std::mem::take(&mut link.target),
                         error,
                     });
                     false
@@ -1106,12 +1070,6 @@ pub enum ConfigWarning {
         target: String,
         error: QuickConnectError,
     },
-    /// A quick link was dropped because its target is invalid.
-    InvalidQuickLinkTarget {
-        id: String,
-        target: String,
-        error: QuickConnectError,
-    },
     /// A color value was not `#RRGGBB` and was cleared.
     InvalidColor {
         location: String,
@@ -1147,10 +1105,6 @@ impl fmt::Display for ConfigWarning {
             Self::InvalidQuickConnectTarget { target, error } => write!(
                 f,
                 "dropped invalid quick connect history target '{target}': {error}"
-            ),
-            Self::InvalidQuickLinkTarget { id, target, error } => write!(
-                f,
-                "dropped quick link '{id}' with invalid target '{target}': {error}"
             ),
             Self::InvalidColor {
                 location,
@@ -1535,20 +1489,6 @@ mod tests {
                 use_count: 3,
             }],
         };
-        document.quick_links = vec![
-            QuickLink {
-                id: "link-1".to_owned(),
-                label: "Prod".to_owned(),
-                target: "deploy@prod.example.com:22".to_owned(),
-                sort_order: 1,
-            },
-            QuickLink {
-                id: "link-2".to_owned(),
-                label: "Lab".to_owned(),
-                target: "lab.example.com:2200".to_owned(),
-                sort_order: 2,
-            },
-        ];
         document.keys = vec![KeyProfile {
             id: "key-1".to_owned(),
             label: "Work".to_owned(),
@@ -1818,7 +1758,6 @@ path = "/home/me/.ssh/id_ed25519"
         );
         assert_eq!(parsed.ui, UiProfile::default());
         assert_eq!(parsed.quick_connect, QuickConnectProfile::default());
-        assert!(parsed.quick_links.is_empty());
         assert!(parsed.keys.is_empty());
 
         let auth = parsed.auth_profiles.get("auth-key").expect("auth");
@@ -2054,12 +1993,6 @@ collapsed = true
                     use_count: 2,
                 }],
             },
-            quick_links: vec![QuickLink {
-                id: "link-1".to_owned(),
-                label: "Router".to_owned(),
-                target: "root@1.1.1.1:12345".to_owned(),
-                sort_order: -1,
-            }],
             ..ConfigDocument::default()
         };
 
@@ -2084,14 +2017,10 @@ use_count = 1
 target = "not a host"
 
 [[quick_links]]
-id = "good"
-label = "Good"
+id = "legacy"
+label = "Legacy"
 target = "example.com"
 
-[[quick_links]]
-id = "bad"
-label = "Bad"
-target = "bad host"
 "#;
 
         let (parsed, warnings) = ConfigDocument::from_toml_str_with_warnings(input).expect("parse");
@@ -2101,16 +2030,14 @@ target = "bad host"
             parsed.quick_connect.history[0].target,
             "bob@example.com:2222"
         );
-        assert_eq!(parsed.quick_links.len(), 1);
-        assert_eq!(parsed.quick_links[0].target, "example.com:22");
         assert!(warnings.iter().any(|warning| matches!(
             warning,
             ConfigWarning::InvalidQuickConnectTarget { target, .. } if target == "not a host"
         )));
-        assert!(warnings.iter().any(|warning| matches!(
-            warning,
-            ConfigWarning::InvalidQuickLinkTarget { id, .. } if id == "bad"
-        )));
+        // 快速链接已下线：旧配置里的 `[[quick_links]]` 直接忽略（不再解析/写回）。
+        assert!(!warnings
+            .iter()
+            .any(|warning| warning.to_string().contains("quick link")));
     }
 
     #[test]

@@ -1,8 +1,12 @@
-//! N2：Quick Connect 页（标签、历史、快速链接、行投影、`+` 行为）。
+//! N2：Quick Connect 页（标签、历史、行投影、`+` 行为）。
 
 use tempfile::tempdir;
+use yshell_config::QuickConnectEntry;
 
 use super::*;
+use crate::runtime::quick_connect::{
+    format_relative_time, next_relative_change_at, now_epoch_seconds,
+};
 
 /// 读取磁盘上的配置（验证即时写回）。
 fn reload_config(config_dir: &std::path::Path) -> ConfigDocument {
@@ -22,10 +26,6 @@ fn submit_records_history_on_success_and_clears_input() {
         .expect("submit");
 
     assert_eq!(projection.quick_connect_error_text, "");
-    assert_eq!(
-        projection.quick_connect_last_target_text,
-        "root@example.com:2200"
-    );
     // 成功后清空输入框。
     assert_eq!(projection.quick_connect_input_text, "");
     // 直连开的是终端标签，QC 页不可见。
@@ -53,7 +53,7 @@ fn submit_records_history_on_success_and_clears_input() {
 }
 
 #[test]
-fn failed_submit_clears_stale_last_target() {
+fn failed_submit_does_not_record_history() {
     // 与设置 YSHELL_FAKE_AUTH_FAILURE 的测试串行，避免读到别的场景。
     let _guard = lock_env();
     let temp = tempdir().expect("tempdir");
@@ -61,12 +61,8 @@ fn failed_submit_clears_stale_last_target() {
     let _ = runtime
         .submit_quick_connect("ssh://root@example.com:2200")
         .expect("successful submit");
-    assert_eq!(
-        runtime.projection().quick_connect_last_target_text,
-        "root@example.com:2200"
-    );
 
-    // D10：新的失败尝试不得让页面继续显示"Connected to …"。
+    // 失败的连接不写入历史（已有的一条保持不变）。
     let (port, accept_handle) = start_tcp_probe_target();
     runtime.force_real_ssh_in_tests = true;
     let projection = runtime
@@ -75,7 +71,6 @@ fn failed_submit_clears_stale_last_target() {
     accept_handle.join().expect("accept thread");
 
     assert_eq!(projection.tab_state_text, "failed");
-    assert_eq!(projection.quick_connect_last_target_text, "");
     assert!(runtime.config_document.quick_connect.history.len() == 1);
 }
 
@@ -185,49 +180,40 @@ fn history_summary_projects_kind_and_params() {
 }
 
 #[test]
-fn pin_and_remove_quick_links_persist() {
+fn relative_time_refreshes_when_the_next_change_point_is_reached() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 0);
-
-    // 先造一个同目标的已保存会话：pin 的标签应使用会话名。
+    // 90 秒前的记录：文案是 "1 minute ago"。
+    let now = now_epoch_seconds();
     runtime
-        .handle_quick_connect("ops@example.com:2200")
-        .expect("connect");
-    runtime.save_active_session().expect("save");
-    let saved_name = runtime.saved_session_profiles()[0].name.clone();
+        .config_document
+        .quick_connect
+        .history
+        .push(QuickConnectEntry {
+            target: "ops@example.com:22".to_owned(),
+            last_used_at: now - 90,
+            use_count: 1,
+        });
+    // QC 页可见（New Tab）。
+    runtime.open_new_tab();
 
-    let projection = runtime
-        .quick_connect_pin("ssh://ops@example.com:2200")
-        .expect("pin");
-    assert_eq!(projection.quick_links_rows.len(), 1);
-    assert_eq!(
-        projection.quick_links_rows[0].target,
-        "ops@example.com:2200"
-    );
-    assert_eq!(projection.quick_links_rows[0].label, saved_name);
-    assert_eq!(projection.quick_links_rows[0].id, "quick-link-1");
+    // 文案与刷新点：相对时间按"秒 → 分 → 时 → 天"推进。
+    assert_eq!(format_relative_time(now - 90, now), "1 minute ago");
+    assert_eq!(format_relative_time(now - 120, now), "2 minutes ago");
+    assert_eq!(next_relative_change_at(now - 90, now), Some(now + 30));
 
-    // 重复 pin 不新增。
-    runtime
-        .quick_connect_pin("ops@example.com:2200")
-        .expect("pin again");
-    assert_eq!(runtime.config_document.quick_links.len(), 1);
+    // 第一次检查只排期：下一次变化在 30 秒后（文案变成 "2 minutes ago"）。
+    assert!(!runtime.quick_connect_relative_time_due_at(now));
+    assert_eq!(runtime.quick_connect_next_refresh_at, Some(now + 30));
 
-    // 即时写回。
-    let reloaded = reload_config(temp.path());
-    assert_eq!(reloaded.quick_links.len(), 1);
-    assert_eq!(reloaded.quick_links[0].id, "quick-link-1");
+    // 到达刷新点：必须重新投影，否则文案一直停在 "1 minute ago"。
+    assert!(runtime.quick_connect_relative_time_due_at(now + 30));
+    // 刷新后排下一次变化点（再过 60 秒 → "3 minutes ago"）。
+    assert_eq!(runtime.quick_connect_next_refresh_at, Some(now + 90));
 
-    // 移除（按 id）。
-    runtime.quick_link_remove("quick-link-1").expect("remove");
-    assert!(runtime.config_document.quick_links.is_empty());
-    assert!(reload_config(temp.path()).quick_links.is_empty());
-
-    // 移除不存在的 id 只提示状态栏，不报错。
-    let projection = runtime
-        .quick_link_remove("missing")
-        .expect("remove missing");
-    assert!(projection.status_text.contains("was not found"));
+    // QC 页不可见时不排期（没有要显示的时间文案）。
+    runtime.dismiss_quick_connect();
+    assert!(!runtime.quick_connect_relative_time_due_at(now + 3_600));
 }
 
 #[test]
@@ -428,22 +414,4 @@ fn saved_session_connect_adds_saved_row_and_history() {
             .count(),
         1
     );
-}
-
-#[test]
-fn save_as_session_prefills_editor() {
-    let temp = tempdir().expect("tempdir");
-    let mut runtime = tab_runtime(temp.path(), 0);
-
-    let projection = runtime
-        .start_quick_connect_session_editor("ssh://bob@example.net:2222")
-        .expect("prefill editor");
-
-    assert!(projection.editor_modal_visible);
-    assert_eq!(runtime.editor.host, "example.net");
-    assert_eq!(runtime.editor.port_text, "2222");
-    assert_eq!(runtime.editor.username, "bob");
-    assert_eq!(projection.editor_host_text, "example.net");
-    assert_eq!(projection.editor_port_text, "2222");
-    assert_eq!(projection.editor_username_text, "bob");
 }

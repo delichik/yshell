@@ -3,13 +3,9 @@
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
 
 use tempfile::tempdir;
-use yshell_config::NewTabMode;
 use yshell_core::SessionState;
-use yshell_local::LocalPtyConfig;
 use yshell_ssh::{PtySize, ShellSession, SshError, SshErrorKind, SshResult};
 
 use super::*;

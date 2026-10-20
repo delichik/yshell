@@ -29,7 +29,6 @@
    - `PanelId` 枚举放本 crate（`sessions|sftp|tunnels|quick_commands|transfers`，snake_case 序列化），供后续 runtime/UI 复用。
 2. 快速连接：
    - `quick_connect: { enabled: bool = true, limit: usize = 20, history: Vec<QuickConnectEntry { target, last_used_at, use_count }> }`。
-   - `quick_links: Vec<QuickLink { id, label, target, sort_order }>`。
    - `target` 一律存规范化字符串（复用 `QuickConnectTarget` 解析校验，非法项读取时跳过并告警）。
 3. 文件夹继承：`FolderProfile` 新增 `terminal: Option<TerminalProfile>`、`logging: Option<LoggingProfile>`、`appearance: Option<AppearanceProfile>`；扩展 `ResolvedSessionProfile` 解析为 **会话 > 最近祖先文件夹 > … > 根文件夹 > 全局 > 内置默认**（逐字段继承）。
 4. 终端主题：`TerminalProfile` 增加可选字段：`color_scheme: Option<String>`、`foreground/background/cursor/selection: Option<String>`（`#RRGGBB`）、`ansi: Option<[String; 16]>`、`font_family: Option<String>`、`font_size: Option<u16>`、`fallback_fonts: Option<Vec<String>>`；保留 scrollback 字段。

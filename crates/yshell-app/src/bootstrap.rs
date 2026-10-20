@@ -36,9 +36,8 @@ pub(crate) mod generated_ui {
 use generated_ui::{
     AuthKeyOption, AuthKeyboardPrompt, FileCrumb, FileRow, HostKeyEntry, HostKeyGroup, MainWindow,
     Palette, PanelFrameData, PrivateKeyRow, ProxyProfileOption, ProxyRow, QuickConnectRow,
-    QuickLinkRow, SessionTreeRow, SftpPaneData, SftpTransferRow, SplitHandleData,
-    TerminalScrollInfo, Theme, ThemeManagerRow, TriStateField, TunnelRow, WorkspacePaneLeaf,
-    WorkspaceSplitter, WorkspaceTab,
+    SessionTreeRow, SftpPaneData, SftpTransferRow, SplitHandleData, TerminalScrollInfo, Theme,
+    ThemeManagerRow, TriStateField, TunnelRow, WorkspacePaneLeaf, WorkspaceSplitter, WorkspaceTab,
 };
 
 /// Keeps the pixel-rendered terminal surface in sync with the runtime.
@@ -599,38 +598,6 @@ pub(crate) fn wire_callbacks(
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
     let surface = surface_source.clone();
-    window.on_quick_connect_pin(move |target| {
-        let Some(window) = weak.upgrade() else {
-            return;
-        };
-        match runtime_ref.borrow_mut().quick_connect_pin(target.as_ref()) {
-            Ok(projection) => {
-                apply_projection(&window, &projection);
-                surface.refresh(&window);
-            }
-            Err(error) => set_error_status(&window, "Could not pin the quick link.", &error),
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_quick_link_remove(move |id| {
-        let Some(window) = weak.upgrade() else {
-            return;
-        };
-        match runtime_ref.borrow_mut().quick_link_remove(id.as_ref()) {
-            Ok(projection) => {
-                apply_projection(&window, &projection);
-                surface.refresh(&window);
-            }
-            Err(error) => set_error_status(&window, "Could not remove the quick link.", &error),
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
     let clipboard_ref = Rc::clone(&clipboard);
     window.on_quick_connect_copy(move |target| {
         let Some(window) = weak.upgrade() else {
@@ -644,25 +611,6 @@ pub(crate) fn wire_callbacks(
             .quick_connect_copied_status(target.as_ref());
         apply_projection(&window, &projection);
         surface.refresh(&window);
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_quick_connect_save_as_session(move |target| {
-        let Some(window) = weak.upgrade() else {
-            return;
-        };
-        match runtime_ref
-            .borrow_mut()
-            .start_quick_connect_session_editor(target.as_ref())
-        {
-            Ok(projection) => {
-                apply_projection(&window, &projection);
-                surface.refresh(&window);
-            }
-            Err(error) => set_error_status(&window, "Could not save the session.", &error),
-        }
     });
 
     let weak = window.as_weak();
@@ -5925,37 +5873,6 @@ fn set_quick_connect_rows_if_changed(
     )));
 }
 
-fn quick_link_row_from(row: &crate::runtime::QuickLinkRowData) -> QuickLinkRow {
-    QuickLinkRow {
-        id: row.id.clone().into(),
-        label: row.label.clone().into(),
-        target: row.target.clone().into(),
-    }
-}
-
-fn quick_link_row_matches(current: &QuickLinkRow, next: &crate::runtime::QuickLinkRowData) -> bool {
-    current.id.as_str() == next.id
-        && current.label.as_str() == next.label
-        && current.target.as_str() == next.target
-}
-
-fn set_quick_links_rows_if_changed(window: &MainWindow, rows: &[crate::runtime::QuickLinkRowData]) {
-    let current = window.get_quick_links_rows();
-    if current.row_count() == rows.len() {
-        let unchanged = (0..rows.len()).all(|index| {
-            current
-                .row_data(index)
-                .is_some_and(|row| quick_link_row_matches(&row, &rows[index]))
-        });
-        if unchanged {
-            return;
-        }
-    }
-    window.set_quick_links_rows(ModelRc::new(VecModel::from(
-        rows.iter().map(quick_link_row_from).collect::<Vec<_>>(),
-    )));
-}
-
 // --- N4：密钥管理页 / 认证弹窗的模型转换（带变更检测，避免重建行实例）--------
 
 fn private_key_row_from(row: &PrivateKeyRowData) -> PrivateKeyRow {
@@ -6807,7 +6724,7 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     set_tabs_if_changed(window, &projection.tabs);
     window.set_tab_count(projection.tab_count);
     window.set_tab_has_disconnected(projection.tab_has_disconnected);
-    // N2：Quick Connect 页投影（可见性/输入/错误/摘要/最近连接/快速链接）。
+    // N2：Quick Connect 页投影（可见性/输入/错误/摘要/最近连接）。
     window.set_quick_connect_visible(projection.quick_connect_visible);
     if window.get_quick_connect_input_text().as_str() != projection.quick_connect_input_text {
         window.set_quick_connect_input_text(projection.quick_connect_input_text.clone().into());
@@ -6824,12 +6741,8 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_quick_connect_summary_param_2_text(
         projection.quick_connect_summary_param_2_text.clone().into(),
     );
-    window.set_quick_connect_last_target_text(
-        projection.quick_connect_last_target_text.clone().into(),
-    );
     window.set_quick_connect_history_enabled(projection.quick_connect_history_enabled);
     set_quick_connect_rows_if_changed(window, &projection.quick_connect_rows);
-    set_quick_links_rows_if_changed(window, &projection.quick_links_rows);
     window.set_close_tabs_confirm_visible(projection.close_tabs_confirm_visible);
     window.set_close_tabs_confirm_single(projection.close_tabs_confirm_single);
     window.set_close_tabs_confirm_name_text(projection.close_tabs_confirm_name_text.clone().into());

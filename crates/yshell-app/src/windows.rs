@@ -648,6 +648,11 @@ impl WindowManager {
             if runtime.poll_sftp_connection() {
                 dirty = true;
             }
+            // N2：QC 页的"最近使用"是相对时间文案（投影时拼装）：到期就重投影
+            // 一次，否则文案会一直停在 "just now"。
+            if runtime.quick_connect_relative_time_due() {
+                dirty = true;
+            }
         }
 
         let requested_close = self

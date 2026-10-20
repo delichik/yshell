@@ -643,26 +643,11 @@ export global TextFormats {
         if kind == "quick-connect-closed" {
             return @tr("MainWindow" => "Closed the Quick Connect page.");
         }
-        if kind == "quick-link-already" {
-            return @tr("MainWindow" => "`{0}` is already a quick link.", param_1);
-        }
-        if kind == "quick-link-pinned" {
-            return @tr("MainWindow" => "Pinned `{0}` as a quick link.", param_1);
-        }
-        if kind == "quick-link-missing" {
-            return @tr("MainWindow" => "Quick link `{0}` was not found.", param_1);
-        }
-        if kind == "quick-link-removed" {
-            return @tr("MainWindow" => "Removed the quick link.");
-        }
         if kind == "quick-connect-history-cleared" {
             return @tr("MainWindow" => "Cleared {n} Quick Connect history entry." | "Cleared {n} Quick Connect history entries." % round(param_1.to-float()), round(param_1.to-float()));
         }
         if kind == "quick-connect-copied" {
             return @tr("MainWindow" => "Copied `{0}` to the clipboard.", param_1);
-        }
-        if kind == "session-editor-qc-target" {
-            return @tr("MainWindow" => "Session editor opened with Quick Connect target `{0}`.", param_1);
         }
         if kind == "quick-connect-persist-failed" {
             return @tr("MainWindow" => "Failed to persist Quick Connect state: {0}", param_1);

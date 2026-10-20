@@ -125,7 +125,6 @@ pub(crate) use proxies::ProxyProfileOptionData;
 pub(crate) use proxies::ProxyRowData;
 pub(crate) use proxies::ProxyTestMessage;
 pub use quick_connect::QuickConnectRowData;
-pub use quick_connect::QuickLinkRowData;
 // N5：外观/文件夹默认值（session_runtime、bootstrap、projection 消费）。
 pub(crate) use theme::TerminalAppearance;
 pub(crate) use theme::{SettingsAppearanceDraft, SettingsAppearanceStatus, ThemeEditorDraft};
@@ -138,7 +137,7 @@ use std::{
     cell::Cell, collections::BTreeMap, collections::BTreeSet, env, fmt, fs, path::Path,
     path::PathBuf, sync::Arc,
 };
-use yshell_config::{ConfigDocument, ConfigStore, LoadOutcome, PanelSide, QuickLink, ThemeCatalog};
+use yshell_config::{ConfigDocument, ConfigStore, LoadOutcome, PanelSide, ThemeCatalog};
 use yshell_core::CommandDispatcher;
 use yshell_core::CoreCommandDispatcher;
 use yshell_core::SessionCommand;
@@ -306,8 +305,8 @@ impl AppRuntime {
             keychain: keychain.map(RuntimeKeychain),
             logging_dialog: LoggingDialogState::default(),
             last_logging_directory: None,
-            quick_connect_last_target: String::new(),
             pending_quick_connect_targets: BTreeMap::new(),
+            quick_connect_next_refresh_at: None,
             recent_saved_usage: Vec::new(),
             private_keys_modal_visible: false,
             private_keys_selected_id: None,
@@ -674,10 +673,10 @@ pub struct AppRuntime {
     pub(crate) logging_dialog: LoggingDialogState,
     /// N6："上次使用目录"：手动日志开启成功后记住，作为下次弹窗默认保存位置。
     pub(crate) last_logging_directory: Option<PathBuf>,
-    /// N2：最近一次连接成功的目标（"保存为会话…"入口）。
-    pub(crate) quick_connect_last_target: String,
     /// N2：QC 直连的挂起目标（session key → canonical），连接成功后落历史。
     pub(crate) pending_quick_connect_targets: BTreeMap<String, String>,
+    /// N2："最近使用"相对时间的下一次刷新时刻（epoch 秒；None = 尚未排期）。
+    pub(crate) quick_connect_next_refresh_at: Option<i64>,
     /// N2：最近使用的已保存会话（profile_id, 时间戳），"最近连接"里的 saved 行。
     pub(crate) recent_saved_usage: Vec<(String, i64)>,
     // --- N4：密钥管理页（私钥 / 主机密钥）与认证弹窗 -------------------------
@@ -905,7 +904,6 @@ impl fmt::Debug for AppRuntime {
             .field("keychain", &self.keychain)
             .field("logging_dialog", &self.logging_dialog)
             .field("last_logging_directory", &self.last_logging_directory)
-            .field("quick_connect_last_target", &self.quick_connect_last_target)
             .field(
                 "pending_quick_connect_targets",
                 &self.pending_quick_connect_targets,

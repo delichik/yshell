@@ -16,8 +16,8 @@ pub use schema::{
     AppearanceProfile, AuthMethod, AuthProfile, ConfigDocument, ConfigSchemaError, ConfigWarning,
     FolderProfile, HostKeyPolicy, KeyProfile, LayoutProfile, LoggingProfile, NewTabMode, PanelId,
     PanelSide, PanelSlot, PrivateKeySource, ProxyProfile, ProxyProtocol, QuickConnectEntry,
-    QuickConnectProfile, QuickLink, ResolvedSessionProfile, SessionBasicEdit, SessionProfile,
-    SftpProfile, TerminalProfile, TunnelForward, TunnelForwardKind, TunnelProfile, UiProfile,
+    QuickConnectProfile, ResolvedSessionProfile, SessionBasicEdit, SessionProfile, SftpProfile,
+    TerminalProfile, TunnelForward, TunnelForwardKind, TunnelProfile, UiProfile,
     SFTP_MAX_PARALLEL_TRANSFERS_MAX, SFTP_MAX_PARALLEL_TRANSFERS_MIN, SCHEMA_VERSION,
 };
 pub use store::{ConfigStore, ConfigStoreError, LoadOutcome};
