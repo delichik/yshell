@@ -31,11 +31,10 @@ export component TunnelPanel inherits Rectangle {
     private property <string> start-text: @tr("Start tunnel");
     private property <string> stop-text: @tr("Stop tunnel");
 
-    // PANEL-2：行高必须容纳内部两行（padding 4+4 + 名称行 14 + 间距 2 +
-    // 动作行 32 = 56px）。旧值 `row-height-list + spacing-8` = 40px 会让每行
-    // 内容向下溢出 8px、与下一行文字重叠；这里改由 token 推导。
+    // PANEL-2：行高 = padding 4+4 + 名称行 + spacing-4 + compact 动作行 24。
+    // 旧值用满血 32 按钮会把窄栏摘要挤没；改用 control-height-compact。
     private property <length> row-height: 2 * Theme.spacing-4
-        + (Theme.font-caption + 2px) + 2px + Theme.control-height;
+        + (Theme.font-caption + 2px) + Theme.spacing-4 + Theme.control-height-compact;
 
     if root.rows.length == 0 : Text {
         text: root.empty-kind == "none"
@@ -78,7 +77,7 @@ export component TunnelPanel inherits Rectangle {
                     padding-right: Theme.spacing-4;
                     padding-top: Theme.spacing-4;
                     padding-bottom: Theme.spacing-4;
-                    spacing: 2px;
+                    spacing: Theme.spacing-4;
 
                     HorizontalLayout {
                         spacing: Theme.spacing-8;
@@ -108,7 +107,7 @@ export component TunnelPanel inherits Rectangle {
 
                     HorizontalLayout {
                         spacing: Theme.spacing-8;
-                        height: Theme.control-height;
+                        height: Theme.control-height-compact;
 
                         Text {
                             text: row.summary-text;
@@ -120,9 +119,11 @@ export component TunnelPanel inherits Rectangle {
                             horizontal-stretch: 1;
                         }
 
-                        // P3：与 Transfers 行动作同形（32×32 图标按钮，命中区 ≥32）。
+                        // 与 Transfers 行一致：compact 24×24，窄栏里留给摘要更多宽度。
                         if row.can-start : WinIconButton {
                             icon: "play";
+                            width: Theme.control-height-compact;
+                            height: Theme.control-height-compact;
                             accessible-name: root.start-text;
                             tooltip-text: root.start-text;
                             cross-axis-self-alignment: center;
@@ -130,6 +131,8 @@ export component TunnelPanel inherits Rectangle {
                         }
                         if row.can-stop : WinIconButton {
                             icon: "pause";
+                            width: Theme.control-height-compact;
+                            height: Theme.control-height-compact;
                             accessible-name: root.stop-text;
                             tooltip-text: root.stop-text;
                             cross-axis-self-alignment: center;

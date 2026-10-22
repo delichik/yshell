@@ -247,6 +247,8 @@ component SftpTransferDrawer inherits Rectangle {
 
                         if row.can-pause : WinIconButton {
                             icon: "pause";
+                            width: Theme.control-height-compact;
+                            height: Theme.control-height-compact;
                             accessible-name: root.pause-text;
                             tooltip-text: root.pause-text;
                             cross-axis-self-alignment: center;
@@ -254,6 +256,8 @@ component SftpTransferDrawer inherits Rectangle {
                         }
                         if row.can-resume : WinIconButton {
                             icon: "play";
+                            width: Theme.control-height-compact;
+                            height: Theme.control-height-compact;
                             accessible-name: root.resume-text;
                             tooltip-text: root.resume-text;
                             cross-axis-self-alignment: center;
@@ -261,6 +265,8 @@ component SftpTransferDrawer inherits Rectangle {
                         }
                         if row.can-retry : WinIconButton {
                             icon: "refresh";
+                            width: Theme.control-height-compact;
+                            height: Theme.control-height-compact;
                             accessible-name: root.retry-text;
                             tooltip-text: root.retry-text;
                             cross-axis-self-alignment: center;
@@ -268,6 +274,8 @@ component SftpTransferDrawer inherits Rectangle {
                         }
                         if row.can-cancel : WinIconButton {
                             icon: "close";
+                            width: Theme.control-height-compact;
+                            height: Theme.control-height-compact;
                             accessible-name: root.cancel-text;
                             tooltip-text: root.cancel-text;
                             cross-axis-self-alignment: center;
@@ -275,6 +283,8 @@ component SftpTransferDrawer inherits Rectangle {
                         }
                         if row.can-remove : WinIconButton {
                             icon: "trash";
+                            width: Theme.control-height-compact;
+                            height: Theme.control-height-compact;
                             accessible-name: root.remove-text;
                             tooltip-text: root.remove-text;
                             cross-axis-self-alignment: center;
@@ -313,15 +323,14 @@ component SftpTransferDrawer inherits Rectangle {
              + (row.can-cancel ? 1 : 0) + (row.can-remove ? 1 : 0);
     }
 
-    /// 动作列宽按该行实际可见的按钮数计算（1/2/3 个 → 32/64/96px，B2）：
-    /// 不再恒定预留 3×32，1 个按钮时右侧不留 64px 死区。
+    /// 动作列宽按该行实际可见的按钮数计算（compact 24，与 Transfers 面板一致）：
+    /// 不再恒定预留 3×32，1 个按钮时右侧不留死区。
     pure function action-width(row: SftpTransferRow) -> length {
-        // 动作按钮 32×32（§8 命中区 ≥32）+ 相邻 4px 间距（§8）。
-        return root.action-count(row) * Theme.control-height
+        return root.action-count(row) * Theme.control-height-compact
              + Math.max(0, root.action-count(row) - 1) * Theme.spacing-4;
     }
 
-    /// 摘要只列非零字段：字段全列时在 340px 面板里必然被省略号截掉
+    /// 摘要只列非零字段：字段全列时在 320px 面板里必然被省略号截掉
     /// 「已暂停/失败/已完成」（B4）。零任务时退化为 "0 transfer(s)"。
     pure function summary-text() -> string {
         return @tr("{0} transfer(s)", root.total-count)

@@ -599,12 +599,12 @@ pub(crate) const NAV_RAIL_WIDTH: f32 = 48.0;
 /// 左栏宽度范围（§4.3：左 200–420）。
 pub(crate) const LEFT_WIDTH_MIN: u32 = 200;
 pub(crate) const LEFT_WIDTH_MAX: u32 = 420;
-/// 右栏宽度范围（§4.3：右 280–560）。
+/// 右栏宽度范围（设计语言 §4.1：右 280–480）。
 pub(crate) const RIGHT_WIDTH_MIN: u32 = 280;
-pub(crate) const RIGHT_WIDTH_MAX: u32 = 560;
-/// 默认栏宽（与 C0 `LayoutProfile` 的默认值一致）。
+pub(crate) const RIGHT_WIDTH_MAX: u32 = 480;
+/// 默认栏宽（与 C0 `LayoutProfile` 的默认值一致；右栏默认 §4.1 的 320）。
 pub(crate) const DEFAULT_LEFT_WIDTH: u32 = 240;
-pub(crate) const DEFAULT_RIGHT_WIDTH: u32 = 340;
+pub(crate) const DEFAULT_RIGHT_WIDTH: u32 = 320;
 /// 分栏边界比例范围与相邻边界最小间距（与 UI 的每面板最小高度配合）。
 pub(crate) const SPLIT_RATIO_MIN: f32 = 0.05;
 pub(crate) const SPLIT_RATIO_MAX: f32 = 0.95;
@@ -707,7 +707,7 @@ pub(crate) fn auto_collapsed_side(
     }
 }
 
-/// 栏宽边界（左 200–420 / 右 280–560）。
+/// 栏宽边界（左 200–420 / 右 280–480）。
 pub(crate) const fn side_width_bounds(side: PanelSide) -> (u32, u32) {
     match side {
         PanelSide::Left => (LEFT_WIDTH_MIN, LEFT_WIDTH_MAX),
@@ -773,7 +773,7 @@ fn resolve_fractions(stored: &[f32], count: usize) -> Option<Vec<f32>> {
 /// 不变式（构造时清洗）：
 /// * 同一栈内不会出现重复面板，两侧不会同时拥有同一面板（保留先出现的那个）；
 /// * 比例列表为空 = 均分；非空时长度 = 栈长 - 1，取值递增且留最小间距；
-/// * 栏宽按侧夹取到 200–420 / 280–560。
+/// * 栏宽按侧夹取到 200–420 / 280–480。
 ///
 /// 栈内改序保留比例（分栏几何不变、面板互换）；增删成员清空该侧比例（回到均分）。
 #[derive(Debug, Clone, PartialEq)]
@@ -1939,7 +1939,7 @@ mod tests {
             DEFAULT_RIGHT_WIDTH
         );
         assert_eq!(side_width_bounds(PanelSide::Left), (200, 420));
-        assert_eq!(side_width_bounds(PanelSide::Right), (280, 560));
+        assert_eq!(side_width_bounds(PanelSide::Right), (280, 480));
     }
 
     #[test]
@@ -2233,9 +2233,9 @@ mod tests {
         let layout = LayoutProfile::default();
         let view = compute_panel_layout(&layout, 1440.0, 794.0, None);
         assert_eq!(view.left_width, 240.0);
-        assert_eq!(view.right_width, 340.0);
+        assert_eq!(view.right_width, 320.0);
         assert_eq!(view.left_effective_width, 240.0);
-        assert_eq!(view.right_effective_width, 340.0);
+        assert_eq!(view.right_effective_width, 320.0);
         assert!(!view.rail_active);
         assert!(!view.dock_toggle_visible);
         assert!(!view.right_collapsed);
@@ -2262,14 +2262,14 @@ mod tests {
         assert_eq!(
             (tunnels.x, tunnels.y, tunnels.width),
             (
-                1100.0 + PANEL_CARD_INSET,
+                1120.0 + PANEL_CARD_INSET,
                 12.0,
-                340.0 - 2.0 * PANEL_CARD_INSET
+                320.0 - 2.0 * PANEL_CARD_INSET
             )
         );
         assert!(tunnels.visible);
         let commands = *view.frame(PanelId::QuickCommands).expect("commands");
-        assert_eq!(commands.x, 1100.0 + PANEL_CARD_INSET);
+        assert_eq!(commands.x, 1120.0 + PANEL_CARD_INSET);
         assert!(commands.y > tunnels.y);
         assert!(commands.visible);
         assert!(view.frame(PanelId::Transfers).is_none());
@@ -2303,7 +2303,7 @@ mod tests {
         // 用户在 1000px 手动展开右栏：右栏恢复。
         let view = compute_panel_layout(&layout, 1000.0, 600.0, Some(PanelSide::Right));
         assert!(!view.right_collapsed);
-        assert_eq!(view.right_effective_width, 340.0);
+        assert_eq!(view.right_effective_width, 320.0);
         assert!(view.frame(PanelId::Tunnels).expect("tunnels").visible);
     }
 

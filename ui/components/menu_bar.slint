@@ -67,6 +67,9 @@ component TitleBarDragTouch inherits TouchArea {
         if (root.native-drag && root.armed
             && (root.abs-length(self.mouse-x - root.press-x) >= 4px
                 || root.abs-length(self.mouse-y - root.press-y) >= 4px)) {
+            // 发起原生移动后立刻卸武装：系统循环会吞掉真实 release，
+            // 不能再等 pointer-up 来清 armed（否则残留抓取会把下一次
+            // 界外点击当成拖动起点）。界外按下靠 press-in-bounds 挡掉。
             root.armed = false;
             root.drag-triggered = true;
             root.drag-requested();

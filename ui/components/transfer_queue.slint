@@ -43,8 +43,9 @@ export component TransferQueue inherits Rectangle {
     }
 
     pure function action-width(row: SftpTransferRow) -> length {
-        // 动作按钮 32×32（§8 命中区 ≥32）+ 相邻 4px 间距（§8）。
-        return root.action-count(row) * Theme.control-height
+        // 右栏窄内容宽：行内动作用 compact 24×24（与队列头一致），避免 5×32
+        // 把文件名挤没；相邻 4px 间距仍走 token。
+        return root.action-count(row) * Theme.control-height-compact
              + Math.max(0, root.action-count(row) - 1) * Theme.spacing-4;
     }
 
@@ -204,10 +205,11 @@ export component TransferQueue inherits Rectangle {
                             spacing: Theme.spacing-4;
                             alignment: end;
 
-                            // 动作按钮统一 32×32（与 SFTP 抽屉内的实现同形，
-                            // 原来这里是 24×24：命中区不足 32，且在 32px 行里贴顶）。
+                            // 右栏行内动作：compact 24×24（窄栏观感优先于满血 32）。
                             if row.can-pause : WinIconButton {
                                 icon: "pause";
+                                width: Theme.control-height-compact;
+                                height: Theme.control-height-compact;
                                 accessible-name: root.pause-text;
                                 tooltip-text: root.pause-text;
                                 cross-axis-self-alignment: center;
@@ -215,6 +217,8 @@ export component TransferQueue inherits Rectangle {
                             }
                             if row.can-resume : WinIconButton {
                                 icon: "play";
+                                width: Theme.control-height-compact;
+                                height: Theme.control-height-compact;
                                 accessible-name: root.resume-text;
                                 tooltip-text: root.resume-text;
                                 cross-axis-self-alignment: center;
@@ -222,6 +226,8 @@ export component TransferQueue inherits Rectangle {
                             }
                             if row.can-retry : WinIconButton {
                                 icon: "refresh";
+                                width: Theme.control-height-compact;
+                                height: Theme.control-height-compact;
                                 accessible-name: root.retry-text;
                                 tooltip-text: root.retry-text;
                                 cross-axis-self-alignment: center;
@@ -229,6 +235,8 @@ export component TransferQueue inherits Rectangle {
                             }
                             if row.can-cancel : WinIconButton {
                                 icon: "close";
+                                width: Theme.control-height-compact;
+                                height: Theme.control-height-compact;
                                 accessible-name: root.cancel-text;
                                 tooltip-text: root.cancel-text;
                                 cross-axis-self-alignment: center;
@@ -236,6 +244,8 @@ export component TransferQueue inherits Rectangle {
                             }
                             if row.can-remove : WinIconButton {
                                 icon: "trash";
+                                width: Theme.control-height-compact;
+                                height: Theme.control-height-compact;
                                 accessible-name: root.remove-text;
                                 tooltip-text: root.remove-text;
                                 cross-axis-self-alignment: center;

@@ -1398,7 +1398,7 @@ const fn default_left_width() -> u32 {
 }
 
 const fn default_right_width() -> u32 {
-    340
+    320
 }
 
 fn default_left_panels() -> Vec<PanelSlot> {
@@ -1900,7 +1900,7 @@ fallback_fonts = ["/fonts/only.ttf"]
             ]
         );
         assert_eq!(defaulted.ui.layout.left_width, 240);
-        assert_eq!(defaulted.ui.layout.right_width, 340);
+        assert_eq!(defaulted.ui.layout.right_width, 320);
         assert_eq!(defaulted.ui.layout.narrow_collapsed_side, None);
 
         let document = ConfigDocument {
@@ -1940,7 +1940,7 @@ collapsed = true
         assert_eq!(parsed.ui.layout.left_width, 300);
         // Unspecified fields keep their defaults.
         assert_eq!(parsed.ui.layout.left.len(), 1);
-        assert_eq!(parsed.ui.layout.right_width, 340);
+        assert_eq!(parsed.ui.layout.right_width, 320);
         assert!(parsed.ui.confirm_close_session);
         assert!(parsed.ui.confirm_quit_app);
         assert_eq!(

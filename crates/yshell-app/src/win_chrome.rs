@@ -84,7 +84,7 @@ pub fn start_native_window_move(window: &slint::Window) {
     use windows_sys::Win32::Foundation::{HWND, POINT};
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetCursorPos, HTCAPTION, PostMessageW, WM_LBUTTONUP, WM_NCLBUTTONDOWN,
+        GetCursorPos, HTCAPTION, PostMessageW, WM_NCLBUTTONDOWN,
     };
 
     let _ = window.with_winit_window(|winit_window| {
@@ -108,10 +108,10 @@ pub fn start_native_window_move(window: &slint::Window) {
             let (cursor_x, cursor_y) = cursor.unwrap_or_default();
             let lparam = (((cursor_y as u32) << 16) | (cursor_x as u32 & 0xffff)) as isize;
             PostMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION as usize, lparam);
-            // 系统移动循环会吞掉鼠标释放，Slint 的抓取因此残留：之后的第一次
-            // 点击仍被送进标题栏（表现为"点哪儿都在拖窗口"）。补一个合成的
-            // 释放让 Slint 交掉抓取。
-            PostMessageW(hwnd, WM_LBUTTONUP, 0, 0);
+            // 不要在这里 PostMessage WM_LBUTTONUP：系统移动循环还没启动，
+            // 队列里的合成释放会立刻结束移动（表现为标题栏拖不动 / 一拖就松）。
+            // Slint 抓取残留改由 TitleBarDragTouch.press-in-bounds 消化——
+            // 界外按下不当作拖动起点。
         }
     });
 }

@@ -55,9 +55,9 @@ export component StatusBar inherits Rectangle {
         : Theme.text-tertiary;
 
     HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 12px;
-        spacing: 8px;
+        padding-left: Theme.spacing-12;
+        padding-right: Theme.spacing-12;
+        spacing: Theme.spacing-8;
         cross-axis-alignment: center;
 
         // WP1：连接状态点（连接中 1.5s 呼吸；设计 §6.3）。
@@ -98,6 +98,7 @@ export component StatusBar inherits Rectangle {
         }
 
         // 失败态状态文案已含 user@host，再显示 target 会叠成难辨的一长串。
+        // stretch + min-width:0：窄窗下优先 elide 目标，把中间 message 留给状态文案。
         if root.connection-target != "" && root.connection-state != "failed" : Text {
             text: root.connection-target;
             color: Theme.text-primary;
@@ -106,7 +107,8 @@ export component StatusBar inherits Rectangle {
             vertical-alignment: center;
             wrap: no-wrap;
             overflow: elide;
-            horizontal-stretch: 0;
+            horizontal-stretch: 1;
+            min-width: 0px;
         }
 
         // P2：Busy 仅在非 connecting/pending 时显示（连接中已有呼吸点，避免叠字）。
@@ -165,7 +167,7 @@ export component StatusBar inherits Rectangle {
             HorizontalLayout {
                 padding-left: Theme.spacing-8;
                 padding-right: Theme.spacing-8;
-                spacing: 6px;
+                spacing: Theme.spacing-4;
                 alignment: center;
 
                 if root.sync-active : Text {
@@ -216,7 +218,7 @@ export component StatusBar inherits Rectangle {
             HorizontalLayout {
                 padding-left: Theme.spacing-8;
                 padding-right: Theme.spacing-8;
-                spacing: 6px;
+                spacing: Theme.spacing-4;
                 alignment: center;
 
                 // REC 圆点：仅在记录中显示（避免静态元素占位）。
