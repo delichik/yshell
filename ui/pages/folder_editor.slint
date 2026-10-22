@@ -1,8 +1,8 @@
 import { Theme } from "../theme.slint";
 import { TextFormats } from "../text_formats.slint";
-import { Icon } from "../components/basic/icons.slint";
-import { WinButton, WinComboBox, WinIconButton, WinToggle, WinScrollIndicator } from "../components/basic/controls.slint";
+import { WinButton, WinComboBox, WinToggle, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
+import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
 
 // Folder Editor（最小版）：文件夹级 Appearance / Terminal / Logging 默认值。
 //
@@ -191,8 +191,7 @@ component FieldRow inherits Rectangle {
                 text: root.hint-text;
                 color: Theme.text-tertiary;
                 font-size: Theme.font-caption;
-                wrap: no-wrap;
-                overflow: elide;
+                wrap: word-wrap;
             }
         }
 
@@ -381,135 +380,39 @@ export component FolderEditor inherits Rectangle {
     callback field-toggled(string);
     callback field-selected(string, int);
 
-    // 内容理想高度：标题行 + 说明 + 三块 + 操作区 + 间距/分割线/内边距
-    private property <length> panel-height:
-        header-row.preferred-height
-        + summary.preferred-height
-        + sections.preferred-height
-        + action-row.preferred-height
-        + 5 * Theme.spacing-12
-        + 2 * 1px
-        + 2 * Theme.spacing-20;
+    private property <string> title-text:
+        root.folder-name == "" ? @tr("Folder Defaults") : @tr("Folder Defaults — {0}", root.folder-name);
+    /// 壳内滚动区上限（标题/摘要/底栏约占 220；矮窗由壳再夹紧面板）。
+    private property <length> sections-scroll-max:
+        Theme.manager-panel-max-height - 220px;
 
-    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
-    //
-    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
-    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
-    states [
-        opened when root.open: {
-            opacity: 1.0;
-            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
-            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
-        }
-        closed when !root.open: { opacity: 0.0; }
-    ]
-    // 退场期间保持可见，等淡出结束再隐藏。
-    visible: root.open || self.opacity > 0.01;
-    background: Theme.scrim;
+    visible: root.open || shell.opacity > 0.01;
+    background: transparent;
 
-    // Esc / 遮罩点击关闭；焦点在弹窗内（与 Settings / Session Editor 的 L2 行为一致）。
-    dialog-scope := FocusScope {
-        width: parent.width;
-        height: parent.height;
+    shell := ManagerDialogShell {
+        width: 100%;
+        height: 100%;
+        open: root.open;
+        content-sized: true;
+        title-text: root.title-text;
+        summary-text: root.folder-path;
+        close => { root.close(); }
 
-        key-pressed(event) => {
-            if (event.text == "\u{001b}") {
-                root.close();
-                return accept;
-            }
-            return reject;
+        summary-hint := Text {
+            visible: root.summary-text != "";
+            text: root.summary-text;
+            color: Theme.text-secondary;
+            font-size: Theme.font-caption;
+            wrap: word-wrap;
         }
 
-        TouchArea {
-            clicked => { root.close(); }
-        }
+        // --- 主体（三块，超出高度时滚动） ------------------------------
+        Rectangle {
+            height: min(sections.preferred-height, root.sections-scroll-max);
+            clip: true;
+            background: transparent;
 
-        panel := Rectangle {
-            x: (parent.width - Theme.dialog-width-wide) / 2;
-            y: max((parent.height - self.height) / 2, Theme.spacing-24);
-            width: Theme.dialog-width-wide;
-            height: min(root.panel-height, parent.height - 2 * Theme.spacing-24);
-            background: Theme.panel-background;
-            border-radius: Theme.radius-panel;
-            border-width: 1px;
-            border-color: Theme.control-stroke;
-
-            // 吞掉面板空白处的点击。
-            TouchArea { }
-
-            panel-body := VerticalLayout {
-                padding: Theme.spacing-20;
-                spacing: Theme.spacing-12;
-
-                // --- 标题行 ---------------------------------------------------
-                header-row := HorizontalLayout {
-                    spacing: Theme.spacing-12;
-
-                    Rectangle {
-                        width: Theme.icon-size + 2 * Theme.spacing-8;
-                        height: self.width;
-                        border-radius: Theme.radius-control;
-                        background: Theme.accent-soft;
-                        // 徽标 36px / 标题块两行（≈46px）→ 默认 stretch 贴行顶。
-                        cross-axis-self-alignment: center;
-
-                        Icon {
-                            name: "folder";
-                            icon-color: Theme.accent;
-                            icon-size: Theme.icon-size;
-                            x: (parent.width - self.width) / 2;
-                            y: (parent.height - self.height) / 2;
-                        }
-                    }
-
-                    VerticalLayout {
-                        horizontal-stretch: 1;
-                        spacing: 2px;
-                        alignment: start;
-
-                        Text {
-                            text: root.folder-name == "" ? @tr("Folder Defaults") : @tr("Folder Defaults — {0}", root.folder-name);
-                            color: Theme.text-primary;
-                            font-size: Theme.font-subtitle;
-                            font-weight: Theme.weight-semibold;
-                            wrap: no-wrap;
-                            overflow: elide;
-                        }
-
-                        Text {
-                            text: root.folder-path;
-                            color: Theme.text-tertiary;
-                            font-size: Theme.font-caption;
-                            wrap: no-wrap;
-                            overflow: elide;
-                        }
-                    }
-
-                    WinIconButton {
-                        icon: "close";
-                        accessible-name: @tr("Close");
-                        cross-axis-self-alignment: center;
-                        clicked => { root.close(); }
-                    }
-                }
-
-                Rectangle { height: 1px; background: Theme.layer-stroke; }
-
-                summary := Text {
-                    visible: root.summary-text != "";
-                    text: root.summary-text;
-                    color: Theme.text-secondary;
-                    font-size: Theme.font-caption;
-                    wrap: word-wrap;
-                }
-
-                // --- 主体（三块，超出高度时滚动） ------------------------------
-                Rectangle {
-                    vertical-stretch: 1;
-                    clip: true;
-                    background: transparent;
-
-                    scroll := Flickable {
+            scroll := Flickable {
                         width: parent.width;
                         height: parent.height;
                         interactive: true;
@@ -571,45 +474,42 @@ export component FolderEditor inherits Rectangle {
                     }
                 }
 
-                Rectangle { height: 1px; background: Theme.divider; }
+        Rectangle { height: 1px; background: Theme.divider; }
 
-                // --- 操作区 ---------------------------------------------------
-                action-row := HorizontalLayout {
-                    spacing: Theme.spacing-8;
+        // --- 操作区 ---------------------------------------------------
+        HorizontalLayout {
+            spacing: Theme.spacing-8;
 
-                    Text {
-                        text: root.status-display;
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-caption;
-                        vertical-alignment: center;
-                        horizontal-stretch: 1;
-                        wrap: no-wrap;
-                        overflow: elide;
-                    }
+            Text {
+                text: root.status-display;
+                color: Theme.text-tertiary;
+                font-size: Theme.font-caption;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+                wrap: no-wrap;
+                overflow: elide;
+            }
 
-                    WinButton {
-                        text: @tr("Reset All");
-                        clicked => { root.reset-all(); }
-                    }
+            WinButton {
+                text: @tr("Reset All");
+                clicked => { root.reset-all(); }
+            }
 
-                    WinButton {
-                        text: @tr("Save");
-                        accent: true;
-                        clicked => { root.save(); }
-                    }
-                }
+            WinButton {
+                text: @tr("Save");
+                accent: true;
+                clicked => { root.save(); }
             }
         }
     }
 
-    // 打开时聚焦弹窗（Esc 需要焦点在弹窗内）。
     public function focus-dialog() {
-        dialog-scope.focus();
+        shell.focus-dialog();
     }
 
     changed open => {
         if (root.open) {
-            dialog-scope.focus();
+            shell.focus-dialog();
         }
     }
 }

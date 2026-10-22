@@ -17,6 +17,7 @@ import {
     WinButton, WinCard, WinCardHeader, WinComboBox, WinIconButton, WinScrollIndicator, WinToggle,
 } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
+import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
 
 /// 代理清单行（Rust `ProxyRowData` 的 Slint 镜像）。
 export struct ProxyRow {
@@ -46,7 +47,8 @@ component ProxyListItem inherits Rectangle {
     in property <bool> selected: false;
     callback clicked();
 
-    height: 56px;
+    // 三行 caption 清单行：32 + 24 = 56。
+    height: Theme.row-height-list + Theme.spacing-24;
     border-radius: Theme.radius-control;
     background: selected ? Theme.subtle-selected
         : touch.pressed ? Theme.subtle-pressed
@@ -100,35 +102,32 @@ component ProxyListItem inherits Rectangle {
     }
 }
 
-/// 表单行：左侧固定宽度标签 + 右侧控件（与 Session Editor 同构）。
+/// 表单行：左侧固定宽度标签 + 右侧控件（可长高，避免 Host/Port 等挤进 32px）。
 component ProxyFormRow inherits Rectangle {
     in property <string> label: "";
     in property <length> label-width: Theme.form-label-width;
-    height: Theme.control-height;
+    height: max(Theme.control-height, body.preferred-height);
     background: transparent;
 
-    HorizontalLayout {
+    body := HorizontalLayout {
         spacing: Theme.spacing-12;
+        cross-axis-alignment: center;
 
         Text {
             text: root.label;
             color: Theme.text-secondary;
             font-size: Theme.font-body;
             width: root.label-width;
-            height: root.height;
             vertical-alignment: center;
             wrap: no-wrap;
             overflow: elide;
         }
 
-        Rectangle {
+        HorizontalLayout {
             horizontal-stretch: 1;
-            background: transparent;
-
-            HorizontalLayout {
-                spacing: Theme.spacing-8;
-                @children
-            }
+            spacing: Theme.spacing-8;
+            cross-axis-alignment: center;
+            @children
         }
     }
 }
@@ -190,22 +189,6 @@ export component ProxiesPage inherits Rectangle {
     callback select-proxy-protocol(int);
     callback toggle-proxy-dns();
 
-    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
-    //
-    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
-    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
-    states [
-        opened when root.open: {
-            opacity: 1.0;
-            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
-            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
-        }
-        closed when !root.open: { opacity: 0.0; }
-    ]
-    // 退场期间保持可见，等淡出结束再隐藏。
-    visible: root.open || self.opacity > 0.01;
-    background: Theme.scrim;
-
     private property <bool> has-selection:
         root.selected-index >= 0 && root.selected-index < root.proxies.length;
     private property <string> selected-name:
@@ -214,79 +197,25 @@ export component ProxiesPage inherits Rectangle {
         "SOCKS4", "SOCKS4a", "SOCKS5", "HTTP CONNECT"
     ];
 
-    dialog_scope := FocusScope {
-        width: parent.width;
-        height: parent.height;
+    // 退场淡出期间壳仍可见：根跟着壳的 opacity，避免透明全屏挡住下层。
+    visible: root.open || shell.opacity > 0.01;
+    background: transparent;
 
-        key-pressed(event) => {
-            if (event.text == "\u{001b}") {
-                root.close();
-                return accept;
-            }
-            return reject;
-        }
-
-        TouchArea {
-            clicked => { root.close(); }
-        }
-
-        Rectangle {
-            x: (parent.width - Theme.dialog-width-wide) / 2;
-            y: max((parent.height - self.height) / 2, 44px);
-            width: Theme.dialog-width-wide;
-            height: min(parent.height - 88px, 640px);
-            background: Theme.panel-background;
-            border-radius: Theme.radius-panel;
-            border-width: 1px;
-            border-color: Theme.control-stroke;
-            clip: true;
-
-            TouchArea { }
-
-            VerticalLayout {
-                padding: Theme.spacing-20;
-                spacing: Theme.spacing-12;
-
-                // 标题行
-                HorizontalLayout {
-                    spacing: Theme.spacing-12;
-
-                    Text {
-                        text: @tr("Proxy Manager");
-                        color: Theme.text-primary;
-                        font-size: Theme.font-subtitle;
-                        font-weight: Theme.weight-semibold;
-                        vertical-alignment: center;
-                    }
-
-                    Text {
-                        text: root.list-summary-text;
-                        color: Theme.text-secondary;
-                        font-size: Theme.font-body;
-                        vertical-alignment: center;
-                        horizontal-stretch: 1;
-                        wrap: no-wrap;
-                        overflow: elide;
-                    }
-
-                    WinIconButton {
-                        icon: "close";
-                        accessible-name: @tr("Close");
-                        clicked => { root.close(); }
-                    }
-                }
-
-                Rectangle {
-                    height: 1px;
-                    background: Theme.divider;
-                }
+    shell := ManagerDialogShell {
+        width: 100%;
+        height: 100%;
+        open: root.open;
+        title-text: @tr("Proxy Manager");
+        summary-text: root.list-summary-text;
+        close => { root.close(); }
 
                 HorizontalLayout {
                     spacing: Theme.spacing-16;
+                    vertical-stretch: 1;
 
                     // --- 左：清单 + 动作 -------------------------------------------
                     Rectangle {
-                        width: 300px;
+                        width: Theme.manager-list-width;
                         clip: true;
                         background: transparent;
 
@@ -381,6 +310,7 @@ export component ProxiesPage inherits Rectangle {
                                         }
                                     }
 
+                                    // 主操作一行；危险/探测次要一行，避免 320 栏里四按钮横挤。
                                     HorizontalLayout {
                                         spacing: Theme.spacing-8;
                                         vertical-stretch: 0;
@@ -412,18 +342,18 @@ export component ProxiesPage inherits Rectangle {
                                         vertical-stretch: 0;
 
                                         WinButton {
+                                            text: @tr("Test");
+                                            icon: "check";
+                                            enabled: root.has-selection && !root.test-in-flight;
+                                            clicked => { root.test-proxy(); }
+                                        }
+
+                                        WinButton {
                                             text: @tr("Delete");
                                             icon: "trash";
                                             critical: true;
                                             enabled: root.has-selection;
                                             clicked => { root.request-remove-proxy(); }
-                                        }
-
-                                        WinButton {
-                                            text: @tr("Test");
-                                            icon: "check";
-                                            enabled: root.has-selection && !root.test-in-flight;
-                                            clicked => { root.test-proxy(); }
                                         }
                                     }
                                 }
@@ -540,7 +470,7 @@ export component ProxiesPage inherits Rectangle {
                                                 }
                                             }
 
-                                            // Host + Port 同一行：减少 880×600 下的表单高度。
+                                            // Host + Port 同一行；Port 带标签、固定宽。
                                             ProxyFormRow {
                                                 label: @tr("Host");
 
@@ -551,8 +481,16 @@ export component ProxiesPage inherits Rectangle {
                                                     edited => { root.update-proxy-host(self.text); }
                                                 }
 
+                                                Text {
+                                                    text: @tr("Port");
+                                                    color: Theme.text-secondary;
+                                                    font-size: Theme.font-caption;
+                                                    vertical-alignment: center;
+                                                    wrap: no-wrap;
+                                                }
+
                                                 WinTextInput {
-                                                    width: 92px;
+                                                    width: Theme.form-port-width;
                                                     text <=> root.editor-port-text;
                                                     placeholder-text: "1080";
                                                     edited => { root.update-proxy-port(self.text); }
@@ -603,37 +541,22 @@ export component ProxiesPage inherits Rectangle {
                                             }
                                         }
 
-                                        WinCard {
+                                        if root.test-result-text != "" : Rectangle {
                                             vertical-stretch: 0;
-
-                                            WinCardHeader {
-                                                title: @tr("Status");
-                                                icon: "settings";
-                                            }
+                                            background: Theme.panel-background;
+                                            border-radius: Theme.radius-control;
+                                            border-width: 1px;
+                                            border-color: Theme.divider;
 
                                             Text {
-                                                text: root.status-display;
+                                                x: Theme.spacing-8;
+                                                y: Theme.spacing-8;
+                                                width: parent.width - 2 * Theme.spacing-8;
+                                                text: root.test-result-text;
                                                 color: Theme.text-secondary;
                                                 font-size: Theme.font-caption;
+                                                font-family: Theme.font-mono;
                                                 wrap: word-wrap;
-                                            }
-
-                                            if root.test-result-text != "" : Rectangle {
-                                                background: Theme.panel-background;
-                                                border-radius: Theme.radius-control;
-                                                border-width: 1px;
-                                                border-color: Theme.divider;
-
-                                                Text {
-                                                    x: 10px;
-                                                    y: 8px;
-                                                    width: parent.width - 20px;
-                                                    text: root.test-result-text;
-                                                    color: Theme.text-secondary;
-                                                    font-size: Theme.font-caption;
-                                                    font-family: Theme.font-mono;
-                                                    wrap: word-wrap;
-                                                }
                                             }
                                         }
                                     }
@@ -650,7 +573,7 @@ export component ProxiesPage inherits Rectangle {
                                 }
                             }
 
-                            // 固定状态行（完整测试详情在滚动区 Status 卡里）。
+                            // 底栏唯一状态条（不再在滚动区重复 Status 卡）。
                             Text {
                                 height: Theme.control-height;
                                 text: root.status-display;
@@ -685,28 +608,28 @@ export component ProxiesPage inherits Rectangle {
                 Rectangle {
                     height: 1px;
                     background: Theme.divider;
+                    vertical-stretch: 0;
                 }
 
                 HorizontalLayout {
                     alignment: end;
+                    vertical-stretch: 0;
 
                     WinButton {
                         text: @tr("Close");
                         clicked => { root.close(); }
                     }
                 }
-            }
-        }
     }
 
     /// 宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
     public function focus-dialog() {
-        dialog_scope.focus();
+        shell.focus-dialog();
     }
 
     changed open => {
         if (root.open) {
-            dialog_scope.focus();
+            shell.focus-dialog();
         }
     }
 }

@@ -2,6 +2,7 @@ import { Theme } from "../theme.slint";
 import { WinButton, WinComboBox, WinIconButton, WinNavItem, WinScrollIndicator, WinToggle } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { TerminalPreview } from "../components/terminal_preview.slint";
+import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
 
 // 分区导航项：WinNavItem + 可选的禁用说明 tooltip。
 // （基础控件 WinNavItem 不属本文件；Tooltip 必须声明在其直接父元素下，故包一层薄壳。）
@@ -122,90 +123,19 @@ export component SettingsDialog inherits Rectangle {
     callback reset-appearance-defaults();
     callback save-appearance();
 
-    private property <length> dialog-height: min(self.height - 80px, 640px);
-    private property <length> dialog-width: Theme.dialog-width-wide;
+    visible: root.open || shell.opacity > 0.01;
+    background: transparent;
 
-    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
-    //
-    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
-    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
-    states [
-        opened when root.open: {
-            opacity: 1.0;
-            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
-            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
-        }
-        closed when !root.open: { opacity: 0.0; }
-    ]
-    // 退场期间保持可见，等淡出结束再隐藏。
-    visible: root.open || self.opacity > 0.01;
-    background: Theme.scrim;
+    shell := ManagerDialogShell {
+        width: 100%;
+        height: 100%;
+        open: root.open;
+        title-text: @tr("Settings");
+        summary-text: "";
+        close => { root.close(); }
 
-    // L2（对话框 Esc / 遮罩点击关闭）：根 FocusScope 包住整个弹窗；打开时聚焦，
-    // Esc 沿焦点链冒泡到这里 → 与关闭按钮完全相同的 `root.close()` 路径；其余按键 reject。
-    dialog_scope := FocusScope {
-        width: parent.width;
-        height: parent.height;
-
-        key-pressed(event) => {
-            // Esc 键码按 `event.text` 比较（与 session_tree 判 Enter 的做法一致）。
-            if (event.text == "\u{001b}") {
-                root.close();
-                return accept;
-            }
-            return reject;
-        }
-
-        // 遮罩：点击 = 关闭（与关闭按钮同一路径）。
-        TouchArea {
-            clicked => { root.close(); }
-        }
-
-        panel := Rectangle {
-            x: (parent.width - root.dialog-width) / 2;
-            y: max((parent.height - self.height) / 2, Theme.spacing-24);
-            width: root.dialog-width;
-            // 固定高度：不随分区内容变化
-            height: root.dialog-height;
-            background: Theme.panel-background;
-            border-radius: Theme.radius-panel;
-            border-width: 1px;
-            border-color: Theme.control-stroke;
-
-            // 吞掉面板空白处的点击，避免穿透到遮罩触发取消。
-            TouchArea { }
-
-            body := VerticalLayout {
-                padding: Theme.spacing-20;
-                spacing: Theme.spacing-12;
-
-                // 标题行（固定）：右侧统一关闭按钮
-                title-row := HorizontalLayout {
-                    spacing: Theme.spacing-8;
-
-                    Text {
-                        text: @tr("Settings");
-                        color: Theme.text-primary;
-                        font-size: Theme.font-subtitle;
-                        font-weight: Theme.weight-semibold;
-                        vertical-alignment: center;
-                        horizontal-stretch: 1;
-                    }
-
-                    WinIconButton {
-                        icon: "close";
-                        accessible-name: @tr("Close");
-                        clicked => { root.close(); }
-                    }
-                }
-
-                Rectangle {
-                    height: 1px;
-                    background: Theme.divider;
-                }
-
-                // 主体：左侧分区导航 + 右侧表单
-                HorizontalLayout {
+        // 主体：左侧分区导航 + 右侧表单
+        HorizontalLayout {
                     vertical-stretch: 1;
                     spacing: Theme.spacing-12;
 
@@ -318,6 +248,7 @@ export component SettingsDialog inherits Rectangle {
 
                                             HorizontalLayout {
                                                 spacing: Theme.spacing-8;
+                                                cross-axis-alignment: center;
 
                                                 WinButton {
                                                     text: @tr("System");
@@ -737,18 +668,16 @@ export component SettingsDialog inherits Rectangle {
                                                 wrap: word-wrap;
                                             }
 
-                                            Text {
-                                                text: @tr("Max parallel transfers");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body;
-                                                font-weight: Theme.weight-semibold;
-                                            }
+                                            AppearanceFieldRow {
+                                                label: @tr("Max parallel transfers");
 
-                                            WinTextInput {
-                                                text <=> root.settings-sftp-max-parallel-transfers-text;
-                                                placeholder-text: "4";
-                                                font-family: Theme.font-mono;
-                                                edited(text) => { root.update-settings-sftp-max-parallel-transfers(text); }
+                                                WinTextInput {
+                                                    horizontal-stretch: 1;
+                                                    text <=> root.settings-sftp-max-parallel-transfers-text;
+                                                    placeholder-text: "4";
+                                                    font-family: Theme.font-mono;
+                                                    edited(text) => { root.update-settings-sftp-max-parallel-transfers(text); }
+                                                }
                                             }
 
                                             Text {
@@ -796,7 +725,8 @@ export component SettingsDialog inherits Rectangle {
                                                 wrap: word-wrap;
                                             }
 
-                                            HorizontalLayout {
+                                            // 三个长入口纵向堆叠，避免 760 里横挤截断。
+                                            VerticalLayout {
                                                 spacing: Theme.spacing-8;
                                                 alignment: start;
 
@@ -910,33 +840,30 @@ export component SettingsDialog inherits Rectangle {
                     }
                 }
 
-                Rectangle {
-                    height: 1px;
-                    background: Theme.divider;
-                }
+        Rectangle {
+            height: 1px;
+            background: Theme.divider;
+        }
 
-                // 操作区（固定）：右对齐
-                action-row := HorizontalLayout {
-                    alignment: end;
+        // 操作区（固定）：右对齐
+        HorizontalLayout {
+            alignment: end;
 
-                    WinButton {
-                        text: @tr("Close");
-                        clicked => { root.close(); }
-                    }
-                }
+            WinButton {
+                text: @tr("Close");
+                clicked => { root.close(); }
             }
         }
     }
 
     /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
     public function focus-dialog() {
-        dialog_scope.focus();
+        shell.focus-dialog();
     }
 
-    // 打开时聚焦弹窗（Esc 需要焦点在弹窗内）。
     changed open => {
         if (root.open) {
-            dialog_scope.focus();
+            shell.focus-dialog();
         }
     }
 }

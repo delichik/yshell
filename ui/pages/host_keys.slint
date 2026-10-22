@@ -11,7 +11,8 @@
 import { Theme } from "../theme.slint";
 import { TextFormats } from "../text_formats.slint";
 import { Icon } from "../components/basic/icons.slint";
-import { WinButton, WinCard, WinCardHeader, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
+import { WinButton, WinCard, WinCardHeader, WinScrollIndicator } from "../components/basic/controls.slint";
+import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
 
 /// 一条已保存的主机密钥（SHA256 指纹 + 公钥行）。
 export struct HostKeyEntry {
@@ -28,13 +29,13 @@ export struct HostKeyGroup {
     entries: [HostKeyEntry],
 }
 
-/// 单条主机密钥行：算法 + SHA256 指纹（两行 40px，缩进在组头之下）。
+/// 单条主机密钥行：算法 + SHA256 指纹（缩进在组头之下）。
 component HostKeyListItem inherits Rectangle {
     in property <HostKeyEntry> node;
     in property <bool> selected: false;
     callback clicked();
 
-    height: 40px;
+    height: Theme.row-height-list + Theme.spacing-8;
     border-radius: Theme.radius-control;
     background: selected ? Theme.subtle-selected
         : touch.pressed ? Theme.subtle-pressed
@@ -118,21 +119,9 @@ export component HostKeysPage inherits Rectangle {
     callback export-keys();
     callback request-clear-all();
 
-    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
-    //
-    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
-    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
-    states [
-        opened when root.open: {
-            opacity: 1.0;
-            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
-            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
-        }
-        closed when !root.open: { opacity: 0.0; }
-    ]
-    // 退场期间保持可见，等淡出结束再隐藏。
-    visible: root.open || self.opacity > 0.01;
-    background: Theme.scrim;
+    // 退场淡出期间壳仍可见：根跟着壳的 opacity，避免透明全屏挡住下层。
+    visible: root.open || shell.opacity > 0.01;
+    background: transparent;
 
     private property <int> group-count: root.groups.length;
 
@@ -147,73 +136,14 @@ export component HostKeysPage inherits Rectangle {
         root.status-text
     );
 
-    dialog_scope := FocusScope {
-        width: parent.width;
-        height: parent.height;
-
-        key-pressed(event) => {
-            if (event.text == "\u{001b}") {
-                root.close();
-                return accept;
-            }
-            return reject;
-        }
-
-        TouchArea {
-            clicked => { root.close(); }
-        }
-
-        Rectangle {
-            x: (parent.width - Theme.dialog-width-wide) / 2;
-            y: 48px;
-            width: Theme.dialog-width-wide;
-            height: parent.height - 96px;
-            background: Theme.panel-background;
-            border-radius: Theme.radius-panel;
-            border-width: 1px;
-            border-color: Theme.control-stroke;
-            clip: true;
-
-            TouchArea { }
-
-            VerticalLayout {
-                padding: Theme.spacing-20;
-                spacing: Theme.spacing-12;
-
-                // 标题行
-                HorizontalLayout {
-                    spacing: Theme.spacing-12;
-
-                    Text {
-                        text: @tr("Host Keys");
-                        color: Theme.text-primary;
-                        font-size: Theme.font-subtitle;
-                        font-weight: Theme.weight-semibold;
-                        vertical-alignment: center;
-                    }
-
-                    Text {
-                        // B 轮3 #30：中文里不用半角逗号，改用 `·` 分隔
-                        text: @tr("{0} host(s) · {1} key(s)", root.group-count, root.key-count);
-                        color: Theme.text-secondary;
-                        font-size: Theme.font-body;
-                        vertical-alignment: center;
-                        horizontal-stretch: 1;
-                        wrap: no-wrap;
-                        overflow: elide;
-                    }
-
-                    WinIconButton {
-                        icon: "close";
-                        accessible-name: @tr("Close");
-                        clicked => { root.close(); }
-                    }
-                }
-
-                Rectangle {
-                    height: 1px;
-                    background: Theme.divider;
-                }
+    shell := ManagerDialogShell {
+        width: 100%;
+        height: 100%;
+        open: root.open;
+        title-text: @tr("Host Keys");
+        // B 轮3 #30：中文里不用半角逗号，改用 `·` 分隔
+        summary-text: @tr("{0} host(s) · {1} key(s)", root.group-count, root.key-count);
+        close => { root.close(); }
 
                 // 空态：居中提示 + 主 Import CTA
                 if root.groups.length == 0 : VerticalLayout {
@@ -259,7 +189,7 @@ export component HostKeysPage inherits Rectangle {
                         }
 
                         Rectangle {
-                            height: 96px;
+                            min-height: 96px;
                             clip: true;
                             background: Theme.panel-background;
                             border-radius: Theme.radius-control;
@@ -342,7 +272,7 @@ export component HostKeysPage inherits Rectangle {
 
                         // --- 左：按 host:port 分组的清单 ------------------------------
                         WinCard {
-                            width: 360px;
+                            width: Theme.manager-list-width;
 
                             WinCardHeader {
                                 title: @tr("Trusted Hosts");
@@ -477,42 +407,60 @@ export component HostKeysPage inherits Rectangle {
                                         }
 
                                         Rectangle {
-                                            height: 176px;
+                                            height: max(96px, min(176px, detail-body.preferred-height + 2 * Theme.spacing-8));
                                             clip: true;
                                             background: Theme.panel-background;
                                             border-radius: Theme.radius-control;
                                             border-width: 1px;
                                             border-color: Theme.divider;
 
-                                            VerticalLayout {
-                                                x: 10px;
-                                                y: Theme.spacing-8;
-                                                width: parent.width - 20px;
-                                                spacing: Theme.spacing-4;
+                                            detail-scroll := Flickable {
+                                                width: parent.width;
+                                                height: parent.height;
+                                                interactive: true;
+                                                content-width: self.width;
+                                                content-height: detail-body.preferred-height + 2 * Theme.spacing-8;
 
-                                                if root.detail-host-text != "" : DetailLine {
-                                                    hint: @tr("Host: {0}", root.detail-host-text);
-                                                }
+                                                detail-body := VerticalLayout {
+                                                    x: 10px;
+                                                    y: Theme.spacing-8;
+                                                    width: parent.width - 20px;
+                                                    spacing: Theme.spacing-4;
 
-                                                if root.detail-algorithm-text != "" : DetailLine {
-                                                    hint: @tr("Algorithm: {0}", root.detail-algorithm-text);
-                                                }
+                                                    if root.detail-host-text != "" : DetailLine {
+                                                        hint: @tr("Host: {0}", root.detail-host-text);
+                                                    }
 
-                                                if root.detail-fingerprint-text != "" : DetailLine {
-                                                    hint: @tr("Fingerprint: {0}", root.detail-fingerprint-text);
-                                                }
+                                                    if root.detail-algorithm-text != "" : DetailLine {
+                                                        hint: @tr("Algorithm: {0}", root.detail-algorithm-text);
+                                                    }
 
-                                                if root.detail-path-text != "" : DetailLine {
-                                                    hint: @tr("Host keys path: {0}", root.detail-path-text);
-                                                }
+                                                    if root.detail-fingerprint-text != "" : DetailLine {
+                                                        hint: @tr("Fingerprint: {0}", root.detail-fingerprint-text);
+                                                    }
 
-                                                if root.detail-path-text != "" && root.detail-host-text == "" : DetailLine {
-                                                    hint: @tr("Temporary trust entries are not persisted here.");
-                                                }
+                                                    if root.detail-path-text != "" : DetailLine {
+                                                        hint: @tr("Host keys path: {0}", root.detail-path-text);
+                                                    }
 
-                                                if !root.detail-split-visible && root.details-text != "" : DetailLine {
-                                                    hint: root.details-text;
+                                                    if root.detail-path-text != "" && root.detail-host-text == "" : DetailLine {
+                                                        hint: @tr("Temporary trust entries are not persisted here.");
+                                                    }
+
+                                                    if !root.detail-split-visible && root.details-text != "" : DetailLine {
+                                                        hint: root.details-text;
+                                                    }
                                                 }
+                                            }
+
+                                            WinScrollIndicator {
+                                                x: parent.width - self.width - Theme.spacing-4;
+                                                y: Theme.spacing-4;
+                                                height: parent.height - 2 * Theme.spacing-4;
+                                                viewport-position: detail-scroll.content-y;
+                                                content-extent: detail-scroll.content-height;
+                                                viewport-extent: detail-scroll.height;
+                                                thumb-min-length: 24px;
                                             }
                                         }
 
@@ -538,7 +486,7 @@ export component HostKeysPage inherits Rectangle {
                                         }
 
                                         Rectangle {
-                                            height: 96px;
+                                            min-height: 96px;
                                             clip: true;
                                             background: Theme.panel-background;
                                             border-radius: Theme.radius-control;
@@ -596,28 +544,28 @@ export component HostKeysPage inherits Rectangle {
                 Rectangle {
                     height: 1px;
                     background: Theme.divider;
+                    vertical-stretch: 0;
                 }
 
                 HorizontalLayout {
                     alignment: end;
+                    vertical-stretch: 0;
 
                     WinButton {
                         text: @tr("Close");
                         clicked => { root.close(); }
                     }
                 }
-            }
-        }
     }
 
     /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
     public function focus-dialog() {
-        dialog_scope.focus();
+        shell.focus-dialog();
     }
 
     changed open => {
         if (root.open) {
-            dialog_scope.focus();
+            shell.focus-dialog();
         }
     }
 }

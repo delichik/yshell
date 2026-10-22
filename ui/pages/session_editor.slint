@@ -1,43 +1,41 @@
 import { Theme } from "../theme.slint";
-import { WinButton, WinIconButton, WinNavItem, WinScrollIndicator } from "../components/basic/controls.slint";
+import { WinButton, WinNavItem, WinScrollIndicator } from "../components/basic/controls.slint";
 import { Icon } from "../components/basic/icons.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { TerminalPreview } from "../components/terminal_preview.slint";
 import { AuthKeyOption } from "../components/auth_prompt_dialog.slint";
 import { ProxyProfileOption } from "proxies.slint";
 import { TriStateField, TriStateFieldSection } from "./folder_editor.slint";
+import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
 
-// 表单行：左侧固定宽度标签 + 右侧控件（子元素放进右侧横向布局）
+// 表单行：左侧固定宽度标签 + 右侧控件（可长高，避免 Method 等挤进 32px）。
 component FormRow inherits Rectangle {
     in property <string> label: "";
     // 与 Theme.form-label-width 同源（禁止在别处再写一份字面量）
     in property <length> label-width: Theme.form-label-width;
 
-    height: Theme.control-height;
+    height: max(Theme.control-height, body.preferred-height);
     background: transparent;
 
-    HorizontalLayout {
+    body := HorizontalLayout {
         spacing: Theme.spacing-12;
+        cross-axis-alignment: center;
 
         Text {
             text: root.label;
             color: Theme.text-secondary;
             font-size: Theme.font-body;
             width: root.label-width;
-            height: root.height;
             vertical-alignment: center;
             wrap: no-wrap;
             overflow: elide;
         }
 
-        Rectangle {
+        HorizontalLayout {
             horizontal-stretch: 1;
-            background: transparent;
-
-            HorizontalLayout {
-                spacing: Theme.spacing-8;
-                @children
-            }
+            spacing: Theme.spacing-8;
+            cross-axis-alignment: center;
+            @children
         }
     }
 }
@@ -485,117 +483,31 @@ export component SessionEditor inherits Rectangle {
     private property <bool> key-selection-valid:
         !root.show-key-auth || root.has-selected-key || root.legacy-key-path-text != "";
 
-    // 面板高度固定（B 轮3 #13）：原实现按各分区内容收缩，切换分区时整块面板（含左侧导航）
-    // 上下跳动、鼠标下的导航项会移位。现在取最高分区所需高度并给伪本地化留余量，
-    // 表单区改为内部滚动（B 轮2 高#3），矮窗口下再收缩到窗口内。
-    private property <length> dialog-height: min(self.height - 80px, 640px);
-    // 面板宽度（统一到 dialog-width-wide，便于各管理页保持一致）
-    private property <length> dialog-width: Theme.dialog-width-wide;
-
     // 保存校验（B 轮3 #16）：运行时要求会话名与主机非空；这里同步禁用并用就地提示替代
     // 只写在状态栏的英文错误（状态栏文案的本地化由 WS-D 处理）。
     // SSH-1：Key 认证还要求选中托管密钥（或保留旧 path-only legacy 会话）。
     private property <bool> save-blocked:
         root.name-text == "" || root.host-text == "" || !root.key-selection-valid;
 
-    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
-    //
-    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
-    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
-    states [
-        opened when root.open: {
-            opacity: 1.0;
-            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
-            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
-        }
-        closed when !root.open: { opacity: 0.0; }
-    ]
-    // 退场期间保持可见，等淡出结束再隐藏。
-    visible: root.open || self.opacity > 0.01;
-    background: Theme.scrim;
+    visible: root.open || shell.opacity > 0.01;
+    background: transparent;
 
-    // L2（对话框 Esc / 遮罩点击关闭）：根 FocusScope 包住整个弹窗；打开时聚焦，
-    // Esc 沿焦点链冒泡到这里 → 与关闭按钮完全相同的 `root.close()` 路径；其余按键 reject。
-    dialog_scope := FocusScope {
-        width: parent.width;
-        height: parent.height;
+    shell := ManagerDialogShell {
+        width: 100%;
+        height: 100%;
+        open: root.open;
+        title-text: @tr("Session Editor");
+        summary-text: root.target-text;
+        close => { root.close(); }
 
-        key-pressed(event) => {
-            // Esc 键码按 `event.text` 比较（与 session_tree 判 Enter 的做法一致）。
-            if (event.text == "\u{001b}") {
-                root.close();
-                return accept;
-            }
-            return reject;
-        }
-
-        // 遮罩：点击 = 关闭（与关闭按钮同一路径）。
-        TouchArea {
-            clicked => { root.close(); }
-        }
-
-        panel := Rectangle {
-            x: (parent.width - root.dialog-width) / 2;
-            y: max((parent.height - self.height) / 2, 40px);
-            width: root.dialog-width;
-            // 固定高度：不随分区内容变化（B 轮3 #13）
-            height: root.dialog-height;
-            background: Theme.panel-background;
-            border-radius: Theme.radius-panel;
-            border-width: 1px;
-            border-color: Theme.control-stroke;
-
-            // 吞掉面板空白处的点击，避免穿透到遮罩触发取消。
-            TouchArea { }
-
-            panel-body := VerticalLayout {
-                padding: Theme.spacing-20;
-                spacing: Theme.spacing-12;
-
-                // --- 标题行 ---------------------------------------------------
-                HorizontalLayout {
-                    spacing: Theme.spacing-12;
-
-                    VerticalLayout {
-                        horizontal-stretch: 1;
-                        spacing: 2px;
-                        alignment: start;
-
-                        Text {
-                            text: @tr("Session Editor");
-                            color: Theme.text-primary;
-                            font-size: Theme.font-subtitle;
-                            font-weight: Theme.weight-semibold;
-                        }
-
-                        Text {
-                            text: root.target-text;
-                            color: Theme.text-tertiary;
-                            font-size: Theme.font-caption;
-                            wrap: no-wrap;
-                            overflow: elide;
-                        }
-                    }
-
-                    WinIconButton {
-                        icon: "close";
-                        accessible-name: @tr("Close");
-                        // 标题块两行（≈46px），按钮 32px 固定高 → 默认 stretch 贴行顶。
-                        cross-axis-self-alignment: center;
-                        clicked => { root.close(); }
-                    }
-                }
-
-                Rectangle { height: 1px; background: Theme.layer-stroke; }
-
-                // --- 主体：左侧分区导航 + 右侧表单 -----------------------------
-                HorizontalLayout {
+        // --- 主体：左侧分区导航 + 右侧表单 -----------------------------
+        HorizontalLayout {
                     vertical-stretch: 1;
                     spacing: Theme.spacing-12;
 
-                    // 分区导航（NavigationView 形态：40px 行高 + 选中强调条）
+                    // 分区导航（与 Settings 同用 Theme.nav-width）
                     Rectangle {
-                        width: 180px;
+                        width: Theme.nav-width;
                         vertical-stretch: 1;
                         background: Theme.layer-fill;
                         border-radius: Theme.radius-panel;
@@ -709,6 +621,7 @@ export component SessionEditor inherits Rectangle {
                                                 }
                                             }
 
+                                            // Host + Port 同一行（与 Proxies 一致；Port 带标签）。
                                             FormRow {
                                                 label: @tr("Host");
 
@@ -718,13 +631,17 @@ export component SessionEditor inherits Rectangle {
                                                     placeholder-text: @tr("Host");
                                                     edited => { root.update-host(self.text); }
                                                 }
-                                            }
 
-                                            FormRow {
-                                                label: @tr("Port");
+                                                Text {
+                                                    text: @tr("Port");
+                                                    color: Theme.text-secondary;
+                                                    font-size: Theme.font-caption;
+                                                    vertical-alignment: center;
+                                                    wrap: no-wrap;
+                                                }
 
                                                 WinTextInput {
-                                                    horizontal-stretch: 1;
+                                                    width: Theme.form-port-width;
                                                     text <=> root.port-text;
                                                     placeholder-text: "22";
                                                     edited => { root.update-port(self.text); }
@@ -757,19 +674,26 @@ export component SessionEditor inherits Rectangle {
 
                                             SectionTitle { heading: @tr("Authentication"); }
 
-                                            // Method：两行分段，避免 Keyboard Interactive 把整行撑破。
+                                            // Method：可长高 FormRow 内两行按钮，不再用空 label 续行。
                                             FormRow {
                                                 label: @tr("Method");
 
-                                                WinButton { text: @tr("Agent"); accent: root.auth-method-text == "agent"; clicked => { root.set-auth-method-agent(); } }
-                                                WinButton { text: @tr("Password"); accent: root.auth-method-text == "password"; clicked => { root.set-auth-method-password(); } }
-                                            }
+                                                VerticalLayout {
+                                                    horizontal-stretch: 1;
+                                                    spacing: Theme.spacing-8;
 
-                                            FormRow {
-                                                label: "";
+                                                    HorizontalLayout {
+                                                        spacing: Theme.spacing-8;
+                                                        WinButton { text: @tr("Agent"); accent: root.auth-method-text == "agent"; clicked => { root.set-auth-method-agent(); } }
+                                                        WinButton { text: @tr("Password"); accent: root.auth-method-text == "password"; clicked => { root.set-auth-method-password(); } }
+                                                    }
 
-                                                WinButton { text: @tr("Keyboard Interactive"); accent: root.auth-method-text == "keyboard_interactive"; clicked => { root.set-auth-method-keyboard-interactive(); } }
-                                                WinButton { text: @tr("Key"); accent: root.auth-method-text == "private_key"; clicked => { root.set-auth-method-private-key(); } }
+                                                    HorizontalLayout {
+                                                        spacing: Theme.spacing-8;
+                                                        WinButton { text: @tr("Keyboard Interactive"); accent: root.auth-method-text == "keyboard_interactive"; clicked => { root.set-auth-method-keyboard-interactive(); } }
+                                                        WinButton { text: @tr("Key"); accent: root.auth-method-text == "private_key"; clicked => { root.set-auth-method-private-key(); } }
+                                                    }
+                                                }
                                             }
 
                                             // 主机密钥策略不在会话编辑器中暴露：所有会话默认走严格
@@ -1062,7 +986,7 @@ export component SessionEditor inherits Rectangle {
                                                 fields: root.editor-appearance-fields;
                                                 // TERM-4：下拉框需要完整的值区宽度；标签列收到
                                                 // 110px 后当前配色名不再被省略（最长标签约 86px）。
-                                                label-width: Theme.form-label-width-narrow;
+                                                label-width: Theme.form-label-width;
                                                 field-set-inherit(key) => { root.editor-theme-field-action(key, "inherit"); }
                                                 field-set-explicit(key) => { root.editor-theme-field-action(key, "explicit"); }
                                                 field-reset(key) => { root.editor-theme-field-action(key, "reset"); }
@@ -1103,32 +1027,29 @@ export component SessionEditor inherits Rectangle {
                     }
                 }
 
-                Rectangle { height: 1px; background: Theme.layer-stroke; }
+        Rectangle { height: 1px; background: Theme.layer-stroke; }
 
-                // --- 底部操作区（右对齐，主操作在最右） -------------------------
-                HorizontalLayout {
-                    alignment: end;
-                    spacing: Theme.spacing-8;
+        // --- 底部操作区（右对齐，主操作在最右） -------------------------
+        HorizontalLayout {
+            alignment: end;
+            spacing: Theme.spacing-8;
 
-                    WinButton { text: @tr("Cancel"); subtle: true; clicked => { root.close(); } }
-                    // B 轮3 #16：运行时要求会话名与主机非空；这里同步门限，避免只留一条
-                    // 被模态遮住的状态栏英文错误。
-                    WinButton { text: @tr("Save"); enabled: !root.save-blocked; clicked => { root.save(); } }
-                    WinButton { text: @tr("Save and Connect"); icon: "connect"; accent: true; enabled: !root.save-blocked; clicked => { root.save-connect(); } }
-                }
-            }
+            WinButton { text: @tr("Cancel"); subtle: true; clicked => { root.close(); } }
+            // B 轮3 #16：运行时要求会话名与主机非空；这里同步门限，避免只留一条
+            // 被模态遮住的状态栏英文错误。
+            WinButton { text: @tr("Save"); enabled: !root.save-blocked; clicked => { root.save(); } }
+            WinButton { text: @tr("Save and Connect"); icon: "connect"; accent: true; enabled: !root.save-blocked; clicked => { root.save-connect(); } }
         }
     }
 
     /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
     public function focus-dialog() {
-        dialog_scope.focus();
+        shell.focus-dialog();
     }
 
-    // 打开时聚焦弹窗（Esc 需要焦点在弹窗内）。
     changed open => {
         if (root.open) {
-            dialog_scope.focus();
+            shell.focus-dialog();
         }
     }
 }

@@ -20,6 +20,7 @@ import { Theme } from "../theme.slint";
 import { WinButton, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
 import { ThemeEditor } from "../components/theme_editor.slint";
 import { TerminalPreview } from "../components/terminal_preview.slint";
+import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
 
 /// 主题列表行（Rust `ThemeManagerRowData` 的 Slint 镜像）。
 export struct ThemeManagerRow {
@@ -33,34 +34,6 @@ export struct ThemeManagerRow {
     selected: bool,
     /// 当前全局默认主题（`terminal.color_scheme` 的有效值）。
     current: bool,
-}
-
-/// 行内动作按钮（禁用时在按钮上悬停显示原因，契约 §18）。
-component ThemeRowAction inherits Rectangle {
-    in property <string> label: "";
-    in property <length> action-width: 68px;
-    in property <bool> enabled: true;
-    in property <string> hint: "";
-    in property <bool> critical: false;
-    callback clicked();
-
-    width: root.action-width;
-    height: Theme.control-height;
-    background: transparent;
-
-    button := WinButton {
-        width: parent.width;
-        height: parent.height;
-        text: root.label;
-        enabled: root.enabled;
-        subtle: true;
-        critical: root.critical;
-        clicked => { root.clicked(); }
-    }
-
-    if !root.enabled && root.hint != "" : Tooltip {
-        text: @markdown("\{root.hint}");
-    }
 }
 
 /// 小徽章（Default / Built-in / Custom）。
@@ -159,44 +132,55 @@ component ThemeListRow inherits Rectangle {
 
         HorizontalLayout {
             horizontal-stretch: 0;
-            spacing: 3px;
+            spacing: Theme.spacing-4;
             cross-axis-alignment: center;
 
             for swatch in root.node.swatches : Rectangle {
-                width: 14px;
-                height: 14px;
-                border-radius: 3px;
+                width: Theme.swatch-size;
+                height: Theme.swatch-size;
+                border-radius: Theme.radius-control;
                 border-width: 1px;
                 border-color: Theme.control-stroke;
                 background: swatch;
             }
         }
 
+        // icon-only 动作：760 内容宽里不再挤三个文字按钮。
         HorizontalLayout {
             horizontal-stretch: 0;
             spacing: Theme.spacing-4;
             cross-axis-alignment: center;
 
-            ThemeRowAction {
-                label: @tr("Clone");
-                action-width: 66px;
+            WinIconButton {
+                icon: "copy";
+                width: Theme.control-height-compact;
+                height: Theme.control-height-compact;
+                accessible-name: @tr("Clone");
+                tooltip-text: @tr("Clone");
                 clicked => { root.clone-theme(); }
             }
 
-            ThemeRowAction {
-                label: @tr("Edit");
-                action-width: 58px;
+            WinIconButton {
+                icon: "edit";
+                width: Theme.control-height-compact;
+                height: Theme.control-height-compact;
                 enabled: !root.node.builtin;
-                hint: @tr("Built-in themes are read-only. Clone this theme to make changes.");
+                accessible-name: @tr("Edit");
+                tooltip-text: root.node.builtin
+                    ? @tr("Built-in themes are read-only. Clone this theme to make changes.")
+                    : @tr("Edit");
                 clicked => { root.edit-theme(); }
             }
 
-            ThemeRowAction {
-                label: @tr("Delete");
-                action-width: 66px;
-                critical: true;
+            WinIconButton {
+                icon: "trash";
+                width: Theme.control-height-compact;
+                height: Theme.control-height-compact;
                 enabled: !root.node.builtin;
-                hint: @tr("Built-in themes cannot be deleted or edited.");
+                accessible-name: @tr("Delete");
+                tooltip-text: root.node.builtin
+                    ? @tr("Built-in themes cannot be deleted or edited.")
+                    : @tr("Delete");
                 clicked => { root.delete-theme(); }
             }
         }
@@ -241,100 +225,24 @@ export component ThemeManagerPage inherits Rectangle {
     callback update-theme-editor-role(string, string);
     callback update-theme-editor-ansi(int, string);
 
-    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
-    //
-    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
-    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
-    states [
-        opened when root.open: {
-            opacity: 1.0;
-            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
-            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
-        }
-        closed when !root.open: { opacity: 0.0; }
-    ]
-    // 退场期间保持可见，等淡出结束再隐藏。
-    visible: root.open || self.opacity > 0.01;
-    background: Theme.scrim;
-
     private property <bool> has-selection:
         root.selected-index >= 0 && root.selected-index < root.themes.length;
 
-    dialog_scope := FocusScope {
-        width: parent.width;
-        height: parent.height;
+    visible: root.open || shell.opacity > 0.01;
+    background: transparent;
 
-        key-pressed(event) => {
-            if (event.text == "\u{001b}") {
-                root.close();
-                return accept;
-            }
-            return reject;
-        }
-
-        TouchArea {
-            clicked => { root.close(); }
-        }
-
-        panel := Rectangle {
-            x: (parent.width - Theme.dialog-width-wide) / 2;
-            y: max((parent.height - self.height) / 2, 40px);
-            width: Theme.dialog-width-wide;
-            height: min(parent.height - 88px, 640px);
-            background: Theme.panel-background;
-            border-radius: Theme.radius-panel;
-            border-width: 1px;
-            border-color: Theme.control-stroke;
-            clip: true;
-
-            // 吞掉面板空白处点击，避免穿透到遮罩触发关闭。
-            TouchArea { }
-
-            VerticalLayout {
-                padding: Theme.spacing-20;
-                spacing: Theme.spacing-12;
-
-                // --- 标题行 -------------------------------------------------
-                HorizontalLayout {
-                    vertical-stretch: 0;
-                    spacing: Theme.spacing-12;
-                    cross-axis-alignment: center;
-
-                    Text {
-                        text: @tr("Theme Manager");
-                        color: Theme.text-primary;
-                        font-size: Theme.font-subtitle;
-                        font-weight: Theme.weight-semibold;
-                        vertical-alignment: center;
-                    }
-
-                    Text {
-                        horizontal-stretch: 1;
-                        text: @tr("Built-in {0} · Custom {1}", root.builtin-count, root.user-count);
-                        color: Theme.text-secondary;
-                        font-size: Theme.font-body;
-                        vertical-alignment: center;
-                        wrap: no-wrap;
-                        overflow: elide;
-                    }
-
-                    WinIconButton {
-                        icon: "close";
-                        accessible-name: @tr("Close");
-                        clicked => { root.close(); }
-                    }
-                }
-
-                Rectangle {
-                    height: 1px;
-                    vertical-stretch: 0;
-                    background: Theme.divider;
-                }
+    shell := ManagerDialogShell {
+        width: 100%;
+        height: 100%;
+        open: root.open;
+        title-text: @tr("Theme Manager");
+        summary-text: @tr("Built-in {0} · Custom {1}", root.builtin-count, root.user-count);
+        close => { root.close(); }
 
                 // --- 顶部固定 live preview ----------------------------------
-                // 尺寸契约：800 dialog − 40 body padding = 760 表面宽；
-                // 内部位图 760 − 2px 边框 − 2×6px 终端内边距 = 746px；
-                // 高 120px − 2px 边框 = 118px（Rust `THEME_MANAGER_PREVIEW_AREA_PX`）。
+                // 尺寸契约：dialog-width-wide(760) − 2×spacing-20 内边距 = 内容宽；
+                // 预览表面宽跟内容走；高 120px − 2px 边框 = 118px
+                //（Rust `THEME_MANAGER_PREVIEW_AREA_PX`）。
                 TerminalPreview {
                     vertical-stretch: 0;
                     frame: root.preview;
@@ -505,18 +413,16 @@ export component ThemeManagerPage inherits Rectangle {
                         clicked => { root.close(); }
                     }
                 }
-            }
-        }
     }
 
     /// 宿主在关闭上层弹窗后把键盘焦点交还给本页（嵌套场景）。
     public function focus-dialog() {
-        dialog_scope.focus();
+        shell.focus-dialog();
     }
 
     changed open => {
         if (root.open) {
-            dialog_scope.focus();
+            shell.focus-dialog();
         }
     }
 }

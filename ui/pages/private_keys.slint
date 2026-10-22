@@ -13,8 +13,9 @@
 
 import { Theme } from "../theme.slint";
 import { TextFormats } from "../text_formats.slint";
-import { WinButton, WinCard, WinCardHeader, WinIconButton, WinToggle, WinScrollIndicator } from "../components/basic/controls.slint";
+import { WinButton, WinCard, WinCardHeader, WinToggle, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
+import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
 
 /// 托管私钥清单行（Rust `PrivateKeyEntryInfo` 的 Slint 镜像）。
 export struct PrivateKeyRow {
@@ -134,21 +135,9 @@ export component PrivateKeysPage inherits Rectangle {
     callback forget-passphrase();
     callback rename-key(string);
 
-    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
-    //
-    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
-    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
-    states [
-        opened when root.open: {
-            opacity: 1.0;
-            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
-            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
-        }
-        closed when !root.open: { opacity: 0.0; }
-    ]
-    // 退场期间保持可见，等淡出结束再隐藏。
-    visible: root.open || self.opacity > 0.01;
-    background: Theme.scrim;
+    // 退场淡出期间壳仍可见：根跟着壳的 opacity，避免透明全屏挡住下层。
+    visible: root.open || shell.opacity > 0.01;
+    background: transparent;
 
     private property <string> selected-label:
         root.selected-index >= 0 && root.selected-index < root.keys.length
@@ -162,82 +151,21 @@ export component PrivateKeysPage inherits Rectangle {
         root.status-text
     );
 
-    dialog_scope := FocusScope {
-        width: parent.width;
-        height: parent.height;
-
-        key-pressed(event) => {
-            if (event.text == "\u{001b}") {
-                root.close();
-                return accept;
-            }
-            return reject;
-        }
-
-        TouchArea {
-            clicked => { root.close(); }
-        }
-
-        Rectangle {
-            // B 轮2 #68 / 轮5：840px 在最小窗口（880px）下左右只剩 20px 内边距；整块面板固定
-            // 全高（880/900 窗口下 812px）而正文只到 ~636px，底部留下 154–180px 死区。
-            // 这里把宽度收到统一的 dialog-width-wide、高度按内容封顶，面板整体居中（与其兄弟弹窗一致）。
-            x: (parent.width - Theme.dialog-width-wide) / 2;
-            y: max((parent.height - self.height) / 2, 44px);
-            width: Theme.dialog-width-wide;
-            height: min(parent.height - 88px, 660px);
-            background: Theme.panel-background;
-            border-radius: Theme.radius-panel;
-            border-width: 1px;
-            border-color: Theme.control-stroke;
-            clip: true;
-
-            TouchArea { }
-
-            VerticalLayout {
-                padding: Theme.spacing-20;
-                spacing: Theme.spacing-12;
-
-                // 标题行
-                HorizontalLayout {
-                    spacing: Theme.spacing-12;
-
-                    Text {
-                        text: @tr("Private Keys");
-                        color: Theme.text-primary;
-                        font-size: Theme.font-subtitle;
-                        font-weight: Theme.weight-semibold;
-                        vertical-alignment: center;
-                    }
-
-                    Text {
-                        text: root.list-summary-text;
-                        color: Theme.text-secondary;
-                        font-size: Theme.font-body;
-                        vertical-alignment: center;
-                        horizontal-stretch: 1;
-                        wrap: no-wrap;
-                        overflow: elide;
-                    }
-
-                    WinIconButton {
-                        icon: "close";
-                        accessible-name: @tr("Close");
-                        clicked => { root.close(); }
-                    }
-                }
-
-                Rectangle {
-                    height: 1px;
-                    background: Theme.divider;
-                }
+    shell := ManagerDialogShell {
+        width: 100%;
+        height: 100%;
+        open: root.open;
+        title-text: @tr("Private Keys");
+        summary-text: root.list-summary-text;
+        close => { root.close(); }
 
                 HorizontalLayout {
                     spacing: Theme.spacing-16;
+                    vertical-stretch: 1;
 
                     // --- 左：清单 + 导入（内容超出时整列滚动）---------------------
                     Rectangle {
-                        width: 320px;
+                        width: Theme.manager-list-width;
                         clip: true;
                         background: transparent;
 
@@ -459,22 +387,40 @@ export component PrivateKeysPage inherits Rectangle {
                                     }
 
                                     Rectangle {
-                                        height: 150px;
+                                        height: max(150px, min(280px, details-block.preferred-height + 20px));
                                         clip: true;
                                         background: Theme.panel-background;
                                         border-radius: Theme.radius-control;
                                         border-width: 1px;
                                         border-color: Theme.divider;
 
-                                        Text {
-                                            x: 10px;
-                                            y: 10px;
-                                            width: parent.width - 20px;
-                                            text: root.details-text;
-                                            color: Theme.text-secondary;
-                                            font-size: Theme.font-caption;
-                                            font-family: Theme.font-mono;
-                                            wrap: word-wrap;
+                                        details-scroll := Flickable {
+                                            width: parent.width;
+                                            height: parent.height;
+                                            interactive: true;
+                                            content-width: self.width;
+                                            content-height: details-block.preferred-height + 20px;
+
+                                            details-block := Text {
+                                                x: 10px;
+                                                y: 10px;
+                                                width: parent.width - 20px;
+                                                text: root.details-text;
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-caption;
+                                                font-family: Theme.font-mono;
+                                                wrap: word-wrap;
+                                            }
+                                        }
+
+                                        WinScrollIndicator {
+                                            x: parent.width - self.width - Theme.spacing-4;
+                                            y: Theme.spacing-4;
+                                            height: parent.height - 2 * Theme.spacing-4;
+                                            viewport-position: details-scroll.content-y;
+                                            content-extent: details-scroll.content-height;
+                                            viewport-extent: details-scroll.height;
+                                            thumb-min-length: 24px;
                                         }
                                     }
 
@@ -495,22 +441,40 @@ export component PrivateKeysPage inherits Rectangle {
 
                                     // 派生公钥（可复制/导出；等宽显示）
                                     if root.public-key-text != "" : Rectangle {
-                                        height: 56px;
+                                        height: max(56px, min(160px, pubkey-block.preferred-height + 20px));
                                         clip: true;
                                         background: Theme.panel-background;
                                         border-radius: Theme.radius-control;
                                         border-width: 1px;
                                         border-color: Theme.divider;
 
-                                        Text {
-                                            x: 10px;
-                                            y: 10px;
-                                            width: parent.width - 20px;
-                                            text: root.public-key-text;
-                                            color: Theme.text-secondary;
-                                            font-size: Theme.font-caption;
-                                            font-family: Theme.font-mono;
-                                            wrap: word-wrap;
+                                        pubkey-scroll := Flickable {
+                                            width: parent.width;
+                                            height: parent.height;
+                                            interactive: true;
+                                            content-width: self.width;
+                                            content-height: pubkey-block.preferred-height + 20px;
+
+                                            pubkey-block := Text {
+                                                x: 10px;
+                                                y: 10px;
+                                                width: parent.width - 20px;
+                                                text: root.public-key-text;
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-caption;
+                                                font-family: Theme.font-mono;
+                                                wrap: word-wrap;
+                                            }
+                                        }
+
+                                        WinScrollIndicator {
+                                            x: parent.width - self.width - Theme.spacing-4;
+                                            y: Theme.spacing-4;
+                                            height: parent.height - 2 * Theme.spacing-4;
+                                            viewport-position: pubkey-scroll.content-y;
+                                            content-extent: pubkey-scroll.content-height;
+                                            viewport-extent: pubkey-scroll.height;
+                                            thumb-min-length: 24px;
                                         }
                                     }
 
@@ -643,28 +607,28 @@ export component PrivateKeysPage inherits Rectangle {
                 Rectangle {
                     height: 1px;
                     background: Theme.divider;
+                    vertical-stretch: 0;
                 }
 
                 HorizontalLayout {
                     alignment: end;
+                    vertical-stretch: 0;
 
                     WinButton {
                         text: @tr("Close");
                         clicked => { root.close(); }
                     }
                 }
-            }
-        }
     }
 
     /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
     public function focus-dialog() {
-        dialog_scope.focus();
+        shell.focus-dialog();
     }
 
     changed open => {
         if (root.open) {
-            dialog_scope.focus();
+            shell.focus-dialog();
         }
     }
 }

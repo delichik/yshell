@@ -1,0 +1,136 @@
+// 管理器弹窗共用壳：遮罩 + 居中宽面板 + 标题行 + 内容槽。
+//
+// 八个管理页（Host Keys / Private Keys / Known Hosts / Proxies / Theme Manager /
+// Settings / Session Editor / Folder Editor）共用同一套几何，避免每页各写
+// y/height 魔法数（曾出现 48/96、52/104、44、40、660 等不一致）。
+//
+// 用法：页面根仍是自己的属性/回调；把主体塞进本组件的 `@children`。
+// `content-sized: true` 时高度跟内容走（Folder Editor），否则固定为
+// `min(manager-panel-max-height, parent.height - 2×spacing-24)`。
+
+import { Theme } from "../theme.slint";
+import { WinIconButton } from "basic/controls.slint";
+
+export component ManagerDialogShell inherits Rectangle {
+    in property <bool> open: false;
+    in property <string> title-text: "";
+    /// 标题右侧摘要（可空：不占位）。
+    in property <string> summary-text: "";
+    /// true = 高度跟内容（封顶）；false = 固定最大高度（列表/导航类）。
+    in property <bool> content-sized: false;
+    callback close();
+
+    // §6.3 #5：进 250ms ease-out / 退 100ms ease-in（非对称 → states）。
+    states [
+        opened when root.open: {
+            opacity: 1.0;
+            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
+            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
+        }
+        closed when !root.open: { opacity: 0.0; }
+    ]
+    visible: root.open || self.opacity > 0.01;
+    background: Theme.scrim;
+
+    dialog_scope := FocusScope {
+        width: parent.width;
+        height: parent.height;
+
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.close();
+                return accept;
+            }
+            return reject;
+        }
+
+        TouchArea {
+            clicked => { root.close(); }
+        }
+
+        panel := Rectangle {
+            // parent = FocusScope（撑满窗口）；在此计算封顶高度，根上读不到 parent。
+            private property <length> panel-cap: min(
+                Theme.manager-panel-max-height,
+                parent.height - 2 * Theme.spacing-24
+            );
+
+            x: (parent.width - Theme.dialog-width-wide) / 2;
+            y: max((parent.height - self.height) / 2, Theme.spacing-24);
+            width: Theme.dialog-width-wide;
+            height: root.content-sized
+                ? min(body.preferred-height, self.panel-cap)
+                : self.panel-cap;
+            background: Theme.panel-background;
+            border-radius: Theme.radius-panel;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
+            clip: true;
+
+            // 吞掉面板空白点击，避免穿透到遮罩误关。
+            TouchArea { }
+
+            body := VerticalLayout {
+                padding: Theme.spacing-20;
+                spacing: Theme.spacing-12;
+
+                HorizontalLayout {
+                    spacing: Theme.spacing-12;
+                    vertical-stretch: 0;
+
+                    Text {
+                        text: root.title-text;
+                        color: Theme.text-primary;
+                        font-size: Theme.font-subtitle;
+                        font-weight: Theme.weight-semibold;
+                        vertical-alignment: center;
+                        wrap: no-wrap;
+                        horizontal-stretch: root.summary-text == "" ? 1 : 0;
+                    }
+
+                    if root.summary-text != "" : Text {
+                        text: root.summary-text;
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-body;
+                        vertical-alignment: center;
+                        wrap: no-wrap;
+                        overflow: elide;
+                        horizontal-stretch: 1;
+                        min-width: 0px;
+                    }
+
+                    WinIconButton {
+                        icon: "close";
+                        accessible-name: @tr("Close");
+                        cross-axis-self-alignment: center;
+                        clicked => { root.close(); }
+                    }
+                }
+
+                Rectangle {
+                    height: 1px;
+                    background: Theme.divider;
+                    vertical-stretch: 0;
+                }
+
+                // 内容槽：固定高度壳里吃掉剩余纵向空间；内容自适应壳不强制拉伸。
+                content-slot := Rectangle {
+                    vertical-stretch: root.content-sized ? 0 : 1;
+                    min-height: 0px;
+                    background: transparent;
+
+                    VerticalLayout {
+                        width: parent.width;
+                        height: root.content-sized ? self.preferred-height : parent.height;
+                        spacing: Theme.spacing-12;
+                        @children
+                    }
+                }
+            }
+        }
+    }
+
+    public function focus-dialog() {
+        dialog_scope.focus();
+    }
+}

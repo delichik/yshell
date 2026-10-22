@@ -193,6 +193,12 @@ export global Theme {
     /// 管理型页面宽度（表格 / 双栏表单）。超出 §5.10 的 480/560，
     /// 但这类页面需要横向空间；统一到一档，避免每个页面各写各的。
     out property <length> dialog-width-wide: 760px;
+    /// 管理器面板最大高度（居中；矮窗时再被 `parent.height - 2×spacing-24` 夹紧）。
+    out property <length> manager-panel-max-height: 640px;
+    /// 列表+详情管理器的左栏宽度（Host Keys / Private Keys / Known Hosts / Proxies）。
+    out property <length> manager-list-width: 320px;
+    /// Host+Port 一行里 Port 字段固定宽（带标签）。
+    out property <length> form-port-width: 96px;
 
     // -------------------------------------------------------------------- 尺寸
     out property <length> icon-size: 20px;
