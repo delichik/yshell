@@ -315,17 +315,20 @@ impl SessionTreeStore {
         folders: &mut Vec<FolderProfile>,
         session: SessionProfile,
     ) -> Result<(), SessionTreeError> {
-        let previous_name = find_session(folders, &session.id)
+        let session_id = session.id.clone();
+        let previous_name = find_session(folders, &session_id)
             .map(|existing| existing.name.clone())
-            .ok_or_else(|| SessionTreeError::NotFound(session.id.clone()))?;
+            .ok_or_else(|| SessionTreeError::NotFound(session_id.clone()))?;
         let name = validate_entry_name(&session.name)?;
-        let target = find_session_mut(folders, &session.id)
-            .ok_or_else(|| SessionTreeError::NotFound(session.id.clone()))?;
-        *target = SessionProfile {
-            name: name.clone(),
-            ..session
-        };
-        self.save_session(folders, &target.id, Some(&previous_name))?;
+        {
+            let target = find_session_mut(folders, &session_id)
+                .ok_or_else(|| SessionTreeError::NotFound(session_id.clone()))?;
+            *target = SessionProfile {
+                name: name.clone(),
+                ..session
+            };
+        }
+        self.save_session(folders, &session_id, Some(&previous_name))?;
         Ok(())
     }
 

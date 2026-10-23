@@ -11,9 +11,7 @@ use std::{
 };
 
 use crate::{
-    names::{
-        name_collides, names_equal_ignore_case, sanitize_entry_name, validate_entry_name, NameError,
-    },
+    names::{names_equal_ignore_case, sanitize_entry_name, validate_entry_name, NameError},
     schema::KeyProfile,
 };
 
@@ -195,7 +193,7 @@ impl KeyCatalog {
     }
 
     /// Writes every in-memory key to disk (legacy migration).
-    pub fn write_all(&self) -> Result<(), KeyCatalogError> {
+    pub fn write_all(&mut self) -> Result<(), KeyCatalogError> {
         if self.keys_dir.exists() {
             for entry in fs::read_dir(&self.keys_dir)?.flatten() {
                 let path = entry.path();
@@ -421,9 +419,4 @@ mod tests {
         assert!(matches!(err, KeyCatalogError::Parse { .. }));
     }
 
-    #[test]
-    fn name_collides_helper_unused_but_available() {
-        // Keep the import used for callers; collision covered via DuplicateLabel.
-        assert!(name_collides("A", ["a"]));
-    }
 }
