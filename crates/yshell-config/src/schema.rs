@@ -19,7 +19,10 @@ pub struct ConfigDocument {
     /// Schema version used to decide whether migrations are needed.
     pub schema_version: u32,
     /// Saved session folders and sessions.
-    #[serde(default)]
+    ///
+    /// Persisted under `{config_dir}/sessions/` (directory tree), not in
+    /// `config.toml`. Still deserialized from legacy inline TOML for migration.
+    #[serde(default, skip_serializing)]
     pub folders: Vec<FolderProfile>,
     /// Saved auth profiles keyed by id.
     #[serde(default)]
@@ -49,7 +52,10 @@ pub struct ConfigDocument {
     #[serde(default)]
     pub quick_connect: QuickConnectProfile,
     /// Managed private key metadata; key material lives in the secret store.
-    #[serde(default)]
+    ///
+    /// Persisted under `{config_dir}/keys/<label>.toml`, not in `config.toml`.
+    /// Still deserialized from legacy inline TOML for migration.
+    #[serde(default, skip_serializing)]
     pub keys: Vec<KeyProfile>,
 }
 
@@ -1097,6 +1103,8 @@ pub enum ConfigWarning {
         theme_id: String,
         theme_name: String,
     },
+    /// Non-fatal notice from session/key file stores or legacy migration.
+    StorageNotice { message: String },
 }
 
 impl fmt::Display for ConfigWarning {
@@ -1142,6 +1150,7 @@ impl fmt::Display for ConfigWarning {
                 f,
                 "migrated inline color overrides at {location} into theme '{theme_name}' ({theme_id})"
             ),
+            Self::StorageNotice { message } => f.write_str(message),
         }
     }
 }
@@ -1477,7 +1486,7 @@ mod tests {
     }
 
     #[test]
-    fn toml_round_trip_preserves_profiles() {
+    fn toml_round_trip_preserves_global_profiles_not_folders_or_keys() {
         let mut document = sample_document();
         document.ui = sample_ui();
         document.quick_connect = QuickConnectProfile {
@@ -1519,9 +1528,21 @@ mod tests {
         });
 
         let toml = document.to_toml_string().expect("serialize");
+        assert!(
+            !toml.contains("[[folders]]") && !toml.contains("folders"),
+            "folders must not serialize into config.toml"
+        );
+        assert!(
+            !toml.contains("[[keys]]") && !toml.contains("secret_ref"),
+            "keys must not serialize into config.toml"
+        );
         let parsed = ConfigDocument::from_toml_str(&toml).expect("parse");
 
-        assert_eq!(parsed, document);
+        assert_eq!(parsed.ui, document.ui);
+        assert_eq!(parsed.quick_connect, document.quick_connect);
+        assert_eq!(parsed.auth_profiles, document.auth_profiles);
+        assert!(parsed.folders.is_empty());
+        assert!(parsed.keys.is_empty());
     }
 
     #[test]
@@ -1572,7 +1593,8 @@ mod tests {
 
         let toml = document.to_toml_string().expect("serialize");
         let reparsed = ConfigDocument::from_toml_str(&toml).expect("parse");
-        assert_eq!(reparsed, document);
+        assert_eq!(reparsed.terminal, document.terminal);
+        assert!(reparsed.folders.is_empty(), "folders live on disk, not in config.toml");
     }
 
     #[test]
@@ -2222,7 +2244,7 @@ ansi = ["#000000", "#111111", "#222222", "#333333", "#444444", "#555555", "#6666
     }
 
     #[test]
-    fn keys_round_trip_and_resolve_by_id() {
+    fn keys_resolve_by_id_in_memory_and_auth_round_trips() {
         let document = ConfigDocument {
             keys: vec![KeyProfile {
                 id: "key-1".to_owned(),
@@ -2250,11 +2272,10 @@ ansi = ["#000000", "#111111", "#222222", "#333333", "#444444", "#555555", "#6666
             ..ConfigDocument::default()
         };
 
+        assert_eq!(document.find_key("key-1").expect("key").label, "Ops");
         let toml = document.to_toml_string().expect("serialize");
         let reparsed = ConfigDocument::from_toml_str(&toml).expect("parse");
-
-        assert_eq!(reparsed, document);
-        assert_eq!(reparsed.find_key("key-1").expect("key").label, "Ops");
+        assert!(reparsed.keys.is_empty());
         let auth = reparsed.auth_profiles.get("auth-1").expect("auth");
         assert_eq!(auth.method.private_key_id(), Some("key-1"));
         assert_eq!(auth.method.private_key_path(), None);

@@ -20,6 +20,23 @@ fn save_active_session_persists_minimal_profile() {
     assert_eq!(runtime.saved_session_profiles().len(), 1);
     assert_eq!(runtime.saved_session_profiles()[0].host, "example.com");
     assert_eq!(runtime.saved_session_profiles()[0].port, 2200);
+    let session_name = &runtime.saved_session_profiles()[0].name;
+    let session_file = runtime
+        .config_store
+        .sessions_dir()
+        .join("Saved Sessions")
+        .join(format!("{session_name}.toml"));
+    assert!(
+        session_file.exists(),
+        "expected session file at {}",
+        session_file.display()
+    );
+    let config_body =
+        std::fs::read_to_string(runtime.config_store.config_file()).expect("config");
+    assert!(
+        !config_body.contains("[[folders]]"),
+        "sessions must not be inlined into config.toml"
+    );
 }
 
 #[test]

@@ -1,4 +1,8 @@
 //! TOML configuration persistence with damaged-file backup recovery.
+//!
+//! Global preferences live in `config.toml`. Saved sessions and key metadata
+//! live in sibling directories (`sessions/`, `keys/`) and are merged into the
+//! in-memory [`ConfigDocument`] on load.
 
 use std::{
     collections::BTreeMap,
@@ -7,7 +11,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use crate::keys::KeyCatalog;
 use crate::schema::{ConfigDocument, ConfigSchemaError, ConfigWarning};
+use crate::sessions::SessionTreeStore;
 use serde::{Deserialize, Serialize};
 use yshell_ssh::{HostKeyFingerprint, KnownHosts};
 
@@ -52,6 +58,24 @@ impl ConfigStore {
         self.root.join(crate::themes::THEMES_DIR_NAME)
     }
 
+    /// Directory that holds the Xshell-style session tree.
+    #[must_use]
+    pub fn sessions_dir(&self) -> PathBuf {
+        self.root.join(crate::sessions::SESSIONS_DIR_NAME)
+    }
+
+    /// Directory that holds managed key metadata files.
+    #[must_use]
+    pub fn keys_dir(&self) -> PathBuf {
+        self.root.join(crate::keys::KEYS_DIR_NAME)
+    }
+
+    /// Session-tree helper rooted at this config directory.
+    #[must_use]
+    pub fn session_tree(&self) -> SessionTreeStore {
+        SessionTreeStore::new(&self.root)
+    }
+
     #[must_use]
     pub fn known_hosts_file(&self) -> PathBuf {
         self.root.join(KNOWN_HOSTS_FILE_NAME)
@@ -70,25 +94,29 @@ impl ConfigStore {
     ///
     /// Warnings cover invalid Quick Connect targets and invalid theme
     /// values that were dropped or cleared by [`ConfigDocument::sanitize`].
+    /// Session/key tree warnings are recorded as [`ConfigWarning::StorageNotice`].
     pub fn load_or_recover_with_warnings(
         &self,
     ) -> Result<(LoadOutcome, Vec<ConfigWarning>), ConfigStoreError> {
         fs::create_dir_all(&self.root)?;
         let path = self.config_file();
         if !path.exists() {
-            let document = ConfigDocument::default();
+            let mut document = ConfigDocument::default();
             self.save(&document)?;
+            let mut warnings = Vec::new();
+            self.attach_external_stores(&mut document, &mut warnings)?;
             let outcome = LoadOutcome {
                 document,
                 recovered_from_backup: None,
             };
-            return Ok((outcome, Vec::new()));
+            return Ok((outcome, warnings));
         }
 
         let input = fs::read_to_string(&path);
         match input {
             Ok(input) => match ConfigDocument::from_toml_str_with_warnings(&input) {
-                Ok((document, warnings)) => {
+                Ok((mut document, mut warnings)) => {
+                    self.attach_external_stores(&mut document, &mut warnings)?;
                     let outcome = LoadOutcome {
                         document,
                         recovered_from_backup: None,
@@ -96,18 +124,23 @@ impl ConfigStore {
                     Ok((outcome, warnings))
                 }
                 Err(error) => {
-                    let outcome = self.backup_and_reset(path, ConfigStoreError::Schema(error))?;
-                    Ok((outcome, Vec::new()))
+                    let (mut outcome, mut warnings) =
+                        self.backup_and_reset(path, ConfigStoreError::Schema(error))?;
+                    self.attach_external_stores(&mut outcome.document, &mut warnings)?;
+                    Ok((outcome, warnings))
                 }
             },
             Err(error) => {
-                let outcome = self.backup_and_reset(path, ConfigStoreError::Io(error))?;
-                Ok((outcome, Vec::new()))
+                let (mut outcome, mut warnings) =
+                    self.backup_and_reset(path, ConfigStoreError::Io(error))?;
+                self.attach_external_stores(&mut outcome.document, &mut warnings)?;
+                Ok((outcome, warnings))
             }
         }
     }
 
-    /// Saves the document atomically enough for local configuration usage.
+    /// Saves global preferences atomically. Session folders and keys are not
+    /// written here — use [`SessionTreeStore`] / [`KeyCatalog`].
     pub fn save(&self, document: &ConfigDocument) -> Result<(), ConfigStoreError> {
         fs::create_dir_all(&self.root)?;
         let path = self.config_file();
@@ -115,6 +148,94 @@ impl ConfigStore {
         let toml = document.to_toml_string()?;
         fs::write(&tmp_path, toml)?;
         fs::rename(tmp_path, path)?;
+        Ok(())
+    }
+
+    /// Saves globals plus the full session tree and key catalog (tests/fixtures).
+    pub fn save_all(&self, document: &ConfigDocument) -> Result<(), ConfigStoreError> {
+        self.save(document)?;
+        self.session_tree()
+            .write_tree(&document.folders)
+            .map_err(ConfigStoreError::SessionTree)?;
+        let mut catalog = KeyCatalog::new(self.keys_dir());
+        catalog.replace_from_vec(document.keys.clone());
+        catalog
+            .write_all()
+            .map_err(ConfigStoreError::KeyCatalog)?;
+        Ok(())
+    }
+
+    /// Merges `sessions/` and `keys/` into `document`, migrating legacy inline
+    /// `folders` / `keys` from `config.toml` when the on-disk trees are empty.
+    fn attach_external_stores(
+        &self,
+        document: &mut ConfigDocument,
+        warnings: &mut Vec<ConfigWarning>,
+    ) -> Result<(), ConfigStoreError> {
+        let session_store = self.session_tree();
+        let (disk_folders, session_notices) = session_store.load();
+        for notice in session_notices {
+            warnings.push(ConfigWarning::StorageNotice { message: notice });
+        }
+
+        let legacy_folders = std::mem::take(&mut document.folders);
+        let mut migrated = false;
+        if disk_folders.is_empty() && !legacy_folders.is_empty() {
+            session_store
+                .write_tree(&legacy_folders)
+                .map_err(ConfigStoreError::SessionTree)?;
+            let (rewritten, rewrite_notices) = session_store.load();
+            for notice in rewrite_notices {
+                warnings.push(ConfigWarning::StorageNotice { message: notice });
+            }
+            document.folders = rewritten;
+            migrated = true;
+            warnings.push(ConfigWarning::StorageNotice {
+                message: "migrated inline session folders from config.toml into sessions/"
+                    .to_owned(),
+            });
+        } else {
+            document.folders = disk_folders;
+            if !legacy_folders.is_empty() {
+                migrated = true;
+                warnings.push(ConfigWarning::StorageNotice {
+                    message: "dropped legacy inline session folders from config.toml because sessions/ already exists"
+                        .to_owned(),
+                });
+            }
+        }
+
+        let (mut key_catalog, key_notices) = KeyCatalog::load(&self.root);
+        for notice in key_notices {
+            warnings.push(ConfigWarning::StorageNotice { message: notice });
+        }
+        let legacy_keys = std::mem::take(&mut document.keys);
+        if key_catalog.to_vec().is_empty() && !legacy_keys.is_empty() {
+            key_catalog.replace_from_vec(legacy_keys);
+            key_catalog
+                .write_all()
+                .map_err(ConfigStoreError::KeyCatalog)?;
+            document.keys = key_catalog.to_vec();
+            migrated = true;
+            warnings.push(ConfigWarning::StorageNotice {
+                message: "migrated inline keys from config.toml into keys/".to_owned(),
+            });
+        } else {
+            document.keys = key_catalog.to_vec();
+            if !legacy_keys.is_empty() {
+                migrated = true;
+                warnings.push(ConfigWarning::StorageNotice {
+                    message:
+                        "dropped legacy inline keys from config.toml because keys/ already exists"
+                            .to_owned(),
+                });
+            }
+        }
+
+        if migrated {
+            // Rewrite config.toml without folders/keys.
+            self.save(document)?;
+        }
         Ok(())
     }
 
@@ -146,15 +267,18 @@ impl ConfigStore {
         &self,
         path: PathBuf,
         _cause: ConfigStoreError,
-    ) -> Result<LoadOutcome, ConfigStoreError> {
+    ) -> Result<(LoadOutcome, Vec<ConfigWarning>), ConfigStoreError> {
         let backup_path = self.backup_path();
         fs::rename(&path, &backup_path)?;
         let document = ConfigDocument::default();
         self.save(&document)?;
-        Ok(LoadOutcome {
-            document,
-            recovered_from_backup: Some(backup_path),
-        })
+        Ok((
+            LoadOutcome {
+                document,
+                recovered_from_backup: Some(backup_path),
+            },
+            Vec::new(),
+        ))
     }
 
     fn backup_path(&self) -> PathBuf {
@@ -173,6 +297,8 @@ pub enum ConfigStoreError {
     Schema(ConfigSchemaError),
     KnownHostsSchema(String),
     Serialize(toml::ser::Error),
+    SessionTree(crate::sessions::SessionTreeError),
+    KeyCatalog(crate::keys::KeyCatalogError),
 }
 
 impl std::fmt::Display for ConfigStoreError {
@@ -182,6 +308,8 @@ impl std::fmt::Display for ConfigStoreError {
             Self::Schema(error) => write!(f, "configuration schema error: {error}"),
             Self::KnownHostsSchema(error) => write!(f, "known_hosts schema error: {error}"),
             Self::Serialize(error) => write!(f, "configuration serialization error: {error}"),
+            Self::SessionTree(error) => write!(f, "session tree error: {error}"),
+            Self::KeyCatalog(error) => write!(f, "key catalog error: {error}"),
         }
     }
 }
@@ -329,5 +457,75 @@ target = "not a host"
         let loaded = store.load_known_hosts().expect("load known_hosts");
 
         assert_eq!(loaded, known_hosts);
+    }
+
+    #[test]
+    fn migrates_legacy_inline_folders_and_keys_to_files() {
+        use crate::schema::{FolderProfile, KeyProfile, SessionProfile};
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = ConfigStore::new(temp.path());
+        fs::create_dir_all(temp.path()).expect("mkdir");
+        fs::write(
+            store.config_file(),
+            r#"
+schema_version = 2
+
+[[folders]]
+id = "folder-1"
+name = "Prod"
+
+[[folders.sessions]]
+id = "saved-web"
+name = "web"
+host = "web.example.test"
+
+[[keys]]
+id = "key-1"
+label = "Work"
+algorithm = "ssh-ed25519"
+fingerprint = "SHA256:abc"
+public_key = "ssh-ed25519 AAAA work"
+secret_ref = "local://yshell/keys/key-1/material"
+"#,
+        )
+        .expect("write legacy config");
+
+        let (outcome, warnings) = store
+            .load_or_recover_with_warnings()
+            .expect("load+migrate");
+        assert!(outcome.recovered_from_backup.is_none());
+        assert_eq!(outcome.document.folders.len(), 1);
+        assert_eq!(outcome.document.folders[0].name, "Prod");
+        assert_eq!(outcome.document.folders[0].sessions[0].host, "web.example.test");
+        assert_eq!(outcome.document.keys.len(), 1);
+        assert_eq!(outcome.document.keys[0].label, "Work");
+        assert!(temp.path().join("sessions/Prod/web.toml").exists());
+        assert!(temp.path().join("keys/Work.toml").exists());
+        assert!(warnings.iter().any(|warning| {
+            matches!(warning, ConfigWarning::StorageNotice { message } if message.contains("migrated"))
+        }));
+
+        let rewritten = fs::read_to_string(store.config_file()).expect("rewritten");
+        assert!(!rewritten.contains("[[folders]]"));
+        assert!(!rewritten.contains("[[keys]]"));
+
+        // Second load uses the file trees, not inline TOML.
+        let reloaded = store.load_or_recover().expect("reload");
+        assert_eq!(reloaded.document.folders[0].sessions[0].id, "saved-web");
+        assert_eq!(reloaded.document.keys[0].id, "key-1");
+
+        // Sanity: helpers still construct the expected types.
+        let _ = FolderProfile::new("x", "X");
+        let _ = SessionProfile::new("y", "y", "h");
+        let _ = KeyProfile {
+            id: "z".to_owned(),
+            label: "Z".to_owned(),
+            algorithm: String::new(),
+            fingerprint: String::new(),
+            public_key: String::new(),
+            secret_ref: String::new(),
+            comment: None,
+        };
     }
 }

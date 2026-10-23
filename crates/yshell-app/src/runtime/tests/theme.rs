@@ -1,5 +1,5 @@
 //! N5 终端主题：外观解析、Settings 外观、Folder/Session 三态覆盖；
-//! 命名主题库（内置只读 / 用户可克隆）；以及 D17（只对新开终端生效）。
+//! 命名主题库（内置只读 / 用户可克隆）；以�?D17（只对新开终端生效）�?
 
 #![allow(clippy::field_reassign_with_default, clippy::useless_conversion)]
 
@@ -29,7 +29,7 @@ fn store_with_prod_folder(config_dir: &Path) -> ConfigStore {
     ));
     root.folders.push(prod);
     document.folders.push(root);
-    store.save(&document).expect("save config");
+    store.save_all(&document).expect("save config");
     store
 }
 
@@ -78,7 +78,7 @@ fn migrate_inline_overrides_creates_user_theme() {
         foreground: Some("#112233".to_owned()),
         ..TerminalProfile::default()
     };
-    store.save(&document).expect("save");
+    store.save_all(&document).expect("save");
 
     let runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
     let scheme = runtime
@@ -104,7 +104,7 @@ fn the_preview_surface_follows_the_previewed_palette() {
         AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
     runtime.open_settings_appearance();
 
-    // 预览表面底色 = 预览配色的背景（否则浅色配色会露出主题黑底）。
+    // 预览表面底色 = 预览配色的背景（否则浅色配色会露出主题黑底）�?
     let palette = runtime.settings_appearance_palette();
     let expected = [
         palette.background.red,
@@ -116,7 +116,7 @@ fn the_preview_surface_follows_the_previewed_palette() {
         expected
     );
 
-    // 换配色方案后，表面底色跟着换。
+    // 换配色方案后，表面底色跟着换�?
     runtime.select_settings_appearance_scheme("nord");
     let palette = runtime.settings_appearance_palette();
     assert_eq!(
@@ -934,20 +934,20 @@ fn preview_lines_include_current_language_and_a_fixed_cjk_sample() {
     assert!(
         english_text
             .iter()
-            .any(|line| line == "CJK fallback: 你好，世界"),
+            .any(|line| line == "CJK fallback: 你好，世�?),
         "missing CJK fallback line: {english_text:?}"
     );
     // Chinese UI gets a Chinese sample; the CJK fallback line is shared.
     assert!(
         chinese_text
             .iter()
-            .any(|line| line == "你好，世界 · 终端主题预览"),
+            .any(|line| line == "你好，世�?· 终端主题预览"),
         "missing Chinese sample: {chinese_text:?}"
     );
     assert!(
         chinese_text
             .iter()
-            .any(|line| line == "CJK fallback: 你好，世界"),
+            .any(|line| line == "CJK fallback: 你好，世�?),
         "missing CJK fallback line: {chinese_text:?}"
     );
     // Both languages keep the ASCII prompt/listing samples.
@@ -966,12 +966,12 @@ fn preview_lines_keep_the_wide_cell_and_preview_width_conventions() {
     let lines = crate::runtime::theme::preview_lines(palette, "zh-CN");
     let cjk = lines
         .iter()
-        .find(|line| preview_line_text(line) == "CJK fallback: 你好，世界")
+        .find(|line| preview_line_text(line) == "CJK fallback: 你好，世�?)
         .expect("CJK fallback line");
 
     let lead = cjk
         .iter()
-        .position(|cell| cell.grapheme == "你")
+        .position(|cell| cell.grapheme == "�?)
         .expect("CJK lead cell");
     assert!(
         cjk[lead + 1].wide_continuation,
@@ -980,7 +980,7 @@ fn preview_lines_keep_the_wide_cell_and_preview_width_conventions() {
     assert_eq!(cjk[lead + 1].grapheme, " ");
     assert_eq!(
         preview_line_text(cjk),
-        "CJK fallback: 你好，世界",
+        "CJK fallback: 你好，世�?,
         "continuation cells must not duplicate the glyph"
     );
 
@@ -1000,7 +1000,7 @@ fn preview_lines_follow_explicit_language_values() {
     for language in ["zh", "zh-CN", "zh-Hans", " ZH-cn "] {
         let texts = preview_texts(&crate::runtime::theme::preview_lines(palette, language));
         assert!(
-            texts.iter().any(|line| line == "你好，世界 · 终端主题预览"),
+            texts.iter().any(|line| line == "你好，世�?· 终端主题预览"),
             "language {language:?} must select the Chinese sample: {texts:?}"
         );
     }
@@ -1156,11 +1156,11 @@ fn preview_content_keeps_language_cjk_rows_and_wide_pairs_when_trimmed() {
         .map(|line| line.trim_end().to_owned())
         .collect();
     assert!(
-        texts.iter().any(|line| line == "你好，世界 · 终端主题预览"),
+        texts.iter().any(|line| line == "你好，世�?· 终端主题预览"),
         "localized sample row must survive row reduction: {texts:?}"
     );
     assert!(
-        texts.iter().any(|line| line == "CJK fallback: 你好，世界"),
+        texts.iter().any(|line| line == "CJK fallback: 你好，世�?),
         "CJK fallback row must survive row reduction: {texts:?}"
     );
     // Prompt row is kept (0,1,6,7), the selection row is not.

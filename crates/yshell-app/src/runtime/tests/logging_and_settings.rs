@@ -180,7 +180,7 @@ fn settings_terminal_save_applies_to_existing_sessions() {
             (DEFAULT_SCROLLBACK_LINES, DEFAULT_SCROLLBACK_MAX_CELLS)
         );
         for index in 0..200 {
-            // D1：应用内诊断不再写终端网格；这里直接以"远端输出"方式喂数据。
+            // D1：应用内诊断不再写终端网格；这里直接�?远端输出"方式喂数据�?
             let line = format!("scrollback sample line {index}\n");
             session
                 .terminal_parser
@@ -278,7 +278,7 @@ fn enabled_logging_writes_fake_terminal_transcript() {
         },
         ..ConfigDocument::default()
     };
-    store.save(&document).expect("save config");
+    store.save_all(&document).expect("save config");
 
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
     let _ = runtime
@@ -298,7 +298,7 @@ fn enabled_logging_writes_fake_terminal_transcript() {
 
 // ---------------------------------------------------------------- N6 手动日志
 
-/// N6：连接一个 fake shell 的运行时，返回（runtime, session_key）。
+/// N6：连接一�?fake shell 的运行时，返回（runtime, session_key）�?
 fn runtime_with_quick_connect(temp: &Path) -> (AppRuntime, String) {
     let mut runtime = AppRuntime::new(temp.to_path_buf()).expect("runtime");
     runtime
@@ -308,7 +308,7 @@ fn runtime_with_quick_connect(temp: &Path) -> (AppRuntime, String) {
     (runtime, session_key)
 }
 
-/// N6：把一段输出喂进会话并把 fake shell 的 pending 输出全部 poll 掉。
+/// N6：把一段输出喂进会话并�?fake shell �?pending 输出全部 poll 掉�?
 fn drain_shell_output(runtime: &mut AppRuntime, session_key: &str, marker: &str) {
     queue_shell_output(runtime, session_key, marker);
     runtime
@@ -319,7 +319,7 @@ fn drain_shell_output(runtime: &mut AppRuntime, session_key: &str, marker: &str)
         .expect("poll shell output");
 }
 
-/// N6：断言行首是 `[HH:MM:SS]`，返回去掉时间戳的整行。
+/// N6：断言行首�?`[HH:MM:SS]`，返回去掉时间戳的整行�?
 fn strip_timestamp_prefix(line: &str) -> &str {
     let bytes = line.as_bytes();
     assert!(
@@ -360,7 +360,7 @@ fn manual_logging_writes_sanitized_timestamped_transcript() {
         log_path.display().to_string()
     );
 
-    // `ls --color` 的等价物：带 ANSI 颜色的输出在 sanitized 模式被剥掉。
+    // `ls --color` 的等价物：带 ANSI 颜色的输出在 sanitized 模式被剥掉�?
     drain_shell_output(&mut runtime, &session_key, "\u{1b}[31mRED\u{1b}[0m");
 
     let stopped = runtime
@@ -418,7 +418,7 @@ fn manual_logging_records_local_input_only_when_enabled() {
     let temp = tempdir().expect("tempdir");
     let (mut runtime, session_key) = runtime_with_quick_connect(temp.path());
 
-    // 设计默认：不记录本地输入。
+    // 设计默认：不记录本地输入�?
     let default_log = temp.path().join("no-input.log");
     runtime
         .start_session_logging(&session_key, &SessionLoggingRequest::new(&default_log))
@@ -439,7 +439,7 @@ fn manual_logging_records_local_input_only_when_enabled() {
     );
     assert!(log.contains("ls -la"), "output echo is still recorded");
 
-    // 勾选"记录本地输入"（R-106）：输入按 Input 方向写入。
+    // 勾�?记录本地输入"（R-106）：输入�?Input 方向写入�?
     let input_log = temp.path().join("with-input.log");
     let mut request = SessionLoggingRequest::new(&input_log);
     request.include_input = true;
@@ -483,7 +483,7 @@ fn manual_logging_replaces_auto_logging_without_resuming_it() {
         .expect("save config");
     let (mut runtime, session_key) = runtime_with_quick_connect(temp.path());
 
-    // 配置驱动的自动日志已经打开（终端 transcript + 传输日志两个文件）。
+    // 配置驱动的自动日志已经打开（终�?transcript + 传输日志两个文件）�?
     let auto_logs = collect_log_files(&temp.path().join("logs"));
     let auto_log = auto_logs
         .iter()
@@ -499,7 +499,7 @@ fn manual_logging_replaces_auto_logging_without_resuming_it() {
         SessionLoggingMode::Auto
     );
 
-    // 手动日志优先：开启后自动日志暂停，输出只进手动文件。
+    // 手动日志优先：开启后自动日志暂停，输出只进手动文件�?
     let manual_log = temp.path().join("manual-precedence.log");
     runtime
         .start_session_logging(&session_key, &SessionLoggingRequest::new(&manual_log))
@@ -518,7 +518,7 @@ fn manual_logging_replaces_auto_logging_without_resuming_it() {
     let manual_content = fs::read_to_string(&manual_log).expect("read manual log");
     assert!(manual_content.contains("manual-only-marker"));
 
-    // 停止手动日志：不自动恢复自动日志（同一会话单一日志输出）。
+    // 停止手动日志：不自动恢复自动日志（同一会话单一日志输出）�?
     runtime
         .stop_session_logging(&session_key)
         .expect("stop manual logging");
@@ -539,7 +539,7 @@ fn manual_logging_replaces_auto_logging_without_resuming_it() {
         "stopped manual log must not receive more output"
     );
 
-    // 即使再次应用日志配置（连接/重连路径），本会话也不重新打开自动日志。
+    // 即使再次应用日志配置（连�?重连路径），本会话也不重新打开自动日志�?
     let logging = runtime.config_document.logging.clone();
     runtime
         .sessions
@@ -607,7 +607,7 @@ fn manual_logging_write_failure_stops_and_surfaces_last_error() {
         .poll_shell_output()
         .expect("poll output");
 
-    // 写失败 → 自动停止并保留已写内容，`last_error` 折进状态栏提示。
+    // 写失�?�?自动停止并保留已写内容，`last_error` 折进状态栏提示�?
     runtime.fold_logging_notice_from_session(&session_key);
     assert!(!runtime.session_logging_active(&session_key));
     assert_eq!(
@@ -672,7 +672,7 @@ fn close_and_exit_entries_stop_and_flush_active_logs() {
         .expect("start logging");
     drain_shell_output(&mut runtime, &session_key, "close-marker");
 
-    // 标签关闭入口：停止并返回文件路径。
+    // 标签关闭入口：停止并返回文件路径�?
     let closed = runtime
         .stop_session_logging_for_close(&session_key)
         .expect("close must report the log file");
@@ -683,7 +683,7 @@ fn close_and_exit_entries_stop_and_flush_active_logs() {
     let log = fs::read_to_string(&log_path).expect("read log");
     assert!(log.contains("close-marker"));
 
-    // 退出入口：停止所有活动日志（幂等）。
+    // 退出入口：停止所有活动日志（幂等）�?
     runtime
         .start_session_logging(
             &session_key,
@@ -728,7 +728,7 @@ fn log_file_name_validation_and_default_suggestion() {
     assert!(validate_log_file_name("session-2026.log").is_ok());
     assert!(validate_log_file_name("  session-2026.log  ").is_ok());
 
-    // 默认名模板 `{session}-{timestamp}.log`，会话标签里的非法字符转 `_`。
+    // 默认名模�?`{session}-{timestamp}.log`，会话标签里的非法字符转 `_`�?
     let suggested = default_session_log_file_name("Prod web/1");
     assert!(suggested.starts_with("Prod_web_1-"), "got {suggested}");
     assert!(suggested.ends_with(".log"));
@@ -744,9 +744,9 @@ fn log_file_name_validation_and_default_suggestion() {
     );
 }
 
-// ------------------------------------------------- N6 Phase 2：弹窗/菜单/关闭
+// ------------------------------------------------- N6 Phase 2：弹�?菜单/关闭
 
-/// N6：弹窗默认值 = 上次目录（回退配置 logs 目录）+ `{session}-{timestamp}.log`。
+/// N6：弹窗默认�?= 上次目录（回退配置 logs 目录�? `{session}-{timestamp}.log`�?
 #[test]
 fn logging_dialog_defaults_and_start_flow() {
     let temp = tempdir().expect("tempdir");
@@ -755,7 +755,7 @@ fn logging_dialog_defaults_and_start_flow() {
     let opened = runtime.open_logging_dialog();
     assert!(opened.logging_dialog_visible);
     assert_eq!(opened.logging_dialog_session_text, "alice@example.com:2200");
-    // 设计默认：sanitized + 时间戳开 + 不记输入 + 无覆盖确认。
+    // 设计默认：sanitized + 时间戳开 + 不记输入 + 无覆盖确认�?
     assert!(
         !opened.logging_dialog_raw_format,
         "sanitized is the default"
@@ -766,7 +766,7 @@ fn logging_dialog_defaults_and_start_flow() {
     assert!(!opened.logging_dialog_overwrite_confirmed);
     assert!(!opened.logging_dialog_file_exists);
     assert!(opened.logging_dialog_file_name_error_text.is_empty());
-    // 默认目录 = 配置 logs 目录（相对 config_dir 解析为绝对路径）。
+    // 默认目录 = 配置 logs 目录（相�?config_dir 解析为绝对路径）�?
     assert_eq!(
         opened.logging_dialog_directory_text,
         temp.path().join("logs").display().to_string()
@@ -776,7 +776,7 @@ fn logging_dialog_defaults_and_start_flow() {
         .starts_with("alice_example.com_2200-"));
     assert!(opened.logging_dialog_file_name_text.ends_with(".log"));
 
-    // 改成临时目录 + 指定文件名后开始。
+    // 改成临时目录 + 指定文件名后开始�?
     let directory_text = temp.path().display().to_string();
     runtime.update_logging_dialog_directory(&directory_text);
     runtime.update_logging_dialog_file_name("dialog-session.log");
@@ -796,7 +796,7 @@ fn logging_dialog_defaults_and_start_flow() {
     let log = fs::read_to_string(temp.path().join("dialog-session.log")).expect("read log");
     assert!(log.contains("dialog-flow-marker"));
 
-    // "上次使用目录"：再次打开弹窗默认 = 上次目录。
+    // "上次使用目录"：再次打开弹窗默认 = 上次目录�?
     let reopened = runtime.open_logging_dialog();
     assert!(reopened.logging_dialog_visible);
     assert_eq!(reopened.logging_dialog_directory_text, directory_text);
@@ -810,7 +810,7 @@ fn logging_dialog_validates_file_name_and_overwrite_confirmation() {
     runtime.open_logging_dialog();
     runtime.update_logging_dialog_directory(&temp.path().display().to_string());
 
-    // 非法文件名：内联错误 + 不开始（弹窗保持打开）。
+    // 非法文件名：内联错误 + 不开始（弹窗保持打开）�?
     runtime.update_logging_dialog_file_name("bad/name.log");
     let rejected = runtime
         .start_logging_from_dialog()
@@ -819,7 +819,7 @@ fn logging_dialog_validates_file_name_and_overwrite_confirmation() {
     assert!(!rejected.logging_dialog_file_name_error_text.is_empty());
     assert!(!runtime.session_logging_active(&session_key));
 
-    // 已存在文件：先要覆盖确认；确认后按 Truncate 覆盖写入。
+    // 已存在文件：先要覆盖确认；确认后�?Truncate 覆盖写入�?
     let existing_path = temp.path().join("existing.log");
     fs::write(&existing_path, "old content\n").expect("seed log");
     runtime.update_logging_dialog_file_name("existing.log");
@@ -869,7 +869,7 @@ fn logging_dialog_open_failure_keeps_dialog_and_reports_path() {
 #[test]
 fn terminal_logging_menu_flags_follow_state() {
     let temp = tempdir().expect("tempdir");
-    // 无会话：Start/Stop/Open 全部禁用。
+    // 无会话：Start/Stop/Open 全部禁用�?
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
     let idle = runtime.projection();
     assert!(!idle.terminal_logging_start_enabled);
@@ -879,7 +879,7 @@ fn terminal_logging_menu_flags_follow_state() {
     assert!(!idle.logging_active);
     assert_eq!(idle.logging_mode_text, "off");
 
-    // 有会话、未记录：Start 可用。
+    // 有会话、未记录：Start 可用�?
     runtime
         .handle_quick_connect("alice@example.com:2200")
         .expect("quick connect");
@@ -888,7 +888,7 @@ fn terminal_logging_menu_flags_follow_state() {
     assert!(ready.terminal_logging_start_enabled);
     assert!(!ready.terminal_logging_stop_enabled);
 
-    // 记录中：Stop/Open 可用，Start 仍打开弹窗（停止提示视图）；REC 投影为 manual。
+    // 记录中：Stop/Open 可用，Start 仍打开弹窗（停止提示视图）；REC 投影�?manual�?
     let log_path = temp.path().join("menu.log");
     runtime
         .start_session_logging(&session_key, &SessionLoggingRequest::new(&log_path))
@@ -904,14 +904,14 @@ fn terminal_logging_menu_flags_follow_state() {
     assert_eq!(logging.logging_path_text, log_path.display().to_string());
     assert!(runtime.projection().tabs[0].logging, "tab REC indicator");
 
-    // 已在记录：Start 入口打开弹窗（前端按 logging-active 显示停止提示视图）。
+    // 已在记录：Start 入口打开弹窗（前端按 logging-active 显示停止提示视图）�?
     let dialog = runtime.terminal_logging_start();
     assert!(dialog.logging_dialog_visible);
     assert!(dialog.logging_active);
     runtime.close_logging_dialog();
     assert!(!runtime.projection().logging_dialog_visible);
 
-    // 停止后：Start 恢复，"打开"仍指向最近文件（已写盘）。
+    // 停止后：Start 恢复�?打开"仍指向最近文件（已写盘）�?
     runtime
         .stop_session_logging(&session_key)
         .expect("stop logging");
@@ -951,7 +951,7 @@ fn closing_tab_stops_logging_and_reports_log_path() {
         .expect("start logging");
     drain_shell_output(&mut runtime, &session_key, "close-flow-marker");
 
-    // 活动连接：先确认再关闭；关闭路径强制停止日志并提示文件位置。
+    // 活动连接：先确认再关闭；关闭路径强制停止日志并提示文件位置�?
     let pending = runtime.request_close_tab(&tab_id).expect("request close");
     assert!(pending.close_tabs_confirm_visible);
     let projection = runtime

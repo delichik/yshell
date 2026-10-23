@@ -6,7 +6,7 @@ use crate::{
     session_runtime::SessionSource,
 };
 use std::collections::BTreeSet;
-use yshell_config::{FolderProfile, LoadOutcome, SessionProfile};
+use yshell_config::{FolderProfile, KeyCatalog, LoadOutcome, SessionProfile};
 use yshell_core::SessionEvent;
 
 use super::*;
@@ -28,24 +28,17 @@ impl AppRuntime {
         }
         let new_folder_id = self.next_folder_id(&folder_name);
         let new_folder = FolderProfile::new(new_folder_id.clone(), folder_name.clone());
-        let parent_label = {
-            let parent = self.target_saved_sessions_folder_mut(&parent_folder_id)?;
-            if parent
-                .folders
-                .iter()
-                .any(|folder| folder.name.eq_ignore_ascii_case(&folder_name))
-            {
-                return Err(AppError::new(format!(
-                    "folder `{folder_name}` already exists under `{}`",
-                    parent.name
-                )));
-            }
-            let label = parent.name.clone();
-            parent.folders.push(new_folder);
-            label
-        };
+        let parent_label = self
+            .target_saved_sessions_folder_mut(&parent_folder_id)?
+            .name
+            .clone();
         self.config_store
-            .save(&self.config_document)
+            .session_tree()
+            .create_folder(
+                &mut self.config_document.folders,
+                Some(&parent_folder_id),
+                new_folder,
+            )
             .map_err(AppError::from_error)?;
         self.editor.target_folder_id = new_folder_id;
         self.new_folder_name.clear();
@@ -70,27 +63,19 @@ impl AppRuntime {
                 "new folder name must not contain `/` or null characters",
             ));
         }
-        if self
-            .config_document
-            .folders
-            .iter()
-            .any(|folder| folder.name.eq_ignore_ascii_case(&folder_name))
-        {
-            return Err(AppError::new(format!(
-                "folder `{folder_name}` already exists in the session tree root"
-            )));
-        }
         let new_folder_id = self.next_folder_id(&folder_name);
-        self.config_document
-            .folders
-            .push(FolderProfile::new(new_folder_id, folder_name.clone()));
         self.config_store
-            .save(&self.config_document)
+            .session_tree()
+            .create_folder(
+                &mut self.config_document.folders,
+                None,
+                FolderProfile::new(new_folder_id, folder_name.clone()),
+            )
             .map_err(AppError::from_error)?;
         self.set_status_kind(
             "session-folder-created-root",
             format!(
-                "Created folder `{folder_name}` in the session tree root and persisted the updated config."
+                "Created folder `{folder_name}` in the session tree root and persisted it under sessions/."
             ),
             folder_name,
             String::new(),
@@ -147,6 +132,9 @@ impl AppRuntime {
             .load_or_recover()
             .map_err(AppError::from_error)?;
         self.config_document = document;
+        self.key_catalog = KeyCatalog::new(self.config_store.keys_dir());
+        self.key_catalog
+            .replace_from_vec(self.config_document.keys.clone());
         if recovered_from_backup.is_some() {
             self.recovered_from_backup = recovered_from_backup;
         }
@@ -171,7 +159,7 @@ impl AppRuntime {
         self.set_status_kind(
             "sessions-reloaded",
             format!(
-                "Reloaded saved sessions from config.toml. Saved sessions discovered: {saved_count}."
+                "Reloaded saved sessions from the sessions/ directory. Saved sessions discovered: {saved_count}."
             ),
             saved_count.to_string(),
             String::new(),
@@ -196,22 +184,31 @@ impl AppRuntime {
             .get(&session_key)
             .ok_or_else(|| AppError::new("active runtime session is missing"))?;
         let profile_id = self.next_saved_profile_id(&active_runtime.ssh_config.host);
-        let profile = active_runtime.to_session_profile(profile_id.clone());
-
-        if let Some(existing) = self.config_document.find_session_mut(&profile_id) {
-            *existing = profile;
+        let mut profile = active_runtime.to_session_profile(profile_id.clone());
+        // Prefer a human-readable file name; fall back to the stable id stem.
+        if profile.name.trim().is_empty() {
+            profile.name = profile_id.clone();
+        }
+        self.ensure_saved_sessions_folder();
+        let folder_id = SAVED_SESSIONS_FOLDER_ID.to_owned();
+        profile.name = self.allocate_unique_session_name(&folder_id, &profile.name, None)?;
+        if self.config_document.find_session(&profile_id).is_some() {
+            self.config_store
+                .session_tree()
+                .update_session(&mut self.config_document.folders, profile)
+                .map_err(AppError::from_error)?;
         } else {
-            self.ensure_saved_sessions_folder().sessions.push(profile);
+            self.config_store
+                .session_tree()
+                .add_session(&mut self.config_document.folders, &folder_id, profile)
+                .map_err(AppError::from_error)?;
         }
         self.selected_saved_session_id = Some(profile_id.clone());
-        self.config_store
-            .save(&self.config_document)
-            .map_err(AppError::from_error)?;
         let saved_count = self.saved_session_count().to_string();
         self.set_status_kind(
             "session-saved",
             format!(
-                "Saved active runtime session as profile `{profile_id}`. Config now contains {saved_count} saved session(s)."
+                "Saved active runtime session as profile `{profile_id}`. Session tree now contains {saved_count} saved session(s)."
             ),
             profile_id,
             saved_count,
@@ -293,13 +290,14 @@ impl AppRuntime {
             .get(&session_key)
             .ok_or_else(|| AppError::new("active runtime session is missing"))?;
         let updated = active_runtime.to_session_profile(profile_id.clone());
-        let existing = self
-            .config_document
-            .find_session_mut(&profile_id)
-            .ok_or_else(|| AppError::new(format!("saved session `{profile_id}` was not found")))?;
-        *existing = updated;
+        if self.config_document.find_session(&profile_id).is_none() {
+            return Err(AppError::new(format!(
+                "saved session `{profile_id}` was not found"
+            )));
+        }
         self.config_store
-            .save(&self.config_document)
+            .session_tree()
+            .update_session(&mut self.config_document.folders, updated)
             .map_err(AppError::from_error)?;
         self.set_status_kind(
             "session-updated",
@@ -316,11 +314,9 @@ impl AppRuntime {
             .clone()
             .ok_or_else(|| AppError::new("no saved session is currently selected"))?;
         let removed = self
-            .config_document
-            .remove_session(&profile_id)
-            .ok_or_else(|| AppError::new(format!("saved session `{profile_id}` was not found")))?;
-        self.config_store
-            .save(&self.config_document)
+            .config_store
+            .session_tree()
+            .delete_session(&mut self.config_document.folders, &profile_id)
             .map_err(AppError::from_error)?;
         // N0：该 profile 可能已被重复打开成多个标签；全部关闭并清理其运行时。
         let profile_session_keys: Vec<String> = self
@@ -356,7 +352,7 @@ impl AppRuntime {
         let removed_id = removed.id;
         self.set_status_kind(
             "session-deleted",
-            format!("Deleted saved session `{removed_id}` and persisted the updated config."),
+            format!("Deleted saved session `{removed_id}` from the sessions/ directory."),
             removed_id,
             String::new(),
         );
@@ -613,6 +609,39 @@ impl AppRuntime {
         }
     }
 
+    /// Allocates a sibling-unique session display name under `folder_id`.
+    pub(crate) fn allocate_unique_session_name(
+        &self,
+        folder_id: &str,
+        base: &str,
+        except_session_id: Option<&str>,
+    ) -> AppResult<String> {
+        let base = yshell_config::sanitize_entry_name(base, "session");
+        let Some(folder) = self.config_document.find_folder(folder_id) else {
+            return Ok(base);
+        };
+        let taken = |candidate: &str| {
+            folder.sessions.iter().any(|session| {
+                except_session_id.is_none_or(|id| session.id != id)
+                    && session.name.eq_ignore_ascii_case(candidate)
+            }) || folder
+                .folders
+                .iter()
+                .any(|child| child.name.eq_ignore_ascii_case(candidate))
+        };
+        if !taken(&base) {
+            return Ok(base);
+        }
+        let mut ordinal = 2usize;
+        loop {
+            let candidate = format!("{base} {ordinal}");
+            if !taken(&candidate) {
+                return Ok(candidate);
+            }
+            ordinal += 1;
+        }
+    }
+
     pub(crate) fn next_folder_id(&self, name: &str) -> String {
         let mut stem = name
             .chars()
@@ -652,20 +681,28 @@ impl AppRuntime {
     }
 
     pub(crate) fn ensure_saved_sessions_folder(&mut self) -> &mut FolderProfile {
-        if let Some(index) = self
+        let exists = self
             .config_document
             .folders
             .iter()
-            .position(|folder| folder.id == SAVED_SESSIONS_FOLDER_ID)
-        {
-            return &mut self.config_document.folders[index];
+            .any(|folder| folder.id == SAVED_SESSIONS_FOLDER_ID);
+        if exists {
+            let _ = self
+                .config_store
+                .session_tree()
+                .ensure_folder(&self.config_document.folders, SAVED_SESSIONS_FOLDER_ID);
+        } else {
+            let folder =
+                FolderProfile::new(SAVED_SESSIONS_FOLDER_ID, SAVED_SESSIONS_FOLDER_NAME);
+            let _ = self.config_store.session_tree().create_folder(
+                &mut self.config_document.folders,
+                None,
+                folder,
+            );
         }
-        self.config_document.folders.push(FolderProfile::new(
-            SAVED_SESSIONS_FOLDER_ID,
-            SAVED_SESSIONS_FOLDER_NAME,
-        ));
-        let last_index = self.config_document.folders.len() - 1;
-        &mut self.config_document.folders[last_index]
+        self.config_document
+            .find_folder_mut(SAVED_SESSIONS_FOLDER_ID)
+            .expect("saved-sessions folder must exist after ensure")
     }
 
     pub(crate) fn target_saved_sessions_folder_mut(

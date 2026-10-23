@@ -3,12 +3,17 @@
 //! The crate owns versioned TOML configuration, profile inheritance, saved
 //! session-tree editing, Quick Connect parsing, and file-store recovery.
 
+pub mod keys;
+pub mod names;
 pub mod paths;
 pub mod quick_connect;
 pub mod schema;
+pub mod sessions;
 pub mod store;
 pub mod themes;
 
+pub use keys::{KeyCatalog, KeyCatalogError, KEYS_DIR_NAME};
+pub use names::{sanitize_entry_name, validate_entry_name, NameError};
 pub use paths::{discover_config_dir, ConfigPathError, ConfigPathResolver, OperatingSystem};
 pub use quick_connect::{parse_quick_connect, QuickConnectError, QuickConnectTarget};
 pub use schema::{
@@ -20,6 +25,7 @@ pub use schema::{
     TerminalProfile, TunnelForward, TunnelForwardKind, TunnelProfile, UiProfile,
     SFTP_MAX_PARALLEL_TRANSFERS_MAX, SFTP_MAX_PARALLEL_TRANSFERS_MIN, SCHEMA_VERSION,
 };
+pub use sessions::{SessionTreeError, SessionTreeStore, FOLDER_META_FILE_NAME, SESSIONS_DIR_NAME};
 pub use store::{ConfigStore, ConfigStoreError, LoadOutcome};
 pub use themes::{
     allocate_user_theme_id, is_builtin_scheme_id, ColorTheme, ThemeCatalog, ThemeCatalogError,

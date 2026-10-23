@@ -1,4 +1,4 @@
-//! NET-1：代理管理器生命周期、引用删除（D8）与后台测试动作。
+//! NET-1：代理管理器生命周期、引用删除（D8）与后台测试动作�?
 
 use std::{
     io::{Read, Write},
@@ -42,7 +42,7 @@ fn store_with_proxies(
     let mut folder = FolderProfile::new("saved-sessions", "Saved Sessions");
     folder.sessions = sessions;
     document.folders.push(folder);
-    store.save(&document).expect("save config");
+    store.save_all(&document).expect("save config");
     store
 }
 
@@ -87,7 +87,7 @@ fn proxy_manager_create_edit_duplicate_delete() {
         std::fs::read_to_string(temp.path().join("secret-store.toml")).expect("read store");
     assert!(!store_contents.contains("proxy-secret"));
 
-    // 编辑同一条：id 不变，引用会话立刻看到新值。
+    // 编辑同一条：id 不变，引用会话立刻看到新值�?
     let _ = runtime.begin_edit_proxy();
     let _ = runtime.update_proxy_editor_name("Corp SOCKS (edited)");
     let _ = runtime.update_proxy_editor_host("10.0.0.5");
@@ -98,7 +98,7 @@ fn proxy_manager_create_edit_duplicate_delete() {
     assert_eq!(projection.proxies_rows[0].address, "10.0.0.5:1081");
     assert_eq!(projection.proxies_editor_id_text, "proxy-1");
 
-    // 复制：新 id + 复制口令。
+    // 复制：新 id + 复制口令�?
     let projection = runtime.duplicate_selected_proxy();
     assert_eq!(runtime.config_document.proxy_profiles.len(), 2);
     assert_eq!(projection.proxies_rows.len(), 2);
@@ -121,7 +121,7 @@ fn proxy_manager_create_edit_duplicate_delete() {
         "proxy-secret"
     );
 
-    // 删除未被引用的副本：先确认再删除。
+    // 删除未被引用的副本：先确认再删除�?
     let copy_index = runtime
         .proxy_row_data()
         .iter()
@@ -162,7 +162,7 @@ fn deleting_a_referenced_proxy_is_blocked_and_can_be_cleared_explicitly() {
     let _ = runtime.select_proxy(0);
     let projection = runtime.request_proxy_remove();
 
-    // D8：阻止删除，并列出引用会话；配置文件保持完整。
+    // D8：阻止删除，并列出引用会话；配置文件保持完整�?
     assert!(projection.proxies_remove_blocked);
     assert!(!projection.proxies_remove_confirm_visible);
     assert!(projection.proxies_referencing_text.contains("Prod"));
@@ -176,7 +176,7 @@ fn deleting_a_referenced_proxy_is_blocked_and_can_be_cleared_explicitly() {
         .proxy_profiles
         .contains_key("proxy-1"));
 
-    // 显式"设为无代理"：只清引用，条目保留。
+    // 显式"设为无代�?：只清引用，条目保留�?
     let projection = runtime.set_referencing_sessions_to_no_proxy();
     assert!(!projection.proxies_remove_blocked);
     assert_eq!(projection.proxies_rows[0].used_by, "");
@@ -185,7 +185,7 @@ fn deleting_a_referenced_proxy_is_blocked_and_can_be_cleared_explicitly() {
         .iter()
         .all(|session| session.proxy_profile_id.is_none()));
 
-    // 现在可以正常确认删除。
+    // 现在可以正常确认删除�?
     let projection = runtime.request_proxy_remove();
     assert!(!projection.proxies_remove_blocked);
     assert!(projection.proxies_remove_confirm_visible);
@@ -196,7 +196,7 @@ fn deleting_a_referenced_proxy_is_blocked_and_can_be_cleared_explicitly() {
 
 #[test]
 fn proxy_test_action_reports_success_and_failure() {
-    // 最小 SOCKS5 stub：读取 greeting，回复"无需认证"。
+    // 最�?SOCKS5 stub：读�?greeting，回�?无需认证"�?
     let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind socks5 stub");
     let port = listener.local_addr().expect("local addr").port();
     let server = thread::spawn(move || {
@@ -208,7 +208,7 @@ fn proxy_test_action_reports_success_and_failure() {
         socket.write_all(&[0x05, 0x00]).expect("method reply");
     });
 
-    // 关闭一个临时监听器，得到必然拒绝连接的端口。
+    // 关闭一个临时监听器，得到必然拒绝连接的端口�?
     let closed = TcpListener::bind(("127.0.0.1", 0)).expect("bind closed port");
     let closed_port = closed.local_addr().expect("local addr").port();
     drop(closed);
@@ -226,7 +226,7 @@ fn proxy_test_action_reports_success_and_failure() {
     let _ = runtime.open_proxies_manager();
     assert_eq!(runtime.proxy_row_data().len(), 2);
 
-    // 成功路径（SOCKS5 协商，不阻塞 UI：worker + poll）。
+    // 成功路径（SOCKS5 协商，不阻塞 UI：worker + poll）�?
     let ok_index = runtime
         .proxy_row_data()
         .iter()
@@ -242,7 +242,7 @@ fn proxy_test_action_reports_success_and_failure() {
     assert!(projection.proxies_test_result_text.contains("SOCKS5"));
     server.join().expect("socks5 stub");
 
-    // 失败路径：端口拒绝连接，错误可读并回填到页面。
+    // 失败路径：端口拒绝连接，错误可读并回填到页面�?
     let broken_index = runtime
         .proxy_row_data()
         .iter()

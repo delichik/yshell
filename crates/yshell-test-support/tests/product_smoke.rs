@@ -71,7 +71,7 @@ fn product_docs_smoke_acceptance_loop() {
         .push(FolderProfile::new("smoke-folder", "Smoke"));
     document.folders[0].sessions.push(profile);
 
-    store.save(&document).expect("config saved");
+    store.save_all(&document).expect("config saved");
     let saved_config = fs::read_to_string(store.config_file()).expect("config readable");
     assert!(saved_config.contains("secret_key"));
     assert!(saved_config.contains(secret_ref.as_str()));
@@ -79,6 +79,18 @@ fn product_docs_smoke_acceptance_loop() {
         !saved_config.contains(SESSION_SECRET),
         "config must persist secret refs, not plaintext secrets"
     );
+    assert!(
+        !saved_config.contains("[[folders]]"),
+        "sessions must live under sessions/, not config.toml"
+    );
+    let session_file = store
+        .sessions_dir()
+        .join("Smoke")
+        .join("Smoke Session.toml");
+    assert!(session_file.exists(), "session file {}", session_file.display());
+    let session_body = fs::read_to_string(&session_file).expect("session readable");
+    assert!(session_body.contains("smoke.example.test"));
+    assert!(!session_body.contains(SESSION_SECRET));
 
     let loaded = store.load_or_recover().expect("config loads").document;
     let resolved = loaded
@@ -145,7 +157,7 @@ fn product_docs_smoke_acceptance_loop() {
     assert_eq!(styled_cell.grapheme, "r");
     assert!(styled_cell.bold);
     assert_eq!(styled_cell.foreground, TerminalColor::rgb(12, 34, 56));
-    assert_eq!(grid.line_text(1), "wide: å¥½");
+    assert_eq!(grid.line_text(1), "wide: å¥?);
 
     let ssh_config = SshConnectionConfig::new(
         &resolved.session.host,

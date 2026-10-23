@@ -494,9 +494,11 @@ impl AppRuntime {
         } else {
             let _ = self.delete_secret_value(&passphrase_ref);
         }
+        let base_label = private_key_label(label, &parsed.comment, &key_id);
+        let unique_label = self.allocate_unique_key_label(&base_label);
         let profile = KeyProfile {
             id: key_id.clone(),
-            label: private_key_label(label, &parsed.comment, &key_id),
+            label: unique_label,
             algorithm: parsed.algorithm.clone(),
             fingerprint: parsed.fingerprint.clone(),
             public_key: parsed.public_key.clone(),
@@ -507,10 +509,10 @@ impl AppRuntime {
                 Some(parsed.comment.clone())
             },
         };
-        self.config_document.keys.push(profile);
-        self.config_store
-            .save(&self.config_document)
+        self.key_catalog
+            .save_key(profile)
             .map_err(AppError::from_error)?;
+        self.config_document.keys = self.key_catalog.to_vec();
         self.private_key_entry(&key_id)
             .ok_or_else(|| AppError::new(format!("imported key `{key_id}` disappeared")))
     }
@@ -542,10 +544,10 @@ impl AppRuntime {
         if passphrase_ref != material_ref {
             self.delete_secret_value(&passphrase_ref)?;
         }
-        self.config_document.keys.retain(|key| key.id != key_id);
-        self.config_store
-            .save(&self.config_document)
+        self.key_catalog
+            .delete_key(key_id)
             .map_err(AppError::from_error)?;
+        self.config_document.keys = self.key_catalog.to_vec();
         // SSH-1：正在编辑的会话草稿若引用了这个 key，清掉选择，避免保存出悬空
         // key_id（密钥管理器页面不把未保存草稿计入 used_by）。
         if self.editor.key_id.as_deref() == Some(key_id) {
@@ -564,16 +566,10 @@ impl AppRuntime {
         if label.is_empty() {
             return Err(AppError::new("a private key label must not be empty"));
         }
-        let profile = self
-            .config_document
-            .keys
-            .iter_mut()
-            .find(|key| key.id == key_id)
-            .ok_or_else(|| AppError::new(format!("managed key `{key_id}` was not found")))?;
-        profile.label = label.to_owned();
-        self.config_store
-            .save(&self.config_document)
+        self.key_catalog
+            .rename_key(key_id, label)
             .map_err(AppError::from_error)?;
+        self.config_document.keys = self.key_catalog.to_vec();
         self.private_key_entry(key_id)
             .ok_or_else(|| AppError::new(format!("renamed key `{key_id}` disappeared")))
     }
@@ -721,6 +717,21 @@ impl AppRuntime {
             next += 1;
         }
     }
+
+    /// Allocates a label that does not collide with existing key files (case-insensitive).
+    fn allocate_unique_key_label(&self, base: &str) -> String {
+        if !self.key_catalog.label_in_use(base, None) {
+            return base.to_owned();
+        }
+        let mut ordinal = 2usize;
+        loop {
+            let candidate = format!("{base} {ordinal}");
+            if !self.key_catalog.label_in_use(&candidate, None) {
+                return candidate;
+            }
+            ordinal += 1;
+        }
+    }
 }
 
 /// 递归收集文件夹树里引用托管密钥的会话名。
@@ -750,13 +761,34 @@ fn collect_key_usage(
 }
 
 /// 托管密钥 label 的解析：显式 label → 密钥注释 → key id。
+///
+/// The result is always a filesystem-safe unique-ish display name (key files
+/// are `keys/<label>.toml`).
 fn private_key_label(label: &str, comment: &str, key_id: &str) -> String {
-    let label = label.trim();
-    if !label.is_empty() {
-        return label.to_owned();
-    }
-    if !comment.trim().is_empty() {
-        return comment.trim().to_owned();
+    let candidates = [label.trim(), comment.trim(), key_id];
+    for candidate in candidates {
+        if candidate.is_empty() {
+            continue;
+        }
+        if let Ok(name) = yshell_config::validate_entry_name(candidate) {
+            return name;
+        }
+        let sanitized: String = candidate
+            .chars()
+            .map(|ch| {
+                if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == ' ' {
+                    ch
+                } else {
+                    '-'
+                }
+            })
+            .collect::<String>()
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        if let Ok(name) = yshell_config::validate_entry_name(&sanitized) {
+            return name;
+        }
     }
     key_id.to_owned()
 }
@@ -2361,7 +2393,17 @@ mod tests {
         let material = runtime.private_key_material("key-1").expect("material");
         assert_eq!(material, ED25519_PLAIN.trim());
 
-        // 配置已落盘：重新加载后 keys 元数据仍在。
+        // 元数据落在 keys/<label>.toml；私钥材料只在 keychain。
+        let key_file = runtime.config_store.keys_dir().join("Work key.toml");
+        assert!(key_file.exists(), "missing {}", key_file.display());
+        let key_body = std::fs::read_to_string(&key_file).expect("read key file");
+        assert!(key_body.contains("secret_ref"));
+        assert!(!key_body.contains("BEGIN OPENSSH PRIVATE KEY"));
+        let config_body =
+            std::fs::read_to_string(runtime.config_store.config_file()).expect("config");
+        assert!(!config_body.contains("[[keys]]"));
+
+        // 重新加载后 keys 元数据仍在。
         let reloaded = runtime
             .config_store
             .load_or_recover()

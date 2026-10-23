@@ -509,7 +509,8 @@ impl AppRuntime {
         folder.terminal = terminal_override.then_some(terminal);
         folder.logging = logging_override.then_some(logging);
         self.config_store
-            .save(&self.config_document)
+            .session_tree()
+            .save_folder_meta(&self.config_document.folders, &folder_id)
             .map_err(AppError::from_error)?;
 
         let folder_name = self.folder_editor.folder_name.clone();

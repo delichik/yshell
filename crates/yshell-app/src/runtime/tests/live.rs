@@ -198,7 +198,7 @@ fn live_native_logging_smoke_when_env_target_is_set() {
         },
         ..ConfigDocument::default()
     };
-    store.save(&document).expect("save config");
+    store.save_all(&document).expect("save config");
 
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
     runtime.force_real_ssh_in_tests = true;
@@ -303,23 +303,21 @@ fn live_native_shell_typing_after_sftp_smoke_when_env_target_is_set() {
     let mut folder = FolderProfile::new(SAVED_SESSIONS_FOLDER_ID, SAVED_SESSIONS_FOLDER_NAME);
     folder.sessions.push(profile);
     document.folders.push(folder);
-    store.save(&document).expect("save config");
+    store.save_all(&document).expect("save config");
 
     let mut runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), None)
         .expect("runtime without keychain");
     runtime.force_real_ssh_in_tests = true;
     let _ = runtime.open_saved_session("saved-key").expect("connect");
     let _ = runtime.resize_active_terminal(78, 36).expect("resize");
-    // 模拟 UI 计时器：每 120ms 轮询 5 秒。
-    for tick in 0..40 {
+    // 模拟 UI 计时器：�?120ms 轮询 5 秒�?    for tick in 0..40 {
         thread::sleep(Duration::from_millis(120));
         if let Err(error) = runtime.poll_active_terminal_output() {
             panic!("poll error at tick {tick}: {error}");
         }
     }
     let _ = runtime.refresh_active_sftp_listing().expect("sftp");
-    // 模拟 UI：逐字符写入（每个 key 事件一次 write+poll）。
-    thread::sleep(Duration::from_millis(1000));
+    // 模拟 UI：逐字符写入（每个 key 事件一�?write+poll）�?    thread::sleep(Duration::from_millis(1000));
     for ch in "echo __TMP_MARK__\r".chars() {
         runtime
             .send_active_terminal_input(&ch.to_string())

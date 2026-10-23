@@ -121,8 +121,8 @@ fn runtime_with_stored_host_key(config_dir: &std::path::Path) -> AppRuntime {
     AppRuntime::new_with_keychain(config_dir.to_path_buf(), None).expect("runtime without keychain")
 }
 
-/// 挂起一次主机密钥确认（`expected = Some(..)` 即 changed 模式）。
-/// 返回活动会话 key，供测试检查重连时使用的 effective known_hosts。
+/// 挂起一次主机密钥确认（`expected = Some(..)` �?changed 模式）�?
+/// 返回活动会话 key，供测试检查重连时使用�?effective known_hosts�?
 fn queue_host_key_prompt(
     runtime: &mut AppRuntime,
     presented_fingerprint: &str,
@@ -151,7 +151,7 @@ fn queue_host_key_prompt(
     session_key
 }
 
-/// SSH-3：变更模式点"Replace and Trust"= 直接替换旧条目，不再要求输入 REPLACE。
+/// SSH-3：变更模式点"Replace and Trust"= 直接替换旧条目，不再要求输入 REPLACE�?
 #[test]
 fn changed_host_key_trust_and_save_replaces_stored_entry() {
     let temp = tempdir().expect("tempdir");
@@ -173,7 +173,7 @@ fn changed_host_key_trust_and_save_replaces_stored_entry() {
     assert!(runtime.pending_host_key_prompt.is_none());
 }
 
-/// SSH-3：变更模式点"Trust Once"只写本次运行时的临时表，绝不落盘。
+/// SSH-3：变更模式点"Trust Once"只写本次运行时的临时表，绝不落盘�?
 #[test]
 fn changed_host_key_trust_once_does_not_persist() {
     let temp = tempdir().expect("tempdir");
@@ -186,7 +186,7 @@ fn changed_host_key_trust_once_does_not_persist() {
 
     assert!(!projection.host_key_prompt_visible);
     assert_eq!(projection.tab_state_text, "connected");
-    // 重连使用的 effective known_hosts 里，临时表覆盖了持久表的旧条目。
+    // 重连使用�?effective known_hosts 里，临时表覆盖了持久表的旧条目�?
     let session_ssh_config = runtime
         .sessions
         .get(&session_key)
@@ -221,7 +221,7 @@ fn changed_host_key_trust_once_does_not_persist() {
     assert!(runtime.pending_host_key_prompt.is_none());
 }
 
-/// SSH-3：取消不写任何 known_hosts（持久/临时都不写），也不继续连接。
+/// SSH-3：取消不写任�?known_hosts（持�?临时都不写），也不继续连接�?
 #[test]
 fn canceling_changed_host_key_writes_nothing() {
     let temp = tempdir().expect("tempdir");
@@ -252,7 +252,7 @@ fn canceling_changed_host_key_writes_nothing() {
         .is_none());
 }
 
-/// SSH-3：首次信任的 "Trust Once" 同样只写临时表，不落盘。
+/// SSH-3：首次信任的 "Trust Once" 同样只写临时表，不落盘�?
 #[test]
 fn first_trust_once_does_not_persist() {
     let temp = tempdir().expect("tempdir");
@@ -311,7 +311,7 @@ fn known_hosts_manager_lists_and_removes_persisted_entries() {
         .contains("beta.example.test:2200"));
     assert!(!opened.known_hosts_inventory_empty);
     assert!(opened.known_hosts_details_text.contains("Fingerprint:"));
-    // D17：详情拆分字段（无英文标签，指纹分组/原样）。
+    // D17：详情拆分字段（无英文标签，指纹分组/原样）�?
     assert_eq!(opened.known_hosts_detail_host_text, "alpha.example.test");
     assert_eq!(opened.known_hosts_detail_port_text, "22");
     assert_eq!(opened.known_hosts_detail_algorithm_text, "ssh-ed25519");
@@ -357,7 +357,7 @@ fn host_keys_manager_detail_fields_match_selected_entry() {
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
     let opened = runtime.open_host_keys_manager();
     assert!(opened.host_keys_modal_visible);
-    // D20：详情拆分字段（无英文标签；纯 hex 指纹走 D9 分组）。
+    // D20：详情拆分字段（无英文标签；�?hex 指纹�?D9 分组）�?
     assert_eq!(opened.host_keys_detail_host_text, "gamma.example.test");
     assert_eq!(opened.host_keys_detail_algorithm_text, "ssh-ed25519");
     assert_eq!(
@@ -413,7 +413,7 @@ fn known_hosts_manager_clear_requires_confirmation_and_persists_empty_store() {
 }
 
 /// D7：TOFU 顺序——密码型会话的主机密钥确认完成后回到密码弹窗（而不是直接重连：
-/// 探针路径下运行时实例尚未建立）。
+/// 探针路径下运行时实例尚未建立）�?
 #[test]
 fn host_key_trust_resumes_password_prompt_for_password_sessions() {
     let temp = tempdir().expect("tempdir");
@@ -452,13 +452,13 @@ fn host_key_trust_resumes_password_prompt_for_password_sessions() {
         projection.password_prompt_host_text,
         "alice@example.com:2200"
     );
-    // D37：状态栏走 kind 模板（`TextFormats.status-message`），host_text 作为参数。
+    // D37：状态栏�?kind 模板（`TextFormats.status-message`），host_text 作为参数�?
     assert_eq!(projection.status_kind, "session-hostkey-confirmed-password");
     assert_eq!(projection.status_param_1, "alice@example.com:2200");
     assert_eq!(projection.status_param_2, "");
     assert!(runtime.pending_host_key_prompt.is_none());
     assert_eq!(runtime.pending_password_prompt.as_ref(), Some(&resume));
-    // 主机密钥已经持久化：确认后的密码重试不会再弹 host key 窗口。
+    // 主机密钥已经持久化：确认后的密码重试不会再弹 host key 窗口�?
     assert!(runtime
         .config_store
         .load_known_hosts()
@@ -503,7 +503,7 @@ fn runtime_new_uses_default_file_keychain_when_master_password_env_is_set() {
     let mut folder = FolderProfile::new("saved-sessions", "Saved Sessions");
     folder.sessions.push(profile);
     document.folders.push(folder);
-    store.save(&document).expect("save config");
+    store.save_all(&document).expect("save config");
 
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
     let _ = runtime

@@ -455,9 +455,14 @@ impl AppRuntime {
             return Err(AppError::new("editor target folder must not be empty"));
         }
 
+        let session_name = self.allocate_unique_session_name(
+            &target_folder_id,
+            self.editor.name.trim(),
+            self.editor.target_session_id.as_deref(),
+        )?;
         let mut profile = SessionProfile::new(
             session_id.clone(),
-            self.editor.name.trim().to_owned(),
+            session_name,
             self.editor.host.trim().to_owned(),
         );
         profile.port = port;
@@ -490,20 +495,34 @@ impl AppRuntime {
         self.config_document
             .auth_profiles
             .insert(auth_profile_id.clone(), auth_profile);
+        // Ensure the target folder exists in memory and on disk before writing the session file.
+        let _ = self.target_saved_sessions_folder_mut(&target_folder_id)?;
         let existing_folder_id = find_session_folder_id(&self.config_document.folders, &session_id);
+        let tree = self.config_store.session_tree();
         if existing_folder_id.as_deref() == Some(target_folder_id.as_str()) {
-            if let Some(existing) = self.config_document.find_session_mut(&session_id) {
-                *existing = profile;
+            if self.config_document.find_session(&session_id).is_some() {
+                tree.update_session(&mut self.config_document.folders, profile)
+                    .map_err(AppError::from_error)?;
             } else {
-                self.target_saved_sessions_folder_mut(&target_folder_id)?
-                    .sessions
-                    .push(profile);
+                tree.add_session(
+                    &mut self.config_document.folders,
+                    &target_folder_id,
+                    profile,
+                )
+                .map_err(AppError::from_error)?;
             }
         } else {
-            let _ = self.config_document.remove_session(&session_id);
-            self.target_saved_sessions_folder_mut(&target_folder_id)?
-                .sessions
-                .push(profile);
+            if existing_folder_id.is_some() {
+                let _ = tree
+                    .delete_session(&mut self.config_document.folders, &session_id)
+                    .map_err(AppError::from_error)?;
+            }
+            tree.add_session(
+                &mut self.config_document.folders,
+                &target_folder_id,
+                profile,
+            )
+            .map_err(AppError::from_error)?;
         }
         // NET-1：迁移后清掉不再被任何会话引用的旧 `<session_id>-proxy`。
         self.cleanup_legacy_proxy(
@@ -511,6 +530,7 @@ impl AppRuntime {
             previous_proxy_id.as_deref(),
             proxy_profile_id.as_deref(),
         );
+        // Auth/proxy profiles remain in config.toml.
         self.config_store
             .save(&self.config_document)
             .map_err(AppError::from_error)?;

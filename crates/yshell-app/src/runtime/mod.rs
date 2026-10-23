@@ -139,7 +139,9 @@ use std::{
     cell::Cell, collections::BTreeMap, collections::BTreeSet, env, fmt, fs, path::Path,
     path::PathBuf, sync::Arc,
 };
-use yshell_config::{ConfigDocument, ConfigStore, LoadOutcome, PanelSide, ThemeCatalog};
+use yshell_config::{
+    ConfigDocument, ConfigStore, KeyCatalog, LoadOutcome, PanelSide, ThemeCatalog,
+};
 use yshell_core::CommandDispatcher;
 use yshell_core::CoreCommandDispatcher;
 use yshell_core::SessionCommand;
@@ -201,11 +203,14 @@ impl AppRuntime {
             .load_known_hosts()
             .map_err(AppError::from_error)?;
         let (proxy_test_tx, proxy_test_rx) = proxies::proxy_test_channel();
+        let mut key_catalog = KeyCatalog::new(config_store.keys_dir());
+        key_catalog.replace_from_vec(document.keys.clone());
         let mut runtime = Self {
             config_dir: config_dir.clone(),
             config_store,
             config_document: document,
             theme_catalog,
+            key_catalog,
             dispatcher: CoreCommandDispatcher::new(),
             sessions: BTreeMap::new(),
             active_session_id: None,
@@ -520,6 +525,8 @@ pub struct AppRuntime {
     pub(crate) config_document: ConfigDocument,
     /// Named terminal color themes (built-in ids + user themes on disk).
     pub(crate) theme_catalog: ThemeCatalog,
+    /// Managed private-key metadata files under `keys/` (material stays in keychain).
+    pub(crate) key_catalog: KeyCatalog,
     pub(crate) dispatcher: CoreCommandDispatcher,
     pub(crate) sessions: BTreeMap<String, SessionRuntime>,
     pub(crate) active_session_id: Option<String>,

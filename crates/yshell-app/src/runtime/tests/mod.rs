@@ -49,7 +49,7 @@ pub(crate) fn saved_session_tree_store(config_dir: &Path) -> ConfigStore {
     ));
     root.folders.push(prod);
     document.folders.push(root);
-    store.save(&document).expect("save config");
+    store.save_all(&document).expect("save config");
     store
 }
 
@@ -95,7 +95,7 @@ pub(crate) fn tab_test_store(config_dir: &Path, count: usize) -> ConfigStore {
         ));
     }
     document.folders.push(folder);
-    store.save(&document).expect("save config");
+    store.save_all(&document).expect("save config");
     store
 }
 
