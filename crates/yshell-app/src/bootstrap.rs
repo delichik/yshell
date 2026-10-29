@@ -6648,9 +6648,8 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
             .into(),
     );
     // --- N5：终端外观 / Folder Editor / Session Editor 覆盖 --------------------
-    // Settings 弹窗可见性跟 Rust `settings_appearance_visible` 对齐，
-    // 这样各分区 Save 成功后关 draft 时 UI 一并关掉。
-    window.set_settings_dialog_visible(projection.settings_appearance_visible);
+    // Settings OS 窗由 DialogWindowManager 跟 `settings_appearance_visible` 同步；
+    // 不再回写 MainWindow.settings_dialog_visible（避免 dismiss 后被投影再次打开）。
     window.set_settings_appearance_color_scheme_name_text(
         projection
             .settings_appearance_color_scheme_name_text

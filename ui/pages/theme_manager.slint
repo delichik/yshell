@@ -224,24 +224,17 @@ export component ThemeManagerPage inherits Rectangle {
     callback update-theme-editor-name(string);
     callback update-theme-editor-role(string, string);
     callback update-theme-editor-ansi(int, string);
-    callback title_drag_requested();
-
-    in-out property <bool> native_title_drag: false;
 
     private property <bool> has-selection:
         root.selected-index >= 0 && root.selected-index < root.themes.length;
 
-    visible: root.open || shell.opacity > 0.01;
+    visible: root.open;
     background: transparent;
 
     shell := ManagerDialogShell {
         width: root.width;
         height: root.height;
         open: root.open;
-        title-text: @tr("Theme Manager");
-        summary-text: @tr("Built-in {0} · Custom {1}", root.builtin-count, root.user-count);
-        native-title-drag: root.native_title_drag;
-        title-drag-requested => { root.title_drag_requested(); }
         close => { root.close(); }
 
                 // --- 顶部固定 live preview ----------------------------------

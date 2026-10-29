@@ -61,7 +61,6 @@ macro_rules! wire_tool_on_close {
 enum ConfirmKind {
     ClearScrollback,
     DeleteSession,
-    Quit,
     CloseTabs,
     CloseWindow,
     EditorDiscard,
@@ -89,7 +88,6 @@ struct LocalDialogFlags {
     settings: bool,
     clear_scrollback: bool,
     delete_session: bool,
-    quit: bool,
     new_folder: bool,
     tab_rename: bool,
     tab_rename_tab_id: String,
@@ -235,10 +233,7 @@ impl DialogWindowManager {
             self.local.delete_session = true;
             window.set_delete_session_dialog_visible(false);
         }
-        if window.get_quit_dialog_visible() {
-            self.local.quit = true;
-            window.set_quit_dialog_visible(false);
-        }
+        // Quit confirm stays on MainWindow (ConfirmDialog overlay); do not latch it here.
         if window.get_new_folder_dialog_visible() {
             self.local.new_folder = true;
             window.set_new_folder_dialog_visible(false);
@@ -647,19 +642,6 @@ impl DialogWindowManager {
                 dont_ask: false,
             });
         }
-        if self.local.quit {
-            return Some(ConfirmSpec {
-                kind: ConfirmKind::Quit,
-                title: "Quit YShell".into(),
-                message: "Quit YShell now? Active runtime sessions will be disconnected.".into(),
-                confirm_label: "Quit".into(),
-                destructive: true,
-                show_dont_ask: true,
-                dont_ask: main
-                    .map(|w| w.get_quit_confirm_dont_ask_again())
-                    .unwrap_or(false),
-            });
-        }
         None
     }
 
@@ -741,12 +723,18 @@ impl DialogWindowManager {
         main: Option<&MainWindow>,
         window_runtime: Option<Rc<WindowRuntime>>,
     ) -> AppResult<()> {
-        if self.local.settings {
+        // Single source of truth: runtime `settings_appearance_visible`
+        // (open_settings_appearance / close_settings_appearance / save).
+        let want = projection.settings_appearance_visible;
+        self.local.settings = want;
+        if want {
             if self.settings.is_none() {
                 let window = SettingsWindow::new().map_err(AppError::from_error)?;
                 window.set_native_title_drag(cfg!(windows));
                 let host = self.host.clone();
+                let runtime = Rc::clone(&self.runtime);
                 window.on_dismiss(move || {
+                    let _ = runtime.borrow_mut().close_settings_appearance();
                     if let Some(host) = host.upgrade() {
                         host.borrow_mut().dialogs.local.settings = false;
                         if let Some(settings) = host.borrow().dialogs.settings.as_ref() {
@@ -754,6 +742,19 @@ impl DialogWindowManager {
                         }
                         host.borrow_mut().dialogs.settings_shown = false;
                     }
+                });
+                let host = self.host.clone();
+                let runtime = Rc::clone(&self.runtime);
+                window.window().on_close_requested(move || {
+                    let _ = runtime.borrow_mut().close_settings_appearance();
+                    if let Some(host) = host.upgrade() {
+                        host.borrow_mut().dialogs.local.settings = false;
+                        if let Some(settings) = host.borrow().dialogs.settings.as_ref() {
+                            let _ = settings.hide();
+                        }
+                        host.borrow_mut().dialogs.settings_shown = false;
+                    }
+                    CloseRequestResponse::HideWindow
                 });
                 let host = self.host.clone();
                 window.on_title_drag_requested(move || {
@@ -774,6 +775,7 @@ impl DialogWindowManager {
                 }
             }
         } else if self.settings_shown {
+            self.local.settings = false;
             if let Some(settings) = self.settings.as_ref() {
                 let _ = settings.hide();
             }
@@ -1181,7 +1183,6 @@ fn dispatch_confirm(
         match kind {
             ConfirmKind::ClearScrollback => host.dialogs.local.clear_scrollback = false,
             ConfirmKind::DeleteSession => host.dialogs.local.delete_session = false,
-            ConfirmKind::Quit => host.dialogs.local.quit = false,
             ConfirmKind::HostKeysClear => host.dialogs.local.host_keys_clear = false,
             ConfirmKind::HostKeysRemove => host.dialogs.local.host_keys_remove = false,
             _ => {}
@@ -1189,20 +1190,6 @@ fn dispatch_confirm(
         host.dialogs.hide_confirm();
     }
 
-    if kind == ConfirmKind::Quit && confirmed {
-        if dont_ask {
-            let _ = host
-                .borrow()
-                .dialogs
-                .runtime
-                .borrow_mut()
-                .set_confirm_quit_app(false);
-        }
-        if let Some(manager) = host.borrow().dialogs.manager.upgrade() {
-            manager.borrow_mut().shutdown();
-        }
-        return;
-    }
     if kind == ConfirmKind::CloseWindow {
         let window_id = host.borrow().dialogs.close_window_id;
         if let (Some(manager), Some(window_id)) =

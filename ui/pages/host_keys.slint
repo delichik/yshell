@@ -118,12 +118,9 @@ export component HostKeysPage inherits Rectangle {
     callback import-keys();
     callback export-keys();
     callback request-clear-all();
-    callback title_drag_requested();
-
-    in-out property <bool> native_title_drag: false;
 
     // 退场淡出期间壳仍可见：根跟着壳的 opacity，避免透明全屏挡住下层。
-    visible: root.open || shell.opacity > 0.01;
+    visible: root.open;
     background: transparent;
 
     private property <int> group-count: root.groups.length;
@@ -143,11 +140,6 @@ export component HostKeysPage inherits Rectangle {
         width: root.width;
         height: root.height;
         open: root.open;
-        title-text: @tr("Host Keys");
-        // B 轮3 #30：中文里不用半角逗号，改用 `·` 分隔
-        summary-text: @tr("{0} host(s) · {1} key(s)", root.group-count, root.key-count);
-        native-title-drag: root.native_title_drag;
-        title-drag-requested => { root.title_drag_requested(); }
         close => { root.close(); }
 
                 // 空态：居中提示 + 主 Import CTA

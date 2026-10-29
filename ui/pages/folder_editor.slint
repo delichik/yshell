@@ -379,17 +379,12 @@ export component FolderEditor inherits Rectangle {
     callback field-edited(string, string);
     callback field-toggled(string);
     callback field-selected(string, int);
-    callback title_drag_requested();
 
-    in-out property <bool> native_title_drag: false;
-
-    private property <string> title-text:
-        root.folder-name == "" ? @tr("Folder Defaults") : @tr("Folder Defaults — {0}", root.folder-name);
     /// 壳内滚动区上限（标题/摘要/底栏约占 220；矮窗由壳再夹紧面板）。
     private property <length> sections-scroll-max:
         Theme.manager-panel-max-height - 220px;
 
-    visible: root.open || shell.opacity > 0.01;
+    visible: root.open;
     background: transparent;
 
     shell := ManagerDialogShell {
@@ -397,10 +392,6 @@ export component FolderEditor inherits Rectangle {
         height: root.height;
         open: root.open;
         content-sized: true;
-        title-text: root.title-text;
-        summary-text: root.folder-path;
-        native-title-drag: root.native_title_drag;
-        title-drag-requested => { root.title_drag_requested(); }
         close => { root.close(); }
 
         summary-hint := Text {

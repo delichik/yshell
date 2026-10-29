@@ -2,6 +2,7 @@
 
 import { Theme } from "../theme.slint";
 import { PrivateKeysPage, PrivateKeyRow } from "../pages/private_keys.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component PrivateKeysWindow inherits Window {
     title: @tr("Private Keys");
@@ -16,6 +17,11 @@ export component PrivateKeysWindow inherits Window {
     background: Theme.window-background;
     default-font-size: Theme.font-body;
     default-font-family: Theme.font-ui;
+
+    private property <length> body-width:
+        Theme.tool-window-width-wide - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-tall - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
 
     in property <[PrivateKeyRow]> keys;
     in property <string> list-summary-text;
@@ -60,50 +66,58 @@ export component PrivateKeysWindow inherits Window {
     callback rename-key(string);
     callback title_drag_requested();
 
-    page := PrivateKeysPage {
-        open: true;
+    chrome := ToolWindowChrome {
         width: Theme.tool-window-width-wide;
         height: Theme.tool-window-height-tall;
-        keys: root.keys;
-        list-summary-text: root.list-summary-text;
-        empty-text: root.empty-text;
-        details-text: root.details-text;
-        public-key-text: root.public-key-text;
-        test-result-text: root.test-result-text;
-        status-text: root.status-text;
-        status-kind-text: root.status-kind-text;
-        status-param-1-text: root.status-param-1-text;
-        status-param-2-text: root.status-param-2-text;
-        busy: root.busy;
-        selected-index <=> root.selected-index;
-        remove-warning-text: root.remove-warning-text;
-        import-label-text <=> root.import-label-text;
-        import-path-text <=> root.import-path-text;
-        import-passphrase-text <=> root.import-passphrase-text;
-        remember-import-passphrase <=> root.remember-import-passphrase;
-        import-enabled: root.import-enabled;
-        passphrase-text <=> root.passphrase-text;
-        passphrase-stored: root.passphrase-stored;
-        passphrase-manage-enabled: root.passphrase-manage-enabled;
-        native-title-drag <=> root.native_title_drag;
+        title-text: @tr("Private Keys");
+        summary-text: root.list-summary-text;
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.dismiss(); }
         title-drag-requested => { root.title_drag_requested(); }
-        close => { root.dismiss(); }
-        select-key(int) => { root.select-key(int); }
-        import-key => { root.import-key(); }
-        browse-import-file => { root.browse-import-file(); }
-        update-import-label(string) => { root.update-import-label(string); }
-        update-import-path(string) => { root.update-import-path(string); }
-        update-import-passphrase(string) => { root.update-import-passphrase(string); }
-        toggle-remember-import-passphrase(bool) => { root.toggle-remember-import-passphrase(bool); }
-        test-key => { root.test-key(); }
-        copy-public-key => { root.copy-public-key(); }
-        export-public-key => { root.export-public-key(); }
-        request-remove => { root.request-remove(); }
-        request-deploy => { root.request-deploy(); }
-        update-passphrase(string) => { root.update-passphrase(string); }
-        save-passphrase => { root.save-passphrase(); }
-        forget-passphrase => { root.forget-passphrase(); }
-        rename-key(string) => { root.rename-key(string); }
+
+        page := PrivateKeysPage {
+            open: true;
+            width: root.body-width;
+            height: root.body-height;
+            keys: root.keys;
+            list-summary-text: root.list-summary-text;
+            empty-text: root.empty-text;
+            details-text: root.details-text;
+            public-key-text: root.public-key-text;
+            test-result-text: root.test-result-text;
+            status-text: root.status-text;
+            status-kind-text: root.status-kind-text;
+            status-param-1-text: root.status-param-1-text;
+            status-param-2-text: root.status-param-2-text;
+            busy: root.busy;
+            selected-index <=> root.selected-index;
+            remove-warning-text: root.remove-warning-text;
+            import-label-text <=> root.import-label-text;
+            import-path-text <=> root.import-path-text;
+            import-passphrase-text <=> root.import-passphrase-text;
+            remember-import-passphrase <=> root.remember-import-passphrase;
+            import-enabled: root.import-enabled;
+            passphrase-text <=> root.passphrase-text;
+            passphrase-stored: root.passphrase-stored;
+            passphrase-manage-enabled: root.passphrase-manage-enabled;
+            close => { root.dismiss(); }
+            select-key(int) => { root.select-key(int); }
+            import-key => { root.import-key(); }
+            browse-import-file => { root.browse-import-file(); }
+            update-import-label(string) => { root.update-import-label(string); }
+            update-import-path(string) => { root.update-import-path(string); }
+            update-import-passphrase(string) => { root.update-import-passphrase(string); }
+            toggle-remember-import-passphrase(bool) => { root.toggle-remember-import-passphrase(bool); }
+            test-key => { root.test-key(); }
+            copy-public-key => { root.copy-public-key(); }
+            export-public-key => { root.export-public-key(); }
+            request-remove => { root.request-remove(); }
+            request-deploy => { root.request-deploy(); }
+            update-passphrase(string) => { root.update-passphrase(string); }
+            save-passphrase => { root.save-passphrase(); }
+            forget-passphrase => { root.forget-passphrase(); }
+            rename-key(string) => { root.rename-key(string); }
+        }
     }
 
     public function focus-dialog() {

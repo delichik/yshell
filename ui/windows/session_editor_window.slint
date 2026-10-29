@@ -5,6 +5,7 @@ import { SessionEditor } from "../pages/session_editor.slint";
 import { AuthKeyOption } from "../components/auth_prompt_dialog.slint";
 import { ProxyProfileOption } from "../pages/proxies.slint";
 import { TriStateField } from "../pages/folder_editor.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component SessionEditorWindow inherits Window {
     title: @tr("Session Editor");
@@ -19,6 +20,11 @@ export component SessionEditorWindow inherits Window {
     background: Theme.window-background;
     default-font-size: Theme.font-body;
     default-font-family: Theme.font-ui;
+
+    private property <length> body-width:
+        Theme.tool-window-width-wide - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-tall - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
 
     in property <string> section;
     in property <string> target-text;
@@ -93,80 +99,88 @@ export component SessionEditorWindow inherits Window {
     callback reset-all-editor-theme();
     callback title_drag_requested();
 
-    editor := SessionEditor {
-        open: true;
+    chrome := ToolWindowChrome {
         width: Theme.tool-window-width-wide;
         height: Theme.tool-window-height-tall;
-        section: root.section;
-        target-text: root.target-text;
-        folder-text: root.folder-text;
-        name-text <=> root.name-text;
-        host-text <=> root.host-text;
-        port-text <=> root.port-text;
-        username-text <=> root.username-text;
-        auth-method-text: root.auth-method-text;
-        password-text <=> root.password-text;
-        key-options: root.key-options;
-        selected-key-index <=> root.selected-key-index;
-        selected-key-missing: root.selected-key-missing;
-        legacy-key-path-text: root.legacy-key-path-text;
-        legacy-key-has-passphrase: root.legacy-key-has-passphrase;
-        has-stored-password: root.has-stored-password;
-        auth-test-status-text: root.auth-test-status-text;
-        proxy-mode-text: root.proxy-mode-text;
-        proxy-options: root.proxy-options;
-        selected-proxy-index <=> root.selected-proxy-index;
-        proxy-selected-detail-text: root.proxy-selected-detail-text;
-        proxy-legacy-text: root.proxy-legacy-text;
-        proxy-selected-missing: root.proxy-selected-missing;
-        tunnel-kind-text: root.tunnel-kind-text;
-        tunnel-bind-host-text <=> root.tunnel-bind-host-text;
-        tunnel-bind-port-text <=> root.tunnel-bind-port-text;
-        tunnel-target-host-text <=> root.tunnel-target-host-text;
-        tunnel-target-port-text <=> root.tunnel-target-port-text;
-        tunnel-summary-text: root.tunnel-summary-text;
-        editor-appearance-fields: root.editor-appearance-fields;
-        preview-frame: root.preview-frame;
-        preview-background: root.preview-background;
-        native-title-drag <=> root.native_title_drag;
+        title-text: @tr("Session Editor");
+        summary-text: root.target-text;
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.dismiss(); }
         title-drag-requested => { root.title_drag_requested(); }
-        close => { root.dismiss(); }
-        select-general => { root.select-general(); }
-        select-authentication => { root.select-authentication(); }
-        select-tunnels => { root.select-tunnels(); }
-        select-proxy => { root.select-proxy(); }
-        select-appearance => { root.select-appearance(); }
-        update-name(string) => { root.update-name(string); }
-        update-host(string) => { root.update-host(string); }
-        update-port(string) => { root.update-port(string); }
-        update-username(string) => { root.update-username(string); }
-        set-auth-method-agent => { root.set-auth-method-agent(); }
-        set-auth-method-password => { root.set-auth-method-password(); }
-        set-auth-method-keyboard-interactive => { root.set-auth-method-keyboard-interactive(); }
-        set-auth-method-private-key => { root.set-auth-method-private-key(); }
-        update-password(string) => { root.update-password(string); }
-        select-key(int) => { root.select-key(int); }
-        manage-keys => { root.manage-keys(); }
-        test-auth => { root.test-auth(); }
-        set-proxy-mode-none => { root.set-proxy-mode-none(); }
-        select-proxy-profile(int) => { root.select-proxy-profile(int); }
-        manage-proxies => { root.manage-proxies(); }
-        set-tunnel-kind-local => { root.set-tunnel-kind-local(); }
-        set-tunnel-kind-remote => { root.set-tunnel-kind-remote(); }
-        set-tunnel-kind-dynamic => { root.set-tunnel-kind-dynamic(); }
-        update-tunnel-bind-host(string) => { root.update-tunnel-bind-host(string); }
-        update-tunnel-bind-port(string) => { root.update-tunnel-bind-port(string); }
-        update-tunnel-target-host(string) => { root.update-tunnel-target-host(string); }
-        update-tunnel-target-port(string) => { root.update-tunnel-target-port(string); }
-        add-tunnel => { root.add-tunnel(); }
-        clear-tunnels => { root.clear-tunnels(); }
-        save => { root.save(); }
-        save-connect => { root.save-connect(); }
-        editor-theme-field-action(string, string) => { root.editor-theme-field-action(string, string); }
-        update-editor-theme-field(string, string) => { root.update-editor-theme-field(string, string); }
-        editor-select-scheme(int) => { root.editor-select-scheme(int); }
-        editor-select-font(int) => { root.editor-select-font(int); }
-        reset-all-editor-theme => { root.reset-all-editor-theme(); }
+
+        editor := SessionEditor {
+            open: true;
+            width: root.body-width;
+            height: root.body-height;
+            section: root.section;
+            target-text: root.target-text;
+            folder-text: root.folder-text;
+            name-text <=> root.name-text;
+            host-text <=> root.host-text;
+            port-text <=> root.port-text;
+            username-text <=> root.username-text;
+            auth-method-text: root.auth-method-text;
+            password-text <=> root.password-text;
+            key-options: root.key-options;
+            selected-key-index <=> root.selected-key-index;
+            selected-key-missing: root.selected-key-missing;
+            legacy-key-path-text: root.legacy-key-path-text;
+            legacy-key-has-passphrase: root.legacy-key-has-passphrase;
+            has-stored-password: root.has-stored-password;
+            auth-test-status-text: root.auth-test-status-text;
+            proxy-mode-text: root.proxy-mode-text;
+            proxy-options: root.proxy-options;
+            selected-proxy-index <=> root.selected-proxy-index;
+            proxy-selected-detail-text: root.proxy-selected-detail-text;
+            proxy-legacy-text: root.proxy-legacy-text;
+            proxy-selected-missing: root.proxy-selected-missing;
+            tunnel-kind-text: root.tunnel-kind-text;
+            tunnel-bind-host-text <=> root.tunnel-bind-host-text;
+            tunnel-bind-port-text <=> root.tunnel-bind-port-text;
+            tunnel-target-host-text <=> root.tunnel-target-host-text;
+            tunnel-target-port-text <=> root.tunnel-target-port-text;
+            tunnel-summary-text: root.tunnel-summary-text;
+            editor-appearance-fields: root.editor-appearance-fields;
+            preview-frame: root.preview-frame;
+            preview-background: root.preview-background;
+            close => { root.dismiss(); }
+            select-general => { root.select-general(); }
+            select-authentication => { root.select-authentication(); }
+            select-tunnels => { root.select-tunnels(); }
+            select-proxy => { root.select-proxy(); }
+            select-appearance => { root.select-appearance(); }
+            update-name(string) => { root.update-name(string); }
+            update-host(string) => { root.update-host(string); }
+            update-port(string) => { root.update-port(string); }
+            update-username(string) => { root.update-username(string); }
+            set-auth-method-agent => { root.set-auth-method-agent(); }
+            set-auth-method-password => { root.set-auth-method-password(); }
+            set-auth-method-keyboard-interactive => { root.set-auth-method-keyboard-interactive(); }
+            set-auth-method-private-key => { root.set-auth-method-private-key(); }
+            update-password(string) => { root.update-password(string); }
+            select-key(int) => { root.select-key(int); }
+            manage-keys => { root.manage-keys(); }
+            test-auth => { root.test-auth(); }
+            set-proxy-mode-none => { root.set-proxy-mode-none(); }
+            select-proxy-profile(int) => { root.select-proxy-profile(int); }
+            manage-proxies => { root.manage-proxies(); }
+            set-tunnel-kind-local => { root.set-tunnel-kind-local(); }
+            set-tunnel-kind-remote => { root.set-tunnel-kind-remote(); }
+            set-tunnel-kind-dynamic => { root.set-tunnel-kind-dynamic(); }
+            update-tunnel-bind-host(string) => { root.update-tunnel-bind-host(string); }
+            update-tunnel-bind-port(string) => { root.update-tunnel-bind-port(string); }
+            update-tunnel-target-host(string) => { root.update-tunnel-target-host(string); }
+            update-tunnel-target-port(string) => { root.update-tunnel-target-port(string); }
+            add-tunnel => { root.add-tunnel(); }
+            clear-tunnels => { root.clear-tunnels(); }
+            save => { root.save(); }
+            save-connect => { root.save-connect(); }
+            editor-theme-field-action(string, string) => { root.editor-theme-field-action(string, string); }
+            update-editor-theme-field(string, string) => { root.update-editor-theme-field(string, string); }
+            editor-select-scheme(int) => { root.editor-select-scheme(int); }
+            editor-select-font(int) => { root.editor-select-font(int); }
+            reset-all-editor-theme => { root.reset-all-editor-theme(); }
+        }
     }
 
     public function focus-dialog() {

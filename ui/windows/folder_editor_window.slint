@@ -2,6 +2,7 @@
 
 import { Theme } from "../theme.slint";
 import { FolderEditor, TriStateField } from "../pages/folder_editor.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component FolderEditorWindow inherits Window {
     title: @tr("Folder Defaults");
@@ -16,6 +17,13 @@ export component FolderEditorWindow inherits Window {
     background: Theme.window-background;
     default-font-size: Theme.font-body;
     default-font-family: Theme.font-ui;
+
+    private property <length> body-width:
+        Theme.tool-window-width-wide - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-tall - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+    private property <string> chrome-title:
+        root.folder-name == "" ? @tr("Folder Defaults") : @tr("Folder Defaults — {0}", root.folder-name);
 
     in property <string> folder-name;
     in property <string> folder-path;
@@ -41,31 +49,39 @@ export component FolderEditorWindow inherits Window {
     callback field-selected(string, int);
     callback title_drag_requested();
 
-    editor := FolderEditor {
-        open: true;
+    chrome := ToolWindowChrome {
         width: Theme.tool-window-width-wide;
         height: Theme.tool-window-height-tall;
-        folder-name: root.folder-name;
-        folder-path: root.folder-path;
-        summary-text: root.summary-text;
-        status-text: root.status-text;
-        status-kind-text: root.status-kind-text;
-        status-param-1-text: root.status-param-1-text;
-        status-param-2-text: root.status-param-2-text;
-        appearance-fields: root.appearance-fields;
-        terminal-fields: root.terminal-fields;
-        logging-fields: root.logging-fields;
-        native-title-drag <=> root.native_title_drag;
+        title-text: root.chrome-title;
+        summary-text: root.folder-path;
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.dismiss(); }
         title-drag-requested => { root.title_drag_requested(); }
-        close => { root.dismiss(); }
-        save => { root.save(); }
-        reset-all => { root.reset-all(); }
-        field-set-inherit(string) => { root.field-set-inherit(string); }
-        field-set-explicit(string) => { root.field-set-explicit(string); }
-        field-reset(string) => { root.field-reset(string); }
-        field-edited(string, string) => { root.field-edited(string, string); }
-        field-toggled(string) => { root.field-toggled(string); }
-        field-selected(string, int) => { root.field-selected(string, int); }
+
+        editor := FolderEditor {
+            open: true;
+            width: root.body-width;
+            height: root.body-height;
+            folder-name: root.folder-name;
+            folder-path: root.folder-path;
+            summary-text: root.summary-text;
+            status-text: root.status-text;
+            status-kind-text: root.status-kind-text;
+            status-param-1-text: root.status-param-1-text;
+            status-param-2-text: root.status-param-2-text;
+            appearance-fields: root.appearance-fields;
+            terminal-fields: root.terminal-fields;
+            logging-fields: root.logging-fields;
+            close => { root.dismiss(); }
+            save => { root.save(); }
+            reset-all => { root.reset-all(); }
+            field-set-inherit(string) => { root.field-set-inherit(string); }
+            field-set-explicit(string) => { root.field-set-explicit(string); }
+            field-reset(string) => { root.field-reset(string); }
+            field-edited(string, string) => { root.field-edited(string, string); }
+            field-toggled(string) => { root.field-toggled(string); }
+            field-selected(string, int) => { root.field-selected(string, int); }
+        }
     }
 
     public function focus-dialog() {

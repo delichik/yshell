@@ -2,6 +2,7 @@
 
 import { Theme } from "../theme.slint";
 import { KnownHostsPage } from "../pages/known_hosts.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component KnownHostsWindow inherits Window {
     title: @tr("Known Hosts");
@@ -16,6 +17,11 @@ export component KnownHostsWindow inherits Window {
     background: Theme.window-background;
     default-font-size: Theme.font-body;
     default-font-family: Theme.font-ui;
+
+    private property <length> body-width:
+        Theme.tool-window-width-wide - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-tall - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
 
     in property <string> inventory-text;
     in property <string> selection-text;
@@ -38,28 +44,36 @@ export component KnownHostsWindow inherits Window {
     callback clear-all();
     callback title_drag_requested();
 
-    page := KnownHostsPage {
-        open: true;
+    chrome := ToolWindowChrome {
         width: Theme.tool-window-width-wide;
         height: Theme.tool-window-height-tall;
-        inventory-text: root.inventory-text;
-        selection-text: root.selection-text;
-        details-text: root.details-text;
-        detail-host-text: root.detail-host-text;
-        detail-port-text: root.detail-port-text;
-        detail-algorithm-text: root.detail-algorithm-text;
-        detail-fingerprint-text: root.detail-fingerprint-text;
-        detail-path-text: root.detail-path-text;
-        path-text: root.path-text;
-        clear-confirmation-text <=> root.clear-confirmation-text;
-        native-title-drag <=> root.native_title_drag;
+        title-text: @tr("Known Hosts");
+        summary-text: root.selection-text;
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.dismiss(); }
         title-drag-requested => { root.title_drag_requested(); }
-        close => { root.dismiss(); }
-        select-prev => { root.select-prev(); }
-        select-next => { root.select-next(); }
-        remove-selected => { root.remove-selected(); }
-        update-clear-confirmation(string) => { root.update-clear-confirmation(string); }
-        clear-all => { root.clear-all(); }
+
+        page := KnownHostsPage {
+            open: true;
+            width: root.body-width;
+            height: root.body-height;
+            inventory-text: root.inventory-text;
+            selection-text: root.selection-text;
+            details-text: root.details-text;
+            detail-host-text: root.detail-host-text;
+            detail-port-text: root.detail-port-text;
+            detail-algorithm-text: root.detail-algorithm-text;
+            detail-fingerprint-text: root.detail-fingerprint-text;
+            detail-path-text: root.detail-path-text;
+            path-text: root.path-text;
+            clear-confirmation-text <=> root.clear-confirmation-text;
+            close => { root.dismiss(); }
+            select-prev => { root.select-prev(); }
+            select-next => { root.select-next(); }
+            remove-selected => { root.remove-selected(); }
+            update-clear-confirmation(string) => { root.update-clear-confirmation(string); }
+            clear-all => { root.clear-all(); }
+        }
     }
 
     public function focus-dialog() {

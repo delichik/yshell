@@ -122,21 +122,14 @@ export component SettingsDialog inherits Rectangle {
     callback clear-appearance-fallbacks();
     callback reset-appearance-defaults();
     callback save-appearance();
-    callback title_drag_requested();
 
-    in-out property <bool> native_title_drag: false;
-
-    visible: root.open || shell.opacity > 0.01;
+    visible: root.open;
     background: transparent;
 
     shell := ManagerDialogShell {
         width: root.width;
         height: root.height;
         open: root.open;
-        title-text: @tr("Settings");
-        summary-text: "";
-        native-title-drag: root.native_title_drag;
-        title-drag-requested => { root.title_drag_requested(); }
         close => { root.close(); }
 
         // 主体：左侧分区导航 + 右侧表单

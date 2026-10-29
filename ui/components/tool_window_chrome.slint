@@ -1,84 +1,16 @@
 // 独立工具窗口客户区壳：自绘标题栏 + 内容槽（无遮罩、无居中卡片）。
 //
 // 由各 `*Window inherits Window` 填满客户区使用；关闭走 `close-requested`，
-// 拖动走 `title-drag-requested`（Windows 原生移动）或内置 WindowMoveArea。
+// 拖动复用主窗同一套 TitleBarDragTouch / CaptionButton（window_caption.slint）。
 
 import { Theme } from "../theme.slint";
-import { Icon } from "basic/icons.slint";
-
-component ToolTitleDragTouch inherits TouchArea {
-    in property <bool> native-drag: false;
-    callback drag-requested();
-
-    private property <length> press-x: 0px;
-    private property <length> press-y: 0px;
-    private property <bool> armed: false;
-    private property <bool> press-in-bounds: false;
-
-    pure function abs-length(value: length) -> length {
-        value < 0px ? -value : value;
-    }
-
-    pointer-event(event) => {
-        if (!root.native-drag) {
-            return;
-        }
-        if (event.button == PointerEventButton.left) {
-            if (event.kind == PointerEventKind.down) {
-                root.press-in-bounds = self.mouse-x >= 0px && self.mouse-x <= root.width
-                    && self.mouse-y >= 0px && self.mouse-y <= root.height;
-                if (!root.press-in-bounds) {
-                    root.armed = false;
-                    return;
-                }
-                root.press-x = self.mouse-x;
-                root.press-y = self.mouse-y;
-                root.armed = true;
-            } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
-                root.armed = false;
-            }
-        }
-    }
-
-    moved => {
-        if (root.native-drag && root.armed
-            && (root.abs-length(self.mouse-x - root.press-x) >= 4px
-                || root.abs-length(self.mouse-y - root.press-y) >= 4px)) {
-            root.armed = false;
-            root.drag-requested();
-        }
-    }
-}
-
-component ToolCaptionClose inherits Rectangle {
-    callback clicked();
-
-    width: 46px;
-    height: 100%;
-    background: touch.pressed ? Theme.caption-close-pressed
-        : touch.has-hover ? Theme.caption-close-hover : transparent;
-    animate background { duration: Theme.duration-faster; easing: ease-out; }
-
-    accessible-role: button;
-    accessible-label: @tr("Close");
-    accessible-action-default => { root.clicked(); }
-
-    Icon {
-        name: "close";
-        icon-color: touch.has-hover ? Theme.caption-close-hover-text : Theme.text-primary;
-        icon-size: 12px;
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
-    }
-
-    touch := TouchArea {
-        clicked => { root.clicked(); }
-    }
-}
+import { TitleBarDragTouch, CaptionButton } from "window_caption.slint";
 
 /// 标题栏 + 内容槽；根尺寸由宿主 Window 的 preferred/min/max 决定。
 export component ToolWindowChrome inherits Rectangle {
     in property <string> title-text: "";
+    /// 标题右侧摘要（可空：不占位）。
+    in property <string> summary-text: "";
     /// Windows：标题栏拖动走 Win32 原生移动循环。
     in property <bool> native-title-drag: false;
     callback close-requested();
@@ -107,7 +39,7 @@ export component ToolWindowChrome inherits Rectangle {
                 height: parent.height;
             }
 
-            if root.native-title-drag : ToolTitleDragTouch {
+            if root.native-title-drag : TitleBarDragTouch {
                 width: parent.width - 46px;
                 height: parent.height;
                 native-drag: true;
@@ -116,7 +48,7 @@ export component ToolWindowChrome inherits Rectangle {
 
             HorizontalLayout {
                 padding-left: Theme.spacing-12;
-                spacing: 0px;
+                spacing: Theme.spacing-12;
 
                 Text {
                     text: root.title-text;
@@ -124,11 +56,22 @@ export component ToolWindowChrome inherits Rectangle {
                     font-size: Theme.font-body;
                     font-weight: Theme.weight-semibold;
                     vertical-alignment: center;
-                    horizontal-stretch: 1;
+                    horizontal-stretch: root.summary-text == "" ? 1 : 0;
                     overflow: elide;
                 }
 
-                ToolCaptionClose {
+                if root.summary-text != "" : Text {
+                    text: root.summary-text;
+                    color: Theme.text-secondary;
+                    font-size: Theme.font-body;
+                    vertical-alignment: center;
+                    overflow: elide;
+                    horizontal-stretch: 1;
+                    min-width: 0px;
+                }
+
+                CaptionButton {
+                    kind: "close";
                     clicked => { root.close-requested(); }
                 }
             }

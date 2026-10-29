@@ -2,6 +2,7 @@
 
 import { Theme } from "../theme.slint";
 import { SettingsDialog } from "../pages/settings.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component SettingsWindow inherits Window {
     title: @tr("Settings");
@@ -16,6 +17,11 @@ export component SettingsWindow inherits Window {
     background: Theme.window-background;
     default-font-size: Theme.font-body;
     default-font-family: Theme.font-ui;
+
+    private property <length> body-width:
+        Theme.tool-window-width-wide - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-tall - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
 
     in property <string> config-dir-text;
     in property <string> secret-store-status-text;
@@ -69,59 +75,66 @@ export component SettingsWindow inherits Window {
     callback save-appearance();
     callback title_drag_requested();
 
-    body := SettingsDialog {
-        open: true;
+    chrome := ToolWindowChrome {
         width: Theme.tool-window-width-wide;
         height: Theme.tool-window-height-tall;
-        config-dir-text: root.config-dir-text;
-        secret-store-status-text: root.secret-store-status-text;
-        scrollback-lines-text <=> root.scrollback-lines-text;
-        scrollback-max-cells-text <=> root.scrollback-max-cells-text;
-        settings-sftp-max-parallel-transfers-text <=> root.settings-sftp-max-parallel-transfers-text;
-        terminal-status-text: root.terminal-status-text;
-        language-text: root.language-text;
-        debug-logging-enabled <=> root.debug-logging-enabled;
-        confirm-close-session-enabled <=> root.confirm-close-session-enabled;
-        confirm-quit-app-enabled <=> root.confirm-quit-app-enabled;
-        debug-log-dir-text: root.debug-log-dir-text;
-        section <=> root.section;
-        appearance-color-scheme-name-text: root.appearance-color-scheme-name-text;
-        appearance-color-scheme-builtin: root.appearance-color-scheme-builtin;
-        appearance-palette-swatches: root.appearance-palette-swatches;
-        appearance-font-options: root.appearance-font-options;
-        appearance-font-index <=> root.appearance-font-index;
-        appearance-font-size-text <=> root.appearance-font-size-text;
-        appearance-fallback-fonts-text <=> root.appearance-fallback-fonts-text;
-        appearance-status-text: root.appearance-status-text;
-        appearance-preview: root.appearance-preview;
-        appearance-preview-background: root.appearance-preview-background;
-        native-title-drag <=> root.native_title_drag;
+        title-text: @tr("Settings");
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.dismiss(); }
         title-drag-requested => { root.title_drag_requested(); }
-        close => { root.dismiss(); }
-        open-host-keys => { root.open-host-keys(); }
-        open-private-keys => { root.open-private-keys(); }
-        open-proxies => { root.open-proxies(); }
-        open-theme-manager => { root.open-theme-manager(); }
-        update-scrollback-lines(string) => { root.update-scrollback-lines(string); }
-        update-scrollback-max-cells(string) => { root.update-scrollback-max-cells(string); }
-        update-settings-sftp-max-parallel-transfers(string) => { root.update-settings-sftp-max-parallel-transfers(string); }
-        save-settings-sftp => { root.save-settings-sftp(); }
-        reset-terminal-defaults => { root.reset-terminal-defaults(); }
-        save-terminal-settings => { root.save-terminal-settings(); }
-        set-language(string) => { root.set-language(string); }
-        set-debug-logging(bool) => { root.set-debug-logging(bool); }
-        set-confirm-close-session(bool) => { root.set-confirm-close-session(bool); }
-        set-confirm-quit-app(bool) => { root.set-confirm-quit-app(bool); }
-        open-debug-log-dir => { root.open-debug-log-dir(); }
-        select-appearance-font(int) => { root.select-appearance-font(int); }
-        update-appearance-font-size(string) => { root.update-appearance-font-size(string); }
-        bump-appearance-font-size(int) => { root.bump-appearance-font-size(int); }
-        update-appearance-fallback-fonts(string) => { root.update-appearance-fallback-fonts(string); }
-        browse-appearance-font-file => { root.browse-appearance-font-file(); }
-        browse-appearance-fallback-font => { root.browse-appearance-fallback-font(); }
-        clear-appearance-fallbacks => { root.clear-appearance-fallbacks(); }
-        reset-appearance-defaults => { root.reset-appearance-defaults(); }
-        save-appearance => { root.save-appearance(); }
+
+        body := SettingsDialog {
+            open: true;
+            width: root.body-width;
+            height: root.body-height;
+            config-dir-text: root.config-dir-text;
+            secret-store-status-text: root.secret-store-status-text;
+            scrollback-lines-text <=> root.scrollback-lines-text;
+            scrollback-max-cells-text <=> root.scrollback-max-cells-text;
+            settings-sftp-max-parallel-transfers-text <=> root.settings-sftp-max-parallel-transfers-text;
+            terminal-status-text: root.terminal-status-text;
+            language-text: root.language-text;
+            debug-logging-enabled <=> root.debug-logging-enabled;
+            confirm-close-session-enabled <=> root.confirm-close-session-enabled;
+            confirm-quit-app-enabled <=> root.confirm-quit-app-enabled;
+            debug-log-dir-text: root.debug-log-dir-text;
+            section <=> root.section;
+            appearance-color-scheme-name-text: root.appearance-color-scheme-name-text;
+            appearance-color-scheme-builtin: root.appearance-color-scheme-builtin;
+            appearance-palette-swatches: root.appearance-palette-swatches;
+            appearance-font-options: root.appearance-font-options;
+            appearance-font-index <=> root.appearance-font-index;
+            appearance-font-size-text <=> root.appearance-font-size-text;
+            appearance-fallback-fonts-text <=> root.appearance-fallback-fonts-text;
+            appearance-status-text: root.appearance-status-text;
+            appearance-preview: root.appearance-preview;
+            appearance-preview-background: root.appearance-preview-background;
+            close => { root.dismiss(); }
+            open-host-keys => { root.open-host-keys(); }
+            open-private-keys => { root.open-private-keys(); }
+            open-proxies => { root.open-proxies(); }
+            open-theme-manager => { root.open-theme-manager(); }
+            update-scrollback-lines(string) => { root.update-scrollback-lines(string); }
+            update-scrollback-max-cells(string) => { root.update-scrollback-max-cells(string); }
+            update-settings-sftp-max-parallel-transfers(string) => { root.update-settings-sftp-max-parallel-transfers(string); }
+            save-settings-sftp => { root.save-settings-sftp(); }
+            reset-terminal-defaults => { root.reset-terminal-defaults(); }
+            save-terminal-settings => { root.save-terminal-settings(); }
+            set-language(string) => { root.set-language(string); }
+            set-debug-logging(bool) => { root.set-debug-logging(bool); }
+            set-confirm-close-session(bool) => { root.set-confirm-close-session(bool); }
+            set-confirm-quit-app(bool) => { root.set-confirm-quit-app(bool); }
+            open-debug-log-dir => { root.open-debug-log-dir(); }
+            select-appearance-font(int) => { root.select-appearance-font(int); }
+            update-appearance-font-size(string) => { root.update-appearance-font-size(string); }
+            bump-appearance-font-size(int) => { root.bump-appearance-font-size(int); }
+            update-appearance-fallback-fonts(string) => { root.update-appearance-fallback-fonts(string); }
+            browse-appearance-font-file => { root.browse-appearance-font-file(); }
+            browse-appearance-fallback-font => { root.browse-appearance-fallback-font(); }
+            clear-appearance-fallbacks => { root.clear-appearance-fallbacks(); }
+            reset-appearance-defaults => { root.reset-appearance-defaults(); }
+            save-appearance => { root.save-appearance(); }
+        }
     }
 
     public function focus-dialog() {

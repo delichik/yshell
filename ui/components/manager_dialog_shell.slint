@@ -1,25 +1,16 @@
-// 管理器页面共用壳：标题行 + 内容槽（填满父级）。
+// 管理器页面内容壳：焦点 / Esc / 内容槽（填满父级）。
 //
-// 独立工具窗口内使用：无遮罩、不居中、高度不再夹 `parent.height`。
-// 父级是固定尺寸的 OS Window 客户区。
-//
+// 标题栏与关闭由宿主 `ToolWindowChrome` 提供；本组件不再自绘标题或拖拽。
 // 宽高用 `root.width`/`root.height`（由宿主赋绝对值），避免 `100%` 与
 // Window.layoutinfo 形成 binding loop。
 
 import { Theme } from "../theme.slint";
-import { WinIconButton } from "basic/controls.slint";
 
 export component ManagerDialogShell inherits Rectangle {
     in property <bool> open: false;
-    in property <string> title-text: "";
-    /// 标题右侧摘要（可空：不占位）。
-    in property <string> summary-text: "";
     /// true = 高度跟内容（Folder Editor）；false = 吃掉剩余纵向空间。
     in property <bool> content-sized: false;
-    /// Windows：标题行拖动走原生移动循环。
-    in property <bool> native-title-drag: false;
     callback close();
-    callback title-drag-requested();
 
     visible: root.open;
     background: Theme.window-background;
@@ -39,67 +30,7 @@ export component ManagerDialogShell inherits Rectangle {
         VerticalLayout {
             width: root.width;
             height: root.height;
-            padding: Theme.tool-window-padding;
             spacing: Theme.spacing-12;
-
-            title_row := Rectangle {
-                height: Theme.control-height;
-                vertical-stretch: 0;
-                background: transparent;
-
-                if root.native-title-drag : TouchArea {
-                    // 简易拖动：按下即请求原生移动（工具窗无最大化，无需阈值）。
-                    pointer-event(event) => {
-                        if (event.button == PointerEventButton.left
-                            && event.kind == PointerEventKind.down) {
-                            root.title-drag-requested();
-                        }
-                    }
-                }
-                if !root.native-title-drag : WindowMoveArea {
-                    width: parent.width - Theme.control-height;
-                    height: parent.height;
-                }
-
-                HorizontalLayout {
-                    spacing: Theme.spacing-12;
-                    vertical-stretch: 0;
-
-                    Text {
-                        text: root.title-text;
-                        color: Theme.text-primary;
-                        font-size: Theme.font-subtitle;
-                        font-weight: Theme.weight-semibold;
-                        vertical-alignment: center;
-                        wrap: no-wrap;
-                        horizontal-stretch: root.summary-text == "" ? 1 : 0;
-                    }
-
-                    if root.summary-text != "" : Text {
-                        text: root.summary-text;
-                        color: Theme.text-secondary;
-                        font-size: Theme.font-body;
-                        vertical-alignment: center;
-                        wrap: no-wrap;
-                        overflow: elide;
-                        horizontal-stretch: 1;
-                        min-width: 0px;
-                    }
-
-                    WinIconButton {
-                        icon: "close";
-                        accessible-name: @tr("Close");
-                        cross-axis-self-alignment: center;
-                        clicked => { root.close(); }
-                    }
-                }
-            }
-
-            Rectangle {
-                height: 1px;
-                background: Theme.divider;
-                vertical-stretch: 0;
-            }
 
             content-slot := Rectangle {
                 vertical-stretch: root.content-sized ? 0 : 1;

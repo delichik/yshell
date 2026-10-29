@@ -128,8 +128,9 @@ pub fn start_native_window_move(window: &slint::Window) {
             PostMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION as usize, lparam);
             // 不要在这里 PostMessage WM_LBUTTONUP：系统移动循环还没启动，
             // 队列里的合成释放会立刻结束移动（表现为标题栏拖不动 / 一拖就松）。
-            // Slint 抓取残留改由 TitleBarDragTouch.press-in-bounds 消化——
-            // 界外按下不当作拖动起点。
+            // Slint 抓取残留：TitleBarDragTouch 在上报 drag-requested 前会
+            // `enabled = false`（触发 Cancel、丢掉 grab），下一帧再恢复；
+            // 仅靠 press-in-bounds 挡误拖，挡不住「点击落到错误控件」。
         }
     });
 }

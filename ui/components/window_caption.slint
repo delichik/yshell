@@ -1,0 +1,197 @@
+// Shared frameless-window caption pieces used by MenuBar and ToolWindowChrome.
+//
+// TitleBarDragTouch matches the main-window native-drag path: threshold +
+// press-in-bounds + drag-triggered. After HTCAPTION move, Windows swallows
+// mouse-up so Slint would keep the TouchArea grab — clear it by toggling
+// `enabled` (emits Cancel / drops grab) and restore on the next frame.
+
+import { Theme } from "../theme.slint";
+import { Icon } from "basic/icons.slint";
+
+/// Windows 原生标题栏拖动检测：`native-drag` 为 true 时由宿主关掉 WindowMoveArea。
+///
+/// 按下后移动超过阈值才上报 `drag-requested`，单击 / 双击仍是普通 TouchArea 行为。
+/// 系统移动循环会吞掉按键释放；发起拖动时短暂 `enabled: false` 清掉抓取，
+/// 否则之后的点击会继续被本 TouchArea 吃掉（拖不动 / 关不掉 / 正文无反应）。
+export component TitleBarDragTouch inherits TouchArea {
+    in property <bool> native-drag: false;
+    callback clicked-blank();
+    callback double-clicked-blank();
+    callback drag-requested();
+
+    private property <length> press-x: 0px;
+    private property <length> press-y: 0px;
+    private property <bool> armed: false;
+    private property <bool> drag-triggered: false;
+    /// 按下是否落在标题栏自身范围内。
+    ///
+    /// 系统移动循环会吞掉鼠标释放，Slint 的抓取因此残留：之后的第一次点击
+    /// 仍被送进这个 TouchArea。若不判断位置，这一次点击会被当成拖动起点
+    /// （再动一下就变成拖窗口）。
+    private property <bool> press-in-bounds: false;
+    /// 刚用 `enabled: false` 清过抓取，下一帧再打开。
+    private property <bool> restore-enabled: false;
+
+    pure function abs-length(value: length) -> length {
+        value < 0px ? -value : value;
+    }
+
+    function clear-slint-grab() {
+        // TouchArea docs：按下期间关掉 enabled → Cancel + 清 pressed/grab。
+        root.enabled = false;
+        root.restore-enabled = true;
+    }
+
+    pointer-event(event) => {
+        if (!root.native-drag) {
+            return;
+        }
+        if (event.button == PointerEventButton.left) {
+            if (event.kind == PointerEventKind.down) {
+                root.drag-triggered = false;
+                root.press-in-bounds = self.mouse-x >= 0px && self.mouse-x <= root.width
+                    && self.mouse-y >= 0px && self.mouse-y <= root.height;
+                if (!root.press-in-bounds) {
+                    // 抓取残留送来的按下（点在标题栏之外）：不当作拖动起点，
+                    // 并清掉抓取，让后续点击能落到真正的控件上。
+                    root.armed = false;
+                    root.clear-slint-grab();
+                    return;
+                }
+                root.press-x = self.mouse-x;
+                root.press-y = self.mouse-y;
+                root.armed = true;
+            } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
+                root.armed = false;
+            }
+        }
+    }
+
+    moved => {
+        if (root.native-drag && root.armed
+            && (root.abs-length(self.mouse-x - root.press-x) >= 4px
+                || root.abs-length(self.mouse-y - root.press-y) >= 4px)) {
+            // 发起原生移动前卸武装并清 Slint 抓取：系统循环会吞掉真实 release，
+            // 若不在这里清 grab，之后所有点击仍进本 TouchArea。
+            root.armed = false;
+            root.drag-triggered = true;
+            root.clear-slint-grab();
+            root.drag-requested();
+        }
+    }
+
+    clicked => {
+        if (root.drag-triggered) {
+            root.drag-triggered = false;
+        } else if (root.press-in-bounds) {
+            root.clicked-blank();
+        }
+        root.press-in-bounds = false;
+    }
+
+    double-clicked => {
+        if (root.press-in-bounds) {
+            root.double-clicked-blank();
+        }
+        root.press-in-bounds = false;
+    }
+
+    // interval 0 → 下一帧；原生 WM_NCLBUTTONDOWN 已 Post，可安全恢复接收。
+    Timer {
+        interval: 0ms;
+        running: root.restore-enabled;
+        triggered => {
+            root.enabled = true;
+            root.restore-enabled = false;
+        }
+    }
+}
+
+/// WinUI 3 标题栏按钮：46×顶栏高、直角、关闭悬停用系统红。
+export component CaptionButton inherits Rectangle {
+    in property <string> kind: "minimize";
+    /// 最大化态：方框换成还原（叠方）。
+    in property <bool> window-maximized: false;
+    callback clicked();
+
+    private property <bool> is-close: root.kind == "close";
+    private property <string> access-label:
+        root.kind == "minimize" ? @tr("MenuBar" => "Minimize")
+        : root.kind == "close" ? @tr("MenuBar" => "Close")
+        : root.window-maximized ? @tr("MenuBar" => "Restore")
+        : @tr("MenuBar" => "Maximize");
+    private property <color> glyph-color: root.is-close && touch.has-hover
+        ? Theme.caption-close-hover-text
+        : Theme.text-primary;
+
+    width: 46px;
+    height: 100%;
+    background: root.is-close
+        ? (touch.pressed ? Theme.caption-close-pressed
+            : touch.has-hover ? Theme.caption-close-hover : transparent)
+        : (touch.pressed ? Theme.subtle-pressed
+            : touch.has-hover ? Theme.subtle-hover : transparent);
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    accessible-role: button;
+    accessible-label: root.access-label;
+    accessible-action-default => { root.clicked(); }
+
+    // 最小化 / 关闭用图标；最大化·还原用几何方框。
+    // close 的 SVG 描边比 minus 更内缩，同为 10px 时 X 会显得更小，故关闭用 12px。
+    if root.kind == "minimize" : Icon {
+        name: "minus";
+        icon-color: root.glyph-color;
+        icon-size: 10px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+    if root.kind == "maximize" && !root.window-maximized : Rectangle {
+        width: 10px;
+        height: 10px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        border-width: 1px;
+        border-color: root.glyph-color;
+        background: transparent;
+    }
+    if root.kind == "maximize" && root.window-maximized : Rectangle {
+        width: 12px;
+        height: 12px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        background: transparent;
+
+        // 后层方框（偏右上）
+        Rectangle {
+            x: 2px;
+            y: 0px;
+            width: 8px;
+            height: 8px;
+            border-width: 1px;
+            border-color: root.glyph-color;
+            background: transparent;
+        }
+        // 前层方框（偏左下，盖住后层一角）
+        Rectangle {
+            x: 0px;
+            y: 2px;
+            width: 8px;
+            height: 8px;
+            border-width: 1px;
+            border-color: root.glyph-color;
+            background: Theme.window-background;
+        }
+    }
+    if root.kind == "close" : Icon {
+        name: "close";
+        icon-color: root.glyph-color;
+        icon-size: 12px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
