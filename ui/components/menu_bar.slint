@@ -437,8 +437,6 @@ export component MenuBarPopups inherits Rectangle {
         panel-width: 230px;
         // A1：遮罩从菜单栏下方开始，点击其它一级菜单不再被遮罩吞掉。
         scrim-top: root.scrim-top;
-        // 下拉菜单给 2px 上移（§6.3 #4）：有「从标题栏落下来」的感觉，但不夸张。
-        rise-offset: 2px;
         dismissed => { root.dismissed(); }
         selected(index) => { root.selected(0, index); }
     }
@@ -452,8 +450,6 @@ export component MenuBarPopups inherits Rectangle {
         anchor-y: root.anchor-y;
         panel-width: 210px;
         scrim-top: root.scrim-top;
-        // 下拉菜单给 2px 上移（§6.3 #4）：有「从标题栏落下来」的感觉，但不夸张。
-        rise-offset: 2px;
         dismissed => { root.dismissed(); }
         selected(index) => { root.selected(1, index); }
     }
@@ -467,8 +463,6 @@ export component MenuBarPopups inherits Rectangle {
         anchor-y: root.anchor-y;
         panel-width: 260px;
         scrim-top: root.scrim-top;
-        // 下拉菜单给 2px 上移（§6.3 #4）：有「从标题栏落下来」的感觉，但不夸张。
-        rise-offset: 2px;
         dismissed => { root.dismissed(); }
         selected(index) => { root.selected(2, index); }
     }
@@ -482,8 +476,6 @@ export component MenuBarPopups inherits Rectangle {
         anchor-y: root.anchor-y;
         panel-width: 250px;
         scrim-top: root.scrim-top;
-        // 下拉菜单给 2px 上移（§6.3 #4）：有「从标题栏落下来」的感觉，但不夸张。
-        rise-offset: 2px;
         dismissed => { root.dismissed(); }
         selected(index) => { root.selected(3, index); }
     }
@@ -497,8 +489,6 @@ export component MenuBarPopups inherits Rectangle {
         anchor-y: root.anchor-y;
         panel-width: 210px;
         scrim-top: root.scrim-top;
-        // 下拉菜单给 2px 上移（§6.3 #4）：有「从标题栏落下来」的感觉，但不夸张。
-        rise-offset: 2px;
         dismissed => { root.dismissed(); }
         selected(index) => { root.selected(4, index); }
     }
