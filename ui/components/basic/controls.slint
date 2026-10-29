@@ -8,7 +8,8 @@ import { Icon } from "icons.slint";
 
 // ---------------------------------------------------------------- 焦点
 /// §3.5 键盘焦点环：2px 双色环（focus-outer 外 + focus-inner 内），贴合控件圆角 +2px。
-/// 环画在控件外缘 2px 处，可能被外层 `clip` 裁掉；只在键盘聚焦时显示（鼠标点击不闪环）。
+/// 环画在控件外缘 2px 处，可能被外层 `clip` 裁掉。
+/// 可见性只认 `FocusReason.tab-navigation`：鼠标点击走 TouchArea → `.focus()`（programmatic），不画环。
 component FocusRing inherits Rectangle {
     in property <bool> visible-ring: false;
     in property <length> radius: Theme.radius-control;
@@ -92,7 +93,7 @@ export component WinButton inherits Rectangle {
             }
             return reject;
         }
-        focus-gained(reason) => { root.keyboard-focus = reason != FocusReason.pointer-click; }
+        focus-gained(reason) => { root.keyboard-focus = reason == FocusReason.tab-navigation; }
         focus-lost(reason) => { root.keyboard-focus = false; }
     }
 
@@ -237,7 +238,7 @@ export component WinIconButton inherits Rectangle {
             }
             return reject;
         }
-        focus-gained(reason) => { root.keyboard-focus = reason != FocusReason.pointer-click; }
+        focus-gained(reason) => { root.keyboard-focus = reason == FocusReason.tab-navigation; }
         focus-lost(reason) => { root.keyboard-focus = false; }
     }
 
@@ -329,7 +330,7 @@ export component WinToggle inherits Rectangle {
             }
             return reject;
         }
-        focus-gained(reason) => { root.keyboard-focus = reason != FocusReason.pointer-click; }
+        focus-gained(reason) => { root.keyboard-focus = reason == FocusReason.tab-navigation; }
         focus-lost(reason) => { root.keyboard-focus = false; }
     }
 
@@ -529,7 +530,7 @@ export component WinNavItem inherits Rectangle {
             }
             return reject;
         }
-        focus-gained(reason) => { root.keyboard-focus = reason != FocusReason.pointer-click; }
+        focus-gained(reason) => { root.keyboard-focus = reason == FocusReason.tab-navigation; }
         focus-lost(reason) => { root.keyboard-focus = false; }
     }
 
@@ -1023,7 +1024,7 @@ export component WinComboBox inherits Rectangle {
             }
             return reject;
         }
-        focus-gained(reason) => { root.keyboard-focus = reason != FocusReason.pointer-click; }
+        focus-gained(reason) => { root.keyboard-focus = reason == FocusReason.tab-navigation; }
         focus-lost(reason) => { root.keyboard-focus = false; }
     }
 
