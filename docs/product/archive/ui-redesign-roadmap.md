@@ -1,10 +1,9 @@
 # UI 重设计路线图
 
-状态：迭代 1–3 已完成（基线见 `ui-redesign-remaining-work.md`）；本文件规划后续迭代。
+> **归档（2026-10-29）**：后续迭代已由 `yshell-next-*` 波次承接并验收。现行范围 → [`yshell-current-status.md`](./yshell-current-status.md)。  
+> `ui-redesign-remaining-work.md` / `ui-winui3-implementation-notes.md` **不在仓库中**（失效引用）。
 
-并行说明：WinUI3 设计语言重构（`ui-winui3-design-language.md` /
-`ui-winui3-implementation-notes.md`）与本路线图并行推进；剩余事项、协作规则与交付检查表
-统一登记在 **`ui-redesign-remaining-work.md`**，新任务请先读那份文档。
+状态：迭代 1–3 已完成；本文件仅为历史规划。
 
 ## 1. 用户反馈与总体目标
 

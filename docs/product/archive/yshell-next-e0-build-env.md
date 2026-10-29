@@ -1,6 +1,8 @@
 # E0 构建环境与路径收口（设计）
 
-状态：**待用户确认**（确认后分配唯一 owner）
+> **归档**：E0 已验收。现行范围 → [`yshell-current-status.md`](./yshell-current-status.md)。
+
+状态：**已完成（归档）**
 设计/验收：主 agent
 关联：`yshell-next-features-requirements.md`（D32）、`yshell-next-t0-slint-upgrade.md`
 

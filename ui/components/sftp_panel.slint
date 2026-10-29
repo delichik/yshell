@@ -6,7 +6,7 @@
 //   本地栏：同一个 FilePane（本地数据）→ 两栏用的是同一个组件
 //
 // 规范：docs/product/ui-winui3-design-language.md §5.2 / §5.5 / §5.11 / §5.14
-//       docs/product/context-menu-design.md §4（四套行菜单）/ §6（队列动作）
+//       docs/product/yshell-ui-interaction-contract.md（SFTP 菜单）；历史矩阵 docs/product/archive/context-menu-design.md §4/§6
 // 约定：颜色与尺寸只引用 Theme token；本文件导出 SftpPanel 与三个窗口级弹窗
 //       （Entry / Conflict / Properties）以及行右键菜单 SftpContextMenu。
 import { ListView } from "std-widgets.slint";
@@ -843,7 +843,7 @@ export component SftpPanel inherits Rectangle {
 
 // ---------------------------------------------------------------- 右键菜单
 
-/// SFTP 上下文菜单（context-menu-design.md §4 四套 + 本地栏两套）。
+/// SFTP 上下文菜单（契约 SFTP 节；历史矩阵 archive/context-menu-design.md §4）。
 ///
 /// 由宿主按右键位置传入 `target-kind` 与启用条件；条目文案与索引→动作 id 的
 /// 映射都集中在这里，宿主只消费语义 id（`selected(string)`）。

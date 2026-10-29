@@ -1,6 +1,8 @@
 # YShell W0 地基任务包（并行设计）
 
-状态：**待用户确认**（确认后每个任务分配唯一 owner 立即执行）
+> **归档**：W0 各项已验收。现行范围 → [`yshell-current-status.md`](./yshell-current-status.md)。
+
+状态：**已完成（归档）**
 设计/验收：主 agent
 执行：各任务唯一 owner subagent
 目的：在 T0（Slint 升级）执行期间，把**不依赖 UI 热文件、不新增第三方依赖、不写 `Cargo.lock`** 的 crates 级工作并行推进，为 N0/N1/N2/N4/N5/N6 铺路。

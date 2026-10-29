@@ -1,6 +1,8 @@
 # rfd 后端选型 spike（设计）
 
-状态：**待确认**；类型：调研 spike（不落依赖、不改仓库代码）
+> **归档**：spike 报告见 `yshell-next-rfd-spike-report.md`；rfd 已入库并被 N1/N4/N6 消费。
+
+状态：**已完成（归档）**；类型：调研 spike
 目的：决定 `rfd` 在 Linux（含 WSLg）走哪个后端，以及降级策略，供 D0b 一次性入库。
 关联决策：D2（rfd + 路径输入降级）、D31（rfd 选型并入 N1 前）
 

@@ -1,13 +1,15 @@
 # N9 同步发送按键（设计）
 
-状态：**待确认**（含 §1 的 Visible 语义待定）；依赖：N0（标签模型）✅、R2
-关联决策：D23（不弹确认，仅状态栏提示 + 一键停止）、D24（作用域当前窗口；Send to Current = 取消；IME 提交后同步；不做暂停键）；需求 §10
-文件落位：`runtime/tabs.rs`（`InputSyncState` 与扇出）；`ui/main_window.slint`（终端/标签右键菜单项 + 状态 chip 最小接线）；`ui/components/status_bar.slint`（同步状态）；`ui/components/terminal_workspace.slint`（标签角标）；`bootstrap.rs`（输入汇聚点）；`ui/text_formats.slint`
+> **归档**：N9 已验收（2026-09-28）。现行缺口（Visible 仍等同 All）→ [`yshell-current-status.md`](./yshell-current-status.md) §3。
+
+状态：**已完成（验收通过）**；§1 Visible 收紧仍属遗留。依赖：N0 ✅、R2 ✅  
+关联决策：D23、D24；需求 §10  
+文件落位：`runtime/tabs.rs`；`ui/main_window.slint`；`status_bar.slint`；`terminal_workspace.slint`；`bootstrap.rs`；`text_formats.slint`
 
 ## 1. 语义与作用域
 - 源：一个终端标签；目标：当前窗口内的终端标签集合。
   - `Send to All`：当前窗口所有已连接 SSH 终端（排除源、排除未连接）；
-  - `Send to Visible`：**待定** —— 当前无分屏，推荐：暂等同 `All` 并在 UI 标注"分屏后收紧"；备选：等分屏（E-029+）实现后再提供 `Visible`；
+  - `Send to Visible`：设计曾「分屏前等同 All」；**分屏已落地，实现尚未按可见 pane 过滤**（已知缺口）；
   - `Send to Current`：取消同步（只保留当前终端，退出同步态）。
 - 标签级 `receives_key_input`：右键勾选/取消"接收键输入"；断开自动移出并提示。
 

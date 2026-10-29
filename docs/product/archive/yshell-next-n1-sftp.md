@@ -1,8 +1,10 @@
 # N1 SFTP 紧凑化 + 双栏 + 拖放（设计）
 
-状态：**待确认**；依赖：F0（后端能力）✅、R2、rfd（spike 后入库）、Slint 1.18 应用内 DragArea/DropArea（已具备）
-关联决策：D9（面板内可折叠本地栏）、D10（远端→远端=下载再上传）、D14（页面只留导航 + ⋯）、D3（OS 拖放等 winit，不在本任务）
-文件落位：重写 `ui/components/sftp_panel.slint`；新 `ui/components/local_pane.slint`；新 `crates/yshell-app/src/local_fs.rs`；`runtime/sftp.rs`；`bootstrap.rs`；`ui/text_formats.slint`（文案）
+> **归档**：N1 已验收（2026-09-28）。OS 拖出等上游；增强项见 [`yshell-current-status.md`](./yshell-current-status.md)。
+
+状态：**已完成（验收通过）**；依赖：F0 ✅、R2、rfd、Slint DragArea/DropArea  
+关联决策：D9、D10、D14、D3（OS 拖放等 winit，不在本任务）  
+文件落位：`sftp_panel.slint`；`local_pane` / `local_fs`；`runtime/sftp.rs`；`bootstrap.rs`；`text_formats.slint`
 
 ## 1. 紧凑单栏（先做）
 - 头部：面包屑（窄宽折叠）+ `↑` + 刷新 + `⋯`；行操作全部进右键菜单（文件/目录/空白/多选四套，见 `context-menu-design.md` §4）；输入类操作走弹窗；删除/覆盖有确认。

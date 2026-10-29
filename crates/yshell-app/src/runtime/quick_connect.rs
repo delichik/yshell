@@ -1,6 +1,6 @@
 //! N2 Quick Connect：工作区覆盖层状态、输入态、历史持久化与行投影。
 //!
-//! 设计：`docs/product/yshell-next-n2-quick-connect.md` §1/§2/§4。
+//! 设计：`docs/product/archive/yshell-next-n2-quick-connect.md` §1/§2/§4。
 //!
 //! TAB-6 起 Quick Connect 是**工作区级覆盖层**，不再占用标签页：
 //! * 开关由 [`AppRuntime::quick_connect_visible`] 驱动（打开/关闭/切换不改变

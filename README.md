@@ -4,7 +4,9 @@ YShell is an open-source, cross-platform SSH terminal and SFTP client planned fo
 
 Current product focus: move toward an app-owned SSH/SFTP implementation. Any path that delegates live shell or file-transfer work to local system `ssh` / `sftp` should be treated as a temporary validation bridge, not release progress.
 
-The repository is currently at Milestone 0+: Rust workspace, crate boundaries, SSH/SFTP adapter models, a native Slint app shell, UI view models, configuration-path discovery, tracing setup, and CI/release automation.
+Product docs live under [`docs/product/`](docs/product/README.md). Start with [`docs/product/yshell-current-status.md`](docs/product/yshell-current-status.md) for what this build ships, intentionally omits, and still leaves open.
+
+The repository is a Rust workspace with crate boundaries, a native Slint app shell, SSH/SFTP stacks, configuration, tracing, and CI/release automation.
 
 ## Native app shell
 

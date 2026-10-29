@@ -1,6 +1,8 @@
 # N3 工具面板停靠系统 + 绑定环清理（设计）
 
-状态：**待确认**；依赖：R2（`runtime/panels.rs`）、R1（tool_dock 已独立）、S1+S2、N0
+> **归档**：已验收。现行范围 → [`yshell-current-status.md`](./yshell-current-status.md)。
+
+状态：**已完成（归档）**；依赖：R2、R1、S1+S2、N0
 关联决策：D8（布局全局一套；Transfers 普通面板）、需求 §4；**同时清理 21 条 binding-loop 告警**
 文件落位：重写 `ui/components/tool_dock.slint` → 泛化为左右栏容器；`ui/components/session_sidebar.slint`（作为 Sessions 面板容器保留）；新 `ui/components/panel_frame.slint`（标题/折叠/移动/关闭菜单 + 拖拽把手）；`runtime/panels.rs`；`ui/main_window.slint`（布局组合/断点）；`C0` 的 `UiProfile.layout` 读写
 

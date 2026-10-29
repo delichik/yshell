@@ -1,0 +1,844 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark" data-view="compare" data-ws="sftp" data-accent="blue"
+  style="--surface-opacity:1">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YShell · Fluent 加强效果图</title>
+<style>
+  /*
+    方向 2：Fluent 加强 —— 同一套信息架构与用法，明显换脸。
+    锁定：SFTP=工作区标签·本地左/远程右；右栏=隧道/传输；新建仍走菜单。
+    拉开差别：层对比、导航选中、标题栏分区、设置卡片分区、工作区内嵌表面。
+  */
+  :root {
+    --font: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+    --mono: "Cascadia Mono", Consolas, monospace;
+    --accent: #60CDFF;
+    --accent-text: #000;
+    --accent-soft: rgba(96,205,255,.16);
+    --accent-hover: #7EDEFF;
+    --r4: 4px; --r8: 8px;
+    --page: #0b0c0e; --page-fg: #ececec;
+    /* —— 现状：几乎同色平铺 —— */
+    --c-win: #202020;
+    --c-layer: #202020;
+    --c-card: #252525;
+    --c-stroke: rgba(255,255,255,.08);
+    --c-text1: #fff;
+    --c-text2: rgba(255,255,255,.72);
+    --c-text3: rgba(255,255,255,.45);
+    --c-term: #0c0c0c;
+    /* —— Fluent 加强：可感知的层 —— */
+    --f-win: #1a1a1a;
+    --f-mica: #1f1f1f;
+    --f-layer: rgba(255,255,255, calc(.055 * var(--surface-opacity)));
+    --f-card: rgba(255,255,255, calc(.075 * var(--surface-opacity)));
+    --f-elev: #2b2b2b;
+    --f-stroke: rgba(255,255,255,.12);
+    --f-stroke-strong: rgba(255,255,255,.18);
+    --f-text1: #fff;
+    --f-text2: rgba(255,255,255,.78);
+    --f-text3: rgba(255,255,255,.55);
+    --f-term: #0a0a0a;
+    --shadow: 0 16px 48px rgba(0,0,0,.55);
+    --success: #6ccb5f;
+  }
+  html[data-theme="light"] {
+    --page: #d8d8d8; --page-fg: #1b1b1b;
+    --c-win: #f3f3f3; --c-layer: #f3f3f3; --c-card: #fff;
+    --c-stroke: rgba(0,0,0,.08);
+    --c-text1: rgba(0,0,0,.9); --c-text2: rgba(0,0,0,.62); --c-text3: rgba(0,0,0,.45);
+    --c-term: #fafafa;
+    --f-win: #e8e8e8; --f-mica: #f0f0f0;
+    --f-layer: rgba(255,255,255, calc(.72 * var(--surface-opacity)));
+    --f-card: rgba(255,255,255, calc(.88 * var(--surface-opacity)));
+    --f-elev: #ffffff;
+    --f-stroke: rgba(0,0,0,.1); --f-stroke-strong: rgba(0,0,0,.16);
+    --f-text1: rgba(0,0,0,.9); --f-text2: rgba(0,0,0,.62); --f-text3: rgba(0,0,0,.45);
+    --f-term: #fff;
+    --shadow: 0 16px 48px rgba(0,0,0,.18);
+    --accent: #005FB8; --accent-text: #fff; --accent-soft: rgba(0,95,184,.12); --accent-hover: #0067C0;
+  }
+  html[data-accent="teal"] { --accent:#4CC2C4; --accent-soft:rgba(76,194,196,.16); }
+  html[data-accent="purple"] { --accent:#B199D9; --accent-soft:rgba(177,153,217,.18); }
+  html[data-accent="green"] { --accent:#6CCB5F; --accent-soft:rgba(108,203,95,.16); }
+  html[data-theme="light"][data-accent="teal"] { --accent:#038387; --accent-text:#fff; --accent-soft:rgba(3,131,135,.12); }
+  html[data-theme="light"][data-accent="purple"] { --accent:#8764B8; --accent-text:#fff; --accent-soft:rgba(135,100,184,.12); }
+  html[data-theme="light"][data-accent="green"] { --accent:#107C10; --accent-text:#fff; --accent-soft:rgba(16,124,16,.12); }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: var(--font); font-size: 14px; line-height: 20px;
+    background: var(--page); color: var(--page-fg); padding: 24px 20px 64px;
+  }
+  .top { max-width: 1360px; margin: 0 auto 16px; display: flex; flex-wrap: wrap; gap: 14px; justify-content: space-between; align-items: end; }
+  .top h1 { margin: 0; font-size: 22px; font-weight: 600; }
+  .top p { margin: 6px 0 0; font-size: 13px; opacity: .72; max-width: 62ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .seg { display: inline-flex; padding: 2px; gap: 2px; background: rgba(128,128,128,.2); border-radius: 6px; }
+  .seg button {
+    appearance: none; border: 0; background: transparent; color: inherit;
+    font: inherit; font-size: 13px; padding: 6px 11px; border-radius: 4px; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: #fff; color: #111; font-weight: 600; }
+  html[data-theme="light"] .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); }
+  .acc { display: flex; gap: 6px; }
+  .acc button { width: 22px; height: 22px; border-radius: 6px; border: 1px solid rgba(128,128,128,.4); cursor: pointer; padding: 0; }
+  .acc button[aria-pressed="true"] { outline: 2px solid var(--page-fg); outline-offset: 2px; }
+  .opacity-ctrl { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .opacity-ctrl input { width: 100px; accent-color: var(--accent); }
+
+  .callouts {
+    max-width: 1360px; margin: 0 auto 14px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  }
+  .callouts article {
+    background: rgba(128,128,128,.1); border: 1px solid rgba(128,128,128,.22);
+    border-radius: 8px; padding: 10px 12px; font-size: 12px;
+  }
+  .callouts strong { display: block; margin-bottom: 4px; font-size: 13px; }
+  .callouts span { opacity: .75; }
+
+  .stage { max-width: 1360px; margin: 0 auto; display: grid; gap: 18px; }
+  html[data-view="compare"] .stage { grid-template-columns: 1fr 1fr; }
+  html[data-view="before"] .shot-after,
+  html[data-view="after"] .shot-before { display: none; }
+  .shot-label {
+    margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; opacity: .65;
+  }
+
+  /* ===================== 共用窗口壳 ===================== */
+  .window {
+    height: 640px; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column;
+    box-shadow: var(--shadow); user-select: none; border: 1px solid transparent;
+  }
+  .menubar { display: flex; align-items: center; flex: 0 0 auto; }
+  .mb-item { display: inline-flex; align-items: center; border-radius: var(--r4); cursor: default; }
+  .mb-spacer { flex: 1; }
+  .caption { display: flex; height: 100%; }
+  .caption i { display: grid; place-items: center; font-style: normal; opacity: .8; }
+  .body { flex: 1; min-height: 0; display: flex; }
+  .nav { display: flex; flex-direction: column; flex: 0 0 auto; min-width: 0; }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .tabs { display: flex; align-items: stretch; flex: 0 0 auto; position: relative; }
+  .tab { display: inline-flex; align-items: center; gap: 8px; position: relative; }
+  .tab-add { display: grid; place-items: center; }
+  .workspace { flex: 1; min-height: 0; display: flex; }
+  .ws-fill { flex: 1; min-width: 0; min-height: 0; display: flex; }
+  html[data-ws="terminal"] .ws-sftp,
+  html[data-ws="sftp"] .ws-term { display: none !important; }
+  .dock { display: flex; flex-direction: column; flex: 0 0 auto; }
+  .statusbar { display: flex; align-items: center; flex: 0 0 auto; }
+
+  /* ---------- 现状：平铺、弱层级 ---------- */
+  .before .window { background: var(--c-win); color: var(--c-text1); border-color: var(--c-stroke); }
+  .before .menubar {
+    height: 32px; padding: 0 4px 0 8px; background: var(--c-win); border-bottom: 1px solid var(--c-stroke);
+  }
+  .before .mb-item { height: 24px; padding: 0 10px; font-size: 13px; }
+  .before .mb-item:hover { background: rgba(128,128,128,.12); }
+  .before .caption i { width: 46px; font-size: 10px; }
+  .before .nav {
+    width: 220px; background: var(--c-layer); border-right: 1px solid var(--c-stroke); padding: 6px;
+  }
+  .before .search {
+    height: 28px; margin-bottom: 6px; padding: 0 8px; border-radius: 4px;
+    background: rgba(128,128,128,.1); border: 1px solid var(--c-stroke);
+    color: var(--c-text3); font-size: 12px; display: flex; align-items: center;
+  }
+  .before .cap { font-size: 10px; color: var(--c-text3); padding: 4px 6px; letter-spacing: .06em; }
+  .before .tree {
+    height: 28px; border-radius: 4px; display: flex; align-items: center; gap: 8px;
+    padding: 0 8px; font-size: 13px; color: var(--c-text2); position: relative;
+  }
+  .before .tree.on { background: rgba(128,128,128,.12); color: var(--c-text1); }
+  .before .tree.on::before {
+    content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px;
+    border-radius: 2px; background: var(--accent);
+  }
+  .before .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+  .before .dot.off { background: var(--c-text3); }
+  .before .tabs {
+    height: 32px; background: var(--c-win); border-bottom: 1px solid var(--c-stroke); padding-left: 4px;
+  }
+  .before .tab { padding: 0 12px; font-size: 13px; color: var(--c-text2); }
+  .before .tab.on { color: var(--c-text1); }
+  .before .tab.on::after {
+    content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 2px; background: var(--accent);
+  }
+  .before .tab-add { width: 28px; margin: 2px; color: var(--c-text2); }
+  .before .term {
+    flex: 1; background: var(--c-term); color: #ccc; font-family: var(--mono); font-size: 12px;
+    padding: 8px 10px; margin: 0;
+  }
+  .before .sftp { flex: 1; display: flex; background: var(--c-win); }
+  .before .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--c-stroke); }
+  .before .pane:last-child { border-right: 0; }
+  .before .crumb {
+    height: 32px; display: flex; align-items: center; gap: 4px; padding: 0 6px;
+    border-bottom: 1px solid var(--c-stroke); font-size: 12px; color: var(--c-text2);
+  }
+  .before .crumb .segm { padding: 2px 6px; border-radius: 3px; }
+  .before .cols {
+    height: 26px; display: grid; grid-template-columns: 1fr 64px 80px; align-items: center;
+    padding: 0 8px; font-size: 11px; color: var(--c-text3); border-bottom: 1px solid var(--c-stroke);
+  }
+  .before .row {
+    height: 28px; display: grid; grid-template-columns: 1fr 64px 80px; align-items: center;
+    padding: 0 8px; font-size: 12px; color: var(--c-text2);
+  }
+  .before .row.on { background: rgba(128,128,128,.12); color: var(--c-text1); }
+  .before .foot {
+    height: 22px; padding: 0 8px; font-size: 11px; color: var(--c-text3);
+    border-top: 1px solid var(--c-stroke); display: flex; align-items: center;
+  }
+  .before .dock {
+    width: 300px; background: var(--c-layer); border-left: 1px solid var(--c-stroke);
+  }
+  .before .pivot { display: flex; padding: 6px 6px 0; gap: 2px; }
+  .before .pivot span {
+    flex: 1; text-align: center; height: 26px; line-height: 26px; font-size: 12px;
+    color: var(--c-text2); border-radius: 4px;
+  }
+  .before .pivot span.on { background: rgba(128,128,128,.12); color: var(--c-text1); }
+  .before .dhead {
+    height: 36px; padding: 0 10px; display: flex; align-items: center;
+    font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--c-stroke);
+  }
+  .before .dbody { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .before .card {
+    background: var(--c-card); border: 1px solid var(--c-stroke); border-radius: 6px; padding: 8px 10px;
+  }
+  .before .card h4 { margin: 0 0 2px; font-size: 12px; }
+  .before .card p { margin: 0; font-size: 11px; color: var(--c-text3); }
+  .before .statusbar {
+    height: 26px; padding: 0 8px; gap: 8px; background: var(--c-win);
+    border-top: 1px solid var(--c-stroke); font-size: 12px; color: var(--c-text2);
+  }
+  .before .sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+
+  /* ---------- Fluent 加强 ---------- */
+  .after .window {
+    background:
+      radial-gradient(1200px 400px at 10% -10%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 60%),
+      var(--f-win);
+    color: var(--f-text1); border-color: var(--f-stroke-strong);
+  }
+  .after .menubar {
+    height: 40px; padding: 0 0 0 10px;
+    background: var(--f-mica);
+    border-bottom: 1px solid var(--f-stroke);
+    gap: 2px;
+  }
+  .after .app-mark {
+    width: 20px; height: 20px; margin-right: 6px; border-radius: 5px;
+    background: var(--accent); color: var(--accent-text);
+    display: grid; place-items: center; font-size: 11px; font-weight: 700;
+  }
+  .after .mb-item {
+    height: 28px; padding: 0 11px; font-size: 13px; color: var(--f-text2);
+  }
+  .after .mb-item:hover { background: rgba(128,128,128,.14); color: var(--f-text1); }
+  .after .caption i { width: 46px; font-size: 11px; }
+  .after .caption i:hover { background: rgba(128,128,128,.12); }
+  .after .caption i.close:hover { background: #c42b1c; color: #fff; }
+
+  .after .nav {
+    width: 248px; padding: 12px 10px;
+    background: var(--f-layer);
+    border-right: 1px solid var(--f-stroke);
+    backdrop-filter: none;
+  }
+  .after .search {
+    height: 32px; margin-bottom: 12px; padding: 0 10px; border-radius: var(--r4);
+    background: var(--f-card); border: 1px solid var(--f-stroke);
+    color: var(--f-text3); font-size: 13px; display: flex; align-items: center; gap: 8px;
+  }
+  .after .cap {
+    font-size: 11px; font-weight: 600; color: var(--f-text3);
+    padding: 4px 10px 8px; letter-spacing: .08em;
+  }
+  .after .tree {
+    height: 40px; border-radius: var(--r4); display: flex; align-items: center; gap: 10px;
+    padding: 0 10px 0 12px; font-size: 14px; color: var(--f-text2); position: relative;
+    margin-bottom: 2px;
+  }
+  .after .tree:hover { background: rgba(128,128,128,.1); }
+  .after .tree.on {
+    background: var(--accent-soft); color: var(--f-text1); font-weight: 600;
+  }
+  .after .tree.on::before {
+    content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px;
+    border-radius: 2px; background: var(--accent);
+  }
+  .after .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--success);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent);
+  }
+  .after .dot.off { background: var(--f-text3); box-shadow: none; }
+
+  .after .tabs {
+    height: 36px; margin: 8px 8px 0; padding: 0 4px;
+    background: var(--f-layer); border: 1px solid var(--f-stroke);
+    border-radius: var(--r8) var(--r8) 0 0; border-bottom: 0;
+  }
+  .after .tab {
+    padding: 0 14px; font-size: 13px; color: var(--f-text2); height: 100%;
+  }
+  .after .tab.on { color: var(--f-text1); font-weight: 600; }
+  .after .tab-ind {
+    position: absolute; bottom: 0; height: 3px; border-radius: 3px 3px 0 0;
+    background: var(--accent); transition: left .22s ease-out, width .22s ease-out;
+  }
+  .after .tab-add {
+    width: 32px; height: 28px; margin: 4px; border-radius: var(--r4); color: var(--f-text2); font-size: 16px;
+  }
+  .after .tab-add:hover { background: rgba(128,128,128,.12); }
+
+  .after .workspace {
+    margin: 0 8px 8px; border: 1px solid var(--f-stroke); border-radius: 0 0 var(--r8) var(--r8);
+    overflow: hidden; background: var(--f-mica);
+  }
+  .after .term {
+    flex: 1; margin: 0; background: var(--f-term); color: #d4d4d4;
+    font-family: var(--mono); font-size: 13px; line-height: 18px; padding: 14px 16px;
+  }
+  .after .sftp { flex: 1; display: flex; gap: 0; background: transparent; padding: 8px; }
+  .after .pane {
+    flex: 1; min-width: 0; display: flex; flex-direction: column;
+    background: var(--f-card); border: 1px solid var(--f-stroke); border-radius: var(--r8);
+    overflow: hidden;
+  }
+  .after .sftp-gap {
+    width: 8px; flex: 0 0 8px; position: relative; cursor: col-resize;
+  }
+  .after .sftp-gap::after {
+    content: ""; position: absolute; left: 3px; top: 20%; bottom: 20%; width: 2px;
+    border-radius: 1px; background: var(--f-stroke-strong); opacity: .7;
+  }
+  .after .pane-head {
+    height: 40px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 12px;
+    border-bottom: 1px solid var(--f-stroke);
+  }
+  .after .pane-title {
+    font-size: 12px; font-weight: 600; color: var(--f-text3); margin-right: 4px; min-width: 36px;
+  }
+  .after .crumb {
+    flex: 1; height: 28px; display: flex; align-items: center; gap: 2px; padding: 0 6px;
+    border-radius: var(--r4); background: rgba(128,128,128,.08); border: 1px solid transparent;
+    font-size: 12px; color: var(--f-text2); overflow: hidden;
+  }
+  .after .crumb:hover { border-color: var(--f-stroke); }
+  .after .crumb .segm {
+    padding: 2px 6px; border-radius: 3px; white-space: nowrap;
+  }
+  .after .crumb .segm:hover { background: rgba(128,128,128,.14); color: var(--f-text1); }
+  .after .crumb .sep { opacity: .4; padding: 0 1px; }
+  .after .ico {
+    width: 28px; height: 28px; border-radius: var(--r4); display: grid; place-items: center;
+    color: var(--f-text2); font-size: 13px;
+  }
+  .after .ico:hover { background: rgba(128,128,128,.12); color: var(--f-text1); }
+  .after .cols {
+    height: 28px; display: grid; grid-template-columns: 1fr 72px 88px; align-items: center;
+    padding: 0 12px; font-size: 11px; font-weight: 600; color: var(--f-text3);
+    border-bottom: 1px solid var(--f-stroke);
+  }
+  .after .row {
+    height: 32px; display: grid; grid-template-columns: 1fr 72px 88px; align-items: center;
+    padding: 0 12px; font-size: 13px; color: var(--f-text2); border-radius: 0;
+  }
+  .after .row:hover { background: rgba(128,128,128,.08); }
+  .after .row.on {
+    background: var(--accent-soft); color: var(--f-text1);
+  }
+  .after .row .nm { display: flex; gap: 8px; align-items: center; overflow: hidden; }
+  .after .row .nm span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .after .row .meta { font-size: 12px; color: var(--f-text3); font-variant-numeric: tabular-nums; }
+  .after .foot {
+    height: 26px; padding: 0 12px; font-size: 11px; color: var(--f-text3);
+    border-top: 1px solid var(--f-stroke); display: flex; align-items: center; gap: 8px;
+    background: rgba(128,128,128,.04);
+  }
+
+  .after .dock {
+    width: 300px; margin: 8px 8px 8px 0;
+    background: var(--f-layer); border: 1px solid var(--f-stroke); border-radius: var(--r8);
+    overflow: hidden;
+  }
+  .after .pivot {
+    display: flex; padding: 8px 8px 0; gap: 2px;
+    background: transparent;
+  }
+  .after .pivot span {
+    flex: 1; text-align: center; height: 30px; line-height: 30px; font-size: 12px;
+    color: var(--f-text2); border-radius: var(--r4); font-weight: 500;
+  }
+  .after .pivot span.on {
+    background: var(--accent-soft); color: var(--accent); font-weight: 600;
+  }
+  .after .dhead {
+    height: 40px; padding: 0 14px; display: flex; align-items: center; justify-content: space-between;
+    font-size: 14px; font-weight: 600; border-bottom: 1px solid var(--f-stroke);
+  }
+  .after .dhead .ghost {
+    height: 28px; padding: 0 10px; border-radius: var(--r4); border: 0;
+    background: transparent; color: var(--accent); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .after .dhead .ghost:hover { background: var(--accent-soft); }
+  .after .dbody { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .after .card {
+    background: var(--f-card); border: 1px solid var(--f-stroke); border-radius: var(--r8);
+    padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .after .card h4 { margin: 0; font-size: 13px; font-weight: 600; }
+  .after .card p { margin: 0; font-size: 12px; color: var(--f-text3); }
+  .after .badge {
+    align-self: start; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+    background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success);
+  }
+  .after .badge.off { background: rgba(128,128,128,.15); color: var(--f-text3); }
+
+  .after .statusbar {
+    height: 28px; margin: 0 8px 8px; padding: 0 12px; gap: 10px;
+    background: var(--f-layer); border: 1px solid var(--f-stroke); border-radius: var(--r8);
+    font-size: 12px; color: var(--f-text2);
+  }
+  .after .sdot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--success);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 25%, transparent);
+  }
+  .after .chip {
+    height: 18px; padding: 0 8px; border-radius: 9px; font-size: 11px; font-weight: 600;
+    background: var(--accent-soft); color: var(--accent);
+  }
+  .sb-spacer { flex: 1; }
+
+  /* Settings（仅 after） */
+  .settings-overlay {
+    position: absolute; inset: 0; background: rgba(0,0,0,.55);
+    display: none; align-items: center; justify-content: center; z-index: 30;
+  }
+  .after { position: relative; }
+  html[data-panel="settings"] .after .settings-overlay { display: flex; }
+  .dialog {
+    width: min(780px, 94%); max-height: 88%; background: var(--f-elev); color: var(--f-text1);
+    border-radius: 8px; box-shadow: var(--shadow); display: flex; flex-direction: column;
+    overflow: hidden; border: 1px solid var(--f-stroke-strong);
+    animation: rise .22s ease-out;
+  }
+  html[data-theme="light"] .dialog { background: #fff; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .dlg-head { padding: 18px 20px 14px; border-bottom: 1px solid var(--f-stroke); display: flex; justify-content: space-between; }
+  .dlg-head h2 { margin: 0; font-size: 22px; font-weight: 600; }
+  .dlg-head p { margin: 4px 0 0; font-size: 12px; color: var(--f-text3); }
+  .dlg-x { width: 32px; height: 32px; border: 0; border-radius: 4px; background: transparent; color: inherit; font-size: 16px; cursor: pointer; }
+  .dlg-x:hover { background: rgba(128,128,128,.12); }
+  .dlg-body { display: flex; min-height: 400px; max-height: 460px; }
+  .dlg-nav { width: 200px; padding: 12px 8px; border-right: 1px solid var(--f-stroke); display: flex; flex-direction: column; gap: 2px; }
+  .nav-item {
+    height: 40px; border-radius: var(--r4); padding: 0 12px; display: flex; align-items: center;
+    font-size: 13px; color: var(--f-text2); position: relative;
+  }
+  .nav-item.on { background: var(--accent-soft); color: var(--f-text1); font-weight: 600; }
+  .nav-item.on::before {
+    content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px;
+    border-radius: 2px; background: var(--accent);
+  }
+  .dlg-content { flex: 1; padding: 16px 20px; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+  .settings-card {
+    background: var(--f-card); border: 1px solid var(--f-stroke); border-radius: var(--r8); padding: 14px 16px;
+  }
+  .settings-card h3 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+  .settings-card .hint { margin: 0 0 12px; font-size: 12px; color: var(--f-text3); }
+  .mode-row { display: flex; gap: 8px; }
+  .mode-card {
+    flex: 1; border-radius: var(--r8); border: 1px solid var(--f-stroke); padding: 10px;
+    background: rgba(128,128,128,.06); cursor: pointer; min-height: 72px;
+    display: flex; flex-direction: column; justify-content: space-between; gap: 8px;
+  }
+  .mode-card.on { border-color: var(--accent); background: var(--accent-soft); }
+  .mode-card .sw { height: 16px; border-radius: 3px; display: flex; overflow: hidden; }
+  .mode-card .sw i { flex: 1; }
+  .swatches { display: flex; gap: 8px; }
+  .swatches button {
+    width: 28px; height: 28px; border-radius: 999px; border: 2px solid transparent; cursor: pointer; padding: 0;
+  }
+  .swatches button.on { box-shadow: 0 0 0 2px var(--accent); border-color: var(--f-elev); }
+  .slider-row { display: flex; align-items: center; gap: 12px; }
+  .slider-row input { flex: 1; accent-color: var(--accent); }
+  .term-block {
+    display: flex; gap: 10px; align-items: center; padding-top: 4px;
+  }
+  .swatch-strip { display: flex; height: 18px; border-radius: 4px; overflow: hidden; flex: 1; border: 1px solid var(--f-stroke); }
+  .swatch-strip i { flex: 1; }
+
+  .note { max-width: 1360px; margin: 18px auto 0; font-size: 12px; opacity: .65; line-height: 1.55; }
+  .note code { font-family: var(--mono); font-size: 11px; background: rgba(128,128,128,.15); padding: 1px 5px; border-radius: 3px; }
+
+  @media (max-width: 1100px) {
+    html[data-view="compare"] .stage { grid-template-columns: 1fr; }
+    .callouts { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>YShell · Fluent 加强</h1>
+      <p>用法锁定（SFTP 双栏标签、右栏隧道/传输、菜单入口不变）。差别在层、选中态、标题栏分区、工作区内嵌表面与设置卡片。</p>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="视图">
+        <button type="button" data-view="before">现状</button>
+        <button type="button" data-view="after">加强后</button>
+        <button type="button" data-view="compare" aria-pressed="true">并排</button>
+      </div>
+      <div class="seg" role="group" aria-label="工作区">
+        <button type="button" data-ws="terminal">终端</button>
+        <button type="button" data-ws="sftp" aria-pressed="true">SFTP</button>
+      </div>
+      <div class="seg" role="group" aria-label="明暗">
+        <button type="button" data-theme="dark" aria-pressed="true">深色</button>
+        <button type="button" data-theme="light">浅色</button>
+      </div>
+      <div class="acc">
+        <button type="button" data-accent="blue" style="background:#60CDFF" aria-pressed="true" title="蓝"></button>
+        <button type="button" data-accent="teal" style="background:#4CC2C4" title="青"></button>
+        <button type="button" data-accent="purple" style="background:#B199D9" title="紫"></button>
+        <button type="button" data-accent="green" style="background:#6CCB5F" title="绿"></button>
+      </div>
+      <label class="opacity-ctrl">表面透明度 <input id="opacity" type="range" min="55" max="100" value="100"> <span id="op-label">100%</span></label>
+      <div class="seg">
+        <button type="button" data-panel="main" aria-pressed="true">主窗口</button>
+        <button type="button" data-panel="settings">设置</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="callouts">
+    <article><strong>层对比</strong><span>窗口底 / 侧栏层 / 内嵌卡片分离；现状几乎同色平铺。</span></article>
+    <article><strong>导航选中</strong><span>40px 行 + accent 软底 + 左边条；不是灰底细条。</span></article>
+    <article><strong>工作区内嵌</strong><span>标签+内容+状态形成「岛」；SFTP 两栏各自成卡。</span></article>
+    <article><strong>设置卡片</strong><span>Appearance 内分区卡片：模式 / 强调色 / 透明度 / 终端配色，导航不拆。</span></article>
+  </section>
+
+  <div class="stage">
+    <!-- ========== 现状 ========== -->
+    <div class="shot-before before">
+      <p class="shot-label">现状 · 平铺弱层级</p>
+      <div class="window">
+        <div class="menubar">
+          <span class="mb-item">文件</span><span class="mb-item">编辑</span><span class="mb-item">查看</span>
+          <span class="mb-item">会话</span><span class="mb-item">工具</span><span class="mb-item">帮助</span>
+          <span class="mb-spacer"></span>
+          <div class="caption"><i>—</i><i>□</i><i>×</i></div>
+        </div>
+        <div class="body">
+          <aside class="nav">
+            <div class="search">搜索会话…</div>
+            <div class="cap">SAVED</div>
+            <div class="tree on"><span class="dot"></span>prod-db</div>
+            <div class="tree"><span class="dot off"></span>bastion</div>
+          </aside>
+          <section class="main">
+            <div class="tabs">
+              <div class="tab ws-term-tab">prod-db</div>
+              <div class="tab on ws-sftp-tab">SFTP · prod-db</div>
+              <div class="tab-add">+</div>
+            </div>
+            <div class="workspace">
+              <div class="ws-fill">
+                <pre class="term ws-term">user@host:~$ htop</pre>
+                <div class="sftp ws-sftp">
+                  <div class="pane">
+                    <div class="crumb"><span class="segm">C:</span><span class="segm">Users</span><span class="segm">projects</span></div>
+                    <div class="cols"><span>名称</span><span>大小</span><span>修改</span></div>
+                    <div class="row">../</div>
+                    <div class="row">docs/</div>
+                    <div class="row on">readme.md</div>
+                    <div class="foot">本地 · 3</div>
+                  </div>
+                  <div class="pane">
+                    <div class="crumb"><span class="segm">/</span><span class="segm">home</span><span class="segm">user</span></div>
+                    <div class="cols"><span>名称</span><span>大小</span><span>修改</span></div>
+                    <div class="row">../</div>
+                    <div class="row">uploads/</div>
+                    <div class="row on">app.log</div>
+                    <div class="foot">远程 · 已连接</div>
+                  </div>
+                </div>
+              </div>
+              <aside class="dock">
+                <div class="pivot"><span class="on">隧道</span><span>传输</span><span>信息</span></div>
+                <div class="dhead">端口转发</div>
+                <div class="dbody">
+                  <div class="card"><h4>3306 → localhost:3306</h4><p>Local · 运行中</p></div>
+                  <div class="card"><h4>8080 → 127.0.0.1:80</h4><p>Local · 已停止</p></div>
+                </div>
+              </aside>
+            </div>
+            <div class="statusbar">
+              <span class="sdot"></span><span>Connected · bastion:22</span>
+              <span class="sb-spacer"></span><span>80×24</span>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== Fluent 加强 ========== -->
+    <div class="shot-after after">
+      <p class="shot-label">Fluent 加强 · 同用法，强层级</p>
+      <div class="window">
+        <div class="menubar">
+          <div class="app-mark">Y</div>
+          <span class="mb-item">文件</span><span class="mb-item">编辑</span><span class="mb-item">查看</span>
+          <span class="mb-item">会话</span><span class="mb-item">工具</span><span class="mb-item">帮助</span>
+          <span class="mb-spacer"></span>
+          <div class="caption"><i>—</i><i>□</i><i>×</i></div>
+        </div>
+        <div class="body">
+          <aside class="nav">
+            <div class="search">⌕ 搜索会话…</div>
+            <div class="cap">SAVED</div>
+            <div class="tree on"><span class="dot"></span>prod-db</div>
+            <div class="tree"><span class="dot off"></span>bastion</div>
+          </aside>
+          <section class="main">
+            <div class="tabs" id="tabs-after">
+              <div class="tab ws-term-tab">prod-db</div>
+              <div class="tab on ws-sftp-tab">SFTP · prod-db</div>
+              <div class="tab-add" title="新建标签 Ctrl+T">+</div>
+              <div class="tab-ind" id="tab-ind"></div>
+            </div>
+            <div class="workspace">
+              <div class="ws-fill">
+                <pre class="term ws-term"><span style="color:#6ccb5f">user@host</span>:<span style="color:var(--accent)">~</span>$ htop
+<span style="opacity:.5"># 终端标签 · 内嵌表面</span></pre>
+                <div class="sftp ws-sftp">
+                  <div class="pane">
+                    <div class="pane-head">
+                      <span class="pane-title">本地</span>
+                      <div class="crumb">
+                        <span class="segm">C:</span><span class="sep">›</span>
+                        <span class="segm">Users</span><span class="sep">›</span>
+                        <span class="segm">projects</span>
+                      </div>
+                      <span class="ico" title="刷新">↻</span>
+                      <span class="ico" title="更多">⋯</span>
+                    </div>
+                    <div class="cols"><span>名称</span><span>大小</span><span>修改</span></div>
+                    <div class="row"><div class="nm">📁 <span>..</span></div><span class="meta">—</span><span class="meta"></span></div>
+                    <div class="row"><div class="nm">📁 <span>docs</span></div><span class="meta">—</span><span class="meta">今天</span></div>
+                    <div class="row on"><div class="nm">📄 <span>readme.md</span></div><span class="meta">4 KB</span><span class="meta">昨天</span></div>
+                    <div class="foot">3 项 · 已选 1</div>
+                  </div>
+                  <div class="sftp-gap" title="拖动调整列宽"></div>
+                  <div class="pane">
+                    <div class="pane-head">
+                      <span class="pane-title">远程</span>
+                      <div class="crumb">
+                        <span class="segm">/</span><span class="sep">›</span>
+                        <span class="segm">home</span><span class="sep">›</span>
+                        <span class="segm">user</span>
+                      </div>
+                      <span class="ico" title="上传">⬆</span>
+                      <span class="ico" title="下载">⬇</span>
+                      <span class="ico" title="新建目录">+</span>
+                      <span class="ico" title="刷新">↻</span>
+                    </div>
+                    <div class="cols"><span>名称</span><span>大小</span><span>修改</span></div>
+                    <div class="row"><div class="nm">📁 <span>..</span></div><span class="meta">—</span><span class="meta"></span></div>
+                    <div class="row"><div class="nm">📁 <span>uploads</span></div><span class="meta">—</span><span class="meta">今天</span></div>
+                    <div class="row on"><div class="nm">📄 <span>app.log</span></div><span class="meta">128 KB</span><span class="meta">今天</span></div>
+                    <div class="foot">已连接 · 拖放跨栏传输</div>
+                  </div>
+                </div>
+              </div>
+              <aside class="dock">
+                <div class="pivot"><span class="on">隧道</span><span>传输</span><span>信息</span></div>
+                <div class="dhead">端口转发 <button type="button" class="ghost">添加</button></div>
+                <div class="dbody">
+                  <div class="card">
+                    <span class="badge">运行中</span>
+                    <h4>3306 → localhost:3306</h4>
+                    <p>Local forward</p>
+                  </div>
+                  <div class="card">
+                    <span class="badge off">已停止</span>
+                    <h4>8080 → 127.0.0.1:80</h4>
+                    <p>Local forward</p>
+                  </div>
+                </div>
+              </aside>
+            </div>
+            <div class="statusbar">
+              <span class="sdot"></span>
+              <span><b style="font-weight:600;color:var(--f-text1)">Connected</b> · bastion:22</span>
+              <span class="sb-spacer"></span>
+              <span class="chip">Recording</span>
+              <span>80×24</span>
+            </div>
+          </section>
+        </div>
+
+        <div class="settings-overlay">
+          <div class="dialog" role="dialog">
+            <div class="dlg-head">
+              <div>
+                <h2>设置</h2>
+                <p>导航项不变 · Appearance 内用卡片分区（界面 + 终端配色）</p>
+              </div>
+              <button type="button" class="dlg-x" id="close-settings">×</button>
+            </div>
+            <div class="dlg-body">
+              <nav class="dlg-nav">
+                <div class="nav-item">General</div>
+                <div class="nav-item on">Appearance</div>
+                <div class="nav-item">Terminal</div>
+                <div class="nav-item">SFTP</div>
+                <div class="nav-item">Security</div>
+              </nav>
+              <div class="dlg-content">
+                <div class="settings-card">
+                  <h3>主题模式</h3>
+                  <p class="hint">跟随系统 / 浅色 / 深色 · 即时生效</p>
+                  <div class="mode-row">
+                    <div class="mode-card" data-mode="system"><span>跟随系统</span><div class="sw"><i style="background:#1a1a1a"></i><i style="background:#f3f3f3"></i></div></div>
+                    <div class="mode-card" data-mode="light"><span>浅色</span><div class="sw"><i style="background:#f3f3f3"></i><i style="background:#fff"></i></div></div>
+                    <div class="mode-card on" data-mode="dark"><span>深色</span><div class="sw"><i style="background:#1a1a1a"></i><i style="background:#2b2b2b"></i></div></div>
+                  </div>
+                </div>
+                <div class="settings-card">
+                  <h3>强调色</h3>
+                  <p class="hint">WinUI 预设 · 选中软底与指示条跟随</p>
+                  <div class="swatches" id="dlg-acc">
+                    <button type="button" class="on" data-accent="blue" style="background:#60CDFF"></button>
+                    <button type="button" data-accent="teal" style="background:#4CC2C4"></button>
+                    <button type="button" data-accent="purple" style="background:#B199D9"></button>
+                    <button type="button" data-accent="green" style="background:#6CCB5F"></button>
+                  </div>
+                </div>
+                <div class="settings-card">
+                  <h3>表面透明度</h3>
+                  <p class="hint">侧栏 / 卡片相对窗口底 · 不透桌面</p>
+                  <div class="slider-row">
+                    <input type="range" id="dlg-opacity" min="55" max="100" value="100">
+                    <output id="dlg-op">100%</output>
+                  </div>
+                </div>
+                <div class="settings-card">
+                  <h3>终端配色</h3>
+                  <p class="hint">现有 Theme Manager 入口保留</p>
+                  <div class="term-block">
+                    <div class="swatch-strip">
+                      <i style="background:#0c0c0c"></i><i style="background:#c50f1f"></i>
+                      <i style="background:#13a10e"></i><i style="background:#c19c00"></i>
+                      <i style="background:#0037da"></i><i style="background:#881798"></i>
+                      <i style="background:#3a96dd"></i><i style="background:#cccccc"></i>
+                    </div>
+                    <button type="button" class="ghost" style="height:28px;padding:0 12px;border-radius:4px;border:0;background:var(--accent);color:var(--accent-text);font:inherit;font-size:12px;font-weight:600;">管理主题…</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note">
+    文件 <code>docs/product/ui-sketches/ui-fluent-strengthened-mockup.html</code> ·
+    SFTP：面包屑路径、列表首行 <code>..</code>、跨栏拖放语义与契约一致；右栏不是 SFTP。
+    并排对比应能一眼看出层与选中态差异；若仍觉得不够「换脸」，说明还要再拉开哪一块。
+  </p>
+
+<script>
+  const root = document.documentElement;
+  const tabs = document.getElementById('tabs-after');
+  const ind = document.getElementById('tab-ind');
+
+  function moveInd() {
+    if (!tabs || !ind) return;
+    const tab = tabs.querySelector('.tab.on');
+    if (!tab) return;
+    const r = tab.getBoundingClientRect(), p = tabs.getBoundingClientRect();
+    ind.style.left = (r.left - p.left + 12) + 'px';
+    ind.style.width = Math.max(28, r.width - 24) + 'px';
+  }
+
+  function setWs(mode) {
+    root.dataset.ws = mode;
+    document.querySelectorAll('[data-ws]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.ws === mode)));
+    document.querySelectorAll('.ws-term-tab').forEach(t => t.classList.toggle('on', mode === 'terminal'));
+    document.querySelectorAll('.ws-sftp-tab').forEach(t => t.classList.toggle('on', mode === 'sftp'));
+    moveInd();
+  }
+
+  document.querySelectorAll('[data-view]').forEach(btn => btn.addEventListener('click', () => {
+    root.dataset.view = btn.dataset.view;
+    root.dataset.panel = 'main';
+    document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+    document.querySelectorAll('[data-panel]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.panel === 'main')));
+    requestAnimationFrame(moveInd);
+  }));
+
+  document.querySelectorAll('[data-ws]').forEach(btn => btn.addEventListener('click', () => setWs(btn.dataset.ws)));
+  document.querySelectorAll('.ws-term-tab').forEach(t => t.addEventListener('click', () => setWs('terminal')));
+  document.querySelectorAll('.ws-sftp-tab').forEach(t => t.addEventListener('click', () => setWs('sftp')));
+
+  document.querySelectorAll('[data-theme]').forEach(btn => btn.addEventListener('click', () => {
+    root.dataset.theme = btn.dataset.theme;
+    document.querySelectorAll('[data-theme]').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+    document.querySelectorAll('.mode-card').forEach(c => c.classList.toggle('on', c.dataset.mode === btn.dataset.theme));
+  }));
+
+  function setAccent(id) {
+    root.dataset.accent = id;
+    document.querySelectorAll('.acc button, #dlg-acc button').forEach(b => {
+      const on = b.dataset.accent === id;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+  }
+  document.querySelectorAll('.acc button, #dlg-acc button').forEach(b => b.addEventListener('click', () => setAccent(b.dataset.accent)));
+
+  function setOp(v) {
+    const n = Math.max(55, Math.min(100, Number(v)));
+    root.style.setProperty('--surface-opacity', String(n / 100));
+    const label = n + '%';
+    document.getElementById('op-label').textContent = label;
+    document.getElementById('dlg-op').textContent = label;
+    document.getElementById('opacity').value = n;
+    document.getElementById('dlg-opacity').value = n;
+  }
+  document.getElementById('opacity').addEventListener('input', e => setOp(e.target.value));
+  document.getElementById('dlg-opacity').addEventListener('input', e => setOp(e.target.value));
+
+  document.querySelectorAll('[data-panel]').forEach(btn => btn.addEventListener('click', () => {
+    root.dataset.panel = btn.dataset.panel;
+    document.querySelectorAll('[data-panel]').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+    if (btn.dataset.panel === 'settings') root.dataset.view = 'after';
+  }));
+  document.getElementById('close-settings').addEventListener('click', () => {
+    root.dataset.panel = 'main';
+    document.querySelectorAll('[data-panel]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.panel === 'main')));
+  });
+
+  document.querySelectorAll('.mode-card').forEach(card => card.addEventListener('click', () => {
+    document.querySelectorAll('.mode-card').forEach(c => c.classList.toggle('on', c === card));
+    if (card.dataset.mode !== 'system') {
+      root.dataset.theme = card.dataset.mode;
+      document.querySelectorAll('[data-theme]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.theme === card.dataset.mode)));
+    }
+  }));
+
+  setWs('sftp');
+  window.addEventListener('resize', moveInd);
+</script>
+</body>
+</html>

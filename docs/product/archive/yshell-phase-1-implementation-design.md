@@ -1,5 +1,7 @@
 # YShell Phase 1 Implementation Design
 
+> **Archived (2026-10-29).** Early Milestone design. Current product scope: [`yshell-current-status.md`](./yshell-current-status.md). Doc index: [`README.md`](./README.md).
+
 This document defines the first implementation phase for turning YShell from an interactive mockup into a real usable product slice.
 
 This phase is intentionally narrow:

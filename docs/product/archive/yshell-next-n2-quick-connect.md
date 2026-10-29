@@ -1,6 +1,8 @@
 # N2 快速连接页（设计）
 
-状态：**已实现**（快速链接与"保存为会话…"入口已下线，见下方"变更记录"）；依赖：R2（runtime 模块化，接线落位）；时机：R2 后
+> **归档**：已验收。`new_tab_mode` 实现漂移见 [`yshell-current-status.md`](./yshell-current-status.md) §3。
+
+状态：**已完成（归档）**（快速链接与"保存为会话…"入口已下线，见下方"变更记录"）；依赖：R2
 关联决策：D11（`+` 默认打开快速连接页）、D12（历史默认开、上限 20、可关可清空）；需求 §3
 文件落位：新 `ui/pages/quick_connect.slint`；`ui/main_window.slint`（最小接线）；`ui/components/command_bar.slint`（移除连接输入）；`runtime/tabs.rs` + `runtime/sessions.rs` + `runtime/mod.rs`；`bootstrap.rs`（回调接线）；`translations`
 

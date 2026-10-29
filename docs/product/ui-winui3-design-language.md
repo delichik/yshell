@@ -1,8 +1,8 @@
 # YShell UI 设计规范 · WinUI 3 / Fluent 2
 
-状态：**设计已确认**（迭代 W0 完成，2026-09-26；五项决策见 §12）。本文件确定"长什么样、遵循什么规则"，实现按 §9 的 W1–W5 推进。
-上游：`docs/product/yshell-product-technical-spec.md` §5.10、`docs/product/ui-redesign-roadmap.md`
-配套视觉稿：`docs/product/ui-sketches/winui3-mockup.html`
+状态：**现行视觉规范**。产品范围见 [`yshell-current-status.md`](./yshell-current-status.md)。  
+上游历史：`archive/yshell-product-technical-spec.md`、`archive/ui-redesign-roadmap.md`。  
+配套视觉稿：`docs/product/ui-sketches/winui3-mockup.html`（若存在）。
 
 ---
 

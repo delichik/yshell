@@ -1,0 +1,915 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark" data-view="after" data-ws="sftp" style="--surface-opacity:1; --accent:#60cdff; --accent-text:#000;">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YShell · UI 现代化效果图</title>
+<style>
+  /* 对照稿：现状 vs 打磨后（布局 / 交互 / 配色 / 表面透明度）
+     token 对齐 docs/product/ui-winui3-design-language.md §3 */
+  :root {
+    --font-ui: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Noto Sans SC", system-ui, sans-serif;
+    --font-mono: "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace;
+    --r-control: 4px;
+    --r-card: 8px;
+    --window-bg: #202020;
+    --layer-fill: rgba(255,255,255, calc(.06 * var(--surface-opacity)));
+    --layer-stroke: rgba(255,255,255,.16);
+    --card-fill: rgba(255,255,255, calc(.05 * var(--surface-opacity)));
+    --card-stroke: rgba(255,255,255,.16);
+    --control-fill: rgba(255,255,255, calc(.06 * var(--surface-opacity)));
+    --control-hover: rgba(255,255,255, calc(.09 * var(--surface-opacity)));
+    --subtle-hover: rgba(255,255,255,.06);
+    --subtle-selected: rgba(255,255,255,.06);
+    --text-1: #ffffff;
+    --text-2: rgba(255,255,255,.786);
+    --text-3: rgba(255,255,255,.53);
+    --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+    --success: #6ccb5f;
+    --critical: #ff99a4;
+    --shadow: 0 12px 40px rgba(0,0,0,.5);
+    --scrim: rgba(0,0,0,.55);
+    --term-bg: #0c0c0c;
+    --term-fg: #cccccc;
+    --page-bg: #0e0f12;
+    --page-fg: #e8e8e8;
+  }
+  html[data-theme="light"] {
+    --window-bg: #f3f3f3;
+    --layer-fill: rgba(255,255,255, calc(.7 * var(--surface-opacity)));
+    --layer-stroke: rgba(0,0,0,.14);
+    --card-fill: rgba(255,255,255, calc(.7 * var(--surface-opacity)));
+    --card-stroke: rgba(0,0,0,.14);
+    --control-fill: rgba(255,255,255, calc(.7 * var(--surface-opacity)));
+    --control-hover: rgba(255,255,255, calc(.5 * var(--surface-opacity)));
+    --subtle-hover: rgba(0,0,0,.04);
+    --subtle-selected: rgba(0,0,0,.04);
+    --text-1: rgba(0,0,0,.894);
+    --text-2: rgba(0,0,0,.62);
+    --text-3: rgba(0,0,0,.45);
+    --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+    --success: #0f7b0f;
+    --critical: #c42b1c;
+    --shadow: 0 12px 40px rgba(0,0,0,.18);
+    --scrim: rgba(0,0,0,.3);
+    --term-bg: #fafafa;
+    --term-fg: #383a42;
+    --page-bg: #e5e5e5;
+    --page-fg: #1a1a1a;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 20px;
+    background: var(--page-bg);
+    color: var(--page-fg);
+    padding: 28px 24px 80px;
+  }
+
+  .top {
+    max-width: 1280px;
+    margin: 0 auto 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px 24px;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+  .top h1 { margin: 0; font-size: 22px; line-height: 28px; font-weight: 600; }
+  .top p { margin: 6px 0 0; font-size: 13px; opacity: .75; max-width: 52ch; }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    align-items: center;
+  }
+  .seg {
+    display: inline-flex;
+    padding: 2px;
+    gap: 2px;
+    background: rgba(128,128,128,.18);
+    border-radius: 6px;
+  }
+  .seg button {
+    appearance: none; border: 0; background: transparent; color: inherit;
+    font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 4px; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] {
+    background: #fff; color: #111; font-weight: 600;
+  }
+  html[data-theme="light"] .seg button[aria-pressed="true"] {
+    background: var(--accent); color: var(--accent-text);
+  }
+  .acc { display: flex; gap: 6px; align-items: center; }
+  .acc button {
+    width: 22px; height: 22px; border-radius: 6px; border: 1px solid rgba(128,128,128,.4);
+    padding: 0; cursor: pointer;
+  }
+  .acc button[aria-pressed="true"] { outline: 2px solid var(--page-fg); outline-offset: 2px; }
+  .opacity-ctrl {
+    display: flex; align-items: center; gap: 8px; font-size: 12px; opacity: .9;
+  }
+  .opacity-ctrl input { width: 110px; accent-color: var(--accent); }
+
+  .legend {
+    max-width: 1280px; margin: 0 auto 18px;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;
+  }
+  .legend article {
+    border: 1px solid rgba(128,128,128,.25);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: rgba(128,128,128,.08);
+  }
+  .legend strong { display: block; font-size: 13px; margin-bottom: 4px; }
+  .legend span { font-size: 12px; opacity: .75; }
+
+  .stage {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: grid;
+    gap: 20px;
+  }
+  html[data-view="compare"] .stage {
+    grid-template-columns: 1fr 1fr;
+  }
+  html[data-view="before"] .shot-after,
+  html[data-view="after"] .shot-before { display: none; }
+  html[data-view="compare"] .shot-before,
+  html[data-view="compare"] .shot-after { display: block; }
+
+  .shot-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    opacity: .7;
+    margin: 0 0 8px;
+  }
+
+  /* ---- Window chrome ---- */
+  .window {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.03), transparent 120px),
+      var(--window-bg);
+    border-radius: 8px;
+    border: 1px solid var(--layer-stroke);
+    box-shadow: var(--shadow);
+    color: var(--text-1);
+    height: 620px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    user-select: none;
+  }
+  .before .window {
+    background: var(--window-bg);
+  }
+
+  .menubar {
+    height: 32px; flex: 0 0 32px;
+    display: flex; align-items: center; gap: 2px;
+    padding: 0 4px 0 8px;
+    border-bottom: 1px solid var(--layer-stroke);
+  }
+  .mb-item {
+    height: 24px; padding: 0 10px; border-radius: var(--r-control);
+    display: inline-flex; align-items: center; font-size: 13px;
+  }
+  .mb-item:hover { background: var(--subtle-hover); }
+  .mb-spacer { flex: 1; }
+  .caption { display: flex; height: 100%; }
+  .caption i {
+    width: 46px; display: grid; place-items: center; font-style: normal; font-size: 10px; opacity: .8;
+  }
+
+  .body { flex: 1; min-height: 0; display: flex; }
+
+  .nav {
+    width: 240px; flex: 0 0 240px;
+    background: var(--layer-fill);
+    border-right: 1px solid var(--layer-stroke);
+    display: flex; flex-direction: column; padding: 8px;
+    gap: 4px;
+  }
+  .search {
+    height: 32px; border-radius: var(--r-control);
+    background: var(--control-fill);
+    border: 1px solid var(--card-stroke);
+    color: var(--text-3); padding: 0 10px;
+    display: flex; align-items: center; font-size: 13px; margin-bottom: 4px;
+  }
+  .caption-row {
+    font-size: 11px; color: var(--text-3); letter-spacing: .06em;
+    padding: 8px 8px 4px; font-weight: 600;
+  }
+  .tree-row {
+    height: 28px; border-radius: var(--r-control);
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 8px; font-size: 13px; color: var(--text-2);
+    position: relative;
+  }
+  .tree-row.selected {
+    background: var(--subtle-selected);
+    color: var(--text-1);
+  }
+  .tree-row.selected::before {
+    content: ""; position: absolute; left: 0; top: 6px; bottom: 6px;
+    width: 3px; border-radius: 2px; background: var(--accent);
+  }
+  .tree-row .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+  .tree-row .dot.off { background: var(--text-3); }
+
+  /* Empty state (after only) */
+  .empty {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    gap: 8px; padding: 16px; color: var(--text-2);
+  }
+  .empty .icon {
+    width: 48px; height: 48px; border-radius: 12px;
+    background: var(--accent-soft); color: var(--accent);
+    display: grid; place-items: center; font-size: 22px; margin-bottom: 4px;
+  }
+  .empty h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-1); }
+  .empty p { margin: 0; font-size: 12px; color: var(--text-3); max-width: 22ch; }
+  .empty .btn {
+    margin-top: 8px; height: 32px; padding: 0 14px; border-radius: var(--r-control);
+    border: 0; background: var(--accent); color: var(--accent-text);
+    font: inherit; font-weight: 600; cursor: pointer;
+  }
+  .before .empty { display: none; }
+  .before .tree-plain {
+    flex: 1; padding: 12px 8px; color: var(--text-3); font-size: 12px;
+  }
+  .after .tree-plain { display: none; }
+
+  .main {
+    flex: 1; min-width: 0; display: flex; flex-direction: column;
+    background: transparent;
+  }
+  .tabs {
+    height: 32px; flex: 0 0 32px;
+    display: flex; align-items: stretch;
+    border-bottom: 1px solid var(--layer-stroke);
+    background: var(--layer-fill);
+    position: relative;
+    padding-left: 4px;
+  }
+  .tab {
+    padding: 0 12px; display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--text-2); position: relative;
+  }
+  .tab.active { color: var(--text-1); }
+  .before .tab.active::after {
+    content: ""; position: absolute; left: 10px; right: 10px; bottom: 0;
+    height: 2px; background: var(--accent); opacity: .9;
+  }
+  .after .tab-indicator {
+    position: absolute; bottom: 0; left: 14px; width: 72px; height: 2px;
+    background: var(--accent); border-radius: 2px 2px 0 0;
+    transition: left .25s ease-out, width .25s ease-out;
+  }
+  .before .tab-indicator { display: none; }
+  .tab-add {
+    width: 28px; margin: 2px 4px; border-radius: var(--r-control);
+    display: grid; place-items: center; color: var(--text-2); font-size: 16px;
+  }
+  .tab-add:hover { background: var(--subtle-hover); }
+  .after .tab-add[data-tip]::after {
+    content: attr(data-tip);
+    position: absolute; top: 34px; left: 50%; transform: translateX(-50%);
+    background: #2c2c2c; color: #fff; font-size: 11px; padding: 4px 8px;
+    border-radius: 4px; white-space: nowrap; opacity: 0; pointer-events: none;
+    transition: opacity .15s;
+    z-index: 5;
+  }
+  html[data-theme="light"] .after .tab-add[data-tip]::after { background: #fff; color: #111; box-shadow: 0 4px 12px rgba(0,0,0,.15); }
+  .after .tab-add:hover::after { opacity: 1; }
+
+  .workspace {
+    flex: 1; min-height: 0; display: flex; padding: 0;
+  }
+  /* 工作区内容：终端标签 vs SFTP 标签（SFTP 是独立标签，不是右栏） */
+  .ws-fill { flex: 1; min-width: 0; min-height: 0; display: flex; }
+  html[data-ws="terminal"] .ws-sftp,
+  html[data-ws="sftp"] .ws-term { display: none !important; }
+
+  .term {
+    flex: 1; margin: 0; background: var(--term-bg); color: var(--term-fg);
+    font-family: var(--font-mono); font-size: 13px; line-height: 18px;
+    padding: 10px 12px; overflow: hidden;
+  }
+  .after .term {
+    margin: 6px; border-radius: var(--r-card);
+    border: 1px solid rgba(128,128,128,.12);
+  }
+  .term .g { color: #16c60c; }
+  .term .c { color: #3b78ff; }
+  .term .dim { opacity: .55; }
+
+  /* SFTP 标签：固定本地左 / 远程右双栏（交互契约 §9） */
+  .sftp-page {
+    flex: 1; min-width: 0; display: flex; background: var(--window-bg);
+  }
+  .sftp-pane {
+    flex: 1; min-width: 0; display: flex; flex-direction: column;
+    background: var(--layer-fill);
+  }
+  .sftp-pane + .sftp-pane { border-left: 1px solid var(--layer-stroke); }
+  .sftp-split {
+    width: 4px; flex: 0 0 4px; background: transparent; cursor: col-resize;
+    position: relative;
+  }
+  .sftp-split::after {
+    content: ""; position: absolute; inset: 0; background: var(--layer-stroke);
+  }
+  .sftp-toolbar {
+    height: 36px; flex: 0 0 36px;
+    display: flex; align-items: center; gap: 4px;
+    padding: 0 8px; border-bottom: 1px solid var(--layer-stroke);
+  }
+  .sftp-toolbar .ico {
+    width: 28px; height: 28px; border-radius: var(--r-control);
+    display: grid; place-items: center; font-size: 12px; color: var(--text-2);
+  }
+  .sftp-toolbar .ico:hover { background: var(--subtle-hover); }
+  .sftp-path {
+    flex: 1; height: 28px; border-radius: var(--r-control);
+    background: var(--control-fill); border: 1px solid var(--card-stroke);
+    padding: 0 8px; font-size: 12px; color: var(--text-2);
+    display: flex; align-items: center; font-family: var(--font-mono);
+    overflow: hidden; white-space: nowrap;
+  }
+  .sftp-cols {
+    height: 28px; flex: 0 0 28px;
+    display: grid; grid-template-columns: 1fr 72px 96px;
+    align-items: center; padding: 0 8px;
+    border-bottom: 1px solid var(--layer-stroke);
+    font-size: 11px; color: var(--text-3); font-weight: 600;
+  }
+  .sftp-list { flex: 1; overflow: hidden; padding: 4px 0; }
+  .sftp-row {
+    height: 32px; display: grid; grid-template-columns: 1fr 72px 96px;
+    align-items: center; padding: 0 8px; font-size: 13px; color: var(--text-2);
+  }
+  .sftp-row:hover { background: var(--subtle-hover); }
+  .sftp-row.sel { background: var(--subtle-selected); color: var(--text-1); }
+  .sftp-row .name { display: flex; align-items: center; gap: 8px; overflow: hidden; }
+  .sftp-row .name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sftp-row .meta { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .sftp-foot {
+    height: 24px; flex: 0 0 24px; padding: 0 8px;
+    display: flex; align-items: center; font-size: 11px; color: var(--text-3);
+    border-top: 1px solid var(--layer-stroke);
+  }
+
+  /* 右栏：隧道 / 传输 / 会话信息 — 不是 SFTP */
+  .dock {
+    width: 320px; flex: 0 0 320px;
+    background: var(--layer-fill);
+    border-left: 1px solid var(--layer-stroke);
+    display: flex; flex-direction: column;
+  }
+  .before .dock { width: 340px; flex-basis: 340px; }
+  .dock-head {
+    height: 44px; display: flex; align-items: center; gap: 8px;
+    padding: 0 12px; border-bottom: 1px solid var(--layer-stroke);
+    font-weight: 600; font-size: 13px;
+  }
+  .dock-body { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .card {
+    background: var(--card-fill);
+    border: 1px solid var(--card-stroke);
+    border-radius: var(--r-card);
+    padding: 10px 12px;
+  }
+  .card h4 { margin: 0 0 4px; font-size: 13px; }
+  .card p { margin: 0; font-size: 12px; color: var(--text-3); }
+  .pivot {
+    display: flex; gap: 2px; padding: 8px 8px 0;
+  }
+  .pivot span {
+    flex: 1; text-align: center; height: 28px; line-height: 28px;
+    border-radius: var(--r-control); font-size: 12px; color: var(--text-2);
+  }
+  .pivot span.on {
+    background: var(--subtle-selected); color: var(--text-1);
+    box-shadow: inset 0 -2px 0 var(--accent);
+  }
+
+  .statusbar {
+    height: 26px; flex: 0 0 26px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 10px; border-top: 1px solid var(--layer-stroke);
+    background: var(--layer-fill); font-size: 12px; color: var(--text-2);
+  }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--success);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 25%, transparent);
+  }
+  .chip {
+    height: 18px; padding: 0 8px; border-radius: 9px;
+    background: var(--subtle-selected); color: var(--text-2); font-size: 11px;
+  }
+  .after .chip.accent { background: var(--accent-soft); color: var(--accent); }
+  .sb-spacer { flex: 1; }
+
+  /* Settings overlay (after) */
+  .settings-overlay {
+    position: absolute; inset: 0; background: var(--scrim);
+    display: none; align-items: center; justify-content: center;
+    z-index: 20;
+  }
+  html[data-panel="settings"] .after .settings-overlay { display: flex; }
+  .dialog {
+    width: min(760px, 92%);
+    max-height: 86%;
+    background: #2c2c2c;
+    color: #fff;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    animation: rise .25s ease-out;
+  }
+  html[data-theme="light"] .dialog { background: #fff; color: rgba(0,0,0,.9); }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+  .dlg-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    padding: 16px 20px 12px; border-bottom: 1px solid rgba(128,128,128,.2);
+  }
+  .dlg-head h2 { margin: 0; font-size: 20px; }
+  .dlg-head p { margin: 4px 0 0; font-size: 12px; opacity: .65; }
+  .dlg-x {
+    width: 32px; height: 32px; border: 0; border-radius: 4px;
+    background: transparent; color: inherit; cursor: pointer; font-size: 16px;
+  }
+  .dlg-x:hover { background: rgba(128,128,128,.15); }
+  .dlg-body { display: flex; min-height: 360px; max-height: 420px; }
+  .dlg-nav {
+    width: 200px; padding: 12px 8px; border-right: 1px solid rgba(128,128,128,.2);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .nav-item {
+    height: 36px; border-radius: 4px; padding: 0 12px;
+    display: flex; align-items: center; font-size: 13px; color: inherit; opacity: .75;
+  }
+  .nav-item.on {
+    opacity: 1; background: var(--subtle-selected);
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+  .dlg-content { flex: 1; padding: 16px 20px; overflow: auto; }
+  .field { margin-bottom: 18px; }
+  .field label { display: block; font-size: 12px; opacity: .7; margin-bottom: 8px; }
+  .mode-row { display: flex; gap: 8px; }
+  .mode-card {
+    flex: 1; height: 64px; border-radius: 8px; border: 1px solid rgba(128,128,128,.3);
+    background: rgba(128,128,128,.08); cursor: pointer; padding: 10px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .mode-card.on { border-color: var(--accent); background: var(--accent-soft); }
+  .mode-card .sw { height: 18px; border-radius: 3px; display: flex; overflow: hidden; }
+  .mode-card .sw i { flex: 1; }
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .swatches button {
+    width: 28px; height: 28px; border-radius: 999px; border: 2px solid transparent;
+    cursor: pointer; padding: 0;
+  }
+  .swatches button.on { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
+  html[data-theme="light"] .swatches button.on { border-color: #111; }
+  .slider-row { display: flex; align-items: center; gap: 12px; }
+  .slider-row input { flex: 1; accent-color: var(--accent); }
+  .slider-row output { width: 3ch; font-variant-numeric: tabular-nums; font-size: 13px; }
+  .preview-strip {
+    height: 56px; border-radius: 8px; border: 1px solid rgba(128,128,128,.25);
+    background: var(--window-bg); display: flex; overflow: hidden; margin-top: 8px;
+  }
+  .preview-strip .a { flex: 1; background: var(--layer-fill); }
+  .preview-strip .b { flex: 1; background: var(--card-fill); border-left: 1px solid var(--card-stroke); }
+  .preview-strip .c {
+    flex: 1.2; background: var(--term-bg); border-left: 1px solid var(--card-stroke);
+    font-family: var(--font-mono); font-size: 11px; color: var(--term-fg);
+    display: flex; align-items: center; padding: 0 10px;
+  }
+
+  .note {
+    max-width: 1280px; margin: 24px auto 0;
+    font-size: 12px; opacity: .65; line-height: 1.5;
+  }
+  .note code {
+    font-family: var(--font-mono); font-size: 11px;
+    background: rgba(128,128,128,.15); padding: 1px 5px; border-radius: 3px;
+  }
+
+  @media (max-width: 980px) {
+    html[data-view="compare"] .stage { grid-template-columns: 1fr; }
+    .nav { width: 180px; flex-basis: 180px; }
+    .dock, .before .dock { width: 240px; flex-basis: 240px; }
+  }
+</style>
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>YShell · UI 现代化效果图</h1>
+      <p>只改呈现：间距、层级、指示条、外观可控。SFTP / 标签 / 菜单入口与交互契约一致，不另造用法。</p>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="对比视图">
+        <button type="button" data-view="before">现状</button>
+        <button type="button" data-view="after" aria-pressed="true">打磨后</button>
+        <button type="button" data-view="compare">并排</button>
+      </div>
+      <div class="seg" role="group" aria-label="工作区标签">
+        <button type="button" data-ws="terminal">终端标签</button>
+        <button type="button" data-ws="sftp" aria-pressed="true">SFTP 标签</button>
+      </div>
+      <div class="seg" role="group" aria-label="明暗">
+        <button type="button" data-theme="dark" aria-pressed="true">深色</button>
+        <button type="button" data-theme="light">浅色</button>
+      </div>
+      <div class="acc" aria-label="强调色">
+        <button type="button" style="background:#60cdff" data-accent="#60cdff" data-accent-text="#000" aria-pressed="true" title="蓝"></button>
+        <button type="button" style="background:#4cc2c4" data-accent="#4cc2c4" data-accent-text="#000" title="青"></button>
+        <button type="button" style="background:#b199d9" data-accent="#b199d9" data-accent-text="#000" title="紫"></button>
+        <button type="button" style="background:#6ccb5f" data-accent="#6ccb5f" data-accent-text="#000" title="绿"></button>
+        <button type="button" style="background:#f4a06a" data-accent="#f4a06a" data-accent-text="#000" title="橙"></button>
+        <button type="button" style="background:#e38fe0" data-accent="#e38fe0" data-accent-text="#000" title="洋红"></button>
+      </div>
+      <label class="opacity-ctrl">
+        表面透明度
+        <input type="range" id="opacity" min="55" max="100" value="100">
+        <span id="opacity-label">100%</span>
+      </label>
+      <div class="seg" role="group" aria-label="面板">
+        <button type="button" data-panel="main" aria-pressed="true">主窗口</button>
+        <button type="button" data-panel="settings">设置外观</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="legend">
+    <article><strong>SFTP 用法不变</strong><span>独立工作区标签；本地左 / 远程右；传输在右栏 Transfers，不嵌在 SFTP 页。</span></article>
+    <article><strong>标签指示条</strong><span>统一指示条平移，入口仍是点标签 / Ctrl+T / 中键关。</span></article>
+    <article><strong>右栏密度</strong><span>隧道 / 传输等面板：宽与内边距对齐 token，不改面板职责。</span></article>
+    <article><strong>应用外观</strong><span>在现有 Appearance 里加明暗 / 强调色 / 表面透明度，不拆导航、不改新建会话入口。</span></article>
+  </section>
+
+  <div class="stage">
+    <!-- BEFORE -->
+    <div class="shot-before before">
+      <p class="shot-label">现状 · 可用但偏「控件堆砌」</p>
+      <div class="window" aria-label="现状主窗口示意">
+        <div class="menubar">
+          <span class="mb-item">文件</span><span class="mb-item">编辑</span><span class="mb-item">查看</span>
+          <span class="mb-item">会话</span><span class="mb-item">工具</span><span class="mb-item">帮助</span>
+          <span class="mb-spacer"></span>
+          <div class="caption"><i>—</i><i>□</i><i>×</i></div>
+        </div>
+        <div class="body">
+          <aside class="nav">
+            <div class="search">搜索会话…</div>
+            <div class="caption-row">SAVED</div>
+            <div class="tree-row selected"><span class="dot"></span>prod-db</div>
+            <div class="tree-row"><span class="dot off"></span>bastion</div>
+            <div class="tree-plain" style="flex:0;padding-top:16px;color:var(--text-3);font-size:12px;">空态仍是 caption 文案<br>（入口：文件 → 新建会话）</div>
+          </aside>
+          <section class="main">
+            <div class="tabs">
+              <div class="tab ws-term-tab">prod-db</div>
+              <div class="tab active ws-sftp-tab">SFTP · prod-db</div>
+              <div class="tab-add">+</div>
+            </div>
+            <div class="workspace">
+              <div class="ws-fill">
+                <pre class="term ws-term"><span class="g">user@host</span>:<span class="c">~</span>$ htop
+<span class="dim"># 终端标签内容区</span></pre>
+                <div class="sftp-page ws-sftp" aria-label="SFTP 双栏">
+                  <div class="sftp-pane">
+                    <div class="sftp-toolbar">
+                      <span class="ico" title="上级">↑</span>
+                      <span class="ico" title="刷新">↻</span>
+                      <div class="sftp-path">C:\Users\delichik\projects</div>
+                    </div>
+                    <div class="sftp-cols"><span>名称</span><span>大小</span><span>修改</span></div>
+                    <div class="sftp-list">
+                      <div class="sftp-row"><div class="name">📁 <span>docs/</span></div><span class="meta">—</span><span class="meta">今天</span></div>
+                      <div class="sftp-row sel"><div class="name">📄 <span>readme.md</span></div><span class="meta">4 KB</span><span class="meta">昨天</span></div>
+                      <div class="sftp-row"><div class="name">📄 <span>build.ps1</span></div><span class="meta">2 KB</span><span class="meta">周一</span></div>
+                    </div>
+                    <div class="sftp-foot">本地 · 3 项</div>
+                  </div>
+                  <div class="sftp-split" title="拖动调整列宽"></div>
+                  <div class="sftp-pane">
+                    <div class="sftp-toolbar">
+                      <span class="ico" title="上级">↑</span>
+                      <span class="ico" title="刷新">↻</span>
+                      <div class="sftp-path">/home/user</div>
+                      <span class="ico" title="上传">⬆</span>
+                      <span class="ico" title="下载">⬇</span>
+                      <span class="ico" title="新建目录">+</span>
+                    </div>
+                    <div class="sftp-cols"><span>名称</span><span>大小</span><span>修改</span></div>
+                    <div class="sftp-list">
+                      <div class="sftp-row"><div class="name">📁 <span>uploads/</span></div><span class="meta">—</span><span class="meta">今天</span></div>
+                      <div class="sftp-row"><div class="name">📁 <span>.config/</span></div><span class="meta">—</span><span class="meta">3月</span></div>
+                      <div class="sftp-row sel"><div class="name">📄 <span>app.log</span></div><span class="meta">128 KB</span><span class="meta">今天</span></div>
+                    </div>
+                    <div class="sftp-foot">远程 · 已连接</div>
+                  </div>
+                </div>
+              </div>
+              <aside class="dock">
+                <div class="pivot">
+                  <span class="on">隧道</span><span>传输</span><span>信息</span>
+                </div>
+                <div class="dock-head">端口转发</div>
+                <div class="dock-body">
+                  <div class="card"><h4>3306 → localhost:3306</h4><p>Local · 运行中</p></div>
+                  <div class="card"><h4>8080 → 127.0.0.1:80</h4><p>Local · 已停止</p></div>
+                </div>
+              </aside>
+            </div>
+            <div class="statusbar">
+              <span class="status-dot"></span>
+              <span>Connected · bastion:22</span>
+              <span class="sb-spacer"></span>
+              <span class="chip">LOG</span>
+              <span>80×24</span>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- AFTER -->
+    <div class="shot-after after">
+      <p class="shot-label">打磨后 · 同一套用法，更清晰的层级与反馈</p>
+      <div class="window" aria-label="打磨后主窗口示意">
+        <div class="menubar">
+          <span class="mb-item">文件</span><span class="mb-item">编辑</span><span class="mb-item">查看</span>
+          <span class="mb-item">会话</span><span class="mb-item">工具</span><span class="mb-item">帮助</span>
+          <span class="mb-spacer"></span>
+          <div class="caption"><i>—</i><i>□</i><i>×</i></div>
+        </div>
+        <div class="body">
+          <aside class="nav">
+            <div class="search">搜索会话…</div>
+            <div class="caption-row">SAVED</div>
+            <div class="tree-row selected"><span class="dot"></span>prod-db</div>
+            <div class="tree-row"><span class="dot off"></span>bastion</div>
+          </aside>
+          <section class="main">
+            <div class="tabs" id="tabs-after">
+              <div class="tab ws-term-tab">prod-db</div>
+              <div class="tab active ws-sftp-tab">SFTP · prod-db</div>
+              <div class="tab-add" data-tip="新建标签 (Ctrl+T)" style="position:relative">+</div>
+              <div class="tab-indicator" id="tab-ind"></div>
+            </div>
+            <div class="workspace">
+              <div class="ws-fill">
+                <pre class="term ws-term"><span class="g">user@host</span>:<span class="c">~</span>$ htop
+<span class="dim"># 终端标签 · 圆角/描边仅视觉</span>
+<span class="dim"># 标签指示条可滑动</span></pre>
+                <div class="sftp-page ws-sftp" aria-label="SFTP 双栏（打磨）">
+                  <div class="sftp-pane">
+                    <div class="sftp-toolbar">
+                      <span class="ico" title="上级">↑</span>
+                      <span class="ico" title="刷新">↻</span>
+                      <div class="sftp-path">C:\Users\delichik\projects</div>
+                    </div>
+                    <div class="sftp-cols"><span>名称 ↑</span><span>大小</span><span>修改</span></div>
+                    <div class="sftp-list">
+                      <div class="sftp-row"><div class="name">📁 <span>docs/</span></div><span class="meta">—</span><span class="meta">今天</span></div>
+                      <div class="sftp-row sel"><div class="name">📄 <span>readme.md</span></div><span class="meta">4 KB</span><span class="meta">昨天</span></div>
+                      <div class="sftp-row"><div class="name">📄 <span>build.ps1</span></div><span class="meta">2 KB</span><span class="meta">周一</span></div>
+                    </div>
+                    <div class="sftp-foot">本地 · 3 项 · 已选 1</div>
+                  </div>
+                  <div class="sftp-split" title="拖动调整列宽"></div>
+                  <div class="sftp-pane">
+                    <div class="sftp-toolbar">
+                      <span class="ico" title="上级">↑</span>
+                      <span class="ico" title="刷新">↻</span>
+                      <div class="sftp-path">/home/user</div>
+                      <span class="ico" title="上传">⬆</span>
+                      <span class="ico" title="下载">⬇</span>
+                      <span class="ico" title="新建目录">+</span>
+                    </div>
+                    <div class="sftp-cols"><span>名称</span><span>大小</span><span>修改</span></div>
+                    <div class="sftp-list">
+                      <div class="sftp-row"><div class="name">📁 <span>uploads/</span></div><span class="meta">—</span><span class="meta">今天</span></div>
+                      <div class="sftp-row"><div class="name">📁 <span>.config/</span></div><span class="meta">—</span><span class="meta">3月</span></div>
+                      <div class="sftp-row sel"><div class="name">📄 <span>app.log</span></div><span class="meta">128 KB</span><span class="meta">今天</span></div>
+                    </div>
+                    <div class="sftp-foot">远程 · 已连接 · 拖放仍跨栏传输</div>
+                  </div>
+                </div>
+              </div>
+              <aside class="dock">
+                <div class="pivot">
+                  <span class="on">隧道</span><span>传输</span><span>信息</span>
+                </div>
+                <div class="dock-head">端口转发</div>
+                <div class="dock-body">
+                  <div class="card"><h4>3306 → localhost:3306</h4><p>Local · 运行中</p></div>
+                  <div class="card"><h4>8080 → 127.0.0.1:80</h4><p>Local · 已停止</p></div>
+                </div>
+              </aside>
+            </div>
+            <div class="statusbar">
+              <span class="status-dot"></span>
+              <span><strong style="font-weight:600;color:var(--text-1)">Connected</strong> · bastion:22</span>
+              <span class="sb-spacer"></span>
+              <span class="chip accent">Recording</span>
+              <span>80×24</span>
+            </div>
+          </section>
+        </div>
+
+        <div class="settings-overlay" id="settings">
+          <div class="dialog" role="dialog" aria-labelledby="dlg-title">
+            <div class="dlg-head">
+              <div>
+                <h2 id="dlg-title">设置</h2>
+                <p>导航项不变；在 Appearance 内增加界面模式与透明度（终端配色仍在同区下方）。</p>
+              </div>
+              <button type="button" class="dlg-x" id="close-settings" title="关闭">×</button>
+            </div>
+            <div class="dlg-body">
+              <nav class="dlg-nav">
+                <div class="nav-item">General</div>
+                <div class="nav-item on">Appearance</div>
+                <div class="nav-item">Terminal</div>
+                <div class="nav-item">SFTP</div>
+                <div class="nav-item">Security</div>
+              </nav>
+              <div class="dlg-content">
+                <div class="field">
+                  <label>主题模式</label>
+                  <div class="mode-row">
+                    <div class="mode-card" data-mode="system">
+                      <span>跟随系统</span>
+                      <div class="sw"><i style="background:#202020"></i><i style="background:#f3f3f3"></i></div>
+                    </div>
+                    <div class="mode-card" data-mode="light">
+                      <span>浅色</span>
+                      <div class="sw"><i style="background:#f3f3f3"></i><i style="background:#fff"></i></div>
+                    </div>
+                    <div class="mode-card on" data-mode="dark">
+                      <span>深色</span>
+                      <div class="sw"><i style="background:#202020"></i><i style="background:#2c2c2c"></i></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="field">
+                  <label>强调色</label>
+                  <div class="swatches" id="dlg-accents">
+                    <button type="button" class="on" style="background:#60cdff" data-accent="#60cdff" data-accent-text="#000"></button>
+                    <button type="button" style="background:#4cc2c4" data-accent="#4cc2c4" data-accent-text="#000"></button>
+                    <button type="button" style="background:#b199d9" data-accent="#b199d9" data-accent-text="#000"></button>
+                    <button type="button" style="background:#6ccb5f" data-accent="#6ccb5f" data-accent-text="#000"></button>
+                    <button type="button" style="background:#f4a06a" data-accent="#f4a06a" data-accent-text="#000"></button>
+                    <button type="button" style="background:#e38fe0" data-accent="#e38fe0" data-accent-text="#000"></button>
+                  </div>
+                </div>
+                <div class="field">
+                  <label>背景表面透明度（面板 / 卡片相对窗口底）</label>
+                  <div class="slider-row">
+                    <input type="range" id="dlg-opacity" min="55" max="100" value="100">
+                    <output id="dlg-opacity-out">100%</output>
+                  </div>
+                  <div class="preview-strip" aria-hidden="true">
+                    <div class="a"></div>
+                    <div class="b"></div>
+                    <div class="c">$ echo surface</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note">
+    文件：<code>docs/product/ui-sketches/ui-modernization-mockup.html</code> ·
+    用浏览器打开即可交互。表面透明度降低时，侧栏/右栏/卡片会更透出窗口底色（不是 Acrylic 透桌面）。
+    与计划 Phase 1–3 对应；确认观感后即可按该方向落地到 Slint。
+  </p>
+
+<script>
+  const root = document.documentElement;
+
+  function setPressed(groupSel, attr, value) {
+    document.querySelectorAll(groupSel).forEach(btn => {
+      btn.setAttribute('aria-pressed', String(btn.getAttribute(attr) === value || btn.dataset[attr.replace('data-','')] === value));
+    });
+  }
+
+  document.querySelectorAll('[data-view]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      root.dataset.view = btn.dataset.view;
+      root.dataset.panel = 'main';
+      document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+      document.querySelectorAll('[data-panel]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.panel === 'main')));
+    });
+  });
+
+  function setWorkspace(mode) {
+    root.dataset.ws = mode;
+    document.querySelectorAll('[data-ws]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.ws === mode)));
+    document.querySelectorAll('.ws-term-tab').forEach(t => t.classList.toggle('active', mode === 'terminal'));
+    document.querySelectorAll('.ws-sftp-tab').forEach(t => t.classList.toggle('active', mode === 'sftp'));
+    const active = tabs && tabs.querySelector('.tab.active');
+    if (active && ind) moveIndicator(active);
+  }
+  document.querySelectorAll('[data-ws]').forEach(btn => {
+    btn.addEventListener('click', () => setWorkspace(btn.dataset.ws));
+  });
+  document.querySelectorAll('.ws-term-tab').forEach(t => t.addEventListener('click', () => setWorkspace('terminal')));
+  document.querySelectorAll('.ws-sftp-tab').forEach(t => t.addEventListener('click', () => setWorkspace('sftp')));
+
+  document.querySelectorAll('[data-theme]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      root.dataset.theme = btn.dataset.theme;
+      document.querySelectorAll('[data-theme]').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+      document.querySelectorAll('.mode-card').forEach(c => {
+        c.classList.toggle('on', c.dataset.mode === btn.dataset.theme);
+      });
+    });
+  });
+
+  function applyAccent(accent, text) {
+    root.style.setProperty('--accent', accent);
+    root.style.setProperty('--accent-text', text);
+    document.querySelectorAll('.acc button, #dlg-accents button').forEach(b => {
+      b.classList.toggle('on', b.dataset.accent === accent);
+      b.setAttribute('aria-pressed', String(b.dataset.accent === accent));
+    });
+  }
+  document.querySelectorAll('.acc button, #dlg-accents button').forEach(btn => {
+    btn.addEventListener('click', () => applyAccent(btn.dataset.accent, btn.dataset.accentText));
+  });
+
+  function applyOpacity(pct) {
+    const v = Math.max(55, Math.min(100, Number(pct))) / 100;
+    root.style.setProperty('--surface-opacity', String(v));
+    const label = Math.round(v * 100) + '%';
+    document.getElementById('opacity-label').textContent = label;
+    document.getElementById('dlg-opacity-out').textContent = label;
+    document.getElementById('opacity').value = Math.round(v * 100);
+    document.getElementById('dlg-opacity').value = Math.round(v * 100);
+  }
+  document.getElementById('opacity').addEventListener('input', e => applyOpacity(e.target.value));
+  document.getElementById('dlg-opacity').addEventListener('input', e => applyOpacity(e.target.value));
+
+  document.querySelectorAll('[data-panel]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      root.dataset.panel = btn.dataset.panel;
+      document.querySelectorAll('[data-panel]').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+      if (btn.dataset.panel === 'settings') root.dataset.view = 'after';
+    });
+  });
+  document.getElementById('close-settings').addEventListener('click', () => {
+    root.dataset.panel = 'main';
+    document.querySelectorAll('[data-panel]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.panel === 'main')));
+  });
+
+  document.querySelectorAll('.mode-card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.mode-card').forEach(c => c.classList.toggle('on', c === card));
+      if (card.dataset.mode === 'system') return;
+      root.dataset.theme = card.dataset.mode;
+      document.querySelectorAll('[data-theme]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.theme === card.dataset.mode)));
+    });
+  });
+
+  // Sliding tab indicator（仅 after 标签条；点击会经 setWorkspace 同步内容）
+  const tabs = document.getElementById('tabs-after');
+  const ind = document.getElementById('tab-ind');
+  function moveIndicator(tab) {
+    if (!tabs || !ind || !tab) return;
+    const rect = tab.getBoundingClientRect();
+    const parent = tabs.getBoundingClientRect();
+    ind.style.left = (rect.left - parent.left + 10) + 'px';
+    ind.style.width = Math.max(24, rect.width - 20) + 'px';
+  }
+  if (tabs) {
+    moveIndicator(tabs.querySelector('.tab.active'));
+    window.addEventListener('resize', () => moveIndicator(tabs.querySelector('.tab.active')));
+  }
+  setWorkspace(root.dataset.ws || 'sftp');
+</script>
+</body>
+</html>

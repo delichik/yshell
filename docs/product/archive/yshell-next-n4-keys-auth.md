@@ -1,6 +1,8 @@
 # N4 密钥管理 + 认证弹窗（设计）
 
-状态：**待确认**；依赖：A0（认证层）✅、C0（keys schema）✅、R2（runtime 模块）与 rfd spike
+> **归档**：已验收。Secret 解锁 UX 等缺口 → [`yshell-current-status.md`](./yshell-current-status.md) §3。
+
+状态：**已完成（归档）**；依赖：A0 ✅、C0 ✅、R2、rfd
 关联决策：D18–D21、需求 §5
 文件落位：新 `ui/pages/private_keys.slint`、`ui/pages/host_keys.slint`（或升级现有 known_hosts 页）、新 `ui/components/auth_prompt_dialog.slint`；`runtime/auth.rs` + `runtime/mod.rs`；`ui/main_window.slint`（最小接线 + 菜单入口）；`bootstrap.rs`；`rfd`（spike 后入库）；secret store 既有 API
 

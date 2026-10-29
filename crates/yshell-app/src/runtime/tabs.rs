@@ -2140,7 +2140,7 @@ impl AppRuntime {
 
 // --- N7：窗口级标签归属 -------------------------------------------------------
 //
-// 设计：`docs/product/yshell-next-n7-multi-window.md`（D5–D8 已确认）。
+// 设计：`docs/product/archive/yshell-next-n7-multi-window.md`（D5–D8 已确认）。
 // * 运行时只换 UI 归属：`tabs`/`sessions` 全量保留，`SessionRuntime`（shell/grid/日志）
 //   在迁移前后是同一个实例（`move_tab_to_window` 不碰 sessions）。
 // * `active_tab_id`/`active_session_id` 是"聚焦窗口"的活动标签镜像；
@@ -2646,7 +2646,7 @@ impl AppRuntime {
 
 // --- N9：同步发送按键（Input Sync）-----------------------------------------
 //
-// 设计：`docs/product/yshell-next-n9-sync-input.md`（D23/D24 已确认）。
+// 设计：`docs/product/archive/yshell-next-n9-sync-input.md`（D23/D24 已确认）。
 // * 源 = 一个终端标签；目标 = 当前窗口内的一批已连接终端标签（不持久化）。
 // * 扇出发生在输入的唯一汇聚点（`runtime/keys.rs::send_active_terminal_bytes`），
 //   目标只写输入，其回显不再回灌到源。

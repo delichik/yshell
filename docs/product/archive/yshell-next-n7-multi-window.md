@@ -1,8 +1,10 @@
 # N7 多窗口（设计，探索性）
 
-状态：**待确认**；依赖：R2、N0；真·拖出等 winit 0.31 正式版 + Slint 跟进版本
-关联决策：D5（首版只做右键"移动到新窗口"）、D6（不做新会话自动开窗）、D7（关闭窗口=确认后断开）、D8（布局全局一套）；需求 §8
-文件落位：新 `crates/yshell-app/src/windows.rs`（WindowManager）；`bootstrap.rs`（`run()` → `show()` + `run_event_loop()`；按窗口 wiring）；`runtime/tabs.rs`（标签→窗口归属）；`ui/main_window.slint`（窗口级最小接线：Move to New Window 菜单项）
+> **归档**：Phase 1 已验收（2026-09-29）。真拖出 / 几何记忆等见 [`yshell-current-status.md`](./yshell-current-status.md) §2–§3。
+
+状态：**已完成（Phase 1）**；真·拖出等 winit 0.31 + Slint  
+关联决策：D5–D8；需求 §8  
+文件落位：`windows.rs`；`bootstrap.rs`；`runtime/tabs.rs`；`main_window.slint`
 
 ## 1. 阶段 1（本任务范围）
 - `WindowManager`：持有 `Vec<WindowEntry>`（`MainWindow` 实例 + 该窗口标签集合/活动标签/布局投影）；`AppRuntime` 单实例共享（单线程 UI）。

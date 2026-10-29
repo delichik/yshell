@@ -1,8 +1,8 @@
 # YShell UI 交互契约
 
-本文档定义 YShell 第一版的每个核心界面区域、控件、输入框、鼠标行为、键盘行为、上下文菜单、跳转目标和错误反馈。后续 Slint UI、ViewModel、端到端测试和截图验收都必须以本文档为准。
+更新注记（2026-10-29）：**范围与砍项以 [`yshell-current-status.md`](./yshell-current-status.md) 为准。** 下文含愿景级控件时，凡标注「本版不做」或与 status §2 冲突的，实现须 disabled/空态/无入口，不得按「始终启用」验收。
 
-右键菜单的完整矩阵见 `docs/product/context-menu-design.md`。本文档中的上下文菜单条目是交互摘要；实现和测试以右键菜单设计矩阵为准。
+本文档是**唯一现行 UI 契约**（原独立 `context-menu-design.md` 已并入各区域菜单节并迁入 `archive/`）。右键以各节「实现状态」与 status 为准。
 
 ## 1. 全局规则
 
@@ -77,12 +77,12 @@ StatusBar
 | 控件 ID | 文案 | 类型 | 左键行为 | 快捷键 | 状态规则 |
 |---|---|---|---|---|---|
 | `menu.file.new_session` | New Session | 菜单项 | 打开 Session Editor，模式为 create。 | `Ctrl+N` | 始终启用。 |
-| `menu.file.new_folder` | New Folder | 菜单项 | 在 SessionSidebar 当前选中父级下创建文件夹。 | `Ctrl+Shift+N` | 始终启用。 |
-| `menu.file.quick_connect` | Quick Connect | 菜单项 | 聚焦 toolbar Quick Connect 输入框并全选文本。 | `Ctrl+O` | 始终启用。 |
-| `menu.file.import_config` | Import Config... | 菜单项 | 打开文件选择器，只允许 YShell config bundle。 | 无 | 始终启用。 |
-| `menu.file.export_config` | Export Config... | 菜单项 | 打开导出向导。 | 无 | 至少存在一个会话时启用。 |
+| `menu.file.quick_connect` | Quick Connect | 菜单项 | 打开/聚焦快速连接页输入框。 | `Ctrl+O` | 始终启用。 |
+| `menu.file.save_active` | Save Active Session | 菜单项 | 将当前活动会话写入 sessions/。 | 视实现 | 有活动会话时启用。 |
 | `menu.file.settings` | Settings... | 菜单项 | 打开 Settings 页面。 | `Ctrl+,` | 始终启用。 |
 | `menu.file.quit` | Quit | 菜单项 | 若存在活动会话，打开 Quit Confirmation；否则退出。 | `Ctrl+Q` / `Cmd+Q` | 始终启用。 |
+
+> **本版 File 菜单**：无 Import / Export Config、无 New Folder 菜单项。新建根文件夹走会话树空白区「New Folder…」。Import/Export 属本版不做（见 `yshell-current-status.md` §2）。
 
 ### 3.2 Edit 菜单
 
@@ -113,8 +113,8 @@ StatusBar
 |---|---|---|---|---|---|
 | `menu.view.session_manager` | Session Manager | 勾选菜单项 | 显示/隐藏左侧会话树。 | `Ctrl+B` | 始终启用。 |
 | `menu.view.transfers` | Transfers | 勾选菜单项 | 显示/隐藏右侧传输队列面板。 | 无 | 始终启用。 |
-| `menu.view.quick_commands` | Quick Commands | 勾选菜单项 | 右侧 Dock 切换到 Quick Commands tab。 | 无 | 始终启用。 |
-| `menu.view.tunnel_panel` | Tunnel Panel | 勾选菜单项 | 右侧 Dock 切换到 Tunnels tab。 | 无 | 始终启用。 |
+| `menu.view.quick_commands` | Quick Commands | 勾选菜单项 | 显示/隐藏 Quick Commands 面板。 | 无 | 始终可勾选；**面板内容本版未提供**（空态说明）。 |
+| `menu.view.tunnel_panel` | Tunnel Panel | 勾选菜单项 | 显示/隐藏 Tunnels 面板。 | 无 | 始终启用。配置可编辑；**Start/Stop 转发 runtime 尚未 provision**（见 status §3）。 |
 | `menu.view.fullscreen` | Full Screen | 勾选菜单项 | 切换全屏。 | `F11` | 始终启用。 |
 | `menu.view.focus_mode` | Focus Mode | 勾选菜单项 | 隐藏左右面板和工具栏，仅保留标签、终端、状态栏。 | 无 | 当前存在终端标签时启用。 |
 
@@ -124,14 +124,9 @@ StatusBar
 
 | 控件 ID | 文案/占位 | 类型 | 默认值 | 左键行为 | 回车行为 | 右键行为 | 状态规则 |
 |---|---|---|---|---|---|---|---|
-| `toolbar.quick_connect.input` | `ssh://user@host:22` | 单行输入框 | 空 | 聚焦并显示历史下拉。 | 解析输入并连接。 | 打开历史菜单。 | 始终启用。 |
-| `toolbar.quick_connect.button` | Connect | 按钮 | 无 | 解析输入并连接。 | 无 | 无 | 输入非空时启用。 |
-| `toolbar.new_session` | New | 图标按钮 | 无 | 打开 Session Editor(create)。 | 无 | 无 | 始终启用。 |
-| `toolbar.split` | Split | 下拉按钮 | Vertical | 左键按上次方向分屏；下拉选择 Vertical/Horizontal。 | 无 | 无 | 当前有标签时启用。 |
-| `toolbar.tunnels` | Tunnels | toggle 按钮 | Off | 打开/关闭 RightDock Tunnels tab。 | 无 | 无 | 当前有标签时启用。 |
-| `toolbar.commands` | Commands | toggle 按钮 | Off | 打开/关闭 RightDock Quick Commands tab。 | 无 | 无 | 始终启用。 |
-| `toolbar.log` | Log | toggle 按钮 | 取 SessionProfile | 开启/关闭当前会话日志。 | 无 | 右键打开日志菜单。 | 当前有终端时启用。 |
-| `toolbar.search` | Search | 图标按钮 | 无 | 打开当前区域搜索。 | 无 | 无 | 当前区域支持搜索时启用。 |
+| `toolbar.new_session` 等 | — | — | — | 顶部 CommandBar Quick Connect **输入条已移除**（N2）；连接入口在快速连接页标签。 | — | — | — |
+
+> 历史「MainToolbar Quick Connect / Commands / Log」控件表保留作愿景参考；现行主工具条以实现为准（New Session、面板开关、查找、设置等）。
 
 ### 4.1 Quick Connect 解析规则
 
@@ -156,10 +151,10 @@ StatusBar
 
 | 控件 ID | 文案/占位 | 类型 | 左键行为 | 右键行为 | 状态规则 |
 |---|---|---|---|---|---|
-| `sidebar.header.title` | Session Manager | 文本 | 无 | 无 | 始终显示。 |
-| `sidebar.header.add` | `+` | 图标按钮 | 打开新建菜单：Session、Folder。 | 无 | 始终启用。 |
-| `sidebar.header.more` | `...` | 图标按钮 | 打开侧栏菜单。 | 无 | 始终启用。 |
+| `sidebar.header.title` | SAVED / 会话树标题 | 文本 | 无 | 无 | 始终显示。 |
 | `sidebar.search.input` | Search sessions | 单行输入框 | 聚焦搜索。 | 清空/粘贴上下文菜单。 | 始终启用。 |
+
+> **本版（S1）**：侧栏常驻 `+` / `…` 已删除；新建会话/文件夹/刷新走空白区右键（及 File / CommandBar New Session）。
 
 ### 5.2 会话树项目
 
@@ -461,6 +456,8 @@ SFTP 标签固定为左右两栏：左栏本地文件，右栏远程文件。顶
 
 ## 11. Tunnel Panel
 
+> **本版实现状态**：会话编辑器可配置 forwards；Dock 列表与 Start/Stop **已接线**，但 SSH runtime **尚未 provision 端口转发**（状态栏 `tunnel-not-provisioned` / `tunnel-not-running`）。Proxy 管理可测连通性，native 连接路径仍拒绝带 proxy 的会话。详见 `yshell-current-status.md` §3。
+
 ### 11.1 Tunnel 列表
 
 | 控件 ID | 类型 | 行为 |
@@ -496,6 +493,8 @@ Tunnel 行菜单：
 | `tunnel.save` | 主按钮 | 无 | 校验通过后保存。 |
 
 ## 12. Quick Commands Panel
+
+> **本版不做命令预设**：Dock 卡片仅展示空态（*Command presets are not available in this build yet.*）。下列控件表为愿景规格，**不得按已交付验收**。同步输入走终端右键 N9，不依赖本面板。
 
 | 控件 ID | 类型 | 左键行为 | 右键行为 |
 |---|---|---|---|
@@ -712,8 +711,7 @@ Folder Editor 用于保存文件夹级默认配置。
 - 源终端每次终端输入事件先发送给源 SSH，再复制到目标 SSH。
 - 复制的事件包括普通字符、Enter、Backspace、Tab、方向键、Home/End、PageUp/PageDown、功能键、Ctrl/Alt 组合和粘贴。
 - 不复制 UI 操作，例如切换标签、打开菜单、拖拽 pane、SFTP 操作。
-- 粘贴大段文本前弹确认，显示目标数量和字符数。
-- `Ctrl+C` interrupt 会复制，但必须在确认弹窗中单独提示。
+- **本版（D23 / N9）**：不弹 KEYS / 大段粘贴 / Ctrl+C 确认；用状态栏 chip + 控制键警示替代。下列「粘贴确认 / Ctrl+C 确认」为旧契约残留，**不以本版验收**。
 - 停止后不关闭任何 SSH 会话。
 
 ## 14. Settings
@@ -727,7 +725,9 @@ Settings 是 dialog，左侧分类，右侧表单。
 - Terminal：全局终端默认值（scrollback 行数 / 单元上限）。
 - Security：SecretStore 状态、配置目录；跳转独立 **Host Keys** / **Private Keys** 管理页（不内嵌）。
 - Advanced：配置目录展示；本版本不提供整库 wipe secrets / 重置布局。
-- SFTP、Shortcuts：本版本禁用，tooltip 说明未提供。
+- SFTP（Settings 分类）：**本版启用**（全局 SFTP 默认）；与 Session Editor 内 SFTP 分区「本版不做」不同。
+- Shortcuts：本版本禁用，tooltip 说明未提供。
+- Secret Store：Security 展示状态；解锁依赖环境变量（见 status §3），本版无 in-app 主密码向导；亦不提供 wipe。
 
 Settings **不**使用 Danger Zone，也 **不**提供打字令牌确认的 `RESET SECRETS` / `CLEAR` 入口。
 

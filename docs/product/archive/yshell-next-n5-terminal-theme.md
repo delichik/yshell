@@ -1,6 +1,8 @@
 # N5 终端主题 + Folder Editor（设计）
 
-状态：**待确认**；依赖：N5a-B（渲染链路）✅、C0（TerminalProfile/继承）✅、R2
+> **归档**：已验收。现行范围 → [`yshell-current-status.md`](./yshell-current-status.md)。
+
+状态：**已完成（归档）**；依赖：N5a-B ✅、C0 ✅、R2
 关联决策：D15（主字体预设列表 + 备用字体自由配置）、D16（不做导入导出/光标形状）、D17（只对新开终端生效）、需求 §6
 文件落位：`crates/yshell-terminal/src/render.rs`（调色板/字体选择接口，小改）、新 `ui/pages/folder_editor.slint`；`ui/pages/settings.slint`（Terminal 外观区）、`ui/pages/session_editor.slint`（Appearance/Terminal 覆盖）；`runtime/panels.rs`?→否 `runtime/sessions.rs`+`editor.rs`；`ui/main_window.slint`（文件夹右键入口最小接线）；`bootstrap.rs`
 

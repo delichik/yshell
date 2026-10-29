@@ -1,6 +1,6 @@
 //! Global logging settings and per-session logging toggles.
 //!
-//! N6（终端日志 UI，设计 `docs/product/yshell-next-n6-logging-ui.md`）在
+//! N6（终端日志 UI，设计 `docs/product/archive/yshell-next-n6-logging-ui.md`）在
 //! [`AppRuntime`] 上增加每会话手动日志开关：
 //!
 //! * [`AppRuntime::start_session_logging`] / [`AppRuntime::stop_session_logging`]：

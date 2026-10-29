@@ -1,7 +1,7 @@
 //! N7 multi-window manager: window lifecycle, per-window terminal surfaces and
 //! the application-level timer.
 //!
-//! 设计：`docs/product/yshell-next-n7-multi-window.md`（D5–D8 已确认）。
+//! 设计：`docs/product/archive/yshell-next-n7-multi-window.md`（D5–D8 已确认）。
 //!
 //! 结构：
 //! * `AppRuntime` 单实例共享（UI 单线程）；窗口只持有"标签 UI 归属"，标签/会话/

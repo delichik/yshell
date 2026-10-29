@@ -1,10 +1,17 @@
 # YShell 下一阶段功能需求分析
 
-更新时间：2026-09-27
-文档性质：**需求与可行性分析**（不含实现代码、不做排期承诺）
-决策状态：**2026-09-27 已全部拍板（含第二轮追加，见 §12.5）；§12 优先于各节"开放问题"，补充需求见 §14**
-输入来源：产品负责人提出的 9 项功能设想 + 仓库现状核对（本文 §0）
-关联文档：`yshell-progress-tracker.md`、`context-menu-design.md`、`ui-redesign-remaining-work.md`（F1/F5/F6/F7、C1–C3、D1–D2、E-018~E-023、E-029~E-038、P-001~P-016、R-039~R-041、R-096~R-106）
+> **归档说明（2026-10-29）**  
+> - N0–N9 等已验收；**现行产品范围 / 本版砍项 / 真缺口** → [`yshell-current-status.md`](./yshell-current-status.md)。  
+> - **§0 基线是 2026-09 开工前快照，已过时**，勿当现状。  
+> - **§12 / §14 决策仍有效**（与 status 冲突时：砍项与露出以 status + 实现为准）。  
+> - §15 台账保留验收记录；§16「执行中」为历史并行表，队列已空。  
+> - 失效外链：`yshell-progress-tracker.md`、`ui-redesign-remaining-work.md`（仓库中不存在）。
+
+更新时间：2026-09-27（正文）；索引勘误 2026-10-29  
+文档性质：**需求与可行性分析**（历史；不含实现代码）  
+决策状态：**2026-09-27 已全部拍板（含第二轮追加，见 §12.5）；§12 优先于各节"开放问题"，补充需求见 §14**  
+输入来源：产品负责人提出的 9 项功能设想 + 仓库现状核对（本文 §0，当时）  
+关联文档（现行）：[`../yshell-current-status.md`](../yshell-current-status.md)、[`../yshell-ui-interaction-contract.md`](../yshell-ui-interaction-contract.md)；同目录：`context-menu-design.md`
 
 > 术语：用户所说 "tooltips panel" 按 **工具面板（Tool Panel / Dock Panel）** 理解。
 
@@ -797,18 +804,16 @@
 
 ---
 
-## 16. 并行计划（2026-09-28 更新）
+## 16. 并行计划（历史快照；2026-09-28）
 
-规则：**接线段同一时刻只有 1 个 shared-file 持有者**；其它任务做"模块段/组件段"并行；模块落位见 `yshell-next-r2-runtime-split.md` §5；总方针见 `yshell-next-parallel-execution-plan.md`。
+> **已冻结**：N0–N9 队列已清空（见 §15）。下表保留当时并行状态，**不是**现行看板。现行缺口 → [`yshell-current-status.md`](./yshell-current-status.md) §3。L1 方案文档仍未落盘；L4 等待独占冻结窗口；winit 0.31 仍跟踪 OS 拖出 / 标签拖窗。
 
-| 状态 | 并行线 | 内容 |
+规则（当时）：接线段同一时刻只有 1 个 shared-file 持有者；详见 `yshell-next-parallel-execution-plan.md`。
+
+| 当时状态 | 并行线 | 内容 |
 |---|---|---|
-| 执行中 | **N2 Phase 2（接线段）** | 快速连接页接线（`tabs/sessions/menus/projection` + `main_window/command_bar/bootstrap` + 翻译） |
-| 执行中 | **N4 模块段** | `auth.rs`/`connection.rs` + 密钥页/认证弹窗 + ssh-key 单测 |
-| 执行中 | **N6 模块段** | `logging.rs` + `logging_dialog` + 单测 |
-| 排队 | N3 / N5 / N1 / N9 / N7 | 接线段让出后依次进入；N3 顺带清理 21 条 binding-loop 告警 |
-| 排队 | L1 / L4 | L1 待 `ui-winui3-status-i18n-plan.md` 定位；L4（fmt）需独占冻结窗口 |
-| 已完成 | T0/W0/W1/W2 全部 + N0+N8 + R1/R2 | 见 §15 台账 |
-| 跟踪 | winit 0.31 正式版 | OS 拖放 / 真·拖出解锁后插入 N1/N7 |
+| （历史）执行中 | N2 / N4 / N6 等 | 见原文台账；均已验收 |
+| （历史）排队 | N3 / N5 / N1 / N9 / N7 / L1 / L4 | 见 §15 |
+| 仍跟踪 | winit 0.31 | OS 拖出 / 真·拖出 |
 
-> 旧版 W0–W4 波次表已由本表取代。
+> 旧版 W0–W4 波次表已由本表取代；本表本身亦已归档。

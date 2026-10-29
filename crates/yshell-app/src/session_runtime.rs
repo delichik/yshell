@@ -1104,7 +1104,7 @@ impl SessionRuntime {
 
 /// N6：运行时手动日志开关（弹窗 → 会话；右键菜单/状态栏/REC 接线在 Phase 2）。
 ///
-/// 设计：`docs/product/yshell-next-n6-logging-ui.md` §3。手动日志优先——同一
+/// 设计：`docs/product/archive/yshell-next-n6-logging-ui.md` §3。手动日志优先——同一
 /// 会话同一时刻只有一个 [`SessionLogger`] 输出，开启手动日志会暂停自动日志，
 /// 且停止后不自动恢复（见 `auto_logging_suppressed`）。
 ///

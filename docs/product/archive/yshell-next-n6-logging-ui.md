@@ -1,6 +1,8 @@
 # N6 终端日志 UI（设计）
 
-状态：**待确认**；依赖：G0/G0-tz ✅（`SessionLogger::open_with` + 本地时间）、R2
+> **归档**：已验收。R-107 / 大小上限遗留 → [`yshell-current-status.md`](./yshell-current-status.md) §3。
+
+状态：**已完成（归档）**；依赖：G0/G0-tz ✅、R2
 关联决策：D22（默认 sanitized + 时间戳开）、D24（单一日志输出、关闭/退出强制 flush）、需求 §7
 文件落位：新 `ui/components/logging_dialog.slint`；`runtime/logging.rs`；`ui/main_window.slint`（终端右键菜单 + REC 指示最小接线）；`ui/components/status_bar.slint`（REC 状态）；`bootstrap.rs`；`ui/text_formats.slint`
 
