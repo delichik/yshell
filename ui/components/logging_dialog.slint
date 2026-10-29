@@ -14,8 +14,7 @@
 // 宿主约定：打开前写入字段默认值（含 `raw-format`/`sanitized-format` 互斥对），
 // `start-requested()` 时读取全部字段；打开失败回填 `path-error-text` 并保持打开。
 //
-// 形态与 Esc/遮罩语义与 ConfirmDialog 一致（ContentDialog + scrim；Esc 与遮罩点击
-// 都走 `cancel()`）。
+// 独立工具窗口内使用（`logging_window.slint`）：填满父级，无遮罩；Esc 走 `cancel()`。
 
 import { Theme } from "../theme.slint";
 import { WinButton, WinToggle, WinInfoBar, WinScrollIndicator } from "basic/controls.slint";
@@ -89,29 +88,15 @@ export component LoggingDialog inherits Rectangle {
     /// overwrite-confirmed）；任一开关变化时发出，宿主写回运行时并重新投影。
     callback options-changed(bool, bool, bool, bool, bool);
 
-    // 面板宽度、正文列宽与表单控件列宽：给自动换行的正文显式宽度，避免布局在宽度未定时
+    // 正文列宽与表单控件列宽：给自动换行的正文显式宽度，避免布局在宽度未定时
     // 估算 preferred-height（同族问题见 B 轮5 认证弹窗：面板少算一行、操作行贴底）。
-    private property <length> dialog-width: Theme.dialog-width-form;
     private property <length> content-width:
-        root.dialog-width - 2 * 1px - 2 * Theme.spacing-20;
+        Theme.tool-window-width-standard - 2 * Theme.spacing-20;
     private property <length> field-width:
         root.content-width - Theme.form-label-width - Theme.spacing-12;
 
-    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
-    //
-    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
-    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
-    states [
-        opened when root.open: {
-            opacity: 1.0;
-            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
-            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
-        }
-        closed when !root.open: { opacity: 0.0; }
-    ]
-    // 退场期间保持可见，等淡出结束再隐藏。
-    visible: root.open || self.opacity > 0.01;
-    background: Theme.scrim;
+    visible: root.open;
+    background: Theme.window-background;
 
     // 开关变化 → 一次性回传全部选项（避免逐个回调的中间态）。
     function notify-options() {
@@ -132,8 +117,8 @@ export component LoggingDialog inherits Rectangle {
         && (!root.include-input || root.input-confirmed);
 
     dialog_scope := FocusScope {
-        width: parent.width;
-        height: parent.height;
+        width: root.width;
+        height: root.height;
 
         key-pressed(event) => {
             // Esc 键码按 `event.text` 比较（与 ConfirmDialog/password_prompt 一致）。
@@ -144,26 +129,9 @@ export component LoggingDialog inherits Rectangle {
             return reject;
         }
 
-        // 遮罩：点击 = 取消（与 Cancel 按钮同一路径）。
-        TouchArea {
-            clicked => { root.cancel(); }
-        }
-
-        Rectangle {
-            x: (parent.width - root.dialog-width) / 2;
-            y: max((parent.height - self.height) / 2, 32px);
-            width: root.dialog-width;
-            height: min(body.preferred-height, max(0px,
-                parent.height - 2 * Theme.spacing-24));
-            background: Theme.panel-background;
-            border-radius: Theme.radius-panel;
-            border-width: 1px;
-            border-color: Theme.control-stroke;
-
-            // 吞掉面板空白处的点击，避免穿透到遮罩触发取消。
-            TouchArea { }
-
-            body := VerticalLayout {
+        body := VerticalLayout {
+                width: root.width;
+                height: root.height;
                 padding: Theme.spacing-20;
                 spacing: Theme.spacing-12;
 
@@ -443,7 +411,6 @@ export component LoggingDialog inherits Rectangle {
                     }
                 }
             }
-        }
     }
 
     /// 宿主在打开弹窗后把键盘焦点交给弹窗（Esc / 点输入框后按键沿父链冒泡）。

@@ -1,0 +1,128 @@
+// About as an independent tool window (title bar + content, no scrim).
+
+import { Theme } from "../theme.slint";
+import { WinButton, WinCard } from "../components/basic/controls.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
+
+export component AboutWindow inherits Window {
+    title: @tr("About YShell");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-standard;
+    min-width: Theme.tool-window-width-standard;
+    max-width: Theme.tool-window-width-standard;
+    preferred-height: Theme.tool-window-height-standard;
+    min-height: Theme.tool-window-height-standard;
+    max-height: Theme.tool-window-height-standard;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <string> version-text: "";
+    in property <string> config-dir-text: "";
+    in-out property <bool> native_title_drag: false;
+
+    callback dismiss();
+    callback title_drag_requested();
+
+    dialog_scope := FocusScope {
+        width: Theme.tool-window-width-standard;
+        height: Theme.tool-window-height-standard;
+
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.dismiss();
+                return accept;
+            }
+            return reject;
+        }
+
+        ToolWindowChrome {
+            width: Theme.tool-window-width-standard;
+            height: Theme.tool-window-height-standard;
+            title-text: @tr("About YShell");
+            native-title-drag: root.native_title_drag;
+            close-requested => { root.dismiss(); }
+            title-drag-requested => { root.title_drag_requested(); }
+
+            Text {
+                text: @tr("YShell {0}", root.version-text);
+                color: Theme.text-secondary;
+                font-size: Theme.font-body;
+            }
+
+            Text {
+                text: @tr("A Slint desktop shell for SSH, SFTP, tunnels and terminal workflows.");
+                color: Theme.text-secondary;
+                font-size: Theme.font-body;
+                wrap: word-wrap;
+            }
+
+            WinCard {
+                GridLayout {
+                    spacing: Theme.spacing-16;
+
+                    Text {
+                        row: 0;
+                        col: 0;
+                        text: @tr("Config directory");
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: top;
+                        width: max(96px, self.preferred-width);
+                    }
+
+                    Text {
+                        row: 0;
+                        col: 1;
+                        text: root.config-dir-text;
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: top;
+                        wrap: word-wrap;
+                    }
+
+                    Text {
+                        row: 1;
+                        col: 0;
+                        text: @tr("License");
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: top;
+                        width: max(96px, self.preferred-width);
+                    }
+
+                    Text {
+                        row: 1;
+                        col: 1;
+                        text: "MIT OR Apache-2.0";
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-caption;
+                        vertical-alignment: top;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                min-height: 0px;
+                background: transparent;
+            }
+
+            HorizontalLayout {
+                alignment: end;
+                vertical-stretch: 0;
+
+                WinButton {
+                    text: @tr("Close");
+                    clicked => { root.dismiss(); }
+                }
+            }
+        }
+    }
+
+    init => {
+        dialog_scope.focus();
+    }
+}

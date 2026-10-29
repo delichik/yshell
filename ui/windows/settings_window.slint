@@ -1,0 +1,135 @@
+﻿// Settings as an independent non-resizable tool window.
+
+import { Theme } from "../theme.slint";
+import { SettingsDialog } from "../pages/settings.slint";
+
+export component SettingsWindow inherits Window {
+    title: @tr("Settings");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-wide;
+    min-width: Theme.tool-window-width-wide;
+    max-width: Theme.tool-window-width-wide;
+    preferred-height: Theme.tool-window-height-tall;
+    min-height: Theme.tool-window-height-tall;
+    max-height: Theme.tool-window-height-tall;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <string> config-dir-text;
+    in property <string> secret-store-status-text;
+    in-out property <string> scrollback-lines-text;
+    in-out property <string> scrollback-max-cells-text;
+    in-out property <string> settings-sftp-max-parallel-transfers-text;
+    in property <string> terminal-status-text;
+    in property <string> language-text;
+    in-out property <bool> debug-logging-enabled;
+    in-out property <bool> confirm-close-session-enabled;
+    in-out property <bool> confirm-quit-app-enabled;
+    in property <string> debug-log-dir-text;
+    in-out property <string> section;
+    in property <string> appearance-color-scheme-name-text;
+    in property <bool> appearance-color-scheme-builtin;
+    in property <[color]> appearance-palette-swatches;
+    in property <[string]> appearance-font-options;
+    in-out property <int> appearance-font-index;
+    in-out property <string> appearance-font-size-text;
+    in-out property <string> appearance-fallback-fonts-text;
+    in property <string> appearance-status-text;
+    in property <image> appearance-preview;
+    in property <color> appearance-preview-background;
+
+    in-out property <bool> native_title_drag: false;
+
+    callback dismiss();
+    callback open-host-keys();
+    callback open-private-keys();
+    callback open-proxies();
+    callback open-theme-manager();
+    callback update-scrollback-lines(string);
+    callback update-scrollback-max-cells(string);
+    callback update-settings-sftp-max-parallel-transfers(string);
+    callback save-settings-sftp();
+    callback reset-terminal-defaults();
+    callback save-terminal-settings();
+    callback set-language(string);
+    callback set-debug-logging(bool);
+    callback set-confirm-close-session(bool);
+    callback set-confirm-quit-app(bool);
+    callback open-debug-log-dir();
+    callback select-appearance-font(int);
+    callback update-appearance-font-size(string);
+    callback bump-appearance-font-size(int);
+    callback update-appearance-fallback-fonts(string);
+    callback browse-appearance-font-file();
+    callback browse-appearance-fallback-font();
+    callback clear-appearance-fallbacks();
+    callback reset-appearance-defaults();
+    callback save-appearance();
+    callback title_drag_requested();
+
+    body := SettingsDialog {
+        open: true;
+        width: Theme.tool-window-width-wide;
+        height: Theme.tool-window-height-tall;
+        config-dir-text: root.config-dir-text;
+        secret-store-status-text: root.secret-store-status-text;
+        scrollback-lines-text <=> root.scrollback-lines-text;
+        scrollback-max-cells-text <=> root.scrollback-max-cells-text;
+        settings-sftp-max-parallel-transfers-text <=> root.settings-sftp-max-parallel-transfers-text;
+        terminal-status-text: root.terminal-status-text;
+        language-text: root.language-text;
+        debug-logging-enabled <=> root.debug-logging-enabled;
+        confirm-close-session-enabled <=> root.confirm-close-session-enabled;
+        confirm-quit-app-enabled <=> root.confirm-quit-app-enabled;
+        debug-log-dir-text: root.debug-log-dir-text;
+        section <=> root.section;
+        appearance-color-scheme-name-text: root.appearance-color-scheme-name-text;
+        appearance-color-scheme-builtin: root.appearance-color-scheme-builtin;
+        appearance-palette-swatches: root.appearance-palette-swatches;
+        appearance-font-options: root.appearance-font-options;
+        appearance-font-index <=> root.appearance-font-index;
+        appearance-font-size-text <=> root.appearance-font-size-text;
+        appearance-fallback-fonts-text <=> root.appearance-fallback-fonts-text;
+        appearance-status-text: root.appearance-status-text;
+        appearance-preview: root.appearance-preview;
+        appearance-preview-background: root.appearance-preview-background;
+        native-title-drag <=> root.native_title_drag;
+        title-drag-requested => { root.title_drag_requested(); }
+        close => { root.dismiss(); }
+        open-host-keys => { root.open-host-keys(); }
+        open-private-keys => { root.open-private-keys(); }
+        open-proxies => { root.open-proxies(); }
+        open-theme-manager => { root.open-theme-manager(); }
+        update-scrollback-lines(string) => { root.update-scrollback-lines(string); }
+        update-scrollback-max-cells(string) => { root.update-scrollback-max-cells(string); }
+        update-settings-sftp-max-parallel-transfers(string) => { root.update-settings-sftp-max-parallel-transfers(string); }
+        save-settings-sftp => { root.save-settings-sftp(); }
+        reset-terminal-defaults => { root.reset-terminal-defaults(); }
+        save-terminal-settings => { root.save-terminal-settings(); }
+        set-language(string) => { root.set-language(string); }
+        set-debug-logging(bool) => { root.set-debug-logging(bool); }
+        set-confirm-close-session(bool) => { root.set-confirm-close-session(bool); }
+        set-confirm-quit-app(bool) => { root.set-confirm-quit-app(bool); }
+        open-debug-log-dir => { root.open-debug-log-dir(); }
+        select-appearance-font(int) => { root.select-appearance-font(int); }
+        update-appearance-font-size(string) => { root.update-appearance-font-size(string); }
+        bump-appearance-font-size(int) => { root.bump-appearance-font-size(int); }
+        update-appearance-fallback-fonts(string) => { root.update-appearance-fallback-fonts(string); }
+        browse-appearance-font-file => { root.browse-appearance-font-file(); }
+        browse-appearance-fallback-font => { root.browse-appearance-fallback-font(); }
+        clear-appearance-fallbacks => { root.clear-appearance-fallbacks(); }
+        reset-appearance-defaults => { root.reset-appearance-defaults(); }
+        save-appearance => { root.save-appearance(); }
+    }
+
+    public function focus-dialog() {
+        body.focus-dialog();
+    }
+
+    init => {
+        root.focus-dialog();
+    }
+}
+

@@ -32,6 +32,7 @@ use crate::bootstrap::{
     TerminalSurface,
 };
 use crate::connect_jobs::ConnectJobMessage;
+use crate::dialog_windows::DialogHost;
 use crate::error::{AppError, AppResult};
 use crate::runtime::AppRuntime;
 use crate::sftp_jobs::SftpJobMessage;
@@ -141,6 +142,8 @@ pub(crate) struct WindowManager {
     sftp_job_rx: Receiver<SftpJobMessage>,
     connect_job_rx: Receiver<ConnectJobMessage>,
     timer: Option<Timer>,
+    /// App-scoped independent dialog / tool windows.
+    dialog_host: Rc<RefCell<DialogHost>>,
 }
 
 impl WindowManager {
@@ -161,6 +164,7 @@ impl WindowManager {
             let limit = runtime.config_document.ui.sftp_max_parallel_transfers;
             runtime.set_sftp_parallel_transfer_limit(limit);
         }
+        let dialog_host = crate::dialog_windows::DialogWindowManager::new(Rc::clone(&runtime));
         let manager = Rc::new(RefCell::new(Self {
             runtime,
             windows: Vec::new(),
@@ -170,7 +174,17 @@ impl WindowManager {
             sftp_job_rx,
             connect_job_rx,
             timer: None,
+            dialog_host,
         }));
+        {
+            let weak = Rc::downgrade(&manager);
+            manager
+                .borrow_mut()
+                .dialog_host
+                .borrow_mut()
+                .dialogs
+                .set_window_manager(weak);
+        }
         Self::open_window(&manager, None)?;
         let weak: Weak<RefCell<Self>> = Rc::downgrade(&manager);
         let timer = Timer::default();
@@ -404,7 +418,6 @@ impl WindowManager {
                 // D7 + 设计 §1：最后一个窗口关闭 = 退出，沿用既有 Quit 确认。
                 if let Some(entry) = self.entry(window_id) {
                     entry.window.set_quit_dialog_visible(true);
-                    entry.window.invoke_focus_top_dialog();
                 }
                 false
             }
@@ -412,10 +425,11 @@ impl WindowManager {
                 self.runtime
                     .borrow_mut()
                     .set_window_close_pending(window_id, true);
+                self.dialog_host
+                    .borrow_mut()
+                    .dialogs
+                    .set_close_window_id(window_id);
                 self.refresh_window(window_id);
-                if let Some(entry) = self.entry(window_id) {
-                    entry.window.invoke_focus_top_dialog();
-                }
                 false
             }
         }
@@ -686,6 +700,38 @@ impl WindowManager {
         for index in 0..self.windows.len() {
             let entry = &self.windows[index];
             entry.surface.refresh(&entry.window);
+        }
+        self.sync_dialog_windows();
+    }
+
+    /// Promote MainWindow dialog flags → independent OS windows; refresh props.
+    fn sync_dialog_windows(&mut self) {
+        {
+            let mut host = self.dialog_host.borrow_mut();
+            for entry in &self.windows {
+                host.dialogs.ingest_one(&entry.window);
+            }
+        }
+        let focused = self.runtime.borrow().focused_window;
+        let window_id = focused.or_else(|| self.windows.first().map(|e| e.id));
+        let window_runtime = window_id.map(|id| WindowRuntime::new(Rc::clone(&self.runtime), id));
+        let projection = {
+            let runtime = self.runtime.borrow();
+            match window_id {
+                Some(id) => runtime.projection_for_window(id),
+                None => runtime.projection(),
+            }
+        };
+        let main = window_id
+            .and_then(|id| self.windows.iter().find(|e| e.id == id).map(|e| &e.window))
+            .or_else(|| self.windows.first().map(|e| &e.window));
+        if let Err(error) = self
+            .dialog_host
+            .borrow_mut()
+            .dialogs
+            .sync(&projection, main, window_runtime)
+        {
+            tracing::warn!(target: "yshell::app", "dialog window sync failed: {error}");
         }
     }
 }

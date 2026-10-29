@@ -17,10 +17,9 @@ import { MenuEntry, MenuPopup } from "menu_popup.slint";
 import { SessionTree, SessionTreeRow } from "session_tree.slint";
 
 // S1：会话树空白区菜单的 `New Folder…` 弹窗 —— 只负责取名，创建在会话树根目录。
-// 形态与 `ConfirmDialog`（§5.10）一致：panel-background 面板 + 右对齐操作区 + 全屏 scrim。
+// 独立工具窗口内使用（`new_folder_window.slint`）：填满父级，无遮罩。
 //
-// L2（对话框 Esc / 遮罩点击关闭）：`Esc` 与遮罩点击 = Cancel（`canceled()` 的同一
-// 路径，宿主据此清空名称）；面板内空白处点击由面板 TouchArea 吞掉，不会穿透到遮罩。
+// L2：`Esc` = Cancel（`canceled()`）；宿主据此清空名称。
 export component NewFolderDialog inherits Rectangle {
     in property <bool> open: false;
     in property <string> title-text: @tr("New Folder");
@@ -30,35 +29,17 @@ export component NewFolderDialog inherits Rectangle {
     in property <string> placeholder-text: @tr("Folder name");
     in property <string> confirm-label: @tr("Create");
     in property <string> cancel-label: @tr("Cancel");
-    /// P4：与 ContentDialog 族（密码/认证 460）对齐；文件夹创建也走同一宽度。
-    in property <length> dialog-width: Theme.dialog-width;
-
     callback confirmed(string);
     callback canceled();
 
-    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
-    //
-    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
-    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
-    states [
-        opened when root.open: {
-            opacity: 1.0;
-            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
-            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
-        }
-        closed when !root.open: { opacity: 0.0; }
-    ]
-    // 退场期间保持可见，等淡出结束再隐藏。
-    visible: root.open || self.opacity > 0.01;
-    background: Theme.scrim;
+    visible: root.open;
+    background: Theme.window-background;
 
-    // L2：根 FocusScope 包住整个弹窗；打开时聚焦，Esc 沿焦点链冒泡到这里 → `canceled()`。
     dialog_scope := FocusScope {
-        width: parent.width;
-        height: parent.height;
+        width: root.width;
+        height: root.height;
 
         key-pressed(event) => {
-            // Esc 键码按 `event.text` 比较（与 session_tree 判 Enter 的做法一致）。
             if (event.text == "\u{001b}") {
                 root.canceled();
                 return accept;
@@ -66,25 +47,9 @@ export component NewFolderDialog inherits Rectangle {
             return reject;
         }
 
-        // 遮罩：点击 = 取消（与 Cancel 按钮同一路径）。
-        TouchArea {
-            clicked => { root.canceled(); }
-        }
-
-        Rectangle {
-            x: (parent.width - root.dialog-width) / 2;
-            y: max((parent.height - self.height) / 2, 40px);
-            width: root.dialog-width;
-            height: body.preferred-height;
-            background: Theme.panel-background;
-            border-radius: Theme.radius-panel;
-            border-width: 1px;
-            border-color: Theme.control-stroke;
-
-            // 吞掉面板空白处的点击，避免穿透到遮罩触发取消。
-            TouchArea { }
-
-            body := VerticalLayout {
+        body := VerticalLayout {
+                width: root.width;
+                height: root.height;
                 padding: Theme.spacing-20;
                 spacing: Theme.spacing-12;
 
@@ -130,7 +95,6 @@ export component NewFolderDialog inherits Rectangle {
                     }
                 }
             }
-        }
     }
 
     /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。

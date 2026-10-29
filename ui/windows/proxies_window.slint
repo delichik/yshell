@@ -1,0 +1,121 @@
+// Proxy Manager as an independent non-resizable tool window.
+
+import { Theme } from "../theme.slint";
+import { ProxiesPage, ProxyRow } from "../pages/proxies.slint";
+
+export component ProxiesWindow inherits Window {
+    title: @tr("Proxy Manager");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-wide;
+    min-width: Theme.tool-window-width-wide;
+    max-width: Theme.tool-window-width-wide;
+    preferred-height: Theme.tool-window-height-tall;
+    min-height: Theme.tool-window-height-tall;
+    max-height: Theme.tool-window-height-tall;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <[ProxyRow]> proxies;
+    in property <string> list-summary-text;
+    in property <string> empty-text;
+    in property <string> status-text;
+    in property <string> status-kind-text;
+    in property <string> status-param-1-text;
+    in property <string> status-param-2-text;
+    in property <string> test-result-text;
+    in property <bool> test-in-flight;
+    in-out property <int> selected-index;
+    in property <bool> remove-blocked;
+    in property <string> referencing-text;
+    in property <bool> editor-is-new;
+    in property <string> editor-id-text;
+    in-out property <string> editor-name-text;
+    in-out property <string> editor-host-text;
+    in-out property <string> editor-port-text;
+    in-out property <string> editor-username-text;
+    in-out property <string> editor-password-text;
+    in property <bool> editor-password-stored;
+    in property <bool> editor-dns-by-proxy;
+    in-out property <int> editor-protocol-index;
+
+    in-out property <bool> native_title_drag: false;
+
+    callback dismiss();
+    callback select-proxy(int);
+    callback start-new-proxy();
+    callback begin-edit-proxy();
+    callback duplicate-proxy();
+    callback request-remove-proxy();
+    callback clear-proxy-references();
+    callback dismiss-proxy-warning();
+    callback test-proxy();
+    callback save-proxy-editor();
+    callback cancel-proxy-editor();
+    callback update-proxy-name(string);
+    callback update-proxy-host(string);
+    callback update-proxy-port(string);
+    callback update-proxy-username(string);
+    callback update-proxy-password(string);
+    callback select-proxy-protocol(int);
+    callback toggle-proxy-dns();
+    callback title_drag_requested();
+
+    page := ProxiesPage {
+        open: true;
+        width: Theme.tool-window-width-wide;
+        height: Theme.tool-window-height-tall;
+        proxies: root.proxies;
+        list-summary-text: root.list-summary-text;
+        empty-text: root.empty-text;
+        status-text: root.status-text;
+        status-kind-text: root.status-kind-text;
+        status-param-1-text: root.status-param-1-text;
+        status-param-2-text: root.status-param-2-text;
+        test-result-text: root.test-result-text;
+        test-in-flight: root.test-in-flight;
+        selected-index <=> root.selected-index;
+        remove-blocked: root.remove-blocked;
+        referencing-text: root.referencing-text;
+        editor-is-new: root.editor-is-new;
+        editor-id-text: root.editor-id-text;
+        editor-name-text <=> root.editor-name-text;
+        editor-host-text <=> root.editor-host-text;
+        editor-port-text <=> root.editor-port-text;
+        editor-username-text <=> root.editor-username-text;
+        editor-password-text <=> root.editor-password-text;
+        editor-password-stored: root.editor-password-stored;
+        editor-dns-by-proxy: root.editor-dns-by-proxy;
+        editor-protocol-index <=> root.editor-protocol-index;
+        native-title-drag <=> root.native_title_drag;
+        title-drag-requested => { root.title_drag_requested(); }
+        close => { root.dismiss(); }
+        select-proxy(int) => { root.select-proxy(int); }
+        start-new-proxy => { root.start-new-proxy(); }
+        begin-edit-proxy => { root.begin-edit-proxy(); }
+        duplicate-proxy => { root.duplicate-proxy(); }
+        request-remove-proxy => { root.request-remove-proxy(); }
+        clear-proxy-references => { root.clear-proxy-references(); }
+        dismiss-proxy-warning => { root.dismiss-proxy-warning(); }
+        test-proxy => { root.test-proxy(); }
+        save-proxy-editor => { root.save-proxy-editor(); }
+        cancel-proxy-editor => { root.cancel-proxy-editor(); }
+        update-proxy-name(string) => { root.update-proxy-name(string); }
+        update-proxy-host(string) => { root.update-proxy-host(string); }
+        update-proxy-port(string) => { root.update-proxy-port(string); }
+        update-proxy-username(string) => { root.update-proxy-username(string); }
+        update-proxy-password(string) => { root.update-proxy-password(string); }
+        select-proxy-protocol(int) => { root.select-proxy-protocol(int); }
+        toggle-proxy-dns => { root.toggle-proxy-dns(); }
+    }
+
+    public function focus-dialog() {
+        page.focus-dialog();
+    }
+
+    init => {
+        root.focus-dialog();
+    }
+}
+

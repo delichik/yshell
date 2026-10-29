@@ -2,8 +2,7 @@
 //
 // 承载原来挂在主界面里的主机密钥提示条：first-trust（首次信任）与 changed
 // （主机密钥变化）两种模式共用一个弹窗，由 `mode-text` 切换。
-// 形态：WinUI 3 ContentDialog（§5.10）——scrim 遮罩、panel-background 面板、
-// subtitle 标题、右对齐操作区（主操作在右），右上角统一关闭按钮。
+// 形态：独立工具窗口内填满父级；subtitle 标题、右对齐操作区、右上角关闭按钮。
 //
 // 与 Rust 侧的约定：
 //   * `mode-text` 取 "first-trust" / "changed"（无待确认提示时为空串）。
@@ -13,11 +12,7 @@
 //     变更模式的"信任"在安全语义上就是替换已保存的 key，所以按钮文案明确写
 //     Replace and Trust，不再要求输入 REPLACE。
 //
-// L2（对话框 Esc / 遮罩点击关闭）：
-//   * `open` 由宿主投影驱动（`visible: self.open`，与其它模态弹窗一致）。
-//   * `Esc` / 遮罩点击 = Cancel（`cancel()`），Rust 侧不写 known_hosts。
-//   * 默认焦点在 Cancel Connection（安全动作），`Enter` 不会误触发信任。
-//   * 面板内空白处点击由面板 TouchArea 吞掉，不会穿透到遮罩误触取消。
+// L2：`Esc` = Cancel（`cancel()`）；默认焦点在 Cancel Connection（安全动作）。
 
 import { Theme } from "../theme.slint";
 import { WinButton, WinIconButton, WinScrollIndicator } from "basic/controls.slint";
@@ -62,29 +57,14 @@ export component HostKeyDialog inherits Rectangle {
         || root.algorithm-text != "" || root.fingerprint-text != ""
         || root.expected-algorithm-text != "" || root.expected-fingerprint-text != "";
 
-    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
-    //
-    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
-    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
-    states [
-        opened when root.open: {
-            opacity: 1.0;
-            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
-            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
-        }
-        closed when !root.open: { opacity: 0.0; }
-    ]
-    // 退场期间保持可见，等淡出结束再隐藏。
-    visible: root.open || self.opacity > 0.01;
-    background: Theme.scrim;
+    visible: root.open;
+    background: Theme.window-background;
 
-    // L2：根 FocusScope 包住整个弹窗；Esc 沿焦点链冒泡到这里 → `cancel()`。
     dialog_scope := FocusScope {
-        width: parent.width;
-        height: parent.height;
+        width: root.width;
+        height: root.height;
 
         key-pressed(event) => {
-            // Esc 键码按 `event.text` 比较（与 session_tree 判 Enter 的做法一致）。
             if (event.text == "\u{001b}") {
                 root.cancel();
                 return accept;
@@ -92,26 +72,9 @@ export component HostKeyDialog inherits Rectangle {
             return reject;
         }
 
-        // 遮罩：点击 = 取消（与 Cancel 按钮同一路径）。
-        TouchArea {
-            clicked => { root.cancel(); }
-        }
-
-        Rectangle {
-            x: (parent.width - 520px) / 2;
-            y: max((parent.height - self.height) / 2, 40px);
-            width: Theme.dialog-width;
-            // 内容高于窗口时收缩（与同族弹窗一致）
-            height: min(body.preferred-height, parent.height - 2 * Theme.spacing-24);
-            background: Theme.panel-background;
-            border-radius: Theme.radius-panel;
-            border-width: 1px;
-            border-color: Theme.control-stroke;
-
-            // 吞掉面板空白处的点击，避免穿透到遮罩触发取消。
-            TouchArea { }
-
-            body := VerticalLayout {
+        body := VerticalLayout {
+                width: root.width;
+                height: root.height;
                 padding: Theme.spacing-20;
                 spacing: Theme.spacing-12;
 
@@ -235,7 +198,6 @@ export component HostKeyDialog inherits Rectangle {
                     }
                 }
             }
-        }
     }
 
     /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。

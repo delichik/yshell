@@ -1,0 +1,180 @@
+// Session Editor as an independent non-resizable tool window.
+
+import { Theme } from "../theme.slint";
+import { SessionEditor } from "../pages/session_editor.slint";
+import { AuthKeyOption } from "../components/auth_prompt_dialog.slint";
+import { ProxyProfileOption } from "../pages/proxies.slint";
+import { TriStateField } from "../pages/folder_editor.slint";
+
+export component SessionEditorWindow inherits Window {
+    title: @tr("Session Editor");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-wide;
+    min-width: Theme.tool-window-width-wide;
+    max-width: Theme.tool-window-width-wide;
+    preferred-height: Theme.tool-window-height-tall;
+    min-height: Theme.tool-window-height-tall;
+    max-height: Theme.tool-window-height-tall;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <string> section;
+    in property <string> target-text;
+    in property <string> folder-text;
+    in-out property <string> name-text;
+    in-out property <string> host-text;
+    in-out property <string> port-text;
+    in-out property <string> username-text;
+    in property <string> auth-method-text;
+    in-out property <string> password-text;
+    in property <[AuthKeyOption]> key-options;
+    in-out property <int> selected-key-index;
+    in property <bool> selected-key-missing;
+    in property <string> legacy-key-path-text;
+    in property <bool> legacy-key-has-passphrase;
+    in property <bool> has-stored-password;
+    in property <string> auth-test-status-text;
+    in property <string> proxy-mode-text;
+    in property <[ProxyProfileOption]> proxy-options;
+    in-out property <int> selected-proxy-index;
+    in property <string> proxy-selected-detail-text;
+    in property <string> proxy-legacy-text;
+    in property <bool> proxy-selected-missing;
+    in property <string> tunnel-kind-text;
+    in-out property <string> tunnel-bind-host-text;
+    in-out property <string> tunnel-bind-port-text;
+    in-out property <string> tunnel-target-host-text;
+    in-out property <string> tunnel-target-port-text;
+    in property <string> tunnel-summary-text;
+    in property <[TriStateField]> editor-appearance-fields;
+    in property <image> preview-frame;
+    in property <color> preview-background;
+
+    in-out property <bool> native_title_drag: false;
+
+    callback dismiss();
+    callback select-general();
+    callback select-authentication();
+    callback select-tunnels();
+    callback select-proxy();
+    callback select-appearance();
+    callback update-name(string);
+    callback update-host(string);
+    callback update-port(string);
+    callback update-username(string);
+    callback set-auth-method-agent();
+    callback set-auth-method-password();
+    callback set-auth-method-keyboard-interactive();
+    callback set-auth-method-private-key();
+    callback update-password(string);
+    callback select-key(int);
+    callback manage-keys();
+    callback test-auth();
+    callback set-proxy-mode-none();
+    callback select-proxy-profile(int);
+    callback manage-proxies();
+    callback set-tunnel-kind-local();
+    callback set-tunnel-kind-remote();
+    callback set-tunnel-kind-dynamic();
+    callback update-tunnel-bind-host(string);
+    callback update-tunnel-bind-port(string);
+    callback update-tunnel-target-host(string);
+    callback update-tunnel-target-port(string);
+    callback add-tunnel();
+    callback clear-tunnels();
+    callback save();
+    callback save-connect();
+    callback editor-theme-field-action(string, string);
+    callback update-editor-theme-field(string, string);
+    callback editor-select-scheme(int);
+    callback editor-select-font(int);
+    callback reset-all-editor-theme();
+    callback title_drag_requested();
+
+    editor := SessionEditor {
+        open: true;
+        width: Theme.tool-window-width-wide;
+        height: Theme.tool-window-height-tall;
+        section: root.section;
+        target-text: root.target-text;
+        folder-text: root.folder-text;
+        name-text <=> root.name-text;
+        host-text <=> root.host-text;
+        port-text <=> root.port-text;
+        username-text <=> root.username-text;
+        auth-method-text: root.auth-method-text;
+        password-text <=> root.password-text;
+        key-options: root.key-options;
+        selected-key-index <=> root.selected-key-index;
+        selected-key-missing: root.selected-key-missing;
+        legacy-key-path-text: root.legacy-key-path-text;
+        legacy-key-has-passphrase: root.legacy-key-has-passphrase;
+        has-stored-password: root.has-stored-password;
+        auth-test-status-text: root.auth-test-status-text;
+        proxy-mode-text: root.proxy-mode-text;
+        proxy-options: root.proxy-options;
+        selected-proxy-index <=> root.selected-proxy-index;
+        proxy-selected-detail-text: root.proxy-selected-detail-text;
+        proxy-legacy-text: root.proxy-legacy-text;
+        proxy-selected-missing: root.proxy-selected-missing;
+        tunnel-kind-text: root.tunnel-kind-text;
+        tunnel-bind-host-text <=> root.tunnel-bind-host-text;
+        tunnel-bind-port-text <=> root.tunnel-bind-port-text;
+        tunnel-target-host-text <=> root.tunnel-target-host-text;
+        tunnel-target-port-text <=> root.tunnel-target-port-text;
+        tunnel-summary-text: root.tunnel-summary-text;
+        editor-appearance-fields: root.editor-appearance-fields;
+        preview-frame: root.preview-frame;
+        preview-background: root.preview-background;
+        native-title-drag <=> root.native_title_drag;
+        title-drag-requested => { root.title_drag_requested(); }
+        close => { root.dismiss(); }
+        select-general => { root.select-general(); }
+        select-authentication => { root.select-authentication(); }
+        select-tunnels => { root.select-tunnels(); }
+        select-proxy => { root.select-proxy(); }
+        select-appearance => { root.select-appearance(); }
+        update-name(string) => { root.update-name(string); }
+        update-host(string) => { root.update-host(string); }
+        update-port(string) => { root.update-port(string); }
+        update-username(string) => { root.update-username(string); }
+        set-auth-method-agent => { root.set-auth-method-agent(); }
+        set-auth-method-password => { root.set-auth-method-password(); }
+        set-auth-method-keyboard-interactive => { root.set-auth-method-keyboard-interactive(); }
+        set-auth-method-private-key => { root.set-auth-method-private-key(); }
+        update-password(string) => { root.update-password(string); }
+        select-key(int) => { root.select-key(int); }
+        manage-keys => { root.manage-keys(); }
+        test-auth => { root.test-auth(); }
+        set-proxy-mode-none => { root.set-proxy-mode-none(); }
+        select-proxy-profile(int) => { root.select-proxy-profile(int); }
+        manage-proxies => { root.manage-proxies(); }
+        set-tunnel-kind-local => { root.set-tunnel-kind-local(); }
+        set-tunnel-kind-remote => { root.set-tunnel-kind-remote(); }
+        set-tunnel-kind-dynamic => { root.set-tunnel-kind-dynamic(); }
+        update-tunnel-bind-host(string) => { root.update-tunnel-bind-host(string); }
+        update-tunnel-bind-port(string) => { root.update-tunnel-bind-port(string); }
+        update-tunnel-target-host(string) => { root.update-tunnel-target-host(string); }
+        update-tunnel-target-port(string) => { root.update-tunnel-target-port(string); }
+        add-tunnel => { root.add-tunnel(); }
+        clear-tunnels => { root.clear-tunnels(); }
+        save => { root.save(); }
+        save-connect => { root.save-connect(); }
+        editor-theme-field-action(string, string) => { root.editor-theme-field-action(string, string); }
+        update-editor-theme-field(string, string) => { root.update-editor-theme-field(string, string); }
+        editor-select-scheme(int) => { root.editor-select-scheme(int); }
+        editor-select-font(int) => { root.editor-select-font(int); }
+        reset-all-editor-theme => { root.reset-all-editor-theme(); }
+    }
+
+    public function focus-dialog() {
+        editor.focus-dialog();
+    }
+
+    init => {
+        root.focus-dialog();
+    }
+}
+

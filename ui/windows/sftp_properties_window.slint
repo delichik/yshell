@@ -1,0 +1,55 @@
+// Properties as an independent non-resizable tool window.
+
+import { Theme } from "../theme.slint";
+import { SftpPropertiesDialog } from "../components/sftp_panel.slint";
+
+export component SftpPropertiesWindow inherits Window {
+    title: @tr("Properties");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-standard;
+    min-width: Theme.tool-window-width-standard;
+    max-width: Theme.tool-window-width-standard;
+    preferred-height: Theme.tool-window-height-standard;
+    min-height: Theme.tool-window-height-standard;
+    max-height: Theme.tool-window-height-standard;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <string> name-text;
+    in property <string> path-text;
+    in property <string> kind-text;
+    in property <string> size-text;
+    in property <string> modified-text;
+    in property <string> permissions-text;
+
+    in-out property <bool> native_title_drag: false;
+
+    callback copy-path();
+    callback canceled();
+    callback title_drag_requested();
+
+    dialog := SftpPropertiesDialog {
+        open: true;
+        width: Theme.tool-window-width-standard;
+        height: Theme.tool-window-height-standard;
+        name-text: root.name-text;
+        path-text: root.path-text;
+        kind-text: root.kind-text;
+        size-text: root.size-text;
+        modified-text: root.modified-text;
+        permissions-text: root.permissions-text;
+        copy-path => { root.copy-path(); }
+        canceled => { root.canceled(); }
+    }
+
+    public function focus-dialog() {
+        dialog.focus-dialog();
+    }
+
+    init => {
+        root.focus-dialog();
+    }
+}
+

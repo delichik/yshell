@@ -1,0 +1,55 @@
+// New Folder as an independent non-resizable tool window.
+
+import { Theme } from "../theme.slint";
+import { NewFolderDialog } from "../components/session_sidebar.slint";
+
+export component NewFolderWindow inherits Window {
+    title: @tr("New Folder");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-standard;
+    min-width: Theme.tool-window-width-standard;
+    max-width: Theme.tool-window-width-standard;
+    preferred-height: Theme.tool-window-height-standard;
+    min-height: Theme.tool-window-height-standard;
+    max-height: Theme.tool-window-height-standard;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <string> title-text;
+    in property <string> message-text;
+    in-out property <string> name-text;
+    in property <string> placeholder-text;
+    in property <string> confirm-label;
+    in property <string> cancel-label;
+
+    in-out property <bool> native_title_drag: false;
+
+    callback confirmed(string);
+    callback canceled();
+    callback title_drag_requested();
+
+    dialog := NewFolderDialog {
+        open: true;
+        width: Theme.tool-window-width-standard;
+        height: Theme.tool-window-height-standard;
+        title-text: root.title-text;
+        message-text: root.message-text;
+        name-text <=> root.name-text;
+        placeholder-text: root.placeholder-text;
+        confirm-label: root.confirm-label;
+        cancel-label: root.cancel-label;
+        confirmed(string) => { root.confirmed(string); }
+        canceled => { root.canceled(); }
+    }
+
+    public function focus-dialog() {
+        dialog.focus-dialog();
+    }
+
+    init => {
+        root.focus-dialog();
+    }
+}
+

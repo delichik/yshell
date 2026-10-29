@@ -1,0 +1,95 @@
+// Host Keys as an independent non-resizable tool window.
+
+import { Theme } from "../theme.slint";
+import { HostKeysPage, HostKeyGroup } from "../pages/host_keys.slint";
+
+export component HostKeysWindow inherits Window {
+    title: @tr("Host Keys");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-wide;
+    min-width: Theme.tool-window-width-wide;
+    max-width: Theme.tool-window-width-wide;
+    preferred-height: Theme.tool-window-height-tall;
+    min-height: Theme.tool-window-height-tall;
+    max-height: Theme.tool-window-height-tall;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <[HostKeyGroup]> groups;
+    in property <int> key-count;
+    in property <string> path-text;
+    in property <string> details-text;
+    in property <string> detail-host-text;
+    in property <string> detail-algorithm-text;
+    in property <string> detail-fingerprint-text;
+    in property <string> detail-path-text;
+    in property <string> status-text;
+    in property <string> status-kind-text;
+    in property <string> status-param-1-text;
+    in property <string> status-param-2-text;
+    in property <string> empty-text;
+    in-out property <int> selected-group;
+    in-out property <int> selected-entry;
+    in-out property <bool> import-visible;
+    in-out property <string> import-text;
+
+    in-out property <bool> native_title_drag: false;
+
+    callback dismiss();
+    callback select-group(int);
+    callback select-entry(int, int);
+    callback request-remove();
+    callback browse-import-file();
+    callback toggle-import();
+    callback update-import-text(string);
+    callback import-keys();
+    callback export-keys();
+    callback request-clear-all();
+    callback title_drag_requested();
+
+    page := HostKeysPage {
+        open: true;
+        width: Theme.tool-window-width-wide;
+        height: Theme.tool-window-height-tall;
+        groups: root.groups;
+        key-count: root.key-count;
+        path-text: root.path-text;
+        details-text: root.details-text;
+        detail-host-text: root.detail-host-text;
+        detail-algorithm-text: root.detail-algorithm-text;
+        detail-fingerprint-text: root.detail-fingerprint-text;
+        detail-path-text: root.detail-path-text;
+        status-text: root.status-text;
+        status-kind-text: root.status-kind-text;
+        status-param-1-text: root.status-param-1-text;
+        status-param-2-text: root.status-param-2-text;
+        empty-text: root.empty-text;
+        selected-group <=> root.selected-group;
+        selected-entry <=> root.selected-entry;
+        import-visible <=> root.import-visible;
+        import-text <=> root.import-text;
+        native-title-drag <=> root.native_title_drag;
+        title-drag-requested => { root.title_drag_requested(); }
+        close => { root.dismiss(); }
+        select-group(int) => { root.select-group(int); }
+        select-entry(int, int) => { root.select-entry(int, int); }
+        request-remove => { root.request-remove(); }
+        browse-import-file => { root.browse-import-file(); }
+        toggle-import => { root.toggle-import(); }
+        update-import-text(string) => { root.update-import-text(string); }
+        import-keys => { root.import-keys(); }
+        export-keys => { root.export-keys(); }
+        request-clear-all => { root.request-clear-all(); }
+    }
+
+    public function focus-dialog() {
+        page.focus-dialog();
+    }
+
+    init => {
+        root.focus-dialog();
+    }
+}
+

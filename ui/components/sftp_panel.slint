@@ -1170,29 +1170,15 @@ export component SftpEntryDialog inherits Rectangle {
         else if (root.kind == "copy-to") { root.copy-to-selected(root.local-path-text); }
     }
 
-    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
-    //
-    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
-    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
-    states [
-        opened when root.open: {
-            opacity: 1.0;
-            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
-            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
-        }
-        closed when !root.open: { opacity: 0.0; }
-    ]
-    // 退场期间保持可见，等淡出结束再隐藏。
-    visible: root.open || self.opacity > 0.01;
-    background: Theme.scrim;
+    visible: root.open;
+    background: Theme.window-background;
 
     dialog_scope := FocusScope {
-        width: parent.width;
-        height: parent.height;
+        width: root.width;
+        height: root.height;
 
         key-pressed(event) => {
-            // 破坏性弹窗（删除）不响应 Esc：只能在弹窗内显式选择操作（B23，
-            // 设计语言 §5.10 / 契约 §1.2）。Esc 被吞掉，不冒泡给窗口。
+            // 破坏性弹窗（删除）不响应 Esc：只能在弹窗内显式选择操作（B23）。
             if (event.text == "\u{001b}") {
                 if (root.kind != "delete") {
                     root.canceled();
@@ -1202,29 +1188,9 @@ export component SftpEntryDialog inherits Rectangle {
             return reject;
         }
 
-        // 遮罩点击关闭：仅非破坏性弹窗（B23）；同时保留命中层，吃掉点击，
-        // 避免点穿到弹窗后面的面板。
-        TouchArea {
-            clicked => {
-                if (root.kind != "delete") {
-                    root.canceled();
-                }
-            }
-        }
-
-        Rectangle {
-            x: (parent.width - Theme.dialog-width) / 2;
-            y: max((parent.height - self.height) / 2, 40px);
-            width: Theme.dialog-width;
-            height: body.preferred-height;
-            background: Theme.panel-background;
-            border-radius: Theme.radius-panel;
-            border-width: 1px;
-            border-color: Theme.control-stroke;
-
-            TouchArea { }
-
-            body := VerticalLayout {
+        body := VerticalLayout {
+                width: root.width;
+                height: root.height;
                 padding: Theme.spacing-20;
                 spacing: 10px;
 
@@ -1314,7 +1280,6 @@ export component SftpEntryDialog inherits Rectangle {
                     }
                 }
             }
-        }
     }
 
     public function focus-dialog() {
@@ -1341,52 +1306,24 @@ export component SftpConflictDialog inherits Rectangle {
     callback resolve(string);
     callback canceled();
 
-    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
-    //
-    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
-    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
-    states [
-        opened when root.open: {
-            opacity: 1.0;
-            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
-            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
-        }
-        closed when !root.open: { opacity: 0.0; }
-    ]
-    // 退场期间保持可见，等淡出结束再隐藏。
-    visible: root.open || self.opacity > 0.01;
-    background: Theme.scrim;
+    visible: root.open;
+    background: Theme.window-background;
 
     dialog_scope := FocusScope {
-        width: parent.width;
-        height: parent.height;
+        width: root.width;
+        height: root.height;
 
         key-pressed(event) => {
-            // 覆盖冲突弹窗属于破坏性确认（Overwrite 会替换目标文件）：
-            // 不响应 Esc，只能点按钮显式选择策略或取消（B23）。
+            // 覆盖冲突弹窗属于破坏性确认：不响应 Esc（B23）。
             if (event.text == "\u{001b}") {
                 return accept;
             }
             return reject;
         }
 
-        // 遮罩点击不关闭冲突弹窗（设计语言 §5.10：遮罩点击仅非破坏性弹窗，B23）；
-        // 空 TouchArea 仍吃掉点击，避免点穿到下面的面板。
-        TouchArea { }
-
-        Rectangle {
-            x: (parent.width - Theme.dialog-width-form) / 2;
-            y: max((parent.height - self.height) / 2, 40px);
-            width: Theme.dialog-width-form;
-            height: body.preferred-height;
-            background: Theme.panel-background;
-            border-radius: Theme.radius-panel;
-            border-width: 1px;
-            border-color: Theme.control-stroke;
-
-            TouchArea { }
-
-            body := VerticalLayout {
+        body := VerticalLayout {
+                width: root.width;
+                height: root.height;
                 padding: Theme.spacing-20;
                 spacing: 10px;
 
@@ -1459,7 +1396,6 @@ export component SftpConflictDialog inherits Rectangle {
                     }
                 }
             }
-        }
     }
 
     public function focus-dialog() {
@@ -1488,25 +1424,12 @@ export component SftpPropertiesDialog inherits Rectangle {
     callback copy-path();
     callback canceled();
 
-    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
-    //
-    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
-    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
-    states [
-        opened when root.open: {
-            opacity: 1.0;
-            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
-            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
-        }
-        closed when !root.open: { opacity: 0.0; }
-    ]
-    // 退场期间保持可见，等淡出结束再隐藏。
-    visible: root.open || self.opacity > 0.01;
-    background: Theme.scrim;
+    visible: root.open;
+    background: Theme.window-background;
 
     dialog_scope := FocusScope {
-        width: parent.width;
-        height: parent.height;
+        width: root.width;
+        height: root.height;
 
         key-pressed(event) => {
             if (event.text == "\u{001b}") {
@@ -1516,23 +1439,9 @@ export component SftpPropertiesDialog inherits Rectangle {
             return reject;
         }
 
-        TouchArea {
-            clicked => { root.canceled(); }
-        }
-
-        Rectangle {
-            x: (parent.width - Theme.dialog-width) / 2;
-            y: max((parent.height - self.height) / 2, 40px);
-            width: Theme.dialog-width;
-            height: body.preferred-height;
-            background: Theme.panel-background;
-            border-radius: Theme.radius-panel;
-            border-width: 1px;
-            border-color: Theme.control-stroke;
-
-            TouchArea { }
-
-            body := VerticalLayout {
+        body := VerticalLayout {
+                width: root.width;
+                height: root.height;
                 padding: Theme.spacing-20;
                 spacing: 10px;
 
@@ -1580,7 +1489,6 @@ export component SftpPropertiesDialog inherits Rectangle {
                     }
                 }
             }
-        }
     }
 
     public function focus-dialog() {

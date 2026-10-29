@@ -1,0 +1,99 @@
+// Theme Manager as an independent non-resizable tool window.
+
+import { Theme } from "../theme.slint";
+import { ThemeManagerPage, ThemeManagerRow } from "../pages/theme_manager.slint";
+
+export component ThemeManagerWindow inherits Window {
+    title: @tr("Theme Manager");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-wide;
+    min-width: Theme.tool-window-width-wide;
+    max-width: Theme.tool-window-width-wide;
+    preferred-height: Theme.tool-window-height-tall;
+    min-height: Theme.tool-window-height-tall;
+    max-height: Theme.tool-window-height-tall;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <[ThemeManagerRow]> themes;
+    in-out property <int> selected-index;
+    in property <string> default-name-text;
+    in property <bool> selected-is-default;
+    in property <int> builtin-count;
+    in property <int> user-count;
+    in property <image> preview;
+    in property <color> preview-background;
+    in property <bool> theme-editor-open;
+    in property <bool> theme-editor-builtin;
+    in property <string> theme-editor-id;
+    in-out property <string> theme-editor-name;
+    in property <color> theme-editor-foreground;
+    in property <color> theme-editor-background;
+    in property <color> theme-editor-cursor;
+    in property <color> theme-editor-selection;
+    in property <[color]> theme-editor-ansi;
+    in property <[color]> editor-palette-swatches;
+
+    in-out property <bool> native_title_drag: false;
+
+    callback dismiss();
+    callback select-theme(int);
+    callback set-default-theme();
+    callback clone-theme(string);
+    callback edit-theme(string);
+    callback request-delete-theme(string);
+    callback close-theme-editor();
+    callback save-theme-editor();
+    callback update-theme-editor-name(string);
+    callback update-theme-editor-role(string, string);
+    callback update-theme-editor-ansi(int, string);
+    callback title_drag_requested();
+
+    page := ThemeManagerPage {
+        open: true;
+        width: Theme.tool-window-width-wide;
+        height: Theme.tool-window-height-tall;
+        themes: root.themes;
+        selected-index <=> root.selected-index;
+        default-name-text: root.default-name-text;
+        selected-is-default: root.selected-is-default;
+        builtin-count: root.builtin-count;
+        user-count: root.user-count;
+        preview: root.preview;
+        preview-background: root.preview-background;
+        theme-editor-open: root.theme-editor-open;
+        theme-editor-builtin: root.theme-editor-builtin;
+        theme-editor-id: root.theme-editor-id;
+        theme-editor-name <=> root.theme-editor-name;
+        theme-editor-foreground: root.theme-editor-foreground;
+        theme-editor-background: root.theme-editor-background;
+        theme-editor-cursor: root.theme-editor-cursor;
+        theme-editor-selection: root.theme-editor-selection;
+        theme-editor-ansi: root.theme-editor-ansi;
+        editor-palette-swatches: root.editor-palette-swatches;
+        native-title-drag <=> root.native_title_drag;
+        title-drag-requested => { root.title_drag_requested(); }
+        close => { root.dismiss(); }
+        select-theme(int) => { root.select-theme(int); }
+        set-default-theme => { root.set-default-theme(); }
+        clone-theme(string) => { root.clone-theme(string); }
+        edit-theme(string) => { root.edit-theme(string); }
+        request-delete-theme(string) => { root.request-delete-theme(string); }
+        close-theme-editor => { root.close-theme-editor(); }
+        save-theme-editor => { root.save-theme-editor(); }
+        update-theme-editor-name(string) => { root.update-theme-editor-name(string); }
+        update-theme-editor-role(string, string) => { root.update-theme-editor-role(string, string); }
+        update-theme-editor-ansi(int, string) => { root.update-theme-editor-ansi(int, string); }
+    }
+
+    public function focus-dialog() {
+        page.focus-dialog();
+    }
+
+    init => {
+        root.focus-dialog();
+    }
+}
+

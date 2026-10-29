@@ -1,0 +1,87 @@
+// Session Logging as an independent non-resizable tool window.
+
+import { Theme } from "../theme.slint";
+import { LoggingDialog } from "../components/logging_dialog.slint";
+
+export component LoggingWindow inherits Window {
+    title: @tr("Session Logging");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-standard;
+    min-width: Theme.tool-window-width-standard;
+    max-width: Theme.tool-window-width-standard;
+    preferred-height: Theme.tool-window-height-standard;
+    min-height: Theme.tool-window-height-standard;
+    max-height: Theme.tool-window-height-standard;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <string> session-name-text;
+    in property <bool> logging-active;
+    in property <string> active-path-text;
+    in property <bool> browse-enabled;
+    in-out property <string> directory-text;
+    in-out property <string> file-name-text;
+    in property <string> file-name-error-text;
+    in property <bool> file-exists;
+    in property <string> path-error-text;
+    in-out property <bool> raw-format;
+    in-out property <bool> sanitized-format;
+    in-out property <bool> timestamps;
+    in-out property <bool> include-input;
+    in-out property <bool> input-confirmed;
+    in-out property <bool> overwrite-confirmed;
+
+    in-out property <bool> native_title_drag: false;
+
+    callback browse-requested();
+    callback directory-changed(string);
+    callback file-name-changed(string);
+    callback start-requested();
+    callback stop-requested();
+    callback open-file-requested();
+    callback open-folder-requested();
+    callback cancel();
+    callback options-changed(bool, bool, bool, bool, bool);
+    callback title_drag_requested();
+
+    dialog := LoggingDialog {
+        open: true;
+        width: Theme.tool-window-width-standard;
+        height: Theme.tool-window-height-standard;
+        session-name-text: root.session-name-text;
+        logging-active: root.logging-active;
+        active-path-text: root.active-path-text;
+        browse-enabled: root.browse-enabled;
+        directory-text <=> root.directory-text;
+        file-name-text <=> root.file-name-text;
+        file-name-error-text: root.file-name-error-text;
+        file-exists: root.file-exists;
+        path-error-text: root.path-error-text;
+        raw-format <=> root.raw-format;
+        sanitized-format <=> root.sanitized-format;
+        timestamps <=> root.timestamps;
+        include-input <=> root.include-input;
+        input-confirmed <=> root.input-confirmed;
+        overwrite-confirmed <=> root.overwrite-confirmed;
+        browse-requested => { root.browse-requested(); }
+        directory-changed(string) => { root.directory-changed(string); }
+        file-name-changed(string) => { root.file-name-changed(string); }
+        start-requested => { root.start-requested(); }
+        stop-requested => { root.stop-requested(); }
+        open-file-requested => { root.open-file-requested(); }
+        open-folder-requested => { root.open-folder-requested(); }
+        cancel => { root.cancel(); }
+        options-changed(bool, bool, bool, bool, bool) => { root.options-changed(bool, bool, bool, bool, bool); }
+    }
+
+    public function focus-dialog() {
+        dialog.focus-dialog();
+    }
+
+    init => {
+        root.focus-dialog();
+    }
+}
+

@@ -36,6 +36,9 @@ export component KnownHostsPage inherits Rectangle {
     callback remove-selected();
     callback update-clear-confirmation(string);
     callback clear-all();
+    callback title_drag_requested();
+
+    in-out property <bool> native_title_drag: false;
 
     // 详情区：拆分字段可用时逐行渲染（标签本地化）；否则回退整段 `details-text`。
     private property <bool> detail-entry-visible: root.detail-host-text != "";
@@ -47,11 +50,13 @@ export component KnownHostsPage inherits Rectangle {
     background: transparent;
 
     shell := ManagerDialogShell {
-        width: 100%;
-        height: 100%;
+        width: root.width;
+        height: root.height;
         open: root.open;
         title-text: @tr("Known Hosts");
         summary-text: root.selection-text;
+        native-title-drag: root.native_title_drag;
+        title-drag-requested => { root.title_drag_requested(); }
         close => { root.close(); }
 
                 HorizontalLayout {

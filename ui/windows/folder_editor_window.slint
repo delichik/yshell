@@ -1,0 +1,79 @@
+// Folder Defaults as an independent non-resizable tool window.
+
+import { Theme } from "../theme.slint";
+import { FolderEditor, TriStateField } from "../pages/folder_editor.slint";
+
+export component FolderEditorWindow inherits Window {
+    title: @tr("Folder Defaults");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-wide;
+    min-width: Theme.tool-window-width-wide;
+    max-width: Theme.tool-window-width-wide;
+    preferred-height: Theme.tool-window-height-tall;
+    min-height: Theme.tool-window-height-tall;
+    max-height: Theme.tool-window-height-tall;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <string> folder-name;
+    in property <string> folder-path;
+    in property <string> summary-text;
+    in property <string> status-text;
+    in property <string> status-kind-text;
+    in property <string> status-param-1-text;
+    in property <string> status-param-2-text;
+    in property <[TriStateField]> appearance-fields;
+    in property <[TriStateField]> terminal-fields;
+    in property <[TriStateField]> logging-fields;
+
+    in-out property <bool> native_title_drag: false;
+
+    callback dismiss();
+    callback save();
+    callback reset-all();
+    callback field-set-inherit(string);
+    callback field-set-explicit(string);
+    callback field-reset(string);
+    callback field-edited(string, string);
+    callback field-toggled(string);
+    callback field-selected(string, int);
+    callback title_drag_requested();
+
+    editor := FolderEditor {
+        open: true;
+        width: Theme.tool-window-width-wide;
+        height: Theme.tool-window-height-tall;
+        folder-name: root.folder-name;
+        folder-path: root.folder-path;
+        summary-text: root.summary-text;
+        status-text: root.status-text;
+        status-kind-text: root.status-kind-text;
+        status-param-1-text: root.status-param-1-text;
+        status-param-2-text: root.status-param-2-text;
+        appearance-fields: root.appearance-fields;
+        terminal-fields: root.terminal-fields;
+        logging-fields: root.logging-fields;
+        native-title-drag <=> root.native_title_drag;
+        title-drag-requested => { root.title_drag_requested(); }
+        close => { root.dismiss(); }
+        save => { root.save(); }
+        reset-all => { root.reset-all(); }
+        field-set-inherit(string) => { root.field-set-inherit(string); }
+        field-set-explicit(string) => { root.field-set-explicit(string); }
+        field-reset(string) => { root.field-reset(string); }
+        field-edited(string, string) => { root.field-edited(string, string); }
+        field-toggled(string) => { root.field-toggled(string); }
+        field-selected(string, int) => { root.field-selected(string, int); }
+    }
+
+    public function focus-dialog() {
+        editor.focus-dialog();
+    }
+
+    init => {
+        root.focus-dialog();
+    }
+}
+

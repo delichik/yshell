@@ -1,0 +1,107 @@
+// Authentication as an independent non-resizable tool window.
+
+import { Theme } from "../theme.slint";
+import { AuthPromptDialog, AuthKeyOption, AuthKeyboardPrompt } from "../components/auth_prompt_dialog.slint";
+
+export component AuthPromptWindow inherits Window {
+    title: @tr("Authentication");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-standard;
+    min-width: Theme.tool-window-width-standard;
+    max-width: Theme.tool-window-width-standard;
+    preferred-height: Theme.tool-window-height-standard;
+    min-height: Theme.tool-window-height-standard;
+    max-height: Theme.tool-window-height-standard;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <string> host-text;
+    in property <string> problem-text;
+    in property <bool> has-usable-method;
+    in-out property <int> selected-method;
+    in property <bool> password-visible;
+    in property <bool> publickey-visible;
+    in property <bool> keyboard-visible;
+    in property <bool> submit-enabled;
+    in-out property <string> password-text;
+    in-out property <bool> remember-password;
+    in property <[AuthKeyOption]> key-options;
+    in-out property <int> selected-key-index;
+    in property <string> selected-key-label;
+    in-out property <string> passphrase-text;
+    in-out property <bool> use-agent;
+    in property <bool> publickey-submit-enabled;
+    in property <string> challenge-name;
+    in property <string> challenge-instruction;
+    in property <[AuthKeyboardPrompt]> challenge-prompts;
+    in property <int> challenge-round;
+    in property <int> challenge-round-total;
+    in property <bool> keyboard-final-round;
+    in property <bool> keyboard-submit-enabled;
+
+    in-out property <bool> native_title_drag: false;
+
+    callback cancel();
+    callback select-method(int);
+    callback submit-password();
+    callback update-password(string);
+    callback toggle-remember-password(bool);
+    callback select-key(int);
+    callback update-passphrase(string);
+    callback toggle-use-agent(bool);
+    callback browse-key-file();
+    callback update-challenge-answer(int, string);
+    callback submit-keyboard-round();
+    callback title_drag_requested();
+
+    dialog := AuthPromptDialog {
+        open: true;
+        width: Theme.tool-window-width-standard;
+        height: Theme.tool-window-height-standard;
+        host-text: root.host-text;
+        problem-text: root.problem-text;
+        has-usable-method: root.has-usable-method;
+        selected-method <=> root.selected-method;
+        password-visible: root.password-visible;
+        publickey-visible: root.publickey-visible;
+        keyboard-visible: root.keyboard-visible;
+        submit-enabled: root.submit-enabled;
+        password-text <=> root.password-text;
+        remember-password <=> root.remember-password;
+        key-options: root.key-options;
+        selected-key-index <=> root.selected-key-index;
+        selected-key-label: root.selected-key-label;
+        passphrase-text <=> root.passphrase-text;
+        use-agent <=> root.use-agent;
+        publickey-submit-enabled: root.publickey-submit-enabled;
+        challenge-name: root.challenge-name;
+        challenge-instruction: root.challenge-instruction;
+        challenge-prompts: root.challenge-prompts;
+        challenge-round: root.challenge-round;
+        challenge-round-total: root.challenge-round-total;
+        keyboard-final-round: root.keyboard-final-round;
+        keyboard-submit-enabled: root.keyboard-submit-enabled;
+        cancel => { root.cancel(); }
+        select-method(int) => { root.select-method(int); }
+        submit-password => { root.submit-password(); }
+        update-password(string) => { root.update-password(string); }
+        toggle-remember-password(bool) => { root.toggle-remember-password(bool); }
+        select-key(int) => { root.select-key(int); }
+        update-passphrase(string) => { root.update-passphrase(string); }
+        toggle-use-agent(bool) => { root.toggle-use-agent(bool); }
+        browse-key-file => { root.browse-key-file(); }
+        update-challenge-answer(int, string) => { root.update-challenge-answer(int, string); }
+        submit-keyboard-round => { root.submit-keyboard-round(); }
+    }
+
+    public function focus-dialog() {
+        dialog.focus-dialog();
+    }
+
+    init => {
+        root.focus-dialog();
+    }
+}
+

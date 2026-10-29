@@ -2,6 +2,24 @@
 
 use crate::error::AppResult;
 
+/// 将窗口钉成不可缩放（独立弹窗 / 工具窗口）。
+///
+/// Slint 的 `Window` 没有公开 `resizable` 属性；通过 winit accessor 关闭缩放。
+/// 非 winit / 取不到句柄时为 no-op。
+pub fn set_resizable(window: &slint::Window, resizable: bool) {
+    use slint::winit_030::WinitWindowAccessor;
+
+    let _ = window.with_winit_window(|winit_window| {
+        winit_window.set_resizable(resizable);
+    });
+}
+
+/// 独立弹窗 show 后收尾：Win11 圆角 + 不可缩放。
+pub fn prepare_aux_window(window: &slint::Window) {
+    apply_rounded_corners(window);
+    set_resizable(window, false);
+}
+
 /// 在创建任何窗口之前选定 winit 后端，并关掉默认的窗口透明。
 ///
 /// Slint winit 默认 `WindowAttributes::with_transparent(true)`。Windows 上无框

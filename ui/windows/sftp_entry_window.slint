@@ -1,0 +1,69 @@
+// SFTP as an independent non-resizable tool window.
+
+import { Theme } from "../theme.slint";
+import { SftpEntryDialog } from "../components/sftp_panel.slint";
+
+export component SftpEntryWindow inherits Window {
+    title: @tr("SFTP");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-standard;
+    min-width: Theme.tool-window-width-standard;
+    max-width: Theme.tool-window-width-standard;
+    preferred-height: Theme.tool-window-height-standard;
+    min-height: Theme.tool-window-height-standard;
+    max-height: Theme.tool-window-height-standard;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <string> kind;
+    in property <string> selected-name-text;
+    in property <string> selected-path-text;
+    in property <int> selected-count;
+    in-out property <string> name-text;
+    in-out property <string> permissions-text;
+    in-out property <string> local-path-text;
+
+    in-out property <bool> native_title_drag: false;
+
+    callback create-folder(string);
+    callback rename-selected(string);
+    callback delete-selected();
+    callback chmod-selected(string);
+    callback upload-selected(string);
+    callback download-selected(string);
+    callback copy-to-selected(string);
+    callback canceled();
+    callback title_drag_requested();
+
+    dialog := SftpEntryDialog {
+        open: true;
+        width: Theme.tool-window-width-standard;
+        height: Theme.tool-window-height-standard;
+        kind: root.kind;
+        selected-name-text: root.selected-name-text;
+        selected-path-text: root.selected-path-text;
+        selected-count: root.selected-count;
+        name-text <=> root.name-text;
+        permissions-text <=> root.permissions-text;
+        local-path-text <=> root.local-path-text;
+        create-folder(string) => { root.create-folder(string); }
+        rename-selected(string) => { root.rename-selected(string); }
+        delete-selected => { root.delete-selected(); }
+        chmod-selected(string) => { root.chmod-selected(string); }
+        upload-selected(string) => { root.upload-selected(string); }
+        download-selected(string) => { root.download-selected(string); }
+        copy-to-selected(string) => { root.copy-to-selected(string); }
+        canceled => { root.canceled(); }
+    }
+
+    public function focus-dialog() {
+        dialog.focus-dialog();
+    }
+
+    init => {
+        root.focus-dialog();
+    }
+}
+

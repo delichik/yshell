@@ -470,6 +470,9 @@ export component SessionEditor inherits Rectangle {
     callback editor-select-scheme(int);
     callback editor-select-font(int);
     callback reset-all-editor-theme();
+    callback title_drag_requested();
+
+    in-out property <bool> native_title_drag: false;
 
     private property <bool> show-password-auth:
         root.auth-method-text == "password" || root.auth-method-text == "keyboard_interactive";
@@ -493,11 +496,13 @@ export component SessionEditor inherits Rectangle {
     background: transparent;
 
     shell := ManagerDialogShell {
-        width: 100%;
-        height: 100%;
+        width: root.width;
+        height: root.height;
         open: root.open;
         title-text: @tr("Session Editor");
         summary-text: root.target-text;
+        native-title-drag: root.native_title_drag;
+        title-drag-requested => { root.title_drag_requested(); }
         close => { root.close(); }
 
         // --- 主体：左侧分区导航 + 右侧表单 -----------------------------

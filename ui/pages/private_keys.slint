@@ -134,6 +134,9 @@ export component PrivateKeysPage inherits Rectangle {
     callback save-passphrase();
     callback forget-passphrase();
     callback rename-key(string);
+    callback title_drag_requested();
+
+    in-out property <bool> native_title_drag: false;
 
     // 退场淡出期间壳仍可见：根跟着壳的 opacity，避免透明全屏挡住下层。
     visible: root.open || shell.opacity > 0.01;
@@ -152,11 +155,13 @@ export component PrivateKeysPage inherits Rectangle {
     );
 
     shell := ManagerDialogShell {
-        width: 100%;
-        height: 100%;
+        width: root.width;
+        height: root.height;
         open: root.open;
         title-text: @tr("Private Keys");
         summary-text: root.list-summary-text;
+        native-title-drag: root.native_title_drag;
+        title-drag-requested => { root.title_drag_requested(); }
         close => { root.close(); }
 
                 HorizontalLayout {

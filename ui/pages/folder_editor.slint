@@ -379,6 +379,9 @@ export component FolderEditor inherits Rectangle {
     callback field-edited(string, string);
     callback field-toggled(string);
     callback field-selected(string, int);
+    callback title_drag_requested();
+
+    in-out property <bool> native_title_drag: false;
 
     private property <string> title-text:
         root.folder-name == "" ? @tr("Folder Defaults") : @tr("Folder Defaults — {0}", root.folder-name);
@@ -390,12 +393,14 @@ export component FolderEditor inherits Rectangle {
     background: transparent;
 
     shell := ManagerDialogShell {
-        width: 100%;
-        height: 100%;
+        width: root.width;
+        height: root.height;
         open: root.open;
         content-sized: true;
         title-text: root.title-text;
         summary-text: root.folder-path;
+        native-title-drag: root.native_title_drag;
+        title-drag-requested => { root.title_drag_requested(); }
         close => { root.close(); }
 
         summary-hint := Text {

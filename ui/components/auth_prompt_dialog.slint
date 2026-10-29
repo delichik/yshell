@@ -3,7 +3,7 @@
 // 支持按服务端 challenge 动态渲染多轮 prompt（name / instruction / 多 prompt / echo）。
 //
 // 与宿主（Rust / main_window）的约定：
-//   * `open` 由宿主投影驱动；`cancel` 关闭弹窗（Esc / 遮罩点击 / Cancel 按钮同一路径）。
+//   * `open` 由宿主投影驱动；`cancel` 关闭弹窗（Esc / Cancel 按钮同一路径）。
 //   * `selected-method`（0/1/2）与 `*-visible` 由宿主按 A0 的 `AuthMethods` 投影：
 //       0 = password、1 = publickey（含 ssh-agent 选项）、2 = keyboard-interactive。
 //   * 输入属性（password-text / passphrase-text / challenge answers）在弹窗内编辑，
@@ -135,28 +135,12 @@ export component AuthPromptDialog inherits Rectangle {
     callback update-challenge-answer(int, string);
     callback submit-keyboard-round();
 
-    // 面板宽度与正文列宽集中定义（宽度归一见 WS-C 报告）。正文类文本显式给宽度：
-    // B 轮5 实测面板底部内边距塌成 2px（按钮行贴住下边框），根因是自动换行的正文在
-    // 布局宽度未定时估算 preferred-height，少算了一行。
-    private property <length> dialog-width: Theme.dialog-width;
+    // 正文列宽：自动换行正文显式宽度，避免 preferred-height 少算一行（B 轮5）。
     private property <length> content-width:
-        root.dialog-width - 2 * 1px - 2 * Theme.spacing-20;
+        Theme.tool-window-width-standard - 2 * Theme.spacing-20;
 
-    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
-    //
-    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
-    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
-    states [
-        opened when root.open: {
-            opacity: 1.0;
-            in { animate opacity { duration: Theme.duration-normal; easing: ease-out; } }
-            out { animate opacity { duration: Theme.duration-faster; easing: ease-in; } }
-        }
-        closed when !root.open: { opacity: 0.0; }
-    ]
-    // 退场期间保持可见，等淡出结束再隐藏。
-    visible: root.open || self.opacity > 0.01;
-    background: Theme.scrim;
+    visible: root.open;
+    background: Theme.window-background;
 
     private property <bool> show-password:
         root.selected-method == 0 && root.password-visible;
@@ -169,10 +153,9 @@ export component AuthPromptDialog inherits Rectangle {
         (root.password-visible && (root.publickey-visible || root.keyboard-visible))
         || (root.publickey-visible && root.keyboard-visible);
 
-    // L2（Esc / 遮罩点击关闭）：与 Cancel 按钮同一路径；面板吞掉空白点击。
     dialog_scope := FocusScope {
-        width: parent.width;
-        height: parent.height;
+        width: root.width;
+        height: root.height;
 
         key-pressed(event) => {
             if (event.text == "\u{001b}") {
@@ -182,24 +165,9 @@ export component AuthPromptDialog inherits Rectangle {
             return reject;
         }
 
-        TouchArea {
-            clicked => { root.cancel(); }
-        }
-
-        Rectangle {
-            x: (parent.width - root.dialog-width) / 2;
-            y: max((parent.height - self.height) / 2, Theme.spacing-24);
-            width: root.dialog-width;
-            // 内容高于窗口时收缩，标题与操作区始终可见
-            height: min(body.preferred-height, parent.height - 2 * Theme.spacing-24);
-            background: Theme.panel-background;
-            border-radius: Theme.radius-panel;
-            border-width: 1px;
-            border-color: Theme.control-stroke;
-
-            TouchArea { }
-
-            body := VerticalLayout {
+        body := VerticalLayout {
+                width: root.width;
+                height: root.height;
                 padding: Theme.spacing-20;
                 spacing: Theme.spacing-12;
 
@@ -540,7 +508,6 @@ export component AuthPromptDialog inherits Rectangle {
                     }
                 }
             }
-        }
     }
 
     /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。

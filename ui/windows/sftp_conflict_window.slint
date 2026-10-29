@@ -1,0 +1,51 @@
+// Resolve name conflicts as an independent non-resizable tool window.
+
+import { Theme } from "../theme.slint";
+import { SftpConflictDialog } from "../components/sftp_panel.slint";
+
+export component SftpConflictWindow inherits Window {
+    title: @tr("Resolve name conflicts");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-standard;
+    min-width: Theme.tool-window-width-standard;
+    max-width: Theme.tool-window-width-standard;
+    preferred-height: Theme.tool-window-height-standard;
+    min-height: Theme.tool-window-height-standard;
+    max-height: Theme.tool-window-height-standard;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <string> source-text;
+    in property <string> destination-text;
+    in property <int> conflict-count;
+    in property <string> conflict-paths-text;
+
+    in-out property <bool> native_title_drag: false;
+
+    callback resolve(string);
+    callback canceled();
+    callback title_drag_requested();
+
+    dialog := SftpConflictDialog {
+        open: true;
+        width: Theme.tool-window-width-standard;
+        height: Theme.tool-window-height-standard;
+        source-text: root.source-text;
+        destination-text: root.destination-text;
+        conflict-count: root.conflict-count;
+        conflict-paths-text: root.conflict-paths-text;
+        resolve(string) => { root.resolve(string); }
+        canceled => { root.canceled(); }
+    }
+
+    public function focus-dialog() {
+        dialog.focus-dialog();
+    }
+
+    init => {
+        root.focus-dialog();
+    }
+}
+

@@ -1,0 +1,63 @@
+// Host Key as an independent non-resizable tool window.
+
+import { Theme } from "../theme.slint";
+import { HostKeyDialog } from "../components/host_key_dialog.slint";
+
+export component HostKeyWindow inherits Window {
+    title: @tr("Host Key");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-standard;
+    min-width: Theme.tool-window-width-standard;
+    max-width: Theme.tool-window-width-standard;
+    preferred-height: Theme.tool-window-height-standard;
+    min-height: Theme.tool-window-height-standard;
+    max-height: Theme.tool-window-height-standard;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <string> prompt-text;
+    in property <string> mode-text;
+    in property <string> target-text;
+    in property <string> known-hosts-path-text;
+    in property <string> algorithm-text;
+    in property <string> fingerprint-text;
+    in property <string> expected-algorithm-text;
+    in property <string> expected-fingerprint-text;
+
+    in-out property <bool> native_title_drag: false;
+
+    callback cancel();
+    callback trust-once();
+    callback trust-and-save();
+    callback dismissed();
+    callback title_drag_requested();
+
+    dialog := HostKeyDialog {
+        open: true;
+        width: Theme.tool-window-width-standard;
+        height: Theme.tool-window-height-standard;
+        prompt-text: root.prompt-text;
+        mode-text: root.mode-text;
+        target-text: root.target-text;
+        known-hosts-path-text: root.known-hosts-path-text;
+        algorithm-text: root.algorithm-text;
+        fingerprint-text: root.fingerprint-text;
+        expected-algorithm-text: root.expected-algorithm-text;
+        expected-fingerprint-text: root.expected-fingerprint-text;
+        cancel => { root.cancel(); }
+        trust-once => { root.trust-once(); }
+        trust-and-save => { root.trust-and-save(); }
+        dismissed => { root.dismissed(); }
+    }
+
+    public function focus-dialog() {
+        dialog.focus-dialog();
+    }
+
+    init => {
+        root.focus-dialog();
+    }
+}
+

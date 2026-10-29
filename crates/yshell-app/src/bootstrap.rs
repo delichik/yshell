@@ -7326,47 +7326,8 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     restore_shortcut_focus_after_modal(window, projection);
 }
 
-/// 上一次投影时是否有模态弹窗可见（W5-A2：弹窗关闭后把键盘焦点还给全局快捷键 FocusScope）。
-static MODAL_WAS_VISIBLE: AtomicBool = AtomicBool::new(false);
-
-/// W5-A2：模态弹窗关闭时，被销毁的输入框会带走键盘焦点，窗口级快捷键随之失效；
-/// 此时把焦点还给 `MainWindow` 里的全局快捷键 FocusScope。
-///
-/// 弹窗可见性一半来自投影（编辑器/known hosts），一半来自窗口本地属性（设置、关于、
-/// 退出确认、删除确认、SFTP 弹窗），所以两边都要读。只在"可见 → 不可见"的跳变上、
-/// 且终端没有持有焦点时抢焦点：终端聚焦时它的 FocusScope 会自己保住焦点，
-/// 抢过来只会让终端失去键盘输入。
-fn restore_shortcut_focus_after_modal(window: &MainWindow, projection: &AppProjection) {
-    // Keep in sync with Slint `any_modal_visible` / `focus-top-dialog`.
-    let modal_visible = projection.editor_modal_visible
-        || projection.editor_discard_dialog_visible
-        || projection.known_hosts_modal_visible
-        || projection.password_prompt_visible
-        || projection.host_key_prompt_visible
-        || projection.private_keys_modal_visible
-        || projection.host_keys_modal_visible
-        || projection.auth_prompt_visible
-        || projection.logging_dialog_visible
-        || projection.close_tabs_confirm_visible
-        || projection.close_window_confirm_visible
-        || projection.folder_editor_visible
-        || projection.theme_manager_visible
-        || projection.theme_manager_remove_confirm_visible
-        || projection.sftp_conflict_visible
-        || projection.sftp_properties_visible
-        || window.get_settings_dialog_visible()
-        || window.get_about_dialog_visible()
-        || window.get_quit_dialog_visible()
-        || window.get_delete_session_dialog_visible()
-        || window.get_new_folder_dialog_visible()
-        || window.get_sftp_dialog_kind() != "none";
-    if MODAL_WAS_VISIBLE.swap(modal_visible, Ordering::Relaxed)
-        && !modal_visible
-        && !window.get_terminal_focused()
-    {
-        window.invoke_focus_global_shortcuts();
-    }
-}
+/// Tool windows are non-modal; keep the hook so projection call sites stay stable.
+fn restore_shortcut_focus_after_modal(_window: &MainWindow, _projection: &AppProjection) {}
 
 pub fn bootstrap_app() -> AppResult<YShellApp> {
     // 须在首个 Window 创建之前：关掉 Windows 无框窗默认透明（顶栏透缝）。

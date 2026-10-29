@@ -192,9 +192,18 @@ export global Theme {
     out property <length> dialog-width-form: 560px;
     /// 管理型页面宽度（表格 / 双栏表单）。超出 §5.10 的 480/560，
     /// 但这类页面需要横向空间；统一到一档，避免每个页面各写各的。
+    /// 独立工具窗口请用 `tool-window-width-wide`；本 token 保留给仍引用它的布局。
     out property <length> dialog-width-wide: 760px;
-    /// 管理器面板最大高度（居中；矮窗时再被 `parent.height - 2×spacing-24` 夹紧）。
+    /// 管理器面板最大高度（遗留 overlay；独立工具窗口用 `tool-window-height-*`）。
     out property <length> manager-panel-max-height: 640px;
+    /// 独立工具窗口客户区：标准（About / 表单提示 / Logging / New Folder 等）。
+    out property <length> tool-window-width-standard: 600px;
+    out property <length> tool-window-height-standard: 480px;
+    /// 独立工具窗口客户区：宽页（Settings / 编辑器 / 列表+详情管理器）。
+    out property <length> tool-window-width-wide: 920px;
+    out property <length> tool-window-height-tall: 720px;
+    /// 工具窗口内容区内边距（比 overlay 的 spacing-20 略松）。
+    out property <length> tool-window-padding: 24px;
     /// 列表+详情管理器的左栏宽度（Host Keys / Private Keys / Known Hosts / Proxies）。
     out property <length> manager-list-width: 320px;
     /// Host+Port 一行里 Port 字段固定宽（带标签）。
