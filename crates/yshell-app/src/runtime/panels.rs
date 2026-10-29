@@ -211,6 +211,9 @@ impl AppRuntime {
             requested.to_string(),
             String::new(),
         );
+        // Save = save and close Settings.
+        self.settings_appearance_visible = false;
+        self.theme_editor = None;
         Ok(self.projection())
     }
 
@@ -281,6 +284,9 @@ impl AppRuntime {
             scrollback_lines.to_string(),
             scrollback_max_cells.to_string(),
         );
+        // Save = save and close Settings.
+        self.settings_appearance_visible = false;
+        self.theme_editor = None;
         Ok(self.projection())
     }
 

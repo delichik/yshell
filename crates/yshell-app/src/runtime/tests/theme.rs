@@ -165,6 +165,10 @@ fn settings_appearance_form_validates_and_persists() {
     assert!(saved
         .settings_appearance_status_text
         .contains("Saved the terminal appearance"));
+    assert!(
+        !saved.settings_appearance_visible,
+        "Save closes the Settings dialog"
+    );
     let persisted = ConfigStore::new(temp.path())
         .load_or_recover()
         .expect("reload")
@@ -178,15 +182,21 @@ fn settings_appearance_form_validates_and_persists() {
         TerminalProfile::default().scrollback_lines
     );
 
+    runtime.open_settings_appearance();
     runtime.update_settings_appearance_font_size("0");
     let rejected = runtime.save_settings_appearance().expect("save rejected");
     assert!(rejected
         .settings_appearance_status_text
         .contains("appearance.font_size"));
+    assert!(
+        rejected.settings_appearance_visible,
+        "validation failure keeps Settings open"
+    );
 
     runtime.update_settings_appearance_font_size("16");
     runtime.reset_settings_appearance_defaults();
     let reset = runtime.save_settings_appearance().expect("save reset");
+    assert!(!reset.settings_appearance_visible);
     assert_eq!(
         reset.settings_appearance_color_scheme_name_text,
         "YShell Default"
@@ -283,7 +293,11 @@ fn clone_edit_and_delete_user_theme() {
         .any(|row| row.id == user_id && row.selected && !row.builtin));
 
     runtime.update_theme_editor_role_color("foreground", "#112233");
-    runtime.save_theme_editor().expect("save theme");
+    let saved_editor = runtime.save_theme_editor().expect("save theme");
+    assert!(
+        !saved_editor.theme_editor_open,
+        "Save Theme closes the theme editor"
+    );
     let theme = runtime
         .theme_catalog
         .get_user(&user_id)
@@ -457,8 +471,8 @@ fn theme_manager_clone_edit_and_delete_require_confirmation() {
         color_rgba(TerminalColor::rgb(0x11, 0x22, 0x33)),
         "preview must follow the editor draft"
     );
-    runtime.save_theme_editor().expect("save theme");
-    let saved = runtime.projection();
+    let saved = runtime.save_theme_editor().expect("save theme");
+    assert!(!saved.theme_editor_open);
     assert!(saved
         .theme_manager_rows
         .iter()
@@ -670,6 +684,10 @@ fn folder_editor_three_state_round_trip() {
     assert!(saved
         .folder_editor_status_text
         .contains("Saved folder defaults"));
+    assert!(
+        !saved.folder_editor_visible,
+        "Save closes the folder editor"
+    );
 
     let folder = runtime
         .config_document
@@ -686,8 +704,12 @@ fn folder_editor_three_state_round_trip() {
     assert!(logging.enabled);
     assert_eq!(logging.directory.as_deref(), Some("/var/log/prod"));
 
+    runtime
+        .open_folder_editor("folder-prod")
+        .expect("reopen editor");
     runtime.reset_all_folder_editor();
-    runtime.save_folder_editor().expect("save reset");
+    let reset = runtime.save_folder_editor().expect("save reset");
+    assert!(!reset.folder_editor_visible);
     let folder = runtime
         .config_document
         .find_folder("folder-prod")
@@ -709,6 +731,7 @@ fn folder_editor_validation_reports_translatable_status_kind() {
 
     runtime.update_folder_editor_field("terminal.scrollback_lines", "not-a-number");
     let rejected = runtime.save_folder_editor().expect("save returns a projection");
+    assert!(rejected.folder_editor_visible, "validation keeps editor open");
     assert_eq!(
         rejected.folder_editor_status_kind_text,
         "folder-defaults-not-number"
@@ -720,6 +743,7 @@ fn folder_editor_validation_reports_translatable_status_kind() {
 
     runtime.update_folder_editor_field("terminal.scrollback_lines", "999999999");
     let rejected = runtime.save_folder_editor().expect("save returns a projection");
+    assert!(rejected.folder_editor_visible);
     assert_eq!(
         rejected.folder_editor_status_kind_text,
         "folder-defaults-out-of-range"

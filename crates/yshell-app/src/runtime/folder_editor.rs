@@ -528,6 +528,8 @@ impl AppRuntime {
             folder_name,
             String::new(),
         );
+        // Save = save and close (same as session editor).
+        self.folder_editor.visible = false;
         Ok(self.projection())
     }
 

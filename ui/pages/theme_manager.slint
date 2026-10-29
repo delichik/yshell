@@ -400,7 +400,7 @@ export component ThemeManagerPage inherits Rectangle {
                     Text {
                         horizontal-stretch: 1;
                         text: root.theme-editor-open
-                            ? @tr("The preview follows the draft. Save the theme to write it to disk; discard discards the draft.")
+                            ? @tr("The preview follows the draft. Save writes it to disk and closes the editor; discard discards the draft.")
                             : @tr("Click a theme to preview it. Set as default applies it to terminals opened afterwards.");
                         color: Theme.text-tertiary;
                         font-size: Theme.font-caption;

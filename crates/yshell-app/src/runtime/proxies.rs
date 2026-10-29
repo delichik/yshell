@@ -370,6 +370,7 @@ impl AppRuntime {
     }
 
     /// Validates the form and creates/updates the managed profile.
+    /// On success, closes the proxies manager (Save = save and close).
     pub fn save_proxy_editor(&mut self) -> AppProjection {
         match self.persist_proxy_editor() {
             Ok((id, created)) => {
@@ -394,6 +395,9 @@ impl AppRuntime {
                     String::new(),
                 );
                 self.set_status_kind(kind, status_text, String::new(), String::new());
+                self.proxies_modal_visible = false;
+                self.proxies_remove_confirm_visible = false;
+                self.proxies_referencing_text.clear();
             }
             Err(error) => {
                 self.set_proxies_status_kind(

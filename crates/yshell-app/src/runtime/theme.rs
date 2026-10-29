@@ -1734,6 +1734,7 @@ impl AppRuntime {
     }
 
     /// Saves the theme editor draft (user themes only).
+    /// On success, closes the editor (Save = save and close).
     pub fn save_theme_editor(&mut self) -> AppResult<AppProjection> {
         let Some(editor) = self.theme_editor.clone() else {
             return Ok(self.projection());
@@ -1748,7 +1749,7 @@ impl AppRuntime {
         self.theme_catalog
             .save_user(theme.clone())
             .map_err(AppError::from_error)?;
-        self.theme_editor = Some(ThemeEditorDraft::from_color_theme(&theme, false));
+        self.theme_editor = None;
         self.theme_manager_selected_id = Some(theme.id.clone());
         self.settings_appearance_status = SettingsAppearanceStatus::Hint;
         Ok(self.projection())
@@ -1903,6 +1904,9 @@ impl AppRuntime {
             self.settings_appearance.color_scheme.clone(),
             String::new(),
         );
+        // Save = save and close Settings.
+        self.settings_appearance_visible = false;
+        self.theme_editor = None;
         Ok(self.projection())
     }
 

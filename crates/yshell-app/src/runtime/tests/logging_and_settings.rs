@@ -146,6 +146,7 @@ fn settings_terminal_save_persists_scrollback_limits() {
     let updated_cells = runtime.update_settings_scrollback_max_cells("3000000");
     assert_eq!(updated_cells.settings_scrollback_max_cells_text, "3000000");
 
+    runtime.open_settings_appearance();
     let saved = runtime
         .save_settings_terminal()
         .expect("save terminal settings");
@@ -153,6 +154,10 @@ fn settings_terminal_save_persists_scrollback_limits() {
     assert_eq!(saved.settings_terminal_status_kind_text, "saved");
     assert_eq!(saved.settings_terminal_status_value_text, "25000");
     assert_eq!(saved.settings_terminal_status_limit_text, "3000000");
+    assert!(
+        !saved.settings_appearance_visible,
+        "Save closes the Settings dialog"
+    );
     let persisted = ConfigStore::new(temp.path())
         .load_or_recover()
         .expect("reload config")
@@ -207,6 +212,7 @@ fn settings_terminal_rejects_invalid_input_without_persisting() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
 
+    runtime.open_settings_appearance();
     for value in ["", "   ", "abc", "-5", "99", "1000001"] {
         let _ = runtime.update_settings_scrollback_lines(value);
         let rejected = runtime
@@ -217,6 +223,10 @@ fn settings_terminal_rejects_invalid_input_without_persisting() {
             "lines value {value:?} should be rejected"
         );
         assert!(!rejected.settings_terminal_status_kind_text.is_empty());
+        assert!(
+            rejected.settings_appearance_visible,
+            "validation failure keeps Settings open"
+        );
         assert_eq!(runtime.config_document.terminal, TerminalProfile::default());
     }
 
@@ -230,6 +240,7 @@ fn settings_terminal_rejects_invalid_input_without_persisting() {
             rejected.settings_terminal_status_kind_text, "saved",
             "cap value {value:?} should be rejected"
         );
+        assert!(rejected.settings_appearance_visible);
         assert_eq!(runtime.config_document.terminal, TerminalProfile::default());
     }
 
