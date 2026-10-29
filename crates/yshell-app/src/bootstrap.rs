@@ -5823,24 +5823,128 @@ fn workspace_splitter_from(
     }
 }
 
-fn set_workspace_split_models(
-    window: &MainWindow,
-    split: &crate::runtime::WorkspaceSplitProjection,
+fn workspace_splitter_matches(
+    current: &WorkspaceSplitter,
+    next: &crate::runtime::WorkspaceSplitterProjection,
+) -> bool {
+    current.split_id == next.split_id
+        && current.vertical == next.vertical
+        && current.x == next.x
+        && current.y == next.y
+        && current.w == next.w
+        && current.h == next.h
+        && current.parent_x == next.parent_x
+        && current.parent_y == next.parent_y
+        && current.parent_w == next.parent_w
+        && current.parent_h == next.parent_h
+        && current.ratio == next.ratio
+}
+
+/// 分屏叶子模型：pane 集合稳定时就地改行，避免 `for leaf in leaves` 重建
+/// TerminalView（会丢键盘焦点，切 tab 也会明显卡顿）。
+fn apply_workspace_split_leaves(
+    current: ModelRc<WorkspacePaneLeaf>,
+    leaves: &[crate::runtime::WorkspacePaneLeafProjection],
+    set_model: impl FnOnce(ModelRc<WorkspacePaneLeaf>),
 ) {
-    window.set_workspace_split_leaves(ModelRc::new(VecModel::from(
-        split
-            .leaves
+    if current.row_count() == leaves.len() {
+        let handle: Option<std::rc::Rc<dyn Model<Data = WorkspacePaneLeaf>>> =
+            current.clone().try_into().ok();
+        if let Some(handle) = handle {
+            if let Some(model) = handle.as_any().downcast_ref::<VecModel<WorkspacePaneLeaf>>() {
+                let structure_stable = (0..leaves.len()).all(|index| {
+                    model
+                        .row_data(index)
+                        .is_some_and(|row| row.pane_id == leaves[index].pane_id)
+                });
+                if structure_stable {
+                    for (index, next) in leaves.iter().enumerate() {
+                        let Some(mut row) = model.row_data(index) else {
+                            continue;
+                        };
+                        apply_workspace_tabs_model(row.tabs.clone(), &next.tabs, |tabs| {
+                            row.tabs = tabs;
+                        });
+                        row.x = next.x;
+                        row.y = next.y;
+                        row.w = next.w;
+                        row.h = next.h;
+                        row.empty = next.empty;
+                        row.focused = next.focused;
+                        row.quick_connect = next.quick_connect;
+                        row.tab_id = next.tab_id.clone().into();
+                        row.title_text = next.title_text.clone().into();
+                        row.mode_text = next.mode_text.clone().into();
+                        row.quick_connect_input_text = next.quick_connect_input_text.clone().into();
+                        row.quick_connect_error_text = next.quick_connect_error_text.clone().into();
+                        row.sftp = sftp_pane_data_from(&next.sftp);
+                        model.set_row_data(index, row);
+                    }
+                    return;
+                }
+            }
+        }
+    }
+    set_model(ModelRc::new(VecModel::from(
+        leaves
             .iter()
             .map(workspace_pane_leaf_from)
             .collect::<Vec<_>>(),
     )));
-    window.set_workspace_split_splitters(ModelRc::new(VecModel::from(
-        split
-            .splitters
+}
+
+fn apply_workspace_split_splitters(
+    current: ModelRc<WorkspaceSplitter>,
+    splitters: &[crate::runtime::WorkspaceSplitterProjection],
+    set_model: impl FnOnce(ModelRc<WorkspaceSplitter>),
+) {
+    if current.row_count() == splitters.len() {
+        let handle: Option<std::rc::Rc<dyn Model<Data = WorkspaceSplitter>>> =
+            current.clone().try_into().ok();
+        if let Some(handle) = handle {
+            if let Some(model) = handle.as_any().downcast_ref::<VecModel<WorkspaceSplitter>>() {
+                let structure_stable = (0..splitters.len()).all(|index| {
+                    model
+                        .row_data(index)
+                        .is_some_and(|row| row.split_id == splitters[index].split_id)
+                });
+                if structure_stable {
+                    for (index, next) in splitters.iter().enumerate() {
+                        let Some(row) = model.row_data(index) else {
+                            continue;
+                        };
+                        if workspace_splitter_matches(&row, next) {
+                            continue;
+                        }
+                        model.set_row_data(index, workspace_splitter_from(next));
+                    }
+                    return;
+                }
+            }
+        }
+    }
+    set_model(ModelRc::new(VecModel::from(
+        splitters
             .iter()
             .map(workspace_splitter_from)
             .collect::<Vec<_>>(),
     )));
+}
+
+fn set_workspace_split_models(
+    window: &MainWindow,
+    split: &crate::runtime::WorkspaceSplitProjection,
+) {
+    apply_workspace_split_leaves(
+        window.get_workspace_split_leaves(),
+        &split.leaves,
+        |model| window.set_workspace_split_leaves(model),
+    );
+    apply_workspace_split_splitters(
+        window.get_workspace_split_splitters(),
+        &split.splitters,
+        |model| window.set_workspace_split_splitters(model),
+    );
     let focused = split.leaves.iter().find(|leaf| leaf.focused);
     window.set_workspace_split_focused_leaf_x(focused.map(|l| l.x).unwrap_or(0.0));
     window.set_workspace_split_focused_leaf_y(focused.map(|l| l.y).unwrap_or(0.0));

@@ -185,6 +185,13 @@ export component TerminalWorkspace inherits VerticalLayout {
         }
     }
 
+    // 刚进入分屏时 focused-pane 可能不变，必须靠 split-active 边沿把焦点交给叶子。
+    changed split-active => {
+        if (root.split-active && root.terminal-visible) {
+            root.focus-terminal();
+        }
+    }
+
     // TAB-6：覆盖层关闭（Esc/提交成功）后，分屏模式把焦点还给聚焦叶的终端。
     changed split-focused-quick-connect => {
         if (root.split-active && !root.split-focused-quick-connect) {

@@ -173,10 +173,54 @@ component SplitPaneLeaf inherits Rectangle {
     border-radius: 0px;
     background: Theme.window-background;
 
-    public function focus-terminal() {
-        if (root.show-terminal && root.focused && !root.quick-connect) {
-            leaf_tv.focus-terminal();
+    /// 宿主递增该计数以请求把键盘焦点落到本叶终端（分屏创建 / 切 pane 后）。
+    in property <int> focus-generation: 0;
+
+    callback terminal-focus-changed(bool);
+
+    // 延后一拍再 focus：叶子刚创建 / interactive 刚翻 true 时同帧 focus 常被吞掉。
+    focus_timer := Timer {
+        interval: 1ms;
+        running: false;
+        triggered => {
+            if (root.show-terminal && root.focused && !root.quick-connect) {
+                leaf_tv.focus-terminal();
+            }
+            self.running = false;
         }
+    }
+
+    public function focus-terminal() {
+        focus_timer.running = false;
+        focus_timer.running = true;
+    }
+
+    init => {
+        if (root.focused && root.show-terminal) {
+            root.focus-terminal();
+        }
+    }
+
+    changed focus-generation => {
+        root.focus-terminal();
+    }
+
+    changed focused => {
+        if (root.focused) {
+            root.focus-terminal();
+        }
+        // 失焦叶立刻上报，避免 WorkspaceSplitView.terminal-focused 卡住为 true。
+        root.terminal-focus-changed(root.terminal-focused);
+    }
+
+    changed show-terminal => {
+        if (root.show-terminal && root.focused) {
+            root.focus-terminal();
+        }
+    }
+
+    changed terminal-focused => {
+        root.terminal-focus-changed(root.terminal-focused);
     }
 
     // DropArea 包整叶：tab 栏子 DropArea 优先接「移入」；余区按六段分屏；预览盖满整叶。
@@ -460,7 +504,12 @@ export component WorkspaceSplitView inherits Rectangle {
     in property <bool> connection-overlay-pending: false;
     in property <bool> view-visible: true;
 
-    out property <bool> terminal-focused: false;
+    /// 由聚焦叶的 TerminalView 上报；此前写死 false，导致分屏后焦点恢复/窗口激活失灵。
+    property <bool> focused-leaf-terminal-focused: false;
+    out property <bool> terminal-focused: root.focused-leaf-terminal-focused;
+
+    /// 递增后各叶 `changed focus-generation` 会把焦点落到当前 focused 叶。
+    property <int> focus-generation: 0;
 
     /// New Tab page data shared by every leaf (per-tab input lives in the leaf).
     in property <string> quick-connect-summary-text: "";
@@ -542,7 +591,9 @@ export component WorkspaceSplitView inherits Rectangle {
     callback sftp-paste-cross-pane();
     callback sftp-column-ratio-changed(float);
 
-    public function focus-terminal() { }
+    public function focus-terminal() {
+        root.focus-generation += 1;
+    }
 
     for leaf in root.leaves : SplitPaneLeaf {
         x: root.width * leaf.x;
@@ -561,6 +612,7 @@ export component WorkspaceSplitView inherits Rectangle {
         pane-id: leaf.pane-id;
         tabs: leaf.tabs;
         focused: leaf.focused;
+        focus-generation: root.focus-generation;
         terminal-image: leaf.focused ? root.primary-image : root.secondary-image;
         surface-background: leaf.focused ? root.primary-surface-background : root.secondary-surface-background;
         cursor-column: root.cursor-column;
@@ -578,6 +630,11 @@ export component WorkspaceSplitView inherits Rectangle {
         connection-overlay-failed: root.connection-overlay-failed;
         connection-overlay-pending: root.connection-overlay-pending;
         view-visible: root.view-visible;
+        terminal-focus-changed(has-focus) => {
+            if (leaf.focused) {
+                root.focused-leaf-terminal-focused = has-focus;
+            }
+        }
         focus-requested() => { root.focus-pane(leaf.pane-id); }
         key-pressed(t, c, a, s, m) => { root.terminal-key(t, c, a, s, m); }
         scroll-lines(d) => { root.terminal-scroll(d); }
