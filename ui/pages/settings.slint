@@ -208,9 +208,9 @@ export component SettingsDialog inherits Rectangle {
                         border-width: 1px;
                         border-color: Theme.card-stroke;
 
-                        VerticalLayout {
-                            padding: Theme.spacing-16;
-                            spacing: Theme.spacing-12;
+                            VerticalLayout {
+                            padding: Theme.spacing-20;
+                            spacing: Theme.spacing-16;
 
                             Rectangle {
                                 vertical-stretch: 1;
@@ -735,8 +735,8 @@ export component SettingsDialog inherits Rectangle {
                                                 wrap: word-wrap;
                                             }
 
-                                            // 三个长入口纵向堆叠，避免 760 里横挤截断。
-                                            VerticalLayout {
+                                            // 宽工具窗下入口可横排；窄时仍自动换行由布局分配。
+                                            HorizontalLayout {
                                                 spacing: Theme.spacing-8;
                                                 alignment: start;
 

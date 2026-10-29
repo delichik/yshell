@@ -748,6 +748,8 @@ impl DialogWindowManager {
     ) -> AppResult<()> {
         if self.confirm.is_none() {
             let window = CompactConfirmWindow::new().map_err(AppError::from_error)?;
+            prep_tool_window!(window);
+            wire_tool_title_drag!(window);
             self.wire_confirm(&window, window_runtime);
             self.confirm = Some(window);
         }

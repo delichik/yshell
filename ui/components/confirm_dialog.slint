@@ -2,19 +2,8 @@ import { Theme } from "../theme.slint";
 import { WinButton, WinToggle } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 
-// Reusable modal confirmation dialog.
-//
-// When `confirmation-token` is non-empty the user has to type that exact text
-// before the primary button becomes enabled (dangerous operations).
-// 形态：WinUI 3 ContentDialog（§5.10）——panel-background 面板、subtitle 标题、
-// 右对齐操作区（主操作在右）与全屏 scrim。
-//
-// L2（对话框 Esc / 遮罩点击关闭）：
-//   * `Esc` 与遮罩点击走与 Cancel 按钮完全相同的 `canceled()` 路径（含宿主清空
-//     确认词等敏感输入）；面板内空白处的点击由面板自身的 TouchArea 吞掉，不会
-//     穿透到遮罩误触取消。
-//   * 危险确认仍无键盘默认确认：弹窗打开后焦点在根 FocusScope（不是确认按钮），
-//     `Enter` 不会触发 `confirmed()`（E-064 语义不变）。
+// Legacy overlay ConfirmDialog (unused by live path; live confirms use CompactConfirmWindow).
+// Kept for visual parity with the tool-window confirm body if anything still hosts it.
 
 export component ConfirmDialog inherits Rectangle {
     in property <bool> open: false;
@@ -25,25 +14,17 @@ export component ConfirmDialog inherits Rectangle {
     in-out property <string> confirmation-text: "";
     in property <string> confirm-label: @tr("Confirm");
     in property <string> cancel-label: @tr("Cancel");
-    /// B 轮2 #48：不需要输入确认词的破坏性确认（关闭标签 / 退出 / 删除会话）也应使用
-    /// `critical` 文案色而不是强调色实底；由宿主对破坏性动作传 true（WS-A 接线）。
     in property <bool> destructive: false;
-    /// 显示「不再询问」勾选（关闭会话 / 退出应用等）。
     in property <bool> show-dont-ask-again: false;
     in-out property <bool> dont-ask-again: false;
 
     callback confirmed();
     callback canceled();
 
-    // 面板宽度与正文列宽（显式宽度同时避免自动换行正文导致面板高度少算一行）
     private property <length> dialog-width: Theme.dialog-width;
     private property <length> content-width:
-        root.dialog-width - 2 * 1px - 2 * Theme.spacing-20;
+        root.dialog-width - 2 * 1px - 2 * Theme.tool-window-padding;
 
-    // §6.3 #5：对话框出现 = 250ms 淡入（ease-out），关闭 = 100ms 淡出（ease-in）。
-    //
-    // 进退场缓动不同，单个 `animate` 只有一个 easing、做不到非对称，
-    // 所以用 states：每个状态自带 in / out 动画，各用各的 easing。
     states [
         opened when root.open: {
             opacity: 1.0;
@@ -52,18 +33,14 @@ export component ConfirmDialog inherits Rectangle {
         }
         closed when !root.open: { opacity: 0.0; }
     ]
-    // 退场期间保持可见，等淡出结束再隐藏。
     visible: root.open || self.opacity > 0.01;
     background: Theme.scrim;
 
-    // L2：根 FocusScope 包住整个弹窗 —— 打开时聚焦它（或弹窗内的输入框），
-    // Esc 沿焦点链冒泡到这里并转成 `canceled()`；其余按键 reject 继续冒泡。
     dialog_scope := FocusScope {
         width: parent.width;
         height: parent.height;
 
         key-pressed(event) => {
-            // Esc 键码按 `event.text` 比较（与 session_tree 判 Enter 的做法一致）。
             if (event.text == "\u{001b}") {
                 root.canceled();
                 return accept;
@@ -71,7 +48,6 @@ export component ConfirmDialog inherits Rectangle {
             return reject;
         }
 
-        // 遮罩：点击 = 取消（与 Cancel 按钮同一路径）。
         TouchArea {
             clicked => { root.canceled(); }
         }
@@ -86,11 +62,10 @@ export component ConfirmDialog inherits Rectangle {
             border-width: 1px;
             border-color: Theme.control-stroke;
 
-            // 吞掉面板空白处的点击，避免穿透到遮罩触发取消。
             TouchArea { }
 
             body := VerticalLayout {
-                padding: Theme.spacing-20;
+                padding: Theme.tool-window-padding;
                 spacing: Theme.spacing-12;
 
                 Text {
@@ -101,7 +76,6 @@ export component ConfirmDialog inherits Rectangle {
                     wrap: word-wrap;
                 }
 
-                // 危险操作（需要输入确认词）的正文用 critical 文案色
                 Text {
                     text: root.message-text;
                     color: root.confirmation-token != "" ? Theme.critical : Theme.text-secondary;
@@ -109,7 +83,6 @@ export component ConfirmDialog inherits Rectangle {
                     width: root.content-width;
                 }
 
-                // 确认词输入（始终实例化，便于 focus-dialog；无 token 时高度归零）
                 confirm_input := WinTextInput {
                     height: root.confirmation-token != "" ? Theme.control-height : 0px;
                     visible: root.confirmation-token != "";
@@ -124,7 +97,6 @@ export component ConfirmDialog inherits Rectangle {
                     horizontal-stretch: 0;
                 }
 
-                // 操作区：右对齐，主操作（确认）在最右
                 HorizontalLayout {
                     alignment: end;
                     spacing: Theme.spacing-8;
@@ -136,9 +108,6 @@ export component ConfirmDialog inherits Rectangle {
 
                     WinButton {
                         text: root.confirm-label;
-                        // 需要输入确认词的破坏性操作：critical 文案色，不用强调色实底。
-                        // B 轮2 #48：不需要确认词的破坏性确认由宿主传 `destructive: true`
-                        // （关闭标签 / 退出 / 删除会话），同样改用 critical 文案色。
                         accent: !root.destructive && root.confirmation-token == "";
                         critical: root.destructive || root.confirmation-token != "";
                         enabled: root.confirmation-token == "" || root.confirmation-text == root.confirmation-token;
@@ -149,7 +118,6 @@ export component ConfirmDialog inherits Rectangle {
         }
     }
 
-    /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
     public function focus-dialog() {
         if (root.confirmation-token != "") {
             confirm_input.focus-input();
@@ -158,7 +126,6 @@ export component ConfirmDialog inherits Rectangle {
         }
     }
 
-    // 打开时：有确认词则聚焦输入框，否则聚焦根 Scope（Esc；Enter 不默认确认）。
     changed open => {
         if (root.open) {
             if (root.confirmation-token != "") {

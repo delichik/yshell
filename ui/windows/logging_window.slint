@@ -2,6 +2,7 @@
 
 import { Theme } from "../theme.slint";
 import { LoggingDialog } from "../components/logging_dialog.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component LoggingWindow inherits Window {
     title: @tr("Session Logging");
@@ -46,34 +47,48 @@ export component LoggingWindow inherits Window {
     callback options-changed(bool, bool, bool, bool, bool);
     callback title_drag_requested();
 
-    dialog := LoggingDialog {
-        open: true;
+    private property <length> body-width:
+        Theme.tool-window-width-standard - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-standard - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+
+    ToolWindowChrome {
         width: Theme.tool-window-width-standard;
         height: Theme.tool-window-height-standard;
-        session-name-text: root.session-name-text;
-        logging-active: root.logging-active;
-        active-path-text: root.active-path-text;
-        browse-enabled: root.browse-enabled;
-        directory-text <=> root.directory-text;
-        file-name-text <=> root.file-name-text;
-        file-name-error-text: root.file-name-error-text;
-        file-exists: root.file-exists;
-        path-error-text: root.path-error-text;
-        raw-format <=> root.raw-format;
-        sanitized-format <=> root.sanitized-format;
-        timestamps <=> root.timestamps;
-        include-input <=> root.include-input;
-        input-confirmed <=> root.input-confirmed;
-        overwrite-confirmed <=> root.overwrite-confirmed;
-        browse-requested => { root.browse-requested(); }
-        directory-changed(string) => { root.directory-changed(string); }
-        file-name-changed(string) => { root.file-name-changed(string); }
-        start-requested => { root.start-requested(); }
-        stop-requested => { root.stop-requested(); }
-        open-file-requested => { root.open-file-requested(); }
-        open-folder-requested => { root.open-folder-requested(); }
-        cancel => { root.cancel(); }
-        options-changed(bool, bool, bool, bool, bool) => { root.options-changed(bool, bool, bool, bool, bool); }
+        title-text: @tr("Terminal Logging");
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.cancel(); }
+        title-drag-requested => { root.title_drag_requested(); }
+
+        dialog := LoggingDialog {
+            open: true;
+            width: root.body-width;
+            height: root.body-height;
+            session-name-text: root.session-name-text;
+            logging-active: root.logging-active;
+            active-path-text: root.active-path-text;
+            browse-enabled: root.browse-enabled;
+            directory-text <=> root.directory-text;
+            file-name-text <=> root.file-name-text;
+            file-name-error-text: root.file-name-error-text;
+            file-exists: root.file-exists;
+            path-error-text: root.path-error-text;
+            raw-format <=> root.raw-format;
+            sanitized-format <=> root.sanitized-format;
+            timestamps <=> root.timestamps;
+            include-input <=> root.include-input;
+            input-confirmed <=> root.input-confirmed;
+            overwrite-confirmed <=> root.overwrite-confirmed;
+            browse-requested => { root.browse-requested(); }
+            directory-changed(string) => { root.directory-changed(string); }
+            file-name-changed(string) => { root.file-name-changed(string); }
+            start-requested => { root.start-requested(); }
+            stop-requested => { root.stop-requested(); }
+            open-file-requested => { root.open-file-requested(); }
+            open-folder-requested => { root.open-folder-requested(); }
+            cancel => { root.cancel(); }
+            options-changed(bool, bool, bool, bool, bool) => { root.options-changed(bool, bool, bool, bool, bool); }
+        }
     }
 
     public function focus-dialog() {
@@ -84,4 +99,3 @@ export component LoggingWindow inherits Window {
         root.focus-dialog();
     }
 }
-

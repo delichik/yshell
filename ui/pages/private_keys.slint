@@ -161,126 +161,120 @@ export component PrivateKeysPage inherits Rectangle {
                     spacing: Theme.spacing-16;
                     vertical-stretch: 1;
 
-                    // --- 左：清单 + 导入（内容超出时整列滚动）---------------------
+                    // --- 左：清单吃满高度 + 底栏动作 --------------------------------
                     Rectangle {
                         width: Theme.manager-list-width;
                         clip: true;
                         background: transparent;
 
-                        left-scroll := Flickable {
+                        left-column := VerticalLayout {
                             width: parent.width;
                             height: parent.height;
-                            interactive: true;
-                            content-width: self.width;
-                            content-height: left-column.preferred-height;
+                            spacing: Theme.spacing-12;
 
-                            left-column := VerticalLayout {
-                                spacing: Theme.spacing-12;
+                            WinCard {
+                                vertical-stretch: 1;
 
-                                WinCard {
-                                    vertical-stretch: 0;
+                                WinCardHeader {
+                                    title: @tr("Managed Keys");
+                                    icon: "shield";
+                                }
 
-                                    WinCardHeader {
-                                        title: @tr("Managed Keys");
-                                        icon: "shield";
-                                    }
+                                Rectangle {
+                                    vertical-stretch: 1;
+                                    min-height: 180px;
+                                    clip: true;
+                                    background: Theme.panel-background;
+                                    border-radius: Theme.radius-control;
+                                    border-width: 1px;
+                                    border-color: Theme.divider;
 
-                                    Rectangle {
-                                        height: max(140px, min(root.keys.length * 56px + 4px, 224px));
-                                        clip: true;
-                                        background: Theme.panel-background;
-                                        border-radius: Theme.radius-control;
-                                        border-width: 1px;
-                                        border-color: Theme.divider;
+                                    keys-list := Flickable {
+                                        visible: root.keys.length > 0;
+                                        width: parent.width;
+                                        height: parent.height;
+                                        interactive: true;
+                                        content-width: self.width;
+                                        content-height: rows.preferred-height;
 
-                                        keys-list := Flickable {
-                                            visible: root.keys.length > 0;
-                                            width: parent.width;
-                                            height: parent.height;
-                                            interactive: true;
-                                            content-width: self.width;
-                                            content-height: rows.preferred-height;
+                                        rows := VerticalLayout {
+                                            padding: Theme.spacing-4;
+                                            spacing: Theme.spacing-4;
 
-                                            rows := VerticalLayout {
-                                                padding: 2px;
-                                                spacing: 2px;
-
-                                                for row[i] in root.keys : PrivateKeyListItem {
-                                                    node: row;
-                                                    selected: i == root.selected-index;
-                                                    clicked => {
-                                                        root.selected-index = i;
-                                                        root.select-key(i);
-                                                    }
+                                            for row[i] in root.keys : PrivateKeyListItem {
+                                                node: row;
+                                                selected: i == root.selected-index;
+                                                clicked => {
+                                                    root.selected-index = i;
+                                                    root.select-key(i);
                                                 }
                                             }
                                         }
+                                    }
 
-                                        // 滚动指示：E22 可复用组件（`content-y` ≤ 0，组件内部取负）
-                                        WinScrollIndicator {
-                                            visible: root.keys.length > 0;
-                                            x: parent.width - self.width - Theme.spacing-4;
-                                            y: Theme.spacing-4;
-                                            height: parent.height - 2 * Theme.spacing-4;
-                                            viewport-position: keys-list.content-y;
-                                            content-extent: keys-list.content-height;
-                                            viewport-extent: keys-list.height;
-                                            thumb-min-length: 24px;
+                                    WinScrollIndicator {
+                                        visible: root.keys.length > 0;
+                                        x: parent.width - self.width - Theme.spacing-4;
+                                        y: Theme.spacing-4;
+                                        height: parent.height - 2 * Theme.spacing-4;
+                                        viewport-position: keys-list.content-y;
+                                        content-extent: keys-list.content-height;
+                                        viewport-extent: keys-list.height;
+                                        thumb-min-length: 24px;
+                                    }
+
+                                    empty-state := VerticalLayout {
+                                        visible: root.keys.length == 0;
+                                        y: max((parent.height - self.preferred-height) / 2, Theme.spacing-12);
+                                        width: parent.width;
+                                        padding-left: Theme.spacing-16;
+                                        padding-right: Theme.spacing-16;
+                                        spacing: Theme.spacing-12;
+                                        alignment: center;
+
+                                        Text {
+                                            width: min(parent.width - 2 * Theme.spacing-16, 280px);
+                                            text: root.empty-text;
+                                            color: Theme.text-tertiary;
+                                            font-size: Theme.font-caption;
+                                            horizontal-alignment: center;
+                                            wrap: word-wrap;
                                         }
 
-                                        // 空态：居中说明 + Import 主 CTA（Browse/rfd 主路径）
-                                        empty-state := VerticalLayout {
-                                            visible: root.keys.length == 0;
-                                            y: max((parent.height - self.preferred-height) / 2, Theme.spacing-12);
-                                            width: parent.width;
-                                            padding-left: Theme.spacing-16;
-                                            padding-right: Theme.spacing-16;
-                                            spacing: Theme.spacing-12;
+                                        HorizontalLayout {
                                             alignment: center;
 
-                                            Text {
-                                                width: min(parent.width - 2 * Theme.spacing-16, 280px);
-                                                text: root.empty-text;
-                                                color: Theme.text-tertiary;
-                                                font-size: Theme.font-caption;
-                                                horizontal-alignment: center;
-                                                wrap: word-wrap;
+                                            WinButton {
+                                                text: @tr("Import");
+                                                icon: "upload";
+                                                accent: true;
+                                                enabled: !root.busy;
+                                                clicked => { root.browse-import-file(); }
                                             }
-
-                                            HorizontalLayout {
-                                                alignment: center;
-
-                                                WinButton {
-                                                    text: @tr("Import");
-                                                    icon: "upload";
-                                                    accent: true;
-                                                    enabled: !root.busy;
-                                                    clicked => { root.browse-import-file(); }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    HorizontalLayout {
-                                        spacing: Theme.spacing-8;
-                                        vertical-stretch: 0;
-
-                                        WinButton {
-                                            text: @tr("Test");
-                                            icon: "check";
-                                            enabled: root.has-selection && !root.busy;
-                                            clicked => { root.test-key(); }
-                                        }
-
-                                        WinButton {
-                                            text: @tr("Import");
-                                            icon: "upload";
-                                            accent: root.keys.length == 0;
-                                            enabled: !root.busy;
-                                            clicked => { root.browse-import-file(); }
                                         }
                                     }
                                 }
+
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-8;
+                                    vertical-stretch: 0;
+
+                                    WinButton {
+                                        text: @tr("Test");
+                                        icon: "check";
+                                        enabled: root.has-selection && !root.busy;
+                                        clicked => { root.test-key(); }
+                                    }
+
+                                    WinButton {
+                                        text: @tr("Import");
+                                        icon: "upload";
+                                        accent: root.keys.length == 0;
+                                        enabled: !root.busy;
+                                        clicked => { root.browse-import-file(); }
+                                    }
+                                }
+                            }
 
                                 WinCard {
                                     vertical-stretch: 0;
@@ -347,18 +341,6 @@ export component PrivateKeysPage inherits Rectangle {
                                         }
                                     }
                                 }
-                            }
-
-                            // 滚动指示（左列整体；面板高度不足时才出现）
-                            WinScrollIndicator {
-                                x: parent.width - self.width - Theme.spacing-4;
-                                y: Theme.spacing-4;
-                                height: parent.height - 2 * Theme.spacing-4;
-                                viewport-position: left-scroll.content-y;
-                                content-extent: left-scroll.content-height;
-                                viewport-extent: left-scroll.height;
-                                thumb-min-length: 24px;
-                            }
                         }
                     }
 
@@ -385,7 +367,7 @@ export component PrivateKeysPage inherits Rectangle {
                                     }
 
                                     Rectangle {
-                                        height: max(150px, min(280px, details-block.preferred-height + 20px));
+                                        height: max(200px, min(420px, details-block.preferred-height + 20px));
                                         clip: true;
                                         background: Theme.panel-background;
                                         border-radius: Theme.radius-control;
@@ -439,7 +421,7 @@ export component PrivateKeysPage inherits Rectangle {
 
                                     // 派生公钥（可复制/导出；等宽显示）
                                     if root.public-key-text != "" : Rectangle {
-                                        height: max(56px, min(160px, pubkey-block.preferred-height + 20px));
+                                        height: max(72px, min(220px, pubkey-block.preferred-height + 20px));
                                         clip: true;
                                         background: Theme.panel-background;
                                         border-radius: Theme.radius-control;

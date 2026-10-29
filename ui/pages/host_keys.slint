@@ -177,7 +177,7 @@ export component HostKeysPage inherits Rectangle {
 
                     if root.import-visible : VerticalLayout {
                         spacing: Theme.spacing-8;
-                        width: min(parent.width - 2 * Theme.spacing-24, 480px);
+                        width: min(parent.width - 2 * Theme.spacing-24, 640px);
 
                         Text {
                             text: @tr("One entry per line: `host:port` followed by an OpenSSH public key or a SHA256 fingerprint.");
@@ -405,7 +405,7 @@ export component HostKeysPage inherits Rectangle {
                                         }
 
                                         Rectangle {
-                                            height: max(96px, min(176px, detail-body.preferred-height + 2 * Theme.spacing-8));
+                                            height: max(120px, min(280px, detail-body.preferred-height + 2 * Theme.spacing-8));
                                             clip: true;
                                             background: Theme.panel-background;
                                             border-radius: Theme.radius-control;

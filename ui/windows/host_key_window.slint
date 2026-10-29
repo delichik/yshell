@@ -2,6 +2,7 @@
 
 import { Theme } from "../theme.slint";
 import { HostKeyDialog } from "../components/host_key_dialog.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component HostKeyWindow inherits Window {
     title: @tr("Host Key");
@@ -34,22 +35,36 @@ export component HostKeyWindow inherits Window {
     callback dismissed();
     callback title_drag_requested();
 
-    dialog := HostKeyDialog {
-        open: true;
+    private property <length> body-width:
+        Theme.tool-window-width-standard - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-standard - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+
+    ToolWindowChrome {
         width: Theme.tool-window-width-standard;
         height: Theme.tool-window-height-standard;
-        prompt-text: root.prompt-text;
-        mode-text: root.mode-text;
-        target-text: root.target-text;
-        known-hosts-path-text: root.known-hosts-path-text;
-        algorithm-text: root.algorithm-text;
-        fingerprint-text: root.fingerprint-text;
-        expected-algorithm-text: root.expected-algorithm-text;
-        expected-fingerprint-text: root.expected-fingerprint-text;
-        cancel => { root.cancel(); }
-        trust-once => { root.trust-once(); }
-        trust-and-save => { root.trust-and-save(); }
-        dismissed => { root.dismissed(); }
+        title-text: @tr("Host Key Confirmation");
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.dismissed(); }
+        title-drag-requested => { root.title_drag_requested(); }
+
+        dialog := HostKeyDialog {
+            open: true;
+            width: root.body-width;
+            height: root.body-height;
+            prompt-text: root.prompt-text;
+            mode-text: root.mode-text;
+            target-text: root.target-text;
+            known-hosts-path-text: root.known-hosts-path-text;
+            algorithm-text: root.algorithm-text;
+            fingerprint-text: root.fingerprint-text;
+            expected-algorithm-text: root.expected-algorithm-text;
+            expected-fingerprint-text: root.expected-fingerprint-text;
+            cancel => { root.cancel(); }
+            trust-once => { root.trust-once(); }
+            trust-and-save => { root.trust-and-save(); }
+            dismissed => { root.dismissed(); }
+        }
     }
 
     public function focus-dialog() {
@@ -60,4 +75,3 @@ export component HostKeyWindow inherits Window {
         root.focus-dialog();
     }
 }
-

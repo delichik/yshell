@@ -1,44 +1,29 @@
-// 认证弹窗（N4 设计 §2）：按服务端能力展示 password / publickey /
-// keyboard-interactive 三种方式，多方式重试不清空已填内容；keyboard-interactive
-// 支持按服务端 challenge 动态渲染多轮 prompt（name / instruction / 多 prompt / echo）。
-//
-// 与宿主（Rust / main_window）的约定：
-//   * `open` 由宿主投影驱动；`cancel` 关闭弹窗（Esc / Cancel 按钮同一路径）。
-//   * `selected-method`（0/1/2）与 `*-visible` 由宿主按 A0 的 `AuthMethods` 投影：
-//       0 = password、1 = publickey（含 ssh-agent 选项）、2 = keyboard-interactive。
-//   * 输入属性（password-text / passphrase-text / challenge answers）在弹窗内编辑，
-//     提交时经回调回传宿主；宿主关闭弹窗时负责清空敏感值（设计 §2）。
-//   * keyboard-interactive 每轮一个 `challenge-prompts` 列表 + `challenge-round`
-//     轮号；提交后宿主用下一轮 challenge 覆盖这组属性（多轮如实呈现）。
-//
-// 规范：docs/product/ui-winui3-design-language.md §5.10（ContentDialog 形态）。
+// 认证弹窗正文（AuthPromptWindow + ToolWindowChrome）。
+// 结构：主机说明 → 方式切换 → 可伸展表单卡片 → 共享底栏。
 
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
-import { WinButton, WinIconButton, WinToggle, WinScrollIndicator } from "basic/controls.slint";
+import { WinButton, WinCard, WinInfoBar, WinToggle, WinScrollIndicator } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 
-/// 私钥下拉的一行（来自托管私钥清单；`detail` = 算法 + 指纹）。
 export struct AuthKeyOption {
     id: string,
     label: string,
     detail: string,
 }
 
-/// keyboard-interactive 的一个 prompt（echo=false 时用密码框）。
 export struct AuthKeyboardPrompt {
     text: string,
     echo: bool,
     answer: string,
 }
 
-/// 私钥下拉行：标签 + 算法/指纹（两行 44px）。
 component AuthKeyListItem inherits Rectangle {
     in property <AuthKeyOption> node;
     in property <bool> selected: false;
     callback clicked();
 
-    height: 44px;
+    height: 52px;
     border-radius: Theme.radius-control;
     background: selected ? Theme.subtle-selected
         : touch.pressed ? Theme.subtle-pressed
@@ -47,11 +32,11 @@ component AuthKeyListItem inherits Rectangle {
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
     VerticalLayout {
-        padding-left: 8px;
-        padding-right: 8px;
-        padding-top: 5px;
-        padding-bottom: 5px;
-        spacing: 1px;
+        padding-left: Theme.spacing-12;
+        padding-right: Theme.spacing-12;
+        padding-top: Theme.spacing-8;
+        padding-bottom: Theme.spacing-8;
+        spacing: Theme.spacing-4;
 
         Text {
             text: node.label;
@@ -79,27 +64,19 @@ component AuthKeyListItem inherits Rectangle {
 
 export component AuthPromptDialog inherits Rectangle {
     in property <bool> open: false;
-    /// 文案里的 `user@host:port`
     in property <string> host-text: "";
-    /// 上一次尝试的错误提示（空 = 首次弹窗）
     in property <string> problem-text: "";
-    /// 服务端是否有任意可用方式（false 时禁用主操作并提示）
     in property <bool> has-usable-method: true;
 
-    /// 当前方式：0 = password、1 = publickey、2 = keyboard-interactive
     in-out property <int> selected-method: 0;
-    /// 服务端是否允许各方式（设计 §2：仅 publickey 时不显示密码）
     in property <bool> password-visible: true;
     in property <bool> publickey-visible: true;
     in property <bool> keyboard-visible: true;
-    /// 宿主按输入完整性计算（Rust 侧仍会校验兜底）
     in property <bool> submit-enabled: true;
 
-    // --- password ---------------------------------------------------------
     in-out property <string> password-text: "";
     in-out property <bool> remember-password: false;
 
-    // --- publickey --------------------------------------------------------
     in property <[AuthKeyOption]> key-options: [];
     in-out property <int> selected-key-index: -1;
     in property <string> selected-key-label: "";
@@ -107,25 +84,17 @@ export component AuthPromptDialog inherits Rectangle {
     in-out property <bool> use-agent: false;
     in property <bool> publickey-submit-enabled: false;
 
-    // --- keyboard-interactive（多轮）-------------------------------------
     in property <string> challenge-name: "";
     in property <string> challenge-instruction: "";
     in property <[AuthKeyboardPrompt]> challenge-prompts: [];
-    /// 当前轮号（1-based；0 = 服务端尚未给出 challenge）
     in property <int> challenge-round: 0;
-    /// 到此为止服务端给出的轮数（含当前轮），用于 "Round n of m" 文案
     in property <int> challenge-round-total: 0;
-    /// 当前轮是否为最后一轮（主操作文案 Connect / Continue）
     in property <bool> keyboard-final-round: false;
     in property <bool> keyboard-submit-enabled: false;
 
     callback cancel();
     callback select-method(int);
     callback submit-password();
-    /// N4：密码输入回传宿主。宿主的 `PendingAuthPrompt::password_text` 只由该回调更新，
-    /// 缺了它会导致：① `submit_auth_prompt()` 永远拿到空密码（"Password must not be
-    /// empty."、连接按钮不可用）；② 任何投影往返（如点"记住密码"）都把窗口属性写回空串，
-    /// 吞掉用户尚未提交的输入（M 轮5）。
     callback update-password(string);
     callback toggle-remember-password(bool);
     callback select-key(int);
@@ -135,12 +104,10 @@ export component AuthPromptDialog inherits Rectangle {
     callback update-challenge-answer(int, string);
     callback submit-keyboard-round();
 
-    // 正文列宽：自动换行正文显式宽度，避免 preferred-height 少算一行（B 轮5）。
-    private property <length> content-width:
-        Theme.tool-window-width-standard - 2 * Theme.spacing-20;
+    private property <length> content-width: root.width;
 
     visible: root.open;
-    background: Theme.window-background;
+    background: transparent;
 
     private property <bool> show-password:
         root.selected-method == 0 && root.password-visible;
@@ -148,10 +115,29 @@ export component AuthPromptDialog inherits Rectangle {
         root.selected-method == 1 && root.publickey-visible;
     private property <bool> show-keyboard:
         root.selected-method == 2 && root.keyboard-visible;
-    /// 只有一个可用方式时不显示切换行（服务端能力已唯一确定当前方式）。
     private property <bool> method-chooser-visible:
         (root.password-visible && (root.publickey-visible || root.keyboard-visible))
         || (root.publickey-visible && root.keyboard-visible);
+
+    private property <bool> primary-enabled:
+        !root.has-usable-method ? false
+        : root.show-password ? root.submit-enabled
+        : root.show-publickey ? root.publickey-submit-enabled
+        : root.show-keyboard ? root.keyboard-submit-enabled
+        : false;
+
+    private property <string> primary-label:
+        root.show-keyboard && !root.keyboard-final-round
+            ? @tr("Continue")
+            : @tr("Connect");
+
+    function submit-primary() {
+        if (root.show-keyboard) {
+            root.submit-keyboard-round();
+        } else {
+            root.submit-password();
+        }
+    }
 
     dialog_scope := FocusScope {
         width: root.width;
@@ -166,134 +152,99 @@ export component AuthPromptDialog inherits Rectangle {
         }
 
         body := VerticalLayout {
-                width: root.width;
-                height: root.height;
-                padding: Theme.spacing-20;
+            width: root.width;
+            height: root.height;
+            spacing: Theme.spacing-16;
+
+            HorizontalLayout {
                 spacing: Theme.spacing-12;
 
-                // 标题行
-                HorizontalLayout {
-                    spacing: Theme.spacing-8;
+                Rectangle {
+                    width: Theme.icon-size-large;
+                    height: Theme.icon-size-large;
+                    background: transparent;
 
-                    Rectangle {
-                        width: Theme.icon-size;
-                        vertical-stretch: 1;
-                        background: transparent;
-
-                        Icon {
-                            name: "shield";
-                            icon-color: Theme.accent;
-                            x: (parent.width - self.width) / 2;
-                            y: (parent.height - self.height) / 2;
-                        }
-                    }
-
-                    VerticalLayout {
-                        spacing: 2px;
-                        horizontal-stretch: 1;
-
-                        Text {
-                            text: @tr("Authentication required");
-                            color: Theme.text-primary;
-                            font-size: Theme.font-subtitle;
-                            font-weight: Theme.weight-semibold;
-                            wrap: no-wrap;
-                        }
-
-                        Text {
-                            text: @tr("Sign in to {0}", root.host-text);
-                            color: Theme.text-secondary;
-                            font-size: Theme.font-body;
-                            wrap: no-wrap;
-                            overflow: elide;
-                        }
-                    }
-
-                    WinIconButton {
-                        icon: "close";
-                        accessible-name: @tr("Cancel");
-                        // 标题块两行（≈46px），按钮 32px 固定高 → 默认 stretch 贴行顶。
-                        cross-axis-self-alignment: center;
-                        clicked => { root.cancel(); }
+                    Icon {
+                        name: "shield";
+                        icon-color: Theme.accent;
+                        icon-size: Theme.icon-size-large;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
                     }
                 }
 
-                // 失败提示（关闭弹窗清空；多方式重试时刷新）
-                if root.problem-text != "" : Rectangle {
-                    background: Theme.attention-background;
-                    border-radius: Theme.radius-control;
-                    border-width: 1px;
-                    border-color: Theme.attention-stroke;
+                VerticalLayout {
+                    spacing: Theme.spacing-4;
+                    horizontal-stretch: 1;
+                    alignment: center;
 
-                    HorizontalLayout {
-                        padding: Theme.spacing-12;
-                        spacing: Theme.spacing-8;
-                        alignment: start;
+                    Text {
+                        text: @tr("Sign in to {0}", root.host-text);
+                        color: Theme.text-primary;
+                        font-size: Theme.font-body;
+                        font-weight: Theme.weight-semibold;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
 
-                        Icon {
-                            name: "warning";
-                            icon-color: Theme.critical;
-                            icon-size: Theme.icon-size-small;
-                        }
-
-                        Text {
-                            text: root.problem-text;
-                            color: Theme.attention-text;
-                            font-size: Theme.font-body;
-                            wrap: word-wrap;
-                            // 显式宽度（= 布局本应分配的宽度）：见 content-width 注释
-                            width: root.content-width - 2 * Theme.spacing-12
-                                - Theme.icon-size-small - Theme.spacing-8;
-                        }
+                    Text {
+                        text: @tr("Choose an authentication method available on this server.");
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        wrap: word-wrap;
                     }
                 }
+            }
 
-                if !root.has-usable-method : Text {
-                    text: @tr("The server does not offer any authentication method YShell supports.");
-                    color: Theme.critical;
-                    font-size: Theme.font-body;
-                    wrap: word-wrap;
-                    // 显式宽度：见 content-width 注释（避免面板高度少算一行）
-                    width: root.content-width;
+            if root.problem-text != "" : WinInfoBar {
+                severity: "error";
+                text: root.problem-text;
+            }
+
+            if !root.has-usable-method : WinInfoBar {
+                severity: "error";
+                text: @tr("The server does not offer any authentication method YShell supports.");
+            }
+
+            if root.has-usable-method && root.method-chooser-visible : HorizontalLayout {
+                spacing: Theme.spacing-8;
+
+                if root.password-visible : WinButton {
+                    text: @tr("Password");
+                    accent: root.selected-method == 0;
+                    clicked => { root.select-method(0); }
                 }
 
-                // 方式切换：随服务端能力显隐（设计 §2）；只有一种可用方式时整行不渲染。
-                // B 轮5：未选中项给常态按钮形态（control-fill + 描边），此前用 subtle
-                // 导致未选中项完全没有边界，用户看不出可点范围与分组关系。
-                if root.has-usable-method && root.method-chooser-visible : HorizontalLayout {
-                    spacing: Theme.spacing-8;
+                if root.publickey-visible : WinButton {
+                    text: @tr("Public key");
+                    accent: root.selected-method == 1;
+                    clicked => { root.select-method(1); }
+                }
 
-                    if root.password-visible : WinButton {
+                if root.keyboard-visible : WinButton {
+                    text: @tr("Keyboard interactive");
+                    accent: root.selected-method == 2;
+                    clicked => { root.select-method(2); }
+                }
+            }
+
+            // --- method body（卡片分区；列表用固定高度避免 layout binding loop）---
+            if root.show-password : WinCard {
+                VerticalLayout {
+                    spacing: Theme.spacing-12;
+
+                    Text {
                         text: @tr("Password");
-                        accent: root.selected-method == 0;
-                        clicked => { root.select-method(0); }
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-body;
                     }
-
-                    if root.publickey-visible : WinButton {
-                        text: @tr("Public key");
-                        accent: root.selected-method == 1;
-                        clicked => { root.select-method(1); }
-                    }
-
-                    if root.keyboard-visible : WinButton {
-                        text: @tr("Keyboard interactive");
-                        accent: root.selected-method == 2;
-                        clicked => { root.select-method(2); }
-                    }
-                }
-
-                // --- password --------------------------------------------------
-                if root.show-password : VerticalLayout {
-                    spacing: Theme.spacing-8;
 
                     WinTextInput {
                         text <=> root.password-text;
                         placeholder-text: @tr("Password");
                         input-type: password;
-                        // 逐键回传宿主（见 update-password 注释）：宿主的投影不含未提交的
-                        // 密码，必须由 UI 主动同步，否则重试路径与"记住密码"往返都会丢输入。
                         edited(text) => { root.update-password(text); }
-                        accepted => { if root.submit-enabled { root.submit-password(); } }
+                        accepted => { if root.primary-enabled { root.submit-primary(); } }
                     }
 
                     WinToggle {
@@ -301,28 +252,12 @@ export component AuthPromptDialog inherits Rectangle {
                         checked: root.remember-password;
                         toggled => { root.toggle-remember-password(self.checked); }
                     }
-
-                    HorizontalLayout {
-                        alignment: end;
-                        spacing: Theme.spacing-8;
-
-                        WinButton {
-                            text: @tr("Cancel");
-                            clicked => { root.cancel(); }
-                        }
-
-                        WinButton {
-                            text: @tr("Connect");
-                            accent: true;
-                            enabled: root.submit-enabled;
-                            clicked => { root.submit-password(); }
-                        }
-                    }
                 }
+            }
 
-                // --- publickey -------------------------------------------------
-                if root.show-publickey : VerticalLayout {
-                    spacing: Theme.spacing-8;
+            if root.show-publickey : WinCard {
+                VerticalLayout {
+                    spacing: Theme.spacing-12;
 
                     Text {
                         text: @tr("Private key");
@@ -331,7 +266,7 @@ export component AuthPromptDialog inherits Rectangle {
                     }
 
                     Rectangle {
-                        height: min(44px * root.key-options.length + 4px, 132px);
+                        height: min(52px * max(root.key-options.length, 1) + 8px, 260px);
                         background: Theme.panel-background;
                         border-radius: Theme.radius-control;
                         border-width: 1px;
@@ -339,6 +274,7 @@ export component AuthPromptDialog inherits Rectangle {
                         clip: true;
 
                         key-scroll := Flickable {
+                            visible: root.key-options.length > 0;
                             width: parent.width;
                             height: parent.height;
                             interactive: true;
@@ -346,8 +282,8 @@ export component AuthPromptDialog inherits Rectangle {
                             content-height: key-list.preferred-height;
 
                             key-list := VerticalLayout {
-                                padding: 2px;
-                                spacing: 2px;
+                                padding: Theme.spacing-4;
+                                spacing: Theme.spacing-4;
 
                                 for option[i] in root.key-options : AuthKeyListItem {
                                     node: option;
@@ -360,8 +296,8 @@ export component AuthPromptDialog inherits Rectangle {
                             }
                         }
 
-                        // 滚动指示：E22 可复用组件（列表超过 3 行时出现）
                         WinScrollIndicator {
+                            visible: root.key-options.length > 0;
                             x: parent.width - self.width - Theme.spacing-4;
                             y: Theme.spacing-4;
                             height: parent.height - 2 * Theme.spacing-4;
@@ -370,14 +306,17 @@ export component AuthPromptDialog inherits Rectangle {
                             viewport-extent: key-scroll.height;
                             thumb-min-length: 16px;
                         }
-                    }
 
-                    if root.key-options.length == 0 : Text {
-                        text: @tr("No managed private key. Import one on the Private Keys page, or browse for a key file.");
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-caption;
-                        wrap: word-wrap;
-                        width: root.content-width;
+                        if root.key-options.length == 0 : Text {
+                            width: parent.width - 2 * Theme.spacing-16;
+                            x: Theme.spacing-16;
+                            y: max((parent.height - self.preferred-height) / 2, Theme.spacing-12);
+                            text: @tr("No managed private key. Import one on the Private Keys page, or browse for a key file.");
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            wrap: word-wrap;
+                            horizontal-alignment: center;
+                        }
                     }
 
                     HorizontalLayout {
@@ -400,14 +339,23 @@ export component AuthPromptDialog inherits Rectangle {
                         }
                     }
 
-                    WinTextInput {
-                        text <=> root.passphrase-text;
-                        placeholder-text: @tr("Key passphrase (optional)");
-                        input-type: password;
-                        // P4：与 password 方式一样逐键回传，避免投影往返吞掉未提交口令。
-                        edited(text) => { root.update-passphrase(text); }
-                        accepted => {
-                            if root.publickey-submit-enabled { root.submit-password(); }
+                    VerticalLayout {
+                        spacing: Theme.spacing-8;
+
+                        Text {
+                            text: @tr("Key passphrase (optional)");
+                            color: Theme.text-secondary;
+                            font-size: Theme.font-body;
+                        }
+
+                        WinTextInput {
+                            text <=> root.passphrase-text;
+                            placeholder-text: @tr("Key passphrase (optional)");
+                            input-type: password;
+                            edited(text) => { root.update-passphrase(text); }
+                            accepted => {
+                                if root.primary-enabled { root.submit-primary(); }
+                            }
                         }
                     }
 
@@ -416,28 +364,12 @@ export component AuthPromptDialog inherits Rectangle {
                         checked: root.use-agent;
                         toggled => { root.toggle-use-agent(self.checked); }
                     }
-
-                    HorizontalLayout {
-                        alignment: end;
-                        spacing: Theme.spacing-8;
-
-                        WinButton {
-                            text: @tr("Cancel");
-                            clicked => { root.cancel(); }
-                        }
-
-                        WinButton {
-                            text: @tr("Connect");
-                            accent: true;
-                            enabled: root.publickey-submit-enabled;
-                            clicked => { root.submit-password(); }
-                        }
-                    }
                 }
+            }
 
-                // --- keyboard-interactive（多轮）-------------------------------
-                if root.show-keyboard : VerticalLayout {
-                    spacing: Theme.spacing-8;
+            if root.show-keyboard : WinCard {
+                VerticalLayout {
+                    spacing: Theme.spacing-12;
 
                     if root.challenge-name != "" : Text {
                         text: root.challenge-name;
@@ -445,7 +377,6 @@ export component AuthPromptDialog inherits Rectangle {
                         font-size: Theme.font-body;
                         font-weight: Theme.weight-semibold;
                         wrap: word-wrap;
-                        width: root.content-width;
                     }
 
                     if root.challenge-instruction != "" : Text {
@@ -453,7 +384,6 @@ export component AuthPromptDialog inherits Rectangle {
                         color: Theme.text-secondary;
                         font-size: Theme.font-body;
                         wrap: word-wrap;
-                        width: root.content-width;
                     }
 
                     if root.challenge-round-total > 1 : Text {
@@ -469,50 +399,53 @@ export component AuthPromptDialog inherits Rectangle {
                     }
 
                     for prompt[i] in root.challenge-prompts : VerticalLayout {
-                        spacing: 4px;
+                        spacing: Theme.spacing-8;
 
                         Text {
                             text: prompt.text;
                             color: Theme.text-secondary;
                             font-size: Theme.font-body;
                             wrap: word-wrap;
-                            width: root.content-width;
                         }
 
                         WinTextInput {
                             text: prompt.answer;
                             input-type: prompt.echo ? InputType.text : InputType.password;
                             accepted => {
-                                if root.keyboard-submit-enabled { root.submit-keyboard-round(); }
+                                if root.primary-enabled { root.submit-primary(); }
                             }
                             edited => { root.update-challenge-answer(i, self.text); }
                         }
                     }
-
-                    HorizontalLayout {
-                        alignment: end;
-                        spacing: Theme.spacing-8;
-
-                        WinButton {
-                            text: @tr("Cancel");
-                            clicked => { root.cancel(); }
-                        }
-
-                        WinButton {
-                            // 多轮：中间轮是 Continue，最后一轮才是 Connect（宿主判断）
-                            text: root.keyboard-final-round ? @tr("Connect") : @tr("Continue");
-                            accent: true;
-                            enabled: root.keyboard-submit-enabled;
-                            clicked => { root.submit-keyboard-round(); }
-                        }
-                    }
                 }
             }
+
+            Rectangle {
+                vertical-stretch: 1;
+                min-height: 0px;
+                background: transparent;
+            }
+
+            HorizontalLayout {
+                alignment: end;
+                spacing: Theme.spacing-8;
+                vertical-stretch: 0;
+
+                WinButton {
+                    text: @tr("Cancel");
+                    clicked => { root.cancel(); }
+                }
+
+                WinButton {
+                    text: root.primary-label;
+                    accent: true;
+                    enabled: root.primary-enabled;
+                    clicked => { root.submit-primary(); }
+                }
+            }
+        }
     }
 
-    /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
-    /// 输入框在 `if` 分支内，无法从外侧直接 focus-input；打开后由用户 Tab/点击进入字段，
-    /// Esc 仍经 dialog_scope（与 PasswordPromptDialog 的 Esc 路径一致）。
     public function focus-dialog() {
         dialog_scope.focus();
     }

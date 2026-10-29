@@ -2,6 +2,7 @@
 
 import { Theme } from "../theme.slint";
 import { SftpPropertiesDialog } from "../components/sftp_panel.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component SftpPropertiesWindow inherits Window {
     title: @tr("Properties");
@@ -30,18 +31,32 @@ export component SftpPropertiesWindow inherits Window {
     callback canceled();
     callback title_drag_requested();
 
-    dialog := SftpPropertiesDialog {
-        open: true;
+    private property <length> body-width:
+        Theme.tool-window-width-standard - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-standard - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+
+    ToolWindowChrome {
         width: Theme.tool-window-width-standard;
         height: Theme.tool-window-height-standard;
-        name-text: root.name-text;
-        path-text: root.path-text;
-        kind-text: root.kind-text;
-        size-text: root.size-text;
-        modified-text: root.modified-text;
-        permissions-text: root.permissions-text;
-        copy-path => { root.copy-path(); }
-        canceled => { root.canceled(); }
+        title-text: @tr("Properties");
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.canceled(); }
+        title-drag-requested => { root.title_drag_requested(); }
+
+        dialog := SftpPropertiesDialog {
+            open: true;
+            width: root.body-width;
+            height: root.body-height;
+            name-text: root.name-text;
+            path-text: root.path-text;
+            kind-text: root.kind-text;
+            size-text: root.size-text;
+            modified-text: root.modified-text;
+            permissions-text: root.permissions-text;
+            copy-path => { root.copy-path(); }
+            canceled => { root.canceled(); }
+        }
     }
 
     public function focus-dialog() {
@@ -52,4 +67,3 @@ export component SftpPropertiesWindow inherits Window {
         root.focus-dialog();
     }
 }
-

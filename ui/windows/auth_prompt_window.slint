@@ -2,6 +2,7 @@
 
 import { Theme } from "../theme.slint";
 import { AuthPromptDialog, AuthKeyOption, AuthKeyboardPrompt } from "../components/auth_prompt_dialog.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component AuthPromptWindow inherits Window {
     title: @tr("Authentication");
@@ -56,44 +57,58 @@ export component AuthPromptWindow inherits Window {
     callback submit-keyboard-round();
     callback title_drag_requested();
 
-    dialog := AuthPromptDialog {
-        open: true;
+    private property <length> body-width:
+        Theme.tool-window-width-standard - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-standard - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+
+    ToolWindowChrome {
         width: Theme.tool-window-width-standard;
         height: Theme.tool-window-height-standard;
-        host-text: root.host-text;
-        problem-text: root.problem-text;
-        has-usable-method: root.has-usable-method;
-        selected-method <=> root.selected-method;
-        password-visible: root.password-visible;
-        publickey-visible: root.publickey-visible;
-        keyboard-visible: root.keyboard-visible;
-        submit-enabled: root.submit-enabled;
-        password-text <=> root.password-text;
-        remember-password <=> root.remember-password;
-        key-options: root.key-options;
-        selected-key-index <=> root.selected-key-index;
-        selected-key-label: root.selected-key-label;
-        passphrase-text <=> root.passphrase-text;
-        use-agent <=> root.use-agent;
-        publickey-submit-enabled: root.publickey-submit-enabled;
-        challenge-name: root.challenge-name;
-        challenge-instruction: root.challenge-instruction;
-        challenge-prompts: root.challenge-prompts;
-        challenge-round: root.challenge-round;
-        challenge-round-total: root.challenge-round-total;
-        keyboard-final-round: root.keyboard-final-round;
-        keyboard-submit-enabled: root.keyboard-submit-enabled;
-        cancel => { root.cancel(); }
-        select-method(int) => { root.select-method(int); }
-        submit-password => { root.submit-password(); }
-        update-password(string) => { root.update-password(string); }
-        toggle-remember-password(bool) => { root.toggle-remember-password(bool); }
-        select-key(int) => { root.select-key(int); }
-        update-passphrase(string) => { root.update-passphrase(string); }
-        toggle-use-agent(bool) => { root.toggle-use-agent(bool); }
-        browse-key-file => { root.browse-key-file(); }
-        update-challenge-answer(int, string) => { root.update-challenge-answer(int, string); }
-        submit-keyboard-round => { root.submit-keyboard-round(); }
+        title-text: @tr("Authentication required");
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.cancel(); }
+        title-drag-requested => { root.title_drag_requested(); }
+
+        dialog := AuthPromptDialog {
+            open: true;
+            width: root.body-width;
+            height: root.body-height;
+            host-text: root.host-text;
+            problem-text: root.problem-text;
+            has-usable-method: root.has-usable-method;
+            selected-method <=> root.selected-method;
+            password-visible: root.password-visible;
+            publickey-visible: root.publickey-visible;
+            keyboard-visible: root.keyboard-visible;
+            submit-enabled: root.submit-enabled;
+            password-text <=> root.password-text;
+            remember-password <=> root.remember-password;
+            key-options: root.key-options;
+            selected-key-index <=> root.selected-key-index;
+            selected-key-label: root.selected-key-label;
+            passphrase-text <=> root.passphrase-text;
+            use-agent <=> root.use-agent;
+            publickey-submit-enabled: root.publickey-submit-enabled;
+            challenge-name: root.challenge-name;
+            challenge-instruction: root.challenge-instruction;
+            challenge-prompts: root.challenge-prompts;
+            challenge-round: root.challenge-round;
+            challenge-round-total: root.challenge-round-total;
+            keyboard-final-round: root.keyboard-final-round;
+            keyboard-submit-enabled: root.keyboard-submit-enabled;
+            cancel => { root.cancel(); }
+            select-method(int) => { root.select-method(int); }
+            submit-password => { root.submit-password(); }
+            update-password(string) => { root.update-password(string); }
+            toggle-remember-password(bool) => { root.toggle-remember-password(bool); }
+            select-key(int) => { root.select-key(int); }
+            update-passphrase(string) => { root.update-passphrase(string); }
+            toggle-use-agent(bool) => { root.toggle-use-agent(bool); }
+            browse-key-file => { root.browse-key-file(); }
+            update-challenge-answer(int, string) => { root.update-challenge-answer(int, string); }
+            submit-keyboard-round => { root.submit-keyboard-round(); }
+        }
     }
 
     public function focus-dialog() {
@@ -104,4 +119,3 @@ export component AuthPromptWindow inherits Window {
         root.focus-dialog();
     }
 }
-

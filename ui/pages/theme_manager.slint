@@ -145,7 +145,7 @@ component ThemeListRow inherits Rectangle {
             }
         }
 
-        // icon-only 动作：760 内容宽里不再挤三个文字按钮。
+        // icon-only 动作：宽工具窗下列表工具栏仍用图标按钮，保持紧凑。
         HorizontalLayout {
             horizontal-stretch: 0;
             spacing: Theme.spacing-4;
@@ -238,7 +238,7 @@ export component ThemeManagerPage inherits Rectangle {
         close => { root.close(); }
 
                 // --- 顶部固定 live preview ----------------------------------
-                // 尺寸契约：dialog-width-wide(760) − 2×spacing-20 内边距 = 内容宽；
+                // 尺寸契约：由宿主 ToolWindowChrome 的 body-width 传入；
                 // 预览表面宽跟内容走；高 120px − 2px 边框 = 118px
                 //（Rust `THEME_MANAGER_PREVIEW_AREA_PX`）。
                 TerminalPreview {
@@ -336,7 +336,7 @@ export component ThemeManagerPage inherits Rectangle {
                         }
                     }
 
-                    // 编辑器：占用列表区域，自身内容可滚动（880×600 下可保存）。
+                    // 编辑器：占用列表区域，自身内容可滚动。
                     if root.theme-editor-open : Rectangle {
                         clip: true;
                         background: Theme.card-fill;

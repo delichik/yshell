@@ -247,11 +247,15 @@ InfoBar / 提示类不写死背景色，用规则生成：`背景 = 系统色 12
   唯一静默信任的是显式的调试策略 `accept-any-for-testing`。变更密钥仍必须阻断式呈现
   （弹窗 + 详情入口 + 输入 `REPLACE` 的确认区）。
 
-### 5.10 ContentDialog（模态对话框）
-- 宽度 480（表单类 560）；圆角 8；遮罩 = `window.background` 60% 且**不加模糊**（软件渲染器）。
-- 结构：标题 `subtitle` → 正文 `body` → 操作区（右对齐，主操作在右）。
-- 关闭方式：Esc、遮罩点击（仅非破坏性）、右上 `×`（可选统一）。
-- 现有弹窗（About/Settings/Session Editor/Known Hosts/删除确认/退出确认/SFTP 操作）全部按此规范重排。
+### 5.10 模态工具窗口（独立 OS 窗口）
+- 弹窗不再嵌在主窗 overlay，而是独立非缩放工具窗口（Windows 上归属主窗、无任务栏按钮、模态）。无遮罩/scrim。
+- 尺寸三档（`ui/theme.slint`）：
+  - **compact** 560×400：确认、密码、New Folder、SFTP 短表单
+  - **standard** 720×580：认证、主机密钥、Logging、About、SFTP 冲突/属性
+  - **wide** 1100×820：Settings、会话/文件夹编辑器、Host Keys / Private Keys / Known Hosts / Proxies / Theme Manager
+- 壳层统一 `ToolWindowChrome`：自绘标题栏 + 关闭钮 + `tool-window-padding` 内容区内边距；短内容用 `vertical-stretch` 把操作区钉在底部。
+- 结构：标题栏文案 → 正文 `body` → 操作区（右对齐，主操作在右）。
+- 关闭方式：Esc、标题栏 `×`（与 Cancel 同路径）；危险确认仍无键盘默认确认（E-064）。
 
 ### 5.11 Flyout / 菜单
 - 圆角 8、`card.fill` 提升一级（深色下用 `#2C2C2C`）、1px 描边、单层阴影。

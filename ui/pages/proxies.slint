@@ -236,7 +236,7 @@ export component ProxiesPage inherits Rectangle {
                                     }
 
                                     Rectangle {
-                                        height: max(120px, min(root.proxies.length * 56px + 4px, 200px));
+                                        height: max(180px, min(root.proxies.length * 56px + 4px, 520px));
                                         clip: true;
                                         background: Theme.panel-background;
                                         border-radius: Theme.radius-control;
@@ -415,7 +415,7 @@ export component ProxiesPage inherits Rectangle {
                     }
 
                     // --- 右：编辑表单 / 测试结果 -----------------------------------
-                    // 表单可滚动；Cancel/Save 固定在底部，880×600 下无需滚动即可保存。
+                    // 表单可滚动；Cancel/Save 固定在底部（宽工具窗下通常无需滚动即可保存）。
                     Rectangle {
                         clip: true;
                         background: transparent;

@@ -2,6 +2,7 @@
 
 import { Theme } from "../theme.slint";
 import { SftpConflictDialog } from "../components/sftp_panel.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component SftpConflictWindow inherits Window {
     title: @tr("Resolve name conflicts");
@@ -28,16 +29,30 @@ export component SftpConflictWindow inherits Window {
     callback canceled();
     callback title_drag_requested();
 
-    dialog := SftpConflictDialog {
-        open: true;
+    private property <length> body-width:
+        Theme.tool-window-width-standard - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-standard - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+
+    ToolWindowChrome {
         width: Theme.tool-window-width-standard;
         height: Theme.tool-window-height-standard;
-        source-text: root.source-text;
-        destination-text: root.destination-text;
-        conflict-count: root.conflict-count;
-        conflict-paths-text: root.conflict-paths-text;
-        resolve(string) => { root.resolve(string); }
-        canceled => { root.canceled(); }
+        title-text: @tr("Resolve name conflicts");
+        native-title-drag: root.native_title_drag;
+        close-requested => { /* destructive: no Esc/× cancel (B23) */ }
+        title-drag-requested => { root.title_drag_requested(); }
+
+        dialog := SftpConflictDialog {
+            open: true;
+            width: root.body-width;
+            height: root.body-height;
+            source-text: root.source-text;
+            destination-text: root.destination-text;
+            conflict-count: root.conflict-count;
+            conflict-paths-text: root.conflict-paths-text;
+            resolve(string) => { root.resolve(string); }
+            canceled => { root.canceled(); }
+        }
     }
 
     public function focus-dialog() {
@@ -48,4 +63,3 @@ export component SftpConflictWindow inherits Window {
         root.focus-dialog();
     }
 }
-

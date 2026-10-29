@@ -12,7 +12,7 @@
 import { ListView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
-import { WinButton, WinIconButton, WinToggle } from "basic/controls.slint";
+import { WinButton, WinCard, WinIconButton, WinToggle } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 import { MenuEntry, MenuPopup } from "menu_popup.slint";
 import { FileCrumb, FilePane, FileRow, ListScrollBar } from "file_pane.slint";
@@ -1170,8 +1170,9 @@ export component SftpEntryDialog inherits Rectangle {
         else if (root.kind == "copy-to") { root.copy-to-selected(root.local-path-text); }
     }
 
+    // 标题由 ToolWindowChrome 提供（`title-text()`）；本组件只渲染正文与操作区。
     visible: root.open;
-    background: Theme.window-background;
+    background: transparent;
 
     dialog_scope := FocusScope {
         width: root.width;
@@ -1189,26 +1190,22 @@ export component SftpEntryDialog inherits Rectangle {
         }
 
         body := VerticalLayout {
-                width: root.width;
-                height: root.height;
-                padding: Theme.spacing-20;
-                spacing: 10px;
+            width: root.width;
+            height: root.height;
+            spacing: Theme.spacing-16;
 
-                Text {
-                    text: root.title-text();
-                    color: Theme.text-primary;
-                    font-size: Theme.font-subtitle;
-                    font-weight: Theme.weight-semibold;
-                }
+            Text {
+                text: root.hint-text();
+                color: Theme.text-secondary;
+                font-size: Theme.font-body;
+                wrap: word-wrap;
+            }
 
-                Text {
-                    text: root.hint-text();
-                    color: Theme.text-tertiary;
-                    wrap: word-wrap;
-                }
+            if root.shows-delete-summary() : WinCard {
+                vertical-stretch: 0;
 
-                if root.shows-delete-summary() : VerticalLayout {
-                    spacing: Theme.spacing-4;
+                VerticalLayout {
+                    spacing: Theme.spacing-8;
 
                     Text {
                         text: root.selected-count > 1
@@ -1224,62 +1221,76 @@ export component SftpEntryDialog inherits Rectangle {
                         text: root.selected-path-text;
                         color: Theme.text-tertiary;
                         font-size: Theme.font-caption;
+                        font-family: Theme.font-mono;
                         wrap: word-wrap;
                     }
                 }
+            }
 
-                if root.is-name-kind() : VerticalLayout {
-                    spacing: Theme.spacing-4;
+            if root.is-name-kind() || root.kind == "chmod" || root.shows-local-path() : WinCard {
+                vertical-stretch: 0;
 
-                    Text { text: root.name-label(); color: Theme.text-secondary; font-size: Theme.font-body; }
-                    WinTextInput {
-                        text <=> root.name-text;
-                        placeholder-text: root.kind == "new-folder" ? "new-folder" : "new-name";
-                    }
-                }
+                VerticalLayout {
+                    spacing: Theme.spacing-12;
 
-                if root.kind == "chmod" : VerticalLayout {
-                    spacing: Theme.spacing-4;
+                    if root.is-name-kind() : VerticalLayout {
+                        spacing: Theme.spacing-8;
 
-                    Text { text: @tr("Permissions (octal)"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                    WinTextInput {
-                        text <=> root.permissions-text;
-                        placeholder-text: "644";
-                    }
-                }
-
-                if root.shows-local-path() : VerticalLayout {
-                    spacing: Theme.spacing-4;
-
-                    Text { text: root.local-label(); color: Theme.text-secondary; font-size: Theme.font-body; }
-                    WinTextInput {
-                        text <=> root.local-path-text;
-                        placeholder-text: root.kind == "copy-to" ? "/remote/dir" : "/local/path";
-                        font-family: Theme.font-mono;
-                    }
-                }
-
-                HorizontalLayout {
-                    alignment: end;
-                    spacing: Theme.spacing-8;
-
-                    WinButton {
-                        text: @tr("Cancel");
-                        clicked => { root.canceled(); }
+                        Text { text: root.name-label(); color: Theme.text-secondary; font-size: Theme.font-body; }
+                        WinTextInput {
+                            text <=> root.name-text;
+                            placeholder-text: root.kind == "new-folder" ? "new-folder" : "new-name";
+                        }
                     }
 
-                    WinButton {
-                        text: root.primary-label();
-                        // 破坏性主按钮（Delete）用 critical 文案色 + 常态底，
-                        // 不用蓝色强调实底（设计语言 §5.1 / B 轮2 #46，B22）；
-                        // 与 ConfirmDialog 的 destructive 判定同形（critical 优先）。
-                        accent: root.kind != "delete";
-                        critical: root.kind == "delete";
-                        enabled: root.primary-enabled();
-                        clicked => { root.confirm(); }
+                    if root.kind == "chmod" : VerticalLayout {
+                        spacing: Theme.spacing-8;
+
+                        Text { text: @tr("Permissions (octal)"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                        WinTextInput {
+                            text <=> root.permissions-text;
+                            placeholder-text: "644";
+                        }
+                    }
+
+                    if root.shows-local-path() : VerticalLayout {
+                        spacing: Theme.spacing-8;
+
+                        Text { text: root.local-label(); color: Theme.text-secondary; font-size: Theme.font-body; }
+                        WinTextInput {
+                            text <=> root.local-path-text;
+                            placeholder-text: root.kind == "copy-to" ? "/remote/dir" : "/local/path";
+                            font-family: Theme.font-mono;
+                        }
                     }
                 }
             }
+
+            Rectangle {
+                vertical-stretch: 1;
+                min-height: 0px;
+                background: transparent;
+            }
+
+            HorizontalLayout {
+                alignment: end;
+                spacing: Theme.spacing-8;
+                vertical-stretch: 0;
+
+                WinButton {
+                    text: @tr("Cancel");
+                    clicked => { root.canceled(); }
+                }
+
+                WinButton {
+                    text: root.primary-label();
+                    accent: root.kind != "delete";
+                    critical: root.kind == "delete";
+                    enabled: root.primary-enabled();
+                    clicked => { root.confirm(); }
+                }
+            }
+        }
     }
 
     public function focus-dialog() {
@@ -1306,8 +1317,9 @@ export component SftpConflictDialog inherits Rectangle {
     callback resolve(string);
     callback canceled();
 
+    // 标题由 ToolWindowChrome 提供。
     visible: root.open;
-    background: Theme.window-background;
+    background: transparent;
 
     dialog_scope := FocusScope {
         width: root.width;
@@ -1322,80 +1334,92 @@ export component SftpConflictDialog inherits Rectangle {
         }
 
         body := VerticalLayout {
-                width: root.width;
-                height: root.height;
-                padding: Theme.spacing-20;
-                spacing: 10px;
+            width: root.width;
+            height: root.height;
+            spacing: Theme.spacing-16;
 
-                Text {
-                    text: @tr("Resolve name conflicts");
-                    color: Theme.text-primary;
-                    font-size: Theme.font-subtitle;
-                    font-weight: Theme.weight-semibold;
-                }
+            Text {
+                text: @tr("{0} destination path(s) already exist.", root.conflict-count);
+                color: Theme.text-primary;
+                font-size: Theme.font-body;
+                font-weight: Theme.weight-semibold;
+                wrap: word-wrap;
+            }
 
-                Text {
-                    text: @tr("{0} destination path(s) already exist.", root.conflict-count);
-                    color: Theme.caution;
-                    wrap: word-wrap;
-                }
+            Text {
+                text: @tr("{0} → {1}", root.source-text, root.destination-text);
+                color: Theme.text-secondary;
+                font-size: Theme.font-caption;
+                font-family: Theme.font-mono;
+                wrap: word-wrap;
+            }
 
-                Text {
-                    text: @tr("{0} → {1}", root.source-text, root.destination-text);
-                    color: Theme.text-tertiary;
-                    font-size: Theme.font-caption;
-                    wrap: word-wrap;
-                }
+            WinCard {
+                vertical-stretch: 1;
 
-                Rectangle {
-                    height: min(120px, conflicts-text.preferred-height + 2 * Theme.spacing-8);
-                    background: Theme.control-fill;
-                    border-radius: Theme.radius-control;
-                    border-width: 1px;
-                    border-color: Theme.control-stroke;
-                    clip: true;
-
-                    conflicts-text := Text {
-                        x: Theme.spacing-8;
-                        y: Theme.spacing-8;
-                        width: parent.width - 2 * Theme.spacing-8;
-                        text: root.conflict-paths-text;
-                        color: Theme.text-secondary;
-                        font-size: Theme.font-caption;
-                        wrap: word-wrap;
-                    }
-                }
-
-                Text {
-                    text: @tr("Overwrite replaces them, Rename keeps both by adding a number, Skip leaves them untouched.");
-                    color: Theme.text-tertiary;
-                    font-size: Theme.font-caption;
-                    wrap: word-wrap;
-                }
-
-                HorizontalLayout {
-                    alignment: end;
+                VerticalLayout {
                     spacing: Theme.spacing-8;
 
-                    WinButton {
-                        text: @tr("Cancel");
-                        clicked => { root.canceled(); }
+                    Text {
+                        text: @tr("Conflicting paths");
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-body;
                     }
-                    WinButton {
-                        text: @tr("Skip");
-                        clicked => { root.resolve("skip"); }
-                    }
-                    WinButton {
-                        text: @tr("Rename");
-                        clicked => { root.resolve("rename"); }
-                    }
-                    WinButton {
-                        text: @tr("Overwrite");
-                        accent: true;
-                        clicked => { root.resolve("overwrite"); }
+
+                    Rectangle {
+                        vertical-stretch: 1;
+                        min-height: 120px;
+                        background: Theme.panel-background;
+                        border-radius: Theme.radius-control;
+                        border-width: 1px;
+                        border-color: Theme.divider;
+                        clip: true;
+
+                        conflicts-text := Text {
+                            x: Theme.spacing-12;
+                            y: Theme.spacing-12;
+                            width: parent.width - 2 * Theme.spacing-12;
+                            text: root.conflict-paths-text;
+                            color: Theme.text-primary;
+                            font-size: Theme.font-caption;
+                            font-family: Theme.font-mono;
+                            wrap: word-wrap;
+                        }
                     }
                 }
             }
+
+            Text {
+                text: @tr("Overwrite replaces them, Rename keeps both by adding a number, Skip leaves them untouched.");
+                color: Theme.text-tertiary;
+                font-size: Theme.font-caption;
+                wrap: word-wrap;
+            }
+
+            HorizontalLayout {
+                alignment: end;
+                spacing: Theme.spacing-8;
+                vertical-stretch: 0;
+
+                WinButton {
+                    text: @tr("Cancel");
+                    clicked => { root.canceled(); }
+                }
+                WinButton {
+                    text: @tr("Skip");
+                    clicked => { root.resolve("skip"); }
+                }
+                WinButton {
+                    text: @tr("Rename");
+                    clicked => { root.resolve("rename"); }
+                }
+                WinButton {
+                    text: @tr("Overwrite");
+                    accent: true;
+                    clicked => { root.resolve("overwrite"); }
+                }
+            }
+        }
     }
 
     public function focus-dialog() {
@@ -1424,8 +1448,9 @@ export component SftpPropertiesDialog inherits Rectangle {
     callback copy-path();
     callback canceled();
 
+    // 标题由 ToolWindowChrome 提供。
     visible: root.open;
-    background: Theme.window-background;
+    background: transparent;
 
     dialog_scope := FocusScope {
         width: root.width;
@@ -1440,55 +1465,52 @@ export component SftpPropertiesDialog inherits Rectangle {
         }
 
         body := VerticalLayout {
-                width: root.width;
-                height: root.height;
-                padding: Theme.spacing-20;
-                spacing: 10px;
+            width: root.width;
+            height: root.height;
+            spacing: Theme.spacing-16;
 
-                Text {
-                    text: @tr("Properties");
-                    color: Theme.text-primary;
-                    font-size: Theme.font-subtitle;
-                    font-weight: Theme.weight-semibold;
-                }
+            WinCard {
+                vertical-stretch: 1;
 
                 GridLayout {
-                    spacing: Theme.spacing-8;
+                    spacing: Theme.spacing-16;
 
-                    Text { text: @tr("Name"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                    Text { text: root.name-text; color: Theme.text-primary; font-size: Theme.font-body; wrap: no-wrap; overflow: elide; }
+                    Text { row: 0; col: 0; text: @tr("Name"); color: Theme.text-secondary; font-size: Theme.font-body; width: Theme.form-label-width; }
+                    Text { row: 0; col: 1; text: root.name-text; color: Theme.text-primary; font-size: Theme.font-body; wrap: no-wrap; overflow: elide; }
 
-                    Text { text: @tr("Path"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                    Text { text: root.path-text; color: Theme.text-primary; font-size: Theme.font-body; wrap: word-wrap; }
+                    Text { row: 1; col: 0; text: @tr("Path"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                    Text { row: 1; col: 1; text: root.path-text; color: Theme.text-primary; font-size: Theme.font-body; font-family: Theme.font-mono; wrap: word-wrap; }
 
-                    Text { text: @tr("Kind"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                    Text { text: root.kind-text; color: Theme.text-primary; font-size: Theme.font-body; }
+                    Text { row: 2; col: 0; text: @tr("Kind"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                    Text { row: 2; col: 1; text: root.kind-text; color: Theme.text-primary; font-size: Theme.font-body; }
 
-                    Text { text: @tr("Size"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                    Text { text: root.size-text; color: Theme.text-primary; font-size: Theme.font-body; }
+                    Text { row: 3; col: 0; text: @tr("Size"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                    Text { row: 3; col: 1; text: root.size-text; color: Theme.text-primary; font-size: Theme.font-body; }
 
-                    Text { text: @tr("Modified"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                    Text { text: root.modified-text; color: Theme.text-primary; font-size: Theme.font-body; }
+                    Text { row: 4; col: 0; text: @tr("Modified"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                    Text { row: 4; col: 1; text: root.modified-text; color: Theme.text-primary; font-size: Theme.font-body; }
 
-                    Text { text: @tr("Permissions"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                    Text { text: root.permissions-text; color: Theme.text-primary; font-size: Theme.font-body; }
-                }
-
-                HorizontalLayout {
-                    alignment: end;
-                    spacing: Theme.spacing-8;
-
-                    WinButton {
-                        text: @tr("Copy Path");
-                        clicked => { root.copy-path(); }
-                    }
-                    WinButton {
-                        text: @tr("Close");
-                        accent: true;
-                        clicked => { root.canceled(); }
-                    }
+                    Text { row: 5; col: 0; text: @tr("Permissions"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                    Text { row: 5; col: 1; text: root.permissions-text; color: Theme.text-primary; font-size: Theme.font-body; font-family: Theme.font-mono; }
                 }
             }
+
+            HorizontalLayout {
+                alignment: end;
+                spacing: Theme.spacing-8;
+                vertical-stretch: 0;
+
+                WinButton {
+                    text: @tr("Copy Path");
+                    clicked => { root.copy-path(); }
+                }
+                WinButton {
+                    text: @tr("Close");
+                    accent: true;
+                    clicked => { root.canceled(); }
+                }
+            }
+        }
     }
 
     public function focus-dialog() {

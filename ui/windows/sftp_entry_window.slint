@@ -1,18 +1,19 @@
-// SFTP as an independent non-resizable tool window.
+// SFTP entry action as an independent non-resizable tool window.
 
 import { Theme } from "../theme.slint";
 import { SftpEntryDialog } from "../components/sftp_panel.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component SftpEntryWindow inherits Window {
     title: @tr("SFTP");
     no-frame: true;
     resize-border-width: 0px;
-    preferred-width: Theme.tool-window-width-standard;
-    min-width: Theme.tool-window-width-standard;
-    max-width: Theme.tool-window-width-standard;
-    preferred-height: Theme.tool-window-height-standard;
-    min-height: Theme.tool-window-height-standard;
-    max-height: Theme.tool-window-height-standard;
+    preferred-width: Theme.tool-window-width-compact;
+    min-width: Theme.tool-window-width-compact;
+    max-width: Theme.tool-window-width-compact;
+    preferred-height: Theme.tool-window-height-compact;
+    min-height: Theme.tool-window-height-compact;
+    max-height: Theme.tool-window-height-compact;
     background: Theme.window-background;
     default-font-size: Theme.font-body;
     default-font-family: Theme.font-ui;
@@ -37,25 +38,53 @@ export component SftpEntryWindow inherits Window {
     callback canceled();
     callback title_drag_requested();
 
-    dialog := SftpEntryDialog {
-        open: true;
-        width: Theme.tool-window-width-standard;
-        height: Theme.tool-window-height-standard;
-        kind: root.kind;
-        selected-name-text: root.selected-name-text;
-        selected-path-text: root.selected-path-text;
-        selected-count: root.selected-count;
-        name-text <=> root.name-text;
-        permissions-text <=> root.permissions-text;
-        local-path-text <=> root.local-path-text;
-        create-folder(string) => { root.create-folder(string); }
-        rename-selected(string) => { root.rename-selected(string); }
-        delete-selected => { root.delete-selected(); }
-        chmod-selected(string) => { root.chmod-selected(string); }
-        upload-selected(string) => { root.upload-selected(string); }
-        download-selected(string) => { root.download-selected(string); }
-        copy-to-selected(string) => { root.copy-to-selected(string); }
-        canceled => { root.canceled(); }
+    private property <length> body-width:
+        Theme.tool-window-width-compact - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-compact - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+
+    private property <string> chrome-title:
+        root.kind == "new-folder" ? @tr("New Folder")
+        : root.kind == "rename" ? @tr("Rename")
+        : root.kind == "chmod" ? @tr("Change Permissions")
+        : root.kind == "delete" ? @tr("Delete")
+        : root.kind == "upload" ? @tr("Upload File")
+        : root.kind == "download" ? @tr("Download")
+        : root.kind == "copy-to" ? @tr("Copy To...")
+        : @tr("SFTP");
+
+    ToolWindowChrome {
+        width: Theme.tool-window-width-compact;
+        height: Theme.tool-window-height-compact;
+        title-text: root.chrome-title;
+        native-title-drag: root.native_title_drag;
+        close-requested => {
+            if (root.kind != "delete") {
+                root.canceled();
+            }
+        }
+        title-drag-requested => { root.title_drag_requested(); }
+
+        dialog := SftpEntryDialog {
+            open: true;
+            width: root.body-width;
+            height: root.body-height;
+            kind: root.kind;
+            selected-name-text: root.selected-name-text;
+            selected-path-text: root.selected-path-text;
+            selected-count: root.selected-count;
+            name-text <=> root.name-text;
+            permissions-text <=> root.permissions-text;
+            local-path-text <=> root.local-path-text;
+            create-folder(string) => { root.create-folder(string); }
+            rename-selected(string) => { root.rename-selected(string); }
+            delete-selected => { root.delete-selected(); }
+            chmod-selected(string) => { root.chmod-selected(string); }
+            upload-selected(string) => { root.upload-selected(string); }
+            download-selected(string) => { root.download-selected(string); }
+            copy-to-selected(string) => { root.copy-to-selected(string); }
+            canceled => { root.canceled(); }
+        }
     }
 
     public function focus-dialog() {
@@ -66,4 +95,3 @@ export component SftpEntryWindow inherits Window {
         root.focus-dialog();
     }
 }
-

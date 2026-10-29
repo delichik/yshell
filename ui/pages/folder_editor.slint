@@ -380,9 +380,10 @@ export component FolderEditor inherits Rectangle {
     callback field-toggled(string);
     callback field-selected(string, int);
 
-    /// 壳内滚动区上限（标题/摘要/底栏约占 220；矮窗由壳再夹紧面板）。
+    /// 壳内滚动区上限：tall 工具窗内容高减去摘要/底栏余量。
     private property <length> sections-scroll-max:
-        Theme.manager-panel-max-height - 220px;
+        Theme.tool-window-height-tall - Theme.bar-height-menubar
+        - 2 * Theme.tool-window-padding - 160px;
 
     visible: root.open;
     background: transparent;

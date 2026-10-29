@@ -17,7 +17,7 @@
 // 独立工具窗口内使用（`logging_window.slint`）：填满父级，无遮罩；Esc 走 `cancel()`。
 
 import { Theme } from "../theme.slint";
-import { WinButton, WinToggle, WinInfoBar, WinScrollIndicator } from "basic/controls.slint";
+import { WinButton, WinCard, WinCardHeader, WinToggle, WinInfoBar, WinScrollIndicator } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 import { Icon } from "basic/icons.slint";
 
@@ -88,15 +88,14 @@ export component LoggingDialog inherits Rectangle {
     /// overwrite-confirmed）；任一开关变化时发出，宿主写回运行时并重新投影。
     callback options-changed(bool, bool, bool, bool, bool);
 
-    // 正文列宽与表单控件列宽：给自动换行的正文显式宽度，避免布局在宽度未定时
-    // 估算 preferred-height（同族问题见 B 轮5 认证弹窗：面板少算一行、操作行贴底）。
-    private property <length> content-width:
-        Theme.tool-window-width-standard - 2 * Theme.spacing-20;
+    // 正文列宽与表单控件列宽：用实际宽度，避免 preferred-height 少算。
+    private property <length> content-width: root.width;
     private property <length> field-width:
         root.content-width - Theme.form-label-width - Theme.spacing-12;
 
+    // 标题由 ToolWindowChrome 提供。
     visible: root.open;
-    background: Theme.window-background;
+    background: transparent;
 
     // 开关变化 → 一次性回传全部选项（避免逐个回调的中间态）。
     function notify-options() {
@@ -132,21 +131,13 @@ export component LoggingDialog inherits Rectangle {
         body := VerticalLayout {
                 width: root.width;
                 height: root.height;
-                padding: Theme.spacing-20;
-                spacing: Theme.spacing-12;
-
-                Text {
-                    text: @tr("Terminal Logging");
-                    color: Theme.text-primary;
-                    font-size: Theme.font-subtitle;
-                    font-weight: Theme.weight-semibold;
-                    wrap: word-wrap;
-                    width: root.content-width;
-                }
+                spacing: Theme.spacing-16;
 
                 Text {
                     text: @tr("Session: {0}", root.session-name-text);
-                    color: Theme.text-secondary;
+                    color: Theme.text-primary;
+                    font-size: Theme.font-body;
+                    font-weight: Theme.weight-semibold;
                     wrap: no-wrap;
                     overflow: elide;
                 }
@@ -238,110 +229,123 @@ export component LoggingDialog inherits Rectangle {
 
                 // ------------------------------------------------- 开启表单视图
                 if !root.logging-active : VerticalLayout {
-                    spacing: Theme.spacing-12;
+                    spacing: Theme.spacing-16;
 
-                    LoggingFormRow {
-                        label: @tr("Save to");
+                    WinCard {
+                        WinCardHeader {
+                            title: @tr("Destination");
+                            icon: "folder";
+                        }
 
-                        HorizontalLayout {
-                            spacing: Theme.spacing-8;
+                        LoggingFormRow {
+                            label: @tr("Save to");
+
+                            HorizontalLayout {
+                                spacing: Theme.spacing-8;
+
+                                WinTextInput {
+                                    text <=> root.directory-text;
+                                    font-family: Theme.font-mono;
+                                    font-size: Theme.font-caption;
+                                    placeholder-text: @tr("Log folder");
+                                    edited(text) => { root.directory-changed(text); }
+                                }
+
+                                WinButton {
+                                    text: @tr("Browse\u{2026}");
+                                    icon: "folder";
+                                    enabled: root.browse-enabled;
+                                    clicked => { root.browse-requested(); }
+                                }
+                            }
+
+                            Text {
+                                text: @tr("Default: the last used folder, or the configured logs directory.");
+                                color: Theme.text-tertiary;
+                                font-size: Theme.font-caption;
+                                wrap: word-wrap;
+                                width: root.field-width;
+                            }
+                        }
+
+                        LoggingFormRow {
+                            label: @tr("File name");
 
                             WinTextInput {
-                                text <=> root.directory-text;
+                                text <=> root.file-name-text;
                                 font-family: Theme.font-mono;
                                 font-size: Theme.font-caption;
-                                placeholder-text: @tr("Log folder");
-                                edited(text) => { root.directory-changed(text); }
+                                placeholder-text: @tr("session-{{timestamp}}.log");
+                                edited(text) => { root.file-name-changed(text); }
                             }
 
-                            WinButton {
-                                text: @tr("Browse\u{2026}");
-                                icon: "folder";
-                                enabled: root.browse-enabled;
-                                clicked => { root.browse-requested(); }
+                            if root.file-name-error-text != "" : Text {
+                                text: root.file-name-error-text;
+                                color: Theme.critical;
+                                font-size: Theme.font-caption;
+                                wrap: word-wrap;
+                                width: root.field-width;
+                            }
+
+                            if root.file-exists && root.file-name-error-text == "" : Text {
+                                text: @tr("This file already exists. Confirm to overwrite it, or choose another name.");
+                                color: Theme.caution;
+                                font-size: Theme.font-caption;
+                                wrap: word-wrap;
+                                width: root.field-width;
                             }
                         }
 
-                        Text {
-                            text: @tr("Default: the last used folder, or the configured logs directory.");
-                            color: Theme.text-tertiary;
-                            font-size: Theme.font-caption;
-                            wrap: word-wrap;
-                            width: root.field-width;
+                        if root.file-exists : WinToggle {
+                            text: @tr("Overwrite the existing file");
+                            checked <=> root.overwrite-confirmed;
+                            toggled => { root.notify-options(); }
                         }
                     }
 
-                    LoggingFormRow {
-                        label: @tr("File name");
-
-                        WinTextInput {
-                            text <=> root.file-name-text;
-                            font-family: Theme.font-mono;
-                            font-size: Theme.font-caption;
-                            placeholder-text: @tr("session-{{timestamp}}.log");
-                            edited(text) => { root.file-name-changed(text); }
+                    WinCard {
+                        WinCardHeader {
+                            title: @tr("Options");
+                            icon: "settings";
                         }
 
-                        if root.file-name-error-text != "" : Text {
-                            text: root.file-name-error-text;
-                            color: Theme.critical;
-                            font-size: Theme.font-caption;
-                            wrap: word-wrap;
-                            width: root.field-width;
-                        }
+                        LoggingFormRow {
+                            label: @tr("Format");
 
-                        if root.file-exists && root.file-name-error-text == "" : Text {
-                            text: @tr("This file already exists. Confirm to overwrite it, or choose another name.");
-                            color: Theme.caution;
-                            font-size: Theme.font-caption;
-                            wrap: word-wrap;
-                            width: root.field-width;
-                        }
-                    }
+                            HorizontalLayout {
+                                spacing: Theme.spacing-8;
 
-                    if root.file-exists : WinToggle {
-                        text: @tr("Overwrite the existing file");
-                        checked <=> root.overwrite-confirmed;
-                        toggled => { root.notify-options(); }
-                    }
+                                WinToggle {
+                                    text: @tr("Sanitized (plain text)");
+                                    radio: true;
+                                    checked <=> root.sanitized-format;
+                                    toggled => { root.sanitized-format = true; root.raw-format = false; root.notify-options(); }
+                                }
 
-                    LoggingFormRow {
-                        label: @tr("Format");
-
-                        HorizontalLayout {
-                            spacing: Theme.spacing-8;
-
-                            WinToggle {
-                                text: @tr("Sanitized (plain text)");
-                                radio: true;
-                                checked <=> root.sanitized-format;
-                                // 单选语义：点击总是选中本项（不能取消）。
-                                toggled => { root.sanitized-format = true; root.raw-format = false; root.notify-options(); }
-                            }
-
-                            WinToggle {
-                                text: @tr("Raw (with ANSI escapes)");
-                                radio: true;
-                                checked <=> root.raw-format;
-                                toggled => { root.raw-format = true; root.sanitized-format = false; root.notify-options(); }
+                                WinToggle {
+                                    text: @tr("Raw (with ANSI escapes)");
+                                    radio: true;
+                                    checked <=> root.raw-format;
+                                    toggled => { root.raw-format = true; root.sanitized-format = false; root.notify-options(); }
+                                }
                             }
                         }
-                    }
 
-                    WinToggle {
-                        text: @tr("Timestamp each line with the local [HH:MM:SS]");
-                        checked <=> root.timestamps;
-                        toggled => { root.notify-options(); }
-                    }
+                        WinToggle {
+                            text: @tr("Timestamp each line with the local [HH:MM:SS]");
+                            checked <=> root.timestamps;
+                            toggled => { root.notify-options(); }
+                        }
 
-                    WinToggle {
-                        text: @tr("Also record local input (commands you type)");
-                        checked <=> root.include-input;
-                        toggled => {
-                            if (!root.include-input) {
-                                root.input-confirmed = false;
+                        WinToggle {
+                            text: @tr("Also record local input (commands you type)");
+                            checked <=> root.include-input;
+                            toggled => {
+                                if (!root.include-input) {
+                                    root.input-confirmed = false;
+                                }
+                                root.notify-options();
                             }
-                            root.notify-options();
                         }
                     }
 
