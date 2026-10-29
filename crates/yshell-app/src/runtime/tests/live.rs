@@ -310,14 +310,16 @@ fn live_native_shell_typing_after_sftp_smoke_when_env_target_is_set() {
     runtime.force_real_ssh_in_tests = true;
     let _ = runtime.open_saved_session("saved-key").expect("connect");
     let _ = runtime.resize_active_terminal(78, 36).expect("resize");
-    // 模拟 UI 计时器：�?120ms 轮询 5 秒�?    for tick in 0..40 {
+    // Simulate the UI timer: poll every 120ms for ~5s.
+    for tick in 0..40 {
         thread::sleep(Duration::from_millis(120));
         if let Err(error) = runtime.poll_active_terminal_output() {
             panic!("poll error at tick {tick}: {error}");
         }
     }
     let _ = runtime.refresh_active_sftp_listing().expect("sftp");
-    // 模拟 UI：逐字符写入（每个 key 事件一�?write+poll）�?    thread::sleep(Duration::from_millis(1000));
+    // Simulate UI: one write+poll per character key event.
+    thread::sleep(Duration::from_millis(1000));
     for ch in "echo __TMP_MARK__\r".chars() {
         runtime
             .send_active_terminal_input(&ch.to_string())

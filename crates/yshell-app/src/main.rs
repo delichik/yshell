@@ -10,6 +10,7 @@ mod connect_jobs;
 mod dialog_windows;
 mod error;
 mod local_fs;
+mod mcp_server;
 mod runtime;
 mod session_runtime;
 mod sftp_jobs;
@@ -57,6 +58,10 @@ fn main() -> AppResult<()> {
             print_help();
             Ok(())
         }
+        CliCommand::Mcp => {
+            let config_dir = yshell_config::discover_config_dir().map_err(AppError::from_error)?;
+            yshell_mcp::run_stdio_server(&config_dir).map_err(AppError::from_error)
+        }
         CliCommand::RunShell => {
             let app = bootstrap_app()?;
             app.run()
@@ -83,6 +88,7 @@ enum CliCommand {
     QuickConnect(String),
     Version,
     Help,
+    Mcp,
     RunShell,
 }
 
@@ -100,6 +106,7 @@ impl CliCommand {
             }),
             "--version" | "-V" => Ok(Self::Version),
             "--help" | "-h" => Ok(Self::Help),
+            "--mcp" => Ok(Self::Mcp),
             unknown => Err(AppError::new(format!("unknown argument: {unknown}"))),
         }
     }
@@ -107,7 +114,7 @@ impl CliCommand {
 
 fn print_help() {
     println!(
-        "YShell\n\nUSAGE:\n    yshell [OPTIONS]\n\nOPTIONS:\n    --check-config            Validate configuration discovery\n    --print-config-dir        Print the configuration directory\n    --quick-connect <input>   Run the runtime quick-connect path without launching UI\n    --version                 Print version\n    --help                    Print help\n\nENVIRONMENT:\n    YSHELL_MASTER_PASSWORD    Enables the local encrypted secret store at <config>/secret-store.toml"
+        "YShell\n\nUSAGE:\n    yshell [OPTIONS]\n\nOPTIONS:\n    --check-config            Validate configuration discovery\n    --print-config-dir        Print the configuration directory\n    --quick-connect <input>   Run the runtime quick-connect path without launching UI\n    --mcp                     MCP stdio bridge to a running YShell GUI (Cursor / agents)\n    --version                 Print version\n    --help                    Print help\n\nENVIRONMENT:\n    YSHELL_MASTER_PASSWORD    Enables the local encrypted secret store at <config>/secret-store.toml"
     );
 }
 

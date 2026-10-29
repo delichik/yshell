@@ -22,6 +22,7 @@
 | 同步输入 N9 | All / Visible / 停止；chip；不弹 KEYS 确认（D23） |
 | 本地终端 | 本机 shell 标签 |
 | 基建 | Slint 1.18、R1/R2 拆分、L2 Esc/遮罩、对比度 xtask、真实 SSH only |
+| MCP（GUI 控制） | `yshell --mcp` stdio 桥接运行中的 GUI；`request_control` 用户授权锁；list/input/output/connect/disconnect/duplicate |
 
 ---
 

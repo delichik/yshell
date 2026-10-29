@@ -31,6 +31,8 @@ export component StatusBar inherits Rectangle {
     in property <string> sync-text: "";
     /// 一次性提示（目标断开移除 / 控制键广播 / 源关闭；空 = 无）。
     in property <string> sync-notice-text: "";
+    /// MCP：AI 正在控制本机 YShell。
+    in property <bool> mcp-controlling: false;
     /// 终端视口列×行（无活动会话时为 0，不显示）。
     in property <int> terminal-cols: 0;
     in property <int> terminal-rows: 0;
@@ -40,6 +42,7 @@ export component StatusBar inherits Rectangle {
 
     callback logging-clicked();
     callback sync-stop-clicked();
+    callback mcp-exit-clicked();
 
     // 固定高度 + 不参与纵向拉伸：Slint 1.18 起 stretch 默认为 1，否则会被
     // 主内容区挤扁，表现为状态栏「消失一截」。
@@ -152,6 +155,45 @@ export component StatusBar inherits Rectangle {
             vertical-alignment: center;
             wrap: no-wrap;
             horizontal-stretch: 0;
+        }
+
+        // MCP：AI 控制中 chip（点击 = 退出控制，AI 需重新 request_control）。
+        if root.mcp-controlling : Rectangle {
+            min-width: 32px;
+            border-radius: Theme.radius-control;
+            background: mcp-touch.pressed ? Theme.subtle-pressed
+                : mcp-touch.has-hover ? Theme.subtle-hover
+                : Theme.attention-background;
+            animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+            HorizontalLayout {
+                padding-left: Theme.spacing-8;
+                padding-right: Theme.spacing-8;
+                spacing: Theme.spacing-4;
+                alignment: center;
+
+                Text {
+                    text: @tr("StatusBar" => "AI controlling");
+                    color: Theme.caution;
+                    font-size: Theme.font-caption;
+                    font-weight: Theme.weight-semibold;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                }
+
+                Icon {
+                    name: "close";
+                    icon-color: Theme.caution;
+                    icon-size: 12px;
+                    cross-axis-self-alignment: center;
+                }
+            }
+
+            mcp-touch := TouchArea {
+                accessible-role: button;
+                accessible-label: @tr("StatusBar" => "Exit AI control");
+                clicked => { root.mcp-exit-clicked(); }
+            }
         }
 
         // N9：同步发送按键 chip（`SYNC → n targets` + 一键停止）与一次性提示。

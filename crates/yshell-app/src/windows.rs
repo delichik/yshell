@@ -144,6 +144,10 @@ pub(crate) struct WindowManager {
     timer: Option<Timer>,
     /// App-scoped independent dialog / tool windows.
     dialog_host: Rc<RefCell<DialogHost>>,
+    /// MCP IPC inbox drained on the UI tick.
+    mcp_inbox: crate::mcp_server::McpInbox,
+    /// Keeps the loopback MCP acceptor alive for the GUI lifetime.
+    _mcp_server: Option<crate::mcp_server::McpServerHandle>,
 }
 
 impl WindowManager {
@@ -165,6 +169,19 @@ impl WindowManager {
             runtime.set_sftp_parallel_transfer_limit(limit);
         }
         let dialog_host = crate::dialog_windows::DialogWindowManager::new(Rc::clone(&runtime));
+        let mcp_inbox = crate::mcp_server::McpInbox::new();
+        let mcp_server = {
+            let token = crate::mcp_server::new_endpoint_token();
+            let config_dir = runtime.borrow().config_dir.clone();
+            runtime.borrow_mut().mcp_endpoint_token = Some(token.clone());
+            match crate::mcp_server::start_mcp_server(config_dir, token, mcp_inbox.clone()) {
+                Ok(handle) => Some(handle),
+                Err(error) => {
+                    tracing::warn!(error = %error, "MCP IPC server failed to start");
+                    None
+                }
+            }
+        };
         let manager = Rc::new(RefCell::new(Self {
             runtime,
             windows: Vec::new(),
@@ -175,6 +192,8 @@ impl WindowManager {
             connect_job_rx,
             timer: None,
             dialog_host,
+            mcp_inbox,
+            _mcp_server: mcp_server,
         }));
         {
             let weak = Rc::downgrade(&manager);
@@ -639,6 +658,11 @@ impl WindowManager {
             }
             while let Ok(message) = self.connect_job_rx.try_recv() {
                 let _ = runtime.apply_connect_job_message(message);
+                dirty = true;
+            }
+            // MCP：IPC worker 入队的控制/读写请求（含授权弹窗发起）。
+            if !self.mcp_inbox.is_empty() {
+                self.mcp_inbox.drain(&mut runtime);
                 dirty = true;
             }
             // NET-1：代理管理器 "Test" 的后台探测结果。

@@ -18,10 +18,21 @@ The CLI also exposes smoke-friendly commands:
 yshell --check-config
 yshell --print-config-dir
 yshell --quick-connect user@example.com
+yshell --mcp
 yshell --version
 ```
 
 Quick Connect input is parsed and validated both from the CLI and from the native toolbar.
+
+### MCP (AI control of the running GUI)
+
+Start the YShell GUI first (it writes `{config_dir}/mcp-endpoint.json`). Point Cursor (or another MCP host) at:
+
+```json
+{ "mcpServers": { "yshell": { "command": "yshell", "args": ["--mcp"] } } }
+```
+
+The agent must call `request_control` (user consent dialog, unless Settings → Auto-approve AI control is on) before `session_input` / `session_output` / connect / disconnect / duplicate. The status bar shows **AI controlling** with an exit control action.
 
 ## Adapter coverage
 

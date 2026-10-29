@@ -605,6 +605,8 @@ export component MainWindow inherits Window {
     // Settings → General：关闭会话前 / 退出前是否确认（可在「不再询问」后重新开启）。
     in-out property <bool> settings_confirm_close_session: true;
     in-out property <bool> settings_confirm_quit_app: true;
+    in-out property <bool> settings_mcp_auto_approve_control: false;
+    in-out property <bool> mcp_controlling: false;
     in-out property <string> terminal_title_name_text: "";
     in-out property <bool> terminal_title_has_session: false;
     in-out property <string> terminal_body_kind_text: "ready";
@@ -850,6 +852,10 @@ export component MainWindow inherits Window {
     callback set_confirm_close_session(bool);
     /// 持久化「退出前确认」偏好。
     callback set_confirm_quit_app(bool);
+    /// 持久化 MCP 控制自动批准（「不再询问」勾选 / Settings 开关共用）。
+    callback set_mcp_auto_approve_control(bool);
+    /// 用户退出 AI 控制（状态栏 chip）。
+    callback exit_mcp_control();
     // --- N7：多窗口（标签迁移 / 窗口关闭确认 / 窗口激活）------------------------
     /// 标签右键：把标签移动到新窗口（只换 UI 所有权）。
     callback move_tab_to_new_window(string);
@@ -2638,6 +2644,8 @@ export component MainWindow inherits Window {
                 sync-text: TextFormats.input-sync-chip(root.input_sync_target_count);
                 sync-notice-text: TextFormats.input-sync-notice(root.input_sync_notice_kind_text, root.input_sync_notice_param_text, root.input_sync_target_count);
                 sync-stop-clicked() => { root.stop_input_sync(); }
+                mcp-controlling: root.mcp_controlling;
+                mcp-exit-clicked() => { root.exit_mcp_control(); }
                 logging-clicked() => {
                     // A23（muse 轮1 中#37）：锚点按弹层实际宽度（logging-menu-width）
                     // 对齐到状态栏右内边距 12px，并夹在窗口内 —— 不再用写死的

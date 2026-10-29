@@ -556,6 +556,10 @@ pub struct UiProfile {
     /// Confirm before quitting the application (last window close / Quit).
     #[serde(default = "default_true")]
     pub confirm_quit_app: bool,
+    /// When true, MCP `request_control` skips the consent dialog (Settings /
+    /// the dialog's "don't ask again" both write this flag).
+    #[serde(default)]
+    pub mcp_auto_approve_control: bool,
     /// Maximum number of SFTP transfers (uploads and downloads) that run at
     /// the same time.
     ///
@@ -576,6 +580,7 @@ impl Default for UiProfile {
             debug_logging: false,
             confirm_close_session: true,
             confirm_quit_app: true,
+            mcp_auto_approve_control: false,
             sftp_max_parallel_transfers: default_sftp_max_parallel_transfers(),
         }
     }

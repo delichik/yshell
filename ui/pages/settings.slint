@@ -78,6 +78,8 @@ export component SettingsDialog inherits Rectangle {
     in-out property <bool> confirm-close-session-enabled: true;
     /// Confirm before quitting YShell.
     in-out property <bool> confirm-quit-app-enabled: true;
+    /// Auto-approve MCP AI control requests (skip the consent dialog).
+    in-out property <bool> mcp-auto-approve-control-enabled: false;
     /// Absolute path of the debug log directory.
     in property <string> debug-log-dir-text: "";
     /// Active left-nav section id.
@@ -111,6 +113,7 @@ export component SettingsDialog inherits Rectangle {
     callback set-debug-logging(bool);
     callback set-confirm-close-session(bool);
     callback set-confirm-quit-app(bool);
+    callback set-mcp-auto-approve-control(bool);
     callback open-debug-log-dir();
     // Appearance（字体；主题编辑已迁移到 Theme Manager）
     callback select-appearance-font(int);
@@ -298,6 +301,15 @@ export component SettingsDialog inherits Rectangle {
                                                 checked <=> root.confirm-quit-app-enabled;
                                                 toggled => {
                                                     root.set-confirm-quit-app(root.confirm-quit-app-enabled);
+                                                }
+                                                horizontal-stretch: 0;
+                                            }
+
+                                            WinToggle {
+                                                text: @tr("Auto-approve AI control (MCP)");
+                                                checked <=> root.mcp-auto-approve-control-enabled;
+                                                toggled => {
+                                                    root.set-mcp-auto-approve-control(root.mcp-auto-approve-control-enabled);
                                                 }
                                                 horizontal-stretch: 0;
                                             }

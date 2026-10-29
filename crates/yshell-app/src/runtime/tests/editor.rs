@@ -25,7 +25,7 @@ const TEST_ED25519_PRIVATE_KEY: &str = concat!(
 const TEST_ED25519_FINGERPRINT: &str = "SHA256:gufPep5T6QepKH9Ggl3KT9znGwIxL0pWn3fxvDUxNPA";
 const LEGACY_KEY_PATH: &str = "/legacy/id_ed25519";
 
-/// 旧配置形态：`AuthMethod::PrivateKey { key_id: None, path, .. }`（SSH-1 legacy）�?
+/// 旧配置形态：`AuthMethod::PrivateKey { key_id: None, path, .. }`（SSH-1 legacy）。
 fn legacy_private_key_store(
     config_dir: &std::path::Path,
     passphrase_secret_key: Option<&str>,
@@ -80,8 +80,8 @@ fn selected_saved_session_can_be_loaded_into_editor() {
     .into_session_profile("saved-editor");
     profile.name = "Editor Session".to_owned();
     profile.auth_profile_id = Some("auth-agent".to_owned());
-    // 兼容性：旧配�?导入的会话仍可携�?`host_key_policy`；编辑器不再读取/暴露它，
-    // 但加载旧会话不得报错（策略只在连接解析时生效）�?
+    // 兼容性：旧配置导入的会话仍可携带 `host_key_policy`；编辑器不再读取/暴露它，
+    // 已消失的选中会话回退为重新载入后的第一个会话（此处没有会话 → 清空）。
     profile.host_key_policy = Some(ConfigHostKeyPolicy::AcceptAnyForTesting);
     let mut folder = FolderProfile::new("folder-ops", "Ops");
     let mut nested = FolderProfile::new("folder-prod", "Prod");
@@ -155,7 +155,7 @@ fn session_editor_section_selection_updates_projection() {
         "authentication"
     );
     // Terminal / Logging sections were removed from the session editor UI
-    // (scrollback �?Settings; logging �?context menu); callbacks fall back to general.
+    // (scrollback → Settings; logging → context menu); callbacks fall back to general.
     assert_eq!(
         runtime.select_session_editor_terminal().editor_section_text,
         "general"
@@ -315,7 +315,7 @@ fn root_folder_creation_from_sidebar_blank_menu_persists_and_projects() {
         .session_tree_rows
         .iter()
         .any(|row| row.kind == "folder" && row.label == "Lab"));
-    // 落盘：重新载入配置后文件夹仍在根级�?
+    // 落盘：重新载入配置后文件夹仍在根级。
     let reloaded = ConfigStore::new(temp.path())
         .load_or_recover()
         .expect("reload");
@@ -324,7 +324,7 @@ fn root_folder_creation_from_sidebar_blank_menu_persists_and_projects() {
         .folders
         .iter()
         .any(|folder| folder.name == "Lab"));
-    // 重名（大小写不敏感）与空名都会被拒绝�?
+    // 重名（大小写不敏感）与空名都会被拒绝。
     assert!(runtime.create_root_saved_folder("lab").is_err());
     assert!(runtime.create_root_saved_folder("  ").is_err());
 }
@@ -348,7 +348,7 @@ fn refresh_saved_sessions_reloads_config_and_prunes_stale_selection() {
         .iter()
         .any(|row| row.id == "session-one"));
 
-    // 外部编辑（模拟另一个实例写盘）：删�?Lab，改�?Ops�?
+    // 外部编辑（模拟另一个实例写盘）：删掉 Lab，改加 Ops。
     let mut edited = ConfigDocument::default();
     edited.folders.push(FolderProfile::new("folder-ops", "Ops"));
     store.save(&edited).expect("save edited config");
@@ -366,7 +366,7 @@ fn refresh_saved_sessions_reloads_config_and_prunes_stale_selection() {
         .session_tree_rows
         .iter()
         .any(|row| row.id == "session-one"));
-    // 已消失的选中会话回退为重新载入后的第一个会话（此处没有会话 �?清空）�?
+    // 已消失的选中会话回退为重新载入后的第一个会话（此处没有会话 ）。清空）。
     assert_eq!(runtime.selected_saved_session_id, None);
     assert!(!projection.has_saved_selection);
 }
@@ -404,7 +404,7 @@ fn editor_can_add_tunnel_forward_and_persist_it() {
         .expect("saved profile");
     let tunnel = profile.tunnel.expect("saved tunnel profile");
     assert_eq!(tunnel.forwards.len(), 1);
-    // 编辑器不再写主机密钥策略：保存后保持为空，运行时解析回退�?Strict�?
+    // 编辑器不再写主机密钥策略：保存后保持为空，运行时解析回退回 Strict。
     assert!(
         profile.host_key_policy.is_none(),
         "editor must not persist a host key policy"
@@ -422,13 +422,13 @@ fn editor_built_ssh_config_uses_strict_policy_unless_testing_override() {
     let _ = runtime.start_new_saved_session_editor();
     let _ = runtime.update_editor_host("strict-default.example.test");
 
-    // 编辑器不再携带策略：默认解析为严�?known_hosts 校验�?
+    // 编辑器不再携带策略：默认解析为严格 known_hosts 校验。
     let config = runtime
         .build_ssh_config_from_editor()
         .expect("build editor ssh config");
     assert_eq!(config.host_key_policy, HostKeyPolicy::Strict);
 
-    // 受控测试路径：accept-any 只能通过显式 override 注入，不是用户选项�?
+    // 受控测试路径：accept-any 只能通过显式 override 注入，不是用户选项。
     runtime.set_host_key_policy_override_for_testing(HostKeyPolicy::AcceptAnyForTesting);
     let overridden = runtime
         .build_ssh_config_from_editor()
@@ -446,7 +446,7 @@ fn editor_selects_managed_proxy_without_creating_profiles() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
 
-    // NET-1：先通过代理管理器创建一条托管条目�?
+    // NET-1：先通过代理管理器创建一条托管条目。
     let _ = runtime.open_proxies_manager();
     let _ = runtime.start_new_proxy();
     let _ = runtime.update_proxy_editor_name("Corp SOCKS");
@@ -466,7 +466,7 @@ fn editor_selects_managed_proxy_without_creating_profiles() {
     assert_eq!(projection.proxies_editor_id_text, proxy_id);
     let _ = runtime.close_proxies_manager();
 
-    // 新建会话并从下拉里选择托管代理�?
+    // 新建会话并从下拉里选择托管代理。
     let _ = runtime.start_new_saved_session_editor();
     let _ = runtime.update_editor_name("Managed Proxy Session");
     let _ = runtime.update_editor_host("managed-proxy.example.test");
@@ -486,14 +486,14 @@ fn editor_selects_managed_proxy_without_creating_profiles() {
         saved_session.proxy_profile_id.as_deref(),
         Some(proxy_id.as_str())
     );
-    // 保存会话不再生成 `<session_id>-proxy`，也不复制管理器条目�?
+    // 保存会话不再生成 `<session_id>-proxy`，也不复制管理器条目。
     assert_eq!(runtime.config_document.proxy_profiles.len(), 1);
     assert!(!runtime
         .config_document
         .proxy_profiles
         .contains_key(&format!("{}-proxy", saved_session.id)));
 
-    // 密码落在 secret store，profile 只保存引用�?
+    // 密码落在 secret store，profile 只保存引用。
     let profile = runtime
         .config_document
         .proxy_profiles
@@ -511,7 +511,7 @@ fn editor_selects_managed_proxy_without_creating_profiles() {
         fs::read_to_string(temp.path().join("secret-store.toml")).expect("read store");
     assert!(!store_contents.contains("proxy-secret"));
 
-    // 重新加载会话：编辑器应投影为 managed，并且连接配置能解析出同一代理�?
+    // 重新加载会话：编辑器应投影为 managed，并且连接配置能解析出同一代理。
     let _ = runtime
         .load_selected_saved_session_into_editor()
         .expect("reload editor");
@@ -536,7 +536,7 @@ fn editor_selects_managed_proxy_without_creating_profiles() {
         other => panic!("expected socks5 proxy, got {other:?}"),
     }
 
-    // 切回 No Proxy：只清会话引用，托管条目本身保留�?
+    // 切回 No Proxy：只清会话引用，托管条目本身保留。
     let _ = runtime.set_editor_proxy_mode_none();
     runtime
         .save_editor_to_saved_session()
@@ -561,7 +561,7 @@ fn legacy_per_session_proxy_loads_and_migrates_to_managed_profile() {
     let keychain: Arc<dyn Keychain> = keychain;
     let store = ConfigStore::new(temp.path());
     let mut document = ConfigDocument::default();
-    // 旧构建写入的 per-session 条目：id = `<session_id>-proxy`�?
+    // 旧构建写入的 per-session 条目：id = `<session_id>-proxy`。
     document.proxy_profiles.insert(
         "saved-legacy-proxy".to_owned(),
         ProxyProfile {
@@ -586,7 +586,7 @@ fn legacy_per_session_proxy_loads_and_migrates_to_managed_profile() {
     let mut folder = FolderProfile::new("saved-sessions", "Saved Sessions");
     folder.sessions.push(session);
     document.folders.push(folder);
-    // 管理器里另有一条可迁移的托管条目�?
+    // 管理器里另有一条可迁移的托管条目。
     document.proxy_profiles.insert(
         "proxy-1".to_owned(),
         ProxyProfile {
@@ -613,7 +613,7 @@ fn legacy_per_session_proxy_loads_and_migrates_to_managed_profile() {
         .contains("127.0.0.1:1081"));
     assert_eq!(runtime.editor.proxy_profile_id.as_deref(), Some("saved-legacy-proxy"));
 
-    // 旧配置仍可连接：legacy 引用解析到保存的口令�?
+    // 旧配置仍可连接：legacy 引用解析到保存的口令。
     match &runtime
         .build_ssh_config_from_editor()
         .expect("legacy proxy config")
@@ -633,8 +633,8 @@ fn legacy_per_session_proxy_loads_and_migrates_to_managed_profile() {
         other => panic!("expected legacy socks5 proxy, got {other:?}"),
     }
 
-    // 选择托管条目并保�?= 迁移；旧 `<session>-proxy` 不再被引用后清理�?
-    // 下拉按名称排序（Managed SOCKS < Proxy for Legacy Session），托管条目�?0�?
+    // 选择托管条目并保存 = 迁移；旧 `<session>-proxy` 不再被引用后清理。
+    // 下拉按名称排序（Managed SOCKS < Proxy for Legacy Session），托管条目）。0。
     let projection = runtime.select_editor_proxy(0);
     assert_eq!(projection.editor_proxy_mode_text, "managed");
     runtime
@@ -881,7 +881,7 @@ fn editing_password_session_keeps_secret_when_password_left_blank() {
     assert!(loaded.editor_has_stored_password);
     assert!(runtime.editor.password.is_empty());
 
-    // Rename only �?leave password blank and save again.
+    // Rename only — leave password blank and save again.
     let _ = runtime.update_editor_name("Keep Secret Session Renamed");
     let resaved = runtime
         .save_editor_to_saved_session()
@@ -1159,7 +1159,7 @@ fn editor_key_auth_lists_managed_keys_and_saves_key_id() {
         other => panic!("expected private key auth, got {other:?}"),
     }
 
-    // 引用保护：已保存会话使用�?key 时，删除必须走确�?阻断路径�?
+    // 引用保护：已保存会话使用该 key 时，删除必须走确认/阻断路径。
     let error = runtime
         .remove_private_key(&entry.id, false)
         .expect_err("referenced key must not be removed without confirmation");
@@ -1191,7 +1191,7 @@ fn editor_key_auth_without_managed_keys_shows_empty_list() {
     assert!(!projection.editor_selected_key_missing);
     assert!(projection.editor_legacy_key_path_text.is_empty());
 
-    // 空清�?+ �?legacy path：连接与保存都必须给出可读错误，而不是写出空密钥�?
+    // 空清除 + 无 legacy path：连接与保存都必须给出可读错误，而不是写出空密钥。
     let error = runtime
         .build_ssh_config_from_editor()
         .expect_err("key auth without a key must fail");
@@ -1226,7 +1226,7 @@ fn legacy_path_key_session_is_marked_and_stays_connectable() {
     assert!(loaded.editor_key_options.is_empty());
     assert_eq!(loaded.editor_selected_key_index, -1);
 
-    // �?path-only 草稿仍可连接：path 原样使用，口令从 secret store 解析�?
+    // 旧 path-only 草稿仍可连接：path 原样使用，口令从 secret store 解析。
     let ssh_config = runtime
         .build_ssh_config_from_editor()
         .expect("legacy editor ssh config");
@@ -1242,7 +1242,7 @@ fn legacy_path_key_session_is_marked_and_stays_connectable() {
         other => panic!("expected private key auth, got {other:?}"),
     }
 
-    // 仅改名保存时保留 legacy path 与已保存口令�?secret 引用（不会破坏旧配置）�?
+    // 仅改名保存时保留 legacy path 与已保存口令的 secret 引用（不会破坏旧配置）。
     let _ = runtime.update_editor_name("Legacy Key Session Renamed");
     let _ = runtime
         .save_editor_to_saved_session()
@@ -1327,7 +1327,7 @@ fn deleting_selected_managed_key_clears_editor_selection() {
     let _ = runtime.select_editor_key(0);
     assert_eq!(runtime.editor.key_id.as_deref(), Some(entry.id.as_str()));
 
-    // 未保存草稿不�?used_by：强制删除后必须清掉选择，避免保存出悬空 key_id�?
+    // 未保存草稿不计 used_by：强制删除后必须清掉选择，避免保存出悬空 key_id。
     let _ = runtime
         .remove_private_key(&entry.id, true)
         .expect("remove draft key");

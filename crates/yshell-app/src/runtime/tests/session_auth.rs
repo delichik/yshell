@@ -26,7 +26,7 @@ fn quick_connect_enters_runtime_pipeline() {
         .active_session_name_text
         .contains("alice@example.com:2200"));
     assert_eq!(projection.tab_state_text, "connected");
-    // D15：连接成功写用户向文案（kind �?Slint @tr 模板映射）�?
+    // D15：连接成功写用户向文案（kind 供 Slint @tr 模板映射）。
     assert_eq!(projection.status_kind, "session-connected");
     assert!(projection
         .status_text
@@ -146,9 +146,9 @@ fn saved_session_host_key_policy_is_applied_to_runtime_shell_config() {
 
 #[test]
 fn runtime_shell_config_carries_host_key_policy_before_connect() {
-    // D7：密码挂起前的主机密钥探针读�?`runtime.ssh_config`（activate 之后才被
-    // resolved 配置覆盖），所�?`from_profile` 必须先把会话策略装进运行时配置，
-    // 否则探针退�?Strict，对 accept_any_for_testing 会话错误地弹确认框�?
+    // D7：密码挂起前的主机密钥探针读取 `runtime.ssh_config`（activate 之后才被
+    // resolved 配置覆盖），所以 `from_profile` 必须先把会话策略装进运行时配置，
+    // 否则探针退回 Strict，对 accept_any_for_testing 会话错误地弹确认框。
     let temp = tempdir().expect("tempdir");
     let store = ConfigStore::new(temp.path());
     let mut document = ConfigDocument::default();
@@ -362,7 +362,7 @@ fn saved_session_password_auth_profile_prompts_without_keychain() {
         .open_saved_session("saved-password")
         .expect("missing password should suspend the connection, not error");
 
-    // 投影：弹窗可�?+ user@host:port 文案；连接尚未创建�?
+    // 投影：弹窗可见 + user@host:port 文案；连接尚未创建。
     assert!(projection.password_prompt_visible);
     assert_eq!(
         projection.password_prompt_host_text,
@@ -371,7 +371,7 @@ fn saved_session_password_auth_profile_prompts_without_keychain() {
     assert!(projection.status_text.contains("Password required"));
     assert!(runtime.active_session_id.is_none());
 
-    // 挂起目标保存了重试所需的最小上下文�?
+    // 合成认证错误驱动弹窗，副标题只应出现一次端口。
     let pending = runtime
         .pending_password_prompt
         .as_ref()
@@ -427,9 +427,9 @@ fn submit_password_retries_saved_session_and_connects() {
         .expect("open saved session");
     assert!(prompted.password_prompt_visible);
 
-    // 测试壳：带密码重试后进入 connected�?
-    // 说明：测试壳不校验密码正确性，"密码错误 �?认证失败"只能在真�?SSH 上验证；
-    // 这里断言的是"挂起 �?重试 �?连接成功"这条状态机，以及密码不写密钥库/配置文件�?
+    // 测试壳：带密码重试后进入 connected。
+    // 说明：测试壳不校验密码正确性，"密码错误 → 认证失败"只能在真实 SSH 上验证；
+    // 这里断言的是"挂起 → 重试 → 连接成功"这条状态机，以及密码不写密钥库/配置文件。
 
     let projection = runtime
         .submit_password("hunter2")
@@ -440,7 +440,7 @@ fn submit_password_retries_saved_session_and_connects() {
     assert_eq!(projection.active_session_state_text, "connected");
     assert!(runtime.pending_password_prompt.is_none());
 
-    // 密码只存在于本次运行时的 ssh 配置里；密钥库与配置文件都不应被写入�?
+    // 密码只存在于本次运行时的 ssh 配置里；密钥库与配置文件都不应被写入。
     let session_key = runtime.active_session_key().expect("active session");
     let session = runtime.sessions.get(&session_key).expect("runtime session");
     assert!(matches!(
@@ -501,7 +501,7 @@ fn submit_password_reports_failure_and_closes_prompt_when_target_is_gone() {
         .expect("open saved session");
     assert!(prompted.password_prompt_visible);
 
-    // 弹窗挂起后目标被删掉：重试失败写�?status_text，弹窗关闭�?
+    // 弹窗挂起后目标被删掉：重试失败写进 status_text，弹窗关闭。
     let deleted = runtime
         .delete_selected_saved_session()
         .expect("delete the prompted saved session");
@@ -518,7 +518,7 @@ fn submit_password_reports_failure_and_closes_prompt_when_target_is_gone() {
 
 #[test]
 fn submit_password_reports_auth_failure_from_real_ssh() {
-    // 真实 SSH + 本地 TCP 探针：握手必失败，用来验�?密码重试失败"会写�?status_text�?
+    // 真实 SSH + 本地 TCP 探针：握手必失败，用来验证"密码重试失败"会写入 status_text。
 
     let (port, accept_handle) = start_tcp_probe_target();
     let temp = tempdir().expect("tempdir");
@@ -562,7 +562,7 @@ fn submit_password_reports_auth_failure_from_real_ssh() {
     assert!(!projection.password_prompt_visible);
     assert_eq!(projection.tab_state_text, "failed");
     assert!(projection.status_text.contains("Could not connect"));
-    // D1：内部失败诊断不再写进终端网格�?
+    // D1：内部失败诊断不再写进终端网格。
     assert!(!projection
         .terminal_body_text
         .contains("Shell runtime failed"));
@@ -594,7 +594,7 @@ fn cancel_password_prompt_clears_pending_state() {
     assert!(projection.password_prompt_host_text.is_empty());
     assert!(runtime.pending_password_prompt.is_none());
 
-    // 没有挂起目标时提交密码是显式错误（UI 层不应触发）�?
+    // 没有挂起目标时提交密码是显式错误（UI 层不应触发）。
     let error = runtime
         .submit_password("hunter2")
         .expect_err("submit without a pending prompt must fail");
@@ -645,8 +645,8 @@ fn saved_session_keyboard_interactive_auth_prompts_without_keychain() {
     );
 }
 
-/// D6：认证弹窗副标题 `user@host:port` 只允许出现一次端口（回归 B �? 高：
-/// `tester@127.0.0.1:2222:2222`）�?
+/// D6：认证弹窗副标题 `user@host:port` 只允许出现一次端口（回归 B ）。 高：
+/// `tester@127.0.0.1:2222:2222`）。
 #[test]
 fn auth_prompt_host_shows_port_once() {
     use crate::runtime::connection::AuthPromptContext;
@@ -661,8 +661,8 @@ fn auth_prompt_host_shows_port_once() {
     let session_key = runtime.active_session_key().expect("active session");
     let session = runtime.sessions.get(&session_key).expect("runtime session");
 
-    // D6：生产路径与测试共用 `AuthPromptContext::for_runtime`（host 只放裸主机）�?
-    // 合成认证错误驱动弹窗，副标题只应出现一次端口�?
+    // D6：生产路径与测试共用 `AuthPromptContext::for_runtime`（host 只放裸主机），
+    // 挂起目标保存了重试所需的最小上下文。
     let context = AuthPromptContext::for_runtime(&session_key, session);
     assert_eq!(context.host, "example.com");
     let error = SshError::new(SshErrorKind::Authentication, "denied").with_auth_context(
@@ -675,7 +675,7 @@ fn auth_prompt_host_shows_port_once() {
     assert!(projection.auth_prompt_visible);
     assert_eq!(projection.auth_prompt_host_text, "alice@example.com:2200");
 
-    // 密码挂起路径同样只拼一次端口�?
+    // 密码挂起路径同样只拼一次端口。
     let prompt = PendingPasswordPrompt {
         profile_id: "saved-password".to_owned(),
         host: "example.com".to_owned(),
@@ -689,7 +689,7 @@ fn auth_prompt_host_shows_port_once() {
 }
 
 /// SSH-1：保存的会话只写 `key_id`；连接时由运行时物化托管密钥材料并复用密钥管理器
-/// 里保存的口令（secret store）�?
+/// 里保存的口令（secret store）。
 #[test]
 fn saved_session_managed_key_resolves_material_and_stored_passphrase() {
     let temp = tempdir().expect("tempdir");
@@ -769,7 +769,7 @@ fn saved_session_managed_key_resolves_material_and_stored_passphrase() {
     }
 }
 
-/// SSH-1：旧 path-only 配置继续可连接（不回退到空路径），口令仍从 secret store 解析�?
+/// SSH-1：旧 path-only 配置继续可连接（不回退到空路径），口令仍从 secret store 解析。
 #[test]
 fn saved_session_legacy_key_path_stays_connectable() {
     let temp = tempdir().expect("tempdir");

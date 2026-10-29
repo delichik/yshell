@@ -70,6 +70,7 @@ enum ConfirmKind {
     ThemeManagerRemove,
     HostKeysClear,
     HostKeysRemove,
+    McpControl,
 }
 
 struct ConfirmSpec {
@@ -724,6 +725,17 @@ impl DialogWindowManager {
                     .unwrap_or(false),
             });
         }
+        if projection.mcp_consent_visible {
+            return Some(ConfirmSpec {
+                kind: ConfirmKind::McpControl,
+                title: "Allow AI control".into(),
+                message: "An AI agent wants to control YShell: type into terminals, read the screen, and open or close sessions. Allow this?".into(),
+                confirm_label: "Allow".into(),
+                destructive: false,
+                show_dont_ask: true,
+                dont_ask: projection.settings_mcp_auto_approve_control,
+            });
+        }
         None
     }
 
@@ -1374,6 +1386,26 @@ fn dispatch_confirm(
         return;
     }
 
+    if kind == ConfirmKind::McpControl {
+        let decision = if confirmed {
+            crate::runtime::mcp::McpConsentDecision::Accept {
+                dont_ask_again: dont_ask,
+            }
+        } else {
+            crate::runtime::mcp::McpConsentDecision::Reject
+        };
+        if let Some(wr) = window_runtime {
+            wr.borrow_mut().resolve_mcp_consent(decision);
+        } else {
+            host.borrow()
+                .dialogs
+                .runtime
+                .borrow_mut()
+                .resolve_mcp_consent(decision);
+        }
+        return;
+    }
+
     let apply = |runtime: &mut crate::runtime::AppRuntime| match kind {
         ConfirmKind::ClearScrollback if confirmed => {
             let _ = runtime.clear_active_terminal_scrollback();
@@ -1487,10 +1519,28 @@ fn wire_settings_actions(
             let _ = wr.borrow_mut().open_proxies_manager();
         }
     });
-    let wr = window_runtime;
+    let wr = window_runtime.clone();
     window.on_open_theme_manager(move || {
         if let Some(wr) = wr.as_ref() {
             let _ = wr.borrow_mut().open_theme_manager();
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_set_confirm_close_session(move |enabled| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr.borrow_mut().set_confirm_close_session(enabled);
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_set_confirm_quit_app(move |enabled| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr.borrow_mut().set_confirm_quit_app(enabled);
+        }
+    });
+    let wr = window_runtime;
+    window.on_set_mcp_auto_approve_control(move |enabled| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr.borrow_mut().set_mcp_auto_approve_control(enabled);
         }
     });
     let _ = host;
@@ -1511,6 +1561,7 @@ fn sync_settings_from(
         settings.set_debug_logging_enabled(main.get_settings_debug_logging_enabled());
         settings.set_confirm_close_session_enabled(main.get_settings_confirm_close_session());
         settings.set_confirm_quit_app_enabled(main.get_settings_confirm_quit_app());
+        settings.set_mcp_auto_approve_control_enabled(main.get_settings_mcp_auto_approve_control());
         settings.set_language_text(main.get_settings_language_text());
         settings.set_debug_log_dir_text(main.get_settings_debug_log_dir_text());
         settings.set_appearance_color_scheme_name_text(
@@ -1530,6 +1581,7 @@ fn sync_settings_from(
     }
     settings.set_confirm_close_session_enabled(projection.settings_confirm_close_session);
     settings.set_confirm_quit_app_enabled(projection.settings_confirm_quit_app);
+    settings.set_mcp_auto_approve_control_enabled(projection.settings_mcp_auto_approve_control);
 }
 
 fn sync_folder_editor(w: &FolderEditorWindow, p: &AppProjection, _m: Option<&MainWindow>) {

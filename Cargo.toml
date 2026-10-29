@@ -10,6 +10,7 @@ members = [
     "crates/yshell-secret",
     "crates/yshell-logging",
     "crates/yshell-local",
+    "crates/yshell-mcp",
     "crates/yshell-test-support",
     "xtask",
 ]
@@ -25,6 +26,7 @@ default-members = [
     "crates/yshell-secret",
     "crates/yshell-logging",
     "crates/yshell-local",
+    "crates/yshell-mcp",
     "crates/yshell-test-support",
 ]
 resolver = "2"

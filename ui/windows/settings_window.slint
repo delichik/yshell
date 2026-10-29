@@ -33,6 +33,7 @@ export component SettingsWindow inherits Window {
     in-out property <bool> debug-logging-enabled;
     in-out property <bool> confirm-close-session-enabled;
     in-out property <bool> confirm-quit-app-enabled;
+    in-out property <bool> mcp-auto-approve-control-enabled;
     in property <string> debug-log-dir-text;
     in-out property <string> section;
     in property <string> appearance-color-scheme-name-text;
@@ -63,6 +64,7 @@ export component SettingsWindow inherits Window {
     callback set-debug-logging(bool);
     callback set-confirm-close-session(bool);
     callback set-confirm-quit-app(bool);
+    callback set-mcp-auto-approve-control(bool);
     callback open-debug-log-dir();
     callback select-appearance-font(int);
     callback update-appearance-font-size(string);
@@ -97,6 +99,7 @@ export component SettingsWindow inherits Window {
             debug-logging-enabled <=> root.debug-logging-enabled;
             confirm-close-session-enabled <=> root.confirm-close-session-enabled;
             confirm-quit-app-enabled <=> root.confirm-quit-app-enabled;
+            mcp-auto-approve-control-enabled <=> root.mcp-auto-approve-control-enabled;
             debug-log-dir-text: root.debug-log-dir-text;
             section <=> root.section;
             appearance-color-scheme-name-text: root.appearance-color-scheme-name-text;
@@ -124,6 +127,7 @@ export component SettingsWindow inherits Window {
             set-debug-logging(bool) => { root.set-debug-logging(bool); }
             set-confirm-close-session(bool) => { root.set-confirm-close-session(bool); }
             set-confirm-quit-app(bool) => { root.set-confirm-quit-app(bool); }
+            set-mcp-auto-approve-control(bool) => { root.set-mcp-auto-approve-control(bool); }
             open-debug-log-dir => { root.open-debug-log-dir(); }
             select-appearance-font(int) => { root.select-appearance-font(int); }
             update-appearance-font-size(string) => { root.update-appearance-font-size(string); }

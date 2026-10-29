@@ -148,6 +148,8 @@ pub struct SessionRuntime {
     /// the desired size in config (otherwise the remote keeps the stale size
     /// until the user manually resizes the window).
     pty_force_resync: bool,
+    /// Absolute grid line at the last terminal input (MCP `since_input` start).
+    pub(crate) mcp_output_watermark: Option<usize>,
 }
 
 impl SessionRuntime {
@@ -193,6 +195,7 @@ impl SessionRuntime {
             connection_error: String::new(),
             connection_in_flight: false,
             pty_force_resync: false,
+            mcp_output_watermark: None,
         };
         runtime.log_runtime_event("Quick Connect accepted. Preparing runtime session.");
         runtime
@@ -249,6 +252,7 @@ impl SessionRuntime {
             connection_error: String::new(),
             connection_in_flight: false,
             pty_force_resync: false,
+            mcp_output_watermark: None,
         };
         runtime.log_runtime_event("Saved session loaded into runtime inventory.");
         runtime
@@ -304,6 +308,7 @@ impl SessionRuntime {
             connection_error: String::new(),
             connection_in_flight: false,
             pty_force_resync: false,
+            mcp_output_watermark: None,
         };
         // 本地 shell 已由调用方 spawn 并确认连接；`attach_shell_session` 同时置位
         // `pty_force_resync`，让下一次视口同步把真实窗口尺寸推给 PTY。
@@ -353,6 +358,7 @@ impl SessionRuntime {
             connection_error: String::new(),
             connection_in_flight: false,
             pty_force_resync: false,
+            mcp_output_watermark: None,
         };
         runtime.log_runtime_event("Draft session created. Waiting for connection details.");
         runtime
@@ -972,9 +978,15 @@ impl SessionRuntime {
         &mut self,
         bytes: &[u8],
     ) -> Result<Vec<Vec<u8>>, yshell_ssh::SshError> {
-        let Some(shell_session) = self.shell_session.as_mut() else {
+        if self.shell_session.is_none() {
             return Ok(Vec::new());
-        };
+        }
+        // Watermark before write so MCP `since_input` includes echo + output.
+        self.mark_mcp_input_watermark();
+        let shell_session = self
+            .shell_session
+            .as_mut()
+            .expect("shell session checked above");
         shell_session.write_input(bytes)?;
         // N6：勾选"记录本地输入"的手动日志按 Input 方向记录（自动日志不记输入，
         // 沿用 G0 语义）。

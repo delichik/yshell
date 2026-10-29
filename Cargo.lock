@@ -6902,6 +6902,7 @@ dependencies = [
  "copypasta",
  "raw-window-handle",
  "rfd",
+ "serde_json",
  "slint",
  "slint-build",
  "ssh-key",
@@ -6913,6 +6914,7 @@ dependencies = [
  "yshell-core",
  "yshell-local",
  "yshell-logging",
+ "yshell-mcp",
  "yshell-secret",
  "yshell-sftp",
  "yshell-ssh",
@@ -6953,6 +6955,16 @@ dependencies = [
  "time",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "yshell-mcp"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]

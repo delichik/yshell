@@ -28,6 +28,7 @@ mod keys;
 mod local_pane;
 mod local_terminal;
 mod logging;
+pub(crate) mod mcp;
 mod menus;
 mod mode_switch;
 mod panels;
@@ -377,6 +378,8 @@ impl AppRuntime {
             theme_manager_pending_delete: None,
             theme_manager_preview_renderer: theme::LivePreviewRenderer::new(),
             folder_editor: folder_editor::FolderEditorState::default(),
+            mcp: mcp::McpControlState::default(),
+            mcp_endpoint_token: None,
         };
         let startup_text = runtime.startup_status();
         let saved_count = runtime.saved_session_count();
@@ -790,6 +793,10 @@ pub struct AppRuntime {
     pub(crate) theme_manager_preview_renderer: theme::LivePreviewRenderer,
     /// Folder Editor 表单状态。
     pub(crate) folder_editor: folder_editor::FolderEditorState,
+    /// MCP control lock / consent (GUI ↔ `yshell --mcp`).
+    pub(crate) mcp: mcp::McpControlState,
+    /// Shared secret written to `mcp-endpoint.json` while the GUI IPC server runs.
+    pub(crate) mcp_endpoint_token: Option<String>,
 }
 
 /// N7：单个窗口持有的标签 UI 归属（标签本身仍在 `AppRuntime::tabs` 登记）。
