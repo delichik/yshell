@@ -25,8 +25,7 @@ import { ThemeManagerRow } from "pages/theme_manager.slint";
 import { HostKeyGroup } from "pages/host_keys.slint";
 import { AuthKeyOption, AuthKeyboardPrompt } from "components/auth_prompt_dialog.slint";
 import { TriStateField } from "pages/folder_editor.slint";
-import { ConfirmDialog } from "components/confirm_dialog.slint";
-// 独立 OS 弹窗（非模态）；由 Rust DialogWindowManager 创建/show/hide。
+// 独立 OS 弹窗（模态 owned aux）；由 Rust DialogWindowManager 创建/show/hide。
 export { AboutWindow } from "windows/about_window.slint";
 export { CompactConfirmWindow } from "windows/compact_confirm_window.slint";
 export { SettingsWindow } from "windows/settings_window.slint";
@@ -1188,8 +1187,7 @@ export component MainWindow inherits Window {
     property <bool> global-shortcuts-blocked: false;
 
     /// 遗留属性：独立弹窗后恒为 false（保留给仍引用它的路径）。
-    // 退出确认留在主窗（绑定本窗生命周期）；其它 L2 已迁独立 OS 窗。
-    property <bool> any_modal_visible: root.quit_dialog_visible;
+    property <bool> any_modal_visible: false;
 
     /// W5-A2 / N2 / TAB-6：Ctrl+O（及非终端焦点下的 Ctrl+L）与 File > Quick Connect
     /// —— 打开覆盖层（已打开则保持）并聚焦输入框。
@@ -2202,13 +2200,9 @@ export component MainWindow inherits Window {
         root.open_context_menu("sftp", x, y);
     }
 
-    /// 主窗内仅保留退出确认；其它弹窗在独立 OS 窗口。
+    /// 弹窗已迁到独立 OS 窗口；保留空实现以免既有关闭路径的调用报错。
     public function focus-top-dialog() {
-        if (root.quit_dialog_visible) {
-            quit_dialog.focus-dialog();
-        } else {
-            root.focus-global-shortcuts();
-        }
+        root.focus-global-shortcuts();
     }
 
     background: Theme.window-background;
@@ -2776,30 +2770,6 @@ export component MainWindow inherits Window {
     }
 
 
-    // Modal dialogs moved to independent OS windows (ui/windows/* + DialogWindowManager).
-    // Visibility flags / callbacks on MainWindow remain as open signals for Rust.
-    // Quit confirm stays in-main: it is tied to this window's close/quit lifecycle.
-
-    quit_dialog := ConfirmDialog {
-        open: root.quit_dialog_visible;
-        destructive: true;
-        show-dont-ask-again: true;
-        dont-ask-again <=> root.quit_confirm_dont_ask_again;
-        title-text: @tr("Quit YShell");
-        message-text: @tr("Quit YShell now? Active runtime sessions will be disconnected.");
-        confirm-label: @tr("Quit");
-        confirmed() => {
-            if (root.quit_confirm_dont_ask_again) {
-                root.set_confirm_quit_app(false);
-                root.quit_confirm_dont_ask_again = false;
-            }
-            root.quit_dialog_visible = false;
-            root.quit_app();
-        }
-        canceled() => {
-            root.quit_dialog_visible = false;
-            root.quit_confirm_dont_ask_again = false;
-            root.focus-top-dialog();
-        }
-    }
+    // Large managers / prompts / compact confirms are independent OS windows
+    // (ui/windows/*), owned + modal via DialogWindowManager.
 }

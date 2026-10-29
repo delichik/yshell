@@ -20,6 +20,83 @@ pub fn prepare_aux_window(window: &slint::Window) {
     set_resizable(window, false);
 }
 
+/// 把 aux 设为 owner 的 owned popup，并隐藏任务栏按钮。
+///
+/// `show()` 之后调用；HWND 未就绪时可在下一帧再调一次。非 Windows 为 no-op。
+pub fn attach_owned_popup(aux: &slint::Window, owner: &slint::Window) {
+    #[cfg(windows)]
+    attach_owned_popup_windows(aux, owner);
+    #[cfg(not(windows))]
+    {
+        let _ = (aux, owner);
+    }
+}
+
+/// 启用 / 禁用窗口输入（模态：disable owner；关闭后 re-enable）。
+pub fn set_window_enabled(window: &slint::Window, enabled: bool) {
+    #[cfg(windows)]
+    set_window_enabled_windows(window, enabled);
+    #[cfg(not(windows))]
+    {
+        let _ = (window, enabled);
+    }
+}
+
+#[cfg(windows)]
+fn hwnd_of(window: &slint::Window) -> Option<windows_sys::Win32::Foundation::HWND> {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use slint::winit_030::WinitWindowAccessor;
+    use windows_sys::Win32::Foundation::HWND;
+
+    let mut out: Option<HWND> = None;
+    let _ = window.with_winit_window(|winit_window| {
+        let Ok(handle) = winit_window.window_handle() else {
+            return;
+        };
+        let RawWindowHandle::Win32(win32) = handle.as_raw() else {
+            return;
+        };
+        out = Some(win32.hwnd.get() as HWND);
+    });
+    out
+}
+
+#[cfg(windows)]
+fn attach_owned_popup_windows(aux: &slint::Window, owner: &slint::Window) {
+    use slint::winit_030::WinitWindowAccessor;
+    use slint::winit_030::winit::platform::windows::WindowExtWindows;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GWLP_HWNDPARENT, SetWindowLongPtrW,
+    };
+
+    let Some(owner_hwnd) = hwnd_of(owner) else {
+        return;
+    };
+    let Some(aux_hwnd) = hwnd_of(aux) else {
+        return;
+    };
+
+    // Owned windows do not get a taskbar button; also hide via ITaskbarList.
+    #[allow(unsafe_code)]
+    unsafe {
+        SetWindowLongPtrW(aux_hwnd, GWLP_HWNDPARENT, owner_hwnd as isize);
+    }
+
+    let _ = aux.with_winit_window(|winit_window| {
+        winit_window.set_skip_taskbar(true);
+    });
+}
+
+#[cfg(windows)]
+fn set_window_enabled_windows(window: &slint::Window, enabled: bool) {
+    use slint::winit_030::WinitWindowAccessor;
+    use slint::winit_030::winit::platform::windows::WindowExtWindows;
+
+    let _ = window.with_winit_window(|winit_window| {
+        winit_window.set_enable(enabled);
+    });
+}
+
 /// 在创建任何窗口之前选定 winit 后端，并关掉默认的窗口透明。
 ///
 /// Slint winit 默认 `WindowAttributes::with_transparent(true)`。Windows 上无框

@@ -704,6 +704,13 @@ impl WindowManager {
         self.sync_dialog_windows();
     }
 
+    /// Re-enable a main window after the modal aux session ends.
+    pub(crate) fn set_main_window_enabled(&mut self, window_id: u64, enabled: bool) {
+        if let Some(entry) = self.entry(window_id) {
+            crate::win_chrome::set_window_enabled(entry.window.window(), enabled);
+        }
+    }
+
     /// Promote MainWindow dialog flags → independent OS windows; refresh props.
     fn sync_dialog_windows(&mut self) {
         {
@@ -729,7 +736,7 @@ impl WindowManager {
             .dialog_host
             .borrow_mut()
             .dialogs
-            .sync(&projection, main, window_runtime)
+            .sync(&projection, main, window_id, window_runtime)
         {
             tracing::warn!(target: "yshell::app", "dialog window sync failed: {error}");
         }

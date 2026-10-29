@@ -1,15 +1,14 @@
-//! Independent non-modal dialog / tool windows.
+//! Independent modal aux dialog / tool windows.
 //!
-//! Former L2 overlays inside `MainWindow` are hosted here as separate Slint
-//! `Window`s. Compact confirms keep the ContentDialog panel; managers/forms use
-//! fixed-size tool windows. The main window stays interactive.
+//! Confirms, managers and prompts are separate Slint `Window`s. On Windows they
+//! are owned by the focused MainWindow (no taskbar button) and modal (owner
+//! input disabled while any aux is open).
 //!
-//! Opening signal: keep the historical `*_visible` / projection flags on
-//! `MainWindow` / `AppProjection`. Each tick, [`DialogWindowManager::sync`]
-//! promotes local MainWindow flags into app-scoped state and show/hides aux
-//! windows. Overlay widgets themselves are removed from `MainWindow`.
+//! Opening signal: historical `*_visible` / projection flags. Each tick,
+//! [`DialogWindowManager::sync`] show/hides aux windows.
 
-use std::cell::RefCell;
+
+use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
 use slint::{CloseRequestResponse, ComponentHandle, SharedString};
@@ -61,6 +60,7 @@ macro_rules! wire_tool_on_close {
 enum ConfirmKind {
     ClearScrollback,
     DeleteSession,
+    Quit,
     CloseTabs,
     CloseWindow,
     EditorDiscard,
@@ -88,6 +88,7 @@ struct LocalDialogFlags {
     settings: bool,
     clear_scrollback: bool,
     delete_session: bool,
+    quit: bool,
     new_folder: bool,
     tab_rename: bool,
     tab_rename_tab_id: String,
@@ -107,6 +108,11 @@ pub(crate) struct DialogWindowManager {
     manager: Weak<RefCell<WindowManager>>,
     /// Window id used for close-window confirm (last requester).
     close_window_id: Option<u64>,
+    /// Nested modal aux count; owner re-enabled when this hits 0.
+    /// `Cell` so show/hide helpers can run under shared `&self` next to field borrows.
+    modal_depth: Cell<u32>,
+    /// Main window id whose input is disabled for the modal session.
+    modal_owner_id: Cell<Option<u64>>,
     local: LocalDialogFlags,
     about: Option<AboutWindow>,
     about_shown: bool,
@@ -159,6 +165,8 @@ impl DialogWindowManager {
                 host: Weak::new(),
                 manager: Weak::new(),
                 close_window_id: None,
+                modal_depth: Cell::new(0),
+                modal_owner_id: Cell::new(None),
                 local: LocalDialogFlags {
                     sftp_dialog_kind: "none".into(),
                     ..LocalDialogFlags::default()
@@ -233,7 +241,10 @@ impl DialogWindowManager {
             self.local.delete_session = true;
             window.set_delete_session_dialog_visible(false);
         }
-        // Quit confirm stays on MainWindow (ConfirmDialog overlay); do not latch it here.
+        if window.get_quit_dialog_visible() {
+            self.local.quit = true;
+            window.set_quit_dialog_visible(false);
+        }
         if window.get_new_folder_dialog_visible() {
             self.local.new_folder = true;
             window.set_new_folder_dialog_visible(false);
@@ -262,164 +273,217 @@ impl DialogWindowManager {
         &mut self,
         projection: &AppProjection,
         main: Option<&MainWindow>,
+        owner_id: Option<u64>,
         window_runtime: Option<Rc<WindowRuntime>>,
     ) -> AppResult<()> {
         let runtime = Rc::clone(&self.runtime);
         let host = self.host.clone();
-        self.sync_about(projection)?;
-        self.sync_confirm(projection, main, window_runtime.clone())?;
-        self.sync_settings(projection, main, window_runtime.clone())?;
-        sync_projection_tool(
-            projection.editor_modal_visible,
-            &mut self.session_editor_shown,
-            &mut self.session_editor,
-            || SessionEditorWindow::new().map_err(AppError::from_error),
-            |w| prep_tool_window!(w),
-            |w| wire_session_editor_window(w, Rc::clone(&runtime)),
-            |w, p, m| sync_session_editor(w, p, m),
-            projection,
-            main,
-        )?;
-        sync_projection_tool(
-            projection.folder_editor_visible,
-            &mut self.folder_editor_shown,
-            &mut self.folder_editor,
-            || FolderEditorWindow::new().map_err(AppError::from_error),
-            |w| prep_tool_window!(w),
-            |w| wire_folder_editor_window(w, Rc::clone(&runtime)),
-            |w, p, m| sync_folder_editor(w, p, m),
-            projection,
-            main,
-        )?;
-        sync_projection_tool(
-            projection.known_hosts_modal_visible,
-            &mut self.known_hosts_shown,
-            &mut self.known_hosts,
-            || KnownHostsWindow::new().map_err(AppError::from_error),
-            |w| prep_tool_window!(w),
-            |w| wire_known_hosts_window(w, Rc::clone(&runtime)),
-            |w, p, _| sync_known_hosts(w, p),
-            projection,
-            main,
-        )?;
-        sync_projection_tool(
-            projection.private_keys_modal_visible,
-            &mut self.private_keys_shown,
-            &mut self.private_keys,
-            || PrivateKeysWindow::new().map_err(AppError::from_error),
-            |w| prep_tool_window!(w),
-            |w| wire_private_keys_window(w, Rc::clone(&runtime)),
-            |w, p, m| sync_private_keys(w, p, m),
-            projection,
-            main,
-        )?;
-        sync_projection_tool(
-            projection.proxies_modal_visible,
-            &mut self.proxies_shown,
-            &mut self.proxies,
-            || ProxiesWindow::new().map_err(AppError::from_error),
-            |w| prep_tool_window!(w),
-            |w| wire_proxies_window(w, Rc::clone(&runtime)),
-            |w, p, m| sync_proxies(w, p, m),
-            projection,
-            main,
-        )?;
-        sync_projection_tool(
-            projection.theme_manager_visible,
-            &mut self.theme_manager_shown,
-            &mut self.theme_manager,
-            || ThemeManagerWindow::new().map_err(AppError::from_error),
-            |w| prep_tool_window!(w),
-            |w| wire_theme_manager_window(w, Rc::clone(&runtime)),
-            |w, p, m| sync_theme_manager(w, p, m),
-            projection,
-            main,
-        )?;
-        sync_projection_tool(
-            projection.host_keys_modal_visible,
-            &mut self.host_keys_shown,
-            &mut self.host_keys,
-            || HostKeysWindow::new().map_err(AppError::from_error),
-            |w| prep_tool_window!(w),
-            |w| wire_host_keys_window(w, Rc::clone(&runtime), host.clone()),
-            |w, p, m| sync_host_keys(w, p, m),
-            projection,
-            main,
-        )?;
-        sync_projection_tool(
-            projection.logging_dialog_visible,
-            &mut self.logging_shown,
-            &mut self.logging,
-            || LoggingWindow::new().map_err(AppError::from_error),
-            |w| prep_tool_window!(w),
-            |w| wire_logging_window(w, Rc::clone(&runtime)),
-            |w, p, m| sync_logging(w, p, m),
-            projection,
-            main,
-        )?;
-        sync_projection_tool(
-            projection.password_prompt_visible,
-            &mut self.password_shown,
-            &mut self.password,
-            || PasswordPromptWindow::new().map_err(AppError::from_error),
-            |w| prep_tool_window!(w),
-            |w| wire_password_prompt_window(w, Rc::clone(&runtime)),
-            |w, p, m| sync_password(w, p, m),
-            projection,
-            main,
-        )?;
-        sync_projection_tool(
-            projection.auth_prompt_visible,
-            &mut self.auth_shown,
-            &mut self.auth,
-            || AuthPromptWindow::new().map_err(AppError::from_error),
-            |w| prep_tool_window!(w),
-            |w| wire_auth_prompt_window(w, Rc::clone(&runtime)),
-            |w, p, m| sync_auth(w, p, m),
-            projection,
-            main,
-        )?;
-        sync_projection_tool(
-            projection.host_key_prompt_visible,
-            &mut self.host_key_shown,
-            &mut self.host_key,
-            || HostKeyWindow::new().map_err(AppError::from_error),
-            |w| prep_tool_window!(w),
-            |w| wire_host_key_window(w, Rc::clone(&runtime)),
-            |w, p, _| sync_host_key_prompt(w, p),
-            projection,
-            main,
-        )?;
-        self.sync_local_new_folder(Rc::clone(&runtime), host.clone(), main)?;
-        self.sync_local_tab_rename(Rc::clone(&runtime), host.clone(), main)?;
-        self.sync_sftp_entry(projection, main)?;
-        sync_projection_tool(
-            projection.sftp_conflict_visible,
-            &mut self.sftp_conflict_shown,
-            &mut self.sftp_conflict,
-            || SftpConflictWindow::new().map_err(AppError::from_error),
-            |w| prep_tool_window!(w),
-            |w| wire_sftp_conflict_window(w, Rc::clone(&runtime)),
-            |w, p, _| sync_sftp_conflict(w, p),
-            projection,
-            main,
-        )?;
-        sync_projection_tool(
-            projection.sftp_properties_visible,
-            &mut self.sftp_properties_shown,
-            &mut self.sftp_properties,
-            || SftpPropertiesWindow::new().map_err(AppError::from_error),
-            |w| prep_tool_window!(w),
-            |w| wire_sftp_properties_window(w, Rc::clone(&runtime)),
-            |w, p, _| sync_sftp_properties(w, p),
-            projection,
-            main,
-        )?;
+        self.sync_about(projection, main, owner_id)?;
+        self.sync_confirm(projection, main, owner_id, window_runtime.clone())?;
+        self.sync_settings(projection, main, owner_id, window_runtime.clone())?;
+        macro_rules! apply_modal {
+            ($action:expr, $slot:ident) => {{
+                match $action {
+                    ModalAction::Show => {
+                        if let Some(window) = self.$slot.as_ref() {
+                            self.show_aux_modal(window, main, owner_id)?;
+                        }
+                    }
+                    ModalAction::Hide => self.end_modal(),
+                    ModalAction::None => {}
+                }
+            }};
+        }
+        apply_modal!(
+            sync_projection_tool(
+                projection.editor_modal_visible,
+                &mut self.session_editor_shown,
+                &mut self.session_editor,
+                || SessionEditorWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_session_editor_window(w, Rc::clone(&runtime)),
+                |w, p, m| sync_session_editor(w, p, m),
+                projection,
+                main,
+            )?,
+            session_editor
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.folder_editor_visible,
+                &mut self.folder_editor_shown,
+                &mut self.folder_editor,
+                || FolderEditorWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_folder_editor_window(w, Rc::clone(&runtime)),
+                |w, p, m| sync_folder_editor(w, p, m),
+                projection,
+                main,
+            )?,
+            folder_editor
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.known_hosts_modal_visible,
+                &mut self.known_hosts_shown,
+                &mut self.known_hosts,
+                || KnownHostsWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_known_hosts_window(w, Rc::clone(&runtime)),
+                |w, p, _| sync_known_hosts(w, p),
+                projection,
+                main,
+            )?,
+            known_hosts
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.private_keys_modal_visible,
+                &mut self.private_keys_shown,
+                &mut self.private_keys,
+                || PrivateKeysWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_private_keys_window(w, Rc::clone(&runtime)),
+                |w, p, m| sync_private_keys(w, p, m),
+                projection,
+                main,
+            )?,
+            private_keys
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.proxies_modal_visible,
+                &mut self.proxies_shown,
+                &mut self.proxies,
+                || ProxiesWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_proxies_window(w, Rc::clone(&runtime)),
+                |w, p, m| sync_proxies(w, p, m),
+                projection,
+                main,
+            )?,
+            proxies
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.theme_manager_visible,
+                &mut self.theme_manager_shown,
+                &mut self.theme_manager,
+                || ThemeManagerWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_theme_manager_window(w, Rc::clone(&runtime)),
+                |w, p, m| sync_theme_manager(w, p, m),
+                projection,
+                main,
+            )?,
+            theme_manager
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.host_keys_modal_visible,
+                &mut self.host_keys_shown,
+                &mut self.host_keys,
+                || HostKeysWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_host_keys_window(w, Rc::clone(&runtime), host.clone()),
+                |w, p, m| sync_host_keys(w, p, m),
+                projection,
+                main,
+            )?,
+            host_keys
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.logging_dialog_visible,
+                &mut self.logging_shown,
+                &mut self.logging,
+                || LoggingWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_logging_window(w, Rc::clone(&runtime)),
+                |w, p, m| sync_logging(w, p, m),
+                projection,
+                main,
+            )?,
+            logging
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.password_prompt_visible,
+                &mut self.password_shown,
+                &mut self.password,
+                || PasswordPromptWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_password_prompt_window(w, Rc::clone(&runtime)),
+                |w, p, m| sync_password(w, p, m),
+                projection,
+                main,
+            )?,
+            password
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.auth_prompt_visible,
+                &mut self.auth_shown,
+                &mut self.auth,
+                || AuthPromptWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_auth_prompt_window(w, Rc::clone(&runtime)),
+                |w, p, m| sync_auth(w, p, m),
+                projection,
+                main,
+            )?,
+            auth
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.host_key_prompt_visible,
+                &mut self.host_key_shown,
+                &mut self.host_key,
+                || HostKeyWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_host_key_window(w, Rc::clone(&runtime)),
+                |w, p, _| sync_host_key_prompt(w, p),
+                projection,
+                main,
+            )?,
+            host_key
+        );
+        self.sync_local_new_folder(Rc::clone(&runtime), host.clone(), main, owner_id)?;
+        self.sync_local_tab_rename(Rc::clone(&runtime), host.clone(), main, owner_id)?;
+        self.sync_sftp_entry(projection, main, owner_id)?;
+        apply_modal!(
+            sync_projection_tool(
+                projection.sftp_conflict_visible,
+                &mut self.sftp_conflict_shown,
+                &mut self.sftp_conflict,
+                || SftpConflictWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_sftp_conflict_window(w, Rc::clone(&runtime)),
+                |w, p, _| sync_sftp_conflict(w, p),
+                projection,
+                main,
+            )?,
+            sftp_conflict
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.sftp_properties_visible,
+                &mut self.sftp_properties_shown,
+                &mut self.sftp_properties,
+                || SftpPropertiesWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_sftp_properties_window(w, Rc::clone(&runtime)),
+                |w, p, _| sync_sftp_properties(w, p),
+                projection,
+                main,
+            )?,
+            sftp_properties
+        );
         let _ = window_runtime;
         Ok(())
     }
 
-    fn sync_about(&mut self, projection: &AppProjection) -> AppResult<()> {
+    fn sync_about(&mut self, projection: &AppProjection, main: Option<&MainWindow>, owner_id: Option<u64>) -> AppResult<()> {
         if self.local.about {
             if self.about.is_none() {
                 let window = AboutWindow::new().map_err(AppError::from_error)?;
@@ -453,7 +517,7 @@ impl DialogWindowManager {
                 about.set_version_text(projection.app_version_text.clone().into());
                 about.set_config_dir_text(projection.config_dir_text.clone().into());
                 if !self.about_shown {
-                    show_aux(about)?;
+                    self.show_aux_modal(about, main, owner_id)?;
                     self.about_shown = true;
                 }
             }
@@ -464,20 +528,25 @@ impl DialogWindowManager {
     }
 
     fn hide_about(&mut self) {
+        if !self.about_shown {
+            return;
+        }
         if let Some(about) = self.about.as_ref() {
             let _ = about.hide();
         }
         self.about_shown = false;
+        self.end_modal();
     }
 
     fn sync_confirm(
         &mut self,
         projection: &AppProjection,
         main: Option<&MainWindow>,
+        owner_id: Option<u64>,
         window_runtime: Option<Rc<WindowRuntime>>,
     ) -> AppResult<()> {
         match self.active_confirm_spec(projection, main) {
-            Some(spec) => self.show_confirm(spec, window_runtime)?,
+            Some(spec) => self.show_confirm(spec, main, owner_id, window_runtime)?,
             None => self.hide_confirm(),
         }
         Ok(())
@@ -642,15 +711,29 @@ impl DialogWindowManager {
                 dont_ask: false,
             });
         }
+        if self.local.quit {
+            return Some(ConfirmSpec {
+                kind: ConfirmKind::Quit,
+                title: "Quit YShell".into(),
+                message: "Quit YShell now? Active runtime sessions will be disconnected.".into(),
+                confirm_label: "Quit".into(),
+                destructive: true,
+                show_dont_ask: true,
+                dont_ask: main
+                    .map(|w| w.get_quit_confirm_dont_ask_again())
+                    .unwrap_or(false),
+            });
+        }
         None
     }
 
     fn show_confirm(
         &mut self,
         spec: ConfirmSpec,
+        main: Option<&MainWindow>,
+        owner_id: Option<u64>,
         window_runtime: Option<Rc<WindowRuntime>>,
     ) -> AppResult<()> {
-        let kind_changed = self.confirm_kind != Some(spec.kind);
         if self.confirm.is_none() {
             let window = CompactConfirmWindow::new().map_err(AppError::from_error)?;
             self.wire_confirm(&window, window_runtime);
@@ -665,20 +748,24 @@ impl DialogWindowManager {
         window.set_dont_ask_again(spec.dont_ask);
         window.set_confirmation_token("".into());
         window.set_confirmation_text("".into());
-        let need_show = kind_changed || self.confirm_kind.is_none();
+        let was_open = self.confirm_kind.is_some();
         self.confirm_kind = Some(spec.kind);
-        if need_show {
-            show_aux(window)?;
-            window.invoke_focus_dialog();
+        if !was_open {
+            self.show_aux_modal(window, main, owner_id)?;
         }
+        window.invoke_focus_dialog();
         Ok(())
     }
 
     fn hide_confirm(&mut self) {
+        let was_shown = self.confirm_kind.is_some();
         if let Some(window) = self.confirm.as_ref() {
             let _ = window.hide();
         }
         self.confirm_kind = None;
+        if was_shown {
+            self.end_modal();
+        }
     }
 
     fn wire_confirm(&self, window: &CompactConfirmWindow, window_runtime: Option<Rc<WindowRuntime>>) {
@@ -721,12 +808,13 @@ impl DialogWindowManager {
         &mut self,
         projection: &AppProjection,
         main: Option<&MainWindow>,
+        owner_id: Option<u64>,
         window_runtime: Option<Rc<WindowRuntime>>,
     ) -> AppResult<()> {
-        // Single source of truth: runtime `settings_appearance_visible`
-        // (open_settings_appearance / close_settings_appearance / save).
-        let want = projection.settings_appearance_visible;
-        self.local.settings = want;
+        let want = projection.settings_appearance_visible || self.local.settings;
+        if projection.settings_appearance_visible {
+            self.local.settings = true;
+        }
         if want {
             if self.settings.is_none() {
                 let window = SettingsWindow::new().map_err(AppError::from_error)?;
@@ -736,11 +824,15 @@ impl DialogWindowManager {
                 window.on_dismiss(move || {
                     let _ = runtime.borrow_mut().close_settings_appearance();
                     if let Some(host) = host.upgrade() {
-                        host.borrow_mut().dialogs.local.settings = false;
-                        if let Some(settings) = host.borrow().dialogs.settings.as_ref() {
-                            let _ = settings.hide();
+                        let mut host = host.borrow_mut();
+                        host.dialogs.local.settings = false;
+                        if host.dialogs.settings_shown {
+                            if let Some(settings) = host.dialogs.settings.as_ref() {
+                                let _ = settings.hide();
+                            }
+                            host.dialogs.settings_shown = false;
+                            host.dialogs.end_modal();
                         }
-                        host.borrow_mut().dialogs.settings_shown = false;
                     }
                 });
                 let host = self.host.clone();
@@ -748,11 +840,15 @@ impl DialogWindowManager {
                 window.window().on_close_requested(move || {
                     let _ = runtime.borrow_mut().close_settings_appearance();
                     if let Some(host) = host.upgrade() {
-                        host.borrow_mut().dialogs.local.settings = false;
-                        if let Some(settings) = host.borrow().dialogs.settings.as_ref() {
-                            let _ = settings.hide();
+                        let mut host = host.borrow_mut();
+                        host.dialogs.local.settings = false;
+                        if host.dialogs.settings_shown {
+                            if let Some(settings) = host.dialogs.settings.as_ref() {
+                                let _ = settings.hide();
+                            }
+                            host.dialogs.settings_shown = false;
+                            host.dialogs.end_modal();
                         }
-                        host.borrow_mut().dialogs.settings_shown = false;
                     }
                     CloseRequestResponse::HideWindow
                 });
@@ -770,16 +866,17 @@ impl DialogWindowManager {
             if let Some(settings) = self.settings.as_ref() {
                 sync_settings_from(settings, projection, main);
                 if !self.settings_shown {
-                    show_aux(settings)?;
+                    self.show_aux_modal(settings, main, owner_id)?;
                     self.settings_shown = true;
                 }
             }
         } else if self.settings_shown {
-            self.local.settings = false;
             if let Some(settings) = self.settings.as_ref() {
                 let _ = settings.hide();
             }
             self.settings_shown = false;
+            self.local.settings = false;
+            self.end_modal();
         }
         Ok(())
     }
@@ -789,6 +886,7 @@ impl DialogWindowManager {
         runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
         host: Weak<RefCell<DialogHost>>,
         main: Option<&MainWindow>,
+        owner_id: Option<u64>,
     ) -> AppResult<()> {
         let want = self.local.new_folder;
         if want {
@@ -802,7 +900,7 @@ impl DialogWindowManager {
                     window.set_name_text(main.get_new_root_folder_name_text());
                 }
                 if !self.new_folder_shown {
-                    show_aux(window)?;
+                    self.show_aux_modal(window, main, owner_id)?;
                     self.new_folder_shown = true;
                 }
             }
@@ -811,6 +909,7 @@ impl DialogWindowManager {
                 let _ = window.hide();
             }
             self.new_folder_shown = false;
+            self.end_modal();
         }
         Ok(())
     }
@@ -820,6 +919,7 @@ impl DialogWindowManager {
         runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
         host: Weak<RefCell<DialogHost>>,
         main: Option<&MainWindow>,
+        owner_id: Option<u64>,
     ) -> AppResult<()> {
         let want = self.local.tab_rename;
         if want {
@@ -835,7 +935,7 @@ impl DialogWindowManager {
                     window.set_name_text(main.get_tab_rename_name_text());
                 }
                 if !self.tab_rename_shown {
-                    show_aux(window)?;
+                    self.show_aux_modal(window, main, owner_id)?;
                     self.tab_rename_shown = true;
                 }
             }
@@ -844,6 +944,7 @@ impl DialogWindowManager {
                 let _ = window.hide();
             }
             self.tab_rename_shown = false;
+            self.end_modal();
         }
         Ok(())
     }
@@ -852,6 +953,7 @@ impl DialogWindowManager {
         &mut self,
         projection: &AppProjection,
         main: Option<&MainWindow>,
+        owner_id: Option<u64>,
     ) -> AppResult<()> {
         let want = self.local.sftp_dialog_kind != "none";
         if want {
@@ -877,7 +979,7 @@ impl DialogWindowManager {
                 }
                 let _ = projection;
                 if !self.sftp_entry_shown {
-                    show_aux(window)?;
+                    self.show_aux_modal(window, main, owner_id)?;
                     self.sftp_entry_shown = true;
                 }
             }
@@ -886,9 +988,71 @@ impl DialogWindowManager {
                 let _ = window.hide();
             }
             self.sftp_entry_shown = false;
+            self.end_modal();
         }
         Ok(())
     }
+
+    fn begin_modal(&self, owner: &MainWindow, owner_id: Option<u64>) {
+        if self.modal_depth.get() == 0 {
+            crate::win_chrome::set_window_enabled(owner.window(), false);
+            self.modal_owner_id.set(owner_id);
+        }
+        self.modal_depth.set(self.modal_depth.get().saturating_add(1));
+    }
+
+    pub(crate) fn end_modal(&self) {
+        let depth = self.modal_depth.get();
+        if depth == 0 {
+            return;
+        }
+        let depth = depth - 1;
+        self.modal_depth.set(depth);
+        if depth > 0 {
+            return;
+        }
+        let owner_id = self.modal_owner_id.take();
+        if let (Some(owner_id), Some(manager)) = (owner_id, self.manager.upgrade()) {
+            manager.borrow_mut().set_main_window_enabled(owner_id, true);
+        }
+    }
+
+    fn show_aux_modal<W: ComponentHandle + 'static>(
+        &self,
+        window: &W,
+        owner: Option<&MainWindow>,
+        owner_id: Option<u64>,
+    ) -> AppResult<()> {
+        window.show().map_err(AppError::from_error)?;
+        crate::win_chrome::prepare_aux_window(window.window());
+        if let Some(owner) = owner {
+            crate::win_chrome::attach_owned_popup(window.window(), owner.window());
+            self.begin_modal(owner, owner_id);
+            let aux_weak = window.as_weak();
+            let owner_weak = owner.as_weak();
+            let _ = slint::invoke_from_event_loop(move || {
+                let (Some(aux), Some(owner)) = (aux_weak.upgrade(), owner_weak.upgrade()) else {
+                    return;
+                };
+                crate::win_chrome::prepare_aux_window(aux.window());
+                crate::win_chrome::attach_owned_popup(aux.window(), owner.window());
+            });
+        } else {
+            let weak = window.as_weak();
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(window) = weak.upgrade() {
+                    crate::win_chrome::prepare_aux_window(window.window());
+                }
+            });
+        }
+        Ok(())
+    }
+}
+
+enum ModalAction {
+    None,
+    Show,
+    Hide,
 }
 
 fn sync_projection_tool<W, Create, Prep, Wire, SyncProps>(
@@ -901,7 +1065,7 @@ fn sync_projection_tool<W, Create, Prep, Wire, SyncProps>(
     sync_props: SyncProps,
     projection: &AppProjection,
     main: Option<&MainWindow>,
-) -> AppResult<()>
+) -> AppResult<ModalAction>
 where
     W: ComponentHandle + 'static,
     Create: FnOnce() -> AppResult<W>,
@@ -919,8 +1083,8 @@ where
         if let Some(window) = slot.as_ref() {
             sync_props(window, projection, main);
             if !*shown {
-                show_aux(window)?;
                 *shown = true;
+                return Ok(ModalAction::Show);
             }
         }
     } else if *shown {
@@ -928,8 +1092,9 @@ where
             let _ = window.hide();
         }
         *shown = false;
+        return Ok(ModalAction::Hide);
     }
-    Ok(())
+    Ok(ModalAction::None)
 }
 
 fn wire_session_editor_window(window: &SessionEditorWindow, runtime: Rc<RefCell<crate::runtime::AppRuntime>>) {
@@ -1156,18 +1321,6 @@ fn wire_new_folder_window(
     });
 }
 
-fn show_aux<W: ComponentHandle + 'static>(window: &W) -> AppResult<()> {
-    window.show().map_err(AppError::from_error)?;
-    crate::win_chrome::prepare_aux_window(window.window());
-    let weak = window.as_weak();
-    let _ = slint::invoke_from_event_loop(move || {
-        if let Some(window) = weak.upgrade() {
-            crate::win_chrome::prepare_aux_window(window.window());
-        }
-    });
-    Ok(())
-}
-
 fn dispatch_confirm(
     host: &Rc<RefCell<DialogHost>>,
     window_runtime: Option<&Rc<WindowRuntime>>,
@@ -1183,6 +1336,7 @@ fn dispatch_confirm(
         match kind {
             ConfirmKind::ClearScrollback => host.dialogs.local.clear_scrollback = false,
             ConfirmKind::DeleteSession => host.dialogs.local.delete_session = false,
+            ConfirmKind::Quit => host.dialogs.local.quit = false,
             ConfirmKind::HostKeysClear => host.dialogs.local.host_keys_clear = false,
             ConfirmKind::HostKeysRemove => host.dialogs.local.host_keys_remove = false,
             _ => {}
@@ -1190,6 +1344,20 @@ fn dispatch_confirm(
         host.dialogs.hide_confirm();
     }
 
+    if kind == ConfirmKind::Quit && confirmed {
+        if dont_ask {
+            let _ = host
+                .borrow()
+                .dialogs
+                .runtime
+                .borrow_mut()
+                .set_confirm_quit_app(false);
+        }
+        if let Some(manager) = host.borrow().dialogs.manager.upgrade() {
+            manager.borrow_mut().shutdown();
+        }
+        return;
+    }
     if kind == ConfirmKind::CloseWindow {
         let window_id = host.borrow().dialogs.close_window_id;
         if let (Some(manager), Some(window_id)) =
