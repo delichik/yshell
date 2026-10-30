@@ -2,8 +2,8 @@
 //
 // TitleBarDragTouch matches the main-window native-drag path: threshold +
 // press-in-bounds + drag-triggered. After HTCAPTION move, Windows swallows
-// mouse-up so Slint would keep the TouchArea grab — clear it by toggling
-// `enabled` (emits Cancel / drops grab) and restore on the next frame.
+// mouse-up so Slint would keep the TouchArea grab — clear it before the move
+// and only re-enable after the synchronous move returns (mouse is up).
 
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
@@ -11,8 +11,13 @@ import { Icon } from "basic/icons.slint";
 /// Windows 原生标题栏拖动检测：`native-drag` 为 true 时由宿主关掉 WindowMoveArea。
 ///
 /// 按下后移动超过阈值才上报 `drag-requested`，单击 / 双击仍是普通 TouchArea 行为。
-/// 系统移动循环会吞掉按键释放；发起拖动时短暂 `enabled: false` 清掉抓取，
-/// 否则之后的点击会继续被本 TouchArea 吃掉（拖不动 / 关不掉 / 正文无反应）。
+///
+/// 抓取清理（拖动后要点两次才能点控件的根因）：
+/// 系统 `HTCAPTION` 移动循环会吞掉 mouse-up。若拖动中途就把 `enabled` 开回去，
+/// 左键仍按下时 TouchArea 会重新抓住输入，下一次点击被吞掉。
+/// 正确做法：发起拖动前 `enabled = false` 清 grab；`drag-requested` 用同步
+/// `SendMessage(WM_NCLBUTTONDOWN)` 跑完移动循环后返回（此时键已松开），再恢复
+/// `enabled`。残留点击路径仍用下一帧 Timer 恢复。
 export component TitleBarDragTouch inherits TouchArea {
     in property <bool> native-drag: false;
     callback clicked-blank();
@@ -24,19 +29,15 @@ export component TitleBarDragTouch inherits TouchArea {
     private property <bool> armed: false;
     private property <bool> drag-triggered: false;
     /// 按下是否落在标题栏自身范围内。
-    ///
-    /// 系统移动循环会吞掉鼠标释放，Slint 的抓取因此残留：之后的第一次点击
-    /// 仍被送进这个 TouchArea。若不判断位置，这一次点击会被当成拖动起点
-    /// （再动一下就变成拖窗口）。
     private property <bool> press-in-bounds: false;
-    /// 刚用 `enabled: false` 清过抓取，下一帧再打开。
+    /// 非拖动路径（抓取残留）清 grab 后，下一帧再打开。
     private property <bool> restore-enabled: false;
 
     pure function abs-length(value: length) -> length {
         value < 0px ? -value : value;
     }
 
-    function clear-slint-grab() {
+    function clear-slint-grab-deferred() {
         // TouchArea docs：按下期间关掉 enabled → Cancel + 清 pressed/grab。
         root.enabled = false;
         root.restore-enabled = true;
@@ -52,10 +53,9 @@ export component TitleBarDragTouch inherits TouchArea {
                 root.press-in-bounds = self.mouse-x >= 0px && self.mouse-x <= root.width
                     && self.mouse-y >= 0px && self.mouse-y <= root.height;
                 if (!root.press-in-bounds) {
-                    // 抓取残留送来的按下（点在标题栏之外）：不当作拖动起点，
-                    // 并清掉抓取，让后续点击能落到真正的控件上。
+                    // 抓取残留送来的按下（点在标题栏之外）：不当作拖动起点。
                     root.armed = false;
-                    root.clear-slint-grab();
+                    root.clear-slint-grab-deferred();
                     return;
                 }
                 root.press-x = self.mouse-x;
@@ -71,12 +71,13 @@ export component TitleBarDragTouch inherits TouchArea {
         if (root.native-drag && root.armed
             && (root.abs-length(self.mouse-x - root.press-x) >= 4px
                 || root.abs-length(self.mouse-y - root.press-y) >= 4px)) {
-            // 发起原生移动前卸武装并清 Slint 抓取：系统循环会吞掉真实 release，
-            // 若不在这里清 grab，之后所有点击仍进本 TouchArea。
             root.armed = false;
             root.drag-triggered = true;
-            root.clear-slint-grab();
+            root.restore-enabled = false;
+            // 清 grab；保持 disabled 直到原生移动循环结束（见 drag-requested 同步语义）。
+            root.enabled = false;
             root.drag-requested();
+            root.enabled = true;
         }
     }
 
@@ -96,7 +97,6 @@ export component TitleBarDragTouch inherits TouchArea {
         root.press-in-bounds = false;
     }
 
-    // interval 0 → 下一帧；原生 WM_NCLBUTTONDOWN 已 Post，可安全恢复接收。
     Timer {
         interval: 0ms;
         running: root.restore-enabled;

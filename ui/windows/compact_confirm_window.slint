@@ -1,7 +1,12 @@
-// Confirm as an independent non-resizable tool window (ToolWindowChrome).
+// Confirm tool window — product ContentDialog layout on ToolWindowChrome.
+//
+// Hierarchy: chrome title → consequence message → optional typed confirm /
+// don't-ask → footer divider → Cancel + Confirm (safe action leftmost of the
+// pair; destructive uses critical styling; no Enter-to-confirm by default).
 
 import { Theme } from "../theme.slint";
-import { WinButton, WinCard, WinToggle } from "../components/basic/controls.slint";
+import { Icon } from "../components/basic/icons.slint";
+import { WinButton, WinToggle } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
@@ -36,6 +41,9 @@ export component CompactConfirmWindow inherits Window {
     callback canceled();
     callback title_drag_requested();
 
+    private property <bool> needs-token: root.confirmation-token != "";
+    private property <bool> is-dangerous: root.destructive || root.needs-token;
+
     dialog_scope := FocusScope {
         width: Theme.tool-window-width-compact;
         height: Theme.tool-window-height-compact;
@@ -56,20 +64,38 @@ export component CompactConfirmWindow inherits Window {
             close-requested => { root.canceled(); }
             title-drag-requested => { root.title_drag_requested(); }
 
-            WinCard {
-                vertical-stretch: 0;
+            // --- Body: what will happen ------------------------------------
+            HorizontalLayout {
+                spacing: Theme.spacing-12;
+                alignment: start;
+
+                if root.is-dangerous : Rectangle {
+                    width: Theme.icon-size-large;
+                    height: Theme.icon-size-large;
+                    background: transparent;
+
+                    Icon {
+                        name: "warning";
+                        icon-color: Theme.critical;
+                        icon-size: Theme.icon-size-large;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
 
                 Text {
                     text: root.message-text;
-                    color: (root.destructive || root.confirmation-token != "")
-                        ? Theme.critical
-                        : Theme.text-primary;
+                    color: root.is-dangerous ? Theme.critical : Theme.text-primary;
                     font-size: Theme.font-body;
+                    font-weight: root.is-dangerous ? Theme.weight-semibold : 400;
                     wrap: word-wrap;
+                    horizontal-stretch: 1;
+                    vertical-alignment: top;
                 }
             }
 
-            if root.confirmation-token != "" : Text {
+            // --- Typed confirmation (host key REPLACE / secret reset style) -
+            if root.needs-token : Text {
                 text: root.confirmation-placeholder != ""
                     ? root.confirmation-placeholder
                     : @tr("Type {0} to confirm", root.confirmation-token);
@@ -79,9 +105,9 @@ export component CompactConfirmWindow inherits Window {
             }
 
             confirm_input := WinTextInput {
-                height: root.confirmation-token != "" ? Theme.control-height : 0px;
-                visible: root.confirmation-token != "";
-                enabled: root.confirmation-token != "";
+                height: root.needs-token ? Theme.control-height : 0px;
+                visible: root.needs-token;
+                enabled: root.needs-token;
                 text <=> root.confirmation-text;
                 placeholder-text: root.confirmation-token;
             }
@@ -98,21 +124,29 @@ export component CompactConfirmWindow inherits Window {
                 background: transparent;
             }
 
+            // --- Footer ----------------------------------------------------
+            Rectangle {
+                height: 1px;
+                vertical-stretch: 0;
+                background: Theme.divider;
+            }
+
             HorizontalLayout {
                 alignment: end;
                 spacing: Theme.spacing-8;
                 vertical-stretch: 0;
+                padding-top: Theme.spacing-4;
 
-                WinButton {
+                cancel_button := WinButton {
                     text: root.cancel-label;
                     clicked => { root.canceled(); }
                 }
 
                 WinButton {
                     text: root.confirm-label;
-                    accent: !root.destructive && root.confirmation-token == "";
-                    critical: root.destructive || root.confirmation-token != "";
-                    enabled: root.confirmation-token == "" || root.confirmation-text == root.confirmation-token;
+                    accent: !root.is-dangerous;
+                    critical: root.is-dangerous;
+                    enabled: !root.needs-token || root.confirmation-text == root.confirmation-token;
                     clicked => { root.confirmed(); }
                 }
             }
@@ -120,8 +154,12 @@ export component CompactConfirmWindow inherits Window {
     }
 
     public function focus-dialog() {
-        if (root.confirmation-token != "") {
+        // E-064: never default-focus the destructive confirm; typed confirms
+        // focus the input; plain confirms keep Esc on the scope (not Enter).
+        if (root.needs-token) {
             confirm_input.focus-input();
+        } else if (root.is-dangerous) {
+            cancel_button.focus-button();
         } else {
             dialog_scope.focus();
         }

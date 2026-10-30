@@ -13,6 +13,7 @@ import { ListView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
 import { WinButton, WinCard, WinIconButton, WinToggle } from "basic/controls.slint";
+// WinCard kept for conflict/properties; entry dialog uses plain labeled fields.
 import { WinTextInput } from "basic/text_input.slint";
 import { MenuEntry, MenuPopup } from "menu_popup.slint";
 import { FileCrumb, FilePane, FileRow, ListScrollBar } from "file_pane.slint";
@@ -1196,88 +1197,84 @@ export component SftpEntryDialog inherits Rectangle {
 
             Text {
                 text: root.hint-text();
-                color: Theme.text-secondary;
+                color: root.kind == "delete" ? Theme.critical : Theme.text-secondary;
                 font-size: Theme.font-body;
+                font-weight: root.kind == "delete" ? Theme.weight-semibold : 400;
                 wrap: word-wrap;
             }
 
-            if root.shows-delete-summary() : WinCard {
-                vertical-stretch: 0;
+            if root.shows-delete-summary() : VerticalLayout {
+                spacing: Theme.spacing-4;
 
-                VerticalLayout {
-                    spacing: Theme.spacing-8;
-
-                    Text {
-                        text: root.selected-count > 1
-                            ? @tr("{0} entries", root.selected-count)
-                            : root.selected-name-text;
-                        color: Theme.text-primary;
-                        font-size: Theme.font-body;
-                        font-weight: Theme.weight-semibold;
-                        wrap: no-wrap;
-                        overflow: elide;
-                    }
-                    if root.selected-count <= 1 : Text {
-                        text: root.selected-path-text;
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-caption;
-                        font-family: Theme.font-mono;
-                        wrap: word-wrap;
-                    }
+                Text {
+                    text: root.selected-count > 1
+                        ? @tr("{0} entries", root.selected-count)
+                        : root.selected-name-text;
+                    color: Theme.text-primary;
+                    font-size: Theme.font-body;
+                    font-weight: Theme.weight-semibold;
+                    wrap: no-wrap;
+                    overflow: elide;
+                }
+                if root.selected-count <= 1 : Text {
+                    text: root.selected-path-text;
+                    color: Theme.text-tertiary;
+                    font-size: Theme.font-caption;
+                    font-family: Theme.font-mono;
+                    wrap: word-wrap;
                 }
             }
 
-            if root.is-name-kind() || root.kind == "chmod" || root.shows-local-path() : WinCard {
-                vertical-stretch: 0;
+            if root.is-name-kind() : VerticalLayout {
+                spacing: Theme.spacing-8;
 
-                VerticalLayout {
-                    spacing: Theme.spacing-12;
+                Text { text: root.name-label(); color: Theme.text-secondary; font-size: Theme.font-body; }
+                WinTextInput {
+                    text <=> root.name-text;
+                    placeholder-text: root.kind == "new-folder" ? "new-folder" : "new-name";
+                }
+            }
 
-                    if root.is-name-kind() : VerticalLayout {
-                        spacing: Theme.spacing-8;
+            if root.kind == "chmod" : VerticalLayout {
+                spacing: Theme.spacing-8;
 
-                        Text { text: root.name-label(); color: Theme.text-secondary; font-size: Theme.font-body; }
-                        WinTextInput {
-                            text <=> root.name-text;
-                            placeholder-text: root.kind == "new-folder" ? "new-folder" : "new-name";
-                        }
-                    }
+                Text { text: @tr("Permissions (octal)"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                WinTextInput {
+                    text <=> root.permissions-text;
+                    placeholder-text: "644";
+                }
+            }
 
-                    if root.kind == "chmod" : VerticalLayout {
-                        spacing: Theme.spacing-8;
+            if root.shows-local-path() : VerticalLayout {
+                spacing: Theme.spacing-8;
 
-                        Text { text: @tr("Permissions (octal)"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                        WinTextInput {
-                            text <=> root.permissions-text;
-                            placeholder-text: "644";
-                        }
-                    }
-
-                    if root.shows-local-path() : VerticalLayout {
-                        spacing: Theme.spacing-8;
-
-                        Text { text: root.local-label(); color: Theme.text-secondary; font-size: Theme.font-body; }
-                        WinTextInput {
-                            text <=> root.local-path-text;
-                            placeholder-text: root.kind == "copy-to" ? "/remote/dir" : "/local/path";
-                            font-family: Theme.font-mono;
-                        }
-                    }
+                Text { text: root.local-label(); color: Theme.text-secondary; font-size: Theme.font-body; }
+                WinTextInput {
+                    text <=> root.local-path-text;
+                    placeholder-text: root.kind == "copy-to" ? "/remote/dir" : "/local/path";
+                    font-family: Theme.font-mono;
                 }
             }
 
             Rectangle {
                 vertical-stretch: 1;
-                min-height: 0px;
+                min-height: Theme.spacing-12;
                 background: transparent;
+            }
+
+            Rectangle {
+                height: 1px;
+                vertical-stretch: 0;
+                background: Theme.divider;
             }
 
             HorizontalLayout {
                 alignment: end;
                 spacing: Theme.spacing-8;
                 vertical-stretch: 0;
+                padding-top: Theme.spacing-4;
 
-                WinButton {
+                cancel_button := WinButton {
                     text: @tr("Cancel");
                     clicked => { root.canceled(); }
                 }
@@ -1294,12 +1291,16 @@ export component SftpEntryDialog inherits Rectangle {
     }
 
     public function focus-dialog() {
-        dialog_scope.focus();
+        if (root.kind == "delete") {
+            cancel_button.focus-button();
+        } else {
+            dialog_scope.focus();
+        }
     }
 
     changed open => {
         if (root.open) {
-            dialog_scope.focus();
+            root.focus-dialog();
         }
     }
 }

@@ -11,15 +11,13 @@
 //   * `@tr` 文案搬移后显式带上原组件上下文（`@tr("MainWindow" => ...)` /
 //     `@tr("NewFolderDialog" => ...)`），保证 gettext 的 (msgctxt, msgid) 不变。
 import { Theme } from "../theme.slint";
-import { WinButton, WinCard, WinIconButton } from "basic/controls.slint";
+import { WinButton, WinIconButton } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 import { MenuEntry, MenuPopup } from "menu_popup.slint";
 import { SessionTree, SessionTreeRow } from "session_tree.slint";
 
-// S1：会话树空白区菜单的 `New Folder…` 弹窗正文 —— 只负责取名。
+// New Folder / Rename Tab 正文：说明 → 标签字段 → 分隔底栏。
 // 由 `new_folder_window.slint` + ToolWindowChrome 承载；标题由 chrome 提供。
-//
-// L2：`Esc` = Cancel（`canceled()`）；宿主据此清空名称。
 export component NewFolderDialog inherits Rectangle {
     in property <bool> open: false;
     in property <string> message-text: @tr("Create a folder in the session tree root.");
@@ -58,25 +56,21 @@ export component NewFolderDialog inherits Rectangle {
                 wrap: word-wrap;
             }
 
-            WinCard {
-                vertical-stretch: 0;
+            VerticalLayout {
+                spacing: Theme.spacing-8;
 
-                VerticalLayout {
-                    spacing: Theme.spacing-8;
+                Text {
+                    text: root.placeholder-text;
+                    color: Theme.text-secondary;
+                    font-size: Theme.font-body;
+                }
 
-                    Text {
-                        text: root.placeholder-text;
-                        color: Theme.text-secondary;
-                        font-size: Theme.font-body;
-                    }
-
-                    name_input := WinTextInput {
-                        text <=> root.name-text;
-                        placeholder-text: root.placeholder-text;
-                        accepted => {
-                            if (root.name-text != "") {
-                                root.confirmed(root.name-text);
-                            }
+                name_input := WinTextInput {
+                    text <=> root.name-text;
+                    placeholder-text: root.placeholder-text;
+                    accepted => {
+                        if (root.name-text != "") {
+                            root.confirmed(root.name-text);
                         }
                     }
                 }
@@ -84,14 +78,21 @@ export component NewFolderDialog inherits Rectangle {
 
             Rectangle {
                 vertical-stretch: 1;
-                min-height: 0px;
+                min-height: Theme.spacing-12;
                 background: transparent;
+            }
+
+            Rectangle {
+                height: 1px;
+                vertical-stretch: 0;
+                background: Theme.divider;
             }
 
             HorizontalLayout {
                 alignment: end;
                 spacing: Theme.spacing-8;
                 vertical-stretch: 0;
+                padding-top: Theme.spacing-4;
 
                 WinButton {
                     text: root.cancel-label;

@@ -169,8 +169,10 @@ pub fn apply_rounded_corners(_window: &slint::Window) {}
 /// * 最大化时先 `SW_RESTORE`，再按抓取点的相对横向位置把还原窗口摆到光标下，
 ///   避免窗口还原到旧位置后“跳一下”（WIN-2）。
 ///
-/// 用 `PostMessageW` 而不是同步 `SendMessageW`，让系统移动循环在回调返回后的
-/// 正常消息派发中启动，避免在 Slint/winit 的输入回调里嵌套消息循环。
+/// 使用同步 `SendMessageW`（标准标题栏拖动写法）：调用在用户松开左键、
+/// 移动循环结束后才返回。调用方（`TitleBarDragTouch`）在调用前关掉
+/// TouchArea、返回后再打开，避免 PostMessage 异步路径下「下一帧就恢复
+/// enabled、左键仍按下 → TouchArea 重新抓住输入 → 拖完要点两次」的问题。
 /// 非 Windows / 取不到 HWND 时为 no-op。
 #[cfg(windows)]
 pub fn start_native_window_move(window: &slint::Window) {
@@ -179,7 +181,7 @@ pub fn start_native_window_move(window: &slint::Window) {
     use windows_sys::Win32::Foundation::{HWND, POINT};
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetCursorPos, HTCAPTION, PostMessageW, WM_NCLBUTTONDOWN,
+        GetCursorPos, HTCAPTION, SendMessageW, WM_NCLBUTTONDOWN,
     };
 
     let _ = window.with_winit_window(|winit_window| {
@@ -190,7 +192,7 @@ pub fn start_native_window_move(window: &slint::Window) {
             return;
         };
         let hwnd = win32.hwnd.get() as HWND;
-        // ReleaseCapture/ShowWindow/PostMessageW 等是 Win32 FFI；工作区默认
+        // ReleaseCapture/ShowWindow/SendMessageW 等是 Win32 FFI；工作区默认
         // deny unsafe，此处与 apply_rounded_corners 一样单独放行。
         #[allow(unsafe_code)]
         unsafe {
@@ -202,12 +204,8 @@ pub fn start_native_window_move(window: &slint::Window) {
             // WM_NCLBUTTONDOWN 的 lParam 是屏幕坐标：低 16 位 x、高 16 位 y。
             let (cursor_x, cursor_y) = cursor.unwrap_or_default();
             let lparam = (((cursor_y as u32) << 16) | (cursor_x as u32 & 0xffff)) as isize;
-            PostMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION as usize, lparam);
-            // 不要在这里 PostMessage WM_LBUTTONUP：系统移动循环还没启动，
-            // 队列里的合成释放会立刻结束移动（表现为标题栏拖不动 / 一拖就松）。
-            // Slint 抓取残留：TitleBarDragTouch 在上报 drag-requested 前会
-            // `enabled = false`（触发 Cancel、丢掉 grab），下一帧再恢复；
-            // 仅靠 press-in-bounds 挡误拖，挡不住「点击落到错误控件」。
+            // 同步跑完系统移动循环；返回时左键已松开。
+            SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION as usize, lparam);
         }
     });
 }
