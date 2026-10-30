@@ -9,11 +9,11 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use yshell_mcp::{
     clear_endpoint, handle_connection, write_endpoint, EndpointInfo, IpcRequest, IpcResponse,
-    IpcResult, METHOD_REQUEST_CONTROL,
+    IpcResult, METHOD_REQUEST_CONTROL, METHOD_SESSION_RUN,
 };
 
 use crate::error::{AppError, AppResult};
@@ -28,7 +28,7 @@ pub enum McpJob {
     BeginControl {
         client_id: String,
         endpoint_token: String,
-        reply: mpsc::Sender<Result<String, String>>,
+        reply: mpsc::Sender<Result<(), String>>,
     },
     ReleaseClient {
         client_id: String,
@@ -80,6 +80,12 @@ impl McpInbox {
                         let _ = reply.send(Err("invalid MCP endpoint token".to_owned()));
                         continue;
                     }
+                    if !runtime.mcp_enabled() {
+                        let _ = reply.send(Err(
+                            "MCP is disabled in Settings → AI / MCP".to_owned()
+                        ));
+                        continue;
+                    }
                     runtime.mcp_begin_request_control(client_id, reply);
                 }
                 McpJob::ReleaseClient { client_id } => {
@@ -102,6 +108,7 @@ impl McpInbox {
 pub struct McpServerHandle {
     shutdown: Arc<AtomicBool>,
     config_dir: PathBuf,
+    pub port: u16,
 }
 
 impl McpServerHandle {
@@ -141,6 +148,7 @@ pub fn start_mcp_server(
     Ok(McpServerHandle {
         shutdown,
         config_dir,
+        port,
     })
 }
 
@@ -190,7 +198,7 @@ fn accept_loop(listener: TcpListener, shutdown: Arc<AtomicBool>, inbox: McpInbox
                     });
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                thread::sleep(std::time::Duration::from_millis(50));
+                thread::sleep(Duration::from_millis(50));
             }
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
             Err(error) => {
@@ -211,12 +219,14 @@ fn dispatch_via_inbox(inbox: &McpInbox, request: IpcRequest) -> IpcResponse {
             reply: tx,
         });
         return match rx.recv() {
-            Ok(Ok(control_token)) => {
-                IpcResponse::ok(id, IpcResult::ControlGranted { control_token })
-            }
+            Ok(Ok(())) => IpcResponse::ok(id, IpcResult::ControlGranted),
             Ok(Err(message)) => IpcResponse::err(id, "control_denied", message),
             Err(_) => IpcResponse::err(id, "control_denied", "control request cancelled"),
         };
+    }
+
+    if request.method == METHOD_SESSION_RUN {
+        return dispatch_session_run(inbox, request);
     }
 
     let (tx, rx) = mpsc::channel();
@@ -227,4 +237,175 @@ fn dispatch_via_inbox(inbox: &McpInbox, request: IpcRequest) -> IpcResponse {
     });
     rx.recv()
         .unwrap_or_else(|_| IpcResponse::err(id, "unavailable", "MCP UI dispatch failed"))
+}
+
+fn sync_handle(inbox: &McpInbox, request: IpcRequest) -> IpcResponse {
+    let (tx, rx) = mpsc::channel();
+    let id = request.id;
+    inbox.push(McpJob::Handle {
+        request,
+        reply: tx,
+    });
+    rx.recv()
+        .unwrap_or_else(|_| IpcResponse::err(id, "unavailable", "MCP UI dispatch failed"))
+}
+
+/// Wait loop runs on the IPC worker; each poll/write is a UI-thread job.
+fn dispatch_session_run(inbox: &McpInbox, request: IpcRequest) -> IpcResponse {
+    let id = request.id;
+    let tab_id = request
+        .params
+        .get("tab_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_owned();
+    let text = request
+        .params
+        .get("text")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_owned();
+    let append_newline = request
+        .params
+        .get("append_newline")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let timeout_ms = request
+        .params
+        .get("timeout_ms")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(15_000)
+        .clamp(100, 120_000);
+    let until_quiet_ms = request
+        .params
+        .get("until_quiet_ms")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(400)
+        .min(60_000);
+    let until_regex = request
+        .params
+        .get("until_regex")
+        .and_then(|v| v.as_str())
+        .map(str::to_owned)
+        .filter(|s| !s.is_empty());
+
+    if !text.is_empty() {
+        let write = IpcRequest {
+            id: request.id.wrapping_add(1),
+            method: yshell_mcp::METHOD_SESSION_INPUT.to_owned(),
+            params: serde_json::json!({
+                "tab_id": tab_id,
+                "text": text,
+                "append_newline": append_newline,
+            }),
+            token: request.token.clone(),
+            client_id: request.client_id.clone(),
+        };
+        let response = sync_handle(inbox, write);
+        if let Some(error) = response.error {
+            return IpcResponse::err(id, error.code, error.message);
+        }
+    }
+
+    let regex = match until_regex.as_deref() {
+        Some(pattern) => match regex::Regex::new(pattern) {
+            Ok(re) => Some(re),
+            Err(error) => {
+                return IpcResponse::err(id, "invalid_regex", error.to_string());
+            }
+        },
+        None => None,
+    };
+
+    let timeout = Duration::from_millis(timeout_ms);
+    let quiet = Duration::from_millis(until_quiet_ms);
+    let start = Instant::now();
+    let mut last_text = String::new();
+    let mut last_change = Instant::now();
+    let mut saw_output = false;
+    let mut timed_out = false;
+    let mut poll_id = request.id.wrapping_add(2);
+
+    // Brief settle after write so the first poll is not empty-by-race.
+    if !text.is_empty() {
+        thread::sleep(Duration::from_millis(50));
+    }
+
+    loop {
+        let poll = IpcRequest {
+            id: poll_id,
+            method: yshell_mcp::METHOD_SESSION_OUTPUT.to_owned(),
+            params: serde_json::json!({
+                "tab_id": tab_id,
+                "mode": if text.is_empty() { "visible" } else { "since_input" },
+            }),
+            token: request.token.clone(),
+            client_id: request.client_id.clone(),
+        };
+        poll_id = poll_id.wrapping_add(1);
+        let response = sync_handle(inbox, poll);
+        if let Some(error) = response.error {
+            return IpcResponse::err(id, error.code, error.message);
+        }
+        let text_now = match response.result {
+            Some(IpcResult::SessionOutput { text, .. }) => text,
+            other => {
+                return IpcResponse::err(
+                    id,
+                    "output_failed",
+                    format!("unexpected poll result: {other:?}"),
+                );
+            }
+        };
+        if text_now != last_text {
+            if !text_now.is_empty() {
+                saw_output = true;
+            }
+            last_text = text_now;
+            last_change = Instant::now();
+        }
+
+        if let Some(re) = regex.as_ref() {
+            if re.is_match(&last_text) {
+                break;
+            }
+        } else if until_quiet_ms > 0
+            && (saw_output || text.is_empty())
+            && last_change.elapsed() >= quiet
+        {
+            // Quiet after change, or (no input) after one settle window.
+            if saw_output || start.elapsed() >= quiet {
+                break;
+            }
+        }
+
+        if start.elapsed() >= timeout {
+            timed_out = true;
+            break;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+
+    let info = IpcRequest {
+        id: poll_id,
+        method: yshell_mcp::METHOD_GET_SESSION.to_owned(),
+        params: serde_json::json!({ "tab_id": tab_id }),
+        token: request.token.clone(),
+        client_id: request.client_id.clone(),
+    };
+    let (state, blocker) = match sync_handle(inbox, info).result {
+        Some(IpcResult::SessionInfo { session }) => (session.state, session.blocker),
+        _ => ("unknown".to_owned(), "none".to_owned()),
+    };
+
+    IpcResponse::ok(
+        id,
+        IpcResult::SessionRun {
+            text: last_text,
+            timed_out,
+            state,
+            blocker,
+            tab_id,
+        },
+    )
 }

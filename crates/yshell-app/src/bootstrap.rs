@@ -1059,6 +1059,26 @@ pub(crate) fn wire_callbacks(
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
     let surface = surface_source.clone();
+    window.on_set_mcp_enabled(move |enabled| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        match runtime_ref.borrow_mut().set_mcp_enabled(enabled) {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(
+                &window,
+                "Could not update the MCP setting.",
+                &error,
+            ),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
     window.on_set_mcp_auto_approve_control(move |enabled| {
         let Some(window) = weak.upgrade() else {
             return;
@@ -6657,7 +6677,11 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_settings_debug_logging_enabled(projection.settings_debug_logging_enabled);
     window.set_settings_confirm_close_session(projection.settings_confirm_close_session);
     window.set_settings_confirm_quit_app(projection.settings_confirm_quit_app);
+    window.set_settings_mcp_enabled(projection.settings_mcp_enabled);
     window.set_settings_mcp_auto_approve_control(projection.settings_mcp_auto_approve_control);
+    window.set_settings_mcp_status_text(projection.settings_mcp_status_text.clone().into());
+    window.set_settings_mcp_boundaries_text(projection.settings_mcp_boundaries_text.clone().into());
+    window.set_settings_mcp_host_config_text(projection.settings_mcp_host_config_text.clone().into());
     window.set_mcp_controlling(projection.mcp_controlling);
     window.set_settings_debug_log_dir_text(projection.settings_debug_log_dir_text.clone().into());
     window.set_settings_terminal_status_kind_text(

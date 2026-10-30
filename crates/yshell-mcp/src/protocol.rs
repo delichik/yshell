@@ -2,16 +2,33 @@
 
 use serde::{Deserialize, Serialize};
 
-pub const METHOD_CLIENT_HELLO: &str = "client_hello";
+pub const METHOD_GET_MCP_INFO: &str = "get_mcp_info";
 pub const METHOD_LIST_SAVED: &str = "list_saved_sessions";
 pub const METHOD_LIST_CONNECTED: &str = "list_connected_sessions";
+pub const METHOD_LIST_SESSIONS: &str = "list_sessions";
+pub const METHOD_GET_SESSION: &str = "get_session";
 pub const METHOD_REQUEST_CONTROL: &str = "request_control";
 pub const METHOD_RELEASE_CONTROL: &str = "release_control";
 pub const METHOD_SESSION_INPUT: &str = "session_input";
 pub const METHOD_SESSION_OUTPUT: &str = "session_output";
+pub const METHOD_SESSION_RUN: &str = "session_run";
+pub const METHOD_SESSION_SEND_KEY: &str = "session_send_key";
 pub const METHOD_CONNECT_SAVED: &str = "connect_saved";
 pub const METHOD_DISCONNECT_SESSION: &str = "disconnect_session";
 pub const METHOD_DUPLICATE_SESSION: &str = "duplicate_session";
+
+/// Product boundaries shown in Settings and returned by `get_mcp_info`.
+pub const MCP_BOUNDARIES_TEXT: &str = "Can: list saved profiles and open terminal tabs; after you approve control, read/write terminals, run commands and wait for output, send keys (e.g. Ctrl+C), disconnect or duplicate tabs.\nCannot: fill passwords or accept host keys (do that in the YShell GUI); control SFTP or tunnels; run without the GUI; let multiple agents hold control at once.";
+
+/// Host-facing stdio MCP config snippet (any MCP client).
+pub const MCP_HOST_CONFIG_SNIPPET: &str = r#"{
+  "mcpServers": {
+    "yshell": {
+      "command": "yshell",
+      "args": ["--mcp"]
+    }
+  }
+}"#;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IpcRequest {
@@ -61,22 +78,40 @@ impl IpcResponse {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum IpcResult {
     Ok,
+    McpInfo {
+        enabled: bool,
+        status: String,
+        control: String,
+        boundaries: String,
+        host_config: String,
+    },
     SavedSessions {
         sessions: Vec<SavedSessionInfo>,
     },
     ConnectedSessions {
         sessions: Vec<ConnectedSessionInfo>,
     },
-    ControlGranted {
-        control_token: String,
+    SessionInfo {
+        session: ConnectedSessionInfo,
     },
+    /// Control granted; ownership is the bridge `client_id`, not a separate token.
+    ControlGranted,
     SessionOutput {
         text: String,
         mode: String,
     },
+    SessionRun {
+        text: String,
+        timed_out: bool,
+        state: String,
+        blocker: String,
+        tab_id: String,
+    },
     TabOpened {
         tab_id: String,
         session_id: Option<String>,
+        state: String,
+        blocker: String,
     },
 }
 
@@ -104,6 +139,8 @@ pub struct ConnectedSessionInfo {
     pub state: String,
     pub connected: bool,
     pub kind: String,
+    /// `none` | `password` | `host_key` | `connecting` | `disconnected` | `failed`
+    pub blocker: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -135,14 +172,4 @@ impl OutputMode {
             Self::Visible => "visible",
         }
     }
-}
-
-/// Alias kept for call-site clarity in the app layer.
-pub type ControlToken = String;
-
-/// Convenience wrapper for tool responses that return screen text.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SessionOutput {
-    pub text: String,
-    pub mode: String,
 }

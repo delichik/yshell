@@ -78,8 +78,16 @@ export component SettingsDialog inherits Rectangle {
     in-out property <bool> confirm-close-session-enabled: true;
     /// Confirm before quitting YShell.
     in-out property <bool> confirm-quit-app-enabled: true;
+    /// MCP master switch (hosts the local endpoint for AI clients).
+    in-out property <bool> mcp-enabled: false;
     /// Auto-approve MCP AI control requests (skip the consent dialog).
     in-out property <bool> mcp-auto-approve-control-enabled: false;
+    /// Listener / control status for Settings → AI / MCP.
+    in property <string> mcp-status-text: "";
+    /// Product boundaries copy.
+    in property <string> mcp-boundaries-text: "";
+    /// Stdio MCP host config snippet.
+    in property <string> mcp-host-config-text: "";
     /// Absolute path of the debug log directory.
     in property <string> debug-log-dir-text: "";
     /// Active left-nav section id.
@@ -113,6 +121,7 @@ export component SettingsDialog inherits Rectangle {
     callback set-debug-logging(bool);
     callback set-confirm-close-session(bool);
     callback set-confirm-quit-app(bool);
+    callback set-mcp-enabled(bool);
     callback set-mcp-auto-approve-control(bool);
     callback open-debug-log-dir();
     // Appearance（字体；主题编辑已迁移到 Theme Manager）
@@ -177,6 +186,12 @@ export component SettingsDialog inherits Rectangle {
                                 icon: "shield";
                                 selected: root.section == "security";
                                 clicked => { root.section = "security"; }
+                            }
+                            SettingsNavItem {
+                                text: @tr("AI / MCP");
+                                icon: "link";
+                                selected: root.section == "mcp";
+                                clicked => { root.section = "mcp"; }
                             }
                             SettingsNavItem {
                                 text: @tr("Advanced");
@@ -301,15 +316,6 @@ export component SettingsDialog inherits Rectangle {
                                                 checked <=> root.confirm-quit-app-enabled;
                                                 toggled => {
                                                     root.set-confirm-quit-app(root.confirm-quit-app-enabled);
-                                                }
-                                                horizontal-stretch: 0;
-                                            }
-
-                                            WinToggle {
-                                                text: @tr("Auto-approve AI control (MCP)");
-                                                checked <=> root.mcp-auto-approve-control-enabled;
-                                                toggled => {
-                                                    root.set-mcp-auto-approve-control(root.mcp-auto-approve-control-enabled);
                                                 }
                                                 horizontal-stretch: 0;
                                             }
@@ -754,6 +760,122 @@ export component SettingsDialog inherits Rectangle {
                                                     text: @tr("Open Proxy Manager…");
                                                     clicked => { root.open-proxies(); }
                                                 }
+                                            }
+                                        }
+
+                                        // --- AI / MCP -----------------------------------------
+                                        if root.section == "mcp" : VerticalLayout {
+                                            alignment: start;
+                                            spacing: Theme.spacing-12;
+
+                                            Text {
+                                                text: @tr("AI / MCP");
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-body-large;
+                                                font-weight: Theme.weight-semibold;
+                                            }
+
+                                            Text {
+                                                text: @tr("Let an AI host (Cursor, Claude Desktop, or any stdio MCP client) control terminal sessions in this running YShell window. Off by default.");
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-body;
+                                                wrap: word-wrap;
+                                            }
+
+                                            WinToggle {
+                                                text: @tr("Enable MCP");
+                                                checked <=> root.mcp-enabled;
+                                                toggled => {
+                                                    root.set-mcp-enabled(root.mcp-enabled);
+                                                }
+                                                horizontal-stretch: 0;
+                                            }
+
+                                            Text {
+                                                text: @tr("Status");
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-body;
+                                                font-weight: Theme.weight-semibold;
+                                            }
+
+                                            Text {
+                                                text: root.mcp-status-text;
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-body;
+                                                wrap: word-wrap;
+                                                font-family: Theme.font-mono;
+                                            }
+
+                                            Text {
+                                                text: @tr("How to connect");
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-body;
+                                                font-weight: Theme.weight-semibold;
+                                            }
+
+                                            Text {
+                                                text: @tr("Keep YShell open with MCP enabled. In your AI host, add a stdio MCP server that starts YShell with --mcp (not a command you run yourself):");
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-body;
+                                                wrap: word-wrap;
+                                            }
+
+                                            Text {
+                                                text: root.mcp-host-config-text;
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-caption;
+                                                wrap: word-wrap;
+                                                font-family: Theme.font-mono;
+                                            }
+
+                                            Text {
+                                                text: @tr("If yshell is not on PATH, set command to the full path of the YShell binary.");
+                                                color: Theme.text-tertiary;
+                                                font-size: Theme.font-caption;
+                                                wrap: word-wrap;
+                                            }
+
+                                            Text {
+                                                text: @tr("What it can and cannot do");
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-body;
+                                                font-weight: Theme.weight-semibold;
+                                            }
+
+                                            Text {
+                                                text: root.mcp-boundaries-text;
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-body;
+                                                wrap: word-wrap;
+                                            }
+
+                                            Rectangle {
+                                                height: 1px;
+                                                background: Theme.divider;
+                                            }
+
+                                            Text {
+                                                text: @tr("Control approval");
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-body;
+                                                font-weight: Theme.weight-semibold;
+                                            }
+
+                                            Text {
+                                                text: @tr("By default each AI control request asks you first. Auto-approve grants full terminal control to any local MCP client that connects.");
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-body;
+                                                wrap: word-wrap;
+                                            }
+
+                                            WinToggle {
+                                                text: @tr("Auto-approve AI control");
+                                                checked <=> root.mcp-auto-approve-control-enabled;
+                                                enabled: root.mcp-enabled;
+                                                toggled => {
+                                                    root.set-mcp-auto-approve-control(root.mcp-auto-approve-control-enabled);
+                                                }
+                                                horizontal-stretch: 0;
                                             }
                                         }
 

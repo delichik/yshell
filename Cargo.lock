@@ -6901,6 +6901,7 @@ version = "0.1.0"
 dependencies = [
  "copypasta",
  "raw-window-handle",
+ "regex",
  "rfd",
  "serde_json",
  "slint",

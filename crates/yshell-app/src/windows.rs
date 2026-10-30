@@ -146,8 +146,8 @@ pub(crate) struct WindowManager {
     dialog_host: Rc<RefCell<DialogHost>>,
     /// MCP IPC inbox drained on the UI tick.
     mcp_inbox: crate::mcp_server::McpInbox,
-    /// Keeps the loopback MCP acceptor alive for the GUI lifetime.
-    _mcp_server: Option<crate::mcp_server::McpServerHandle>,
+    /// Loopback MCP acceptor; started only while Settings → MCP is enabled.
+    mcp_server: Option<crate::mcp_server::McpServerHandle>,
 }
 
 impl WindowManager {
@@ -170,18 +170,15 @@ impl WindowManager {
         }
         let dialog_host = crate::dialog_windows::DialogWindowManager::new(Rc::clone(&runtime));
         let mcp_inbox = crate::mcp_server::McpInbox::new();
-        let mcp_server = {
-            let token = crate::mcp_server::new_endpoint_token();
+        // MCP is opt-in: clear any stale endpoint until Settings enables it.
+        {
             let config_dir = runtime.borrow().config_dir.clone();
-            runtime.borrow_mut().mcp_endpoint_token = Some(token.clone());
-            match crate::mcp_server::start_mcp_server(config_dir, token, mcp_inbox.clone()) {
-                Ok(handle) => Some(handle),
-                Err(error) => {
-                    tracing::warn!(error = %error, "MCP IPC server failed to start");
-                    None
-                }
-            }
-        };
+            let _ = yshell_mcp::clear_endpoint(&config_dir);
+            runtime.borrow_mut().mcp_endpoint_token = None;
+            runtime
+                .borrow_mut()
+                .set_mcp_listener_status(crate::runtime::mcp::McpListenerStatus::Disabled);
+        }
         let manager = Rc::new(RefCell::new(Self {
             runtime,
             windows: Vec::new(),
@@ -193,7 +190,7 @@ impl WindowManager {
             timer: None,
             dialog_host,
             mcp_inbox,
-            _mcp_server: mcp_server,
+            mcp_server: None,
         }));
         {
             let weak = Rc::downgrade(&manager);
@@ -635,9 +632,78 @@ impl WindowManager {
         dirty || changed || secondary_changed
     }
 
+    /// Start or stop the MCP loopback server to match Settings → Enable MCP.
+    fn reconcile_mcp_server(&mut self) -> bool {
+        let enabled = self.runtime.borrow().mcp_enabled();
+        if enabled {
+            if self.mcp_server.is_some() {
+                return false;
+            }
+            // Stay on Failed until the user toggles MCP off/on (set_mcp_enabled
+            // clears status back to Disabled so we retry once per enable).
+            if matches!(
+                self.runtime.borrow().mcp_listener_status,
+                crate::runtime::mcp::McpListenerStatus::Failed { .. }
+            ) {
+                return false;
+            }
+            let token = crate::mcp_server::new_endpoint_token();
+            let config_dir = self.runtime.borrow().config_dir.clone();
+            match crate::mcp_server::start_mcp_server(
+                config_dir,
+                token.clone(),
+                self.mcp_inbox.clone(),
+            ) {
+                Ok(handle) => {
+                    let port = handle.port;
+                    self.mcp_server = Some(handle);
+                    let mut runtime = self.runtime.borrow_mut();
+                    runtime.mcp_endpoint_token = Some(token);
+                    runtime.set_mcp_listener_status(
+                        crate::runtime::mcp::McpListenerStatus::Ready { port },
+                    );
+                    runtime.set_status_kind(
+                        "mcp-listener-ready",
+                        format!("MCP ready on 127.0.0.1:{port}. Point your AI host at yshell --mcp."),
+                        port.to_string(),
+                        String::new(),
+                    );
+                    true
+                }
+                Err(error) => {
+                    tracing::warn!(error = %error, "MCP IPC server failed to start");
+                    let mut runtime = self.runtime.borrow_mut();
+                    runtime.mcp_endpoint_token = None;
+                    runtime.set_mcp_listener_status(
+                        crate::runtime::mcp::McpListenerStatus::Failed {
+                            message: error.to_string(),
+                        },
+                    );
+                    runtime.set_status_kind(
+                        "mcp-listener-failed",
+                        format!("MCP failed to start: {error}"),
+                        String::new(),
+                        String::new(),
+                    );
+                    true
+                }
+            }
+        } else if self.mcp_server.take().is_some() {
+            let mut runtime = self.runtime.borrow_mut();
+            runtime.mcp_endpoint_token = None;
+            runtime.set_mcp_listener_status(crate::runtime::mcp::McpListenerStatus::Disabled);
+            true
+        } else {
+            false
+        }
+    }
+
     /// 应用级轮询：消息 drain → 终端轮询 → 各窗口尺寸同步 → 投影 + 重绘。
     fn tick(&mut self) {
         let mut dirty = false;
+        if self.reconcile_mcp_server() {
+            dirty = true;
+        }
         {
             let Ok(mut runtime) = self.runtime.try_borrow_mut() else {
                 return;

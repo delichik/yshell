@@ -605,7 +605,11 @@ export component MainWindow inherits Window {
     // Settings → General：关闭会话前 / 退出前是否确认（可在「不再询问」后重新开启）。
     in-out property <bool> settings_confirm_close_session: true;
     in-out property <bool> settings_confirm_quit_app: true;
+    in-out property <bool> settings_mcp_enabled: false;
     in-out property <bool> settings_mcp_auto_approve_control: false;
+    in-out property <string> settings_mcp_status_text: "";
+    in-out property <string> settings_mcp_boundaries_text: "";
+    in-out property <string> settings_mcp_host_config_text: "";
     in-out property <bool> mcp_controlling: false;
     in-out property <string> terminal_title_name_text: "";
     in-out property <bool> terminal_title_has_session: false;
@@ -853,6 +857,7 @@ export component MainWindow inherits Window {
     /// 持久化「退出前确认」偏好。
     callback set_confirm_quit_app(bool);
     /// 持久化 MCP 控制自动批准（「不再询问」勾选 / Settings 开关共用）。
+    callback set_mcp_enabled(bool);
     callback set_mcp_auto_approve_control(bool);
     /// 用户退出 AI 控制（状态栏 chip）。
     callback exit_mcp_control();

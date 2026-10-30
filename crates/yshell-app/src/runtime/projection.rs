@@ -380,7 +380,11 @@ impl AppRuntime {
             settings_debug_logging_enabled: self.config_document.ui.debug_logging,
             settings_confirm_close_session: self.config_document.ui.confirm_close_session,
             settings_confirm_quit_app: self.config_document.ui.confirm_quit_app,
+            settings_mcp_enabled: self.config_document.ui.mcp_enabled,
             settings_mcp_auto_approve_control: self.config_document.ui.mcp_auto_approve_control,
+            settings_mcp_status_text: self.mcp_status_text(),
+            settings_mcp_boundaries_text: yshell_mcp::MCP_BOUNDARIES_TEXT.to_owned(),
+            settings_mcp_host_config_text: yshell_mcp::MCP_HOST_CONFIG_SNIPPET.to_owned(),
             mcp_controlling: self.mcp.is_controlling(),
             mcp_consent_visible: self.mcp.consent_visible(),
             settings_debug_log_dir_text: self.debug_log_dir().display().to_string(),
@@ -1727,8 +1731,16 @@ pub struct AppProjection {
     pub settings_confirm_close_session: bool,
     /// Whether quitting the application asks for confirmation.
     pub settings_confirm_quit_app: bool,
+    /// Whether the GUI hosts the MCP IPC endpoint.
+    pub settings_mcp_enabled: bool,
     /// Whether MCP `request_control` skips the consent dialog.
     pub settings_mcp_auto_approve_control: bool,
+    /// Listener / control status line for Settings → AI / MCP.
+    pub settings_mcp_status_text: String,
+    /// Product boundaries copy for Settings and agents.
+    pub settings_mcp_boundaries_text: String,
+    /// Stdio MCP host config snippet.
+    pub settings_mcp_host_config_text: String,
     /// AI currently holds the MCP control lock.
     pub mcp_controlling: bool,
     /// MCP consent dialog should be visible.

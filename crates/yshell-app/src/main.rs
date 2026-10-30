@@ -114,7 +114,7 @@ impl CliCommand {
 
 fn print_help() {
     println!(
-        "YShell\n\nUSAGE:\n    yshell [OPTIONS]\n\nOPTIONS:\n    --check-config            Validate configuration discovery\n    --print-config-dir        Print the configuration directory\n    --quick-connect <input>   Run the runtime quick-connect path without launching UI\n    --mcp                     MCP stdio bridge to a running YShell GUI (Cursor / agents)\n    --version                 Print version\n    --help                    Print help\n\nENVIRONMENT:\n    YSHELL_MASTER_PASSWORD    Enables the local encrypted secret store at <config>/secret-store.toml"
+        "YShell\n\nUSAGE:\n    yshell [OPTIONS]\n\nOPTIONS:\n    --check-config            Validate configuration discovery\n    --print-config-dir        Print the configuration directory\n    --quick-connect <input>   Run the runtime quick-connect path without launching UI\n    --mcp                     Host-facing MCP stdio server (AI clients only; enable MCP in the GUI Settings first)\n    --version                 Print version\n    --help                    Print help\n\nENVIRONMENT:\n    YSHELL_MASTER_PASSWORD    Enables the local encrypted secret store at <config>/secret-store.toml"
     );
 }
 

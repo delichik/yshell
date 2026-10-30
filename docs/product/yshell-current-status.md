@@ -1,6 +1,6 @@
 # YShell 本 build 产品现状
 
-更新时间：2026-10-29  
+更新时间：2026-10-30  
 性质：**唯一现行产品范围文档**（有什么 / 砍了什么 / 还缺什么 / 仍生效的决策）
 
 冲突时：本文 > 实现与单测 > [`yshell-ui-interaction-contract.md`](./yshell-ui-interaction-contract.md) > [`archive/`](./archive/README.md) 历史稿。
@@ -22,7 +22,7 @@
 | 同步输入 N9 | All / Visible / 停止；chip；不弹 KEYS 确认（D23） |
 | 本地终端 | 本机 shell 标签 |
 | 基建 | Slint 1.18、R1/R2 拆分、L2 Esc/遮罩、对比度 xtask、真实 SSH only |
-| MCP（GUI 控制） | `yshell --mcp` stdio 桥接运行中的 GUI；`request_control` 用户授权锁；list/input/output/connect/disconnect/duplicate |
+| MCP（终端控制） | Settings → AI / MCP 默认关；开启后 GUI 托管本机 endpoint；AI host 配 `yshell --mcp`（stdio，非用户手跑）；授权锁 + `session_run`/blocker；不含 SFTP、不含代填密码/host key |
 
 ---
 

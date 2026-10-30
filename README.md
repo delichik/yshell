@@ -18,21 +18,33 @@ The CLI also exposes smoke-friendly commands:
 yshell --check-config
 yshell --print-config-dir
 yshell --quick-connect user@example.com
-yshell --mcp
 yshell --version
 ```
 
 Quick Connect input is parsed and validated both from the CLI and from the native toolbar.
 
-### MCP (AI control of the running GUI)
+### MCP (AI control of terminal sessions)
 
-Start the YShell GUI first (it writes `{config_dir}/mcp-endpoint.json`). Point Cursor (or another MCP host) at:
+MCP is an opt-in product feature: open YShell → **Settings → AI / MCP → Enable MCP**. The GUI then hosts a local endpoint. AI hosts (Cursor, Claude Desktop, or any stdio MCP client) start `yshell --mcp` as their MCP server process — that flag is not a user workflow.
 
 ```json
-{ "mcpServers": { "yshell": { "command": "yshell", "args": ["--mcp"] } } }
+{
+  "mcpServers": {
+    "yshell": {
+      "command": "yshell",
+      "args": ["--mcp"]
+    }
+  }
+}
 ```
 
-The agent must call `request_control` (user consent dialog, unless Settings → Auto-approve AI control is on) before `session_input` / `session_output` / connect / disconnect / duplicate. The status bar shows **AI controlling** with an exit control action.
+If `yshell` is not on `PATH`, set `command` to the absolute path of the binary. Prerequisites: GUI running and MCP enabled.
+
+**In scope:** list saved profiles and terminal tabs; after user approval, `session_run` (wait for output), input/output, keys, connect/disconnect/duplicate. Sessions report blockers (`password`, `host_key`, …) when the GUI still needs you.
+
+**Out of scope:** SFTP/tunnels; agent-filled passwords or host-key acceptance; headless mode without the GUI.
+
+The agent should call `get_mcp_info` / `request_control` first. Prefer `session_run` over raw input/output. Status bar shows **AI controlling** with Exit.
 
 ## Adapter coverage
 

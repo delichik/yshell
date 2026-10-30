@@ -380,6 +380,7 @@ impl AppRuntime {
             folder_editor: folder_editor::FolderEditorState::default(),
             mcp: mcp::McpControlState::default(),
             mcp_endpoint_token: None,
+            mcp_listener_status: mcp::McpListenerStatus::Disabled,
         };
         let startup_text = runtime.startup_status();
         let saved_count = runtime.saved_session_count();
@@ -797,6 +798,8 @@ pub struct AppRuntime {
     pub(crate) mcp: mcp::McpControlState,
     /// Shared secret written to `mcp-endpoint.json` while the GUI IPC server runs.
     pub(crate) mcp_endpoint_token: Option<String>,
+    /// Loopback listener status shown in Settings → AI / MCP.
+    pub(crate) mcp_listener_status: mcp::McpListenerStatus,
 }
 
 /// N7：单个窗口持有的标签 UI 归属（标签本身仍在 `AppRuntime::tabs` 登记）。

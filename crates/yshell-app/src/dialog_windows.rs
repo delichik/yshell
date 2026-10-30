@@ -728,8 +728,8 @@ impl DialogWindowManager {
         if projection.mcp_consent_visible {
             return Some(ConfirmSpec {
                 kind: ConfirmKind::McpControl,
-                title: "Allow AI control".into(),
-                message: "An AI agent wants to control YShell: type into terminals, read the screen, and open or close sessions. Allow this?".into(),
+                title: "Allow AI control of terminals".into(),
+                message: "An AI agent wants control of YShell terminal sessions: run commands, read the screen, and open or close tabs. It cannot fill passwords or accept host keys — those stay in this app. Allow?".into(),
                 confirm_label: "Allow".into(),
                 destructive: false,
                 show_dont_ask: true,
@@ -1539,6 +1539,12 @@ fn wire_settings_actions(
             let _ = wr.borrow_mut().set_confirm_quit_app(enabled);
         }
     });
+    let wr_enable = window_runtime.clone();
+    window.on_set_mcp_enabled(move |enabled| {
+        if let Some(wr) = wr_enable.as_ref() {
+            let _ = wr.borrow_mut().set_mcp_enabled(enabled);
+        }
+    });
     let wr = window_runtime;
     window.on_set_mcp_auto_approve_control(move |enabled| {
         if let Some(wr) = wr.as_ref() {
@@ -1563,7 +1569,11 @@ fn sync_settings_from(
         settings.set_debug_logging_enabled(main.get_settings_debug_logging_enabled());
         settings.set_confirm_close_session_enabled(main.get_settings_confirm_close_session());
         settings.set_confirm_quit_app_enabled(main.get_settings_confirm_quit_app());
+        settings.set_mcp_enabled(main.get_settings_mcp_enabled());
         settings.set_mcp_auto_approve_control_enabled(main.get_settings_mcp_auto_approve_control());
+        settings.set_mcp_status_text(main.get_settings_mcp_status_text());
+        settings.set_mcp_boundaries_text(main.get_settings_mcp_boundaries_text());
+        settings.set_mcp_host_config_text(main.get_settings_mcp_host_config_text());
         settings.set_language_text(main.get_settings_language_text());
         settings.set_debug_log_dir_text(main.get_settings_debug_log_dir_text());
         settings.set_appearance_color_scheme_name_text(
@@ -1583,7 +1593,11 @@ fn sync_settings_from(
     }
     settings.set_confirm_close_session_enabled(projection.settings_confirm_close_session);
     settings.set_confirm_quit_app_enabled(projection.settings_confirm_quit_app);
+    settings.set_mcp_enabled(projection.settings_mcp_enabled);
     settings.set_mcp_auto_approve_control_enabled(projection.settings_mcp_auto_approve_control);
+    settings.set_mcp_status_text(projection.settings_mcp_status_text.clone().into());
+    settings.set_mcp_boundaries_text(projection.settings_mcp_boundaries_text.clone().into());
+    settings.set_mcp_host_config_text(projection.settings_mcp_host_config_text.clone().into());
 }
 
 fn sync_folder_editor(w: &FolderEditorWindow, p: &AppProjection, _m: Option<&MainWindow>) {
