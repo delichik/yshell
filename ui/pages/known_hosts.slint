@@ -1,6 +1,6 @@
 import { Theme } from "../theme.slint";
 import { Icon } from "../components/basic/icons.slint";
-import { WinButton, WinCard, WinCardHeader, WinScrollIndicator } from "../components/basic/controls.slint";
+import { WinButton, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
 
@@ -15,7 +15,7 @@ component DetailLine inherits Text {
     wrap: word-wrap;
 }
 
-// 已知主机管理器：ContentDialog 形态（§5.10）：标题行 → 双栏（清单 / 详情）→ 危险区。
+// 已知主机管理器：清单 / 详情 / 危险区（无 WinCard 套壳）。
 export component KnownHostsPage inherits Rectangle {
     in property <bool> open: false;
     in property <string> inventory-text: "";
@@ -42,7 +42,6 @@ export component KnownHostsPage inherits Rectangle {
     private property <bool> detail-split-visible:
         root.detail-entry-visible || root.detail-path-text != "";
 
-    // 退场淡出期间壳仍可见：根跟着壳的 opacity，避免透明全屏挡住下层。
     visible: root.open;
     background: transparent;
 
@@ -57,23 +56,24 @@ export component KnownHostsPage inherits Rectangle {
                     vertical-stretch: 1;
 
                     // --- 左：持久化条目 -------------------------------------------
-                    WinCard {
+                    VerticalLayout {
                         width: Theme.manager-list-width;
+                        spacing: Theme.spacing-8;
 
-                        WinCardHeader {
-                            title: @tr("Persisted Entries");
-                            icon: "globe";
+                        Text {
+                            text: @tr("Persisted Entries");
+                            color: Theme.text-primary;
+                            font-size: Theme.font-body;
+                            font-weight: Theme.weight-semibold;
                         }
 
-                        // 清单表面：Rust 侧给出预格式化文本，行首 ">" 标记当前选中项。
-                        // 原先是"裁剪的 Text"，条目多时下半部分不可达（E22）→ 改为可滚动 + 指示条。
                         Rectangle {
                             vertical-stretch: 1;
                             clip: true;
-                            background: Theme.panel-background;
+                            background: Theme.control-fill;
                             border-radius: Theme.radius-control;
                             border-width: 1px;
-                            border-color: Theme.divider;
+                            border-color: Theme.control-stroke;
 
                             inventory-scroll := Flickable {
                                 width: parent.width;
@@ -83,9 +83,9 @@ export component KnownHostsPage inherits Rectangle {
                                 content-height: inventory-text.preferred-height + 2 * Theme.spacing-8;
 
                                 inventory-text := Text {
-                                    x: 10px;
+                                    x: Theme.spacing-12;
                                     y: Theme.spacing-8;
-                                    width: inventory-scroll.width - 20px;
+                                    width: inventory-scroll.width - 2 * Theme.spacing-12;
                                     text: root.inventory-text;
                                     color: Theme.text-secondary;
                                     font-size: Theme.font-caption;
@@ -94,7 +94,6 @@ export component KnownHostsPage inherits Rectangle {
                                 }
                             }
 
-                            // 滚动指示：E22 可复用组件（`content-y` ≤ 0，组件内部取负）
                             WinScrollIndicator {
                                 x: parent.width - self.width - Theme.spacing-4;
                                 y: Theme.spacing-4;
@@ -120,12 +119,6 @@ export component KnownHostsPage inherits Rectangle {
                                 text: @tr("Next");
                                 clicked => { root.select-next(); }
                             }
-                        }
-
-                        HorizontalLayout {
-                            spacing: Theme.spacing-8;
-                            alignment: end;
-                            vertical-stretch: 0;
 
                             WinButton {
                                 text: @tr("Remove Selected");
@@ -138,14 +131,18 @@ export component KnownHostsPage inherits Rectangle {
 
                     // --- 右：详情 + 危险区 -----------------------------------------
                     VerticalLayout {
-                        spacing: Theme.spacing-12;
+                        spacing: Theme.spacing-16;
+                        horizontal-stretch: 1;
 
-                        WinCard {
+                        VerticalLayout {
+                            spacing: Theme.spacing-8;
                             vertical-stretch: 1;
 
-                            WinCardHeader {
-                                title: @tr("Host Key Details");
-                                icon: "shield";
+                            Text {
+                                text: @tr("Host Key Details");
+                                color: Theme.text-primary;
+                                font-size: Theme.font-body;
+                                font-weight: Theme.weight-semibold;
                             }
 
                             Text {
@@ -155,14 +152,13 @@ export component KnownHostsPage inherits Rectangle {
                                 wrap: word-wrap;
                             }
 
-                            // 详情表面：等宽 caption，指纹对齐显示（可滚动 + 指示条，E22）
                             Rectangle {
                                 vertical-stretch: 1;
                                 clip: true;
-                                background: Theme.panel-background;
+                                background: Theme.control-fill;
                                 border-radius: Theme.radius-control;
                                 border-width: 1px;
-                                border-color: Theme.divider;
+                                border-color: Theme.control-stroke;
 
                                 details-scroll := Flickable {
                                     width: parent.width;
@@ -172,12 +168,11 @@ export component KnownHostsPage inherits Rectangle {
                                     content-height: detail-body.preferred-height + 2 * Theme.spacing-8;
 
                                     detail-body := VerticalLayout {
-                                        x: 10px;
+                                        x: Theme.spacing-12;
                                         y: Theme.spacing-8;
-                                        width: details-scroll.width - 20px;
+                                        width: details-scroll.width - 2 * Theme.spacing-12;
                                         spacing: Theme.spacing-4;
 
-                                        // 已选条目：四条字段行（标签本地化；空值行也保留，与原整段文本行数一致）
                                         if root.detail-entry-visible : VerticalLayout {
                                             spacing: Theme.spacing-4;
 
@@ -191,12 +186,10 @@ export component KnownHostsPage inherits Rectangle {
                                             hint: @tr("Known hosts path: {0}", root.detail-path-text);
                                         }
 
-                                        // 未选中条目（仅路径）时的说明，替代原整段文本里的英文句
                                         if root.detail-path-text != "" && !root.detail-entry-visible : DetailLine {
                                             hint: @tr("Temporary trust entries are not persisted here.");
                                         }
 
-                                        // 兼容回退：宿主尚未提供拆分字段时，继续显示原来的整段文本
                                         if !root.detail-split-visible && root.details-text != "" : DetailLine {
                                             hint: root.details-text;
                                         }
@@ -215,31 +208,25 @@ export component KnownHostsPage inherits Rectangle {
                             }
                         }
 
-                        // 危险区：WinCard + critical 文案色
-                        WinCard {
+                        // 危险区
+                        VerticalLayout {
+                            spacing: Theme.spacing-8;
                             vertical-stretch: 0;
 
                             HorizontalLayout {
                                 spacing: Theme.spacing-8;
+                                cross-axis-alignment: center;
 
-                                Rectangle {
-                                    width: Theme.icon-size-small;
-                                    vertical-stretch: 1;
-                                    background: transparent;
-
-                                    Icon {
-                                        name: "warning";
-                                        icon-color: Theme.critical;
-                                        icon-size: Theme.icon-size-small;
-                                        x: (parent.width - self.width) / 2;
-                                        y: (parent.height - self.height) / 2;
-                                    }
+                                Icon {
+                                    name: "warning";
+                                    icon-color: Theme.critical;
+                                    icon-size: Theme.icon-size-small;
                                 }
 
                                 Text {
                                     text: @tr("Danger Zone");
                                     color: Theme.critical;
-                                    font-size: Theme.font-body-large;
+                                    font-size: Theme.font-body;
                                     font-weight: Theme.weight-semibold;
                                     vertical-alignment: center;
                                     horizontal-stretch: 1;
@@ -254,8 +241,6 @@ export component KnownHostsPage inherits Rectangle {
                                 wrap: word-wrap;
                             }
 
-                            // 确认输入：WinTextInput 自带 control-fill 底 + control-stroke 描边 + 聚焦强调条（§5.2）。
-                            // placeholder 中的 CLEAR 是机器比对令牌，译文必须保留英文原词。
                             WinTextInput {
                                 text <=> root.clear-confirmation-text;
                                 placeholder-text: @tr("Type CLEAR");
@@ -284,6 +269,7 @@ export component KnownHostsPage inherits Rectangle {
                 HorizontalLayout {
                     alignment: end;
                     vertical-stretch: 0;
+                    padding-top: Theme.spacing-4;
 
                     WinButton {
                         text: @tr("Close");
@@ -292,7 +278,6 @@ export component KnownHostsPage inherits Rectangle {
                 }
     }
 
-    /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
     public function focus-dialog() {
         shell.focus-dialog();
     }

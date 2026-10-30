@@ -1,12 +1,16 @@
-// 主机密钥确认正文：说明 + 标签/值详情卡 + 警告 + 底栏。
+// Host key verification — decide whether to trust the presented key.
+//
+// first-trust: verify fingerprint, then Trust Once or Trust and Save.
+// changed: treat as a security event — Cancel is the safe default; Replace
+// is destructive and must be deliberate.
 
 import { Theme } from "../theme.slint";
-import { WinButton, WinCard, WinInfoBar } from "basic/controls.slint";
+import { Icon } from "basic/icons.slint";
+import { WinButton, WinInfoBar } from "basic/controls.slint";
 
 component DetailRow inherits HorizontalLayout {
     in property <string> label: "";
     in property <string> value: "";
-    in property <bool> mono: true;
     spacing: Theme.spacing-16;
 
     Text {
@@ -22,7 +26,7 @@ component DetailRow inherits HorizontalLayout {
         text: root.value;
         color: Theme.text-primary;
         font-size: Theme.font-body;
-        font-family: root.mono ? Theme.font-mono : Theme.font-ui;
+        font-family: Theme.font-mono;
         horizontal-stretch: 1;
         wrap: word-wrap;
     }
@@ -44,6 +48,7 @@ export component HostKeyDialog inherits Rectangle {
     callback trust-and-save();
     callback dismissed();
 
+    private property <bool> is-changed: root.mode-text == "changed";
     private property <bool> detail-visible:
         root.target-text != "" || root.known-hosts-path-text != ""
         || root.algorithm-text != "" || root.fingerprint-text != ""
@@ -69,74 +74,101 @@ export component HostKeyDialog inherits Rectangle {
             height: root.height;
             spacing: Theme.spacing-16;
 
-            Text {
-                text: root.mode-text == "changed"
-                    ? @tr("Host key changed for {0}.", root.target-text)
-                    : root.target-text != ""
-                        ? @tr("First-time host key for {0}.", root.target-text)
-                        : @tr("Verify the host key before continuing.");
-                color: Theme.text-primary;
-                font-size: Theme.font-body;
-                font-weight: Theme.weight-semibold;
-                wrap: word-wrap;
-            }
+            // Lead: severity + what happened
+            HorizontalLayout {
+                spacing: Theme.spacing-12;
+                alignment: start;
 
-            if root.mode-text == "changed" : WinInfoBar {
-                severity: "error";
-                text: @tr("The presented key does not match the stored key. This may indicate a man-in-the-middle attack. Replace and Trust will overwrite the stored key; do so only if you verified the new key elsewhere.");
-            }
+                Rectangle {
+                    width: Theme.icon-size-large;
+                    height: Theme.icon-size-large;
+                    background: transparent;
 
-            WinCard {
-                vertical-stretch: 1;
+                    Icon {
+                        name: "warning";
+                        icon-color: root.is-changed ? Theme.critical : Theme.caution;
+                        icon-size: Theme.icon-size-large;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
 
                 VerticalLayout {
-                    spacing: Theme.spacing-16;
+                    spacing: Theme.spacing-4;
+                    horizontal-stretch: 1;
 
-                    if root.detail-visible && root.known-hosts-path-text != "" : DetailRow {
-                        label: @tr("Known hosts");
-                        value: root.known-hosts-path-text;
-                        mono: true;
+                    Text {
+                        text: root.is-changed
+                            ? @tr("Host key changed for {0}.", root.target-text)
+                            : root.target-text != ""
+                                ? @tr("First-time host key for {0}.", root.target-text)
+                                : @tr("Verify the host key before continuing.");
+                        color: root.is-changed ? Theme.critical : Theme.text-primary;
+                        font-size: Theme.font-body;
+                        font-weight: Theme.weight-semibold;
+                        wrap: word-wrap;
                     }
 
-                    if root.detail-visible && root.mode-text == "changed" && root.expected-algorithm-text != "" : DetailRow {
-                        label: @tr("Expected");
-                        value: @tr("{0} {1}", root.expected-algorithm-text, root.expected-fingerprint-text);
-                        mono: true;
-                    }
-
-                    if root.detail-visible && root.algorithm-text != "" : DetailRow {
-                        label: @tr("Presented");
-                        value: @tr("{0} {1}", root.algorithm-text, root.fingerprint-text);
-                        mono: true;
-                    }
-
-                    if root.detail-visible && root.mode-text != "changed" : Text {
-                        text: @tr("Choose Trust Once or Trust and Save.");
+                    if !root.is-changed : Text {
+                        text: @tr("Compare the fingerprint with a trusted source, then trust once or save it for next time.");
                         color: Theme.text-tertiary;
                         font-size: Theme.font-caption;
                         wrap: word-wrap;
                     }
-
-                    if !root.detail-visible && root.prompt-text != "" : Text {
-                        text: root.prompt-text;
-                        color: Theme.text-secondary;
-                        font-family: Theme.font-mono;
-                        font-size: Theme.font-body;
-                        wrap: word-wrap;
-                    }
-
-                    Rectangle {
-                        vertical-stretch: 1;
-                        min-height: 0px;
-                        background: transparent;
-                    }
                 }
             }
 
+            if root.is-changed : WinInfoBar {
+                severity: "error";
+                text: @tr("The presented key does not match the stored key. This may indicate a man-in-the-middle attack. Replace and Trust will overwrite the stored key; do so only if you verified the new key elsewhere.");
+            }
+
+            // Facts to verify
+            VerticalLayout {
+                spacing: Theme.spacing-12;
+
+                if root.detail-visible && root.known-hosts-path-text != "" : DetailRow {
+                    label: @tr("Known hosts");
+                    value: root.known-hosts-path-text;
+                }
+
+                if root.detail-visible && root.is-changed && root.expected-algorithm-text != "" : DetailRow {
+                    label: @tr("Expected");
+                    value: @tr("{0} {1}", root.expected-algorithm-text, root.expected-fingerprint-text);
+                }
+
+                if root.detail-visible && root.algorithm-text != "" : DetailRow {
+                    label: root.is-changed ? @tr("Presented") : @tr("Fingerprint");
+                    value: @tr("{0} {1}", root.algorithm-text, root.fingerprint-text);
+                }
+
+                if !root.detail-visible && root.prompt-text != "" : Text {
+                    text: root.prompt-text;
+                    color: Theme.text-secondary;
+                    font-family: Theme.font-mono;
+                    font-size: Theme.font-body;
+                    wrap: word-wrap;
+                }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                min-height: Theme.spacing-12;
+                background: transparent;
+            }
+
+            Rectangle {
+                height: 1px;
+                vertical-stretch: 0;
+                background: Theme.divider;
+            }
+
+            // Safe action first; destructive save/replace on the right.
             HorizontalLayout {
                 alignment: end;
                 spacing: Theme.spacing-8;
                 vertical-stretch: 0;
+                padding-top: Theme.spacing-4;
 
                 cancel_button := WinButton {
                     text: @tr("Cancel Connection");
@@ -149,11 +181,11 @@ export component HostKeyDialog inherits Rectangle {
                 }
 
                 WinButton {
-                    text: root.mode-text == "changed"
+                    text: root.is-changed
                         ? @tr("Replace and Trust")
                         : @tr("Trust and Save");
-                    accent: root.mode-text != "changed";
-                    critical: root.mode-text == "changed";
+                    accent: !root.is-changed;
+                    critical: root.is-changed;
                     clicked => { root.trust-and-save(); }
                 }
             }

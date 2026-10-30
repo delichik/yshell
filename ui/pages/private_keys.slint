@@ -13,7 +13,7 @@
 
 import { Theme } from "../theme.slint";
 import { TextFormats } from "../text_formats.slint";
-import { WinButton, WinCard, WinCardHeader, WinToggle, WinScrollIndicator } from "../components/basic/controls.slint";
+import { WinButton, WinToggle, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
 
@@ -172,22 +172,25 @@ export component PrivateKeysPage inherits Rectangle {
                             height: parent.height;
                             spacing: Theme.spacing-12;
 
-                            WinCard {
+                            VerticalLayout {
                                 vertical-stretch: 1;
+                                spacing: Theme.spacing-8;
 
-                                WinCardHeader {
-                                    title: @tr("Managed Keys");
-                                    icon: "shield";
+                                Text {
+                                    text: @tr("Managed Keys");
+                                    color: Theme.text-primary;
+                                    font-size: Theme.font-body;
+                                    font-weight: Theme.weight-semibold;
                                 }
 
                                 Rectangle {
                                     vertical-stretch: 1;
                                     min-height: 180px;
                                     clip: true;
-                                    background: Theme.panel-background;
+                                    background: Theme.control-fill;
                                     border-radius: Theme.radius-control;
                                     border-width: 1px;
-                                    border-color: Theme.divider;
+                                    border-color: Theme.control-stroke;
 
                                     keys-list := Flickable {
                                         visible: root.keys.length > 0;
@@ -276,12 +279,15 @@ export component PrivateKeysPage inherits Rectangle {
                                 }
                             }
 
-                                WinCard {
+                                VerticalLayout {
                                     vertical-stretch: 0;
+                                    spacing: Theme.spacing-8;
 
-                                    WinCardHeader {
-                                        title: @tr("Import Private Key");
-                                        icon: "upload";
+                                    Text {
+                                        text: @tr("Import Private Key");
+                                        color: Theme.text-primary;
+                                        font-size: Theme.font-body;
+                                        font-weight: Theme.weight-semibold;
                                     }
 
                                     Text {
@@ -360,19 +366,23 @@ export component PrivateKeysPage inherits Rectangle {
                                 spacing: Theme.spacing-12;
 
                                 // 详情 + 派生公钥
-                                WinCard {
-                                    WinCardHeader {
-                                        title: @tr("Key Details");
-                                        icon: "shield";
+                                VerticalLayout {
+                                    spacing: Theme.spacing-8;
+
+                                    Text {
+                                        text: @tr("Key Details");
+                                        color: Theme.text-primary;
+                                        font-size: Theme.font-body;
+                                        font-weight: Theme.weight-semibold;
                                     }
 
                                     Rectangle {
                                         height: max(200px, min(420px, details-block.preferred-height + 20px));
                                         clip: true;
-                                        background: Theme.panel-background;
+                                        background: Theme.control-fill;
                                         border-radius: Theme.radius-control;
                                         border-width: 1px;
-                                        border-color: Theme.divider;
+                                        border-color: Theme.control-stroke;
 
                                         details-scroll := Flickable {
                                             width: parent.width;
@@ -423,10 +433,10 @@ export component PrivateKeysPage inherits Rectangle {
                                     if root.public-key-text != "" : Rectangle {
                                         height: max(72px, min(220px, pubkey-block.preferred-height + 20px));
                                         clip: true;
-                                        background: Theme.panel-background;
+                                        background: Theme.control-fill;
                                         border-radius: Theme.radius-control;
                                         border-width: 1px;
-                                        border-color: Theme.divider;
+                                        border-color: Theme.control-stroke;
 
                                         pubkey-scroll := Flickable {
                                             width: parent.width;
@@ -526,10 +536,14 @@ export component PrivateKeysPage inherits Rectangle {
                                 }
 
                                 // 口令管理
-                                WinCard {
-                                    WinCardHeader {
-                                        title: @tr("Passphrase");
-                                        icon: "shield";
+                                VerticalLayout {
+                                    spacing: Theme.spacing-8;
+
+                                    Text {
+                                        text: @tr("Passphrase");
+                                        color: Theme.text-primary;
+                                        font-size: Theme.font-body;
+                                        font-weight: Theme.weight-semibold;
                                     }
 
                                     Text {

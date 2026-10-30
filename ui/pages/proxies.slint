@@ -14,7 +14,7 @@
 import { Theme } from "../theme.slint";
 import { TextFormats } from "../text_formats.slint";
 import {
-    WinButton, WinCard, WinCardHeader, WinComboBox, WinIconButton, WinScrollIndicator, WinToggle,
+    WinButton, WinComboBox, WinIconButton, WinScrollIndicator, WinToggle,
 } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
@@ -227,21 +227,24 @@ export component ProxiesPage inherits Rectangle {
                             left-column := VerticalLayout {
                                 spacing: Theme.spacing-12;
 
-                                WinCard {
+                                VerticalLayout {
                                     vertical-stretch: 0;
+                                    spacing: Theme.spacing-8;
 
-                                    WinCardHeader {
-                                        title: @tr("Managed Proxies");
-                                        icon: "globe";
+                                    Text {
+                                        text: @tr("Managed Proxies");
+                                        color: Theme.text-primary;
+                                        font-size: Theme.font-body;
+                                        font-weight: Theme.weight-semibold;
                                     }
 
                                     Rectangle {
                                         height: max(180px, min(root.proxies.length * 56px + 4px, 520px));
                                         clip: true;
-                                        background: Theme.panel-background;
+                                        background: Theme.control-fill;
                                         border-radius: Theme.radius-control;
                                         border-width: 1px;
-                                        border-color: Theme.divider;
+                                        border-color: Theme.control-stroke;
 
                                         proxies-list := Flickable {
                                             visible: root.proxies.length > 0;
@@ -438,10 +441,14 @@ export component ProxiesPage inherits Rectangle {
                                     sections := VerticalLayout {
                                         spacing: Theme.spacing-12;
 
-                                        WinCard {
-                                            WinCardHeader {
-                                                title: root.editor-is-new ? @tr("New Proxy") : @tr("Edit Proxy");
-                                                icon: "globe";
+                                        VerticalLayout {
+                                            spacing: Theme.spacing-8;
+
+                                            Text {
+                                                text: root.editor-is-new ? @tr("New Proxy") : @tr("Edit Proxy");
+                                                color: Theme.text-primary;
+                                                font-size: Theme.font-body;
+                                                font-weight: Theme.weight-semibold;
                                             }
 
                                             ProxyFormRow {
@@ -541,10 +548,10 @@ export component ProxiesPage inherits Rectangle {
 
                                         if root.test-result-text != "" : Rectangle {
                                             vertical-stretch: 0;
-                                            background: Theme.panel-background;
+                                            background: Theme.control-fill;
                                             border-radius: Theme.radius-control;
                                             border-width: 1px;
-                                            border-color: Theme.divider;
+                                            border-color: Theme.control-stroke;
 
                                             Text {
                                                 x: Theme.spacing-8;

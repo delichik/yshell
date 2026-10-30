@@ -11,7 +11,7 @@
 import { Theme } from "../theme.slint";
 import { TextFormats } from "../text_formats.slint";
 import { Icon } from "../components/basic/icons.slint";
-import { WinButton, WinCard, WinCardHeader, WinScrollIndicator } from "../components/basic/controls.slint";
+import { WinButton, WinScrollIndicator } from "../components/basic/controls.slint";
 import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
 
 /// 一条已保存的主机密钥（SHA256 指纹 + 公钥行）。
@@ -269,21 +269,24 @@ export component HostKeysPage inherits Rectangle {
                         vertical-stretch: 1;
 
                         // --- 左：按 host:port 分组的清单 ------------------------------
-                        WinCard {
+                        VerticalLayout {
                             width: Theme.manager-list-width;
+                            spacing: Theme.spacing-8;
 
-                            WinCardHeader {
-                                title: @tr("Trusted Hosts");
-                                icon: "globe";
+                            Text {
+                                text: @tr("Trusted Hosts");
+                                color: Theme.text-primary;
+                                font-size: Theme.font-body;
+                                font-weight: Theme.weight-semibold;
                             }
 
                             Rectangle {
                                 vertical-stretch: 1;
                                 clip: true;
-                                background: Theme.panel-background;
+                                background: Theme.control-fill;
                                 border-radius: Theme.radius-control;
                                 border-width: 1px;
-                                border-color: Theme.divider;
+                                border-color: Theme.control-stroke;
 
                                 groups-list := Flickable {
                                     width: parent.width;
@@ -308,9 +311,6 @@ export component HostKeysPage inherits Rectangle {
                                                     padding-right: 8px;
                                                     spacing: Theme.spacing-8;
 
-                                                    // 图标包一层可拉伸容器再居中：
-                                                    // 裸 Icon 是写死 16px 的固定尺寸子项，
-                                                    // 默认 stretch 会把它贴行顶（比文字高 8px）。
                                                     Rectangle {
                                                         width: Theme.icon-size-small;
                                                         vertical-stretch: 1;
@@ -391,10 +391,14 @@ export component HostKeysPage inherits Rectangle {
                                 sections := VerticalLayout {
                                     spacing: Theme.spacing-12;
 
-                                    WinCard {
-                                        WinCardHeader {
-                                            title: @tr("Host Key Details");
-                                            icon: "shield";
+                                    VerticalLayout {
+                                        spacing: Theme.spacing-8;
+
+                                        Text {
+                                            text: @tr("Host Key Details");
+                                            color: Theme.text-primary;
+                                            font-size: Theme.font-body;
+                                            font-weight: Theme.weight-semibold;
                                         }
 
                                         Text {
@@ -407,10 +411,10 @@ export component HostKeysPage inherits Rectangle {
                                         Rectangle {
                                             height: max(120px, min(280px, detail-body.preferred-height + 2 * Theme.spacing-8));
                                             clip: true;
-                                            background: Theme.panel-background;
+                                            background: Theme.control-fill;
                                             border-radius: Theme.radius-control;
                                             border-width: 1px;
-                                            border-color: Theme.divider;
+                                            border-color: Theme.control-stroke;
 
                                             detail-scroll := Flickable {
                                                 width: parent.width;
@@ -420,9 +424,9 @@ export component HostKeysPage inherits Rectangle {
                                                 content-height: detail-body.preferred-height + 2 * Theme.spacing-8;
 
                                                 detail-body := VerticalLayout {
-                                                    x: 10px;
+                                                    x: Theme.spacing-12;
                                                     y: Theme.spacing-8;
-                                                    width: parent.width - 20px;
+                                                    width: parent.width - 2 * Theme.spacing-12;
                                                     spacing: Theme.spacing-4;
 
                                                     if root.detail-host-text != "" : DetailLine {
@@ -470,10 +474,14 @@ export component HostKeysPage inherits Rectangle {
                                         }
                                     }
 
-                                    if root.import-visible : WinCard {
-                                        WinCardHeader {
-                                            title: @tr("Paste Host Keys");
-                                            icon: "upload";
+                                    if root.import-visible : VerticalLayout {
+                                        spacing: Theme.spacing-8;
+
+                                        Text {
+                                            text: @tr("Paste Host Keys");
+                                            color: Theme.text-primary;
+                                            font-size: Theme.font-body;
+                                            font-weight: Theme.weight-semibold;
                                         }
 
                                         Text {
@@ -486,16 +494,16 @@ export component HostKeysPage inherits Rectangle {
                                         Rectangle {
                                             min-height: 96px;
                                             clip: true;
-                                            background: Theme.panel-background;
+                                            background: Theme.control-fill;
                                             border-radius: Theme.radius-control;
                                             border-width: 1px;
-                                            border-color: Theme.divider;
+                                            border-color: Theme.control-stroke;
 
                                             TextInput {
-                                                x: 10px;
-                                                y: 10px;
-                                                width: parent.width - 20px;
-                                                height: parent.height - 20px;
+                                                x: Theme.spacing-12;
+                                                y: Theme.spacing-12;
+                                                width: parent.width - 2 * Theme.spacing-12;
+                                                height: parent.height - 2 * Theme.spacing-12;
                                                 text <=> root.import-text;
                                                 color: Theme.text-secondary;
                                                 font-size: Theme.font-caption;

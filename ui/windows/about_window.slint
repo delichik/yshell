@@ -1,7 +1,7 @@
 // About as an independent tool window (title bar + content, no scrim).
 
 import { Theme } from "../theme.slint";
-import { WinButton, WinCard } from "../components/basic/controls.slint";
+import { WinButton } from "../components/basic/controls.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component AboutWindow inherits Window {
@@ -59,49 +59,48 @@ export component AboutWindow inherits Window {
                 wrap: word-wrap;
             }
 
-            WinCard {
-                GridLayout {
-                    spacing: Theme.spacing-16;
+            GridLayout {
+                spacing: Theme.spacing-16;
+                padding-top: Theme.spacing-8;
 
-                    Text {
-                        row: 0;
-                        col: 0;
-                        text: @tr("Config directory");
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-caption;
-                        vertical-alignment: top;
-                        width: max(96px, self.preferred-width);
-                    }
+                Text {
+                    row: 0;
+                    col: 0;
+                    text: @tr("Config directory");
+                    color: Theme.text-secondary;
+                    font-size: Theme.font-body;
+                    vertical-alignment: top;
+                    width: max(Theme.form-label-width, self.preferred-width);
+                }
 
-                    Text {
-                        row: 0;
-                        col: 1;
-                        text: root.config-dir-text;
-                        color: Theme.text-secondary;
-                        font-size: Theme.font-caption;
-                        vertical-alignment: top;
-                        wrap: word-wrap;
-                    }
+                Text {
+                    row: 0;
+                    col: 1;
+                    text: root.config-dir-text;
+                    color: Theme.text-primary;
+                    font-size: Theme.font-body;
+                    font-family: Theme.font-mono;
+                    vertical-alignment: top;
+                    wrap: word-wrap;
+                }
 
-                    Text {
-                        row: 1;
-                        col: 0;
-                        text: @tr("License");
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-caption;
-                        vertical-alignment: top;
-                        width: max(96px, self.preferred-width);
-                    }
+                Text {
+                    row: 1;
+                    col: 0;
+                    text: @tr("License");
+                    color: Theme.text-secondary;
+                    font-size: Theme.font-body;
+                    vertical-alignment: top;
+                }
 
-                    Text {
-                        row: 1;
-                        col: 1;
-                        text: "MIT OR Apache-2.0";
-                        color: Theme.text-secondary;
-                        font-size: Theme.font-caption;
-                        vertical-alignment: top;
-                        wrap: word-wrap;
-                    }
+                Text {
+                    row: 1;
+                    col: 1;
+                    text: "MIT OR Apache-2.0";
+                    color: Theme.text-primary;
+                    font-size: Theme.font-body;
+                    vertical-alignment: top;
+                    wrap: word-wrap;
                 }
             }
 
@@ -111,9 +110,16 @@ export component AboutWindow inherits Window {
                 background: transparent;
             }
 
+            Rectangle {
+                height: 1px;
+                vertical-stretch: 0;
+                background: Theme.divider;
+            }
+
             HorizontalLayout {
                 alignment: end;
                 vertical-stretch: 0;
+                padding-top: Theme.spacing-4;
 
                 WinButton {
                     text: @tr("Close");

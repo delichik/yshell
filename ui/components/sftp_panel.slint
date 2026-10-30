@@ -12,8 +12,7 @@
 import { ListView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
-import { WinButton, WinCard, WinIconButton, WinToggle } from "basic/controls.slint";
-// WinCard kept for conflict/properties; entry dialog uses plain labeled fields.
+import { WinButton, WinIconButton, WinToggle } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 import { MenuEntry, MenuPopup } from "menu_popup.slint";
 import { FileCrumb, FilePane, FileRow, ListScrollBar } from "file_pane.slint";
@@ -1355,37 +1354,34 @@ export component SftpConflictDialog inherits Rectangle {
                 wrap: word-wrap;
             }
 
-            WinCard {
+            VerticalLayout {
+                spacing: Theme.spacing-8;
                 vertical-stretch: 1;
 
-                VerticalLayout {
-                    spacing: Theme.spacing-8;
+                Text {
+                    text: @tr("Conflicting paths");
+                    color: Theme.text-secondary;
+                    font-size: Theme.font-body;
+                }
 
-                    Text {
-                        text: @tr("Conflicting paths");
-                        color: Theme.text-secondary;
-                        font-size: Theme.font-body;
-                    }
+                Rectangle {
+                    vertical-stretch: 1;
+                    min-height: 120px;
+                    background: Theme.control-fill;
+                    border-radius: Theme.radius-control;
+                    border-width: 1px;
+                    border-color: Theme.control-stroke;
+                    clip: true;
 
-                    Rectangle {
-                        vertical-stretch: 1;
-                        min-height: 120px;
-                        background: Theme.panel-background;
-                        border-radius: Theme.radius-control;
-                        border-width: 1px;
-                        border-color: Theme.divider;
-                        clip: true;
-
-                        conflicts-text := Text {
-                            x: Theme.spacing-12;
-                            y: Theme.spacing-12;
-                            width: parent.width - 2 * Theme.spacing-12;
-                            text: root.conflict-paths-text;
-                            color: Theme.text-primary;
-                            font-size: Theme.font-caption;
-                            font-family: Theme.font-mono;
-                            wrap: word-wrap;
-                        }
+                    conflicts-text := Text {
+                        x: Theme.spacing-12;
+                        y: Theme.spacing-12;
+                        width: parent.width - 2 * Theme.spacing-12;
+                        text: root.conflict-paths-text;
+                        color: Theme.text-primary;
+                        font-size: Theme.font-caption;
+                        font-family: Theme.font-mono;
+                        wrap: word-wrap;
                     }
                 }
             }
@@ -1397,10 +1393,17 @@ export component SftpConflictDialog inherits Rectangle {
                 wrap: word-wrap;
             }
 
+            Rectangle {
+                height: 1px;
+                vertical-stretch: 0;
+                background: Theme.divider;
+            }
+
             HorizontalLayout {
                 alignment: end;
                 spacing: Theme.spacing-8;
                 vertical-stretch: 0;
+                padding-top: Theme.spacing-4;
 
                 WinButton {
                     text: @tr("Cancel");
@@ -1470,36 +1473,45 @@ export component SftpPropertiesDialog inherits Rectangle {
             height: root.height;
             spacing: Theme.spacing-16;
 
-            WinCard {
+            GridLayout {
+                spacing: Theme.spacing-16;
+
+                Text { row: 0; col: 0; text: @tr("Name"); color: Theme.text-secondary; font-size: Theme.font-body; width: Theme.form-label-width; }
+                Text { row: 0; col: 1; text: root.name-text; color: Theme.text-primary; font-size: Theme.font-body; wrap: no-wrap; overflow: elide; }
+
+                Text { row: 1; col: 0; text: @tr("Path"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                Text { row: 1; col: 1; text: root.path-text; color: Theme.text-primary; font-size: Theme.font-body; font-family: Theme.font-mono; wrap: word-wrap; }
+
+                Text { row: 2; col: 0; text: @tr("Kind"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                Text { row: 2; col: 1; text: root.kind-text; color: Theme.text-primary; font-size: Theme.font-body; }
+
+                Text { row: 3; col: 0; text: @tr("Size"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                Text { row: 3; col: 1; text: root.size-text; color: Theme.text-primary; font-size: Theme.font-body; }
+
+                Text { row: 4; col: 0; text: @tr("Modified"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                Text { row: 4; col: 1; text: root.modified-text; color: Theme.text-primary; font-size: Theme.font-body; }
+
+                Text { row: 5; col: 0; text: @tr("Permissions"); color: Theme.text-secondary; font-size: Theme.font-body; }
+                Text { row: 5; col: 1; text: root.permissions-text; color: Theme.text-primary; font-size: Theme.font-body; font-family: Theme.font-mono; }
+            }
+
+            Rectangle {
                 vertical-stretch: 1;
+                min-height: Theme.spacing-12;
+                background: transparent;
+            }
 
-                GridLayout {
-                    spacing: Theme.spacing-16;
-
-                    Text { row: 0; col: 0; text: @tr("Name"); color: Theme.text-secondary; font-size: Theme.font-body; width: Theme.form-label-width; }
-                    Text { row: 0; col: 1; text: root.name-text; color: Theme.text-primary; font-size: Theme.font-body; wrap: no-wrap; overflow: elide; }
-
-                    Text { row: 1; col: 0; text: @tr("Path"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                    Text { row: 1; col: 1; text: root.path-text; color: Theme.text-primary; font-size: Theme.font-body; font-family: Theme.font-mono; wrap: word-wrap; }
-
-                    Text { row: 2; col: 0; text: @tr("Kind"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                    Text { row: 2; col: 1; text: root.kind-text; color: Theme.text-primary; font-size: Theme.font-body; }
-
-                    Text { row: 3; col: 0; text: @tr("Size"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                    Text { row: 3; col: 1; text: root.size-text; color: Theme.text-primary; font-size: Theme.font-body; }
-
-                    Text { row: 4; col: 0; text: @tr("Modified"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                    Text { row: 4; col: 1; text: root.modified-text; color: Theme.text-primary; font-size: Theme.font-body; }
-
-                    Text { row: 5; col: 0; text: @tr("Permissions"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                    Text { row: 5; col: 1; text: root.permissions-text; color: Theme.text-primary; font-size: Theme.font-body; font-family: Theme.font-mono; }
-                }
+            Rectangle {
+                height: 1px;
+                vertical-stretch: 0;
+                background: Theme.divider;
             }
 
             HorizontalLayout {
                 alignment: end;
                 spacing: Theme.spacing-8;
                 vertical-stretch: 0;
+                padding-top: Theme.spacing-4;
 
                 WinButton {
                     text: @tr("Copy Path");

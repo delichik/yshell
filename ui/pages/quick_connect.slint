@@ -11,7 +11,7 @@
 //   标题/说明 → 输入行（+ 内联错误）→ 最近连接卡片。
 import { Theme } from "../theme.slint";
 import { Icon } from "../components/basic/icons.slint";
-import { WinButton, WinCard, WinCardHeader, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
+import { WinButton, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 
 /// 最近连接行：运行时对"QC 历史 + 已保存会话最近使用"去重排序后的展示投影。
@@ -294,12 +294,21 @@ export component QuickConnectPage inherits Rectangle {
             }
 
             // 最近连接：QC 历史 + 已保存会话最近使用（运行时去重排序）
-            WinCard {
-                WinCardHeader {
-                    title: @tr("Recent Connections");
-                    icon: "terminal";
+            VerticalLayout {
+                spacing: Theme.spacing-8;
 
-                    Rectangle { horizontal-stretch: 1; }
+                HorizontalLayout {
+                    spacing: Theme.spacing-8;
+                    cross-axis-alignment: center;
+
+                    Text {
+                        text: @tr("Recent Connections");
+                        color: Theme.text-primary;
+                        font-size: Theme.font-body;
+                        font-weight: Theme.weight-semibold;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
 
                     // D12：历史可清空；历史关闭时不提供该入口。
                     if root.history-enabled && root.recent-rows.length > 0 : WinButton {

@@ -1,9 +1,11 @@
-// 认证弹窗正文（AuthPromptWindow + ToolWindowChrome）。
-// 结构：主机说明 → 方式切换 → 可伸展表单卡片 → 共享底栏。
+// Authentication prompt — sign in with a server-offered method.
+//
+// Flow: host context → retry error (if any) → method switch (when >1) →
+// method fields → footer (Cancel | Connect/Continue). Sensitive values are
+// cleared by the host on dismiss; this component only presents and edits them.
 
 import { Theme } from "../theme.slint";
-import { Icon } from "basic/icons.slint";
-import { WinButton, WinCard, WinInfoBar, WinToggle, WinScrollIndicator } from "basic/controls.slint";
+import { WinButton, WinInfoBar, WinToggle, WinScrollIndicator } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 
 export struct AuthKeyOption {
@@ -23,7 +25,7 @@ component AuthKeyListItem inherits Rectangle {
     in property <bool> selected: false;
     callback clicked();
 
-    height: 52px;
+    height: 48px;
     border-radius: Theme.radius-control;
     background: selected ? Theme.subtle-selected
         : touch.pressed ? Theme.subtle-pressed
@@ -36,7 +38,7 @@ component AuthKeyListItem inherits Rectangle {
         padding-right: Theme.spacing-12;
         padding-top: Theme.spacing-8;
         padding-bottom: Theme.spacing-8;
-        spacing: Theme.spacing-4;
+        spacing: 2px;
 
         Text {
             text: node.label;
@@ -104,8 +106,6 @@ export component AuthPromptDialog inherits Rectangle {
     callback update-challenge-answer(int, string);
     callback submit-keyboard-round();
 
-    private property <length> content-width: root.width;
-
     visible: root.open;
     background: transparent;
 
@@ -156,43 +156,24 @@ export component AuthPromptDialog inherits Rectangle {
             height: root.height;
             spacing: Theme.spacing-16;
 
-            HorizontalLayout {
-                spacing: Theme.spacing-12;
+            // Who are we signing into?
+            VerticalLayout {
+                spacing: Theme.spacing-4;
 
-                Rectangle {
-                    width: Theme.icon-size-large;
-                    height: Theme.icon-size-large;
-                    background: transparent;
-
-                    Icon {
-                        name: "shield";
-                        icon-color: Theme.accent;
-                        icon-size: Theme.icon-size-large;
-                        x: (parent.width - self.width) / 2;
-                        y: (parent.height - self.height) / 2;
-                    }
+                Text {
+                    text: @tr("Sign in to {0}", root.host-text);
+                    color: Theme.text-primary;
+                    font-size: Theme.font-body;
+                    font-weight: Theme.weight-semibold;
+                    wrap: no-wrap;
+                    overflow: elide;
                 }
 
-                VerticalLayout {
-                    spacing: Theme.spacing-4;
-                    horizontal-stretch: 1;
-                    alignment: center;
-
-                    Text {
-                        text: @tr("Sign in to {0}", root.host-text);
-                        color: Theme.text-primary;
-                        font-size: Theme.font-body;
-                        font-weight: Theme.weight-semibold;
-                        wrap: no-wrap;
-                        overflow: elide;
-                    }
-
-                    Text {
-                        text: @tr("Choose an authentication method available on this server.");
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-caption;
-                        wrap: word-wrap;
-                    }
+                if root.method-chooser-visible : Text {
+                    text: @tr("Pick a method the server accepts. You can switch and retry without losing what you typed.");
+                    color: Theme.text-tertiary;
+                    font-size: Theme.font-caption;
+                    wrap: word-wrap;
                 }
             }
 
@@ -206,6 +187,7 @@ export component AuthPromptDialog inherits Rectangle {
                 text: @tr("The server does not offer any authentication method YShell supports.");
             }
 
+            // Method switch — only when the server offers more than one.
             if root.has-usable-method && root.method-chooser-visible : HorizontalLayout {
                 spacing: Theme.spacing-8;
 
@@ -228,10 +210,12 @@ export component AuthPromptDialog inherits Rectangle {
                 }
             }
 
-            // --- method body（卡片分区；列表用固定高度避免 layout binding loop）---
-            if root.show-password : WinCard {
+            // --- Password --------------------------------------------------
+            if root.show-password : VerticalLayout {
+                spacing: Theme.spacing-12;
+
                 VerticalLayout {
-                    spacing: Theme.spacing-12;
+                    spacing: Theme.spacing-8;
 
                     Text {
                         text: @tr("Password");
@@ -246,18 +230,21 @@ export component AuthPromptDialog inherits Rectangle {
                         edited(text) => { root.update-password(text); }
                         accepted => { if root.primary-enabled { root.submit-primary(); } }
                     }
+                }
 
-                    WinToggle {
-                        text: @tr("Remember password");
-                        checked: root.remember-password;
-                        toggled => { root.toggle-remember-password(self.checked); }
-                    }
+                WinToggle {
+                    text: @tr("Remember password");
+                    checked: root.remember-password;
+                    toggled => { root.toggle-remember-password(self.checked); }
                 }
             }
 
-            if root.show-publickey : WinCard {
+            // --- Public key ------------------------------------------------
+            if root.show-publickey : VerticalLayout {
+                spacing: Theme.spacing-12;
+
                 VerticalLayout {
-                    spacing: Theme.spacing-12;
+                    spacing: Theme.spacing-8;
 
                     Text {
                         text: @tr("Private key");
@@ -266,11 +253,11 @@ export component AuthPromptDialog inherits Rectangle {
                     }
 
                     Rectangle {
-                        height: min(52px * max(root.key-options.length, 1) + 8px, 260px);
-                        background: Theme.panel-background;
+                        height: min(48px * max(root.key-options.length, 1) + 8px, 240px);
+                        background: Theme.control-fill;
                         border-radius: Theme.radius-control;
                         border-width: 1px;
-                        border-color: Theme.divider;
+                        border-color: Theme.control-stroke;
                         clip: true;
 
                         key-scroll := Flickable {
@@ -283,7 +270,7 @@ export component AuthPromptDialog inherits Rectangle {
 
                             key-list := VerticalLayout {
                                 padding: Theme.spacing-4;
-                                spacing: Theme.spacing-4;
+                                spacing: 2px;
 
                                 for option[i] in root.key-options : AuthKeyListItem {
                                     node: option;
@@ -323,8 +310,10 @@ export component AuthPromptDialog inherits Rectangle {
                         spacing: Theme.spacing-8;
 
                         Text {
-                            text: root.selected-key-label;
-                            color: Theme.text-secondary;
+                            text: root.selected-key-label != ""
+                                ? root.selected-key-label
+                                : @tr("No key selected");
+                            color: Theme.text-tertiary;
                             font-size: Theme.font-caption;
                             vertical-alignment: center;
                             horizontal-stretch: 1;
@@ -338,98 +327,104 @@ export component AuthPromptDialog inherits Rectangle {
                             clicked => { root.browse-key-file(); }
                         }
                     }
+                }
 
-                    VerticalLayout {
-                        spacing: Theme.spacing-8;
+                VerticalLayout {
+                    spacing: Theme.spacing-8;
 
-                        Text {
-                            text: @tr("Key passphrase (optional)");
-                            color: Theme.text-secondary;
-                            font-size: Theme.font-body;
-                        }
-
-                        WinTextInput {
-                            text <=> root.passphrase-text;
-                            placeholder-text: @tr("Key passphrase (optional)");
-                            input-type: password;
-                            edited(text) => { root.update-passphrase(text); }
-                            accepted => {
-                                if root.primary-enabled { root.submit-primary(); }
-                            }
-                        }
+                    Text {
+                        text: @tr("Key passphrase");
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-body;
                     }
 
-                    WinToggle {
-                        text: @tr("Use ssh-agent");
-                        checked: root.use-agent;
-                        toggled => { root.toggle-use-agent(self.checked); }
+                    WinTextInput {
+                        text <=> root.passphrase-text;
+                        placeholder-text: @tr("Optional");
+                        input-type: password;
+                        edited(text) => { root.update-passphrase(text); }
+                        accepted => {
+                            if root.primary-enabled { root.submit-primary(); }
+                        }
                     }
+                }
+
+                WinToggle {
+                    text: @tr("Use ssh-agent");
+                    checked: root.use-agent;
+                    toggled => { root.toggle-use-agent(self.checked); }
                 }
             }
 
-            if root.show-keyboard : WinCard {
-                VerticalLayout {
-                    spacing: Theme.spacing-12;
+            // --- Keyboard-interactive --------------------------------------
+            if root.show-keyboard : VerticalLayout {
+                spacing: Theme.spacing-12;
 
-                    if root.challenge-name != "" : Text {
-                        text: root.challenge-name;
-                        color: Theme.text-primary;
-                        font-size: Theme.font-body;
-                        font-weight: Theme.weight-semibold;
-                        wrap: word-wrap;
-                    }
+                if root.challenge-round-total > 1 : Text {
+                    text: @tr("Round {0} of {1}", root.challenge-round, root.challenge-round-total);
+                    color: Theme.text-tertiary;
+                    font-size: Theme.font-caption;
+                }
 
-                    if root.challenge-instruction != "" : Text {
-                        text: root.challenge-instruction;
+                if root.challenge-name != "" : Text {
+                    text: root.challenge-name;
+                    color: Theme.text-primary;
+                    font-size: Theme.font-body;
+                    font-weight: Theme.weight-semibold;
+                    wrap: word-wrap;
+                }
+
+                if root.challenge-instruction != "" : Text {
+                    text: root.challenge-instruction;
+                    color: Theme.text-secondary;
+                    font-size: Theme.font-body;
+                    wrap: word-wrap;
+                }
+
+                if root.challenge-prompts.length == 0 : Text {
+                    text: @tr("Waiting for the server challenge…");
+                    color: Theme.text-tertiary;
+                    font-size: Theme.font-body;
+                }
+
+                for prompt[i] in root.challenge-prompts : VerticalLayout {
+                    spacing: Theme.spacing-8;
+
+                    Text {
+                        text: prompt.text;
                         color: Theme.text-secondary;
                         font-size: Theme.font-body;
                         wrap: word-wrap;
                     }
 
-                    if root.challenge-round-total > 1 : Text {
-                        text: @tr("Round {0} of {1}", root.challenge-round, root.challenge-round-total);
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-caption;
-                    }
-
-                    if root.challenge-prompts.length == 0 : Text {
-                        text: @tr("Waiting for the server challenge…");
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-body;
-                    }
-
-                    for prompt[i] in root.challenge-prompts : VerticalLayout {
-                        spacing: Theme.spacing-8;
-
-                        Text {
-                            text: prompt.text;
-                            color: Theme.text-secondary;
-                            font-size: Theme.font-body;
-                            wrap: word-wrap;
+                    WinTextInput {
+                        text: prompt.answer;
+                        input-type: prompt.echo ? InputType.text : InputType.password;
+                        accepted => {
+                            if root.primary-enabled { root.submit-primary(); }
                         }
-
-                        WinTextInput {
-                            text: prompt.answer;
-                            input-type: prompt.echo ? InputType.text : InputType.password;
-                            accepted => {
-                                if root.primary-enabled { root.submit-primary(); }
-                            }
-                            edited => { root.update-challenge-answer(i, self.text); }
-                        }
+                        edited => { root.update-challenge-answer(i, self.text); }
                     }
                 }
             }
 
             Rectangle {
                 vertical-stretch: 1;
-                min-height: 0px;
+                min-height: Theme.spacing-12;
                 background: transparent;
+            }
+
+            Rectangle {
+                height: 1px;
+                vertical-stretch: 0;
+                background: Theme.divider;
             }
 
             HorizontalLayout {
                 alignment: end;
                 spacing: Theme.spacing-8;
                 vertical-stretch: 0;
+                padding-top: Theme.spacing-4;
 
                 WinButton {
                     text: @tr("Cancel");
