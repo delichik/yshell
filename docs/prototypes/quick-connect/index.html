@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Quick Connect wireframe</title>
+  <style>
+    /* Quick Connect panel — board 720×480 */
+    :root {
+      --board-w: 720px;
+      --board-h: 480px;
+      --ctrl-h: 32px;
+      --line: #111;
+      --fill: #fff;
+      --mute: #555;
+      --soft: #f0f0f0;
+      --bg: #e8e8e8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--line);
+      background: var(--bg);
+    }
+    .meta {
+      max-width: var(--board-w);
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: var(--mute);
+      line-height: 1.45;
+    }
+    .meta a { color: var(--line); }
+    .meta code { font-size: 12px; }
+    .tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: var(--mute);
+    }
+    .tools button {
+      height: var(--ctrl-h);
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .tools button[aria-pressed="true"] {
+      background: var(--soft);
+      font-weight: 600;
+    }
+    .stage {
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+    .board {
+      width: var(--board-w);
+      height: var(--board-h);
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--fill);
+      border: 1px solid var(--line);
+    }
+    .board-label {
+      flex: 0 0 auto;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--mute);
+      border-bottom: 1px solid var(--soft);
+    }
+    .qc {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      gap: 12px;
+      overflow: auto;
+    }
+    .qc label {
+      font-size: 13px;
+      color: var(--mute);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .qc input[type="text"] {
+      height: var(--ctrl-h);
+      border: 1px solid var(--line);
+      padding: 0 8px;
+      font: inherit;
+      width: min(480px, 100%);
+      background: var(--fill);
+      color: var(--line);
+    }
+    .qc-actions { display: flex; gap: 8px; }
+    .btn {
+      height: var(--ctrl-h);
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font: inherit;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .btn-primary {
+      background: var(--soft);
+      font-weight: 600;
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    .qc-list {
+      border: 1px dashed var(--line);
+      flex: 1;
+      min-height: 120px;
+      max-height: 280px;
+      overflow: auto;
+    }
+    .qc-row {
+      height: 48px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+      cursor: default;
+    }
+    .qc-row:last-child { border-bottom: 0; }
+    .qc-row .d {
+      font-size: 12px;
+      color: var(--mute);
+      font-family: ui-monospace, monospace;
+    }
+    .empty {
+      flex: 1;
+      min-height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      border: 1px dashed var(--line);
+      font-size: 13px;
+      color: var(--mute);
+      text-align: center;
+      line-height: 1.45;
+    }
+    .legend {
+      max-width: var(--board-w);
+      margin: 16px 0 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font-size: 12px;
+      color: var(--mute);
+      line-height: 1.5;
+    }
+    .legend strong { color: var(--line); }
+    .field-error {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--line);
+      display: none;
+    }
+    .field-error.visible { display: block; }
+    .qc input[type="text"].invalid {
+      border-width: 2px;
+      border-color: var(--line);
+    }
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <p class="meta">
+    <strong>Quick Connect</strong> tab content · board <code>720×480</code>.
+    <a href="../index.html">← prototypes index</a> · embedded in <a href="../main-window/index.html">main-window</a>.
+  </p>
+
+  <div class="tools" role="group" aria-label="Prototype states">
+    <span>State:</span>
+    <button type="button" data-state="default" aria-pressed="true">Default</button>
+    <button type="button" data-state="empty-target" aria-pressed="false">Empty target</button>
+    <button type="button" data-state="bad-port" aria-pressed="false">Bad port</button>
+    <button type="button" data-state="empty" aria-pressed="false">Empty recent</button>
+  </div>
+
+  <div class="stage">
+    <div class="board">
+      <div class="board-label">Quick Connect</div>
+      <div class="qc" aria-label="Quick Connect">
+        <label for="qcTarget">Target
+          <input type="text" id="qcTarget" value="alice@edge.example.com:22" autocomplete="off">
+        </label>
+        <p class="field-error" id="targetError" role="alert"></p>
+        <div class="qc-actions">
+          <button type="button" class="btn btn-primary" id="connectBtn">Connect</button>
+          <button type="button" class="btn" id="clearBtn">Clear</button>
+        </div>
+        <div class="section-title">Recent Connections</div>
+        <div class="qc-list" id="recentList">
+          <div class="qc-row"><span>edge.example.com</span><div class="d">alice@edge.example.com:22</div></div>
+          <div class="qc-row"><span>staging-web</span><div class="d">deploy@10.0.2.14:22</div></div>
+          <div class="qc-row"><span>jump-host</span><div class="d">ops@bastion.example.com:2200</div></div>
+        </div>
+        <div class="empty" id="recentEmpty" hidden>
+          No recent connections yet.<br>
+          Successful connects appear here for one-click reuse.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <strong>Layout</strong>: Target field · primary Connect · Clear · scrollable recent list (fixed row height 48).<br>
+    <strong>Validation</strong>: empty host → Connect disabled + “Host is required”; bad port → “Port must be between 1 and 65535”.<br>
+    <strong>Empty recent</strong>: list hidden; dashed empty-state copy shown. Form fields unchanged.<br>
+    No decorative styling — blocks and labels only.
+  </div>
+
+  <script>
+    (function () {
+      var list = document.getElementById("recentList");
+      var empty = document.getElementById("recentEmpty");
+      var clearBtn = document.getElementById("clearBtn");
+      var target = document.getElementById("qcTarget");
+      var connectBtn = document.getElementById("connectBtn");
+      var targetError = document.getElementById("targetError");
+
+      function validateTarget() {
+        var raw = (target.value || "").trim();
+        var err = "";
+        if (!raw) {
+          err = "Host is required";
+        } else {
+          var portMatch = raw.match(/:(\d+)\s*$/);
+          if (portMatch) {
+            var port = parseInt(portMatch[1], 10);
+            if (port < 1 || port > 65535) err = "Port must be between 1 and 65535";
+          }
+        }
+        if (targetError) {
+          targetError.textContent = err;
+          targetError.classList.toggle("visible", !!err);
+        }
+        target.classList.toggle("invalid", !!err);
+        if (connectBtn) connectBtn.disabled = !!err;
+        return !err;
+      }
+
+      function applyState(state) {
+        document.querySelectorAll(".tools [data-state]").forEach(function (b) {
+          b.setAttribute("aria-pressed", b.getAttribute("data-state") === state ? "true" : "false");
+        });
+        var isEmptyRecent = state === "empty";
+        list.hidden = isEmptyRecent;
+        empty.hidden = !isEmptyRecent;
+        if (state === "empty-target") target.value = "";
+        else if (state === "bad-port") target.value = "alice@edge.example.com:70000";
+        else if (state !== "empty") target.value = "alice@edge.example.com:22";
+        validateTarget();
+      }
+
+      document.querySelectorAll(".tools [data-state]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          applyState(btn.getAttribute("data-state"));
+        });
+      });
+
+      clearBtn.addEventListener("click", function () {
+        target.value = "";
+        target.focus();
+        validateTarget();
+      });
+
+      target.addEventListener("input", validateTarget);
+      validateTarget();
+    })();
+  </script>
+</body>
+</html>

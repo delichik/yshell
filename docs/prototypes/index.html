@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — UI prototypes</title>
+  <style>
+    :root {
+      --line: #111;
+      --fill: #fff;
+      --mute: #555;
+      --soft: #f0f0f0;
+      --bg: #e8e8e8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 24px 48px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--line);
+      background: var(--bg);
+      line-height: 1.45;
+    }
+    .wrap {
+      max-width: 880px;
+      margin: 0 auto;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      font-weight: 600;
+    }
+    .lead {
+      margin: 0 0 28px;
+      font-size: 14px;
+      color: var(--mute);
+    }
+    .lead a { color: var(--line); }
+    h2 {
+      margin: 28px 0 10px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--mute);
+    }
+    .size {
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--mute);
+    }
+    ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      border: 1px solid var(--line);
+      background: var(--fill);
+    }
+    li {
+      border-bottom: 1px solid var(--line);
+    }
+    li:last-child { border-bottom: 0; }
+    a.row {
+      display: grid;
+      grid-template-columns: minmax(140px, 200px) 1fr;
+      gap: 12px 20px;
+      align-items: baseline;
+      padding: 10px 14px;
+      color: inherit;
+      text-decoration: none;
+      min-height: 40px;
+    }
+    a.row:hover { background: var(--soft); }
+    a.row:focus-visible {
+      outline: 2px solid var(--line);
+      outline-offset: -2px;
+    }
+    .name {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .desc {
+      font-size: 13px;
+      color: var(--mute);
+    }
+    .foot {
+      margin: 28px 0 0;
+      font-size: 12px;
+      color: var(--mute);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>YShell UI prototypes</h1>
+    <p class="lead">
+      Low-fidelity wireframes for layout and interaction.
+      Rules: <code>docs/agents/prototypes.md</code>
+      (menus, shortcuts, context menus, and <strong>click → destination</strong> paths).
+      Open a row in the browser; no build step.
+    </p>
+
+    <h2>Main shell <span class="size">1440×900 · 菜单/快捷键枢纽</span></h2>
+    <ul>
+      <li>
+        <a class="row" href="main-window/index.html">
+          <span class="name">main-window</span>
+          <span class="desc">整壳拼装 · 菜单+快捷键+跳转 · 区域细节见下方独立原型</span>
+        </a>
+      </li>
+    </ul>
+
+    <h2>ToolDock <span class="size">N3 左右栈 · 面板可换边</span></h2>
+    <ul>
+      <li>
+        <a class="row" href="tool-dock/index.html">
+          <span class="name">tool-dock</span>
+          <span class="desc">Left/Right stack 壳 · Move L/R · 分栏/折叠（默认布局非锁死）</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="panel-sessions/index.html">
+          <span class="name">panel-sessions</span>
+          <span class="desc">Sessions 内容 · 右键 · Session 原地改名（Folder New/Rename 本版禁用）</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="panel-transfers/index.html">
+          <span class="name">panel-transfers</span>
+          <span class="desc">320×520 · Running/Mixed/Empty · Pause All · 行右键 Pause/Cancel/Reveal</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="panel-tunnels/index.html">
+          <span class="name">panel-tunnels</span>
+          <span class="desc">320×560 · Add Tunnel → tunnel-editor · Start/Stop disabled</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="panel-commands/index.html">
+          <span class="name">panel-commands</span>
+          <span class="desc">Commands 空态（本版不做内容）</span>
+        </a>
+      </li>
+    </ul>
+
+    <h2>Workspace regions <span class="size">工作区（非 dock）</span></h2>
+    <ul>
+      <li>
+        <a class="row" href="tab-bar/index.html">
+          <span class="name">tab-bar</span>
+          <span class="desc">标签条 · Rename Tab 原地输入（默认演示）</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="terminal-workspace/index.html">
+          <span class="name">terminal-workspace</span>
+          <span class="desc">960×560 · SSH/本地终端 · 查找 · Find Across SSH · REC · 右键菜单</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="sftp-panel/index.html">
+          <span class="name">sftp-panel</span>
+          <span class="desc">双栏 · 原地 Rename/New Folder · 折叠本地 · 拖放 · Chmod</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="quick-connect/index.html">
+          <span class="name">quick-connect</span>
+          <span class="desc">表单 + Recent · 空 Host / 坏端口校验</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="workspace-split/index.html">
+          <span class="name">workspace-split</span>
+          <span class="desc">分屏 1/2v/2h/4 · 空 pane · Balance Panes</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="sync-input/index.html">
+          <span class="name">sync-input</span>
+          <span class="desc">N9 Send Key Input To · banner/chip · 无 KEYS 弹窗 (D23)</span>
+        </a>
+      </li>
+    </ul>
+
+    <h2>Compact <span class="size">560×400</span></h2>
+    <ul>
+      <li>
+        <a class="row" href="compact-confirm/index.html">
+          <span class="name">compact-confirm</span>
+          <span class="desc">Normal / destructive（无打字确认）</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="close-tab-confirm/index.html">
+          <span class="name">close-tab-confirm</span>
+          <span class="desc">关标签 / Quit · 后果列表 · 无打字确认</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="new-folder/index.html">
+          <span class="name">new-folder</span>
+          <span class="desc">历史短表单壳（主路径：panel-sessions / Folder New 本版禁用）</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="sftp-entry/index.html">
+          <span class="name">sftp-entry</span>
+          <span class="desc">历史短表单壳（主路径：sftp-panel 原地 Rename / New Folder）</span>
+        </a>
+      </li>
+    </ul>
+
+    <h2>Standard <span class="size">720×580</span></h2>
+    <ul>
+      <li>
+        <a class="row" href="auth-prompt/index.html">
+          <span class="name">auth-prompt</span>
+          <span class="desc">Password only · Multi · Key · Challenge（含原 password 弹窗）</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="host-key/index.html">
+          <span class="name">host-key</span>
+          <span class="desc">First-trust / changed host key</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="logging/index.html">
+          <span class="name">logging</span>
+          <span class="desc">Start form vs stop recording</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="about/index.html">
+          <span class="name">about</span>
+          <span class="desc">Version · Config · License</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="sftp-conflict/index.html">
+          <span class="name">sftp-conflict</span>
+          <span class="desc">Overwrite conflict paths</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="sftp-properties/index.html">
+          <span class="name">sftp-properties</span>
+          <span class="desc">Item properties grid</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="tunnel-editor/index.html">
+          <span class="name">tunnel-editor</span>
+          <span class="desc">Add/edit tunnel form · Cancel|Save → panel-tunnels · runtime 未 provision</span>
+        </a>
+      </li>
+    </ul>
+
+    <h2>Wide <span class="size">1100×820</span></h2>
+    <ul>
+      <li>
+        <a class="row" href="settings/index.html">
+          <span class="name">settings</span>
+          <span class="desc">Left nav + form sections</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="session-editor/index.html">
+          <span class="name">session-editor</span>
+          <span class="desc">Session create / edit sections</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="folder-editor/index.html">
+          <span class="name">folder-editor</span>
+          <span class="desc">Folder name / notes</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="theme-manager/index.html">
+          <span class="name">theme-manager</span>
+          <span class="desc">Theme list + edit / preview</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="host-keys/index.html">
+          <span class="name">host-keys</span>
+          <span class="desc">List + details；Import/Export 为冻结父窗的子窗</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="known-hosts/index.html">
+          <span class="name">known-hosts</span>
+          <span class="desc">Persisted entries + danger zone</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="private-keys/index.html">
+          <span class="name">private-keys</span>
+          <span class="desc">清单 + 详情；Import/Export 子窗冻结父级</span>
+        </a>
+      </li>
+      <li>
+        <a class="row" href="proxies/index.html">
+          <span class="name">proxies</span>
+          <span class="desc">清单 + 表单；页脚仅 Cancel | Save</span>
+        </a>
+      </li>
+    </ul>
+
+    <p class="foot">
+      Markdown index: <code>README.md</code>. Prefer this HTML hub when browsing in a browser.
+    </p>
+  </div>
+</body>
+</html>

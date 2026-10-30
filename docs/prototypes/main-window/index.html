@@ -1,0 +1,1682 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Main window wireframe</title>
+  <style>
+    /* Theme: preferred 1440×900, min 880×600 — board must not shrink to viewport. */
+    :root {
+      --win-w: 1440px;
+      --win-h: 900px;
+      --titlebar-h: 32px;
+      --statusbar-h: 28px;
+      --sidebar-w: 260px;
+      --right-w: 280px;
+      --tabbar-h: 36px;
+      --ctrl-h: 32px;
+      --line: #111;
+      --fill: #fff;
+      --mute: #555;
+      --soft: #f0f0f0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--line);
+      background: #e8e8e8;
+    }
+    .meta {
+      max-width: var(--win-w);
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: var(--mute);
+      line-height: 1.45;
+    }
+    .meta code { font-size: 12px; }
+    .nav-hud {
+      max-width: var(--win-w);
+      margin: 0 0 12px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font-size: 13px;
+      font-family: ui-monospace, monospace;
+      min-height: 36px;
+      display: flex;
+      align-items: center;
+    }
+    .nav-hud strong { font-weight: 600; font-family: ui-sans-serif, system-ui, sans-serif; margin-right: 6px; }
+    .tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: var(--mute);
+    }
+    .tools button {
+      height: var(--ctrl-h);
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .tools button[aria-pressed="true"] {
+      background: var(--soft);
+      font-weight: 600;
+    }
+    .stage {
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+    .win {
+      width: var(--win-w);
+      height: var(--win-h);
+      display: flex;
+      flex-direction: column;
+      background: var(--fill);
+      border: 1px solid var(--line);
+      flex-shrink: 0;
+      position: relative;
+    }
+    .win.fullscreen-demo {
+      outline: 3px double var(--line);
+      outline-offset: 4px;
+    }
+    .titlebar {
+      height: var(--titlebar-h);
+      flex: 0 0 var(--titlebar-h);
+      display: flex;
+      align-items: center;
+      padding: 0 8px 0 4px;
+      gap: 8px;
+      border-bottom: 1px solid var(--line);
+      position: relative;
+      z-index: 20;
+    }
+    .menus {
+      display: flex;
+      gap: 0;
+      font-size: 12px;
+      flex: 1;
+      min-width: 0;
+      align-items: stretch;
+    }
+    .menu-btn {
+      border: 0;
+      background: transparent;
+      padding: 0 10px;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      height: 100%;
+    }
+    .menu-btn:hover,
+    .menu-btn[aria-expanded="true"] {
+      background: var(--soft);
+    }
+    .menus .dis {
+      color: var(--mute);
+      text-decoration: line-through;
+      padding: 0 10px;
+      display: flex;
+      align-items: center;
+      pointer-events: none;
+    }
+    .title-end {
+      display: flex;
+      gap: 4px;
+      margin-left: auto;
+    }
+    .cap {
+      width: 40px;
+      height: 24px;
+      border: 1px solid var(--line);
+      background: transparent;
+      font-size: 10px;
+    }
+    .shell {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: row;
+    }
+    .sidebar {
+      width: var(--sidebar-w);
+      flex: 0 0 var(--sidebar-w);
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      background: var(--soft);
+      padding: 4px;
+    }
+    .sidebar > .pf {
+      flex: 1;
+      min-height: 0;
+      height: 100%;
+    }
+    .win.hide-sidebar .sidebar { display: none; }
+    .win.focus-mode .sidebar,
+    .win.focus-mode .right { display: none; }
+    .side-head {
+      flex: 0 0 auto;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .side-search {
+      flex: 0 0 auto;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    .side-search input {
+      width: 100%;
+      height: 28px;
+      border: 1px solid var(--line);
+      padding: 0 8px;
+      font: inherit;
+      font-size: 13px;
+    }
+    .tree {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      padding: 4px;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+    }
+    .tree-blank {
+      flex: 1;
+      min-height: 48px;
+      margin: 4px;
+      border: 1px dashed var(--mute);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: var(--mute);
+    }
+    .tree-row {
+      height: 28px;
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: default;
+      gap: 4px;
+    }
+    .tree-row.sel { outline: 1px solid var(--line); outline-offset: -1px; font-weight: 600; }
+    .tree-row.folder { color: var(--mute); }
+    .tree-row .name,
+    .tab .name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .inline-rename {
+      height: 22px;
+      flex: 1;
+      min-width: 0;
+      border: 2px solid var(--line);
+      background: #fff;
+      color: var(--line);
+      font: inherit;
+      font-size: 13px;
+      padding: 0 4px;
+      margin: 0;
+      outline: none;
+      box-shadow: 0 0 0 1px var(--fill);
+    }
+    .tab .inline-rename {
+      width: 100%;
+      min-width: 72px;
+      height: 24px;
+      font-size: 13px;
+    }
+    .tree-row.renaming,
+    .tab.renaming,
+    .sftp-row.renaming {
+      position: relative;
+      overflow: visible;
+      outline: 1px dashed var(--line);
+      outline-offset: -1px;
+      background: var(--soft);
+    }
+    .renaming-badge {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 2;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: var(--mute);
+      border: 1px solid var(--line);
+      padding: 0 4px;
+      height: 18px;
+      line-height: 16px;
+      white-space: nowrap;
+      background: var(--fill);
+      pointer-events: none;
+    }
+    .tab.renaming .renaming-badge {
+      right: 4px;
+    }
+    .center {
+      flex: 1 1 auto;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .tabbar {
+      height: var(--tabbar-h);
+      flex: 0 0 var(--tabbar-h);
+      display: flex;
+      align-items: stretch;
+      border-bottom: 1px solid var(--line);
+      gap: 0;
+      overflow: hidden;
+    }
+    .tab {
+      appearance: none;
+      border: 0;
+      border-right: 1px solid var(--line);
+      background: transparent;
+      padding: 0 14px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tab[aria-pressed="true"] {
+      background: var(--soft);
+      font-weight: 600;
+    }
+    .tab-spacer { flex: 1; }
+    .content {
+      flex: 1 1 auto;
+      min-height: 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .panel[hidden] { display: none !important; }
+    .term {
+      flex: 1;
+      min-height: 0;
+      padding: 12px;
+      font-family: ui-monospace, monospace;
+      font-size: 13px;
+      line-height: 1.4;
+      overflow: auto;
+      background: var(--soft);
+      white-space: pre-wrap;
+      cursor: text;
+    }
+    .sftp {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto 1fr;
+    }
+    .sftp-toolbar {
+      grid-column: 1 / -1;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+    }
+    .sftp-pane {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--line);
+    }
+    .sftp-pane:last-child { border-right: 0; }
+    .sftp-path {
+      flex: 0 0 auto;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      font-family: ui-monospace, monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--mute);
+    }
+    .sftp-list {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      font-size: 13px;
+    }
+    .sftp-row {
+      height: 28px;
+      display: grid;
+      grid-template-columns: 1fr 80px 120px;
+      align-items: center;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--soft);
+      gap: 8px;
+      cursor: default;
+    }
+    .sftp-row span {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sftp-row .name { min-width: 0; }
+    .sftp-row.renaming { overflow: visible; }
+    .sftp-row .inline-rename {
+      width: 100%;
+      max-width: 100%;
+      height: 22px;
+      font-size: 13px;
+    }
+    .qc {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      gap: 12px;
+      overflow: auto;
+    }
+    .qc label { font-size: 13px; color: var(--mute); display: flex; flex-direction: column; gap: 6px; }
+    .qc input {
+      height: var(--ctrl-h);
+      border: 1px solid var(--line);
+      padding: 0 8px;
+      font: inherit;
+      width: min(480px, 100%);
+    }
+    .qc-actions { display: flex; gap: 8px; }
+    .btn {
+      height: var(--ctrl-h);
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font: inherit;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .btn-primary { background: var(--soft); font-weight: 600; }
+    .qc-list {
+      border: 1px dashed var(--line);
+      max-height: 280px;
+      overflow: auto;
+    }
+    .qc-row {
+      height: 48px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+    }
+    .qc-row:last-child { border-bottom: 0; }
+    .qc-row .d { font-size: 12px; color: var(--mute); font-family: ui-monospace, monospace; }
+    .right {
+      width: var(--right-w);
+      flex: 0 0 var(--right-w);
+      border-left: 1px solid var(--line);
+      display: none;
+      flex-direction: column;
+      min-height: 0;
+      gap: 0;
+      padding: 4px;
+      background: var(--soft);
+    }
+    .win.show-right .right { display: flex; }
+    .pf {
+      flex: 1 1 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--fill);
+      border: 1px solid var(--line);
+    }
+    .pf.collapsed {
+      flex: 0 0 32px;
+      max-height: 32px;
+    }
+    .pf.collapsed .pf-body { display: none; }
+    .pf-head {
+      flex: 0 0 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 8px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .pf-head .grow { flex: 1; min-width: 0; }
+    .pf-head .more {
+      width: 24px;
+      height: 24px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      padding: 0;
+    }
+    .pf-body {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 10px;
+      font-size: 13px;
+    }
+    .pf-split {
+      flex: 0 0 4px;
+      height: 4px;
+      background: repeating-linear-gradient(
+        90deg,
+        var(--line) 0 2px,
+        transparent 2px 6px
+      );
+      margin: 2px 0;
+    }
+    .empty {
+      color: var(--mute);
+      font-size: 12px;
+      line-height: 1.4;
+      padding: 12px;
+      border: 1px dashed var(--line);
+    }
+    .xfer-row {
+      height: 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-bottom: 1px solid var(--soft);
+      gap: 2px;
+    }
+    .xfer-row .bar {
+      height: 4px;
+      background: var(--soft);
+      border: 1px solid var(--line);
+    }
+    .xfer-row .bar > i {
+      display: block;
+      height: 100%;
+      background: var(--line);
+      width: 40%;
+    }
+    .status {
+      height: var(--statusbar-h);
+      flex: 0 0 var(--statusbar-h);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 16px;
+      border-top: 1px solid var(--line);
+      font-size: 12px;
+      color: var(--mute);
+    }
+    .status .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .flyout {
+      position: fixed;
+      z-index: 1000;
+      min-width: 260px;
+      max-width: 320px;
+      background: var(--fill);
+      border: 1px solid var(--line);
+      box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.08);
+      padding: 4px 0;
+      font-size: 13px;
+      display: none;
+    }
+    .flyout.open { display: block; }
+    .flyout button,
+    .flyout a.fly-item {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      padding: 6px 28px 6px 12px;
+      font: inherit;
+      font-size: 13px;
+      text-align: left;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+      gap: 8px;
+    }
+    .flyout button:hover,
+    .flyout a.fly-item:hover { background: var(--soft); }
+    .flyout .label { flex: 1; min-width: 0; }
+    .flyout .kbd {
+      font-size: 11px;
+      color: var(--mute);
+      font-family: ui-monospace, monospace;
+      white-space: nowrap;
+    }
+    .flyout .sep {
+      height: 1px;
+      background: var(--soft);
+      margin: 4px 0;
+      border: 0;
+    }
+    .flyout .note {
+      padding: 6px 12px;
+      font-size: 11px;
+      color: var(--mute);
+      line-height: 1.35;
+    }
+    .flyout button.dis,
+    .flyout .dis {
+      color: var(--mute);
+      cursor: not-allowed;
+    }
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 1100;
+      padding: 10px 14px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font-size: 13px;
+      max-width: 360px;
+      display: none;
+      box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.08);
+    }
+    .toast.show { display: block; }
+    .legend {
+      max-width: var(--win-w);
+      margin: 20px 0 0;
+      padding: 12px 14px;
+      border: 1px dashed var(--line);
+      font-size: 12px;
+      color: var(--mute);
+      line-height: 1.5;
+    }
+    .legend strong { color: var(--line); font-weight: 600; }
+    .kbd-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 12px;
+    }
+    .kbd-table th,
+    .kbd-table td {
+      border: 1px solid var(--line);
+      padding: 6px 8px;
+      text-align: left;
+    }
+    .kbd-table th { background: var(--soft); color: var(--line); }
+    .kbd-table code { font-size: 11px; }
+  </style>
+</head>
+<body>
+  <p class="meta">
+    Main shell hub · N3 <strong>Left stack | Workspace | Right stack</strong> · fixed board <code>1440×900</code> ·
+    titlebar <code>32</code> · stack widths <code>260</code>/<code>280</code> (defaults, panels can swap sides).
+    Stage <code>overflow-x: auto</code>; board does not shrink.
+    分区细节见 Regions；停靠换边见 <a href="../tool-dock/index.html">tool-dock</a>。
+  </p>
+
+  <div class="tools" role="group" aria-label="Region prototypes">
+    <span style="align-self:center;font-size:12px;color:var(--mute)">Regions:</span>
+    <a class="btn" href="../tool-dock/index.html" style="display:inline-flex;align-items:center;text-decoration:none">tool-dock</a>
+    <a class="btn" href="../panel-sessions/index.html" style="display:inline-flex;align-items:center;text-decoration:none">panel-sessions</a>
+    <a class="btn" href="../panel-transfers/index.html" style="display:inline-flex;align-items:center;text-decoration:none">panel-transfers</a>
+    <a class="btn" href="../panel-tunnels/index.html" style="display:inline-flex;align-items:center;text-decoration:none">panel-tunnels</a>
+    <a class="btn" href="../panel-commands/index.html" style="display:inline-flex;align-items:center;text-decoration:none">panel-commands</a>
+    <a class="btn" href="../tab-bar/index.html" style="display:inline-flex;align-items:center;text-decoration:none">tab-bar</a>
+    <a class="btn" href="../terminal-workspace/index.html" style="display:inline-flex;align-items:center;text-decoration:none">terminal</a>
+    <a class="btn" href="../workspace-split/index.html" style="display:inline-flex;align-items:center;text-decoration:none">split</a>
+    <a class="btn" href="../sync-input/index.html" style="display:inline-flex;align-items:center;text-decoration:none">N9 sync</a>
+    <a class="btn" href="../sftp-panel/index.html" style="display:inline-flex;align-items:center;text-decoration:none">sftp-panel</a>
+    <a class="btn" href="../quick-connect/index.html" style="display:inline-flex;align-items:center;text-decoration:none">quick-connect</a>
+    <a class="btn" href="../close-tab-confirm/index.html" style="display:inline-flex;align-items:center;text-decoration:none">close/quit</a>
+    <a class="btn" href="../index.html" style="display:inline-flex;align-items:center;text-decoration:none">← hub</a>
+  </div>
+
+  <div class="nav-hud" id="navHud" aria-live="polite">
+    <strong>Last action:</strong>
+    <span id="navHudText">— (click a menu, context menu, or shortcut)</span>
+  </div>
+
+  <div class="tools" role="group" aria-label="Main content state (prototype shortcuts)">
+    <button type="button" data-view="terminal" aria-pressed="true">Terminal</button>
+    <button type="button" data-view="sftp" aria-pressed="false">SFTP</button>
+    <button type="button" data-view="qc" aria-pressed="false">Quick Connect</button>
+    <button type="button" data-view="focus" aria-pressed="false">Focus mode</button>
+    <button type="button" data-view="right" aria-pressed="true">Right stack</button>
+  </div>
+
+  <div class="stage">
+    <div class="win" id="win" role="application" aria-label="YShell main window">
+      <div class="titlebar">
+        <div class="menus" aria-label="Application menus">
+          <button type="button" class="menu-btn" data-menu="file" aria-haspopup="true" aria-expanded="false">File</button>
+          <button type="button" class="menu-btn" data-menu="edit" aria-haspopup="true" aria-expanded="false">Edit</button>
+          <button type="button" class="menu-btn" data-menu="session" aria-haspopup="true" aria-expanded="false">Session</button>
+          <button type="button" class="menu-btn" data-menu="view" aria-haspopup="true" aria-expanded="false">View</button>
+          <button type="button" class="menu-btn" data-menu="tools" aria-haspopup="true" aria-expanded="false">Tools</button>
+          <button type="button" class="menu-btn" data-menu="help" aria-haspopup="true" aria-expanded="false">Help</button>
+          <span class="dis" title="Not in this version">Import/Export</span>
+        </div>
+        <div class="title-end">
+          <button type="button" class="cap" tabindex="-1" aria-hidden="true">_</button>
+          <button type="button" class="cap" tabindex="-1" aria-hidden="true">□</button>
+          <button type="button" class="cap" tabindex="-1" aria-hidden="true">×</button>
+        </div>
+      </div>
+
+      <div class="shell">
+        <aside class="sidebar" aria-label="Left stack">
+          <div class="pf" data-panel-id="sessions">
+            <div class="pf-head">
+              <span class="grow">Sessions</span>
+              <button type="button" class="more" title="Panel options" aria-label="Sessions panel options">⋯</button>
+            </div>
+            <div class="pf-body" style="padding:0;display:flex;flex-direction:column">
+              <div class="side-head">SAVED SESSIONS</div>
+              <div class="side-search">
+                <input type="search" placeholder="Search sessions" aria-label="Search sessions" />
+              </div>
+              <div class="tree" role="tree" id="sessionTree">
+                <div class="tree-row folder" data-ctx="tree-folder" data-kind="folder"><span class="prefix">▾ </span><span class="name">Production</span></div>
+                <div class="tree-row sel" data-ctx="tree-session" data-kind="session"><span class="prefix">·· </span><span class="name">edge-01</span></div>
+                <div class="tree-row" data-ctx="tree-session" data-kind="session"><span class="prefix">·· </span><span class="name">db-primary</span></div>
+                <div class="tree-row folder" data-ctx="tree-folder" data-kind="folder"><span class="prefix">▾ </span><span class="name">Staging</span></div>
+                <div class="tree-row" data-ctx="tree-session" data-kind="session"><span class="prefix">·· </span><span class="name">staging-web</span></div>
+                <div class="tree-row" data-ctx="tree-session" data-kind="session"><span class="prefix">·· </span><span class="name">jump-host</span></div>
+                <div class="tree-blank" data-ctx="tree-blank" title="Right-click empty tree area">empty tree area (right-click)</div>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <div class="center">
+          <div class="tabbar" role="tablist" aria-label="TabBar" id="tabbar">
+            <button type="button" class="tab" data-tab="term" data-ctx="tab" data-kind="tab" aria-pressed="true"><span class="name">edge-01</span></button>
+            <button type="button" class="tab" data-tab="sftp" data-ctx="tab" data-kind="tab" aria-pressed="false"><span class="name">SFTP · edge-01</span></button>
+            <button type="button" class="tab" data-tab="qc" data-ctx="tab" data-kind="tab" aria-pressed="false"><span class="name">Quick Connect</span></button>
+            <span class="tab-spacer"></span>
+          </div>
+
+          <div class="content">
+            <div class="panel" data-panel="terminal">
+              <div class="term" id="termSurface" data-ctx="terminal" aria-label="Terminal" tabindex="0">alice@edge-01:~$ uptime
+ 16:42:01 up 42 days,  3:11,  1 user,  load average: 0.08, 0.12, 0.09
+alice@edge-01:~$ _</div>
+            </div>
+
+            <div class="panel" data-panel="sftp" hidden>
+              <div class="sftp" aria-label="SFTP dual pane">
+                <div class="sftp-toolbar">
+                  <span>Local</span>
+                  <span>/</span>
+                  <span>Remote</span>
+                  <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
+                    <span style="color:var(--mute)">Upload · Download</span>
+                    <button type="button" class="btn" id="sftpNewFolderBtn" style="height:24px;font-size:12px;padding:0 8px">New Folder</button>
+                  </span>
+                </div>
+                <div class="sftp-pane">
+                  <div class="sftp-path">C:\Users\alice\proj</div>
+                  <div class="sftp-list" id="sftpLocal">
+                    <div class="sftp-row" data-ctx="sftp-row" data-kind="sftp"><span class="name">..</span><span></span><span></span></div>
+                    <div class="sftp-row" data-ctx="sftp-row" data-kind="sftp"><span class="name">src/</span><span>—</span><span>2026-10-28</span></div>
+                    <div class="sftp-row" data-ctx="sftp-row" data-kind="sftp"><span class="name">README.md</span><span>4 KB</span><span>2026-10-30</span></div>
+                    <div class="sftp-row" data-ctx="sftp-row" data-kind="sftp"><span class="name">Cargo.toml</span><span>1 KB</span><span>2026-10-29</span></div>
+                  </div>
+                </div>
+                <div class="sftp-pane">
+                  <div class="sftp-path">/home/alice/proj</div>
+                  <div class="sftp-list" id="sftpRemote">
+                    <div class="sftp-row" data-ctx="sftp-row" data-kind="sftp"><span class="name">..</span><span></span><span></span></div>
+                    <div class="sftp-row" data-ctx="sftp-row" data-kind="sftp"><span class="name">src/</span><span>—</span><span>Oct 28</span></div>
+                    <div class="sftp-row" data-ctx="sftp-row" data-kind="sftp"><span class="name">.env</span><span>0.2 KB</span><span>Oct 30</span></div>
+                    <div class="sftp-row" data-ctx="sftp-row" data-kind="sftp"><span class="name">deploy.sh</span><span>2 KB</span><span>Oct 29</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel" data-panel="qc" hidden>
+              <div class="qc" aria-label="Quick Connect">
+                <label>Target
+                  <input type="text" id="qcInput" value="alice@edge.example.com:22" />
+                </label>
+                <div class="qc-actions">
+                  <button type="button" class="btn btn-primary">Connect</button>
+                  <button type="button" class="btn">Clear</button>
+                </div>
+                <div style="font-size:13px;font-weight:600;margin-top:8px">Recent Connections</div>
+                <div class="qc-list">
+                  <div class="qc-row"><span>edge.example.com</span><div class="d">alice@edge.example.com:22</div></div>
+                  <div class="qc-row"><span>staging-web</span><div class="d">deploy@10.0.2.14:22</div></div>
+                  <div class="qc-row"><span>jump-host</span><div class="d">ops@bastion.example.com:2200</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <aside class="right" aria-label="Right stack">
+          <div class="pf" data-panel-id="tunnels">
+            <div class="pf-head">
+              <span class="grow">Tunnels</span>
+              <button type="button" class="more" title="Panel options" aria-label="Tunnels panel options">⋯</button>
+            </div>
+            <div class="pf-body">
+              <div style="margin-bottom:8px;font-weight:600">Local forwards</div>
+              <div class="tree-row">127.0.0.1:5432 → db:5432</div>
+              <div class="tree-row">127.0.0.1:8080 → web:80</div>
+              <p class="empty" style="margin-top:12px">Start/Stop runtime not provisioned — config only. Content → <a href="../panel-tunnels/index.html">panel-tunnels</a></p>
+            </div>
+          </div>
+          <div class="pf-split" aria-hidden="true"></div>
+          <div class="pf" data-panel-id="commands">
+            <div class="pf-head">
+              <span class="grow">Commands</span>
+              <button type="button" class="more" title="Panel options" aria-label="Commands panel options">⋯</button>
+            </div>
+            <div class="pf-body">
+              <p class="empty">Quick Commands not available this version. → <a href="../panel-commands/index.html">panel-commands</a></p>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="status" aria-label="StatusBar">
+        <span class="grow">Connected · edge-01 · 42ms</span>
+        <span>UTF-8</span>
+        <span>80×24</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="flyout" id="appMenu" role="menu" aria-hidden="true"></div>
+  <div class="flyout" id="ctxMenu" role="menu" aria-hidden="true"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <div class="legend">
+    <strong>Structure (top → bottom)</strong><br>
+    1. TitleBar + menus — Import/Export struck (not this version)<br>
+    2. <strong>Left stack</strong> | Workspace (TabBar + content) | <strong>Right stack</strong> — panels movable either side → <a href="../tool-dock/index.html">tool-dock</a><br>
+    3. StatusBar (28)<br>
+    <strong>Interactions</strong>: App menus · context menus · shortcuts · HUD.<br>
+    <strong>Inline rename / create</strong>: 分区验收 →
+    <a href="../sftp-panel/index.html">sftp-panel</a>、
+    <a href="../tab-bar/index.html">tab-bar</a>、
+    <a href="../panel-sessions/index.html">panel-sessions</a>（Session 改名；Folder New/Rename 本版禁用）。
+    本壳默认示意：左 Sessions、右 Tunnels+Commands（非锁死）。<br>
+    <strong>Scroll</strong>: only tree, terminal buffer, SFTP lists, QC recent, right body — never the outer window frame.
+
+    <table class="kbd-table" aria-label="Keyboard cheat sheet">
+      <thead>
+        <tr><th>Shortcut</th><th>Demo behavior</th><th>Destination / state</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>Ctrl+N</code></td><td>Toast + navigate</td><td>→ session-editor</td></tr>
+        <tr><td><code>Ctrl+O</code></td><td>Toast + switch view</td><td>Quick Connect tab</td></tr>
+        <tr><td><code>Ctrl+,</code></td><td>Toast + navigate</td><td>→ settings</td></tr>
+        <tr><td><code>Ctrl+Q</code></td><td>Toast + navigate</td><td>→ close-tab-confirm (quit)</td></tr>
+        <tr><td><code>Ctrl+Shift+S</code></td><td>Toast + switch view</td><td>SFTP tab</td></tr>
+        <tr><td><code>Ctrl+B</code></td><td>Toast + toggle</td><td>Sessions panel visibility</td></tr>
+        <tr><td><code>F11</code></td><td>Toast + toggle</td><td>Full screen (outline demo)</td></tr>
+        <tr><td><code>F5</code></td><td>Toast</td><td>Reconnect current session</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    (function () {
+      var win = document.getElementById("win");
+      var navHudText = document.getElementById("navHudText");
+      var appMenu = document.getElementById("appMenu");
+      var ctxMenu = document.getElementById("ctxMenu");
+      var toastEl = document.getElementById("toast");
+      var toastTimer = null;
+
+      var viewBtns = document.querySelectorAll(".tools [data-view]");
+      var panels = {
+        terminal: document.querySelector('[data-panel="terminal"]'),
+        sftp: document.querySelector('[data-panel="sftp"]'),
+        qc: document.querySelector('[data-panel="qc"]')
+      };
+      var tabs = document.querySelectorAll(".tab");
+      var qcInput = document.getElementById("qcInput");
+
+      var paths = {
+        sessionEditor: "../session-editor/index.html",
+        settings: "../settings/index.html",
+        quitConfirm: "../close-tab-confirm/index.html",
+        closeTabConfirm: "../close-tab-confirm/index.html",
+        scrollbackConfirm: "../compact-confirm/index.html",
+        deleteConfirm: "../compact-confirm/index.html",
+        hostKeys: "../host-keys/index.html",
+        privateKeys: "../private-keys/index.html",
+        proxies: "../proxies/index.html",
+        themeManager: "../theme-manager/index.html",
+        logging: "../logging/index.html",
+        about: "../about/index.html",
+        newFolder: "../new-folder/index.html",
+        sftpEntry: "../sftp-entry/index.html",
+        sftpProperties: "../sftp-properties/index.html"
+      };
+
+      function recordAction(action, destination) {
+        navHudText.textContent = action + " → " + destination;
+      }
+
+      function showToast(msg) {
+        toastEl.textContent = msg;
+        toastEl.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () {
+          toastEl.classList.remove("show");
+        }, 2200);
+      }
+
+      function navigate(href, action, destLabel) {
+        recordAction(action, destLabel);
+        showToast(action);
+        window.location.href = href;
+      }
+
+      function closeFlyouts() {
+        appMenu.classList.remove("open");
+        appMenu.setAttribute("aria-hidden", "true");
+        ctxMenu.classList.remove("open");
+        ctxMenu.setAttribute("aria-hidden", "true");
+        document.querySelectorAll(".menu-btn[aria-expanded]").forEach(function (b) {
+          b.setAttribute("aria-expanded", "false");
+        });
+      }
+
+      function openFlyout(el, x, y, html, isContext) {
+        closeFlyouts();
+        el.innerHTML = html;
+        el.classList.add("open");
+        el.setAttribute("aria-hidden", "false");
+        el.style.left = x + "px";
+        el.style.top = y + "px";
+        requestAnimationFrame(function () {
+          var r = el.getBoundingClientRect();
+          var maxX = window.innerWidth - r.width - 8;
+          var maxY = window.innerHeight - r.height - 8;
+          if (r.right > window.innerWidth - 8) el.style.left = Math.max(8, maxX) + "px";
+          if (r.bottom > window.innerHeight - 8) el.style.top = Math.max(8, maxY) + "px";
+        });
+        el.querySelectorAll("[data-act]").forEach(function (node) {
+          node.addEventListener("click", function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            var act = node.getAttribute("data-act");
+            runAction(act, node.getAttribute("data-label") || act);
+            closeFlyouts();
+          });
+        });
+        if (!isContext) {
+          var menuId = el.getAttribute("data-for");
+          if (menuId) {
+            var btn = document.querySelector('.menu-btn[data-menu="' + menuId + '"]');
+            if (btn) btn.setAttribute("aria-expanded", "true");
+          }
+        }
+      }
+
+      function showPanel(name) {
+        Object.keys(panels).forEach(function (k) {
+          panels[k].hidden = k !== name;
+        });
+        tabs.forEach(function (t) {
+          var map = { term: "terminal", sftp: "sftp", qc: "qc" };
+          t.setAttribute("aria-pressed", map[t.getAttribute("data-tab")] === name ? "true" : "false");
+        });
+      }
+
+      function syncViewButtons(primary) {
+        viewBtns.forEach(function (b) {
+          var v = b.getAttribute("data-view");
+          var on = v === primary;
+          if (primary === "terminal" && v === "focus") on = win.classList.contains("focus-mode");
+          if (primary === "right" && v === "right") on = win.classList.contains("show-right");
+          b.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+      }
+
+      function setView(view, source) {
+        if (view === "focus") {
+          win.classList.add("focus-mode");
+          showPanel("terminal");
+          viewBtns.forEach(function (b) {
+            b.setAttribute("aria-pressed", b.getAttribute("data-view") === "focus" ? "true" : "false");
+          });
+          if (source) recordAction(source, "Focus mode ON");
+          return;
+        }
+        win.classList.remove("focus-mode");
+        if (view === "right") {
+          win.classList.add("show-right");
+          viewBtns.forEach(function (b) {
+            b.setAttribute("aria-pressed", b.getAttribute("data-view") === "right" ? "true" : "false");
+          });
+          if (source) recordAction(source, "Right stack visible");
+          return;
+        }
+        viewBtns.forEach(function (b) {
+          b.setAttribute("aria-pressed", b.getAttribute("data-view") === view ? "true" : "false");
+        });
+        if (view === "sftp") showPanel("sftp");
+        else if (view === "qc") {
+          showPanel("qc");
+          if (qcInput) qcInput.focus();
+        } else showPanel("terminal");
+        if (source) {
+          recordAction(source, view === "qc" ? "Quick Connect tab" : view === "sftp" ? "SFTP tab" : "Terminal");
+        }
+      }
+
+      function showRightPanel(tabId, source) {
+        win.classList.add("show-right");
+        syncViewButtons("right");
+        if (source) {
+          recordAction(source, "Right stack · " + (tabId || "Tunnels+Commands"));
+          showToast("Right stack visible (N3 panels — not tabs)");
+        }
+      }
+
+      function toggleSidebar(source) {
+        win.classList.toggle("hide-sidebar");
+        var vis = win.classList.contains("hide-sidebar") ? "hidden" : "visible";
+        recordAction(source || "Sessions panel", "Left stack · Sessions " + vis);
+        showToast("Sessions panel: " + vis);
+      }
+
+      function toggleFullscreen(source) {
+        win.classList.toggle("fullscreen-demo");
+        var on = win.classList.contains("fullscreen-demo");
+        recordAction(source || "Full Screen", on ? "Full screen ON (demo)" : "Full screen OFF");
+        showToast(on ? "F11 · Full screen ON" : "F11 · Full screen OFF");
+      }
+
+      function toggleFocusMode(source) {
+        var entering = !win.classList.contains("focus-mode");
+        win.classList.toggle("focus-mode", entering);
+        if (entering) showPanel("terminal");
+        viewBtns.forEach(function (b) {
+          b.setAttribute("aria-pressed", b.getAttribute("data-view") === "focus" ? (entering ? "true" : "false") : b.getAttribute("aria-pressed"));
+        });
+        recordAction(source || "Focus Mode", entering ? "Focus mode ON" : "Focus mode OFF");
+        showToast(entering ? "Focus mode ON" : "Focus mode OFF");
+      }
+
+      function runAction(act, label) {
+        switch (act) {
+          case "new-session":
+            navigate(paths.sessionEditor, label || "New Session", "session-editor");
+            break;
+          case "quick-connect":
+            setView("qc", label || "Quick Connect");
+            showToast("Ctrl+O · Quick Connect");
+            break;
+          case "settings":
+            navigate(paths.settings, label || "Settings", "settings");
+            break;
+          case "quit":
+            navigate(paths.quitConfirm, label || "Quit", "close-tab-confirm (quit)");
+            break;
+          case "edit-copy":
+          case "edit-paste":
+          case "edit-select-all":
+          case "edit-find":
+          case "edit-clear-terminal":
+            recordAction(label, "In-place (prototype)");
+            showToast(label);
+            break;
+          case "edit-clear-scrollback":
+            navigate(paths.scrollbackConfirm, label || "Clear Scrollback", "compact-confirm");
+            break;
+          case "session-connect":
+            recordAction(label || "Connect", "Connect selected session");
+            showToast("Connect");
+            break;
+          case "session-disconnect":
+            recordAction(label || "Disconnect", "Disconnect tab");
+            showToast("Disconnect");
+            break;
+          case "session-reconnect":
+            recordAction(label || "Reconnect", "Reconnect session");
+            showToast("F5 · Reconnect");
+            break;
+          case "session-duplicate-tab":
+            recordAction(label || "Duplicate Tab", "New tab (same profile)");
+            showToast("Duplicate Tab");
+            break;
+          case "session-edit":
+            navigate(paths.sessionEditor, label || "Edit Session", "session-editor");
+            break;
+          case "session-open-sftp":
+            setView("sftp", label || "Open SFTP");
+            showToast("Ctrl+Shift+S · SFTP");
+            break;
+          case "session-tunnels":
+            showRightPanel("tunnels", label || "Tunnels");
+            showToast("Tunnel panel");
+            break;
+          case "view-session-manager":
+            toggleSidebar(label || "Session Manager");
+            break;
+          case "view-transfers":
+            showRightPanel("transfers", label || "Transfers");
+            showToast("Transfers panel");
+            break;
+          case "view-quick-commands":
+            showRightPanel("qcmd", label || "Quick Commands");
+            showToast("Quick Commands — panel empty this version");
+            break;
+          case "view-tunnel-panel":
+            showRightPanel("tunnels", label || "Tunnel Panel");
+            showToast("Tunnel Panel");
+            break;
+          case "view-fullscreen":
+            toggleFullscreen(label || "Full Screen");
+            break;
+          case "view-focus-mode":
+            toggleFocusMode(label || "Focus Mode");
+            break;
+          case "tools-host-keys":
+            navigate(paths.hostKeys, label || "Host Keys", "host-keys");
+            break;
+          case "tools-private-keys":
+            navigate(paths.privateKeys, label || "Private Keys", "private-keys");
+            break;
+          case "tools-proxies":
+            navigate(paths.proxies, label || "Proxies", "proxies");
+            break;
+          case "tools-theme":
+            navigate(paths.themeManager, label || "Theme Manager", "theme-manager");
+            break;
+          case "tools-logging":
+            navigate(paths.logging, label || "Logging", "logging");
+            break;
+          case "help-about":
+            navigate(paths.about, label || "About", "about");
+            break;
+          case "ctx-tree-connect":
+            recordAction(label || "Connect", "Session tree · connect");
+            showToast("Connect");
+            break;
+          case "ctx-tree-new-tab":
+            recordAction(label || "Open in New Tab", "New terminal tab");
+            showToast("Open in New Tab");
+            break;
+          case "ctx-tree-sftp":
+            setView("sftp", label || "Open SFTP");
+            break;
+          case "ctx-tree-edit":
+            navigate(paths.sessionEditor, label || "Edit Session", "session-editor");
+            break;
+          case "ctx-tree-duplicate":
+            recordAction(label || "Duplicate", "Duplicate session entry");
+            showToast("Duplicate");
+            break;
+          case "ctx-tree-delete":
+            navigate(paths.deleteConfirm, label || "Delete Session", "compact-confirm");
+            break;
+          case "ctx-blank-new-session":
+            navigate(paths.sessionEditor, label || "New Session", "session-editor");
+            break;
+          case "ctx-blank-new-folder":
+            createFolderInline(label || "New Folder");
+            break;
+          case "ctx-tree-rename":
+          case "ctx-folder-rename":
+            beginInlineRename(ctxTarget, label || "Rename");
+            break;
+          case "ctx-blank-delete":
+            navigate(paths.deleteConfirm, label || "Delete", "compact-confirm");
+            break;
+          case "ctx-tab-close":
+            navigate(paths.closeTabConfirm, label || "Close Tab", "close-tab-confirm");
+            break;
+          case "ctx-tab-close-others":
+            recordAction(label || "Close Others", "Close other tabs");
+            showToast("Close Others");
+            break;
+          case "ctx-tab-rename":
+            beginInlineRename(ctxTarget, label || "Rename Tab");
+            break;
+          case "ctx-tab-duplicate":
+            recordAction(label || "Duplicate Tab", "Duplicate tab");
+            showToast("Duplicate Tab");
+            break;
+          case "ctx-sftp-download":
+          case "ctx-sftp-upload":
+            recordAction(label, "SFTP transfer queue");
+            showToast(label);
+            break;
+          case "ctx-sftp-rename":
+            beginInlineRename(ctxTarget, label || "Rename");
+            break;
+          case "ctx-sftp-new-folder":
+            createSftpFolderInline(ctxTarget, label || "New Folder");
+            break;
+          case "ctx-sftp-delete":
+            navigate(paths.deleteConfirm, label || "Delete", "compact-confirm");
+            break;
+          case "ctx-sftp-properties":
+            navigate(paths.sftpProperties, label || "Properties", "sftp-properties");
+            break;
+          default:
+            recordAction(label || act, "—");
+            showToast(label || act);
+        }
+      }
+
+      function menuItem(label, kbd, act, opts) {
+        opts = opts || {};
+        var text = opts.disabled ? label + " (not this version)" : label;
+        if (opts.disabled) {
+          return '<button type="button" class="dis" disabled title="Not available in this version" data-act="' + act + '" data-label="' + label + '">' +
+            '<span class="label">' + text + '</span><span class="kbd">' + (kbd || "") + "</span></button>";
+        }
+        if (opts.href) {
+          return '<a class="fly-item" href="' + opts.href + '" data-act="' + act + '" data-label="' + label + '">' +
+            '<span class="label">' + label + '</span><span class="kbd">' + (kbd || "") + "</span></a>";
+        }
+        return '<button type="button" data-act="' + act + '" data-label="' + label + '">' +
+          '<span class="label">' + label + '</span><span class="kbd">' + (kbd || "") + "</span></button>";
+      }
+
+      var menuTemplates = {
+        file: menuItem("New Session", "Ctrl+N", "new-session") +
+          menuItem("Quick Connect", "Ctrl+O", "quick-connect") +
+          '<hr class="sep">' +
+          menuItem("Settings…", "Ctrl+,", "settings") +
+          menuItem("Quit", "Ctrl+Q", "quit"),
+        edit: menuItem("Copy", "Ctrl+C", "edit-copy") +
+          menuItem("Paste", "Ctrl+V", "edit-paste") +
+          menuItem("Select All", "Ctrl+A", "edit-select-all") +
+          '<hr class="sep">' +
+          menuItem("Find…", "Ctrl+F", "edit-find") +
+          menuItem("Clear Terminal", "Ctrl+L", "edit-clear-terminal") +
+          menuItem("Clear Scrollback", "", "edit-clear-scrollback"),
+        session: menuItem("Connect", "Enter", "session-connect") +
+          menuItem("Disconnect", "", "session-disconnect") +
+          menuItem("Reconnect", "F5", "session-reconnect") +
+          '<hr class="sep">' +
+          menuItem("Duplicate Tab", "", "session-duplicate-tab") +
+          menuItem("Edit Session…", "", "session-edit") +
+          '<hr class="sep">' +
+          menuItem("Open SFTP", "Ctrl+Shift+S", "session-open-sftp") +
+          menuItem("Tunnels…", "", "session-tunnels"),
+        view: menuItem("Sessions", "Ctrl+B", "view-session-manager") +
+          menuItem("Transfers", "", "view-transfers") +
+          menuItem("Quick Commands", "", "view-quick-commands") +
+          '<p class="note">Quick Commands: empty this version. Panels dock either stack → tool-dock.</p>' +
+          menuItem("Tunnels", "", "view-tunnel-panel") +
+          '<hr class="sep">' +
+          menuItem("Full Screen", "F11", "view-fullscreen") +
+          menuItem("Focus Mode", "", "view-focus-mode"),
+        tools: menuItem("Host Keys…", "", "tools-host-keys") +
+          menuItem("Private Keys…", "", "tools-private-keys") +
+          menuItem("Proxies…", "", "tools-proxies") +
+          menuItem("Theme Manager…", "", "tools-theme") +
+          menuItem("Logging…", "", "tools-logging"),
+        help: menuItem("About YShell…", "", "help-about")
+      };
+
+      document.querySelectorAll(".menu-btn[data-menu]").forEach(function (btn) {
+        btn.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          var id = btn.getAttribute("data-menu");
+          var open = appMenu.classList.contains("open") && appMenu.getAttribute("data-for") === id;
+          if (open) {
+            closeFlyouts();
+            return;
+          }
+          var rect = btn.getBoundingClientRect();
+          appMenu.setAttribute("data-for", id);
+          openFlyout(appMenu, rect.left, rect.bottom, menuTemplates[id], false);
+        });
+      });
+
+      function ctxHtml(type) {
+        if (type === "tree-session") {
+          return menuItem("Connect", "", "ctx-tree-connect") +
+            menuItem("Open in New Tab", "", "ctx-tree-new-tab") +
+            menuItem("Open SFTP", "", "ctx-tree-sftp") +
+            menuItem("Edit Session…", "", "ctx-tree-edit") +
+            '<hr class="sep">' +
+            menuItem("Rename", "", "ctx-tree-rename") +
+            menuItem("Duplicate", "", "ctx-tree-duplicate") +
+            menuItem("Delete…", "", "ctx-tree-delete");
+        }
+        if (type === "tree-blank") {
+          return menuItem("New Session…", "", "ctx-blank-new-session") +
+            menuItem("New Folder", "", "ctx-blank-new-folder", { disabled: true }) +
+            menuItem("Import Config…", "", "ctx-blank-import", { disabled: true }) +
+            menuItem("Expand All", "", "ctx-blank-expand", { disabled: true }) +
+            menuItem("Collapse All", "", "ctx-blank-collapse", { disabled: true });
+        }
+        if (type === "tree-folder") {
+          return menuItem("New Session Here…", "", "ctx-blank-new-session") +
+            menuItem("Edit Folder Defaults…", "", "ctx-folder-edit", { href: "../folder-editor/index.html" }) +
+            menuItem("New Folder", "", "ctx-blank-new-folder", { disabled: true }) +
+            menuItem("Rename", "", "ctx-folder-rename", { disabled: true }) +
+            menuItem("Delete…", "", "ctx-blank-delete", { disabled: true }) +
+            menuItem("Connect All", "", "ctx-folder-connect-all", { disabled: true });
+        }
+        if (type === "tab") {
+          return menuItem("Close", "", "ctx-tab-close") +
+            menuItem("Close Others", "", "ctx-tab-close-others") +
+            menuItem("Rename", "", "ctx-tab-rename") +
+            menuItem("Duplicate", "", "ctx-tab-duplicate");
+        }
+        if (type === "terminal") {
+          return menuItem("Copy", "Ctrl+C", "edit-copy") +
+            menuItem("Paste", "Ctrl+V", "edit-paste") +
+            menuItem("Select All", "Ctrl+A", "edit-select-all") +
+            menuItem("Find…", "Ctrl+F", "edit-find") +
+            menuItem("Clear Terminal", "Ctrl+L", "edit-clear-terminal");
+        }
+        if (type === "sftp-row") {
+          return menuItem("Download", "", "ctx-sftp-download") +
+            menuItem("Upload", "", "ctx-sftp-upload") +
+            menuItem("Rename", "", "ctx-sftp-rename") +
+            menuItem("New Folder", "", "ctx-sftp-new-folder") +
+            menuItem("Delete…", "", "ctx-sftp-delete") +
+            menuItem("Properties…", "", "ctx-sftp-properties");
+        }
+        return "";
+      }
+
+      var ctxTarget = null;
+      var renameState = null;
+
+      function clearRenamingBadge(host) {
+        if (!host) return;
+        host.querySelectorAll(".renaming-badge").forEach(function (b) { b.remove(); });
+      }
+
+      function endInlineRename(commit) {
+        if (!renameState) return;
+        var host = renameState.host;
+        var input = renameState.input;
+        var original = renameState.original;
+        var isCreate = !!renameState.isCreate;
+        var asFolder = !!renameState.asFolder;
+        var value = (input.value || "").trim();
+        clearRenamingBadge(host);
+        syncDemoButtons(null);
+        if (commit && value) {
+          if (asFolder && value.slice(-1) !== "/") value += "/";
+          var nameEl = document.createElement("span");
+          nameEl.className = "name";
+          nameEl.textContent = value;
+          host.classList.remove("renaming");
+          if (input.parentNode) input.parentNode.replaceChild(nameEl, input);
+          recordAction(renameState.label || "Rename", (isCreate ? "Inline create → \"" : "Inline rename → \"") + value + "\"");
+          showToast((isCreate ? "Created " : "Renamed to ") + value);
+          renameState = null;
+          return;
+        }
+        host.classList.remove("renaming");
+        if (isCreate) {
+          if (host.parentNode) host.parentNode.removeChild(host);
+          recordAction(renameState.label || "New Folder", "Inline create cancelled");
+          showToast("Create cancelled");
+        } else {
+          var restore = document.createElement("span");
+          restore.className = "name";
+          restore.textContent = original;
+          if (input.parentNode) input.parentNode.replaceChild(restore, input);
+          recordAction(renameState.label || "Rename", "Inline rename cancelled");
+          showToast("Rename cancelled");
+        }
+        renameState = null;
+      }
+
+      function beginInlineRename(host, label, opts) {
+        opts = opts || {};
+        if (!host || !win.contains(host)) return;
+        var existingName = host.querySelector(".name");
+        if (existingName && existingName.textContent === "..") {
+          showToast("Cannot rename ..");
+          return;
+        }
+        if (renameState) endInlineRename(false);
+        closeFlyouts();
+        var nameEl = host.querySelector(".name");
+        if (!nameEl) return;
+        var original = nameEl.textContent;
+        var input = document.createElement("input");
+        input.type = "text";
+        input.className = "inline-rename";
+        input.value = original;
+        if (opts.placeholder) input.placeholder = opts.placeholder;
+        if (opts.initial !== undefined) input.value = opts.initial;
+        input.setAttribute("aria-label", label || "Rename");
+        host.classList.add("renaming");
+        nameEl.replaceWith(input);
+        clearRenamingBadge(host);
+        var badge = document.createElement("span");
+        badge.className = "renaming-badge";
+        badge.textContent = opts.isCreate ? "inline create" : "inline rename";
+        host.appendChild(badge);
+        renameState = {
+          host: host,
+          input: input,
+          original: original,
+          label: label,
+          isCreate: !!opts.isCreate,
+          asFolder: !!opts.asFolder,
+          sticky: !!opts.sticky
+        };
+        try {
+          input.focus();
+          input.select();
+        } catch (e) {}
+
+        function onKey(ev) {
+          if (ev.key === "Enter") {
+            ev.preventDefault();
+            ev.stopPropagation();
+            cleanup();
+            endInlineRename(true);
+          } else if (ev.key === "Escape") {
+            ev.preventDefault();
+            ev.stopPropagation();
+            cleanup();
+            endInlineRename(false);
+          }
+        }
+        function onBlur() {
+          if (renameState && renameState.sticky) return;
+          cleanup();
+          endInlineRename(true);
+        }
+        function cleanup() {
+          input.removeEventListener("keydown", onKey);
+          input.removeEventListener("blur", onBlur);
+        }
+        input.addEventListener("keydown", onKey);
+        input.addEventListener("blur", onBlur);
+      }
+
+      function createFolderInline(label, opts) {
+        opts = opts || {};
+        closeFlyouts();
+        var tree = document.getElementById("sessionTree") || document.querySelector(".tree");
+        if (!tree) return;
+        var row = document.createElement("div");
+        row.className = "tree-row folder";
+        row.setAttribute("data-ctx", "tree-folder");
+        row.setAttribute("data-kind", "folder");
+        row.innerHTML = '<span class="prefix">▾ </span><span class="name">New Folder</span>';
+        tree.appendChild(row);
+        recordAction(label || "New Folder", "Inline create folder (edit name in place)");
+        showToast("New Folder — edit name in tree");
+        beginInlineRename(row, "New Folder", {
+          isCreate: true,
+          initial: "New Folder",
+          sticky: !!opts.sticky
+        });
+      }
+
+      function createSftpFolderInline(fromTarget, label, opts) {
+        opts = opts || {};
+        closeFlyouts();
+        var list = (fromTarget && fromTarget.closest(".sftp-list")) ||
+          document.getElementById("sftpRemote") ||
+          document.querySelector(".sftp-list");
+        if (!list) return;
+        var row = document.createElement("div");
+        row.className = "sftp-row";
+        row.setAttribute("data-ctx", "sftp-row");
+        row.setAttribute("data-kind", "sftp");
+        row.innerHTML = '<span class="name">New Folder</span><span>—</span><span></span>';
+        var first = list.querySelector(".sftp-row");
+        if (first && first.querySelector(".name") && first.querySelector(".name").textContent === "..") {
+          if (first.nextSibling) list.insertBefore(row, first.nextSibling);
+          else list.appendChild(row);
+        } else if (first) {
+          list.insertBefore(row, first);
+        } else {
+          list.appendChild(row);
+        }
+        recordAction(label || "New Folder", "SFTP inline create folder");
+        showToast("New Folder — edit name in SFTP list");
+        beginInlineRename(row, "New Folder", {
+          isCreate: true,
+          asFolder: true,
+          initial: "New Folder",
+          sticky: !!opts.sticky
+        });
+      }
+
+      function syncDemoButtons(active) {
+        document.querySelectorAll(".tools [data-demo]").forEach(function (b) {
+          b.setAttribute("aria-pressed", b.getAttribute("data-demo") === active ? "true" : "false");
+        });
+      }
+
+      function runInlineDemo(kind) {
+        win.classList.remove("focus-mode");
+        if (kind === "tree-rename") {
+          showPanel("terminal");
+          syncViewButtons("terminal");
+          var folder = document.querySelector('.tree-row.folder[data-ctx="tree-folder"]');
+          if (folder) beginInlineRename(folder, "Rename", { sticky: true });
+          syncDemoButtons(kind);
+          recordAction("Demo · Tree rename", "Sticky inline rename on folder");
+          showToast("Tree rename — input pinned (Enter / Esc)");
+          return;
+        }
+        if (kind === "tree-new") {
+          showPanel("terminal");
+          syncViewButtons("terminal");
+          createFolderInline("New Folder", { sticky: true });
+          syncDemoButtons(kind);
+          recordAction("Demo · Tree new folder", "Sticky inline create in tree");
+          return;
+        }
+        if (kind === "tab-rename") {
+          showPanel("terminal");
+          syncViewButtons("terminal");
+          var tab = document.querySelector('.tab[data-tab="term"]');
+          if (tab) beginInlineRename(tab, "Rename Tab", { sticky: true });
+          syncDemoButtons(kind);
+          recordAction("Demo · Tab rename", "Sticky inline rename on tab");
+          showToast("Tab rename — input pinned (Enter / Esc)");
+          return;
+        }
+        if (kind === "sftp-rename") {
+          setView("sftp", "Demo · SFTP rename");
+          var host = null;
+          document.querySelectorAll("#sftpRemote .sftp-row").forEach(function (r) {
+            var n = r.querySelector(".name");
+            if (n && n.textContent === ".env") host = r;
+          });
+          if (!host) host = document.querySelector("#sftpRemote .sftp-row:nth-child(3)");
+          if (host) beginInlineRename(host, "Rename", { sticky: true });
+          syncDemoButtons(kind);
+          recordAction("Demo · SFTP rename", "Sticky inline rename on remote row");
+          showToast("SFTP rename — input pinned (Enter / Esc)");
+          return;
+        }
+        if (kind === "sftp-new") {
+          setView("sftp", "Demo · SFTP new folder");
+          createSftpFolderInline(document.getElementById("sftpRemote"), "New Folder", { sticky: true });
+          syncDemoButtons(kind);
+          recordAction("Demo · SFTP new folder", "Sticky inline create in remote list");
+        }
+      }
+
+      document.addEventListener("contextmenu", function (ev) {
+        var t = ev.target.closest("[data-ctx]");
+        if (!t || !win.contains(t)) return;
+        if (ev.target.closest(".inline-rename")) return;
+        ev.preventDefault();
+        ctxTarget = t;
+        var kind = t.getAttribute("data-ctx");
+        openFlyout(ctxMenu, ev.clientX, ev.clientY, ctxHtml(kind), true);
+      });
+
+      document.addEventListener("click", function (ev) {
+        if (ev.target.closest(".inline-rename")) return;
+        closeFlyouts();
+      });
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape" && !renameState) closeFlyouts();
+      });
+
+      viewBtns.forEach(function (b) {
+        b.addEventListener("click", function () {
+          if (renameState) endInlineRename(false);
+          setView(b.getAttribute("data-view"));
+        });
+      });
+
+      tabs.forEach(function (t) {
+        t.addEventListener("click", function (ev) {
+          if (ev.target.closest(".inline-rename")) return;
+          if (renameState && renameState.host === t) return;
+          var map = { term: "terminal", sftp: "sftp", qc: "qc" };
+          var name = map[t.getAttribute("data-tab")];
+          win.classList.remove("focus-mode");
+          viewBtns.forEach(function (b) {
+            b.setAttribute("aria-pressed", b.getAttribute("data-view") === name ? "true" : "false");
+          });
+          showPanel(name);
+        });
+        t.addEventListener("dblclick", function (ev) {
+          ev.preventDefault();
+          beginInlineRename(t, "Rename Tab");
+        });
+      });
+
+      document.getElementById("sessionTree").addEventListener("dblclick", function (ev) {
+        var row = ev.target.closest(".tree-row[data-ctx]");
+        if (!row || !row.querySelector(".name")) return;
+        ev.preventDefault();
+        beginInlineRename(row, "Rename");
+      });
+
+      document.querySelectorAll(".sftp-list").forEach(function (list) {
+        list.addEventListener("dblclick", function (ev) {
+          var row = ev.target.closest(".sftp-row");
+          if (!row) return;
+          ev.preventDefault();
+          beginInlineRename(row, "Rename");
+        });
+      });
+
+      document.querySelectorAll(".pf-head .more").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          showToast("Panel ⋯ → Move Left/Right · Collapse · Hide (see tool-dock)");
+          recordAction("Panel options", "→ tool-dock for Move L/R demo");
+        });
+      });
+
+      var sftpNewFolderBtn = document.getElementById("sftpNewFolderBtn");
+      if (sftpNewFolderBtn) {
+        sftpNewFolderBtn.addEventListener("click", function () {
+          createSftpFolderInline(document.getElementById("sftpRemote"), "New Folder");
+        });
+      }
+
+      function chord(ev) {
+        return ev.ctrlKey || ev.metaKey;
+      }
+
+      document.addEventListener("keydown", function (ev) {
+        var inField = ev.target.closest("input, textarea");
+        var isDemoShortcut = chord(ev) || ev.key === "F11" || ev.key === "F5";
+        if (inField && !isDemoShortcut) return;
+
+        if (chord(ev) && !ev.shiftKey && ev.key.toLowerCase() === "n") {
+          ev.preventDefault();
+          showToast("Ctrl+N · New Session");
+          navigate(paths.sessionEditor, "Ctrl+N · New Session", "session-editor");
+          return;
+        }
+        if (chord(ev) && !ev.shiftKey && ev.key.toLowerCase() === "o") {
+          ev.preventDefault();
+          setView("qc", "Ctrl+O · Quick Connect");
+          showToast("Ctrl+O · Quick Connect");
+          return;
+        }
+        if (chord(ev) && ev.key === ",") {
+          ev.preventDefault();
+          showToast("Ctrl+, · Settings");
+          navigate(paths.settings, "Ctrl+, · Settings", "settings");
+          return;
+        }
+        if (chord(ev) && !ev.shiftKey && ev.key.toLowerCase() === "q") {
+          ev.preventDefault();
+          showToast("Ctrl+Q · Quit");
+          navigate(paths.quitConfirm, "Ctrl+Q · Quit", "close-tab-confirm (quit)");
+          return;
+        }
+        if (chord(ev) && ev.shiftKey && ev.key.toLowerCase() === "s") {
+          ev.preventDefault();
+          setView("sftp", "Ctrl+Shift+S · Open SFTP");
+          showToast("Ctrl+Shift+S · SFTP");
+          return;
+        }
+        if (chord(ev) && !ev.shiftKey && ev.key.toLowerCase() === "b") {
+          ev.preventDefault();
+          toggleSidebar("Ctrl+B · Session Manager");
+          return;
+        }
+        if (ev.key === "F11") {
+          ev.preventDefault();
+          toggleFullscreen("F11 · Full Screen");
+          return;
+        }
+        if (ev.key === "F5") {
+          ev.preventDefault();
+          runAction("session-reconnect", "F5 · Reconnect");
+        }
+      });
+
+      win.classList.add("show-right");
+      setView("terminal");
+      syncViewButtons("right");
+      viewBtns.forEach(function (b) {
+        var v = b.getAttribute("data-view");
+        if (v === "terminal") b.setAttribute("aria-pressed", "true");
+        else if (v === "right") b.setAttribute("aria-pressed", "true");
+        else b.setAttribute("aria-pressed", "false");
+      });
+    })();
+  </script>
+</body>
+</html>

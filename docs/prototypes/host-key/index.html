@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Host key wireframe</title>
+  <style>
+    /* Theme.tool-window-*-standard */
+    :root {
+      --win-w: 720px;
+      --win-h: 580px;
+      --titlebar-h: 32px;
+      --pad: 28px;
+      --gap: 16px;
+      --ctrl-h: 32px;
+      --anno-w: 200px;
+      --line: #111;
+      --fill: #fff;
+      --mute: #555;
+      --soft: #f0f0f0;
+      --anno: #336;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--line);
+      background: #e8e8e8;
+    }
+    .meta {
+      max-width: calc(var(--win-w) + 16px + var(--anno-w));
+      margin: 0 0 16px;
+      font-size: 13px;
+      color: var(--mute);
+      line-height: 1.45;
+    }
+    .meta code { font-size: 12px; }
+    .tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: var(--mute);
+    }
+    .tools label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .frame {
+      display: grid;
+      grid-template-columns: var(--win-w) var(--anno-w);
+      column-gap: 16px;
+      width: max-content;
+      align-items: start;
+    }
+    .win {
+      width: var(--win-w);
+      height: var(--win-h);
+      display: flex;
+      flex-direction: column;
+      background: var(--fill);
+      border: 1px solid var(--line);
+      flex-shrink: 0;
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .callouts {
+      grid-column: 2;
+      grid-row: 1;
+      position: relative;
+      height: var(--win-h);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .callout {
+      position: absolute;
+      left: 0;
+      right: 0;
+      font-size: 11px;
+      line-height: 1.35;
+      color: var(--anno);
+    }
+    .callout::before {
+      content: "";
+      position: absolute;
+      left: -12px;
+      top: 0.55em;
+      width: 10px;
+      border-top: 1px dashed var(--anno);
+    }
+    .callout strong {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 2px;
+      color: var(--line);
+    }
+    .callout-title { top: 6px; }
+    .callout-lead { top: 52px; }
+    .callout-infobar { top: 128px; }
+    .root:not(.mode-changed) .callout-infobar { display: none; }
+    .root.mode-changed .callout-lead { top: 52px; }
+    .callout-details { top: 220px; }
+    .root.mode-changed .callout-details { top: 268px; }
+    .callout-spacer { top: 360px; }
+    .callout-footer { top: 520px; }
+
+    .titlebar {
+      height: var(--titlebar-h);
+      flex: 0 0 var(--titlebar-h);
+      display: flex;
+      align-items: center;
+      padding: 0 8px 0 12px;
+      gap: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .title {
+      flex: 1;
+      min-width: 0;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .cap {
+      width: 40px;
+      height: 24px;
+      border: 1px solid var(--line);
+      background: transparent;
+      font-size: 10px;
+      padding: 0;
+    }
+    .body {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: var(--pad);
+      gap: var(--gap);
+      overflow: hidden;
+    }
+    .tag {
+      position: absolute;
+      top: 0;
+      right: 0;
+      z-index: 1;
+      padding: 1px 5px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--anno);
+      background: #e8e8e8;
+      border: 1px dashed var(--anno);
+      pointer-events: none;
+    }
+    .region { position: relative; }
+
+    .lead {
+      flex: 0 0 auto;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .icon-warn {
+      flex: 0 0 32px;
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .root.mode-changed .icon-warn {
+      background: var(--soft);
+      border-width: 2px;
+    }
+    .lead-text { flex: 1; min-width: 0; }
+    .headline {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+    .root.mode-changed .headline { font-weight: 700; }
+    .sub {
+      margin: 4px 0 0;
+      font-size: 12px;
+      color: var(--mute);
+      line-height: 1.4;
+    }
+    .panel-first .sub { display: block; }
+    .panel-changed .sub { display: none; }
+    .panel-first { display: block; }
+    .panel-changed { display: none; }
+    .root.mode-changed .panel-first { display: none; }
+    .root.mode-changed .panel-changed { display: block; }
+
+    .infobar {
+      display: none;
+      flex: 0 0 auto;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      font-size: 12px;
+      line-height: 1.4;
+      background: var(--soft);
+    }
+    .root.mode-changed .infobar { display: block; }
+
+    .details {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .row {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      font-size: 14px;
+    }
+    .row-label {
+      flex: 0 0 120px;
+      color: var(--mute);
+    }
+    .row-value {
+      flex: 1;
+      font-family: ui-monospace, monospace;
+      word-break: break-all;
+    }
+    .row-changed { display: none; }
+    .root.mode-changed .row-changed { display: flex; }
+
+    .spacer {
+      flex: 1 1 auto;
+      min-height: 12px;
+      position: relative;
+      border: 1px dashed transparent;
+    }
+    .spacer::after {
+      content: "spacer";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 10px;
+      color: var(--mute);
+      opacity: 0.7;
+    }
+    .footer {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .rule {
+      margin: 0;
+      border: 0;
+      border-top: 1px solid var(--line);
+    }
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      appearance: none;
+      height: var(--ctrl-h);
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font: inherit;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .btn-accent {
+      background: var(--soft);
+      font-weight: 600;
+    }
+    .btn-destructive {
+      background: var(--line);
+      color: var(--fill);
+      font-weight: 600;
+    }
+    .note {
+      margin: 0;
+      font-size: 11px;
+      color: var(--anno);
+    }
+    .legend {
+      max-width: calc(var(--win-w) + 16px + var(--anno-w));
+      margin: 20px 0 0;
+      padding: 12px 14px;
+      border: 1px dashed var(--line);
+      font-size: 12px;
+      color: var(--mute);
+      line-height: 1.55;
+    }
+    .legend strong { color: var(--line); }
+    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+  </style>
+</head>
+<body>
+  <div class="root" id="root">
+    <p class="meta">
+      Host key 线框 · 固定 <code>720×580</code> · 标题栏 <code>32</code> · 内边距 <code>28</code> ·
+      body 不滚动。对照 <code>HostKeyDialog</code>：first-trust / changed。
+    </p>
+
+    <div class="tools" role="group" aria-label="Prototype controls">
+      <label><input type="radio" name="mode" value="first" checked /> First-time trust</label>
+      <label><input type="radio" name="mode" value="changed" /> Host key changed</label>
+    </div>
+
+    <div class="stage">
+      <div class="frame">
+        <div class="win" role="dialog" aria-labelledby="win-title">
+          <div class="titlebar region">
+            <span class="tag">A · chrome</span>
+            <div class="title" id="win-title">Host key verification</div>
+            <button type="button" class="cap" tabindex="-1" aria-hidden="true">_</button>
+            <button type="button" class="cap" tabindex="-1" aria-hidden="true">□</button>
+            <button type="button" class="cap" tabindex="-1" aria-hidden="true">×</button>
+          </div>
+
+          <div class="body">
+            <div class="lead region">
+              <span class="tag">B · lead</span>
+              <div class="icon-warn" aria-hidden="true">!</div>
+              <div class="lead-text">
+                <div class="panel-first">
+                  <p class="headline">First-time host key for edge.example.com:22.</p>
+                  <p class="sub">Compare the fingerprint with a trusted source, then trust once or save it for next time.</p>
+                </div>
+                <div class="panel-changed">
+                  <p class="headline">Host key changed for edge.example.com:22.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="infobar region" role="alert">
+              <span class="tag">C · infobar</span>
+              The presented key does not match the stored key. This may indicate a man-in-the-middle attack.
+              Replace and Trust will overwrite the stored key; do so only if you verified the new key elsewhere.
+            </div>
+
+            <div class="details region">
+              <span class="tag">D · facts</span>
+              <div class="row">
+                <span class="row-label">Known hosts</span>
+                <span class="row-value">C:\Users\alice\.yshell\known_hosts</span>
+              </div>
+              <div class="row row-changed">
+                <span class="row-label">Expected</span>
+                <span class="row-value">ED25519 SHA256:abC9…xY2z</span>
+              </div>
+              <div class="row">
+                <span class="row-label" id="fp-label">Fingerprint</span>
+                <span class="row-value">ED25519 SHA256:nThU…k8mQ</span>
+              </div>
+              <p class="note">打开时焦点在 Cancel Connection（changed 为安全默认）</p>
+            </div>
+
+            <div class="spacer" aria-hidden="true"></div>
+
+            <div class="footer region">
+              <span class="tag">E · footer</span>
+              <hr class="rule" />
+              <div class="actions">
+                <button type="button" class="btn" id="btn-cancel">Cancel Connection</button>
+                <button type="button" class="btn">Trust Once</button>
+                <button type="button" class="btn btn-accent" id="btn-save">Trust and Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <ul class="callouts" aria-label="Design annotations">
+          <li class="callout callout-title">
+            <strong>A · Chrome</strong>
+            独立工具窗标题；目标主机写在正文 lead，不重复占标题栏。
+          </li>
+          <li class="callout callout-lead">
+            <strong>B · Severity lead</strong>
+            图标 + 标题句；first-trust 带 caption，changed 用 critical 语气（线框用字重/边框表达）。
+          </li>
+          <li class="callout callout-infobar">
+            <strong>C · Error infobar</strong>
+            仅 changed 显示 MITM 警告；不改变窗体尺寸。
+          </li>
+          <li class="callout callout-details">
+            <strong>D · Detail rows</strong>
+            Known hosts / Expected（changed）/ Presented 或 Fingerprint；等宽值列。
+          </li>
+          <li class="callout callout-spacer">
+            <strong>Spacer</strong>
+            顶开页脚；字段顶对齐不居中。
+          </li>
+          <li class="callout callout-footer">
+            <strong>E · Actions</strong>
+            Cancel | Trust Once | Trust and Save / Replace and Trust（destructive）。
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="legend">
+      <strong>交互</strong>
+      <ul>
+        <li>Esc → Cancel Connection。</li>
+        <li>changed：Cancel 为安全默认焦点；右侧 Replace and Trust 为破坏性主操作（线框深色按钮）。</li>
+        <li>first-trust：Trust and Save 为 accent（非 destructive）。</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var root = document.getElementById("root");
+      var fpLabel = document.getElementById("fp-label");
+      var btnSave = document.getElementById("btn-save");
+      var modes = document.querySelectorAll('input[name="mode"]');
+
+      function sync() {
+        var changed = root.querySelector('input[name="mode"][value="changed"]').checked;
+        root.classList.toggle("mode-changed", changed);
+        if (fpLabel) fpLabel.textContent = changed ? "Presented" : "Fingerprint";
+        if (btnSave) {
+          btnSave.textContent = changed ? "Replace and Trust" : "Trust and Save";
+          btnSave.classList.toggle("btn-accent", !changed);
+          btnSave.classList.toggle("btn-destructive", changed);
+        }
+      }
+
+      modes.forEach(function (r) {
+        r.addEventListener("change", sync);
+      });
+      sync();
+    })();
+  </script>
+</body>
+</html>

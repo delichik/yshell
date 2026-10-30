@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Host keys wireframe</title>
+  <style>
+    :root {
+      --win-w: 1100px; --win-h: 820px; --titlebar-h: 32px; --pad: 28px; --gap: 12px;
+      --ctrl-h: 32px; --list-w: 380px; --row-h: 48px;
+      --modal-w: 560px; --modal-h: 400px;
+      --line: #111; --fill: #fff; --mute: #555; --soft: #f0f0f0; --scrim: #00000066;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--mute); margin-bottom: 10px; }
+    .tools button { height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line); background: var(--fill); font: inherit; cursor: pointer; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .frame { position: relative; width: max-content; }
+    .win { width: var(--win-w); height: var(--win-h); flex-shrink: 0; display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line); }
+    .titlebar { height: var(--titlebar-h); flex: 0 0 var(--titlebar-h); display: flex; align-items: center; padding: 0 12px; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; }
+    .body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: var(--pad); gap: var(--gap); overflow: hidden; }
+    .toolbar { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .toolbar .grow { flex: 1; }
+    .split { flex: 1 1 auto; min-height: 0; display: flex; gap: 16px; overflow: hidden; }
+    .col-left { width: var(--list-w); flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; gap: 8px; }
+    .col-right { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+    .scroll-box { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px dashed var(--line); padding: 4px; }
+    .group-head { height: var(--row-h); font-weight: 600; font-size: 14px; padding: 0 10px; display: flex; align-items: center; border-bottom: 1px solid var(--line); }
+    .entry { min-height: var(--row-h); padding: 6px 10px 6px 20px; border-bottom: 1px solid var(--line); font-size: 13px; cursor: pointer; }
+    .entry[aria-selected="true"] { background: var(--soft); }
+    .entry small { display: block; font-family: ui-monospace, monospace; font-size: 11px; color: var(--mute); }
+    .detail-block { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px solid var(--line); padding: 12px; font-size: 13px; font-family: ui-monospace, monospace; line-height: 1.5; }
+    .spacer { flex: 1 1 auto; min-height: 8px; }
+    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+    .btn { height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line); background: var(--fill); font: inherit; font-size: 14px; cursor: pointer; }
+    .btn-primary { background: var(--soft); font-weight: 600; }
+    .btn-danger { border-color: #800; }
+    .field { margin-bottom: 10px; }
+    .label { font-size: 13px; color: var(--mute); display: block; margin-bottom: 4px; }
+    .input { height: var(--ctrl-h); width: 100%; border: 1px solid var(--line); padding: 0 8px; font: inherit; }
+    .textarea { width: 100%; min-height: 120px; border: 1px solid var(--line); font-family: ui-monospace, monospace; font-size: 12px; padding: 8px; resize: none; }
+    .scrim {
+      display: none; position: absolute; inset: 0; background: var(--scrim);
+      align-items: center; justify-content: center; z-index: 2;
+    }
+    .frame.has-modal .scrim { display: flex; }
+    .frame.has-modal .win { pointer-events: none; }
+    .modal {
+      width: var(--modal-w); height: var(--modal-h); flex-shrink: 0;
+      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+      pointer-events: auto;
+    }
+    .modal .m-body { flex: 1; min-height: 0; padding: var(--pad); display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+    .modal .m-spacer { flex: 1; min-height: 8px; }
+    .legend { max-width: var(--win-w); margin: 20px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+  </style>
+</head>
+<body>
+  <p class="meta">
+    Host Keys · Import（文件 / 粘贴）与 Export 均为<strong>冻结父窗</strong>的子窗，不在右栏内嵌。
+  </p>
+  <div class="tools">
+    <button type="button" id="demo-import-file">Import from file…</button>
+    <button type="button" id="demo-import-paste">Import paste…</button>
+    <button type="button" id="demo-export">Export…</button>
+  </div>
+
+  <div class="stage">
+    <div class="frame" id="frame">
+      <div class="win" role="dialog">
+        <div class="titlebar">Host Keys</div>
+        <div class="body">
+          <div class="toolbar">
+            <button type="button" class="btn" id="btn-import">Import…</button>
+            <button type="button" class="btn" id="btn-export">Export…</button>
+            <a class="btn btn-danger" href="../compact-confirm/index.html" style="display:inline-flex;align-items:center;text-decoration:none;color:inherit">Clear All… → confirm</a>
+            <span class="grow"></span>
+            <span style="font-size:12px;color:var(--mute)">3 hosts · 4 keys</span>
+          </div>
+          <div class="split">
+            <div class="col-left">
+              <strong>Trusted Hosts</strong>
+              <div class="scroll-box">
+                <div class="group-head">edge.example.com:22</div>
+                <div class="entry" aria-selected="true"><span>ED25519</span><small>SHA256:nThU…k8mQ</small></div>
+                <div class="group-head">bastion.internal:2222</div>
+                <div class="entry" aria-selected="false"><span>RSA 4096</span><small>SHA256:abC9…xY2z</small></div>
+                <div class="entry" aria-selected="false"><span>ECDSA</span><small>SHA256:pLm2…9vQw</small></div>
+                <div class="group-head">legacy.box:22</div>
+                <div class="entry"><span>RSA 2048</span><small>SHA256:qWe4…tYu7</small></div>
+              </div>
+              <button type="button" class="btn btn-danger">Remove</button>
+            </div>
+            <div class="col-right">
+              <strong>Host Key Details</strong>
+              <div class="detail-block">
+                Host: edge.example.com<br />
+                Port: 22<br />
+                Algorithm: ED25519<br />
+                Fingerprint: SHA256:nThU…k8mQ<br />
+                Path: …/host_keys.json
+              </div>
+            </div>
+          </div>
+          <div class="spacer"></div>
+          <div class="footer">
+            <hr class="rule" />
+            <div class="actions"><button type="button" class="btn btn-primary">Close</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="scrim" id="scrim" aria-hidden="true">
+        <div class="modal" id="modal-import-file" hidden role="dialog">
+          <div class="titlebar">Import Host Keys</div>
+          <div class="m-body">
+            <p style="margin:0;font-size:13px;color:var(--mute)">Choose a known_hosts or host_keys file to merge.</p>
+            <div class="field">
+              <label class="label">File</label>
+              <div style="display:flex;gap:8px"><input class="input" readonly placeholder="Path to file" /><button type="button" class="btn">Browse…</button></div>
+            </div>
+            <button type="button" class="btn" id="switch-paste" style="align-self:flex-start">Paste text instead…</button>
+            <div class="m-spacer"></div>
+            <hr class="rule" />
+            <div class="actions">
+              <button type="button" class="btn modal-cancel">Cancel</button>
+              <button type="button" class="btn btn-primary">Import</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal" id="modal-import-paste" hidden role="dialog">
+          <div class="titlebar">Paste Host Keys</div>
+          <div class="m-body">
+            <p style="margin:0;font-size:13px;color:var(--mute)">One entry per line: <code>host:port</code> + OpenSSH public key or SHA256 fingerprint.</p>
+            <textarea class="textarea" placeholder="edge.example.com:22 ssh-ed25519 AAAA…"></textarea>
+            <div class="m-spacer"></div>
+            <hr class="rule" />
+            <div class="actions">
+              <button type="button" class="btn modal-cancel">Cancel</button>
+              <button type="button" class="btn btn-primary">Import</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal" id="modal-export" hidden role="dialog">
+          <div class="titlebar">Export Host Keys</div>
+          <div class="m-body">
+            <p style="margin:0;font-size:13px;color:var(--mute)">Write all trusted host keys to a file.</p>
+            <div class="field">
+              <label class="label">Destination</label>
+              <div style="display:flex;gap:8px"><input class="input" readonly value="C:\Users\alice\host_keys_export.json" /><button type="button" class="btn">Browse…</button></div>
+            </div>
+            <div class="m-spacer"></div>
+            <hr class="rule" />
+            <div class="actions">
+              <button type="button" class="btn modal-cancel">Cancel</button>
+              <button type="button" class="btn btn-primary">Export</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <ul>
+      <li>父窗页脚仅 Close；Clear All… / Remove 走确认（另开 confirm，本页未叠画）。</li>
+      <li>Import… / Export… → scrim + compact 子窗；父窗冻结不可点。</li>
+      <li>粘贴导入与文件导入都是子窗，不是右栏内嵌面板。</li>
+    </ul>
+  </div>
+
+  <script>
+    (function () {
+      var frame = document.getElementById("frame");
+      var ids = ["modal-import-file", "modal-import-paste", "modal-export"];
+
+      function closeModal() {
+        frame.classList.remove("has-modal");
+        ids.forEach(function (id) { document.getElementById(id).hidden = true; });
+      }
+
+      function openModal(id) {
+        ids.forEach(function (x) { document.getElementById(x).hidden = x !== id; });
+        frame.classList.add("has-modal");
+      }
+
+      document.getElementById("btn-import").addEventListener("click", function () { openModal("modal-import-file"); });
+      document.getElementById("btn-export").addEventListener("click", function () { openModal("modal-export"); });
+      document.getElementById("demo-import-file").addEventListener("click", function () { openModal("modal-import-file"); });
+      document.getElementById("demo-import-paste").addEventListener("click", function () { openModal("modal-import-paste"); });
+      document.getElementById("demo-export").addEventListener("click", function () { openModal("modal-export"); });
+      document.getElementById("switch-paste").addEventListener("click", function () { openModal("modal-import-paste"); });
+      document.querySelectorAll(".modal-cancel").forEach(function (b) {
+        b.addEventListener("click", closeModal);
+      });
+      document.querySelectorAll(".entry").forEach(function (el) {
+        el.addEventListener("click", function () {
+          document.querySelectorAll(".entry").forEach(function (x) {
+            x.setAttribute("aria-selected", x === el ? "true" : "false");
+          });
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

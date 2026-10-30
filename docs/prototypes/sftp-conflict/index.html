@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — SFTP conflict wireframe</title>
+  <style>
+    :root {
+      --win-w: 720px;
+      --win-h: 580px;
+      --titlebar-h: 32px;
+      --pad: 28px;
+      --gap: 16px;
+      --ctrl-h: 32px;
+      --anno-w: 200px;
+      --list-min: 120px;
+      --line: #111;
+      --fill: #fff;
+      --mute: #555;
+      --soft: #f0f0f0;
+      --anno: #336;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--line);
+      background: #e8e8e8;
+    }
+    .meta {
+      max-width: calc(var(--win-w) + 16px + var(--anno-w));
+      margin: 0 0 16px;
+      font-size: 13px;
+      color: var(--mute);
+    }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .frame {
+      display: grid;
+      grid-template-columns: var(--win-w) var(--anno-w);
+      column-gap: 16px;
+      width: max-content;
+    }
+    .win {
+      width: var(--win-w);
+      height: var(--win-h);
+      display: flex;
+      flex-direction: column;
+      background: var(--fill);
+      border: 1px solid var(--line);
+      flex-shrink: 0;
+    }
+    .callouts {
+      grid-column: 2;
+      position: relative;
+      height: var(--win-h);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .callout {
+      position: absolute;
+      left: 0;
+      right: 0;
+      font-size: 11px;
+      color: var(--anno);
+      line-height: 1.35;
+    }
+    .callout::before {
+      content: "";
+      position: absolute;
+      left: -12px;
+      top: 0.55em;
+      width: 10px;
+      border-top: 1px dashed var(--anno);
+    }
+    .callout strong { display: block; color: var(--line); margin-bottom: 2px; }
+    .callout-title { top: 6px; }
+    .callout-summary { top: 48px; }
+    .callout-list { top: 120px; }
+    .callout-footer { top: 520px; }
+
+    .titlebar {
+      height: var(--titlebar-h);
+      flex: 0 0 var(--titlebar-h);
+      display: flex;
+      align-items: center;
+      padding: 0 8px 0 12px;
+      gap: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .title { flex: 1; font-size: 12px; font-weight: 600; }
+    .cap {
+      width: 40px;
+      height: 24px;
+      border: 1px solid var(--line);
+      font-size: 10px;
+      background: transparent;
+    }
+    .body {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: var(--pad);
+      gap: var(--gap);
+      overflow: hidden;
+    }
+    .tag {
+      position: absolute;
+      top: 0;
+      right: 0;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--anno);
+      background: #e8e8e8;
+      border: 1px dashed var(--anno);
+      padding: 1px 5px;
+      pointer-events: none;
+    }
+    .region { position: relative; }
+
+    .headline {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .route {
+      margin: 0;
+      font-size: 12px;
+      font-family: ui-monospace, monospace;
+      color: var(--mute);
+      word-break: break-all;
+    }
+    .list-block {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow: hidden;
+    }
+    .list-label {
+      margin: 0;
+      font-size: 14px;
+      color: var(--mute);
+      flex: 0 0 auto;
+    }
+    .list-scroll {
+      flex: 1 1 auto;
+      min-height: var(--list-min);
+      max-height: 100%;
+      overflow: auto;
+      padding: 12px;
+      border: 1px solid var(--line);
+      background: var(--soft);
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    .caption {
+      margin: 0;
+      flex: 0 0 auto;
+      font-size: 12px;
+      color: var(--mute);
+      line-height: 1.4;
+    }
+    .spacer {
+      flex: 1 1 auto;
+      min-height: 12px;
+    }
+
+    .footer {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .rule { margin: 0; border: 0; border-top: 1px solid var(--line); }
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      height: var(--ctrl-h);
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font: inherit;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .btn-accent { background: var(--soft); font-weight: 600; }
+
+    .legend {
+      max-width: calc(var(--win-w) + 16px + var(--anno-w));
+      margin: 20px 0 0;
+      padding: 12px 14px;
+      border: 1px dashed var(--line);
+      font-size: 12px;
+      color: var(--mute);
+    }
+  </style>
+</head>
+<body>
+  <p class="meta">
+    SFTP 覆盖冲突 · <code>720×580</code> · 仅 <strong>Conflicting paths</strong> 区滚动（min-height 120）·
+    对照 <code>SftpConflictDialog</code> · Esc 不关闭（B23）。
+  </p>
+
+  <div class="stage">
+    <div class="frame">
+      <div class="win" role="dialog">
+        <div class="titlebar region">
+          <span class="tag">A</span>
+          <div class="title">Resolve conflicts</div>
+          <button type="button" class="cap" tabindex="-1" aria-hidden="true">×</button>
+        </div>
+
+        <div class="body">
+          <div class="region">
+            <span class="tag">B</span>
+            <p class="headline">3 destination path(s) already exist.</p>
+            <p class="route">/home/alice/project → /var/www/deploy</p>
+          </div>
+
+          <div class="list-block region">
+            <span class="tag">C</span>
+            <p class="list-label">Conflicting paths</p>
+            <div class="list-scroll" tabindex="0">index.html
+assets/logo.png
+assets/logo@2x.png
+css/app.css
+js/bundle.js
+js/vendor.js
+README.md
+config/settings.json
+config/secrets.env
+public/favicon.ico
+public/robots.txt</div>
+          </div>
+
+          <p class="caption region">
+            Overwrite replaces them, Rename keeps both by adding a number, Skip leaves them untouched.
+          </p>
+
+          <div class="spacer" aria-hidden="true"></div>
+
+          <div class="footer region">
+            <span class="tag">D</span>
+            <hr class="rule" />
+            <div class="actions">
+              <button type="button" class="btn">Cancel</button>
+              <button type="button" class="btn">Skip</button>
+              <button type="button" class="btn">Rename</button>
+              <button type="button" class="btn btn-accent">Overwrite</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <ul class="callouts">
+        <li class="callout callout-title"><strong>A</strong> Chrome 标题 Resolve conflicts。</li>
+        <li class="callout callout-summary"><strong>B</strong> 冲突数量 + source → dest。</li>
+        <li class="callout callout-list"><strong>C</strong> 唯一滚动区；mono 路径列表。</li>
+        <li class="callout callout-footer"><strong>D</strong> Cancel · Skip · Rename · Overwrite（accent）。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="legend">resolve 回调：skip / rename / overwrite；Cancel → canceled()。</div>
+</body>
+</html>

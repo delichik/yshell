@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Theme manager wireframe</title>
+  <style>
+    :root {
+      --win-w: 1100px; --win-h: 820px; --titlebar-h: 32px; --pad: 28px; --gap: 12px;
+      --ctrl-h: 32px; --list-w: 380px; --row-h: 56px;
+      --line: #111; --fill: #fff; --mute: #555; --soft: #f0f0f0;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); }
+    .tools { font-size: 13px; color: var(--mute); margin-bottom: 10px; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .win { width: var(--win-w); height: var(--win-h); flex-shrink: 0; display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line); }
+    .titlebar { height: var(--titlebar-h); flex: 0 0 var(--titlebar-h); display: flex; align-items: center; padding: 0 12px; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; }
+    .body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: var(--pad); gap: var(--gap); overflow: hidden; }
+    .split { flex: 1 1 auto; min-height: 0; display: flex; gap: 16px; overflow: hidden; }
+    .col-left { width: var(--list-w); flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; gap: 8px; }
+    .col-right { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+    .scroll-list { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px dashed var(--line); padding: 4px; }
+    .scroll-detail { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px solid var(--line); padding: 16px; }
+    .theme-row {
+      height: var(--row-h); display: flex; align-items: center; gap: 8px; padding: 0 8px;
+      border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13px; background: transparent; width: 100%; text-align: left; border-left: 0; border-right: 0; border-top: 0;
+    }
+    .theme-row[aria-pressed="true"] { background: var(--soft); font-weight: 600; }
+    .swatches { display: flex; gap: 3px; margin-left: auto; }
+    .sw { width: 20px; height: 14px; border: 1px solid var(--line); }
+    .preview { height: 120px; border: 1px solid var(--line); background: #0c0c0c; color: #ccc; font-family: ui-monospace, monospace; font-size: 12px; padding: 10px; flex-shrink: 0; }
+    .heading { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
+    .field { margin-bottom: 10px; }
+    .label { font-size: 13px; color: var(--mute); display: block; margin-bottom: 4px; }
+    .input { height: var(--ctrl-h); width: 100%; max-width: 320px; border: 1px solid var(--line); padding: 0 8px; font: inherit; }
+    .panel-edit[hidden] { display: none !important; }
+    .spacer { flex: 1 1 auto; min-height: 8px; }
+    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+    .btn { height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line); background: var(--fill); font: inherit; cursor: pointer; }
+    .btn-primary { background: var(--soft); font-weight: 600; }
+    .legend { max-width: var(--win-w); margin: 20px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+  </style>
+</head>
+<body>
+  <p class="meta">Theme Manager · <code>1100×820</code> · 左列表 <code>380</code> 可滚 · 右预览/编辑可滚</p>
+  <div class="tools">
+    <label><input type="checkbox" id="edit-mode" /> 右栏：Edit 模式（vs 只读预览）</label>
+  </div>
+  <div class="stage">
+    <div class="win" role="dialog">
+      <div class="titlebar">Theme Manager</div>
+      <div class="body">
+        <div class="split">
+          <div class="col-left">
+            <strong style="font-size:14px">Themes</strong>
+            <div class="scroll-list" id="theme-list">
+              <button type="button" class="theme-row" aria-pressed="true"><span>Campbell</span><span class="swatches"><span class="sw" style="background:#ccc"></span><span class="sw" style="background:#c00"></span></span></button>
+              <button type="button" class="theme-row" aria-pressed="false"><span>Campbell (Dark)</span><span class="swatches"><span class="sw" style="background:#888"></span><span class="sw" style="background:#0a0"></span></span></button>
+              <button type="button" class="theme-row" aria-pressed="false"><span>Custom — ops</span><span class="swatches"><span class="sw" style="background:#feb"></span><span class="sw" style="background:#369"></span></span></button>
+              <button type="button" class="theme-row" aria-pressed="false"><span>Custom — demo</span><span class="swatches"><span class="sw"></span><span class="sw"></span></span></button>
+              <button type="button" class="theme-row" aria-pressed="false"><span>Extra row (scroll)</span><span class="swatches"><span class="sw"></span></span></button>
+              <button type="button" class="theme-row" aria-pressed="false"><span>Extra row 2</span><span class="swatches"><span class="sw"></span></span></button>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="btn">Set as Default</button>
+              <button type="button" class="btn">Clone</button>
+            </div>
+          </div>
+          <div class="col-right">
+            <div class="preview">$ theme preview — live bitmap in product</div>
+            <div class="scroll-detail">
+              <div id="view-preview">
+                <h2 class="heading">Campbell</h2>
+                <p style="font-size:13px;color:var(--mute)">Built-in · Current default</p>
+                <p style="font-size:13px">行点击只改预览；Set as Default 才写全局。</p>
+              </div>
+              <div class="panel-edit" id="view-edit" hidden>
+                <h2 class="heading">Edit theme</h2>
+                <div class="field"><label class="label">Name</label><input class="input" value="Custom — ops" /></div>
+                <div class="field"><label class="label">Foreground / Background / …</label><p class="label">ANSI 16 + role colors（占位网格）</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <div class="footer">
+          <hr class="rule" />
+          <div class="actions" id="footer-browse">
+            <button type="button" class="btn btn-primary">Close</button>
+          </div>
+          <div class="actions" id="footer-edit" hidden>
+            <button type="button" class="btn">Cancel</button>
+            <button type="button" class="btn btn-primary">Save theme</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="legend">
+    <ul>
+      <li>浏览：页脚 <strong>Close</strong>。编辑：页脚换成 <strong>Cancel | Save theme</strong>（不与 Close 并存）。</li>
+      <li>左列表 / 右详情各自滚动；列表宽 <code>380</code>。</li>
+    </ul>
+  </div>
+  <script>
+    document.querySelectorAll(".theme-row").forEach(function (row) {
+      row.addEventListener("click", function () {
+        document.querySelectorAll(".theme-row").forEach(function (r) { r.setAttribute("aria-pressed", r === row ? "true" : "false"); });
+      });
+    });
+    document.getElementById("edit-mode").addEventListener("change", function (e) {
+      var editing = e.target.checked;
+      document.getElementById("view-preview").hidden = editing;
+      document.getElementById("view-edit").hidden = !editing;
+      document.getElementById("footer-browse").hidden = editing;
+      document.getElementById("footer-edit").hidden = !editing;
+    });
+  </script>
+</body>
+</html>

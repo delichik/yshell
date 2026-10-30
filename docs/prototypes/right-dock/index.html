@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="2; url=../tool-dock/index.html">
+  <title>YShell — Right dock moved to tool-dock</title>
+  <style>
+    :root {
+      --line: #111;
+      --fill: #fff;
+      --mute: #555;
+      --bg: #e8e8e8;
+    }
+    body {
+      margin: 0;
+      padding: 48px 24px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--line);
+      background: var(--bg);
+      line-height: 1.5;
+    }
+    .card {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 20px 22px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font-size: 14px;
+    }
+    .card p { margin: 0 0 12px; color: var(--mute); }
+    .card ul { margin: 0 0 12px; padding-left: 20px; color: var(--mute); }
+    .card li { margin: 4px 0; }
+    .card a { color: var(--line); font-weight: 600; }
+    .card strong { color: var(--line); }
+    code { font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <p><strong>Right dock tabs are obsolete</strong></p>
+    <p>
+      This page previously showed a single right stack with Transfers / Tunnels / Commands tabs.
+      Panel <strong>content</strong> is now split into dedicated prototypes; stack chrome lives in ToolDock.
+    </p>
+    <ul>
+      <li><a href="../panel-transfers/index.html">panel-transfers</a></li>
+      <li><a href="../panel-tunnels/index.html">panel-tunnels</a></li>
+      <li><a href="../panel-commands/index.html">panel-commands</a></li>
+    </ul>
+    <p>
+      Continue to <a href="../tool-dock/index.html">tool-dock/index.html</a>
+      (auto-redirect in 2s) · <a href="../index.html">prototypes index</a>
+    </p>
+  </div>
+</body>
+</html>

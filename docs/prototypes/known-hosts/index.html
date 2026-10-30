@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Known hosts wireframe</title>
+  <style>
+    :root {
+      --win-w: 1100px; --win-h: 820px; --titlebar-h: 32px; --pad: 28px; --gap: 12px;
+      --ctrl-h: 32px; --list-w: 380px;
+      --line: #111; --fill: #fff; --mute: #555; --soft: #f0f0f0; --danger: #800;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .win { width: var(--win-w); height: var(--win-h); flex-shrink: 0; display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line); }
+    .titlebar { height: var(--titlebar-h); flex: 0 0 var(--titlebar-h); display: flex; align-items: center; padding: 0 12px; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; }
+    .body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: var(--pad); gap: var(--gap); overflow: hidden; }
+    .split { flex: 1 1 auto; min-height: 0; display: flex; gap: 16px; overflow: hidden; }
+    .col-left { width: var(--list-w); flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; gap: 8px; }
+    .col-right { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+    .scroll-box { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px dashed var(--line); padding: 10px; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.45; white-space: pre; }
+    .detail-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px solid var(--line); padding: 12px; font-family: ui-monospace, monospace; font-size: 12px; }
+    .danger { flex: 0 0 auto; border: 1px solid var(--danger); padding: 12px; color: var(--danger); }
+    .danger h3 { margin: 0 0 8px; font-size: 14px; }
+    .danger p { margin: 0 0 8px; font-size: 13px; font-family: ui-sans-serif, system-ui, sans-serif; }
+    .input { height: var(--ctrl-h); width: 100%; max-width: 280px; border: 1px solid var(--line); padding: 0 8px; font: inherit; }
+    .row-btns { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+    .spacer { flex: 1 1 auto; min-height: 8px; }
+    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+    .btn { height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line); background: var(--fill); font: inherit; font-size: 14px; cursor: pointer; }
+    .btn-primary { background: var(--soft); font-weight: 600; }
+    .btn-danger { border-color: var(--danger); color: var(--danger); }
+    .legend { max-width: var(--win-w); margin: 20px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+  </style>
+</head>
+<body>
+  <p class="meta">Known Hosts · 左 Persisted Entries <code>380</code> · 右详情 + Danger Zone（<strong>无</strong>打字确认）</p>
+  <div class="stage">
+    <div class="win" role="dialog">
+      <div class="titlebar">Known Hosts</div>
+      <div class="body">
+        <div class="split">
+          <div class="col-left">
+            <strong>Persisted Entries</strong>
+            <div class="scroll-box">|1|edge.example.com|22|ssh-ed25519|AAAA…
+|1|bastion|2222|ssh-rsa|AAAA…
+|1|db.internal|22|ecdsa-sha2-nistp256|AAAA…
+…</div>
+            <div class="row-btns">
+              <button type="button" class="btn">Prev</button>
+              <button type="button" class="btn">Next</button>
+              <button type="button" class="btn btn-danger">Remove Selected</button>
+            </div>
+          </div>
+          <div class="col-right">
+            <strong>Host Key Details</strong>
+            <p style="margin:0;font-size:12px;color:var(--mute)">Path: C:\Users\…\.ssh\known_hosts</p>
+            <div class="detail-scroll">
+              Host: edge.example.com<br />
+              Port: 22<br />
+              Algorithm: ssh-ed25519<br />
+              Fingerprint: SHA256:nThU…k8mQ
+            </div>
+            <div class="danger">
+              <h3>Danger Zone</h3>
+              <p>Remove every persisted known host entry from disk. New connections will ask you to trust hosts again.</p>
+              <div class="row-btns" style="margin-top:10px">
+                <a class="btn btn-danger" href="../compact-confirm/index.html" style="display:inline-flex;align-items:center;text-decoration:none;color:inherit">Clear all… → confirm</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <div class="footer">
+          <hr class="rule" />
+          <div class="actions"><button type="button" class="btn btn-primary">Close</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="legend">
+    <ul>
+      <li>左清单与右详情区分别滚动；Danger Zone 固定在右列底部。</li>
+      <li>清空：按钮打开 destructive 确认窗——<strong>禁止</strong>手输 CLEAR。</li>
+      <li>窗体 <code>1100×820</code>；body <code>overflow: hidden</code>。</li>
+    </ul>
+  </div>
+</body>
+</html>

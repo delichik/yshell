@@ -53,21 +53,25 @@ macOS 菜单显示 `Cmd`，Windows/Linux 显示 `Ctrl`。终端内快捷键冲�
 
 ## 2. 主窗口布局
 
-主窗口从上到下、从左到右固定为以下区域：
+主窗口从上到下、从左到右为以下区域（**N3 ToolDock**：两侧是可换边的面板栈，不是固定 sidebar）：
 
 ```text
 AppMenu
 MainToolbar
-SessionSidebar | WorkspaceTabs + TerminalWorkspace | RightDock
+Left stack | WorkspaceTabs + TerminalWorkspace | Right stack
 StatusBar
 ```
+
+- **Left / Right stack**：有序竖排 `PanelFrame`（Sessions / Tunnels / QuickCommands / Transfers）。每面板 `PanelPlacement = Left | Right | Hidden`；标题 `⋯`：Move to Left / Move to Right、Collapse、Hide；同栈上下分栏可拖。
+- **默认布局（非锁死）**：左栈 Sessions；右栈 Tunnels + QuickCommands。Transfers 常通过 View 或传输任务显示。SFTP **不是** dock 面板，是工作区标签。
+- 布局持久化见 status「面板停靠 N3」与 `[ui.layout]`。
 
 默认尺寸：
 
 - 最小窗口：`1120 x 720`。
 - 默认窗口：`1440 x 900`。
-- SessionSidebar 默认宽度：`260px`，可拖拽范围 `200-420px`。
-- RightDock 默认宽度：`330px`，可拖拽范围 `280-560px`。
+- 左栈默认宽度：`260px`，可拖拽范围 `200-420px`（按边记忆）。
+- 右栈默认宽度：`330px`，可拖拽范围 `280-560px`（按边记忆）。
 - StatusBar 高度：`30px`。
 
 ## 3. AppMenu
@@ -105,18 +109,18 @@ StatusBar
 | `menu.session.duplicate_tab` | Duplicate Tab | 菜单项 | 使用相同 SessionProfile 打开新标签并连接。 | 无 | 当前标签有会话 profile 时启用。 |
 | `menu.session.edit` | Edit Session... | 菜单项 | 打开 Session Editor，模式为 edit。 | 无 | 选中保存的会话时启用。 |
 | `menu.session.open_sftp` | Open SFTP | 菜单项 | 在当前会话上打开 SFTP 标签（固定本地/远程左右两栏）。 | `Ctrl+Shift+S` | 当前标签已连接时启用。 |
-| `menu.session.tunnels` | Tunnels... | 菜单项 | 打开右侧 Tunnel 面板。 | 无 | 当前标签存在时启用。 |
+| `menu.session.tunnels` | Tunnels... | 菜单项 | 显示 Tunnels 面板（落在其当前栈侧；默认右栈）。 | 无 | 当前标签存在时启用。 |
 
 ### 3.4 View 菜单
 
 | 控件 ID | 文案 | 类型 | 左键行为 | 快捷键 | 状态规则 |
 |---|---|---|---|---|---|
-| `menu.view.session_manager` | Session Manager | 勾选菜单项 | 显示/隐藏左侧会话树。 | `Ctrl+B` | 始终启用。 |
-| `menu.view.transfers` | Transfers | 勾选菜单项 | 显示/隐藏右侧传输队列面板。 | 无 | 始终启用。 |
+| `menu.view.session_manager` | Sessions | 勾选菜单项 | 显示/隐藏 Sessions 面板（可停左或右栈；默认左）。 | `Ctrl+B` | 始终启用。 |
+| `menu.view.transfers` | Transfers | 勾选菜单项 | 显示/隐藏 Transfers 面板（可停任一栈）。 | 无 | 始终启用。 |
 | `menu.view.quick_commands` | Quick Commands | 勾选菜单项 | 显示/隐藏 Quick Commands 面板。 | 无 | 始终可勾选；**面板内容本版未提供**（空态说明）。 |
-| `menu.view.tunnel_panel` | Tunnel Panel | 勾选菜单项 | 显示/隐藏 Tunnels 面板。 | 无 | 始终启用。配置可编辑；**Start/Stop 转发 runtime 尚未 provision**（见 status §3）。 |
+| `menu.view.tunnel_panel` | Tunnels | 勾选菜单项 | 显示/隐藏 Tunnels 面板。 | 无 | 始终启用。配置可编辑；**Start/Stop 转发 runtime 尚未 provision**（见 status §3）。 |
 | `menu.view.fullscreen` | Full Screen | 勾选菜单项 | 切换全屏。 | `F11` | 始终启用。 |
-| `menu.view.focus_mode` | Focus Mode | 勾选菜单项 | 隐藏左右面板和工具栏，仅保留标签、终端、状态栏。 | 无 | 当前存在终端标签时启用。 |
+| `menu.view.focus_mode` | Focus Mode | 勾选菜单项 | 隐藏左右栈与工具栏，仅保留标签、终端、状态栏。 | 无 | 当前存在终端标签时启用。 |
 
 ## 4. MainToolbar
 
@@ -145,7 +149,9 @@ StatusBar
 - host 为空：输入框下方显示 `Host is required`。
 - 解析成功但没有认证信息：打开 Quick Auth Dialog。
 
-## 5. SessionSidebar
+## 5. Sessions panel
+
+Sessions 是可停靠工具面板（`PanelId::Sessions`），内容为会话树；可放在 **左栈或右栈**（默认左）。面板外壳（标题 / ⋯ Move·Collapse·Hide / 折叠）见 §8 与 N3 `PanelFrame`；本节只规定树内容。实现组件名可能仍为 `session_sidebar.slint`。
 
 ### 5.1 顶部区域
 
@@ -154,7 +160,7 @@ StatusBar
 | `sidebar.header.title` | SAVED / 会话树标题 | 文本 | 无 | 无 | 始终显示。 |
 | `sidebar.search.input` | Search sessions | 单行输入框 | 聚焦搜索。 | 清空/粘贴上下文菜单。 | 始终启用。 |
 
-> **本版（S1）**：侧栏常驻 `+` / `…` 已删除；新建会话/文件夹/刷新走空白区右键（及 File / CommandBar New Session）。
+> **本版（S1）**：面板内常驻 `+` / `…` 树工具已删除（面板级 `⋯` 仍负责 Move/Collapse/Hide）；新建会话/刷新走空白区右键（及 File / CommandBar New Session）。Folder New Folder / Rename / Delete 本版不做（见 status §2）。
 
 ### 5.2 会话树项目
 
@@ -314,16 +320,18 @@ Split 下拉菜单：
 - Highlight All 开启时，目标终端标签显示匹配数量 badge。
 - 搜索不发送任何内容到 SSH，不影响连接状态。
 
-## 8. RightDock
+## 8. ToolDock panels（N3）
 
-RightDock 是 tabbed dock，第一版包含 `Transfers`、`Tunnels`、`Commands`、`Session Info`。`Local` / `SFTP` 不再作为 RightDock 面板；SFTP 是独立标签，固定本地左栏 / 远程右栏。默认显示 `Tunnels` 和 `Commands`，`Transfers` 通过 View 菜单或传输任务打开。
+可停靠面板不是固定「右侧 Tab」：每个面板是独立 `PanelFrame`，可出现在左栈或右栈，同栈内上下分栏。活动 dock 面板：`Sessions`、`Tunnels`、`QuickCommands`、`Transfers`。`Local` / `SFTP` **不是** dock 面板；SFTP 是工作区标签（本地左栏 / 远程右栏）。默认右栈常显示 `Tunnels` + `QuickCommands`；`Transfers` 多由 View 或传输任务打开。
 
-| Dock Tab | 左键行为 | 右键行为 |
+| Panel | 内容要点 | 面板级菜单（⋯） |
 |---|---|---|
-| Transfers | 切换到传输队列。 | 菜单：Clear Completed、Pause All、Resume All。 |
-| Tunnels | 切换到端口转发面板。 | 菜单：Add Tunnel、Stop All。 |
-| Commands | 切换到快捷命令。 | 菜单：New Command、Manage Groups。 |
-| Session Info | 切换到当前会话信息。 | 无。 |
+| Sessions | 会话树（见 §5） | Move to Left/Right · Collapse · Hide |
+| Transfers | 传输队列；队列项可 Clear Completed / Pause / Resume（内容区或上下文） | 同上 |
+| Tunnels | 端口转发列表；Add / Start/Stop（runtime 本版未 provision，见 status §3） | 同上 |
+| Quick Commands | 本版仅空态（见 status §2） | 同上 |
+
+面板拖拽换边/换序与栏宽、分栏比例持久化见 status N3 与 `[ui.layout]`。原型：`docs/prototypes/tool-dock/`、`panel-*`。
 
 ## 8.1 Send Key Input To 状态条
 

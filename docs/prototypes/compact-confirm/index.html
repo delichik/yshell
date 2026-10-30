@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Compact confirm wireframe</title>
+  <style>
+    /* Theme.tool-window-*-compact — do not scale the dialog to the viewport. */
+    :root {
+      --win-w: 560px;
+      --win-h: 400px;
+      --titlebar-h: 32px;
+      --pad: 28px;
+      --gap: 16px;
+      --ctrl-h: 32px;
+      --anno-w: 200px;
+      --line: #111;
+      --fill: #fff;
+      --mute: #555;
+      --soft: #f0f0f0;
+      --anno: #336;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--line);
+      background: #e8e8e8;
+    }
+    .meta {
+      max-width: calc(var(--win-w) + 16px + var(--anno-w));
+      margin: 0 0 16px;
+      font-size: 13px;
+      color: var(--mute);
+      line-height: 1.45;
+    }
+    .meta code { font-size: 12px; }
+    .tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: var(--mute);
+    }
+    .tools label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .stage {
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+    .frame {
+      display: grid;
+      grid-template-columns: var(--win-w) var(--anno-w);
+      column-gap: 16px;
+      width: max-content;
+      align-items: start;
+    }
+    .win {
+      width: var(--win-w);
+      height: var(--win-h);
+      display: flex;
+      flex-direction: column;
+      background: var(--fill);
+      border: 1px solid var(--line);
+      flex-shrink: 0;
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .callouts {
+      grid-column: 2;
+      grid-row: 1;
+      position: relative;
+      height: var(--win-h);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .callout {
+      position: absolute;
+      left: 0;
+      right: 0;
+      font-size: 11px;
+      line-height: 1.35;
+      color: var(--anno);
+    }
+    .callout::before {
+      content: "";
+      position: absolute;
+      left: -12px;
+      top: 0.55em;
+      width: 10px;
+      border-top: 1px dashed var(--anno);
+    }
+    .callout strong {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      margin-bottom: 2px;
+      color: var(--line);
+    }
+    .callout-title { top: 6px; }
+    .callout-message { top: 72px; }
+    .callout-token { top: 148px; }
+    .callout-spacer { top: 260px; }
+    .callout-footer { top: 340px; }
+    .root:not([data-state="token"]) .callout-token { display: none; }
+
+    .titlebar {
+      height: var(--titlebar-h);
+      flex: 0 0 var(--titlebar-h);
+      display: flex;
+      align-items: center;
+      padding: 0 8px 0 12px;
+      gap: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .title {
+      flex: 1;
+      min-width: 0;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .cap {
+      width: 40px;
+      height: 24px;
+      border: 1px solid var(--line);
+      background: transparent;
+      font-size: 10px;
+      color: var(--line);
+      padding: 0;
+      border-radius: 0;
+    }
+    .body {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: var(--pad);
+      gap: var(--gap);
+      overflow: hidden;
+    }
+    .tag {
+      position: absolute;
+      top: 0;
+      right: 0;
+      z-index: 1;
+      padding: 1px 5px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      color: var(--anno);
+      background: #e8e8e8;
+      border: 1px dashed var(--anno);
+      pointer-events: none;
+      user-select: none;
+    }
+    .region { position: relative; }
+    .message-row {
+      flex: 0 0 auto;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .warn-icon {
+      flex: 0 0 24px;
+      width: 24px;
+      height: 24px;
+      border: 1px solid var(--line);
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 22px;
+      text-align: center;
+      display: none;
+    }
+    .root[data-state="destructive"] .warn-icon,
+    .root[data-state="token"] .warn-icon { display: block; }
+    .message {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.4;
+      flex: 1;
+    }
+    .root[data-state="destructive"] .message,
+    .root[data-state="token"] .message {
+      font-weight: 600;
+    }
+    .token-block {
+      flex: 0 0 auto;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .root[data-state="token"] .token-block { display: flex; }
+    .label {
+      font-size: 13px;
+      color: var(--mute);
+    }
+    .input {
+      height: var(--ctrl-h);
+      padding: 0 8px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      color: var(--line);
+      font: inherit;
+      font-size: 14px;
+      border-radius: 0;
+      width: 100%;
+    }
+    .hint {
+      margin: 0;
+      font-size: 13px;
+      color: var(--mute);
+      line-height: 1.35;
+    }
+    .note {
+      margin: 0;
+      font-size: 11px;
+      color: var(--anno);
+      line-height: 1.35;
+    }
+    .spacer {
+      flex: 1 1 auto;
+      min-height: 12px;
+      position: relative;
+      border: 1px dashed transparent;
+    }
+    .spacer::after {
+      content: "spacer · 顶开页脚";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 10px;
+      color: var(--mute);
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0.7;
+    }
+    .footer {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .rule {
+      height: 0;
+      margin: 0;
+      border: 0;
+      border-top: 1px solid var(--line);
+    }
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .btn {
+      appearance: none;
+      height: var(--ctrl-h);
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      color: var(--line);
+      font: inherit;
+      font-size: 14px;
+      cursor: pointer;
+      border-radius: 0;
+    }
+    .btn-primary {
+      background: var(--soft);
+      font-weight: 600;
+    }
+    .btn-danger {
+      background: var(--line);
+      color: var(--fill);
+      font-weight: 600;
+    }
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .legend {
+      max-width: calc(var(--win-w) + 16px + var(--anno-w));
+      margin: 20px 0 0;
+      padding: 12px 14px;
+      border: 1px dashed var(--line);
+      font-size: 12px;
+      color: var(--mute);
+      line-height: 1.55;
+    }
+    .legend strong { color: var(--line); font-weight: 600; }
+    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+  </style>
+</head>
+<body>
+  <div class="root" id="root" data-state="normal">
+    <p class="meta">
+      Compact confirm 线框 · 固定 <code>560×400</code>（<code>Theme.tool-window-*-compact</code>）·
+      标题栏 <code>32</code> · 内边距 <code>28</code> · body 不滚动。
+    </p>
+
+    <div class="tools" role="group" aria-label="Prototype state">
+      <label><input type="radio" name="state" value="normal" checked /> Normal confirm</label>
+      <label><input type="radio" name="state" value="destructive" /> Destructive (delete / clear)</label>
+    </div>
+
+    <div class="stage">
+      <div class="frame">
+        <div class="win" role="dialog" aria-labelledby="win-title">
+          <div class="titlebar region">
+            <span class="tag">A · chrome</span>
+            <div class="title" id="win-title">Disconnect</div>
+            <button type="button" class="cap" tabindex="-1" aria-hidden="true">_</button>
+            <button type="button" class="cap" tabindex="-1" aria-hidden="true">□</button>
+            <button type="button" class="cap" tabindex="-1" aria-hidden="true">×</button>
+          </div>
+
+          <div class="body">
+            <div class="message-row region">
+              <span class="tag">B · message</span>
+              <div class="warn-icon" aria-hidden="true">!</div>
+              <p class="message" id="message">Close the active session to web-01? Unsaved work in the terminal is not preserved.</p>
+            </div>
+
+            <div class="spacer" aria-hidden="true"></div>
+
+            <div class="footer region">
+              <span class="tag">C · footer</span>
+              <hr class="rule" />
+              <div class="actions">
+                <button type="button" class="btn">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirm-btn">Confirm</button>
+              </div>
+              <p class="note" id="focus-note">Esc = Cancel · 危险确认默认 focus Cancel</p>
+            </div>
+          </div>
+        </div>
+
+        <ul class="callouts" aria-label="Design annotations">
+          <li class="callout callout-title">
+            <strong>A · Chrome 标题</strong>
+            后果摘要写在标题栏（Disconnect / Delete / Clear all…）；正文只讲细节。
+          </li>
+          <li class="callout callout-message">
+            <strong>B · 后果正文</strong>
+            destructive 加警告图标 + 明确不可撤销说明；<strong>禁止</strong>要求手输 CLEAR/DELETE。
+          </li>
+          <li class="callout callout-spacer">
+            <strong>Spacer</strong>
+            短内容顶对齐；页脚钉底，窗体恒 560×400。
+          </li>
+          <li class="callout callout-footer">
+            <strong>C · 页脚</strong>
+            Cancel | 明确动词（Delete / Clear all）；危险按钮 critical；安全默认焦点在 Cancel。
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="legend">
+      <strong>产品规则</strong>
+      <ul>
+        <li><strong>永不</strong>用「输入确认词」才能点确认——删除/清空只用文案 + 破坏性按钮。</li>
+        <li>普通 / 破坏性两态即可；清空 secrets / known hosts 走 destructive，主按钮写 Clear all / Delete。</li>
+        <li>危险确认：默认 focus Cancel（E-064）；Esc = Cancel。</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var root = document.getElementById("root");
+      var title = document.getElementById("win-title");
+      var message = document.getElementById("message");
+      var confirmBtn = document.getElementById("confirm-btn");
+      var focusNote = document.getElementById("focus-note");
+
+      var copy = {
+        normal: {
+          title: "Disconnect",
+          message: "Close the active session to web-01? Unsaved work in the terminal is not preserved.",
+          label: "Disconnect",
+          focus: "Esc = Cancel"
+        },
+        destructive: {
+          title: "Clear all known hosts",
+          message: "Remove every persisted known host entry from disk. New connections will ask you to trust hosts again. This cannot be undone.",
+          label: "Clear all",
+          focus: "Esc = Cancel · 默认 focus Cancel（E-064）· 无打字确认"
+        }
+      };
+
+      function setState(name) {
+        root.setAttribute("data-state", name);
+        var c = copy[name];
+        if (title) title.textContent = c.title;
+        if (message) message.textContent = c.message;
+        if (confirmBtn) {
+          confirmBtn.textContent = c.label;
+          confirmBtn.className = "btn " + (name === "destructive" ? "btn-danger" : "btn-primary");
+          confirmBtn.disabled = false;
+        }
+        if (focusNote) focusNote.textContent = c.focus;
+      }
+
+      root.querySelectorAll('input[name="state"]').forEach(function (r) {
+        r.addEventListener("change", function () {
+          if (r.checked) setState(r.value);
+        });
+      });
+
+      setState("normal");
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Logging wireframe</title>
+  <style>
+    :root {
+      --win-w: 720px;
+      --win-h: 580px;
+      --titlebar-h: 32px;
+      --pad: 28px;
+      --gap: 16px;
+      --ctrl-h: 32px;
+      --anno-w: 200px;
+      --label-w: 100px;
+      --line: #111;
+      --fill: #fff;
+      --mute: #555;
+      --soft: #f0f0f0;
+      --anno: #336;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--line);
+      background: #e8e8e8;
+    }
+    .meta {
+      max-width: calc(var(--win-w) + 16px + var(--anno-w));
+      margin: 0 0 16px;
+      font-size: 13px;
+      color: var(--mute);
+      line-height: 1.45;
+    }
+    .meta code { font-size: 12px; }
+    .tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: var(--mute);
+    }
+    .tools label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .frame {
+      display: grid;
+      grid-template-columns: var(--win-w) var(--anno-w);
+      column-gap: 16px;
+      width: max-content;
+      align-items: start;
+    }
+    .win {
+      width: var(--win-w);
+      height: var(--win-h);
+      display: flex;
+      flex-direction: column;
+      background: var(--fill);
+      border: 1px solid var(--line);
+      flex-shrink: 0;
+    }
+    .callouts {
+      grid-column: 2;
+      grid-row: 1;
+      position: relative;
+      height: var(--win-h);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .callout {
+      position: absolute;
+      left: 0;
+      right: 0;
+      font-size: 11px;
+      line-height: 1.35;
+      color: var(--anno);
+    }
+    .callout::before {
+      content: "";
+      position: absolute;
+      left: -12px;
+      top: 0.55em;
+      width: 10px;
+      border-top: 1px dashed var(--anno);
+    }
+    .callout strong { display: block; font-weight: 700; margin-bottom: 2px; color: var(--line); }
+    .callout-title { top: 6px; }
+    .callout-session { top: 48px; }
+    .callout-content { top: 88px; }
+    .callout-footer { top: 520px; }
+
+    .titlebar {
+      height: var(--titlebar-h);
+      flex: 0 0 var(--titlebar-h);
+      display: flex;
+      align-items: center;
+      padding: 0 8px 0 12px;
+      gap: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .title { flex: 1; font-size: 12px; font-weight: 600; }
+    .cap {
+      width: 40px;
+      height: 24px;
+      border: 1px solid var(--line);
+      background: transparent;
+      font-size: 10px;
+    }
+    .body {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: var(--pad);
+      gap: var(--gap);
+      overflow: hidden;
+    }
+    .tag {
+      position: absolute;
+      top: 0;
+      right: 0;
+      padding: 1px 5px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--anno);
+      background: #e8e8e8;
+      border: 1px dashed var(--anno);
+      pointer-events: none;
+    }
+    .region { position: relative; }
+
+    .session {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      flex: 0 0 auto;
+    }
+    .content {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 0;
+    }
+    .view[hidden] { display: none !important; }
+
+    .section-title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .form-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .form-row > .lbl {
+      flex: 0 0 var(--label-w);
+      font-size: 14px;
+      color: var(--mute);
+      padding-top: 6px;
+    }
+    .form-row > .field-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .path-row {
+      display: flex;
+      gap: 8px;
+    }
+    .input {
+      flex: 1;
+      height: var(--ctrl-h);
+      padding: 0 8px;
+      border: 1px solid var(--line);
+      font: inherit;
+      font-size: 13px;
+      font-family: ui-monospace, monospace;
+    }
+    .hint {
+      margin: 0;
+      font-size: 12px;
+      color: var(--mute);
+      line-height: 1.35;
+    }
+    .radios {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+    }
+    .check, .radio-line {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .warn-box {
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      background: var(--soft);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .active-lead {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      font-size: 14px;
+    }
+    .active-lead .mark {
+      width: 20px;
+      height: 20px;
+      border: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .path-box {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      background: var(--soft);
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      word-break: break-all;
+    }
+    .sub-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .btn {
+      appearance: none;
+      height: var(--ctrl-h);
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font: inherit;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .btn-subtle { background: var(--soft); }
+    .btn-accent { background: var(--soft); font-weight: 600; }
+    .btn-stop {
+      background: var(--line);
+      color: var(--fill);
+      font-weight: 600;
+    }
+
+    .spacer {
+      flex: 1 1 auto;
+      min-height: 12px;
+    }
+    .footer {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .rule { margin: 0; border: 0; border-top: 1px solid var(--line); }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+    .legend {
+      max-width: calc(var(--win-w) + 16px + var(--anno-w));
+      margin: 20px 0 0;
+      padding: 12px 14px;
+      border: 1px dashed var(--line);
+      font-size: 12px;
+      color: var(--mute);
+      line-height: 1.55;
+    }
+    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+  </style>
+</head>
+<body>
+  <div class="root" id="root">
+    <p class="meta">
+      Terminal logging 线框 · <code>720×580</code> · 对照 <code>LoggingDialog</code>。
+      原型 body 不滚动（实现里窗变矮时中间区可滚；此处用 spacer 消化余量）。
+    </p>
+
+    <div class="tools">
+      <label><input type="radio" name="view" value="start" checked /> Start form</label>
+      <label><input type="radio" name="view" value="active" /> Active / stop view</label>
+    </div>
+
+    <div class="stage">
+      <div class="frame">
+        <div class="win" role="dialog">
+          <div class="titlebar region">
+            <span class="tag">A</span>
+            <div class="title">Session logging</div>
+            <button type="button" class="cap" tabindex="-1" aria-hidden="true">×</button>
+          </div>
+
+          <div class="body">
+            <p class="session region">Session: prod-edge</p>
+
+            <div class="content region">
+              <span class="tag">B</span>
+
+              <div class="view" id="view-start">
+                <p class="section-title">Destination</p>
+                <div class="form-row">
+                  <span class="lbl">Save to</span>
+                  <div class="field-col">
+                    <div class="path-row">
+                      <input class="input" type="text" value="D:\Logs\yshell" />
+                      <button type="button" class="btn">Browse…</button>
+                    </div>
+                    <p class="hint">Default: the last used folder, or the configured logs directory.</p>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <span class="lbl">File name</span>
+                  <div class="field-col">
+                    <input class="input" type="text" value="prod-edge-20261030-165600.log" />
+                  </div>
+                </div>
+
+                <p class="section-title">Options</p>
+                <div class="form-row">
+                  <span class="lbl">Format</span>
+                  <div class="field-col radios">
+                    <label class="radio-line"><input type="radio" name="fmt" checked /> Sanitized (plain text)</label>
+                    <label class="radio-line"><input type="radio" name="fmt" /> Raw (with ANSI escapes)</label>
+                  </div>
+                </div>
+                <label class="check"><input type="checkbox" checked /> Timestamp each line with the local [HH:MM:SS]</label>
+                <label class="check"><input type="checkbox" /> Also record local input (commands you type)</label>
+                <p class="hint">Logging starts now: existing scrollback is not written; new output is recorded.</p>
+              </div>
+
+              <div class="view" id="view-active" hidden>
+                <div class="active-lead">
+                  <span class="mark">✓</span>
+                  <span>Recording terminal output to this file:</span>
+                </div>
+                <div class="path-box">D:\Logs\yshell\prod-edge-20261030-165600.log</div>
+                <div class="sub-actions">
+                  <button type="button" class="btn btn-subtle">Open File</button>
+                  <button type="button" class="btn btn-subtle">Open Folder</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="spacer" aria-hidden="true"></div>
+
+            <div class="footer region">
+              <span class="tag">C</span>
+              <hr class="rule" />
+              <div class="actions">
+                <button type="button" class="btn" id="btn-dismiss">Cancel</button>
+                <button type="button" class="btn btn-accent" id="btn-primary">Start Logging</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <ul class="callouts">
+          <li class="callout callout-title"><strong>A</strong> 工具窗 chrome；标题 Session logging。</li>
+          <li class="callout callout-session"><strong>Session</strong> 会话名固定顶行。</li>
+          <li class="callout callout-content"><strong>Body</strong> 开启表单 vs 活动中停止提示；无列表故不滚动。</li>
+          <li class="callout callout-footer"><strong>Footer</strong> Cancel/Close + Start 或 Stop Logging。</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="legend">
+      <strong>未画进线框的宿主态</strong>（实现有）：文件名错误、file-exists + overwrite 勾选、include-input 警告 + 确认、path-error。
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var viewStart = document.getElementById("view-start");
+      var viewActive = document.getElementById("view-active");
+      var btnDismiss = document.getElementById("btn-dismiss");
+      var btnPrimary = document.getElementById("btn-primary");
+      var radios = document.querySelectorAll('input[name="view"]');
+
+      function sync() {
+        var active = document.querySelector('input[name="view"][value="active"]').checked;
+        viewStart.hidden = active;
+        viewActive.hidden = !active;
+        btnDismiss.textContent = active ? "Close" : "Cancel";
+        btnPrimary.textContent = active ? "Stop Logging" : "Start Logging";
+        btnPrimary.classList.toggle("btn-accent", !active);
+        btnPrimary.classList.toggle("btn-stop", active);
+      }
+      radios.forEach(function (r) { r.addEventListener("change", sync); });
+      sync();
+    })();
+  </script>
+</body>
+</html>

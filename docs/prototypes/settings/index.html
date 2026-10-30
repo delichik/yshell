@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Settings wireframe</title>
+  <style>
+    /* Theme.tool-window-width-wide × tool-window-height-tall */
+    :root {
+      --win-w: 1100px;
+      --win-h: 820px;
+      --titlebar-h: 32px;
+      --pad: 28px;
+      --gap: 12px;
+      --ctrl-h: 32px;
+      --nav-w: 240px;
+      --nav-item-h: 40px;
+      --line: #111;
+      --fill: #fff;
+      --mute: #555;
+      --soft: #f0f0f0;
+      --panel: #f4f4f4;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .meta code { font-size: 12px; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .win {
+      width: var(--win-w); height: var(--win-h); flex-shrink: 0;
+      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+    }
+    .titlebar {
+      height: var(--titlebar-h); flex: 0 0 var(--titlebar-h);
+      display: flex; align-items: center; padding: 0 8px 0 12px; gap: 8px; border-bottom: 1px solid var(--line);
+    }
+    .title { flex: 1; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cap { width: 40px; height: 24px; border: 1px solid var(--line); background: transparent; font-size: 10px; }
+    .body {
+      flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+      padding: var(--pad); gap: var(--gap); overflow: hidden;
+    }
+    .main { flex: 1 1 auto; min-height: 0; display: flex; gap: var(--gap); overflow: hidden; }
+    .nav-panel {
+      width: var(--nav-w); flex-shrink: 0; align-self: stretch;
+      border: 1px solid var(--line); background: var(--panel); padding: 8px;
+      display: flex; flex-direction: column; gap: 2px; overflow: hidden;
+    }
+    .nav-item {
+      height: var(--nav-item-h); border: 0; background: transparent; text-align: left;
+      padding: 0 10px; font: inherit; font-size: 14px; cursor: pointer; width: 100%;
+    }
+    .nav-item[aria-current="page"] { background: var(--soft); font-weight: 600; }
+    .nav-item:disabled { color: var(--mute); cursor: not-allowed; background: var(--soft); }
+    .form-card {
+      flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto;
+      border: 1px solid var(--line); background: var(--fill); padding: 20px;
+    }
+    .section-title { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
+    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+    .label { font-size: 13px; color: var(--mute); }
+    .input, .select {
+      height: var(--ctrl-h); padding: 0 8px; border: 1px solid var(--line); background: var(--fill); font: inherit; font-size: 14px; width: 100%; max-width: 360px;
+    }
+    .check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 8px; }
+    .row-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .btn {
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line); background: var(--fill); font: inherit; font-size: 14px; cursor: pointer;
+    }
+    .btn-primary { background: var(--soft); font-weight: 600; }
+    .hint { font-size: 12px; color: var(--mute); margin: 4px 0 0; }
+    .panel[hidden] { display: none !important; }
+    .spacer { flex: 1 1 auto; min-height: 8px; }
+    .footer { flex: 0 0 auto; }
+    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+    .legend {
+      max-width: var(--win-w); margin: 20px 0 0; padding: 12px 14px; border: 1px dashed var(--line);
+      font-size: 12px; color: var(--mute); line-height: 1.55;
+    }
+    .legend strong { color: var(--line); }
+    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+    .swatch-row { display: flex; gap: 4px; margin: 8px 0; }
+    .swatch { width: 24px; height: 24px; border: 1px solid var(--line); background: #333; }
+  </style>
+</head>
+<body>
+  <p class="meta">
+    Settings 线框 · 固定 <code>1100×820</code>（<code>tool-window-width-wide</code> × <code>tool-window-height-tall</code>）·
+    标题栏 <code>32</code> · 内边距 <code>28</code> · 左导航 <code>240</code> · 仅右侧表单区滚动。
+  </p>
+
+  <div class="stage">
+    <div class="win" role="dialog" aria-labelledby="win-title">
+      <div class="titlebar">
+        <div class="title" id="win-title">Settings</div>
+        <button type="button" class="cap" tabindex="-1" aria-hidden="true">_</button>
+        <button type="button" class="cap" tabindex="-1" aria-hidden="true">□</button>
+        <button type="button" class="cap" tabindex="-1" aria-hidden="true">×</button>
+      </div>
+      <div class="body">
+        <div class="main">
+          <nav class="nav-panel" aria-label="Settings sections">
+            <button type="button" class="nav-item" data-section="general" aria-current="page">General</button>
+            <button type="button" class="nav-item" data-section="appearance">Appearance</button>
+            <button type="button" class="nav-item" data-section="terminal">Terminal</button>
+            <button type="button" class="nav-item" data-section="security">Security</button>
+            <button type="button" class="nav-item" data-section="advanced">Advanced</button>
+            <button type="button" class="nav-item" data-section="sftp">SFTP</button>
+            <button type="button" class="nav-item" disabled title="Not available in this version.">Shortcuts</button>
+            <p class="hint" style="margin-top:auto;padding:4px 6px">Shortcuts 禁用 · hover tooltip</p>
+          </nav>
+          <div class="form-card" id="form-scroll">
+            <div class="panel" data-panel="general">
+              <h2 class="section-title">General</h2>
+              <div class="field">
+                <label class="label" for="lang">Language</label>
+                <select class="select" id="lang"><option>System default</option><option>English</option><option>中文</option></select>
+              </div>
+              <label class="check"><input type="checkbox" checked /> Confirm before closing an active session</label>
+              <label class="check"><input type="checkbox" checked /> Confirm before quitting YShell</label>
+              <p class="hint">Config directory: <code>C:\Users\…\AppData\Roaming\yshell</code></p>
+            </div>
+            <div class="panel" data-panel="appearance" hidden>
+              <h2 class="section-title">Appearance</h2>
+              <p class="label">Color scheme</p>
+              <p><strong>Campbell</strong> (built-in)</p>
+              <div class="swatch-row"><span class="swatch"></span><span class="swatch" style="background:#c00"></span><span class="swatch" style="background:#0a0"></span></div>
+              <div class="row-btns"><button type="button" class="btn">Manage Themes…</button></div>
+              <div class="field"><label class="label">Font</label><select class="select"><option>Cascadia Mono</option></select></div>
+              <div class="field"><label class="label">Font size</label><input class="input" value="14" /></div>
+              <div class="field"><label class="label">Terminal preview</label><div style="height:80px;border:1px dashed var(--line);background:#0c0c0c;color:#ccc;font-family:monospace;font-size:12px;padding:8px">$ echo preview</div></div>
+            </div>
+            <div class="panel" data-panel="terminal" hidden>
+              <h2 class="section-title">Terminal</h2>
+              <div class="field"><label class="label">Scrollback lines</label><input class="input" value="10000" /></div>
+              <div class="field"><label class="label">Scrollback max cells</label><input class="input" value="25000000" /></div>
+              <div class="row-btns"><button type="button" class="btn">Reset defaults</button><button type="button" class="btn btn-primary">Save terminal settings</button></div>
+            </div>
+            <div class="panel" data-panel="security" hidden>
+              <h2 class="section-title">Security</h2>
+              <p class="hint">Secret store: Windows Credential Manager</p>
+              <div class="row-btns">
+                <button type="button" class="btn">Host Keys…</button>
+                <button type="button" class="btn">Private Keys…</button>
+                <button type="button" class="btn">Proxies…</button>
+              </div>
+            </div>
+            <div class="panel" data-panel="advanced" hidden>
+              <h2 class="section-title">Advanced</h2>
+              <label class="check"><input type="checkbox" /> Enable debug logging</label>
+              <label class="check"><input type="checkbox" /> Auto-approve MCP AI control requests</label>
+              <div class="row-btns"><button type="button" class="btn">Open debug log folder</button></div>
+            </div>
+            <div class="panel" data-panel="sftp" hidden>
+              <h2 class="section-title">SFTP</h2>
+              <div class="field"><label class="label">Max parallel transfers</label><input class="input" value="4" /></div>
+              <div class="row-btns"><button type="button" class="btn btn-primary">Save</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="spacer" aria-hidden="true"></div>
+        <div class="footer">
+          <hr class="rule" />
+          <div class="actions"><button type="button" class="btn btn-primary">Close</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <strong>布局 / 滚动</strong>
+    <ul>
+      <li>窗体恒 <code>1100×820</code>；<code>.stage { overflow-x: auto }</code>；<code>.win { flex-shrink: 0 }</code>。</li>
+      <li>Body <code>overflow: hidden</code>；列：主内容 → spacer → 页脚 Close。</li>
+      <li>仅右侧 <code>.form-card</code> 滚动；左导航固定高度、不滚。</li>
+      <li>Shortcuts 禁用 + tooltip 文案（本版不做）。</li>
+    </ul>
+  </div>
+
+  <script>
+    (function () {
+      var nav = document.querySelectorAll(".nav-item[data-section]");
+      var panels = document.querySelectorAll(".panel[data-panel]");
+      nav.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var id = btn.getAttribute("data-section");
+          nav.forEach(function (b) { b.setAttribute("aria-current", b === btn ? "page" : "false"); });
+          panels.forEach(function (p) { p.hidden = p.getAttribute("data-panel") !== id; });
+          document.getElementById("form-scroll").scrollTop = 0;
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Auth prompt wireframe</title>
+  <style>
+    /* Theme.tool-window-*-standard — do not scale the dialog to the viewport. */
+    :root {
+      --win-w: 720px;
+      --win-h: 580px;
+      --titlebar-h: 32px;
+      --pad: 28px;
+      --gap: 16px;
+      --ctrl-h: 32px;
+      --key-list-max: 240px;
+      --anno-w: 200px;
+      --line: #111;
+      --fill: #fff;
+      --mute: #555;
+      --soft: #f0f0f0;
+      --anno: #336;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--line);
+      background: #e8e8e8;
+    }
+    .meta {
+      max-width: calc(var(--win-w) + 16px + var(--anno-w));
+      margin: 0 0 16px;
+      font-size: 13px;
+      color: var(--mute);
+      line-height: 1.45;
+    }
+    .meta code { font-size: 12px; }
+    .tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: var(--mute);
+    }
+    .tools label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .stage {
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+    /* Window + side callouts. Callouts sit OUTSIDE the 720×580 product chrome. */
+    .frame {
+      display: grid;
+      grid-template-columns: var(--win-w) var(--anno-w);
+      column-gap: 16px;
+      width: max-content;
+      align-items: start;
+    }
+    .win {
+      width: var(--win-w);
+      height: var(--win-h);
+      display: flex;
+      flex-direction: column;
+      background: var(--fill);
+      border: 1px solid var(--line);
+      flex-shrink: 0;
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .callouts {
+      grid-column: 2;
+      grid-row: 1;
+      position: relative;
+      height: var(--win-h);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .callout {
+      position: absolute;
+      left: 0;
+      right: 0;
+      font-size: 11px;
+      line-height: 1.35;
+      color: var(--anno);
+    }
+    .callout::before {
+      content: "";
+      position: absolute;
+      left: -12px;
+      top: 0.55em;
+      width: 10px;
+      border-top: 1px dashed var(--anno);
+    }
+    .callout strong {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      margin-bottom: 2px;
+      color: var(--line);
+    }
+    /* Approximate vertical anchors inside the fixed window (titlebar 32 + pad 28). */
+    .callout-title { top: 6px; }
+    .callout-error { top: 52px; }
+    .callout-methods { top: 100px; }
+    .callout-form { top: 148px; }
+    .callout-spacer { top: 360px; }
+    .callout-footer { top: 520px; }
+    .root:not(.show-error) .callout-error { display: none; }
+    .root.hide-methods .callout-methods { display: none; }
+    .root.hide-methods .callout-form { top: 100px; }
+
+    .titlebar {
+      height: var(--titlebar-h);
+      flex: 0 0 var(--titlebar-h);
+      display: flex;
+      align-items: center;
+      padding: 0 8px 0 12px;
+      gap: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .title {
+      flex: 1;
+      min-width: 0;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .cap {
+      width: 40px;
+      height: 24px;
+      border: 1px solid var(--line);
+      background: transparent;
+      font-size: 10px;
+      color: var(--line);
+      padding: 0;
+    }
+    /*
+      Body = Theme.tool-window-padding (28).
+      Column: chrome content top-aligned → flex spacer → footer pinned.
+      Only the key list may scroll; the dialog body itself does not.
+    */
+    .body {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: var(--pad);
+      gap: var(--gap);
+      overflow: hidden;
+    }
+    .error {
+      display: none;
+      flex: 0 0 auto;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      font-size: 13px;
+      background: var(--soft);
+      line-height: 1.35;
+    }
+    .root.show-error .error { display: block; }
+    .methods {
+      display: inline-flex;
+      flex: 0 0 auto;
+      align-self: flex-start;
+      border: 1px solid var(--line);
+    }
+    .method {
+      appearance: none;
+      border: 0;
+      border-right: 1px solid var(--line);
+      background: transparent;
+      color: var(--line);
+      font: inherit;
+      font-size: 13px;
+      height: var(--ctrl-h);
+      padding: 0 14px;
+      cursor: pointer;
+    }
+    .method:last-child { border-right: 0; }
+    .method[aria-pressed="true"] {
+      background: var(--soft);
+      font-weight: 600;
+    }
+    .form {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 0;
+    }
+    .panel[hidden] { display: none !important; }
+    /* In-product region tags: overlay, zero layout cost. */
+    .tag {
+      position: absolute;
+      top: 0;
+      right: 0;
+      z-index: 1;
+      padding: 1px 5px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      color: var(--anno);
+      background: #e8e8e8;
+      border: 1px dashed var(--anno);
+      pointer-events: none;
+      user-select: none;
+    }
+    .region {
+      position: relative;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .label {
+      font-size: 13px;
+      color: var(--mute);
+    }
+    .input {
+      height: var(--ctrl-h);
+      padding: 0 8px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      color: var(--line);
+      font: inherit;
+      font-size: 14px;
+      border-radius: 0;
+      width: 100%;
+    }
+    .input:disabled {
+      background: var(--soft);
+      color: var(--mute);
+    }
+    .check {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      width: fit-content;
+      cursor: pointer;
+    }
+    .list {
+      border: 1px dashed var(--line);
+      height: var(--key-list-max);
+      overflow: auto;
+      padding: 4px;
+      background: var(--fill);
+    }
+    .list.disabled {
+      background: var(--soft);
+      pointer-events: none;
+      color: var(--mute);
+    }
+    .key {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+      width: 100%;
+      height: 48px;
+      text-align: left;
+      padding: 0 8px;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+    }
+    .key:last-child { border-bottom: 0; }
+    .key[aria-pressed="true"] {
+      outline: 1px solid var(--line);
+      outline-offset: -1px;
+      font-weight: 600;
+    }
+    .key-detail {
+      font-size: 12px;
+      color: var(--mute);
+      font-family: ui-monospace, monospace;
+    }
+    .row-end {
+      display: flex;
+      justify-content: flex-end;
+    }
+    .name {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .instr {
+      margin: 0;
+      font-size: 14px;
+      color: var(--mute);
+      line-height: 1.4;
+    }
+    .hint {
+      margin: 0;
+      font-size: 12px;
+      color: var(--mute);
+      line-height: 1.35;
+    }
+    .note {
+      margin: 0;
+      font-size: 11px;
+      color: var(--anno);
+      line-height: 1.35;
+    }
+    .spacer {
+      flex: 1 1 auto;
+      min-height: 12px;
+      position: relative;
+      border: 1px dashed transparent;
+    }
+    .spacer::after {
+      content: "spacer · 顶开页脚，不居中字段";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 10px;
+      color: var(--mute);
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0.7;
+    }
+    .footer {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .rule {
+      height: 0;
+      margin: 0;
+      border: 0;
+      border-top: 1px solid var(--line);
+    }
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .btn {
+      appearance: none;
+      height: var(--ctrl-h);
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      color: var(--line);
+      font: inherit;
+      font-size: 14px;
+      cursor: pointer;
+      border-radius: 0;
+    }
+    .btn-primary {
+      background: var(--soft);
+      font-weight: 600;
+    }
+    .legend {
+      max-width: calc(var(--win-w) + 16px + var(--anno-w));
+      margin: 20px 0 0;
+      padding: 12px 14px;
+      border: 1px dashed var(--line);
+      font-size: 12px;
+      color: var(--mute);
+      line-height: 1.55;
+    }
+    .legend strong { color: var(--line); font-weight: 600; }
+    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+  </style>
+</head>
+<body>
+  <div class="root" id="root">
+    <p class="meta">
+      Auth 线框原型 · 固定 <code>720×580</code>（<code>Theme.tool-window-*-standard</code>）·
+      标题栏 <code>32</code> · 内边距 <code>28</code> · 仅密钥列表可滚（上限 <code>240</code>）。
+      <strong>密码登录 = Auth 单方法形态</strong>，不另开 Password 弹窗。
+      右侧虚线为<strong>设计注释</strong>（不占产品几何）。
+    </p>
+
+    <div class="tools" role="group" aria-label="Prototype controls">
+      <label><input type="checkbox" id="toggle-error" /> Retry error</label>
+      <span style="margin-left:8px">Scenario:</span>
+      <label><input type="radio" name="scenario" value="password" checked /> Password only</label>
+      <label><input type="radio" name="scenario" value="multi" /> Multi-method</label>
+      <label><input type="radio" name="scenario" value="key" /> Key only</label>
+      <label><input type="radio" name="scenario" value="challenge" /> Challenge only</label>
+    </div>
+
+    <div class="stage">
+      <div class="frame">
+        <div class="win" role="dialog" aria-labelledby="win-title">
+          <div class="titlebar region">
+            <span class="tag">A · chrome</span>
+            <div class="title" id="win-title">Sign in to alice@edge.example.com:22</div>
+            <button type="button" class="cap" tabindex="-1" aria-hidden="true">_</button>
+            <button type="button" class="cap" tabindex="-1" aria-hidden="true">□</button>
+            <button type="button" class="cap" tabindex="-1" aria-hidden="true">×</button>
+          </div>
+
+          <div class="body">
+            <div class="error region" id="error-box" role="alert">
+              <span class="tag">B · error</span>
+              Authentication failed. Permission denied (publickey,password).
+            </div>
+
+            <div class="methods region" id="methods" role="group" aria-label="Authentication method">
+              <span class="tag">C · method</span>
+              <button type="button" class="method" data-method="password" aria-pressed="true">Password</button>
+              <button type="button" class="method" data-method="key" aria-pressed="false">Key</button>
+              <button type="button" class="method" data-method="challenge" aria-pressed="false">Challenge</button>
+            </div>
+
+            <div class="form region">
+              <span class="tag">D · form</span>
+              <div class="panel" data-panel="password">
+                <div class="field">
+                  <label class="label" for="password">Password</label>
+                  <input class="input" id="password" type="password" autocomplete="off" />
+                </div>
+                <label class="check"><input type="checkbox" /> Remember password</label>
+                <p class="note">打开 / 切到 Password → focus 密码框</p>
+              </div>
+
+              <div class="panel" data-panel="key" hidden>
+                <div class="field">
+                  <span class="label" id="key-label">Private key</span>
+                  <div class="list" id="keylist" role="listbox" aria-labelledby="key-label">
+                    <button type="button" class="key" role="option" aria-pressed="true">
+                      <span>work-ed25519</span>
+                      <span class="key-detail">ED25519 · SHA256:nThU…k8mQ</span>
+                    </button>
+                    <button type="button" class="key" role="option" aria-pressed="false">
+                      <span>laptop-rsa</span>
+                      <span class="key-detail">RSA 4096 · SHA256:abC9…xY2z</span>
+                    </button>
+                    <button type="button" class="key" role="option" aria-pressed="false">
+                      <span>deploy-ci</span>
+                      <span class="key-detail">ED25519 · SHA256:pLm2…9vQw</span>
+                    </button>
+                    <button type="button" class="key" role="option" aria-pressed="false">
+                      <span>legacy-home</span>
+                      <span class="key-detail">RSA 2048 · SHA256:qWe4…tYu7</span>
+                    </button>
+                    <button type="button" class="key" role="option" aria-pressed="false">
+                      <span>spare-ed25519</span>
+                      <span class="key-detail">ED25519 · SHA256:zXc8…vBn1</span>
+                    </button>
+                  </div>
+                  <p class="note">列表 h=240 / 项 h=48 · 仅此区滚动 · 无「已选标签」重复行</p>
+                  <div class="row-end">
+                    <button type="button" class="btn">Browse…</button>
+                  </div>
+                </div>
+                <div class="field">
+                  <label class="label" for="passphrase">Key passphrase</label>
+                  <input class="input" id="passphrase" type="password" placeholder="Optional" autocomplete="off" />
+                </div>
+                <label class="check"><input type="checkbox" id="agent" /> Use ssh-agent</label>
+                <p class="hint" id="agent-hint" hidden>ssh-agent will supply keys for this attempt. List and passphrase disabled.</p>
+                <p class="note">勾选 agent → 禁用列表 + 口令（互斥）</p>
+              </div>
+
+              <div class="panel" data-panel="challenge" hidden>
+                <p class="hint">Round 1 of 2</p>
+                <p class="name">duo-mfa</p>
+                <p class="instr">Enter the passcode from your authenticator, then confirm on your phone.</p>
+                <div class="field">
+                  <label class="label" for="otp">Passcode</label>
+                  <input class="input" id="otp" type="text" autocomplete="off" />
+                </div>
+                <p class="note">多轮非末轮主按钮 = Continue；焦点落第一输入框</p>
+              </div>
+            </div>
+
+            <div class="spacer" aria-hidden="true"></div>
+
+            <div class="footer region">
+              <span class="tag">E · footer</span>
+              <hr class="rule" />
+              <div class="actions">
+                <button type="button" class="btn">Cancel</button>
+                <button type="button" class="btn btn-primary" id="primary">Connect</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <ul class="callouts" aria-label="Design annotations">
+          <li class="callout callout-title">
+            <strong>A · Chrome 标题</strong>
+            主机写在标题栏；正文不再重复「Sign in to…」。空 host 回退 Authentication。
+          </li>
+          <li class="callout callout-error">
+            <strong>B · 重试错误</strong>
+            有 problem-text 才出现；不改变窗体尺寸。
+          </li>
+          <li class="callout callout-methods">
+            <strong>C · 方法分段</strong>
+            仅 &gt;1 种方法时显示。单方法 Password = 昔「密码弹窗」，同一 Auth 窗。
+          </li>
+          <li class="callout callout-form">
+            <strong>D · 主表单</strong>
+            顶对齐。Password only 无方法条；Remember 仍在。
+          </li>
+          <li class="callout callout-spacer">
+            <strong>Spacer</strong>
+            只把页脚顶到底；密码单路径中间空是预期。
+          </li>
+          <li class="callout callout-footer">
+            <strong>E · 页脚</strong>
+            分隔线 + Cancel | Connect/Continue。Esc = Cancel。窗体恒 720×580。
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="legend">
+      <strong>注释约定</strong>
+      <ul>
+        <li>右侧 callout + 窗内角标（A–E）说明分区职责与交互；<strong>不计入</strong> 720×580。</li>
+        <li>窗内 <code class="note" style="display:inline;border:0;padding:0">蓝色小字</code> 只写焦点 / 互斥 / 滚动等实现易漏点。</li>
+        <li>场景条：Password only / Multi / Key only / Challenge only；外框尺寸不变。</li>
+        <li><strong>无独立 password-prompt 原型</strong>——与 Auth 同一窗。</li>
+      </ul>
+      <strong>对照实现</strong>：统一 Auth 工具窗；列表上限约 240；agent 与密钥列表互斥。合并/废弃独立 PasswordPromptWindow 属实现阶段。
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var root = document.getElementById("root");
+      var methods = root.querySelectorAll(".method");
+      var methodsBar = document.getElementById("methods");
+      var panels = root.querySelectorAll(".panel");
+      var primary = document.getElementById("primary");
+      var err = document.getElementById("toggle-error");
+      var agent = document.getElementById("agent");
+      var agentHint = document.getElementById("agent-hint");
+      var keylist = document.getElementById("keylist");
+      var passphrase = document.getElementById("passphrase");
+      var keys = root.querySelectorAll(".key");
+      var password = document.getElementById("password");
+      var otp = document.getElementById("otp");
+
+      function setMethod(name) {
+        methods.forEach(function (b) {
+          b.setAttribute("aria-pressed", b.getAttribute("data-method") === name ? "true" : "false");
+        });
+        panels.forEach(function (p) {
+          p.hidden = p.getAttribute("data-panel") !== name;
+        });
+        if (primary) primary.textContent = name === "challenge" ? "Continue" : "Connect";
+        var focusEl = name === "password" ? password
+          : name === "challenge" ? otp
+          : (agent && agent.checked ? null : passphrase);
+        if (focusEl) {
+          try { focusEl.focus(); } catch (e) {}
+        }
+      }
+
+      function setScenario(scenario) {
+        var multi = scenario === "multi";
+        var method = scenario === "multi" ? "password" : scenario;
+        methodsBar.hidden = !multi;
+        root.classList.toggle("hide-methods", !multi);
+        setMethod(method);
+      }
+
+      methods.forEach(function (b) {
+        b.addEventListener("click", function () {
+          setMethod(b.getAttribute("data-method"));
+        });
+      });
+
+      if (err) {
+        err.addEventListener("change", function () {
+          root.classList.toggle("show-error", err.checked);
+        });
+      }
+
+      root.querySelectorAll('input[name="scenario"]').forEach(function (r) {
+        r.addEventListener("change", function () {
+          if (r.checked) setScenario(r.value);
+        });
+      });
+
+      function syncAgent() {
+        var on = !!(agent && agent.checked);
+        if (keylist) keylist.classList.toggle("disabled", on);
+        if (passphrase) passphrase.disabled = on;
+        if (agentHint) agentHint.hidden = !on;
+      }
+      if (agent) {
+        agent.addEventListener("change", syncAgent);
+        syncAgent();
+      }
+
+      keys.forEach(function (k) {
+        k.addEventListener("click", function () {
+          if (keylist && keylist.classList.contains("disabled")) return;
+          keys.forEach(function (x) {
+            x.setAttribute("aria-pressed", x === k ? "true" : "false");
+          });
+        });
+      });
+
+      setScenario("password");
+    })();
+  </script>
+</body>
+</html>

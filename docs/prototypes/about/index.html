@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — About wireframe</title>
+  <style>
+    :root {
+      --win-w: 720px;
+      --win-h: 580px;
+      --titlebar-h: 32px;
+      --pad: 28px;
+      --gap: 16px;
+      --ctrl-h: 32px;
+      --anno-w: 200px;
+      --label-w: 140px;
+      --line: #111;
+      --fill: #fff;
+      --mute: #555;
+      --soft: #f0f0f0;
+      --anno: #336;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--line);
+      background: #e8e8e8;
+    }
+    .meta {
+      max-width: calc(var(--win-w) + 16px + var(--anno-w));
+      margin: 0 0 16px;
+      font-size: 13px;
+      color: var(--mute);
+    }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .frame {
+      display: grid;
+      grid-template-columns: var(--win-w) var(--anno-w);
+      column-gap: 16px;
+      width: max-content;
+    }
+    .win {
+      width: var(--win-w);
+      height: var(--win-h);
+      display: flex;
+      flex-direction: column;
+      background: var(--fill);
+      border: 1px solid var(--line);
+      flex-shrink: 0;
+    }
+    .callouts {
+      grid-column: 2;
+      position: relative;
+      height: var(--win-h);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .callout {
+      position: absolute;
+      left: 0;
+      right: 0;
+      font-size: 11px;
+      color: var(--anno);
+      line-height: 1.35;
+    }
+    .callout::before {
+      content: "";
+      position: absolute;
+      left: -12px;
+      top: 0.55em;
+      width: 10px;
+      border-top: 1px dashed var(--anno);
+    }
+    .callout strong { display: block; color: var(--line); margin-bottom: 2px; }
+    .callout-title { top: 6px; }
+    .callout-copy { top: 72px; }
+    .callout-grid { top: 140px; }
+    .callout-footer { top: 520px; }
+
+    .titlebar {
+      height: var(--titlebar-h);
+      flex: 0 0 var(--titlebar-h);
+      display: flex;
+      align-items: center;
+      padding: 0 8px 0 12px;
+      gap: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .title { flex: 1; font-size: 12px; font-weight: 600; }
+    .cap {
+      width: 40px;
+      height: 24px;
+      border: 1px solid var(--line);
+      font-size: 10px;
+      background: transparent;
+    }
+    .body {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: var(--pad);
+      gap: var(--gap);
+      overflow: hidden;
+    }
+    .tag {
+      position: absolute;
+      top: 0;
+      right: 0;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--anno);
+      background: #e8e8e8;
+      border: 1px dashed var(--anno);
+      padding: 1px 5px;
+      pointer-events: none;
+    }
+    .region { position: relative; }
+
+    .product-name {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .blurb {
+      margin: 0;
+      font-size: 14px;
+      color: var(--mute);
+      line-height: 1.45;
+      max-width: 52em;
+    }
+    .grid {
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: var(--label-w) 1fr;
+      gap: 16px 16px;
+      padding-top: 8px;
+      font-size: 14px;
+    }
+    .grid .lbl { color: var(--mute); }
+    .grid .val.mono { font-family: ui-monospace, monospace; word-break: break-all; }
+
+    .spacer { flex: 1 1 auto; min-height: 12px; }
+    .footer { flex: 0 0 auto; }
+    .rule { margin: 0 0 12px; border: 0; border-top: 1px solid var(--line); }
+    .actions { display: flex; justify-content: flex-end; }
+    .btn {
+      height: var(--ctrl-h);
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--soft);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .legend {
+      max-width: calc(var(--win-w) + 16px + var(--anno-w));
+      margin: 20px 0 0;
+      padding: 12px 14px;
+      border: 1px dashed var(--line);
+      font-size: 12px;
+      color: var(--mute);
+    }
+  </style>
+</head>
+<body>
+  <p class="meta">About 线框 · <code>720×580</code> · 对照 <code>AboutWindow</code> · Esc / Close 关闭。</p>
+
+  <div class="stage">
+    <div class="frame">
+      <div class="win" role="dialog">
+        <div class="titlebar region">
+          <span class="tag">A</span>
+          <div class="title">About YShell</div>
+          <button type="button" class="cap" tabindex="-1" aria-hidden="true">×</button>
+        </div>
+
+        <div class="body">
+          <div class="region">
+            <span class="tag">B</span>
+            <p class="product-name">YShell 0.4.0-dev</p>
+            <p class="blurb">A Slint desktop shell for SSH, SFTP, tunnels and terminal workflows.</p>
+          </div>
+
+          <div class="grid region">
+            <span class="tag">C</span>
+            <span class="lbl">Config directory</span>
+            <span class="val mono">C:\Users\alice\AppData\Roaming\yshell</span>
+            <span class="lbl">License</span>
+            <span class="val">MIT OR Apache-2.0</span>
+          </div>
+
+          <div class="spacer" aria-hidden="true"></div>
+
+          <div class="footer region">
+            <span class="tag">D</span>
+            <hr class="rule" />
+            <div class="actions">
+              <button type="button" class="btn">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <ul class="callouts">
+        <li class="callout callout-title"><strong>A</strong> 无遮罩独立工具窗。</li>
+        <li class="callout callout-copy"><strong>B</strong> 版本 + 一句产品说明。</li>
+        <li class="callout callout-grid"><strong>C</strong> Config / License 两列网格。</li>
+        <li class="callout callout-footer"><strong>D</strong> 单 Close；accent 按钮。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="legend">版本与 config 路径由宿主注入；窗体尺寸切换状态不变。</div>
+</body>
+</html>

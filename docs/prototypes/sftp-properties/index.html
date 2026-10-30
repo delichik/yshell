@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — SFTP properties wireframe</title>
+  <style>
+    :root {
+      --win-w: 720px;
+      --win-h: 580px;
+      --titlebar-h: 32px;
+      --pad: 28px;
+      --gap: 16px;
+      --ctrl-h: 32px;
+      --anno-w: 200px;
+      --label-w: 120px;
+      --line: #111;
+      --fill: #fff;
+      --mute: #555;
+      --soft: #f0f0f0;
+      --anno: #336;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--line);
+      background: #e8e8e8;
+    }
+    .meta {
+      max-width: calc(var(--win-w) + 16px + var(--anno-w));
+      margin: 0 0 16px;
+      font-size: 13px;
+      color: var(--mute);
+    }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .frame {
+      display: grid;
+      grid-template-columns: var(--win-w) var(--anno-w);
+      column-gap: 16px;
+      width: max-content;
+    }
+    .win {
+      width: var(--win-w);
+      height: var(--win-h);
+      display: flex;
+      flex-direction: column;
+      background: var(--fill);
+      border: 1px solid var(--line);
+      flex-shrink: 0;
+    }
+    .callouts {
+      grid-column: 2;
+      position: relative;
+      height: var(--win-h);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .callout {
+      position: absolute;
+      left: 0;
+      right: 0;
+      font-size: 11px;
+      color: var(--anno);
+      line-height: 1.35;
+    }
+    .callout::before {
+      content: "";
+      position: absolute;
+      left: -12px;
+      top: 0.55em;
+      width: 10px;
+      border-top: 1px dashed var(--anno);
+    }
+    .callout strong { display: block; color: var(--line); margin-bottom: 2px; }
+    .callout-title { top: 6px; }
+    .callout-grid { top: 56px; }
+    .callout-footer { top: 520px; }
+
+    .titlebar {
+      height: var(--titlebar-h);
+      flex: 0 0 var(--titlebar-h);
+      display: flex;
+      align-items: center;
+      padding: 0 8px 0 12px;
+      gap: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .title { flex: 1; font-size: 12px; font-weight: 600; }
+    .cap {
+      width: 40px;
+      height: 24px;
+      border: 1px solid var(--line);
+      font-size: 10px;
+      background: transparent;
+    }
+    .body {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: var(--pad);
+      gap: var(--gap);
+      overflow: hidden;
+    }
+    .tag {
+      position: absolute;
+      top: 0;
+      right: 0;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--anno);
+      background: #e8e8e8;
+      border: 1px dashed var(--anno);
+      padding: 1px 5px;
+      pointer-events: none;
+    }
+    .region { position: relative; }
+
+    .grid {
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: var(--label-w) 1fr;
+      gap: 16px;
+      font-size: 14px;
+      align-items: start;
+    }
+    .grid .lbl { color: var(--mute); }
+    .grid .val { word-break: break-word; }
+    .grid .val.mono { font-family: ui-monospace, monospace; }
+    .grid .val.elide {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .spacer { flex: 1 1 auto; min-height: 12px; }
+    .footer { flex: 0 0 auto; }
+    .rule { margin: 0 0 12px; border: 0; border-top: 1px solid var(--line); }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .btn {
+      height: var(--ctrl-h);
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font: inherit;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .btn-accent { background: var(--soft); font-weight: 600; }
+
+    .legend {
+      max-width: calc(var(--win-w) + 16px + var(--anno-w));
+      margin: 20px 0 0;
+      padding: 12px 14px;
+      border: 1px dashed var(--line);
+      font-size: 12px;
+      color: var(--mute);
+    }
+  </style>
+</head>
+<body>
+  <p class="meta">SFTP 属性 · <code>720×580</code> · 对照 <code>SftpPropertiesDialog</code> · Esc → Close。</p>
+
+  <div class="stage">
+    <div class="frame">
+      <div class="win" role="dialog">
+        <div class="titlebar region">
+          <span class="tag">A</span>
+          <div class="title">Properties</div>
+          <button type="button" class="cap" tabindex="-1" aria-hidden="true">×</button>
+        </div>
+
+        <div class="body">
+          <div class="grid region">
+            <span class="tag">B</span>
+            <span class="lbl">Name</span>
+            <span class="val elide">deploy-bundle.tar.gz</span>
+            <span class="lbl">Path</span>
+            <span class="val mono">/var/www/deploy/releases/deploy-bundle.tar.gz</span>
+            <span class="lbl">Kind</span>
+            <span class="val">File</span>
+            <span class="lbl">Size</span>
+            <span class="val">48.2 MB (50,567,890 bytes)</span>
+            <span class="lbl">Modified</span>
+            <span class="val">2026-10-28 14:32:08</span>
+            <span class="lbl">Permissions</span>
+            <span class="val mono">rw-r--r-- (644)</span>
+          </div>
+
+          <div class="spacer" aria-hidden="true"></div>
+
+          <div class="footer region">
+            <span class="tag">C</span>
+            <hr class="rule" />
+            <div class="actions">
+              <button type="button" class="btn">Copy Path</button>
+              <button type="button" class="btn btn-accent">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <ul class="callouts">
+        <li class="callout callout-title"><strong>A</strong> 工具窗 Properties。</li>
+        <li class="callout callout-grid"><strong>B</strong> 六行标签网格；Path/Permissions 等宽。</li>
+        <li class="callout callout-footer"><strong>C</strong> Copy Path | Close（accent）。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="legend">Copy Path → copy-path()；窄列表里隐藏的 Modified/Permissions 从此弹窗查看。</div>
+</body>
+</html>

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Proxies wireframe</title>
+  <style>
+    :root {
+      --win-w: 1100px; --win-h: 820px; --titlebar-h: 32px; --pad: 28px; --gap: 12px;
+      --ctrl-h: 32px; --list-w: 380px; --row-h: 56px;
+      --line: #111; --fill: #fff; --mute: #555; --soft: #f0f0f0;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .win { width: var(--win-w); height: var(--win-h); flex-shrink: 0; display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line); }
+    .titlebar { height: var(--titlebar-h); flex: 0 0 var(--titlebar-h); display: flex; align-items: center; padding: 0 12px; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; }
+    .body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: var(--pad); gap: var(--gap); overflow: hidden; }
+    .split { flex: 1 1 auto; min-height: 0; display: flex; gap: 16px; overflow: hidden; }
+    .col-left { width: var(--list-w); flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; gap: 8px; overflow: auto; }
+    .scroll-list { min-height: 180px; max-height: 360px; overflow: auto; border: 1px dashed var(--line); flex-shrink: 0; }
+    .proxy-row { height: var(--row-h); padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 13px; cursor: pointer; }
+    .proxy-row[aria-selected="true"] { background: var(--soft); font-weight: 600; }
+    .proxy-row small { display: block; font-family: ui-monospace, monospace; font-size: 11px; color: var(--mute); font-weight: 400; }
+    .col-right { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+    .form-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px solid var(--line); padding: 16px; }
+    .form-row { display: grid; grid-template-columns: 100px 1fr; gap: 10px; align-items: center; margin-bottom: 10px; font-size: 14px; }
+    .form-row .lbl { text-align: right; color: var(--mute); font-size: 13px; }
+    .input, .select { height: var(--ctrl-h); border: 1px solid var(--line); padding: 0 8px; font: inherit; width: 100%; max-width: 400px; }
+    .form-footer { flex: 0 0 auto; padding-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+    .status { font-size: 12px; color: var(--mute); height: var(--ctrl-h); display: flex; align-items: center; }
+    .form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .spacer { flex: 1 1 auto; min-height: 8px; }
+    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+    .win-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+    .btn { height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line); background: var(--fill); font: inherit; font-size: 14px; cursor: pointer; }
+    .btn-primary { background: var(--soft); font-weight: 600; }
+    .row-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+    .legend { max-width: var(--win-w); margin: 20px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+  </style>
+</head>
+<body>
+  <p class="meta">Proxy Manager · 编辑型窗：页脚只有 Cancel | Save（<strong>不要</strong>再叠 Close）</p>
+  <div class="stage">
+    <div class="win" role="dialog">
+      <div class="titlebar">Proxies</div>
+      <div class="body">
+        <div class="split">
+          <div class="col-left">
+            <strong>Managed Proxies</strong>
+            <div class="scroll-list">
+              <div class="proxy-row" aria-selected="true">corp-socks5<small>SOCKS5 · proxy.corp:1080 · password saved · Prod, Staging</small></div>
+              <div class="proxy-row" aria-selected="false">dev-http<small>HTTP CONNECT · 127.0.0.1:8888 · not used</small></div>
+            </div>
+            <div class="row-btns">
+              <button type="button" class="btn btn-primary">New</button>
+              <button type="button" class="btn">Edit</button>
+              <button type="button" class="btn">Duplicate</button>
+            </div>
+            <div class="row-btns">
+              <button type="button" class="btn">Test</button>
+              <button type="button" class="btn">Delete</button>
+            </div>
+          </div>
+          <div class="col-right">
+            <div class="form-scroll">
+              <h2 style="margin:0 0 12px;font-size:15px">Edit Proxy</h2>
+              <div class="form-row"><span class="lbl">Name</span><input class="input" value="corp-socks5" /></div>
+              <div class="form-row"><span class="lbl">Protocol</span><select class="select"><option>SOCKS4</option><option>SOCKS4a</option><option selected>SOCKS5</option><option>HTTP CONNECT</option></select></div>
+              <div class="form-row"><span class="lbl">Host</span><input class="input" value="proxy.corp" /></div>
+              <div class="form-row"><span class="lbl">Port</span><input class="input" value="1080" style="max-width:100px" /></div>
+              <div class="form-row"><span class="lbl">Username</span><input class="input" value="alice" /></div>
+              <div class="form-row"><span class="lbl">Password</span><input class="input" type="password" placeholder="Leave blank to keep saved" /></div>
+              <label style="font-size:14px"><input type="checkbox" checked /> DNS through Proxy: On</label>
+              <p style="font-size:12px;color:var(--mute);font-family:monospace">Profile id: proxy-7f3a…</p>
+              <p style="font-size:12px;font-family:monospace;border:1px dashed var(--line);padding:8px;margin-top:12px">Test: TCP OK · SOCKS5 greet OK</p>
+            </div>
+            <div class="form-footer">
+              <div class="status">Status: Ready · Test: TCP OK</div>
+            </div>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <div class="footer">
+          <hr class="rule" />
+          <div class="win-actions">
+            <button type="button" class="btn">Cancel</button>
+            <button type="button" class="btn btn-primary">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="legend">
+    <ul>
+      <li>编辑型管理器：窗级页脚 <strong>Cancel | Save</strong> 一条；取消即关窗/丢弃未保存编辑。</li>
+      <li>禁止 Cancel|Save + Close 双栏。</li>
+      <li>右列表单可滚；左清单 380；窗体 1100×820。</li>
+    </ul>
+  </div>
+  <script>
+    document.querySelectorAll(".proxy-row").forEach(function (row) {
+      row.addEventListener("click", function () {
+        document.querySelectorAll(".proxy-row").forEach(function (r) { r.setAttribute("aria-selected", r === row ? "true" : "false"); });
+      });
+    });
+  </script>
+</body>
+</html>

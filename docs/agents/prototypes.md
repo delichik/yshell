@@ -54,6 +54,14 @@ docs/prototypes/
 - 多状态建议在页内提供状态切换条，例如：`默认 | 加载中 | 空 | 错误 | 禁用项可见`。
 - 危险操作、二次确认、阻断弹窗：用简单叠层框表达，不必动画。
 - 结构说明 / 分区注解写在**窗口外**的图例区，不要塞进对话框抢高度。
+- **一窗一条提交/关闭栏**：页脚要么是 `Close`（浏览型管理器），要么是 `Cancel | Save`（编辑型），**禁止**在 `Cancel|Save` 外再叠一层窗级 `Close`。
+- **嵌套流程冻结上级**：Import / Export / Deploy / 二次确认等不是父窗内嵌表单块，而是叠在父窗上的模态子窗（scrim + 子对话框），父窗不可点；子窗自带 Cancel | 主操作。
+- **右键菜单必须可演示**：关键区域（会话树、标签、终端、SFTP 行等）要能右键弹出菜单；菜单项写清文案，禁用项标出。
+- **快捷键必须可见**：菜单项右侧标 `Ctrl+…` / `F5` 等；页外可附键盘速查；关键按键用 `keydown` 演示跳转或状态切换（至少覆盖契约 §2 常用项）。
+- **跳转路径必须可点**：打开其它工具窗/确认框的动作，用链接或按钮跳到对应 `docs/prototypes/<name>/`（或本页模态），并写清路径，例如 `→ session-editor` / `→ compact-confirm (quit)`。
+- **主窗按 N3 拆原型**：`tool-dock`（左右可换面板栈）+ `panel-*`（内容）+ 工作区 `tab-bar` / `terminal-workspace` / `workspace-split` / `sync-input`（N9）/ `sftp-panel` / `quick-connect`；`main-window` 只做整壳拼装与菜单/快捷键枢纽。**禁止**再画固定 Left Sidebar / RightDock Tab。面板侧别默认值不是锁死。N9 用 banner/chip，禁止 KEYS 打字确认（D23）。
+- **原地重命名 / 新建名**：标签 Rename Tab、**SFTP** Rename / New Folder、Sessions 树 **Session** 改名均为**原地输入框**（插行再编辑），不是另开对话框；`Enter` 或失焦确认，`Esc` 取消（新建取消则移除该行）。对应分区原型必须用状态钮（或默认演示态）把输入框钉在画面上。Folder 的 New Folder / Rename / Delete 以 status「本版不做」为准（菜单 disabled）。`sftp-entry` / `new-folder` 短表单壳不作主路径。
+- **禁止打字确认破坏操作**：删除、清空、覆盖等高危动作**永远不要**让用户手输 `CLEAR` / `DELETE` / 确认词。用清晰文案 + 明确的破坏性按钮（及可选二次确认窗）即可；主按钮可标 critical，安全默认焦点在 Cancel。
 - 与 [`yshell-ui-interaction-contract.md`](../product/yshell-ui-interaction-contract.md) 冲突时，先改契约或 status，再改原型。
 
 ## 尺寸与滚动（强制）
