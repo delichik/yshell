@@ -10,3 +10,5 @@
 | [`github-actions-release.md`](./github-actions-release.md) | CI / Release |
 
 读序：status → 契约（改 UI 时）→ 设计语言（改视觉时）。
+
+Agent 规则：根目录 [`AGENTS.md`](../../AGENTS.md)；专项（含 **UI 原型优先**）见 [`docs/agents/`](../agents/README.md)；原型产物在 [`docs/prototypes/`](../prototypes/README.md)。
