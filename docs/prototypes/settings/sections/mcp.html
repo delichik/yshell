@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — settings · MCP</title>
+  <link rel="stylesheet" href="../../form.css">
+  <link rel="stylesheet" href="../../_icons.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <style>
+    :root {
+      --board-w: 800px; --board-h: 640px; --nav-item-h: 40px;
+      --panel: #f4f4f4;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--board-w); margin: 0 0 8px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .meta a { color: var(--line); font-weight: 600; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; font-size: 13px; color: var(--mute); }
+    .tools .btn { font-size: 13px; }
+    .tools a.btn[aria-current="page"] { background: var(--soft); font-weight: 600; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .board {
+      width: var(--board-w); height: var(--board-h); flex-shrink: 0;
+      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+    }
+    .board-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--mute); padding: 6px 10px 0;
+    }
+    .board-body { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; border-top: 1px solid var(--line); margin-top: 4px; }
+    .legend { max-width: var(--board-w); margin: 16px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+    .legend strong { color: var(--line); }
+  </style>
+</head>
+<body>
+  <p class="meta">settings · sections/mcp · board 800×640。 <a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a> · consent <a href="../mcp-consent.html">mcp-consent</a>。</p>
+  <div class="tools" role="navigation">
+    <a class="btn" href="general.html" title="General">General</a>
+    <a class="btn" href="appearance.html" title="Appearance">Appearance</a>
+    <a class="btn" href="terminal.html" title="Terminal">Terminal</a>
+    <a class="btn" href="security.html" title="Security">Security</a>
+    <a class="btn" href="mcp.html" aria-current="page" title="MCP">MCP</a>
+    <a class="btn" href="advanced.html" title="Advanced">Advanced</a>
+    <a class="btn" href="sftp.html" title="SFTP">SFTP</a>
+  </div>
+  <div class="stage">
+    <div class="board">
+      <div class="board-label">sections / mcp</div>
+      <div class="board-body">
+        <div class="panel" data-panel="mcp">
+          <div class="form-row">
+            <span class="lbl">Enable</span>
+            <label class="form-switch" title="Enable MCP">
+              <input type="checkbox" id="fld-mcp-enable" aria-label="Enable MCP" />
+              <span class="switch" aria-hidden="true"></span>
+              <span class="switch-txt"><span class="txt-on">On</span><span class="txt-off">Off</span></span>
+            </label>
+          </div>
+          <p class="hint hint-indent">Off by default; other MCP controls are disabled.</p>
+
+          <div class="form-row">
+            <span class="lbl">Port</span>
+            <input class="input input-port" id="fld-mcp-port" type="text" inputmode="numeric" value="18765" aria-label="Port" title="Port" />
+          </div>
+          <p class="hint hint-indent">1–65535.</p>
+
+          <div class="form-row">
+            <span class="lbl">Listen</span>
+            <div class="methods" role="group" aria-label="Listen scope" id="fld-mcp-listen">
+              <button type="button" class="method" data-listen="local" aria-pressed="true" title="Local">Local</button>
+              <button type="button" class="method" data-listen="lan" aria-pressed="false" title="LAN">LAN</button>
+            </div>
+          </div>
+          <p class="hint hint-indent">Local = 127.0.0.1; LAN = 0.0.0.0.</p>
+
+          <div class="form-row">
+            <span class="lbl">API key</span>
+            <div class="ctl-with-btn center">
+              <input class="input" id="fld-mcp-key" type="password" autocomplete="off" placeholder="Required for LAN"
+                     aria-label="API key" title="Required for LAN" value="" />
+              <button type="button" class="btn btn-icon" id="btn-mcp-gen" title="Generate" aria-label="Generate"><span class="i i-generate" aria-hidden="true"></span></button>
+              <button type="button" class="btn btn-icon" id="btn-mcp-copy" title="Copy" aria-label="Copy"><span class="i i-copy" aria-hidden="true"></span></button>
+            </div>
+          </div>
+          <p class="hint hint-indent">Required for LAN.</p>
+
+          <div class="form-row">
+            <span class="lbl">View user</span>
+            <label class="form-switch" title="Allow viewing user-created connections">
+              <input type="checkbox" id="fld-mcp-view-user" aria-label="Allow viewing user-created connections" />
+              <span class="switch" aria-hidden="true"></span>
+              <span class="switch-txt"><span class="txt-on">On</span><span class="txt-off">Off</span></span>
+            </label>
+          </div>
+          <p class="hint hint-indent">AI can see user-created connections.</p>
+
+          <div class="form-row">
+            <span class="lbl">Control user</span>
+            <label class="form-switch" title="Allow controlling user-created connections">
+              <input type="checkbox" id="fld-mcp-control-user" aria-label="Allow controlling user-created connections" />
+              <span class="switch" aria-hidden="true"></span>
+              <span class="switch-txt"><span class="txt-on">On</span><span class="txt-off">Off</span></span>
+            </label>
+          </div>
+          <p class="hint hint-indent">AI can operate user-created connections.</p>
+
+          <div class="form-row">
+            <span class="lbl">Auto-approve</span>
+            <label class="form-switch" title="Skip the MCP control consent dialog">
+              <input type="checkbox" id="fld-mcp-auto" aria-label="Auto-approve AI control" />
+              <span class="switch" aria-hidden="true"></span>
+              <span class="switch-txt"><span class="txt-on">On</span><span class="txt-off">Off</span></span>
+            </label>
+          </div>
+          <p class="hint hint-indent">Skip the control consent dialog.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="legend">
+    <ul class="anno">
+      <li><strong>A · Enable</strong> 默认 Off；关时其余控件禁用。</li>
+      <li><strong>B · Listen / API key</strong> Local = 127.0.0.1，LAN = 0.0.0.0；LAN 时 key 必填。Generate / Copy 为图标旁路。</li>
+      <li><strong>C · Access</strong> View / Control 联动；Auto-approve Off → <a href="../mcp-consent.html">mcp-consent</a>。</li>
+      <li><strong>D · AI tab</strong> AI 标签带 AI 标志 → <a href="../../main-shell/workspace/tab-bar.html">tab-bar</a>。</li>
+    </ul>
+    <p class="anno-ref"><a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a> · <a href="../index.html#mcp">settings hub</a></p>
+  </div>
+  <script>
+    (function () {
+      var enable = document.getElementById("fld-mcp-enable");
+      var port = document.getElementById("fld-mcp-port");
+      var key = document.getElementById("fld-mcp-key");
+      var viewUser = document.getElementById("fld-mcp-view-user");
+      var controlUser = document.getElementById("fld-mcp-control-user");
+      var auto = document.getElementById("fld-mcp-auto");
+      var gen = document.getElementById("btn-mcp-gen");
+      var copy = document.getElementById("btn-mcp-copy");
+      var listenBtns = document.querySelectorAll("#fld-mcp-listen .method");
+
+      function syncEnable() {
+        var on = enable.checked;
+        port.disabled = !on;
+        key.disabled = !on;
+        viewUser.disabled = !on;
+        controlUser.disabled = !on;
+        auto.disabled = !on;
+        gen.disabled = !on;
+        copy.disabled = !on;
+        listenBtns.forEach(function (b) { b.disabled = !on; });
+      }
+
+      viewUser.addEventListener("change", function () {
+        if (!viewUser.checked) controlUser.checked = false;
+      });
+      controlUser.addEventListener("change", function () {
+        if (controlUser.checked) viewUser.checked = true;
+      });
+
+      listenBtns.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          if (btn.disabled) return;
+          listenBtns.forEach(function (b) {
+            b.setAttribute("aria-pressed", b === btn ? "true" : "false");
+          });
+        });
+      });
+
+      gen.addEventListener("click", function () {
+        if (gen.disabled) return;
+        key.type = "text";
+        key.value = "ys_mcp_" + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+      });
+
+      enable.addEventListener("change", syncEnable);
+      syncEnable();
+    })();
+  </script>
+</body>
+</html>

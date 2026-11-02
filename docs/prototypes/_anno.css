@@ -1,0 +1,129 @@
+/* Shared prototype annotation chrome.
+   Format: "A · Short name" — letter, space, middle-dot, space, title.
+   Common chrome / spacer / footer: see annotations.html (do not repeat per page). */
+
+:root {
+  --anno: #336;
+  --anno-w: 200px;
+}
+
+/* In-window corner tag (overlay, zero layout cost) */
+.anno-tag,
+.tag {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--anno);
+  background: #e8e8e8;
+  border: 1px dashed var(--anno);
+  pointer-events: none;
+  user-select: none;
+}
+
+.region {
+  position: relative;
+}
+
+/* In-product annotation overlay. Put annotation nodes inside this layer
+   (position:absolute, pointer-events:none); never into menus / forms / panes. */
+.anno-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+.anno-layer > * { position: absolute; }
+
+/* Side callouts — outside product geometry */
+.anno-callouts,
+.callouts {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  height: 100%;
+  min-height: var(--win-h, 580px);
+}
+
+.anno-callout,
+.callout {
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0 0 0 10px;
+  font-size: 11px;
+  color: var(--anno);
+  line-height: 1.35;
+  pointer-events: none;
+}
+
+.anno-callout::before,
+.callout::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.35em;
+  bottom: 0.35em;
+  width: 0;
+  border-left: 1px dashed var(--anno);
+}
+
+.anno-callout strong,
+.callout strong {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-bottom: 2px;
+  color: var(--line, #111);
+}
+
+/* Bottom / board legend — same A · Title vocabulary */
+.anno,
+.legend .anno {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.anno > li,
+.legend .anno > li {
+  margin: 0 0 8px;
+  padding: 0;
+  font-size: 12px;
+  color: var(--mute, #555);
+  line-height: 1.55;
+}
+
+.anno > li > strong,
+.legend .anno > li > strong {
+  display: block;
+  color: var(--line, #111);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.anno-ref {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--mute, #555);
+  line-height: 1.45;
+}
+
+.anno-ref a { color: var(--line, #111); }
+
+/* Blue implementation tip — overlay only (use .anno-layer); never in flow. */
+.anno-note,
+.note {
+  margin: 0;
+  pointer-events: none;
+  font-size: 11px;
+  color: var(--anno);
+  line-height: 1.35;
+}

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Login Script · Keys step</title>
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../form.css">
+  <style>
+    :root {
+      --modal-w: 720px; --modal-h: 580px; --titlebar-h: 32px; --pad: 28px;
+      --ctrl-h: 32px;
+      --line: #111; --fill: #fff; --mute: #555; --soft: #f0f0f0;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--modal-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .meta a { color: inherit; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .tools button {
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line);
+      background: var(--fill); font: inherit; cursor: pointer;
+    }
+    .tools button[aria-pressed="true"] { background: var(--soft); font-weight: 600; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .modal {
+      width: var(--modal-w); height: var(--modal-h); flex-shrink: 0;
+      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+    }
+    .titlebar {
+      height: var(--titlebar-h); flex: 0 0 var(--titlebar-h);
+      display: flex; align-items: center; padding: 0 8px 0 12px; gap: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .title { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cap {
+      width: 40px; height: 24px; border: 1px solid var(--line); background: transparent;
+      font-size: 10px; color: var(--line); padding: 0; text-decoration: none;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .m-body { flex: 1; min-height: 0; padding: var(--pad); display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+    .form-row { grid-template-columns: 100px minmax(0, 1fr); gap: 8px 12px; }
+    /* Keys body + Tokens: same --field-w as Name; height grows, width does not. */
+    .form-row.keys-row {
+      flex: 1 1 auto;
+      min-height: 0;
+      align-items: stretch;
+      grid-template-rows: minmax(160px, 1fr);
+    }
+    .keys-area {
+      width: 100%; max-width: var(--field-w); height: 100%; min-height: 160px;
+      border: 1px solid var(--line); padding: 8px;
+      font-family: ui-monospace, monospace; font-size: 13px; line-height: 1.4;
+      resize: none; box-sizing: border-box;
+    }
+    .cheat {
+      width: 100%; max-width: var(--field-w);
+      border: 1px dashed var(--line); padding: 10px 12px; font-size: 12px; color: var(--mute); line-height: 1.5;
+      max-height: var(--field-h-lg); overflow: auto; background: var(--soft);
+      box-sizing: border-box;
+    }
+    .cheat strong { color: var(--line); }
+    .cheat code {
+      font-family: ui-monospace, monospace; font-size: 11px;
+      border: 1px solid var(--line); padding: 0 4px; background: var(--fill); white-space: nowrap;
+    }
+    .cheat-grid {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; margin-top: 6px;
+    }
+    .cheat-grid > span { min-width: 0; overflow-wrap: anywhere; }
+    .hint { margin: 0; font-size: 12px; color: var(--mute); }
+    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; align-items: center; flex: 0 0 auto; }
+    .actions .grow { flex: 1; }
+    .btn {
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line);
+      background: var(--fill); font: inherit; font-size: 14px; cursor: pointer;
+      display: inline-flex; align-items: center; text-decoration: none; color: inherit;
+    }
+    .btn-primary { background: var(--soft); font-weight: 600; }
+    #btn-delete[hidden] { display: none !important; }
+    .legend { max-width: var(--modal-w); margin: 20px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+  </style>
+</head>
+<body>
+  <p class="meta">Login Script · Keys 步骤弹窗。 <a href="../../annotations.html">annotations</a>。</p>
+  <div class="tools" role="group" aria-label="Modal state">
+    <button type="button" id="state-add" aria-pressed="true" title="Add Keys">Add Keys</button>
+    <button type="button" id="state-edit" aria-pressed="false" title="Edit Keys">Edit Keys</button>
+  </div>
+
+  <div class="stage">
+    <div class="modal" role="dialog" aria-labelledby="win-title">
+      <div class="titlebar">
+        <div class="title" id="win-title">Add Keys</div>
+        <a class="cap" href="login-script.html" aria-label="Close" title="Close"><span class="i i-close" aria-hidden="true"></span></a>
+      </div>
+      <div class="m-body">
+        <div class="form-row">
+          <span class="lbl">Name</span>
+          <input class="input" id="fld-name" placeholder="Optional" value="" />
+        </div>
+        <div class="form-row top keys-row">
+          <span class="lbl">Keys</span>
+          <textarea class="keys-area" id="fld-keys" spellcheck="false" placeholder="cd /opt/app{Enter}&#10;sudo -i{Enter}"></textarea>
+        </div>
+        <div class="form-row top">
+          <span class="lbl">Tokens</span>
+          <div class="cheat" id="cheat">
+            <strong>按键转换</strong> — 普通字符原样发送；特殊键写成 <code>{…}</code>（大小写不敏感）。
+            <div class="cheat-grid">
+              <span><code>{Enter}</code> / <code>{Return}</code> 回车</span>
+              <span><code>{Tab}</code> Tab</span>
+              <span><code>{Esc}</code> Escape</span>
+              <span><code>{Space}</code> 空格</span>
+              <span><code>{Backspace}</code> 退格</span>
+              <span><code>{Delete}</code> 删除</span>
+              <span><code>{Up}</code> <code>{Down}</code> <code>{Left}</code> <code>{Right}</code></span>
+              <span><code>{Home}</code> <code>{End}</code></span>
+              <span><code>{Ctrl+C}</code> 中断</span>
+              <span><code>{Ctrl+D}</code> EOF</span>
+              <span><code>{Ctrl+Z}</code> 挂起</span>
+              <span><code>{Ctrl+L}</code> 清屏（常见）</span>
+              <span><code>{Ctrl+A}</code> … <code>{Ctrl+Z}</code></span>
+              <span><code>{Alt+…}</code> / <code>{Shift+…}</code></span>
+              <span><code>{{</code> 字面量 <code>{</code></span>
+              <span><code>}}</code> 字面量 <code>}</code></span>
+            </div>
+            <p class="hint" style="margin-top:8px">Example: <code>yes{Enter}</code>, <code>echo {{a}}{Enter}</code></p>
+          </div>
+        </div>
+        <hr class="rule" />
+        <div class="actions">
+          <button type="button" class="btn btn-icon btn-danger" id="btn-delete" hidden aria-label="Delete" title="Delete"><span class="i i-trash" aria-hidden="true"></span></button>
+          <span class="grow"></span>
+          <a class="btn" href="login-script.html" title="Cancel">Cancel</a>
+          <button type="button" class="btn btn-primary" id="btn-save" title="Save">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+      <ul class="anno">
+        <li><strong>A · Keys form</strong> Name；正文 / Tokens。</li>
+      </ul>
+      <p class="anno-ref"><a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a></p>
+    </div>
+
+  <script>
+    (function () {
+      var title = document.getElementById("win-title");
+      var name = document.getElementById("fld-name");
+      var keys = document.getElementById("fld-keys");
+      var btnDelete = document.getElementById("btn-delete");
+      var btnAdd = document.getElementById("state-add");
+      var btnEdit = document.getElementById("state-edit");
+
+      function showAdd() {
+        btnAdd.setAttribute("aria-pressed", "true");
+        btnEdit.setAttribute("aria-pressed", "false");
+        title.textContent = "Add Keys";
+        btnDelete.hidden = true;
+        name.value = "";
+        keys.value = "";
+      }
+
+      function showEdit() {
+        btnAdd.setAttribute("aria-pressed", "false");
+        btnEdit.setAttribute("aria-pressed", "true");
+        title.textContent = "Edit Keys";
+        btnDelete.hidden = false;
+        name.value = "Go home";
+        keys.value = "cd ~{Enter}\n{Ctrl+L}";
+      }
+
+      btnAdd.addEventListener("click", showAdd);
+      btnEdit.addEventListener("click", showEdit);
+      document.getElementById("btn-save").addEventListener("click", function () {
+        location.href = "index.html";
+      });
+      btnDelete.addEventListener("click", function () {
+        location.href = "index.html";
+      });
+
+      if (/edit/i.test(location.hash)) showEdit();
+      else showAdd();
+    })();
+  </script>
+</body>
+</html>

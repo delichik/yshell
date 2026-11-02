@@ -4,20 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YShell — Logging wireframe</title>
-  <style>
+  
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_anno.css">
+<style>
     :root {
       --win-w: 720px;
       --win-h: 580px;
       --titlebar-h: 32px;
       --pad: 28px;
       --gap: 16px;
-      --ctrl-h: 32px;
       --anno-w: 200px;
       --label-w: 100px;
-      --line: #111;
-      --fill: #fff;
-      --mute: #555;
-      --soft: #f0f0f0;
       --anno: #336;
     }
     * { box-sizing: border-box; }
@@ -88,11 +86,8 @@
       border-top: 1px dashed var(--anno);
     }
     .callout strong { display: block; font-weight: 700; margin-bottom: 2px; color: var(--line); }
-    .callout-title { top: 6px; }
     .callout-session { top: 48px; }
     .callout-content { top: 88px; }
-    .callout-footer { top: 520px; }
-
     .titlebar {
       height: var(--titlebar-h);
       flex: 0 0 var(--titlebar-h);
@@ -153,16 +148,18 @@
       font-size: 14px;
       font-weight: 600;
     }
-    .form-row {
+    /* Logging uses flex label | field-col (not grid form-row); keep layout override */
+    .content .form-row {
       display: flex;
+      grid-template-columns: none;
       gap: 12px;
       align-items: flex-start;
+      margin-bottom: 0;
     }
-    .form-row > .lbl {
+    .content .form-row > .lbl {
       flex: 0 0 var(--label-w);
-      font-size: 14px;
-      color: var(--mute);
-      padding-top: 6px;
+      width: var(--label-w);
+      text-align: left;
     }
     .form-row > .field-col {
       flex: 1;
@@ -174,34 +171,18 @@
     .path-row {
       display: flex;
       gap: 8px;
-    }
-    .input {
-      flex: 1;
-      height: var(--ctrl-h);
-      padding: 0 8px;
-      border: 1px solid var(--line);
-      font: inherit;
-      font-size: 13px;
-      font-family: ui-monospace, monospace;
-    }
-    .hint {
-      margin: 0;
-      font-size: 12px;
-      color: var(--mute);
-      line-height: 1.35;
-    }
-    .radios {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px 16px;
-    }
-    .check, .radio-line {
-      display: inline-flex;
       align-items: center;
-      gap: 8px;
-      font-size: 14px;
-      cursor: pointer;
+      min-width: 0;
     }
+    .path-row .input {
+      flex: 0 1 var(--field-w);
+      width: var(--field-w);
+      max-width: var(--field-w);
+      min-width: 0;
+      font-family: ui-monospace, monospace;
+      font-size: 13px;
+    }
+    .path-row .btn { flex: 0 0 auto; white-space: nowrap; }
     .warn-box {
       padding: 8px 10px;
       border: 1px solid var(--line);
@@ -227,6 +208,9 @@
       font-weight: 700;
     }
     .path-box {
+      width: 100%;
+      max-width: 420px;
+      box-sizing: border-box;
       padding: 10px 12px;
       border: 1px solid var(--line);
       background: var(--soft);
@@ -238,16 +222,6 @@
     .sub-actions {
       display: flex;
       gap: 8px;
-    }
-    .btn {
-      appearance: none;
-      height: var(--ctrl-h);
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
-      font: inherit;
-      font-size: 14px;
-      cursor: pointer;
     }
     .btn-subtle { background: var(--soft); }
     .btn-accent { background: var(--soft); font-weight: 600; }
@@ -284,10 +258,7 @@
 </head>
 <body>
   <div class="root" id="root">
-    <p class="meta">
-      Terminal logging 线框 · <code>720×580</code> · 对照 <code>LoggingDialog</code>。
-      原型 body 不滚动（实现里窗变矮时中间区可滚；此处用 spacer 消化余量）。
-    </p>
+    <p class="meta">Session logging · <code>720×580</code>。 <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>。</p>
 
     <div class="tools">
       <label><input type="radio" name="view" value="start" checked /> Start form</label>
@@ -297,17 +268,15 @@
     <div class="stage">
       <div class="frame">
         <div class="win" role="dialog">
-          <div class="titlebar region">
-            <span class="tag">A</span>
-            <div class="title">Session logging</div>
-            <button type="button" class="cap" tabindex="-1" aria-hidden="true">×</button>
+          <div class="titlebar">
+<div class="title">Session logging</div>
+            <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
           </div>
 
           <div class="body">
-            <p class="session region">Session: prod-edge</p>
+            <p class="session region"><span class="tag">A · session</span>Session: prod-edge</p>
 
-            <div class="content region">
-              <span class="tag">B</span>
+            <div class="content region"><span class="tag">B · body</span>
 
               <div class="view" id="view-start">
                 <p class="section-title">Destination</p>
@@ -316,9 +285,8 @@
                   <div class="field-col">
                     <div class="path-row">
                       <input class="input" type="text" value="D:\Logs\yshell" />
-                      <button type="button" class="btn">Browse…</button>
+                      <button type="button" class="btn btn-icon" title="Browse" aria-label="Browse"><span class="i i-browse" aria-hidden="true"></span></button>
                     </div>
-                    <p class="hint">Default: the last used folder, or the configured logs directory.</p>
                   </div>
                 </div>
                 <div class="form-row">
@@ -336,9 +304,27 @@
                     <label class="radio-line"><input type="radio" name="fmt" /> Raw (with ANSI escapes)</label>
                   </div>
                 </div>
-                <label class="check"><input type="checkbox" checked /> Timestamp each line with the local [HH:MM:SS]</label>
-                <label class="check"><input type="checkbox" /> Also record local input (commands you type)</label>
-                <p class="hint">Logging starts now: existing scrollback is not written; new output is recorded.</p>
+                <div class="form-row">
+                  <span class="lbl">Timestamp</span>
+                  <div class="field-col">
+                    <label class="form-switch">
+                      <input type="checkbox" checked aria-label="Timestamp each line with the local [HH:MM:SS]" />
+                      <span class="switch" aria-hidden="true"></span>
+                      <span class="switch-txt"><span class="txt-on">On</span><span class="txt-off">Off</span></span>
+                    </label>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <span class="lbl">Record input</span>
+                  <div class="field-col">
+                    <label class="form-switch">
+                      <input type="checkbox" aria-label="Record local input" />
+                      <span class="switch" aria-hidden="true"></span>
+                      <span class="switch-txt"><span class="txt-on">On</span><span class="txt-off">Off</span></span>
+                    </label>
+                  </div>
+                </div>
+                <p class="hint" style="margin-left:calc(var(--label-w) + 12px);max-width:420px">Starts from now — existing scrollback is not written.</p>
               </div>
 
               <div class="view" id="view-active" hidden>
@@ -348,40 +334,44 @@
                 </div>
                 <div class="path-box">D:\Logs\yshell\prod-edge-20261030-165600.log</div>
                 <div class="sub-actions">
-                  <button type="button" class="btn btn-subtle">Open File</button>
-                  <button type="button" class="btn btn-subtle">Open Folder</button>
+                  <button type="button" class="btn btn-subtle" title="Open File">Open File</button>
+                  <button type="button" class="btn btn-subtle" title="Open Folder">Open Folder</button>
                 </div>
               </div>
             </div>
 
             <div class="spacer" aria-hidden="true"></div>
 
-            <div class="footer region">
-              <span class="tag">C</span>
-              <hr class="rule" />
+            <div class="footer">
+<hr class="rule" />
               <div class="actions">
-                <button type="button" class="btn" id="btn-dismiss">Cancel</button>
-                <button type="button" class="btn btn-accent" id="btn-primary">Start Logging</button>
+                <button type="button" class="btn" id="btn-dismiss" title="Cancel">Cancel</button>
+                <button type="button" class="btn btn-accent" id="btn-primary" title="Start Logging">Start Logging</button>
               </div>
             </div>
           </div>
         </div>
 
-        <ul class="callouts">
-          <li class="callout callout-title"><strong>A</strong> 工具窗 chrome；标题 Session logging。</li>
-          <li class="callout callout-session"><strong>Session</strong> 会话名固定顶行。</li>
-          <li class="callout callout-content"><strong>Body</strong> 开启表单 vs 活动中停止提示；无列表故不滚动。</li>
-          <li class="callout callout-footer"><strong>Footer</strong> Cancel/Close + Start 或 Stop Logging。</li>
+        <ul class="callouts" aria-label="Design annotations">
+          <li class="callout callout-session">
+            <strong>A · Session</strong>
+            会话名固定顶行。
+          </li>
+          <li class="callout callout-content">
+            <strong>B · Body</strong>
+            开启表单 vs 活动中停止提示；无列表故不滚动。
+          </li>
         </ul>
       </div>
     </div>
 
     <div class="legend">
-      <strong>未画进线框的宿主态</strong>（实现有）：文件名错误、file-exists + overwrite 勾选、include-input 警告 + 确认、path-error。
-    </div>
-  </div>
-
-  <script>
+      <ul class="anno">
+        <li><strong>A · Session</strong> 顶行固定会话名。</li>
+        <li><strong>B · Body</strong> Start 表单 / Active 停止态；未画：文件名错误、overwrite、include-input 警告。</li>
+      </ul>
+      <p class="anno-ref"><a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a></p>
+    </div><script>
     (function () {
       var viewStart = document.getElementById("view-start");
       var viewActive = document.getElementById("view-active");

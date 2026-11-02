@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Tab bar wireframe</title>
+  <style>
+    /* Isolated TabBar slice — board 960×200, tabbar-h 36 */
+    :root {
+      --board-w: 960px;
+      --board-h: 200px;
+      --tabbar-h: 36px;
+      --ctrl-h: 32px;
+      --line: #111;
+      --fill: #fff;
+      --mute: #555;
+      --soft: #f0f0f0;
+      --bg: #e8e8e8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--line);
+      background: var(--bg);
+    }
+    .meta {
+      max-width: var(--board-w);
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: var(--mute);
+      line-height: 1.45;
+    }
+    .meta a { color: var(--line); }
+    .meta code { font-size: 12px; }
+    .tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: var(--mute);
+    }
+    .tools button {
+      height: var(--ctrl-h);
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .tools button[aria-pressed="true"] {
+      background: var(--soft);
+      font-weight: 600;
+    }
+    .stage {
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+    .board {
+      width: var(--board-w);
+      height: var(--board-h);
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--fill);
+      border: 1px solid var(--line);
+      position: relative;
+    }
+    .board-label {
+      flex: 0 0 auto;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--mute);
+      border-bottom: 1px solid var(--soft);
+    }
+    .tabbar {
+      height: var(--tabbar-h);
+      flex: 0 0 var(--tabbar-h);
+      display: flex;
+      align-items: stretch;
+      border-bottom: 1px solid var(--line);
+    }
+    .tab {
+      appearance: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      background: transparent;
+      padding: 0 14px;
+      min-width: 120px;
+      max-width: 220px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      position: relative;
+    }
+    .tab[aria-pressed="true"] {
+      background: var(--soft);
+      font-weight: 600;
+    }
+    .sess-ico {
+      width: 16px;
+      height: 16px;
+      flex: 0 0 16px;
+      border: 1px solid var(--line);
+      background: var(--soft);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .sess-ico[data-icon="db"],
+    .sess-ico[data-icon="custom"] { background: #1a1a2e; color: #e8e0d0; }
+    .tab .name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: left;
+    }
+    .mode-chip {
+      flex: 0 0 auto;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--mute);
+      border: 1px solid var(--line);
+      padding: 0 4px;
+      height: 16px;
+      line-height: 14px;
+      background: var(--fill);
+    }
+    .tab[data-mode="sftp"] .mode-chip { color: var(--line); }
+    .tab[data-mode="new"] .mode-chip { border-style: dashed; }
+    .ai-chip {
+      flex: 0 0 auto;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--fill);
+      border: 1px solid var(--line);
+      padding: 0 4px;
+      height: 16px;
+      line-height: 14px;
+      background: var(--line);
+    }
+    .anno-ref { max-width: var(--board-w); margin: 10px 0 0; font-size: 12px; color: var(--mute); line-height: 1.5; }
+    .anno-ref a { color: var(--line); font-weight: 600; }
+    .anno-ref strong { color: var(--line); font-weight: 600; }
+    .tab-spacer { flex: 1; min-width: 0; }
+    .inline-rename {
+      flex: 1;
+      min-width: 72px;
+      height: 24px;
+      border: 2px solid var(--line);
+      background: var(--fill);
+      color: var(--line);
+      font: inherit;
+      font-size: 13px;
+      padding: 0 4px;
+      margin: 0;
+      outline: none;
+    }
+    .tab.renaming {
+      outline: 1px dashed var(--line);
+      outline-offset: -1px;
+      background: var(--soft);
+      overflow: visible;
+    }
+    .renaming-badge {
+      position: absolute;
+      right: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 2;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--mute);
+      border: 1px solid var(--line);
+      padding: 0 4px;
+      height: 18px;
+      line-height: 16px;
+      white-space: nowrap;
+      background: var(--fill);
+      pointer-events: none;
+    }
+    .legend {
+      max-width: var(--board-w);
+      margin: 16px 0 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font-size: 12px;
+      color: var(--mute);
+      line-height: 1.5;
+    }
+    .legend strong { color: var(--line); }
+    .flyout {
+      position: fixed;
+      z-index: 1000;
+      min-width: 240px;
+      max-width: 280px;
+      background: var(--fill);
+      border: 1px solid var(--line);
+      padding: 4px 0;
+      font-size: 13px;
+      display: none;
+    }
+    .flyout.open { display: block; }
+    .flyout button {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      padding: 6px 12px;
+      font: inherit;
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .flyout button:hover { background: var(--soft); }
+    .flyout button.dis {
+      color: var(--mute);
+      cursor: not-allowed;
+    }
+    .flyout .sep {
+      height: 1px;
+      background: var(--soft);
+      margin: 4px 0;
+      border: 0;
+    }
+    .toast {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font-size: 12px;
+      display: none;
+    }
+    .toast.show { display: block; }
+  </style>
+</head>
+<body>
+  <p class="meta">
+    <strong>TabBar</strong> isolated wireframe · board <code>960×200</code> (tab strip <code>36</code> + context-menu annotation).
+    Hub: <a href="../../index.html">prototypes index</a> · shell: <a href="../index.html">main-window</a>.
+  </p>
+
+  <div class="tools" role="group" aria-label="Prototype states">
+    <span>State:</span>
+    <button type="button" data-state="default" aria-pressed="true" title="Default">Default</button>
+    <button type="button" data-state="renaming" aria-pressed="false" title="Renaming tab">Renaming tab</button>
+    <button type="button" data-state="switched-sftp" aria-pressed="false" title="After Switch→SFTP">After Switch→SFTP</button>
+  </div>
+
+  <div class="stage">
+    <div class="board" id="board">
+      <div class="board-label">TabBar · modes: new | terminal | sftp（同一标签切换模式，不是另开标签）</div>
+      <div class="tabbar" role="tablist" aria-label="TabBar" id="tabbar">
+        <button type="button" class="tab" data-id="t1" data-mode="terminal" data-origin="user" data-icon="default" data-ctx="tab" aria-pressed="true" title="edge-01"><span class="sess-ico" data-icon="default" title="session.icon · Default">S</span><span class="name">edge-01</span><span class="mode-chip" title="tab mode">TERM</span></button>
+        <button type="button" class="tab" data-id="t2" data-mode="terminal" data-origin="ai" data-icon="default" data-ctx="tab" aria-pressed="false" title="ai-probe (AI)"><span class="sess-ico" data-icon="default" title="session.icon · Default">S</span><span class="name">ai-probe</span><span class="ai-chip" title="Created by AI">AI</span><span class="mode-chip" title="tab mode">TERM</span></button>
+        <button type="button" class="tab" data-id="t3" data-mode="sftp" data-origin="user" data-icon="custom" data-ctx="tab" aria-pressed="false" title="jump-host"><span class="sess-ico" data-icon="custom" title="session.icon · Custom">★</span><span class="name">jump-host</span><span class="mode-chip" title="tab mode">SFTP</span></button>
+        <button type="button" class="tab" data-id="t4" data-mode="new" data-origin="user" data-icon="qc" data-ctx="tab" aria-pressed="false" title="New Tab"><span class="sess-ico" data-icon="qc" title="New Tab">+</span><span class="name">New Tab</span><span class="mode-chip" title="tab mode">NEW</span></button>
+        <span class="tab-spacer" aria-hidden="true"></span>
+      </div>
+    </div>
+  </div>
+
+  <p class="anno-ref" id="ctxAnno" aria-live="polite">
+    Active tab mode drives content: <a href="terminal.html">terminal</a> /
+    <a href="sftp.html">sftp</a> /
+    <a href="quick-connect.html">quick-connect</a>.
+    <strong>Switch to SFTP / Terminal</strong> = <em>原标签改 mode</em>（同 id，不新开标签）。
+    Open SFTP（Session 菜单）才可能新建独立 SFTP 标签。分屏见 <a href="split.html">split</a>（每叶各自 TabBar）。
+  </p>
+
+  <div class="legend">
+    <strong>三种 mode</strong> — <code>new</code>（New Tab / QC）· <code>terminal</code> · <code>sftp</code>；共享同一套标签条、关闭、拖拽、分屏。<br>
+    <strong>Switch</strong> — Terminal↔SFTP 是<strong>同一标签</strong>改 mode（保留 SSH transport）；不要画成两个并列标签互切。<br>
+    <strong>session.icon</strong> — Terminal / SFTP 标签显示会话图标（与 <a href="../panels/sessions.html">panels/sessions</a> 同套）；New Tab 用 <code>+</code>。mode chip（TERM/SFTP/NEW）仅本原型标明状态。<br>
+    <strong>AI origin</strong> — MCP/AI 创建的连接在名称旁显示实心 <code>AI</code> 标志（用户创建的不显示）。见 Settings → <a href="../../settings/sections/mcp.html">MCP</a>。<br>
+    <strong>Inline rename</strong> — 右键 Rename Tab → 原地改名（图标与 mode / AI 标志保留）。Demo 态钉住输入；产品路径 Enter/blur 提交、Esc 取消。
+  </div>
+
+  <div class="flyout" id="ctxMenu" role="menu" aria-hidden="true"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (function () {
+      var board = document.getElementById("board");
+      var ctxMenu = document.getElementById("ctxMenu");
+      var toast = document.getElementById("toast");
+      var ctxTarget = null;
+      var renameState = null;
+      var toastTimer = null;
+
+      function showToast(msg) {
+        toast.textContent = msg;
+        toast.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { toast.classList.remove("show"); }, 2200);
+      }
+
+      function closeFlyouts() {
+        ctxMenu.classList.remove("open");
+        ctxMenu.setAttribute("aria-hidden", "true");
+        ctxMenu.innerHTML = "";
+      }
+
+      function openFlyout(x, y, html) {
+        ctxMenu.innerHTML = html;
+        ctxMenu.style.left = x + "px";
+        ctxMenu.style.top = y + "px";
+        ctxMenu.classList.add("open");
+        ctxMenu.setAttribute("aria-hidden", "false");
+        var r = ctxMenu.getBoundingClientRect();
+        if (r.right > window.innerWidth - 8) ctxMenu.style.left = Math.max(8, x - r.width) + "px";
+        if (r.bottom > window.innerHeight - 8) ctxMenu.style.top = Math.max(8, y - r.height) + "px";
+      }
+
+      function menuBtn(label, act, dis) {
+        var d = dis ? ' class="dis" disabled' : ' data-act="' + act + '"';
+        return '<button type="button" role="menuitem"' + d + ' title="' + label + '">' + label + "</button>";
+      }
+
+      function modeLabel(mode) {
+        return mode === "sftp" ? "SFTP" : mode === "new" ? "NEW" : "TERM";
+      }
+
+      function syncModeChip(tab) {
+        var chip = tab.querySelector(".mode-chip");
+        if (chip) chip.textContent = modeLabel(tab.getAttribute("data-mode"));
+      }
+
+      function setTabMode(tab, mode) {
+        if (!tab || mode === "new") return;
+        tab.setAttribute("data-mode", mode);
+        syncModeChip(tab);
+        updateAnno(tab);
+      }
+
+      function updateAnno(tab) {
+        var anno = document.getElementById("ctxAnno");
+        if (!anno || !tab) return;
+        var mode = tab.getAttribute("data-mode");
+        var name = (tab.querySelector(".name") || {}).textContent || "";
+        var content =
+          mode === "sftp" ? '<a href="sftp.html">sftp.html</a>' :
+          mode === "new" ? '<a href="quick-connect.html">quick-connect.html</a>' :
+          '<a href="terminal.html">terminal.html</a>';
+        anno.innerHTML =
+          'Active: <strong>' + name + '</strong> · mode=<code>' + mode + '</code> → content ' + content + '. ' +
+          '<strong>Switch to SFTP / Terminal</strong> = 原标签改 mode（同 id）。' +
+          ' Open SFTP（Session 菜单）可另建 SFTP 标签。分屏：<a href="split.html">split.html</a>（每叶自有 TabBar）。';
+      }
+
+      function tabCtxHtml(tab) {
+        var mode = tab.getAttribute("data-mode");
+        var html = menuBtn("Rename Tab", "rename") +
+          '<hr class="sep">' +
+          menuBtn("Close", "close") +
+          menuBtn("Close Others", "close-others") +
+          menuBtn("Close Left", "close-left") +
+          menuBtn("Close Right", "close-right") +
+          menuBtn("Close All", "close-all") +
+          '<hr class="sep">';
+        if (mode === "terminal" || mode === "sftp") {
+          html += menuBtn("Reconnect", "reconnect") +
+            menuBtn("Disconnect", "disconnect") +
+            '<hr class="sep">';
+          if (mode === "terminal") {
+            html += menuBtn("Receive Key Input", "recv-keys") +
+              menuBtn("Switch to SFTP", "switch-sftp");
+          } else {
+            html += menuBtn("Switch to Terminal", "switch-term");
+          }
+        } else {
+          html += menuBtn("Reconnect", "reconnect", true) +
+            menuBtn("Disconnect", "disconnect", true) +
+            menuBtn("Switch to SFTP", "switch-sftp", true) +
+            menuBtn("Switch to Terminal", "switch-term", true);
+        }
+        html += '<hr class="sep">' +
+          menuBtn("Split Right", "split-right") +
+          menuBtn("Split Down", "split-down");
+        return html;
+      }
+
+      function clearRenamingBadge(host) {
+        host.querySelectorAll(".renaming-badge").forEach(function (b) { b.remove(); });
+      }
+
+      function endInlineRename(commit) {
+        if (!renameState) return;
+        var host = renameState.host;
+        var input = renameState.input;
+        var original = renameState.original;
+        var sticky = renameState.sticky;
+        var value = (input.value || "").trim() || original;
+        clearRenamingBadge(host);
+        if (commit && value !== original) {
+          var nameEl = document.createElement("span");
+          nameEl.className = "name";
+          nameEl.textContent = value;
+          host.classList.remove("renaming");
+          input.replaceWith(nameEl);
+          showToast("Renamed to " + value);
+        } else if (commit && !sticky) {
+          var same = document.createElement("span");
+          same.className = "name";
+          same.textContent = value;
+          host.classList.remove("renaming");
+          input.replaceWith(same);
+        } else {
+          host.classList.remove("renaming");
+          var restore = document.createElement("span");
+          restore.className = "name";
+          restore.textContent = original;
+          input.replaceWith(restore);
+          showToast(commit ? "Rename unchanged" : "Rename cancelled");
+        }
+        renameState = null;
+      }
+
+      function beginInlineRename(host, opts) {
+        opts = opts || {};
+        if (!host) return;
+        if (renameState) endInlineRename(false);
+        closeFlyouts();
+        var nameEl = host.querySelector(".name");
+        if (!nameEl) return;
+        var original = nameEl.textContent;
+        var input = document.createElement("input");
+        input.type = "text";
+        input.className = "inline-rename";
+        input.value = original;
+        input.setAttribute("aria-label", "Rename Tab");
+        host.classList.add("renaming");
+        nameEl.replaceWith(input);
+        clearRenamingBadge(host);
+        var badge = document.createElement("span");
+        badge.className = "renaming-badge";
+        badge.textContent = "inline rename";
+        host.appendChild(badge);
+        renameState = { host: host, input: input, original: original, sticky: !!opts.sticky };
+        try { input.focus(); input.select(); } catch (e) {}
+
+        function onKey(ev) {
+          if (ev.key === "Enter") {
+            ev.preventDefault();
+            ev.stopPropagation();
+            cleanup();
+            endInlineRename(true);
+          } else if (ev.key === "Escape") {
+            ev.preventDefault();
+            ev.stopPropagation();
+            cleanup();
+            endInlineRename(false);
+          }
+        }
+        function onBlur() {
+          if (renameState && renameState.sticky) return;
+          cleanup();
+          endInlineRename(true);
+        }
+        function cleanup() {
+          input.removeEventListener("keydown", onKey);
+          input.removeEventListener("blur", onBlur);
+        }
+        input.addEventListener("keydown", onKey);
+        input.addEventListener("blur", onBlur);
+      }
+
+      function applyState(state) {
+        document.querySelectorAll(".tools [data-state]").forEach(function (b) {
+          b.setAttribute("aria-pressed", b.getAttribute("data-state") === state ? "true" : "false");
+        });
+        var edge = document.querySelector('.tab[data-id="t1"]');
+        if (state === "default") {
+          if (renameState) endInlineRename(false);
+          if (edge) {
+            setTabMode(edge, "terminal");
+            setActiveTab(edge);
+          }
+          return;
+        }
+        if (state === "switched-sftp") {
+          if (renameState) endInlineRename(false);
+          if (edge) {
+            setTabMode(edge, "sftp");
+            setActiveTab(edge);
+            showToast("edge-01 · mode → sftp（同一标签）");
+          }
+          return;
+        }
+        if (state === "renaming") {
+          var active = document.querySelector('.tab[aria-pressed="true"]') || edge;
+          setActiveTab(active);
+          if (!active.querySelector(".inline-rename")) {
+            beginInlineRename(active, { sticky: true });
+          } else if (renameState) {
+            renameState.sticky = true;
+          }
+        }
+      }
+
+      document.querySelectorAll(".tools [data-state]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          applyState(btn.getAttribute("data-state"));
+        });
+      });
+
+      function setActiveTab(tab) {
+        document.querySelectorAll(".tab").forEach(function (t) {
+          t.setAttribute("aria-pressed", t === tab ? "true" : "false");
+        });
+        updateAnno(tab);
+      }
+
+      document.querySelectorAll(".tab").forEach(function (tab) {
+        syncModeChip(tab);
+        tab.addEventListener("click", function (ev) {
+          if (ev.target.closest(".inline-rename")) return;
+          if (renameState && renameState.host === tab) return;
+          if (renameState) endInlineRename(false);
+          setActiveTab(tab);
+        });
+        tab.addEventListener("dblclick", function (ev) {
+          ev.preventDefault();
+          beginInlineRename(tab, { sticky: false });
+        });
+      });
+
+      board.addEventListener("contextmenu", function (ev) {
+        var tab = ev.target.closest(".tab[data-ctx]");
+        if (!tab) return;
+        if (ev.target.closest(".inline-rename")) return;
+        ev.preventDefault();
+        ctxTarget = tab;
+        openFlyout(ev.clientX, ev.clientY, tabCtxHtml(tab));
+      });
+
+      ctxMenu.addEventListener("click", function (ev) {
+        var btn = ev.target.closest("button[data-act]");
+        if (!btn || !ctxTarget) return;
+        ev.stopPropagation();
+        var act = btn.getAttribute("data-act");
+        closeFlyouts();
+        if (act === "rename") {
+          beginInlineRename(ctxTarget, { sticky: false });
+          showToast("Rename Tab — inline input");
+          return;
+        }
+        if (act === "switch-sftp") {
+          setTabMode(ctxTarget, "sftp");
+          setActiveTab(ctxTarget);
+          showToast("Switch to SFTP · 同一标签改 mode");
+          return;
+        }
+        if (act === "switch-term") {
+          setTabMode(ctxTarget, "terminal");
+          setActiveTab(ctxTarget);
+          showToast("Switch to Terminal · 同一标签改 mode");
+          return;
+        }
+        if (act === "split-right" || act === "split-down") {
+          showToast((act === "split-right" ? "Split Right" : "Split Down") + " → split.html（每叶自有 TabBar）");
+          return;
+        }
+        showToast(btn.textContent + " (demo)");
+      });
+
+      document.addEventListener("click", function (ev) {
+        if (ev.target.closest(".inline-rename")) return;
+        if (!ev.target.closest("#ctxMenu")) closeFlyouts();
+      });
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape" && !renameState) closeFlyouts();
+      });
+
+      applyState("default");
+    })();
+  </script>
+</body>
+</html>

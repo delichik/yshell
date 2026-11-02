@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YShell — SFTP conflict wireframe</title>
+  <link rel="stylesheet" href="../_anno.css">
+  <link rel="stylesheet" href="../_icons.css">
   <style>
     :root {
       --win-w: 720px;
@@ -75,11 +77,8 @@
       border-top: 1px dashed var(--anno);
     }
     .callout strong { display: block; color: var(--line); margin-bottom: 2px; }
-    .callout-title { top: 6px; }
     .callout-summary { top: 48px; }
     .callout-list { top: 120px; }
-    .callout-footer { top: 520px; }
-
     .titlebar {
       height: var(--titlebar-h);
       flex: 0 0 var(--titlebar-h);
@@ -206,29 +205,25 @@
   </style>
 </head>
 <body>
-  <p class="meta">
-    SFTP 覆盖冲突 · <code>720×580</code> · 仅 <strong>Conflicting paths</strong> 区滚动（min-height 120）·
-    对照 <code>SftpConflictDialog</code> · Esc 不关闭（B23）。
-  </p>
+  <p class="meta">SFTP conflict · <code>720×580</code>。 <a href="../annotations.html">annotations</a>。</p>
 
   <div class="stage">
     <div class="frame">
       <div class="win" role="dialog">
         <div class="titlebar region">
-          <span class="tag">A</span>
-          <div class="title">Resolve conflicts</div>
-          <button type="button" class="cap" tabindex="-1" aria-hidden="true">×</button>
+<div class="title">Resolve conflicts</div>
+          <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
         </div>
 
         <div class="body">
           <div class="region">
-            <span class="tag">B</span>
+            <span class="tag">A · summary</span>
             <p class="headline">3 destination path(s) already exist.</p>
             <p class="route">/home/alice/project → /var/www/deploy</p>
           </div>
 
           <div class="list-block region">
-            <span class="tag">C</span>
+            <span class="tag">B · list</span>
             <p class="list-label">Conflicting paths</p>
             <div class="list-scroll" tabindex="0">index.html
 assets/logo.png
@@ -250,27 +245,31 @@ public/robots.txt</div>
           <div class="spacer" aria-hidden="true"></div>
 
           <div class="footer region">
-            <span class="tag">D</span>
-            <hr class="rule" />
+<hr class="rule" />
             <div class="actions">
-              <button type="button" class="btn">Cancel</button>
-              <button type="button" class="btn">Skip</button>
-              <button type="button" class="btn">Rename</button>
-              <button type="button" class="btn btn-accent">Overwrite</button>
+              <button type="button" class="btn" title="Cancel">Cancel</button>
+              <button type="button" class="btn" title="Skip">Skip</button>
+              <button type="button" class="btn" title="Rename">Rename</button>
+              <button type="button" class="btn btn-accent" title="Overwrite">Overwrite</button>
             </div>
           </div>
         </div>
       </div>
 
-      <ul class="callouts">
-        <li class="callout callout-title"><strong>A</strong> Chrome 标题 Resolve conflicts。</li>
-        <li class="callout callout-summary"><strong>B</strong> 冲突数量 + source → dest。</li>
-        <li class="callout callout-list"><strong>C</strong> 唯一滚动区；mono 路径列表。</li>
-        <li class="callout callout-footer"><strong>D</strong> Cancel · Skip · Rename · Overwrite（accent）。</li>
-      </ul>
+      <ul class="callouts" aria-label="Design annotations">
+          <li class="callout callout-summary"><strong>A · Summary</strong> 冲突数量 + source → dest。</li>
+          <li class="callout callout-list"><strong>B · List</strong> 唯一滚动区；mono 路径列表。</li>
+        </ul>
     </div>
   </div>
 
-  <div class="legend">resolve 回调：skip / rename / overwrite；Cancel → canceled()。</div>
+  <div class="legend">
+      <ul class="anno">
+        <li><strong>A · Summary</strong> 冲突数量与方向。</li>
+        <li><strong>B · List</strong> 冲突路径列表。</li>
+        <li><strong>C · Actions</strong> Cancel · Skip · Rename · Overwrite（页脚按钮集，语义本页特有）。</li>
+      </ul>
+      <p class="anno-ref"><a href="../annotations.html">annotations</a></p>
+    </div>
 </body>
 </html>

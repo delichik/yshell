@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — session-editor · Login Script</title>
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../form.css">
+  <style>
+    :root {
+      --board-w: 800px; --board-h: 640px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--board-w); margin: 0 0 8px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .meta a { color: var(--line); font-weight: 600; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; font-size: 13px; }
+    .tools .btn, a.btn, button.btn {
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line); background: var(--fill);
+      font: inherit; font-size: 13px; cursor: pointer; text-decoration: none; color: inherit;
+      display: inline-flex; align-items: center;
+    }
+    .tools a.btn[aria-current="page"] { background: var(--soft); font-weight: 600; }
+    .btn-primary { background: var(--soft); font-weight: 600; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .board {
+      width: var(--board-w); height: var(--board-h); flex-shrink: 0;
+      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+    }
+    .board-label { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); padding: 6px 10px 0; }
+    .board-body { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; border-top: 1px solid var(--line); margin-top: 4px; }
+    .section-head { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: 0 0 12px; flex-wrap: wrap; }
+    .section-title { margin: 0; font-size: 15px; font-weight: 600; }
+    .hint, .source { font-size: 12px; color: var(--mute); margin: 8px 0; }
+    .hint a { color: var(--line); }
+    .step-list { min-height: var(--field-h-md); max-height: calc(var(--ctrl-h) * 9); }
+    .step {
+      display: grid;
+      grid-template-columns: 20px 28px 72px minmax(0, 1fr);
+      gap: 10px; align-items: center;
+      height: var(--row-h); min-height: var(--row-h); max-height: var(--row-h);
+      padding: 0 10px; box-sizing: border-box; overflow: hidden;
+      border-bottom: 1px solid var(--line); font-size: 13px;
+      cursor: grab; user-select: none;
+    }
+    .step .grip { color: var(--mute); letter-spacing: -2px; cursor: grab; text-align: center; }
+    .step .idx { color: var(--mute); font-variant-numeric: tabular-nums; }
+    .step .kind-tag { font-size: 11px; font-weight: 600; padding: 2px 6px; border: 1px solid var(--line); background: var(--soft); width: fit-content; }
+    .step .meta {
+      min-width: 0; text-decoration: none; color: inherit; font: inherit;
+      display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      cursor: pointer; font-weight: 600;
+    }
+    .step .meta.is-keys-raw {
+      font-weight: 400; font-family: ui-monospace, monospace; font-size: 12px; color: var(--mute);
+    }
+    .step .meta.is-wait {
+      font-weight: 400; font-variant-numeric: tabular-nums; color: var(--mute);
+    }
+    .step.dragging { opacity: 0.5; }
+    .step.drag-over { outline: 1px dashed var(--line); }
+    .step[aria-selected="true"] {
+      background: var(--soft); outline: 1px solid var(--line); outline-offset: -1px;
+    }
+    .flyout {
+      display: none; position: fixed; z-index: 5; min-width: 180px;
+      background: var(--fill); border: 1px solid var(--line); padding: 4px 0; font-size: 13px;
+    }
+    .flyout.open { display: block; }
+    .flyout button {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      width: 100%; height: 28px; padding: 0 12px; border: 0; background: transparent;
+      font: inherit; font-size: 13px; text-align: left; cursor: pointer; color: inherit;
+    }
+    .flyout button:hover { background: var(--soft); }
+    .flyout button:disabled { opacity: 0.4; cursor: not-allowed; color: var(--mute); }
+    .flyout button:disabled:hover { background: transparent; }
+    .flyout .danger { color: #800; }
+    .flyout .sep { height: 1px; background: var(--line); margin: 4px 0; }
+    .legend { max-width: var(--board-w); margin: 16px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+  </style>
+</head>
+<body>
+  <p class="meta">session-editor · sections/login-script · board 800×640。 <a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a>。</p>
+  <div class="tools" role="navigation">
+    <a class="btn" href="general.html" title="General">General</a>
+    <a class="btn" href="authentication.html" title="Authentication">Authentication</a>
+    <a class="btn" href="login-script.html" aria-current="page" title="Login Script">Login Script</a>
+    <a class="btn" href="proxy.html" title="Proxy">Proxy</a>
+    <a class="btn" href="tunnels.html" title="Tunnels">Tunnels</a>
+    <a class="btn" href="terminal-style.html" title="Terminal Style">Terminal Style</a>
+    <a class="btn" href="login-step-keys.html" title="login-step-keys">login-step-keys</a>
+    <a class="btn" href="login-step-wait.html" title="login-step-wait">login-step-wait</a>
+  </div>
+  <div class="stage">
+    <div class="board">
+      <div class="board-label">sections / login-script</div>
+      <div class="board-body">
+<div class="panel inherit-page" data-panel="login-script" data-page="login-script">
+              <div class="section-head">
+<label class="inherit-toggle">
+                  <span class="tog-label" data-tog-label>Inherit</span>
+                  <input type="checkbox" data-inherit checked />
+                  <span class="switch" aria-hidden="true"></span>
+                </label>
+              </div>
+              <p class="source" data-source>Using parent: Folder «Production» / Global</p>
+              <div class="fields-lock">
+                <div class="step-toolbar">
+                  <a class="btn btn-primary" href="login-step-keys.html" title="Add Keys">Keys</a>
+                  <a class="btn" href="login-step-wait.html" title="Add Wait">Wait</a>
+                </div>
+                <div class="step-list" id="login-steps" role="list"></div>
+              </div>
+            </div>
+      </div>
+    </div>
+  </div>
+  <div class="flyout" id="login-step-ctx" role="menu" aria-hidden="true">
+    <button type="button" data-act="edit" title="Edit">Edit</button>
+    <button type="button" class="danger" data-act="delete" title="Delete">Delete</button>
+    <div class="sep"></div>
+    <button type="button" data-act="move-up" title="Move Up">Move Up</button>
+    <button type="button" data-act="move-down" title="Move Down">Move Down</button>
+    <div class="sep"></div>
+    <button type="button" data-act="move-top" title="Move to Top">Move to Top</button>
+    <button type="button" data-act="move-bottom" title="Move to Bottom">Move to Bottom</button>
+  </div>
+  <div class="legend">
+      <ul class="anno">
+        <li><strong>A · Inherit</strong> 页级开关。</li>
+        <li><strong>B · Steps</strong> 清单全宽；Keys / Wait 在列表上方；行可拖拽或右键调序。</li>
+      </ul>
+      <p class="anno-ref"><a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a></p>
+    </div>
+  <script>
+  (function () {
+    var PARENT_STEPS = [
+      { name: "Go home", kind: "keys", value: "cd ~{Enter}" },
+      { name: "", kind: "wait", value: "500" },
+      { name: "Load env", kind: "keys", value: "source ./env.sh{Enter}" }
+    ];
+    function escapeHtml(s) {
+      return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+    }
+    var loginSteps = [];
+    var dragFrom = -1;
+    var loginStepActiveIndex = -1;
+    var loginStepCtx = document.getElementById("login-step-ctx");
+
+    function hideLoginStepCtx() {
+      if (!loginStepCtx) return;
+      loginStepCtx.classList.remove("open");
+      loginStepCtx.setAttribute("aria-hidden", "true");
+    }
+
+    function showLoginStepCtx(x, y, index) {
+      if (!loginStepCtx) return;
+      loginStepActiveIndex = index;
+      var n = loginSteps.length;
+      var atTop = index <= 0;
+      var atBottom = index < 0 || index >= n - 1;
+      loginStepCtx.querySelector('[data-act="move-up"]').disabled = atTop;
+      loginStepCtx.querySelector('[data-act="move-top"]').disabled = atTop;
+      loginStepCtx.querySelector('[data-act="move-down"]').disabled = atBottom;
+      loginStepCtx.querySelector('[data-act="move-bottom"]').disabled = atBottom;
+      loginStepCtx.classList.add("open");
+      loginStepCtx.setAttribute("aria-hidden", "false");
+      var pad = 4;
+      loginStepCtx.style.left = Math.max(pad, Math.min(x, window.innerWidth - loginStepCtx.offsetWidth - pad)) + "px";
+      loginStepCtx.style.top = Math.max(pad, Math.min(y, window.innerHeight - loginStepCtx.offsetHeight - pad)) + "px";
+    }
+
+    function selectLoginStepRow(index) {
+      loginStepActiveIndex = index;
+      var list = document.getElementById("login-steps");
+      if (!list) return;
+      list.querySelectorAll(".step").forEach(function (r, i) {
+        r.setAttribute("aria-selected", i === index ? "true" : "false");
+      });
+    }
+
+    function moveLoginStep(from, to) {
+      if (from < 0 || from >= loginSteps.length) return;
+      if (to < 0 || to >= loginSteps.length || from === to) return;
+      var item = loginSteps.splice(from, 1)[0];
+      loginSteps.splice(to, 0, item);
+      hideLoginStepCtx();
+      renderLoginSteps(loginSteps);
+      selectLoginStepRow(to);
+    }
+
+    function renderLoginSteps(steps) {
+      loginSteps = (steps || []).map(function (s) {
+        var kind = s.kind === "wait" ? "wait" : "keys";
+        return {
+          name: kind === "wait" ? "" : (s.name || ""),
+          kind: kind,
+          value: s.value || ""
+        };
+      });
+      var list = document.getElementById("login-steps");
+      if (!list) return;
+      list.innerHTML = "";
+      loginStepActiveIndex = -1;
+      if (!loginSteps.length) {
+        list.innerHTML = '<p class="hint" style="padding:12px">No steps — use Keys / Wait above</p>';
+        return;
+      }
+      loginSteps.forEach(function (s, i) {
+        var row = document.createElement("div");
+        row.className = "step";
+        row.setAttribute("role", "listitem");
+        row.draggable = true;
+        var href = s.kind === "wait" ? "login-step-wait.html#edit" : "login-step-keys.html#edit";
+        var label;
+        var metaClass = "meta";
+        if (s.kind === "wait") {
+          label = (s.value || "0") + " ms";
+          metaClass += " is-wait";
+        } else if (s.name) {
+          label = s.name;
+        } else {
+          label = s.value || "(empty keys)";
+          metaClass += " is-keys-raw";
+        }
+        row.innerHTML =
+          '<span class="grip" aria-hidden="true">&#8942;&#8942;</span>' +
+          '<span class="idx">' + (i + 1) + '</span>' +
+          '<span class="kind-tag">' + (s.kind === "wait" ? "Wait" : "Keys") + '</span>' +
+          '<a class="' + metaClass + '" href="' + href + '" title="' + escapeHtml(label) + '">' +
+          escapeHtml(label) + '</a>';
+        row.addEventListener("click", function () {
+          selectLoginStepRow(i);
+          hideLoginStepCtx();
+        });
+        row.addEventListener("contextmenu", function (ev) {
+          ev.preventDefault();
+          selectLoginStepRow(i);
+          showLoginStepCtx(ev.clientX, ev.clientY, i);
+        });
+        row.addEventListener("dragstart", function (ev) {
+          dragFrom = i; row.classList.add("dragging");
+          ev.dataTransfer.effectAllowed = "move";
+          hideLoginStepCtx();
+        });
+        row.addEventListener("dragend", function () {
+          dragFrom = -1;
+          list.querySelectorAll(".step").forEach(function (el) { el.classList.remove("dragging", "drag-over"); });
+        });
+        row.addEventListener("dragover", function (ev) { ev.preventDefault(); row.classList.add("drag-over"); });
+        row.addEventListener("dragleave", function () { row.classList.remove("drag-over"); });
+        row.addEventListener("drop", function (ev) {
+          ev.preventDefault(); row.classList.remove("drag-over");
+          if (dragFrom < 0 || dragFrom === i) return;
+          var item = loginSteps.splice(dragFrom, 1)[0];
+          loginSteps.splice(i, 0, item);
+          renderLoginSteps(loginSteps);
+          selectLoginStepRow(i);
+        });
+        list.appendChild(row);
+      });
+    }
+
+    loginStepCtx.querySelector('[data-act="edit"]').addEventListener("click", function () {
+      if (loginStepActiveIndex < 0 || loginStepActiveIndex >= loginSteps.length) return;
+      var s = loginSteps[loginStepActiveIndex];
+      hideLoginStepCtx();
+      location.href = s.kind === "wait" ? "login-step-wait.html#edit" : "login-step-keys.html#edit";
+    });
+    loginStepCtx.querySelector('[data-act="delete"]').addEventListener("click", function () {
+      if (loginStepActiveIndex < 0 || loginStepActiveIndex >= loginSteps.length) return;
+      var i = loginStepActiveIndex;
+      loginSteps.splice(i, 1);
+      hideLoginStepCtx();
+      renderLoginSteps(loginSteps);
+      if (loginSteps.length) selectLoginStepRow(Math.min(i, loginSteps.length - 1));
+    });
+    loginStepCtx.querySelector('[data-act="move-up"]').addEventListener("click", function () {
+      if (this.disabled) return;
+      moveLoginStep(loginStepActiveIndex, loginStepActiveIndex - 1);
+    });
+    loginStepCtx.querySelector('[data-act="move-down"]').addEventListener("click", function () {
+      if (this.disabled) return;
+      moveLoginStep(loginStepActiveIndex, loginStepActiveIndex + 1);
+    });
+    loginStepCtx.querySelector('[data-act="move-top"]').addEventListener("click", function () {
+      if (this.disabled) return;
+      moveLoginStep(loginStepActiveIndex, 0);
+    });
+    loginStepCtx.querySelector('[data-act="move-bottom"]').addEventListener("click", function () {
+      if (this.disabled) return;
+      moveLoginStep(loginStepActiveIndex, loginSteps.length - 1);
+    });
+    document.addEventListener("click", function (ev) {
+      if (!loginStepCtx.contains(ev.target)) hideLoginStepCtx();
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") hideLoginStepCtx();
+    });
+
+    renderLoginSteps(PARENT_STEPS);
+  })();
+  </script>
+</body>
+</html>

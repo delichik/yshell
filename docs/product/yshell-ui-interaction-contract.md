@@ -12,10 +12,10 @@
 |---|---|
 | 左键单击 | 选择、聚焦、触发主动作。 |
 | 左键双击 | 打开、连接、进入目录、编辑当前对象。 |
-| 右键单击 | 打开当前对象的上下文菜单。 |
+| 右键单击 | 默认打开当前对象的上下文菜单；终端可被 Settings → Terminal → Right click 覆盖（Paste / Do nothing）。 |
 | 鼠标悬停 | 显示 tooltip；危险按钮 tooltip 必须说明风险。 |
 | 拖拽 | 只用于标签排序、分屏移动、SFTP 上传、SFTP 下载、面板宽度调整。 |
-| 中键单击 | 仅标签栏支持：关闭对应标签。其他区域中键无动作。 |
+| 中键单击 | 标签栏：关闭对应标签；终端：按 Settings → Terminal → Middle click（默认 Paste）；其他区域无动作。 |
 
 ### 1.2 键盘规则
 
@@ -83,10 +83,10 @@ StatusBar
 | `menu.file.new_session` | New Session | 菜单项 | 打开 Session Editor，模式为 create。 | `Ctrl+N` | 始终启用。 |
 | `menu.file.quick_connect` | Quick Connect | 菜单项 | 打开/聚焦快速连接页输入框。 | `Ctrl+O` | 始终启用。 |
 | `menu.file.save_active` | Save Active Session | 菜单项 | 将当前活动会话写入 sessions/。 | 视实现 | 有活动会话时启用。 |
-| `menu.file.settings` | Settings... | 菜单项 | 打开 Settings 页面。 | `Ctrl+,` | 始终启用。 |
+| `menu.file.settings` | Settings | 菜单项 | 打开 Settings 页面。 | `Ctrl+,` | 始终启用。 |
 | `menu.file.quit` | Quit | 菜单项 | 若存在活动会话，打开 Quit Confirmation；否则退出。 | `Ctrl+Q` / `Cmd+Q` | 始终启用。 |
 
-> **本版 File 菜单**：无 Import / Export Config、无 New Folder 菜单项。新建根文件夹走会话树空白区「New Folder…」。Import/Export 属本版不做（见 `yshell-current-status.md` §2）。
+> **本版 File 菜单**：无 Import / Export Config、无 New Folder 菜单项。新建根文件夹走会话树空白区「New Folder」。Import/Export 属本版不做（见 `yshell-current-status.md` §2）。
 
 ### 3.2 Edit 菜单
 
@@ -95,7 +95,7 @@ StatusBar
 | `menu.edit.copy` | Copy | 菜单项 | 复制当前终端选区或 SFTP 选中文件路径。 | `Ctrl+C` | 有可复制内容时启用。 |
 | `menu.edit.paste` | Paste | 菜单项 | 粘贴到当前焦点输入框或终端。 | `Ctrl+V` | 剪贴板非空时启用。 |
 | `menu.edit.select_all` | Select All | 菜单项 | 终端全选可见缓冲，SFTP 全选列表。 | `Ctrl+A` | 当前区域支持选择时启用。 |
-| `menu.edit.find` | Find... | 菜单项 | 打开当前区域搜索栏。 | `Ctrl+F` | 终端或 SFTP 有焦点时启用。 |
+| `menu.edit.find` | Find | 菜单项 | 打开当前区域搜索栏。 | `Ctrl+F` | 终端或 SFTP 有焦点时启用。 |
 | `menu.edit.clear_terminal` | Clear Terminal | 菜单项 | 清屏但不清除 scrollback。 | `Ctrl+L` | 当前标签已连接时启用。 |
 | `menu.edit.clear_scrollback` | Clear Scrollback | 菜单项 | 打开确认弹窗，确认后清除 scrollback。 | 无 | 当前标签存在终端时启用。 |
 
@@ -107,9 +107,9 @@ StatusBar
 | `menu.session.disconnect` | Disconnect | 菜单项 | 断开当前标签 SSH 和关联 SFTP。 | 无 | 当前标签已连接时启用。 |
 | `menu.session.reconnect` | Reconnect | 菜单项 | 断开后重新连接当前会话。 | `F5` when disconnected | 当前标签断开或错误时启用。 |
 | `menu.session.duplicate_tab` | Duplicate Tab | 菜单项 | 使用相同 SessionProfile 打开新标签并连接。 | 无 | 当前标签有会话 profile 时启用。 |
-| `menu.session.edit` | Edit Session... | 菜单项 | 打开 Session Editor，模式为 edit。 | 无 | 选中保存的会话时启用。 |
+| `menu.session.edit` | Edit Session | 菜单项 | 打开 Session Editor，模式为 edit。 | 无 | 选中保存的会话时启用。 |
 | `menu.session.open_sftp` | Open SFTP | 菜单项 | 在当前会话上打开 SFTP 标签（固定本地/远程左右两栏）。 | `Ctrl+Shift+S` | 当前标签已连接时启用。 |
-| `menu.session.tunnels` | Tunnels... | 菜单项 | 显示 Tunnels 面板（落在其当前栈侧；默认右栈）。 | 无 | 当前标签存在时启用。 |
+| `menu.session.tunnels` | Tunnels | 菜单项 | 显示 Tunnels 面板（落在其当前栈侧；默认右栈）。 | 无 | 当前标签存在时启用。 |
 
 ### 3.4 View 菜单
 
@@ -166,7 +166,7 @@ Sessions 是可停靠工具面板（`PanelId::Sessions`），内容为会话树�
 
 | 对象 | 左键单击 | 左键双击 | 右键单击 | 拖拽 |
 |---|---|---|---|---|
-| Folder | 选中。 | 展开/折叠。 | 菜单：New Session、New Folder、Rename、Delete、Export Folder。 | 可拖到其它 Folder 下。 |
+| Folder | 选中。 | 展开/折叠。 | 菜单：New Session Here、Edit（共用 Session Editor）、New Folder / Rename / Delete（本版不做）。 | 可拖到其它 Folder 下。 |
 | Session | 选中并在详情区显示摘要。 | 连接：活动标签已断开/未连接（且不是快速连接页）时占用该标签，否则打开新标签。 | 菜单：Connect、Open in New Tab、Open SFTP、Edit、Duplicate、Favorite、Delete、Export。 | 可拖到 Folder 下或改变排序。 |
 | Favorite Session | 选中。 | 打开新标签并连接。 | 菜单：Connect、Remove Favorite、Edit。 | 可在 Favorites 内排序。 |
 | Recent Session | 选中。 | 打开新标签并连接。 | 菜单：Connect、Pin to Favorites、Remove from Recent。 | 不支持拖拽。 |
@@ -178,7 +178,7 @@ Sessions 是可停靠工具面板（`PanelId::Sessions`），内容为会话树�
 | Connect | Session | 当前工作区打开新标签并连接。 | 无 |
 | Open in New Tab | Session | 新建标签但不切断其它标签。 | 无 |
 | Open SFTP | Session | 新建 SFTP 标签；未连接时先连接。 | 未保存认证时打开认证弹窗。 |
-| Edit | Session | 打开 Session Editor(edit)。 | 无 |
+| Edit | Session / Folder | 打开共用 Session Editor（会话或文件夹模式）。文件夹模式下 Host/Port/Username 不可编辑。 | 无 |
 | Duplicate | Session | 复制配置，名称追加 `Copy`，打开编辑器。 | 无 |
 | Rename | Folder/Session | 行内编辑名称。 | Enter 保存，Esc 取消。 |
 | Delete | Folder/Session | 移入确认弹窗。Folder 删除会列出子项数量。 | 必须确认 |
@@ -191,11 +191,14 @@ Sessions 是可停靠工具面板（`PanelId::Sessions`），内容为会话树�
 
 标签有三种模式：New Tab（快速连接）、Terminal、SFTP。三者共享同一套标签条、分屏、拖拽和关闭机制；模式差异只体现在内容区、标签图标和模式专属菜单项。`+` / `Ctrl+T` / 启动应用都创建一个 New Tab；多个 New Tab 相互独立。
 
+**来源标志**：由 MCP/AI 创建的连接在标签名称旁显示 **AI** 标志（实心 chip）；用户创建的标签不显示。Rename / Switch mode 不清除该标志。
+
 | 区域 | 左键单击 | 左键双击 | 右键单击 | 中键单击 | 拖拽 |
 |---|---|---|---|---|---|
 | 标签主体 | 切换到该标签。 | 已断开/未连接的标签：重连该标签；仍连着的标签：复制同源会话（新标签）。 | 打开标签上下文菜单。 | 关闭标签。 | 调整顺序或拖入分屏。 |
 | 关闭按钮 `x` | 关闭标签。 | 无 | 无 | 无 | 无 |
 | 状态图标 | 显示状态 tooltip。 | 无 | 无 | 无 | 无 |
+| AI 标志 | 仅展示（tooltip：Created by AI）。 | 无 | 无 | 无 | 无 |
 
 关闭窗口内最后一个标签等同点击窗口关闭：主窗口进入退出确认，次窗口直接关闭。
 
@@ -264,8 +267,10 @@ Split 下拉菜单：
 | Alt + 左键拖拽 | 创建矩形选区。 |
 | 左键双击 | 选择当前单词。 |
 | 左键三击 | 选择当前行。 |
-| 右键单击选区 | 打开 Copy/Paste/Select Screen/Select All/Find/Find Across SSH/Clear 菜单。 |
-| 右键单击无选区 | 打开 Paste/Select Screen/Select All/Find/Find Across SSH/Clear 菜单。 |
+| 中键单击 | 按 Settings → Terminal → Middle click：Paste（默认）/ Do nothing。 |
+| 右键（Context menu）单击选区 | 打开 Copy/Paste/Select Screen/Select All/Find/Find Across SSH/Clear 菜单。 |
+| 右键（Context menu）单击无选区 | 打开 Paste/Select Screen/Select All/Find/Find Across SSH/Clear 菜单。 |
+| 右键（Paste / Do nothing） | 不弹菜单；Paste 走剪贴板并遵循 Multi-line paste，Do nothing 无动作。 |
 | 鼠标滚轮 | 滚动 scrollback。 |
 | Shift + 鼠标滚轮 | 水平滚动，若终端启用横向滚动。 |
 
@@ -276,7 +281,7 @@ Split 下拉菜单：
 | Copy | 复制选区。 | 有选区时启用。 |
 | Copy Current Line | 复制当前光标行。 | 当前行存在内容时启用。 |
 | Copy Screen | 复制当前可见屏幕内容。 | 当前屏幕存在内容时启用。 |
-| Paste | 粘贴剪贴板。 | 剪贴板非空且已连接时启用。 |
+| Paste | 粘贴剪贴板；多行时按 Settings → Terminal → Multi-line paste。 | 剪贴板非空且已连接时启用。 |
 | Paste as Bracketed | 使用 bracketed paste 包裹粘贴。 | 剪贴板非空且终端支持时启用。 |
 | Select Screen | 仅选择当前可见屏幕内容。 | 当前屏幕存在内容时启用。 |
 | Select All | 选择可见终端和 scrollback。 | 始终启用。 |
@@ -285,7 +290,7 @@ Split 下拉菜单：
 | Find Across SSH | 打开跨 SSH 查找面板。 | 至少存在 2 个 SSH terminal 时启用。 |
 | Clear Screen | 发送清屏并清空当前屏幕。 | 已连接时启用。 |
 | Clear Scrollback | 清除 scrollback，弹确认。 | scrollback 非空时启用。 |
-| Save Output As... | 将 scrollback 保存为文本。 | scrollback 非空时启用。 |
+| Save Output As | 将 scrollback 保存为文本。 | scrollback 非空时启用。 |
 
 ### 7.3 终端搜索栏
 
@@ -331,7 +336,7 @@ Split 下拉菜单：
 | Tunnels | 端口转发列表；Add / Start/Stop（runtime 本版未 provision，见 status §3） | 同上 |
 | Quick Commands | 本版仅空态（见 status §2） | 同上 |
 
-面板拖拽换边/换序与栏宽、分栏比例持久化见 status N3 与 `[ui.layout]`。原型：`docs/prototypes/tool-dock/`、`panel-*`。
+面板拖拽换边/换序与栏宽、分栏比例持久化见 status N3 与 `[ui.layout]`。原型：`docs/prototypes/main-shell/tool-dock.html`、`main-shell/panels/*`。
 
 ## 8.1 Send Key Input To 状态条
 
@@ -347,11 +352,17 @@ Split 下拉菜单：
 
 状态条必须使用警示色，不允许和普通连接状态混淆。
 
-每个可见 SSH pane 的 pane header 必须显示接收开关：
+终端单窗（`main-shell/workspace/terminal.html`）不再显示 Session 信息；当 sync input ≠ Off 时，终端上方显示接收横幅：
+
+| 控件 ID | 类型 | 行为 |
+|---|---|---|
+| `pane.receive_key_input_banner` | 状态条 | 左侧文字随右侧 switch 变化：On = `Sending keys to current session`，Off = `Not sending keys to current session`。仅 sync input ≠ Off 时显示。 |
+
+分屏时每个可见 SSH pane 的 pane header 仍显示接收开关：
 
 | 控件 ID | 类型 | 左键行为 | 状态 |
 |---|---|---|---|
-| `pane.receive_key_input_toggle` | checkbox/toggle | 将当前 pane 加入或移出 Send Key Input To 目标。 | 仅 connected SSH shell pane 启用；源 pane disabled。 |
+| `pane.receive_key_input_toggle` | switch + On/Off | 将当前 pane 加入或移出 Send Key Input To 目标。 | 仅 connected SSH shell pane 启用；源 pane disabled。单窗时用上方 banner switch。 |
 
 ## 9. SFTP Tab
 
@@ -410,34 +421,31 @@ SFTP 标签固定为左右两栏：左栏本地文件，右栏远程文件。顶
 | 菜单项 | 目标 | 行为 | 确认 |
 |---|---|---|---|
 | Open/View | 文件 | 下载临时副本并用只读查看器或系统默认程序打开。 | 无 |
-| Edit | 文件 | 下载临时副本，用系统默认编辑器打开，监听变更并提示上传。 | 上传时确认 |
+| Edit | 文件 | 下载临时副本，用 Settings → SFTP External editor（System default / 已检测编辑器 / Custom 路径）打开；每次保存立即自动上传（对齐 Xftp）。监视在编辑器进程退出或 SFTP/SSH 断开后结束并清临时文件。 | 无（保存即传；不另弹确认） |
 | Download | 文件/目录 | 加入下载队列。 | 覆盖本地文件时确认 |
 | Upload Here | 目录/空白 | 打开文件选择器并上传到目标目录。 | 覆盖远程文件时确认 |
 | Rename | 文件/目录 | 行内编辑名称。 | 名称冲突时确认覆盖或取消 |
 | Delete | 文件/目录/多选 | 打开删除确认。 | 必须确认 |
-| New Folder | 空白/目录 | 打开新建目录弹窗。 | 无 |
-| Chmod | 文件/目录 | 打开权限编辑弹窗。 | Apply 时确认 |
+| New Folder | 空白/目录 | 列表行内插入新行编辑。 | 无 |
+| Permissions | 远程文件/目录 | 打开独立 compact 权限窗（`sftp-chmod`）。 | Apply 应用 |
 | Copy Remote Path | 文件/目录 | 复制远程绝对路径。 | 无 |
 | Refresh | 任意 | 刷新当前目录。 | 无 |
 
 ### 9.5 SFTP 弹窗
 
-#### New Folder Dialog
-
-| 控件 ID | 类型 | 默认 | 校验 |
-|---|---|---|---|
-| `new_folder.name` | 单行输入框 | `New Folder` | 非空，不包含 `/` 或空字符。 |
-| `new_folder.cancel` | 按钮 | 无 | 关闭弹窗。 |
-| `new_folder.create` | 主按钮 | 无 | 校验通过后创建目录。 |
+Rename / New Folder 均为列表行内编辑，不存在独立弹窗。
 
 #### Chmod Dialog
 
+独立 compact `560×400`；原型：`sftp-chmod/index.html`。
+
 | 控件 ID | 类型 | 默认 |
 |---|---|---|
+| `chmod.path` | 只读文本 | 目标绝对路径。 |
+| `chmod.octal` | 单行输入框 | `755`；与九个 checkbox 双向同步。 |
 | `chmod.owner.read/write/execute` | checkbox | 从当前权限读取。 |
 | `chmod.group.read/write/execute` | checkbox | 从当前权限读取。 |
 | `chmod.other.read/write/execute` | checkbox | 从当前权限读取。 |
-| `chmod.octal` | 单行输入框 | 如 `755`。 |
 | `chmod.cancel` | 按钮 | 关闭。 |
 | `chmod.apply` | 主按钮 | 应用 chmod。 |
 
@@ -495,7 +503,7 @@ Tunnel 行菜单：
 | `tunnel.listen_port` | 数字输入框 | 空 | `1-65535`。 |
 | `tunnel.target_host` | 单行输入框 | 空 | Dynamic 类型 disabled；其它类型非空。 |
 | `tunnel.target_port` | 数字输入框 | 空 | Dynamic 类型 disabled；其它类型 `1-65535`。 |
-| `tunnel.enabled_on_connect` | checkbox | false | 无。 |
+| `tunnel.enabled_on_connect` | switch + Enabled/disabled | false | 无。 |
 | `tunnel.test` | 按钮 | 无 | 尝试绑定监听端口，不保存。 |
 | `tunnel.cancel` | 按钮 | 无 | 关闭。 |
 | `tunnel.save` | 主按钮 | 无 | 校验通过后保存。 |
@@ -531,99 +539,118 @@ Tunnel 行菜单：
 | `broadcast.cancel` | 按钮 | 关闭。 |
 | `broadcast.send` | 危险主按钮 | 向目标会话发送文本。 |
 
-## 13. Session Editor
+## 13. Session Editor（Session / Folder 共用）
 
-Session Editor 是 modal dialog，宽度 `760px`，高度不超过屏幕 `85%`，包含左侧 section nav 和右侧表单。
+Session Editor 是 modal dialog（原型壳 `1100×820`），包含左侧 section nav 和右侧表单。**文件夹与会话共用同一编辑器**：可配置字段均可从父级 Inherit（会话 → 最近祖先文件夹 → 全局）；**Host / Port / Username 是连接身份，不可继承**——编辑文件夹时这些字段不可用（隐藏）。Folder 右键 **Edit** 打开本编辑器（文件夹模式），不再有独立 Folder Editor。右栏分区内容区**不再重复** section 大标题（导航已标明）；可 Inherit 页仅保留 Inherit 开关。Known Hosts / Private Keys / Proxies / Terminal Styles 管理器左右栏同样**不要** Managed / Details 类分区标题。
+
+**表单控件规范**：原型唯一样式源 [`docs/prototypes/form.css`](../prototypes/form.css)，验收样板 [`forms.html`](../prototypes/forms.html)。各页直接引用这些 class / token / 开关动画（`.12s` 拇指位移）；禁止另写一套控件样式。`session-editor/form.css` 仅 re-export。  
+**表单宽度**：普通表单控件与**只读展示块**列统一 **420**（`--field-w`；Proxies / Terminal Styles / Tunnel editor / Private Keys 等右栏或弹窗同此）：input / select / 短 textarea / 公钥预览 / 路径只读框 / 终端预览。Port `100`、Icon 下拉 `220` 等窄控件另计。旁路钮 `.ctl-with-btn` 可伸出 420：字段旁无歧义时仅「管理」，独立入口用全称（如「管理终端样式」），选文件用 Browse（见 [`forms.html`](../prototypes/forms.html)）。Notes 不得再加宽。  
+**表单行高**：`--ctrl-h`（32）为最小行高单位；`form-row` / `detail-row` 高度必须是其**整数倍**（默认 min = 1×；清单 `--row-h` = 2×；textarea / 终端预览 `--field-h-md` = 4×；公钥等 `--field-h-lg` = 5×）。行内始终顶对齐。左 `lbl` 用固定 `padding-top: calc((ctrl-h − 1.2em) / 2)`，在最小高度时与单行控件视觉垂直居中；值列变高时 **label 上边距不变**。  
+**展示表单（管理器右栏等内嵌 part）**：不强制左标签缩进；宽度仍 420，只读块与输入对齐；行高规则同上。  
+**例外（不要套 420）**：Tunnels / Login Script / 管理器**左**清单（全宽）；Login Keys **正文与 Tokens**、Import **粘贴 PEM**（大编辑值列全宽；Name 仍 420）。  
+**布尔字段**：与其它字段同一 `form-row`——左短 `lbl` | 右 **开关 + 状态文案**（按上下文：On/Off、Enabled/Disabled、Use/Don't use 等）；禁止 checkbox 与游离「☐ + 长文案」行。补充说明用 `hint-indent`。页级 Inherit、pane 接收开关同用开关控件。菜单勾选项除外。口令/密码**禁止** Remember（填写即保存或本次连接用完即弃）。  
+**按钮悬停提示**：所有可点按钮（文字 / 图标 / 主按钮 / 危险钮 / 工具栏 / 页脚）都必须有 **`title`**（图标钮另加 `aria-label`）。悬停片刻显示含义；正面案例：Terminal Styles 字体旁 `+` → Add Font File。  
+**清单 / 旁路图标钮**：上下文无歧义时，添加 / 删除 / 复制 / 清空等用图标（`+` / `⌫` / `⎘` / `⌀` 等），勿写长文案。多种添加并存时用短区分文案（`Keys` / `Wait`）。右键菜单仍用文字（建议也有 `title`）。  
+**单字段子窗**（Known Hosts Add / Import / Export 等）：只有一项输入时**不适用**表单列规则——无左侧 label、无缩进；控件顶满内容区。
 
 ### 13.1 左侧 section nav
 
 | 项 | 左键行为 |
 |---|---|
-| General | 显示通用连接信息。 |
+| General | 显示通用连接信息（不继承）。 |
 | Authentication | 显示认证设置。 |
-| Terminal | 显示终端设置。 |
-| SFTP | 显示 SFTP 设置。 |
+| Login Script | 登录成功后、用户可输入前自动执行的脚本。 |
+| SFTP | 显示 SFTP 设置（本版不做）。 |
 | Tunnels | 显示端口转发设置。 |
 | Proxy | 显示代理设置。 |
-| Logging | 显示日志设置。 |
-| Advanced | 显示 keepalive、环境变量等高级设置。 |
-| Appearance | 显示该 session 的外观覆盖设置。 |
+| Advanced | 显示 keepalive、环境变量等高级设置（本版不做）。 |
+| Terminal Style | 选择该 session 的终端样式 Profile（继承 / 自定义）。 |
+
+> **无 Terminal / Logging 分区**：终端外观走 **Terminal Style**（选 Profile）+ Terminal Styles 管理器；日志走独立 Logging 工具窗 / 终端右键。Session Editor 不再设这两页。
 
 ### 13.2 General 表单
 
-| 控件 ID | 类型 | 默认 | 校验 |
+General **不继承**。Username 在 Authentication。
+
+| 控件 ID | 类型 | 默认 | 校验 / 行为 |
 |---|---|---|---|
-| `session.name` | 单行输入框 | 空 | 非空，同文件夹下不重名。 |
-| `session.folder` | 下拉/选择器 | 当前文件夹 | 必须存在。 |
-| `session.host` | 单行输入框 | 空 | 非空，可为域名/IP。 |
-| `session.port` | 数字输入框 | `22` | `1-65535`。 |
-| `session.username` | 单行输入框 | 空 | 允许空；空时连接时提示。 |
-| `session.tags` | token input | 空 | 每个 tag 最长 32 字符。 |
-| `session.color` | 色块选择 | 自动 | 从预设色板选择。 |
+| `session.name` | 单行输入框 | 空 | 非空，同文件夹下不重名。控件列宽 **420**。 |
+| `session.icon` | 预览 + 下拉 (+ Browse) | Default（内置） | 行容器宽 **420**；下拉固定 **220**；Default / 预设 / 自定义图片。会话树与 session 标签展示此图标。 |
+| `session.host` | 单行输入框 | 空 | 非空，可为域名/IP。宽 **420**。文件夹模式隐藏。 |
+| `session.port` | 数字输入框 | `22` | `1-65535`；宽固定 **100**（勿用 `width:100%` 撑开）。文件夹模式隐藏。 |
+| `session.notes` | 多行文本区 | 空 | 可选备注；宽与 Name 对齐 **420**（较高 `min-height`）。 |
+| `session.folder` | 下拉/选择器 | 当前文件夹 | 必须存在（会话）。 |
 
 ### 13.3 Authentication 表单
 
+页级 Inherit 开关（默认开）。Username 在本页（不在 General）。
+
 | 控件 ID | 类型 | 默认 | 行为 |
 |---|---|---|---|
-| `auth.method` | segmented control | Password | Password / Private Key / Agent / Keyboard Interactive。 |
-| `auth.password.save` | checkbox | false | 勾选后密码保存到 SecretStore。 |
-| `auth.password.input` | password input | 空 | 仅 Password 显示。 |
-| `auth.key.path` | 文件路径输入 | 空 | Browse 选择私钥文件。 |
-| `auth.key.browse` | 按钮 | 无 | 打开文件选择器。 |
-| `auth.key.passphrase.save` | checkbox | false | 保存 passphrase 到 SecretStore。 |
-| `auth.agent_forwarding` | checkbox | false | 启用 agent forwarding。 |
-| `auth.test` | 按钮 | 无 | 使用当前表单执行测试连接，不保存。 |
+| `auth.username` | 单行输入框 | 空 | 允许空；空时连接时提示。 |
+| `auth.method` | 分段按钮 | Private Key | Password / Private Key。**Agent 本版不做。** |
+| `auth.password` | password input | 空 | 仅 Password：**填写即保存**到 SecretStore；留空 = 连接时再问。无「Remember」勾选。 |
+| `auth.key` | 下拉 | 首项托管密钥 | 仅 Private Key：从 Private Keys 选；无手输路径（D19）。 |
+| `auth.key.manage` | 按钮 | 无 | 与下拉同一行末尾；文案仅 **管理** → Private Keys（字段旁无歧义不加 Keys）。 |
+| `auth.key.passphrase` | password input | 空 | 仅 Private Key：**填写即保存**；留空 = 需要时再问。无「Remember」勾选。 |
+
+连接时实际口令/挑战 UI 见 Auth Prompt；本页只存偏好与托管密钥引用。
+
+### 13.3a Login Script 清单
+
+页级 Inherit 开关（默认开）。**不是** shell 脚本文件；是代用户输入的**有序步骤列表**（主页是清单，不是表单列；列表全宽，不套 `--field-w`。Keys/Wait 分窗才是表单）。
+
+**时机**：SSH 认证成功之后，终端对用户输入开放之前，按列表顺序执行。空列表 = 跳过。
+
+主列表**只读**。Keys 与 Wait **分窗**（勿用 Type 下拉混在同一表单）：
+
+- Keys：`session-editor/sections/login-step-keys.html`（720×580；大编辑区 + Token 说明）
+- Wait：`session-editor/sections/login-step-wait.html`（560×400）
+
+| 控件 ID | 类型 | 默认 | 行为 |
+|---|---|---|---|
+| `login_script.add_keys` | 按钮 | 无 | **列表上方** 文案 `Keys`（须与 Wait 区分，故不用裸 `+`）→ keys 弹窗。 |
+| `login_script.add_wait` | 按钮 | 无 | **列表上方** 文案 `Wait` → wait 弹窗。 |
+| `login_script.steps` | 只读列表 | 空 | 点摘要 → 对应分窗 Edit；行拖拽调序。 |
+| `login_script.keys.name` | 单行 | 空 | **可选**。 |
+| `login_script.keys.body` | 多行等宽 | 空 | 代用户击键；`{Enter}` / `{Ctrl+C}` 等 Token；字面量花括号双写：`{{`→`{`、`}}`→`}`（弹窗内附转换表）。**值列全宽**，不套 `--field-w`。 |
+| `login_script.wait.name` | 单行 | 空 | **可选**。 |
+| `login_script.wait.ms` | 数字 | `500` | 下一步前等待毫秒。 |
+| `*.dlg.delete` / `cancel` / `save` | 按钮 | 无 | 编辑态 Delete；Cancel \| Save。 |
 
 ### 13.4 Terminal 表单
 
-| 控件 ID | 类型 | 默认 |
-|---|---|---|
-| `terminal.type` | 下拉 | `xterm-256color` |
-| `terminal.encoding` | 下拉 | `UTF-8` |
-| `terminal.font_family` | 字体选择 | 系统 monospace |
-| `terminal.font_size` | 数字输入 | `13` |
-| `terminal.line_height` | 数字输入 | `1.2` |
-| `terminal.color_scheme` | 下拉 | Default Dark |
-| `terminal.cursor_shape` | 下拉 | Block |
-| `terminal.blink_cursor` | checkbox | true |
-| `terminal.scrollback_lines` | 数字输入 | `10000` |
+**已删除。** Session Editor 无 Terminal 分区；见 Terminal Style / Terminal Styles / Settings → Terminal。
 
 ### 13.5 SFTP 表单
 
-| 控件 ID | 类型 | 默认 | 校验 |
-|---|---|---|---|
-| `sftp.default_remote_dir` | 单行输入框 | 空 | 空表示登录目录；非空必须以 `/` 开头。 |
-| `sftp.default_local_dir` | 路径输入 | Downloads | 必须是本地有效目录。 |
-| `sftp.confirm_overwrite` | checkbox | true | 无。 |
-| `sftp.preserve_timestamp` | checkbox | true | 无。 |
-| `sftp.show_hidden_files` | checkbox | true | 无。 |
-| `sftp.transfer_parallelism` | 数字输入 | `2` | `1-8`。 |
+**Session Editor 分区本版不做**（nav disabled）。全局 SFTP 默认见 **§14.2 Settings → SFTP**（不再在会话级配路径 / 并行等旧字段）。
 
 ### 13.6 Proxy 表单
 
-| 控件 ID | 类型 | 默认 | 校验 |
+页级 Inherit 开关（默认开）。会话侧只**选择**已有 Proxy Profile，不内嵌完整代理编辑表单。切片：`session-editor/sections/proxy.html`。
+
+| 控件 ID | 类型 | 默认 | 行为 |
 |---|---|---|---|
-| `proxy.mode` | segmented control | Inherit | Inherit / None / Global / Custom。 |
-| `proxy.protocol` | 下拉 | SOCKS5 | SOCKS4 / SOCKS4a / SOCKS5 / HTTP CONNECT。 |
-| `proxy.host` | 单行输入框 | 空 | Custom 时非空。 |
-| `proxy.port` | 数字输入 | 空 | Custom 时 `1-65535`。 |
-| `proxy.resolve_dns_by_proxy` | checkbox | true | SOCKS4 disabled；SOCKS4a/SOCKS5 可用。 |
-| `proxy.username` | 单行输入框 | 空 | SOCKS5/HTTP CONNECT 可用。 |
-| `proxy.password.save` | checkbox | false | 勾选后保存到 SecretStore。 |
-| `proxy.password.input` | password input | 空 | SOCKS5/HTTP CONNECT 可用。 |
-| `proxy.test` | 按钮 | 无 | 执行 TCP、proxy handshake、SSH handshake 三阶段测试。 |
+| `proxy.profile` | 下拉 | 继承解析值 / No Proxy | 选已有托管 Profile（含 No Proxy）。 |
+| `proxy.manage` | 按钮 | 无 | Profile 右侧文案仅 **管理** → Proxies 管理器（字段旁无歧义不加全称；不挤进左栏标签列）。 |
+
+### 13.6a Tunnels 清单（Session Editor）
+
+页级 Inherit 开关（默认开）。**配置清单**（非表单字段列；非 Dock 运行态 Start/Stop）。切片原型：`session-editor/sections/tunnels.html`；编辑弹窗：`tunnel-editor/`。列表宽 = 右栏内容区，不套 `--field-w`。
+
+| 控件 ID | 类型 | 默认 | 行为 |
+|---|---|---|---|
+| `session_tunnels.add` | 按钮 | 无 | **列表上方** 图标 **`+`**（`aria-label` Add Tunnel；仅一种隧道，无歧义）→ tunnel-editor（create）。 |
+| `session_tunnels.clear` | 按钮 | 无 | 列表上方 Clear Tunnels；切 Custom。 |
+| `session_tunnels.list` | 列表 | 空 / 继承 | 左键选中；双击 → tunnel-editor（edit）。 |
+| 行右键 Edit | 菜单 | 无 | → tunnel-editor（edit）。 |
+| 行右键 Duplicate | 菜单 | 无 | 复制该条配置（名称加 copy）；切 Custom。 |
+| 行右键 Delete | 菜单 | 无 | 删除该条；切 Custom。 |
 
 ### 13.7 Logging 表单
 
-| 控件 ID | 类型 | 默认 | 校验 |
-|---|---|---|---|
-| `logging.mode` | segmented control | Inherit | Inherit / Disabled / Enabled。 |
-| `logging.format` | 下拉 | Sanitized Text | Raw Transcript / Sanitized Text。 |
-| `logging.record_remote_output` | checkbox | true | 第一版默认 true，且为日志核心能力。 |
-| `logging.record_local_input` | checkbox | false | 勾选时弹安全确认。 |
-| `logging.include_timestamps` | checkbox | true | 无。 |
-| `logging.path_template` | 单行输入框 | `{date}/{session}-{host}.log` | 非空，变量必须来自允许列表。 |
-| `logging.open_folder` | 按钮 | 无 | 打开日志目录。 |
+**已从 Session Editor 删除。** 会话日志配置与启停走独立 Logging 工具窗 / 终端右键（见 Logging 原型），不在 Session Editor 设页。
 
 日志按钮右键菜单：
 
@@ -633,27 +660,19 @@ Session Editor 是 modal dialog，宽度 `760px`，高度不超过屏幕 `85%`�
 | Stop Logging | 停止当前会话日志。 | 已开启时启用。 |
 | Open Current Log | 打开当前日志文件。 | 已生成日志文件时启用。 |
 | Open Log Folder | 打开日志目录。 | 始终启用。 |
-| Logging Settings | 跳转 Session Editor Logging section。 | 当前 session 可编辑时启用。 |
+| Logging Settings | 打开 Logging 工具窗。 | 始终启用。 |
 
-### 13.8 Appearance 表单
+### 13.8 Terminal Style 表单（原 Appearance）
+
+页级 Inherit 开关（默认开）。会话侧只**选择**已有 Terminal Style Profile；字体 / 配色在 Terminal Styles 管理器编辑。切片：`session-editor/sections/terminal-style.html`。
 
 | 控件 ID | 类型 | 默认 | 行为 |
 |---|---|---|---|
-| `appearance.mode` | segmented control | Inherit | Inherit / Custom。 |
-| `appearance.theme_mode` | 下拉 | Inherit | System / Light / Dark。 |
-| `appearance.terminal_color_scheme` | 下拉 | Inherit | 选择终端配色。 |
-| `appearance.font_family` | 字体选择 | Inherit | 选择终端字体。 |
-| `appearance.font_size` | 数字输入 | Inherit | `8-36`。 |
-| `appearance.line_height` | 数字输入 | Inherit | `1.0-2.0`。 |
-| `appearance.cursor_shape` | 下拉 | Inherit | Block / Bar / Underline。 |
-| `appearance.tab_color` | 色块选择 | Inherit | 设置标签颜色。 |
-| `appearance.show_sftp_on_connect` | checkbox | Inherit | 连接后自动显示 SFTP。 |
+| `terminal_style.profile` | 下拉 | 继承解析值 | 选已有 Style（如 Campbell / Custom — ops）。 |
+| `terminal_style.manage` | 按钮 | 无 | Style 右侧文案仅 **管理** → Terminal Styles 管理器。独立入口（如 Settings Appearance）才用全称 **管理终端样式**。 |
+| `terminal_style.preview` | 只读预览 | 随 Profile | 与管理器 Live preview **同构**（高 `--field-h-md` = 4×32、实线边、ANSI 样例）；`max-width` 对齐表单列（`420`），`overflow: hidden`，不得撑破右栏。 |
 
-继承提示：
-
-- 每一项显示最终 resolved 值，例如 `Inherited from folder Production: Dark`。
-- 用户点击 Reset Field 恢复单项继承。
-- 用户点击 Reset All 恢复整个 session 的外观继承。
+> Settings 里的 **Appearance**（应用壳主题等）与本页无关，勿混名。
 
 ### 13.9 底部按钮
 
@@ -661,33 +680,29 @@ Session Editor 是 modal dialog，宽度 `760px`，高度不超过屏幕 `85%`�
 |---|---|---|---|---|
 | `session_editor.test` | Test Connection | 按钮 | 使用当前表单发起测试连接。 | host/port 基本合法时启用。 |
 | `session_editor.cancel` | Cancel | 按钮 | 若有未保存改动，弹 Discard Changes。 | 始终启用。 |
-| `session_editor.save` | Save | 主按钮 | 校验并保存。 | 表单合法且有改动时启用。 |
-| `session_editor.save_connect` | Save and Connect | 主按钮 | 保存后打开标签并连接。 | 表单合法时启用。 |
+| `session_editor.save` | Save | 主按钮 | 校验并保存；**成功后关闭**编辑器。分区内无独立 Save。 | 表单合法且有改动时启用。 |
+| `session_editor.save_connect` | Save and Connect | 主按钮 | 保存后打开标签并连接（编辑器关闭）。 | 表单合法时启用。 |
 
-## 13.10 Folder Editor
+## 13.10 Folder 模式（共用 Session Editor）
 
-Folder Editor 用于保存文件夹级默认配置。
+无独立 Folder Editor。文件夹级默认配置使用 §13 同一壳：
 
-| 控件 ID | 类型 | 默认 | 行为 |
-|---|---|---|---|
-| `folder.name` | 单行输入框 | 空 | 非空，同级不重名。 |
-| `folder.parent` | 下拉/选择器 | 当前父级 | 选择父文件夹。 |
-| `folder.appearance.mode` | segmented control | Inherit | Inherit / Custom。 |
-| `folder.logging.mode` | segmented control | Inherit | Inherit / Disabled / Enabled。 |
-| `folder.proxy.mode` | segmented control | Inherit | Inherit / None / Global / Custom。 |
-| `folder.apply_preview` | 只读列表 | 无 | 显示受影响的子文件夹和 session 数量。 |
-| `folder.cancel` | 按钮 | 无 | 关闭。 |
-| `folder.save` | 主按钮 | 无 | 保存文件夹配置。 |
-
-保存文件夹级配置时，不弹出逐个 session 确认；但必须在 preview 中显示影响范围。
+| 规则 | 说明 |
+|---|---|
+| 入口 | 会话树 Folder 右键 **Edit**（文案不再用 Edit Folder Defaults）。 |
+| 可编辑 | Name / Icon / Notes；以及 Authentication / Login Script / Proxy / Tunnels / Terminal Style 等可 Inherit 字段。 |
+| 不可编辑 | Host / Port / Username（连接身份；文件夹无连接目标）。 |
+| 继承 | 子会话未覆盖时解析自本文件夹 → 更上层文件夹 → 全局。 |
+| 页脚 | Cancel \| Save；无 Test Connection / Save and Connect。 |
+| 影响范围 | 保存时不逐个确认子会话；可选显示受影响子项数量（预览）。 |
 
 ## 13.11 Send Key Input To Dialog
 
 触发入口：
 
 - Quick Commands Panel 的 `Send Key Input To`。
-- 终端右键菜单 `Send Key Input To...`。
-- 标签右键菜单 `Send Key Input To...`。
+- 终端右键菜单 `Send Key Input To`。
+- 标签右键菜单 `Send Key Input To`。
 - 每个可见 SSH pane header 上的接收开关。
 
 控件：
@@ -719,41 +734,190 @@ Folder Editor 用于保存文件夹级默认配置。
 - 源终端每次终端输入事件先发送给源 SSH，再复制到目标 SSH。
 - 复制的事件包括普通字符、Enter、Backspace、Tab、方向键、Home/End、PageUp/PageDown、功能键、Ctrl/Alt 组合和粘贴。
 - 不复制 UI 操作，例如切换标签、打开菜单、拖拽 pane、SFTP 操作。
-- **本版（D23 / N9）**：不弹 KEYS / 大段粘贴 / Ctrl+C 确认；用状态栏 chip + 控制键警示替代。下列「粘贴确认 / Ctrl+C 确认」为旧契约残留，**不以本版验收**。
+- **本版（D23 / N9）**：N9 广播路径不弹 KEYS / 大段粘贴 / Ctrl+C 确认；用状态栏 chip + 控制键警示替代。普通终端粘贴的确认由 Settings → Terminal → Multi-line paste 决定（§14.5）。下列「粘贴确认 / Ctrl+C 确认」为旧契约残留，**不以本版验收**。
 - 停止后不关闭任何 SSH 会话。
 
 ## 14. Settings
 
-Settings 是 dialog，左侧分类，右侧表单。
+Settings 是 dialog，左侧分类，右侧内容（表单 / 设置卡片）。
 
 分类：
 
-- General：语言（system / zh-CN / en-US）。
-- Appearance：终端外观入口（配色、字体；保存后对新开终端生效）。
-- Terminal：全局终端默认值（scrollback 行数 / 单元上限）。
-- Security：SecretStore 状态、配置目录；跳转独立 **Host Keys** / **Private Keys** 管理页（不内嵌）。
-- Advanced：配置目录展示；本版本不提供整库 wipe secrets / 重置布局。
-- SFTP（Settings 分类）：**本版启用**（全局 SFTP 默认）；与 Session Editor 内 SFTP 分区「本版不做」不同。
+- General：语言（system / zh-CN / en-US）+ Confirm close / quit + Reduce motion（见 §14.7）。
+- Appearance：**本版启用**（见 §14.6）：App theme（Mode / Accent）+ Terminal style（Style 下拉 + 管理）。
+- Terminal：全局终端默认值（scrollback 行数 / 单元上限，见 §14.5）。
+- Security：**本版启用**（见 §14.4）：Master password 卡片 + 启动解锁 + Known Hosts / Private Keys / Proxies 管理器行（整行点击，不内嵌）。
+- MCP：**本版启用**（独立分区，见 §14.3）；Enable / Port / Listen / API key / View user / Control user / Auto-approve；AI 创建标签带 AI 标志（§6.1）。
+- Advanced：Debug logging、配置目录展示；本版本不提供整库 wipe secrets / 重置布局。MCP 不放本页。
+- SFTP（Settings 分类）：**本版启用**（全局 SFTP 默认，见 §14.2）；与 Session Editor 内 SFTP 分区「本版不做」不同。
 - Shortcuts：本版本禁用，tooltip 说明未提供。
-- Secret Store：Security 展示状态；解锁依赖环境变量（见 status §3），本版无 in-app 主密码向导；亦不提供 wipe。
 
-Settings **不**使用 Danger Zone，也 **不**提供打字令牌确认的 `RESET SECRETS` / `CLEAR` 入口。
+### 14.1 底部按钮
 
-Host Keys / Private Keys 由 Session 菜单打开（与 Settings 同级独立弹窗）。破坏性操作用普通 `ConfirmDialog`（`destructive`，无确认词）：
+| 控件 ID | 文案 | 类型 | 行为 | 状态 |
+|---|---|---|---|---|
+| `settings.cancel` | Cancel | 按钮 | 弃稿关闭（× / Esc 同路径）。 | 始终启用。 |
+| `settings.save` | Save | 主按钮 | 校验并持久化**全部**可编辑分区草稿；**成功后关闭**。任一分区校验失败则保持打开。 | 始终启用（失败时留在窗内）。 |
+
+分区内**禁止**再放 Save / Save terminal settings / Save SFTP 等；Reset defaults、管理入口等旁路动作可保留。
+
+### 14.2 SFTP（Settings）
+
+全局默认；切片原型：`settings/sections/sftp.html`。无分区 Save。
+
+| 控件 ID | 类型 | 默认 | 行为 |
+|---|---|---|---|
+| `settings.sftp.show_hidden` | 开关 | On | 新开 SFTP 标签的默认隐藏文件显示；栏内仍可临时切换。 |
+| `settings.sftp.conflict_action` | 下拉 | Ask | **Ask** → 弹出 conflict 窗；**Replace** 覆盖；**Skip** 跳过冲突项；**Stop** 中止整批传输。非 Ask 不弹窗。 |
+| `settings.sftp.external_editor` | 下拉 | System default 或首个已检测项 | 选项固定含 **System default** 与 **Custom**；其余为启动时自动检测到的知名编辑器（如 VS Code、Zed、Notepad++、Sublime Text——未安装的不出现）。选非 Custom 时不显示路径。 |
+| `settings.sftp.external_editor_path` | 路径 + Browse | 空 | **仅 Custom** 可见/必填：用户 Browse 选可执行文件。Remote Edit 用所选编辑器打开临时副本；**每次保存立即自动上传**（对齐 Xftp）。监视在**编辑器进程退出**或 **SFTP/SSH 断开**后结束并清理临时文件；不因单次保存而结束。 |
+
+### 14.3 MCP（Settings）
+
+独立分区；切片原型：`settings/sections/mcp.html`。无分区 Save。默认关闭。
+
+| 控件 ID | 类型 | 默认 | 行为 |
+|---|---|---|---|
+| `settings.mcp.enabled` | 开关 | Off | 开启后 GUI 托管 MCP endpoint。Off 时下列控件禁用。 |
+| `settings.mcp.port` | 数字（宽 Port） | `18765` | `1–65535`。 |
+| `settings.mcp.listen` | 分段 Local \| LAN | Local | **Local** = `127.0.0.1`；**LAN** = `0.0.0.0`。 |
+| `settings.mcp.api_key` | password + Generate / Copy | 空 | **LAN 必填**（Save 校验失败则留在窗内）；Local 可选。Generate 写入新密钥；Copy 复制当前值。 |
+| `settings.mcp.view_user_connections` | 开关 | Off | On 时允许 AI **查看**用户创建的连接；Off 时 AI 仅见自身创建的连接。开 Control 时强制 On。 |
+| `settings.mcp.control_user_connections` | 开关 | Off | On 时允许 AI **操作**用户创建的连接（输入/开关等）；隐含 View。关 View 时强制 Off。 |
+| `settings.mcp.auto_approve` | 开关 | Off | On 时跳过 **MCP control consent**（§14.3a）；Off 时每次 `request_control` 弹窗。 |
+
+#### 14.3a MCP control consent
+
+原型：`settings/mcp-consent.html`。壳：CompactConfirm（`560×400`）。触发：MCP Enable 且 Auto-approve = Off，AI 请求控制。
+
+| 控件 ID | 文案 | 行为 |
+|---|---|---|
+| `mcp_consent.message` | 说明正文 | 可跑命令 / 读屏 / 开关标签；**不能**代填密码或接受 host key。 |
+| `mcp_consent.dont_ask` | Don't ask again 勾选框（footer 最左，与 Deny / Allow 同一行） | 仅与 Allow 一并生效：写入 `settings.mcp.auto_approve = On`。Deny 不改设置。 |
+| `mcp_consent.deny` | Deny | 拒绝控制；Esc / × 同路径。 |
+| `mcp_consent.allow` | Allow | 主按钮（非破坏性）；授予控制锁。 |
+
+### 14.4 Security（Settings）
+
+切片：`settings/sections/security.html`；主密码子窗：`settings/master-password.html`；启动解锁：`settings/master-password-unlock.html`。无分区 Save。
+
+页面结构（WinUI Settings card）：
+
+- **Master password 卡片**：图标 + 标题 + 状态 pill（Not set / Set）+ 一句状态说明 + 动作区；Set 态额外露出 `Forgot password?`（→ Reset）。
+- **Managers**：Known Hosts / Private Keys / Proxies 三行；整行可点（图标 + 名称 + 计数 + chevron），不做内嵌管理，也不在行下堆按钮。
+- 配置目录只在 Advanced 展示，Security 不重复。
+
+Master password 语义：
+
+- **可选**。未设 = 不启用主密码加密层；session / key 文件按默认存储（凭证可能仍由 OS keychain 保护）。
+- **设** = 用主密码加密全部 session 文件与 key 文件（含保存的口令 / passphrase）；启动后首次读取机密时弹 `master-password-unlock`。
+- 主密码不写入磁盘；只保存用于校验的 verifier / KDF 参数。
+- Set / Change 校验口令至少 8 字符；Change 必须校验当前口令。
+- **Remove** 必须校验当前主密码；成功后解密并回到 Not set，不删除数据。
+- **Reset** 用于忘记主密码：删除受其保护的 session / key 数据后移除主密码；Known Hosts 不受影响，proxy profile 保留但已存口令属于受保护数据会被清除。无打字确认词；危险按钮。
+
+| 控件 ID | 类型 | 默认 | 行为 |
+|---|---|---|---|
+| `settings.security.master_password.status` | 只读 pill | Not set | **Not set** = 未启用主密码加密层；**Set** = 已启用（对齐 Xshell）。 |
+| `settings.security.master_password.set` | 主按钮 | — | 仅 Not set：→ Set Master Password。 |
+| `settings.security.master_password.change` | 按钮 | — | 仅 Set：→ Change（Current + New + Confirm）。 |
+| `settings.security.master_password.remove` | 按钮 | — | 仅 Set：→ Remove（Current；解密并清除主密码，不删数据）。 |
+| `settings.security.master_password.forgot` | 危险文字链 | — | 仅 Set：→ Reset（删除受保护数据；无确认词）。 |
+| `settings.security.managers.known_hosts` | 可点行 | 计数 | → Known Hosts 管理器。 |
+| `settings.security.managers.private_keys` | 可点行 | 计数 | → Private Keys 管理器。 |
+| `settings.security.managers.proxies` | 可点行 | 计数 | → Proxies 管理器。 |
+
+#### 14.4a Master password 子窗
+
+`master-password.html`（compact `560×400`）：
+
+| 子窗 | 字段 | 主按钮 | 说明 |
+|---|---|---|---|
+| Set | New / Confirm | Set | 写 verifier，并加密既有 session / key 文件。 |
+| Change | Current / New / Confirm | Change | 校验当前口令后重加密；错误留在窗内。 |
+| Remove | Current | Remove | 解密后回到 Not set；不删数据。 |
+| Reset | 无 | Reset and Delete（danger） | 删除受保护数据；默认焦点 Cancel。 |
+
+#### 14.4b Startup unlock
+
+`master-password-unlock.html`（compact `560×400`）：启动后首次读取机密时出现。
+
+| 控件 ID | 类型 | 行为 |
+|---|---|---|
+| `master_password_unlock.password` | password（单字段） | Enter = Unlock。 |
+| `master_password_unlock.unlock` | 主按钮 | 校验；错误在字段上方显示错误条，窗体尺寸不变。 |
+| `master_password_unlock.forgot` | 危险文字链 | → Reset；删除受保护数据后重新开始。 |
+| `master_password_unlock.quit` | 按钮 / × / Esc | 退出 YShell，不读取任何受保护文件。 |
+
+Headless（CLI / MCP）不弹 GUI 解锁：若主密码已设，需通过 `YSHELL_MASTER_PASSWORD` 提供；否则以 locked 错误失败，不读取受保护文件。
+
+Settings **不**使用 Danger Zone，也 **不**提供打字令牌确认的 `RESET SECRETS` / `CLEAR` 入口（Reset Master Password 用明确破坏性按钮，无确认词）。启动解锁原型见 `master-password-unlock.html`；本分区只管设置入口与状态。Known Hosts / Private Keys 亦可从 Session 菜单打开。
+
+Known Hosts / Private Keys 由 Session 菜单打开（与 Settings 同级独立弹窗）。破坏性操作用普通 `ConfirmDialog`（`destructive`，无确认词）：
 
 | 控件 ID | 行为 | 确认 |
 |---|---|---|
-| `host_keys.remove` | 删除选中 `host:port` 整组 known hosts。 | 普通确认。 |
-| `host_keys.clear_all` | 清空全部 known hosts。 | 普通确认。 |
+| `known_hosts.remove` | 删除选中 `host:port` 整组 known hosts。 | 普通确认。 |
+| `known_hosts.clear_all` | 清空全部 known hosts。 | 普通确认。 |
 | `private_keys.remove` | 删除选中托管私钥。 | 普通确认（含被引用告警）。 |
 | `private_keys.deploy` | 向当前会话部署公钥。 | 普通确认。 |
 | `settings.advanced.open_config_dir` | 打开配置目录。 | 无（本版本可仅展示路径）。 |
+
+口令（Generate / Import / 详情）：**填写即写入** SecretStore，**无**「Remember」勾选（对齐 Authentication）。详情可用 Forget 清除已存口令。Auth Prompt 本次连接口令同样无 Remember。
+
+### 14.5 Terminal（Settings）
+
+全局终端默认值；切片原型：`settings/sections/terminal.html`。无分区 Save；Reset defaults 留在分区，Save 用整窗页脚。
+
+| 控件 ID | 类型 | 默认 | 行为 |
+|---|---|---|---|
+| `settings.terminal.scrollback_lines` | 数字 | `10000` | `100–1,000,000` 行；越界时字段红框 + 行内错误，不落盘。 |
+| `settings.terminal.scrollback_max_cells` | 数字 | `2000000` | `100,000–100,000,000` 单元；与行数一起构成 per-session 上限。 |
+| `settings.terminal.middle_click` | 下拉 | Paste | Paste / Do nothing；Paste 走剪贴板，并遵循 Multi-line paste 策略。 |
+| `settings.terminal.right_click` | 下拉 | Context menu | Context menu / Paste / Do nothing；Paste 不弹菜单，并遵循 Multi-line paste 策略。 |
+| `settings.terminal.multiline_paste` | 下拉 | Ask | Ask → ConfirmDialog（`Paste N lines?`，Cancel \| Paste）；Paste 直接发送；Block 忽略多行粘贴。 |
+| `settings.terminal.auto_copy` | 开关 | Off | On = 选中即复制到剪贴板；Off = 需 Ctrl+C / 菜单 Copy。 |
+| `settings.terminal.reset_defaults` | 图标按钮 | — | 恢复 scrollback + 鼠标 / 粘贴 / Auto copy 默认值；不关闭窗、不触发分区 Save。 |
+
+- 这些设置是全局默认值；Save 后应用到现有与新开终端。
+- Middle / Right = Paste 与 Ctrl+V 走同一 Multi-line paste 策略；Ask 的确认框复用 CompactConfirm（`compact-confirm`），不出现打字确认词。
+- 错误就在字段下方/表单状态中显示，窗尺寸不变。
+- 分区内不出现 `Save` / `Save terminal settings`。
+
+### 14.6 Appearance（Settings）
+
+切片原型：`settings/sections/appearance.html`。无分区 Save。页面分两组：**App theme**（Mode / Accent）与 **Terminal style**（Style 下拉 + 管理）。
+
+| 控件 ID | 类型 | 默认 | 行为 |
+|---|---|---|---|
+| `settings.appearance.mode` | 分段 System / Light / Dark | System | 整窗明暗；选择后即时预览，Save 持久化，Cancel 回滚。 |
+| `settings.appearance.accent` | 色板 | Windows Blue | Follow system + 6 预设（Blue / Teal / Purple / Green / Orange / Magenta）；即时预览，Save 持久化，Cancel 回滚。 |
+| `settings.appearance.terminal_style` | 下拉 | Campbell | 全局 Terminal Style Profile；Save 后对新开终端生效；已开终端保持捕获样式。 |
+| `settings.appearance.manage_terminal_styles` | 图标按钮 | — | → Terminal Styles 管理器；字体 / 配色在管理器编辑。 |
+
+- App theme 作用于整个应用；Terminal style 独立于 UI 明暗。
+- Follow system accent 仅 Windows 读取系统强调色；Linux / macOS 回退当前预设（设计规范 §3.4）。
+- 本分区不内联字体 / 配色编辑；这些在 Terminal Styles 管理器。
+- 分区内不出现 Save。
+
+### 14.7 General（Settings）
+
+切片原型：`settings/sections/general.html`。无分区 Save。
+
+| 控件 ID | 类型 | 默认 | 行为 |
+|---|---|---|---|
+| `settings.general.language` | 下拉 | System default | System / 中文 / English；切换立即生效。 |
+| `settings.general.confirm_close_session` | 开关 | On | 关闭有活动连接的会话 / 标签前确认。 |
+| `settings.general.confirm_quit_app` | 开关 | On | 退出 YShell 前确认。 |
+| `settings.general.reduce_motion` | 开关 | Off | On = 关闭所有过渡动画。 |
+
+- Save 持久化；分区内不出现 Save。
 
 ## 15. 安全弹窗
 
 ### 15.1 Host Key First Trust
 
-触发：首次连接未知 host key。
+壳：compact `560×400`。触发：首次连接未知 host key。
 
 必须显示：
 
@@ -774,7 +938,7 @@ Host Keys / Private Keys 由 Session 菜单打开（与 Settings 同级独立弹
 
 ### 15.2 Host Key Changed
 
-触发：已知 host key 与当前不一致。
+壳：compact `560×400`。触发：已知 host key 与当前不一致。
 
 必须是阻断弹窗，不能自动继续。
 
@@ -784,7 +948,7 @@ Host Keys / Private Keys 由 Session 菜单打开（与 Settings 同级独立弹
 |---|---|---|
 | `host_key_changed.cancel` | Cancel | 取消连接。 |
 | `host_key_changed.copy_details` | Copy Details | 复制旧/新 fingerprint 和路径。 |
-| `host_key_changed.replace` | Replace Key | 需输入 `REPLACE` 后启用，替换 known_hosts 并连接。 |
+| `host_key_changed.replace` | Replace and Trust | 替换 known_hosts 并连接；破坏性主按钮，无打字确认词。 |
 
 ## 16. 退出与关闭确认
 
@@ -806,6 +970,7 @@ Host Keys / Private Keys 由 Session 菜单打开（与 Settings 同级独立弹
 | `close_tab.cancel` | Cancel | 返回。 |
 | `close_tab.disconnect_close` | Disconnect and Close | 停止 SSH/SFTP/tunnel 并关闭。 |
 | `close_tab.keep_running` | Keep Running in Background | 第一版 disabled，tooltip 说明不支持后台会话。 |
+| `close_tab.dont_ask` | Don't ask again | 勾选框，footer 最左、与 Cancel 同一行；勾选并确认后写 Settings → General → Confirm close = Off。Cancel / × 不改。 |
 
 ### 16.2 Quit Confirmation
 
@@ -817,6 +982,7 @@ Host Keys / Private Keys 由 Session 菜单打开（与 Settings 同级独立弹
 |---|---|---|
 | `quit.cancel` | Cancel | 返回应用。 |
 | `quit.disconnect_quit` | Disconnect and Quit | 断开所有连接并退出。 |
+| `quit.dont_ask` | Don't ask again | 勾选框，footer 最左、与 Cancel 同一行；勾选并确认后写 Settings → General → Confirm quit = Off。Cancel / × 不改。 |
 
 ## 17. 交互跳转表
 

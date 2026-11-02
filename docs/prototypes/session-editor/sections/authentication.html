@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — session-editor · Authentication</title>
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../form.css">
+  <style>
+    :root { --board-w: 800px; --board-h: 640px; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--board-w); margin: 0 0 8px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .meta a { color: var(--line); font-weight: 600; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; font-size: 13px; color: var(--mute); }
+    .tools .btn, a.btn, button.btn {
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line); background: var(--fill);
+      font: inherit; font-size: 13px; cursor: pointer; text-decoration: none; color: inherit;
+      display: inline-flex; align-items: center;
+    }
+    .tools a.btn[aria-current="page"] { background: var(--soft); font-weight: 600; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .board {
+      width: var(--board-w); height: var(--board-h); flex-shrink: 0;
+      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+    }
+    .board-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--mute); padding: 6px 10px 0;
+    }
+    .board-body { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; border-top: 1px solid var(--line); margin-top: 4px; }
+    .section-head { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: 0 0 12px; flex-wrap: wrap; }
+    .section-title { margin: 0; font-size: 15px; font-weight: 600; }
+    .source, .hint { font-size: 12px; color: var(--mute); margin: 8px 0; }
+    .auth-sub[hidden] { display: none !important; }
+    .legend { max-width: var(--board-w); margin: 16px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+    .legend strong { color: var(--line); }
+  </style>
+</head>
+<body>
+  <p class="meta">session-editor · sections/authentication · board 800×640。 <a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a>。</p>
+  <div class="tools" role="navigation">
+    <a class="btn" href="general.html" title="General">General</a>
+    <a class="btn" href="authentication.html" aria-current="page" title="Authentication">Authentication</a>
+    <a class="btn" href="login-script.html" title="Login Script">Login Script</a>
+    <a class="btn" href="proxy.html" title="Proxy">Proxy</a>
+    <a class="btn" href="tunnels.html" title="Tunnels">Tunnels</a>
+    <a class="btn" href="terminal-style.html" title="Terminal Style">Terminal Style</a>
+  </div>
+  <div class="stage">
+    <div class="board">
+      <div class="board-label">sections / authentication</div>
+      <div class="board-body">
+        <div class="panel inherit-page" data-panel="authentication" data-page="authentication">
+          <div class="section-head">
+<label class="inherit-toggle">
+              <span class="tog-label">Inherit</span>
+              <input type="checkbox" data-inherit checked />
+              <span class="switch" aria-hidden="true"></span>
+            </label>
+          </div>
+          <p class="source">Using parent: Folder «Production» / Global</p>
+          <div class="fields-lock">
+            <div class="form-row">
+              <span class="lbl">Username</span>
+              <input class="input" data-field="username" value="alice" />
+            </div>
+            <div class="form-row">
+              <span class="lbl">Method</span>
+              <div class="methods" role="group" aria-label="Preferred authentication method" id="auth-methods">
+                <button type="button" class="method" data-method="password" aria-pressed="false" title="Password">Password</button>
+                <button type="button" class="method" data-method="key" aria-pressed="true" title="Private Key">Private Key</button>
+              </div>
+            </div>
+            <div class="auth-sub" data-auth="password" hidden>
+              <div class="form-row">
+                <span class="lbl">Password</span>
+                <input class="input" type="password" data-field="password" placeholder="Empty = ask on connect" autocomplete="off" />
+              </div>
+            </div>
+            <div class="auth-sub" data-auth="key">
+              <div class="form-row">
+                <span class="lbl">Private key</span>
+                <div class="ctl-with-btn">
+                  <select class="select" data-field="key" id="fld-key">
+                    <option value="work-ed25519" selected>work-ed25519</option>
+                    <option value="laptop-rsa">laptop-rsa</option>
+                    <option value="deploy-ci">deploy-ci</option>
+                  </select>
+                  <a class="btn btn-icon" href="../../private-keys/index.html" aria-label="管理私钥" title="管理私钥"><span class="i i-manage" aria-hidden="true"></span></a>
+                </div>
+              </div>
+              <p class="hint hint-indent">Keys are managed in Private Keys.</p>
+              <div class="form-row">
+                <span class="lbl">Passphrase</span>
+                <input class="input" type="password" data-field="passphrase" placeholder="Empty = ask when needed" autocomplete="off" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="legend">
+      <ul class="anno">
+        <li><strong>A · Inherit</strong> 页级开关；关掉后编辑本会话值。</li>
+        <li><strong>B · Method</strong> Password / Private Key 分段。</li>
+        <li><strong>C · Key</strong> 下拉 + 管理。</li>
+      </ul>
+      <p class="anno-ref"><a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a></p>
+    </div>
+  <script>
+    (function () {
+      var methods = document.querySelectorAll("#auth-methods .method");
+      var subs = document.querySelectorAll(".auth-sub");
+      methods.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var m = btn.getAttribute("data-method");
+          methods.forEach(function (b) {
+            b.setAttribute("aria-pressed", b === btn ? "true" : "false");
+          });
+          subs.forEach(function (p) {
+            p.hidden = p.getAttribute("data-auth") !== m;
+          });
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

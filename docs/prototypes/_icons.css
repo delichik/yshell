@@ -1,0 +1,50 @@
+/* Tabler outline for prototypes — SVG as alpha mask + currentColor
+   so icons follow .btn / .btn-danger / .btn-primary text color. */
+
+.i {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  vertical-align: middle;
+  background-color: currentColor;
+  -webkit-mask-image: var(--i);
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-image: var(--i);
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-mode: alpha;
+}
+.cap .i {
+  width: 12px;
+  height: 12px;
+}
+
+.i-plus { --i: url("_icons/plus.svg"); }
+.i-copy { --i: url("_icons/copy.svg"); }
+.i-clear { --i: url("_icons/clear.svg"); }
+.i-trash { --i: url("_icons/trash.svg"); }
+.i-close { --i: url("_icons/close.svg"); }
+.i-edit { --i: url("_icons/edit.svg"); }
+.i-search { --i: url("_icons/search.svg"); }
+.i-refresh { --i: url("_icons/refresh.svg"); }
+.i-settings { --i: url("_icons/settings.svg"); }
+.i-manage { --i: url("_icons/manage.svg"); }
+.i-import { --i: url("_icons/import.svg"); }
+.i-export { --i: url("_icons/export.svg"); }
+.i-shield { --i: url("_icons/shield.svg"); }
+.i-globe { --i: url("_icons/globe.svg"); }
+.i-chevron-right { --i: url("_icons/chevron-right.svg"); }
+.i-generate { --i: url("_icons/generate.svg"); }
+.i-browse { --i: url("_icons/browse.svg"); }
+.i-folder { --i: url("_icons/folder.svg"); }
+.i-file { --i: url("_icons/file.svg"); }
+.i-upload { --i: url("_icons/upload.svg"); }
+.i-download { --i: url("_icons/download.svg"); }
+.i-terminal { --i: url("_icons/terminal.svg"); }
+.i-more { --i: url("_icons/more.svg"); }
+.i-check { --i: url("_icons/check.svg"); }
+.i-warning { --i: url("_icons/warning.svg"); }

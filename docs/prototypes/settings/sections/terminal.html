@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — settings · Terminal</title>
+  <link rel="stylesheet" href="../../form.css">
+  <link rel="stylesheet" href="../../_icons.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <style>
+    :root { --board-w: 800px; --board-h: 640px; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--board-w); margin: 0 0 8px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .meta a { color: var(--line); font-weight: 600; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; font-size: 13px; color: var(--mute); }
+    .tools .btn { font-size: 13px; }
+    .tools a.btn[aria-current="page"] { background: var(--soft); font-weight: 600; }
+    .tools button {
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line);
+      background: var(--fill); font: inherit; font-size: 13px; cursor: pointer;
+    }
+    .tools button[aria-pressed="true"] { background: var(--soft); font-weight: 600; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .board {
+      width: var(--board-w); height: var(--board-h); flex-shrink: 0;
+      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+    }
+    .board-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--mute); padding: 6px 10px 0;
+    }
+    .board-body { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; border-top: 1px solid var(--line); margin-top: 4px; }
+    .group-label { margin: 20px 0 8px; font-size: 12px; font-weight: 600; color: var(--mute); }
+    .board-body > .group-label:first-child { margin-top: 0; }
+    .input.is-invalid { border-color: var(--danger); }
+    .hint.is-error { color: var(--danger); }
+    .legend { max-width: var(--board-w); margin: 16px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+    .legend strong { color: var(--line); }
+  </style>
+</head>
+<body>
+  <p class="meta">settings · sections/terminal · board 800×640。 <a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a> · <a href="../../compact-confirm/index.html">paste confirm</a>。</p>
+  <div class="tools" role="navigation">
+    <a class="btn" href="general.html" title="General">General</a>
+    <a class="btn" href="appearance.html" title="Appearance">Appearance</a>
+    <a class="btn" href="terminal.html" aria-current="page" title="Terminal">Terminal</a>
+    <a class="btn" href="security.html" title="Security">Security</a>
+    <a class="btn" href="mcp.html" title="MCP">MCP</a>
+    <a class="btn" href="advanced.html" title="Advanced">Advanced</a>
+    <a class="btn" href="sftp.html" title="SFTP">SFTP</a>
+  </div>
+  <div class="tools" role="group" aria-label="Validation demo state">
+    <span>Validation:</span>
+    <button type="button" data-state="ok" aria-pressed="true" title="Valid values">Default</button>
+    <button type="button" data-state="error" aria-pressed="false" title="Out-of-range value">Invalid</button>
+  </div>
+  <div class="stage">
+    <div class="board">
+      <div class="board-label">sections / terminal</div>
+      <div class="board-body">
+        <h3 class="group-label">Scrollback</h3>
+        <div class="form-row">
+          <label class="lbl" for="sb-lines">Scrollback lines</label>
+          <input class="input" id="sb-lines" type="text" inputmode="numeric" value="10000"
+                 aria-label="Scrollback lines" aria-describedby="sb-lines-help" title="100–1,000,000 lines" />
+        </div>
+        <p class="hint hint-indent" id="sb-lines-help" aria-live="polite">100–1,000,000 lines kept per session.</p>
+        <div class="form-row">
+          <label class="lbl" for="sb-cells">Max cells</label>
+          <input class="input" id="sb-cells" type="text" inputmode="numeric" value="2000000"
+                 aria-label="Scrollback max cells" aria-describedby="sb-cells-help" title="100,000–100,000,000 cells" />
+        </div>
+        <p class="hint hint-indent" id="sb-cells-help">100,000–100,000,000 cells; caps memory.</p>
+
+        <h3 class="group-label">Mouse &amp; paste</h3>
+        <div class="form-row">
+          <label class="lbl" for="fld-middle">Middle click</label>
+          <select class="select" id="fld-middle" aria-label="Middle click behavior" title="Middle click behavior">
+            <option selected>Paste</option>
+            <option>Do nothing</option>
+          </select>
+        </div>
+        <p class="hint hint-indent">Paste from the clipboard or ignore the click.</p>
+        <div class="form-row">
+          <label class="lbl" for="fld-right">Right click</label>
+          <select class="select" id="fld-right" aria-label="Right click behavior" title="Right click behavior">
+            <option selected>Context menu</option>
+            <option>Paste</option>
+            <option>Do nothing</option>
+          </select>
+        </div>
+        <p class="hint hint-indent">Open the terminal menu, paste, or ignore the click.</p>
+        <div class="form-row">
+          <label class="lbl" for="fld-multiline">Multi-line paste</label>
+          <select class="select" id="fld-multiline" aria-label="Multi-line paste behavior" title="Multi-line paste behavior">
+            <option selected>Ask</option>
+            <option>Paste</option>
+            <option>Block</option>
+          </select>
+        </div>
+        <p class="hint hint-indent">Ask before sending text with more than one line.</p>
+        <div class="form-row">
+          <span class="lbl">Auto copy</span>
+          <label class="form-switch" title="Copy selected text automatically">
+            <input type="checkbox" id="fld-auto-copy" aria-label="Automatically copy selected text" />
+            <span class="switch" aria-hidden="true"></span>
+            <span class="switch-txt"><span class="txt-on">On</span><span class="txt-off">Off</span></span>
+          </label>
+        </div>
+        <p class="hint hint-indent">Copy selected terminal text to the clipboard automatically.</p>
+
+        <div class="form-row">
+          <span class="lbl"></span>
+          <button type="button" class="btn btn-icon" id="btn-reset" title="Reset defaults" aria-label="Reset defaults">
+            <span class="i i-refresh" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="legend">
+    <ul class="anno">
+      <li><strong>A · Scrollback</strong> lines + max cells；Reset 重置全部终端设置。</li>
+      <li><strong>B · Mouse &amp; paste</strong> middle / right click、multi-line paste、auto copy；Ask → <a href="../../compact-confirm/index.html">paste confirm</a>。</li>
+      <li><strong>C · Validation</strong> 越界 → 红框 + 行内错误；不出现分区 Save。</li>
+    </ul>
+    <p class="anno-ref"><a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a></p>
+  </div>
+  <script>
+    (function () {
+      var lines = document.getElementById("sb-lines");
+      var cells = document.getElementById("sb-cells");
+      var linesHelp = document.getElementById("sb-lines-help");
+      var middle = document.getElementById("fld-middle");
+      var right = document.getElementById("fld-right");
+      var multiline = document.getElementById("fld-multiline");
+      var autoCopy = document.getElementById("fld-auto-copy");
+      var reset = document.getElementById("btn-reset");
+      var btns = document.querySelectorAll(".tools [data-state]");
+      var okText = "100–1,000,000 lines kept per session.";
+      var errText = "Scrollback lines must be 100–1,000,000.";
+
+      function sync(state) {
+        var invalid = state === "error";
+        btns.forEach(function (b) {
+          b.setAttribute("aria-pressed", b.getAttribute("data-state") === state ? "true" : "false");
+        });
+        lines.classList.toggle("is-invalid", invalid);
+        lines.value = invalid ? "99" : "10000";
+        linesHelp.classList.toggle("is-error", invalid);
+        linesHelp.textContent = invalid ? errText : okText;
+      }
+
+      btns.forEach(function (b) {
+        b.addEventListener("click", function () { sync(b.getAttribute("data-state")); });
+      });
+
+      reset.addEventListener("click", function () {
+        lines.value = "10000";
+        cells.value = "2000000";
+        middle.selectedIndex = 0;
+        right.selectedIndex = 0;
+        multiline.selectedIndex = 0;
+        autoCopy.checked = false;
+        sync("ok");
+      });
+
+      sync("ok");
+    })();
+  </script>
+</body>
+</html>

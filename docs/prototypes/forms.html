@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Form components</title>
+  <link rel="stylesheet" href="form.css">
+  <link rel="stylesheet" href="_anno.css">
+  <style>
+    :root { --bg: #e8e8e8; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--line);
+      background: var(--bg);
+      line-height: 1.5;
+    }
+    .wrap { max-width: 760px; }
+    h1 { margin: 0 0 8px; font-size: 20px; }
+    .lead { margin: 0 0 20px; font-size: 14px; color: var(--mute); }
+    .lead a { color: var(--line); }
+    h2 {
+      margin: 28px 0 8px;
+      font-size: 15px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--line);
+    }
+    h3 { margin: 16px 0 8px; font-size: 13px; color: var(--mute); font-weight: 600; }
+    .box {
+      border: 1px solid var(--line);
+      background: var(--fill);
+      padding: 16px 18px;
+      margin: 0 0 12px;
+    }
+    .rule { margin: 0 0 12px; font-size: 12px; color: var(--mute); line-height: 1.45; }
+    .rule code { font-size: 11px; }
+    .tok {
+      display: flex; flex-wrap: wrap; gap: 8px 16px;
+      margin: 0 0 12px; font-size: 12px; color: var(--mute);
+    }
+    .tok code { color: var(--line); }
+    .demo-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .section-gap { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--soft); }
+    nav.toc {
+      margin: 0 0 20px; padding: 12px 14px;
+      border: 1px dashed var(--line); background: var(--fill);
+      font-size: 13px;
+    }
+    nav.toc a { color: var(--line); margin-right: 12px; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Form components</h1>
+    <p class="lead">
+      原型表单<strong>唯一样式源</strong>：<a href="form.css"><code>form.css</code></a>。
+      本页是控件验收样板——其它原型须直接引用这些 class / token，禁止另写一套开关、行高或按钮。
+      通用窗体分区见 <a href="annotations.html">annotations</a>。
+      ← <a href="index.html">prototypes index</a>
+    </p>
+
+    <nav class="toc" aria-label="Sections">
+      <a href="#tokens">Tokens</a>
+      <a href="#row">Row</a>
+      <a href="#text">Text</a>
+      <a href="#btn">Buttons</a>
+      <a href="#sidecar">Sidecar</a>
+      <a href="#switch">Switch</a>
+      <a href="#methods">Methods</a>
+      <a href="#display">Display</a>
+      <a href="#list">Lists</a>
+      <a href="#single">Single-field</a>
+    </nav>
+
+    <h2 id="tokens">Tokens</h2>
+    <p class="rule">改尺寸只改 <code>form.css</code> 的 <code>:root</code>。<strong>行高 = n × <code>--ctrl-h</code></strong>（n≥1）；动画仅开关拇指 <code>--motion-switch</code>（.12s）。</p>
+    <div class="box">
+      <div class="tok">
+        <span><code>--field-w</code> 420</span>
+        <span><code>--lbl-w</code> 120</span>
+        <span><code>--port-w</code> 100</span>
+        <span><code>--icon-select-w</code> 220</span>
+        <span><code>--ctrl-h</code> 32（1× 最小行高）</span>
+        <span><code>--row-h</code> 64（2× 清单）</span>
+        <span><code>--field-h-md</code> 128（4×）</span>
+        <span><code>--field-h-lg</code> 160（5×）</span>
+        <span><code>--motion-switch</code> .12s</span>
+      </div>
+    </div>
+
+    <h2 id="row">Form row</h2>
+    <p class="rule"><code>.form-row</code>：min-height = 1× <code>--ctrl-h</code>；行高必须是最小行高的整数倍。顶对齐；label 固定上边距。高控件用 <code>--field-h-*</code>，不要改 label pad。</p>
+    <div class="box">
+      <div class="form-row">
+        <span class="lbl">Name</span>
+        <input class="input" value="prod-edge" aria-label="Name" />
+      </div>
+      <div class="form-row">
+        <span class="lbl">Port</span>
+        <input class="input input-port" value="22" inputmode="numeric" aria-label="Port" />
+      </div>
+      <div class="form-row top">
+        <span class="lbl">Notes</span>
+        <textarea class="textarea" aria-label="Notes">Tall value — label top pad unchanged.</textarea>
+      </div>
+      <p class="hint hint-indent">hint-indent 与控件列左缘对齐。</p>
+    </div>
+
+    <h2 id="text">Text · select · password</h2>
+    <div class="box">
+      <div class="form-row">
+        <span class="lbl">Host</span>
+        <input class="input" value="edge.example.com" aria-label="Host" />
+      </div>
+      <div class="form-row">
+        <span class="lbl">Protocol</span>
+        <select class="select" aria-label="Protocol">
+          <option>SOCKS5</option>
+          <option>HTTP CONNECT</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <span class="lbl">Password</span>
+        <input class="input" type="password" placeholder="Empty = ask on connect" aria-label="Password" />
+      </div>
+      <div class="form-row">
+        <span class="lbl">Disabled</span>
+        <input class="input" value="read-only look" disabled aria-label="Disabled" />
+      </div>
+      <div class="form-row">
+        <span class="lbl">Icon</span>
+        <div class="icon-row">
+          <span class="ico-preview" title="Current icon">S</span>
+          <select class="select" aria-label="Icon">
+            <option>Default</option>
+            <option>Preset · Server</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="btn">Buttons</h2>
+    <p class="rule">每个按钮必须有 <code>title</code>；图标钮另加 <code>aria-label</code>。表单行内按钮 <code>justify-self:start</code>，勿撑满列。删除类图标钮加 <code>btn-danger</code>，与文字 Delete 同色描边。</p>
+    <div class="box">
+      <div class="demo-actions">
+        <button type="button" class="btn" title="Cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" title="Save">Save</button>
+        <button type="button" class="btn btn-danger" title="Delete">Delete</button>
+        <button type="button" class="btn btn-danger btn-primary" title="Clear all">Clear all</button>
+        <button type="button" class="btn" title="Disabled" disabled>Disabled</button>
+      </div>
+      <div class="demo-actions">
+        <button type="button" class="btn btn-icon btn-primary" aria-label="Add" title="Add"><span class="i i-plus" aria-hidden="true"></span></button>
+        <button type="button" class="btn btn-icon" aria-label="Copy" title="Copy"><span class="i i-copy" aria-hidden="true"></span></button>
+        <button type="button" class="btn btn-icon" aria-label="Forget" title="Forget"><span class="i i-clear" aria-hidden="true"></span></button>
+        <button type="button" class="btn btn-icon btn-danger" aria-label="Delete" title="Delete"><span class="i i-trash" aria-hidden="true"></span></button>
+      </div>
+      <div class="form-row" style="margin-top:12px;margin-bottom:0">
+        <span class="lbl"></span>
+        <button type="button" class="btn" title="Test">Test</button>
+      </div>
+    </div>
+
+    <h2 id="sidecar">Sidecar · 管理 / Browse</h2>
+    <p class="rule">唯一允许超出 420 的是旁路钮（<code>.ctl-with-btn</code>）。旁路用图标钮：<code>i-manage</code> / <code>i-browse</code>；<code>title</code>/<code>aria-label</code> 写全称（如「管理私钥」「Browse」）。</p>
+    <div class="box">
+      <div class="form-row">
+        <span class="lbl">Private key</span>
+        <div class="ctl-with-btn center">
+          <select class="select" aria-label="Private key">
+            <option>work-ed25519</option>
+            <option>laptop-rsa</option>
+          </select>
+          <a class="btn btn-icon" href="private-keys/index.html" title="管理私钥" aria-label="管理私钥"><span class="i i-manage" aria-hidden="true"></span></a>
+        </div>
+      </div>
+      <div class="form-row top">
+        <span class="lbl">Public key</span>
+        <div class="ctl-with-btn">
+          <div class="pubkey">ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINexample… work-ed25519</div>
+          <button type="button" class="btn btn-icon" aria-label="Copy public key" title="Copy public key"><span class="i i-copy" aria-hidden="true"></span></button>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="switch">Switch</h2>
+    <p class="rule">布尔 = 开关 + 上下文文案。禁止 checkbox 长句。动画：拇指 <code>translateX</code> .12s。</p>
+    <p class="rule">用户向 <code>hint</code>：只写<strong>非显而易见的产品行为</strong>（如空口令语义、日志不含既有 scrollback）。不要教 SSH 常识，不要复述标题/开关文案，目标用户不是小白。</p>
+    <div class="box">
+      <div class="form-row">
+        <span class="lbl">Confirm close</span>
+        <label class="form-switch">
+          <input type="checkbox" checked aria-label="Confirm before closing" />
+          <span class="switch" aria-hidden="true"></span>
+          <span class="switch-txt"><span class="txt-on">On</span><span class="txt-off">Off</span></span>
+        </label>
+      </div>
+      <div class="form-row">
+        <span class="lbl">On connect</span>
+        <label class="form-switch">
+          <input type="checkbox" aria-label="Enable on connect" />
+          <span class="switch" aria-hidden="true"></span>
+          <span class="switch-txt"><span class="txt-on">Enabled</span><span class="txt-off">Disabled</span></span>
+        </label>
+      </div>
+      <div class="form-row">
+        <span class="lbl">ssh-agent</span>
+        <label class="form-switch">
+          <input type="checkbox" aria-label="Use ssh-agent" />
+          <span class="switch" aria-hidden="true"></span>
+          <span class="switch-txt"><span class="txt-on">Use</span><span class="txt-off">Don't use</span></span>
+        </label>
+      </div>
+      <div class="form-row">
+        <span class="lbl">Disabled</span>
+        <label class="form-switch">
+          <input type="checkbox" disabled aria-label="Disabled switch" />
+          <span class="switch" aria-hidden="true"></span>
+          <span class="switch-txt"><span class="txt-on">On</span><span class="txt-off">Off</span></span>
+        </label>
+      </div>
+      <div class="form-row">
+        <span class="lbl">Inherit</span>
+        <label class="inherit-toggle">
+          <span class="tog-label">Inherit</span>
+          <input type="checkbox" checked aria-label="Inherit" />
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+      </div>
+    </div>
+
+    <h2 id="methods">Method segmented</h2>
+    <p class="rule"><code>.methods</code> 宽 ≤ field-w；放在 form-row 值列。</p>
+    <div class="box">
+      <div class="form-row">
+        <span class="lbl">Method</span>
+        <div class="methods" role="group" aria-label="Method" id="demo-methods">
+          <button type="button" class="method" data-m="password" aria-pressed="false" title="Password">Password</button>
+          <button type="button" class="method" data-m="key" aria-pressed="true" title="Private Key">Private Key</button>
+          <button type="button" class="method" data-m="challenge" aria-pressed="false" title="Challenge">Challenge</button>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="display">Display / detail</h2>
+    <p class="rule">只读展示块同 ≤420；<code>.detail-row</code> 行高规则同 form-row。</p>
+    <div class="box">
+      <div class="detail-row">
+        <span class="detail-label">Algorithm</span>
+        <span class="detail-value">ED25519</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Fingerprint</span>
+        <span class="detail-value mono">SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKwDEjsOE</span>
+      </div>
+      <div class="detail-row top section-gap">
+        <span class="detail-label">Preview</span>
+        <div class="term-preview" aria-label="Terminal preview">alice@edge:~$ ls
+ok · 12 passed</div>
+      </div>
+    </div>
+
+    <h2 id="list">Lists (full width)</h2>
+    <p class="rule">CRUD 清单<strong>不</strong>套 field-w；行高 <code>--row-h</code> = 2×（64）。工具条在列表<strong>上方</strong>。</p>
+    <div class="box">
+      <div class="step-toolbar">
+        <button type="button" class="btn btn-primary btn-icon" aria-label="Add" title="Add"><span class="i i-plus" aria-hidden="true"></span></button>
+        <button type="button" class="btn btn-icon" aria-label="Clear" title="Clear"><span class="i i-clear" aria-hidden="true"></span></button>
+      </div>
+      <div class="list-box" style="max-height:144px" role="listbox" aria-label="Demo list">
+        <div class="list-row" role="option" aria-selected="true">
+          <span class="name">corp-socks5</span>
+          <small>proxy.corp:1080</small>
+        </div>
+        <div class="list-row" role="option" aria-selected="false">
+          <span class="name">dev-http</span>
+          <small>127.0.0.1:8888</small>
+        </div>
+        <div class="list-row" role="option" aria-selected="false">
+          <span class="name">work-ed25519</span>
+          <small>SHA256:nThU…k8mQ</small>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="single">Single-field modal</h2>
+    <p class="rule">Known Hosts Add 等：无左侧 label；控件顶满。<code>.single-field</code></p>
+    <div class="box single-field">
+      <input class="input" placeholder="host:port or pattern" aria-label="Host pattern" style="max-width:none" />
+    </div>
+
+    <p class="anno-ref" style="margin-top:24px">
+      实现对照：契约「表单宽度 / 行高 / 布尔」节 · 规则 <a href="../agents/prototypes.md">prototypes.md</a> ·
+      注释 <a href="annotations.html">annotations</a>
+    </p>
+  </div>
+
+  <script>
+    (function () {
+      var methods = document.querySelectorAll("#demo-methods .method");
+      methods.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          methods.forEach(function (b) {
+            b.setAttribute("aria-pressed", b === btn ? "true" : "false");
+          });
+        });
+      });
+      document.querySelectorAll(".list-row").forEach(function (row) {
+        row.addEventListener("click", function () {
+          document.querySelectorAll(".list-row").forEach(function (r) {
+            r.setAttribute("aria-selected", r === row ? "true" : "false");
+          });
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

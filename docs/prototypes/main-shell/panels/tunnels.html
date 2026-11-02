@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Tunnels panel wireframe</title>
+  <link rel="stylesheet" href="../../_icons.css">
+  <style>
+    :root {
+      --board-w: 320px;
+      --board-h: 560px;
+      --line: #111;
+      --fill: #fff;
+      --mute: #555;
+      --soft: #f0f0f0;
+      --bg: #e8e8e8;
+      --ctrl-h: 32px;
+      --head-h: 36px;
+      --row-h: 64px; /* 2× ctrl-h */
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--line);
+      background: var(--bg);
+    }
+    .meta {
+      max-width: 520px;
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: var(--mute);
+      line-height: 1.45;
+    }
+    .meta a { color: var(--line); }
+    .meta code { font-size: 12px; }
+    .tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: var(--mute);
+    }
+    .tools button {
+      height: var(--ctrl-h);
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .tools button[aria-pressed="true"] {
+      background: var(--soft);
+      font-weight: 600;
+    }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .board {
+      width: var(--board-w);
+      height: var(--board-h);
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--fill);
+      border: 1px solid var(--line);
+    }
+    .panel-head {
+      flex: 0 0 var(--head-h);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .panel-head button.icon {
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--line);
+      background: transparent;
+      font: inherit;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 0;
+    }
+    .panel-actions {
+      flex: 0 0 auto;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--soft);
+    }
+    .panel-actions a.btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: var(--ctrl-h);
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--line);
+      text-decoration: none;
+    }
+    .panel-actions a.btn-icon {
+      width: var(--ctrl-h);
+      min-width: var(--ctrl-h);
+      padding: 0;
+      font-size: 20px;
+      line-height: 1;
+    }
+    .panel-body {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 8px 10px 10px;
+      font-size: 12px;
+    }
+    .tunnel-row {
+      min-height: var(--row-h);
+      padding: 8px 0;
+      border-bottom: 1px solid var(--soft);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .tunnel-row .route {
+      font-family: ui-monospace, monospace;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .tunnel-row .meta-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .tunnel-row .name { font-weight: 600; font-size: 12px; }
+    .state-badge {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      padding: 1px 6px;
+      border: 1px solid var(--line);
+      background: var(--soft);
+    }
+    .state-badge.running { background: var(--line); color: var(--fill); }
+    .state-badge.stopped { color: var(--mute); }
+    .state-badge.failed { border-width: 2px; }
+    .row-btns { display: flex; gap: 6px; }
+    .row-btns button {
+      height: 26px;
+      padding: 0 8px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font: inherit;
+      font-size: 11px;
+      cursor: not-allowed;
+      color: var(--mute);
+    }
+    .row-btns button:not(:disabled) { cursor: pointer; color: var(--line); }
+    .gap-note {
+      margin-top: 10px;
+      padding: 10px;
+      border: 2px solid var(--line);
+      background: var(--soft);
+      font-size: 11px;
+      color: var(--line);
+      line-height: 1.45;
+      font-weight: 600;
+    }
+    .gap-note span { display: block; font-weight: 400; color: var(--mute); margin-top: 4px; }
+    .legend {
+      max-width: 520px;
+      margin: 16px 0 0;
+      padding: 12px 14px;
+      border: 1px dashed var(--line);
+      font-size: 12px;
+      color: var(--mute);
+      line-height: 1.5;
+    }
+    .legend strong { color: var(--line); }
+    .legend a { color: var(--line); }
+    .tooltip-wrap { position: relative; display: inline-block; }
+    .tooltip-wrap[data-tip]:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      left: 0;
+      top: calc(100% + 4px);
+      z-index: 5;
+      min-width: 180px;
+      padding: 6px 8px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--mute);
+      line-height: 1.35;
+      box-shadow: 2px 2px 0 rgba(0,0,0,0.06);
+    }
+  </style>
+</head>
+<body>
+  <p class="meta">
+    <strong>Tunnels panel</strong> · content only · board <code>320×560</code> · config list; runtime gap highlighted.
+    <a href="../../index.html">prototypes index</a>
+  </p>
+
+  <div class="tools" role="group" aria-label="Row demo states">
+    <span>Rows:</span>
+    <button type="button" data-view="config" aria-pressed="true" title="Config list">Config list</button>
+    <button type="button" data-view="states" title="Running / Stopped / Failed">Running / Stopped / Failed</button>
+    <button type="button" data-view="gap" title="Runtime gap note">Runtime gap note</button>
+  </div>
+
+  <div class="stage">
+    <div class="board" aria-label="Tunnels panel">
+      <header class="panel-head">
+        <span>Tunnels</span>
+        <button type="button" class="icon" aria-label="Panel menu" title="Panel menu">⋯</button>
+      </header>
+      <div class="panel-actions">
+        <a class="btn btn-icon" href="../../tunnel-editor/index.html" aria-label="Add Tunnel" title="Add Tunnel"><span class="i i-plus" aria-hidden="true"></span></a>
+      </div>
+      <div class="panel-body" id="panelBody"></div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <strong>Docking</strong> — Either stack via <a href="../tool-dock.html">tool-dock</a>.
+    <strong>+</strong>（Add Tunnel）→ <a href="../../tunnel-editor/index.html">tunnel-editor</a> (Save returns config only).
+    <strong>Start / Stop</strong> — disabled until runtime provisioned; hover shows <em>runtime not provisioned</em>.
+    Session-level tunnel defs also editable in <a href="../../session-editor/index.html">session-editor</a> (Tunnels section).
+  </div>
+
+  <script>
+    (function () {
+      var tip = "runtime not provisioned";
+      function btn(label, primary) {
+        return (
+          '<span class="tooltip-wrap" data-tip="' + tip + '">' +
+          '<button type="button" disabled' + (primary ? ' title="' + tip + '"' : '') + '>' + label + '</button></span>'
+        );
+      }
+      function row(name, route, state) {
+        var badge = state
+          ? '<span class="state-badge ' + state + '">' + state + '</span>'
+          : '<span class="state-badge stopped">config</span>';
+        return (
+          '<div class="tunnel-row">' +
+            '<div class="meta-line"><span class="name">' + name + '</span>' + badge + '</div>' +
+            '<div class="route">' + route + '</div>' +
+            '<div class="row-btns">' + btn("Start", true) + btn("Stop", false) + '</div>' +
+          '</div>'
+        );
+      }
+
+      var views = {
+        config: row("local-postgres", "127.0.0.1:5432 → db.internal:5432", null) +
+          row("dev-web", "127.0.0.1:8080 → web:80", null) +
+          row("socks-dynamic", "Dynamic · bind 127.0.0.1:1080", null),
+        states:
+          row("local-postgres", "127.0.0.1:5432 → db.internal:5432", "running") +
+          row("dev-web", "127.0.0.1:8080 → web:80", "stopped") +
+          row("legacy-sftp", "127.0.0.1:2222 → sftp:22", "failed"),
+        gap:
+          row("local-postgres", "127.0.0.1:5432 → db.internal:5432", "stopped") +
+          '<div class="gap-note">Runtime not provisioned' +
+          '<span>Start/Stop buttons stay disabled; panel shows saved tunnel config only. Forwarding engine ships in a later milestone.</span></div>'
+      };
+
+      var body = document.getElementById("panelBody");
+      var btns = document.querySelectorAll(".tools button[data-view]");
+
+      function show(key) {
+        btns.forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-view") === key ? "true" : "false"); });
+        body.innerHTML = views[key];
+      }
+
+      btns.forEach(function (b) {
+        b.addEventListener("click", function () { show(b.getAttribute("data-view")); });
+      });
+      show("config");
+    })();
+  </script>
+</body>
+</html>

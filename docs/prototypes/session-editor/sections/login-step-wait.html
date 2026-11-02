@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Login Script · Wait step</title>
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../form.css">
+  <style>
+    :root {
+      --modal-w: 560px; --modal-h: 400px; --titlebar-h: 32px; --pad: 28px;
+      --ctrl-h: 32px;
+      --line: #111; --fill: #fff; --mute: #555; --soft: #f0f0f0;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--modal-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .meta a { color: inherit; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .tools button {
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line);
+      background: var(--fill); font: inherit; cursor: pointer;
+    }
+    .tools button[aria-pressed="true"] { background: var(--soft); font-weight: 600; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .modal {
+      width: var(--modal-w); height: var(--modal-h); flex-shrink: 0;
+      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+    }
+    .titlebar {
+      height: var(--titlebar-h); flex: 0 0 var(--titlebar-h);
+      display: flex; align-items: center; padding: 0 8px 0 12px; gap: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .title { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cap {
+      width: 40px; height: 24px; border: 1px solid var(--line); background: transparent;
+      font-size: 10px; color: var(--line); padding: 0; text-decoration: none;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .m-body { flex: 1; min-height: 0; padding: var(--pad); display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+    .m-spacer { flex: 1; min-height: 8px; }
+    .form-row { grid-template-columns: 100px minmax(0, 1fr); gap: 8px 12px; }
+    .input-ms { width: 140px; max-width: 140px; }
+    .hint { margin: 0 0 0 112px; font-size: 12px; color: var(--mute); max-width: var(--field-w); }
+    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
+    .actions .grow { flex: 1; }
+    .btn {
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line);
+      background: var(--fill); font: inherit; font-size: 14px; cursor: pointer;
+      display: inline-flex; align-items: center; text-decoration: none; color: inherit;
+    }
+    .btn-primary { background: var(--soft); font-weight: 600; }
+    #btn-delete[hidden] { display: none !important; }
+    .legend { max-width: var(--modal-w); margin: 20px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+  </style>
+</head>
+<body>
+  <p class="meta">Login Script · Wait 步骤弹窗。 <a href="../../annotations.html">annotations</a>。</p>
+  <div class="tools" role="group" aria-label="Modal state">
+    <button type="button" id="state-add" aria-pressed="true" title="Add Wait">Add Wait</button>
+    <button type="button" id="state-edit" aria-pressed="false" title="Edit Wait">Edit Wait</button>
+  </div>
+
+  <div class="stage">
+    <div class="modal" role="dialog" aria-labelledby="win-title">
+      <div class="titlebar">
+        <div class="title" id="win-title">Add Wait</div>
+        <a class="cap" href="login-script.html" aria-label="Close" title="Close"><span class="i i-close" aria-hidden="true"></span></a>
+      </div>
+      <div class="m-body">
+        <div class="form-row">
+          <span class="lbl">Wait (ms)</span>
+          <input class="input input-ms" id="fld-wait" type="number" min="0" step="50" value="500" />
+        </div>
+        <div class="m-spacer"></div>
+        <hr class="rule" />
+        <div class="actions">
+          <button type="button" class="btn btn-icon btn-danger" id="btn-delete" hidden aria-label="Delete" title="Delete"><span class="i i-trash" aria-hidden="true"></span></button>
+          <span class="grow"></span>
+          <a class="btn" href="login-script.html" title="Cancel">Cancel</a>
+          <button type="button" class="btn btn-primary" id="btn-save" title="Save">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+      <ul class="anno">
+        <li><strong>A · Wait form</strong> 等待条件字段。</li>
+      </ul>
+      <p class="anno-ref"><a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a></p>
+    </div>
+
+  <script>
+    (function () {
+      var title = document.getElementById("win-title");
+      var wait = document.getElementById("fld-wait");
+      var btnDelete = document.getElementById("btn-delete");
+      var btnAdd = document.getElementById("state-add");
+      var btnEdit = document.getElementById("state-edit");
+
+      function showAdd() {
+        btnAdd.setAttribute("aria-pressed", "true");
+        btnEdit.setAttribute("aria-pressed", "false");
+        title.textContent = "Add Wait";
+        btnDelete.hidden = true;
+        wait.value = "500";
+      }
+
+      function showEdit() {
+        btnAdd.setAttribute("aria-pressed", "false");
+        btnEdit.setAttribute("aria-pressed", "true");
+        title.textContent = "Edit Wait";
+        btnDelete.hidden = false;
+        wait.value = "500";
+      }
+
+      btnAdd.addEventListener("click", showAdd);
+      btnEdit.addEventListener("click", showEdit);
+      document.getElementById("btn-save").addEventListener("click", function () {
+        location.href = "login-script.html";
+      });
+      btnDelete.addEventListener("click", function () {
+        location.href = "login-script.html";
+      });
+
+      if (/edit/i.test(location.hash)) showEdit();
+      else showAdd();
+    })();
+  </script>
+</body>
+</html>

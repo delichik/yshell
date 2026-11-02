@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>YShell — form width audit runner</title>
+  <style>
+    body { font: 13px/1.45 ui-sans-serif, system-ui, sans-serif; margin: 16px; background: #e8e8e8; color: #111; }
+    #log { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px; background: #fff; border: 1px solid #111; padding: 12px; max-height: 70vh; overflow: auto; }
+    iframe { position: absolute; left: -9999px; width: 1100px; height: 900px; border: 0; }
+    .ok { color: #060; } .bad { color: #900; font-weight: 700; } .skip { color: #555; }
+  </style>
+</head>
+<body>
+  <p><strong>Form / display audit</strong> — loads each page offscreen, measures inputs/selects/textareas/pubkey/preview/list-box.</p>
+  <p id="status">Running…</p>
+  <div id="log"></div>
+  <iframe id="frame" title="audit"></iframe>
+  <script>
+    const PAGES = [
+      "session-editor/sections/general.html",
+      "session-editor/sections/authentication.html",
+      "session-editor/sections/login-script.html",
+      "session-editor/sections/login-step-keys.html",
+      "session-editor/sections/login-step-wait.html",
+      "session-editor/sections/proxy.html",
+      "session-editor/sections/tunnels.html",
+      "session-editor/sections/terminal-style.html",
+      "private-keys/index.html",
+      "private-keys/modals.html#export",
+      "private-keys/modals.html#import-file",
+      "terminal-styles/index.html",
+      "proxies/index.html",
+      "tunnel-editor/index.html",
+      "known-hosts/modals.html",
+      "known-hosts/modals.html#import",
+      "logging/index.html",
+      "auth-prompt/index.html",
+      "settings/sections/general.html",
+      "settings/sections/appearance.html",
+      "settings/sections/terminal.html",
+      "settings/sections/sftp.html",
+      "sftp-chmod/index.html"
+    ];
+    const FIELD_MAX = 420;
+    const logEl = document.getElementById("log");
+    const frame = document.getElementById("frame");
+    const status = document.getElementById("status");
+    const lines = [];
+    function out(html) { lines.push(html); logEl.innerHTML = lines.join("\n"); }
+
+    function measure(doc) {
+      const issues = [];
+      const info = [];
+      const sels = [
+        "input.input", "input:not([type=checkbox]):not([type=radio]):not([type=hidden])",
+        "select.select", "select",
+        "textarea.textarea", "textarea.keys-area",
+        ".pubkey", ".term-preview", ".path-box", ".field-box"
+      ];
+      const seen = new Set();
+      sels.forEach((sel) => {
+        doc.querySelectorAll(sel).forEach((el) => {
+          if (seen.has(el) || el.closest(".tools") || el.closest(".legend")) return;
+          // Lists that should be full-width
+          if (el.closest(".list-box") || el.closest(".step-list") || el.id === "keylist" || el.classList.contains("list")) return;
+          seen.add(el);
+          const r = el.getBoundingClientRect();
+          const w = Math.round(r.width);
+          if (w < 8) return;
+          const tag = (el.className && String(el.className).split(" ")[0]) || el.tagName.toLowerCase();
+          const id = el.id || el.getAttribute("placeholder") || el.getAttribute("aria-label") || tag;
+          // Large editors allowed full value column
+          const large = el.classList.contains("keys-area") || el.classList.contains("textarea") && el.closest(".form-row");
+          const cheat = el.classList.contains("cheat");
+          if (large || cheat) {
+            info.push(id + "=" + w + (w > FIELD_MAX ? " (large-ok)" : ""));
+            return;
+          }
+          // Port / narrow
+          const cs = getComputedStyle(el);
+          const mw = cs.maxWidth;
+          if (w > FIELD_MAX + 2) {
+            issues.push(id + " w=" + w + " >420 (max=" + mw + ")");
+          } else {
+            info.push(id + "=" + w);
+          }
+        });
+      });
+      // list-box / step-list should NOT be capped if they're CRUD (just report width)
+      doc.querySelectorAll(".list-box, .step-list").forEach((el) => {
+        const w = Math.round(el.getBoundingClientRect().width);
+        info.push("list:" + (el.id || el.className) + "=" + w);
+      });
+      // stacked label smell: .field > .label + input without form-row
+      doc.querySelectorAll(".field > .label, .field > label.label").forEach((lab) => {
+        const parent = lab.parentElement;
+        if (parent && !parent.classList.contains("form-row") && parent.querySelector("input, select, textarea")) {
+          issues.push("stacked-label: " + (lab.textContent || "").trim().slice(0, 40));
+        }
+      });
+      return { issues, info };
+    }
+
+    function load(url) {
+      return new Promise((resolve) => {
+        const [path, hash] = url.split("#");
+        const bust = path + (path.includes("?") ? "&" : "?") + "_t=" + Date.now() + (hash ? "#" + hash : "");
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          frame.removeEventListener("load", onLoad);
+          try {
+            const doc = frame.contentDocument;
+            if (hash === "export" && doc.getElementById("state-export")) doc.getElementById("state-export").click();
+            if (hash === "import-file" && doc.getElementById("state-import-file")) doc.getElementById("state-import-file").click();
+            if (hash === "import" && doc.getElementById("state-import")) doc.getElementById("state-import").click();
+          } catch (e) {}
+          setTimeout(() => resolve(), 120);
+        };
+        const onLoad = () => finish();
+        frame.addEventListener("load", onLoad);
+        setTimeout(finish, 4000); // watchdog if load stuck
+        frame.src = bust;
+      });
+    }
+
+    (async () => {
+      let fail = 0;
+      for (const page of PAGES) {
+        const url = page;
+        try {
+          await load(url);
+          const doc = frame.contentDocument;
+          if (!doc || !doc.body) {
+            out('<span class="bad">FAIL ' + page + ' — no document</span>');
+            fail++;
+            continue;
+          }
+          const { issues, info } = measure(doc);
+          if (issues.length) {
+            fail++;
+            out('<span class="bad">FAIL ' + page + '</span>\n  ' + issues.join("\n  ") + '\n  info: ' + info.slice(0, 8).join(", "));
+          } else {
+            out('<span class="ok">OK   ' + page + '</span>  ' + info.slice(0, 6).join(", "));
+          }
+        } catch (e) {
+          fail++;
+          out('<span class="bad">FAIL ' + page + ' — ' + e.message + '</span>');
+        }
+      }
+      status.textContent = fail ? ("DONE — " + fail + " failures") : "DONE — all OK";
+      status.className = fail ? "bad" : "ok";
+      document.title = status.textContent;
+    })();
+  </script>
+</body>
+</html>

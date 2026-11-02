@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — Session editor wireframe</title>
+  <title>YShell — Session / Folder editor hub</title>
+  <link rel="stylesheet" href="../_icons.css">
   <style>
     :root {
       --win-w: 1100px; --win-h: 820px; --titlebar-h: 32px; --pad: 28px; --gap: 12px;
@@ -13,112 +14,133 @@
     * { box-sizing: border-box; }
     body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
     .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); line-height: 1.45; }
-    .stage { overflow-x: auto; padding-bottom: 8px; }
-    .win { width: var(--win-w); height: var(--win-h); flex-shrink: 0; display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line); }
-    .titlebar { height: var(--titlebar-h); flex: 0 0 var(--titlebar-h); display: flex; align-items: center; padding: 0 8px 0 12px; gap: 8px; border-bottom: 1px solid var(--line); }
-    .title { flex: 1; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .cap { width: 40px; height: 24px; border: 1px solid var(--line); background: transparent; font-size: 10px; }
-    .body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: var(--pad); gap: var(--gap); overflow: hidden; }
-    .main { flex: 1 1 auto; min-height: 0; display: flex; gap: var(--gap); overflow: hidden; }
-    .nav-panel { width: var(--nav-w); flex-shrink: 0; border: 1px solid var(--line); background: var(--panel); padding: 8px; display: flex; flex-direction: column; gap: 2px; }
-    .nav-item { height: var(--nav-item-h); border: 0; background: transparent; text-align: left; padding: 0 10px; font: inherit; font-size: 14px; cursor: pointer; width: 100%; }
-    .nav-item[aria-current="page"] { background: var(--soft); font-weight: 600; }
-    .nav-item:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      color: var(--mute);
-      font-size: 13px;
+    .meta a { color: var(--line); font-weight: 600; }
+    .meta code { font-size: 12px; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--mute); margin-bottom: 10px; }
+    .tools button, .tools a.btn {
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line);
+      background: var(--fill); font: inherit; font-size: 13px; cursor: pointer;
+      text-decoration: none; color: inherit; display: inline-flex; align-items: center;
     }
-    .form-card { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto; border: 1px solid var(--line); padding: 20px; }
-    .section-title { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
-    .form-row { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: center; margin-bottom: 10px; font-size: 14px; }
-    .form-row .lbl { text-align: right; color: var(--mute); font-size: 13px; }
-    .input, .select { height: var(--ctrl-h); padding: 0 8px; border: 1px solid var(--line); font: inherit; width: 100%; max-width: 420px; }
-    .panel[hidden] { display: none !important; }
-    .hint { font-size: 12px; color: var(--mute); margin: 8px 0; }
-    .hint a { color: var(--line); }
-    .list-box { border: 1px dashed var(--line); max-height: 160px; overflow: auto; }
-    .list-row { height: 48px; padding: 0 10px; display: flex; align-items: center; border-bottom: 1px solid var(--line); font-size: 13px; }
+    .tools button[aria-pressed="true"] { background: var(--soft); font-weight: 600; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .win {
+      width: var(--win-w); height: var(--win-h); flex-shrink: 0;
+      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+    }
+    .titlebar {
+      height: var(--titlebar-h); flex: 0 0 var(--titlebar-h);
+      display: flex; align-items: center; padding: 0 8px 0 12px; gap: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .title { flex: 1; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cap { width: 40px; height: 24px; border: 1px solid var(--line); background: transparent; font-size: 10px; color: var(--line); padding: 0; }
+    .body {
+      flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+      padding: var(--pad); gap: var(--gap); overflow: hidden;
+    }
+    .main { flex: 1 1 auto; min-height: 0; display: flex; gap: var(--gap); overflow: hidden; }
+    .nav-panel {
+      width: var(--nav-w); flex-shrink: 0; border: 1px solid var(--line); background: var(--panel);
+      padding: 8px; display: flex; flex-direction: column; gap: 2px;
+    }
+    a.nav-item, .nav-dis {
+      height: var(--nav-item-h); display: flex; align-items: center; padding: 0 10px;
+      font: inherit; font-size: 14px; text-decoration: none; color: inherit; box-sizing: border-box;
+    }
+    a.nav-item:hover { background: var(--soft); }
+    a.nav-item[aria-current="page"] { background: var(--soft); font-weight: 600; }
+    .nav-dis { opacity: 0.5; color: var(--mute); font-size: 13px; cursor: not-allowed; }
+    .form-card {
+      flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto;
+      border: 1px solid var(--line); padding: 20px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .region {
+      border: 1px dashed var(--line); padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 6px; background: var(--fill);
+    }
+    .region .rid { font-size: 13px; font-weight: 700; }
+    .region .hint { font-size: 12px; color: var(--mute); line-height: 1.45; }
+    .region a { font-size: 13px; color: var(--line); font-weight: 600; }
+    .region[hidden] { display: none !important; }
     .spacer { flex: 1 1 auto; min-height: 8px; }
     .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
-    .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-    .btn { height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line); background: var(--fill); font: inherit; font-size: 14px; cursor: pointer; }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; align-items: center; }
+    .btn {
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line); background: var(--fill);
+      font: inherit; font-size: 14px; cursor: pointer;
+    }
     .btn-primary { background: var(--soft); font-weight: 600; }
-    .legend { max-width: var(--win-w); margin: 20px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+    .session-only[hidden] { display: none !important; }
+    .legend {
+      max-width: var(--win-w); margin: 20px 0 0; padding: 12px 14px; border: 1px dashed var(--line);
+      font-size: 12px; color: var(--mute); line-height: 1.55;
+    }
     .legend strong { color: var(--line); }
-    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
   </style>
 </head>
 <body>
   <p class="meta">
-    Session Editor · <code>1100×820</code> · 左分区导航 · 右表单滚动 · 页脚 Cancel | Save.
-    <strong>status §2</strong>：SFTP / Advanced 分区本版不做 → nav 按钮 disabled，标注 “(not this version)”.
+    Session / Folder Editor · <code>1100×820</code> · 分区见 <code>sections/*</code>。
+    <a href="../index.html">hub</a> · <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>
   </p>
+
+  <div class="tools" role="group" aria-label="Target kind">
+    <button type="button" id="mode-session" aria-pressed="true" title="编辑 Session">编辑 Session</button>
+    <button type="button" id="mode-folder" aria-pressed="false" title="编辑 Folder">编辑 Folder</button>
+  </div>
+
   <div class="stage">
-    <div class="win" role="dialog">
+    <div class="win" role="dialog" aria-labelledby="win-title">
       <div class="titlebar">
-        <div class="title">Edit Session — prod-edge</div>
-        <button type="button" class="cap" tabindex="-1">_</button><button type="button" class="cap" tabindex="-1">□</button><button type="button" class="cap" tabindex="-1">×</button>
+        <div class="title" id="win-title">Edit Session — prod-edge</div>
+        <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
       </div>
       <div class="body">
         <div class="main">
-          <nav class="nav-panel" aria-label="Session sections">
-            <button type="button" class="nav-item" data-section="general" aria-current="page">General</button>
-            <button type="button" class="nav-item" data-section="terminal">Terminal</button>
-            <button type="button" class="nav-item" data-section="logging">Logging</button>
-            <button type="button" class="nav-item" data-section="authentication">Authentication</button>
-            <button type="button" class="nav-item" data-section="proxy">Proxy</button>
-            <button type="button" class="nav-item" data-section="tunnels">Tunnels</button>
-            <button type="button" class="nav-item" data-section="appearance">Appearance</button>
-            <button type="button" class="nav-item" disabled title="Not in this version (status §2)">SFTP (not this version)</button>
-            <button type="button" class="nav-item" disabled title="Not in this version (status §2)">Advanced (not this version)</button>
+          <nav class="nav-panel" aria-label="Editor sections">
+            <a class="nav-item" href="#general" data-section="general" aria-current="page" title="General">General</a>
+            <a class="nav-item" href="#authentication" data-section="authentication" title="Authentication">Authentication</a>
+            <a class="nav-item" href="#login-script" data-section="login-script" title="Login Script">Login Script</a>
+            <a class="nav-item" href="#proxy" data-section="proxy" title="Proxy">Proxy</a>
+            <a class="nav-item" href="#tunnels" data-section="tunnels" title="Tunnels">Tunnels</a>
+            <a class="nav-item" href="#terminal-style" data-section="terminal-style" title="Terminal Style">Terminal Style</a>
+            <span class="nav-dis" title="Not in this version (status §2)">SFTP (not this version)</span>
+            <span class="nav-dis" title="Not in this version (status §2)">Advanced (not this version)</span>
           </nav>
           <div class="form-card" id="scroll">
-            <div class="panel" data-panel="general">
-              <h2 class="section-title">General</h2>
-              <div class="form-row"><span class="lbl">Name</span><input class="input" value="prod-edge" /></div>
-              <div class="form-row"><span class="lbl">Host</span><input class="input" value="edge.example.com" /></div>
-              <div class="form-row"><span class="lbl">Port</span><input class="input" value="22" style="max-width:100px" /></div>
-              <div class="form-row"><span class="lbl">Username</span><input class="input" value="alice" /></div>
+            <div class="region" data-panel="general">
+              <span class="rid">General</span>
+              <span class="hint">不继承 · Name / Host / Port / Icon / Notes · Folder 无 Host/Port</span>
+              <a href="sections/general.html">→ sections/general.html</a>
             </div>
-            <div class="panel" data-panel="terminal" hidden>
-              <h2 class="section-title">Terminal</h2>
-              <div class="form-row"><span class="lbl">Shell</span><input class="input" value="/bin/bash" /></div>
-              <div class="form-row"><span class="lbl">Scrollback</span><input class="input" value="10000" style="max-width:120px" /></div>
-              <div class="form-row"><span class="lbl">Columns</span><input class="input" value="120" style="max-width:80px" /></div>
-              <div class="form-row"><span class="lbl">Rows</span><input class="input" value="32" style="max-width:80px" /></div>
-              <p class="hint">Per-session terminal defaults · stub for layout only.</p>
+            <div class="region" data-panel="authentication" hidden>
+              <span class="rid">Authentication</span>
+              <span class="hint">Inherit · Username · Password / Key</span>
+              <a href="sections/authentication.html">→ sections/authentication.html</a>
             </div>
-            <div class="panel" data-panel="logging" hidden>
-              <h2 class="section-title">Logging</h2>
-              <div class="form-row"><span class="lbl">Log to file</span><select class="select"><option>Off</option><option selected>On connect</option></select></div>
-              <div class="form-row"><span class="lbl">Directory</span><input class="input" value="%USERPROFILE%\Documents\YShell\logs" /></div>
-              <div class="form-row"><span class="lbl">Filename</span><input class="input" value="{session}-{date}.log" /></div>
-              <p class="hint">Full logging UI · <a href="../logging/index.html">logging</a> tool window.</p>
+            <div class="region" data-panel="login-script" hidden>
+              <span class="rid">Login Script</span>
+              <span class="hint">Inherit · 步骤列表 · 右键调序 · Keys/Wait 分窗</span>
+              <a href="sections/login-script.html">→ sections/login-script.html</a>
+              <a href="sections/login-step-keys.html">→ sections/login-step-keys.html</a>
+              <a href="sections/login-step-wait.html">→ sections/login-step-wait.html</a>
             </div>
-            <div class="panel" data-panel="authentication" hidden>
-              <h2 class="section-title">Authentication</h2>
-              <div class="form-row"><span class="lbl">Method</span><select class="select"><option>Password</option><option selected>Key</option><option>Agent</option></select></div>
-              <div class="form-row"><span class="lbl">Private key</span><select class="select"><option>work-ed25519</option></select></div>
-              <p class="hint">托管密钥来自 Private Keys 管理器；无手输路径。</p>
+            <div class="region" data-panel="proxy" hidden>
+              <span class="rid">Proxy</span>
+              <span class="hint">Inherit · 托管 Proxies 配置</span>
+              <a href="sections/proxy.html">→ sections/proxy.html</a>
             </div>
-            <div class="panel" data-panel="proxy" hidden>
-              <h2 class="section-title">Proxy</h2>
-              <div class="form-row"><span class="lbl">Profile</span><select class="select"><option>No Proxy</option><option selected>corp-socks5</option></select></div>
-              <p class="hint">Managed proxy · 编辑在 Proxy Manager 生效于所有引用会话。</p>
+            <div class="region" data-panel="tunnels" hidden>
+              <span class="rid">Tunnels</span>
+              <span class="hint">Inherit · Add → tunnel-editor</span>
+              <a href="sections/tunnels.html">→ sections/tunnels.html</a>
             </div>
-            <div class="panel" data-panel="tunnels" hidden>
-              <h2 class="section-title">Tunnels</h2>
-              <div class="list-box">
-                <div class="list-row">Local 8080 → remote 127.0.0.1:80</div>
-                <div class="list-row">Dynamic SOCKS · 1080</div>
-              </div>
-              <p style="margin-top:8px"><button type="button" class="btn">Add tunnel</button> <button type="button" class="btn">Clear Tunnels</button></p>
-            </div>
-            <div class="panel" data-panel="appearance" hidden>
-              <h2 class="section-title">Appearance</h2>
-              <div class="form-row"><span class="lbl">Color scheme</span><select class="select"><option>Inherit folder</option><option>Campbell</option></select></div>
-              <div class="form-row"><span class="lbl">Preview</span><div style="height:72px;border:1px dashed var(--line);background:#111;color:#ddd;font-family:monospace;font-size:12px;padding:8px">terminal preview</div></div>
+            <div class="region" data-panel="terminal-style" hidden>
+              <span class="rid">Terminal Style</span>
+              <span class="hint">Inherit · 终端样式引用</span>
+              <a href="sections/terminal-style.html">→ sections/terminal-style.html</a>
             </div>
           </div>
         </div>
@@ -126,34 +148,70 @@
         <div class="footer">
           <hr class="rule" />
           <div class="actions">
-            <button type="button" class="btn">Cancel</button>
-            <button type="button" class="btn btn-primary">Save</button>
+            <span class="session-only" id="session-actions">
+              <button type="button" class="btn" title="Test Connection">Test Connection</button>
+            </span>
+            <button type="button" class="btn" title="Cancel">Cancel</button>
+            <button type="button" class="btn btn-primary" title="Save">Save</button>
           </div>
         </div>
       </div>
     </div>
   </div>
+
   <div class="legend">
-    <strong>滚动规则</strong>
-    <ul>
-      <li>固定 <code>1100×820</code>；stage 横向滚动；win 不缩放。</li>
-      <li>Body 不滚；仅 <code>.form-card</code> 滚动。</li>
-      <li>切换 General / Terminal / Logging / … 时外框尺寸不变。</li>
-      <li>SFTP · Advanced：disabled nav，文案 “(not this version)” 对齐 <code>yshell-current-status.md</code> §2。</li>
-    </ul>
+    <strong>本页职责</strong> — 整壳几何、左导航、Session/Folder 模式、页脚。分区<strong>只写标签 + 跳转</strong>；表单/右键/Inherit 交互在 <code>sections/*</code>。
+    页脚 <strong>Cancel | Save</strong>（Session 另有 Test / Save and Connect）：Save 保存并关闭；分区内<strong>不要</strong>再放 Save。
   </div>
+
   <script>
     (function () {
+      var mode = /folder/i.test(location.hash) ? "folder" : "session";
+      var winTitle = document.getElementById("win-title");
+      var btnSession = document.getElementById("mode-session");
+      var btnFolder = document.getElementById("mode-folder");
+      var sessionActions = document.getElementById("session-actions");
       var nav = document.querySelectorAll(".nav-item[data-section]");
-      var panels = document.querySelectorAll(".panel[data-panel]");
-      nav.forEach(function (btn) {
-        btn.addEventListener("click", function () {
-          var id = btn.getAttribute("data-section");
-          nav.forEach(function (b) { b.setAttribute("aria-current", b === btn ? "page" : "false"); });
-          panels.forEach(function (p) { p.hidden = p.getAttribute("data-panel") !== id; });
-          document.getElementById("scroll").scrollTop = 0;
+      var panels = document.querySelectorAll("[data-panel]");
+
+      function applyMode(next) {
+        mode = next;
+        var isFolder = mode === "folder";
+        btnSession.setAttribute("aria-pressed", isFolder ? "false" : "true");
+        btnFolder.setAttribute("aria-pressed", isFolder ? "true" : "false");
+        sessionActions.hidden = isFolder;
+        winTitle.textContent = isFolder ? "Edit Folder — Production" : "Edit Session — prod-edge";
+      }
+
+      function showSection(id) {
+        nav.forEach(function (a) {
+          a.setAttribute("aria-current", a.getAttribute("data-section") === id ? "page" : "false");
+        });
+        panels.forEach(function (p) {
+          p.hidden = p.getAttribute("data-panel") !== id;
+        });
+      }
+
+      btnSession.addEventListener("click", function () {
+        history.replaceState(null, "", location.pathname + location.search);
+        applyMode("session");
+      });
+      btnFolder.addEventListener("click", function () {
+        history.replaceState(null, "", "#folder");
+        applyMode("folder");
+      });
+      nav.forEach(function (a) {
+        a.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          showSection(a.getAttribute("data-section"));
         });
       });
+
+      var hash = (location.hash || "").replace(/^#/, "");
+      if (hash === "folder") applyMode("folder");
+      else applyMode("session");
+      if (hash && hash !== "folder") showSection(hash);
+      else showSection("general");
     })();
   </script>
 </body>

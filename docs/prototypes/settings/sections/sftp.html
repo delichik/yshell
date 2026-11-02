@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — settings · SFTP</title>
+  <link rel="stylesheet" href="../../form.css">
+  <link rel="stylesheet" href="../../_icons.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <style>
+    :root {
+      --board-w: 800px; --board-h: 640px; --nav-item-h: 40px;
+      --panel: #f4f4f4;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--board-w); margin: 0 0 8px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .meta a { color: var(--line); font-weight: 600; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; font-size: 13px; color: var(--mute); }
+    .tools .btn { font-size: 13px; }
+    .tools a.btn[aria-current="page"] { background: var(--soft); font-weight: 600; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .board {
+      width: var(--board-w); height: var(--board-h); flex-shrink: 0;
+      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+    }
+    .board-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--mute); padding: 6px 10px 0;
+    }
+    .board-body { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; border-top: 1px solid var(--line); margin-top: 4px; }
+    .legend { max-width: var(--board-w); margin: 16px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+    .legend strong { color: var(--line); }
+  </style>
+</head>
+<body>
+  <p class="meta">settings · sections/sftp · board 800×640。 <a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a> · conflict dialog <a href="../../sftp-conflict/index.html">sftp-conflict</a>。</p>
+  <div class="tools" role="navigation">
+    <a class="btn" href="general.html" title="General">General</a>
+    <a class="btn" href="appearance.html" title="Appearance">Appearance</a>
+    <a class="btn" href="terminal.html" title="Terminal">Terminal</a>
+    <a class="btn" href="security.html" title="Security">Security</a>
+    <a class="btn" href="mcp.html" title="MCP">MCP</a>
+    <a class="btn" href="advanced.html" title="Advanced">Advanced</a>
+    <a class="btn" href="sftp.html" aria-current="page" title="SFTP">SFTP</a>
+  </div>
+  <div class="stage">
+    <div class="board">
+      <div class="board-label">sections / sftp</div>
+      <div class="board-body">
+        <div class="panel" data-panel="sftp">
+          <div class="form-row">
+            <span class="lbl">Show hidden</span>
+            <label class="form-switch" title="Show hidden files by default">
+              <input type="checkbox" checked aria-label="Show hidden files by default" />
+              <span class="switch" aria-hidden="true"></span>
+              <span class="switch-txt"><span class="txt-on">On</span><span class="txt-off">Off</span></span>
+            </label>
+          </div>
+          <p class="hint hint-indent">New SFTP tabs start with hidden files shown.</p>
+
+          <div class="form-row">
+            <label class="lbl" for="fld-conflict">Conflict</label>
+            <select class="select" id="fld-conflict" aria-label="Conflict action" title="Conflict action">
+              <option selected>Ask</option>
+              <option>Replace</option>
+              <option>Skip</option>
+              <option>Stop</option>
+            </select>
+          </div>
+          <p class="hint hint-indent">Ask opens a dialog; others apply automatically.</p>
+
+          <div class="form-row">
+            <label class="lbl" for="fld-editor">External editor</label>
+            <select class="select" id="fld-editor" aria-label="External editor" title="External editor">
+              <option value="system">System default</option>
+              <option value="vscode" selected>Visual Studio Code</option>
+              <option value="zed">Zed</option>
+              <option value="npp">Notepad++</option>
+              <option value="sublime">Sublime Text</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <p class="hint hint-indent">Used to open remote files for editing.</p>
+          <div class="form-row" id="row-editor-custom" hidden>
+            <span class="lbl"></span>
+            <div class="ctl-with-btn center">
+              <input class="input" id="fld-editor-path" type="text" placeholder="Path to editor executable"
+                     aria-label="Custom editor path" title="Custom editor path" value="" />
+              <button type="button" class="btn btn-icon" title="Browse" aria-label="Browse"><span class="i i-browse" aria-hidden="true"></span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="legend">
+    <ul class="anno">
+      <li><strong>A · Show hidden</strong> 新开 SFTP 标签默认；栏内仍可临时切换。</li>
+      <li><strong>B · Conflict</strong> Ask（默认）→ <a href="../../sftp-conflict/index.html">conflict dialog</a>；其他直接执行。</li>
+      <li><strong>C · External editor</strong> 下拉 + 仅 Custom 路径 + Browse。</li>
+      <li><strong>D · Remote Edit</strong> 保存即自动上传；编辑器退出或断开后结束。</li>
+    </ul>
+    <p class="anno-ref"><a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a> · <a href="../index.html#sftp">settings hub</a></p>
+  </div>
+  <script>
+    (function () {
+      var sel = document.getElementById("fld-editor");
+      var row = document.getElementById("row-editor-custom");
+      var path = document.getElementById("fld-editor-path");
+      function sync() {
+        var custom = sel.value === "custom";
+        row.hidden = !custom;
+        if (custom) path.focus();
+      }
+      sel.addEventListener("change", sync);
+      sync();
+    })();
+  </script>
+</body>
+</html>
+

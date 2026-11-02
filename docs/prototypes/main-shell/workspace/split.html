@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Workspace split wireframe</title>
+  <style>
+    /* Per-pane TabBar + content; max 4 leaves. */
+    :root {
+      --board-w: 1100px;
+      --board-h: 640px;
+      --tabbar-h: 36px;
+      --split: 4px;
+      --ctrl-h: 32px;
+      --line: #111;
+      --fill: #fff;
+      --mute: #555;
+      --soft: #f0f0f0;
+      --bg: #e8e8e8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--line);
+      background: var(--bg);
+    }
+    .meta {
+      max-width: var(--board-w);
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: var(--mute);
+      line-height: 1.45;
+    }
+    .meta a { color: var(--line); }
+    .meta code { font-size: 12px; }
+    .tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: var(--mute);
+    }
+    .tools button {
+      height: var(--ctrl-h);
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .tools button[aria-pressed="true"] {
+      background: var(--soft);
+      font-weight: 600;
+    }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .board {
+      width: var(--board-w);
+      height: var(--board-h);
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--fill);
+      border: 1px solid var(--line);
+    }
+    .board-label {
+      flex: 0 0 auto;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--mute);
+      border-bottom: 1px solid var(--soft);
+    }
+    .toolbar-row {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--soft);
+      font-size: 12px;
+      color: var(--mute);
+    }
+    .toolbar-row .btn-lite {
+      height: 26px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font: inherit;
+      font-size: 11px;
+    }
+    .split-root {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: none;
+      padding: 0;
+    }
+    body[data-layout="1"] .layout-1,
+    body[data-layout="2v"] .layout-2v,
+    body[data-layout="2h"] .layout-2h,
+    body[data-layout="4"] .layout-4,
+    body[data-layout="empty"] .layout-empty {
+      display: flex;
+    }
+    .split-col {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .split-row {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: row;
+    }
+    .split-v {
+      width: var(--split);
+      flex: 0 0 var(--split);
+      background: repeating-linear-gradient(90deg, var(--mute) 0, var(--mute) 4px, transparent 4px, transparent 8px);
+      cursor: col-resize;
+    }
+    .split-h {
+      height: var(--split);
+      flex: 0 0 var(--split);
+      background: repeating-linear-gradient(0deg, var(--mute) 0, var(--mute) 4px, transparent 4px, transparent 8px);
+      cursor: row-resize;
+    }
+    .pane {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--soft);
+      background: var(--fill);
+    }
+    .pane.focused { outline: 1px solid var(--line); outline-offset: -1px; }
+    .pane.empty { background: var(--soft); }
+    .leaf-tabbar {
+      height: var(--tabbar-h);
+      flex: 0 0 var(--tabbar-h);
+      display: flex;
+      align-items: stretch;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      overflow: hidden;
+    }
+    .leaf-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 0 10px;
+      border-right: 1px solid var(--line);
+      max-width: 140px;
+      white-space: nowrap;
+    }
+    .leaf-tab.active { background: var(--soft); font-weight: 600; }
+    .leaf-tab .ico {
+      width: 14px; height: 14px; flex: 0 0 14px;
+      border: 1px solid var(--line); background: var(--soft);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 8px; font-weight: 700;
+    }
+    .leaf-tab .ico.custom { background: #1a1a2e; color: #e8e0d0; }
+    .leaf-tab .nm {
+      overflow: hidden; text-overflow: ellipsis; min-width: 0;
+    }
+    .leaf-tab .md {
+      font-size: 8px; font-weight: 700; color: var(--mute);
+      border: 1px solid var(--line); padding: 0 3px; height: 14px; line-height: 12px;
+    }
+    .leaf-body {
+      flex: 1;
+      min-height: 0;
+      padding: 10px 12px;
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--mute);
+      overflow: auto;
+    }
+    .pane.empty .leaf-body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 13px;
+    }
+    .legend {
+      max-width: var(--board-w);
+      margin: 16px 0 0;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font-size: 12px;
+      color: var(--mute);
+      line-height: 1.55;
+    }
+    .legend strong { color: var(--line); }
+    .legend ul { margin: 8px 0 0; padding-left: 18px; }
+    .legend li { margin: 4px 0; }
+    .legend a { color: var(--line); }
+  </style>
+</head>
+<body data-layout="2v">
+  <p class="meta">
+    <strong>Workspace split</strong> · board <code>1100×640</code> · 最多 <strong>4</strong> 叶。
+    <strong>每叶自有 TabBar + 内容</strong>（不是整窗一条全局标签条盖住所有 pane）。
+    Hub: <a href="../../index.html">prototypes index</a> ·
+    <a href="../index.html">main-shell</a> ·
+    <a href="tab-bar.html">tab-bar</a>（mode）·
+    <a href="sync-input.html">sync-input</a>
+  </p>
+
+  <div class="tools" role="group" aria-label="Split layouts">
+    <span>Layout:</span>
+    <button type="button" data-layout="1" aria-pressed="false" title="1 pane">1 pane</button>
+    <button type="button" data-layout="2v" aria-pressed="true" title="2 vertical">2 vertical</button>
+    <button type="button" data-layout="2h" aria-pressed="false" title="2 horizontal">2 horizontal</button>
+    <button type="button" data-layout="4" aria-pressed="false" title="4-pane grid">4-pane grid</button>
+    <button type="button" data-layout="empty" aria-pressed="false" title="Empty pane">Empty pane</button>
+  </div>
+
+  <div class="stage">
+    <div class="board">
+      <div class="board-label">WorkspaceSplit · leaf = TabBar + (Terminal | SFTP | New Tab)</div>
+      <div class="toolbar-row">
+        <span>View</span>
+        <button type="button" class="btn-lite" disabled title="Balance Panes">Balance Panes</button>
+        <span style="margin-left:auto">Splitters 4px · drag tab to edge to split · max 4 leaves</span>
+      </div>
+
+      <div class="split-root layout-1">
+        <div class="pane focused">
+          <div class="leaf-tabbar">
+            <div class="leaf-tab active"><span class="ico">S</span><span class="nm">edge-01</span><span class="md">TERM</span></div>
+            <div class="leaf-tab"><span class="ico">+</span><span class="nm">New Tab</span><span class="md">NEW</span></div>
+          </div>
+          <div class="leaf-body">user@edge-01:~$ htop<br>… · content mode = terminal → <em>terminal.html</em></div>
+        </div>
+      </div>
+
+      <div class="split-root layout-2v">
+        <div class="split-row">
+          <div class="pane focused">
+            <div class="leaf-tabbar">
+              <div class="leaf-tab active"><span class="ico">S</span><span class="nm">edge-01</span><span class="md">TERM</span></div>
+              <div class="leaf-tab"><span class="ico custom">DB</span><span class="nm">db-primary</span><span class="md">TERM</span></div>
+            </div>
+            <div class="leaf-body">user@edge-01:~$ kubectl logs -f api<br>…</div>
+          </div>
+          <div class="split-v" aria-hidden="true" title="Vertical splitter"></div>
+          <div class="pane">
+            <div class="leaf-tabbar">
+              <div class="leaf-tab active"><span class="ico custom">★</span><span class="nm">jump-host</span><span class="md">SFTP</span></div>
+            </div>
+            <div class="leaf-body">SFTP leaf · Local | Remote dual pane<br>… · mode = sftp → <em>sftp.html</em>（与 Terminal 同为标签 mode，不是 dock）</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="split-root layout-2h">
+        <div class="split-col">
+          <div class="pane focused">
+            <div class="leaf-tabbar">
+              <div class="leaf-tab active"><span class="ico">S</span><span class="nm">edge-01</span><span class="md">TERM</span></div>
+            </div>
+            <div class="leaf-body">user@edge-01:~$ tail -f /var/log/syslog</div>
+          </div>
+          <div class="split-h" aria-hidden="true"></div>
+          <div class="pane">
+            <div class="leaf-tabbar">
+              <div class="leaf-tab active"><span class="ico">+</span><span class="nm">New Tab</span><span class="md">NEW</span></div>
+            </div>
+            <div class="leaf-body">Quick Connect page · mode = new → <em>quick-connect.html</em></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="split-root layout-4">
+        <div class="split-col">
+          <div class="split-row">
+            <div class="pane focused">
+              <div class="leaf-tabbar"><div class="leaf-tab active"><span class="ico">S</span><span class="nm">edge-01</span><span class="md">TERM</span></div></div>
+              <div class="leaf-body">pane A</div>
+            </div>
+            <div class="split-v" aria-hidden="true"></div>
+            <div class="pane">
+              <div class="leaf-tabbar"><div class="leaf-tab active"><span class="ico custom">DB</span><span class="nm">db</span><span class="md">TERM</span></div></div>
+              <div class="leaf-body">pane B</div>
+            </div>
+          </div>
+          <div class="split-h" aria-hidden="true"></div>
+          <div class="split-row">
+            <div class="pane">
+              <div class="leaf-tabbar"><div class="leaf-tab active"><span class="ico">S</span><span class="nm">staging</span><span class="md">SFTP</span></div></div>
+              <div class="leaf-body">pane C · SFTP</div>
+            </div>
+            <div class="split-v" aria-hidden="true"></div>
+            <div class="pane">
+              <div class="leaf-tabbar"><div class="leaf-tab active"><span class="ico">+</span><span class="nm">New Tab</span><span class="md">NEW</span></div></div>
+              <div class="leaf-body">pane D · QC</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="split-root layout-empty">
+        <div class="split-row">
+          <div class="pane focused">
+            <div class="leaf-tabbar">
+              <div class="leaf-tab active"><span class="ico">S</span><span class="nm">edge-01</span><span class="md">TERM</span></div>
+            </div>
+            <div class="leaf-body">user@edge-01:~$</div>
+          </div>
+          <div class="split-v" aria-hidden="true"></div>
+          <div class="pane empty">
+            <div class="leaf-tabbar" style="opacity:0.5">
+              <div class="leaf-tab" style="color:var(--mute)">(empty)</div>
+            </div>
+            <div class="leaf-body">
+              No session in this pane.<br>
+              Drop a tab here / New Session Here / Close Pane.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <strong>分屏与标签的关系</strong>
+    <ul>
+      <li><strong>叶结构</strong>：每个 pane = 自己的 <a href="tab-bar.html">TabBar</a> + 活动标签内容（Terminal / SFTP / New Tab）。不要画「一条全局 TabBar + 下面多分屏内容」。</li>
+      <li><strong>mode</strong>：New Tab / Terminal / SFTP 都可进分屏；叶子数与 mode 无关。SFTP 是标签 mode，不是 dock 面板。</li>
+      <li><strong>Switch</strong>：某叶内 Terminal↔SFTP 仍是<strong>原标签改 mode</strong>（见 tab-bar），不会因为分屏变成两个标签。</li>
+      <li><strong>上限</strong>：最多 4 叶；拖标签到 pane 边缘分屏；关叶内最后标签后合并相邻叶。</li>
+      <li><strong>Balance Panes</strong>：同级 ratio → 50%。</li>
+    </ul>
+  </div>
+
+  <script>
+    (function () {
+      function applyLayout(id) {
+        document.body.setAttribute("data-layout", id);
+        document.querySelectorAll(".tools [data-layout]").forEach(function (b) {
+          b.setAttribute("aria-pressed", b.getAttribute("data-layout") === id ? "true" : "false");
+        });
+      }
+      document.querySelectorAll(".tools [data-layout]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          applyLayout(btn.getAttribute("data-layout"));
+        });
+      });
+      applyLayout("2v");
+    })();
+  </script>
+</body>
+</html>

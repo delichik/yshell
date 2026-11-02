@@ -11,310 +11,300 @@
       --mute: #555;
       --soft: #f0f0f0;
       --bg: #e8e8e8;
+      --nav-w: 300px;
     }
     * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
     body {
-      margin: 0;
-      padding: 32px 24px 48px;
       font-family: ui-sans-serif, system-ui, sans-serif;
       color: var(--line);
       background: var(--bg);
-      line-height: 1.45;
+      display: flex;
+      flex-direction: column;
+      min-height: 100%;
     }
-    .wrap {
-      max-width: 880px;
-      margin: 0 auto;
+    .top {
+      flex: 0 0 auto;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--fill);
     }
-    h1 {
-      margin: 0 0 8px;
-      font-size: 22px;
+    .top h1 {
+      margin: 0 0 4px;
+      font-size: 16px;
       font-weight: 600;
     }
-    .lead {
-      margin: 0 0 28px;
-      font-size: 14px;
+    .top .lead {
+      margin: 0;
+      font-size: 12px;
       color: var(--mute);
+      line-height: 1.4;
     }
-    .lead a { color: var(--line); }
-    h2 {
-      margin: 28px 0 10px;
-      font-size: 13px;
+    .top .lead a { color: var(--line); }
+    .shell {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+    }
+    .nav {
+      width: var(--nav-w);
+      flex-shrink: 0;
+      border-right: 1px solid var(--line);
+      background: var(--fill);
+      overflow: auto;
+      padding: 8px 0 24px;
+    }
+    .group {
+      margin: 12px 0 4px;
+      padding: 0 12px;
+      font-size: 11px;
       font-weight: 600;
       letter-spacing: 0.04em;
       text-transform: uppercase;
       color: var(--mute);
     }
-    .size {
+    .group .size {
       font-weight: 400;
       text-transform: none;
       letter-spacing: 0;
-      color: var(--mute);
     }
-    ul {
-      list-style: none;
-      margin: 0;
-      padding: 0;
-      border: 1px solid var(--line);
-      background: var(--fill);
-    }
-    li {
-      border-bottom: 1px solid var(--line);
-    }
-    li:last-child { border-bottom: 0; }
-    a.row {
-      display: grid;
-      grid-template-columns: minmax(140px, 200px) 1fr;
-      gap: 12px 20px;
-      align-items: baseline;
-      padding: 10px 14px;
+    .nav button.item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: 0;
+      border-bottom: 1px solid transparent;
+      background: transparent;
+      padding: 8px 12px;
+      font: inherit;
+      cursor: pointer;
       color: inherit;
-      text-decoration: none;
-      min-height: 40px;
     }
-    a.row:hover { background: var(--soft); }
-    a.row:focus-visible {
-      outline: 2px solid var(--line);
-      outline-offset: -2px;
-    }
-    .name {
-      font-size: 14px;
+    .nav button.item:hover { background: var(--soft); }
+    .nav button.item[aria-current="true"] {
+      background: var(--soft);
       font-weight: 600;
-      white-space: nowrap;
+      outline: 1px solid var(--line);
+      outline-offset: -1px;
     }
-    .desc {
+    .nav button.item .name {
+      display: block;
       font-size: 13px;
-      color: var(--mute);
+      font-weight: inherit;
     }
-    .foot {
-      margin: 28px 0 0;
+    .nav button.item .desc {
+      display: block;
+      margin-top: 2px;
+      font-size: 11px;
+      color: var(--mute);
+      font-weight: 400;
+      line-height: 1.35;
+    }
+    .stage {
+      flex: 1 1 auto;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: #ddd;
+    }
+    .stage-bar {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--fill);
       font-size: 12px;
       color: var(--mute);
+    }
+    .stage-bar strong { color: var(--line); font-weight: 600; }
+    .stage-bar a {
+      color: var(--line);
+      margin-left: auto;
+      font-size: 12px;
+    }
+    .frame-wrap {
+      flex: 1 1 auto;
+      min-height: 0;
+      position: relative;
+    }
+    iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: var(--bg);
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <header class="top">
     <h1>YShell UI prototypes</h1>
     <p class="lead">
-      Low-fidelity wireframes for layout and interaction.
-      Rules: <code>docs/agents/prototypes.md</code>
-      (menus, shortcuts, context menus, and <strong>click → destination</strong> paths).
-      Open a row in the browser; no build step.
+      左侧选原型，右侧 iframe 预览。规则：<code>docs/agents/prototypes.md</code> ·
+      注释约定：<a href="annotations.html">annotations</a> ·
+      表单控件：<a href="forms.html">forms</a>（样式源 <code>form.css</code>）。
+      也可 <a id="open-tab" href="#" target="_blank" rel="noopener">新标签打开当前项</a>。
     </p>
-
-    <h2>Main shell <span class="size">1440×900 · 菜单/快捷键枢纽</span></h2>
-    <ul>
-      <li>
-        <a class="row" href="main-window/index.html">
-          <span class="name">main-window</span>
-          <span class="desc">整壳拼装 · 菜单+快捷键+跳转 · 区域细节见下方独立原型</span>
-        </a>
-      </li>
-    </ul>
-
-    <h2>ToolDock <span class="size">N3 左右栈 · 面板可换边</span></h2>
-    <ul>
-      <li>
-        <a class="row" href="tool-dock/index.html">
-          <span class="name">tool-dock</span>
-          <span class="desc">Left/Right stack 壳 · Move L/R · 分栏/折叠（默认布局非锁死）</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="panel-sessions/index.html">
-          <span class="name">panel-sessions</span>
-          <span class="desc">Sessions 内容 · 右键 · Session 原地改名（Folder New/Rename 本版禁用）</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="panel-transfers/index.html">
-          <span class="name">panel-transfers</span>
-          <span class="desc">320×520 · Running/Mixed/Empty · Pause All · 行右键 Pause/Cancel/Reveal</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="panel-tunnels/index.html">
-          <span class="name">panel-tunnels</span>
-          <span class="desc">320×560 · Add Tunnel → tunnel-editor · Start/Stop disabled</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="panel-commands/index.html">
-          <span class="name">panel-commands</span>
-          <span class="desc">Commands 空态（本版不做内容）</span>
-        </a>
-      </li>
-    </ul>
-
-    <h2>Workspace regions <span class="size">工作区（非 dock）</span></h2>
-    <ul>
-      <li>
-        <a class="row" href="tab-bar/index.html">
-          <span class="name">tab-bar</span>
-          <span class="desc">标签条 · Rename Tab 原地输入（默认演示）</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="terminal-workspace/index.html">
-          <span class="name">terminal-workspace</span>
-          <span class="desc">960×560 · SSH/本地终端 · 查找 · Find Across SSH · REC · 右键菜单</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="sftp-panel/index.html">
-          <span class="name">sftp-panel</span>
-          <span class="desc">双栏 · 原地 Rename/New Folder · 折叠本地 · 拖放 · Chmod</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="quick-connect/index.html">
-          <span class="name">quick-connect</span>
-          <span class="desc">表单 + Recent · 空 Host / 坏端口校验</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="workspace-split/index.html">
-          <span class="name">workspace-split</span>
-          <span class="desc">分屏 1/2v/2h/4 · 空 pane · Balance Panes</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="sync-input/index.html">
-          <span class="name">sync-input</span>
-          <span class="desc">N9 Send Key Input To · banner/chip · 无 KEYS 弹窗 (D23)</span>
-        </a>
-      </li>
-    </ul>
-
-    <h2>Compact <span class="size">560×400</span></h2>
-    <ul>
-      <li>
-        <a class="row" href="compact-confirm/index.html">
-          <span class="name">compact-confirm</span>
-          <span class="desc">Normal / destructive（无打字确认）</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="close-tab-confirm/index.html">
-          <span class="name">close-tab-confirm</span>
-          <span class="desc">关标签 / Quit · 后果列表 · 无打字确认</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="new-folder/index.html">
-          <span class="name">new-folder</span>
-          <span class="desc">历史短表单壳（主路径：panel-sessions / Folder New 本版禁用）</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="sftp-entry/index.html">
-          <span class="name">sftp-entry</span>
-          <span class="desc">历史短表单壳（主路径：sftp-panel 原地 Rename / New Folder）</span>
-        </a>
-      </li>
-    </ul>
-
-    <h2>Standard <span class="size">720×580</span></h2>
-    <ul>
-      <li>
-        <a class="row" href="auth-prompt/index.html">
-          <span class="name">auth-prompt</span>
-          <span class="desc">Password only · Multi · Key · Challenge（含原 password 弹窗）</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="host-key/index.html">
-          <span class="name">host-key</span>
-          <span class="desc">First-trust / changed host key</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="logging/index.html">
-          <span class="name">logging</span>
-          <span class="desc">Start form vs stop recording</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="about/index.html">
-          <span class="name">about</span>
-          <span class="desc">Version · Config · License</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="sftp-conflict/index.html">
-          <span class="name">sftp-conflict</span>
-          <span class="desc">Overwrite conflict paths</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="sftp-properties/index.html">
-          <span class="name">sftp-properties</span>
-          <span class="desc">Item properties grid</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="tunnel-editor/index.html">
-          <span class="name">tunnel-editor</span>
-          <span class="desc">Add/edit tunnel form · Cancel|Save → panel-tunnels · runtime 未 provision</span>
-        </a>
-      </li>
-    </ul>
-
-    <h2>Wide <span class="size">1100×820</span></h2>
-    <ul>
-      <li>
-        <a class="row" href="settings/index.html">
-          <span class="name">settings</span>
-          <span class="desc">Left nav + form sections</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="session-editor/index.html">
-          <span class="name">session-editor</span>
-          <span class="desc">Session create / edit sections</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="folder-editor/index.html">
-          <span class="name">folder-editor</span>
-          <span class="desc">Folder name / notes</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="theme-manager/index.html">
-          <span class="name">theme-manager</span>
-          <span class="desc">Theme list + edit / preview</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="host-keys/index.html">
-          <span class="name">host-keys</span>
-          <span class="desc">List + details；Import/Export 为冻结父窗的子窗</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="known-hosts/index.html">
-          <span class="name">known-hosts</span>
-          <span class="desc">Persisted entries + danger zone</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="private-keys/index.html">
-          <span class="name">private-keys</span>
-          <span class="desc">清单 + 详情；Import/Export 子窗冻结父级</span>
-        </a>
-      </li>
-      <li>
-        <a class="row" href="proxies/index.html">
-          <span class="name">proxies</span>
-          <span class="desc">清单 + 表单；页脚仅 Cancel | Save</span>
-        </a>
-      </li>
-    </ul>
-
-    <p class="foot">
-      Markdown index: <code>README.md</code>. Prefer this HTML hub when browsing in a browser.
-    </p>
+  </header>
+  <div class="shell">
+    <nav class="nav" id="nav" aria-label="Prototype list"></nav>
+    <div class="stage">
+      <div class="stage-bar">
+        <span>Preview · <strong id="cur-name">—</strong></span>
+        <span id="cur-desc"></span>
+        <a id="open-src" href="#" target="_blank" rel="noopener">Open source file</a>
+      </div>
+      <div class="frame-wrap">
+        <iframe id="frame" title="Prototype preview" src="about:blank"></iframe>
+      </div>
+    </div>
   </div>
+
+  <script>
+    (function () {
+      var GROUPS = [
+        {
+          title: "Meta",
+          size: "shared",
+          items: [
+            { href: "annotations.html", name: "annotations", desc: "注释格式 · 通用 chrome/spacer/footer" },
+            { href: "forms.html", name: "forms", desc: "表单控件规范 · form.css 唯一样式源" }
+          ]
+        },
+        {
+          title: "Main shell",
+          size: "main-shell/",
+          items: [
+            { href: "main-shell/index.html", name: "main-shell", desc: "整壳拼装 · 菜单/快捷键枢纽" },
+            { href: "main-shell/tool-dock.html", name: "main-shell/tool-dock", desc: "Left/Right stack · Move L/R" },
+            { href: "main-shell/panels/sessions.html", name: "main-shell/panels/sessions", desc: "Sessions · 右键 · 原地改名 · session.icon" },
+            { href: "main-shell/panels/transfers.html", name: "main-shell/panels/transfers", desc: "Transfers · Pause/Cancel" },
+            { href: "main-shell/panels/tunnels.html", name: "main-shell/panels/tunnels", desc: "Tunnels · Add → tunnel-editor" },
+            { href: "main-shell/panels/commands.html", name: "main-shell/panels/commands", desc: "Commands 空态" },
+            { href: "main-shell/workspace/tab-bar.html", name: "main-shell/workspace/tab-bar", desc: "标签条 · 原地 Rename · session.icon" },
+            { href: "main-shell/workspace/terminal.html", name: "main-shell/workspace/terminal", desc: "终端 · 查找 · REC" },
+            { href: "main-shell/workspace/sftp.html", name: "main-shell/workspace/sftp", desc: "双栏 SFTP · 拖放" },
+            { href: "main-shell/workspace/quick-connect.html", name: "main-shell/workspace/quick-connect", desc: "QC 表单 + Recent" },
+            { href: "main-shell/workspace/split.html", name: "main-shell/workspace/split", desc: "分屏 1/2/4" },
+            { href: "main-shell/workspace/sync-input.html", name: "main-shell/workspace/sync-input", desc: "N9 · 无 KEYS 确认" }
+          ]
+        },
+        {
+          title: "Compact",
+          size: "560×400",
+          items: [
+            { href: "compact-confirm/index.html", name: "compact-confirm", desc: "确认 · 普通 / 破坏性 / 多行粘贴" },
+            { href: "close-tab-confirm/index.html", name: "close-tab-confirm", desc: "关标签 / Quit" },
+            { href: "host-key/index.html", name: "host-key", desc: "Host key 信任（compact）" },
+            { href: "sftp-chmod/index.html", name: "sftp-chmod", desc: "SFTP 权限：八进制 + 勾选框" }
+          ]
+        },
+        {
+          title: "Standard",
+          size: "720×580",
+          items: [
+            { href: "auth-prompt/index.html", name: "auth-prompt", desc: "Password / Key / Challenge" },
+            { href: "logging/index.html", name: "logging", desc: "日志启停" },
+            { href: "about/index.html", name: "about", desc: "About" },
+            { href: "sftp-conflict/index.html", name: "sftp-conflict", desc: "覆盖冲突" },
+            { href: "sftp-properties/index.html", name: "sftp-properties", desc: "属性" },
+            { href: "tunnel-editor/index.html", name: "tunnel-editor", desc: "隧道编辑" }
+          ]
+        },
+        {
+          title: "Wide",
+          size: "1100×820",
+          items: [
+            { href: "settings/index.html", name: "settings", desc: "整壳 hub · 分区只标跳转" },
+            { href: "settings/sections/general.html", name: "settings/sections/general", desc: "General · language / confirmations / motion" },
+            { href: "settings/sections/appearance.html", name: "settings/sections/appearance", desc: "Appearance · app theme · terminal style" },
+            { href: "settings/sections/terminal.html", name: "settings/sections/terminal", desc: "Terminal · scrollback · mouse · paste" },
+            { href: "settings/sections/security.html", name: "settings/sections/security", desc: "Security · master password · managers" },
+            { href: "settings/master-password.html", name: "settings/master-password", desc: "Master password · Set/Change/Remove/Reset" },
+            { href: "settings/master-password-unlock.html", name: "settings/master-password-unlock", desc: "Master password · startup unlock + error" },
+            { href: "settings/sections/mcp.html", name: "settings/sections/mcp", desc: "MCP · enable / listen / access" },
+            { href: "settings/mcp-consent.html", name: "settings/mcp-consent", desc: "MCP · Allow AI control 确认" },
+            { href: "settings/sections/advanced.html", name: "settings/sections/advanced", desc: "Advanced · debug · config directory" },
+            { href: "settings/sections/sftp.html", name: "settings/sections/sftp", desc: "Show hidden · Conflict · External editor" },
+            { href: "session-editor/index.html", name: "session-editor", desc: "整壳 hub · 分区只标跳转" },
+            { href: "session-editor/sections/general.html", name: "session-editor/sections/general", desc: "General · Icon" },
+            { href: "session-editor/sections/authentication.html", name: "session-editor/sections/authentication", desc: "Auth · Inherit" },
+            { href: "session-editor/sections/login-script.html", name: "session-editor/sections/login-script", desc: "Login Script 列表" },
+            { href: "session-editor/sections/login-step-keys.html", name: "session-editor/sections/login-step-keys", desc: "Login Script · Keys 弹窗" },
+            { href: "session-editor/sections/login-step-wait.html", name: "session-editor/sections/login-step-wait", desc: "Login Script · Wait 弹窗" },
+            { href: "session-editor/sections/proxy.html", name: "session-editor/sections/proxy", desc: "Proxy · 管理" },
+            { href: "session-editor/sections/tunnels.html", name: "session-editor/sections/tunnels", desc: "Tunnels · 右键 Edit/Duplicate/Delete" },
+            { href: "session-editor/sections/terminal-style.html", name: "session-editor/sections/terminal-style", desc: "Terminal Style · 预览对齐 styles 管理器" },
+            { href: "terminal-styles/index.html", name: "terminal-styles", desc: "终端样式" },
+            { href: "known-hosts/index.html", name: "known-hosts", desc: "Known Hosts" },
+            { href: "known-hosts/modals.html", name: "known-hosts/modals", desc: "Known Hosts 子窗" },
+            { href: "private-keys/index.html", name: "private-keys", desc: "Private Keys" },
+            { href: "private-keys/modals.html", name: "private-keys/modals", desc: "Private Keys 子窗" },
+            { href: "proxies/index.html", name: "proxies", desc: "Proxies" }
+          ]
+        }
+      ];
+
+      var nav = document.getElementById("nav");
+      var frame = document.getElementById("frame");
+      var curName = document.getElementById("cur-name");
+      var curDesc = document.getElementById("cur-desc");
+      var openSrc = document.getElementById("open-src");
+      var openTab = document.getElementById("open-tab");
+      var buttons = [];
+
+      function selectItem(item, btn) {
+        buttons.forEach(function (b) { b.setAttribute("aria-current", "false"); });
+        btn.setAttribute("aria-current", "true");
+        frame.src = item.href;
+        curName.textContent = item.name;
+        curDesc.textContent = item.desc || "";
+        openSrc.href = item.href;
+        openTab.href = item.href;
+        try {
+          history.replaceState(null, "", "#" + encodeURIComponent(item.href));
+        } catch (e) {}
+      }
+
+      GROUPS.forEach(function (g) {
+        var label = document.createElement("div");
+        label.className = "group";
+        label.innerHTML = g.title + (g.size ? ' <span class="size">' + g.size + "</span>" : "");
+        nav.appendChild(label);
+        g.items.forEach(function (item) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "item";
+          btn.title = item.name + (item.desc ? " — " + item.desc : "");
+          btn.innerHTML =
+            '<span class="name">' + item.name + "</span>" +
+            '<span class="desc">' + item.desc + "</span>";
+          btn.addEventListener("click", function () { selectItem(item, btn); });
+          nav.appendChild(btn);
+          buttons.push(btn);
+          item._btn = btn;
+        });
+      });
+
+      var hash = (location.hash || "").replace(/^#/, "");
+      var start = null;
+      if (hash) {
+        try { hash = decodeURIComponent(hash); } catch (e) {}
+        GROUPS.some(function (g) {
+          return g.items.some(function (it) {
+            if (it.href === hash) { start = it; return true; }
+            return false;
+          });
+        });
+      }
+      if (!start) start = GROUPS[0].items[0];
+      selectItem(start, start._btn);
+      start._btn.scrollIntoView({ block: "nearest" });
+    })();
+  </script>
 </body>
 </html>

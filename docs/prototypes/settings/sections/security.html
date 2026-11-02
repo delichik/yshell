@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — settings · Security</title>
+  <link rel="stylesheet" href="../../form.css">
+  <link rel="stylesheet" href="../../_icons.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <style>
+    :root {
+      --board-w: 800px; --board-h: 640px;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--board-w); margin: 0 0 8px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .meta a { color: var(--line); font-weight: 600; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; font-size: 13px; color: var(--mute); }
+    .tools .btn { font-size: 13px; }
+    .tools a.btn[aria-current="page"] { background: var(--soft); font-weight: 600; }
+    .tools button {
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line);
+      background: var(--fill); font: inherit; font-size: 13px; cursor: pointer;
+    }
+    .tools button[aria-pressed="true"] { background: var(--soft); font-weight: 600; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .board {
+      width: var(--board-w); height: var(--board-h); flex-shrink: 0;
+      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+    }
+    .board-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--mute); padding: 6px 10px 0;
+    }
+    .board-body { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; border-top: 1px solid var(--line); margin-top: 4px; }
+
+    .set-card {
+      width: 100%; border: 1px solid var(--line); background: var(--fill);
+      padding: 16px; box-sizing: border-box;
+    }
+    .set-head { display: flex; align-items: center; gap: 12px; }
+    .set-icon {
+      width: var(--ctrl-h); height: var(--ctrl-h); flex: 0 0 var(--ctrl-h);
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--line); background: var(--soft);
+    }
+    .set-title { flex: 1; min-width: 0; margin: 0; font-size: 15px; font-weight: 600; }
+    .status-pill {
+      height: 24px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px;
+      display: inline-flex; align-items: center; flex: 0 0 auto;
+      font-size: 12px; font-weight: 600;
+    }
+    .status-pill.is-set { background: var(--soft); }
+    .set-desc { margin: 10px 0 0; font-size: 14px; }
+    .set-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+    .set-actions .grow { flex: 1 1 12px; }
+    .link-quiet {
+      font-size: 13px; color: var(--mute); text-decoration: underline;
+      display: inline-flex; align-items: center; min-height: var(--ctrl-h);
+    }
+    .link-danger { color: var(--danger); }
+
+    .group-label { margin: 20px 0 8px; font-size: 12px; font-weight: 600; color: var(--mute); }
+    .set-list { width: 100%; border: 1px solid var(--line); background: var(--fill); }
+    .set-row {
+      display: flex; align-items: center; gap: 12px;
+      min-height: var(--row-h); padding: 8px 14px;
+      border-bottom: 1px solid var(--line);
+      color: inherit; text-decoration: none;
+    }
+    .set-row:last-child { border-bottom: 0; }
+    .set-row:hover { background: var(--soft); }
+    .set-row .ico {
+      width: var(--ctrl-h); height: var(--ctrl-h); flex: 0 0 var(--ctrl-h);
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--line);
+    }
+    .set-row .name { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; }
+    .set-row .count { flex: 0 0 auto; font-size: 12px; color: var(--mute); }
+    .set-row .chev { flex: 0 0 auto; color: var(--mute); }
+
+    .legend { max-width: var(--board-w); margin: 16px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+    .legend strong { color: var(--line); }
+  </style>
+</head>
+<body>
+  <p class="meta">settings · sections/security · board 800×640。 <a href="../../forms.html">forms</a> · <a href="../master-password.html">master-password</a> · <a href="../master-password-unlock.html">unlock</a>。</p>
+  <div class="tools" role="navigation">
+    <a class="btn" href="general.html" title="General">General</a>
+    <a class="btn" href="appearance.html" title="Appearance">Appearance</a>
+    <a class="btn" href="terminal.html" title="Terminal">Terminal</a>
+    <a class="btn" href="security.html" aria-current="page" title="Security">Security</a>
+    <a class="btn" href="mcp.html" title="MCP">MCP</a>
+    <a class="btn" href="advanced.html" title="Advanced">Advanced</a>
+    <a class="btn" href="sftp.html" title="SFTP">SFTP</a>
+  </div>
+  <div class="tools" role="group" aria-label="Master password demo state">
+    <span>Master password:</span>
+    <button type="button" data-mp="unset" aria-pressed="true" title="Master password not set">Not set</button>
+    <button type="button" data-mp="set" aria-pressed="false" title="Master password set">Set</button>
+  </div>
+  <div class="stage">
+    <div class="board">
+      <div class="board-label">sections / security</div>
+      <div class="board-body">
+        <section class="set-card" aria-labelledby="mp-title">
+          <div class="set-head">
+            <span class="set-icon" aria-hidden="true"><span class="i i-shield"></span></span>
+            <h2 class="set-title" id="mp-title">Master password</h2>
+            <span class="status-pill" id="mp-status">Not set</span>
+          </div>
+
+          <p class="set-desc" id="mp-desc-unset">Sessions and keys are not encrypted.</p>
+          <p class="set-desc" id="mp-desc-set" hidden>Sessions and keys are encrypted.</p>
+
+          <div class="set-actions" id="mp-actions-unset">
+            <a class="btn btn-primary" href="../master-password.html#set" title="Set master password">Set</a>
+          </div>
+          <p class="hint" id="mp-hint-unset">Set a password to encrypt saved sessions and keys.</p>
+          <div class="set-actions" id="mp-actions-set" hidden>
+            <a class="btn" href="../master-password.html#change" title="Change master password">Change</a>
+            <a class="btn" href="../master-password.html#remove" title="Remove master password">Remove</a>
+            <span class="grow"></span>
+            <a class="link-quiet link-danger" href="../master-password.html#reset" title="Reset master password">Forgot password?</a>
+          </div>
+          <p class="hint" id="mp-hint-set" hidden>Remove decrypts files; Reset deletes them.</p>
+        </section>
+
+        <h3 class="group-label">Managers</h3>
+        <div class="set-list" role="list">
+          <a class="set-row" href="../../known-hosts/index.html" role="listitem" title="Open Known Hosts">
+            <span class="ico" aria-hidden="true"><span class="i i-check"></span></span>
+            <span class="name">Known Hosts</span>
+            <span class="count">12</span>
+            <span class="chev" aria-hidden="true"><span class="i i-chevron-right"></span></span>
+          </a>
+          <a class="set-row" href="../../private-keys/index.html" role="listitem" title="Open Private Keys">
+            <span class="ico" aria-hidden="true"><span class="i i-file"></span></span>
+            <span class="name">Private Keys</span>
+            <span class="count">3</span>
+            <span class="chev" aria-hidden="true"><span class="i i-chevron-right"></span></span>
+          </a>
+          <a class="set-row" href="../../proxies/index.html" role="listitem" title="Open Proxies">
+            <span class="ico" aria-hidden="true"><span class="i i-globe"></span></span>
+            <span class="name">Proxies</span>
+            <span class="count">2</span>
+            <span class="chev" aria-hidden="true"><span class="i i-chevron-right"></span></span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="legend">
+    <ul class="anno">
+      <li><strong>A · Master password</strong> 状态 + Set / Change / Remove；Forgot → Reset。</li>
+      <li><strong>B · Managers</strong> 整行跳转；右侧只显示计数。</li>
+    </ul>
+    <p class="anno-ref"><a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a> · <a href="../index.html#security">settings hub</a></p>
+  </div>
+  <script>
+    (function () {
+      var status = document.getElementById("mp-status");
+      var descUnset = document.getElementById("mp-desc-unset");
+      var descSet = document.getElementById("mp-desc-set");
+      var actionsUnset = document.getElementById("mp-actions-unset");
+      var actionsSet = document.getElementById("mp-actions-set");
+      var hintUnset = document.getElementById("mp-hint-unset");
+      var hintSet = document.getElementById("mp-hint-set");
+      var btns = document.querySelectorAll(".tools [data-mp]");
+
+      function sync(state) {
+        var set = state === "set";
+        btns.forEach(function (b) {
+          b.setAttribute("aria-pressed", b.getAttribute("data-mp") === state ? "true" : "false");
+        });
+        status.textContent = set ? "Set" : "Not set";
+        status.classList.toggle("is-set", set);
+        descUnset.hidden = set;
+        descSet.hidden = !set;
+        actionsUnset.hidden = set;
+        actionsSet.hidden = !set;
+        hintUnset.hidden = set;
+        hintSet.hidden = !set;
+      }
+
+      btns.forEach(function (b) {
+        b.addEventListener("click", function () { sync(b.getAttribute("data-mp")); });
+      });
+      sync("unset");
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — session-editor · Terminal Style</title>
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../form.css">
+  <style>
+    :root {
+      --board-w: 800px; --board-h: 640px;
+      --term-bg: #0c0c0c; --term-fg: #cccccc; --term-border: #333;
+      --c1: #c50f1f; --c2: #13a10e; --c3: #c19c00; --c4: #0037da;
+      --c6: #3a96dd; --c8: #767676; --c15: #f2f2f2;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--board-w); margin: 0 0 8px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .meta a { color: var(--line); font-weight: 600; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; font-size: 13px; color: var(--mute); }
+    .tools .btn, a.btn, button.btn {
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line); background: var(--fill);
+      font: inherit; font-size: 13px; cursor: pointer; text-decoration: none; color: inherit;
+      display: inline-flex; align-items: center;
+    }
+    .tools a.btn[aria-current="page"] { background: var(--soft); font-weight: 600; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .board {
+      width: var(--board-w); height: var(--board-h); flex-shrink: 0;
+      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+    }
+    .board-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--mute); padding: 6px 10px 0;
+    }
+    .board-body { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; border-top: 1px solid var(--line); margin-top: 4px; }
+    .section-head { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: 0 0 12px; flex-wrap: wrap; }
+    .section-title { margin: 0; font-size: 15px; font-weight: 600; }
+    .source { font-size: 12px; color: var(--mute); margin: 0 0 12px; }
+    .term-preview {
+      height: var(--field-h-md);
+      border: 1px solid var(--term-border); background: var(--term-bg); color: var(--term-fg);
+      font-family: "Cascadia Mono", "Cascadia Code", ui-monospace, monospace;
+      font-size: 13px; line-height: 1.35;
+      padding: 8px 10px; overflow: hidden; white-space: pre; min-width: 0;
+    }
+    .term-preview .dim { color: var(--c8); }
+    .term-preview .red { color: var(--c1); }
+    .term-preview .grn { color: var(--c2); }
+    .term-preview .ylw { color: var(--c3); }
+    .term-preview .blu { color: var(--c4); }
+    .term-preview .cyn { color: var(--c6); }
+    .term-preview .br { color: var(--c15); }
+    .term-preview .cursor {
+      display: inline-block; width: 7px; height: 13px; background: var(--c15);
+      vertical-align: text-bottom; margin-left: 1px;
+    }
+    .legend { max-width: var(--board-w); margin: 16px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+    .legend strong { color: var(--line); }
+    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+  </style>
+</head>
+<body>
+  <p class="meta">session-editor · sections/terminal-style · board 800×640。 <a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a>。</p>
+  <div class="tools" role="navigation">
+    <a class="btn" href="general.html" title="General">General</a>
+    <a class="btn" href="authentication.html" title="Authentication">Authentication</a>
+    <a class="btn" href="login-script.html" title="Login Script">Login Script</a>
+    <a class="btn" href="proxy.html" title="Proxy">Proxy</a>
+    <a class="btn" href="tunnels.html" title="Tunnels">Tunnels</a>
+    <a class="btn" href="terminal-style.html" aria-current="page" title="Terminal Style">Terminal Style</a>
+  </div>
+  <div class="stage">
+    <div class="board">
+      <div class="board-label">sections / terminal-style</div>
+      <div class="board-body">
+        <div class="panel inherit-page" data-panel="terminal-style" data-page="terminal-style">
+          <div class="section-head">
+<label class="inherit-toggle">
+              <span class="tog-label">Inherit</span>
+              <input type="checkbox" data-inherit checked />
+              <span class="switch" aria-hidden="true"></span>
+            </label>
+          </div>
+          <p class="source">Using parent: Folder «Production» / Global</p>
+          <div class="fields-lock">
+            <div class="form-row">
+              <span class="lbl">Style</span>
+              <div class="ctl-with-btn">
+                <select class="select" data-field="scheme">
+                  <option selected>Campbell</option>
+                  <option>Custom — ops</option>
+                </select>
+                <a class="btn btn-icon" href="../../terminal-styles/index.html" aria-label="管理终端样式" title="管理终端样式"><span class="i i-manage" aria-hidden="true"></span></a>
+              </div>
+            </div>
+            <p class="hint hint-indent">Fonts and colors are edited in Terminal Styles.</p>
+            <div class="form-row top">
+              <span class="lbl">Preview</span>
+              <div class="term-preview" aria-label="Terminal style preview">
+<span class="dim">alice@edge</span>:<span class="blu">~</span>$ ls <span class="grn">src</span> <span class="ylw">Cargo.toml</span>
+<span class="dim">alice@edge</span>:<span class="blu">~</span>$ echo 中文 CJK fallback
+<span class="grn">ok</span> · <span class="cyn">12 passed</span> · <span class="red">0 failed</span>
+<span class="br">Ready.</span><span class="cursor"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="legend">
+      <ul class="anno">
+        <li><strong>A · Inherit</strong> 页级开关。</li>
+        <li><strong>B · Style</strong> Profile 下拉 + 管理；下方预览。</li>
+      </ul>
+      <p class="anno-ref"><a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a></p>
+    </div>
+</body>
+</html>

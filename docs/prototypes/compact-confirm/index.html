@@ -4,7 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YShell — Compact confirm wireframe</title>
-  <style>
+  
+  <link rel="stylesheet" href="../_anno.css">
+  <link rel="stylesheet" href="../_icons.css">
+<style>
     /* Theme.tool-window-*-compact — do not scale the dialog to the viewport. */
     :root {
       --win-w: 560px;
@@ -105,14 +108,8 @@
       margin-bottom: 2px;
       color: var(--line);
     }
-    .callout-title { top: 6px; }
     .callout-message { top: 72px; }
-    .callout-token { top: 148px; }
-    .callout-spacer { top: 260px; }
-    .callout-footer { top: 340px; }
-    .root:not([data-state="token"]) .callout-token { display: none; }
-
-    .titlebar {
+    .root:not([data-state="token"]) .titlebar {
       height: var(--titlebar-h);
       flex: 0 0 var(--titlebar-h);
       display: flex;
@@ -303,80 +300,58 @@
 </head>
 <body>
   <div class="root" id="root" data-state="normal">
-    <p class="meta">
-      Compact confirm 线框 · 固定 <code>560×400</code>（<code>Theme.tool-window-*-compact</code>）·
-      标题栏 <code>32</code> · 内边距 <code>28</code> · body 不滚动。
-    </p>
+    <p class="meta">Compact confirm · <code>560×400</code> · 普通 / 破坏性 / 多行粘贴。 <a href="../annotations.html">annotations</a>。</p>
 
     <div class="tools" role="group" aria-label="Prototype state">
       <label><input type="radio" name="state" value="normal" checked /> Normal confirm</label>
       <label><input type="radio" name="state" value="destructive" /> Destructive (delete / clear)</label>
+      <label><input type="radio" name="state" value="paste" /> Multi-line paste</label>
     </div>
 
     <div class="stage">
       <div class="frame">
         <div class="win" role="dialog" aria-labelledby="win-title">
-          <div class="titlebar region">
-            <span class="tag">A · chrome</span>
-            <div class="title" id="win-title">Disconnect</div>
-            <button type="button" class="cap" tabindex="-1" aria-hidden="true">_</button>
-            <button type="button" class="cap" tabindex="-1" aria-hidden="true">□</button>
-            <button type="button" class="cap" tabindex="-1" aria-hidden="true">×</button>
+          <div class="titlebar">
+<div class="title" id="win-title">Disconnect</div>
+            <button type="button" class="cap" title="Close" aria-label="Close"><span class="i i-close" aria-hidden="true"></span></button>
           </div>
 
           <div class="body">
             <div class="message-row region">
-              <span class="tag">B · message</span>
+              <span class="tag">A · message</span>
               <div class="warn-icon" aria-hidden="true">!</div>
               <p class="message" id="message">Close the active session to web-01? Unsaved work in the terminal is not preserved.</p>
             </div>
 
             <div class="spacer" aria-hidden="true"></div>
 
-            <div class="footer region">
-              <span class="tag">C · footer</span>
-              <hr class="rule" />
+            <div class="footer">
+<hr class="rule" />
               <div class="actions">
-                <button type="button" class="btn">Cancel</button>
-                <button type="button" class="btn btn-primary" id="confirm-btn">Confirm</button>
+                <button type="button" class="btn" title="Cancel">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirm-btn" title="Confirm">Confirm</button>
               </div>
-              <p class="note" id="focus-note">Esc = Cancel · 危险确认默认 focus Cancel</p>
             </div>
           </div>
         </div>
 
         <ul class="callouts" aria-label="Design annotations">
-          <li class="callout callout-title">
-            <strong>A · Chrome 标题</strong>
-            后果摘要写在标题栏（Disconnect / Delete / Clear all…）；正文只讲细节。
-          </li>
           <li class="callout callout-message">
-            <strong>B · 后果正文</strong>
-            destructive 加警告图标 + 明确不可撤销说明；<strong>禁止</strong>要求手输 CLEAR/DELETE。
-          </li>
-          <li class="callout callout-spacer">
-            <strong>Spacer</strong>
-            短内容顶对齐；页脚钉底，窗体恒 560×400。
-          </li>
-          <li class="callout callout-footer">
-            <strong>C · 页脚</strong>
-            Cancel | 明确动词（Delete / Clear all）；危险按钮 critical；安全默认焦点在 Cancel。
+            <strong>A · Message</strong>
+            后果正文；destructive 加警告图标。标题栏写 Disconnect / Delete / Clear All / Paste N lines?。
           </li>
         </ul>
       </div>
     </div>
 
     <div class="legend">
-      <strong>产品规则</strong>
-      <ul>
-        <li><strong>永不</strong>用「输入确认词」才能点确认——删除/清空只用文案 + 破坏性按钮。</li>
-        <li>普通 / 破坏性两态即可；清空 secrets / known hosts 走 destructive，主按钮写 Clear all / Delete。</li>
-        <li>危险确认：默认 focus Cancel（E-064）；Esc = Cancel。</li>
+      <ul class="anno">
+        <li><strong>A · Message</strong> 后果正文；无手输确认词。</li>
+        <li><strong>B · Focus</strong> <span id="focus-note">危险确认默认 focus Cancel；Esc = Cancel</span>。</li>
       </ul>
+      <p class="anno-ref"><a href="../annotations.html">annotations</a></p>
     </div>
-  </div>
-
-  <script>
+<script>
     (function () {
       var root = document.getElementById("root");
       var title = document.getElementById("win-title");
@@ -395,7 +370,13 @@
           title: "Clear all known hosts",
           message: "Remove every persisted known host entry from disk. New connections will ask you to trust hosts again. This cannot be undone.",
           label: "Clear all",
-          focus: "Esc = Cancel · 默认 focus Cancel（E-064）· 无打字确认"
+          focus: "默认 focus Cancel；Esc = Cancel"
+        },
+        paste: {
+          title: "Paste 3 lines?",
+          message: "The clipboard contains 3 lines. Paste anyway?",
+          label: "Paste",
+          focus: "默认 focus Cancel；Esc = Cancel"
         }
       };
 
@@ -406,6 +387,7 @@
         if (message) message.textContent = c.message;
         if (confirmBtn) {
           confirmBtn.textContent = c.label;
+          confirmBtn.title = c.label;
           confirmBtn.className = "btn " + (name === "destructive" ? "btn-danger" : "btn-primary");
           confirmBtn.disabled = false;
         }

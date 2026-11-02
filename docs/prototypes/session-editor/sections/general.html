@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — session-editor · General</title>
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../form.css">
+  <style>
+    :root { --board-w: 800px; --board-h: 640px; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--board-w); margin: 0 0 8px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .meta a { color: var(--line); font-weight: 600; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; font-size: 13px; color: var(--mute); }
+    .tools .btn, a.btn, button.btn, .btn {
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line); background: var(--fill);
+      font: inherit; font-size: 13px; cursor: pointer; text-decoration: none; color: inherit;
+      display: inline-flex; align-items: center;
+    }
+    .btn-icon { width: var(--ctrl-h); min-width: var(--ctrl-h); padding: 0; justify-content: center; font-size: 20px; font-weight: 600; line-height: 1; }
+    .tools a.btn[aria-current="page"] { background: var(--soft); font-weight: 600; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .board {
+      width: var(--board-w); height: var(--board-h); flex-shrink: 0;
+      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+    }
+    .board-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--mute); padding: 6px 10px 0;
+    }
+    .board-body { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; border-top: 1px solid var(--line); margin-top: 4px; }
+    .section-head { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: 0 0 12px; }
+    .section-title { margin: 0; font-size: 15px; font-weight: 600; }
+    .source, .hint { font-size: 12px; color: var(--mute); margin: 8px 0; }
+    .ico-preview {
+      width: 32px; height: 32px; border: 1px solid var(--line); background: var(--soft);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 600; flex-shrink: 0;
+    }
+    .ico-preview.custom { background: #1a1a2e; color: #e8e0d0; font-size: 11px; }
+    #btn-icon-browse[hidden], #btn-icon-reset[hidden] { display: none !important; }
+    .legend { max-width: var(--board-w); margin: 16px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+    .legend strong { color: var(--line); }
+    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+  </style>
+</head>
+<body>
+  <p class="meta">session-editor · sections/general · board 800×640。 <a href="../../annotations.html">annotations</a>。</p>
+  <div class="tools" role="navigation">
+    <a class="btn" href="general.html" aria-current="page" title="General">General</a>
+    <a class="btn" href="authentication.html" title="Authentication">Authentication</a>
+    <a class="btn" href="login-script.html" title="Login Script">Login Script</a>
+    <a class="btn" href="proxy.html" title="Proxy">Proxy</a>
+    <a class="btn" href="tunnels.html" title="Tunnels">Tunnels</a>
+    <a class="btn" href="terminal-style.html" title="Terminal Style">Terminal Style</a>
+  </div>
+  <div class="stage">
+    <div class="board">
+      <div class="board-label">sections / general</div>
+      <div class="board-body">
+        <div class="panel" data-panel="general">
+          <div class="form-row"><span class="lbl">Name</span><input class="input" id="fld-name" value="prod-edge" /></div>
+          <div class="form-row"><span class="lbl">Host</span><input class="input" id="fld-host" value="edge.example.com" /></div>
+          <div class="form-row"><span class="lbl">Port</span><input class="input input-port" id="fld-port" value="22" inputmode="numeric" /></div>
+          <div class="form-row">
+            <span class="lbl">Icon</span>
+            <div class="icon-row">
+              <span class="ico-preview" id="ico-preview" title="Current icon">S</span>
+              <select class="select" id="fld-icon">
+                <option value="default" selected>Default</option>
+                <option value="server">Preset · Server</option>
+                <option value="db">Preset · Database</option>
+                <option value="custom">Custom image</option>
+              </select>
+              <button type="button" class="btn btn-icon" id="btn-icon-browse" hidden title="Browse" aria-label="Browse"><span class="i i-browse" aria-hidden="true"></span></button>
+              <button type="button" class="btn btn-icon" id="btn-icon-reset" hidden aria-label="Reset to default" title="Reset to default"><span class="i i-clear" aria-hidden="true"></span></button>
+            </div>
+          </div>
+          <div class="form-row top">
+            <span class="lbl">Notes</span>
+            <textarea class="textarea" id="fld-notes" placeholder="Optional notes for this session / folder…">Primary edge host. Jump via bastion if direct SSH fails.</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="legend">
+      <ul class="anno">
+        <li><strong>A · Fields</strong> Name / Host / Port / Icon / Notes（不继承）。</li>
+      </ul>
+      <p class="anno-ref"><a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a></p>
+    </div>
+  <script>
+    (function () {
+      var fldIcon = document.getElementById("fld-icon");
+      var ico = document.getElementById("ico-preview");
+      var browse = document.getElementById("btn-icon-browse");
+      var reset = document.getElementById("btn-icon-reset");
+      var glyphs = { default: "S", server: "Srv", db: "DB", custom: "★" };
+      function sync() {
+        var v = fldIcon.value;
+        ico.textContent = glyphs[v] || "S";
+        ico.classList.toggle("custom", v === "custom");
+        browse.hidden = v !== "custom";
+        reset.hidden = v === "default";
+      }
+      fldIcon.addEventListener("change", sync);
+      reset.addEventListener("click", function () { fldIcon.value = "default"; sync(); });
+      sync();
+    })();
+  </script>
+</body>
+</html>

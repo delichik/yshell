@@ -4,72 +4,128 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YShell — Known hosts wireframe</title>
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_anno.css">
   <style>
     :root {
       --win-w: 1100px; --win-h: 820px; --titlebar-h: 32px; --pad: 28px; --gap: 12px;
-      --ctrl-h: 32px; --list-w: 380px;
-      --line: #111; --fill: #fff; --mute: #555; --soft: #f0f0f0; --danger: #800;
+      --list-w: 380px;
     }
     * { box-sizing: border-box; }
     body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
-    .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); }
+    .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .meta a { color: inherit; }
     .stage { overflow-x: auto; padding-bottom: 8px; }
     .win { width: var(--win-w); height: var(--win-h); flex-shrink: 0; display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line); }
-    .titlebar { height: var(--titlebar-h); flex: 0 0 var(--titlebar-h); display: flex; align-items: center; padding: 0 12px; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; }
+    .titlebar {
+      height: var(--titlebar-h); flex: 0 0 var(--titlebar-h);
+      display: flex; align-items: center; padding: 0 8px 0 12px; gap: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .title { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cap { width: 40px; height: 24px; border: 1px solid var(--line); background: transparent; font-size: 10px; color: var(--line); padding: 0; }
     .body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: var(--pad); gap: var(--gap); overflow: hidden; }
+    .toolbar { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .toolbar .grow { flex: 1; }
     .split { flex: 1 1 auto; min-height: 0; display: flex; gap: 16px; overflow: hidden; }
     .col-left { width: var(--list-w); flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; gap: 8px; }
-    .col-right { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
-    .scroll-box { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px dashed var(--line); padding: 10px; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.45; white-space: pre; }
-    .detail-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px solid var(--line); padding: 12px; font-family: ui-monospace, monospace; font-size: 12px; }
-    .danger { flex: 0 0 auto; border: 1px solid var(--danger); padding: 12px; color: var(--danger); }
-    .danger h3 { margin: 0 0 8px; font-size: 14px; }
-    .danger p { margin: 0 0 8px; font-size: 13px; font-family: ui-sans-serif, system-ui, sans-serif; }
-    .input { height: var(--ctrl-h); width: 100%; max-width: 280px; border: 1px solid var(--line); padding: 0 8px; font: inherit; }
-    .row-btns { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+    .col-right { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+    .scroll-box { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px dashed var(--line); padding: 4px; }
+    .entry {
+      min-height: var(--row-h); height: var(--row-h); padding: 6px 10px; border-bottom: 1px solid var(--line);
+      font-size: 13px; cursor: pointer; display: flex; flex-direction: column; justify-content: center;
+    }
+    .entry[aria-selected="true"] { background: var(--soft); }
+    .entry .host { display: block; font-weight: 600; }
+    .entry .fp { display: block; font-family: ui-monospace, monospace; font-size: 11px; color: var(--mute); margin-top: 2px; }
+    .detail-panel {
+      flex: 1 1 auto; min-height: 0; overflow: auto;
+      border: 1px solid var(--line); padding: 16px;
+    }
+    .detail-row:last-child { border-bottom: 0; }
     .spacer { flex: 1 1 auto; min-height: 8px; }
     .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
     .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-    .btn { height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line); background: var(--fill); font: inherit; font-size: 14px; cursor: pointer; }
-    .btn-primary { background: var(--soft); font-weight: 600; }
-    .btn-danger { border-color: var(--danger); color: var(--danger); }
+    .flyout {
+      display: none; position: fixed; z-index: 5; min-width: 180px;
+      background: var(--fill); border: 1px solid var(--line); padding: 4px 0; font-size: 13px;
+    }
+    .flyout.open { display: block; }
+    .flyout a, .flyout button {
+      display: flex; align-items: center; width: 100%; height: 28px; padding: 0 12px;
+      border: 0; background: transparent; font: inherit; font-size: 13px; text-align: left;
+      cursor: pointer; color: inherit; text-decoration: none;
+    }
+    .flyout a:hover, .flyout button:hover { background: var(--soft); }
+    .flyout .danger { color: #800; }
+    .flyout .sep { height: 1px; background: var(--line); margin: 4px 0; }
     .legend { max-width: var(--win-w); margin: 20px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
     .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
   </style>
 </head>
 <body>
-  <p class="meta">Known Hosts · 左 Persisted Entries <code>380</code> · 右详情 + Danger Zone（<strong>无</strong>打字确认）</p>
+  <p class="meta">Known Hosts · 清单 host:port + 指纹；右栏只读详情。 <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>。</p>
+
   <div class="stage">
     <div class="win" role="dialog">
-      <div class="titlebar">Known Hosts</div>
+      <div class="titlebar">
+        <div class="title">Known Hosts</div>
+        <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
+      </div>
       <div class="body">
+        <div class="toolbar">
+          <a class="btn btn-icon" href="modals.html#add" aria-label="Add host" title="Add host"><span class="i i-plus" aria-hidden="true"></span></a>
+          <a class="btn btn-icon" href="modals.html#import" title="Import" aria-label="Import"><span class="i i-import" aria-hidden="true"></span></a>
+          <a class="btn btn-icon" href="modals.html#export" title="Export" aria-label="Export"><span class="i i-export" aria-hidden="true"></span></a>
+          <span class="grow"></span>
+          <span style="font-size:12px;color:var(--mute)">3 hosts · 4 keys</span>
+        </div>
         <div class="split">
           <div class="col-left">
-            <strong>Persisted Entries</strong>
-            <div class="scroll-box">|1|edge.example.com|22|ssh-ed25519|AAAA…
-|1|bastion|2222|ssh-rsa|AAAA…
-|1|db.internal|22|ecdsa-sha2-nistp256|AAAA…
-…</div>
-            <div class="row-btns">
-              <button type="button" class="btn">Prev</button>
-              <button type="button" class="btn">Next</button>
-              <button type="button" class="btn btn-danger">Remove Selected</button>
+            <div class="scroll-box" id="host-list" role="listbox" aria-label="Trusted hosts">
+              <div class="entry" role="option" aria-selected="true"
+                data-host="edge.example.com" data-port="22" data-algo="ED25519"
+                data-fp="SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKwDEjsOE">
+                <span class="host">edge.example.com:22</span>
+                <span class="fp">SHA256:nThU…k8mQ</span>
+              </div>
+              <div class="entry" role="option" aria-selected="false"
+                data-host="bastion.internal" data-port="2222" data-algo="RSA 4096"
+                data-fp="SHA256:abC9dEfGhIjKlMnOpQrStUvWxYz0123456789xY2z">
+                <span class="host">bastion.internal:2222</span>
+                <span class="fp">SHA256:abC9…xY2z</span>
+              </div>
+              <div class="entry" role="option" aria-selected="false"
+                data-host="bastion.internal" data-port="2222" data-algo="ECDSA"
+                data-fp="SHA256:pLm2nOpQrStUvWxYzAbCdEfGhIjKlMnOp9vQw">
+                <span class="host">bastion.internal:2222</span>
+                <span class="fp">SHA256:pLm2…9vQw</span>
+              </div>
+              <div class="entry" role="option" aria-selected="false"
+                data-host="legacy.box" data-port="22" data-algo="RSA 2048"
+                data-fp="SHA256:qWe4rTyUiOpAsDfGhJkLzXcVbNm1234567tYu7">
+                <span class="host">legacy.box:22</span>
+                <span class="fp">SHA256:qWe4…tYu7</span>
+              </div>
             </div>
           </div>
           <div class="col-right">
-            <strong>Host Key Details</strong>
-            <p style="margin:0;font-size:12px;color:var(--mute)">Path: C:\Users\…\.ssh\known_hosts</p>
-            <div class="detail-scroll">
-              Host: edge.example.com<br />
-              Port: 22<br />
-              Algorithm: ssh-ed25519<br />
-              Fingerprint: SHA256:nThU…k8mQ
-            </div>
-            <div class="danger">
-              <h3>Danger Zone</h3>
-              <p>Remove every persisted known host entry from disk. New connections will ask you to trust hosts again.</p>
-              <div class="row-btns" style="margin-top:10px">
-                <a class="btn btn-danger" href="../compact-confirm/index.html" style="display:inline-flex;align-items:center;text-decoration:none;color:inherit">Clear all… → confirm</a>
+            <div class="detail-panel" id="detail" aria-live="polite">
+              <div class="detail-row">
+                <span class="detail-label">Host</span>
+                <span class="detail-value" data-field="host">edge.example.com</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Port</span>
+                <span class="detail-value" data-field="port">22</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Algorithm</span>
+                <span class="detail-value" data-field="algo">ED25519</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Fingerprint</span>
+                <span class="detail-value mono" data-field="fp">SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKwDEjsOE</span>
               </div>
             </div>
           </div>
@@ -77,17 +133,92 @@
         <div class="spacer"></div>
         <div class="footer">
           <hr class="rule" />
-          <div class="actions"><button type="button" class="btn btn-primary">Close</button></div>
+          <div class="actions"><button type="button" class="btn btn-primary" title="Close">Close</button></div>
         </div>
       </div>
     </div>
   </div>
-  <div class="legend">
-    <ul>
-      <li>左清单与右详情区分别滚动；Danger Zone 固定在右列底部。</li>
-      <li>清空：按钮打开 destructive 确认窗——<strong>禁止</strong>手输 CLEAR。</li>
-      <li>窗体 <code>1100×820</code>；body <code>overflow: hidden</code>。</li>
-    </ul>
+
+  <div class="flyout" id="ctx-row" role="menu" aria-hidden="true">
+    <a class="danger" href="../compact-confirm/index.html">Remove</a>
   </div>
+  <div class="flyout" id="ctx-blank" role="menu" aria-hidden="true">
+    <a href="modals.html#add"><span class="i i-plus" aria-hidden="true"></span></a>（Add）
+    <div class="sep"></div>
+    <a class="danger" href="../compact-confirm/index.html">Clear All</a>
+  </div>
+
+  <div class="legend">
+      <ul class="anno">
+        <li><strong>A · Toolbar</strong> Add / Import / Export。</li>
+        <li><strong>B · List</strong> host:port + 指纹摘要；右键 Remove；空白 Clear All。</li>
+        <li><strong>C · Detail</strong> 结构化只读（无路径）；子窗见 modals.html。</li>
+      </ul>
+      <p class="anno-ref"><a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a></p>
+    </div>
+
+  <script>
+    (function () {
+      var detail = document.getElementById("detail");
+      var ctxRow = document.getElementById("ctx-row");
+      var ctxBlank = document.getElementById("ctx-blank");
+      var menus = [ctxRow, ctxBlank];
+
+      function fillDetail(el) {
+        detail.querySelector('[data-field="host"]').textContent = el.getAttribute("data-host") || "";
+        detail.querySelector('[data-field="port"]').textContent = el.getAttribute("data-port") || "";
+        detail.querySelector('[data-field="algo"]').textContent = el.getAttribute("data-algo") || "";
+        detail.querySelector('[data-field="fp"]').textContent = el.getAttribute("data-fp") || "";
+      }
+
+      function selectEntry(el) {
+        document.querySelectorAll(".entry").forEach(function (x) {
+          x.setAttribute("aria-selected", x === el ? "true" : "false");
+        });
+        fillDetail(el);
+      }
+
+      function hideMenus() {
+        menus.forEach(function (m) {
+          m.classList.remove("open");
+          m.setAttribute("aria-hidden", "true");
+        });
+      }
+
+      function showMenu(menu, x, y) {
+        hideMenus();
+        menu.classList.add("open");
+        menu.setAttribute("aria-hidden", "false");
+        var pad = 4;
+        var left = Math.min(x, window.innerWidth - menu.offsetWidth - pad);
+        var top = Math.min(y, window.innerHeight - menu.offsetHeight - pad);
+        menu.style.left = Math.max(pad, left) + "px";
+        menu.style.top = Math.max(pad, top) + "px";
+      }
+
+      document.querySelectorAll(".entry").forEach(function (el) {
+        el.addEventListener("click", function () { selectEntry(el); hideMenus(); });
+        el.addEventListener("contextmenu", function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          selectEntry(el);
+          showMenu(ctxRow, ev.clientX, ev.clientY);
+        });
+      });
+
+      document.getElementById("host-list").addEventListener("contextmenu", function (ev) {
+        if (ev.target.closest(".entry")) return;
+        ev.preventDefault();
+        showMenu(ctxBlank, ev.clientX, ev.clientY);
+      });
+
+      document.addEventListener("click", function (ev) {
+        if (!ev.target.closest(".flyout")) hideMenus();
+      });
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape") hideMenus();
+      });
+    })();
+  </script>
 </body>
 </html>

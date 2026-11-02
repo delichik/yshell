@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YShell — SFTP properties wireframe</title>
+  <link rel="stylesheet" href="../_anno.css">
+  <link rel="stylesheet" href="../_icons.css">
   <style>
     :root {
       --win-w: 720px;
@@ -75,10 +77,7 @@
       border-top: 1px dashed var(--anno);
     }
     .callout strong { display: block; color: var(--line); margin-bottom: 2px; }
-    .callout-title { top: 6px; }
     .callout-grid { top: 56px; }
-    .callout-footer { top: 520px; }
-
     .titlebar {
       height: var(--titlebar-h);
       flex: 0 0 var(--titlebar-h);
@@ -148,7 +147,11 @@
       font: inherit;
       font-size: 14px;
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
+    .btn-icon { width: var(--ctrl-h); min-width: var(--ctrl-h); padding: 0; font-size: 20px; font-weight: 600; line-height: 1; }
     .btn-accent { background: var(--soft); font-weight: 600; }
 
     .legend {
@@ -162,20 +165,19 @@
   </style>
 </head>
 <body>
-  <p class="meta">SFTP 属性 · <code>720×580</code> · 对照 <code>SftpPropertiesDialog</code> · Esc → Close。</p>
+  <p class="meta">SFTP properties · <code>720×580</code>。 <a href="../annotations.html">annotations</a>。</p>
 
   <div class="stage">
     <div class="frame">
       <div class="win" role="dialog">
         <div class="titlebar region">
-          <span class="tag">A</span>
-          <div class="title">Properties</div>
-          <button type="button" class="cap" tabindex="-1" aria-hidden="true">×</button>
+<div class="title">Properties</div>
+          <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
         </div>
 
         <div class="body">
           <div class="grid region">
-            <span class="tag">B</span>
+            <span class="tag">A · grid</span>
             <span class="lbl">Name</span>
             <span class="val elide">deploy-bundle.tar.gz</span>
             <span class="lbl">Path</span>
@@ -193,24 +195,27 @@
           <div class="spacer" aria-hidden="true"></div>
 
           <div class="footer region">
-            <span class="tag">C</span>
-            <hr class="rule" />
+<hr class="rule" />
             <div class="actions">
-              <button type="button" class="btn">Copy Path</button>
-              <button type="button" class="btn btn-accent">Close</button>
+              <button type="button" class="btn btn-icon" aria-label="Copy Path" title="Copy Path"><span class="i i-copy" aria-hidden="true"></span></button>
+              <button type="button" class="btn btn-accent" title="Close">Close</button>
             </div>
           </div>
         </div>
       </div>
 
-      <ul class="callouts">
-        <li class="callout callout-title"><strong>A</strong> 工具窗 Properties。</li>
-        <li class="callout callout-grid"><strong>B</strong> 六行标签网格；Path/Permissions 等宽。</li>
-        <li class="callout callout-footer"><strong>C</strong> Copy Path | Close（accent）。</li>
-      </ul>
+      <ul class="callouts" aria-label="Design annotations">
+          <li class="callout callout-grid"><strong>A · Grid</strong> 六行标签网格；Path/Permissions 等宽。</li>
+        </ul>
     </div>
   </div>
 
-  <div class="legend">Copy Path → copy-path()；窄列表里隐藏的 Modified/Permissions 从此弹窗查看。</div>
+  <div class="legend">
+      <ul class="anno">
+        <li><strong>A · Grid</strong> 属性只读网格。</li>
+        <li><strong>B · Actions</strong> Copy Path | Close（页脚语义）。</li>
+      </ul>
+      <p class="anno-ref"><a href="../annotations.html">annotations</a></p>
+    </div>
 </body>
 </html>

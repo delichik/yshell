@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Terminal styles wireframe</title>
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_anno.css">
+  <style>
+    :root {
+      --win-w: 1100px; --win-h: 820px; --titlebar-h: 32px; --pad: 28px; --gap: 12px;
+      --list-w: 380px; /* --row-h / preview from form.css (2× / 4×) */
+      --term-bg: #0c0c0c; --term-fg: #cccccc; --term-border: #333;
+      --c1: #c50f1f; --c2: #13a10e; --c3: #c19c00; --c4: #0037da;
+      --c5: #881798; --c6: #3a96dd; --c8: #767676; --c15: #f2f2f2;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--mute); margin-bottom: 10px; }
+    .tools button {
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line);
+      background: var(--fill); font: inherit; cursor: pointer;
+    }
+    .tools button[aria-pressed="true"] { background: var(--soft); font-weight: 600; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .win {
+      width: var(--win-w); height: var(--win-h); flex-shrink: 0;
+      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+    }
+    .titlebar {
+      height: var(--titlebar-h); flex: 0 0 var(--titlebar-h);
+      display: flex; align-items: center; padding: 0 8px 0 12px; gap: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .title { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cap { width: 40px; height: 24px; border: 1px solid var(--line); background: transparent; font-size: 10px; color: var(--line); padding: 0; }
+    .body {
+      flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+      padding: var(--pad); gap: var(--gap); overflow: hidden;
+    }
+    .toolbar { flex: 0 0 auto; display: flex; gap: 8px; align-items: center; }
+    .toolbar .grow { flex: 1; }
+    .split { flex: 1 1 auto; min-height: 0; display: flex; gap: 16px; overflow: hidden; }
+    .col-left {
+      width: var(--list-w); flex-shrink: 0;
+      display: flex; flex-direction: column; min-height: 0; gap: 8px;
+    }
+    .col-right {
+      flex: 1 1 auto; min-width: 0; min-height: 0;
+      display: flex; flex-direction: column; gap: 10px; overflow: hidden;
+    }
+    .scroll-list { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px dashed var(--line); }
+    .style-row { height: var(--row-h); min-height: var(--row-h); }
+
+    /* Theme-colored preview overrides form.css .term-preview neutrals */
+    .term-preview {
+      flex: 0 0 var(--field-h-md); height: var(--field-h-md);
+      border-color: var(--term-border); background: var(--term-bg); color: var(--term-fg);
+      font-family: "Cascadia Mono", "Cascadia Code", ui-monospace, monospace;
+      font-size: 13px; line-height: 1.35;
+      padding: 8px 10px; white-space: pre;
+    }
+    .term-preview .dim { color: var(--c8); }
+    .term-preview .red { color: var(--c1); }
+    .term-preview .grn { color: var(--c2); }
+    .term-preview .ylw { color: var(--c3); }
+    .term-preview .blu { color: var(--c4); }
+    .term-preview .cyn { color: var(--c6); }
+    .term-preview .br { color: var(--c15); }
+    .term-preview .cursor {
+      display: inline-block; width: 7px; height: 13px; background: var(--c15);
+      vertical-align: text-bottom; margin-left: 1px;
+    }
+
+    .detail-scroll {
+      flex: 1 1 auto; min-height: 0; overflow: auto;
+      border: 1px solid var(--line); padding: 16px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .section { font-size: 13px; font-weight: 600; margin: 4px 0 0; }
+    .detail-scroll .form-row { grid-template-columns: 110px minmax(0, 1fr); margin-bottom: 0; }
+    .id-line { margin: 0 0 0 122px; font-size: 12px; color: var(--mute); font-family: ui-monospace, monospace; }
+    .row-inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .ctl-with-btn { flex-wrap: wrap; align-items: center; }
+    .size-val { width: 40px; text-align: center; font-size: 14px; }
+    .swatch-btn {
+      width: 28px; height: 28px; border: 1px solid var(--line); padding: 0; cursor: pointer;
+    }
+    .swatch-btn:disabled { cursor: not-allowed; opacity: 0.7; }
+    .ansi-label { font-size: 13px; color: var(--mute); margin: 4px 0 0; }
+    .ansi-grid {
+      display: grid; grid-template-columns: repeat(8, 28px); gap: 4px;
+      margin-left: 122px;
+    }
+    .ansi-grid button {
+      width: 28px; height: 28px; border: 1px solid var(--line); padding: 0; cursor: pointer;
+    }
+    .ansi-grid button:disabled { cursor: not-allowed; opacity: 0.7; }
+    .ro-note { font-size: 12px; color: var(--mute); margin: 0 0 0 122px; }
+    .hint-inline { font-size: 12px; color: var(--mute); }
+
+    .spacer { flex: 1 1 auto; min-height: 8px; }
+    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .flyout {
+      display: none; position: fixed; z-index: 5; min-width: 180px;
+      background: var(--fill); border: 1px solid var(--line); padding: 4px 0; font-size: 13px;
+    }
+    .flyout.open { display: block; }
+    .flyout button {
+      display: flex; align-items: center; width: 100%; height: 28px; padding: 0 12px;
+      border: 0; background: transparent; font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+    }
+    .flyout button:hover { background: var(--soft); }
+    .flyout button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .flyout .danger { color: #800; }
+    .flyout .sep { height: 1px; background: var(--line); margin: 4px 0; }
+    .legend {
+      max-width: var(--win-w); margin: 20px 0 0; padding: 12px 14px;
+      border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55;
+    }
+    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+  </style>
+</head>
+<body>
+  <p class="meta">Terminal Styles。 <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>。</p>
+  <div class="tools" role="group">
+    <button type="button" id="pick-custom" aria-pressed="true" title="选中 Custom（可编辑）">选中 Custom（可编辑）</button>
+    <button type="button" id="pick-builtin" aria-pressed="false" title="选中 Built-in（只读）">选中 Built-in（只读）</button>
+  </div>
+
+  <div class="stage">
+    <div class="win" role="dialog">
+      <div class="titlebar">
+        <div class="title">Terminal Styles</div>
+        <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
+      </div>
+      <div class="body">
+        <div class="toolbar">
+          <button type="button" class="btn btn-primary btn-icon" id="btn-new" aria-label="New style" title="New style"><span class="i i-plus" aria-hidden="true"></span></button>
+          <span class="grow"></span>
+          <span style="font-size:12px;color:var(--mute)" id="summary">4 styles</span>
+        </div>
+        <div class="split">
+          <div class="col-left">
+            <div class="scroll-list" id="style-list">
+              <button type="button" class="style-row" aria-pressed="false" data-builtin="1" data-name="Campbell" title="Campbell Built-in">
+                <span class="name">Campbell</span>
+                <span class="kind">Built-in</span>
+              </button>
+              <button type="button" class="style-row" aria-pressed="false" data-builtin="1" data-name="One Half Light" title="One Half Light Built-in">
+                <span class="name">One Half Light</span>
+                <span class="kind">Built-in</span>
+              </button>
+              <button type="button" class="style-row" aria-pressed="true" data-builtin="0" data-name="Custom — ops" title="Custom — ops Custom">
+                <span class="name">Custom — ops</span>
+                <span class="kind">Custom</span>
+              </button>
+              <button type="button" class="style-row" aria-pressed="false" data-builtin="0" data-name="Custom — demo" title="Custom — demo Custom">
+                <span class="name">Custom — demo</span>
+                <span class="kind">Custom</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="col-right">
+            <div class="term-preview" id="preview" aria-label="Terminal live preview">
+<span class="dim">alice@edge</span>:<span class="blu">~</span>$ ls <span class="grn">src</span> <span class="ylw">Cargo.toml</span>
+<span class="dim">alice@edge</span>:<span class="blu">~</span>$ echo 中文 CJK fallback
+<span class="grn">ok</span> · <span class="cyn">12 passed</span> · <span class="red">0 failed</span>
+<span class="br">Ready.</span><span class="cursor"></span>
+            </div>
+            <div class="detail-scroll" id="detail">
+              <div class="form-row">
+                <span class="lbl">Name</span>
+                <input class="input" id="fld-name" value="Custom — ops" />
+              </div>
+              <p class="id-line" id="fld-id">Style id: user-ops-7f3a</p>
+
+              <p class="section">Font</p>
+              <div class="form-row">
+                <span class="lbl">Font family</span>
+                <div class="ctl-with-btn">
+                  <select class="select" id="fld-font" title="Monospace fonts only">
+                    <option>Cascadia Mono</option>
+                    <option selected>JetBrains Mono</option>
+                    <option>DejaVu Sans Mono</option>
+                    <option>Consolas</option>
+                    <option>Sarasa Mono SC</option>
+                  </select>
+                  <button type="button" class="btn btn-icon" id="btn-add-font" aria-label="Add Font File" title="Add Font File"><span class="i i-plus" aria-hidden="true"></span></button>
+                  <span class="hint-inline">monospace only</span>
+                </div>
+              </div>
+              <div class="form-row">
+                <span class="lbl">Font size</span>
+                <div class="row-inline">
+                  <button type="button" class="btn" id="btn-size-dec" aria-label="Decrease" title="Decrease">−</button>
+                  <span class="size-val" id="fld-size">14</span>
+                  <button type="button" class="btn" id="btn-size-inc" aria-label="Increase" title="Increase"><span class="i i-plus" aria-hidden="true"></span></button>
+                  <span class="hint-inline">Logical pixels (6–72)</span>
+                </div>
+              </div>
+              <div class="form-row">
+                <span class="lbl">Fallback</span>
+                <div class="ctl-with-btn">
+                  <select class="select" id="fld-fallback" title="Any installed font">
+                    <option value="">(None)</option>
+                    <optgroup label="Monospace">
+                      <option>Cascadia Mono</option>
+                      <option>JetBrains Mono</option>
+                      <option>DejaVu Sans Mono</option>
+                      <option>Consolas</option>
+                      <option>Sarasa Mono SC</option>
+                    </optgroup>
+                    <optgroup label="All fonts">
+                      <option selected>Noto Sans CJK SC</option>
+                      <option>Microsoft YaHei UI</option>
+                      <option>Segoe UI</option>
+                      <option>Noto Sans</option>
+                      <option>Arial</option>
+                    </optgroup>
+                  </select>
+                  <button type="button" class="btn btn-icon" id="btn-add-fallback" aria-label="Add Font File" title="Add Font File"><span class="i i-plus" aria-hidden="true"></span></button>
+                  <span class="hint-inline">any font</span>
+                </div>
+              </div>
+
+              <p class="section">Colors</p>
+              <div class="form-row">
+                <span class="lbl">Foreground</span>
+                <button type="button" class="swatch-btn" id="sw-fg" style="background:#e8e0d0" title="pick"></button>
+              </div>
+              <div class="form-row">
+                <span class="lbl">Background</span>
+                <button type="button" class="swatch-btn" id="sw-bg" style="background:#1a1a2e" title="pick"></button>
+              </div>
+              <div class="form-row">
+                <span class="lbl">Cursor</span>
+                <button type="button" class="swatch-btn" id="sw-cur" style="background:#e8e0d0" title="pick"></button>
+              </div>
+              <div class="form-row">
+                <span class="lbl">Selection</span>
+                <button type="button" class="swatch-btn" id="sw-sel" style="background:#264f78" title="pick"></button>
+              </div>
+              <p class="ansi-label">ANSI colors</p>
+              <div class="ansi-grid" id="ansi-grid" aria-label="ANSI 0–15"></div>
+              <p class="ro-note" id="ro-note" hidden>Built-in styles are read-only. Clone to make a custom copy.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="spacer"></div>
+        <div class="footer">
+          <hr class="rule" />
+          <div class="actions">
+            <button type="button" class="btn" title="Cancel">Cancel</button>
+            <button type="button" class="btn btn-primary" id="btn-save" title="Save">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flyout" id="ctx" role="menu" aria-hidden="true">
+    <button type="button" data-act="clone" title="Clone">Clone</button>
+    <div class="sep"></div>
+    <button type="button" class="danger" data-act="delete" id="ctx-delete" title="Delete">Delete</button>
+  </div>
+
+  <div class="legend">
+      <ul class="anno">
+        <li><strong>A · Toolbar</strong> 仅 + 新建自定义；Clone 仅行右键。</li>
+        <li><strong>B · List</strong> Built-in / Custom；内置只读、禁 Delete。</li>
+        <li><strong>C · Editor</strong> 预览 → Name → Font / size / Fallback → Colors。</li>
+      </ul>
+      <p class="anno-ref"><a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a></p>
+    </div>
+
+  <script>
+    (function () {
+      var customAnsi = [
+        "#1a1a2e", "#e94560", "#0f9", "#f0c", "#36f", "#a0f", "#0cf", "#e8e0d0",
+        "#555", "#f66", "#6f6", "#ff6", "#66f", "#f6f", "#6ff", "#fff"
+      ];
+      var campbellAnsi = [
+        "#0c0c0c", "#c50f1f", "#13a10e", "#c19c00", "#0037da", "#881798", "#3a96dd", "#cccccc",
+        "#767676", "#e74856", "#16c60c", "#f9f1a5", "#3b78ff", "#b4009e", "#61d6d6", "#f2f2f2"
+      ];
+
+      var ansiGrid = document.getElementById("ansi-grid");
+      var fldName = document.getElementById("fld-name");
+      var fldId = document.getElementById("fld-id");
+      var fldFont = document.getElementById("fld-font");
+      var fldSize = document.getElementById("fld-size");
+      var fldFallback = document.getElementById("fld-fallback");
+      var preview = document.getElementById("preview");
+      var roNote = document.getElementById("ro-note");
+      var summary = document.getElementById("summary");
+      var size = 14;
+      var ctx = document.getElementById("ctx");
+      var ctxDelete = document.getElementById("ctx-delete");
+      var styleList = document.getElementById("style-list");
+
+      function fillAnsi(colors, enabled) {
+        ansiGrid.innerHTML = "";
+        colors.forEach(function (hex, i) {
+          var b = document.createElement("button");
+          b.type = "button";
+          b.title = "ANSI " + i;
+          b.style.background = hex;
+          b.disabled = !enabled;
+          ansiGrid.appendChild(b);
+        });
+      }
+
+      function syncPreviewFont() {
+        var stack = '"' + fldFont.value + '"';
+        if (fldFallback.value) stack += ', "' + fldFallback.value + '"';
+        stack += ", ui-monospace, monospace";
+        preview.style.fontFamily = stack;
+        preview.style.fontSize = size + "px";
+        fldSize.textContent = String(size);
+      }
+
+      function setEditable(on) {
+        [fldName, fldFont, fldFallback, document.getElementById("btn-add-font"),
+          document.getElementById("btn-add-fallback"),
+          document.getElementById("btn-size-dec"), document.getElementById("btn-size-inc")]
+          .forEach(function (el) { el.disabled = !on; });
+        ["sw-fg", "sw-bg", "sw-cur", "sw-sel"].forEach(function (id) {
+          document.getElementById(id).disabled = !on;
+        });
+        document.getElementById("btn-save").disabled = !on;
+        roNote.hidden = on;
+      }
+
+      function selectRow(row) {
+        document.querySelectorAll(".style-row").forEach(function (r) {
+          r.setAttribute("aria-pressed", r === row ? "true" : "false");
+        });
+        var builtin = row.getAttribute("data-builtin") === "1";
+        var name = row.getAttribute("data-name") || "";
+        fldName.value = name;
+        fldId.textContent = builtin ? "Built-in style" : "Style id: user-" + name.replace(/\s+/g, "-").toLowerCase();
+        if (builtin) {
+          fldFont.value = "Cascadia Mono";
+          size = 13;
+          fldFallback.value = "";
+          document.getElementById("sw-fg").style.background = "#cccccc";
+          document.getElementById("sw-bg").style.background = "#0c0c0c";
+          document.getElementById("sw-cur").style.background = "#ffffff";
+          document.getElementById("sw-sel").style.background = "#264f78";
+          fillAnsi(campbellAnsi, false);
+          setEditable(false);
+        } else {
+          fldFont.value = name.indexOf("New style") === 0 ? "Cascadia Mono" : "JetBrains Mono";
+          size = name.indexOf("New style") === 0 ? 13 : 14;
+          fldFallback.value = name.indexOf("New style") === 0 ? "" : "Noto Sans CJK SC";
+          document.getElementById("sw-fg").style.background = "#e8e0d0";
+          document.getElementById("sw-bg").style.background = "#1a1a2e";
+          document.getElementById("sw-cur").style.background = "#e8e0d0";
+          document.getElementById("sw-sel").style.background = "#264f78";
+          fillAnsi(customAnsi, true);
+          setEditable(true);
+        }
+        syncPreviewFont();
+      }
+
+      function wireRow(row) {
+        row.addEventListener("click", function () { selectRow(row); hideCtx(); });
+        row.addEventListener("contextmenu", function (ev) {
+          ev.preventDefault();
+          selectRow(row);
+          ctxDelete.disabled = row.getAttribute("data-builtin") === "1";
+          showCtx(ev.clientX, ev.clientY);
+        });
+      }
+
+      document.querySelectorAll(".style-row").forEach(wireRow);
+      fillAnsi(customAnsi, true);
+      syncPreviewFont();
+
+      fldFont.addEventListener("change", syncPreviewFont);
+      fldFallback.addEventListener("change", syncPreviewFont);
+      document.getElementById("btn-size-dec").addEventListener("click", function () {
+        if (fldName.disabled) return;
+        size = Math.max(6, size - 1);
+        syncPreviewFont();
+      });
+      document.getElementById("btn-size-inc").addEventListener("click", function () {
+        if (fldName.disabled) return;
+        size = Math.min(72, size + 1);
+        syncPreviewFont();
+      });
+
+      document.getElementById("btn-new").addEventListener("click", function () {
+        var n = document.querySelectorAll(".style-row").length + 1;
+        var row = document.createElement("button");
+        row.type = "button";
+        row.className = "style-row";
+        row.setAttribute("data-builtin", "0");
+        row.setAttribute("data-name", "New style " + n);
+        row.title = "New style " + n;
+        row.innerHTML =
+          '<span class="name">New style ' + n + '</span>' +
+          '<span class="kind">Custom</span>';
+        styleList.appendChild(row);
+        wireRow(row);
+        summary.textContent = document.querySelectorAll(".style-row").length + " styles";
+        selectRow(row);
+        fldName.focus();
+      });
+
+      function hideCtx() {
+        ctx.classList.remove("open");
+        ctx.setAttribute("aria-hidden", "true");
+      }
+      function showCtx(x, y) {
+        ctx.classList.add("open");
+        ctx.setAttribute("aria-hidden", "false");
+        var pad = 4;
+        ctx.style.left = Math.max(pad, Math.min(x, window.innerWidth - ctx.offsetWidth - pad)) + "px";
+        ctx.style.top = Math.max(pad, Math.min(y, window.innerHeight - ctx.offsetHeight - pad)) + "px";
+      }
+      document.addEventListener("click", function (ev) {
+        if (!ctx.contains(ev.target)) hideCtx();
+      });
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape") hideCtx();
+      });
+      ctx.querySelector('[data-act="clone"]').addEventListener("click", function () {
+        hideCtx();
+        document.getElementById("btn-new").click();
+      });
+      ctxDelete.addEventListener("click", function () {
+        if (ctxDelete.disabled) return;
+        hideCtx();
+        location.href = "../compact-confirm/index.html";
+      });
+
+      document.getElementById("pick-custom").addEventListener("click", function () {
+        selectRow(document.querySelector('.style-row[data-name="Custom — ops"]'));
+        document.getElementById("pick-custom").setAttribute("aria-pressed", "true");
+        document.getElementById("pick-builtin").setAttribute("aria-pressed", "false");
+      });
+      document.getElementById("pick-builtin").addEventListener("click", function () {
+        selectRow(document.querySelector('.style-row[data-name="Campbell"]'));
+        document.getElementById("pick-custom").setAttribute("aria-pressed", "false");
+        document.getElementById("pick-builtin").setAttribute("aria-pressed", "true");
+      });
+    })();
+  </script>
+</body>
+</html>

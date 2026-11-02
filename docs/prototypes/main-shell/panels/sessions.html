@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Sessions panel wireframe</title>
+  <style>
+    /* Theme: panel content 260 + chrome → board 280×640 (PanelId::Sessions). */
+    :root {
+      --panel-content-w: 260px;
+      --board-w: 280px;
+      --board-h: 640px;
+      --row-h: 28px;
+      --ctrl-h: 32px;
+      --anno-w: 220px;
+      --line: #111;
+      --fill: #fff;
+      --mute: #555;
+      --soft: #f0f0f0;
+      --anno: #336;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--line);
+      background: #e8e8e8;
+    }
+    .meta {
+      max-width: calc(var(--board-w) + 16px + var(--anno-w));
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: var(--mute);
+      line-height: 1.45;
+    }
+    .meta code { font-size: 12px; }
+    .nav-hud {
+      max-width: calc(var(--board-w) + 16px + var(--anno-w));
+      margin: 0 0 12px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font-size: 13px;
+      font-family: ui-monospace, monospace;
+      min-height: 36px;
+      display: flex;
+      align-items: center;
+    }
+    .nav-hud strong {
+      font-weight: 600;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      margin-right: 6px;
+    }
+    .tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: var(--mute);
+    }
+    .tools button {
+      height: var(--ctrl-h);
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .tools button[aria-pressed="true"] {
+      background: var(--soft);
+      font-weight: 600;
+    }
+    .stage {
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+    .frame {
+      display: grid;
+      grid-template-columns: var(--board-w) var(--anno-w);
+      column-gap: 16px;
+      width: max-content;
+      align-items: start;
+    }
+    .board {
+      width: var(--board-w);
+      height: var(--board-h);
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--fill);
+      border: 1px solid var(--line);
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .board-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--mute);
+      padding: 4px 8px 0;
+    }
+    .panel-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid var(--line);
+      margin-top: 4px;
+    }
+    .panel-head {
+      flex: 0 0 auto;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .panel-search {
+      flex: 0 0 auto;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    .panel-search input {
+      width: 100%;
+      height: var(--row-h);
+      border: 1px solid var(--line);
+      padding: 0 8px;
+      font: inherit;
+      font-size: 13px;
+    }
+    .tree {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      padding: 4px;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+    }
+    .tree-row {
+      height: var(--row-h);
+      flex: 0 0 var(--row-h);
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: default;
+      gap: 4px;
+    }
+    .tree-row.sel {
+      outline: 1px solid var(--line);
+      outline-offset: -1px;
+      font-weight: 600;
+    }
+    .tree-row.folder { color: var(--mute); }
+    .tree-row .prefix { flex: 0 0 auto; }
+    .sess-ico {
+      width: 16px;
+      height: 16px;
+      flex: 0 0 16px;
+      border: 1px solid var(--line);
+      background: var(--soft);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .sess-ico[data-icon="server"] { letter-spacing: -0.04em; }
+    .sess-ico[data-icon="db"] { background: #1a1a2e; color: #e8e0d0; }
+    .sess-ico[data-icon="custom"] { background: #1a1a2e; color: #e8e0d0; }
+    .tree-row .name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .tree-blank {
+      flex: 1;
+      min-height: 64px; /* 2× ctrl-h */
+      margin: 4px;
+      border: 1px dashed var(--mute);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: var(--mute);
+      text-align: center;
+      padding: 8px;
+    }
+    .inline-rename {
+      height: 22px;
+      flex: 1;
+      min-width: 0;
+      border: 2px solid var(--line);
+      background: var(--fill);
+      color: var(--line);
+      font: inherit;
+      font-size: 13px;
+      padding: 0 4px;
+      margin: 0;
+      outline: none;
+    }
+    .tree-row.renaming {
+      position: relative;
+      overflow: visible;
+      outline: 1px dashed var(--line);
+      outline-offset: -1px;
+      background: var(--soft);
+    }
+    .renaming-badge {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 2;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: var(--mute);
+      border: 1px solid var(--line);
+      padding: 0 4px;
+      height: 18px;
+      line-height: 16px;
+      white-space: nowrap;
+      background: var(--fill);
+      pointer-events: none;
+    }
+    .callouts {
+      grid-column: 2;
+      grid-row: 1;
+      position: relative;
+      height: var(--board-h);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .callout {
+      position: absolute;
+      left: 0;
+      right: 0;
+      font-size: 11px;
+      line-height: 1.35;
+      color: var(--anno);
+    }
+    .callout::before {
+      content: "";
+      position: absolute;
+      left: -12px;
+      top: 0.55em;
+      width: 10px;
+      border-top: 1px dashed var(--anno);
+    }
+    .callout strong {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      margin-bottom: 2px;
+      color: var(--line);
+    }
+    .callout-head { top: 28px; }
+    .callout-search { top: 72px; }
+    .callout-tree { top: 120px; }
+    .callout-blank { top: 380px; }
+    .callout-rename { top: 480px; }
+    .board[data-state="default"] .callout-rename { display: none; }
+
+    .flyout {
+      position: fixed;
+      z-index: 1000;
+      min-width: 240px;
+      max-width: 320px;
+      padding: 4px 0;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.08);
+      display: none;
+    }
+    .flyout.open { display: block; }
+    .flyout button,
+    .flyout a.fly-item {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      border: 0;
+      background: transparent;
+      padding: 6px 12px;
+      font: inherit;
+      font-size: 13px;
+      text-align: left;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+      gap: 8px;
+    }
+    .flyout button:hover:not(.dis):not(:disabled),
+    .flyout a.fly-item:hover { background: var(--soft); }
+    .flyout .label { flex: 1; min-width: 0; }
+    .flyout .kbd {
+      font-size: 11px;
+      color: var(--mute);
+      font-family: ui-monospace, monospace;
+      white-space: nowrap;
+    }
+    .flyout .sep {
+      height: 1px;
+      background: var(--soft);
+      margin: 4px 0;
+      border: 0;
+    }
+    .flyout button.dis,
+    .flyout button:disabled {
+      color: var(--mute);
+      cursor: not-allowed;
+    }
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 1100;
+      padding: 10px 14px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font-size: 13px;
+      max-width: 360px;
+      display: none;
+      box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.08);
+    }
+    .toast.show { display: block; }
+    .legend {
+      max-width: calc(var(--board-w) + 16px + var(--anno-w));
+      margin: 20px 0 0;
+      padding: 12px 14px;
+      border: 1px dashed var(--line);
+      font-size: 12px;
+      color: var(--mute);
+      line-height: 1.5;
+    }
+    .legend strong { color: var(--line); font-weight: 600; }
+    .legend a { color: var(--line); }
+  </style>
+</head>
+<body>
+  <p class="meta">
+    <strong>Sessions panel</strong> (<code>PanelId::Sessions</code>) · content only · fixed board <code>280×640</code>
+    (content <code>260</code> + chrome) · row <code>28</code> ·
+    <code>yshell-current-status.md</code> §2 folder ops disabled. Stage <code>overflow-x: auto</code>; board does not shrink.
+  </p>
+
+  <div class="nav-hud" id="navHud" aria-live="polite">
+    <strong>Last action:</strong>
+    <span id="navHudText">— (right-click tree, menu item, or state tool)</span>
+  </div>
+
+  <div class="tools" role="group" aria-label="Prototype states">
+    <span style="font-size:12px">State:</span>
+    <button type="button" data-state="default" aria-pressed="false" title="Default">Default</button>
+    <button type="button" data-state="session-rename" aria-pressed="true" title="Session rename">Session rename</button>
+  </div>
+
+  <div class="stage">
+    <div class="frame">
+      <div class="board" id="board" data-state="session-rename" aria-label="Sessions panel">
+        <div class="board-label">Sessions panel</div>
+        <aside class="panel-body">
+          <div class="panel-head" id="panelHead">SAVED SESSIONS</div>
+          <div class="panel-search">
+            <input type="search" placeholder="Search sessions" aria-label="Search sessions" id="searchInput" />
+          </div>
+          <div class="tree" role="tree" id="sessionTree">
+            <div class="tree-row folder" data-ctx="tree-folder" data-kind="folder">
+              <span class="prefix">▾ </span><span class="sess-ico" data-icon="folder" title="Folder">F</span><span class="name">Production</span>
+            </div>
+            <div class="tree-row sel" data-ctx="tree-session" data-kind="session" data-session="edge-01">
+              <span class="prefix">·· </span><span class="sess-ico" data-icon="default" title="session.icon · Default">S</span><span class="name">edge-01</span>
+            </div>
+            <div class="tree-row" data-ctx="tree-session" data-kind="session">
+              <span class="prefix">·· </span><span class="sess-ico" data-icon="db" title="session.icon · Preset · Database">DB</span><span class="name">db-primary</span>
+            </div>
+            <div class="tree-row folder" data-ctx="tree-folder" data-kind="folder">
+              <span class="prefix">▾ </span><span class="sess-ico" data-icon="folder" title="Folder">F</span><span class="name">Staging</span>
+            </div>
+            <div class="tree-row" data-ctx="tree-session" data-kind="session">
+              <span class="prefix">·· </span><span class="sess-ico" data-icon="server" title="session.icon · Preset · Server">Sv</span><span class="name">staging-web</span>
+            </div>
+            <div class="tree-row" data-ctx="tree-session" data-kind="session">
+              <span class="prefix">·· </span><span class="sess-ico" data-icon="custom" title="session.icon · Custom image">★</span><span class="name">jump-host</span>
+            </div>
+            <div class="tree-blank" data-ctx="tree-blank">blank tree area (right-click)</div>
+          </div>
+        </aside>
+      </div>
+
+      <ul class="callouts" aria-hidden="true">
+        <li class="callout callout-head">
+          <strong>Header</strong>
+          SAVED SESSIONS · no <code>+</code> / <code>…</code> (removed D25).
+        </li>
+        <li class="callout callout-search">
+          <strong>Search</strong>
+          Filter saved sessions; always enabled.
+        </li>
+        <li class="callout callout-tree">
+          <strong>Tree rows</strong>
+          Folder 28px · indent · <code>session.icon</code>（Default / 预设 / 自定义）· single select.
+        </li>
+        <li class="callout callout-blank">
+          <strong>Blank area</strong>
+          New Session / Refresh enabled; Import · Expand/Collapse · New Folder disabled (§2).
+        </li>
+        <li class="callout callout-rename">
+          <strong>Inline rename</strong>
+          Session only this build; sticky demo ignores blur · Enter / Esc.
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="legend">
+    <strong>Docking</strong> — Content only; dockable in the <strong>left or right stack</strong> via ToolDock →
+    <a href="../tool-dock.html">tool-dock</a>. All prototypes →
+    <a href="../../index.html">docs/prototypes/index.html</a>. Full shell →
+    <a href="../index.html">main-window</a>.<br>
+    <strong>Scope</strong> — Sessions panel slice (<code>PanelId::Sessions</code>); no dock chrome on this page.<br>
+    <strong>§2 (not this version)</strong> — Folder: New Folder, Rename, Delete, Connect All disabled in menus.
+    Blank tree: Import Config, Expand All, Collapse All, New Folder disabled. Folder context allows
+    <em>New Session Here</em> / <em>Edit</em>（Folder）→ 共用 <a href="../../session-editor/index.html">session-editor</a>（Folder 用 <code>#folder</code>）。<br>
+    <strong>Session context</strong> — Connect · Open in New Tab · Open SFTP · Edit → session-editor · Duplicate ·
+    Rename (inline) · Delete → <a href="../../compact-confirm/index.html">compact-confirm</a>. Double-click session name starts rename.<br>
+    <strong>session.icon</strong> — General 里配置（Default / Preset · Server / Database / Custom image）。
+    Saved Sessions 行与已打开的 session 标签均显示此图标（标签见 <a href="../workspace/tab-bar.html">tab-bar</a>）。
+  </div>
+
+  <div class="flyout" id="ctxMenu" role="menu" aria-hidden="true"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (function () {
+      var board = document.getElementById("board");
+      var navHudText = document.getElementById("navHudText");
+      var ctxMenu = document.getElementById("ctxMenu");
+      var toastEl = document.getElementById("toast");
+      var toastTimer = null;
+      var stateBtns = document.querySelectorAll(".tools [data-state]");
+
+      var paths = {
+        sessionEditor: "../../session-editor/index.html",
+        folderEditor: "../../session-editor/index.html#folder",
+        compactConfirm: "../../compact-confirm/index.html"
+      };
+
+      var ctxTarget = null;
+      var renameState = null;
+
+      function recordAction(action, destination) {
+        navHudText.textContent = action + " → " + destination;
+      }
+
+      function showToast(msg) {
+        toastEl.textContent = msg;
+        toastEl.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () {
+          toastEl.classList.remove("show");
+        }, 2200);
+      }
+
+      function closeFlyouts() {
+        ctxMenu.classList.remove("open");
+        ctxMenu.setAttribute("aria-hidden", "true");
+        ctxMenu.innerHTML = "";
+      }
+
+      function openFlyout(el, x, y, html) {
+        closeFlyouts();
+        el.innerHTML = html;
+        el.classList.add("open");
+        el.setAttribute("aria-hidden", "false");
+        el.style.left = Math.min(x, window.innerWidth - 280) + "px";
+        el.style.top = Math.min(y, window.innerHeight - 20) + "px";
+      }
+
+      function menuItem(label, kbd, act, opts) {
+        opts = opts || {};
+        var text = opts.disabled ? label + " (not this version)" : label;
+        var title = kbd ? text + " " + kbd : text;
+        if (opts.disabled) {
+          return '<button type="button" class="dis" disabled title="Not available in this version" data-act="' + act + '" data-label="' + label + '">' +
+            '<span class="label">' + text + '</span><span class="kbd">' + (kbd || "") + "</span></button>";
+        }
+        if (opts.href) {
+          return '<a class="fly-item" href="' + opts.href + '" data-act="' + act + '" data-label="' + label + '" title="' + title + '">' +
+            '<span class="label">' + text + '</span><span class="kbd">' + (kbd || "") + "</span></a>";
+        }
+        return '<button type="button" data-act="' + act + '" data-label="' + label + '" title="' + title + '">' +
+          '<span class="label">' + text + '</span><span class="kbd">' + (kbd || "") + "</span></button>";
+      }
+
+      function ctxHtml(type) {
+        if (type === "tree-session") {
+          return menuItem("Connect", "", "ctx-connect") +
+            menuItem("Open in New Tab", "", "ctx-new-tab") +
+            menuItem("Open SFTP", "Ctrl+Shift+S", "ctx-sftp") +
+            menuItem("Edit Session", "", "ctx-edit", { href: paths.sessionEditor }) +
+            '<hr class="sep">' +
+            menuItem("Rename", "", "ctx-rename") +
+            menuItem("Duplicate", "", "ctx-duplicate") +
+            menuItem("Favorite", "", "ctx-favorite") +
+            menuItem("Export Session", "", "ctx-export", { disabled: true }) +
+            menuItem("Delete", "", "ctx-delete", { href: paths.compactConfirm });
+        }
+        if (type === "tree-folder") {
+          return menuItem("New Session Here", "", "ctx-folder-new-session", { href: paths.sessionEditor }) +
+            menuItem("New Folder", "", "ctx-folder-new-folder", { disabled: true }) +
+            menuItem("Rename", "", "ctx-folder-rename", { disabled: true }) +
+            menuItem("Delete", "", "ctx-folder-delete", { disabled: true }) +
+            menuItem("Connect All", "", "ctx-folder-connect-all", { disabled: true }) +
+            '<hr class="sep">' +
+            menuItem("Edit", "", "ctx-folder-defaults", { href: paths.folderEditor });
+        }
+        if (type === "tree-blank") {
+          return menuItem("New Session", "", "ctx-blank-new-session", { href: paths.sessionEditor }) +
+            menuItem("New Folder", "", "ctx-blank-new-folder", { disabled: true }) +
+            menuItem("Import Config", "", "ctx-blank-import", { disabled: true }) +
+            '<hr class="sep">' +
+            menuItem("Expand All", "", "ctx-blank-expand", { disabled: true }) +
+            menuItem("Collapse All", "", "ctx-blank-collapse", { disabled: true }) +
+            menuItem("Refresh", "", "ctx-blank-refresh");
+        }
+        return "";
+      }
+
+      function syncStateButtons(active) {
+        stateBtns.forEach(function (b) {
+          b.setAttribute("aria-pressed", b.getAttribute("data-state") === active ? "true" : "false");
+        });
+        board.setAttribute("data-state", active === "session-rename" ? "session-rename" : "default");
+      }
+
+      function clearRenamingBadge(host) {
+        if (!host) return;
+        host.querySelectorAll(".renaming-badge").forEach(function (b) { b.remove(); });
+      }
+
+      function endInlineRename(commit) {
+        if (!renameState) return;
+        var host = renameState.host;
+        var input = renameState.input;
+        var original = renameState.original;
+        var value = (input.value || "").trim();
+        clearRenamingBadge(host);
+        host.classList.remove("renaming");
+        if (commit && value) {
+          var nameEl = document.createElement("span");
+          nameEl.className = "name";
+          nameEl.textContent = value;
+          if (input.parentNode) input.parentNode.replaceChild(nameEl, input);
+          recordAction(renameState.label || "Rename", 'Inline rename → "' + value + '"');
+          showToast("Renamed to " + value);
+        } else {
+          var restore = document.createElement("span");
+          restore.className = "name";
+          restore.textContent = original;
+          if (input.parentNode) input.parentNode.replaceChild(restore, input);
+          recordAction(renameState.label || "Rename", "Inline rename cancelled");
+          showToast("Rename cancelled");
+        }
+        renameState = null;
+      }
+
+      function beginInlineRename(host, label, opts) {
+        opts = opts || {};
+        if (!host || !board.contains(host)) return;
+        if (host.getAttribute("data-kind") !== "session") {
+          showToast("Folder rename disabled this version");
+          return;
+        }
+        if (renameState) endInlineRename(false);
+        closeFlyouts();
+        var nameEl = host.querySelector(".name");
+        if (!nameEl) return;
+        var original = nameEl.textContent;
+        var input = document.createElement("input");
+        input.type = "text";
+        input.className = "inline-rename";
+        input.value = original;
+        input.setAttribute("aria-label", label || "Rename session");
+        host.classList.add("renaming");
+        nameEl.replaceWith(input);
+        clearRenamingBadge(host);
+        if (opts.sticky) {
+          var badge = document.createElement("span");
+          badge.className = "renaming-badge";
+          badge.textContent = "inline rename";
+          host.appendChild(badge);
+        }
+        renameState = {
+          host: host,
+          input: input,
+          original: original,
+          label: label,
+          sticky: !!opts.sticky
+        };
+        try {
+          input.focus();
+          input.select();
+        } catch (e) {}
+
+        function onKey(ev) {
+          if (ev.key === "Enter") {
+            ev.preventDefault();
+            ev.stopPropagation();
+            cleanup();
+            endInlineRename(true);
+          } else if (ev.key === "Escape") {
+            ev.preventDefault();
+            ev.stopPropagation();
+            cleanup();
+            endInlineRename(false);
+          }
+        }
+        function onBlur() {
+          if (renameState && renameState.sticky) return;
+          cleanup();
+          endInlineRename(true);
+        }
+        function cleanup() {
+          input.removeEventListener("keydown", onKey);
+          input.removeEventListener("blur", onBlur);
+        }
+        input.addEventListener("keydown", onKey);
+        input.addEventListener("blur", onBlur);
+      }
+
+      function applyPrototypeState(state) {
+        if (renameState) endInlineRename(false);
+        syncStateButtons(state);
+        if (state === "session-rename") {
+          var row = document.querySelector('.tree-row[data-session="edge-01"]');
+          if (row) beginInlineRename(row, "Rename", { sticky: true });
+          recordAction("State · Session rename", "Sticky inline on edge-01");
+          showToast("Session rename — pinned (Enter / Esc; blur ignored)");
+        } else {
+          recordAction("State · Default", "Tree without inline edit");
+          showToast("Default tree state");
+        }
+      }
+
+      document.addEventListener("contextmenu", function (ev) {
+        var t = ev.target.closest("[data-ctx]");
+        if (!t || !board.contains(t)) return;
+        if (ev.target.closest(".inline-rename")) return;
+        ev.preventDefault();
+        ctxTarget = t;
+        var kind = t.getAttribute("data-ctx");
+        openFlyout(ctxMenu, ev.clientX, ev.clientY, ctxHtml(kind));
+      });
+
+      document.addEventListener("click", function (ev) {
+        if (ev.target.closest(".inline-rename")) return;
+        var actEl = ev.target.closest("[data-act]");
+        if (actEl && ctxMenu.contains(actEl)) {
+          if (actEl.disabled || actEl.classList.contains("dis")) {
+            showToast(actEl.getAttribute("data-label") + " — not this version");
+            return;
+          }
+          var act = actEl.getAttribute("data-act");
+          var label = actEl.getAttribute("data-label") || act;
+          if (actEl.tagName === "A") {
+            recordAction(label, actEl.getAttribute("href"));
+            return;
+          }
+          ev.preventDefault();
+          switch (act) {
+            case "ctx-connect":
+              recordAction(label, "Connect in workspace");
+              showToast("Connect");
+              break;
+            case "ctx-new-tab":
+              recordAction(label, "New tab");
+              showToast("Open in New Tab");
+              break;
+            case "ctx-sftp":
+              recordAction(label, "Open SFTP tab");
+              showToast("Open SFTP");
+              break;
+            case "ctx-duplicate":
+              recordAction(label, "Duplicate → session-editor");
+              showToast("Duplicate (opens editor)");
+              break;
+            case "ctx-favorite":
+              recordAction(label, "Toggle favorite");
+              showToast("Favorite toggled");
+              break;
+            case "ctx-rename":
+              if (ctxTarget) beginInlineRename(ctxTarget, label, { sticky: false });
+              break;
+            case "ctx-blank-refresh":
+              recordAction(label, "Reload session config");
+              showToast("Refresh");
+              break;
+            default:
+              recordAction(label, "—");
+              showToast(label);
+          }
+          closeFlyouts();
+          return;
+        }
+        if (!ev.target.closest(".flyout")) closeFlyouts();
+      });
+
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape" && !renameState) closeFlyouts();
+      });
+
+      document.getElementById("sessionTree").addEventListener("dblclick", function (ev) {
+        var row = ev.target.closest(".tree-row[data-ctx='tree-session']");
+        if (!row || !ev.target.closest(".name")) return;
+        ev.preventDefault();
+        beginInlineRename(row, "Rename", { sticky: board.getAttribute("data-state") === "session-rename" });
+      });
+
+      document.querySelectorAll(".tree-row.folder").forEach(function (row) {
+        row.addEventListener("dblclick", function (ev) {
+          if (!ev.target.closest(".name")) return;
+          ev.preventDefault();
+          var prefix = row.querySelector(".prefix");
+          if (prefix) {
+            var open = prefix.textContent.indexOf("▾") >= 0;
+            prefix.textContent = (open ? "▸ " : "▾ ");
+            recordAction("Folder toggle", open ? "Collapse " + row.querySelector(".name").textContent : "Expand");
+          }
+        });
+      });
+
+      stateBtns.forEach(function (b) {
+        b.addEventListener("click", function () {
+          applyPrototypeState(b.getAttribute("data-state"));
+        });
+      });
+
+      applyPrototypeState("session-rename");
+    })();
+  </script>
+</body>
+</html>

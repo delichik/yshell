@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YShell — Tunnel editor wireframe</title>
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_anno.css">
   <style>
     /* Theme.tool-window-standard: 720×580, titlebar 32, padding 28 */
     :root {
@@ -12,12 +14,6 @@
       --titlebar-h: 32px;
       --pad: 28px;
       --gap: 14px;
-      --ctrl-h: 32px;
-      --label-w: 120px;
-      --line: #111;
-      --fill: #fff;
-      --mute: #555;
-      --soft: #f0f0f0;
       --bg: #e8e8e8;
     }
     * { box-sizing: border-box; }
@@ -104,37 +100,18 @@
       font-size: 15px;
       font-weight: 600;
     }
-    .form-row {
-      display: grid;
-      grid-template-columns: var(--label-w) 1fr;
-      gap: 12px;
-      align-items: center;
-      margin-bottom: 10px;
-      font-size: 14px;
-    }
-    .form-row .lbl { text-align: right; color: var(--mute); font-size: 13px; }
-    .input, .select {
-      height: var(--ctrl-h);
-      padding: 0 8px;
-      border: 1px solid var(--line);
-      font: inherit;
-      width: 100%;
-      max-width: 360px;
-    }
     .inline-pair {
       display: flex;
       gap: 8px;
-      max-width: 360px;
+      max-width: var(--field-w);
     }
-    .inline-pair .input { flex: 1; min-width: 0; }
-    .inline-pair .input.port { max-width: 88px; flex: 0 0 88px; }
-    .hint {
+    .inline-pair .input { flex: 1; min-width: 0; max-width: none; }
+    .inline-pair .input.port { max-width: var(--port-w); flex: 0 0 var(--port-w); }
+    .form-card .hint {
       margin: 12px 0 0;
       padding: 10px 12px;
       border: 1px dashed var(--line);
-      font-size: 12px;
-      color: var(--mute);
-      line-height: 1.45;
+      max-width: none;
     }
     .spacer { flex: 1 1 auto; min-height: 8px; }
     .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
@@ -143,16 +120,6 @@
       justify-content: flex-end;
       gap: 8px;
     }
-    .btn {
-      height: var(--ctrl-h);
-      padding: 0 14px;
-      border: 1px solid var(--line);
-      background: var(--fill);
-      font: inherit;
-      font-size: 14px;
-      cursor: pointer;
-    }
-    .btn-primary { background: var(--soft); font-weight: 600; }
     .legend {
       max-width: var(--win-w);
       margin: 16px 0 0;
@@ -169,16 +136,13 @@
   </style>
 </head>
 <body>
-  <p class="meta">
-    <strong>Tunnel editor</strong> · standard tool window <code>720×580</code> · opened from Tunnels panel Add.
-    <a href="../index.html">prototypes index</a> · return → <a href="../panel-tunnels/index.html">panel-tunnels</a>
-  </p>
+  <p class="meta">Tunnel editor · <code>720×580</code> · 自 Tunnels 面板 Add。 <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>。</p>
 
   <div class="tools">
     <span>Type preview:</span>
-    <button type="button" class="btn" data-type="local" aria-pressed="true" style="height:32px">Local forward</button>
-    <button type="button" class="btn" data-type="remote" style="height:32px">Remote forward</button>
-    <button type="button" class="btn" data-type="dynamic" style="height:32px">Dynamic (SOCKS)</button>
+    <button type="button" class="btn" data-type="local" aria-pressed="true" style="height:32px" title="Local forward">Local forward</button>
+    <button type="button" class="btn" data-type="remote" style="height:32px" title="Remote forward">Remote forward</button>
+    <button type="button" class="btn" data-type="dynamic" style="height:32px" title="Dynamic (SOCKS)">Dynamic (SOCKS)</button>
   </div>
 
   <div class="stage">
@@ -187,12 +151,11 @@
         <div class="title" id="winTitle">Add Tunnel</div>
         <button type="button" class="cap" tabindex="-1" aria-hidden="true">_</button>
         <button type="button" class="cap" tabindex="-1" aria-hidden="true">□</button>
-        <button type="button" class="cap" tabindex="-1" aria-hidden="true">×</button>
+        <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
       </div>
       <div class="body">
         <div class="form-card">
-          <h2 class="section-title">Tunnel</h2>
-          <div class="form-row">
+<div class="form-row">
             <span class="lbl">Name</span>
             <input class="input" type="text" value="local-postgres" aria-label="Tunnel name" />
           </div>
@@ -210,7 +173,7 @@
           </div>
           <div class="form-row">
             <span class="lbl">Bind port</span>
-            <input class="input" type="text" value="5432" style="max-width:120px" aria-label="Bind port" />
+            <input class="input" type="text" value="5432" style="max-width:100px" aria-label="Bind port" />
           </div>
           <div class="panel" id="destFields" data-panel="dest">
             <div class="form-row">
@@ -221,17 +184,21 @@
               </div>
             </div>
           </div>
-          <p class="hint" id="runtimeHint">
-            Saves tunnel definition to session config only. <strong>Start/Stop</strong> in
-            <a href="../panel-tunnels/index.html">panel-tunnels</a> remains disabled — runtime not provisioned.
-          </p>
+          <div class="form-row">
+            <span class="lbl">On connect</span>
+            <label class="form-switch">
+              <input type="checkbox" aria-label="Enable on connect" />
+              <span class="switch" aria-hidden="true"></span>
+              <span class="switch-txt"><span class="txt-on">Enabled</span><span class="txt-off">Disabled</span></span>
+            </label>
+          </div>
         </div>
         <div class="spacer"></div>
         <footer>
           <hr class="rule" />
           <div class="actions" style="margin-top:12px">
-            <a class="btn" href="../panel-tunnels/index.html">Cancel</a>
-            <a class="btn btn-primary" href="../panel-tunnels/index.html" id="saveBtn">Save</a>
+            <a class="btn" href="../main-shell/panels/tunnels.html" title="Cancel">Cancel</a>
+            <a class="btn btn-primary" href="../main-shell/panels/tunnels.html" id="saveBtn" title="Save">Save</a>
           </div>
         </footer>
       </div>
@@ -239,13 +206,14 @@
   </div>
 
   <div class="legend">
-    <strong>Navigation</strong>
-    <ul>
-      <li>Open from <a href="../panel-tunnels/index.html">panel-tunnels</a> · <strong>Add Tunnel</strong>.</li>
-      <li><strong>Cancel | Save</strong> both return to panel list (prototype links); no extra window-level Close.</li>
-      <li>Dynamic type hides destination host/port row (bind only).</li>
-    </ul>
-  </div>
+      <ul class="anno">
+        <li><strong>A · Form</strong> Name / Type / Bind / Destination；Dynamic 隐藏 Destination。</li>
+        <li><strong>B · On connect</strong> 开关 Enabled/Disabled。</li>
+        <li><strong>C · Nav</strong> Cancel | Save 回 panel-tunnels。</li>
+        <li><strong>D · Runtime</strong> 本版只存定义；panel Start/Stop 仍 disabled。</li>
+      </ul>
+      <p class="anno-ref"><a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a></p>
+    </div>
 
   <script>
     (function () {

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Private keys · modals</title>
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_anno.css">
+  <style>
+    :root {
+      /* Generate 表单项多：用 standard 720×580；Import/Export 同框避免切换跳尺寸 */
+      --modal-w: 720px; --modal-h: 580px; --titlebar-h: 32px; --pad: 28px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--modal-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .meta a { color: inherit; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .tools button {
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line);
+      background: var(--fill); font: inherit; cursor: pointer;
+    }
+    .tools button[aria-pressed="true"] { background: var(--soft); font-weight: 600; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .modal {
+      width: var(--modal-w); height: var(--modal-h); flex-shrink: 0;
+      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+    }
+    .modal[hidden] { display: none !important; }
+    .titlebar {
+      height: var(--titlebar-h); flex: 0 0 var(--titlebar-h);
+      display: flex; align-items: center; padding: 0 8px 0 12px; gap: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .title { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cap { width: 40px; height: 24px; border: 1px solid var(--line); background: transparent; font-size: 10px; color: var(--line); padding: 0; }
+    .m-body { flex: 1; min-height: 0; padding: var(--pad); display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+    .m-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+    .m-spacer { flex: 1; min-height: 8px; }
+    .field { margin: 0; }
+    .m-body .form-row { margin-bottom: 0; }
+    .label { font-size: 13px; color: var(--mute); display: block; margin-bottom: 4px; }
+    .textarea {
+      /* PEM paste: tall editor, still ≤420 */
+      min-height: var(--field-h-md); resize: none;
+    }
+    .pubkey { min-height: 96px; max-height: 180px; }
+    .row-btns { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .ok { margin: 0; font-size: 14px; font-weight: 600; }
+    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; flex: 0 0 auto; }
+    .linkish { background: transparent; border: 0; padding: 0; font: inherit; font-size: 13px; color: var(--mute); text-decoration: underline; cursor: pointer; }
+    .legend { max-width: var(--modal-w); margin: 20px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+  </style>
+</head>
+<body>
+  <p class="meta">Private Keys 子窗 · Generate / Import / Export。 <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>。</p>
+  <div class="tools" role="group" aria-label="Modal state">
+    <button type="button" id="state-generate" aria-pressed="true" title="Generate">Generate</button>
+    <button type="button" id="state-gen-done" aria-pressed="false" title="Generate result">Generate result</button>
+    <button type="button" id="state-import-file" aria-pressed="false" title="Import file">Import file</button>
+    <button type="button" id="state-import-paste" aria-pressed="false" title="Import paste">Import paste</button>
+    <button type="button" id="state-export" aria-pressed="false" title="Export">Export</button>
+  </div>
+
+  <div class="stage">
+    <!-- Generate form -->
+    <div class="modal" id="modal-generate" role="dialog">
+      <div class="titlebar">
+        <div class="title">Generate Private Key</div>
+        <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
+      </div>
+      <div class="m-body">
+        <div class="m-scroll">
+          <div class="form-row"><span class="lbl">Label</span><input class="input" value="work-ed25519" /></div>
+          <div class="form-row">
+            <span class="lbl">Type</span>
+            <select class="select" id="gen-type">
+              <option selected>ED25519</option>
+              <option>RSA</option>
+              <option>ECDSA</option>
+            </select>
+          </div>
+          <div class="form-row" id="gen-bits-row" hidden>
+            <span class="lbl">Bits</span>
+            <select class="select">
+              <option>2048</option>
+              <option selected>3072</option>
+              <option>4096</option>
+            </select>
+          </div>
+          <div class="form-row"><span class="lbl">Comment</span><input class="input" placeholder="optional · defaults to label" /></div>
+          <div class="form-row"><span class="lbl">Passphrase</span><input class="input" type="password" placeholder="Optional" /></div>
+          <div class="form-row"><span class="lbl">Confirm</span><input class="input" type="password" placeholder="Repeat passphrase" /></div>
+        </div>
+        <hr class="rule" />
+        <div class="actions">
+          <a class="btn" href="index.html" title="Cancel">Cancel</a>
+          <button type="button" class="btn btn-primary" id="btn-do-generate" title="Generate">Generate</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Generate result: public key visible -->
+    <div class="modal" id="modal-gen-done" role="dialog" hidden>
+      <div class="titlebar">
+        <div class="title">Key Generated — work-ed25519</div>
+        <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
+      </div>
+      <div class="m-body">
+        <div class="m-scroll">
+          <p class="ok">Private key saved to the secret store.</p>
+          <div class="form-row"><span class="lbl">Fingerprint</span><span style="font-family:ui-monospace,monospace;font-size:12px">SHA256:nThU…k8mQ</span></div>
+          <div class="form-row"><span class="lbl">Type</span><span>ED25519</span></div>
+          <div class="form-row top">
+            <span class="lbl">Public key</span>
+            <div class="ctl-with-btn">
+              <div class="pubkey">ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINexamplePublicKeyMaterialHere0123456789ABCDEF work-ed25519</div>
+              <button type="button" class="btn btn-icon" aria-label="Copy public key" title="Copy public key"><span class="i i-copy" aria-hidden="true"></span></button>
+            </div>
+          </div>
+        </div>
+        <hr class="rule" />
+        <div class="actions">
+          <a class="btn btn-primary" href="index.html" title="Done">Done</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Import from file -->
+    <div class="modal" id="modal-import-file" role="dialog" hidden>
+      <div class="titlebar">
+        <div class="title">Import Private Key</div>
+        <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
+      </div>
+      <div class="m-body">
+        <div class="m-scroll">
+          <div class="form-row"><span class="lbl">Label</span><input class="input" placeholder="optional · from filename" /></div>
+          <div class="form-row">
+            <span class="lbl">Key file</span>
+            <div class="ctl-with-btn">
+              <input class="input" readonly placeholder="Path to private key" />
+              <button type="button" class="btn btn-icon" title="Browse" aria-label="Browse"><span class="i i-browse" aria-hidden="true"></span></button>
+            </div>
+          </div>
+          <div class="form-row"><span class="lbl">Passphrase</span><input class="input" type="password" placeholder="If encrypted" /></div>
+          <p style="margin:8px 0 0 132px"><button type="button" class="linkish" id="switch-paste" title="Paste key text instead">Paste key text instead</button></p>
+        </div>
+        <hr class="rule" />
+        <div class="actions">
+          <a class="btn" href="index.html" title="Cancel">Cancel</a>
+          <button type="button" class="btn btn-primary" title="Import">Import</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Import paste -->
+    <div class="modal" id="modal-import-paste" role="dialog" hidden>
+      <div class="titlebar">
+        <div class="title">Paste Private Key</div>
+        <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
+      </div>
+      <div class="m-body">
+        <div class="m-scroll">
+          <div class="form-row"><span class="lbl">Label</span><input class="input" placeholder="optional" /></div>
+          <div class="form-row top">
+            <span class="lbl">Private key</span>
+            <textarea class="textarea" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;…&#10;-----END OPENSSH PRIVATE KEY-----"></textarea>
+          </div>
+          <div class="form-row"><span class="lbl">Passphrase</span><input class="input" type="password" placeholder="If encrypted" /></div>
+          <p style="margin:8px 0 0 132px"><button type="button" class="linkish" id="switch-file" title="Choose a file instead">Choose a file instead</button></p>
+        </div>
+        <hr class="rule" />
+        <div class="actions">
+          <a class="btn" href="index.html" title="Cancel">Cancel</a>
+          <button type="button" class="btn btn-primary" title="Import">Import</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Export public key -->
+    <div class="modal" id="modal-export" role="dialog" hidden>
+      <div class="titlebar">
+        <div class="title">Export Public Key</div>
+        <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
+      </div>
+      <div class="m-body">
+        <div class="m-scroll">
+          <div class="form-row top">
+            <span class="lbl">Public key</span>
+            <div class="pubkey">ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINexamplePublicKeyMaterialHere0123456789ABCDEF work-ed25519</div>
+          </div>
+          <div class="form-row">
+            <span class="lbl">Destination</span>
+            <div class="ctl-with-btn">
+              <input class="input" readonly value="C:\Users\alice\work-ed25519.pub" />
+              <button type="button" class="btn btn-icon" title="Browse" aria-label="Browse"><span class="i i-browse" aria-hidden="true"></span></button>
+            </div>
+          </div>
+        </div>
+        <hr class="rule" />
+        <div class="actions">
+          <a class="btn" href="index.html" title="Cancel">Cancel</a>
+          <button type="button" class="btn btn-primary" title="Export">Export</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+      <ul class="anno">
+        <li><strong>A · Generate</strong> 表单 → 结果页公钥 + Copy 同行。</li>
+        <li><strong>B · Import</strong> 文件 / 粘贴可互跳。</li>
+        <li><strong>C · Export</strong> 公钥预览 + Destination。</li>
+      </ul>
+      <p class="anno-ref"><a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a></p>
+    </div>
+
+  <script>
+    (function () {
+      var map = {
+        generate: { btn: "state-generate", modal: "modal-generate" },
+        "gen-done": { btn: "state-gen-done", modal: "modal-gen-done" },
+        "import-file": { btn: "state-import-file", modal: "modal-import-file" },
+        "import-paste": { btn: "state-import-paste", modal: "modal-import-paste" },
+        export: { btn: "state-export", modal: "modal-export" }
+      };
+
+      function show(name) {
+        Object.keys(map).forEach(function (k) {
+          var on = k === name;
+          document.getElementById(map[k].btn).setAttribute("aria-pressed", on ? "true" : "false");
+          document.getElementById(map[k].modal).hidden = !on;
+        });
+      }
+
+      Object.keys(map).forEach(function (k) {
+        document.getElementById(map[k].btn).addEventListener("click", function () { show(k); });
+      });
+
+      document.getElementById("btn-do-generate").addEventListener("click", function () { show("gen-done"); });
+      document.getElementById("switch-paste").addEventListener("click", function () { show("import-paste"); });
+      document.getElementById("switch-file").addEventListener("click", function () { show("import-file"); });
+
+      document.getElementById("gen-type").addEventListener("change", function (e) {
+        document.getElementById("gen-bits-row").hidden = e.target.value !== "RSA";
+      });
+
+      var hash = (location.hash || "").replace(/^#/, "");
+      var aliases = { import: "import-file", generate: "generate", export: "export", "import-file": "import-file", "import-paste": "import-paste", "gen-done": "gen-done" };
+      if (aliases[hash]) show(aliases[hash]);
+    })();
+  </script>
+</body>
+</html>

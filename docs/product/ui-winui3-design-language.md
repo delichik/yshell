@@ -245,14 +245,22 @@ InfoBar / 提示类不写死背景色，用规则生成：`背景 = 系统色 12
 - 主机密钥确认策略（2026-09-27 产品决定）：`strict` 与 `trust_on_first_use` 的**首次连接都必须弹窗**——
   Trust Once = 仅本次（内存）信任，Trust and Save = 写入 `known_hosts`；**不存在静默 TOFU**。
   唯一静默信任的是显式的调试策略 `accept-any-for-testing`。变更密钥仍必须阻断式呈现
-  （弹窗 + 详情入口 + 输入 `REPLACE` 的确认区）。
+  （弹窗 + 详情入口 + 破坏性 Replace 按钮；**不**使用输入 `REPLACE` 的确认区）。
 
 ### 5.10 模态工具窗口（独立 OS 窗口）
 - 弹窗不再嵌在主窗 overlay，而是独立非缩放工具窗口（Windows 上归属主窗、无任务栏按钮、模态）。无遮罩/scrim。
-- 尺寸三档（`ui/theme.slint`）：
-  - **compact** 560×400：确认、密码、New Folder、SFTP 短表单
-  - **standard** 720×580：认证、主机密钥、Logging、About、SFTP 冲突/属性
-  - **wide** 1100×820：Settings、会话/文件夹编辑器、Host Keys / Private Keys / Known Hosts / Proxies / Theme Manager
+- **弹窗尺寸只有三档**（`ui/theme.slint`）；新增弹窗只能选一档，确需特殊尺寸时在原型 meta 与 README 标注原因：
+
+| 档位 | 尺寸 | 使用 |
+|---|---|---|
+| compact | 560×400 | 确认 / 关闭标签·退出 / Host key / 主密码 / 解锁 / MCP consent / SFTP 权限 / Known Hosts 子窗 / Login step Wait |
+| standard | 720×580 | Auth / Logging / About / SFTP 冲突·属性 / Tunnel editor / Private Keys 子窗 / Login step Keys |
+| wide | 1100×820 | Settings / Session·Folder Editor / Known Hosts / Private Keys / Proxies / Terminal Styles |
+
+- **非弹窗的固定尺寸**（切片/主窗，不要当弹窗尺寸套用）：
+  - 主窗 `1440×900`；工作区切片 `960×560`；tab bar 切片 `960×200`；Quick Connect 切片 `720×480`；split / tool-dock 切片 `1100×640`。
+  - Settings / Session Editor 的 `800×640` 是**内容切片**，实际弹窗仍是 wide `1100×820`；dock 面板 `280–320` 宽同理。
+  - `dialog-width-form` / `dialog-width-wide` 为遗留 token，新弹窗不要引用。
 - 壳层统一 `ToolWindowChrome`：自绘标题栏 + 关闭钮 + `tool-window-padding` 内容区内边距；短内容用 `vertical-stretch` 把操作区钉在底部。
 - 结构：标题栏文案 → 正文 `body` → 操作区（右对齐，主操作在右）。
 - 关闭方式：Esc、标题栏 `×`（与 Cancel 同路径）；危险确认仍无键盘默认确认（E-064）。
@@ -274,9 +282,10 @@ InfoBar / 提示类不写死背景色，用规则生成：`背景 = 系统色 12
 - 信息不足时省略，不换行。
 
 ### 5.15 图标
-- 采用 **Fluent System Icons（MIT）** 的 SVG path，内嵌为 Slint `Path`/`Image`，20×20 默认，线性 1.5px 描边风格。
-- 首批清单（20 个）：新建、打开、保存、连接、断开、上传、下载、刷新、上一级、文件夹、文件、重命名、删除、权限、终端、隧道、命令、设置、搜索、更多、关闭、复制、粘贴、清屏。
-- 状态点、连接态等用 `Rectangle` 绘制，不用图标字体（避免跨平台字体缺失）。
+- 采用 **Tabler Icons outline（MIT）**：SVG 源在 `ui/icons/svg/`（白描边便于 `Image.colorize`），栅格化为 **24 / 32 / 40** PNG 供 Slint 使用（软件渲染器不实现 `Path`）。
+- 拉取 / 生成：`scripts/ui-icons/fetch-tabler-outline.ps1` → `generate.ps1`（或 `generate.sh`）→ `generate-icons-slint.sh`。
+- 产品名与 Tabler 文件映射见 fetch 脚本；含 plus / close / clear / copy / paste / trash / manage / browse / import / export / generate / search / settings / refresh / upload / download / edit / folder / file / terminal / connect / warning / chevron-* 等。
+- 默认显示约 20×20（资源取 2× 档）；状态点、连接态等用 `Rectangle` 绘制，不用图标字体。
 
 ### 5.16 菜单栏（MenuBar）
 - 位置与高度：标题栏下方、命令栏上方，独占 32px 一行；背景 `window.background`，底部 1px `layer.stroke`。
@@ -502,5 +511,5 @@ slint::select_bundled_translation(lang) ──▶  运行时切换（立即重�
 默认沿用（如有异议请在 W1 评审时提出）：
 - 三栏布局（左会话 / 中终端 / 右工具）不变，按 CommandBar + NavigationView 风格改造；
 - 终端配色默认 Campbell（深）/ One Half Light（浅），与 UI 主题解耦；
-- 图标采用 Fluent System Icons（MIT），首批 20 个见 §5.15；
+- 图标采用 Tabler Icons outline（MIT）→ 多尺寸 PNG，见 §5.15；
 - 最小窗口 880×600，默认 1440×900，面板宽度可拖拽（内存态）。

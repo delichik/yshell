@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YShell — Close tab / quit confirm wireframe</title>
+  <link rel="stylesheet" href="../_anno.css">
+  <link rel="stylesheet" href="../_icons.css">
   <style>
     /* Theme.tool-window-*-compact — fixed geometry, no viewport scaling. */
     :root {
@@ -105,11 +107,7 @@
       margin-bottom: 2px;
       color: var(--line);
     }
-    .callout-title { top: 6px; }
     .callout-list { top: 88px; }
-    .callout-spacer { top: 248px; }
-    .callout-footer { top: 340px; }
-
     .titlebar {
       height: var(--titlebar-h);
       flex: 0 0 var(--titlebar-h);
@@ -216,9 +214,20 @@
     }
     .actions {
       display: flex;
+      align-items: center;
       justify-content: flex-end;
       gap: 8px;
     }
+    .dont-ask {
+      margin-right: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--mute);
+      cursor: pointer;
+    }
+    .dont-ask input { width: 16px; height: 16px; margin: 0; }
     .btn {
       appearance: none;
       height: var(--ctrl-h);
@@ -258,10 +267,7 @@
 </head>
 <body>
   <div class="root" id="root" data-state="close-ssh">
-    <p class="meta">
-      Close tab / quit confirm · fixed <code>560×400</code> (<code>Theme.tool-window-*-compact</code>) ·
-      titlebar <code>32</code> · padding <code>28</code> · body does not scroll.
-    </p>
+    <p class="meta">Close tab / Quit · <code>560×400</code>。 <a href="../annotations.html">annotations</a>。</p>
 
     <div class="tools" role="group" aria-label="Prototype state">
       <label><input type="radio" name="state" value="close-ssh" checked /> Close Tab (SSH)</label>
@@ -272,17 +278,14 @@
     <div class="stage">
       <div class="frame">
         <div class="win" role="dialog" aria-labelledby="win-title">
-          <div class="titlebar region">
-            <span class="tag">A · chrome</span>
-            <div class="title" id="win-title">Close tab — prod-edge</div>
-            <button type="button" class="cap" tabindex="-1" aria-hidden="true">_</button>
-            <button type="button" class="cap" tabindex="-1" aria-hidden="true">□</button>
-            <button type="button" class="cap" tabindex="-1" aria-hidden="true">×</button>
+          <div class="titlebar">
+<div class="title" id="win-title">Close tab — prod-edge</div>
+            <button type="button" class="cap" title="Cancel" aria-label="Cancel"><span class="i i-close" aria-hidden="true"></span></button>
           </div>
 
           <div class="body">
             <div class="region">
-              <span class="tag">B · consequences</span>
+              <span class="tag">A · consequences</span>
               <p class="lead" id="lead">Close the tab for session <strong>prod-edge</strong>?</p>
               <ul class="consequences" id="consequences"></ul>
               <p class="note-inline" id="tunnel-note"></p>
@@ -290,12 +293,15 @@
 
             <div class="spacer" aria-hidden="true"></div>
 
-            <div class="footer region">
-              <span class="tag">C · footer</span>
-              <hr class="rule" />
+            <div class="footer">
+<hr class="rule" />
               <div class="actions">
-                <button type="button" class="btn">Cancel</button>
-                <button type="button" class="btn btn-destructive" id="primary-btn">Close Tab</button>
+                <label class="dont-ask" title="Don't ask again for this action">
+                  <input type="checkbox" id="fld-dont-ask" aria-label="Don't ask again" />
+                  Don't ask again
+                </label>
+                <button type="button" class="btn" title="Cancel">Cancel</button>
+                <button type="button" class="btn btn-destructive" id="primary-btn" title="Close Tab">Close Tab</button>
               </div>
               <p class="focus-note">Esc = Cancel · default focus Cancel · no type-to-confirm</p>
             </div>
@@ -303,34 +309,21 @@
         </div>
 
         <ul class="callouts" aria-label="Design annotations">
-          <li class="callout callout-title">
-            <strong>A · Title</strong>
-            Summarize action in title (Close tab / Quit YShell); session name when closing a tab.
-          </li>
           <li class="callout callout-list">
-            <strong>B · Consequence list</strong>
-            Bulleted outcomes: SSH disconnect, SFTP stop, transfer cancel count, tunnel stop note.
-          </li>
-          <li class="callout callout-spacer">
-            <strong>Spacer</strong>
-            Short copy top-aligned; footer pinned; window stays 560×400 across states.
-          </li>
-          <li class="callout callout-footer">
-            <strong>C · Footer</strong>
-            Cancel | Close Tab or Quit; destructive uses stronger 2px border (not filled critical fill).
+            <strong>A · Consequences</strong>
+            列出将断开的 SSH / SFTP / transfers / tunnels。
           </li>
         </ul>
       </div>
     </div>
 
     <div class="legend">
-      <strong>Product rules</strong>
-      <ul>
-        <li>Contract §16 close tab / quit · lists active SSH, SFTP, transfers, tunnels before confirm.</li>
-        <li><strong>No</strong> typing CLEAR / DELETE / confirm words — same policy as
-          <a href="../compact-confirm/index.html">compact-confirm</a> generic pattern.</li>
-        <li>Keep Running in Background remains disabled in product (not shown in this wireframe).</li>
+      <ul class="anno">
+        <li><strong>A · Consequences</strong> 活动资源摘要；Keep Running 可 disabled。</li>
+        <li><strong>B · Actions</strong> Cancel | Close Tab / Quit；安全默认 Cancel。</li>
+        <li><strong>C · Don't ask again</strong> 与 Cancel 同一行最左；勾选并确认后写 Settings → General 的 Confirm close / quit = Off；Cancel / × 不改。</li>
       </ul>
+      <p class="anno-ref"><a href="../annotations.html">annotations</a></p>
     </div>
   </div>
 

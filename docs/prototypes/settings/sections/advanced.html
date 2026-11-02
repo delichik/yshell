@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — settings · Advanced</title>
+  <link rel="stylesheet" href="../../form.css">
+  <link rel="stylesheet" href="../../_icons.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <style>
+    :root { --board-w: 800px; --board-h: 640px; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--board-w); margin: 0 0 8px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .meta a { color: var(--line); font-weight: 600; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; font-size: 13px; color: var(--mute); }
+    .tools .btn { font-size: 13px; }
+    .tools a.btn[aria-current="page"] { background: var(--soft); font-weight: 600; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .board {
+      width: var(--board-w); height: var(--board-h); flex-shrink: 0;
+      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+    }
+    .board-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--mute); padding: 6px 10px 0;
+    }
+    .board-body { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; border-top: 1px solid var(--line); margin-top: 4px; }
+    .legend { max-width: var(--board-w); margin: 16px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+    .legend strong { color: var(--line); }
+  </style>
+</head>
+<body>
+  <p class="meta">settings · sections/advanced · board 800×640。 <a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a>。</p>
+  <div class="tools" role="navigation">
+    <a class="btn" href="general.html" title="General">General</a>
+    <a class="btn" href="appearance.html" title="Appearance">Appearance</a>
+    <a class="btn" href="terminal.html" title="Terminal">Terminal</a>
+    <a class="btn" href="security.html" title="Security">Security</a>
+    <a class="btn" href="mcp.html" title="MCP">MCP</a>
+    <a class="btn" href="advanced.html" aria-current="page" title="Advanced">Advanced</a>
+    <a class="btn" href="sftp.html" title="SFTP">SFTP</a>
+  </div>
+  <div class="stage">
+    <div class="board">
+      <div class="board-label">sections / advanced</div>
+      <div class="board-body">
+        <div class="form-row">
+          <span class="lbl">Debug logging</span>
+          <div class="ctl-with-btn center">
+            <label class="form-switch" title="Write debug logs under the config directory">
+              <input type="checkbox" aria-label="Enable debug logging" />
+              <span class="switch" aria-hidden="true"></span>
+              <span class="switch-txt"><span class="txt-on">On</span><span class="txt-off">Off</span></span>
+            </label>
+            <button type="button" class="btn btn-icon" title="Open debug log folder" aria-label="Open debug log folder">
+              <span class="i i-folder" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
+        <p class="hint hint-indent">Writes logs under the config directory.</p>
+        <div class="form-row">
+          <label class="lbl" for="fld-config-dir">Config directory</label>
+          <div class="ctl-with-btn center">
+            <input class="input" id="fld-config-dir" readonly value="C:\Users\alice\AppData\Roaming\yshell"
+                   aria-label="Config directory" title="Config directory" />
+            <button type="button" class="btn btn-icon" title="Open config directory" aria-label="Open config directory">
+              <span class="i i-folder" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
+        <p class="hint hint-indent">Read-only path to sessions, keys, and logs.</p>
+      </div>
+    </div>
+  </div>
+  <div class="legend">
+    <ul class="anno">
+      <li><strong>A · Debug logging</strong> 开关 + 打开日志目录。</li>
+      <li><strong>B · Config directory</strong> 只读路径 + 打开目录。</li>
+      <li><strong>C · MCP</strong> 已迁至 <a href="mcp.html">sections/mcp.html</a>。</li>
+    </ul>
+    <p class="anno-ref"><a href="../../forms.html">forms</a> · <a href="../../annotations.html">annotations</a></p>
+  </div>
+</body>
+</html>

@@ -4,218 +4,243 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YShell — Private keys wireframe</title>
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_anno.css">
   <style>
     :root {
       --win-w: 1100px; --win-h: 820px; --titlebar-h: 32px; --pad: 28px; --gap: 12px;
-      --ctrl-h: 32px; --list-w: 380px; --row-h: 56px;
-      --modal-w: 560px; --modal-h: 400px;
-      --line: #111; --fill: #fff; --mute: #555; --soft: #f0f0f0; --scrim: #00000066;
+      --list-w: 380px;
     }
     * { box-sizing: border-box; }
     body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
     .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); line-height: 1.45; }
-    .tools { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--mute); margin-bottom: 10px; }
+    .meta a { color: inherit; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--mute); margin-bottom: 10px; }
     .tools button { height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line); background: var(--fill); font: inherit; cursor: pointer; }
     .stage { overflow-x: auto; padding-bottom: 8px; }
-    .frame { position: relative; width: max-content; }
-    .win {
-      width: var(--win-w); height: var(--win-h); flex-shrink: 0;
-      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+    .win { width: var(--win-w); height: var(--win-h); flex-shrink: 0; display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line); }
+    .titlebar {
+      height: var(--titlebar-h); flex: 0 0 var(--titlebar-h);
+      display: flex; align-items: center; padding: 0 8px 0 12px; gap: 8px;
+      border-bottom: 1px solid var(--line);
     }
-    .win.is-blocked { pointer-events: none; }
-    .titlebar { height: var(--titlebar-h); flex: 0 0 var(--titlebar-h); display: flex; align-items: center; padding: 0 12px; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; }
+    .title { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cap { width: 40px; height: 24px; border: 1px solid var(--line); background: transparent; font-size: 10px; color: var(--line); padding: 0; }
     .body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: var(--pad); gap: var(--gap); overflow: hidden; }
+    .toolbar { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .toolbar .grow { flex: 1; }
     .split { flex: 1 1 auto; min-height: 0; display: flex; gap: 16px; overflow: hidden; }
-    .col-left { width: var(--list-w); flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; gap: 10px; }
-    .col-right { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto; border: 1px solid var(--line); padding: 16px; }
+    .col-left { width: var(--list-w); flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; gap: 8px; }
+    .col-right { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
     .scroll-list { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px dashed var(--line); }
-    .key-row { height: var(--row-h); padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 13px; cursor: pointer; }
-    .key-row[aria-selected="true"] { background: var(--soft); font-weight: 600; }
-    .key-row small { display: block; font-family: ui-monospace, monospace; font-size: 11px; color: var(--mute); font-weight: 400; }
-    .empty { padding: 24px 12px; text-align: center; font-size: 12px; color: var(--mute); }
-    .field { margin-bottom: 10px; }
-    .label { font-size: 13px; color: var(--mute); display: block; margin-bottom: 4px; }
-    .input { height: var(--ctrl-h); width: 100%; border: 1px solid var(--line); padding: 0 8px; font: inherit; }
+    .empty {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 12px; padding: 24px; text-align: center; font-size: 13px; color: var(--mute);
+      border: 1px dashed var(--line);
+    }
+    .empty[hidden], .scroll-list[hidden], .detail[hidden], .detail-empty[hidden] { display: none !important; }
+    .detail { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px solid var(--line); padding: 16px; }
+    .detail-empty {
+      flex: 1 1 auto; min-height: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; padding: 24px; text-align: center; font-size: 13px; color: var(--mute);
+      border: 1px dashed var(--line);
+    }
+    .detail .detail-row { grid-template-columns: 110px minmax(0, 1fr); }
+    .section-gap { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--soft); }
     .row-btns { display: flex; gap: 8px; flex-wrap: wrap; }
-    .mono { font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; border: 1px dashed var(--line); padding: 10px; max-height: 160px; overflow: auto; }
     .spacer { flex: 1 1 auto; min-height: 8px; }
     .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
     .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-    .btn { height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line); background: var(--fill); font: inherit; font-size: 14px; cursor: pointer; }
-    .btn-primary { background: var(--soft); font-weight: 600; }
-    .btn-danger { border-color: #800; }
-    .scrim {
-      display: none; position: absolute; inset: 0; background: var(--scrim);
-      align-items: center; justify-content: center; z-index: 2;
+    .flyout {
+      display: none; position: fixed; z-index: 5; min-width: 180px;
+      background: var(--fill); border: 1px solid var(--line); padding: 4px 0; font-size: 13px;
     }
-    .frame.has-modal .scrim { display: flex; }
-    .frame.has-modal .win { pointer-events: none; }
-    .modal {
-      width: var(--modal-w); height: var(--modal-h); flex-shrink: 0;
-      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
-      pointer-events: auto;
+    .flyout.open { display: block; }
+    .flyout a, .flyout button {
+      display: flex; align-items: center; width: 100%; height: 28px; padding: 0 12px;
+      border: 0; background: transparent; font: inherit; font-size: 13px; text-align: left;
+      cursor: pointer; color: inherit; text-decoration: none;
     }
-    .modal .m-body { flex: 1; min-height: 0; padding: var(--pad); display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
-    .modal .m-spacer { flex: 1; min-height: 8px; }
+    .flyout a:hover, .flyout button:hover { background: var(--soft); }
+    .flyout .danger { color: #800; }
+    .flyout .sep { height: 1px; background: var(--line); margin: 4px 0; }
     .legend { max-width: var(--win-w); margin: 20px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
     .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
   </style>
 </head>
 <body>
-  <p class="meta">
-    Private Keys · <code>1100×820</code> · Import / Export 为<strong>冻结父窗</strong>的 compact 子窗（560×400），不是左栏内嵌块。
-  </p>
-  <div class="tools" role="group" aria-label="Demo modal">
-    <button type="button" id="demo-import">Open Import modal</button>
-    <button type="button" id="demo-export">Open Export modal</button>
-    <button type="button" id="demo-empty">Empty list state</button>
+  <p class="meta">Private Keys · Generate / Import；右栏公钥；空列表无详情。 <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>。</p>
+  <div class="tools">
+    <button type="button" id="demo-list" aria-pressed="true" title="有密钥">有密钥</button>
+    <button type="button" id="demo-empty" aria-pressed="false" title="空列表">空列表</button>
   </div>
 
   <div class="stage">
-    <div class="frame" id="frame">
-      <div class="win" id="parent" role="dialog" aria-labelledby="pk-title">
-        <div class="titlebar" id="pk-title">Private Keys</div>
-        <div class="body">
-          <div class="split">
-            <div class="col-left">
-              <strong>Managed Keys</strong>
-              <div class="scroll-list" id="key-list">
-                <div class="key-row" aria-selected="true">work-ed25519<small>ED25519 · SHA256:nThU… · passphrase saved · Prod</small></div>
-                <div class="key-row" aria-selected="false">laptop-rsa<small>RSA 4096 · SHA256:abC9… · passphrase not saved</small></div>
-                <div class="key-row" aria-selected="false">deploy-ci<small>ED25519 · SHA256:pLm2… · used by CI</small></div>
-              </div>
-              <div class="empty" id="empty" hidden>
-                No managed private keys yet.<br />Import an OpenSSH private key to get started.
-              </div>
-              <div class="row-btns">
-                <button type="button" class="btn" id="btn-test">Test</button>
-                <button type="button" class="btn btn-primary" id="btn-import">Import…</button>
-              </div>
-            </div>
-            <div class="col-right" id="detail">
-              <h2 style="margin:0 0 8px;font-size:15px">Key Details — work-ed25519</h2>
-              <p style="margin:0 0 8px;font-size:13px;color:var(--mute)">Algorithm ED25519 · Fingerprint SHA256:nThU…k8mQ</p>
-              <p style="margin:0 0 8px;font-size:13px">Used by: Prod, Staging</p>
-              <p style="margin:0 0 4px" class="label">Public key</p>
-              <div class="mono">ssh-ed25519 AAAA…nThU work-ed25519</div>
-              <div class="row-btns" style="margin:12px 0">
-                <button type="button" class="btn">Copy</button>
-                <button type="button" class="btn" id="btn-export">Export…</button>
-                <button type="button" class="btn">Deploy…</button>
-                <a class="btn btn-danger" href="../compact-confirm/index.html" style="display:inline-flex;align-items:center;text-decoration:none;color:inherit">Remove… → confirm</a>
-              </div>
-              <h3 style="font-size:14px;margin:16px 0 8px">Passphrase</h3>
-              <p style="font-size:12px;color:var(--mute);margin:0 0 8px">A passphrase is saved for this key.</p>
-              <div class="field"><label class="label">Passphrase</label><input class="input" type="password" placeholder="New or replace" /></div>
-              <div class="row-btns">
-                <button type="button" class="btn btn-primary">Remember</button>
-                <button type="button" class="btn">Forget</button>
-              </div>
-            </div>
-          </div>
-          <div class="spacer"></div>
-          <div class="footer">
-            <hr class="rule" />
-            <div class="actions"><button type="button" class="btn btn-primary">Close</button></div>
-          </div>
-        </div>
+    <div class="win" role="dialog">
+      <div class="titlebar">
+        <div class="title">Private Keys</div>
+        <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
       </div>
-
-      <div class="scrim" id="scrim" aria-hidden="true">
-        <div class="modal" id="modal-import" role="dialog" aria-labelledby="import-title" hidden>
-          <div class="titlebar" id="import-title">Import Private Key</div>
-          <div class="m-body">
-            <p style="margin:0;font-size:13px;color:var(--mute)">Stored in the secret store; only metadata is written to config.</p>
-            <div class="field"><label class="label">Label (optional)</label><input class="input" placeholder="work-ed25519" /></div>
-            <div class="field">
-              <label class="label">Key file</label>
-              <div class="row-btns"><input class="input" readonly placeholder="Path to key file" /><button type="button" class="btn">Browse…</button></div>
+      <div class="body">
+        <div class="toolbar">
+          <a class="btn btn-primary btn-icon" href="modals.html#generate" title="Generate" aria-label="Generate"><span class="i i-generate" aria-hidden="true"></span></a>
+          <a class="btn btn-icon" href="modals.html#import-file" title="Import" aria-label="Import"><span class="i i-import" aria-hidden="true"></span></a>
+          <span class="grow"></span>
+          <span style="font-size:12px;color:var(--mute)" id="summary">3 keys</span>
+        </div>
+        <div class="split">
+          <div class="col-left">
+            <div class="scroll-list" id="key-list" role="listbox">
+              <div class="key-row" role="option" aria-selected="true" data-name="work-ed25519">
+                <span class="name">work-ed25519</span>
+                <small>SHA256:nThU…k8mQ</small>
+              </div>
+              <div class="key-row" role="option" aria-selected="false" data-name="laptop-rsa">
+                <span class="name">laptop-rsa</span>
+                <small>SHA256:abC9…xY2z</small>
+              </div>
+              <div class="key-row" role="option" aria-selected="false" data-name="deploy-ci">
+                <span class="name">deploy-ci</span>
+                <small>SHA256:pLm2…9vQw</small>
+              </div>
             </div>
-            <div class="field"><label class="label">Passphrase (optional)</label><input class="input" type="password" /></div>
-            <label style="font-size:14px"><input type="checkbox" /> Remember passphrase</label>
-            <div class="m-spacer"></div>
-            <hr class="rule" />
-            <div class="actions">
-              <button type="button" class="btn modal-cancel">Cancel</button>
-              <button type="button" class="btn btn-primary">Import</button>
+            <div class="empty" id="empty" hidden>
+              <span>No managed private keys yet.</span>
+              <div class="row-btns">
+                <a class="btn btn-primary btn-icon" href="modals.html#generate" title="Generate" aria-label="Generate"><span class="i i-generate" aria-hidden="true"></span></a>
+                <a class="btn btn-icon" href="modals.html#import-file" title="Import" aria-label="Import"><span class="i i-import" aria-hidden="true"></span></a>
+              </div>
+            </div>
+          </div>
+          <div class="col-right">
+            <div class="detail" id="detail">
+              <div class="detail-row">
+                <span class="detail-label">Algorithm</span>
+                <span class="detail-value">ED25519</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Fingerprint</span>
+                <span class="detail-value mono">SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKwDEjsOE</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Used by</span>
+                <span class="detail-value">Prod, Staging</span>
+              </div>
+
+              <div class="detail-row top section-gap">
+                <span class="detail-label">Public key</span>
+                <div class="ctl-with-btn" style="display:flex;gap:8px;align-items:flex-start">
+                  <div class="pubkey" id="pubkey">ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINexamplePublicKeyMaterialHere0123456789ABCDEF work-ed25519</div>
+                  <button type="button" class="btn btn-icon" aria-label="Copy public key" title="Copy public key"><span class="i i-copy" aria-hidden="true"></span></button>
+                </div>
+              </div>
+
+              <div class="detail-row top section-gap">
+                <span class="detail-label">Passphrase</span>
+                <div>
+                  <p class="hint" style="margin:0 0 8px">Leave empty to keep current passphrase</p>
+                  <div class="ctl-with-btn" style="display:flex;gap:8px;align-items:center">
+                    <input class="input" type="password" placeholder="New or replace" aria-label="Passphrase" />
+                    <button type="button" class="btn btn-icon" aria-label="Forget passphrase" title="Forget passphrase"><span class="i i-clear" aria-hidden="true"></span></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="detail-empty" id="detail-empty" hidden>
+              <span>No key selected.</span>
+              <span>Generate or import a key first.</span>
             </div>
           </div>
         </div>
-
-        <div class="modal" id="modal-export" role="dialog" aria-labelledby="export-title" hidden>
-          <div class="titlebar" id="export-title">Export Public Key</div>
-          <div class="m-body">
-            <p style="margin:0;font-size:13px;color:var(--mute)">Choose where to write the OpenSSH public key for work-ed25519.</p>
-            <div class="field">
-              <label class="label">Destination</label>
-              <div class="row-btns"><input class="input" readonly value="C:\Users\alice\work-ed25519.pub" /><button type="button" class="btn">Browse…</button></div>
-            </div>
-            <div class="m-spacer"></div>
-            <hr class="rule" />
-            <div class="actions">
-              <button type="button" class="btn modal-cancel">Cancel</button>
-              <button type="button" class="btn btn-primary">Export</button>
-            </div>
-          </div>
+        <div class="spacer"></div>
+        <div class="footer">
+          <hr class="rule" />
+          <div class="actions"><button type="button" class="btn btn-primary" title="Close">Close</button></div>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="legend">
-    <ul>
-      <li>父窗页脚<strong>只有 Close</strong>（浏览型）；口令 Remember/Forget 是详情内操作，不是窗级 Save。</li>
-      <li>Import… / Export… 打开 compact 子窗 + scrim；父窗 <code>pointer-events: none</code>（冻结）。</li>
-      <li>子窗页脚 Cancel | 主操作；不要把导入表单塞进左栏。</li>
-      <li>空列表：左栏 empty + Import… 仍可用。</li>
-    </ul>
+  <div class="flyout" id="ctx" role="menu" aria-hidden="true">
+    <button type="button" data-act="test" title="Test">Test</button>
+    <a href="modals.html#export">Export public key</a>
+    <button type="button" data-act="deploy" title="Deploy">Deploy</button>
+    <div class="sep"></div>
+    <a class="danger" href="../compact-confirm/index.html">Remove</a>
   </div>
+
+  <div class="legend">
+      <ul class="anno">
+        <li><strong>A · Toolbar</strong> Generate / Import。</li>
+        <li><strong>B · List</strong> 名称 + 指纹；右键 Test / Export / Deploy / Remove。</li>
+        <li><strong>C · Detail</strong> 公钥 + Copy；口令 + Forget；空列表右栏空态。</li>
+      </ul>
+      <p class="anno-ref"><a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a></p>
+    </div>
 
   <script>
     (function () {
-      var frame = document.getElementById("frame");
-      var scrim = document.getElementById("scrim");
-      var modals = {
-        import: document.getElementById("modal-import"),
-        export: document.getElementById("modal-export")
-      };
+      var ctx = document.getElementById("ctx");
+      var list = document.getElementById("key-list");
+      var empty = document.getElementById("empty");
+      var detail = document.getElementById("detail");
+      var detailEmpty = document.getElementById("detail-empty");
+      var summary = document.getElementById("summary");
+      var btnList = document.getElementById("demo-list");
+      var btnEmpty = document.getElementById("demo-empty");
 
-      function closeModal() {
-        frame.classList.remove("has-modal");
-        scrim.setAttribute("aria-hidden", "true");
-        Object.keys(modals).forEach(function (k) { modals[k].hidden = true; });
-      }
-
-      function openModal(name) {
-        Object.keys(modals).forEach(function (k) { modals[k].hidden = k !== name; });
-        frame.classList.add("has-modal");
-        scrim.setAttribute("aria-hidden", "false");
-      }
-
-      document.getElementById("btn-import").addEventListener("click", function () { openModal("import"); });
-      document.getElementById("btn-export").addEventListener("click", function () { openModal("export"); });
-      document.getElementById("demo-import").addEventListener("click", function () { openModal("import"); });
-      document.getElementById("demo-export").addEventListener("click", function () { openModal("export"); });
-      document.querySelectorAll(".modal-cancel").forEach(function (b) {
-        b.addEventListener("click", closeModal);
-      });
-
-      document.getElementById("demo-empty").addEventListener("click", function () {
-        var list = document.getElementById("key-list");
-        var empty = document.getElementById("empty");
-        var on = empty.hidden;
+      function setEmpty(on) {
         empty.hidden = !on;
         list.hidden = on;
-        document.getElementById("detail").style.opacity = on ? "0.4" : "1";
-      });
+        detail.hidden = on;
+        detailEmpty.hidden = !on;
+        summary.textContent = on ? "0 keys" : "3 keys";
+        btnList.setAttribute("aria-pressed", on ? "false" : "true");
+        btnEmpty.setAttribute("aria-pressed", on ? "true" : "false");
+        if (on) hideCtx();
+      }
+
+      function selectRow(row) {
+        document.querySelectorAll(".key-row").forEach(function (r) {
+          r.setAttribute("aria-selected", r === row ? "true" : "false");
+        });
+      }
+
+      function hideCtx() {
+        ctx.classList.remove("open");
+        ctx.setAttribute("aria-hidden", "true");
+      }
+
+      function showCtx(x, y) {
+        ctx.classList.add("open");
+        ctx.setAttribute("aria-hidden", "false");
+        var pad = 4;
+        ctx.style.left = Math.max(pad, Math.min(x, window.innerWidth - ctx.offsetWidth - pad)) + "px";
+        ctx.style.top = Math.max(pad, Math.min(y, window.innerHeight - ctx.offsetHeight - pad)) + "px";
+      }
 
       document.querySelectorAll(".key-row").forEach(function (row) {
-        row.addEventListener("click", function () {
-          document.querySelectorAll(".key-row").forEach(function (r) {
-            r.setAttribute("aria-selected", r === row ? "true" : "false");
-          });
+        row.addEventListener("click", function () { selectRow(row); hideCtx(); });
+        row.addEventListener("contextmenu", function (ev) {
+          ev.preventDefault();
+          selectRow(row);
+          showCtx(ev.clientX, ev.clientY);
         });
       });
+
+      document.addEventListener("click", function (ev) {
+        if (!ctx.contains(ev.target)) hideCtx();
+      });
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape") hideCtx();
+      });
+      ctx.querySelectorAll("[data-act]").forEach(function (b) {
+        b.addEventListener("click", hideCtx);
+      });
+
+      btnList.addEventListener("click", function () { setEmpty(false); });
+      btnEmpty.addEventListener("click", function () { setEmpty(true); });
     })();
   </script>
 </body>

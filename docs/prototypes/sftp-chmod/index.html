@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — SFTP permissions</title>
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_icons.css">
+  <link rel="stylesheet" href="../_anno.css">
+  <style>
+    /* Theme.tool-window-*-compact */
+    :root { --win-w: 560px; --win-h: 400px; --titlebar-h: 32px; --pad: 28px; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
+    .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .meta a { color: var(--line); font-weight: 600; }
+    .stage { overflow-x: auto; padding-bottom: 8px; }
+    .win {
+      width: var(--win-w); height: var(--win-h); flex-shrink: 0;
+      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+    }
+    .titlebar {
+      height: var(--titlebar-h); flex: 0 0 var(--titlebar-h);
+      display: flex; align-items: center; padding: 0 8px 0 12px; gap: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .title { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cap { width: 40px; height: 24px; border: 1px solid var(--line); background: transparent; font-size: 10px; color: var(--line); padding: 0; }
+    .body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: var(--pad); gap: 12px; overflow: hidden; }
+    .body .form-row { margin-bottom: 0; }
+    .body .hint { margin: 0; }
+    .perm-grid {
+      width: 100%; max-width: var(--field-w);
+      display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr;
+      border: 1px solid var(--line); box-sizing: border-box;
+    }
+    .perm-grid > span, .perm-grid > label {
+      min-height: var(--ctrl-h); display: flex; align-items: center;
+      padding: 0 10px; border-bottom: 1px solid var(--line);
+      box-sizing: border-box; font-size: 13px;
+    }
+    .perm-grid > :nth-last-child(-n + 4) { border-bottom: 0; }
+    .perm-grid .perm-head { min-height: 20px; font-size: 12px; color: var(--mute); }
+    .perm-grid .perm-cell { justify-content: center; }
+    .perm-grid input { width: 18px; height: 18px; margin: 0; }
+    .spacer { flex: 1; min-height: 8px; }
+    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .legend { max-width: var(--win-w); margin: 16px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
+    .legend strong { color: var(--line); }
+  </style>
+</head>
+<body>
+  <p class="meta">SFTP permissions · compact <code>560×400</code>。 ← <a href="../main-shell/workspace/sftp.html">sftp panel</a> · <a href="../annotations.html">annotations</a>。</p>
+
+  <div class="stage">
+    <div class="win" role="dialog" aria-labelledby="win-title">
+      <div class="titlebar">
+        <div class="title" id="win-title">Change permissions</div>
+        <button type="button" class="cap" title="Cancel" aria-label="Cancel"><span class="i i-close" aria-hidden="true"></span></button>
+      </div>
+      <div class="body">
+        <div class="form-row">
+          <span class="lbl">Path</span>
+          <input class="input" readonly value="/home/alice/proj/deploy.sh" aria-label="Path" title="Path" />
+        </div>
+        <div class="form-row">
+          <label class="lbl" for="fld-mode">Mode</label>
+          <input class="input input-port" id="fld-mode" type="text" inputmode="numeric" maxlength="3"
+                 value="755" aria-label="Octal mode" aria-describedby="mode-hint" title="Octal mode, e.g. 755" />
+        </div>
+        <p class="hint hint-indent" id="mode-hint">Octal, e.g. 755. Changes sync with the checkboxes.</p>
+
+        <div class="perm-grid" role="group" aria-label="Permissions">
+          <span class="perm-head">Permissions</span>
+          <span class="perm-head perm-cell">Owner</span>
+          <span class="perm-head perm-cell">Group</span>
+          <span class="perm-head perm-cell">Other</span>
+
+          <span>Read</span>
+          <label class="perm-cell"><input type="checkbox" data-class="owner" data-bit="4" aria-label="Owner read" /></label>
+          <label class="perm-cell"><input type="checkbox" data-class="group" data-bit="4" aria-label="Group read" /></label>
+          <label class="perm-cell"><input type="checkbox" data-class="other" data-bit="4" aria-label="Other read" /></label>
+
+          <span>Write</span>
+          <label class="perm-cell"><input type="checkbox" data-class="owner" data-bit="2" aria-label="Owner write" /></label>
+          <label class="perm-cell"><input type="checkbox" data-class="group" data-bit="2" aria-label="Group write" /></label>
+          <label class="perm-cell"><input type="checkbox" data-class="other" data-bit="2" aria-label="Other write" /></label>
+
+          <span>Execute</span>
+          <label class="perm-cell"><input type="checkbox" data-class="owner" data-bit="1" aria-label="Owner execute" /></label>
+          <label class="perm-cell"><input type="checkbox" data-class="group" data-bit="1" aria-label="Group execute" /></label>
+          <label class="perm-cell"><input type="checkbox" data-class="other" data-bit="1" aria-label="Other execute" /></label>
+        </div>
+
+        <div class="spacer" aria-hidden="true"></div>
+
+        <hr class="rule" />
+        <div class="actions">
+          <a class="btn" href="../main-shell/workspace/sftp.html" title="Cancel">Cancel</a>
+          <button type="button" class="btn btn-primary" title="Apply">Apply</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <ul class="anno">
+      <li><strong>A · Mode</strong> 八进制输入与 9 个勾选框双向同步。</li>
+      <li><strong>B · Permissions</strong> Owner / Group / Other × Read / Write / Execute。</li>
+      <li><strong>C · Actions</strong> Cancel | Apply；无打字确认词。</li>
+    </ul>
+    <p class="anno-ref"><a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a></p>
+  </div>
+
+  <script>
+    (function () {
+      var mode = document.getElementById("fld-mode");
+      var checks = document.querySelectorAll(".perm-grid input[type=checkbox]");
+      var classes = ["owner", "group", "other"];
+
+      function digitFor(name) {
+        var digit = 0;
+        checks.forEach(function (c) {
+          if (c.getAttribute("data-class") === name && c.checked) {
+            digit += Number(c.getAttribute("data-bit"));
+          }
+        });
+        return digit;
+      }
+
+      function syncFromMode() {
+        var text = mode.value.replace(/[^0-7]/g, "").slice(0, 3);
+        if (text !== mode.value) mode.value = text;
+        if (text.length !== 3) return;
+        classes.forEach(function (name, index) {
+          var digit = Number(text.charAt(index));
+          checks.forEach(function (c) {
+            if (c.getAttribute("data-class") === name) {
+              c.checked = (digit & Number(c.getAttribute("data-bit"))) !== 0;
+            }
+          });
+        });
+      }
+
+      function syncToMode() {
+        mode.value = classes.map(function (name) { return digitFor(name); }).join("");
+      }
+
+      mode.addEventListener("input", syncFromMode);
+      checks.forEach(function (c) { c.addEventListener("change", syncToMode); });
+      syncFromMode();
+    })();
+  </script>
+</body>
+</html>

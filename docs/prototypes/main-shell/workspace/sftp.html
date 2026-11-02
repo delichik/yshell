@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — SFTP dual-pane wireframe</title>
+  <style>
+    /*
+      SFTP content region tokens (board only, not full main window):
+      --board-w: 960px; --board-h: 560px;
+      --toolbar-h: 36px; --path-h: 28px; --row-h: 28px; --ctrl-h: 32px;
+      --anno-w: 220px;
+      Colors: --line #111 · --fill #fff · --mute #555 · --soft #f0f0f0 · page #e8e8e8
+    */
+    :root {
+      --board-w: 960px;
+      --board-h: 560px;
+      --toolbar-h: 36px;
+      --path-h: 28px;
+      --row-h: 28px;
+      --ctrl-h: 32px;
+      --anno-w: 220px;
+      --line: #111;
+      --fill: #fff;
+      --mute: #555;
+      --soft: #f0f0f0;
+      --anno: #555;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--line);
+      background: #e8e8e8;
+    }
+    .meta {
+      max-width: calc(var(--board-w) + 16px + var(--anno-w));
+      margin: 0 0 16px;
+      font-size: 13px;
+      color: var(--mute);
+      line-height: 1.45;
+    }
+    .meta code { font-size: 12px; }
+    .hud {
+      max-width: calc(var(--board-w) + 16px + var(--anno-w));
+      margin: 0 0 12px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font-size: 13px;
+      font-family: ui-monospace, monospace;
+      min-height: 36px;
+    }
+    .hud strong {
+      font-weight: 600;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      margin-right: 6px;
+    }
+    .tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: var(--mute);
+    }
+    .tools label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .stage {
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+    .frame {
+      display: grid;
+      grid-template-columns: var(--board-w) var(--anno-w);
+      column-gap: 16px;
+      width: max-content;
+      align-items: start;
+    }
+    .board {
+      width: var(--board-w);
+      height: var(--board-h);
+      flex-shrink: 0;
+      grid-column: 1;
+      grid-row: 1;
+      background: var(--fill);
+      border: 1px solid var(--line);
+      overflow: hidden;
+      position: relative;
+    }
+    .callouts {
+      grid-column: 2;
+      grid-row: 1;
+      position: relative;
+      height: var(--board-h);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .callout {
+      position: absolute;
+      left: 0;
+      right: 0;
+      font-size: 11px;
+      line-height: 1.35;
+      color: var(--anno);
+    }
+    .callout::before {
+      content: "";
+      position: absolute;
+      left: -12px;
+      top: 0.55em;
+      width: 10px;
+      border-top: 1px dashed var(--anno);
+    }
+    .callout strong {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      margin-bottom: 2px;
+      color: var(--line);
+    }
+    .callout-a { top: 4px; }
+    .callout-b { top: 52px; }
+    .callout-c { top: 300px; }
+    .callout-d { top: 468px; }
+
+    .tag {
+      position: absolute;
+      top: 0;
+      right: 0;
+      z-index: 2;
+      padding: 1px 5px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      color: var(--anno);
+      background: #e8e8e8;
+      border: 1px dashed var(--anno);
+      pointer-events: none;
+      user-select: none;
+    }
+    .region { position: relative; }
+
+    .sftp {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: var(--toolbar-h) 1fr;
+      min-height: 0;
+    }
+    .sftp-toolbar {
+      grid-column: 1 / -1;
+      height: var(--toolbar-h);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      min-width: 0;
+    }
+    .sftp-toolbar .lbl {
+      font-weight: 600;
+      flex: 0 0 auto;
+    }
+    .crumbs {
+      flex: 1 1 0;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-family: ui-monospace, monospace;
+      font-size: 11px;
+      color: var(--mute);
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .crumbs span { flex: 0 0 auto; }
+    .crumbs .trail {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+    .sep-v {
+      width: 1px;
+      height: 20px;
+      background: var(--line);
+      flex: 0 0 1px;
+      margin: 0 4px;
+    }
+    .toolbar-actions {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+    .toolbar-actions .mute {
+      font-size: 12px;
+      color: var(--mute);
+      white-space: nowrap;
+    }
+    .btn {
+      appearance: none;
+      height: 24px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      color: var(--line);
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      border-radius: 0;
+    }
+    .btn-primary {
+      background: var(--soft);
+      font-weight: 600;
+    }
+    .sftp-pane {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--line);
+    }
+    .sftp-pane:last-child { border-right: 0; }
+    .sftp-path {
+      flex: 0 0 var(--path-h);
+      height: var(--path-h);
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      font-family: ui-monospace, monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--mute);
+    }
+    .sftp-head {
+      flex: 0 0 auto;
+      height: var(--row-h);
+      display: grid;
+      grid-template-columns: 1fr 72px 100px;
+      align-items: center;
+      padding: 0 10px;
+      gap: 8px;
+      border-bottom: 1px solid var(--line);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--mute);
+      background: var(--soft);
+    }
+    .sftp-list {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      font-size: 13px;
+    }
+    .sftp-row {
+      height: var(--row-h);
+      display: grid;
+      grid-template-columns: 1fr 72px 100px;
+      align-items: center;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--soft);
+      gap: 8px;
+      cursor: default;
+    }
+    .sftp-row span {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sftp-row .name { min-width: 0; }
+    .sftp-row.renaming {
+      position: relative;
+      overflow: visible;
+      outline: 1px dashed var(--line);
+      outline-offset: -1px;
+      background: var(--soft);
+    }
+    .inline-rename {
+      width: 100%;
+      max-width: 100%;
+      height: 22px;
+      border: 2px solid var(--line);
+      background: var(--fill);
+      color: var(--line);
+      font: inherit;
+      font-size: 13px;
+      padding: 0 4px;
+      margin: 0;
+      outline: none;
+      border-radius: 0;
+    }
+    .renaming-badge {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 2;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: var(--mute);
+      border: 1px solid var(--line);
+      padding: 0 4px;
+      height: 18px;
+      line-height: 16px;
+      white-space: nowrap;
+      background: var(--fill);
+      pointer-events: none;
+    }
+
+    .flyout {
+      position: fixed;
+      z-index: 1000;
+      min-width: 200px;
+      max-width: 280px;
+      background: var(--fill);
+      border: 1px solid var(--line);
+      padding: 4px 0;
+      font-size: 13px;
+      display: none;
+    }
+    .flyout.open { display: block; }
+    .flyout button {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      padding: 6px 12px;
+      font: inherit;
+      font-size: 13px;
+      text-align: left;
+      color: inherit;
+      cursor: pointer;
+    }
+    .flyout button:hover { background: var(--soft); }
+    .flyout .sep {
+      height: 1px;
+      background: var(--soft);
+      margin: 4px 0;
+      border: 0;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 1100;
+      padding: 10px 14px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      font-size: 13px;
+      max-width: 360px;
+      display: none;
+    }
+    .toast.show { display: block; }
+
+    .pane-inner {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .collapse-strip {
+      display: none;
+      flex: 1;
+      min-height: 0;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 8px 4px;
+      gap: 8px;
+      border-right: 1px solid var(--line);
+      background: var(--soft);
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    .collapse-strip .btn {
+      writing-mode: horizontal-tb;
+      height: var(--ctrl-h);
+      width: 24px;
+      padding: 0;
+    }
+    .root[data-demo="local-collapsed"] .sftp {
+      grid-template-columns: 32px 1fr;
+    }
+    .root[data-demo="local-collapsed"] .local-pane .pane-inner { display: none; }
+    .root[data-demo="local-collapsed"] .local-pane .collapse-strip { display: flex; }
+
+    .remote-pane { position: relative; }
+    .drop-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      margin: 6px;
+      border: 2px dashed var(--line);
+      background: rgba(255, 255, 255, 0.88);
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+    }
+    .root[data-demo="drag-drop"] .drop-overlay { display: flex; }
+
+    .legend {
+      max-width: calc(var(--board-w) + 16px + var(--anno-w));
+      margin: 20px 0 0;
+      padding: 12px 14px;
+      border: 1px dashed var(--line);
+      font-size: 12px;
+      color: var(--mute);
+      line-height: 1.55;
+    }
+    .legend strong { color: var(--line); font-weight: 600; }
+    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+    .legend a { color: var(--line); }
+  </style>
+</head>
+<body>
+  <div class="root" id="root">
+    <p class="meta">
+      SFTP · 标签 <code>mode=sftp</code> 时的内容区（工作区标签，<strong>不是</strong> dock 面板）·
+      固定 <code>960×560</code> · Local | Remote 双栏。
+      与 Terminal 原位互切见 <a href="tab-bar.html">tab-bar</a>（Switch = 同标签改 mode）；分屏见 <a href="split.html">split</a>。
+      列表内<strong>就地</strong>新建/重命名（非对话框）。Stage <code>overflow-x: auto</code>。
+    </p>
+
+    <div class="hud" aria-live="polite">
+      <strong>Last action:</strong>
+      <span id="hudText">—</span>
+    </div>
+
+    <div class="tools" role="group" aria-label="Demo list states">
+      <span style="align-self:center">Demo state:</span>
+      <label><input type="radio" name="demo" value="default" checked /> Default list · 默认列表</label>
+      <label><input type="radio" name="demo" value="rename" /> Renaming · 重命名 <code>.env</code></label>
+      <label><input type="radio" name="demo" value="new-folder" /> New folder · 新建文件夹</label>
+      <label><input type="radio" name="demo" value="local-collapsed" /> Local collapsed · 本地栏折叠</label>
+      <label><input type="radio" name="demo" value="drag-drop" /> Drag-drop hint · 拖放提示</label>
+    </div>
+
+    <div class="stage">
+      <div class="frame">
+        <div class="board" id="board" role="region" aria-label="SFTP dual pane">
+          <div class="sftp">
+            <div class="sftp-toolbar region">
+              <span class="tag">A · toolbar</span>
+              <span class="lbl">Local</span>
+              <div class="crumbs" aria-label="Local path crumbs">
+                <span class="trail">C:\Users\alice\proj</span>
+              </div>
+              <span class="sep-v" aria-hidden="true"></span>
+              <span class="lbl">Remote</span>
+              <div class="crumbs" aria-label="Remote path crumbs">
+                <span>/</span><span>home</span><span>/</span><span>alice</span><span>/</span><span class="trail">proj</span>
+              </div>
+              <div class="toolbar-actions">
+                <span class="mute">Upload · Download</span>
+                <button type="button" class="btn btn-primary" id="newFolderBtn" title="New Folder">New Folder</button>
+                <button type="button" class="btn" id="moreBtn" aria-haspopup="true" title="More ▾">More ▾</button>
+              </div>
+            </div>
+
+            <div class="sftp-pane local-pane region">
+              <span class="tag">B · local pane</span>
+              <div class="collapse-strip" aria-label="Local pane collapsed">
+                <button type="button" class="btn" title="Expand local pane">▶</button>
+                <span>Local</span>
+              </div>
+              <div class="pane-inner">
+              <div class="sftp-path">C:\Users\alice\proj</div>
+              <div class="sftp-head"><span>Name</span><span>Size</span><span>Date</span></div>
+              <div class="sftp-list" id="sftpLocal" data-pane="local">
+                <div class="sftp-row" data-ctx="sftp-row"><span class="name">..</span><span></span><span></span></div>
+                <div class="sftp-row" data-ctx="sftp-row"><span class="name">src/</span><span>—</span><span>2026-10-28</span></div>
+                <div class="sftp-row" data-ctx="sftp-row"><span class="name">assets/</span><span>—</span><span>2026-10-27</span></div>
+                <div class="sftp-row" data-ctx="sftp-row"><span class="name">README.md</span><span>4 KB</span><span>2026-10-30</span></div>
+                <div class="sftp-row" data-ctx="sftp-row"><span class="name">Cargo.toml</span><span>1 KB</span><span>2026-10-29</span></div>
+                <div class="sftp-row" data-ctx="sftp-row"><span class="name">package-lock.json</span><span>128 KB</span><span>2026-10-25</span></div>
+                <div class="sftp-row" data-ctx="sftp-row"><span class="name">dist/</span><span>—</span><span>2026-10-26</span></div>
+                <div class="sftp-row" data-ctx="sftp-row"><span class="name">build.log</span><span>12 KB</span><span>2026-10-24</span></div>
+              </div>
+              </div>
+            </div>
+
+            <div class="sftp-pane remote-pane region">
+              <span class="tag">C · remote pane</span>
+              <div class="drop-overlay" aria-hidden="true">Drop to upload</div>
+              <div class="sftp-path">/home/alice/proj</div>
+              <div class="sftp-head"><span>Name</span><span>Size</span><span>Date</span></div>
+              <div class="sftp-list" id="sftpRemote" data-pane="remote">
+                <div class="sftp-row" data-ctx="sftp-row"><span class="name">..</span><span></span><span></span></div>
+                <div class="sftp-row" data-ctx="sftp-row"><span class="name">src/</span><span>—</span><span>Oct 28</span></div>
+                <div class="sftp-row" data-ctx="sftp-row" data-file=".env"><span class="name">.env</span><span>0.2 KB</span><span>Oct 30</span></div>
+                <div class="sftp-row" data-ctx="sftp-row"><span class="name">deploy.sh</span><span>2 KB</span><span>Oct 29</span></div>
+                <div class="sftp-row" data-ctx="sftp-row"><span class="name">config.yaml</span><span>1 KB</span><span>Oct 27</span></div>
+                <div class="sftp-row" data-ctx="sftp-row"><span class="name">logs/</span><span>—</span><span>Oct 26</span></div>
+                <div class="sftp-row" data-ctx="sftp-row"><span class="name">README.md</span><span>4 KB</span><span>Oct 30</span></div>
+                <div class="sftp-row" data-ctx="sftp-row"><span class="name">target/</span><span>—</span><span>Oct 25</span></div>
+                <div class="sftp-row" data-ctx="sftp-row"><span class="name">release.tar.gz</span><span>8 MB</span><span>Oct 24</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <ul class="callouts" aria-label="Design annotations">
+          <li class="callout callout-a">
+            <strong>A · Toolbar 工具栏</strong>
+            Local / Remote 路径屑 · 传输 · New Folder（就地插入行）· More。无弹窗新建/重命名。
+          </li>
+          <li class="callout callout-b">
+            <strong>B · Local 本地栏</strong>
+            路径条 + 列头；仅列表区域滚动，画板高度固定 560。
+          </li>
+          <li class="callout callout-c">
+            <strong>C · Remote 远程栏</strong>
+            演示态在 <code>..</code> 后插入新建行，或对 <code>.env</code> 行内 <code>inline-rename</code>。
+          </li>
+          <li class="callout callout-d">
+            <strong>Inline edit 就地编辑</strong>
+            徽章 <code>inline create</code> / <code>inline rename</code> · Enter 确认 · Esc 取消（新建取消则删行）。
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="legend">
+      <strong>产品规则 · Legend</strong>
+      <ul>
+        <li><strong>Rename / New Folder</strong>：列表行内输入框，<strong>不是</strong>对话框。</li>
+        <li><strong>Enter</strong> 确认 · <strong>Esc</strong> 取消（新建取消移除临时行）。交互式操作在「Default list」下失焦亦确认；上方 Demo 态为<strong>钉住</strong>（blur 不消失）。</li>
+        <li>右键行：Rename / New Folder / Delete / Properties · 双击名称 → Rename · 工具栏 New Folder。</li>
+        <li><strong>Local collapsed</strong>（status D9）：本地栏收成窄条 + 展开钮；远程栏占满剩余宽。</li>
+        <li><strong>Drag-drop</strong>：拖入远程时虚线叠层 “Drop to upload”。</li>
+        <li><strong>Permissions</strong>：独立 compact 窗 <a href="../../sftp-chmod/index.html">sftp-chmod</a>；八进制 + 勾选框。</li>
+        <li>Hub：<a href="../../index.html">prototypes index</a> · 整窗壳与导航见 <a href="../index.html">main-window</a>（本页仅 SFTP 内容区）。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="flyout" id="ctxMenu" role="menu" aria-hidden="true"></div>
+  <div class="flyout" id="moreMenu" role="menu" aria-hidden="true"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (function () {
+      var hudText = document.getElementById("hudText");
+      var ctxMenu = document.getElementById("ctxMenu");
+      var moreMenu = document.getElementById("moreMenu");
+      var toastEl = document.getElementById("toast");
+      var toastTimer = null;
+      var sftpRemote = document.getElementById("sftpRemote");
+      var remoteBaseline = sftpRemote ? sftpRemote.innerHTML : "";
+
+      var demoState = "default";
+      var ctxTarget = null;
+      var renameState = null;
+
+      function record(action) {
+        if (hudText) hudText.textContent = action;
+      }
+
+      function showToast(msg) {
+        toastEl.textContent = msg;
+        toastEl.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () {
+          toastEl.classList.remove("show");
+        }, 2200);
+      }
+
+      function isDemoSticky() {
+        return demoState === "rename" || demoState === "new-folder";
+      }
+
+      function closeFlyouts() {
+        [ctxMenu, moreMenu].forEach(function (el) {
+          el.classList.remove("open");
+          el.setAttribute("aria-hidden", "true");
+        });
+      }
+
+      function openFlyout(el, x, y, html) {
+        closeFlyouts();
+        el.innerHTML = html;
+        el.classList.add("open");
+        el.setAttribute("aria-hidden", "false");
+        el.style.left = x + "px";
+        el.style.top = y + "px";
+        requestAnimationFrame(function () {
+          var r = el.getBoundingClientRect();
+          if (r.right > window.innerWidth - 8) {
+            el.style.left = Math.max(8, window.innerWidth - r.width - 8) + "px";
+          }
+          if (r.bottom > window.innerHeight - 8) {
+            el.style.top = Math.max(8, window.innerHeight - r.height - 8) + "px";
+          }
+        });
+        el.querySelectorAll("[data-act]").forEach(function (node) {
+          node.addEventListener("click", function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            runAct(node.getAttribute("data-act"));
+            closeFlyouts();
+          });
+        });
+      }
+
+      function menuItem(label, act) {
+        return '<button type="button" data-act="' + act + '" title="' + label + '">' + label + "</button>";
+      }
+
+      function resetRemoteList() {
+        if (renameState) {
+          renameState = null;
+        }
+        if (sftpRemote) sftpRemote.innerHTML = remoteBaseline;
+      }
+
+      function findRemoteRowByName(name) {
+        if (!sftpRemote) return null;
+        var rows = sftpRemote.querySelectorAll(".sftp-row");
+        for (var i = 0; i < rows.length; i++) {
+          var n = rows[i].querySelector(".name");
+          if (n && n.textContent === name) return rows[i];
+        }
+        return null;
+      }
+
+      function clearRenamingBadge(host) {
+        if (!host) return;
+        host.querySelectorAll(".renaming-badge").forEach(function (b) { b.remove(); });
+      }
+
+      function endInlineRename(commit) {
+        if (!renameState) return;
+        var host = renameState.host;
+        var input = renameState.input;
+        var original = renameState.original;
+        var isCreate = !!renameState.isCreate;
+        var asFolder = !!renameState.asFolder;
+        var value = (input.value || "").trim();
+        clearRenamingBadge(host);
+        if (commit && value) {
+          if (asFolder && value.slice(-1) !== "/") value += "/";
+          var nameEl = document.createElement("span");
+          nameEl.className = "name";
+          nameEl.textContent = value;
+          host.classList.remove("renaming");
+          if (input.parentNode) input.parentNode.replaceChild(nameEl, input);
+          record((isCreate ? "Inline create → " : "Inline rename → ") + value);
+          showToast((isCreate ? "Created " : "Renamed to ") + value);
+          if (isDemoSticky() && demoState === "new-folder") applyDemoState("new-folder");
+          else if (isDemoSticky() && demoState === "rename") applyDemoState("rename");
+          else demoState = "default";
+          syncDemoRadios();
+          renameState = null;
+          return;
+        }
+        host.classList.remove("renaming");
+        if (isCreate) {
+          if (host.parentNode) host.parentNode.removeChild(host);
+          record("Inline create cancelled");
+          showToast("Create cancelled");
+        } else {
+          var restore = document.createElement("span");
+          restore.className = "name";
+          restore.textContent = original;
+          if (input.parentNode) input.parentNode.replaceChild(restore, input);
+          record("Inline rename cancelled");
+          showToast("Rename cancelled");
+        }
+        renameState = null;
+        if (isDemoSticky()) applyDemoState(demoState);
+      }
+
+      function beginInlineRename(host, label, opts) {
+        opts = opts || {};
+        if (!host) return;
+        var existingName = host.querySelector(".name");
+        if (existingName && existingName.textContent === "..") {
+          showToast("Cannot rename ..");
+          return;
+        }
+        if (renameState) endInlineRename(false);
+        closeFlyouts();
+        var nameEl = host.querySelector(".name");
+        if (!nameEl) return;
+        var original = nameEl.textContent;
+        var input = document.createElement("input");
+        input.type = "text";
+        input.className = "inline-rename";
+        input.value = original;
+        if (opts.placeholder) input.placeholder = opts.placeholder;
+        if (opts.initial !== undefined) input.value = opts.initial;
+        input.setAttribute("aria-label", label || "Rename");
+        host.classList.add("renaming");
+        nameEl.replaceWith(input);
+        clearRenamingBadge(host);
+        var badge = document.createElement("span");
+        badge.className = "renaming-badge";
+        badge.textContent = opts.isCreate ? "inline create" : "inline rename";
+        host.appendChild(badge);
+        var sticky = opts.sticky !== undefined ? opts.sticky : isDemoSticky();
+        renameState = {
+          host: host,
+          input: input,
+          original: original,
+          label: label,
+          isCreate: !!opts.isCreate,
+          asFolder: !!opts.asFolder,
+          sticky: sticky
+        };
+        try {
+          input.focus();
+          input.select();
+        } catch (e) {}
+
+        function onKey(ev) {
+          if (ev.key === "Enter") {
+            ev.preventDefault();
+            ev.stopPropagation();
+            cleanup();
+            endInlineRename(true);
+          } else if (ev.key === "Escape") {
+            ev.preventDefault();
+            ev.stopPropagation();
+            cleanup();
+            endInlineRename(false);
+          }
+        }
+        function onBlur() {
+          if (renameState && renameState.sticky) return;
+          cleanup();
+          endInlineRename(true);
+        }
+        function cleanup() {
+          input.removeEventListener("keydown", onKey);
+          input.removeEventListener("blur", onBlur);
+        }
+        input.addEventListener("keydown", onKey);
+        input.addEventListener("blur", onBlur);
+      }
+
+      function createSftpFolderInline(listEl, label, opts) {
+        opts = opts || {};
+        closeFlyouts();
+        var list = listEl || sftpRemote;
+        if (!list) return;
+        var row = document.createElement("div");
+        row.className = "sftp-row";
+        row.setAttribute("data-ctx", "sftp-row");
+        row.innerHTML = '<span class="name">New Folder</span><span>—</span><span></span>';
+        var first = list.querySelector(".sftp-row");
+        if (first && first.querySelector(".name") && first.querySelector(".name").textContent === "..") {
+          if (first.nextSibling) list.insertBefore(row, first.nextSibling);
+          else list.appendChild(row);
+        } else if (first) {
+          list.insertBefore(row, first);
+        } else {
+          list.appendChild(row);
+        }
+        record(label || "New Folder · inline create");
+        showToast("New Folder — edit in list");
+        beginInlineRename(row, "New Folder", {
+          isCreate: true,
+          asFolder: true,
+          initial: "New Folder",
+          sticky: opts.sticky !== undefined ? opts.sticky : isDemoSticky()
+        });
+      }
+
+      var rootEl = document.getElementById("root");
+
+      function applyDemoState(state) {
+        demoState = state;
+        if (rootEl) rootEl.setAttribute("data-demo", state);
+        if (state === "local-collapsed") {
+          resetRemoteList();
+          record("Demo · Local pane collapsed");
+          showToast("Local pane collapsed to strip");
+          return;
+        }
+        if (state === "drag-drop") {
+          resetRemoteList();
+          record("Demo · Drag-drop overlay on remote");
+          showToast("Drop to upload overlay");
+          return;
+        }
+        resetRemoteList();
+        if (state === "rename") {
+          var envRow = findRemoteRowByName(".env") || sftpRemote.querySelector('[data-file=".env"]');
+          if (envRow) beginInlineRename(envRow, "Rename", { sticky: true });
+          record("Demo · Renaming remote .env (sticky)");
+          showToast("Rename .env — input pinned");
+          return;
+        }
+        if (state === "new-folder") {
+          createSftpFolderInline(sftpRemote, "Demo · New Folder", { sticky: true });
+          record("Demo · New folder after .. (sticky)");
+          return;
+        }
+        record("Default list");
+      }
+
+      function syncDemoRadios() {
+        document.querySelectorAll('input[name="demo"]').forEach(function (r) {
+          r.checked = r.value === demoState;
+        });
+      }
+
+      function runAct(act) {
+        if (act === "ctx-rename") {
+          if (ctxTarget) beginInlineRename(ctxTarget, "Rename", { sticky: isDemoSticky() });
+          return;
+        }
+        if (act === "ctx-new-folder") {
+          var list = ctxTarget && ctxTarget.closest(".sftp-list");
+          createSftpFolderInline(list || sftpRemote, "New Folder", { sticky: isDemoSticky() });
+          return;
+        }
+        if (act === "ctx-chmod") {
+          record("Permissions → sftp-chmod");
+          showToast("Navigate → sftp-chmod");
+          window.location.href = "../../sftp-chmod/index.html";
+          return;
+        }
+        if (act === "ctx-delete") {
+          record("Delete (compact confirm in product)");
+          showToast("Delete — would open compact confirm");
+          return;
+        }
+        if (act === "ctx-properties") {
+          record("Properties → sftp-properties");
+          showToast("Navigate → sftp-properties");
+          window.location.href = "../sftp-properties/index.html";
+          return;
+        }
+        if (act === "more-refresh") {
+          record("Refresh both panes");
+          showToast("Refresh lists");
+        }
+      }
+
+      document.querySelectorAll('input[name="demo"]').forEach(function (r) {
+        r.addEventListener("change", function () {
+          if (r.checked) applyDemoState(r.value);
+        });
+      });
+
+      document.getElementById("newFolderBtn").addEventListener("click", function () {
+        demoState = "default";
+        syncDemoRadios();
+        createSftpFolderInline(sftpRemote, "Toolbar · New Folder", { sticky: false });
+      });
+
+      document.getElementById("moreBtn").addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var r = ev.currentTarget.getBoundingClientRect();
+        openFlyout(
+          moreMenu,
+          r.left,
+          r.bottom + 2,
+          menuItem("Refresh", "more-refresh") +
+            '<div class="sep"></div>' +
+            menuItem("Sync with selection", "more-refresh")
+        );
+      });
+
+      document.querySelectorAll(".sftp-list").forEach(function (list) {
+        list.addEventListener("contextmenu", function (ev) {
+          var row = ev.target.closest(".sftp-row");
+          if (!row) return;
+          ev.preventDefault();
+          ctxTarget = row;
+          var isRemote = list.getAttribute("data-pane") === "remote";
+          openFlyout(
+            ctxMenu,
+            ev.clientX,
+            ev.clientY,
+            menuItem("Rename", "ctx-rename") +
+              menuItem("New Folder", "ctx-new-folder") +
+              (isRemote ? menuItem("Permissions", "ctx-chmod") : "") +
+              '<div class="sep"></div>' +
+              menuItem("Delete", "ctx-delete") +
+              menuItem("Properties", "ctx-properties")
+          );
+        });
+        list.addEventListener("dblclick", function (ev) {
+          if (ev.target.closest(".inline-rename")) return;
+          var row = ev.target.closest(".sftp-row");
+          if (!row) return;
+          ev.preventDefault();
+          demoState = "default";
+          syncDemoRadios();
+          beginInlineRename(row, "Rename", { sticky: false });
+        });
+      });
+
+      document.addEventListener("click", function (ev) {
+        if (ev.target.closest(".flyout") || ev.target.closest("#moreBtn")) return;
+        closeFlyouts();
+      });
+
+      applyDemoState("default");
+    })();
+  </script>
+</body>
+</html>
