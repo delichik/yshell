@@ -20,6 +20,14 @@ on:
         required: false
         type: number
         default: 90
+      platforms:
+        description: >-
+          JSON array of platform ids to build. Feature branches under
+          `dev/<system>/...` pass a single platform here so packaging only
+          builds that system; `dev` and releases keep the full matrix.
+        required: false
+        type: string
+        default: '["windows-x86_64","macos-x86_64","macos-aarch64","linux-x86_64"]'
 
 permissions:
   contents: read
@@ -29,28 +37,38 @@ env:
   CARGO_INCREMENTAL: "0"
 
 jobs:
+  plan:
+    name: Plan build matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      include: ${{ steps.matrix.outputs.include }}
+    steps:
+      - name: Select platforms
+        id: matrix
+        env:
+          PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          set -euo pipefail
+          ALL='[
+            {"os":"windows-latest","target":"x86_64-pc-windows-msvc","platform":"windows-x86_64","formats":"portable,msi"},
+            {"os":"macos-latest","target":"x86_64-apple-darwin","platform":"macos-x86_64","formats":"portable,dmg"},
+            {"os":"macos-latest","target":"aarch64-apple-darwin","platform":"macos-aarch64","formats":"portable,dmg"},
+            {"os":"ubuntu-latest","target":"x86_64-unknown-linux-gnu","platform":"linux-x86_64","formats":"portable,deb,rpm"}
+          ]'
+          echo "requested platforms: $PLATFORMS"
+          include=$(printf '%s' "$ALL" | jq -c --argjson wanted "$PLATFORMS" \
+            '[.[] | select(.platform as $name | $wanted | index($name))]')
+          echo "matrix: $include"
+          echo "include=$include" >> "$GITHUB_OUTPUT"
+
   build:
     name: ${{ matrix.platform }}
+    needs: plan
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            platform: windows-x86_64
-            formats: portable,msi
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            platform: macos-x86_64
-            formats: portable,dmg
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            platform: macos-aarch64
-            formats: portable,dmg
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            platform: linux-x86_64
-            formats: portable,deb,rpm
+        include: ${{ fromJSON(needs.plan.outputs.include) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     steps:
