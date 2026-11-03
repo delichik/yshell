@@ -243,8 +243,9 @@ impl WindowManager {
             // 挂在首个组件创建出来的全局上下文里（提前调用会报 NoTranslationsBundled，
             // 界面整体回退英文），而晚于 show() 会先闪一帧英文。重复调用是幂等的。
             let ui_language = this.runtime.borrow().ui_language().to_owned();
+            let ui_appearance = this.runtime.borrow().config_document.ui.clone();
             apply_language(&ui_language);
-            apply_appearance(&window);
+            apply_appearance(&window, &ui_appearance);
             apply_fonts(&window);
             // W5-A2：窗口级快捷键依赖 root FocusScope 持有键盘焦点。
             window.invoke_focus_global_shortcuts();

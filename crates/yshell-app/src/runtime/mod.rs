@@ -43,6 +43,7 @@ pub(crate) use sftp_ops::{resolve_drop_move, same_local_volume};
 mod split_tree;
 mod ssh_config;
 mod tabs;
+mod terminal_input;
 mod theme;
 mod transfer;
 

@@ -22,7 +22,10 @@ use crate::{
     names::{
         name_collides, names_equal_ignore_case, sanitize_entry_name, validate_entry_name, NameError,
     },
-    schema::{AppearanceProfile, FolderProfile, LoggingProfile, SessionProfile, TerminalProfile},
+    schema::{
+        AppearanceProfile, FolderProfile, LoggingProfile, LoginScriptProfile, SessionProfile,
+        SftpProfile, TerminalProfile, TunnelProfile,
+    },
 };
 
 /// Directory name under the config root that holds the session tree.
@@ -92,6 +95,16 @@ struct FolderMetaFile {
     pub logging: Option<LoggingProfile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub appearance: Option<AppearanceProfile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth_profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proxy_profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sftp: Option<SftpProfile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tunnel: Option<TunnelProfile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub login_script: Option<LoginScriptProfile>,
 }
 
 impl SessionTreeStore {
@@ -406,6 +419,11 @@ impl SessionTreeStore {
             terminal: folder.terminal.clone(),
             logging: folder.logging.clone(),
             appearance: folder.appearance.clone(),
+            auth_profile_id: folder.auth_profile_id.clone(),
+            proxy_profile_id: folder.proxy_profile_id.clone(),
+            sftp: folder.sftp.clone(),
+            tunnel: folder.tunnel.clone(),
+            login_script: folder.login_script.clone(),
         };
         atomic_write_toml(&folder_path.join(FOLDER_META_FILE_NAME), &meta)
     }
@@ -457,6 +475,11 @@ impl SessionTreeStore {
                         terminal: None,
                         logging: None,
                         appearance: None,
+                        auth_profile_id: None,
+                        proxy_profile_id: None,
+                        sftp: None,
+                        tunnel: None,
+                        login_script: None,
                     }
                 }
             }
@@ -466,6 +489,11 @@ impl SessionTreeStore {
                 terminal: None,
                 logging: None,
                 appearance: None,
+                auth_profile_id: None,
+                proxy_profile_id: None,
+                sftp: None,
+                tunnel: None,
+                login_script: None,
             }
         };
 
@@ -523,6 +551,11 @@ impl SessionTreeStore {
             terminal: meta.terminal,
             logging: meta.logging,
             appearance: meta.appearance,
+            auth_profile_id: meta.auth_profile_id,
+            proxy_profile_id: meta.proxy_profile_id,
+            sftp: meta.sftp,
+            tunnel: meta.tunnel,
+            login_script: meta.login_script,
         })
     }
 }
@@ -681,6 +714,7 @@ fn remove_folder(folders: &mut Vec<FolderProfile>, id: &str) -> Option<FolderPro
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::schema::{LoginStep, LoginStepAction, TunnelForward, TunnelForwardKind};
     use tempfile::TempDir;
 
     fn sample_tree() -> Vec<FolderProfile> {
@@ -710,6 +744,55 @@ mod tests {
         assert_eq!(loaded[0].name, "Prod");
         assert_eq!(loaded[0].sessions[0].name, "web");
         assert_eq!(loaded[0].folders[0].sessions[0].host, "api.example.test");
+    }
+
+    #[test]
+    fn folder_meta_round_trips_session_icon_and_inheritance_overrides() {
+        let temp = TempDir::new().expect("tempdir");
+        let store = SessionTreeStore::new(temp.path());
+
+        let mut folder = FolderProfile::new("folder-dev", "Dev");
+        folder.auth_profile_id = Some("auth-1".to_owned());
+        folder.proxy_profile_id = Some("proxy-1".to_owned());
+        folder.sftp = Some(SftpProfile {
+            show_hidden: false,
+            ..SftpProfile::default()
+        });
+        folder.tunnel = Some(TunnelProfile {
+            forwards: vec![TunnelForward {
+                kind: TunnelForwardKind::Local,
+                bind_host: "127.0.0.1".to_owned(),
+                bind_port: 8080,
+                target_host: "db.test".to_owned(),
+                target_port: 5432,
+            }],
+        });
+        folder.login_script = Some(LoginScriptProfile {
+            steps: vec![LoginStep {
+                name: "login".to_owned(),
+                action: LoginStepAction::Keys {
+                    keys: "whoami\n".to_owned(),
+                    tokens: false,
+                },
+            }],
+        });
+        let mut session = SessionProfile::new("saved-dev", "Dev box", "dev.test");
+        session.icon = Some("server".to_owned());
+        folder.sessions.push(session);
+
+        store.write_tree(&[folder]).expect("write");
+        let (loaded, warnings) = store.load();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let folder = &loaded[0];
+        assert_eq!(folder.auth_profile_id.as_deref(), Some("auth-1"));
+        assert_eq!(folder.proxy_profile_id.as_deref(), Some("proxy-1"));
+        assert!(!folder.sftp.as_ref().expect("sftp").show_hidden);
+        assert_eq!(folder.tunnel.as_ref().expect("tunnel").forwards.len(), 1);
+        assert_eq!(
+            folder.login_script.as_ref().expect("script").steps[0].name,
+            "login"
+        );
+        assert_eq!(folder.sessions[0].icon.as_deref(), Some("server"));
     }
 
     #[test]

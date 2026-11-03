@@ -300,15 +300,58 @@ fn resolve_appearance(
     (mode, accent)
 }
 
+/// 把配置里的主题模式映射成 UI 侧模式。
+fn theme_mode_from_config(mode: yshell_config::AppearanceMode) -> ThemeMode {
+    match mode {
+        yshell_config::AppearanceMode::System => ThemeMode::System,
+        yshell_config::AppearanceMode::Light => ThemeMode::Light,
+        yshell_config::AppearanceMode::Dark => ThemeMode::Dark,
+    }
+}
+
+/// 把配置里的强调色映射成预设 id（`follow_system` 暂回退到 Windows 蓝）。
+pub(crate) fn accent_id_from_config(accent: yshell_config::AccentColor) -> &'static str {
+    use yshell_config::AccentColor as Accent;
+    match accent {
+        Accent::FollowSystem | Accent::Blue => "blue",
+        Accent::Teal => "teal",
+        Accent::Purple => "purple",
+        Accent::Green => "green",
+        Accent::Orange => "orange",
+        Accent::Magenta => "magenta",
+    }
+}
+
+/// 生效外观：`YSHELL_THEME` / `YSHELL_ACCENT` 环境变量优先（测试与 CI 用），
+/// 其次 `[ui]` 配置，最后内置默认。
+pub(crate) fn resolve_appearance_with_config(
+    ui: &yshell_config::UiProfile,
+) -> (ThemeMode, AccentColors) {
+    let mode_env = std::env::var("YSHELL_THEME").ok();
+    let accent_env = std::env::var("YSHELL_ACCENT").ok();
+    let (env_mode, env_accent) = resolve_appearance(mode_env.as_deref(), accent_env.as_deref());
+    let mode = if mode_env.as_deref().and_then(ThemeMode::from_id).is_some() {
+        env_mode
+    } else {
+        theme_mode_from_config(ui.appearance_mode)
+    };
+    let accent = if accent_env
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty())
+    {
+        env_accent
+    } else {
+        appearance::resolve_accent(accent_id_from_config(ui.appearance_accent))
+    };
+    (mode, accent)
+}
+
 /// 把解析后的主题模式与强调色写入 Slint 的 `Theme` 全局。
 ///
 /// 明暗的"跟随系统"由 Slint 侧处理（`Theme.mode = unknown` 时读取
 /// std-widgets 的 `Palette.color-scheme`），Rust 只负责用户显式选择的模式。
-pub(crate) fn apply_appearance(window: &MainWindow) {
-    let (mode, accent) = resolve_appearance(
-        std::env::var("YSHELL_THEME").ok().as_deref(),
-        std::env::var("YSHELL_ACCENT").ok().as_deref(),
-    );
+pub(crate) fn apply_appearance(window: &MainWindow, ui: &yshell_config::UiProfile) {
+    let (mode, accent) = resolve_appearance_with_config(ui);
 
     let theme = window.global::<Theme>();
     theme.set_mode(match mode {
@@ -1680,6 +1723,7 @@ pub(crate) fn wire_callbacks(
     let runtime_ref = Rc::clone(&runtime);
     let surface = surface_source.clone();
     let suppress_ref = Rc::clone(&suppress_selection_end);
+    let clipboard_ref = Rc::clone(&clipboard);
     window.on_terminal_selection_end(move |x, y| {
         let Some(window) = weak.upgrade() else {
             return;
@@ -1697,6 +1741,12 @@ pub(crate) fn wire_callbacks(
         let result = runtime_ref.borrow_mut().finish_active_terminal_selection();
         match result {
             Ok(projection) => {
+                // Settings → Terminal 的自动复制：选区一结束就写系统剪贴板。
+                if let Some(text) = runtime_ref.borrow_mut().auto_copy_terminal_selection() {
+                    if let Some(clipboard) = clipboard_ref.borrow_mut().as_mut() {
+                        let _ = clipboard.set_contents(text);
+                    }
+                }
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
@@ -7439,8 +7489,9 @@ pub fn init_logging_for_runtime(runtime: &AppRuntime) -> AppResult<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        platform_default_ui_font, resolve_appearance, resolve_language, resolve_ui_font,
-        terminal_grid_cell, terminal_size_from_viewport,
+        accent_id_from_config, platform_default_ui_font, resolve_appearance,
+        resolve_appearance_with_config, resolve_language, resolve_ui_font, terminal_grid_cell,
+        terminal_size_from_viewport, theme_mode_from_config,
     };
     use crate::runtime::AppRuntime;
     use tempfile::tempdir;
@@ -7632,6 +7683,54 @@ mod tests {
         let (mode, accent) = resolve_appearance(Some("bogus"), Some("bogus"));
         assert_eq!(mode, ThemeMode::System);
         assert_eq!(accent, appearance::resolve_accent("blue"));
+    }
+
+    #[test]
+    fn config_appearance_maps_modes_and_accent_ids() {
+        use yshell_config::{AccentColor, AppearanceMode};
+
+        assert_eq!(
+            theme_mode_from_config(AppearanceMode::System),
+            ThemeMode::System
+        );
+        assert_eq!(
+            theme_mode_from_config(AppearanceMode::Light),
+            ThemeMode::Light
+        );
+        assert_eq!(
+            theme_mode_from_config(AppearanceMode::Dark),
+            ThemeMode::Dark
+        );
+
+        for (accent, id) in [
+            (AccentColor::Blue, "blue"),
+            (AccentColor::Teal, "teal"),
+            (AccentColor::Purple, "purple"),
+            (AccentColor::Green, "green"),
+            (AccentColor::Orange, "orange"),
+            (AccentColor::Magenta, "magenta"),
+        ] {
+            assert_eq!(accent_id_from_config(accent), id);
+            assert_eq!(appearance::preset(id).id, id);
+        }
+        // 跟随系统 accent 暂回退到默认蓝色。
+        assert_eq!(accent_id_from_config(AccentColor::FollowSystem), "blue");
+    }
+
+    #[test]
+    fn config_appearance_is_used_when_env_is_absent() {
+        if std::env::var_os("YSHELL_THEME").is_some() || std::env::var_os("YSHELL_ACCENT").is_some()
+        {
+            return;
+        }
+        let ui = yshell_config::UiProfile {
+            appearance_mode: yshell_config::AppearanceMode::Dark,
+            appearance_accent: yshell_config::AccentColor::Magenta,
+            ..yshell_config::UiProfile::default()
+        };
+        let (mode, accent) = resolve_appearance_with_config(&ui);
+        assert_eq!(mode, ThemeMode::Dark);
+        assert_eq!(accent, appearance::resolve_accent("magenta"));
     }
 
     #[test]

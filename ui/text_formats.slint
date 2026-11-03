@@ -976,6 +976,9 @@ export global TextFormats {
         if kind == "clipboard-empty-paste" {
             return @tr("MainWindow" => "Clipboard is empty, so nothing was pasted.");
         }
+        if kind == "terminal-paste-blocked-multiline" {
+            return @tr("MainWindow" => "Multi-line paste is blocked in Settings → Terminal.");
+        }
         if kind == "terminal-cleared" {
             return @tr("MainWindow" => "Cleared the visible terminal view.");
         }

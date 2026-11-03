@@ -7,6 +7,7 @@ use crate::{
 use yshell_core::{CommandDispatcher, SessionCommand};
 use yshell_terminal::{GridPoint, TerminalSnapshot};
 
+use super::terminal_input::{self, PasteDecision};
 use super::*;
 
 impl AppRuntime {
@@ -92,6 +93,35 @@ impl AppRuntime {
         Ok(self.projection())
     }
 
+    /// Settings → Terminal 的多行粘贴策略：`Some` 表示这次粘贴被拦下并已有状态提示。
+    fn multi_line_paste_refusal(&mut self, text: &str) -> Option<AppProjection> {
+        match terminal_input::paste_decision(
+            self.config_document.ui.terminal_multi_line_paste,
+            text,
+        ) {
+            PasteDecision::Send | PasteDecision::Confirm => None,
+            PasteDecision::Block => {
+                self.set_status_kind(
+                    "terminal-paste-blocked-multiline",
+                    "Multi-line paste is blocked in Settings → Terminal.".to_owned(),
+                    String::new(),
+                    String::new(),
+                );
+                Some(self.projection())
+            }
+        }
+    }
+
+    /// Settings → Terminal 的自动复制：选区结束且有内容时返回要写剪贴板的文本。
+    pub fn auto_copy_terminal_selection(&mut self) -> Option<String> {
+        let text = self.active_terminal_selection_text();
+        terminal_input::should_auto_copy(
+            self.config_document.ui.terminal_auto_copy,
+            !text.is_empty(),
+        )
+        .then_some(text)
+    }
+
     pub fn paste_terminal_clipboard(&mut self) -> AppResult<AppProjection> {
         if self.terminal_clipboard.is_empty() {
             self.set_status_kind(
@@ -119,6 +149,9 @@ impl AppRuntime {
             );
             return Ok(self.projection());
         }
+        if let Some(projection) = self.multi_line_paste_refusal(text) {
+            return Ok(projection);
+        }
         self.terminal_clipboard = text.to_owned();
         // Paste sends the clipboard bytes verbatim; terminals do not append a
         // newline, so pasted text waits for the user to press Enter.
@@ -138,6 +171,9 @@ impl AppRuntime {
                 String::new(),
             );
             return Ok(self.projection());
+        }
+        if let Some(projection) = self.multi_line_paste_refusal(text) {
+            return Ok(projection);
         }
         self.terminal_clipboard = text.to_owned();
         let mut bytes = Vec::with_capacity(text.len() + 12);
