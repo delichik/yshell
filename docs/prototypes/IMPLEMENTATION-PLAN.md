@@ -109,9 +109,9 @@ wiring note 格式：新增 property / callback 名 + 期望绑定 + 插入锚�
 - 差距清单恢复：`IMPLEMENTATION-GAPS.md`；任务板：task-1 … task-11。
 - 旧一轮成果归档在 `refs/archive/win-ui-opt`（只读参考）。
 
-### 第 1 波 · 进行中（2026-11-03）
+### 第 1 波 · 完成（2026-11-03）
 
-已完成（提交 `c6d1102`）：
+提交：`c6d1102`（config + runtime 基础）、`edb0243`（Settings 草稿 / SFTP 默认值）。
 
 - **config**（`crates/yshell-config`）：
   - `[ui]` 新字段：`appearance_mode`（system/light/dark）、`appearance_accent`（follow/6 预设，与 `yshell_ui::appearance` 同名）、终端交互四项（middle/right click、multi-line paste、auto copy）。
@@ -122,14 +122,18 @@ wiring note 格式：新增 property / callback 名 + 期望绑定 + 插入锚�
 - **runtime**：
   - App theme 改为读配置（`YSHELL_THEME` / `YSHELL_ACCENT` 环境变量仍优先，兼容测试与 CI）。
   - 新增 `runtime/terminal_input` 纯逻辑模块（点击语义 / 多行粘贴裁决 / 自动复制）+ 7 单测。
+  - Settings → Terminal 草稿新增四项交互（update / Save 写 `[ui]` / Reset 回 D37 默认）。
   - 多行粘贴 `Block` 已在两条粘贴路径生效（新状态 kind + 模板）；选区结束且开自动复制时写入系统剪贴板。
+  - 新 SFTP 标签与本地栏按配置继承 Show hidden（默认开，对齐原型）。
   - 新增 TextFormats 模板：MCP 七个状态、`terminal-paste-blocked-multiline`。
 
-验证：`cargo xtask check` 通过；`cargo test --workspace --exclude xtask` 全绿（yshell-config 60 / yshell-app 400 + 集成）。
+验证：`cargo xtask check` 通过；`cargo test --workspace --exclude xtask` 全绿（yshell-config 60 / yshell-app 402 + 集成）。
 
-下一轮（波 1 收尾）：
+移交波 2：
 
-- Settings → Terminal 草稿补四项交互字段（`runtime/panels.rs` + projection）。
-- SFTP 全局默认值（show hidden / conflict / external editor）应用到 SFTP 入口。
-- 主密码状态改由 secret store 推导，与波 2-A 的安全窗一起落地；不在 config 增加幽灵字段。
+- 主密码 / SecretVault 状态机与启动解锁 → 波 2-A（随 Settings → Security 一起做）。
+- login script 连接后执行挂点 → 波 2-B（随 Session Editor 一起做）。
+- Settings 四项交互的 projection / Slint 接线 → 波 2-A。
+- SFTP conflict 默认动作、external editor 启动 → 波 3-G / 波 4 收口。
+
 
