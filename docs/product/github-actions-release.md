@@ -88,6 +88,22 @@ cargo xtask dist --target <triple> --platform <slug> --formats <list>
 随后 `checksums` 任务下载所有 artifact，把每个 `.sha256` 汇总为 `SHA256SUMS.txt`
 （并校验数量与产物数量一致），单独上传。
 
+### 缓存
+
+`setup-build-env` 用 `Swatinem/rust-cache` 缓存 `~/.cargo`（registry、git 依赖）和
+`target` 里的**第三方依赖**产物。key 由 rustc 版本、仓库内所有
+`Cargo.toml`/`Cargo.lock`/`.cargo/config.toml` 的哈希等组成，并用旧 `Cargo.lock` 的缓存
+做回退。
+
+它**不缓存本仓库自己的 crate**（保存前会把非依赖产物删掉）：cargo 用源文件 mtime
+判断 workspace crate 是否需要重编，而 `actions/checkout` 给每个文件新的 mtime，所以每次
+构建都会重新编译本仓库的 crate（UI、终端等）。命中缓存省下的是第三方依赖那部分，实测
+Windows 打包从约 21 分钟降到约 9 分钟。
+
+两个限制：GitHub 默认每仓库 10 GB 缓存上限（按最近使用淘汰，超了会触发
+cache thrashing）；缓存按分支隔离，只有当前分支和默认分支（`main`）的缓存能被恢复，
+因此特性分支的第一次构建必然是冷的。
+
 ## 5. `release.yml`
 
 | 触发方式 | 行为 |
