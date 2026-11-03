@@ -108,3 +108,28 @@ wiring note 格式：新增 property / callback 名 + 期望绑定 + 插入锚�
 - 验证：`cargo xtask check` 通过；`cargo test --workspace --exclude xtask` 27 个测试套件全绿；`yshell.exe` 启动冒烟通过（1440×900，见 `D:\NewSpace\ui-evidence\wave0\app-launch.png`）。
 - 差距清单恢复：`IMPLEMENTATION-GAPS.md`；任务板：task-1 … task-11。
 - 旧一轮成果归档在 `refs/archive/win-ui-opt`（只读参考）。
+
+### 第 1 波 · 进行中（2026-11-03）
+
+已完成（提交 `c6d1102`）：
+
+- **config**（`crates/yshell-config`）：
+  - `[ui]` 新字段：`appearance_mode`（system/light/dark）、`appearance_accent`（follow/6 预设，与 `yshell_ui::appearance` 同名）、终端交互四项（middle/right click、multi-line paste、auto copy）。
+  - `[sftp]` 新字段：`show_hidden`（默认开）、`conflict_action`（ask/replace/skip/stop）、`external_editor`（None = 系统默认）。
+  - `SessionProfile`：`icon`（None = 默认 / 预设 id / 自定义路径）、`login_script`；`LoginScriptProfile` + `LoginStepAction::{Keys, Wait}`。
+  - `FolderProfile`：auth / proxy / sftp / tunnel / login-script 五类可继承覆盖；`ResolvedSessionProfile` 解析 nearest-first，并随 `.folder.toml` 持久化。
+  - sanitize：图标与外部编辑器去空白、空值回 None；登录脚本名字补齐、等待上限 60s。
+- **runtime**：
+  - App theme 改为读配置（`YSHELL_THEME` / `YSHELL_ACCENT` 环境变量仍优先，兼容测试与 CI）。
+  - 新增 `runtime/terminal_input` 纯逻辑模块（点击语义 / 多行粘贴裁决 / 自动复制）+ 7 单测。
+  - 多行粘贴 `Block` 已在两条粘贴路径生效（新状态 kind + 模板）；选区结束且开自动复制时写入系统剪贴板。
+  - 新增 TextFormats 模板：MCP 七个状态、`terminal-paste-blocked-multiline`。
+
+验证：`cargo xtask check` 通过；`cargo test --workspace --exclude xtask` 全绿（yshell-config 60 / yshell-app 400 + 集成）。
+
+下一轮（波 1 收尾）：
+
+- Settings → Terminal 草稿补四项交互字段（`runtime/panels.rs` + projection）。
+- SFTP 全局默认值（show hidden / conflict / external editor）应用到 SFTP 入口。
+- 主密码状态改由 secret store 推导，与波 2-A 的安全窗一起落地；不在 config 增加幽灵字段。
+
