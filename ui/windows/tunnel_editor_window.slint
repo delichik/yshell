@@ -1,0 +1,251 @@
+// Tunnel Editor 子窗（standard 720×580）。
+//
+// 原型：`docs/prototypes/tunnel-editor/index.html`。
+// Name / Type / Bind host / Bind port / Destination（Dynamic 隐藏）/ On connect；
+// 页脚 Cancel | Save。本版只存定义，转发引擎后续里程碑。
+
+import { Theme } from "../theme.slint";
+import { WinButton, WinComboBox } from "../components/basic/controls.slint";
+import { WinTextInput } from "../components/basic/text_input.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
+
+component FormRow inherits Rectangle {
+    in property <string> label: "";
+
+    height: max(Theme.control-height, body.preferred-height);
+    background: transparent;
+
+    body := HorizontalLayout {
+        spacing: Theme.spacing-12;
+        cross-axis-alignment: start;
+
+        Text {
+            text: root.label;
+            color: Theme.text-secondary;
+            font-size: Theme.font-body;
+            width: Theme.form-label-width-narrow;
+            height: Theme.control-height;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        HorizontalLayout {
+            horizontal-stretch: 1;
+            spacing: Theme.spacing-8;
+            cross-axis-alignment: center;
+            @children
+        }
+    }
+}
+
+// 开关（40×20 轨道 + 12px 拇指）。
+component SwitchToggle inherits Rectangle {
+    in-out property <bool> checked: false;
+    callback toggled();
+
+    width: 40px;
+    height: 20px;
+    border-radius: 10px;
+    background: root.checked ? Theme.accent : Theme.control-stroke;
+
+    Rectangle {
+        width: 12px;
+        height: 12px;
+        y: 4px;
+        x: root.checked ? parent.width - 14px : 2px;
+        border-radius: 6px;
+        background: root.checked ? Theme.accent-text : Theme.text-secondary;
+        animate x { duration: Theme.duration-faster; easing: ease-out; }
+    }
+
+    touch := TouchArea {
+        clicked => {
+            root.checked = !root.checked;
+            root.toggled();
+        }
+    }
+}
+
+export component TunnelEditorWindow inherits Window {
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-standard;
+    min-width: Theme.tool-window-width-standard;
+    max-width: Theme.tool-window-width-standard;
+    preferred-height: Theme.tool-window-height-standard;
+    min-height: Theme.tool-window-height-standard;
+    max-height: Theme.tool-window-height-standard;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    title: root.edit-mode ? @tr("Edit Tunnel") : @tr("Add Tunnel");
+
+    private property <length> body-width:
+        Theme.tool-window-width-standard - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-standard - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+
+    /// true = 编辑已有隧道配置。
+    in property <bool> edit-mode: false;
+    in-out property <string> name-text: "";
+    in property <string> kind-text: "local";
+    in-out property <string> bind-host-text: "127.0.0.1";
+    in-out property <string> bind-port-text: "";
+    in-out property <string> target-host-text: "";
+    in-out property <string> target-port-text: "";
+    in property <bool> enabled: true;
+
+    in-out property <bool> native_title_drag: false;
+
+    callback dismiss();
+    callback update-name(string);
+    callback set-kind(string);
+    callback update-bind-host(string);
+    callback update-bind-port(string);
+    callback update-target-host(string);
+    callback update-target-port(string);
+    callback set-enabled(bool);
+    callback save();
+    callback title_drag_requested();
+
+    private property <bool> dynamic: root.kind-text == "dynamic";
+
+    chrome := ToolWindowChrome {
+        width: Theme.tool-window-width-standard;
+        height: Theme.tool-window-height-standard;
+        title-text: root.edit-mode ? @tr("Edit Tunnel") : @tr("Add Tunnel");
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.dismiss(); }
+        title-drag-requested => { root.title_drag_requested(); }
+
+        VerticalLayout {
+            width: root.body-width;
+            height: root.body-height;
+            spacing: Theme.spacing-12;
+
+            FormRow {
+                label: @tr("Name");
+                WinTextInput {
+                    width: 420px;
+                    text <=> root.name-text;
+                    placeholder-text: @tr("Optional");
+                    edited => { root.update-name(self.text); }
+                }
+            }
+
+            FormRow {
+                label: @tr("Type");
+                WinComboBox {
+                    width: 420px;
+                    model: [
+                        @tr("Local forward"),
+                        @tr("Remote forward"),
+                        @tr("Dynamic (SOCKS)"),
+                    ];
+                    current-index: root.kind-text == "remote" ? 1 : root.dynamic ? 2 : 0;
+                    selected(index) => {
+                        root.set-kind(index == 1 ? "remote" : index == 2 ? "dynamic" : "local");
+                    }
+                }
+            }
+
+            FormRow {
+                label: @tr("Bind host");
+                WinTextInput {
+                    width: 420px;
+                    text <=> root.bind-host-text;
+                    placeholder-text: "127.0.0.1";
+                    edited => { root.update-bind-host(self.text); }
+                }
+            }
+
+            FormRow {
+                label: @tr("Bind port");
+                WinTextInput {
+                    width: Theme.form-port-width;
+                    input-type: number;
+                    text <=> root.bind-port-text;
+                    placeholder-text: @tr("Port");
+                    edited => { root.update-bind-port(self.text); }
+                }
+            }
+
+            if !root.dynamic : FormRow {
+                label: @tr("Destination");
+                WinTextInput {
+                    width: 320px;
+                    text <=> root.target-host-text;
+                    placeholder-text: @tr("Host");
+                    edited => { root.update-target-host(self.text); }
+                }
+                WinTextInput {
+                    width: Theme.form-port-width;
+                    input-type: number;
+                    text <=> root.target-port-text;
+                    placeholder-text: @tr("Port");
+                    edited => { root.update-target-port(self.text); }
+                }
+            }
+
+            FormRow {
+                label: @tr("On connect");
+                SwitchToggle {
+                    checked: root.enabled;
+                    toggled => { root.set-enabled(!root.enabled); }
+                }
+                Text {
+                    text: root.enabled ? @tr("Enabled") : @tr("Disabled");
+                    color: Theme.text-secondary;
+                    font-size: Theme.font-body;
+                    vertical-alignment: center;
+                }
+            }
+
+            Text {
+                text: @tr("Tunnels are saved with the session; forwarding starts when the tunnel engine is available.");
+                color: Theme.text-tertiary;
+                font-size: Theme.font-caption;
+                wrap: word-wrap;
+            }
+
+            Rectangle { vertical-stretch: 1; background: transparent; }
+
+            Rectangle { height: 1px; background: Theme.layer-stroke; }
+
+            HorizontalLayout {
+                alignment: end;
+                spacing: Theme.spacing-8;
+
+                WinButton { text: @tr("Cancel"); subtle: true; clicked => { root.dismiss(); } }
+                WinButton {
+                    text: @tr("Save");
+                    accent: true;
+                    enabled: root.bind-port-text != "" && (root.dynamic || (root.target-host-text != "" && root.target-port-text != ""));
+                    clicked => { root.save(); }
+                }
+            }
+        }
+    }
+
+    public function focus-dialog() {
+        focus_scope.focus();
+    }
+
+    focus_scope := FocusScope {
+        width: 0px;
+        height: 0px;
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.dismiss();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    init => {
+        root.focus-dialog();
+    }
+}

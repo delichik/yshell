@@ -1,0 +1,119 @@
+// Known Hosts · Add / Edit（单字段粘贴窗，compact 560×400）。
+//
+// 规范：docs/prototypes/known-hosts/modals.html（单字段子窗：无左侧 label、控件顶满
+// 内容区）。Edit 与 Add 共用本窗：`edit-mode` 时标题/主按钮改为 Edit，runtime 在
+// 提交后删除旧 `host:port` 条目。
+//
+// 一窗一条提交/关闭栏：Cancel | Add。
+
+import { Theme } from "../theme.slint";
+import { WinButton } from "../components/basic/controls.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
+
+export component KnownHostAddWindow inherits Window {
+    title: @tr("Add Known Host");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-compact;
+    min-width: Theme.tool-window-width-compact;
+    max-width: Theme.tool-window-width-compact;
+    preferred-height: Theme.tool-window-height-compact;
+    min-height: Theme.tool-window-height-compact;
+    max-height: Theme.tool-window-height-compact;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <bool> edit-mode: false;
+    in-out property <string> entries-text: "";
+    in property <string> error-text: "";
+
+    in-out property <bool> native_title_drag: false;
+
+    callback canceled();
+    callback submitted();
+    callback update-text(string);
+    callback title_drag_requested();
+
+    private property <length> body-width:
+        Theme.tool-window-width-compact - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-compact - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+
+    ToolWindowChrome {
+        width: Theme.tool-window-width-compact;
+        height: Theme.tool-window-height-compact;
+        title-text: root.edit-mode ? @tr("Edit Known Host") : @tr("Add Known Host");
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.canceled(); }
+        title-drag-requested => { root.title_drag_requested(); }
+
+        VerticalLayout {
+            width: root.body-width;
+            height: root.body-height;
+            spacing: Theme.spacing-12;
+
+            Rectangle {
+                vertical-stretch: 1;
+                clip: true;
+                background: Theme.control-fill;
+                border-radius: Theme.radius-control;
+                border-width: 1px;
+                border-color: Theme.control-stroke;
+
+                TextInput {
+                    x: Theme.spacing-12;
+                    y: Theme.spacing-12;
+                    width: parent.width - 2 * Theme.spacing-12;
+                    height: parent.height - 2 * Theme.spacing-12;
+                    text <=> root.entries-text;
+                    color: Theme.text-primary;
+                    font-size: Theme.font-caption;
+                    font-family: Theme.font-mono;
+                    single-line: false;
+                    wrap: word-wrap;
+                    edited => { root.update-text(self.text); }
+                }
+            }
+
+            if root.error-text != "" : Text {
+                text: root.error-text;
+                color: Theme.critical;
+                font-size: Theme.font-caption;
+                wrap: word-wrap;
+            }
+
+            Rectangle {
+                height: 1px;
+                vertical-stretch: 0;
+                background: Theme.divider;
+            }
+
+            HorizontalLayout {
+                alignment: end;
+                vertical-stretch: 0;
+                spacing: Theme.spacing-8;
+
+                WinButton {
+                    text: @tr("Cancel");
+                    clicked => { root.canceled(); }
+                }
+
+                WinButton {
+                    text: root.edit-mode ? @tr("Edit") : @tr("Add");
+                    accent: true;
+                    enabled: root.entries-text != "";
+                    clicked => { root.submitted(); }
+                }
+            }
+        }
+    }
+
+    init => {
+        root.focus-dialog();
+    }
+
+    public function focus-dialog() {
+        // 无独立 FocusScope：由宿主把键盘焦点留在窗口（Esc 由宿主处理）。
+    }
+}

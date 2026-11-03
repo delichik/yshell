@@ -1,0 +1,227 @@
+// Private Keys · Import（standard 720×580，文件 / 粘贴两个 tab 可互跳）。
+//
+// 规范：docs/prototypes/private-keys/modals.html。文件 tab：Label / Key file / Passphrase；
+// 粘贴 tab：Label / Private key / Passphrase；两个 tab 用顶部按钮互跳。
+// 一窗一条提交/关闭栏：Cancel | Import。
+
+import { Theme } from "../theme.slint";
+import { WinButton, WinIconButton } from "../components/basic/controls.slint";
+import { WinTextInput } from "../components/basic/text_input.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
+
+/// 表单行：左标签 + 右控件。
+component ImportFormRow inherits HorizontalLayout {
+    in property <string> label: "";
+    spacing: Theme.spacing-12;
+    cross-axis-alignment: start;
+
+    Text {
+        text: root.label;
+        width: Theme.form-label-width-medium;
+        color: Theme.text-secondary;
+        font-size: Theme.font-body;
+        vertical-alignment: center;
+        wrap: no-wrap;
+    }
+
+    HorizontalLayout {
+        horizontal-stretch: 1;
+        spacing: Theme.spacing-8;
+        cross-axis-alignment: center;
+        @children
+    }
+}
+
+export component PrivateKeyImportWindow inherits Window {
+    title: @tr("Import Private Key");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-standard;
+    min-width: Theme.tool-window-width-standard;
+    max-width: Theme.tool-window-width-standard;
+    preferred-height: Theme.tool-window-height-standard;
+    min-height: Theme.tool-window-height-standard;
+    max-height: Theme.tool-window-height-standard;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    /// 0 = 文件，1 = 粘贴。
+    in-out property <int> tab: 0;
+    in-out property <string> label-text: "";
+    in-out property <string> path-text: "";
+    in-out property <string> passphrase-text: "";
+    in-out property <string> paste-text: "";
+    in property <string> error-text: "";
+
+    in-out property <bool> native_title_drag: false;
+
+    callback canceled();
+    callback imported();
+    callback browse-file();
+    callback select-tab(int);
+    callback update-label(string);
+    callback update-path(string);
+    callback update-passphrase(string);
+    callback update-paste(string);
+    callback title_drag_requested();
+
+    private property <length> body-width:
+        Theme.tool-window-width-standard - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-standard - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+
+    ToolWindowChrome {
+        width: Theme.tool-window-width-standard;
+        height: Theme.tool-window-height-standard;
+        title-text: root.tab == 1 ? @tr("Paste Private Key") : @tr("Import Private Key");
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.canceled(); }
+        title-drag-requested => { root.title_drag_requested(); }
+
+        VerticalLayout {
+            width: root.body-width;
+            height: root.body-height;
+            spacing: Theme.spacing-12;
+
+            // 两个 tab 互跳（原型 linkish 文案的按钮化实现）。
+            HorizontalLayout {
+                vertical-stretch: 0;
+                spacing: Theme.spacing-8;
+
+                WinButton {
+                    text: @tr("From file");
+                    accent: root.tab == 0;
+                    clicked => { root.select-tab(0); }
+                }
+
+                WinButton {
+                    text: @tr("Paste key");
+                    accent: root.tab == 1;
+                    clicked => { root.select-tab(1); }
+                }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                clip: true;
+                background: transparent;
+
+                form-scroll := Flickable {
+                    width: parent.width;
+                    height: parent.height;
+                    interactive: true;
+                    content-width: self.width;
+                    content-height: form-body.preferred-height;
+
+                    form-body := VerticalLayout {
+                        spacing: Theme.spacing-12;
+
+                        ImportFormRow {
+                            label: @tr("Label");
+
+                            WinTextInput {
+                                horizontal-stretch: 1;
+                                text <=> root.label-text;
+                                placeholder-text: @tr("Optional · defaults to the key comment");
+                                edited => { root.update-label(self.text); }
+                            }
+                        }
+
+                        if root.tab == 0 : ImportFormRow {
+                            label: @tr("Key file");
+
+                            WinTextInput {
+                                horizontal-stretch: 1;
+                                text <=> root.path-text;
+                                placeholder-text: @tr("Path to private key");
+                                font-family: Theme.font-mono;
+                                font-size: Theme.font-caption;
+                                read-only: true;
+                                edited => { root.update-path(self.text); }
+                            }
+
+                            WinIconButton {
+                                icon: "file";
+                                accessible-name: @tr("Browse");
+                                tooltip-text: @tr("Browse");
+                                clicked => { root.browse-file(); }
+                            }
+                        }
+
+                        if root.tab == 1 : ImportFormRow {
+                            label: @tr("Private key");
+
+                            Rectangle {
+                                horizontal-stretch: 1;
+                                height: 200px;
+                                clip: true;
+                                background: Theme.control-fill;
+                                border-radius: Theme.radius-control;
+                                border-width: 1px;
+                                border-color: Theme.control-stroke;
+
+                                TextInput {
+                                    x: Theme.spacing-8;
+                                    y: Theme.spacing-8;
+                                    width: parent.width - 2 * Theme.spacing-8;
+                                    height: parent.height - 2 * Theme.spacing-8;
+                                    text <=> root.paste-text;
+                                    color: Theme.text-primary;
+                                    font-size: Theme.font-caption;
+                                    font-family: Theme.font-mono;
+                                    single-line: false;
+                                    wrap: word-wrap;
+                                    edited => { root.update-paste(self.text); }
+                                }
+                            }
+                        }
+
+                        ImportFormRow {
+                            label: @tr("Passphrase");
+
+                            WinTextInput {
+                                horizontal-stretch: 1;
+                                text <=> root.passphrase-text;
+                                placeholder-text: @tr("If the key is encrypted");
+                                input-type: password;
+                                edited => { root.update-passphrase(self.text); }
+                            }
+                        }
+
+                        if root.error-text != "" : Text {
+                            text: root.error-text;
+                            color: Theme.critical;
+                            font-size: Theme.font-caption;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                height: 1px;
+                vertical-stretch: 0;
+                background: Theme.divider;
+            }
+
+            HorizontalLayout {
+                alignment: end;
+                vertical-stretch: 0;
+                spacing: Theme.spacing-8;
+
+                WinButton {
+                    text: @tr("Cancel");
+                    clicked => { root.canceled(); }
+                }
+
+                WinButton {
+                    text: @tr("Import");
+                    accent: true;
+                    enabled: root.tab == 1 ? root.paste-text != "" : root.path-text != "";
+                    clicked => { root.imported(); }
+                }
+            }
+        }
+    }
+}

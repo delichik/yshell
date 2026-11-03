@@ -43,6 +43,12 @@ fn read_text_formats() -> String {
 
 /// Kinds compared against by the `status-message*` function family.
 fn template_kinds(source: &str) -> Vec<String> {
+    // A local Windows checkout may materialize `ui/text_formats.slint` with CRLF
+    // line endings (core.autocrlf). Normalize first: the brace search below
+    // looks for `\n    }\n`, so CRLF input would silently run the extracted
+    // section to EOF and pick up helper functions after the entry point.
+    let source = source.replace("\r\n", "\n");
+    let source = source.as_str();
     let start = source
         .find("public pure function status-message-core(")
         .expect("status-message-core must exist");
@@ -55,7 +61,24 @@ fn template_kinds(source: &str) -> Vec<String> {
     if let Some(relative) = source[end..].find("\n    }\n") {
         section_end = end + relative + "\n    }\n".len();
     }
-    let section = &source[start..section_end.min(source.len())];
+    let mut kinds = kind_branches(&source[start..section_end.min(source.len())]);
+    // `settings-security-status` is the wave-2 Settings/Security template helper.
+    // The `status-message` entry point links it in wave 4; until then its kinds
+    // fall back to the English `status_text`, but they are already valid
+    // templates and must not be duplicated into the family body.
+    if let Some(helper_start) = source.find("public pure function settings-security-status(") {
+        let helper_end = source[helper_start..]
+            .find("\n    }\n")
+            .map_or(source.len(), |relative| {
+                helper_start + relative + "\n    }\n".len()
+            });
+        kinds.extend(kind_branches(&source[helper_start..helper_end]));
+    }
+    kinds
+}
+
+/// `if kind == "..."` comparisons inside one function section.
+fn kind_branches(section: &str) -> Vec<String> {
     let mut kinds = Vec::new();
     for line in section.lines() {
         let line = line.trim();

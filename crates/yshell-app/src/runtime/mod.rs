@@ -38,6 +38,10 @@ mod quick_connect;
 mod sessions;
 mod sftp;
 mod sftp_ops;
+// --- settings-security ---
+mod security;
+mod settings;
+// --- settings-security end
 pub(crate) use sftp_ops::PendingRemoteEdit;
 pub(crate) use sftp_ops::{resolve_drop_move, same_local_volume};
 mod split_tree;
@@ -114,6 +118,11 @@ pub(crate) use editor::EditorAuthTestStatus;
 pub(crate) use editor::EditorProxyMode;
 pub(crate) use editor::EditorSection;
 pub(crate) use editor::SessionEditorDraft;
+// --- session-editor：波 2-B 新增的编辑器数据类型 ---------------------------
+pub(crate) use editor::{
+    EditorInheritSourceData, EditorLoginStepDialog, EditorLoginStepRowData, EditorTunnelDialog,
+    EditorTunnelRowData, LoginScriptRun,
+};
 // N6 Phase 2：终端日志弹窗状态（mod.rs 字段 / bootstrap 消费）。
 pub(crate) use logging::LoggingDialogState;
 pub(crate) use panels::SettingsTerminalStatus;
@@ -199,6 +208,11 @@ impl AppRuntime {
         // Settings → Terminal / SFTP 的草稿初值都来自 `[ui]` 与 `[sftp]`。
         let ui_defaults = document.ui.clone();
         let sftp_show_hidden_default = document.sftp.show_hidden;
+        // --- settings-security ---
+        let settings_app_theme = settings::AppThemeDraft::from_ui(&ui_defaults);
+        let settings_sftp_defaults = document.sftp.clone();
+        let security_state = security::SecurityState::load(&config_dir);
+        // --- settings-security end
         let remembered_local_directory = document.ui.local_directory.clone();
         let default_local_dir = remembered_local_directory
             .as_deref()
@@ -320,6 +334,12 @@ impl AppRuntime {
             pending_password_prompt: None,
             editor_modal_visible: false,
             editor_section: EditorSection::General,
+            // --- session-editor：波 2-B 子窗 / 选中 / 执行态 -------------------
+            editor_login_step_dialog: None,
+            editor_tunnel_dialog: None,
+            editor_selected_login_step: None,
+            editor_selected_tunnel: None,
+            editor_login_script_run: None,
             host_key_policy_override: None,
             recovered_from_backup,
             next_runtime_ordinal: 1,
@@ -391,6 +411,45 @@ impl AppRuntime {
             mcp: mcp::McpControlState::default(),
             mcp_endpoint_token: None,
             mcp_listener_status: mcp::McpListenerStatus::Disabled,
+            // --- managers-dialogs ---
+            hosts_add_visible: false,
+            hosts_add_text: String::new(),
+            hosts_add_error_text: String::new(),
+            hosts_add_edit_target: None,
+            hosts_import_path_text: String::new(),
+            hosts_export_visible: false,
+            hosts_export_path_text: String::new(),
+            hosts_menu_group: None,
+            hosts_menu_entry: None,
+            keys_generate_visible: false,
+            keys_generate_result_visible: false,
+            keys_generate_algorithm_index: 0,
+            keys_generate_label: String::new(),
+            keys_generate_comment: String::new(),
+            keys_generate_passphrase: String::new(),
+            keys_generate_confirm: String::new(),
+            keys_generate_error_text: String::new(),
+            keys_generate_public_key: String::new(),
+            keys_generate_fingerprint: String::new(),
+            keys_generate_result_label: String::new(),
+            keys_import_visible: false,
+            keys_import_tab: 0,
+            keys_import_paste_text: String::new(),
+            keys_export_visible: false,
+            keys_export_path_text: String::new(),
+            keys_deploy_target_index: 0,
+            keys_menu_key_id: None,
+            proxies_menu_id: None,
+            // --- settings-security ---
+            settings_app_theme,
+            settings_app_theme_baseline: settings_app_theme,
+            settings_sftp_draft: settings::SettingsSftpDraft::from_profile(
+                &settings_sftp_defaults,
+                Vec::new(),
+            ),
+            settings_sftp_status: settings::SettingsSftpStatus::Hint,
+            security_state,
+            // --- settings-security end
         };
         let startup_text = runtime.startup_status();
         let saved_count = runtime.saved_session_count();
@@ -701,6 +760,16 @@ pub struct AppRuntime {
     pub(crate) pending_password_prompt: Option<PendingPasswordPrompt>,
     pub(crate) editor_modal_visible: bool,
     pub(crate) editor_section: EditorSection,
+    // --- session-editor：Login Script / Tunnel 子窗（波 2-B）-------------------
+    /// Login Script 步骤子窗状态（None = 关闭）。
+    pub(crate) editor_login_step_dialog: Option<EditorLoginStepDialog>,
+    /// Tunnel 子窗状态（None = 关闭）。
+    pub(crate) editor_tunnel_dialog: Option<EditorTunnelDialog>,
+    /// Login Script / Tunnel 清单的选中行（行右键菜单目标）。
+    pub(crate) editor_selected_login_step: Option<usize>,
+    pub(crate) editor_selected_tunnel: Option<usize>,
+    /// 正在执行的 Login Script（连接成功后的 Keys/Wait 推进）。
+    pub(crate) editor_login_script_run: Option<LoginScriptRun>,
     pub(crate) host_key_policy_override: Option<HostKeyPolicy>,
     pub(crate) recovered_from_backup: Option<PathBuf>,
     pub(crate) next_runtime_ordinal: usize,
@@ -815,6 +884,57 @@ pub struct AppRuntime {
     pub(crate) mcp_endpoint_token: Option<String>,
     /// Loopback listener status shown in Settings → AI / MCP.
     pub(crate) mcp_listener_status: mcp::McpListenerStatus,
+    // --- managers-dialogs：波2-C 管理器子窗与行级动作状态 -----------------------
+    /// Known Hosts：Add / Edit 单字段窗（`hosts_add_edit_target` 非空 = Edit）。
+    pub(crate) hosts_add_visible: bool,
+    pub(crate) hosts_add_text: String,
+    pub(crate) hosts_add_error_text: String,
+    /// 编辑目标（原 `host:port`；Add 提交后删除旧条目）。
+    pub(crate) hosts_add_edit_target: Option<String>,
+    /// Known Hosts：Import / Export 子窗（`host_keys_import_visible` 复用为 Import 窗）。
+    pub(crate) hosts_import_path_text: String,
+    pub(crate) hosts_export_visible: bool,
+    pub(crate) hosts_export_path_text: String,
+    /// Known Hosts：行右键菜单指向的（组, 条目）。
+    pub(crate) hosts_menu_group: Option<usize>,
+    pub(crate) hosts_menu_entry: Option<usize>,
+    /// Private Keys：Generate 子窗（表单 → 结果页）。
+    pub(crate) keys_generate_visible: bool,
+    pub(crate) keys_generate_result_visible: bool,
+    pub(crate) keys_generate_algorithm_index: i32,
+    pub(crate) keys_generate_label: String,
+    pub(crate) keys_generate_comment: String,
+    pub(crate) keys_generate_passphrase: String,
+    pub(crate) keys_generate_confirm: String,
+    pub(crate) keys_generate_error_text: String,
+    pub(crate) keys_generate_public_key: String,
+    pub(crate) keys_generate_fingerprint: String,
+    pub(crate) keys_generate_result_label: String,
+    /// Private Keys：Import（文件 / 粘贴两个 tab）子窗。
+    pub(crate) keys_import_visible: bool,
+    pub(crate) keys_import_tab: i32,
+    pub(crate) keys_import_paste_text: String,
+    /// Private Keys：Export 公钥子窗。
+    pub(crate) keys_export_visible: bool,
+    pub(crate) keys_export_path_text: String,
+    /// Private Keys：Deploy 子窗（目标会话选择；复用 `private_keys_deploy_confirm_visible`）。
+    pub(crate) keys_deploy_target_index: i32,
+    /// Private Keys：行右键菜单指向的 key id。
+    pub(crate) keys_menu_key_id: Option<String>,
+    /// Proxies：行右键菜单指向的 profile id。
+    pub(crate) proxies_menu_id: Option<String>,
+    // --- settings-security ---
+    /// D36 App theme draft (instant preview until Save).
+    pub(crate) settings_app_theme: settings::AppThemeDraft,
+    /// Persisted App theme baseline; Cancel / × / Esc revert to it.
+    pub(crate) settings_app_theme_baseline: settings::AppThemeDraft,
+    /// D33 SFTP defaults draft.
+    pub(crate) settings_sftp_draft: settings::SettingsSftpDraft,
+    /// Inline status of the SFTP section.
+    pub(crate) settings_sftp_status: settings::SettingsSftpStatus,
+    /// D35 master password state machine (card + sub-dialogs + startup unlock).
+    pub(crate) security_state: security::SecurityState,
+    // --- settings-security end
 }
 
 /// N7：单个窗口持有的标签 UI 归属（标签本身仍在 `AppRuntime::tabs` 登记）。
@@ -1236,3 +1356,7 @@ impl AppRuntime {
         events
     }
 }
+
+// --- managers-dialogs ---
+// 波2-C：SFTP chmod 窗（八进制 <-> 9 个勾选）的纯逻辑；入口接线在波 3-G。
+pub(crate) mod sftp_chmod;

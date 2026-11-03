@@ -46,6 +46,8 @@ export component HostKeyDialog inherits Rectangle {
     callback cancel();
     callback trust-once();
     callback trust-and-save();
+    /// changed 模式：复制指纹/路径等详情（原型 C · Actions）。
+    callback copy-details();
     callback dismissed();
 
     private property <bool> is-changed: root.mode-text == "changed";
@@ -175,9 +177,14 @@ export component HostKeyDialog inherits Rectangle {
                     clicked => { root.cancel(); }
                 }
 
-                WinButton {
+                if !root.is-changed : WinButton {
                     text: @tr("Trust Once");
                     clicked => { root.trust-once(); }
+                }
+
+                if root.is-changed : WinButton {
+                    text: @tr("Copy Details");
+                    clicked => { root.copy-details(); }
                 }
 
                 WinButton {

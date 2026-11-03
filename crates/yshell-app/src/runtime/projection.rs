@@ -11,6 +11,10 @@ use super::panels::{PanelFrameView, PanelLayoutView};
 use super::theme::palette_parts;
 use super::*;
 
+// --- settings-security ---
+use super::settings;
+// --- settings-security end
+
 /// 加载指示器的转圈相位（8 步一圈；按墙钟推进，投影每次刷新都会带上新值）。
 pub(crate) fn spinner_phase() -> i32 {
     let millis = std::time::SystemTime::now()
@@ -233,6 +237,19 @@ impl AppRuntime {
         let settings_appearance_color_scheme_builtin =
             yshell_config::ThemeCatalog::is_builtin(&settings_appearance_color_scheme_id);
         let settings_appearance_palette = palette_parts(self.settings_appearance_palette());
+        // --- settings-security ---
+        // D36 App theme draft (instant preview) + D33 SFTP defaults + D35
+        // master-password card / dialogs.
+        let settings_app_theme = self.settings_app_theme;
+        let settings_sftp_editor_options = self.settings_sftp_draft.editor_options();
+        let settings_security_known_hosts_count =
+            i32::try_from(self.known_host_entries().len()).unwrap_or(i32::MAX);
+        let settings_security_private_keys_count =
+            i32::try_from(self.private_key_entries().len()).unwrap_or(i32::MAX);
+        let settings_security_proxies_count =
+            i32::try_from(self.config_document.proxy_profiles.len()).unwrap_or(i32::MAX);
+        let settings_master_password_dialog = self.security_state.dialog();
+        // --- settings-security end
         // TERM-1: the independent Theme Manager list + preview.
         let theme_manager_default_id =
             theme::resolved_global_scheme_id(&self.config_document.terminal, &self.theme_catalog);
@@ -312,6 +329,44 @@ impl AppRuntime {
         let folder_editor_logging_fields = self.folder_editor_logging_fields();
         let editor_appearance_fields = self.editor_appearance_fields();
         let editor_terminal_fields = self.editor_terminal_fields();
+        // --- session-editor：波 2-B 投影数据（六分区 / Inherit / 子窗）-----
+        let editor_inherit_sources = self.editor_inherit_sources();
+        let editor_login_steps = self.editor_login_step_rows();
+        let editor_tunnels = self.editor_tunnel_rows();
+        let editor_login_step_dialog = self.editor_login_step_dialog.clone();
+        let editor_tunnel_dialog = self.editor_tunnel_dialog.clone();
+        let editor_parent_auth_summary_text = self.editor_parent_auth_summary();
+        let editor_parent_proxy_summary_text = self.editor_parent_proxy_summary();
+        let editor_parent_terminal_style_text = self.editor_parent_terminal_style_summary();
+        let editor_parent_login_step_count = self.editor_parent_login_step_count();
+        let editor_parent_tunnel_count = self.editor_parent_tunnel_count();
+        let editor_scheme_options = self.editor_scheme_option_names();
+        let editor_scheme_index = self.editor_scheme_selected_index();
+        let editor_icon_index = self.editor_icon_index();
+        let editor_icon_custom_text = self.editor_icon_custom_text();
+        let mut editor_proxy_option_labels = vec!["No Proxy".to_owned()];
+        editor_proxy_option_labels.extend(
+            editor_proxy_options
+                .iter()
+                .map(|option| option.label.clone()),
+        );
+        let editor_proxy_option_index = if self.editor.inherit_proxy {
+            // Inherit：下拉显示父级解析值（0 = No Proxy / 未继承到 profile）。
+            self.editor_parent_resolved()
+                .proxy
+                .as_ref()
+                .and_then(|proxy| {
+                    editor_proxy_options
+                        .iter()
+                        .position(|option| option.id == proxy.id)
+                })
+                .map(|index| i32::try_from(index + 1).unwrap_or(i32::MAX))
+                .unwrap_or(0)
+        } else if self.editor.proxy_mode == EditorProxyMode::Managed {
+            editor_selected_proxy_index.saturating_add(1)
+        } else {
+            0
+        };
 
         AppProjection {
             config_dir_text: self.config_dir.display().to_string(),
@@ -447,6 +502,89 @@ impl AppRuntime {
             editor_discard_dialog_visible: self.editor_discard_dialog_visible,
             editor_is_dirty: self.editor_is_dirty(),
             editor_section_text: self.editor_section.label().to_owned(),
+            // --- session-editor：波 2-B 投影 ------------------------------
+            editor_icon_index,
+            editor_icon_custom_text,
+            editor_notes_text: self.editor.notes.clone(),
+            editor_inherit_auth: self.editor.inherit_auth,
+            editor_inherit_login_script: self.editor.inherit_login_script,
+            editor_inherit_proxy: self.editor.inherit_proxy,
+            editor_inherit_tunnels: self.editor.inherit_tunnels,
+            editor_inherit_terminal_style: self.editor.inherit_terminal_style,
+            editor_inherit_sources,
+            editor_parent_auth_summary_text,
+            editor_parent_proxy_summary_text,
+            editor_parent_terminal_style_text,
+            editor_parent_login_step_count,
+            editor_parent_tunnel_count,
+            editor_login_steps,
+            editor_selected_login_step: self
+                .editor_selected_login_step
+                .map(|index| i32::try_from(index).unwrap_or(i32::MAX))
+                .unwrap_or(-1),
+            editor_login_step_dialog_visible: editor_login_step_dialog.is_some(),
+            editor_login_step_is_edit: editor_login_step_dialog
+                .as_ref()
+                .is_some_and(|dialog| dialog.index.is_some()),
+            editor_login_step_kind_text: editor_login_step_dialog
+                .as_ref()
+                .map(|dialog| dialog.kind.label().to_owned())
+                .unwrap_or_else(|| "keys".to_owned()),
+            editor_login_step_name_text: editor_login_step_dialog
+                .as_ref()
+                .map(|dialog| dialog.name.clone())
+                .unwrap_or_default(),
+            editor_login_step_keys_text: editor_login_step_dialog
+                .as_ref()
+                .map(|dialog| dialog.keys.clone())
+                .unwrap_or_default(),
+            editor_login_step_tokens: editor_login_step_dialog
+                .as_ref()
+                .is_some_and(|dialog| dialog.tokens),
+            editor_login_step_millis_text: editor_login_step_dialog
+                .as_ref()
+                .map(|dialog| dialog.millis_text.clone())
+                .unwrap_or_else(|| "500".to_owned()),
+            editor_tunnels,
+            editor_selected_tunnel: self
+                .editor_selected_tunnel
+                .map(|index| i32::try_from(index).unwrap_or(i32::MAX))
+                .unwrap_or(-1),
+            editor_tunnel_dialog_visible: editor_tunnel_dialog.is_some(),
+            editor_tunnel_is_edit: editor_tunnel_dialog
+                .as_ref()
+                .is_some_and(|dialog| dialog.index.is_some()),
+            editor_tunnel_name_text: editor_tunnel_dialog
+                .as_ref()
+                .map(|dialog| dialog.name.clone())
+                .unwrap_or_default(),
+            editor_tunnel_dialog_kind_text: editor_tunnel_dialog
+                .as_ref()
+                .map(|dialog| tunnel_kind_label(dialog.kind).to_owned())
+                .unwrap_or_else(|| "local".to_owned()),
+            editor_tunnel_dialog_bind_host_text: editor_tunnel_dialog
+                .as_ref()
+                .map(|dialog| dialog.bind_host.clone())
+                .unwrap_or_else(|| "127.0.0.1".to_owned()),
+            editor_tunnel_dialog_bind_port_text: editor_tunnel_dialog
+                .as_ref()
+                .map(|dialog| dialog.bind_port_text.clone())
+                .unwrap_or_default(),
+            editor_tunnel_dialog_target_host_text: editor_tunnel_dialog
+                .as_ref()
+                .map(|dialog| dialog.target_host.clone())
+                .unwrap_or_default(),
+            editor_tunnel_dialog_target_port_text: editor_tunnel_dialog
+                .as_ref()
+                .map(|dialog| dialog.target_port_text.clone())
+                .unwrap_or_default(),
+            editor_tunnel_enabled: editor_tunnel_dialog
+                .as_ref()
+                .is_none_or(|dialog| dialog.enabled),
+            editor_scheme_options,
+            editor_scheme_index,
+            editor_proxy_option_labels,
+            editor_proxy_option_index,
             known_hosts_modal_visible: self.known_hosts_modal_visible,
             known_hosts_inventory_rows_text: self.known_hosts_inventory_rows_text(),
             known_hosts_inventory_empty: self.known_hosts_inventory_empty(),
@@ -866,6 +1004,115 @@ impl AppRuntime {
             logging_dialog_include_input: self.logging_dialog.include_input,
             logging_dialog_input_confirmed: self.logging_dialog.input_confirmed,
             logging_dialog_overwrite_confirmed: self.logging_dialog.overwrite_confirmed,
+            // --- settings-security ---
+            settings_appearance_mode_index: settings_app_theme.slint_mode_index(),
+            settings_appearance_accent_index: settings_app_theme.accent_index(),
+            settings_appearance_accent_light_swatches: settings::accent_swatches_light(),
+            settings_appearance_accent_dark_swatches: settings::accent_swatches_dark(),
+            settings_appearance_active_accent_light: settings::rgb_parts(
+                settings_app_theme.accent_colors().light,
+            ),
+            settings_appearance_active_accent_dark: settings::rgb_parts(
+                settings_app_theme.accent_colors().dark,
+            ),
+            settings_appearance_style_options: settings::terminal_style_options(
+                &self.theme_catalog,
+            ),
+            settings_appearance_style_index: settings::terminal_style_index(
+                &self.settings_appearance,
+                &self.theme_catalog,
+            ),
+            settings_terminal_middle_click_index: settings::middle_click_index(
+                self.settings_terminal_middle_click,
+            ),
+            settings_terminal_right_click_index: settings::right_click_index(
+                self.settings_terminal_right_click,
+            ),
+            settings_terminal_multi_line_paste_index: settings::multi_line_paste_index(
+                self.settings_terminal_multi_line_paste,
+            ),
+            settings_terminal_auto_copy: self.settings_terminal_auto_copy,
+            settings_sftp_show_hidden: self.settings_sftp_draft.show_hidden,
+            settings_sftp_conflict_index: self.settings_sftp_draft.conflict_index(),
+            settings_sftp_editor_options,
+            settings_sftp_editor_index: self.settings_sftp_draft.editor_index(),
+            settings_sftp_editor_custom_visible: self.settings_sftp_draft.custom_path_visible(),
+            settings_sftp_editor_path_text: self.settings_sftp_draft.editor_path_text.clone(),
+            settings_sftp_status_kind_text: self.settings_sftp_status.kind_id().to_owned(),
+            settings_sftp_status_text: self.settings_sftp_status.display_text(),
+            settings_master_password_set: self.security_state.is_set(),
+            settings_master_password_locked: self.master_password_locked(),
+            settings_master_password_status_text: self.master_password_status_text(),
+            settings_master_password_dialog_visible: self.security_state.dialog_visible(),
+            settings_master_password_dialog_kind_text: self
+                .security_state
+                .dialog_kind_id()
+                .to_owned(),
+            settings_master_password_dialog_error_text: self
+                .security_state
+                .dialog_error_id()
+                .to_owned(),
+            settings_master_password_dialog_current_visible: settings_master_password_dialog
+                .is_some_and(|draft| draft.current_visible()),
+            settings_master_password_dialog_new_visible: settings_master_password_dialog
+                .is_some_and(|draft| draft.new_visible()),
+            settings_master_password_unlock_visible: self.security_state.unlock_visible(),
+            settings_master_password_unlock_error_text: self
+                .security_state
+                .unlock_error_id()
+                .to_owned(),
+            settings_security_known_hosts_count,
+            settings_security_private_keys_count,
+            settings_security_proxies_count,
+            // --- settings-security end
+            // --- managers-dialogs ---
+            hosts_add_visible: self.hosts_add_visible,
+            hosts_add_text: self.hosts_add_text.clone(),
+            hosts_add_error_text: self.hosts_add_error_text.clone(),
+            hosts_add_edit_mode: self.hosts_add_edit_target.is_some(),
+            hosts_import_path_text: self.hosts_import_path_text.clone(),
+            hosts_export_visible: self.hosts_export_visible,
+            hosts_export_path_text: self.hosts_export_path_text.clone(),
+            keys_generate_visible: self.keys_generate_visible,
+            keys_generate_result_visible: self.keys_generate_result_visible,
+            keys_generate_algorithm_index: self.keys_generate_algorithm_index,
+            keys_generate_algorithm_options: super::auth::PRIVATE_KEY_GENERATE_ALGORITHMS
+                .iter()
+                .map(|label| (*label).to_owned())
+                .collect(),
+            keys_generate_label_text: self.keys_generate_label.clone(),
+            keys_generate_comment_text: self.keys_generate_comment.clone(),
+            keys_generate_passphrase_text: self.keys_generate_passphrase.clone(),
+            keys_generate_confirm_text: self.keys_generate_confirm.clone(),
+            keys_generate_error_text: self.keys_generate_error_text.clone(),
+            keys_generate_public_key_text: self.keys_generate_public_key.clone(),
+            keys_generate_fingerprint_text: self.keys_generate_fingerprint.clone(),
+            keys_generate_result_label_text: self.keys_generate_result_label.clone(),
+            keys_import_visible: self.keys_import_visible,
+            keys_import_tab: self.keys_import_tab,
+            keys_import_paste_text: self.keys_import_paste_text.clone(),
+            keys_export_visible: self.keys_export_visible,
+            keys_export_path_text: self.keys_export_path_text.clone(),
+            keys_export_public_key_text: self
+                .selected_private_key_entry()
+                .map(|entry| entry.public_key)
+                .unwrap_or_default(),
+            keys_deploy_target_options: self
+                .private_key_deploy_targets()
+                .into_iter()
+                .map(|(_, label)| label)
+                .collect(),
+            keys_deploy_target_index: self.keys_deploy_target_index,
+            themes_font_family_text: self.settings_appearance.font_family.clone(),
+            themes_font_options: self.settings_appearance.font_options(),
+            themes_font_index: self.settings_appearance.font_index(),
+            themes_font_size_text: self.settings_appearance.font_size_text.clone(),
+            themes_backup_font_text: self.settings_appearance.backup_font_text.clone(),
+            themes_font_editable: self
+                .theme_editor
+                .as_ref()
+                .is_some_and(|draft| !draft.builtin),
+            // --- managers-dialogs end
         }
     }
 
@@ -1251,7 +1498,7 @@ struct PrivateKeysProjectionParts {
     passphrase_manage_enabled: bool,
 }
 
-/// NET-1：代理管理器页投影。
+/// NET-1：代理管理器页投影
 struct ProxiesProjectionParts {
     visible: bool,
     rows: Vec<ProxyRowData>,
@@ -1325,7 +1572,7 @@ impl ConnectionOverlayProjection {
     }
 }
 
-/// WP1：StatusBar 连接态。
+/// WP1：StatusBar 连接态
 struct StatusConnectionProjection {
     state: String,
     target: String,
@@ -1583,7 +1830,7 @@ impl AppRuntime {
         let selected_key_label = usize::try_from(selected_key_index)
             .ok()
             .and_then(|index| key_entries.get(index))
-            .map(|entry| format!("{} — {}", entry.label, entry.algorithm))
+            .map(|entry| format!("{} {}", entry.label, entry.algorithm))
             .or_else(|| {
                 prompt
                     .map(|prompt| prompt.browsed_key_path.clone())
@@ -1708,11 +1955,6 @@ pub struct AppProjection {
     pub editor_proxy_legacy_text: String,
     /// 选中的托管代理已从管理器删除（保存会被拒绝）。
     pub editor_proxy_selected_missing: bool,
-    pub editor_tunnel_kind_text: String,
-    pub editor_tunnel_bind_host_text: String,
-    pub editor_tunnel_bind_port_text: String,
-    pub editor_tunnel_target_host_text: String,
-    pub editor_tunnel_target_port_text: String,
     pub editor_tunnel_summary_kind_text: String,
     pub editor_tunnel_summary_rows_text: String,
     pub editor_tunnel_summary_count: i32,
@@ -1736,7 +1978,7 @@ pub struct AppProjection {
     pub settings_mcp_enabled: bool,
     /// Whether MCP `request_control` skips the consent dialog.
     pub settings_mcp_auto_approve_control: bool,
-    /// Listener / control status line for Settings → AI / MCP.
+    /// Listener / control status line for Settings AI / MCP.
     pub settings_mcp_status_text: String,
     /// Product boundaries copy for Settings and agents.
     pub settings_mcp_boundaries_text: String,
@@ -1752,7 +1994,7 @@ pub struct AppProjection {
     pub settings_terminal_status_field_text: String,
     pub settings_terminal_status_value_text: String,
     pub settings_terminal_status_limit_text: String,
-    // --- N5：Settings → Appearance（字体 + 当前主题摘要） -----------------------
+    // --- N5：Settings Appearance（字体 + 当前主题摘要）-------------------
     pub settings_appearance_visible: bool,
     pub settings_appearance_color_scheme_name_text: String,
     pub settings_appearance_color_scheme_builtin: bool,
@@ -1817,6 +2059,54 @@ pub struct AppProjection {
     pub editor_discard_dialog_visible: bool,
     pub editor_is_dirty: bool,
     pub editor_section_text: String,
+    // 旧版 Tunnels 内联表单字段（bootstrap 仍在写；Tunnels 已是清单 + 子窗，
+    // 这些值保留给尚未迁移的调用点，不作为隧道清单来源）。
+    pub editor_tunnel_kind_text: String,
+    pub editor_tunnel_bind_host_text: String,
+    pub editor_tunnel_bind_port_text: String,
+    pub editor_tunnel_target_host_text: String,
+    pub editor_tunnel_target_port_text: String,
+    // --- session-editor：波 2-B（General / Inherit / Login Script / Tunnels）--
+    pub editor_icon_index: i32,
+    pub editor_icon_custom_text: String,
+    pub editor_notes_text: String,
+    pub editor_inherit_auth: bool,
+    pub editor_inherit_login_script: bool,
+    pub editor_inherit_proxy: bool,
+    pub editor_inherit_tunnels: bool,
+    pub editor_inherit_terminal_style: bool,
+    /// Inherit 来源（顺序 = `EditorInheritScope::ALL`：auth / login / proxy / tunnels / style）
+    pub editor_inherit_sources: Vec<EditorInheritSourceData>,
+    pub editor_parent_auth_summary_text: String,
+    pub editor_parent_proxy_summary_text: String,
+    pub editor_parent_terminal_style_text: String,
+    pub editor_parent_login_step_count: i32,
+    pub editor_parent_tunnel_count: i32,
+    pub editor_login_steps: Vec<EditorLoginStepRowData>,
+    pub editor_selected_login_step: i32,
+    pub editor_login_step_dialog_visible: bool,
+    pub editor_login_step_is_edit: bool,
+    pub editor_login_step_kind_text: String,
+    pub editor_login_step_name_text: String,
+    pub editor_login_step_keys_text: String,
+    pub editor_login_step_tokens: bool,
+    pub editor_login_step_millis_text: String,
+    pub editor_tunnels: Vec<EditorTunnelRowData>,
+    pub editor_selected_tunnel: i32,
+    pub editor_tunnel_dialog_visible: bool,
+    pub editor_tunnel_is_edit: bool,
+    pub editor_tunnel_name_text: String,
+    pub editor_tunnel_dialog_kind_text: String,
+    pub editor_tunnel_dialog_bind_host_text: String,
+    pub editor_tunnel_dialog_bind_port_text: String,
+    pub editor_tunnel_dialog_target_host_text: String,
+    pub editor_tunnel_dialog_target_port_text: String,
+    pub editor_tunnel_enabled: bool,
+    pub editor_scheme_options: Vec<String>,
+    pub editor_scheme_index: i32,
+    /// Proxy 下拉模型：`["No Proxy", ...托管 profile 名]`
+    pub editor_proxy_option_labels: Vec<String>,
+    pub editor_proxy_option_index: i32,
     pub known_hosts_modal_visible: bool,
     pub known_hosts_inventory_rows_text: String,
     pub known_hosts_inventory_empty: bool,
@@ -1893,7 +2183,7 @@ pub struct AppProjection {
     pub tabs: Vec<TabData>,
     /// N0：活动标签 id（无标签时为空串）。
     pub active_tab_id: String,
-    /// `new` / `terminal` / `sftp` — active tab mode for the projected window.
+    /// `new` / `terminal` / `sftp` active tab mode for the projected window.
     pub active_tab_mode_text: String,
     pub tab_count: i32,
     /// N0：是否存在非 connected/connecting 的标签（`Close Disconnected Tabs` 启用条件）。
@@ -1934,7 +2224,7 @@ pub struct AppProjection {
     /// Close Current Pane 是否可用。
     pub tab_menu_close_pane_enabled: bool,
 
-    // --- N9：同步发送按键（终端/标签菜单 + 状态栏 chip + 标签角标）-------------
+    // --- N9：同步发送按键（终端/标签菜单 + 状态栏 chip + 标签角标）------
     /// 终端右键菜单：`Send Key Input to All Tabs` / `… to Visible Tabs` 可用性。
     pub terminal_sync_all_enabled: bool,
     pub terminal_sync_visible_enabled: bool,
@@ -2025,7 +2315,7 @@ pub struct AppProjection {
     pub sftp_available: bool,
     pub transfer_queue_rows_text: String,
     pub transfer_queue_empty: bool,
-    // --- N1 Phase 2：本地栏 / 队列抽屉 / 冲突与属性 / 剪贴板 -------------------
+    // --- N1 Phase 2：本地栏 / 队列抽屉 / 冲突与属性 / 剪贴板 --------------
     /// Local pane path (lexically normalized absolute path).
     pub local_path_text: String,
     /// Local pane rows, including the leading `..` marker.
@@ -2197,7 +2487,7 @@ pub struct AppProjection {
     pub host_keys_status_param_2_text: String,
     pub host_keys_import_visible: bool,
     pub host_keys_import_text: String,
-    // --- N4：认证弹窗 --------------------------------------------------------
+    // --- N4：认证弹窗------------------------------------------------------
     pub auth_prompt_visible: bool,
     pub auth_prompt_host_text: String,
     pub auth_prompt_problem_text: String,
@@ -2222,7 +2512,7 @@ pub struct AppProjection {
     pub auth_prompt_challenge_round_total: i32,
     pub auth_prompt_keyboard_final_round: bool,
     pub auth_prompt_keyboard_submit_enabled: bool,
-    // --- N6：终端日志（弹窗 / 菜单 / REC / 状态栏）---------------------------
+    // --- N6：终端日志（弹窗 / 菜单 / REC / 状态栏）-------------------------
     /// 活动会话是否有日志输出（REC 指示）。
     pub logging_active: bool,
     /// 活动会话的日志类型 id（`off`/`auto`/`manual`）。
@@ -2249,6 +2539,93 @@ pub struct AppProjection {
     pub logging_dialog_include_input: bool,
     pub logging_dialog_input_confirmed: bool,
     pub logging_dialog_overwrite_confirmed: bool,
+    // --- settings-security ---
+    /// D36 App theme draft: Mode segmented index (0 System / 1 Light / 2 Dark).
+    pub settings_appearance_mode_index: i32,
+    /// D36 App theme draft: Accent swatch index (`Follow system` + 6 presets).
+    pub settings_appearance_accent_index: i32,
+    /// Swatch colors for the current theme (light / dark rows).
+    pub settings_appearance_accent_light_swatches: Vec<[u8; 3]>,
+    pub settings_appearance_accent_dark_swatches: Vec<[u8; 3]>,
+    /// Selected accent base colors (live-preview consumers).
+    pub settings_appearance_active_accent_light: [u8; 3],
+    pub settings_appearance_active_accent_dark: [u8; 3],
+    /// D36 Terminal style picker (global color-scheme profile).
+    pub settings_appearance_style_options: Vec<String>,
+    pub settings_appearance_style_index: i32,
+    /// D37 Terminal interaction dropdown indexes + Auto copy switch.
+    pub settings_terminal_middle_click_index: i32,
+    pub settings_terminal_right_click_index: i32,
+    pub settings_terminal_multi_line_paste_index: i32,
+    pub settings_terminal_auto_copy: bool,
+    /// D33 SFTP defaults draft.
+    pub settings_sftp_show_hidden: bool,
+    pub settings_sftp_conflict_index: i32,
+    pub settings_sftp_editor_options: Vec<String>,
+    pub settings_sftp_editor_index: i32,
+    pub settings_sftp_editor_custom_visible: bool,
+    pub settings_sftp_editor_path_text: String,
+    pub settings_sftp_status_kind_text: String,
+    pub settings_sftp_status_text: String,
+    /// D35 master password card / dialogs.
+    pub settings_master_password_set: bool,
+    pub settings_master_password_locked: bool,
+    pub settings_master_password_status_text: String,
+    pub settings_master_password_dialog_visible: bool,
+    pub settings_master_password_dialog_kind_text: String,
+    pub settings_master_password_dialog_error_text: String,
+    pub settings_master_password_dialog_current_visible: bool,
+    pub settings_master_password_dialog_new_visible: bool,
+    pub settings_master_password_unlock_visible: bool,
+    pub settings_master_password_unlock_error_text: String,
+    /// Managers row counts (Settings Security list).
+    pub settings_security_known_hosts_count: i32,
+    pub settings_security_private_keys_count: i32,
+    pub settings_security_proxies_count: i32,
+    // --- settings-security end
+    // --- managers-dialogs ---
+    /// Known Hosts：Add/Edit 单字段窗（`hosts_add_edit_mode` = 用现有条目预填）
+    pub hosts_add_visible: bool,
+    pub hosts_add_text: String,
+    pub hosts_add_error_text: String,
+    pub hosts_add_edit_mode: bool,
+    /// Known Hosts Import 子窗的路径（可见性复用 `host_keys_import_visible`）
+    pub hosts_import_path_text: String,
+    pub hosts_export_visible: bool,
+    pub hosts_export_path_text: String,
+    /// Private Keys：Generate 子窗（表单 / 结果页）
+    pub keys_generate_visible: bool,
+    pub keys_generate_result_visible: bool,
+    pub keys_generate_algorithm_index: i32,
+    /// D18：Generate 算法下拉（顺序与 `PRIVATE_KEY_GENERATE_ALGORITHMS` 一致）
+    pub keys_generate_algorithm_options: Vec<String>,
+    pub keys_generate_label_text: String,
+    pub keys_generate_comment_text: String,
+    pub keys_generate_passphrase_text: String,
+    pub keys_generate_confirm_text: String,
+    pub keys_generate_error_text: String,
+    pub keys_generate_public_key_text: String,
+    pub keys_generate_fingerprint_text: String,
+    pub keys_generate_result_label_text: String,
+    /// Private Keys：Import（文件 / 粘贴）子窗
+    pub keys_import_visible: bool,
+    pub keys_import_tab: i32,
+    pub keys_import_paste_text: String,
+    /// Private Keys：Export 公钥子窗
+    pub keys_export_visible: bool,
+    pub keys_export_path_text: String,
+    pub keys_export_public_key_text: String,
+    /// Private Keys：Deploy 子窗（目标会话选择）
+    pub keys_deploy_target_options: Vec<String>,
+    pub keys_deploy_target_index: i32,
+    /// Terminal Styles：字体字段（复用全局终端外观草稿；Built-in 只读）。
+    pub themes_font_family_text: String,
+    pub themes_font_options: Vec<String>,
+    pub themes_font_index: i32,
+    pub themes_font_size_text: String,
+    pub themes_backup_font_text: String,
+    pub themes_font_editable: bool,
+    // --- managers-dialogs end
 }
 
 /// 单个面板框的 px 几何（Slint 侧 `PanelFrameData` 的同构体）。
@@ -2293,7 +2670,7 @@ impl PanelFrameData {
 /// N3：分栏手柄投影（Slint 侧 `SplitHandleData` 的同构体）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SplitHandleData {
-    /// "left" / "right"。
+    /// "left" / "right"
     pub side: String,
     pub boundary: i32,
     pub x: i32,

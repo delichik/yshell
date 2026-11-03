@@ -524,6 +524,12 @@ impl WindowManager {
         }
     }
 
+    /// D33: Settings → SFTP → External editor 的 Browse（rfd 走 worker 线程，
+    /// 结果经应用级 dialog channel 回填到 runtime 的 SFTP 草稿）。
+    pub(crate) fn browse_settings_sftp_editor(&self) {
+        crate::bootstrap::spawn_pick_settings_sftp_editor(self.dialog_tx.clone());
+    }
+
     fn entry(&mut self, window_id: u64) -> Option<&mut WindowEntry> {
         self.windows.iter_mut().find(|entry| entry.id == window_id)
     }

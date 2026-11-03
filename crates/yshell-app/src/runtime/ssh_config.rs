@@ -60,6 +60,9 @@ impl AppRuntime {
             tunnel_target_port_text: String::new(),
             tunnels: resolved.tunnel.forwards.clone(),
             theme,
+            // --- session-editor：icon / notes / 页级 Inherit / login script 由
+            // `editor_apply_resolved_session` 补齐（见 editor.rs），避免逐字段重复。
+            ..SessionEditorDraft::default()
         };
         if let Some(auth) = &resolved.auth {
             match &auth.method {
@@ -601,6 +604,8 @@ impl AppRuntime {
             (host.to_owned(), port)
         };
         Ok(TunnelForward {
+            name: None,
+            enabled: true,
             kind: self.editor.tunnel_kind,
             bind_host: bind_host.to_owned(),
             bind_port,

@@ -12,8 +12,8 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
 use yshell_config::{
-    ColorTheme, ConfigDocument, ConfigWarning, FolderProfile, LoggingProfile, TerminalProfile,
-    ThemeCatalog,
+    AccentColor, AppearanceMode, ColorTheme, ConfigDocument, ConfigWarning, FolderProfile,
+    LoggingProfile, TerminalProfile, ThemeCatalog,
 };
 use yshell_terminal::{
     color_scheme, FontFamilyFaces, FontSelection, GridPoint, PrimaryFont, SelectionRange,
@@ -328,7 +328,7 @@ fn profile_has_color_overrides(profile: &TerminalProfile) -> bool {
         || profile.ansi.is_some()
 }
 
-fn clear_color_overrides(profile: &mut TerminalProfile) {
+pub(crate) fn clear_color_overrides(profile: &mut TerminalProfile) {
     profile.foreground = None;
     profile.background = None;
     profile.cursor = None;
@@ -1261,6 +1261,11 @@ impl AppRuntime {
 // ---------------------------------------------------------------------------
 
 /// Editable state of the Settings Appearance section.
+///
+/// D36: the section has two groups — **App theme** (`app_mode` / `app_accent`,
+/// instant preview + Save persist) and **Terminal style** (the color-scheme
+/// profile picker below; font/color *editing* lives in the Terminal Styles
+/// manager, so the font fields are kept for import/migration only).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SettingsAppearanceDraft {
     pub(crate) color_scheme: String,
@@ -1268,11 +1273,19 @@ pub(crate) struct SettingsAppearanceDraft {
     pub(crate) font_size_text: String,
     /// Single backup font path (TERM-5); the form offers exactly one value.
     pub(crate) backup_font_text: String,
+    /// D36 App theme Mode draft (`System` / `Light` / `Dark`).
+    pub(crate) app_mode: AppearanceMode,
+    /// D36 App theme Accent draft (`FollowSystem` + six presets).
+    pub(crate) app_accent: AccentColor,
 }
 
 impl Default for SettingsAppearanceDraft {
     fn default() -> Self {
-        Self::from_terminal_profile(&TerminalProfile::default(), &ThemeCatalog::default())
+        Self::from_config(
+            &TerminalProfile::default(),
+            &yshell_config::UiProfile::default(),
+            &ThemeCatalog::default(),
+        )
     }
 }
 
@@ -1303,7 +1316,11 @@ impl SettingsAppearanceDraft {
             .unwrap_or(0)
     }
 
-    pub(crate) fn from_terminal_profile(profile: &TerminalProfile, catalog: &ThemeCatalog) -> Self {
+    pub(crate) fn from_config(
+        profile: &TerminalProfile,
+        ui: &yshell_config::UiProfile,
+        catalog: &ThemeCatalog,
+    ) -> Self {
         let (font, _) = resolve_font(profile);
         Self {
             color_scheme: profile
@@ -1318,6 +1335,8 @@ impl SettingsAppearanceDraft {
             },
             font_size_text: resolve_font_size(profile.font_size).round().to_string(),
             backup_font_text: profile.backup_font.clone().unwrap_or_default(),
+            app_mode: ui.appearance_mode,
+            app_accent: ui.appearance_accent,
         }
     }
 
@@ -1499,18 +1518,35 @@ impl SettingsAppearanceStatus {
 }
 
 impl AppRuntime {
-    /// Loads the Appearance draft when Settings opens (inline form + preview).
+    /// Loads the Settings drafts when the dialog opens. The dialog is one
+    /// window with one `Cancel | Save` footer, so all sections share this
+    /// lifecycle; only the Appearance / SFTP drafts are re-read here (the
+    /// Terminal drafts keep the values the user may have already typed, and
+    /// `close_settings_appearance` reloads everything on cancel).
     pub fn open_settings_appearance(&mut self) -> AppProjection {
-        self.settings_appearance = SettingsAppearanceDraft::from_terminal_profile(
+        self.settings_appearance = SettingsAppearanceDraft::from_config(
             &self.config_document.terminal,
+            &self.config_document.ui,
             &self.theme_catalog,
         );
         self.settings_appearance_status = SettingsAppearanceStatus::Hint;
+        self.reload_settings_theme_drafts();
         self.settings_appearance_visible = true;
         self.projection()
     }
 
+    /// Cancels the Settings dialog: every draft is discarded and the App theme
+    /// instant preview reverts to the persisted baseline (§14.1 / D36).
     pub fn close_settings_appearance(&mut self) -> AppProjection {
+        self.settings_appearance = SettingsAppearanceDraft::from_config(
+            &self.config_document.terminal,
+            &self.config_document.ui,
+            &self.theme_catalog,
+        );
+        self.settings_appearance_status = SettingsAppearanceStatus::Hint;
+        // D36: discard the instant preview before reloading the baseline drafts.
+        self.revert_settings_app_theme();
+        self.reload_settings_drafts();
         self.settings_appearance_visible = false;
         self.theme_editor = None;
         self.projection()
@@ -1853,6 +1889,11 @@ impl AppRuntime {
     /// Restores the built-in defaults into the form (saved by `save_...`).
     pub fn reset_settings_appearance_defaults(&mut self) -> AppProjection {
         self.settings_appearance = SettingsAppearanceDraft::default();
+        // D36: the App theme preview draft follows the reset (defaults).
+        self.settings_app_theme = super::settings::AppThemeDraft {
+            mode: self.settings_appearance.app_mode,
+            accent: self.settings_appearance.app_accent,
+        };
         self.settings_appearance_status = SettingsAppearanceStatus::Hint;
         self.projection()
     }
@@ -1875,12 +1916,16 @@ impl AppRuntime {
         // TERM-5: drop the legacy list if it is still around, so a save always
         // writes the single-value field only.
         terminal.legacy_fallback_fonts = None;
+        // D36: the same dialog-level Save also persists the App theme group.
+        self.config_document.ui.appearance_mode = self.settings_appearance.app_mode;
+        self.config_document.ui.appearance_accent = self.settings_appearance.app_accent;
         self.config_store
             .save(&self.config_document)
             .map_err(AppError::from_error)?;
         self.settings_appearance_status = SettingsAppearanceStatus::Saved;
-        self.settings_appearance = SettingsAppearanceDraft::from_terminal_profile(
+        self.settings_appearance = SettingsAppearanceDraft::from_config(
             &self.config_document.terminal,
+            &self.config_document.ui,
             &self.theme_catalog,
         );
         self.set_status_kind(

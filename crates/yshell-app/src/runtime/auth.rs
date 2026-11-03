@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 
 use crate::{error::AppError, error::AppResult};
-use ssh_key::{HashAlg, PrivateKey, PublicKey};
+use ssh_key::{Algorithm, HashAlg, LineEnding, PrivateKey, PublicKey};
 use yshell_config::HostKeyPolicy as ConfigHostKeyPolicy;
 use yshell_config::KeyProfile;
 use yshell_secret::SecretRef;
@@ -1214,6 +1214,7 @@ impl AppRuntime {
         self.private_keys_modal_visible = true;
         self.private_keys_remove_confirm_visible = false;
         self.private_keys_deploy_confirm_visible = false;
+        self.reset_private_keys_dialog_state();
         self.ensure_private_keys_selection();
         let count = self.config_document.keys.len();
         self.set_status_kind(
@@ -1235,6 +1236,7 @@ impl AppRuntime {
         self.private_keys_passphrase_input.clear();
         self.private_keys_remove_confirm_visible = false;
         self.private_keys_deploy_confirm_visible = false;
+        self.reset_private_keys_dialog_state();
         self.set_status_kind(
             "private-keys-closed",
             "Closed private keys manager.".to_owned(),
@@ -1504,7 +1506,75 @@ impl AppRuntime {
     pub fn request_private_key_deploy(&mut self) -> AppProjection {
         if self.selected_private_key_entry().is_some() {
             self.private_keys_deploy_confirm_visible = true;
+            self.keys_deploy_target_index = 0;
+            let targets = self.private_key_deploy_targets();
+            match targets.first() {
+                Some((_, target)) => {
+                    let text = format!("Ready to deploy to {target}.");
+                    self.set_private_keys_status_kind(
+                        "private-key-deploy-ready",
+                        text,
+                        target.clone(),
+                        String::new(),
+                    );
+                }
+                None => {
+                    self.set_private_keys_status_kind(
+                        "private-key-deploy-no-targets",
+                        "No live SSH session is available to deploy to. Open an SSH session first."
+                            .to_owned(),
+                        String::new(),
+                        String::new(),
+                    );
+                }
+            }
         }
+        self.projection()
+    }
+
+    /// Deploy 子窗可选的目标会话（session key, `user@host:port`；本地终端不参与）。
+    #[must_use]
+    pub(crate) fn private_key_deploy_targets(&self) -> Vec<(String, String)> {
+        let mut targets = self
+            .sessions
+            .iter()
+            .filter(|(_, session)| !session.is_local())
+            .map(|(session_key, session)| {
+                (
+                    session_key.clone(),
+                    format!(
+                        "{}@{}:{}",
+                        session.username_label(),
+                        session.host_label(),
+                        session.ssh_config.port
+                    ),
+                )
+            })
+            .collect::<Vec<_>>();
+        targets.sort_by(|left, right| left.1.cmp(&right.1));
+        targets
+    }
+
+    /// Deploy 子窗切换目标会话（越界忽略）。
+    // TODO(wave2-private-key-deploy): Private Key Deploy 子窗接线后删除。
+    #[allow(dead_code)]
+    pub fn select_private_key_deploy_target(&mut self, index: i32) -> AppProjection {
+        let targets = self.private_key_deploy_targets();
+        let Some(target) = usize::try_from(index)
+            .ok()
+            .and_then(|index| targets.get(index))
+        else {
+            return self.projection();
+        };
+        self.keys_deploy_target_index = index;
+        let text = format!("Deploy target set to {}.", target.1);
+        let target_text = target.1.clone();
+        self.set_private_keys_status_kind(
+            "private-key-deploy-target",
+            text,
+            target_text,
+            String::new(),
+        );
         self.projection()
     }
 
@@ -1533,11 +1603,19 @@ impl AppRuntime {
                 return self.projection();
             }
         };
-        let Some(session_key) = self.active_session_id.clone() else {
+        // Deploy 子窗：按目标会话选择（本地终端不参与；无目标时给出明确提示）。
+        let targets = self.private_key_deploy_targets();
+        let selected_index = usize::try_from(self.keys_deploy_target_index).unwrap_or(0);
+        let Some((session_key, _)) = targets
+            .get(selected_index)
+            .or_else(|| targets.first())
+            .cloned()
+        else {
             self.private_keys_deploy_confirm_visible = false;
             self.set_private_keys_status_kind(
-                "private-key-deploy-requires-session",
-                "Deploy requires an active session to the target host.".to_owned(),
+                "private-key-deploy-no-targets",
+                "No live SSH session is available to deploy to. Open an SSH session first."
+                    .to_owned(),
                 String::new(),
                 String::new(),
             );
@@ -1547,7 +1625,7 @@ impl AppRuntime {
             self.private_keys_deploy_confirm_visible = false;
             self.set_private_keys_status_kind(
                 "private-key-deploy-session-gone",
-                "The active session is gone.".to_owned(),
+                "The deploy target session is gone.".to_owned(),
                 String::new(),
                 String::new(),
             );
@@ -1558,7 +1636,8 @@ impl AppRuntime {
             self.private_keys_deploy_confirm_visible = false;
             self.set_private_keys_status_kind(
                 "private-key-deploy-requires-ssh",
-                "Deploy requires an SSH session; the active tab is a local terminal.".to_owned(),
+                "Deploy requires an SSH session; the selected target is a local terminal."
+                    .to_owned(),
                 String::new(),
                 String::new(),
             );
@@ -1775,6 +1854,7 @@ impl AppRuntime {
     pub fn open_host_keys_manager(&mut self) -> AppProjection {
         self.host_keys_modal_visible = true;
         self.host_keys_import_visible = false;
+        self.reset_host_keys_dialog_state();
         self.ensure_host_keys_selection();
         let groups = self.host_key_group_data().len();
         self.set_status_kind(
@@ -1790,6 +1870,7 @@ impl AppRuntime {
         self.host_keys_modal_visible = false;
         self.host_keys_import_visible = false;
         self.host_keys_import_text.clear();
+        self.reset_host_keys_dialog_state();
         self.set_status_kind(
             "host-keys-closed",
             "Closed host keys manager.".to_owned(),
@@ -1856,11 +1937,13 @@ impl AppRuntime {
         }
     }
 
-    /// 导入主机密钥：每行 `host:port <公钥行>` 或 `host:port <SHA256:指纹>`。
-    pub fn import_host_keys_from_text(&mut self) -> AppProjection {
+    /// 解析 `host:port <公钥行 | SHA256:指纹>` 行并写入 persistent known hosts。
+    ///
+    /// 返回 `(写入条数, 跳过行及原因)`；不落盘、不写状态（调用方负责）。
+    fn apply_host_key_lines(&mut self, text: &str) -> (usize, Vec<String>) {
         let mut imported = 0usize;
         let mut failures = Vec::new();
-        for line in self.host_keys_import_text.lines() {
+        for line in text.lines() {
             let line = line.trim();
             if line.is_empty() || line.starts_with('#') {
                 continue;
@@ -1911,6 +1994,12 @@ impl AppRuntime {
             );
             imported += 1;
         }
+        (imported, failures)
+    }
+
+    /// 导入主机密钥：每行 `host:port <公钥行>` 或 `host:port <SHA256:指纹>`。
+    pub fn import_host_keys_from_text(&mut self) -> AppProjection {
+        let (imported, failures) = self.apply_host_key_lines(&self.host_keys_import_text.clone());
         if imported > 0 {
             if let Err(error) = self
                 .config_store
@@ -2165,6 +2254,893 @@ impl AppRuntime {
     #[must_use]
     pub(crate) fn host_keys_detail_path_text(&self) -> String {
         self.config_store.known_hosts_file().display().to_string()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// --- managers-dialogs ---（波2-C：管理器子窗与行级动作）
+// ---------------------------------------------------------------------------
+
+/// Private Keys → Generate 的算法选项（数量与 Slint ComboBox 的顺序一致）。
+///
+/// 生成由 `ssh-key` 的 `PrivateKey::random` 完成：ED25519 与 RSA（4096）在
+/// 当前 feature 集下可用；ECDSA 曲线 feature 未启用，故不提供。
+pub(crate) const PRIVATE_KEY_GENERATE_ALGORITHMS: [&str; 2] = ["ED25519", "RSA"];
+
+// TODO(wave2-managers): Known Hosts / Private Keys 的 Add·Import·Export·右键菜单
+// 子窗接线后删除本行 allow（当前这些窗口尚未接线）。
+#[allow(dead_code)]
+impl AppRuntime {
+    /// 清空私钥管理器的子窗/菜单暂态（打开/关闭管理器时调用）。
+    fn reset_private_keys_dialog_state(&mut self) {
+        self.keys_generate_visible = false;
+        self.keys_generate_result_visible = false;
+        self.keys_generate_algorithm_index = 0;
+        self.keys_generate_label.clear();
+        self.keys_generate_comment.clear();
+        self.keys_generate_passphrase.clear();
+        self.keys_generate_confirm.clear();
+        self.keys_generate_error_text.clear();
+        self.keys_generate_public_key.clear();
+        self.keys_generate_fingerprint.clear();
+        self.keys_generate_result_label.clear();
+        self.keys_import_visible = false;
+        self.keys_import_tab = 0;
+        self.keys_import_paste_text.clear();
+        self.keys_export_visible = false;
+        self.keys_export_path_text.clear();
+        self.keys_deploy_target_index = 0;
+        self.keys_menu_key_id = None;
+    }
+
+    /// 清空主机密钥管理器的子窗/菜单暂态。
+    fn reset_host_keys_dialog_state(&mut self) {
+        self.hosts_add_visible = false;
+        self.hosts_add_text.clear();
+        self.hosts_add_error_text.clear();
+        self.hosts_add_edit_target = None;
+        self.hosts_import_path_text.clear();
+        self.hosts_export_visible = false;
+        self.hosts_export_path_text.clear();
+        self.hosts_menu_group = None;
+        self.hosts_menu_entry = None;
+    }
+
+    // --- Known Hosts：Add / Edit 单字段窗 ---------------------------------
+
+    pub fn open_host_keys_add_dialog(&mut self) -> AppProjection {
+        self.hosts_add_visible = true;
+        self.hosts_add_text.clear();
+        self.hosts_add_error_text.clear();
+        self.hosts_add_edit_target = None;
+        self.set_host_keys_status_kind(
+            "host-keys-add-opened",
+            "Paste a `host:port` entry with an OpenSSH public key or a SHA256 fingerprint."
+                .to_owned(),
+            String::new(),
+            String::new(),
+        );
+        self.projection()
+    }
+
+    /// 行右键 Edit：用现有条目预填 Add 单字段窗（保存时替换旧条目）。
+    pub fn open_host_keys_edit_dialog(&mut self, group: i32, entry: i32) -> AppProjection {
+        let groups = self.host_key_group_data();
+        let Some(group_index) = usize::try_from(group)
+            .ok()
+            .filter(|index| *index < groups.len())
+        else {
+            return self.projection();
+        };
+        let Some(entry_index) = usize::try_from(entry)
+            .ok()
+            .filter(|index| *index < groups[group_index].entries.len())
+        else {
+            return self.projection();
+        };
+        let selected = &groups[group_index];
+        let key = &selected.entries[entry_index];
+        let target = format!("{}:{}", selected.host, selected.port);
+        self.hosts_add_visible = true;
+        self.hosts_add_edit_target = Some(target.clone());
+        self.hosts_add_text = format!(
+            "{target} {} {}",
+            key.algorithm,
+            format_fingerprint_groups(&key.fingerprint)
+        );
+        self.hosts_add_error_text.clear();
+        self.host_keys_selected_group = Some(group_index);
+        self.host_keys_selected_entry = Some(entry_index);
+        let text = format!("Editing the saved host key for {target}.");
+        self.set_host_keys_status_kind("host-keys-edit-opened", text, target, String::new());
+        self.projection()
+    }
+
+    pub fn update_host_keys_add_text(&mut self, value: &str) -> AppProjection {
+        self.hosts_add_text = value.to_owned();
+        self.projection()
+    }
+
+    pub fn cancel_host_keys_add_dialog(&mut self) -> AppProjection {
+        self.hosts_add_visible = false;
+        self.hosts_add_text.clear();
+        self.hosts_add_error_text.clear();
+        self.hosts_add_edit_target = None;
+        self.projection()
+    }
+
+    /// Add/Edit 提交：解析粘贴行 → pin；Edit 时若 host:port 变化则删掉旧条目。
+    pub fn submit_host_keys_add_dialog(&mut self) -> AppProjection {
+        let text = self.hosts_add_text.trim().to_owned();
+        if text.is_empty() {
+            self.hosts_add_error_text = "Paste a host key entry first.".to_owned();
+            self.set_host_keys_status_kind(
+                "host-keys-add-empty",
+                self.hosts_add_error_text.clone(),
+                String::new(),
+                String::new(),
+            );
+            return self.projection();
+        }
+        let requested_target = Self::first_host_key_target(&text);
+        let (imported, failures) = self.apply_host_key_lines(&text);
+        if imported == 0 {
+            let reason = if failures.is_empty() {
+                "the entry could not be parsed".to_owned()
+            } else {
+                failures.join("; ")
+            };
+            self.hosts_add_error_text = reason.clone();
+            self.set_host_keys_status_kind(
+                "host-keys-add-failed",
+                reason.clone(),
+                reason,
+                String::new(),
+            );
+            return self.projection();
+        }
+        let mut removed_old = false;
+        let was_edit = self.hosts_add_edit_target.is_some();
+        if let Some(old_target) = self.hosts_add_edit_target.take() {
+            if requested_target.as_deref() != Some(old_target.as_str()) {
+                if let Some((host, port_text)) = old_target.rsplit_once(':') {
+                    if let Ok(port) = port_text.parse::<u16>() {
+                        self.persistent_known_hosts.remove(host, port);
+                        removed_old = true;
+                    }
+                }
+            }
+        }
+        if let Err(error) = self
+            .config_store
+            .save_known_hosts(&self.persistent_known_hosts)
+        {
+            self.hosts_add_error_text = error.to_string();
+            self.set_host_keys_status_kind(
+                "host-keys-add-persist-failed",
+                format!("Could not save the host key: {error}"),
+                error.to_string(),
+                String::new(),
+            );
+            return self.projection();
+        }
+        self.ensure_host_keys_selection();
+        let target_text = requested_target.unwrap_or_else(|| "the pasted entry".to_owned());
+        let kind = if was_edit || removed_old {
+            "host-keys-edited"
+        } else {
+            "host-keys-added"
+        };
+        self.hosts_add_visible = false;
+        self.hosts_add_text.clear();
+        self.hosts_add_error_text.clear();
+        let text = if kind == "host-keys-edited" {
+            format!("Updated the saved host key for {target_text}.")
+        } else {
+            format!("Added the saved host key for {target_text}.")
+        };
+        self.set_host_keys_status_kind(kind, text.clone(), target_text.clone(), String::new());
+        self.set_status_kind(kind, text, target_text, String::new());
+        self.projection()
+    }
+
+    /// 取首行里的 `host:port`（用于状态文案/Edit 替换判断）。
+    fn first_host_key_target(text: &str) -> Option<String> {
+        let line = text
+            .lines()
+            .map(str::trim)
+            .find(|line| !line.is_empty() && !line.starts_with('#'))?;
+        let target = line.split_whitespace().next()?;
+        let (host, port) = target.rsplit_once(':')?;
+        port.parse::<u16>().ok()?;
+        Some(format!("{host}:{port}"))
+    }
+
+    // --- Known Hosts：Import / Export 子窗 --------------------------------
+
+    pub fn open_host_keys_import_dialog(&mut self) -> AppProjection {
+        self.host_keys_import_visible = true;
+        self.hosts_import_path_text.clear();
+        self.set_host_keys_status_kind(
+            "host-keys-import-opened",
+            "Choose a `known_hosts` file to import.".to_owned(),
+            String::new(),
+            String::new(),
+        );
+        self.projection()
+    }
+
+    pub fn close_host_keys_import_dialog(&mut self) -> AppProjection {
+        self.host_keys_import_visible = false;
+        self.hosts_import_path_text.clear();
+        self.projection()
+    }
+
+    pub fn update_host_keys_import_path(&mut self, value: &str) -> AppProjection {
+        self.hosts_import_path_text = value.to_owned();
+        self.projection()
+    }
+
+    /// Import 子窗提交：读文件 → 解析 → 落盘；成功时关闭子窗。
+    pub fn import_host_keys_from_dialog(&mut self) -> AppProjection {
+        let path = self.hosts_import_path_text.trim().to_owned();
+        if path.is_empty() {
+            self.set_host_keys_status_kind(
+                "host-keys-import-path-empty",
+                "Choose a `known_hosts` file to import.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+            return self.projection();
+        }
+        let text = match fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(error) => {
+                self.set_host_keys_status_kind(
+                    "host-keys-import-read-failed",
+                    format!("Import failed to read `{path}`: {error}"),
+                    path,
+                    error.to_string(),
+                );
+                return self.projection();
+            }
+        };
+        let (imported, failures) = self.apply_host_key_lines(&text);
+        if imported > 0 {
+            if let Err(error) = self
+                .config_store
+                .save_known_hosts(&self.persistent_known_hosts)
+            {
+                self.set_host_keys_status_kind(
+                    "host-keys-import-persist-failed",
+                    format!("Import failed to persist: {error}"),
+                    error.to_string(),
+                    String::new(),
+                );
+                return self.projection();
+            }
+            self.ensure_host_keys_selection();
+        }
+        if imported == 0 {
+            let reason = if failures.is_empty() {
+                "the file contains no host key entries".to_owned()
+            } else {
+                failures.join("; ")
+            };
+            self.set_host_keys_status_kind(
+                "host-keys-import-failed",
+                format!("Import failed: {reason}"),
+                reason,
+                String::new(),
+            );
+            return self.projection();
+        }
+        self.host_keys_import_visible = false;
+        self.hosts_import_path_text.clear();
+        let skipped = failures.len();
+        if skipped == 0 {
+            let text = format!("Imported {imported} host key(s).");
+            self.set_host_keys_status_kind(
+                "host-keys-imported",
+                text.clone(),
+                imported.to_string(),
+                String::new(),
+            );
+            self.set_status_kind(
+                "host-keys-imported",
+                text,
+                imported.to_string(),
+                String::new(),
+            );
+        } else {
+            let failures_text = failures.join("; ");
+            let text = format!(
+                "Imported {imported} host key(s); {skipped} line(s) skipped: {failures_text}"
+            );
+            self.set_host_keys_status_kind(
+                "host-keys-imported-with-skips",
+                text.clone(),
+                imported.to_string(),
+                failures_text,
+            );
+            self.set_status_kind(
+                "host-keys-imported",
+                text,
+                imported.to_string(),
+                skipped.to_string(),
+            );
+        }
+        self.projection()
+    }
+
+    pub fn open_host_keys_export_dialog(&mut self) -> AppProjection {
+        self.hosts_export_visible = true;
+        self.hosts_export_path_text = self
+            .config_dir
+            .join("known_hosts_export")
+            .display()
+            .to_string();
+        self.projection()
+    }
+
+    pub fn close_host_keys_export_dialog(&mut self) -> AppProjection {
+        self.hosts_export_visible = false;
+        self.projection()
+    }
+
+    pub fn update_host_keys_export_path(&mut self, value: &str) -> AppProjection {
+        self.hosts_export_path_text = value.to_owned();
+        self.projection()
+    }
+
+    /// Export 子窗提交：把 `host:port algorithm fingerprint` 行写到目标路径。
+    pub fn export_host_keys_to_path(&mut self) -> AppProjection {
+        let path = self.hosts_export_path_text.trim().to_owned();
+        if path.is_empty() {
+            self.set_host_keys_status_kind(
+                "host-keys-export-path-empty",
+                "Choose a destination file first.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+            return self.projection();
+        }
+        let text = self.export_host_keys_text();
+        match fs::write(&path, format!("{text}\n")) {
+            Ok(()) => {
+                self.hosts_export_visible = false;
+                let message = format!("Exported host keys to `{path}`.");
+                self.set_host_keys_status_kind(
+                    "host-keys-exported",
+                    message.clone(),
+                    path.clone(),
+                    String::new(),
+                );
+                self.set_status_kind("host-keys-exported", message, path, String::new());
+            }
+            Err(error) => {
+                self.set_host_keys_status_kind(
+                    "host-keys-export-failed",
+                    format!("Export failed: {error}"),
+                    error.to_string(),
+                    String::new(),
+                );
+            }
+        }
+        self.projection()
+    }
+
+    // --- Known Hosts：行右键菜单 -----------------------------------------
+
+    pub fn prepare_host_keys_context_menu(&mut self, group: i32, entry: i32) -> AppProjection {
+        let groups = self.host_key_group_data();
+        let Some(group_index) = usize::try_from(group)
+            .ok()
+            .filter(|index| *index < groups.len())
+        else {
+            return self.projection();
+        };
+        let Some(entry_index) = usize::try_from(entry)
+            .ok()
+            .filter(|index| *index < groups[group_index].entries.len())
+        else {
+            return self.projection();
+        };
+        self.host_keys_selected_group = Some(group_index);
+        self.host_keys_selected_entry = Some(entry_index);
+        self.hosts_menu_group = Some(group_index);
+        self.hosts_menu_entry = Some(entry_index);
+        let selected = &groups[group_index];
+        let host_text = format!("{}:{}", selected.host, selected.port);
+        let algorithm = selected.entries[entry_index].algorithm.clone();
+        let text = format!("Selected host key {host_text} ({algorithm}).");
+        self.set_host_keys_status_kind("host-key-selected", text, host_text, algorithm);
+        self.projection()
+    }
+
+    /// 行右键 Edit（无菜单目标时退化为当前选中条目）。
+    pub fn edit_host_key_from_menu(&mut self) -> AppProjection {
+        let (group, entry) = self
+            .hosts_menu_group
+            .zip(self.hosts_menu_entry)
+            .or_else(|| {
+                self.host_keys_selected_group
+                    .zip(self.host_keys_selected_entry)
+            })
+            .map_or((0, 0), |(group, entry)| (group as i32, entry as i32));
+        self.open_host_keys_edit_dialog(group, entry)
+    }
+
+    /// 行右键 Remove（复用选中条目的删除逻辑，由宿主确认框承接）。
+    pub fn remove_host_key_from_menu(&mut self) -> AppResult<AppProjection> {
+        if let Some((group, entry)) = self.hosts_menu_group.zip(self.hosts_menu_entry) {
+            self.host_keys_selected_group = Some(group);
+            self.host_keys_selected_entry = Some(entry);
+        }
+        self.hosts_menu_group = None;
+        self.hosts_menu_entry = None;
+        self.remove_selected_host_key()
+    }
+
+    // --- Private Keys：Generate 子窗 --------------------------------------
+
+    pub fn open_private_keys_generate_dialog(&mut self) -> AppProjection {
+        self.keys_generate_visible = true;
+        self.keys_generate_result_visible = false;
+        self.keys_generate_algorithm_index = 0;
+        self.keys_generate_label.clear();
+        self.keys_generate_comment.clear();
+        self.keys_generate_passphrase.clear();
+        self.keys_generate_confirm.clear();
+        self.keys_generate_error_text.clear();
+        self.keys_generate_public_key.clear();
+        self.keys_generate_fingerprint.clear();
+        self.keys_generate_result_label.clear();
+        self.set_private_keys_status_kind(
+            "private-key-generate-opened",
+            "Generate a new managed key: choose the algorithm, then confirm the passphrase."
+                .to_owned(),
+            String::new(),
+            String::new(),
+        );
+        self.projection()
+    }
+
+    pub fn close_private_keys_generate_dialog(&mut self) -> AppProjection {
+        self.keys_generate_visible = false;
+        self.keys_generate_result_visible = false;
+        // 敏感值：关闭时清空口令（与导入/密码输入同一约定）。
+        self.keys_generate_passphrase.clear();
+        self.keys_generate_confirm.clear();
+        self.projection()
+    }
+
+    pub fn update_private_keys_generate_label(&mut self, value: &str) -> AppProjection {
+        self.keys_generate_label = value.to_owned();
+        self.projection()
+    }
+
+    pub fn update_private_keys_generate_comment(&mut self, value: &str) -> AppProjection {
+        self.keys_generate_comment = value.to_owned();
+        self.projection()
+    }
+
+    pub fn update_private_keys_generate_passphrase(&mut self, value: &str) -> AppProjection {
+        self.keys_generate_passphrase = value.to_owned();
+        self.projection()
+    }
+
+    pub fn update_private_keys_generate_confirm(&mut self, value: &str) -> AppProjection {
+        self.keys_generate_confirm = value.to_owned();
+        self.projection()
+    }
+
+    pub fn select_private_keys_generate_algorithm(&mut self, index: i32) -> AppProjection {
+        if (0..PRIVATE_KEY_GENERATE_ALGORITHMS.len() as i32).contains(&index) {
+            self.keys_generate_algorithm_index = index;
+        }
+        self.projection()
+    }
+
+    /// Generate 表单 → 生成材料 → 走现有导入流程 → 结果页（公钥 + Copy）。
+    pub fn generate_private_key_from_form(&mut self) -> AppProjection {
+        self.keys_generate_error_text.clear();
+        if self.keys_generate_passphrase != self.keys_generate_confirm {
+            self.keys_generate_error_text =
+                "The passphrase confirmation does not match.".to_owned();
+            self.set_private_keys_status_kind(
+                "private-key-generate-passphrase-mismatch",
+                self.keys_generate_error_text.clone(),
+                String::new(),
+                String::new(),
+            );
+            return self.projection();
+        }
+        let algorithm_index = self.keys_generate_algorithm_index;
+        let comment = self.keys_generate_comment.clone();
+        let passphrase_text = self.keys_generate_passphrase.clone();
+        let material = match Self::generate_private_key_material(
+            algorithm_index,
+            &comment,
+            &passphrase_text,
+        ) {
+            Ok(material) => material,
+            Err(error) => {
+                self.keys_generate_error_text = format!("Key generation failed: {error}");
+                self.set_private_keys_status_kind(
+                    "private-key-generate-failed",
+                    self.keys_generate_error_text.clone(),
+                    error.to_string(),
+                    String::new(),
+                );
+                return self.projection();
+            }
+        };
+        let passphrase = self.keys_generate_passphrase.clone();
+        let passphrase = if passphrase.is_empty() {
+            None
+        } else {
+            Some(passphrase.as_str())
+        };
+        let label = self.keys_generate_label.clone();
+        match self.import_private_key(&label, &material, passphrase, true) {
+            Ok(entry) => {
+                self.private_keys_selected_id = Some(entry.id.clone());
+                self.keys_generate_public_key = entry.public_key.clone();
+                self.keys_generate_fingerprint = entry.fingerprint.clone();
+                self.keys_generate_result_label = entry.label.clone();
+                self.keys_generate_result_visible = true;
+                self.keys_generate_passphrase.clear();
+                self.keys_generate_confirm.clear();
+                let detail = format!("{} · {}", entry.algorithm, entry.fingerprint);
+                let text = format!("Generated `{}` ({detail}).", entry.label);
+                self.set_status_kind(
+                    "private-key-generated",
+                    text.clone(),
+                    entry.label.clone(),
+                    detail.clone(),
+                );
+                self.set_private_keys_status_kind(
+                    "private-key-generated",
+                    text,
+                    entry.label,
+                    detail,
+                );
+            }
+            Err(error) => {
+                self.keys_generate_error_text = format!("Key generation failed: {error}");
+                self.set_private_keys_status_kind(
+                    "private-key-generate-failed",
+                    self.keys_generate_error_text.clone(),
+                    error.to_string(),
+                    String::new(),
+                );
+            }
+        }
+        self.projection()
+    }
+
+    /// 结果页 Copy Public Key 用（生成成功后有效）。
+    #[must_use]
+    pub fn generated_private_key_public_line(&self) -> Option<String> {
+        (!self.keys_generate_public_key.is_empty()).then(|| self.keys_generate_public_key.clone())
+    }
+
+    /// 结果页 Done：关闭 Generate 子窗（保留已生成密钥）。
+    pub fn finish_private_keys_generate_dialog(&mut self) -> AppProjection {
+        self.keys_generate_visible = false;
+        self.keys_generate_result_visible = false;
+        self.keys_generate_public_key.clear();
+        self.projection()
+    }
+
+    /// 用 `ssh-key` 生成 OpenSSH 私钥文本（ED25519 / RSA 4096）。
+    ///
+    /// 口令非空时用 OpenSSH 默认的 `Aes256Ctr` 加密材料——与「加密托管」一致：
+    /// secret store 里存的是加密后的 OpenSSH 容器，回读仍需口令。
+    fn generate_private_key_material(
+        algorithm_index: i32,
+        comment: &str,
+        passphrase: &str,
+    ) -> AppResult<String> {
+        let algorithm = match algorithm_index {
+            0 => Algorithm::Ed25519,
+            1 => Algorithm::Rsa { hash: None },
+            other => {
+                return Err(AppError::new(format!(
+                    "unsupported key algorithm index {other}"
+                )));
+            }
+        };
+        let mut rng = ssh_key::rand_core::OsRng;
+        let mut key = PrivateKey::random(&mut rng, algorithm)
+            .map_err(|error| AppError::new(format!("key generation failed: {error}")))?;
+        let comment = comment.trim();
+        if !comment.is_empty() {
+            key.set_comment(comment);
+        }
+        if !passphrase.is_empty() {
+            key = key
+                .encrypt(&mut rng, passphrase.as_bytes())
+                .map_err(|error| AppError::new(format!("key encryption failed: {error}")))?;
+        }
+        let material = key
+            .to_openssh(LineEnding::LF)
+            .map_err(|error| AppError::new(format!("key generation failed: {error}")))?;
+        Ok(material.to_string())
+    }
+
+    // --- Private Keys：Import（文件 / 粘贴）子窗 ---------------------------
+
+    pub fn open_private_keys_import_dialog(&mut self) -> AppProjection {
+        self.keys_import_visible = true;
+        self.keys_import_tab = 0;
+        self.keys_import_paste_text.clear();
+        self.private_keys_import_label.clear();
+        self.private_keys_import_path.clear();
+        self.private_keys_import_passphrase.clear();
+        self.set_private_keys_status_kind(
+            "private-key-import-opened",
+            "Import an OpenSSH private key from a file or paste its text.".to_owned(),
+            String::new(),
+            String::new(),
+        );
+        self.projection()
+    }
+
+    pub fn close_private_keys_import_dialog(&mut self) -> AppProjection {
+        self.keys_import_visible = false;
+        self.keys_import_paste_text.clear();
+        self.private_keys_import_passphrase.clear();
+        self.projection()
+    }
+
+    /// Import 子窗 tab：0 = 文件，1 = 粘贴（两个 tab 可互跳）。
+    pub fn select_private_keys_import_tab(&mut self, tab: i32) -> AppProjection {
+        self.keys_import_tab = if tab == 1 { 1 } else { 0 };
+        self.projection()
+    }
+
+    pub fn update_private_keys_import_paste_text(&mut self, value: &str) -> AppProjection {
+        self.keys_import_paste_text = value.to_owned();
+        self.projection()
+    }
+
+    pub fn import_private_key_from_dialog(&mut self) -> AppProjection {
+        let material = if self.keys_import_tab == 1 {
+            let text = self.keys_import_paste_text.trim().to_owned();
+            if text.is_empty() {
+                self.set_private_keys_status_kind(
+                    "private-key-import-text-empty",
+                    "Paste an OpenSSH private key first.".to_owned(),
+                    String::new(),
+                    String::new(),
+                );
+                return self.projection();
+            }
+            text
+        } else {
+            let path = self.private_keys_import_path.trim().to_owned();
+            if path.is_empty() {
+                self.set_private_keys_status_kind(
+                    "private-key-import-path-empty",
+                    "Enter or browse a private key file path first.".to_owned(),
+                    String::new(),
+                    String::new(),
+                );
+                return self.projection();
+            }
+            match fs::read_to_string(&path) {
+                Ok(material) => material,
+                Err(error) => {
+                    self.set_private_keys_status_kind(
+                        "private-key-import-read-failed",
+                        format!("Failed to read `{path}`: {error}"),
+                        path,
+                        error.to_string(),
+                    );
+                    return self.projection();
+                }
+            }
+        };
+        let label = self.private_keys_import_label.clone();
+        let passphrase = self.private_keys_import_passphrase.clone();
+        let passphrase = if passphrase.is_empty() {
+            None
+        } else {
+            Some(passphrase.as_str())
+        };
+        match self.import_private_key(&label, &material, passphrase, true) {
+            Ok(entry) => {
+                self.private_keys_selected_id = Some(entry.id.clone());
+                self.keys_import_visible = false;
+                self.keys_import_paste_text.clear();
+                self.private_keys_import_label.clear();
+                self.private_keys_import_path.clear();
+                self.private_keys_import_passphrase.clear();
+                let detail = format!("{} · {}", entry.algorithm, entry.fingerprint);
+                let text = format!("Imported `{}` ({detail}).", entry.label);
+                self.set_status_kind(
+                    "private-key-imported",
+                    text.clone(),
+                    entry.label.clone(),
+                    detail.clone(),
+                );
+                self.set_private_keys_status_kind(
+                    "private-key-imported",
+                    text,
+                    entry.label,
+                    detail,
+                );
+            }
+            Err(error) => {
+                self.set_private_keys_status_kind(
+                    "private-key-import-failed",
+                    format!("Import failed: {error}"),
+                    error.to_string(),
+                    String::new(),
+                );
+            }
+        }
+        self.projection()
+    }
+
+    // --- Private Keys：Export 子窗 ---------------------------------------
+
+    pub fn open_private_keys_export_dialog(&mut self) -> AppProjection {
+        let Some(entry) = self.selected_private_key_entry() else {
+            self.set_private_keys_status_kind(
+                "private-key-export-requires-selection",
+                "Select a managed key to export its public key.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+            return self.projection();
+        };
+        self.keys_export_visible = true;
+        self.keys_export_path_text = self
+            .config_dir
+            .join(format!("{}.pub", entry.label))
+            .display()
+            .to_string();
+        self.projection()
+    }
+
+    pub fn close_private_keys_export_dialog(&mut self) -> AppProjection {
+        self.keys_export_visible = false;
+        self.projection()
+    }
+
+    pub fn update_private_keys_export_path(&mut self, value: &str) -> AppProjection {
+        self.keys_export_path_text = value.to_owned();
+        self.projection()
+    }
+
+    pub fn export_private_key_to_path(&mut self) -> AppProjection {
+        let Some(entry) = self.selected_private_key_entry() else {
+            self.set_private_keys_status_kind(
+                "private-key-export-requires-selection",
+                "Select a managed key to export its public key.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+            return self.projection();
+        };
+        let public_line = match self.private_key_public_line(&entry.id) {
+            Ok(line) => line,
+            Err(error) => {
+                self.set_private_keys_status_kind(
+                    "private-key-export-failed",
+                    format!("Export failed: {error}"),
+                    error.to_string(),
+                    String::new(),
+                );
+                return self.projection();
+            }
+        };
+        let path = self.keys_export_path_text.trim().to_owned();
+        if path.is_empty() {
+            self.set_private_keys_status_kind(
+                "private-key-export-path-empty",
+                "Choose a destination file first.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+            return self.projection();
+        }
+        match fs::write(&path, format!("{public_line}\n")) {
+            Ok(()) => {
+                self.keys_export_visible = false;
+                let text = format!("Exported the public key to `{path}`.");
+                self.set_status_kind(
+                    "private-key-exported",
+                    text.clone(),
+                    path.clone(),
+                    String::new(),
+                );
+                self.set_private_keys_status_kind(
+                    "private-key-exported",
+                    text,
+                    path,
+                    String::new(),
+                );
+            }
+            Err(error) => {
+                self.set_private_keys_status_kind(
+                    "private-key-export-failed",
+                    format!("Export failed: {error}"),
+                    error.to_string(),
+                    String::new(),
+                );
+            }
+        }
+        self.projection()
+    }
+
+    // --- Private Keys：Deploy 子窗 ---------------------------------------
+
+    pub fn close_private_keys_deploy_dialog(&mut self) -> AppProjection {
+        self.private_keys_deploy_confirm_visible = false;
+        self.keys_deploy_target_index = 0;
+        self.projection()
+    }
+
+    // --- Private Keys：行右键菜单 ----------------------------------------
+
+    pub fn prepare_private_key_context_menu(&mut self, index: i32) -> AppProjection {
+        let rows = self.private_key_row_data();
+        let Some(row) = usize::try_from(index)
+            .ok()
+            .and_then(|index| rows.get(index))
+        else {
+            return self.projection();
+        };
+        self.private_keys_selected_id = Some(row.id.clone());
+        self.keys_menu_key_id = Some(row.id.clone());
+        self.private_keys_passphrase_input.clear();
+        self.private_keys_test_result_text.clear();
+        self.private_keys_remove_confirm_visible = false;
+        self.private_keys_deploy_confirm_visible = false;
+        let text = format!("Selected managed key `{}`.", row.label);
+        self.set_private_keys_status_kind(
+            "private-key-selected",
+            text,
+            row.label.clone(),
+            String::new(),
+        );
+        self.projection()
+    }
+
+    /// 行右键 Test：先按菜单目标选中，再走既有测试路径。
+    pub fn test_private_key_from_menu(&mut self) -> AppProjection {
+        self.apply_private_key_menu_selection();
+        self.test_selected_private_key()
+    }
+
+    /// 行右键 Export public key：按菜单目标打开 Export 子窗。
+    pub fn export_private_key_from_menu(&mut self) -> AppProjection {
+        self.apply_private_key_menu_selection();
+        self.open_private_keys_export_dialog()
+    }
+
+    /// 行右键 Deploy：按菜单目标打开 Deploy 子窗。
+    pub fn deploy_private_key_from_menu(&mut self) -> AppProjection {
+        self.apply_private_key_menu_selection();
+        self.request_private_key_deploy()
+    }
+
+    /// 行右键 Remove：按菜单目标打开既有 Danger Zone 确认。
+    pub fn remove_private_key_from_menu(&mut self) -> AppProjection {
+        self.apply_private_key_menu_selection();
+        self.request_private_key_remove()
+    }
+
+    fn apply_private_key_menu_selection(&mut self) {
+        if let Some(key_id) = self.keys_menu_key_id.clone() {
+            if self.private_key_entry(&key_id).is_some() {
+                self.private_keys_selected_id = Some(key_id);
+            }
+        }
     }
 }
 
@@ -2617,5 +3593,200 @@ mod tests {
                 .label,
             "New label"
         );
+    }
+
+    // --- managers-dialogs：生成 / 导入 / 主机密钥单字段窗 / 行右键 -------------
+
+    #[test]
+    fn generate_private_key_round_trips_through_parse_and_fingerprint() {
+        let (_temp, mut runtime) = test_runtime_with_keychain();
+        runtime.open_private_keys_manager();
+        runtime.open_private_keys_generate_dialog();
+        runtime.update_private_keys_generate_label("generated-ed25519");
+        runtime.update_private_keys_generate_comment("generated comment");
+        runtime.update_private_keys_generate_passphrase("generated-pass");
+        runtime.update_private_keys_generate_confirm("generated-pass");
+        assert_eq!(runtime.keys_generate_algorithm_index, 0);
+
+        let projection = runtime.generate_private_key_from_form();
+        assert!(projection.keys_generate_result_visible);
+        assert!(projection
+            .keys_generate_public_key_text
+            .starts_with("ssh-ed25519 "));
+        assert!(projection
+            .keys_generate_fingerprint_text
+            .starts_with("SHA256:"));
+
+        // 生成材料可被现有 import/parse 流程读回，且指纹一致。
+        let key_id = runtime
+            .private_keys_selected_id
+            .clone()
+            .expect("generated key selected");
+        let material = runtime.private_key_material(&key_id).expect("material");
+        assert!(material.contains("BEGIN OPENSSH PRIVATE KEY"));
+        let parsed = parse_private_key_material(&material, Some("generated-pass"))
+            .expect("generated material parses");
+        assert!(
+            parsed.encrypted,
+            "passphrase-protected material is encrypted"
+        );
+        assert!(parsed.decrypted);
+        assert_eq!(
+            parsed.fingerprint,
+            runtime
+                .private_key_entry(&key_id)
+                .expect("entry")
+                .fingerprint
+        );
+        assert!(runtime.generated_private_key_public_line().is_some());
+
+        // 结果页 Done 关闭子窗，但保留已入库的密钥。
+        let projection = runtime.finish_private_keys_generate_dialog();
+        assert!(!projection.keys_generate_visible);
+        assert_eq!(runtime.private_key_entries().len(), 1);
+    }
+
+    #[test]
+    fn generate_private_key_rejects_passphrase_mismatch() {
+        let (_temp, mut runtime) = test_runtime_with_keychain();
+        runtime.open_private_keys_generate_dialog();
+        runtime.update_private_keys_generate_passphrase("one");
+        runtime.update_private_keys_generate_confirm("two");
+
+        let projection = runtime.generate_private_key_from_form();
+        assert!(!projection.keys_generate_result_visible);
+        assert!(projection
+            .keys_generate_error_text
+            .contains("does not match"));
+        assert!(runtime.private_key_entries().is_empty());
+    }
+
+    #[test]
+    fn host_keys_add_dialog_adds_and_updates_entries() {
+        let (_temp, mut runtime) = test_runtime_with_keychain();
+        runtime.open_host_keys_manager();
+
+        // Add：单字段粘贴 `host:port algorithm fingerprint`。
+        runtime.open_host_keys_add_dialog();
+        runtime.update_host_keys_add_text(
+            "edge.example.com:22 ssh-ed25519 SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKwDEjsOE",
+        );
+        let projection = runtime.submit_host_keys_add_dialog();
+        assert!(!projection.hosts_add_visible);
+        assert_eq!(runtime.known_host_entries().len(), 1);
+        assert_eq!(projection.hosts_add_error_text, "");
+
+        // 非法行：报错并留在窗内。
+        runtime.open_host_keys_add_dialog();
+        runtime.update_host_keys_add_text("not-a-host-key");
+        let projection = runtime.submit_host_keys_add_dialog();
+        assert!(projection.hosts_add_visible);
+        assert!(!projection.hosts_add_error_text.is_empty());
+        assert_eq!(runtime.known_host_entries().len(), 1);
+
+        // Edit：预填 + 改 host:port 时替换旧条目。
+        runtime.open_host_keys_edit_dialog(0, 0);
+        assert!(runtime.hosts_add_edit_target.is_some());
+        runtime.update_host_keys_add_text(
+            "edge2.example.com:2222 ssh-ed25519 SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKwDEjsOE",
+        );
+        let projection = runtime.submit_host_keys_add_dialog();
+        assert!(!projection.hosts_add_visible);
+        let entries = runtime.known_host_entries();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].host, "edge2.example.com");
+        assert_eq!(entries[0].port, 2222);
+    }
+
+    #[test]
+    fn host_keys_context_menu_tracks_target_and_removes_it() {
+        let (_temp, mut runtime) = test_runtime_with_keychain();
+        runtime.open_host_keys_manager();
+        runtime.open_host_keys_add_dialog();
+        runtime.update_host_keys_add_text(
+            "one.example.com:22 ssh-ed25519 SHA256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        );
+        let _ = runtime.submit_host_keys_add_dialog();
+        runtime.open_host_keys_add_dialog();
+        runtime.update_host_keys_add_text(
+            "two.example.com:22 ssh-ed25519 SHA256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        );
+        let _ = runtime.submit_host_keys_add_dialog();
+        assert_eq!(runtime.known_host_entries().len(), 2);
+
+        let _ = runtime.prepare_host_keys_context_menu(1, 0);
+        assert_eq!(runtime.hosts_menu_group, Some(1));
+        assert_eq!(runtime.hosts_menu_entry, Some(0));
+        let edited = runtime.open_host_keys_edit_dialog(1, 0);
+        assert!(edited.hosts_add_edit_mode);
+        let _ = runtime.cancel_host_keys_add_dialog();
+
+        let _ = runtime.prepare_host_keys_context_menu(1, 0);
+        let projection = runtime
+            .remove_host_key_from_menu()
+            .expect("remove from menu");
+        assert_eq!(projection.host_keys_key_count, 1);
+        assert_eq!(runtime.hosts_menu_group, None);
+    }
+
+    #[test]
+    fn private_key_import_dialog_pastes_material_and_closes() {
+        let (_temp, mut runtime) = test_runtime_with_keychain();
+        runtime.open_private_keys_manager();
+        runtime.open_private_keys_import_dialog();
+        runtime.select_private_keys_import_tab(1);
+        runtime.update_private_keys_import_paste_text(ED25519_PLAIN);
+        runtime.update_private_keys_import_label("pasted-key");
+
+        let projection = runtime.import_private_key_from_dialog();
+        assert!(!projection.keys_import_visible);
+        assert_eq!(runtime.private_key_entries().len(), 1);
+        assert_eq!(projection.keys_import_tab, 1);
+        assert!(runtime.private_key_entries()[0]
+            .fingerprint
+            .starts_with("SHA256:"));
+    }
+
+    #[test]
+    fn private_key_menu_actions_target_the_right_clicked_row() {
+        let (_temp, mut runtime) = test_runtime_with_keychain();
+        let first = runtime
+            .import_private_key("first", ED25519_PLAIN, None, false)
+            .expect("import");
+        let second = runtime
+            .import_private_key("second", ED25519_PLAIN, None, false)
+            .expect("import");
+        runtime.open_private_keys_manager();
+        // 行模型按 label 排序：first, second。
+        let _ = runtime.prepare_private_key_context_menu(1);
+        assert_eq!(
+            runtime.keys_menu_key_id.as_deref(),
+            Some(second.id.as_str())
+        );
+        assert_ne!(first.id, second.id);
+        // 菜单目标已选中，导出子窗打开的是该行公钥。
+        let projection = runtime.export_private_key_from_menu();
+        assert!(projection.keys_export_visible);
+        assert!(!projection.keys_export_public_key_text.is_empty());
+        let _ = runtime.close_private_keys_export_dialog();
+        assert!(!runtime.projection().keys_export_visible);
+    }
+
+    #[test]
+    fn deploy_dialog_reports_when_no_ssh_target_exists() {
+        let (_temp, mut runtime) = test_runtime_with_keychain();
+        runtime
+            .import_private_key("deploy-key", ED25519_PLAIN, None, false)
+            .expect("import");
+        runtime.open_private_keys_manager();
+        let projection = runtime.request_private_key_deploy();
+        assert!(projection.private_keys_deploy_confirm_visible);
+        assert!(projection.keys_deploy_target_options.is_empty());
+        assert_eq!(
+            runtime.private_keys_status_kind,
+            "private-key-deploy-no-targets"
+        );
+        let _ = runtime.close_private_keys_deploy_dialog();
+        assert!(!runtime.private_keys_deploy_confirm_visible);
     }
 }

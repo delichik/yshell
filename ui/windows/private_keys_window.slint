@@ -64,6 +64,14 @@ export component PrivateKeysWindow inherits Window {
     callback save-passphrase();
     callback forget-passphrase();
     callback rename-key(string);
+    // 子窗入口 + 行右键动作（DialogWindowManager 接线）。
+    callback open-generate-dialog();
+    callback open-import-dialog();
+    callback prepare-context-menu(int);
+    callback test-from-menu();
+    callback export-from-menu();
+    callback deploy-from-menu();
+    callback remove-from-menu();
     callback title_drag_requested();
 
     chrome := ToolWindowChrome {
@@ -117,6 +125,13 @@ export component PrivateKeysWindow inherits Window {
             save-passphrase => { root.save-passphrase(); }
             forget-passphrase => { root.forget-passphrase(); }
             rename-key(string) => { root.rename-key(string); }
+            open-generate-dialog => { root.open-generate-dialog(); }
+            open-import-dialog => { root.open-import-dialog(); }
+            prepare-context-menu(int) => { root.prepare-context-menu(int); }
+            test-from-menu => { root.test-from-menu(); }
+            export-from-menu => { root.export-from-menu(); }
+            deploy-from-menu => { root.deploy-from-menu(); }
+            remove-from-menu => { root.remove-from-menu(); }
         }
     }
 

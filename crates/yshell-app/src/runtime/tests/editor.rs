@@ -180,11 +180,18 @@ fn session_editor_section_selection_updates_projection() {
         runtime.select_session_editor_advanced().editor_section_text,
         "advanced"
     );
+    // 分区按原型改名：原 Appearance → Terminal Style（section id `terminal-style`）。
     assert_eq!(
         runtime
             .select_session_editor_appearance()
             .editor_section_text,
-        "appearance"
+        "terminal-style"
+    );
+    assert_eq!(
+        runtime
+            .select_session_editor_login_script()
+            .editor_section_text,
+        "login-script"
     );
     assert_eq!(
         runtime.select_session_editor_general().editor_section_text,
@@ -767,6 +774,8 @@ fn saved_session_tunnel_profile_is_applied_to_runtime_shell_config() {
     profile.tunnel = Some(TunnelProfile {
         forwards: vec![
             TunnelForward {
+                name: None,
+                enabled: true,
                 kind: TunnelForwardKind::Local,
                 bind_host: "127.0.0.1".to_owned(),
                 bind_port: 18080,
@@ -774,6 +783,8 @@ fn saved_session_tunnel_profile_is_applied_to_runtime_shell_config() {
                 target_port: 8080,
             },
             TunnelForward {
+                name: None,
+                enabled: true,
                 kind: TunnelForwardKind::Dynamic,
                 bind_host: "127.0.0.1".to_owned(),
                 bind_port: 19050,

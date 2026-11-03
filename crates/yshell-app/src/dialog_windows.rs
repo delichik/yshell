@@ -10,13 +10,14 @@
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
-use slint::{CloseRequestResponse, ComponentHandle, SharedString};
+use slint::{CloseRequestResponse, ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
 use crate::bootstrap::generated_ui::{
     AboutWindow, AuthPromptWindow, CompactConfirmWindow, FolderEditorWindow, HostKeyWindow,
-    HostKeysWindow, KnownHostsWindow, LoggingWindow, MainWindow, NewFolderWindow,
-    PasswordPromptWindow, PrivateKeysWindow, ProxiesWindow, SessionEditorWindow, SettingsWindow,
-    SftpConflictWindow, SftpEntryWindow, SftpPropertiesWindow, ThemeManagerWindow,
+    HostKeysWindow, KnownHostsWindow, LoggingWindow, MainWindow, MasterPasswordUnlockWindow,
+    MasterPasswordWindow, NewFolderWindow, PasswordPromptWindow, PrivateKeysWindow, ProxiesWindow,
+    SessionEditorWindow, SettingsWindow, SftpConflictWindow, SftpEntryWindow, SftpPropertiesWindow,
+    Theme, ThemeManagerWindow,
 };
 use crate::error::{AppError, AppResult};
 use crate::runtime::AppProjection;
@@ -119,6 +120,12 @@ pub(crate) struct DialogWindowManager {
     confirm_kind: Option<ConfirmKind>,
     settings: Option<SettingsWindow>,
     settings_shown: bool,
+    // D35: master-password sub-dialog + startup unlock are independent compact
+    // tool windows created lazily when their projection flag turns true.
+    master_password: Option<MasterPasswordWindow>,
+    master_password_shown: bool,
+    master_password_unlock: Option<MasterPasswordUnlockWindow>,
+    master_password_unlock_shown: bool,
     // Additional tool windows are created lazily in sync_* helpers.
     session_editor: Option<SessionEditorWindow>,
     session_editor_shown: bool,
@@ -176,6 +183,10 @@ impl DialogWindowManager {
                 confirm_kind: None,
                 settings: None,
                 settings_shown: false,
+                master_password: None,
+                master_password_shown: false,
+                master_password_unlock: None,
+                master_password_unlock_shown: false,
                 session_editor: None,
                 session_editor_shown: false,
                 folder_editor: None,
@@ -280,6 +291,11 @@ impl DialogWindowManager {
         self.sync_about(projection, main, owner_id)?;
         self.sync_confirm(projection, main, owner_id, window_runtime.clone())?;
         self.sync_settings(projection, main, owner_id, window_runtime.clone())?;
+        // D35: startup unlock first, then the Set/Change/Remove/Reset sub-dialog,
+        // so "Forgot password?" from the unlock window stacks the Reset dialog
+        // above it (Cancel returns to the unlock window).
+        self.sync_master_password_unlock(projection, main, owner_id)?;
+        self.sync_master_password(projection, main, owner_id)?;
         macro_rules! apply_modal {
             ($action:expr, $slot:ident) => {{
                 match $action {
@@ -845,7 +861,14 @@ impl DialogWindowManager {
                 let host = self.host.clone();
                 let runtime = Rc::clone(&self.runtime);
                 window.on_dismiss(move || {
-                    let _ = runtime.borrow_mut().close_settings_appearance();
+                    {
+                        // Cancel / × / Esc: discard every draft. `close_settings_appearance`
+                        // reloads the persisted baseline; marking the UI dirty makes the
+                        // next tick re-push the reverted App theme to every window.
+                        let mut runtime = runtime.borrow_mut();
+                        let _ = runtime.close_settings_appearance();
+                        runtime.mark_ui_dirty();
+                    }
                     if let Some(host) = host.upgrade() {
                         let mut host = host.borrow_mut();
                         host.dialogs.local.settings = false;
@@ -861,7 +884,14 @@ impl DialogWindowManager {
                 let host = self.host.clone();
                 let runtime = Rc::clone(&self.runtime);
                 window.window().on_close_requested(move || {
-                    let _ = runtime.borrow_mut().close_settings_appearance();
+                    {
+                        // Cancel / × / Esc: discard every draft. `close_settings_appearance`
+                        // reloads the persisted baseline; marking the UI dirty makes the
+                        // next tick re-push the reverted App theme to every window.
+                        let mut runtime = runtime.borrow_mut();
+                        let _ = runtime.close_settings_appearance();
+                        runtime.mark_ui_dirty();
+                    }
                     if let Some(host) = host.upgrade() {
                         let mut host = host.borrow_mut();
                         host.dialogs.local.settings = false;
@@ -900,6 +930,79 @@ impl DialogWindowManager {
             self.settings_shown = false;
             self.local.settings = false;
             self.end_modal();
+        }
+        Ok(())
+    }
+
+    /// D35: startup master-password unlock window (`Quit` / `×` / Esc exits).
+    fn sync_master_password_unlock(
+        &mut self,
+        projection: &AppProjection,
+        main: Option<&MainWindow>,
+        owner_id: Option<u64>,
+    ) -> AppResult<()> {
+        let manager = self.manager.clone();
+        let runtime = Rc::clone(&self.runtime);
+        let action = sync_projection_tool(
+            projection.settings_master_password_unlock_visible,
+            &mut self.master_password_unlock_shown,
+            &mut self.master_password_unlock,
+            || MasterPasswordUnlockWindow::new().map_err(AppError::from_error),
+            |w| prep_tool_window!(w),
+            |w| wire_master_password_unlock_window(w, runtime, manager),
+            sync_master_password_unlock_props,
+            projection,
+            main,
+        )?;
+        match action {
+            ModalAction::Show => {
+                if let Some(window) = self.master_password_unlock.as_ref() {
+                    // The projection never carries plaintext back: a fresh gate
+                    // always starts with an empty field.
+                    window.set_password_text("".into());
+                    self.show_aux_modal(window, main, owner_id)?;
+                    window.invoke_focus_dialog();
+                }
+            }
+            ModalAction::Hide => self.end_modal(),
+            ModalAction::None => {}
+        }
+        Ok(())
+    }
+
+    /// D35: Settings → Security master-password sub-dialog.
+    fn sync_master_password(
+        &mut self,
+        projection: &AppProjection,
+        main: Option<&MainWindow>,
+        owner_id: Option<u64>,
+    ) -> AppResult<()> {
+        let runtime = Rc::clone(&self.runtime);
+        let action = sync_projection_tool(
+            projection.settings_master_password_dialog_visible,
+            &mut self.master_password_shown,
+            &mut self.master_password,
+            || MasterPasswordWindow::new().map_err(AppError::from_error),
+            |w| prep_tool_window!(w),
+            |w| wire_master_password_window(w, runtime),
+            sync_master_password_props,
+            projection,
+            main,
+        )?;
+        match action {
+            ModalAction::Show => {
+                if let Some(window) = self.master_password.as_ref() {
+                    // Reused window: clear the previous draft's plaintext (it is
+                    // never projected back) and hand over the keyboard.
+                    window.set_current_text("".into());
+                    window.set_new_text("".into());
+                    window.set_confirm_text("".into());
+                    self.show_aux_modal(window, main, owner_id)?;
+                    window.invoke_focus_dialog();
+                }
+            }
+            ModalAction::Hide => self.end_modal(),
+            ModalAction::None => {}
         }
         Ok(())
     }
@@ -1532,6 +1635,123 @@ fn sync_session_editor(w: &SessionEditorWindow, p: &AppProjection, m: Option<&Ma
     }
 }
 
+// --- D35: master-password windows -----------------------------------------
+
+/// Quits YShell from the startup unlock window (`Quit` / `×`).
+///
+/// Reuses the existing shutdown path: no protected file is read by the unlock
+/// gate, so there is nothing else to confirm.
+fn quit_from_master_password_unlock(
+    runtime: &Rc<RefCell<crate::runtime::AppRuntime>>,
+    manager: &Weak<RefCell<WindowManager>>,
+) {
+    let _ = runtime.borrow_mut().dismiss_master_password_unlock();
+    if let Some(manager) = manager.upgrade() {
+        if let Ok(mut manager) = manager.try_borrow_mut() {
+            manager.shutdown();
+        }
+    }
+}
+
+fn wire_master_password_window(
+    window: &MasterPasswordWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+) {
+    wire_tool_title_drag!(window);
+    let rt = Rc::clone(&runtime);
+    window.on_update_current(move |text: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_master_password_field("current", text.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_new(move |text: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_master_password_field("new", text.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_confirm(move |text: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_master_password_field("confirm", text.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_submit(move || {
+        if let Err(error) = rt.borrow_mut().submit_master_password_dialog() {
+            tracing::warn!(
+                target: "yshell::app",
+                "master password submit failed: {error}"
+            );
+        }
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_cancel(move || {
+        let _ = rt.borrow_mut().close_master_password_dialog();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_dismissed(move || {
+        let _ = rt.borrow_mut().close_master_password_dialog();
+    });
+    let rt = Rc::clone(&runtime);
+    window.window().on_close_requested(move || {
+        let _ = rt.borrow_mut().close_master_password_dialog();
+        CloseRequestResponse::HideWindow
+    });
+}
+
+fn wire_master_password_unlock_window(
+    window: &MasterPasswordUnlockWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+    manager: Weak<RefCell<WindowManager>>,
+) {
+    wire_tool_title_drag!(window);
+    let rt = Rc::clone(&runtime);
+    window.on_update_password(move |text: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_master_password_unlock_password(text.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_unlock(move || {
+        let _ = rt.borrow_mut().submit_master_password_unlock();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_forgot(move || {
+        // Opens the destructive Reset sub-dialog; Cancel returns to this window.
+        let _ = rt.borrow_mut().forgot_master_password();
+        rt.borrow_mut().mark_ui_dirty();
+    });
+    let rt = Rc::clone(&runtime);
+    let mgr = manager.clone();
+    window.on_quit(move || quit_from_master_password_unlock(&rt, &mgr));
+    let rt = Rc::clone(&runtime);
+    window.window().on_close_requested(move || {
+        quit_from_master_password_unlock(&rt, &manager);
+        CloseRequestResponse::HideWindow
+    });
+}
+
+fn sync_master_password_props(
+    w: &MasterPasswordWindow,
+    p: &AppProjection,
+    _m: Option<&MainWindow>,
+) {
+    w.set_kind(p.settings_master_password_dialog_kind_text.clone().into());
+    w.set_error_id(p.settings_master_password_dialog_error_text.clone().into());
+    // D36: the aux window created from Settings follows the live App theme too.
+    crate::bootstrap::apply_app_theme_preview(&w.global::<Theme>(), p);
+}
+
+fn sync_master_password_unlock_props(
+    w: &MasterPasswordUnlockWindow,
+    p: &AppProjection,
+    _m: Option<&MainWindow>,
+) {
+    w.set_error_id(p.settings_master_password_unlock_error_text.clone().into());
+    crate::bootstrap::apply_app_theme_preview(&w.global::<Theme>(), p);
+}
+
 fn wire_settings_actions(
     window: &SettingsWindow,
     window_runtime: Option<Rc<WindowRuntime>>,
@@ -1558,7 +1778,9 @@ fn wire_settings_actions(
     let wr = window_runtime.clone();
     window.on_open_theme_manager(move || {
         if let Some(wr) = wr.as_ref() {
-            let _ = wr.borrow_mut().open_theme_manager();
+            // Appearance → Terminal style → Manage: the runtime owns the
+            // Settings-specific entry point (it keeps the draft in sync).
+            let _ = wr.borrow_mut().open_settings_terminal_styles_manager();
         }
     });
     let wr = window_runtime.clone();
@@ -1579,13 +1801,211 @@ fn wire_settings_actions(
             let _ = wr.borrow_mut().set_mcp_enabled(enabled);
         }
     });
-    let wr = window_runtime;
+    let wr = window_runtime.clone();
     window.on_set_mcp_auto_approve_control(move |enabled| {
         if let Some(wr) = wr.as_ref() {
             let _ = wr.borrow_mut().set_mcp_auto_approve_control(enabled);
         }
     });
-    let _ = host;
+    // --- D36 / D37 / D33: Settings sections (whole-window draft + Save) -----
+    let wr = window_runtime.clone();
+    window.on_update_settings_appearance_mode(move |index| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr.borrow_mut().update_settings_appearance_mode(index);
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_update_settings_appearance_accent(move |index| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr.borrow_mut().update_settings_appearance_accent(index);
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_select_settings_appearance_style(move |index| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr.borrow_mut().select_settings_appearance_style(index);
+        }
+    });
+
+    let wr = window_runtime.clone();
+    window.on_update_settings_terminal_middle_click(move |index| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr.borrow_mut().update_settings_terminal_middle_click(index);
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_update_settings_terminal_right_click(move |index| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr.borrow_mut().update_settings_terminal_right_click(index);
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_update_settings_terminal_multi_line_paste(move |index| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr
+                .borrow_mut()
+                .update_settings_terminal_multi_line_paste(index);
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_update_settings_terminal_auto_copy(move |enabled| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr.borrow_mut().update_settings_terminal_auto_copy(enabled);
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_update_scrollback_lines(move |value: SharedString| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr
+                .borrow_mut()
+                .update_settings_scrollback_lines(value.as_ref());
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_update_scrollback_max_cells(move |value: SharedString| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr
+                .borrow_mut()
+                .update_settings_scrollback_max_cells(value.as_ref());
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_reset_terminal_defaults(move || {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr.borrow_mut().reset_settings_terminal_defaults();
+        }
+    });
+
+    let wr = window_runtime.clone();
+    window.on_update_settings_sftp_show_hidden(move |show_hidden| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr
+                .borrow_mut()
+                .update_settings_sftp_show_hidden(show_hidden);
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_update_settings_sftp_conflict_action(move |index| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr.borrow_mut().update_settings_sftp_conflict_action(index);
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_update_settings_sftp_external_editor(move |index| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr.borrow_mut().update_settings_sftp_external_editor(index);
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_update_settings_sftp_external_editor_path(move |value: SharedString| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr
+                .borrow_mut()
+                .update_settings_sftp_external_editor_path(value.as_ref());
+        }
+    });
+    // rfd runs on a worker thread (blocking on the UI thread freezes rendering);
+    // the picked path comes back through the app-level dialog channel.
+    let host_browse = host.clone();
+    window.on_browse_settings_sftp_external_editor(move || {
+        let Some(host) = host_browse.upgrade() else {
+            return;
+        };
+        let manager = host.borrow().dialogs.manager.upgrade();
+        if let Some(manager) = manager {
+            manager.borrow().browse_settings_sftp_editor();
+        }
+    });
+
+    let wr = window_runtime.clone();
+    window.on_open_master_password_dialog(move |kind: SharedString| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr.borrow_mut().open_master_password_dialog(kind.as_ref());
+        }
+    });
+
+    let wr = window_runtime.clone();
+    window.on_open_config_dir(move || {
+        if let Some(wr) = wr.as_ref() {
+            let dir = wr.borrow().config_dir.display().to_string();
+            crate::bootstrap::spawn_open_path(dir);
+        }
+    });
+
+    let wr = window_runtime.clone();
+    let host_save = host.clone();
+    window.on_save_settings(move || {
+        let Some(wr) = wr.as_ref() else {
+            return;
+        };
+        let result = wr.borrow_mut().save_settings_all();
+        match result {
+            Ok(projection) => {
+                if projection.settings_appearance_visible {
+                    // A section failed validation: keep the dialog open, the
+                    // runtime already projected that section's inline status.
+                    return;
+                }
+                // Save = save and close. The runtime clears the projection flag,
+                // but the local modal flag would keep the aux window open on the
+                // next sync tick — mirror the Cancel path here.
+                wr.borrow_mut().mark_ui_dirty();
+                if let Some(host) = host_save.upgrade() {
+                    let mut host = host.borrow_mut();
+                    host.dialogs.local.settings = false;
+                    if host.dialogs.settings_shown {
+                        if let Some(settings) = host.dialogs.settings.as_ref() {
+                            let _ = settings.hide();
+                        }
+                        host.dialogs.settings_shown = false;
+                        host.dialogs.end_modal();
+                    }
+                }
+            }
+            Err(error) => {
+                tracing::warn!(
+                    target: "yshell::app",
+                    "could not save the settings: {error}"
+                );
+            }
+        }
+    });
+
+    // --- General / Advanced / MCP: existing per-section setters -------------
+    let wr = window_runtime.clone();
+    window.on_set_language(move |value: SharedString| {
+        if let Some(wr) = wr.as_ref() {
+            let result = wr.borrow_mut().set_ui_language(value.as_ref());
+            match result {
+                Ok(projection) => {
+                    crate::bootstrap::apply_language(projection.settings_language_text.as_str())
+                }
+                Err(error) => tracing::warn!(
+                    target: "yshell::app",
+                    "could not save the language setting: {error}"
+                ),
+            }
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_set_debug_logging(move |enabled| {
+        if let Some(wr) = wr.as_ref() {
+            if let Err(error) = wr.borrow_mut().set_debug_logging(enabled) {
+                tracing::warn!(
+                    target: "yshell::app",
+                    "could not save the debug logging setting: {error}"
+                );
+            }
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_open_debug_log_dir(move || {
+        if let Some(wr) = wr.as_ref() {
+            if let Ok(dir) = wr.borrow().ensure_debug_log_dir() {
+                crate::bootstrap::spawn_open_path(dir.display().to_string());
+            }
+        }
+    });
 }
 
 fn sync_settings_from(
@@ -1594,37 +2014,19 @@ fn sync_settings_from(
     main: Option<&MainWindow>,
 ) {
     settings.set_config_dir_text(projection.config_dir_text.clone().into());
-    if let Some(main) = main {
-        settings.set_scrollback_lines_text(main.get_settings_scrollback_lines_text());
-        settings.set_scrollback_max_cells_text(main.get_settings_scrollback_max_cells_text());
-        settings.set_settings_sftp_max_parallel_transfers_text(
-            main.get_settings_sftp_max_parallel_transfers_text(),
-        );
-        settings.set_debug_logging_enabled(main.get_settings_debug_logging_enabled());
-        settings.set_confirm_close_session_enabled(main.get_settings_confirm_close_session());
-        settings.set_confirm_quit_app_enabled(main.get_settings_confirm_quit_app());
-        settings.set_mcp_enabled(main.get_settings_mcp_enabled());
-        settings.set_mcp_auto_approve_control_enabled(main.get_settings_mcp_auto_approve_control());
-        settings.set_mcp_status_text(main.get_settings_mcp_status_text());
-        settings.set_mcp_boundaries_text(main.get_settings_mcp_boundaries_text());
-        settings.set_mcp_host_config_text(main.get_settings_mcp_host_config_text());
-        settings.set_language_text(main.get_settings_language_text());
-        settings.set_debug_log_dir_text(main.get_settings_debug_log_dir_text());
-        settings.set_appearance_color_scheme_name_text(
-            main.get_settings_appearance_color_scheme_name_text(),
-        );
-        settings.set_appearance_color_scheme_builtin(
-            main.get_settings_appearance_color_scheme_builtin(),
-        );
-        settings.set_appearance_font_index(main.get_settings_appearance_font_index());
-        settings.set_appearance_font_size_text(main.get_settings_appearance_font_size_text());
-        settings
-            .set_appearance_fallback_fonts_text(main.get_settings_appearance_fallback_fonts_text());
-        settings.set_appearance_status_text(main.get_settings_appearance_status_text());
-        settings.set_appearance_preview(main.get_settings_appearance_preview());
-        settings
-            .set_appearance_preview_background(main.get_settings_appearance_preview_background());
-    }
+    settings.set_scrollback_lines_text(projection.settings_scrollback_lines_text.clone().into());
+    settings.set_scrollback_max_cells_text(
+        projection.settings_scrollback_max_cells_text.clone().into(),
+    );
+    settings.set_settings_sftp_max_parallel_transfers_text(
+        projection
+            .settings_sftp_max_parallel_transfers_text
+            .clone()
+            .into(),
+    );
+    settings.set_language_text(projection.settings_language_text.clone().into());
+    settings.set_debug_logging_enabled(projection.settings_debug_logging_enabled);
+    settings.set_debug_log_dir_text(projection.settings_debug_log_dir_text.clone().into());
     settings.set_confirm_close_session_enabled(projection.settings_confirm_close_session);
     settings.set_confirm_quit_app_enabled(projection.settings_confirm_quit_app);
     settings.set_mcp_enabled(projection.settings_mcp_enabled);
@@ -1632,6 +2034,173 @@ fn sync_settings_from(
     settings.set_mcp_status_text(projection.settings_mcp_status_text.clone().into());
     settings.set_mcp_boundaries_text(projection.settings_mcp_boundaries_text.clone().into());
     settings.set_mcp_host_config_text(projection.settings_mcp_host_config_text.clone().into());
+    settings.set_appearance_color_scheme_name_text(
+        projection
+            .settings_appearance_color_scheme_name_text
+            .clone()
+            .into(),
+    );
+    settings
+        .set_appearance_color_scheme_builtin(projection.settings_appearance_color_scheme_builtin);
+    settings.set_appearance_font_index(projection.settings_appearance_font_index);
+    settings.set_appearance_font_size_text(
+        projection.settings_appearance_font_size_text.clone().into(),
+    );
+    settings.set_appearance_fallback_fonts_text(
+        projection
+            .settings_appearance_backup_font_text
+            .clone()
+            .into(),
+    );
+    settings.set_appearance_status_text(projection.settings_appearance_status_text.clone().into());
+    set_settings_swatches(
+        settings,
+        &projection.settings_appearance_palette_swatches,
+        &projection.settings_appearance_accent_light_swatches,
+        &projection.settings_appearance_accent_dark_swatches,
+    );
+    set_settings_options(
+        settings,
+        &projection.settings_appearance_font_options,
+        &projection.settings_appearance_style_options,
+    );
+    if let Some(main) = main {
+        settings.set_appearance_preview(main.get_settings_appearance_preview());
+        settings
+            .set_appearance_preview_background(main.get_settings_appearance_preview_background());
+    }
+
+    // --- settings-security ---
+    settings.set_settings_appearance_mode_index(projection.settings_appearance_mode_index);
+    settings.set_settings_appearance_accent_index(projection.settings_appearance_accent_index);
+    settings.set_settings_appearance_style_index(projection.settings_appearance_style_index);
+    settings
+        .set_settings_terminal_middle_click_index(projection.settings_terminal_middle_click_index);
+    settings
+        .set_settings_terminal_right_click_index(projection.settings_terminal_right_click_index);
+    settings.set_settings_terminal_multi_line_paste_index(
+        projection.settings_terminal_multi_line_paste_index,
+    );
+    settings.set_settings_terminal_auto_copy(projection.settings_terminal_auto_copy);
+    settings.set_settings_terminal_status_kind_text(
+        projection.settings_terminal_status_kind_text.clone().into(),
+    );
+    settings.set_settings_terminal_status_field_text(
+        projection
+            .settings_terminal_status_field_text
+            .clone()
+            .into(),
+    );
+    settings.set_settings_terminal_status_value_text(
+        projection
+            .settings_terminal_status_value_text
+            .clone()
+            .into(),
+    );
+    settings.set_settings_terminal_status_limit_text(
+        projection
+            .settings_terminal_status_limit_text
+            .clone()
+            .into(),
+    );
+    settings.set_settings_sftp_show_hidden(projection.settings_sftp_show_hidden);
+    settings.set_settings_sftp_conflict_index(projection.settings_sftp_conflict_index);
+    settings.set_settings_sftp_editor_index(projection.settings_sftp_editor_index);
+    settings
+        .set_settings_sftp_editor_custom_visible(projection.settings_sftp_editor_custom_visible);
+    settings.set_settings_sftp_editor_path_text(
+        projection.settings_sftp_editor_path_text.clone().into(),
+    );
+    settings.set_settings_sftp_status_kind_text(
+        projection.settings_sftp_status_kind_text.clone().into(),
+    );
+    settings.set_settings_master_password_set(projection.settings_master_password_set);
+    settings.set_settings_master_password_locked(projection.settings_master_password_locked);
+    settings
+        .set_settings_security_known_hosts_count(projection.settings_security_known_hosts_count);
+    settings
+        .set_settings_security_private_keys_count(projection.settings_security_private_keys_count);
+    settings.set_settings_security_proxies_count(projection.settings_security_proxies_count);
+    if !string_model_matches(
+        &settings.get_settings_sftp_editor_options(),
+        &projection.settings_sftp_editor_options,
+    ) {
+        settings.set_settings_sftp_editor_options(option_model(
+            &projection.settings_sftp_editor_options,
+        ));
+    }
+    // D36: the Settings window itself follows the App theme instant preview.
+    crate::bootstrap::apply_app_theme_preview(&settings.global::<Theme>(), projection);
+}
+
+/// `[color]` models are rebuilt only when the palette actually changed: the sync
+/// runs on every UI tick while the window is open.
+fn set_settings_swatches(
+    settings: &SettingsWindow,
+    palette: &[[u8; 3]],
+    accent_light: &[[u8; 3]],
+    accent_dark: &[[u8; 3]],
+) {
+    if !color_model_matches(&settings.get_appearance_palette_swatches(), palette) {
+        settings.set_appearance_palette_swatches(swatch_model(palette));
+    }
+    if !color_model_matches(
+        &settings.get_settings_appearance_accent_light_swatches(),
+        accent_light,
+    ) {
+        settings.set_settings_appearance_accent_light_swatches(swatch_model(accent_light));
+    }
+    if !color_model_matches(
+        &settings.get_settings_appearance_accent_dark_swatches(),
+        accent_dark,
+    ) {
+        settings.set_settings_appearance_accent_dark_swatches(swatch_model(accent_dark));
+    }
+}
+
+fn set_settings_options(settings: &SettingsWindow, fonts: &[String], styles: &[String]) {
+    if !string_model_matches(&settings.get_appearance_font_options(), fonts) {
+        settings.set_appearance_font_options(option_model(fonts));
+    }
+    if !string_model_matches(&settings.get_settings_appearance_style_options(), styles) {
+        settings.set_settings_appearance_style_options(option_model(styles));
+    }
+}
+
+fn swatch_model(swatches: &[[u8; 3]]) -> ModelRc<slint::Color> {
+    ModelRc::new(VecModel::from(
+        swatches
+            .iter()
+            .map(|[red, green, blue]| slint::Color::from_rgb_u8(*red, *green, *blue))
+            .collect::<Vec<_>>(),
+    ))
+}
+
+fn option_model(values: &[String]) -> ModelRc<SharedString> {
+    ModelRc::new(VecModel::from(
+        values
+            .iter()
+            .map(|value| SharedString::from(value.as_str()))
+            .collect::<Vec<_>>(),
+    ))
+}
+
+fn color_model_matches(model: &ModelRc<slint::Color>, expected: &[[u8; 3]]) -> bool {
+    model.row_count() == expected.len()
+        && model
+            .iter()
+            .zip(expected.iter())
+            .all(|(color, [red, green, blue])| {
+                color == slint::Color::from_rgb_u8(*red, *green, *blue)
+            })
+}
+
+fn string_model_matches(model: &ModelRc<SharedString>, expected: &[String]) -> bool {
+    model.row_count() == expected.len()
+        && model
+            .iter()
+            .zip(expected.iter())
+            .all(|(item, value)| item.as_str() == value.as_str())
 }
 
 fn sync_folder_editor(w: &FolderEditorWindow, p: &AppProjection, _m: Option<&MainWindow>) {

@@ -113,6 +113,9 @@ pub struct FolderProfile {
     /// Login script inherited by sessions below this folder.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub login_script: Option<LoginScriptProfile>,
+    /// Free-form notes shown in the folder/session editor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
 }
 
 impl FolderProfile {
@@ -131,6 +134,7 @@ impl FolderProfile {
             sftp: None,
             tunnel: None,
             login_script: None,
+            notes: None,
         }
     }
 
@@ -221,6 +225,9 @@ pub struct SessionProfile {
     /// Login script steps run after the connection is established.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub login_script: Option<LoginScriptProfile>,
+    /// Free-form notes shown in the Session Editor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
     #[serde(default)]
     pub tags: Vec<String>,
 }
@@ -244,6 +251,7 @@ impl SessionProfile {
             terminal: None,
             icon: None,
             login_script: None,
+            notes: None,
             tags: Vec::new(),
         }
     }
@@ -431,6 +439,12 @@ pub struct TunnelProfile {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TunnelForward {
+    /// Display name shown in the tunnel list / editor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Whether the tunnel starts with the session ("On connect").
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     pub kind: TunnelForwardKind,
     pub bind_host: String,
     pub bind_port: u16,
@@ -1261,6 +1275,7 @@ impl ConfigDocument {
         sanitize_terminal_colors(&mut self.terminal, "terminal", &mut warnings);
         sanitize_terminal_fonts(&mut self.terminal, "terminal", &mut warnings);
         sanitize_sftp_profile(&mut self.sftp);
+        sanitize_tunnel_profile(&mut self.tunnel);
         self.ui.sftp_max_parallel_transfers =
             clamp_sftp_max_parallel_transfers(self.ui.sftp_max_parallel_transfers);
         for folder in &mut self.folders {
@@ -1589,6 +1604,10 @@ fn sanitize_folder(folder: &mut FolderProfile, prefix: &str, warnings: &mut Vec<
     if let Some(script) = folder.login_script.as_mut() {
         sanitize_login_script(script);
     }
+    if let Some(tunnel) = folder.tunnel.as_mut() {
+        sanitize_tunnel_profile(tunnel);
+    }
+    sanitize_notes(&mut folder.notes);
     for session in &mut folder.sessions {
         sanitize_session_entry(session);
         if let Some(section) = session.terminal.as_mut() {
@@ -1602,10 +1621,33 @@ fn sanitize_folder(folder: &mut FolderProfile, prefix: &str, warnings: &mut Vec<
         if let Some(script) = session.login_script.as_mut() {
             sanitize_login_script(script);
         }
+        if let Some(tunnel) = session.tunnel.as_mut() {
+            sanitize_tunnel_profile(tunnel);
+        }
+        sanitize_notes(&mut session.notes);
     }
     for child in &mut folder.folders {
         let child_prefix = format!("{prefix}.folders[{}]", child.id);
         sanitize_folder(child, &child_prefix, warnings);
+    }
+}
+
+/// Trims notes; an empty note means "no notes".
+fn sanitize_notes(notes: &mut Option<String>) {
+    *notes = notes
+        .take()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty());
+}
+
+/// Trims tunnel display names; an empty name means "unnamed".
+fn sanitize_tunnel_profile(profile: &mut TunnelProfile) {
+    for forward in &mut profile.forwards {
+        forward.name = forward
+            .name
+            .take()
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty());
     }
 }
 
@@ -2535,6 +2577,8 @@ external_editor = "code"
         });
         folder.tunnel = Some(TunnelProfile {
             forwards: vec![TunnelForward {
+                name: Some("db".to_owned()),
+                enabled: true,
                 kind: TunnelForwardKind::Local,
                 bind_host: "127.0.0.1".to_owned(),
                 bind_port: 8080,
@@ -2633,6 +2677,42 @@ icon = "   "
             .expect("empty icon session")
             .icon
             .is_none());
+    }
+
+    #[test]
+    fn notes_and_tunnel_metadata_are_sanitized() {
+        let input = r##"
+schema_version = 2
+
+[[folders]]
+id = "f"
+name = "F"
+notes = "  folder note  "
+
+[folders.tunnel]
+forwards = [{ name = "  db  ", enabled = false, kind = "local", bind_host = "127.0.0.1", bind_port = 8080, target_host = "db.test", target_port = 5432 }]
+
+[[folders.sessions]]
+id = "s"
+name = "S"
+host = "h"
+notes = "   "
+
+[folders.sessions.tunnel]
+forwards = [{ name = "  ", enabled = true, kind = "local", bind_host = "127.0.0.1", bind_port = 8081, target_host = "x.test", target_port = 1 }]
+"##;
+        let document = ConfigDocument::from_toml_str(input).expect("parse");
+        let folder = &document.folders[0];
+        assert_eq!(folder.notes.as_deref(), Some("folder note"));
+        let folder_tunnel = folder.tunnel.as_ref().expect("folder tunnel");
+        assert_eq!(folder_tunnel.forwards[0].name.as_deref(), Some("db"));
+        assert!(!folder_tunnel.forwards[0].enabled);
+
+        let session = document.find_session("s").expect("session");
+        assert!(session.notes.is_none());
+        let session_tunnel = session.tunnel.as_ref().expect("session tunnel");
+        assert!(session_tunnel.forwards[0].name.is_none());
+        assert!(session_tunnel.forwards[0].enabled);
     }
 
     #[test]

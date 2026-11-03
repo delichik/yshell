@@ -1,17 +1,22 @@
-// 主机密钥页（N4 设计 §1，与私钥页同级、独立入口）：升级 known_hosts 展示——
-// 按 `host:port` 分组、SHA256 指纹、导出/导入、清空确认。
+// 主机密钥页（Known Hosts 管理器，N4/D18）：按 `host:port` 分组的只读清单 +
+// 右栏结构化详情；全局动作在工具条（图标钮，正文只进 title），行级 Edit/Remove
+// 走右键菜单。
 //
-// 与宿主（Rust / main_window）的约定：
-//   * `open` 由宿主投影驱动；`cancel`（Esc / 遮罩点击 / Close）走同一条路径。
-//   * `groups` 是按 `host:port` 分组后的行模型（每组一个 host 行 + 若干公钥行）。
-//   * 导入优先文件浏览；粘贴为次级高级路径。清空 / 删除由宿主 ConfirmDialog 确认。
+// 与宿主（Rust / main_window / DialogWindowManager）的约定：
+//   * `open` 由宿主投影驱动；`close`（Esc / 标题栏关闭 / Close）走同一条路径。
+//   * `groups` 是按 `host:port` 分组后的行模型（组头 + 若干公钥行）。
+//   * Import / Export / Add 是独立子窗（`ui/windows/known_host_*_window.slint`），
+//     本页只发 `open-*` 回调；子窗提交仍走 runtime 的 host keys 方法。
+//   * 行右键先 `prepare-host-keys-context-menu`（宿主记录菜单目标），再发任务回调；
+//     Remove 由宿主 ConfirmDialog 承接（无 CLEAR 打字确认）。
 //
-// 规范：docs/product/ui-winui3-design-language.md §5.10（ContentDialog 形态）。
+// 规范：docs/agents/prototypes.md（清单型管理器）、docs/prototypes/known-hosts/。
 
 import { Theme } from "../theme.slint";
 import { TextFormats } from "../text_formats.slint";
 import { Icon } from "../components/basic/icons.slint";
-import { WinButton, WinScrollIndicator } from "../components/basic/controls.slint";
+import { WinButton, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
+import { MenuPopup, MenuEntry } from "../components/menu_popup.slint";
 import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
 
 /// 一条已保存的主机密钥（SHA256 指纹 + 公钥行）。
@@ -29,13 +34,56 @@ export struct HostKeyGroup {
     entries: [HostKeyEntry],
 }
 
-/// 单条主机密钥行：算法 + SHA256 指纹（缩进在组头之下）。
+/// 组头行：`host:port`，整行只读（选中经由下面的密钥行）。
+component HostGroupHeader inherits Rectangle {
+    in property <string> host-text: "";
+    in property <int> key-count: 0;
+
+    height: Theme.control-height;
+    background: transparent;
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-8;
+        padding-right: Theme.spacing-8;
+        spacing: Theme.spacing-8;
+        cross-axis-alignment: center;
+
+        Icon {
+            name: "globe";
+            icon-color: Theme.text-secondary;
+            icon-size: Theme.icon-size-small;
+        }
+
+        Text {
+            text: root.host-text;
+            color: Theme.text-primary;
+            font-size: Theme.font-body;
+            font-weight: Theme.weight-semibold;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        Text {
+            text: root.key-count > 1 ? @tr("{0} keys", root.key-count) : "";
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            vertical-alignment: center;
+            wrap: no-wrap;
+        }
+    }
+}
+
+/// 单条主机密钥行：算法 + SHA256 指纹（一行，极简）；右键出 Edit/Remove。
 component HostKeyListItem inherits Rectangle {
     in property <HostKeyEntry> node;
     in property <bool> selected: false;
+    /// 行右键（绝对窗口坐标；页面换算成 page 坐标后定位菜单）。
     callback clicked();
+    callback context-menu-requested(length, length);
 
-    height: Theme.row-height-list + Theme.spacing-8;
+    height: Theme.control-height;
     border-radius: Theme.radius-control;
     background: selected ? Theme.subtle-selected
         : touch.pressed ? Theme.subtle-pressed
@@ -43,26 +91,29 @@ component HostKeyListItem inherits Rectangle {
         : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
-    VerticalLayout {
-        padding-left: 16px;
-        padding-right: 8px;
-        padding-top: 4px;
-        padding-bottom: 4px;
-        spacing: 1px;
+    HorizontalLayout {
+        padding-left: Theme.spacing-24;
+        padding-right: Theme.spacing-8;
+        spacing: Theme.spacing-8;
+        cross-axis-alignment: center;
 
         Text {
-            text: node.algorithm;
-            color: Theme.text-primary;
-            font-size: Theme.font-body;
+            text: root.node.algorithm;
+            color: Theme.text-secondary;
+            font-size: Theme.font-caption;
+            vertical-alignment: center;
             wrap: no-wrap;
+            width: 84px;
             overflow: elide;
         }
 
         Text {
-            text: node.fingerprint;
+            text: root.node.fingerprint;
             color: Theme.text-tertiary;
             font-size: Theme.font-caption;
             font-family: Theme.font-mono;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
             wrap: no-wrap;
             overflow: elide;
         }
@@ -70,18 +121,75 @@ component HostKeyListItem inherits Rectangle {
 
     touch := TouchArea {
         clicked => { root.clicked(); }
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                root.context-menu-requested(
+                    self.absolute-position.x + self.mouse-x,
+                    self.absolute-position.y + self.mouse-y,
+                );
+            }
+        }
     }
 }
 
-// 详情行（等宽 caption；与详情块原有整段文本同一形态）。
-// 注意：同一文件内的局部组件必须先声明后使用。
-component DetailLine inherits Text {
-    in property <string> hint: "";
-    text: root.hint;
-    color: Theme.text-secondary;
-    font-size: Theme.font-caption;
-    font-family: Theme.font-mono;
-    wrap: word-wrap;
+// 详情行（标签 + 等宽值；只读）。
+component DetailRow inherits HorizontalLayout {
+    in property <string> label: "";
+    in property <string> value: "";
+    spacing: Theme.spacing-12;
+
+    Text {
+        text: root.label;
+        color: Theme.text-secondary;
+        font-size: Theme.font-body;
+        width: Theme.form-label-width-narrow;
+        vertical-alignment: top;
+        wrap: no-wrap;
+        overflow: elide;
+    }
+
+    Text {
+        text: root.value;
+        color: Theme.text-primary;
+        font-size: Theme.font-body;
+        font-family: Theme.font-mono;
+        horizontal-stretch: 1;
+        wrap: word-wrap;
+    }
+}
+
+// 删除类图标钮（红描边 + 图标随 critical 色；与文字 Delete 同套危险语义）。
+component DangerIconButton inherits Rectangle {
+    in property <string> tooltip: "";
+    in property <bool> enabled: true;
+    callback clicked();
+
+    width: Theme.control-height;
+    height: Theme.control-height;
+    border-radius: Theme.radius-control;
+    border-width: 1px;
+    border-color: root.enabled ? Theme.critical : Theme.control-stroke;
+    background: touch.pressed ? Theme.subtle-pressed
+        : touch.has-hover ? Theme.subtle-hover
+        : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
+
+    Icon {
+        name: "trash";
+        icon-color: root.enabled ? Theme.critical : Theme.text-disabled;
+        icon-size: Theme.icon-size;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+
+    if root.tooltip != "" : Tooltip {
+        text: @markdown("\{root.tooltip}");
+    }
 }
 
 export component HostKeysPage inherits Rectangle {
@@ -91,7 +199,7 @@ export component HostKeysPage inherits Rectangle {
     in property <int> key-count: 0;
     in property <string> path-text: "";
     in property <string> details-text: "";
-    /// WS-D/WS-A 拆分的详情字段（标签在页面内本地化）。全部为空时回退到 `details-text`。
+    /// 详情字段（标签在页面内本地化）。全部为空时回退到 `details-text`。
     in property <string> detail-host-text: "";
     in property <string> detail-algorithm-text: "";
     in property <string> detail-fingerprint-text: "";
@@ -105,6 +213,7 @@ export component HostKeysPage inherits Rectangle {
 
     in-out property <int> selected-group: -1;
     in-out property <int> selected-entry: -1;
+    // 兼容既有宿主投影（导入子窗的可见性/文本）；页面不再内联导入。
     in-out property <bool> import-visible: false;
     in-out property <string> import-text: "";
 
@@ -112,29 +221,72 @@ export component HostKeysPage inherits Rectangle {
     callback select-group(int);
     callback select-entry(int, int);
     callback request-remove();
+    callback request-edit(int, int);
+    callback request-remove-at(int, int);
     callback browse-import-file();
     callback toggle-import();
     callback update-import-text(string);
     callback import-keys();
     callback export-keys();
     callback request-clear-all();
+    // 子窗入口（Add / Import / Export；窗口由宿主 DialogWindowManager 管理）。
+    callback open-add-dialog();
+    callback open-import-dialog();
+    callback open-export-dialog();
 
     // 退场淡出期间壳仍可见：根跟着壳的 opacity，避免透明全屏挡住下层。
     visible: root.open;
     background: transparent;
 
-    private property <int> group-count: root.groups.length;
-
-    // 详情区：拆分字段可用时逐行渲染（标签本地化）；否则回退整段 `details-text`。
-    private property <bool> detail-split-visible:
-        root.detail-host-text != "" || root.detail-algorithm-text != ""
-        || root.detail-fingerprint-text != "" || root.detail-path-text != "";
     private property <string> status-display: TextFormats.status-message(
         root.status-kind-text,
         root.status-param-1-text,
         root.status-param-2-text,
         root.status-text
     );
+    private property <bool> detail-split-visible:
+        root.detail-host-text != "" || root.detail-algorithm-text != ""
+        || root.detail-fingerprint-text != "" || root.detail-path-text != "";
+
+    // 行右键菜单状态（页面内浮层；坐标相对页面 root）。
+    private property <bool> row-menu-open: false;
+    private property <length> row-menu-x: 0px;
+    private property <length> row-menu-y: 0px;
+    private property <int> row-menu-group: -1;
+    private property <int> row-menu-entry: -1;
+    private property <[MenuEntry]> row-menu-entries: [
+        {
+            label: @tr("Edit"),
+            shortcut: "",
+            enabled: true,
+            checked: false,
+            separator: false,
+        },
+        {
+            label: "",
+            shortcut: "",
+            enabled: false,
+            checked: false,
+            separator: true,
+        },
+        {
+            label: @tr("Remove"),
+            shortcut: "",
+            enabled: true,
+            checked: false,
+            separator: false,
+        },
+    ];
+
+    public function open-row-menu(group: int, entry: int, x: length, y: length) {
+        root.selected-group = group;
+        root.selected-entry = entry;
+        root.row-menu-group = group;
+        root.row-menu-entry = entry;
+        root.row-menu-x = x - root.absolute-position.x;
+        root.row-menu-y = y - root.absolute-position.y;
+        root.row-menu-open = true;
+    }
 
     shell := ManagerDialogShell {
         width: root.width;
@@ -142,426 +294,259 @@ export component HostKeysPage inherits Rectangle {
         open: root.open;
         close => { root.close(); }
 
-                // 空态：居中提示 + 主 Import CTA
-                if root.groups.length == 0 : VerticalLayout {
-                    vertical-stretch: 1;
-                    alignment: center;
-                    spacing: Theme.spacing-16;
+        // 空态：居中提示 + 主 Import CTA（Add 为次级）。
+        if root.groups.length == 0 : VerticalLayout {
+            vertical-stretch: 1;
+            alignment: center;
+            spacing: Theme.spacing-16;
 
-                    Text {
-                        text: root.empty-text;
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-body;
-                        horizontal-alignment: center;
-                        wrap: word-wrap;
-                        // 固定上限，避免 parent.width → layoutinfo 回环。
-                        width: 420px;
+            Text {
+                width: 420px;
+                text: root.empty-text;
+                color: Theme.text-tertiary;
+                font-size: Theme.font-body;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+            }
+
+            HorizontalLayout {
+                alignment: center;
+                spacing: Theme.spacing-8;
+
+                WinButton {
+                    text: @tr("Add");
+                    icon: "plus";
+                    clicked => { root.open-add-dialog(); }
+                }
+
+                WinButton {
+                    text: @tr("Import");
+                    icon: "upload";
+                    accent: true;
+                    clicked => { root.open-import-dialog(); }
+                }
+            }
+        }
+
+        // 非空：工具条（图标钮 + 计数）→ 清单 / 详情。
+        if root.groups.length > 0 : VerticalLayout {
+            spacing: Theme.spacing-12;
+            vertical-stretch: 1;
+
+            HorizontalLayout {
+                spacing: Theme.spacing-8;
+                vertical-stretch: 0;
+                cross-axis-alignment: center;
+
+                WinIconButton {
+                    icon: "plus";
+                    accessible-name: @tr("Add");
+                    tooltip-text: @tr("Add known host");
+                    clicked => { root.open-add-dialog(); }
+                }
+
+                WinIconButton {
+                    icon: "upload";
+                    accessible-name: @tr("Import");
+                    tooltip-text: @tr("Import known hosts");
+                    clicked => { root.open-import-dialog(); }
+                }
+
+                WinIconButton {
+                    icon: "download";
+                    accessible-name: @tr("Export");
+                    tooltip-text: @tr("Export known hosts");
+                    clicked => { root.open-export-dialog(); }
+                }
+
+                DangerIconButton {
+                    tooltip: @tr("Clear all host keys");
+                    enabled: root.groups.length > 0;
+                    clicked => { root.request-clear-all(); }
+                }
+
+                Rectangle { horizontal-stretch: 1; }
+
+                Text {
+                    text: @tr("{0} host(s) · {1} key(s)", root.groups.length, root.key-count);
+                    color: Theme.text-tertiary;
+                    font-size: Theme.font-caption;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                }
+            }
+
+            HorizontalLayout {
+                spacing: Theme.spacing-16;
+                vertical-stretch: 1;
+
+                // --- 左：按 host:port 分组的极简清单（行级动作走右键）---------
+                Rectangle {
+                    width: Theme.manager-list-width;
+                    clip: true;
+                    background: Theme.control-fill;
+                    border-radius: Theme.radius-control;
+                    border-width: 1px;
+                    border-color: Theme.control-stroke;
+
+                    groups-list := Flickable {
+                        width: parent.width;
+                        height: parent.height;
+                        interactive: true;
+                        content-width: self.width;
+                        content-height: group-rows.preferred-height;
+
+                        group-rows := VerticalLayout {
+                            padding: Theme.spacing-4;
+                            spacing: 0px;
+
+                            for group[group-index] in root.groups : VerticalLayout {
+                                spacing: 0px;
+
+                                HostGroupHeader {
+                                    host-text: group.host + ":" + group.port;
+                                    key-count: group.entries.length;
+                                }
+
+                                for entry[entry-index] in group.entries : HostKeyListItem {
+                                    node: entry;
+                                    selected: group-index == root.selected-group
+                                        && entry-index == root.selected-entry;
+                                    clicked => {
+                                        root.selected-group = group-index;
+                                        root.selected-entry = entry-index;
+                                        root.select-entry(group-index, entry-index);
+                                    }
+                                    context-menu-requested(x, y) => {
+                                        root.selected-group = group-index;
+                                        root.selected-entry = entry-index;
+                                        root.select-entry(group-index, entry-index);
+                                        root.open-row-menu(group-index, entry-index, x, y);
+                                    }
+                                }
+                            }
+                        }
                     }
 
-                    HorizontalLayout {
-                        alignment: center;
-                        spacing: Theme.spacing-8;
-
-                        WinButton {
-                            text: @tr("Import");
-                            icon: "upload";
-                            accent: true;
-                            clicked => { root.browse-import-file(); }
-                        }
-
-                        WinButton {
-                            text: @tr("Paste text…");
-                            clicked => { root.toggle-import(); }
-                        }
+                    WinScrollIndicator {
+                        x: parent.width - self.width - Theme.spacing-4;
+                        y: Theme.spacing-4;
+                        height: parent.height - 2 * Theme.spacing-4;
+                        viewport-position: groups-list.content-y;
+                        content-extent: groups-list.content-height;
+                        viewport-extent: groups-list.height;
+                        thumb-min-length: 24px;
                     }
+                }
 
-                    if root.import-visible : VerticalLayout {
-                        spacing: Theme.spacing-8;
-                        width: min(parent.width - 2 * Theme.spacing-24, 640px);
+                // --- 右：结构化只读详情（无分区标题）-------------------------
+                Rectangle {
+                    clip: true;
+                    background: transparent;
 
-                        Text {
-                            text: @tr("One entry per line: `host:port` followed by an OpenSSH public key or a SHA256 fingerprint.");
-                            color: Theme.text-tertiary;
-                            font-size: Theme.font-caption;
-                            wrap: word-wrap;
-                        }
+                    scroll := Flickable {
+                        width: parent.width;
+                        height: parent.height;
+                        interactive: true;
+                        content-width: self.width;
+                        content-height: sections.preferred-height;
 
-                        Rectangle {
-                            min-height: 96px;
-                            clip: true;
-                            background: Theme.panel-background;
-                            border-radius: Theme.radius-control;
-                            border-width: 1px;
-                            border-color: Theme.divider;
+                        sections := VerticalLayout {
+                            spacing: Theme.spacing-12;
 
-                            TextInput {
-                                x: 10px;
-                                y: 10px;
-                                width: parent.width - 20px;
-                                height: parent.height - 20px;
-                                text <=> root.import-text;
+                            if root.detail-host-text != "" : DetailRow {
+                                label: @tr("Host");
+                                value: root.detail-host-text;
+                            }
+
+                            if root.detail-algorithm-text != "" : DetailRow {
+                                label: @tr("Algorithm");
+                                value: root.detail-algorithm-text;
+                            }
+
+                            if root.detail-fingerprint-text != "" : DetailRow {
+                                label: @tr("Fingerprint");
+                                value: root.detail-fingerprint-text;
+                            }
+
+                            if root.detail-path-text != "" : DetailRow {
+                                label: @tr("Known hosts");
+                                value: root.detail-path-text;
+                            }
+
+                            if !root.detail-split-visible && root.details-text != "" : Text {
+                                text: root.details-text;
                                 color: Theme.text-secondary;
                                 font-size: Theme.font-caption;
                                 font-family: Theme.font-mono;
-                                single-line: false;
                                 wrap: word-wrap;
-                                edited => { root.update-import-text(self.text); }
-                            }
-                        }
-
-                        HorizontalLayout {
-                            alignment: end;
-                            spacing: Theme.spacing-8;
-
-                            WinButton {
-                                text: @tr("Cancel");
-                                clicked => { root.toggle-import(); }
                             }
 
-                            WinButton {
-                                text: @tr("Import");
-                                accent: true;
-                                enabled: root.import-text != "";
-                                clicked => { root.import-keys(); }
+                            if root.groups.length > 0 && root.selected-group < 0 : Text {
+                                text: @tr("Select a host to see its key details.");
+                                color: Theme.text-tertiary;
+                                font-size: Theme.font-caption;
+                                wrap: word-wrap;
+                            }
+
+                            if root.status-display != "" : Text {
+                                text: root.status-display;
+                                color: Theme.text-secondary;
+                                font-size: Theme.font-caption;
+                                wrap: word-wrap;
                             }
                         }
                     }
-                }
 
-                // 非空：工具栏 + 列表 / 详情
-                if root.groups.length > 0 : VerticalLayout {
-                    spacing: Theme.spacing-12;
-                    vertical-stretch: 1;
-
-                    HorizontalLayout {
-                        spacing: Theme.spacing-8;
-                        vertical-stretch: 0;
-
-                        WinButton {
-                            text: @tr("Import");
-                            icon: "upload";
-                            clicked => { root.browse-import-file(); }
-                        }
-
-                        WinButton {
-                            text: @tr("Export");
-                            icon: "download";
-                            clicked => { root.export-keys(); }
-                        }
-
-                        WinButton {
-                            text: @tr("Clear All");
-                            icon: "trash";
-                            critical: true;
-                            clicked => { root.request-clear-all(); }
-                        }
-
-                        Rectangle { horizontal-stretch: 1; }
-
-                        WinButton {
-                            text: @tr("Paste text…");
-                            clicked => { root.toggle-import(); }
-                        }
-                    }
-
-                    HorizontalLayout {
-                        spacing: Theme.spacing-16;
-                        vertical-stretch: 1;
-
-                        // --- 左：按 host:port 分组的清单 ------------------------------
-                        VerticalLayout {
-                            width: Theme.manager-list-width;
-                            spacing: Theme.spacing-8;
-
-                            Text {
-                                text: @tr("Trusted Hosts");
-                                color: Theme.text-primary;
-                                font-size: Theme.font-body;
-                                font-weight: Theme.weight-semibold;
-                            }
-
-                            Rectangle {
-                                vertical-stretch: 1;
-                                clip: true;
-                                background: Theme.control-fill;
-                                border-radius: Theme.radius-control;
-                                border-width: 1px;
-                                border-color: Theme.control-stroke;
-
-                                groups-list := Flickable {
-                                    width: parent.width;
-                                    height: parent.height;
-                                    interactive: true;
-                                    content-width: self.width;
-                                    content-height: group-rows.preferred-height;
-
-                                    group-rows := VerticalLayout {
-                                        padding: 2px;
-
-                                        for group[group-index] in root.groups : VerticalLayout {
-                                            spacing: 2px;
-
-                                            // host:port 组头
-                                            Rectangle {
-                                                height: Theme.row-height-list;
-                                                background: transparent;
-
-                                                HorizontalLayout {
-                                                    padding-left: 8px;
-                                                    padding-right: 8px;
-                                                    spacing: Theme.spacing-8;
-
-                                                    Rectangle {
-                                                        width: Theme.icon-size-small;
-                                                        vertical-stretch: 1;
-                                                        background: transparent;
-
-                                                        Icon {
-                                                            name: "globe";
-                                                            icon-color: Theme.text-secondary;
-                                                            icon-size: Theme.icon-size-small;
-                                                            x: (parent.width - self.width) / 2;
-                                                            y: (parent.height - self.height) / 2;
-                                                        }
-                                                    }
-
-                                                    Text {
-                                                        text: group.host + ":" + group.port;
-                                                        color: Theme.text-primary;
-                                                        font-size: Theme.font-body;
-                                                        font-weight: Theme.weight-semibold;
-                                                        vertical-alignment: center;
-                                                        horizontal-stretch: 1;
-                                                        wrap: no-wrap;
-                                                        overflow: elide;
-                                                    }
-                                                }
-                                            }
-
-                                            for entry[entry-index] in group.entries : HostKeyListItem {
-                                                node: entry;
-                                                selected: group-index == root.selected-group && entry-index == root.selected-entry;
-                                                clicked => {
-                                                    root.selected-group = group-index;
-                                                    root.selected-entry = entry-index;
-                                                    root.select-entry(group-index, entry-index);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                WinScrollIndicator {
-                                    x: parent.width - self.width - Theme.spacing-4;
-                                    y: Theme.spacing-4;
-                                    height: parent.height - 2 * Theme.spacing-4;
-                                    viewport-position: groups-list.content-y;
-                                    content-extent: groups-list.content-height;
-                                    viewport-extent: groups-list.height;
-                                    thumb-min-length: 24px;
-                                }
-                            }
-
-                            HorizontalLayout {
-                                spacing: Theme.spacing-8;
-                                vertical-stretch: 0;
-
-                                WinButton {
-                                    text: @tr("Remove");
-                                    icon: "trash";
-                                    critical: true;
-                                    enabled: root.selected-group >= 0;
-                                    clicked => { root.request-remove(); }
-                                }
-                            }
-                        }
-
-                        // --- 右：详情 / 粘贴导入 ---------------------------------
-                        Rectangle {
-                            clip: true;
-                            background: transparent;
-
-                            scroll := Flickable {
-                                width: parent.width;
-                                height: parent.height;
-                                interactive: true;
-                                content-width: self.width;
-                                content-height: sections.preferred-height;
-
-                                sections := VerticalLayout {
-                                    spacing: Theme.spacing-12;
-
-                                    VerticalLayout {
-                                        spacing: Theme.spacing-8;
-
-                                        Text {
-                                            text: @tr("Host Key Details");
-                                            color: Theme.text-primary;
-                                            font-size: Theme.font-body;
-                                            font-weight: Theme.weight-semibold;
-                                        }
-
-                                        Text {
-                                            text: @tr("Path: {0}", root.path-text);
-                                            color: Theme.text-tertiary;
-                                            font-size: Theme.font-caption;
-                                            wrap: word-wrap;
-                                        }
-
-                                        Rectangle {
-                                            height: max(120px, min(280px, detail-body.preferred-height + 2 * Theme.spacing-8));
-                                            clip: true;
-                                            background: Theme.control-fill;
-                                            border-radius: Theme.radius-control;
-                                            border-width: 1px;
-                                            border-color: Theme.control-stroke;
-
-                                            detail-scroll := Flickable {
-                                                width: parent.width;
-                                                height: parent.height;
-                                                interactive: true;
-                                                content-width: self.width;
-                                                content-height: detail-body.preferred-height + 2 * Theme.spacing-8;
-
-                                                detail-body := VerticalLayout {
-                                                    x: Theme.spacing-12;
-                                                    y: Theme.spacing-8;
-                                                    width: parent.width - 2 * Theme.spacing-12;
-                                                    spacing: Theme.spacing-4;
-
-                                                    if root.detail-host-text != "" : DetailLine {
-                                                        hint: @tr("Host: {0}", root.detail-host-text);
-                                                    }
-
-                                                    if root.detail-algorithm-text != "" : DetailLine {
-                                                        hint: @tr("Algorithm: {0}", root.detail-algorithm-text);
-                                                    }
-
-                                                    if root.detail-fingerprint-text != "" : DetailLine {
-                                                        hint: @tr("Fingerprint: {0}", root.detail-fingerprint-text);
-                                                    }
-
-                                                    if root.detail-path-text != "" : DetailLine {
-                                                        hint: @tr("Host keys path: {0}", root.detail-path-text);
-                                                    }
-
-                                                    if root.detail-path-text != "" && root.detail-host-text == "" : DetailLine {
-                                                        hint: @tr("Temporary trust entries are not persisted here.");
-                                                    }
-
-                                                    if !root.detail-split-visible && root.details-text != "" : DetailLine {
-                                                        hint: root.details-text;
-                                                    }
-                                                }
-                                            }
-
-                                            WinScrollIndicator {
-                                                x: parent.width - self.width - Theme.spacing-4;
-                                                y: Theme.spacing-4;
-                                                height: parent.height - 2 * Theme.spacing-4;
-                                                viewport-position: detail-scroll.content-y;
-                                                content-extent: detail-scroll.content-height;
-                                                viewport-extent: detail-scroll.height;
-                                                thumb-min-length: 24px;
-                                            }
-                                        }
-
-                                        if root.status-display != "" : Text {
-                                            text: root.status-display;
-                                            color: Theme.text-secondary;
-                                            font-size: Theme.font-caption;
-                                            wrap: word-wrap;
-                                        }
-                                    }
-
-                                    if root.import-visible : VerticalLayout {
-                                        spacing: Theme.spacing-8;
-
-                                        Text {
-                                            text: @tr("Paste Host Keys");
-                                            color: Theme.text-primary;
-                                            font-size: Theme.font-body;
-                                            font-weight: Theme.weight-semibold;
-                                        }
-
-                                        Text {
-                                            text: @tr("One entry per line: `host:port` followed by an OpenSSH public key or a SHA256 fingerprint.");
-                                            color: Theme.text-tertiary;
-                                            font-size: Theme.font-caption;
-                                            wrap: word-wrap;
-                                        }
-
-                                        Rectangle {
-                                            min-height: 96px;
-                                            clip: true;
-                                            background: Theme.control-fill;
-                                            border-radius: Theme.radius-control;
-                                            border-width: 1px;
-                                            border-color: Theme.control-stroke;
-
-                                            TextInput {
-                                                x: Theme.spacing-12;
-                                                y: Theme.spacing-12;
-                                                width: parent.width - 2 * Theme.spacing-12;
-                                                height: parent.height - 2 * Theme.spacing-12;
-                                                text <=> root.import-text;
-                                                color: Theme.text-secondary;
-                                                font-size: Theme.font-caption;
-                                                font-family: Theme.font-mono;
-                                                single-line: false;
-                                                wrap: word-wrap;
-                                                edited => { root.update-import-text(self.text); }
-                                            }
-                                        }
-
-                                        HorizontalLayout {
-                                            alignment: end;
-                                            spacing: Theme.spacing-8;
-
-                                            WinButton {
-                                                text: @tr("Cancel");
-                                                clicked => { root.toggle-import(); }
-                                            }
-
-                                            WinButton {
-                                                text: @tr("Import");
-                                                accent: true;
-                                                enabled: root.import-text != "";
-                                                clicked => { root.import-keys(); }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            WinScrollIndicator {
-                                x: parent.width - self.width - Theme.spacing-4;
-                                y: Theme.spacing-4;
-                                height: parent.height - 2 * Theme.spacing-4;
-                                viewport-position: scroll.content-y;
-                                content-extent: scroll.content-height;
-                                viewport-extent: scroll.height;
-                                thumb-min-length: 24px;
-                            }
-                        }
+                    WinScrollIndicator {
+                        x: parent.width - self.width - Theme.spacing-4;
+                        y: Theme.spacing-4;
+                        height: parent.height - 2 * Theme.spacing-4;
+                        viewport-position: scroll.content-y;
+                        content-extent: scroll.content-height;
+                        viewport-extent: scroll.height;
+                        thumb-min-length: 24px;
                     }
                 }
+            }
+        }
 
-                Rectangle {
-                    height: 1px;
-                    background: Theme.divider;
-                    vertical-stretch: 0;
-                }
+        Rectangle {
+            height: 1px;
+            background: Theme.divider;
+            vertical-stretch: 0;
+        }
 
-                HorizontalLayout {
-                    alignment: end;
-                    vertical-stretch: 0;
+        HorizontalLayout {
+            alignment: end;
+            vertical-stretch: 0;
+            spacing: Theme.spacing-8;
 
-                    WinButton {
-                        text: @tr("Close");
-                        clicked => { root.close(); }
-                    }
-                }
+            WinButton {
+                text: @tr("Close");
+                clicked => { root.close(); }
+            }
+        }
+    }
+
+    // 行右键菜单（页面内浮层；在 shell 之上）。
+    manager_menu := MenuPopup {
+        width: parent.width;
+        height: parent.height;
+        open: root.row-menu-open;
+        entries: root.row-menu-entries;
+        anchor-x: root.row-menu-x;
+        anchor-y: root.row-menu-y;
+        panel-width: 200px;
+        selected(index) => {
+            root.row-menu-open = false;
+            if index == 0 {
+                root.request-edit(root.row-menu-group, root.row-menu-entry);
+            } else if index == 2 {
+                root.request-remove-at(root.row-menu-group, root.row-menu-entry);
+            }
+        }
+        dismissed => { root.row-menu-open = false; }
     }
 
     /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。
@@ -572,6 +557,8 @@ export component HostKeysPage inherits Rectangle {
     changed open => {
         if (root.open) {
             shell.focus-dialog();
+        } else {
+            root.row-menu-open = false;
         }
     }
 }

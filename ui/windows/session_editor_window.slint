@@ -1,10 +1,11 @@
-// Session Editor as an independent non-resizable tool window.
+// Session Editor 独立工具窗（wide 1100×820，无遮罩）。
+//
+// 壳与焦点在 `ToolWindowChrome` + `ManagerDialogShell`；页面本体见
+// `ui/pages/session_editor.slint`（六分区 + 页级 Inherit + 行右键菜单）。
 
 import { Theme } from "../theme.slint";
-import { SessionEditor } from "../pages/session_editor.slint";
+import { SessionEditor, InheritSource, LoginStepRow, TunnelRow } from "../pages/session_editor.slint";
 import { AuthKeyOption } from "../components/auth_prompt_dialog.slint";
-import { ProxyProfileOption } from "../pages/proxies.slint";
-import { TriStateField } from "../pages/folder_editor.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component SessionEditorWindow inherits Window {
@@ -26,77 +27,107 @@ export component SessionEditorWindow inherits Window {
     private property <length> body-height:
         Theme.tool-window-height-tall - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
 
-    in property <string> section;
-    in property <string> target-text;
-    in property <string> folder-text;
+    // --- 分区 / 目标 ------------------------------------------------------
+    in property <string> section: "general";
+    in property <string> target-text: "";
+    in property <string> folder-text: "";
+    in property <bool> folder-mode: false;
+    // --- General ----------------------------------------------------------
     in-out property <string> name-text;
     in-out property <string> host-text;
-    in-out property <string> port-text;
+    in-out property <string> port-text: "22";
     in-out property <string> username-text;
-    in property <string> auth-method-text;
-    in-out property <string> password-text;
-    in property <[AuthKeyOption]> key-options;
-    in-out property <int> selected-key-index;
-    in property <bool> selected-key-missing;
-    in property <string> legacy-key-path-text;
-    in property <bool> legacy-key-has-passphrase;
-    in property <bool> has-stored-password;
-    in property <string> auth-test-status-text;
-    in property <string> proxy-mode-text;
-    in property <[ProxyProfileOption]> proxy-options;
-    in-out property <int> selected-proxy-index;
-    in property <string> proxy-selected-detail-text;
-    in property <string> proxy-legacy-text;
-    in property <bool> proxy-selected-missing;
-    in property <string> tunnel-kind-text;
-    in-out property <string> tunnel-bind-host-text;
-    in-out property <string> tunnel-bind-port-text;
-    in-out property <string> tunnel-target-host-text;
-    in-out property <string> tunnel-target-port-text;
-    in property <string> tunnel-summary-text;
-    in property <[TriStateField]> editor-appearance-fields;
+    in property <int> icon-index: 0;
+    in property <string> icon-custom-text: "";
+    in-out property <string> notes-text: "";
+    // --- Authentication ---------------------------------------------------
+    in property <string> auth-method-text: "agent";
+    in-out property <string> password-text: "";
+    in-out property <string> passphrase-text: "";
+    in property <[AuthKeyOption]> key-options: [];
+    in-out property <int> selected-key-index: -1;
+    in property <bool> selected-key-missing: false;
+    in property <string> legacy-key-path-text: "";
+    in property <bool> legacy-key-has-passphrase: false;
+    in property <bool> has-stored-password: false;
+    in property <string> auth-test-status-text: "";
+    // --- 页级 Inherit -----------------------------------------------------
+    in property <bool> inherit-auth: true;
+    in property <bool> inherit-login-script: true;
+    in property <bool> inherit-proxy: true;
+    in property <bool> inherit-tunnels: true;
+    in property <bool> inherit-terminal-style: true;
+    in property <[InheritSource]> inherit-sources: [];
+    in property <string> parent-auth-text: "";
+    in property <string> parent-proxy-text: "";
+    in property <string> parent-terminal-style-text: "";
+    in property <int> parent-login-step-count: 0;
+    in property <int> parent-tunnel-count: 0;
+    // --- Login Script -----------------------------------------------------
+    in property <[LoginStepRow]> login-steps: [];
+    in property <int> selected-login-step: -1;
+    // --- Tunnels ----------------------------------------------------------
+    in property <[TunnelRow]> tunnels: [];
+    in property <int> selected-tunnel: -1;
+    // --- Proxy / Terminal Style -------------------------------------------
+    in property <[string]> proxy-option-labels: [];
+    in property <int> proxy-option-index: 0;
+    in property <string> proxy-selected-detail-text: "";
+    in property <string> proxy-legacy-text: "";
+    in property <bool> proxy-selected-missing: false;
+    in property <[string]> scheme-options: [];
+    in property <int> scheme-index: 0;
     in property <image> preview-frame;
-    in property <color> preview-background;
+    in property <color> preview-background: Theme.terminal-surface;
 
     in-out property <bool> native_title_drag: false;
 
     callback dismiss();
     callback select-general();
     callback select-authentication();
+    callback select-login-script();
     callback select-tunnels();
     callback select-proxy();
-    callback select-appearance();
+    callback select-terminal-style();
     callback update-name(string);
     callback update-host(string);
     callback update-port(string);
     callback update-username(string);
-    callback set-auth-method-agent();
+    callback update-icon-index(int);
+    callback browse-icon();
+    callback reset-icon();
+    callback update-notes(string);
     callback set-auth-method-password();
-    callback set-auth-method-keyboard-interactive();
     callback set-auth-method-private-key();
     callback update-password(string);
+    callback update-passphrase(string);
     callback select-key(int);
     callback manage-keys();
-    callback test-auth();
+    callback toggle-inherit-auth(bool);
+    callback toggle-inherit-login-script(bool);
+    callback toggle-inherit-proxy(bool);
+    callback toggle-inherit-tunnels(bool);
+    callback toggle-inherit-terminal-style(bool);
+    callback add-login-step(string);
+    callback edit-login-step(int);
+    callback select-login-step(int);
+    callback duplicate-login-step(int);
+    callback delete-login-step(int);
+    callback move-login-step(int, int);
+    callback add-tunnel();
+    callback edit-tunnel(int);
+    callback select-tunnel(int);
+    callback duplicate-tunnel(int);
+    callback delete-tunnel(int);
+    callback clear-tunnels();
     callback set-proxy-mode-none();
     callback select-proxy-profile(int);
     callback manage-proxies();
-    callback set-tunnel-kind-local();
-    callback set-tunnel-kind-remote();
-    callback set-tunnel-kind-dynamic();
-    callback update-tunnel-bind-host(string);
-    callback update-tunnel-bind-port(string);
-    callback update-tunnel-target-host(string);
-    callback update-tunnel-target-port(string);
-    callback add-tunnel();
-    callback clear-tunnels();
+    callback select-scheme(int);
+    callback manage-terminal-styles();
+    callback test-auth();
     callback save();
     callback save-connect();
-    callback editor-theme-field-action(string, string);
-    callback update-editor-theme-field(string, string);
-    callback editor-select-scheme(int);
-    callback editor-select-font(int);
-    callback reset-all-editor-theme();
     callback title_drag_requested();
 
     chrome := ToolWindowChrome {
@@ -115,12 +146,17 @@ export component SessionEditorWindow inherits Window {
             section: root.section;
             target-text: root.target-text;
             folder-text: root.folder-text;
+            folder-mode: root.folder-mode;
             name-text <=> root.name-text;
             host-text <=> root.host-text;
             port-text <=> root.port-text;
             username-text <=> root.username-text;
+            icon-index: root.icon-index;
+            icon-custom-text: root.icon-custom-text;
+            notes-text <=> root.notes-text;
             auth-method-text: root.auth-method-text;
             password-text <=> root.password-text;
+            passphrase-text <=> root.passphrase-text;
             key-options: root.key-options;
             selected-key-index <=> root.selected-key-index;
             selected-key-missing: root.selected-key-missing;
@@ -128,58 +164,77 @@ export component SessionEditorWindow inherits Window {
             legacy-key-has-passphrase: root.legacy-key-has-passphrase;
             has-stored-password: root.has-stored-password;
             auth-test-status-text: root.auth-test-status-text;
-            proxy-mode-text: root.proxy-mode-text;
-            proxy-options: root.proxy-options;
-            selected-proxy-index <=> root.selected-proxy-index;
+            inherit-auth: root.inherit-auth;
+            inherit-login-script: root.inherit-login-script;
+            inherit-proxy: root.inherit-proxy;
+            inherit-tunnels: root.inherit-tunnels;
+            inherit-terminal-style: root.inherit-terminal-style;
+            inherit-sources: root.inherit-sources;
+            parent-auth-text: root.parent-auth-text;
+            parent-proxy-text: root.parent-proxy-text;
+            parent-terminal-style-text: root.parent-terminal-style-text;
+            parent-login-step-count: root.parent-login-step-count;
+            parent-tunnel-count: root.parent-tunnel-count;
+            login-steps: root.login-steps;
+            selected-login-step: root.selected-login-step;
+            tunnels: root.tunnels;
+            selected-tunnel: root.selected-tunnel;
+            proxy-option-labels: root.proxy-option-labels;
+            proxy-option-index: root.proxy-option-index;
             proxy-selected-detail-text: root.proxy-selected-detail-text;
             proxy-legacy-text: root.proxy-legacy-text;
             proxy-selected-missing: root.proxy-selected-missing;
-            tunnel-kind-text: root.tunnel-kind-text;
-            tunnel-bind-host-text <=> root.tunnel-bind-host-text;
-            tunnel-bind-port-text <=> root.tunnel-bind-port-text;
-            tunnel-target-host-text <=> root.tunnel-target-host-text;
-            tunnel-target-port-text <=> root.tunnel-target-port-text;
-            tunnel-summary-text: root.tunnel-summary-text;
-            editor-appearance-fields: root.editor-appearance-fields;
+            scheme-options: root.scheme-options;
+            scheme-index: root.scheme-index;
             preview-frame: root.preview-frame;
             preview-background: root.preview-background;
+
             close => { root.dismiss(); }
             select-general => { root.select-general(); }
             select-authentication => { root.select-authentication(); }
+            select-login-script => { root.select-login-script(); }
             select-tunnels => { root.select-tunnels(); }
             select-proxy => { root.select-proxy(); }
-            select-appearance => { root.select-appearance(); }
+            select-terminal-style => { root.select-terminal-style(); }
             update-name(string) => { root.update-name(string); }
             update-host(string) => { root.update-host(string); }
             update-port(string) => { root.update-port(string); }
             update-username(string) => { root.update-username(string); }
-            set-auth-method-agent => { root.set-auth-method-agent(); }
+            update-icon-index(int) => { root.update-icon-index(int); }
+            browse-icon => { root.browse-icon(); }
+            reset-icon => { root.reset-icon(); }
+            update-notes(string) => { root.update-notes(string); }
             set-auth-method-password => { root.set-auth-method-password(); }
-            set-auth-method-keyboard-interactive => { root.set-auth-method-keyboard-interactive(); }
             set-auth-method-private-key => { root.set-auth-method-private-key(); }
             update-password(string) => { root.update-password(string); }
+            update-passphrase(string) => { root.update-passphrase(string); }
             select-key(int) => { root.select-key(int); }
             manage-keys => { root.manage-keys(); }
-            test-auth => { root.test-auth(); }
+            toggle-inherit-auth(bool) => { root.toggle-inherit-auth(bool); }
+            toggle-inherit-login-script(bool) => { root.toggle-inherit-login-script(bool); }
+            toggle-inherit-proxy(bool) => { root.toggle-inherit-proxy(bool); }
+            toggle-inherit-tunnels(bool) => { root.toggle-inherit-tunnels(bool); }
+            toggle-inherit-terminal-style(bool) => { root.toggle-inherit-terminal-style(bool); }
+            add-login-step(string) => { root.add-login-step(string); }
+            edit-login-step(int) => { root.edit-login-step(int); }
+            select-login-step(int) => { root.select-login-step(int); }
+            duplicate-login-step(int) => { root.duplicate-login-step(int); }
+            delete-login-step(int) => { root.delete-login-step(int); }
+            move-login-step(int, int) => { root.move-login-step(int, int); }
+            add-tunnel => { root.add-tunnel(); }
+            edit-tunnel(int) => { root.edit-tunnel(int); }
+            select-tunnel(int) => { root.select-tunnel(int); }
+            duplicate-tunnel(int) => { root.duplicate-tunnel(int); }
+            delete-tunnel(int) => { root.delete-tunnel(int); }
+            clear-tunnels => { root.clear-tunnels(); }
             set-proxy-mode-none => { root.set-proxy-mode-none(); }
             select-proxy-profile(int) => { root.select-proxy-profile(int); }
             manage-proxies => { root.manage-proxies(); }
-            set-tunnel-kind-local => { root.set-tunnel-kind-local(); }
-            set-tunnel-kind-remote => { root.set-tunnel-kind-remote(); }
-            set-tunnel-kind-dynamic => { root.set-tunnel-kind-dynamic(); }
-            update-tunnel-bind-host(string) => { root.update-tunnel-bind-host(string); }
-            update-tunnel-bind-port(string) => { root.update-tunnel-bind-port(string); }
-            update-tunnel-target-host(string) => { root.update-tunnel-target-host(string); }
-            update-tunnel-target-port(string) => { root.update-tunnel-target-port(string); }
-            add-tunnel => { root.add-tunnel(); }
-            clear-tunnels => { root.clear-tunnels(); }
+            select-scheme(int) => { root.select-scheme(int); }
+            manage-terminal-styles => { root.manage-terminal-styles(); }
+            test-auth => { root.test-auth(); }
             save => { root.save(); }
             save-connect => { root.save-connect(); }
-            editor-theme-field-action(string, string) => { root.editor-theme-field-action(string, string); }
-            update-editor-theme-field(string, string) => { root.update-editor-theme-field(string, string); }
-            editor-select-scheme(int) => { root.editor-select-scheme(int); }
-            editor-select-font(int) => { root.editor-select-font(int); }
-            reset-all-editor-theme => { root.reset-all-editor-theme(); }
         }
     }
 
@@ -191,4 +246,3 @@ export component SessionEditorWindow inherits Window {
         root.focus-dialog();
     }
 }
-

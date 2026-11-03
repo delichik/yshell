@@ -105,6 +105,8 @@ struct FolderMetaFile {
     pub tunnel: Option<TunnelProfile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub login_script: Option<LoginScriptProfile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
 }
 
 impl SessionTreeStore {
@@ -424,6 +426,7 @@ impl SessionTreeStore {
             sftp: folder.sftp.clone(),
             tunnel: folder.tunnel.clone(),
             login_script: folder.login_script.clone(),
+            notes: folder.notes.clone(),
         };
         atomic_write_toml(&folder_path.join(FOLDER_META_FILE_NAME), &meta)
     }
@@ -480,6 +483,7 @@ impl SessionTreeStore {
                         sftp: None,
                         tunnel: None,
                         login_script: None,
+                        notes: None,
                     }
                 }
             }
@@ -494,6 +498,7 @@ impl SessionTreeStore {
                 sftp: None,
                 tunnel: None,
                 login_script: None,
+                notes: None,
             }
         };
 
@@ -556,6 +561,7 @@ impl SessionTreeStore {
             sftp: meta.sftp,
             tunnel: meta.tunnel,
             login_script: meta.login_script,
+            notes: meta.notes,
         })
     }
 }
@@ -760,6 +766,8 @@ mod tests {
         });
         folder.tunnel = Some(TunnelProfile {
             forwards: vec![TunnelForward {
+                name: Some("db".to_owned()),
+                enabled: true,
                 kind: TunnelForwardKind::Local,
                 bind_host: "127.0.0.1".to_owned(),
                 bind_port: 8080,

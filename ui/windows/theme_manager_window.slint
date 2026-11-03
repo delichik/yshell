@@ -41,12 +41,19 @@ export component ThemeManagerWindow inherits Window {
     in property <color> theme-editor-selection;
     in property <[color]> theme-editor-ansi;
     in property <[color]> editor-palette-swatches;
+    in property <bool> font-editable;
+    in property <[string]> font-options;
+    in-out property <int> font-index;
+    in-out property <string> font-family-text;
+    in-out property <string> font-size-text;
+    in-out property <string> backup-font-text;
 
     in-out property <bool> native_title_drag: false;
 
     callback dismiss();
     callback select-theme(int);
     callback set-default-theme();
+    callback new-style();
     callback clone-theme(string);
     callback edit-theme(string);
     callback request-delete-theme(string);
@@ -55,6 +62,13 @@ export component ThemeManagerWindow inherits Window {
     callback update-theme-editor-name(string);
     callback update-theme-editor-role(string, string);
     callback update-theme-editor-ansi(int, string);
+    callback prepare-context-menu(int);
+    callback clone-from-menu();
+    callback delete-from-menu();
+    callback update-font-family(string);
+    callback update-font-size(string);
+    callback update-backup-font(string);
+    callback browse-font-file();
     callback title_drag_requested();
 
     chrome := ToolWindowChrome {
@@ -88,9 +102,16 @@ export component ThemeManagerWindow inherits Window {
             theme-editor-selection: root.theme-editor-selection;
             theme-editor-ansi: root.theme-editor-ansi;
             editor-palette-swatches: root.editor-palette-swatches;
+            font-editable: root.font-editable;
+            font-options: root.font-options;
+            font-index <=> root.font-index;
+            font-family-text <=> root.font-family-text;
+            font-size-text <=> root.font-size-text;
+            backup-font-text <=> root.backup-font-text;
             close => { root.dismiss(); }
             select-theme(int) => { root.select-theme(int); }
             set-default-theme => { root.set-default-theme(); }
+            new-style => { root.new-style(); }
             clone-theme(string) => { root.clone-theme(string); }
             edit-theme(string) => { root.edit-theme(string); }
             request-delete-theme(string) => { root.request-delete-theme(string); }
@@ -99,6 +120,13 @@ export component ThemeManagerWindow inherits Window {
             update-theme-editor-name(string) => { root.update-theme-editor-name(string); }
             update-theme-editor-role(string, string) => { root.update-theme-editor-role(string, string); }
             update-theme-editor-ansi(int, string) => { root.update-theme-editor-ansi(int, string); }
+            prepare-context-menu(int) => { root.prepare-context-menu(int); }
+            clone-from-menu => { root.clone-from-menu(); }
+            delete-from-menu => { root.delete-from-menu(); }
+            update-font-family(string) => { root.update-font-family(string); }
+            update-font-size(string) => { root.update-font-size(string); }
+            update-backup-font(string) => { root.update-backup-font(string); }
+            browse-font-file => { root.browse-font-file(); }
         }
     }
 

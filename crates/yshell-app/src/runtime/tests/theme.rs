@@ -1375,7 +1375,8 @@ fn session_editor_preview_only_renders_while_appearance_is_active() {
     );
 
     let appearance = runtime.select_session_editor_appearance();
-    assert_eq!(appearance.editor_section_text, "appearance");
+    // 原 Appearance 分区按原型改名 Terminal Style（section id `terminal-style`）。
+    assert_eq!(appearance.editor_section_text, "terminal-style");
     let frame = appearance
         .session_editor_preview
         .expect("Session Editor preview on the Appearance section");

@@ -1,0 +1,118 @@
+// Known Hosts · Export（compact 560×400，单字段：目标路径 + Browse）。
+//
+// 规范：docs/prototypes/known-hosts/modals.html。导出 `host:port algorithm fingerprint`
+// 每行一条；成功后由 runtime 关闭子窗。
+//
+// 一窗一条提交/关闭栏：Cancel | Export。
+
+import { Theme } from "../theme.slint";
+import { WinButton, WinIconButton } from "../components/basic/controls.slint";
+import { WinTextInput } from "../components/basic/text_input.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
+
+export component KnownHostExportWindow inherits Window {
+    title: @tr("Export Known Hosts");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-compact;
+    min-width: Theme.tool-window-width-compact;
+    max-width: Theme.tool-window-width-compact;
+    preferred-height: Theme.tool-window-height-compact;
+    min-height: Theme.tool-window-height-compact;
+    max-height: Theme.tool-window-height-compact;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in-out property <string> path-text: "";
+    in property <string> error-text: "";
+
+    in-out property <bool> native_title_drag: false;
+
+    callback canceled();
+    callback exported();
+    callback browse-file();
+    callback update-path(string);
+    callback title_drag_requested();
+
+    private property <length> body-width:
+        Theme.tool-window-width-compact - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-compact - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+
+    ToolWindowChrome {
+        width: Theme.tool-window-width-compact;
+        height: Theme.tool-window-height-compact;
+        title-text: @tr("Export Known Hosts");
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.canceled(); }
+        title-drag-requested => { root.title_drag_requested(); }
+
+        VerticalLayout {
+            width: root.body-width;
+            height: root.body-height;
+            spacing: Theme.spacing-12;
+
+            HorizontalLayout {
+                spacing: Theme.spacing-8;
+                cross-axis-alignment: center;
+
+                WinTextInput {
+                    horizontal-stretch: 1;
+                    text <=> root.path-text;
+                    placeholder-text: @tr("Destination file");
+                    font-family: Theme.font-mono;
+                    font-size: Theme.font-caption;
+                    edited => { root.update-path(self.text); }
+                }
+
+                WinIconButton {
+                    icon: "file";
+                    accessible-name: @tr("Browse");
+                    tooltip-text: @tr("Browse");
+                    clicked => { root.browse-file(); }
+                }
+            }
+
+            Text {
+                text: @tr("Writes one `host:port algorithm fingerprint` line per saved host key.");
+                color: Theme.text-tertiary;
+                font-size: Theme.font-caption;
+                wrap: word-wrap;
+            }
+
+            if root.error-text != "" : Text {
+                text: root.error-text;
+                color: Theme.critical;
+                font-size: Theme.font-caption;
+                wrap: word-wrap;
+            }
+
+            Rectangle { vertical-stretch: 1; }
+
+            Rectangle {
+                height: 1px;
+                vertical-stretch: 0;
+                background: Theme.divider;
+            }
+
+            HorizontalLayout {
+                alignment: end;
+                vertical-stretch: 0;
+                spacing: Theme.spacing-8;
+
+                WinButton {
+                    text: @tr("Cancel");
+                    clicked => { root.canceled(); }
+                }
+
+                WinButton {
+                    text: @tr("Export");
+                    accent: true;
+                    enabled: root.path-text != "";
+                    clicked => { root.exported(); }
+                }
+            }
+        }
+    }
+}

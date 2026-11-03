@@ -273,6 +273,9 @@ impl YShellApp {
             .prepare_desktop_startup_workspace();
         let manager = crate::windows::WindowManager::new(Rc::clone(&self.runtime))?;
         self.manager = Some(manager);
+        // D35：启动主密码解锁（仅 GUI 路径；CLI / MCP 保持 `YSHELL_MASTER_PASSWORD`
+        // 现状，见契约 §14.4b）。投影标志置位后 `dialog_windows` 同步创建解锁窗。
+        let _ = self.runtime.borrow_mut().request_master_password_unlock();
         Ok(())
     }
 
@@ -354,11 +357,7 @@ pub(crate) fn apply_appearance(window: &MainWindow, ui: &yshell_config::UiProfil
     let (mode, accent) = resolve_appearance_with_config(ui);
 
     let theme = window.global::<Theme>();
-    theme.set_mode(match mode {
-        ThemeMode::System => 0,
-        ThemeMode::Light => 1,
-        ThemeMode::Dark => 2,
-    });
+    theme.set_mode(theme_mode_index(mode));
 
     // §6.4.4 / §6.1.5："减少动画"总开关。设置页的开关直接写 Theme.reduce-motion，
     // 这里只负责启动时的初值（`YSHELL_REDUCE_MOTION=1` 关闭所有过渡）。
@@ -387,6 +386,23 @@ pub(crate) fn apply_appearance(window: &MainWindow, ui: &yshell_config::UiProfil
             .set_color_scheme(ColorScheme::Dark),
     }
 
+    apply_accent_to_theme(&theme, accent);
+}
+
+/// `ThemeMode` → Slint `Theme.mode` value（0 系统 / 1 浅 / 2 深）。
+fn theme_mode_index(mode: ThemeMode) -> i32 {
+    match mode {
+        ThemeMode::System => 0,
+        ThemeMode::Light => 1,
+        ThemeMode::Dark => 2,
+    }
+}
+
+/// 把解析后的强调色写入 `Theme` 全局。
+///
+/// `apply_appearance`（启动）与 [`apply_app_theme_preview`]（Settings 即时
+/// 预览）共用，派生色规则仍只在 `yshell_ui::appearance` 一处。
+fn apply_accent_to_theme(theme: &Theme, accent: AccentColors) {
     let to_color =
         |value: appearance::RgbColor| slint::Color::from_rgb_u8(value.red, value.green, value.blue);
     theme.set_accent_light(to_color(accent.light));
@@ -399,6 +415,46 @@ pub(crate) fn apply_appearance(window: &MainWindow, ui: &yshell_config::UiProfil
     theme.set_accent_text_dark(to_color(accent.text_dark));
     theme.set_accent_soft_light(to_color(accent.soft_light));
     theme.set_accent_soft_dark(to_color(accent.soft_dark));
+}
+
+/// D36：把当前生效的 App theme（Mode + 强调色）写入任意窗口的 `Theme` 全局。
+///
+/// Settings 打开期间投影里的值来自 App theme 草稿（即时预览）；关闭后投影回到
+/// 持久化基线，所以 Cancel / × / Esc 的回滚也走这条路径。`YSHELL_THEME` /
+/// `YSHELL_ACCENT` 仍然优先（验收 / CI 开关不能被配置文件或预览覆盖）。
+///
+/// 只写 `Theme.mode` 与强调色，不动 std-widgets 的 `Palette`：`Theme.system-
+/// scheme` 是 `Palette.color-scheme` 的实时绑定，覆盖 `Palette` 会让"跟随系统"
+/// 再也读不回系统值（启动时的 `apply_appearance` 是 `Palette` 的唯一写入点）。
+pub(crate) fn apply_app_theme_preview(theme: &Theme<'_>, projection: &AppProjection) {
+    let mode_env = std::env::var("YSHELL_THEME")
+        .ok()
+        .and_then(|value| ThemeMode::from_id(&value));
+    let mode_index = mode_env.map_or(projection.settings_appearance_mode_index, theme_mode_index);
+    theme.set_mode(mode_index.clamp(0, 2));
+    let accent_env = std::env::var("YSHELL_ACCENT").unwrap_or_default();
+    let accent = if accent_env.trim().is_empty() {
+        // Swatch order = `runtime/settings.rs::APP_ACCENT_IDS`
+        // (0 = Follow system → Windows Blue, 1 = Blue, then the presets).
+        appearance::resolve_accent(accent_preset_id(
+            projection.settings_appearance_accent_index,
+        ))
+    } else {
+        appearance::resolve_accent(accent_env.trim())
+    };
+    apply_accent_to_theme(theme, accent);
+}
+
+/// Accent swatch index → accent preset id.
+fn accent_preset_id(index: i32) -> &'static str {
+    match index {
+        2 => "teal",
+        3 => "purple",
+        4 => "green",
+        5 => "orange",
+        6 => "magenta",
+        _ => "blue",
+    }
 }
 
 /// 平台默认 UI 字体族（必须同时覆盖拉丁与 CJK）。
@@ -4679,6 +4735,8 @@ pub(crate) enum DialogKind {
     TerminalFontPrimary,
     /// N5：终端外观的备用字体文件（pick_file，单值，选中即替换）。
     TerminalFontBackup,
+    /// D33：Settings → SFTP → External editor 的可执行文件（pick_file；仅 Custom）。
+    SettingsSftpEditor,
 }
 
 /// rfd 的 GTK 后端是单个全局线程：并发/重复调用会在同一 GTK 主循环上嵌套对话框。
@@ -4719,7 +4777,7 @@ fn spawn_pick_folder(
 }
 
 /// N6：用系统默认程序打开文件/目录（worker 线程；失败静默——菜单项已按存在性启用）。
-fn spawn_open_path(path: String) {
+pub(crate) fn spawn_open_path(path: String) {
     if path.is_empty() {
         return;
     }
@@ -4758,6 +4816,22 @@ fn spawn_pick_file(
             });
         }
     });
+}
+
+/// D33：Settings → SFTP → External editor（Custom）的可执行文件选择。
+pub(crate) fn spawn_pick_settings_sftp_editor(
+    dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
+) {
+    // Windows 的系统文件对话框始终可用；其它平台沿用 DISPLAY 预检，不可用时
+    // 保持路径输入框（失败回落手工输入，不阻塞 Settings）。
+    if !cfg!(windows) && !file_dialogs_available() {
+        return;
+    }
+    spawn_pick_file(
+        dialog_tx,
+        DialogKind::SettingsSftpEditor,
+        "Choose editor executable",
+    );
 }
 
 /// N4：在 worker 线程上打开 `save_file` 并写文本（结果经 mpsc 回填状态）。
@@ -5175,6 +5249,10 @@ pub(crate) fn apply_dialog_outcome(
                 runtime.update_settings_appearance_font_family(&path)
             }
             DialogKind::TerminalFontBackup => runtime.set_settings_appearance_backup_font(&path),
+            // D33：Settings → SFTP 外部编辑器路径（Custom）。
+            DialogKind::SettingsSftpEditor => {
+                runtime.update_settings_sftp_external_editor_path(&path)
+            }
         },
         FileDialogOutcome::Saved { kind, path, error } => match kind {
             DialogKind::HostKeysExport | DialogKind::HostKeysImport => match &error {
@@ -7442,6 +7520,9 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_auth_prompt_challenge_round_total(projection.auth_prompt_challenge_round_total);
     window.set_auth_prompt_keyboard_final_round(projection.auth_prompt_keyboard_final_round);
     window.set_auth_prompt_keyboard_submit_enabled(projection.auth_prompt_keyboard_submit_enabled);
+    // D36: App theme（Settings 即时预览 / 持久化基线）。每次投影刷新都同步到
+    // 本窗口的 `Theme` 全局（N7 多窗口各自一份实例）。
+    apply_app_theme_preview(&window.global::<Theme>(), projection);
     restore_shortcut_focus_after_modal(window, projection);
 }
 

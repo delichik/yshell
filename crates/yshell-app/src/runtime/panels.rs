@@ -179,7 +179,6 @@ impl AppRuntime {
     }
 
     /// Settings → Terminal：中键行为（0 = Paste，1 = Do nothing）。
-    #[allow(dead_code)] // 波 2 的 Settings 页接线后删除。
     pub fn update_settings_terminal_middle_click(&mut self, index: i32) -> AppProjection {
         self.settings_terminal_middle_click = middle_click_from_index(index);
         self.settings_terminal_status = SettingsTerminalStatus::Hint;
@@ -187,7 +186,6 @@ impl AppRuntime {
     }
 
     /// Settings → Terminal：右键行为（0 = Context menu，1 = Paste，2 = Do nothing）。
-    #[allow(dead_code)] // 波 2 的 Settings 页接线后删除。
     pub fn update_settings_terminal_right_click(&mut self, index: i32) -> AppProjection {
         self.settings_terminal_right_click = right_click_from_index(index);
         self.settings_terminal_status = SettingsTerminalStatus::Hint;
@@ -195,7 +193,6 @@ impl AppRuntime {
     }
 
     /// Settings → Terminal：多行粘贴策略（0 = Ask，1 = Paste，2 = Block）。
-    #[allow(dead_code)] // 波 2 的 Settings 页接线后删除。
     pub fn update_settings_terminal_multi_line_paste(&mut self, index: i32) -> AppProjection {
         self.settings_terminal_multi_line_paste = multi_line_paste_from_index(index);
         self.settings_terminal_status = SettingsTerminalStatus::Hint;
@@ -203,7 +200,6 @@ impl AppRuntime {
     }
 
     /// Settings → Terminal：选区结束自动复制。
-    #[allow(dead_code)] // 波 2 的 Settings 页接线后删除。
     pub fn update_settings_terminal_auto_copy(&mut self, enabled: bool) -> AppProjection {
         self.settings_terminal_auto_copy = enabled;
         self.settings_terminal_status = SettingsTerminalStatus::Hint;
@@ -509,7 +505,6 @@ impl SettingsTerminalField {
 }
 
 /// Settings → Terminal 中键下拉索引 → 行为（与 settings 页下拉顺序一致）。
-#[allow(dead_code)] // 波 2 的 Settings 页接线后删除。
 fn middle_click_from_index(index: i32) -> MiddleClickAction {
     match index {
         1 => MiddleClickAction::DoNothing,
@@ -518,7 +513,6 @@ fn middle_click_from_index(index: i32) -> MiddleClickAction {
 }
 
 /// Settings → Terminal 右键下拉索引 → 行为。
-#[allow(dead_code)] // 波 2 的 Settings 页接线后删除。
 fn right_click_from_index(index: i32) -> RightClickAction {
     match index {
         1 => RightClickAction::Paste,
@@ -528,7 +522,6 @@ fn right_click_from_index(index: i32) -> RightClickAction {
 }
 
 /// Settings → Terminal 多行粘贴下拉索引 → 策略。
-#[allow(dead_code)] // 波 2 的 Settings 页接线后删除。
 fn multi_line_paste_from_index(index: i32) -> MultiLinePastePolicy {
     match index {
         1 => MultiLinePastePolicy::Paste,

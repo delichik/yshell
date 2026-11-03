@@ -1191,6 +1191,40 @@ export global TextFormats {
         if kind == "editor-saved" {
             return @tr("MainWindow" => "Saved session editor changes into `{0}`.", param_1);
         }
+        // --- session-editor：Login Script 步骤 / Tunnel 清单 / 执行挂点 --------
+        if kind == "editor-login-step-added" {
+            return @tr("MainWindow" => "Added a login script {0} step.", param_1);
+        }
+        if kind == "editor-login-step-updated" {
+            return @tr("MainWindow" => "Updated the login script {0} step.", param_1);
+        }
+        if kind == "editor-login-step-deleted" {
+            return @tr("MainWindow" => "Deleted a login script step.");
+        }
+        if kind == "editor-login-step-duplicated" {
+            return @tr("MainWindow" => "Duplicated a login script step.");
+        }
+        if kind == "editor-login-steps-moved" {
+            return @tr("MainWindow" => "Reordered the login script steps.");
+        }
+        if kind == "editor-login-script-started" {
+            return @tr("MainWindow" => "Running the login script for this session.");
+        }
+        if kind == "editor-login-script-finished" {
+            return @tr("MainWindow" => "Login script finished.");
+        }
+        if kind == "editor-login-script-failed" {
+            return @tr("MainWindow" => "Login script stopped: {0}", param_1);
+        }
+        if kind == "editor-tunnel-updated" {
+            return @tr("MainWindow" => "Updated tunnel {0}.", param_1);
+        }
+        if kind == "editor-tunnel-duplicated" {
+            return @tr("MainWindow" => "Duplicated a tunnel configuration.");
+        }
+        if kind == "editor-tunnel-removed" {
+            return @tr("MainWindow" => "Deleted a tunnel configuration.");
+        }
         if kind == "session-folder-created" {
             return @tr("MainWindow" => "Created folder `{0}` under `{1}` and selected it for the editor.", param_1, param_2);
         }
@@ -1609,6 +1643,73 @@ export global TextFormats {
         if kind == "sftp-unknown-menu-action" {
             return @tr("MainWindow" => "Unknown SFTP menu action `{0}`.", param_1);
         }
+        // --- managers-dialogs：管理器子窗 / 行右键状态 ---------------------------
+        if kind == "host-keys-add-opened" {
+            return @tr("MainWindow" => "Paste a `host:port` entry with an OpenSSH public key or a SHA256 fingerprint.");
+        }
+        if kind == "host-keys-edit-opened" {
+            return @tr("MainWindow" => "Editing the saved host key for {0}.", param_1);
+        }
+        if kind == "host-keys-add-empty" {
+            return @tr("MainWindow" => "Paste a host key entry first.");
+        }
+        if kind == "host-keys-add-failed" {
+            return @tr("MainWindow" => "Could not add the entry: {0}", param_1);
+        }
+        if kind == "host-keys-add-persist-failed" {
+            return @tr("MainWindow" => "Could not save the host key: {0}", param_1);
+        }
+        if kind == "host-keys-added" {
+            return @tr("MainWindow" => "Added the saved host key for {0}.", param_1);
+        }
+        if kind == "host-keys-edited" {
+            return @tr("MainWindow" => "Updated the saved host key for {0}.", param_1);
+        }
+        if kind == "host-keys-import-opened" {
+            return @tr("MainWindow" => "Choose a `known_hosts` file to import.");
+        }
+        if kind == "host-keys-import-path-empty" {
+            return @tr("MainWindow" => "Choose a `known_hosts` file to import.");
+        }
+        if kind == "host-keys-import-failed" {
+            return @tr("MainWindow" => "Import failed: {0}", param_1);
+        }
+        if kind == "host-keys-export-path-empty" {
+            return @tr("MainWindow" => "Choose a destination file first.");
+        }
+        if kind == "private-key-generate-opened" {
+            return @tr("MainWindow" => "Generate a new managed key: choose the algorithm, then confirm the passphrase.");
+        }
+        if kind == "private-key-generate-passphrase-mismatch" {
+            return @tr("MainWindow" => "The passphrase confirmation does not match.");
+        }
+        if kind == "private-key-generate-failed" {
+            return @tr("MainWindow" => "Key generation failed: {0}", param_1);
+        }
+        if kind == "private-key-generated" {
+            return @tr("MainWindow" => "Generated `{0}` ({1}).", param_1, param_2);
+        }
+        if kind == "private-key-import-opened" {
+            return @tr("MainWindow" => "Import an OpenSSH private key from a file or paste its text.");
+        }
+        if kind == "private-key-import-text-empty" {
+            return @tr("MainWindow" => "Paste an OpenSSH private key first.");
+        }
+        if kind == "private-key-export-requires-selection" {
+            return @tr("MainWindow" => "Select a managed key to export its public key.");
+        }
+        if kind == "private-key-export-path-empty" {
+            return @tr("MainWindow" => "Choose a destination file first.");
+        }
+        if kind == "private-key-deploy-ready" {
+            return @tr("MainWindow" => "Ready to deploy to {0}.", param_1);
+        }
+        if kind == "private-key-deploy-no-targets" {
+            return @tr("MainWindow" => "No live SSH session is available to deploy to. Open an SSH session first.");
+        }
+        if kind == "private-key-deploy-target" {
+            return @tr("MainWindow" => "Deploy target set to {0}.", param_1);
+        }
         return fallback;
     }
 
@@ -1699,5 +1800,105 @@ export global TextFormats {
         if key == "logging.format" { return @tr("MainWindow" => "Raw keeps escape sequences"); }
         if key == "logging.directory" { return @tr("MainWindow" => "Log output directory"); }
         return "";
+    }
+
+    // --- settings-security ---------------------------------------------------
+    // Appearance → Accent 色板tooltip（顺序 = `APP_ACCENT_IDS`）。
+    public pure function appearance-accent-label(index: int) -> string {
+        if index == 0 { return @tr("MainWindow" => "Follow system"); }
+        if index == 1 { return @tr("MainWindow" => "Windows Blue"); }
+        if index == 2 { return @tr("MainWindow" => "Teal"); }
+        if index == 3 { return @tr("MainWindow" => "Purple"); }
+        if index == 4 { return @tr("MainWindow" => "Green"); }
+        if index == 5 { return @tr("MainWindow" => "Orange"); }
+        if index == 6 { return @tr("MainWindow" => "Magenta"); }
+        return "";
+    }
+
+    // Settings → Security 主密码卡片状态 pill。
+    public pure function master-password-status(is-set: bool) -> string {
+        return is-set ? @tr("MainWindow" => "Set") : @tr("MainWindow" => "Not set");
+    }
+
+    // Settings → SFTP 分区内联状态。
+    public pure function settings-sftp-status(kind: string, fallback: string) -> string {
+        if kind == "custom-editor-path-required" {
+            return @tr("MainWindow" => "Choose the editor executable before saving.");
+        }
+        if kind == "saved" {
+            return @tr("MainWindow" => "Saved the SFTP defaults.");
+        }
+        if kind == "hint" {
+            return @tr("MainWindow" => "Defaults apply to new SFTP tabs.");
+        }
+        return fallback;
+    }
+
+    // 主密码子窗标题（按 Rust 投影的 kind id）。
+    public pure function master-password-dialog-title(kind: string) -> string {
+        if kind == "change" {
+            return @tr("MainWindow" => "Change Master Password");
+        }
+        if kind == "remove" {
+            return @tr("MainWindow" => "Remove Master Password");
+        }
+        if kind == "reset" {
+            return @tr("MainWindow" => "Reset Master Password");
+        }
+        return @tr("MainWindow" => "Set Master Password");
+    }
+
+    // 主密码子窗页脚主按钮（按 kind id）。
+    public pure function master-password-dialog-primary(kind: string) -> string {
+        if kind == "change" {
+            return @tr("MainWindow" => "Change");
+        }
+        if kind == "remove" {
+            return @tr("MainWindow" => "Remove");
+        }
+        if kind == "reset" {
+            return @tr("MainWindow" => "Reset and Delete");
+        }
+        return @tr("MainWindow" => "Set");
+    }
+
+    // 主密码校验错误（错误条 / 行内错误共用）。
+    public pure function master-password-error(kind: string) -> string {
+        if kind == "too-short" {
+            return @tr("MainWindow" => "Use at least 8 characters.");
+        }
+        if kind == "mismatch" {
+            return @tr("MainWindow" => "The passwords do not match.");
+        }
+        if kind == "current-required" {
+            return @tr("MainWindow" => "Enter the current master password.");
+        }
+        if kind == "wrong-current" {
+            return @tr("MainWindow" => "Incorrect password.");
+        }
+        if kind == "not-set" {
+            return @tr("MainWindow" => "No master password is set.");
+        }
+        return "";
+    }
+
+    // 状态栏模板：Settings 保存与主密码生命周期（第 4 波接入 status-message）。
+    public pure function settings-security-status(kind: string, mode: string, accent: string, fallback: string) -> string {
+        if kind == "settings-saved" {
+            return @tr("MainWindow" => "Saved settings (app theme={0}, accent={1}).", mode, accent);
+        }
+        if kind == "master-password-set" {
+            return @tr("MainWindow" => "Master password set. Sessions and keys will be encrypted.");
+        }
+        if kind == "master-password-changed" {
+            return @tr("MainWindow" => "Master password changed.");
+        }
+        if kind == "master-password-removed" {
+            return @tr("MainWindow" => "Master password removed. Saved data stays decrypted.");
+        }
+        if kind == "master-password-reset" {
+            return @tr("MainWindow" => "Master password reset. Protected sessions and keys were deleted.");
+        }
+        return fallback;
     }
 }

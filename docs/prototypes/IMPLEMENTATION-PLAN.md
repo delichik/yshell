@@ -101,6 +101,23 @@ wiring note 格式：新增 property / callback 名 + 期望绑定 + 插入锚�
 
 ## 7. 波次记录
 
+### 交付流程（2026-11-03 用户要求，后续所有项适用）
+
+- **Lead 不再亲自写实现代码**：每个窗口/弹窗作为一项，委派 teammate 完成实现与接线。
+- 每项完成标准：`cargo check -p yshell-app`、`cargo test -p yshell-app`、`cargo fmt --all --check`、`cargo xtask check` 全绿 + 实机冒烟证据。
+- 每项单独提交，**只 push 到当前分支 `win/ui2`**（不合并、不 PR）；push 后等 **dev-build（Windows）CI 绿**。
+- 用户只核验 Windows 平台产物/行为；用户核验通过后才开始下一项。
+- 项顺序：Settings（含主密码两窗）→ Session Editor → 管理器（Known Hosts / Private Keys / Proxies / Terminal Styles 逐项）→ host-key / auth-prompt / sftp-chmod 等弹窗 → 主壳/面板/工作区。
+
+### 第 1 项 · Settings 窗口（含主密码两窗）· 待用户核验（2026-11-03）
+
+- 委派 `settings-security`（实现）→ `settings-wire`（接线，中途失败）→ `settings-fixer`（补接线/门禁，失败）→ `settings-render-fix`（修复 + 验收，完成）。
+- 根因修复：`ui/windows/settings_window.slint` 的窗口级 `section` 属性无默认值，覆盖了页面默认 `"general"`，导致内容区空白；同类 Slint 陷阱（`alignment: start` 忽略 stretch、输入框/下拉 preferred-width=0）一并修掉。
+- 交付：Settings 七分区（通用/外观/终端/安全/MCP/高级/SFTP）+ 主密码 Set 子窗/解锁窗接线；App theme 即时预览；Save=保存并关闭、Cancel 回滚；Settings Terminal 四项、SFTP 三项落盘。
+- 门禁：`cargo check` / `cargo test -p yshell-app`（452）/ `cargo fmt --all --check` / `cargo xtask check` 全绿。
+- 证据：`D:\NewSpace\ui-evidence\wave2\settings\`（7 分区截图、Appearance 即时预览、Save/Cancel 持久化与回滚、主密码子窗）+ `settings-render-fix.md`。
+- 已知未改：zh-CN 部分文案仍英文（波 4 i18n）；Terminal 分区保存后残留状态文案。
+
 ### 第 0 波 · 完成（2026-11-03）
 
 - 分支 `win/ui2`，基线提交 `fe7f037`（chore: 清 fmt/clippy/test 漂移）。
@@ -108,6 +125,14 @@ wiring note 格式：新增 property / callback 名 + 期望绑定 + 插入锚�
 - 验证：`cargo xtask check` 通过；`cargo test --workspace --exclude xtask` 27 个测试套件全绿；`yshell.exe` 启动冒烟通过（1440×900，见 `D:\NewSpace\ui-evidence\wave0\app-launch.png`）。
 - 差距清单恢复：`IMPLEMENTATION-GAPS.md`；任务板：task-1 … task-11。
 - 旧一轮成果归档在 `refs/archive/win-ui-opt`（只读参考）。
+
+### 第 2 波 · 进行中（2026-11-03，3 人并行）
+
+- **2-A settings-security**：Settings 五分区重写 + `master_password_window` / `master_password_unlock_window`；`runtime/settings.rs`（App theme / SFTP 草稿、整窗 Save）、`runtime/security.rs`（主密码状态机 + verifier）、`SettingsAppearanceDraft` 扩展；wiring note 已交（40 个投影字段 + 回调 + 窗口注册 + 启动解锁）。
+- **2-C managers-dialogs**：四管理器页收口 + `known_host_*` / `private_key_*` / `sftp_chmod` / `host-key compact` 子窗；`auth.rs` / `proxies.rs` / `sftp_chmod.rs` 逻辑；wiring note 已交。
+- **2-B session-editor**：Session Editor 六分区 + Login Script + `login-step-*` / `tunnel-editor` 窗；仍在收尾。
+- 基础层补充（Lead）：`SessionProfile.notes` / `FolderProfile.notes`、`TunnelForward.name` + `enabled`（含持久化/sanitize/测试）；启用 `ssh-key` 的 ed25519 + getrandom（Private Keys Generate）；`main_window.slint` 已导出全部新窗口（编译验证通过）。
+- 当前 `cargo check -p yshell-app` 通过（剩余为接线前的 dead_code warning）。集成（projection setter / bootstrap 回调 / dialog 注册）待 Lead 逐人落地。
 
 ### 第 1 波 · 完成（2026-11-03）
 

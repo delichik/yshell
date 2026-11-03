@@ -29,6 +29,8 @@ import { TriStateField } from "pages/folder_editor.slint";
 export { AboutWindow } from "windows/about_window.slint";
 export { CompactConfirmWindow } from "windows/compact_confirm_window.slint";
 export { SettingsWindow } from "windows/settings_window.slint";
+export { MasterPasswordWindow } from "windows/master_password_window.slint";
+export { MasterPasswordUnlockWindow } from "windows/master_password_unlock_window.slint";
 export { SessionEditorWindow } from "windows/session_editor_window.slint";
 export { FolderEditorWindow } from "windows/folder_editor_window.slint";
 export { KnownHostsWindow } from "windows/known_hosts_window.slint";
@@ -44,6 +46,18 @@ export { NewFolderWindow } from "windows/new_folder_window.slint";
 export { SftpEntryWindow } from "windows/sftp_entry_window.slint";
 export { SftpConflictWindow } from "windows/sftp_conflict_window.slint";
 export { SftpPropertiesWindow } from "windows/sftp_properties_window.slint";
+// 波 2 新增：管理器子窗 / 登录脚本步骤 / 隧道编辑 / SFTP chmod。
+export { KnownHostAddWindow } from "windows/known_host_add_window.slint";
+export { KnownHostImportWindow } from "windows/known_host_import_window.slint";
+export { KnownHostExportWindow } from "windows/known_host_export_window.slint";
+export { PrivateKeyGenerateWindow } from "windows/private_key_generate_window.slint";
+export { PrivateKeyImportWindow } from "windows/private_key_import_window.slint";
+export { PrivateKeyExportWindow } from "windows/private_key_export_window.slint";
+export { PrivateKeyDeployWindow } from "windows/private_key_deploy_window.slint";
+export { LoginStepKeysWindow } from "windows/login_step_keys.slint";
+export { LoginStepWaitWindow } from "windows/login_step_wait.slint";
+export { TunnelEditorWindow } from "windows/tunnel_editor_window.slint";
+export { SftpChmodWindow } from "windows/sftp_chmod_window.slint";
 
 // 一级菜单（MenuTitle/MenuBar 行）已搬到 components/menu_bar.slint；
 // NewFolderDialog 已搬到 components/session_sidebar.slint（独立 OS 窗口见 windows/new_folder_window.slint）。

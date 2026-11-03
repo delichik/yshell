@@ -77,7 +77,6 @@ export component AuthPromptDialog inherits Rectangle {
     in property <bool> submit-enabled: true;
 
     in-out property <string> password-text: "";
-    in-out property <bool> remember-password: false;
 
     in property <[AuthKeyOption]> key-options: [];
     in-out property <int> selected-key-index: -1;
@@ -98,7 +97,6 @@ export component AuthPromptDialog inherits Rectangle {
     callback select-method(int);
     callback submit-password();
     callback update-password(string);
-    callback toggle-remember-password(bool);
     callback select-key(int);
     callback update-passphrase(string);
     callback toggle-use-agent(bool);
@@ -230,12 +228,6 @@ export component AuthPromptDialog inherits Rectangle {
                         edited(text) => { root.update-password(text); }
                         accepted => { if root.primary-enabled { root.submit-primary(); } }
                     }
-                }
-
-                WinToggle {
-                    text: @tr("Remember password");
-                    checked: root.remember-password;
-                    toggled => { root.toggle-remember-password(self.checked); }
                 }
             }
 
