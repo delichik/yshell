@@ -137,7 +137,7 @@ export component PanelFrame inherits Rectangle {
     }
 
     // 标题条与内容之间不再画分隔线：卡片本身已有 1px `card-stroke` 描边，
-    // 而 `layer-stroke` 与 `card-stroke` 取值完全相同（都是 #FFFFFF29 / #00000024），
+    // 而 `layer-stroke` 与 `card-stroke` 取值完全相同（同一半透明描边色），
     // 两条同色同粗的线叠在一起会读成「框中框」——卡片像是被切开却没切干净。
     // 现在靠 12px 内容内边距 + 标题的 `body-strong` 字重区分层级。
 

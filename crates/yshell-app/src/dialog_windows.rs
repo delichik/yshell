@@ -7,7 +7,6 @@
 //! Opening signal: historical `*_visible` / projection flags. Each tick,
 //! [`DialogWindowManager::sync`] show/hides aux windows.
 
-
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
@@ -42,8 +41,7 @@ macro_rules! wire_tool_title_drag {
 
 macro_rules! wire_tool_on_close {
     ($window:expr, $runtime:expr, $close:expr) => {{
-        let close_fn: fn(&mut crate::runtime::AppRuntime) -> crate::runtime::AppProjection =
-            $close;
+        let close_fn: fn(&mut crate::runtime::AppRuntime) -> crate::runtime::AppProjection = $close;
         let rt = Rc::clone(&$runtime);
         $window.on_dismiss(move || {
             let _ = close_fn(&mut rt.borrow_mut());
@@ -157,7 +155,7 @@ pub(crate) struct DialogWindowManager {
 }
 
 impl DialogWindowManager {
-    pub(crate) fn new(
+    pub(crate) fn create(
         runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
     ) -> Rc<RefCell<DialogHost>> {
         let host = Rc::new(RefCell::new(DialogHost {
@@ -303,7 +301,7 @@ impl DialogWindowManager {
                 || SessionEditorWindow::new().map_err(AppError::from_error),
                 |w| prep_tool_window!(w),
                 |w| wire_session_editor_window(w, Rc::clone(&runtime)),
-                |w, p, m| sync_session_editor(w, p, m),
+                sync_session_editor,
                 projection,
                 main,
             )?,
@@ -317,7 +315,7 @@ impl DialogWindowManager {
                 || FolderEditorWindow::new().map_err(AppError::from_error),
                 |w| prep_tool_window!(w),
                 |w| wire_folder_editor_window(w, Rc::clone(&runtime)),
-                |w, p, m| sync_folder_editor(w, p, m),
+                sync_folder_editor,
                 projection,
                 main,
             )?,
@@ -345,7 +343,7 @@ impl DialogWindowManager {
                 || PrivateKeysWindow::new().map_err(AppError::from_error),
                 |w| prep_tool_window!(w),
                 |w| wire_private_keys_window(w, Rc::clone(&runtime)),
-                |w, p, m| sync_private_keys(w, p, m),
+                sync_private_keys,
                 projection,
                 main,
             )?,
@@ -359,7 +357,7 @@ impl DialogWindowManager {
                 || ProxiesWindow::new().map_err(AppError::from_error),
                 |w| prep_tool_window!(w),
                 |w| wire_proxies_window(w, Rc::clone(&runtime)),
-                |w, p, m| sync_proxies(w, p, m),
+                sync_proxies,
                 projection,
                 main,
             )?,
@@ -373,7 +371,7 @@ impl DialogWindowManager {
                 || ThemeManagerWindow::new().map_err(AppError::from_error),
                 |w| prep_tool_window!(w),
                 |w| wire_theme_manager_window(w, Rc::clone(&runtime)),
-                |w, p, m| sync_theme_manager(w, p, m),
+                sync_theme_manager,
                 projection,
                 main,
             )?,
@@ -387,7 +385,7 @@ impl DialogWindowManager {
                 || HostKeysWindow::new().map_err(AppError::from_error),
                 |w| prep_tool_window!(w),
                 |w| wire_host_keys_window(w, Rc::clone(&runtime), host.clone()),
-                |w, p, m| sync_host_keys(w, p, m),
+                sync_host_keys,
                 projection,
                 main,
             )?,
@@ -401,7 +399,7 @@ impl DialogWindowManager {
                 || LoggingWindow::new().map_err(AppError::from_error),
                 |w| prep_tool_window!(w),
                 |w| wire_logging_window(w, Rc::clone(&runtime)),
-                |w, p, m| sync_logging(w, p, m),
+                sync_logging,
                 projection,
                 main,
             )?,
@@ -415,7 +413,7 @@ impl DialogWindowManager {
                 || PasswordPromptWindow::new().map_err(AppError::from_error),
                 |w| prep_tool_window!(w),
                 |w| wire_password_prompt_window(w, Rc::clone(&runtime)),
-                |w, p, m| sync_password(w, p, m),
+                sync_password,
                 projection,
                 main,
             )?,
@@ -429,7 +427,7 @@ impl DialogWindowManager {
                 || AuthPromptWindow::new().map_err(AppError::from_error),
                 |w| prep_tool_window!(w),
                 |w| wire_auth_prompt_window(w, Rc::clone(&runtime)),
-                |w, p, m| sync_auth(w, p, m),
+                sync_auth,
                 projection,
                 main,
             )?,
@@ -484,7 +482,12 @@ impl DialogWindowManager {
         Ok(())
     }
 
-    fn sync_about(&mut self, projection: &AppProjection, main: Option<&MainWindow>, owner_id: Option<u64>) -> AppResult<()> {
+    fn sync_about(
+        &mut self,
+        projection: &AppProjection,
+        main: Option<&MainWindow>,
+        owner_id: Option<u64>,
+    ) -> AppResult<()> {
         if self.local.about {
             if self.about.is_none() {
                 let window = AboutWindow::new().map_err(AppError::from_error)?;
@@ -665,7 +668,9 @@ impl DialogWindowManager {
                 confirm_label: "Close".into(),
                 destructive: true,
                 show_dont_ask: true,
-                dont_ask: main.map(|w| w.get_close_confirm_dont_ask_again()).unwrap_or(false),
+                dont_ask: main
+                    .map(|w| w.get_close_confirm_dont_ask_again())
+                    .unwrap_or(false),
             });
         }
         if projection.close_window_confirm_visible {
@@ -782,7 +787,11 @@ impl DialogWindowManager {
         }
     }
 
-    fn wire_confirm(&self, window: &CompactConfirmWindow, window_runtime: Option<Rc<WindowRuntime>>) {
+    fn wire_confirm(
+        &self,
+        window: &CompactConfirmWindow,
+        window_runtime: Option<Rc<WindowRuntime>>,
+    ) {
         let host = self.host.clone();
         let wr = window_runtime.clone();
         window.on_confirmed(move || {
@@ -1012,7 +1021,8 @@ impl DialogWindowManager {
             crate::win_chrome::set_window_enabled(owner.window(), false);
             self.modal_owner_id.set(owner_id);
         }
-        self.modal_depth.set(self.modal_depth.get().saturating_add(1));
+        self.modal_depth
+            .set(self.modal_depth.get().saturating_add(1));
     }
 
     pub(crate) fn end_modal(&self) {
@@ -1069,6 +1079,9 @@ enum ModalAction {
     Hide,
 }
 
+// A dialog pipeline has one parameter per stage (create / prep / wire / sync /
+// projection / main); bundling them into a struct would only hide the coupling.
+#[allow(clippy::too_many_arguments)]
 fn sync_projection_tool<W, Create, Prep, Wire, SyncProps>(
     want: bool,
     shown: &mut bool,
@@ -1111,7 +1124,10 @@ where
     Ok(ModalAction::None)
 }
 
-fn wire_session_editor_window(window: &SessionEditorWindow, runtime: Rc<RefCell<crate::runtime::AppRuntime>>) {
+fn wire_session_editor_window(
+    window: &SessionEditorWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+) {
     wire_tool_title_drag!(window);
     let rt = Rc::clone(&runtime);
     window.on_dismiss(move || {
@@ -1126,17 +1142,26 @@ fn wire_session_editor_window(window: &SessionEditorWindow, runtime: Rc<RefCell<
     });
 }
 
-fn wire_folder_editor_window(window: &FolderEditorWindow, runtime: Rc<RefCell<crate::runtime::AppRuntime>>) {
+fn wire_folder_editor_window(
+    window: &FolderEditorWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+) {
     wire_tool_title_drag!(window);
     wire_tool_on_close!(window, runtime, |r| r.close_folder_editor());
 }
 
-fn wire_known_hosts_window(window: &KnownHostsWindow, runtime: Rc<RefCell<crate::runtime::AppRuntime>>) {
+fn wire_known_hosts_window(
+    window: &KnownHostsWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+) {
     wire_tool_title_drag!(window);
     wire_tool_on_close!(window, runtime, |r| r.close_known_hosts_manager());
 }
 
-fn wire_private_keys_window(window: &PrivateKeysWindow, runtime: Rc<RefCell<crate::runtime::AppRuntime>>) {
+fn wire_private_keys_window(
+    window: &PrivateKeysWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+) {
     wire_tool_title_drag!(window);
     wire_tool_on_close!(window, runtime, |r| r.close_private_keys_manager());
     let rt = Rc::clone(&runtime);
@@ -1158,7 +1183,10 @@ fn wire_proxies_window(window: &ProxiesWindow, runtime: Rc<RefCell<crate::runtim
     });
 }
 
-fn wire_theme_manager_window(window: &ThemeManagerWindow, runtime: Rc<RefCell<crate::runtime::AppRuntime>>) {
+fn wire_theme_manager_window(
+    window: &ThemeManagerWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+) {
     wire_tool_title_drag!(window);
     wire_tool_on_close!(window, runtime, |r| r.close_theme_manager());
     let rt = Rc::clone(&runtime);
@@ -1229,7 +1257,10 @@ fn wire_password_prompt_window(
     });
 }
 
-fn wire_auth_prompt_window(window: &AuthPromptWindow, runtime: Rc<RefCell<crate::runtime::AppRuntime>>) {
+fn wire_auth_prompt_window(
+    window: &AuthPromptWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+) {
     wire_tool_title_drag!(window);
     let rt = Rc::clone(&runtime);
     window.on_cancel(move || {
@@ -1267,7 +1298,10 @@ fn wire_host_key_window(window: &HostKeyWindow, runtime: Rc<RefCell<crate::runti
     });
 }
 
-fn wire_sftp_conflict_window(window: &SftpConflictWindow, runtime: Rc<RefCell<crate::runtime::AppRuntime>>) {
+fn wire_sftp_conflict_window(
+    window: &SftpConflictWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+) {
     wire_tool_title_drag!(window);
     let rt = Rc::clone(&runtime);
     window.on_canceled(move || {
@@ -1584,12 +1618,12 @@ fn sync_settings_from(
         );
         settings.set_appearance_font_index(main.get_settings_appearance_font_index());
         settings.set_appearance_font_size_text(main.get_settings_appearance_font_size_text());
-        settings.set_appearance_fallback_fonts_text(
-            main.get_settings_appearance_fallback_fonts_text(),
-        );
+        settings
+            .set_appearance_fallback_fonts_text(main.get_settings_appearance_fallback_fonts_text());
         settings.set_appearance_status_text(main.get_settings_appearance_status_text());
         settings.set_appearance_preview(main.get_settings_appearance_preview());
-        settings.set_appearance_preview_background(main.get_settings_appearance_preview_background());
+        settings
+            .set_appearance_preview_background(main.get_settings_appearance_preview_background());
     }
     settings.set_confirm_close_session_enabled(projection.settings_confirm_close_session);
     settings.set_confirm_quit_app_enabled(projection.settings_confirm_quit_app);

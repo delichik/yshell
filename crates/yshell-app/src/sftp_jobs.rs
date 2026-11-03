@@ -333,10 +333,7 @@ impl TransferLimiter {
     fn acquire(&self) {
         let mut state = self.state.lock().expect("transfer limiter poisoned");
         while state.in_flight >= state.limit {
-            state = self
-                .changed
-                .wait(state)
-                .expect("transfer limiter poisoned");
+            state = self.changed.wait(state).expect("transfer limiter poisoned");
         }
         state.in_flight += 1;
     }
@@ -357,7 +354,11 @@ impl TransferLimiter {
 /// returned so the UI thread can change the limit at runtime.
 pub fn start_sftp_job_worker_with_limit(
     limit: usize,
-) -> (Sender<SftpJob>, Receiver<SftpJobMessage>, Arc<TransferLimiter>) {
+) -> (
+    Sender<SftpJob>,
+    Receiver<SftpJobMessage>,
+    Arc<TransferLimiter>,
+) {
     let (job_tx, job_rx) = std::sync::mpsc::channel::<SftpJob>();
     let (msg_tx, msg_rx) = std::sync::mpsc::channel::<SftpJobMessage>();
     let shared_rx = Arc::new(Mutex::new(job_rx));
@@ -933,11 +934,7 @@ pub(crate) fn delete_remote_entry<B: yshell_sftp::SftpBackend>(
 }
 
 fn remote_exists(client: &mut SftpClient<yshell_sftp::RealSftpBackend>, path: &str) -> bool {
-    client
-        .entry_kind(path)
-        .ok()
-        .flatten()
-        .is_some()
+    client.entry_kind(path).ok().flatten().is_some()
 }
 
 fn unique_remote_path(client: &mut SftpClient<yshell_sftp::RealSftpBackend>, path: &str) -> String {
@@ -990,7 +987,7 @@ mod tests {
     use std::{path::PathBuf, sync::atomic::AtomicBool, sync::Arc};
 
     use tempfile::tempdir;
-    use yshell_sftp::{InMemorySftpBackend, FsEntry, SftpClient, TreeTransferOptions};
+    use yshell_sftp::{FsEntry, InMemorySftpBackend, SftpClient, TreeTransferOptions};
     use yshell_ssh::SshConnectionConfig;
 
     use super::{

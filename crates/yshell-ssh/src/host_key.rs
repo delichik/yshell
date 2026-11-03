@@ -23,7 +23,9 @@ pub enum HostKeyDecision {
     /// 兼容保留：产品决定（2026-09-27）后不再有静默 pin 新密钥的路径，
     /// `TrustOnFirstUse` 首次连接也必须由用户确认（见 `KnownHosts::verify`）。
     PinNewKey,
-    Rejected { expected: HostKeyFingerprint },
+    Rejected {
+        expected: HostKeyFingerprint,
+    },
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

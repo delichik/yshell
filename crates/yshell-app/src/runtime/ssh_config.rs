@@ -102,7 +102,8 @@ impl AppRuntime {
         // （`<session_id>-proxy` 或悬空引用）分开呈现；legacy 保持只读但可连接。
         if let Some(proxy_id) = resolved.session.proxy_profile_id.as_deref() {
             draft.proxy_profile_id = Some(proxy_id.to_owned());
-            if resolved.proxy.is_some() && !is_legacy_proxy_profile_id(&resolved.session.id, proxy_id)
+            if resolved.proxy.is_some()
+                && !is_legacy_proxy_profile_id(&resolved.session.id, proxy_id)
             {
                 draft.proxy_mode = EditorProxyMode::Managed;
             } else {
@@ -568,9 +569,7 @@ impl AppRuntime {
             })
         } else {
             Err(AppError::new(if startup_snippet.is_empty() {
-                format!(
-                    "auth test for {host_label} did not establish a live shell"
-                )
+                format!("auth test for {host_label} did not establish a live shell")
             } else {
                 format!(
                     "auth test for {host_label} did not establish a live shell. Startup: {startup_snippet}"
@@ -647,10 +646,7 @@ pub(crate) fn tunnel_forward_summary_body(forward: &TunnelForward) -> String {
         TunnelForwardKind::Dynamic => format!("{}:{}", forward.bind_host, forward.bind_port),
         TunnelForwardKind::Local | TunnelForwardKind::Remote => format!(
             "{}:{} -> {}:{}",
-            forward.bind_host,
-            forward.bind_port,
-            forward.target_host,
-            forward.target_port
+            forward.bind_host, forward.bind_port, forward.target_host, forward.target_port
         ),
     }
 }

@@ -63,11 +63,9 @@ fn hwnd_of(window: &slint::Window) -> Option<windows_sys::Win32::Foundation::HWN
 
 #[cfg(windows)]
 fn attach_owned_popup_windows(aux: &slint::Window, owner: &slint::Window) {
-    use slint::winit_030::WinitWindowAccessor;
     use slint::winit_030::winit::platform::windows::WindowExtWindows;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GWLP_HWNDPARENT, SetWindowLongPtrW,
-    };
+    use slint::winit_030::WinitWindowAccessor;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{SetWindowLongPtrW, GWLP_HWNDPARENT};
 
     let Some(owner_hwnd) = hwnd_of(owner) else {
         return;
@@ -89,8 +87,8 @@ fn attach_owned_popup_windows(aux: &slint::Window, owner: &slint::Window) {
 
 #[cfg(windows)]
 fn set_window_enabled_windows(window: &slint::Window, enabled: bool) {
-    use slint::winit_030::WinitWindowAccessor;
     use slint::winit_030::winit::platform::windows::WindowExtWindows;
+    use slint::winit_030::WinitWindowAccessor;
 
     let _ = window.with_winit_window(|winit_window| {
         winit_window.set_enable(enabled);
@@ -99,8 +97,8 @@ fn set_window_enabled_windows(window: &slint::Window, enabled: bool) {
 
 /// 在创建任何窗口之前选定 winit 后端，并关掉默认的窗口透明。
 ///
-/// Slint winit 默认 `WindowAttributes::with_transparent(true)`。Windows 上无框
-/// + DWM 圆角时，顶边会出现一条透到桌面的细缝（自绘标题栏/菜单栏上方）。
+/// Slint winit 默认 `WindowAttributes::with_transparent(true)`；Windows 上无框 + DWM
+/// 圆角时，顶边会出现一条透到桌面的细缝（自绘标题栏/菜单栏上方）。
 /// Slint 只在原生 `MenuBar` 时自动关透明；我们用自绘顶栏，需显式关掉。
 /// 见 <https://github.com/slint-ui/slint/issues/7730>。
 ///
@@ -181,7 +179,7 @@ pub fn start_native_window_move(window: &slint::Window) {
     use windows_sys::Win32::Foundation::{HWND, POINT};
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetCursorPos, HTCAPTION, SendMessageW, WM_NCLBUTTONDOWN,
+        GetCursorPos, SendMessageW, HTCAPTION, WM_NCLBUTTONDOWN,
     };
 
     let _ = window.with_winit_window(|winit_window| {
@@ -224,8 +222,8 @@ unsafe fn restore_maximized_for_drag(
 ) {
     use windows_sys::Win32::Foundation::RECT;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetWindowRect, IsZoomed, SW_RESTORE, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
-        ShowWindow,
+        GetWindowRect, IsZoomed, SetWindowPos, ShowWindow, SWP_NOACTIVATE, SWP_NOSIZE,
+        SWP_NOZORDER, SW_RESTORE,
     };
 
     if IsZoomed(hwnd) == 0 {
@@ -302,19 +300,27 @@ mod tests {
     fn restore_origin_keeps_grab_point_under_cursor() {
         // 1920 宽最大化窗口，光标在中心 → 1440 宽还原窗口中心仍在光标下；
         // 纵向保留按下点距窗口顶边的距离。
-        assert_eq!(restored_drag_origin((960, 30), 0, 1920, 20, 1440), (240, 10));
+        assert_eq!(
+            restored_drag_origin((960, 30), 0, 1920, 20, 1440),
+            (240, 10)
+        );
     }
 
     #[test]
     fn restore_origin_clamps_relative_x() {
         // 光标越出右缘（极端时序）时按右缘的相对位置摆位，不把窗口甩到光标右侧。
-        assert_eq!(restored_drag_origin((2200, 40), 0, 1920, 20, 1000), (1200, 20));
+        assert_eq!(
+            restored_drag_origin((2200, 40), 0, 1920, 20, 1000),
+            (1200, 20)
+        );
     }
 
     #[test]
     fn restore_origin_ignores_window_left_offset() {
         // 最大化窗口从副屏 x=1920 开始：相对位置按窗口自身宽度计算。
-        assert_eq!(restored_drag_origin((2880, 50), 1920, 1920, 24, 1400), (2180, 26));
+        assert_eq!(
+            restored_drag_origin((2880, 50), 1920, 1920, 24, 1400),
+            (2180, 26)
+        );
     }
 }
-

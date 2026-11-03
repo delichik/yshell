@@ -1723,7 +1723,8 @@ pub struct AppProjection {
     pub settings_scrollback_lines_text: String,
     pub settings_scrollback_max_cells_text: String,
     /// Settings page field: max parallel SFTP transfers.
-    pub settings_sftp_max_parallel_transfers_text: String,    /// UI language preference: `system` / `zh-CN` / `en-US`.
+    pub settings_sftp_max_parallel_transfers_text: String,
+    /// UI language preference: `system` / `zh-CN` / `en-US`.
     pub settings_language_text: String,
     /// Whether process debug logs are written under `{config_dir}/logs`.
     pub settings_debug_logging_enabled: bool,

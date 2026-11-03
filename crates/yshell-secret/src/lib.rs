@@ -196,7 +196,10 @@ impl InMemoryEncryptedStore {
 
     #[must_use]
     pub fn encrypted_entries_snapshot(&self) -> HashMap<SecretRef, Vec<u8>> {
-        self.encrypted.lock().map(|entries| entries.clone()).unwrap_or_default()
+        self.encrypted
+            .lock()
+            .map(|entries| entries.clone())
+            .unwrap_or_default()
     }
 
     fn ensure_master(&self, master_password: &str) -> Result<(), SecretError> {

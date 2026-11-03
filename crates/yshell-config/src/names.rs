@@ -100,15 +100,11 @@ pub fn names_equal_ignore_case(left: &str, right: &str) -> bool {
 
 /// Returns whether `candidate` collides with any name in `existing` (case-insensitive).
 #[must_use]
-pub fn name_collides<'a>(
-    candidate: &str,
-    existing: impl IntoIterator<Item = &'a str>,
-) -> bool {
+pub fn name_collides<'a>(candidate: &str, existing: impl IntoIterator<Item = &'a str>) -> bool {
     existing
         .into_iter()
         .any(|name| names_equal_ignore_case(name, candidate))
 }
-
 
 #[cfg(test)]
 mod tests {

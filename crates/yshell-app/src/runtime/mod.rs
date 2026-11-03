@@ -60,8 +60,8 @@ pub(crate) use connection::PendingHostKeyPrompt;
 #[cfg(test)]
 pub(crate) use connection::PendingPasswordAuthMethod;
 pub(crate) use connection::PendingPasswordPrompt;
-pub(crate) use local_pane::LocalPaneState;
 pub(crate) use local_pane::local_crumbs_for;
+pub(crate) use local_pane::LocalPaneState;
 pub(crate) use projection::local_path_separator;
 pub(crate) use sessions::collect_session_inventory_lines;
 pub(crate) use sessions::find_session_folder_id;
@@ -73,8 +73,8 @@ pub(crate) use sftp::normalize_remote_path;
 #[cfg(test)]
 pub(crate) use sftp::parent_remote_path;
 pub(crate) use sftp::parse_sftp_permissions;
-pub(crate) use sftp::LiveSftpClient;
 pub use sftp::FileCrumbData;
+pub(crate) use sftp::LiveSftpClient;
 pub use sftp::SftpCrumbData;
 pub(crate) use sftp::SftpListingState;
 pub use sftp::SftpPaneProjection;

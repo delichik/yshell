@@ -723,23 +723,13 @@ impl AppRuntime {
                 self.set_status_kind("terminal-search-invalid", text, detail, String::new());
             }
             "prompt" => {
-                self.set_status_kind(
-                    "terminal-search-prompt",
-                    text,
-                    String::new(),
-                    String::new(),
-                );
+                self.set_status_kind("terminal-search-prompt", text, String::new(), String::new());
             }
             "empty" => {
                 self.set_status_kind("terminal-search-empty", text, query, String::new());
             }
             _ => {
-                self.set_status_kind(
-                    "terminal-search-found",
-                    text,
-                    query,
-                    count.to_string(),
-                );
+                self.set_status_kind("terminal-search-found", text, query, count.to_string());
             }
         }
     }

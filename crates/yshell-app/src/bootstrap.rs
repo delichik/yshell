@@ -1068,11 +1068,7 @@ pub(crate) fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_error_status(
-                &window,
-                "Could not update the MCP setting.",
-                &error,
-            ),
+            Err(error) => set_error_status(&window, "Could not update the MCP setting.", &error),
         }
     });
 
@@ -1083,7 +1079,10 @@ pub(crate) fn wire_callbacks(
         let Some(window) = weak.upgrade() else {
             return;
         };
-        match runtime_ref.borrow_mut().set_mcp_auto_approve_control(enabled) {
+        match runtime_ref
+            .borrow_mut()
+            .set_mcp_auto_approve_control(enabled)
+        {
             Ok(projection) => {
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
@@ -5724,10 +5723,16 @@ fn sftp_pane_data_from(pane: &crate::runtime::SftpPaneProjection) -> SftpPaneDat
         remote_edit_loading_text: pane.remote_edit_loading_text.clone().into(),
         spinner_phase: pane.spinner_phase,
         local_rows: ModelRc::new(VecModel::from(
-            pane.local_rows.iter().map(file_row_from).collect::<Vec<_>>(),
+            pane.local_rows
+                .iter()
+                .map(file_row_from)
+                .collect::<Vec<_>>(),
         )),
         local_crumbs: ModelRc::new(VecModel::from(
-            pane.local_crumbs.iter().map(sftp_crumb_from).collect::<Vec<_>>(),
+            pane.local_crumbs
+                .iter()
+                .map(sftp_crumb_from)
+                .collect::<Vec<_>>(),
         )),
         local_path_text: pane.local_path_text.clone().into(),
         local_path_separator: pane.local_path_separator.clone().into(),
@@ -5903,7 +5908,10 @@ fn apply_workspace_split_leaves(
         let handle: Option<std::rc::Rc<dyn Model<Data = WorkspacePaneLeaf>>> =
             current.clone().try_into().ok();
         if let Some(handle) = handle {
-            if let Some(model) = handle.as_any().downcast_ref::<VecModel<WorkspacePaneLeaf>>() {
+            if let Some(model) = handle
+                .as_any()
+                .downcast_ref::<VecModel<WorkspacePaneLeaf>>()
+            {
                 let structure_stable = (0..leaves.len()).all(|index| {
                     model
                         .row_data(index)
@@ -5954,7 +5962,10 @@ fn apply_workspace_split_splitters(
         let handle: Option<std::rc::Rc<dyn Model<Data = WorkspaceSplitter>>> =
             current.clone().try_into().ok();
         if let Some(handle) = handle {
-            if let Some(model) = handle.as_any().downcast_ref::<VecModel<WorkspaceSplitter>>() {
+            if let Some(model) = handle
+                .as_any()
+                .downcast_ref::<VecModel<WorkspaceSplitter>>()
+            {
                 let structure_stable = (0..splitters.len()).all(|index| {
                     model
                         .row_data(index)
@@ -6681,7 +6692,8 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_settings_mcp_auto_approve_control(projection.settings_mcp_auto_approve_control);
     window.set_settings_mcp_status_text(projection.settings_mcp_status_text.clone().into());
     window.set_settings_mcp_boundaries_text(projection.settings_mcp_boundaries_text.clone().into());
-    window.set_settings_mcp_host_config_text(projection.settings_mcp_host_config_text.clone().into());
+    window
+        .set_settings_mcp_host_config_text(projection.settings_mcp_host_config_text.clone().into());
     window.set_mcp_controlling(projection.mcp_controlling);
     window.set_settings_debug_log_dir_text(projection.settings_debug_log_dir_text.clone().into());
     window.set_settings_terminal_status_kind_text(

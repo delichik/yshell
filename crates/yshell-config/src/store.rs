@@ -159,9 +159,7 @@ impl ConfigStore {
             .map_err(ConfigStoreError::SessionTree)?;
         let mut catalog = KeyCatalog::new(self.keys_dir());
         catalog.replace_from_vec(document.keys.clone());
-        catalog
-            .write_all()
-            .map_err(ConfigStoreError::KeyCatalog)?;
+        catalog.write_all().map_err(ConfigStoreError::KeyCatalog)?;
         Ok(())
     }
 
@@ -491,13 +489,14 @@ secret_ref = "local://yshell/keys/key-1/material"
         )
         .expect("write legacy config");
 
-        let (outcome, warnings) = store
-            .load_or_recover_with_warnings()
-            .expect("load+migrate");
+        let (outcome, warnings) = store.load_or_recover_with_warnings().expect("load+migrate");
         assert!(outcome.recovered_from_backup.is_none());
         assert_eq!(outcome.document.folders.len(), 1);
         assert_eq!(outcome.document.folders[0].name, "Prod");
-        assert_eq!(outcome.document.folders[0].sessions[0].host, "web.example.test");
+        assert_eq!(
+            outcome.document.folders[0].sessions[0].host,
+            "web.example.test"
+        );
         assert_eq!(outcome.document.keys.len(), 1);
         assert_eq!(outcome.document.keys[0].label, "Work");
         assert!(temp.path().join("sessions/Prod/web.toml").exists());

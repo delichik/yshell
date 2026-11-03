@@ -168,7 +168,7 @@ impl WindowManager {
             let limit = runtime.config_document.ui.sftp_max_parallel_transfers;
             runtime.set_sftp_parallel_transfer_limit(limit);
         }
-        let dialog_host = crate::dialog_windows::DialogWindowManager::new(Rc::clone(&runtime));
+        let dialog_host = crate::dialog_windows::DialogWindowManager::create(Rc::clone(&runtime));
         let mcp_inbox = crate::mcp_server::McpInbox::new();
         // MCP is opt-in: clear any stale endpoint until Settings enables it.
         {
@@ -664,7 +664,9 @@ impl WindowManager {
                     );
                     runtime.set_status_kind(
                         "mcp-listener-ready",
-                        format!("MCP ready on 127.0.0.1:{port}. Point your AI host at yshell --mcp."),
+                        format!(
+                            "MCP ready on 127.0.0.1:{port}. Point your AI host at yshell --mcp."
+                        ),
                         port.to_string(),
                         String::new(),
                     );
@@ -822,11 +824,11 @@ impl WindowManager {
         let main = window_id
             .and_then(|id| self.windows.iter().find(|e| e.id == id).map(|e| &e.window))
             .or_else(|| self.windows.first().map(|e| &e.window));
-        if let Err(error) = self
-            .dialog_host
-            .borrow_mut()
-            .dialogs
-            .sync(&projection, main, window_id, window_runtime)
+        if let Err(error) =
+            self.dialog_host
+                .borrow_mut()
+                .dialogs
+                .sync(&projection, main, window_id, window_runtime)
         {
             tracing::warn!(target: "yshell::app", "dialog window sync failed: {error}");
         }

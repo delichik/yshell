@@ -528,7 +528,9 @@ impl AppRuntime {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 self.set_status_kind(
                     "sftp-remote-edit-canceled-gone",
-                    format!("Canceled remote edit for `{remote_path}`. Temp file was already gone."),
+                    format!(
+                        "Canceled remote edit for `{remote_path}`. Temp file was already gone."
+                    ),
                     remote_path,
                     String::new(),
                 );
@@ -1316,8 +1318,7 @@ impl AppRuntime {
                             && report.failed.is_empty()
                             && report.conflicts.is_empty();
                         // 计数明细只进 tracing；状态栏用 kind 模板 + 目标路径。
-                        let summary =
-                            tree_transfer_status_text(&report, direction, &destination);
+                        let summary = tree_transfer_status_text(&report, direction, &destination);
                         tracing::info!(target: "yshell::app", "{summary}");
                         let (kind, text) = match direction {
                             TransferDirection::Upload => (

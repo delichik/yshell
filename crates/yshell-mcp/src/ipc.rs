@@ -93,10 +93,7 @@ where
 }
 
 /// Client helper used by the stdio bridge (one request/response per TCP connect).
-pub fn call(
-    endpoint: &crate::EndpointInfo,
-    request: &IpcRequest,
-) -> Result<IpcResponse, IpcError> {
+pub fn call(endpoint: &crate::EndpointInfo, request: &IpcRequest) -> Result<IpcResponse, IpcError> {
     let stream = TcpStream::connect((endpoint.host.as_str(), endpoint.port))?;
     stream.set_nodelay(true)?;
     stream.set_read_timeout(Some(Duration::from_secs(600)))?;

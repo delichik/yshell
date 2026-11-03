@@ -9,7 +9,7 @@ use std::{
 
 use tempfile::TempDir;
 use yshell_sftp::{
-    InMemorySftpBackend, FsEntry, FsEntryKind, OverwritePolicy, RealSftpBackend, SftpBackend,
+    FsEntry, FsEntryKind, InMemorySftpBackend, OverwritePolicy, RealSftpBackend, SftpBackend,
     SftpClient, SftpErrorKind, TransferDirection, TransferItemKind, TransferProgress,
     TreeTransferOptions,
 };
@@ -54,7 +54,9 @@ fn upload_text(client: &mut SftpClient, remote: &str, contents: &str) {
 fn download_text(client: &SftpClient, remote: &str) -> String {
     let temp = TempDir::new().expect("tempdir");
     let local = temp.path().join("download.txt");
-    client.download_file(remote, &local).expect("download fake file");
+    client
+        .download_file(remote, &local)
+        .expect("download fake file");
     fs::read_to_string(&local).expect("read downloaded text")
 }
 
@@ -123,12 +125,16 @@ fn upload_tree_transfers_nested_tree_and_reports_progress() {
     assert!(events
         .iter()
         .all(|event| event.direction == TransferDirection::Upload));
-    assert!(events.iter().any(|event| event.kind == TransferItemKind::Dir));
+    assert!(events
+        .iter()
+        .any(|event| event.kind == TransferItemKind::Dir));
     let last = events.last().expect("progress events");
     assert_eq!(last.path, "/srv/data/sub/deep/c.txt");
     assert_eq!(last.bytes_done, 11);
     assert_eq!(last.bytes_total, 11);
-    assert!(events.windows(2).all(|pair| pair[0].bytes_done <= pair[1].bytes_done));
+    assert!(events
+        .windows(2)
+        .all(|pair| pair[0].bytes_done <= pair[1].bytes_done));
 }
 
 #[test]
@@ -175,7 +181,10 @@ fn upload_tree_overwrite_skip_ask_and_rename_policies() {
     assert!(report.conflicts.is_empty());
     assert_eq!(report.bytes_transferred, 5);
     // Every scanned item is accounted for: root + a.txt + blocked + y.txt + sub + b.txt.
-    assert_eq!(report.completed + report.skipped + report.failed.len() as u64, 6);
+    assert_eq!(
+        report.completed + report.skipped + report.failed.len() as u64,
+        6
+    );
     assert_eq!(download_text(&client, "/dest/a.txt"), "old-a");
     assert_eq!(download_text(&client, "/dest/blocked"), "old-file");
     assert_eq!(download_text(&client, "/dest/sub/b.txt"), "new-b");
@@ -461,7 +470,10 @@ fn download_tree_overwrite_skip_ask_and_rename_policies() {
     assert_eq!(report.completed, 4);
     assert_eq!(report.skipped, 0);
     assert!(report.failed.is_empty());
-    assert_eq!(fs::read_to_string(out.join("a.txt")).expect("read a"), "A-new");
+    assert_eq!(
+        fs::read_to_string(out.join("a.txt")).expect("read a"),
+        "A-new"
+    );
     assert_eq!(
         fs::read_to_string(out.join("blocked/y.txt")).expect("read y"),
         "Y"
@@ -484,7 +496,10 @@ fn download_tree_overwrite_skip_ask_and_rename_policies() {
     assert_eq!(report.skipped, 3); // a.txt + blocked + blocked/y.txt
     assert!(report.conflicts.is_empty());
     assert_eq!(report.bytes_transferred, 0);
-    assert_eq!(fs::read_to_string(out.join("a.txt")).expect("read a"), "A-old");
+    assert_eq!(
+        fs::read_to_string(out.join("a.txt")).expect("read a"),
+        "A-old"
+    );
     assert_eq!(
         fs::read_to_string(out.join("blocked")).expect("read blocked"),
         "local-file"
@@ -508,7 +523,10 @@ fn download_tree_overwrite_skip_ask_and_rename_policies() {
         report.conflicts,
         vec!["/src/a.txt".to_owned(), "/src/blocked".to_owned()]
     );
-    assert_eq!(report.completed + report.skipped + report.failed.len() as u64, 4);
+    assert_eq!(
+        report.completed + report.skipped + report.failed.len() as u64,
+        4
+    );
 
     // Rename: keep both sides.
     let temp = TempDir::new().expect("tempdir");
@@ -525,7 +543,10 @@ fn download_tree_overwrite_skip_ask_and_rename_policies() {
         .expect("download tree");
     assert_eq!(report.completed, 4);
     assert_eq!(report.skipped, 0);
-    assert_eq!(fs::read_to_string(out.join("a.txt")).expect("read a"), "A-old");
+    assert_eq!(
+        fs::read_to_string(out.join("a.txt")).expect("read a"),
+        "A-old"
+    );
     assert_eq!(
         fs::read_to_string(out.join("a (1).txt")).expect("read renamed a"),
         "A-new"
@@ -567,7 +588,10 @@ fn download_tree_records_missing_remote_content_and_continues() {
     assert_eq!(report.failed[0].0, "/src/bad.txt");
     assert!(report.failed[0].1.contains("no stored fake content"));
     assert_eq!(report.completed, 2); // output root + ok.txt
-    assert_eq!(fs::read_to_string(out.join("ok.txt")).expect("read ok"), "ok");
+    assert_eq!(
+        fs::read_to_string(out.join("ok.txt")).expect("read ok"),
+        "ok"
+    );
     assert!(!out.join("bad.txt").exists());
 }
 
@@ -684,7 +708,11 @@ fn remove_dir_only_removes_empty_directories() {
 
     client.delete("/srv/sub/a.txt").expect("delete file");
     client.remove_dir("/srv/sub").expect("remove empty dir");
-    assert!(client.list_dir("/srv").expect("list /srv").entries.is_empty());
+    assert!(client
+        .list_dir("/srv")
+        .expect("list /srv")
+        .entries
+        .is_empty());
 }
 
 #[test]
@@ -706,7 +734,11 @@ fn delete_many_and_chmod_many_report_each_item() {
         SftpErrorKind::NotFound
     );
     assert!(results[2].is_ok());
-    assert!(client.list_dir("/srv").expect("list /srv").entries.is_empty());
+    assert!(client
+        .list_dir("/srv")
+        .expect("list /srv")
+        .entries
+        .is_empty());
 
     upload_text(&mut client, "/srv/a.txt", "a");
     let results = client.chmod_many(&["/srv/a.txt".to_owned(), "/srv/missing".to_owned()], 0o600);
@@ -765,7 +797,10 @@ fn tree_transfer_rejects_renaming_the_transfer_root() {
         .expect_err("download root rename");
     assert_eq!(error.kind, SftpErrorKind::InvalidPath);
     assert!(error.message.contains("transfer root"));
-    assert_eq!(fs::read_to_string(&out).expect("read blocking root"), "file");
+    assert_eq!(
+        fs::read_to_string(&out).expect("read blocking root"),
+        "file"
+    );
 }
 
 #[test]

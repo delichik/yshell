@@ -57,7 +57,9 @@ fn debug_logging_setting_persists_and_creates_log_dir() {
         temp.path().join("logs").display().to_string()
     );
 
-    let enabled = runtime.set_debug_logging(true).expect("enable debug logging");
+    let enabled = runtime
+        .set_debug_logging(true)
+        .expect("enable debug logging");
     assert!(enabled.settings_debug_logging_enabled);
     assert!(enabled.status_text.contains("Debug logging enabled"));
     assert!(temp.path().join("logs").is_dir());
@@ -70,7 +72,9 @@ fn debug_logging_setting_persists_and_creates_log_dir() {
         .debug_logging;
     assert!(persisted);
 
-    let disabled = runtime.set_debug_logging(false).expect("disable debug logging");
+    let disabled = runtime
+        .set_debug_logging(false)
+        .expect("disable debug logging");
     assert!(!disabled.settings_debug_logging_enabled);
     assert!(disabled.status_text.contains("Debug logging disabled"));
 }

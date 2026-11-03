@@ -606,11 +606,10 @@ pub const SFTP_MAX_PARALLEL_TRANSFERS_MAX: usize = 16;
 /// Clamps a configured parallel-transfer count into the supported range.
 #[must_use]
 pub fn clamp_sftp_max_parallel_transfers(value: usize) -> usize {
-    value
-        .clamp(
-            SFTP_MAX_PARALLEL_TRANSFERS_MIN,
-            SFTP_MAX_PARALLEL_TRANSFERS_MAX,
-        )
+    value.clamp(
+        SFTP_MAX_PARALLEL_TRANSFERS_MIN,
+        SFTP_MAX_PARALLEL_TRANSFERS_MAX,
+    )
 }
 
 fn default_ui_language() -> String {
@@ -1605,7 +1604,10 @@ mod tests {
         let toml = document.to_toml_string().expect("serialize");
         let reparsed = ConfigDocument::from_toml_str(&toml).expect("parse");
         assert_eq!(reparsed.terminal, document.terminal);
-        assert!(reparsed.folders.is_empty(), "folders live on disk, not in config.toml");
+        assert!(
+            reparsed.folders.is_empty(),
+            "folders live on disk, not in config.toml"
+        );
     }
 
     #[test]

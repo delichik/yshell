@@ -44,7 +44,8 @@ pub fn write_endpoint(config_dir: &Path, info: &EndpointInfo) -> io::Result<Path
 pub fn load_endpoint(config_dir: &Path) -> io::Result<EndpointInfo> {
     let path = endpoint_path(config_dir);
     let bytes = fs::read(&path)?;
-    serde_json::from_slice(&bytes).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+    serde_json::from_slice(&bytes)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
 }
 
 pub fn clear_endpoint(config_dir: &Path) -> io::Result<()> {

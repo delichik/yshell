@@ -715,9 +715,10 @@ mod tests {
         // The crumbs mirror the remote ones: a root crumb plus one per segment.
         let crumbs = runtime.local_crumbs();
         assert!(!crumbs.is_empty());
-        assert_eq!(crumbs.last().map(|crumb| crumb.path.clone()), Some(
-            pane.display().to_string()
-        ));
+        assert_eq!(
+            crumbs.last().map(|crumb| crumb.path.clone()),
+            Some(pane.display().to_string())
+        );
         assert!(crumbs
             .iter()
             .all(|crumb| !crumb.label.is_empty() && !crumb.path.is_empty()));
@@ -726,9 +727,7 @@ mod tests {
         let separator = crate::runtime::local_path_separator();
         assert_eq!(separator, if cfg!(windows) { "\\" } else { "/" });
         if cfg!(windows) {
-            assert!(crumbs
-                .iter()
-                .any(|crumb| crumb.path.contains('\\')));
+            assert!(crumbs.iter().any(|crumb| crumb.path.contains('\\')));
         }
     }
 

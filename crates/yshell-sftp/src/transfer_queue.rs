@@ -187,12 +187,18 @@ mod tests {
             "b",
             None,
         ));
-        assert_eq!(queue.start_next().map(|task| task.id.as_str()), Some("running"));
+        assert_eq!(
+            queue.start_next().map(|task| task.id.as_str()),
+            Some("running")
+        );
 
         assert!(queue.pause("running").unwrap());
         assert_eq!(queue.tasks[0].status, TransferStatus::Paused);
         // A paused task is not handed out again by the runner.
-        assert_eq!(queue.start_next().map(|task| task.id.as_str()), Some("queued"));
+        assert_eq!(
+            queue.start_next().map(|task| task.id.as_str()),
+            Some("queued")
+        );
         assert!(!queue.pause("running").unwrap());
 
         assert!(queue.resume("running").unwrap());
@@ -214,13 +220,8 @@ mod tests {
     #[test]
     fn retry_is_capped_and_a_retried_task_can_fail_again() {
         let mut queue = TransferQueue::default();
-        let mut task = TransferTask::new(
-            "t1",
-            TransferDirection::Upload,
-            "a",
-            "/remote/a",
-            Some(100),
-        );
+        let mut task =
+            TransferTask::new("t1", TransferDirection::Upload, "a", "/remote/a", Some(100));
         task.max_retries = 2;
         queue.enqueue(task);
         queue.start_next();

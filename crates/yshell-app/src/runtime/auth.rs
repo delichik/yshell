@@ -260,12 +260,7 @@ impl AppRuntime {
                 self.set_status_kind("known-hosts-selected", text, host_text, String::new());
             }
             "empty" => {
-                self.set_status_kind(
-                    "known-hosts-empty",
-                    text,
-                    String::new(),
-                    String::new(),
-                );
+                self.set_status_kind("known-hosts-empty", text, String::new(), String::new());
             }
             _ => {
                 let total = self.known_hosts_selection_total().to_string();
@@ -1492,12 +1487,7 @@ impl AppRuntime {
                     String::new(),
                 );
                 self.ensure_private_keys_selection();
-                self.set_status_kind(
-                    "private-key-removed",
-                    text,
-                    removed.label,
-                    String::new(),
-                );
+                self.set_status_kind("private-key-removed", text, removed.label, String::new());
             }
             Err(error) => {
                 self.set_private_keys_status_kind(
@@ -1604,9 +1594,8 @@ impl AppRuntime {
             Ok(output) => {
                 self.private_keys_deploy_confirm_visible = false;
                 let exit_status = output.exit_status.to_string();
-                let text = format!(
-                    "Deploy command failed on {target} with exit status {exit_status}."
-                );
+                let text =
+                    format!("Deploy command failed on {target} with exit status {exit_status}.");
                 self.set_private_keys_status_kind(
                     "private-key-deploy-exit-failed",
                     text,

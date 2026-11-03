@@ -31,8 +31,7 @@ fn save_active_session_persists_minimal_profile() {
         "expected session file at {}",
         session_file.display()
     );
-    let config_body =
-        std::fs::read_to_string(runtime.config_store.config_file()).expect("config");
+    let config_body = std::fs::read_to_string(runtime.config_store.config_file()).expect("config");
     assert!(
         !config_body.contains("[[folders]]"),
         "sessions must not be inlined into config.toml"
@@ -85,9 +84,10 @@ fn saved_session_selection_rotates_and_opens_selected_profile() {
     assert!(previous
         .saved_session_selection_name_text
         .contains("one.example.test"));
+    assert!(previous.saved_session_inventory_rows_text.contains("> "));
     assert!(previous
         .saved_session_inventory_rows_text
-        .contains("> ops@one.example.test:2222"));
+        .contains("[one.example.test:2222]"));
 
     let opened = runtime
         .open_selected_saved_session()
@@ -117,15 +117,15 @@ fn session_tree_flattens_folders_and_sessions_in_display_order() {
             ("folder", 0, SAVED_SESSIONS_FOLDER_NAME),
             ("session", 1, "One"),
             ("folder", 1, "Prod"),
-            ("session", 2, "Prod DB"),
             ("session", 2, "Cache"),
+            ("session", 2, "Prod DB"),
         ]
     );
     // 文件夹 detail = 子树内可见会话数；会话 detail = user@host。
     assert_eq!(rows[0].detail, "3");
     assert_eq!(rows[2].detail, "2");
     assert_eq!(rows[1].detail, "one.example.test");
-    assert_eq!(rows[3].detail, "ops@db.example.test");
+    assert_eq!(rows[4].detail, "ops@db.example.test");
     assert!(rows
         .iter()
         .filter(|row| row.kind == "folder")
@@ -222,7 +222,7 @@ fn session_tree_search_keeps_hit_chains_and_folder_subtrees() {
         .collect::<Vec<_>>();
     assert_eq!(
         labels,
-        vec![SAVED_SESSIONS_FOLDER_NAME, "Prod", "Prod DB", "Cache"]
+        vec![SAVED_SESSIONS_FOLDER_NAME, "Prod", "Cache", "Prod DB"]
     );
     assert_eq!(folder_hit.session_tree_rows[0].detail, "2");
 

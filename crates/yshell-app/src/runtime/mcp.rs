@@ -24,17 +24,16 @@ pub enum McpConsentDecision {
 }
 
 /// Phase of the single global MCP control lock.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum McpControlPhase {
+    #[default]
     Idle,
-    AwaitingConsent { client_id: String },
-    Controlling { client_id: String },
-}
-
-impl Default for McpControlPhase {
-    fn default() -> Self {
-        Self::Idle
-    }
+    AwaitingConsent {
+        client_id: String,
+    },
+    Controlling {
+        client_id: String,
+    },
 }
 
 /// Reply channel for a pending `request_control`.
@@ -45,8 +44,12 @@ pub type McpControlReply = mpsc::Sender<Result<(), String>>;
 pub enum McpListenerStatus {
     #[default]
     Disabled,
-    Ready { port: u16 },
-    Failed { message: String },
+    Ready {
+        port: u16,
+    },
+    Failed {
+        message: String,
+    },
 }
 
 /// In-memory MCP control state owned by [`AppRuntime`].
@@ -287,14 +290,10 @@ impl AppRuntime {
                 return;
             }
             McpControlPhase::Controlling { .. } => {
-                let _ = reply.send(Err(
-                    "another client already holds AI control".to_owned()
-                ));
+                let _ = reply.send(Err("another client already holds AI control".to_owned()));
                 return;
             }
-            McpControlPhase::AwaitingConsent { client_id: waiting }
-                if waiting != &client_id =>
-            {
+            McpControlPhase::AwaitingConsent { client_id: waiting } if waiting != &client_id => {
                 let _ = reply.send(Err(
                     "another control request is waiting for the user".to_owned()
                 ));
@@ -343,9 +342,7 @@ impl AppRuntime {
                 },
             ),
             METHOD_LIST_SAVED => match self.mcp_list_saved_sessions() {
-                Ok(sessions) => {
-                    IpcResponse::ok(request.id, IpcResult::SavedSessions { sessions })
-                }
+                Ok(sessions) => IpcResponse::ok(request.id, IpcResult::SavedSessions { sessions }),
                 Err(error) => IpcResponse::err(request.id, "error", error.to_string()),
             },
             METHOD_LIST_CONNECTED | METHOD_LIST_SESSIONS => IpcResponse::ok(
@@ -843,7 +840,11 @@ fn mcp_encode_key_spec(spec: &str) -> AppResult<Vec<u8>> {
         return Err(AppError::new("key is required"));
     }
     let lower = raw.to_ascii_lowercase();
-    let parts: Vec<&str> = lower.split('+').map(str::trim).filter(|p| !p.is_empty()).collect();
+    let parts: Vec<&str> = lower
+        .split('+')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .collect();
     if parts.is_empty() {
         return Err(AppError::new("key is required"));
     }
@@ -936,9 +937,7 @@ mod tests {
         let mut runtime = AppRuntime::new(dir.path().to_path_buf()).expect("runtime");
         runtime.mcp_endpoint_token = Some("secret".into());
         runtime.set_mcp_enabled(true).expect("enable");
-        runtime
-            .set_mcp_auto_approve_control(true)
-            .expect("persist");
+        runtime.set_mcp_auto_approve_control(true).expect("persist");
         let (tx, rx) = mpsc::channel();
         runtime.mcp_begin_request_control("client-a".into(), tx);
         rx.recv().expect("reply").expect("granted");
@@ -1080,10 +1079,9 @@ mod tests {
         }
         session.mcp_output_watermark = Some(1);
         runtime.sessions.insert(key.clone(), session);
-        runtime.tabs.push(tabs::TabEntry::terminal(
-            "tab-mcp-out".into(),
-            key.clone(),
-        ));
+        runtime
+            .tabs
+            .push(tabs::TabEntry::terminal("tab-mcp-out".into(), key.clone()));
         let last = runtime
             .mcp_read_terminal_output("tab-mcp-out", OutputMode::LastLine, None)
             .expect("last");

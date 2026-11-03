@@ -182,10 +182,7 @@ impl SessionTreeStore {
                     .collect()
             }
         };
-        if name_collides(
-            &name,
-            sibling_names.iter().map(String::as_str),
-        ) {
+        if name_collides(&name, sibling_names.iter().map(String::as_str)) {
             return Err(NameError::Collision { name }.into());
         }
 
@@ -248,12 +245,7 @@ impl SessionTreeStore {
                     .iter()
                     .filter(|s| s.id != session_id)
                     .map(|s| s.name.as_str())
-                    .chain(
-                        folder
-                            .folders
-                            .iter()
-                            .map(|f| f.name.as_str()),
-                    )
+                    .chain(folder.folders.iter().map(|f| f.name.as_str()))
                     .collect()
             })
             .unwrap_or_default();
@@ -281,7 +273,7 @@ impl SessionTreeStore {
     /// Inserts a new session into `folder_id` in memory and on disk.
     pub fn add_session(
         &self,
-        folders: &mut Vec<FolderProfile>,
+        folders: &mut [FolderProfile],
         folder_id: &str,
         mut session: SessionProfile,
     ) -> Result<(), SessionTreeError> {
@@ -312,7 +304,7 @@ impl SessionTreeStore {
     /// Updates an existing session in memory and on disk.
     pub fn update_session(
         &self,
-        folders: &mut Vec<FolderProfile>,
+        folders: &mut [FolderProfile],
         session: SessionProfile,
     ) -> Result<(), SessionTreeError> {
         let session_id = session.id.clone();
@@ -335,7 +327,7 @@ impl SessionTreeStore {
     /// Removes a session from memory and deletes its file.
     pub fn delete_session(
         &self,
-        folders: &mut Vec<FolderProfile>,
+        folders: &mut [FolderProfile],
         session_id: &str,
     ) -> Result<SessionProfile, SessionTreeError> {
         let (folder_id, session) = find_session_with_parent(folders, session_id)
@@ -446,10 +438,12 @@ impl SessionTreeStore {
         let name = path
             .file_name()
             .and_then(|value| value.to_str())
-            .ok_or_else(|| SessionTreeError::Ambiguous(format!(
-                "folder path {} has a non-utf8 name",
-                path.display()
-            )))?
+            .ok_or_else(|| {
+                SessionTreeError::Ambiguous(format!(
+                    "folder path {} has a non-utf8 name",
+                    path.display()
+                ))
+            })?
             .to_owned();
         let name = validate_entry_name(&name)?;
         let meta_path = path.join(FOLDER_META_FILE_NAME);
@@ -545,12 +539,9 @@ fn atomic_write_toml<T: Serialize>(path: &Path, value: &T) -> Result<(), Session
 }
 
 fn load_toml<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, String> {
-    let input = fs::read_to_string(path).map_err(|error| {
-        format!("failed to read {}: {error}", path.display())
-    })?;
-    toml::from_str(&input).map_err(|error| {
-        format!("failed to parse {}: {error}", path.display())
-    })
+    let input = fs::read_to_string(path)
+        .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+    toml::from_str(&input).map_err(|error| format!("failed to parse {}: {error}", path.display()))
 }
 
 fn synthesize_folder_id(name: &str) -> String {
@@ -666,7 +657,7 @@ fn find_session_with_parent<'a>(
     folders.iter().find_map(|folder| walk(folder, session_id))
 }
 
-fn remove_session(folders: &mut Vec<FolderProfile>, id: &str) -> Option<SessionProfile> {
+fn remove_session(folders: &mut [FolderProfile], id: &str) -> Option<SessionProfile> {
     for folder in folders.iter_mut() {
         if let Some(removed) = folder.remove_session(id) {
             return Some(removed);
@@ -709,15 +700,9 @@ mod tests {
         let temp = TempDir::new().expect("tempdir");
         let store = SessionTreeStore::new(temp.path());
         store.write_tree(&sample_tree()).expect("write");
-        assert!(temp
-            .path()
-            .join("sessions/Prod/.folder.toml")
-            .exists());
+        assert!(temp.path().join("sessions/Prod/.folder.toml").exists());
         assert!(temp.path().join("sessions/Prod/web.toml").exists());
-        assert!(temp
-            .path()
-            .join("sessions/Prod/Nested/api.toml")
-            .exists());
+        assert!(temp.path().join("sessions/Prod/Nested/api.toml").exists());
 
         let (loaded, warnings) = store.load();
         assert!(warnings.is_empty(), "{warnings:?}");
@@ -739,7 +724,10 @@ mod tests {
                 SessionProfile::new("saved-other", "WEB", "other.test"),
             )
             .expect_err("collision");
-        assert!(matches!(err, SessionTreeError::Name(NameError::Collision { .. })));
+        assert!(matches!(
+            err,
+            SessionTreeError::Name(NameError::Collision { .. })
+        ));
     }
 
     #[test]

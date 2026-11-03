@@ -150,7 +150,12 @@ fn settings_appearance_form_validates_and_persists() {
             .is_some_and(|label| label == "DejaVu Sans Mono"),
         "bundled DejaVu must remain a preset: {font_options:?}"
     );
-    assert_eq!(opened.settings_appearance_font_index, 0);
+    // 默认主字体随平台字体集而定；只要求索引落在选项范围内。
+    let font_index = opened.settings_appearance_font_index;
+    assert!(
+        (0..font_options.len() as i32).contains(&font_index),
+        "font index {font_index} out of range: {font_options:?}"
+    );
 
     let selected = runtime.select_settings_appearance_scheme("nord");
     assert_eq!(runtime.settings_appearance.color_scheme, "nord");
@@ -371,7 +376,10 @@ fn theme_manager_lists_builtin_and_user_themes_with_the_default_flagged() {
         .clone();
     assert!(user_id.starts_with("user-"));
     assert_eq!(cloned.theme_manager_user_count, 1);
-    assert_eq!(cloned.theme_manager_rows.len(), opened.theme_manager_rows.len() + 1);
+    assert_eq!(
+        cloned.theme_manager_rows.len(),
+        opened.theme_manager_rows.len() + 1
+    );
     let cloned_row = cloned
         .theme_manager_rows
         .iter()
@@ -493,7 +501,9 @@ fn theme_manager_clone_edit_and_delete_require_confirmation() {
     assert!(runtime.theme_catalog.contains_user(&user_id));
 
     runtime.request_delete_color_theme(&user_id);
-    let deleted = runtime.confirm_delete_color_theme().expect("delete confirmed");
+    let deleted = runtime
+        .confirm_delete_color_theme()
+        .expect("delete confirmed");
     assert!(!runtime.theme_catalog.contains_user(&user_id));
     assert!(!deleted
         .theme_manager_rows
@@ -512,8 +522,7 @@ fn theme_manager_delete_retargets_references_to_the_default() {
         AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
     runtime.open_theme_manager();
     runtime.clone_color_theme("nord").expect("clone");
-    let user_id = runtime
-        .theme_manager_selection_id();
+    let user_id = runtime.theme_manager_selection_id();
     runtime
         .apply_theme_manager_selection()
         .expect("apply cloned default");
@@ -659,8 +668,7 @@ fn folder_editor_three_state_round_trip() {
     assert!(opened
         .folder_editor_appearance_fields
         .iter()
-        .all(|field| field.key != "appearance.foreground"
-            && field.key != "appearance.background"));
+        .all(|field| field.key != "appearance.foreground" && field.key != "appearance.background"));
     let lines_row = opened
         .folder_editor_terminal_fields
         .iter()
@@ -730,8 +738,13 @@ fn folder_editor_validation_reports_translatable_status_kind() {
     runtime.folder_editor_field_action("terminal.scrollback_lines", ThemeFieldAction::SetExplicit);
 
     runtime.update_folder_editor_field("terminal.scrollback_lines", "not-a-number");
-    let rejected = runtime.save_folder_editor().expect("save returns a projection");
-    assert!(rejected.folder_editor_visible, "validation keeps editor open");
+    let rejected = runtime
+        .save_folder_editor()
+        .expect("save returns a projection");
+    assert!(
+        rejected.folder_editor_visible,
+        "validation keeps editor open"
+    );
     assert_eq!(
         rejected.folder_editor_status_kind_text,
         "folder-defaults-not-number"
@@ -742,7 +755,9 @@ fn folder_editor_validation_reports_translatable_status_kind() {
     );
 
     runtime.update_folder_editor_field("terminal.scrollback_lines", "999999999");
-    let rejected = runtime.save_folder_editor().expect("save returns a projection");
+    let rejected = runtime
+        .save_folder_editor()
+        .expect("save returns a projection");
     assert!(rejected.folder_editor_visible);
     assert_eq!(
         rejected.folder_editor_status_kind_text,
@@ -977,7 +992,9 @@ fn preview_lines_include_current_language_and_a_fixed_cjk_sample() {
     // Both languages keep the ASCII prompt/listing samples.
     for texts in [&english_text, &chinese_text] {
         assert!(
-            texts.iter().any(|line| line.contains("user@host:~$ ls --color")),
+            texts
+                .iter()
+                .any(|line| line.contains("user@host:~$ ls --color")),
             "missing ASCII prompt: {texts:?}"
         );
     }
@@ -1569,20 +1586,14 @@ fn folder_editor_choice_rows_feed_the_combo_box() {
     assert!(runtime.folder_editor.theme.color_scheme.explicit);
 
     // Logging format is the other Folder Editor choice row.
-    let format_row = folder_editor_row(
-        &opened.folder_editor_logging_fields,
-        "logging.format",
-    );
+    let format_row = folder_editor_row(&opened.folder_editor_logging_fields, "logging.format");
     assert_eq!(format_row.kind, "choice");
     assert_eq!(
         format_row.options,
         vec!["raw".to_owned(), "sanitized".to_owned()]
     );
     let selected = runtime.select_folder_editor_log_format_index(1);
-    let format_row = folder_editor_row(
-        &selected.folder_editor_logging_fields,
-        "logging.format",
-    );
+    let format_row = folder_editor_row(&selected.folder_editor_logging_fields, "logging.format");
     assert_eq!(format_row.selected, 1);
     assert_eq!(format_row.value, "sanitized");
 

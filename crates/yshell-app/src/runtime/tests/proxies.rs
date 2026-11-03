@@ -64,7 +64,10 @@ fn proxy_manager_create_edit_duplicate_delete() {
     let _ = runtime.update_proxy_editor_username("proxy-user");
     let _ = runtime.update_proxy_editor_password("proxy-secret");
     let projection = runtime.save_proxy_editor();
-    assert!(!projection.proxies_modal_visible, "Save closes the proxies dialog");
+    assert!(
+        !projection.proxies_modal_visible,
+        "Save closes the proxies dialog"
+    );
     assert_eq!(runtime.config_document.proxy_profiles.len(), 1);
     assert_eq!(projection.proxies_selected_index, 0);
     assert_eq!(projection.proxies_rows.len(), 1);
@@ -130,8 +133,7 @@ fn proxy_manager_create_edit_duplicate_delete() {
         .proxy_row_data()
         .iter()
         .position(|row| row.id == copy.id)
-        .expect("copy row")
-        as i32;
+        .expect("copy row") as i32;
     let _ = runtime.select_proxy(copy_index);
     let projection = runtime.request_proxy_remove();
     assert!(!projection.proxies_remove_blocked);
@@ -171,7 +173,10 @@ fn deleting_a_referenced_proxy_is_blocked_and_can_be_cleared_explicitly() {
     assert!(!projection.proxies_remove_confirm_visible);
     assert!(projection.proxies_referencing_text.contains("Prod"));
     assert!(projection.proxies_referencing_text.contains("Staging"));
-    assert_eq!(projection.proxies_status_kind_text, "proxies-remove-blocked");
+    assert_eq!(
+        projection.proxies_status_kind_text,
+        "proxies-remove-blocked"
+    );
     assert_eq!(projection.proxies_status_param_1_text, "Shared SOCKS");
     assert!(projection.proxies_status_param_2_text.contains("Prod"));
     assert!(projection.proxies_status_text.contains("Prod"));

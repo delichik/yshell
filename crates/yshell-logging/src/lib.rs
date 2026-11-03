@@ -16,10 +16,7 @@ use std::{
 use time::{error::IndeterminateOffset, OffsetDateTime};
 
 use tracing_subscriber::{
-    fmt as tracing_fmt,
-    fmt::writer::MakeWriter,
-    layer::SubscriberExt,
-    util::SubscriberInitExt,
+    fmt as tracing_fmt, fmt::writer::MakeWriter, layer::SubscriberExt, util::SubscriberInitExt,
     EnvFilter,
 };
 
@@ -195,7 +192,9 @@ pub fn init_tracing(config: &LoggingConfig) -> Result<(), InitLoggingError> {
 fn build_writer(config: &LoggingConfig) -> BoxMakeWriter {
     let file_state = config.file_directory.as_ref().map(|directory| {
         if let Some(existing) = DEBUG_LOG_STATE.get() {
-            existing.enabled.store(config.debug_enabled, Ordering::Release);
+            existing
+                .enabled
+                .store(config.debug_enabled, Ordering::Release);
             return Arc::clone(existing);
         }
         let state = Arc::new(DebugLogState {
@@ -915,7 +914,9 @@ mod tests {
             file: Mutex::new(None),
         };
 
-        state.write_all(b"hidden\n").expect("discard while disabled");
+        state
+            .write_all(b"hidden\n")
+            .expect("discard while disabled");
         assert!(!path.exists());
 
         state.enabled.store(true, Ordering::Release);
@@ -1052,10 +1053,7 @@ mod tests {
             hms_prefix(datetime!(2026-09-27 14:30:45 +08:00)),
             "[14:30:45]"
         );
-        assert_eq!(
-            hms_prefix(datetime!(2026-09-27 00:00:00 UTC)),
-            "[00:00:00]"
-        );
+        assert_eq!(hms_prefix(datetime!(2026-09-27 00:00:00 UTC)), "[00:00:00]");
         assert_eq!(
             hms_prefix(datetime!(2026-09-27 23:59:59 -07:00)),
             "[23:59:59]"
@@ -1263,10 +1261,7 @@ mod tests {
             .record(TranscriptDirection::Output, b"tail")
             .expect("record");
 
-        assert_eq!(
-            fs::read_to_string(&path).expect("read log"),
-            "output\ttail"
-        );
+        assert_eq!(fs::read_to_string(&path).expect("read log"), "output\ttail");
     }
 
     #[test]

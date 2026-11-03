@@ -1273,6 +1273,28 @@ export global TextFormats {
         if kind == "startup-recovered" {
             return @tr("MainWindow" => "Recovered configuration from backup. Saved sessions: {0}. Backup: {1}", param_1, param_2);
         }
+        // --- I18N-1：AI / MCP ---------------------------------------------------
+        if kind == "settings-mcp-enabled" {
+            return @tr("MainWindow" => "MCP enabled. Starting local endpoint…");
+        }
+        if kind == "settings-mcp-disabled" {
+            return @tr("MainWindow" => "MCP is off. AI hosts cannot connect until you enable it.");
+        }
+        if kind == "settings-mcp-auto-approve-enabled" {
+            return @tr("MainWindow" => "MCP control requests will be approved automatically.");
+        }
+        if kind == "settings-mcp-auto-approve-disabled" {
+            return @tr("MainWindow" => "MCP control requests will ask for confirmation.");
+        }
+        if kind == "mcp-control-granted" {
+            return @tr("MainWindow" => "AI control is active. Exit anytime from the status bar.");
+        }
+        if kind == "mcp-control-denied" {
+            return @tr("MainWindow" => "AI control request was denied.");
+        }
+        if kind == "mcp-control-exited" {
+            return @tr("MainWindow" => "AI control ended. The agent must request control again.");
+        }
         return fallback;
     }
 

@@ -7,8 +7,8 @@ use std::collections::VecDeque;
 use std::fmt;
 
 use yshell_ssh::{
-    channel::ShellSession, error::SshError, error::SshErrorKind, error::SshResult, pty::PtySize,
-    proxy::ProxyState, AuthMethod, ShellAdapter, SshConnectionConfig,
+    channel::ShellSession, error::SshError, error::SshErrorKind, error::SshResult,
+    proxy::ProxyState, pty::PtySize, AuthMethod, ShellAdapter, SshConnectionConfig,
 };
 
 /// Deterministic shell used by offline app unit tests.

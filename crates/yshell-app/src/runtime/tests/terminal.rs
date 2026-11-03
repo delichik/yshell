@@ -127,8 +127,8 @@ fn attach_shell_forces_viewport_pty_resync_even_when_config_matches() {
         pixel_width: 0,
         pixel_height: 0,
     };
-    let shell = yshell_test_support::TestShellSession::open_boxed(&stale_config)
-        .expect("open stale shell");
+    let shell =
+        yshell_test_support::TestShellSession::open_boxed(&stale_config).expect("open stale shell");
     {
         let session = runtime.sessions.get_mut(&session_key).expect("session");
         // Config already at viewport size; live shell is 80x24.
@@ -143,7 +143,9 @@ fn attach_shell_forces_viewport_pty_resync_even_when_config_matches() {
         .sync_active_terminal_size_passive(100, 40)
         .expect("post-attach sync")
         .expect("must push resize onto live shell");
-    assert!(forced.terminal_body_text.contains("test-shell resized to 100x40"));
+    assert!(forced
+        .terminal_body_text
+        .contains("test-shell resized to 100x40"));
     assert!(!runtime.sessions[&session_key].needs_pty_viewport_resync());
 
     let skipped = runtime

@@ -22,8 +22,8 @@ pub use schema::{
     FolderProfile, HostKeyPolicy, KeyProfile, LayoutProfile, LoggingProfile, NewTabMode, PanelId,
     PanelSide, PanelSlot, PrivateKeySource, ProxyProfile, ProxyProtocol, QuickConnectEntry,
     QuickConnectProfile, ResolvedSessionProfile, SessionBasicEdit, SessionProfile, SftpProfile,
-    TerminalProfile, TunnelForward, TunnelForwardKind, TunnelProfile, UiProfile,
-    SFTP_MAX_PARALLEL_TRANSFERS_MAX, SFTP_MAX_PARALLEL_TRANSFERS_MIN, SCHEMA_VERSION,
+    TerminalProfile, TunnelForward, TunnelForwardKind, TunnelProfile, UiProfile, SCHEMA_VERSION,
+    SFTP_MAX_PARALLEL_TRANSFERS_MAX, SFTP_MAX_PARALLEL_TRANSFERS_MIN,
 };
 pub use sessions::{SessionTreeError, SessionTreeStore, FOLDER_META_FILE_NAME, SESSIONS_DIR_NAME};
 pub use store::{ConfigStore, ConfigStoreError, LoadOutcome};

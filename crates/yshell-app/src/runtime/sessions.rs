@@ -269,6 +269,26 @@ impl AppRuntime {
         self.open_saved_session(&profile_id)
     }
 
+    /// 已保存会话所在目录的 id（用于同目录内的名称清洗与去重）。
+    fn saved_session_parent_folder_id(&self, session_id: &str) -> Option<String> {
+        fn walk(folders: &[FolderProfile], session_id: &str) -> Option<String> {
+            for folder in folders {
+                if folder
+                    .sessions
+                    .iter()
+                    .any(|session| session.id == session_id)
+                {
+                    return Some(folder.id.clone());
+                }
+                if let Some(found) = walk(&folder.folders, session_id) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        walk(&self.config_document.folders, session_id)
+    }
+
     pub fn update_selected_saved_session_from_active(&mut self) -> AppResult<AppProjection> {
         let profile_id = self
             .selected_saved_session_id
@@ -285,11 +305,18 @@ impl AppRuntime {
                 "local terminal sessions cannot update saved SSH sessions",
             ));
         }
-        let active_runtime = self
-            .sessions
-            .get(&session_key)
-            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
-        let updated = active_runtime.to_session_profile(profile_id.clone());
+        let mut updated = {
+            let active_runtime = self
+                .sessions
+                .get(&session_key)
+                .ok_or_else(|| AppError::new("active runtime session is missing"))?;
+            active_runtime.to_session_profile(profile_id.clone())
+        };
+        // 名称来自活动连接（如 `host:port`），落盘前按条目名规则清洗并在同目录内去重。
+        if let Some(folder_id) = self.saved_session_parent_folder_id(&profile_id) {
+            updated.name =
+                self.allocate_unique_session_name(&folder_id, &updated.name, Some(&profile_id))?;
+        }
         if self.config_document.find_session(&profile_id).is_none() {
             return Err(AppError::new(format!(
                 "saved session `{profile_id}` was not found"
@@ -692,8 +719,7 @@ impl AppRuntime {
                 .session_tree()
                 .ensure_folder(&self.config_document.folders, SAVED_SESSIONS_FOLDER_ID);
         } else {
-            let folder =
-                FolderProfile::new(SAVED_SESSIONS_FOLDER_ID, SAVED_SESSIONS_FOLDER_NAME);
+            let folder = FolderProfile::new(SAVED_SESSIONS_FOLDER_ID, SAVED_SESSIONS_FOLDER_NAME);
             let _ = self.config_store.session_tree().create_folder(
                 &mut self.config_document.folders,
                 None,

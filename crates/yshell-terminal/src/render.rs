@@ -220,10 +220,7 @@ impl FontFace {
     }
 
     /// Load a face from disk and annotate it with `style`.
-    pub fn from_file_with_style(
-        path: &Path,
-        style: FontFaceStyle,
-    ) -> Result<Self, FontFaceError> {
+    pub fn from_file_with_style(path: &Path, style: FontFaceStyle) -> Result<Self, FontFaceError> {
         let name = path.display().to_string();
         let bytes = std::fs::read(path)
             .map_err(|error| FontFaceError::new(name.clone(), io_reason(&error)))?;
@@ -457,7 +454,11 @@ fn bundled_font_faces() -> &'static BundledFontFaces {
             })
         };
         BundledFontFaces {
-            regular: load(FONT_REGULAR_FILE, FontFaceStyle::Regular, "DejaVu Sans Mono"),
+            regular: load(
+                FONT_REGULAR_FILE,
+                FontFaceStyle::Regular,
+                "DejaVu Sans Mono",
+            ),
             bold: Some(load(
                 FONT_BOLD_FILE,
                 FontFaceStyle::Bold,
@@ -1470,7 +1471,8 @@ fn blend_pixel_subpixel(
 
 /// Blend one sRGB channel in linear light to avoid washed/haloing AA on dark bg.
 fn blend_channel_linear(background: u8, foreground: u8, coverage: f32) -> u8 {
-    let mixed = srgb_to_linear(background) * (1.0 - coverage) + srgb_to_linear(foreground) * coverage;
+    let mixed =
+        srgb_to_linear(background) * (1.0 - coverage) + srgb_to_linear(foreground) * coverage;
     (linear_to_srgb(mixed) * 255.0).round().clamp(0.0, 255.0) as u8
 }
 
@@ -2613,10 +2615,13 @@ mod tests {
         assert!(set.has_dedicated_bold());
         assert!(set.resolve('A', GlyphStyle::default()).is_some());
         assert!(set
-            .resolve('A', GlyphStyle {
-                bold: true,
-                italic: false
-            })
+            .resolve(
+                'A',
+                GlyphStyle {
+                    bold: true,
+                    italic: false
+                }
+            )
             .is_some());
     }
 

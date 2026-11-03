@@ -67,9 +67,8 @@ export component TunnelPanel inherits Rectangle {
                 height: root.row-height;
                 border-radius: Theme.radius-control;
                 // 隔行底色用 `subtle-hover`（深浅两套主题都是 8% 叠加）：
-                // 之前用 `card-fill`，dark 是 #FFFFFF0D（几乎看不出）而 light 是
-                // #FFFFFFB3（70% 白）——两套主题观感完全相反，浅色下隔行底色
-                // 近乎纯白，压过了行内容。
+                // 之前用 `card-fill`，深浅两套主题观感完全相反：深色下几乎
+                // 看不出、浅色下近乎纯白，压过了行内容。
                 background: Math.mod(index, 2) == 0 ? transparent : Theme.subtle-hover;
 
                 VerticalLayout {

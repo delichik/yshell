@@ -12,9 +12,8 @@ use crate::ipc;
 use crate::protocol::{
     IpcRequest, IpcResult, OutputMode, MCP_BOUNDARIES_TEXT, METHOD_CONNECT_SAVED,
     METHOD_DISCONNECT_SESSION, METHOD_DUPLICATE_SESSION, METHOD_GET_MCP_INFO, METHOD_GET_SESSION,
-    METHOD_LIST_SAVED, METHOD_LIST_SESSIONS, METHOD_RELEASE_CONTROL,
-    METHOD_REQUEST_CONTROL, METHOD_SESSION_INPUT, METHOD_SESSION_OUTPUT, METHOD_SESSION_RUN,
-    METHOD_SESSION_SEND_KEY,
+    METHOD_LIST_SAVED, METHOD_LIST_SESSIONS, METHOD_RELEASE_CONTROL, METHOD_REQUEST_CONTROL,
+    METHOD_SESSION_INPUT, METHOD_SESSION_OUTPUT, METHOD_SESSION_RUN, METHOD_SESSION_SEND_KEY,
 };
 
 #[derive(Debug)]
@@ -63,17 +62,16 @@ pub fn run_stdio_server(config_dir: &Path) -> Result<(), StdioServerError> {
 
     let stdin = io::stdin();
     let mut stdout = io::stdout();
-    let mut lines = stdin.lock().lines();
+    let lines = stdin.lock().lines();
 
-    while let Some(line) = lines.next() {
+    for line in lines {
         let line = line?;
         let line = line.trim();
         if line.is_empty() {
             continue;
         }
-        let message: Value = serde_json::from_str(line).map_err(|error| {
-            StdioServerError::Protocol(format!("invalid MCP JSON: {error}"))
-        })?;
+        let message: Value = serde_json::from_str(line)
+            .map_err(|error| StdioServerError::Protocol(format!("invalid MCP JSON: {error}")))?;
         if message.get("method").and_then(Value::as_str) == Some("notifications/initialized")
             || message.get("method").and_then(Value::as_str) == Some("notifications/cancelled")
         {
@@ -118,13 +116,7 @@ pub fn run_stdio_server(config_dir: &Path) -> Result<(), StdioServerError> {
                     .get("arguments")
                     .cloned()
                     .unwrap_or_else(|| json!({}));
-                match dispatch_tool(
-                    &endpoint,
-                    &client_id,
-                    &next_id,
-                    name,
-                    &arguments,
-                ) {
+                match dispatch_tool(&endpoint, &client_id, &next_id, name, &arguments) {
                     Ok(value) => json!({
                         "jsonrpc": "2.0",
                         "id": id,
@@ -154,9 +146,12 @@ pub fn run_stdio_server(config_dir: &Path) -> Result<(), StdioServerError> {
             _ => continue,
         };
 
-        writeln!(stdout, "{}", serde_json::to_string(&response).map_err(|e| {
-            StdioServerError::Protocol(e.to_string())
-        })?)?;
+        writeln!(
+            stdout,
+            "{}",
+            serde_json::to_string(&response)
+                .map_err(|e| { StdioServerError::Protocol(e.to_string()) })?
+        )?;
         stdout.flush()?;
     }
     Ok(())

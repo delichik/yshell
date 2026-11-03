@@ -152,12 +152,7 @@ impl AppRuntime {
             count_text.clone(),
             String::new(),
         );
-        self.set_status_kind(
-            "proxies-opened",
-            status_text,
-            count_text,
-            String::new(),
-        );
+        self.set_status_kind("proxies-opened", status_text, count_text, String::new());
         self.projection()
     }
 
@@ -180,7 +175,10 @@ impl AppRuntime {
     /// Selects a list row (does not overwrite the edit form; use Edit for that).
     pub fn select_proxy(&mut self, index: i32) -> AppProjection {
         let rows = self.proxy_row_data();
-        let Some(row) = usize::try_from(index).ok().and_then(|index| rows.get(index)) else {
+        let Some(row) = usize::try_from(index)
+            .ok()
+            .and_then(|index| rows.get(index))
+        else {
             return self.projection();
         };
         self.proxies_selected_id = Some(row.id.clone());
@@ -487,7 +485,9 @@ impl AppRuntime {
         if let Err(error) = self.save_proxy_config() {
             match previous {
                 Some(previous) => {
-                    self.config_document.proxy_profiles.insert(id.clone(), previous);
+                    self.config_document
+                        .proxy_profiles
+                        .insert(id.clone(), previous);
                 }
                 None => {
                     self.config_document.proxy_profiles.remove(&id);
@@ -594,12 +594,7 @@ impl AppRuntime {
                     removed.name.clone(),
                     String::new(),
                 );
-                self.set_status_kind(
-                    "proxies-deleted",
-                    status_text,
-                    removed.name,
-                    String::new(),
-                );
+                self.set_status_kind("proxies-deleted", status_text, removed.name, String::new());
             }
             Err(error) => {
                 self.set_proxies_status_kind(
@@ -618,17 +613,12 @@ impl AppRuntime {
         let Some(profile) = self.selected_proxy_profile() else {
             return self.projection();
         };
-        let cleared = clear_proxy_from_sessions(
-            &mut self.config_document.folders,
-            profile.id.as_str(),
-        );
+        let cleared =
+            clear_proxy_from_sessions(&mut self.config_document.folders, profile.id.as_str());
         if cleared == 0 {
             self.set_proxies_status_kind(
                 "proxies-no-references",
-                format!(
-                    "No saved session references `{}` anymore.",
-                    profile.name
-                ),
+                format!("No saved session references `{}` anymore.", profile.name),
                 profile.name,
                 String::new(),
             );
@@ -813,12 +803,7 @@ impl AppRuntime {
                     report.remote, report.elapsed_ms, report.detail
                 );
                 self.proxies_test_result_text = status_text.clone();
-                self.set_proxies_status_kind(
-                    "proxies-test-passed",
-                    status_text,
-                    param_1,
-                    param_2,
-                );
+                self.set_proxies_status_kind("proxies-test-passed", status_text, param_1, param_2);
             }
             Err(error) => {
                 let status_text = format!("Test failed: {error}");
@@ -944,11 +929,7 @@ impl AppRuntime {
         let mut next = self.config_document.proxy_profiles.len() + 1;
         loop {
             let candidate = format!("proxy-{next}");
-            if !self
-                .config_document
-                .proxy_profiles
-                .contains_key(&candidate)
-            {
+            if !self.config_document.proxy_profiles.contains_key(&candidate) {
                 return candidate;
             }
             next += 1;

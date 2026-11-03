@@ -286,23 +286,12 @@ pub fn allocate_user_theme_id(existing: &BTreeMap<String, ColorTheme>) -> String
 }
 
 fn load_theme_file(path: &Path) -> Result<ColorTheme, String> {
-    let input = fs::read_to_string(path).map_err(|error| {
-        format!(
-            "failed to read theme {}: {error}",
-            path.display()
-        )
-    })?;
-    let theme: ColorTheme = toml::from_str(&input).map_err(|error| {
-        format!(
-            "failed to parse theme {}: {error}",
-            path.display()
-        )
-    })?;
+    let input = fs::read_to_string(path)
+        .map_err(|error| format!("failed to read theme {}: {error}", path.display()))?;
+    let theme: ColorTheme = toml::from_str(&input)
+        .map_err(|error| format!("failed to parse theme {}: {error}", path.display()))?;
     if theme.id.trim().is_empty() {
-        return Err(format!(
-            "theme file {} has an empty id",
-            path.display()
-        ));
+        return Err(format!("theme file {} has an empty id", path.display()));
     }
     Ok(theme)
 }
@@ -373,7 +362,10 @@ mod tests {
             .save_user(sample_theme("user-a", "Old"))
             .expect("save");
         catalog.rename_user("user-a", "New").expect("rename");
-        assert_eq!(catalog.get_user("user-a").map(|t| t.name.as_str()), Some("New"));
+        assert_eq!(
+            catalog.get_user("user-a").map(|t| t.name.as_str()),
+            Some("New")
+        );
         catalog.delete_user("user-a").expect("delete");
         assert!(!catalog.contains_user("user-a"));
         assert!(!temp.path().join("themes/user-a.toml").exists());

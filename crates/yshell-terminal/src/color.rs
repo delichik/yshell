@@ -142,6 +142,9 @@ mod tests {
         assert_eq!(TerminalColor::indexed(1), TerminalColor::RED);
         assert_eq!(TerminalColor::indexed(196), TerminalColor::rgb(255, 0, 0));
         assert_eq!(TerminalColor::indexed(232), TerminalColor::rgb(8, 8, 8));
-        assert_eq!(TerminalColor::indexed(255), TerminalColor::rgb(238, 238, 238));
+        assert_eq!(
+            TerminalColor::indexed(255),
+            TerminalColor::rgb(238, 238, 238)
+        );
     }
 }

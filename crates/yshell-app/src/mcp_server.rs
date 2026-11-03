@@ -81,9 +81,8 @@ impl McpInbox {
                         continue;
                     }
                     if !runtime.mcp_enabled() {
-                        let _ = reply.send(Err(
-                            "MCP is disabled in Settings → AI / MCP".to_owned()
-                        ));
+                        let _ =
+                            reply.send(Err("MCP is disabled in Settings → AI / MCP".to_owned()));
                         continue;
                     }
                     runtime.mcp_begin_request_control(client_id, reply);
@@ -131,10 +130,7 @@ pub fn start_mcp_server(
     inbox: McpInbox,
 ) -> AppResult<McpServerHandle> {
     let listener = TcpListener::bind(("127.0.0.1", 0)).map_err(AppError::from_error)?;
-    let port = listener
-        .local_addr()
-        .map_err(AppError::from_error)?
-        .port();
+    let port = listener.local_addr().map_err(AppError::from_error)?.port();
     let info = EndpointInfo::loopback(port, endpoint_token);
     write_endpoint(&config_dir, &info).map_err(AppError::from_error)?;
 
@@ -231,10 +227,7 @@ fn dispatch_via_inbox(inbox: &McpInbox, request: IpcRequest) -> IpcResponse {
 
     let (tx, rx) = mpsc::channel();
     let id = request.id;
-    inbox.push(McpJob::Handle {
-        request,
-        reply: tx,
-    });
+    inbox.push(McpJob::Handle { request, reply: tx });
     rx.recv()
         .unwrap_or_else(|_| IpcResponse::err(id, "unavailable", "MCP UI dispatch failed"))
 }
@@ -242,10 +235,7 @@ fn dispatch_via_inbox(inbox: &McpInbox, request: IpcRequest) -> IpcResponse {
 fn sync_handle(inbox: &McpInbox, request: IpcRequest) -> IpcResponse {
     let (tx, rx) = mpsc::channel();
     let id = request.id;
-    inbox.push(McpJob::Handle {
-        request,
-        reply: tx,
-    });
+    inbox.push(McpJob::Handle { request, reply: tx });
     rx.recv()
         .unwrap_or_else(|_| IpcResponse::err(id, "unavailable", "MCP UI dispatch failed"))
 }

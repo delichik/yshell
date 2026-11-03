@@ -233,13 +233,10 @@ pub(crate) fn scheme_id_known(id: &str, catalog: &ThemeCatalog) -> bool {
 /// Converts a persisted [`ColorTheme`] into a renderer palette.
 #[must_use]
 pub(crate) fn palette_from_color_theme(theme: &ColorTheme) -> TerminalPalette {
-    let parse = |value: &str, fallback: TerminalColor| {
-        TerminalColor::from_hex(value).unwrap_or(fallback)
-    };
+    let parse =
+        |value: &str, fallback: TerminalColor| TerminalColor::from_hex(value).unwrap_or(fallback);
     let default = TerminalPalette::DEFAULT;
-    let ansi = std::array::from_fn(|index| {
-        parse(&theme.ansi[index], default.ansi[index])
-    });
+    let ansi = std::array::from_fn(|index| parse(&theme.ansi[index], default.ansi[index]));
     TerminalPalette {
         foreground: parse(&theme.foreground, default.foreground),
         background: parse(&theme.background, default.background),
@@ -280,7 +277,10 @@ pub(crate) fn builtin_as_color_theme(id: &str) -> Option<ColorTheme> {
 
 /// Palette resolved from a profile: named theme (user or built-in) plus any
 /// legacy inline color overrides (kept until migration clears them).
-pub(crate) fn resolve_palette(profile: &TerminalProfile, catalog: &ThemeCatalog) -> TerminalPalette {
+pub(crate) fn resolve_palette(
+    profile: &TerminalProfile,
+    catalog: &ThemeCatalog,
+) -> TerminalPalette {
     let mut palette = lookup_scheme_palette(profile.color_scheme.as_deref(), catalog);
     if let Some(color) = profile
         .foreground
@@ -342,12 +342,7 @@ pub(crate) fn migrate_inline_color_overrides(
     catalog: &mut ThemeCatalog,
 ) -> Vec<ConfigWarning> {
     let mut warnings = Vec::new();
-    migrate_profile_overrides(
-        &mut document.terminal,
-        "terminal",
-        catalog,
-        &mut warnings,
-    );
+    migrate_profile_overrides(&mut document.terminal, "terminal", catalog, &mut warnings);
     for folder in &mut document.folders {
         migrate_folder_overrides(folder, "folders", catalog, &mut warnings);
     }
@@ -362,12 +357,7 @@ fn migrate_folder_overrides(
 ) {
     let location = format!("{prefix}.{}", folder.id);
     if let Some(terminal) = folder.terminal.as_mut() {
-        migrate_profile_overrides(
-            terminal,
-            &format!("{location}.terminal"),
-            catalog,
-            warnings,
-        );
+        migrate_profile_overrides(terminal, &format!("{location}.terminal"), catalog, warnings);
     }
     for session in &mut folder.sessions {
         if let Some(terminal) = session.terminal.as_mut() {
@@ -779,11 +769,7 @@ impl ThemeDraft {
 
     /// Refreshes the display text of every inherited field from a new parent
     /// resolution (the editor's target folder changed).
-    pub(crate) fn refresh_inherited(
-        &mut self,
-        resolved: &TerminalProfile,
-        catalog: &ThemeCatalog,
-    ) {
+    pub(crate) fn refresh_inherited(&mut self, resolved: &TerminalProfile, catalog: &ThemeCatalog) {
         let update = |field: &mut ThemeFieldDraft, text: String| {
             if !field.explicit {
                 field.text = text;
@@ -1317,10 +1303,7 @@ impl SettingsAppearanceDraft {
             .unwrap_or(0)
     }
 
-    pub(crate) fn from_terminal_profile(
-        profile: &TerminalProfile,
-        catalog: &ThemeCatalog,
-    ) -> Self {
+    pub(crate) fn from_terminal_profile(profile: &TerminalProfile, catalog: &ThemeCatalog) -> Self {
         let (font, _) = resolve_font(profile);
         Self {
             color_scheme: profile
@@ -1572,10 +1555,8 @@ impl AppRuntime {
     /// Row click: select a theme **for the preview only**. The global default
     /// changes only through [`Self::apply_theme_manager_selection`].
     pub fn select_theme_manager_row(&mut self, index: i32) -> AppProjection {
-        let default_id = resolved_global_scheme_id(
-            &self.config_document.terminal,
-            &self.theme_catalog,
-        );
+        let default_id =
+            resolved_global_scheme_id(&self.config_document.terminal, &self.theme_catalog);
         let selected_id = self.theme_manager_selection_id();
         let rows = theme_manager_rows(&self.theme_catalog, &selected_id, &default_id);
         if let Some(row) = usize::try_from(index)
@@ -1740,7 +1721,9 @@ impl AppRuntime {
             return Ok(self.projection());
         };
         if editor.builtin {
-            return Err(AppError::new("built-in themes cannot be modified; clone first"));
+            return Err(AppError::new(
+                "built-in themes cannot be modified; clone first",
+            ));
         }
         let theme = editor.to_color_theme();
         if !theme.colors_valid() {
@@ -1781,7 +1764,11 @@ impl AppRuntime {
         if self.settings_appearance.color_scheme == id {
             self.settings_appearance.color_scheme = DEFAULT_COLOR_SCHEME_ID.to_owned();
         }
-        if self.theme_editor.as_ref().is_some_and(|editor| editor.id == id) {
+        if self
+            .theme_editor
+            .as_ref()
+            .is_some_and(|editor| editor.id == id)
+        {
             self.theme_editor = None;
         }
         if self.theme_manager_pending_delete.as_deref() == Some(id) {
@@ -1829,9 +1816,10 @@ impl AppRuntime {
             .settings_appearance
             .font_size()
             .unwrap_or(DEFAULT_FONT_SIZE as u16);
-        let next = i32::from(current)
-            .saturating_add(delta)
-            .clamp(i32::from(THEME_FONT_SIZE_MIN), i32::from(THEME_FONT_SIZE_MAX));
+        let next = i32::from(current).saturating_add(delta).clamp(
+            i32::from(THEME_FONT_SIZE_MIN),
+            i32::from(THEME_FONT_SIZE_MAX),
+        );
         self.settings_appearance.font_size_text = next.to_string();
         self.settings_appearance_status = SettingsAppearanceStatus::Hint;
         self.projection()
@@ -1871,10 +1859,7 @@ impl AppRuntime {
 
     /// Validates and persists the global terminal appearance defaults.
     pub fn save_settings_appearance(&mut self) -> AppResult<AppProjection> {
-        let theme = match self
-            .settings_appearance
-            .theme_fields(&self.theme_catalog)
-        {
+        let theme = match self.settings_appearance.theme_fields(&self.theme_catalog) {
             Ok(theme) => theme,
             Err(error) => {
                 self.settings_appearance_status = SettingsAppearanceStatus::Rejected(error);
@@ -2016,9 +2001,7 @@ impl AppRuntime {
     /// Cancel/discard never writes the draft, so reopening the editor renders
     /// the persisted theme again.
     pub(crate) fn session_editor_preview_frame(&self) -> Option<TerminalFrame> {
-        if !self.editor_modal_visible
-            || !matches!(self.editor_section, EditorSection::Appearance)
-        {
+        if !self.editor_modal_visible || !matches!(self.editor_section, EditorSection::Appearance) {
             return None;
         }
         let resolved = self.editor_theme_resolved_terminal();

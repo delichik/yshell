@@ -298,7 +298,9 @@ fn editor_rejects_duplicate_folder_names_under_same_parent() {
         .create_folder_under_editor_target()
         .expect_err("duplicate folder name should fail");
 
-    assert!(error.to_string().contains("already exists under `Prod`"));
+    assert!(error
+        .to_string()
+        .contains("already exists in this location"));
 }
 
 #[test]
@@ -351,13 +353,13 @@ fn refresh_saved_sessions_reloads_config_and_prunes_stale_selection() {
     // 外部编辑（模拟另一个实例写盘）：删掉 Lab，改加 Ops。
     let mut edited = ConfigDocument::default();
     edited.folders.push(FolderProfile::new("folder-ops", "Ops"));
-    store.save(&edited).expect("save edited config");
+    store.save_all(&edited).expect("save edited config");
 
     let projection = runtime.refresh_saved_sessions().expect("refresh");
 
     assert!(projection
         .status_text
-        .contains("Reloaded saved sessions from config.toml"));
+        .contains("Reloaded saved sessions from the sessions/ directory"));
     assert!(projection
         .session_tree_rows
         .iter()
@@ -504,7 +506,9 @@ fn editor_selects_managed_proxy_without_creating_profiles() {
         .as_deref()
         .expect("proxy password secret key");
     assert_eq!(
-        runtime.resolve_secret_value(secret_key).expect("stored password"),
+        runtime
+            .resolve_secret_value(secret_key)
+            .expect("stored password"),
         "proxy-secret"
     );
     let store_contents =
@@ -611,7 +615,10 @@ fn legacy_per_session_proxy_loads_and_migrates_to_managed_profile() {
     assert!(projection
         .editor_proxy_legacy_text
         .contains("127.0.0.1:1081"));
-    assert_eq!(runtime.editor.proxy_profile_id.as_deref(), Some("saved-legacy-proxy"));
+    assert_eq!(
+        runtime.editor.proxy_profile_id.as_deref(),
+        Some("saved-legacy-proxy")
+    );
 
     // 旧配置仍可连接：legacy 引用解析到保存的口令。
     match &runtime
@@ -646,7 +653,10 @@ fn legacy_per_session_proxy_loads_and_migrates_to_managed_profile() {
         .config_document
         .proxy_profiles
         .contains_key("saved-legacy-proxy"));
-    assert!(runtime.config_document.proxy_profiles.contains_key("proxy-1"));
+    assert!(runtime
+        .config_document
+        .proxy_profiles
+        .contains_key("proxy-1"));
 }
 
 #[test]

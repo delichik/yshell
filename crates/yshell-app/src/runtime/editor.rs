@@ -280,7 +280,10 @@ impl AppRuntime {
         self.editor.proxy_profile_id = Some(option.id.clone());
         self.set_status_kind(
             "editor-proxy-selected",
-            format!("Selected managed proxy `{}` for this session.", option.label),
+            format!(
+                "Selected managed proxy `{}` for this session.",
+                option.label
+            ),
             option.label.clone(),
             String::new(),
         );
@@ -374,11 +377,9 @@ impl AppRuntime {
                 host_label.clone(),
                 startup_snippet.clone(),
             ),
-            EditorAuthTestStatus::Failed { error } => (
-                "editor-auth-test-failed",
-                error.clone(),
-                String::new(),
-            ),
+            EditorAuthTestStatus::Failed { error } => {
+                ("editor-auth-test-failed", error.clone(), String::new())
+            }
         };
         let text = status.legacy_text();
         self.set_status_kind(kind, text, param_1, param_2);
@@ -570,10 +571,7 @@ impl AppRuntime {
     }
 
     /// NET-1：托管代理下拉的选中下标（无选中/legacy/悬空 → -1）。
-    pub(crate) fn editor_proxy_selected_index(
-        &self,
-        options: &[ProxyProfileOptionData],
-    ) -> i32 {
+    pub(crate) fn editor_proxy_selected_index(&self, options: &[ProxyProfileOptionData]) -> i32 {
         if self.editor.proxy_mode != EditorProxyMode::Managed {
             return -1;
         }
@@ -610,9 +608,9 @@ impl AppRuntime {
         };
         match self.config_document.proxy_profiles.get(proxy_id) {
             Some(profile) => format!("{} (`{proxy_id}`)", proxy_summary_line(profile)),
-            None => format!(
-                "Missing proxy profile `{proxy_id}` (legacy per-session proxy reference)."
-            ),
+            None => {
+                format!("Missing proxy profile `{proxy_id}` (legacy per-session proxy reference).")
+            }
         }
     }
 
@@ -624,9 +622,7 @@ impl AppRuntime {
                 .editor
                 .proxy_profile_id
                 .as_deref()
-                .is_some_and(|proxy_id| {
-                    !self.config_document.proxy_profiles.contains_key(proxy_id)
-                })
+                .is_some_and(|proxy_id| !self.config_document.proxy_profiles.contains_key(proxy_id))
     }
 
     pub(crate) fn editor_folder_parts(&self) -> (String, String, bool) {
