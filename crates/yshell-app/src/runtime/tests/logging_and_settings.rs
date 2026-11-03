@@ -3,7 +3,10 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::tempdir;
-use yshell_config::{ConfigDocument, ConfigStore, LoggingProfile, TerminalProfile};
+use yshell_config::{
+    ConfigDocument, ConfigStore, LoggingProfile, MiddleClickAction, MultiLinePastePolicy,
+    RightClickAction, TerminalProfile,
+};
 use yshell_logging::{LogMode, TranscriptFormat};
 use yshell_terminal::{DEFAULT_SCROLLBACK_LINES, DEFAULT_SCROLLBACK_MAX_CELLS};
 
@@ -279,6 +282,87 @@ fn settings_terminal_reset_defaults_fills_inputs_without_persisting() {
         runtime.config_document.terminal.scrollback_max_cells,
         150_000
     );
+}
+
+#[test]
+fn settings_terminal_interactions_default_project_and_persist() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+
+    assert_eq!(
+        runtime.settings_terminal_middle_click,
+        MiddleClickAction::Paste
+    );
+    assert_eq!(
+        runtime.settings_terminal_right_click,
+        RightClickAction::ContextMenu
+    );
+    assert_eq!(
+        runtime.settings_terminal_multi_line_paste,
+        MultiLinePastePolicy::Ask
+    );
+    assert!(!runtime.settings_terminal_auto_copy);
+
+    runtime.update_settings_terminal_middle_click(1);
+    runtime.update_settings_terminal_right_click(1);
+    runtime.update_settings_terminal_multi_line_paste(2);
+    runtime.update_settings_terminal_auto_copy(true);
+    let saved = runtime
+        .save_settings_terminal()
+        .expect("save terminal settings");
+    assert_eq!(saved.settings_terminal_status_kind_text, "saved");
+
+    let persisted = ConfigStore::new(temp.path())
+        .load_or_recover()
+        .expect("reload config")
+        .document;
+    assert_eq!(
+        persisted.ui.terminal_middle_click,
+        MiddleClickAction::DoNothing
+    );
+    assert_eq!(persisted.ui.terminal_right_click, RightClickAction::Paste);
+    assert_eq!(
+        persisted.ui.terminal_multi_line_paste,
+        MultiLinePastePolicy::Block
+    );
+    assert!(persisted.ui.terminal_auto_copy);
+
+    // 粘贴 / 自动复制读取运行中的 [ui] 配置，保存后立即生效。
+    assert_eq!(
+        runtime.config_document.ui.terminal_multi_line_paste,
+        MultiLinePastePolicy::Block
+    );
+    assert!(runtime.config_document.ui.terminal_auto_copy);
+}
+
+#[test]
+fn settings_terminal_reset_restores_interaction_defaults() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    let _ = runtime.update_settings_terminal_middle_click(1);
+    let _ = runtime.update_settings_terminal_right_click(2);
+    let _ = runtime.update_settings_terminal_multi_line_paste(1);
+    let _ = runtime.update_settings_terminal_auto_copy(true);
+
+    let projection = runtime.reset_settings_terminal_defaults();
+
+    assert_eq!(
+        projection.settings_terminal_status_kind_text,
+        "defaults-loaded"
+    );
+    assert_eq!(
+        runtime.settings_terminal_middle_click,
+        MiddleClickAction::Paste
+    );
+    assert_eq!(
+        runtime.settings_terminal_right_click,
+        RightClickAction::ContextMenu
+    );
+    assert_eq!(
+        runtime.settings_terminal_multi_line_paste,
+        MultiLinePastePolicy::Ask
+    );
+    assert!(!runtime.settings_terminal_auto_copy);
 }
 
 #[test]

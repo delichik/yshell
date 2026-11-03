@@ -583,6 +583,8 @@ mod tests {
         fs::write(pane.join(".hidden"), b"h").expect("write");
 
         let mut runtime = runtime_with_local(&temp);
+        // 导航断言与隐藏文件无关：先按旧行为关掉隐藏文件显示。
+        runtime.local_pane.show_hidden = false;
         let projection = runtime.refresh_local_pane();
         assert!(projection.local_rows.len() >= 3, "rows plus parent row");
         assert_eq!(projection.local_item_count, 2);
@@ -613,6 +615,8 @@ mod tests {
         fs::write(pane.join(".only-hidden"), b"h").expect("write");
 
         let mut runtime = runtime_with_local(&temp);
+        // 新默认显示隐藏文件（Settings → SFTP）；先关掉再验证过滤与空态提示。
+        runtime.local_pane.show_hidden = false;
         let hidden_off = runtime.refresh_local_pane();
         assert_eq!(hidden_off.local_item_count, 0);
         assert!(hidden_off.local_empty_text.contains("Enable Hidden"));

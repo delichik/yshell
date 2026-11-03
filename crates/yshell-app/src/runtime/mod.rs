@@ -142,7 +142,8 @@ use std::{
     path::PathBuf, sync::Arc,
 };
 use yshell_config::{
-    ConfigDocument, ConfigStore, KeyCatalog, LoadOutcome, PanelSide, ThemeCatalog,
+    ConfigDocument, ConfigStore, KeyCatalog, LoadOutcome, MiddleClickAction, MultiLinePastePolicy,
+    PanelSide, RightClickAction, ThemeCatalog,
 };
 use yshell_core::CommandDispatcher;
 use yshell_core::CoreCommandDispatcher;
@@ -195,6 +196,9 @@ impl AppRuntime {
         }
         let terminal = document.terminal.clone();
         let sftp_max_parallel_transfers = document.ui.sftp_max_parallel_transfers;
+        // Settings → Terminal / SFTP 的草稿初值都来自 `[ui]` 与 `[sftp]`。
+        let ui_defaults = document.ui.clone();
+        let sftp_show_hidden_default = document.sftp.show_hidden;
         let remembered_local_directory = document.ui.local_directory.clone();
         let default_local_dir = remembered_local_directory
             .as_deref()
@@ -258,6 +262,10 @@ impl AppRuntime {
             settings_scrollback_max_cells_text: terminal.scrollback_max_cells.to_string(),
             settings_sftp_max_parallel_transfers_text: sftp_max_parallel_transfers.to_string(),
             settings_terminal_status: SettingsTerminalStatus::Hint,
+            settings_terminal_middle_click: ui_defaults.terminal_middle_click,
+            settings_terminal_right_click: ui_defaults.terminal_right_click,
+            settings_terminal_multi_line_paste: ui_defaults.terminal_multi_line_paste,
+            settings_terminal_auto_copy: ui_defaults.terminal_auto_copy,
             terminal_clipboard: String::new(),
             terminal_search_query: String::new(),
             terminal_search_regex: false,
@@ -275,7 +283,7 @@ impl AppRuntime {
             sftp_last_probe: std::time::Instant::now(),
             sftp_sort_column: SftpSortColumn::Name,
             sftp_sort_ascending: true,
-            sftp_show_hidden: false,
+            sftp_show_hidden: sftp_show_hidden_default,
             sftp_column_ratio: 0.5,
             sftp_session: SftpSessionLifecycle::Disconnected { session_key: None },
             sftp_live: BTreeMap::new(),
@@ -290,6 +298,7 @@ impl AppRuntime {
             next_transfer_ordinal: 1,
             local_pane: LocalPaneState {
                 dir: default_local_dir,
+                show_hidden: sftp_show_hidden_default,
                 ..LocalPaneState::default()
             },
             sftp_selection: BTreeSet::new(),
@@ -609,6 +618,11 @@ pub struct AppRuntime {
     /// 设置页里的「SFTP 上传/下载最大并行数」（文本形式，便于直接编辑）。
     pub(crate) settings_sftp_max_parallel_transfers_text: String,
     pub(crate) settings_terminal_status: SettingsTerminalStatus,
+    /// Settings → Terminal 终端交互草稿（Save 时写入 `[ui]`）。
+    pub(crate) settings_terminal_middle_click: MiddleClickAction,
+    pub(crate) settings_terminal_right_click: RightClickAction,
+    pub(crate) settings_terminal_multi_line_paste: MultiLinePastePolicy,
+    pub(crate) settings_terminal_auto_copy: bool,
     pub(crate) terminal_clipboard: String,
     pub(crate) terminal_search_query: String,
     pub(crate) terminal_search_regex: bool,

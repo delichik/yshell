@@ -10,7 +10,10 @@ use crate::{
     session_runtime::SessionSource,
 };
 use std::collections::BTreeSet;
-use yshell_config::{LayoutProfile, PanelId, PanelSide, PanelSlot, TerminalProfile};
+use yshell_config::{
+    LayoutProfile, MiddleClickAction, MultiLinePastePolicy, PanelId, PanelSide, PanelSlot,
+    RightClickAction, TerminalProfile,
+};
 use yshell_core::SessionState;
 use yshell_ssh::{ForwardingKind, TunnelConfig};
 use yshell_terminal::{DEFAULT_SCROLLBACK_LINES, DEFAULT_SCROLLBACK_MAX_CELLS};
@@ -175,6 +178,38 @@ impl AppRuntime {
         self.projection()
     }
 
+    /// Settings → Terminal：中键行为（0 = Paste，1 = Do nothing）。
+    #[allow(dead_code)] // 波 2 的 Settings 页接线后删除。
+    pub fn update_settings_terminal_middle_click(&mut self, index: i32) -> AppProjection {
+        self.settings_terminal_middle_click = middle_click_from_index(index);
+        self.settings_terminal_status = SettingsTerminalStatus::Hint;
+        self.projection()
+    }
+
+    /// Settings → Terminal：右键行为（0 = Context menu，1 = Paste，2 = Do nothing）。
+    #[allow(dead_code)] // 波 2 的 Settings 页接线后删除。
+    pub fn update_settings_terminal_right_click(&mut self, index: i32) -> AppProjection {
+        self.settings_terminal_right_click = right_click_from_index(index);
+        self.settings_terminal_status = SettingsTerminalStatus::Hint;
+        self.projection()
+    }
+
+    /// Settings → Terminal：多行粘贴策略（0 = Ask，1 = Paste，2 = Block）。
+    #[allow(dead_code)] // 波 2 的 Settings 页接线后删除。
+    pub fn update_settings_terminal_multi_line_paste(&mut self, index: i32) -> AppProjection {
+        self.settings_terminal_multi_line_paste = multi_line_paste_from_index(index);
+        self.settings_terminal_status = SettingsTerminalStatus::Hint;
+        self.projection()
+    }
+
+    /// Settings → Terminal：选区结束自动复制。
+    #[allow(dead_code)] // 波 2 的 Settings 页接线后删除。
+    pub fn update_settings_terminal_auto_copy(&mut self, enabled: bool) -> AppProjection {
+        self.settings_terminal_auto_copy = enabled;
+        self.settings_terminal_status = SettingsTerminalStatus::Hint;
+        self.projection()
+    }
+
     /// Saves the "max parallel SFTP transfers" setting and applies it to the
     /// running transfer worker.
     pub fn save_settings_sftp(&mut self) -> AppResult<AppProjection> {
@@ -229,6 +264,11 @@ impl AppRuntime {
     pub fn reset_settings_terminal_defaults(&mut self) -> AppProjection {
         self.settings_scrollback_lines_text = DEFAULT_SCROLLBACK_LINES.to_string();
         self.settings_scrollback_max_cells_text = DEFAULT_SCROLLBACK_MAX_CELLS.to_string();
+        // D37：Reset defaults 一并重置终端交互四项。
+        self.settings_terminal_middle_click = MiddleClickAction::default();
+        self.settings_terminal_right_click = RightClickAction::default();
+        self.settings_terminal_multi_line_paste = MultiLinePastePolicy::default();
+        self.settings_terminal_auto_copy = false;
         self.settings_terminal_status = SettingsTerminalStatus::DefaultsLoaded;
         self.projection()
     }
@@ -262,9 +302,15 @@ impl AppRuntime {
         let terminal = TerminalProfile {
             scrollback_lines,
             scrollback_max_cells,
-            ..TerminalProfile::default()
+            color_scheme: self.config_document.terminal.color_scheme.clone(),
+            ..self.config_document.terminal.clone()
         };
         self.config_document.terminal = terminal.clone();
+        // D37：终端交互四项保存在 `[ui]`，且对新旧终端立即生效（读取方直接看配置）。
+        self.config_document.ui.terminal_middle_click = self.settings_terminal_middle_click;
+        self.config_document.ui.terminal_right_click = self.settings_terminal_right_click;
+        self.config_document.ui.terminal_multi_line_paste = self.settings_terminal_multi_line_paste;
+        self.config_document.ui.terminal_auto_copy = self.settings_terminal_auto_copy;
         self.config_store
             .save(&self.config_document)
             .map_err(AppError::from_error)?;
@@ -459,6 +505,35 @@ impl SettingsTerminalField {
             Self::ScrollbackLines => "Scrollback lines",
             Self::ScrollbackMaxCells => "Scrollback memory cap",
         }
+    }
+}
+
+/// Settings → Terminal 中键下拉索引 → 行为（与 settings 页下拉顺序一致）。
+#[allow(dead_code)] // 波 2 的 Settings 页接线后删除。
+fn middle_click_from_index(index: i32) -> MiddleClickAction {
+    match index {
+        1 => MiddleClickAction::DoNothing,
+        _ => MiddleClickAction::Paste,
+    }
+}
+
+/// Settings → Terminal 右键下拉索引 → 行为。
+#[allow(dead_code)] // 波 2 的 Settings 页接线后删除。
+fn right_click_from_index(index: i32) -> RightClickAction {
+    match index {
+        1 => RightClickAction::Paste,
+        2 => RightClickAction::DoNothing,
+        _ => RightClickAction::ContextMenu,
+    }
+}
+
+/// Settings → Terminal 多行粘贴下拉索引 → 策略。
+#[allow(dead_code)] // 波 2 的 Settings 页接线后删除。
+fn multi_line_paste_from_index(index: i32) -> MultiLinePastePolicy {
+    match index {
+        1 => MultiLinePastePolicy::Paste,
+        2 => MultiLinePastePolicy::Block,
+        _ => MultiLinePastePolicy::Ask,
     }
 }
 
