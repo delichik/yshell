@@ -934,11 +934,17 @@ export component WinComboBox inherits Rectangle {
     in property <bool> enabled: true;
     /// 无选中或越界时的占位文案。
     in property <string> placeholder-text: "";
+    /// 可选：把 `model` 里的稳定 id 映射为界面文案（i18n 场景由 `@tr` 模板函数提供）。
+    /// 默认关闭；未开启时行为不变（直接显示 model 文本）。
+    in property <bool> has-label-map: false;
+    pure callback label-for(string) -> string;
     callback selected(int);
 
     private property <string> current-text:
         root.current-index >= 0 && root.current-index < root.model.length
-            ? root.model[root.current-index]
+            ? (root.has-label-map
+                ? root.label-for(root.model[root.current-index])
+                : root.model[root.current-index])
             : "";
 
     height: Theme.control-height;
@@ -1084,7 +1090,7 @@ export component WinComboBox inherits Rectangle {
                         }
 
                         Text {
-                            text: item;
+                            text: root.has-label-map ? root.label-for(item) : item;
                             color: Theme.text-primary;
                             font-size: Theme.font-body;
                             vertical-alignment: center;

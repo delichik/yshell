@@ -269,12 +269,11 @@ export component SettingsDialog inherits Rectangle {
     in-out property <bool> mcp-enabled: false;
     /// Auto-approve MCP AI control requests (skip the consent dialog).
     in-out property <bool> mcp-auto-approve-control-enabled: false;
-    /// Listener / control status for Settings → MCP.
-    in property <string> mcp-status-text: "";
-    /// Product boundaries copy.
-    in property <string> mcp-boundaries-text: "";
-    /// Stdio MCP host config snippet.
-    in property <string> mcp-host-config-text: "";
+    /// MCP listener / control status kind id (rendered by
+    /// `TextFormats.settings-mcp-status`; see `runtime/mcp.rs::mcp_status_kind`).
+    in property <string> mcp-status-kind-text: "";
+    /// Optional detail for the MCP status kind (listening port / failure reason).
+    in property <string> mcp-status-detail-text: "";
     /// Absolute path of the debug log directory.
     in property <string> debug-log-dir-text: "";
     /// Active left-nav section id.
@@ -968,7 +967,13 @@ export component SettingsDialog inherits Rectangle {
                                         WinComboBox {
                                             max-width: 420px;
                                             horizontal-stretch: 1;
+                                            // Rust 投影稳定 id（`system-default` / `custom` / 编辑器名），
+                                            // 显示文案用 @tr 映射（`TextFormats.settings-sftp-editor-label`）。
                                             model: root.settings-sftp-editor-options;
+                                            has-label-map: true;
+                                            label-for(id) => {
+                                                return TextFormats.settings-sftp-editor-label(id);
+                                            }
                                             current-index: root.settings-sftp-editor-index;
                                             selected(index) => {
                                                 root.update-settings-sftp-external-editor(index);
@@ -1008,7 +1013,8 @@ export component SettingsDialog inherits Rectangle {
                                     }
                                 }
 
-                                // --- MCP（D-1：stdio 现状；端口 / 监听 / API key 本版不可用）--
+                                // --- MCP（D-1：stdio 现状；Port / Listen / API key /
+                                // View user / Control user 本版不可用，按原型保留行 + 短 hint）--
                                 if root.section == "mcp" : VerticalLayout {
                                     alignment: start;
                                     spacing: Theme.spacing-12;
@@ -1022,29 +1028,19 @@ export component SettingsDialog inherits Rectangle {
                                         }
                                     }
                                     SettingsHint {
-                                        text: @tr("Off by default; the controls below stay disabled until MCP is enabled.");
+                                        text: @tr("Off by default; other MCP controls are disabled.");
                                     }
 
                                     SettingsFieldRow {
                                         label: @tr("Port");
-                                        HorizontalLayout {
-                                            spacing: Theme.spacing-8;
-                                            alignment: start;
-                                            WinTextInput {
-                                                width: 100px;
-                                                enabled: false;
-                                                text: "18765";
-                                            }
-                                            Text {
-                                                text: @tr("Not available in this version.");
-                                                color: Theme.text-tertiary;
-                                                font-size: Theme.font-caption;
-                                                vertical-alignment: center;
-                                            }
+                                        WinTextInput {
+                                            width: 100px;
+                                            enabled: false;
+                                            text: "18765";
                                         }
                                     }
                                     SettingsHint {
-                                        text: @tr("This build hosts MCP over stdio; no TCP port is opened.");
+                                        text: @tr("Not available in this version.");
                                     }
 
                                     SettingsFieldRow {
@@ -1057,7 +1053,7 @@ export component SettingsDialog inherits Rectangle {
                                         }
                                     }
                                     SettingsHint {
-                                        text: @tr("Only a local stdio host is supported in this version.");
+                                        text: @tr("Not available in this version.");
                                     }
 
                                     SettingsFieldRow {
@@ -1066,11 +1062,34 @@ export component SettingsDialog inherits Rectangle {
                                             max-width: 420px;
                                             horizontal-stretch: 1;
                                             enabled: false;
-                                            placeholder-text: @tr("Not available in this version.");
                                         }
                                     }
                                     SettingsHint {
-                                        text: @tr("The stdio host does not use an API key.");
+                                        text: @tr("Not available in this version.");
+                                    }
+
+                                    SettingsFieldRow {
+                                        label: @tr("View user");
+                                        WinToggle {
+                                            text: @tr("Off");
+                                            enabled: false;
+                                            checked: false;
+                                        }
+                                    }
+                                    SettingsHint {
+                                        text: @tr("Not available in this version.");
+                                    }
+
+                                    SettingsFieldRow {
+                                        label: @tr("Control user");
+                                        WinToggle {
+                                            text: @tr("Off");
+                                            enabled: false;
+                                            checked: false;
+                                        }
+                                    }
+                                    SettingsHint {
+                                        text: @tr("Not available in this version.");
                                     }
 
                                     SettingsFieldRow {
@@ -1085,51 +1104,39 @@ export component SettingsDialog inherits Rectangle {
                                         }
                                     }
                                     SettingsHint {
-                                        text: @tr("Skip the control consent dialog for local MCP clients.");
+                                        text: @tr("Skip the control consent dialog.");
                                     }
 
-                                    SettingsGroupLabel {
-                                        text: @tr("Status");
-                                    }
-                                    Text {
-                                        text: root.mcp-status-text;
-                                        color: Theme.text-secondary;
-                                        font-size: Theme.font-body;
-                                        wrap: word-wrap;
-                                        font-family: Theme.font-mono;
-                                    }
-
-                                    SettingsGroupLabel {
-                                        text: @tr("How to connect");
-                                    }
-                                    Text {
-                                        text: @tr("Keep YShell open with MCP enabled. In your AI host, add a stdio MCP server that starts YShell with --mcp (not a command you run yourself):");
-                                        color: Theme.text-secondary;
-                                        font-size: Theme.font-body;
-                                        wrap: word-wrap;
-                                    }
-                                    Text {
-                                        text: root.mcp-host-config-text;
-                                        color: Theme.text-primary;
-                                        font-size: Theme.font-caption;
-                                        wrap: word-wrap;
-                                        font-family: Theme.font-mono;
-                                    }
-                                    Text {
-                                        text: @tr("If yshell is not on PATH, set command to the full path of the YShell binary.");
-                                        color: Theme.text-tertiary;
-                                        font-size: Theme.font-caption;
-                                        wrap: word-wrap;
+                                    // 状态：Rust 投影 kind id + detail，句子由 TextFormats 渲染。
+                                    SettingsHint {
+                                        text: TextFormats.settings-mcp-status(
+                                            root.mcp-status-kind-text,
+                                            root.mcp-status-detail-text,
+                                        );
+                                        hint-color: root.mcp-status-kind-text == "failed"
+                                            ? Theme.critical : Theme.text-tertiary;
                                     }
 
-                                    SettingsGroupLabel {
-                                        text: @tr("What it can and cannot do");
+                                    SettingsHint {
+                                        text: @tr("Add this stdio server in your AI host; do not run it yourself.");
                                     }
-                                    Text {
-                                        text: root.mcp-boundaries-text;
-                                        color: Theme.text-secondary;
-                                        font-size: Theme.font-body;
-                                        wrap: word-wrap;
+                                    HorizontalLayout {
+                                        spacing: 0px;
+                                        alignment: start;
+
+                                        Rectangle {
+                                            width: Theme.form-label-width-wide + Theme.spacing-12;
+                                            height: 1px;
+                                            background: transparent;
+                                        }
+                                        Text {
+                                            text: "command = \"yshell\", args = [\"--mcp\"]";
+                                            color: Theme.text-primary;
+                                            font-size: Theme.font-caption;
+                                            font-family: Theme.font-mono;
+                                            wrap: no-wrap;
+                                            overflow: elide;
+                                        }
                                     }
                                 }
 

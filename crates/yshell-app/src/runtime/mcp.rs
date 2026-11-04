@@ -156,6 +156,43 @@ impl AppRuntime {
         }
     }
 
+    /// Stable projection id for the Settings → MCP status line.
+    ///
+    /// The user-facing sentence is rendered by
+    /// `TextFormats.settings-mcp-status`; keep these ids in sync with
+    /// `ui/text_formats.slint`. `mcp_status_text` stays as the English status
+    /// used by the MCP `get_mcp_info` reply (agent-facing, not translated).
+    #[must_use]
+    pub fn mcp_status_kind(&self) -> &'static str {
+        if self.mcp.is_controlling() {
+            return "controlling";
+        }
+        if self.mcp.consent_visible() {
+            return "awaiting-consent";
+        }
+        match &self.mcp_listener_status {
+            McpListenerStatus::Disabled => {
+                if self.mcp_enabled() {
+                    "starting"
+                } else {
+                    "disabled"
+                }
+            }
+            McpListenerStatus::Ready { .. } => "ready",
+            McpListenerStatus::Failed { .. } => "failed",
+        }
+    }
+
+    /// Detail for [`Self::mcp_status_kind`] (listening port / failure message).
+    #[must_use]
+    pub fn mcp_status_detail(&self) -> String {
+        match &self.mcp_listener_status {
+            McpListenerStatus::Ready { port } => port.to_string(),
+            McpListenerStatus::Failed { message } => message.clone(),
+            McpListenerStatus::Disabled => String::new(),
+        }
+    }
+
     #[must_use]
     pub fn mcp_control_state_label(&self) -> &'static str {
         match &self.mcp.phase {
@@ -1020,6 +1057,31 @@ mod tests {
         };
         assert!(boundaries.contains("Cannot"));
         assert!(host_config.contains("--mcp"));
+    }
+
+    #[test]
+    fn projection_status_kind_and_detail_track_listener_state() {
+        let dir = tempdir().expect("tempdir");
+        let mut runtime = AppRuntime::new(dir.path().to_path_buf()).expect("runtime");
+
+        // Default: MCP off.
+        assert_eq!(runtime.mcp_status_kind(), "disabled");
+        assert_eq!(runtime.mcp_status_detail(), "");
+
+        // Enabled, listener not up yet: the UI template shows "Starting".
+        runtime.set_mcp_enabled(true).expect("enable");
+        assert_eq!(runtime.mcp_status_kind(), "starting");
+
+        // Ready / failed carry their detail to the UI template (port / reason).
+        runtime.set_mcp_listener_status(McpListenerStatus::Ready { port: 6123 });
+        assert_eq!(runtime.mcp_status_kind(), "ready");
+        assert_eq!(runtime.mcp_status_detail(), "6123");
+
+        runtime.set_mcp_listener_status(McpListenerStatus::Failed {
+            message: "bind failed".to_owned(),
+        });
+        assert_eq!(runtime.mcp_status_kind(), "failed");
+        assert_eq!(runtime.mcp_status_detail(), "bind failed");
     }
 
     #[test]

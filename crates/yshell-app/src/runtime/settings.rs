@@ -362,14 +362,19 @@ impl SettingsSftpDraft {
         true
     }
 
-    /// External editor dropdown model: `System default` + detected + `Custom`.
+    /// External editor dropdown model: stable id for the two fixed choices
+    /// (`system-default` / `custom`) plus the detected editors' display names.
+    ///
+    /// The ids are rendered by `TextFormats.settings-sftp-editor-label` in
+    /// `ui/pages/settings.slint`; detected editor names are proper nouns and are
+    /// shown as-is.
     pub(crate) fn editor_options(&self) -> Vec<String> {
         let mut options = Vec::with_capacity(self.detected_editors.len() + 2);
-        options.push("System default".to_owned());
+        options.push("system-default".to_owned());
         for editor in &self.detected_editors {
             options.push(editor_label(editor.id).to_owned());
         }
-        options.push("Custom".to_owned());
+        options.push("custom".to_owned());
         options
     }
 
@@ -869,10 +874,10 @@ mod tests {
         assert_eq!(
             draft.editor_options(),
             vec![
-                "System default".to_owned(),
+                "system-default".to_owned(),
                 "Visual Studio Code".to_owned(),
                 "Zed".to_owned(),
-                "Custom".to_owned(),
+                "custom".to_owned(),
             ]
         );
         assert_eq!(draft.external_editor_config_value(), Ok(None));

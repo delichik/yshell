@@ -1901,4 +1901,47 @@ export global TextFormats {
         }
         return fallback;
     }
+
+    // --- settings-mcp / settings-sftp ---------------------------------------
+    // Settings → MCP 连接状态：Rust 只投影稳定 kind id（+ 可选 detail：端口 / 失败原因），
+    // 句子在这里渲染；kind 见 `runtime/mcp.rs::mcp_status_kind`。
+    public pure function settings-mcp-status(kind: string, detail: string) -> string {
+        if kind == "disabled" {
+            return @tr("MainWindow" => "Off");
+        }
+        if kind == "starting" {
+            return @tr("MainWindow" => "Starting");
+        }
+        if kind == "ready" {
+            if detail == "" {
+                return @tr("MainWindow" => "On");
+            }
+            return @tr("MainWindow" => "Listening on 127.0.0.1:{0}", detail);
+        }
+        if kind == "failed" {
+            if detail == "" {
+                return @tr("MainWindow" => "Failed");
+            }
+            return @tr("MainWindow" => "Failed: {0}", detail);
+        }
+        if kind == "controlling" {
+            return @tr("MainWindow" => "AI is controlling a terminal");
+        }
+        if kind == "awaiting-consent" {
+            return @tr("MainWindow" => "Waiting for approval");
+        }
+        return @tr("MainWindow" => "Off");
+    }
+
+    // Settings → SFTP External editor 下拉的显示文案：Rust 投影稳定 id
+    // （`system-default` / `custom`）或已检测到的编辑器名（专有名词，原样显示）。
+    public pure function settings-sftp-editor-label(id: string) -> string {
+        if id == "system-default" {
+            return @tr("MainWindow" => "System default");
+        }
+        if id == "custom" {
+            return @tr("MainWindow" => "Custom");
+        }
+        return id;
+    }
 }

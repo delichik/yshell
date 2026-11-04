@@ -437,8 +437,8 @@ impl AppRuntime {
             settings_confirm_quit_app: self.config_document.ui.confirm_quit_app,
             settings_mcp_enabled: self.config_document.ui.mcp_enabled,
             settings_mcp_auto_approve_control: self.config_document.ui.mcp_auto_approve_control,
-            settings_mcp_status_text: self.mcp_status_text(),
-            settings_mcp_boundaries_text: yshell_mcp::MCP_BOUNDARIES_TEXT.to_owned(),
+            settings_mcp_status_text: self.mcp_status_kind().to_owned(),
+            settings_mcp_boundaries_text: self.mcp_status_detail(),
             settings_mcp_host_config_text: yshell_mcp::MCP_HOST_CONFIG_SNIPPET.to_owned(),
             mcp_controlling: self.mcp.is_controlling(),
             mcp_consent_visible: self.mcp.consent_visible(),
@@ -1978,9 +1978,15 @@ pub struct AppProjection {
     pub settings_mcp_enabled: bool,
     /// Whether MCP `request_control` skips the consent dialog.
     pub settings_mcp_auto_approve_control: bool,
-    /// Listener / control status line for Settings AI / MCP.
+    /// Settings → MCP status **kind id** (`disabled` / `starting` / `ready` /
+    /// `failed` / `controlling` / `awaiting-consent`); the sentence is rendered
+    /// by `TextFormats.settings-mcp-status` (see `AppRuntime::mcp_status_kind`).
     pub settings_mcp_status_text: String,
-    /// Product boundaries copy for Settings and agents.
+    /// Detail for the MCP status kind (listening port / failure message; empty
+    /// when the kind has no detail). Reuses the historical
+    /// `settings_mcp_boundaries_text` projection slot because the
+    /// `SettingsWindow` wiring lives in `dialog_windows.rs` (owned by a parallel
+    /// task); the long product-boundaries copy is no longer shown in Settings.
     pub settings_mcp_boundaries_text: String,
     /// Stdio MCP host config snippet.
     pub settings_mcp_host_config_text: String,
