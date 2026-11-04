@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { WinButton, WinIconButton, WinToggle } from "basic/controls.slint";
+import { WinButton, WinCheckBox, WinIconButton } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 
 // 终端滚动条数据通道（§5.17）：Rust 投影写入总行数/视口行数，滚动条把
@@ -534,8 +534,9 @@ export component TerminalView inherits Rectangle {
                             }
                         }
 
-                        // WP2：正则模式开关；窄栏隐藏文字，走纯图标/勾选态
-                        WinToggle {
+                        // WP2：正则模式选项（勾选框语义，不是开关）；窄栏隐藏文字，靠
+                        // `accessible-name` 表达语义。
+                        WinCheckBox {
                             text: find_scope.width >= 420px ? @tr("Regex") : "";
                             accessible-name: @tr("Regex");
                             checked <=> root.search-regex;

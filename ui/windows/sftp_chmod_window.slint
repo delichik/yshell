@@ -8,37 +8,9 @@
 // 一窗一条提交/关闭栏：Cancel | Apply（无打字确认词）。
 
 import { Theme } from "../theme.slint";
-import { Icon } from "../components/basic/icons.slint";
-import { WinButton } from "../components/basic/controls.slint";
+import { WinButton, WinCheckBox } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
-
-/// 单个权限勾选框（20×20，勾选 = 强调色底 + check 图标）。
-component PermissionCheck inherits Rectangle {
-    in property <bool> checked: false;
-    in property <string> accessible-name: "";
-    callback toggled();
-
-    width: 20px;
-    height: 20px;
-    border-radius: 3px;
-    border-width: 1px;
-    border-color: root.checked ? Theme.accent : Theme.control-stroke;
-    background: root.checked ? Theme.accent : Theme.control-fill;
-    animate background { duration: Theme.duration-faster; easing: ease-out; }
-
-    if root.checked : Icon {
-        name: "check";
-        icon-color: Theme.accent-text;
-        icon-size: 12px;
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
-    }
-
-    touch := TouchArea {
-        clicked => { root.toggled(); }
-    }
-}
 
 /// 权限表格里的表头单元格。
 component PermissionHeader inherits Text {
@@ -219,20 +191,23 @@ export component SftpChmodWindow inherits Window {
                         vertical-alignment: center;
                         height: Theme.control-height;
                     }
-                    PermissionCheck {
-                        row: 1; col: 1; checked: root.owner-read;
+                    WinCheckBox {
+                        row: 1; col: 1;
+                        checked <=> root.owner-read;
                         accessible-name: @tr("Owner read");
-                        toggled => { root.owner-read = !root.owner-read; root.sync-to-mode(); }
+                        toggled => { root.sync-to-mode(); }
                     }
-                    PermissionCheck {
-                        row: 1; col: 2; checked: root.group-read;
+                    WinCheckBox {
+                        row: 1; col: 2;
+                        checked <=> root.group-read;
                         accessible-name: @tr("Group read");
-                        toggled => { root.group-read = !root.group-read; root.sync-to-mode(); }
+                        toggled => { root.sync-to-mode(); }
                     }
-                    PermissionCheck {
-                        row: 1; col: 3; checked: root.other-read;
+                    WinCheckBox {
+                        row: 1; col: 3;
+                        checked <=> root.other-read;
                         accessible-name: @tr("Other read");
-                        toggled => { root.other-read = !root.other-read; root.sync-to-mode(); }
+                        toggled => { root.sync-to-mode(); }
                     }
 
                     Text {
@@ -244,20 +219,23 @@ export component SftpChmodWindow inherits Window {
                         vertical-alignment: center;
                         height: Theme.control-height;
                     }
-                    PermissionCheck {
-                        row: 2; col: 1; checked: root.owner-write;
+                    WinCheckBox {
+                        row: 2; col: 1;
+                        checked <=> root.owner-write;
                         accessible-name: @tr("Owner write");
-                        toggled => { root.owner-write = !root.owner-write; root.sync-to-mode(); }
+                        toggled => { root.sync-to-mode(); }
                     }
-                    PermissionCheck {
-                        row: 2; col: 2; checked: root.group-write;
+                    WinCheckBox {
+                        row: 2; col: 2;
+                        checked <=> root.group-write;
                         accessible-name: @tr("Group write");
-                        toggled => { root.group-write = !root.group-write; root.sync-to-mode(); }
+                        toggled => { root.sync-to-mode(); }
                     }
-                    PermissionCheck {
-                        row: 2; col: 3; checked: root.other-write;
+                    WinCheckBox {
+                        row: 2; col: 3;
+                        checked <=> root.other-write;
                         accessible-name: @tr("Other write");
-                        toggled => { root.other-write = !root.other-write; root.sync-to-mode(); }
+                        toggled => { root.sync-to-mode(); }
                     }
 
                     Text {
@@ -269,20 +247,23 @@ export component SftpChmodWindow inherits Window {
                         vertical-alignment: center;
                         height: Theme.control-height;
                     }
-                    PermissionCheck {
-                        row: 3; col: 1; checked: root.owner-exec;
+                    WinCheckBox {
+                        row: 3; col: 1;
+                        checked <=> root.owner-exec;
                         accessible-name: @tr("Owner execute");
-                        toggled => { root.owner-exec = !root.owner-exec; root.sync-to-mode(); }
+                        toggled => { root.sync-to-mode(); }
                     }
-                    PermissionCheck {
-                        row: 3; col: 2; checked: root.group-exec;
+                    WinCheckBox {
+                        row: 3; col: 2;
+                        checked <=> root.group-exec;
                         accessible-name: @tr("Group execute");
-                        toggled => { root.group-exec = !root.group-exec; root.sync-to-mode(); }
+                        toggled => { root.sync-to-mode(); }
                     }
-                    PermissionCheck {
-                        row: 3; col: 3; checked: root.other-exec;
+                    WinCheckBox {
+                        row: 3; col: 3;
+                        checked <=> root.other-exec;
                         accessible-name: @tr("Other execute");
-                        toggled => { root.other-exec = !root.other-exec; root.sync-to-mode(); }
+                        toggled => { root.sync-to-mode(); }
                     }
                 }
 

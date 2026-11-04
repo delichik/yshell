@@ -21,7 +21,7 @@
 import { ListView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
-import { WinButton, WinIconButton, WinSpinner, WinToggle } from "basic/controls.slint";
+import { WinButton, WinIconButton, WinIconToggle, WinSpinner } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 
 // ---------------------------------------------------------------- 数据结构
@@ -700,8 +700,9 @@ export component FilePane inherits Rectangle {
                 enabled: root.connected;
                 clicked => { root.refresh(); }
             }
-            WinToggle {
-                text: "";
+            // 工具栏图标切换（语义=显示/隐藏隐藏文件）：保持图标按钮形态，
+            // 不用 40×20 开关冒充；文本型布尔在表单里用 WinSwitch。
+            WinIconToggle {
                 icon: "eye";
                 checked: root.show-hidden;
                 accessible-name: @tr("Show hidden files");

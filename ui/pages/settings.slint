@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { WinButton, WinComboBox, WinIconButton, WinNavItem, WinScrollIndicator, WinToggle } from "../components/basic/controls.slint";
+import { WinButton, WinComboBox, WinIconButton, WinNavItem, WinScrollIndicator, WinSwitch } from "../components/basic/controls.slint";
 import { Icon } from "../components/basic/icons.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { TerminalPreview } from "../components/terminal_preview.slint";
@@ -513,8 +513,9 @@ export component SettingsDialog inherits Rectangle {
 
                                     SettingsFieldRow {
                                         label: @tr("Confirm close");
-                                        WinToggle {
+                                        WinSwitch {
                                             text: root.confirm-close-session-enabled ? @tr("On") : @tr("Off");
+                                            accessible-name: @tr("Confirm close");
                                             checked <=> root.confirm-close-session-enabled;
                                             toggled => {
                                                 root.set-confirm-close-session(root.confirm-close-session-enabled);
@@ -527,8 +528,9 @@ export component SettingsDialog inherits Rectangle {
 
                                     SettingsFieldRow {
                                         label: @tr("Confirm quit");
-                                        WinToggle {
+                                        WinSwitch {
                                             text: root.confirm-quit-app-enabled ? @tr("On") : @tr("Off");
+                                            accessible-name: @tr("Confirm quit");
                                             checked <=> root.confirm-quit-app-enabled;
                                             toggled => {
                                                 root.set-confirm-quit-app(root.confirm-quit-app-enabled);
@@ -541,8 +543,9 @@ export component SettingsDialog inherits Rectangle {
 
                                     SettingsFieldRow {
                                         label: @tr("Reduce motion");
-                                        WinToggle {
+                                        WinSwitch {
                                             text: Theme.reduce-motion ? @tr("On") : @tr("Off");
+                                            accessible-name: @tr("Reduce motion");
                                             checked: Theme.reduce-motion;
                                             toggled => {
                                                 // 即时应用 + 落盘（`[ui] reduce_motion`）。
@@ -756,8 +759,9 @@ export component SettingsDialog inherits Rectangle {
 
                                     SettingsFieldRow {
                                         label: @tr("Auto copy");
-                                        WinToggle {
+                                        WinSwitch {
                                             text: root.settings-terminal-auto-copy ? @tr("On") : @tr("Off");
+                                            accessible-name: @tr("Auto copy");
                                             checked <=> root.settings-terminal-auto-copy;
                                             toggled => {
                                                 root.update-settings-terminal-auto-copy(root.settings-terminal-auto-copy);
@@ -941,8 +945,9 @@ export component SettingsDialog inherits Rectangle {
 
                                     SettingsFieldRow {
                                         label: @tr("Show hidden");
-                                        WinToggle {
+                                        WinSwitch {
                                             text: root.settings-sftp-show-hidden ? @tr("On") : @tr("Off");
+                                            accessible-name: @tr("Show hidden");
                                             checked <=> root.settings-sftp-show-hidden;
                                             toggled => {
                                                 root.update-settings-sftp-show-hidden(root.settings-sftp-show-hidden);
@@ -1028,8 +1033,9 @@ export component SettingsDialog inherits Rectangle {
 
                                     SettingsFieldRow {
                                         label: @tr("Enable");
-                                        WinToggle {
+                                        WinSwitch {
                                             text: root.mcp-enabled ? @tr("On") : @tr("Off");
+                                            accessible-name: @tr("Enable");
                                             checked <=> root.mcp-enabled;
                                             toggled => { root.set-mcp-enabled(root.mcp-enabled); }
                                         }
@@ -1077,8 +1083,9 @@ export component SettingsDialog inherits Rectangle {
 
                                     SettingsFieldRow {
                                         label: @tr("View user");
-                                        WinToggle {
+                                        WinSwitch {
                                             text: @tr("Off");
+                                            accessible-name: @tr("View user");
                                             enabled: false;
                                             checked: false;
                                         }
@@ -1089,8 +1096,9 @@ export component SettingsDialog inherits Rectangle {
 
                                     SettingsFieldRow {
                                         label: @tr("Control user");
-                                        WinToggle {
+                                        WinSwitch {
                                             text: @tr("Off");
+                                            accessible-name: @tr("Control user");
                                             enabled: false;
                                             checked: false;
                                         }
@@ -1101,8 +1109,9 @@ export component SettingsDialog inherits Rectangle {
 
                                     SettingsFieldRow {
                                         label: @tr("Auto-approve");
-                                        WinToggle {
+                                        WinSwitch {
                                             text: root.mcp-auto-approve-control-enabled ? @tr("On") : @tr("Off");
+                                            accessible-name: @tr("Auto-approve");
                                             checked <=> root.mcp-auto-approve-control-enabled;
                                             enabled: root.mcp-enabled;
                                             toggled => {
@@ -1157,8 +1166,9 @@ export component SettingsDialog inherits Rectangle {
                                         HorizontalLayout {
                                             spacing: Theme.spacing-8;
                                             alignment: start;
-                                            WinToggle {
+                                            WinSwitch {
                                                 text: root.debug-logging-enabled ? @tr("On") : @tr("Off");
+                                                accessible-name: @tr("Debug logging");
                                                 checked <=> root.debug-logging-enabled;
                                                 toggled => {
                                                     root.set-debug-logging(root.debug-logging-enabled);

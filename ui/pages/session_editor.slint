@@ -9,7 +9,7 @@
 
 import { Theme } from "../theme.slint";
 import {
-    WinButton, WinComboBox, WinIconButton, WinNavItem, WinScrollIndicator,
+    WinButton, WinComboBox, WinIconButton, WinNavItem, WinScrollIndicator, WinSwitch,
 } from "../components/basic/controls.slint";
 import { Icon } from "../components/basic/icons.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
@@ -108,40 +108,9 @@ component EditorNavItem inherits Rectangle {
     }
 }
 
-// 开关（form.css 形态：40×20 轨道 + 12px 拇指，100ms 位移）。
-component SwitchToggle inherits Rectangle {
-    in-out property <bool> checked: false;
-    in property <bool> enabled: true;
-    callback toggled();
-
-    width: 40px;
-    height: 20px;
-    border-radius: 10px;
-    background: !root.enabled ? Theme.control-fill-disabled
-        : root.checked ? Theme.accent
-        : Theme.control-stroke;
-
-    Rectangle {
-        width: 12px;
-        height: 12px;
-        y: 4px;
-        x: root.checked ? parent.width - 14px : 2px;
-        border-radius: 6px;
-        background: root.checked ? Theme.accent-text : Theme.text-secondary;
-        animate x { duration: Theme.duration-faster; easing: ease-out; }
-        animate background { duration: Theme.duration-faster; easing: ease-out; }
-    }
-
-    touch := TouchArea {
-        enabled: root.enabled;
-        clicked => {
-            root.checked = !root.checked;
-            root.toggled();
-        }
-    }
-}
-
 // 页级 Inherit 开关（右对齐：Inherit 文案 + 开关）。
+// 开关视觉统一走共享 `WinSwitch`（§5.3：40×20 轨道 + 12 滑块 + 167ms）；
+// 不再在本页自绘 switch，避免各页动画/禁用态/键盘可达性不一致。
 component InheritBar inherits Rectangle {
     in property <bool> inherit: true;
     callback toggled(bool);
@@ -160,8 +129,9 @@ component InheritBar inherits Rectangle {
             vertical-alignment: center;
         }
 
-        SwitchToggle {
+        WinSwitch {
             checked: root.inherit;
+            accessible-name: @tr("Inherit");
             toggled => { root.toggled(!root.inherit); }
         }
     }

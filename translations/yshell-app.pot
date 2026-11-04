@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2026-11-04 10:25+0000\n"
+"POT-Creation-Date: 2026-11-04 12:32+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -662,22 +662,32 @@ msgctxt "AuthPromptDialog"
 msgid "Optional"
 msgstr ""
 
-#: ui/components/auth_prompt_dialog.slint:345
+#: ui/components/auth_prompt_dialog.slint:347
+msgctxt "AuthPromptDialog"
+msgid "Use"
+msgstr ""
+
+#: ui/components/auth_prompt_dialog.slint:347
+msgctxt "AuthPromptDialog"
+msgid "Don't use"
+msgstr ""
+
+#: ui/components/auth_prompt_dialog.slint:348
 msgctxt "AuthPromptDialog"
 msgid "Use ssh-agent"
 msgstr ""
 
-#: ui/components/auth_prompt_dialog.slint:356
+#: ui/components/auth_prompt_dialog.slint:359
 msgctxt "AuthPromptDialog"
 msgid "Round {0} of {1}"
 msgstr ""
 
-#: ui/components/auth_prompt_dialog.slint:377
+#: ui/components/auth_prompt_dialog.slint:380
 msgctxt "AuthPromptDialog"
 msgid "Waiting for the server challenge…"
 msgstr ""
 
-#: ui/components/auth_prompt_dialog.slint:422
+#: ui/components/auth_prompt_dialog.slint:425
 msgctxt "AuthPromptDialog"
 msgid "Cancel"
 msgstr ""
@@ -692,7 +702,7 @@ msgctxt "ConfirmDialog"
 msgid "Cancel"
 msgstr ""
 
-#: ui/components/confirm_dialog.slint:95
+#: ui/components/confirm_dialog.slint:96 ui/components/confirm_dialog.slint:97
 msgctxt "ConfirmDialog"
 msgid "Don't ask again"
 msgstr ""
@@ -713,7 +723,7 @@ msgctxt "FilePane"
 msgid "Refresh"
 msgstr ""
 
-#: ui/components/file_pane.slint:412 ui/components/file_pane.slint:1230
+#: ui/components/file_pane.slint:412 ui/components/file_pane.slint:1231
 msgctxt "FilePane"
 msgid "{0} · {1}"
 msgstr ""
@@ -747,52 +757,52 @@ msgctxt "FilePane"
 msgid "…"
 msgstr ""
 
-#: ui/components/file_pane.slint:707
+#: ui/components/file_pane.slint:708
 msgctxt "FilePane"
 msgid "Show hidden files"
 msgstr ""
 
-#: ui/components/file_pane.slint:739
+#: ui/components/file_pane.slint:740
 msgctxt "FilePane"
 msgid "Retry"
 msgstr ""
 
-#: ui/components/file_pane.slint:1096
+#: ui/components/file_pane.slint:1097
 msgctxt "FilePane"
 msgid "Name"
 msgstr ""
 
-#: ui/components/file_pane.slint:1105
+#: ui/components/file_pane.slint:1106
 msgctxt "FilePane"
 msgid "Size"
 msgstr ""
 
-#: ui/components/file_pane.slint:1115
+#: ui/components/file_pane.slint:1116
 msgctxt "FilePane"
 msgid "Modified"
 msgstr ""
 
-#: ui/components/file_pane.slint:1126
+#: ui/components/file_pane.slint:1127
 msgctxt "FilePane"
 msgid "Perm"
 msgstr ""
 
-#: ui/components/file_pane.slint:1208
+#: ui/components/file_pane.slint:1209
 msgctxt "FilePane"
 msgid "Save Edit"
 msgstr ""
 
-#: ui/components/file_pane.slint:1213
+#: ui/components/file_pane.slint:1214
 msgctxt "FilePane"
 msgid "Cancel Edit"
 msgstr ""
 
-#: ui/components/file_pane.slint:1227
+#: ui/components/file_pane.slint:1228
 msgctxt "FilePane"
 msgid "{0} · selected: {1} · {2}"
 msgstr ""
 
-#: ui/components/file_pane.slint:1229
+#: ui/components/file_pane.slint:1230
 msgctxt "FilePane"
 msgid "{0} · {1} selected · {2}"
 msgstr ""
@@ -939,76 +949,93 @@ msgid ""
 "This file already exists. Confirm to overwrite it, or choose another name."
 msgstr ""
 
-#: ui/components/logging_dialog.slint:301
+#: ui/components/logging_dialog.slint:302
+#: ui/components/logging_dialog.slint:302
+#: ui/components/logging_dialog.slint:302
+msgctxt "LoggingDialog"
+msgid "On"
+msgstr ""
+
+#: ui/components/logging_dialog.slint:302
+#: ui/components/logging_dialog.slint:302
+#: ui/components/logging_dialog.slint:302
+msgctxt "LoggingDialog"
+msgid "Off"
+msgstr ""
+
+#: ui/components/logging_dialog.slint:303
 msgctxt "LoggingDialog"
 msgid "Overwrite the existing file"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:307
+#: ui/components/logging_dialog.slint:309
 msgctxt "LoggingDialog"
 msgid "Options"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:314
+#: ui/components/logging_dialog.slint:316
 msgctxt "LoggingDialog"
 msgid "Format"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:320
+#: ui/components/logging_dialog.slint:323
 msgctxt "LoggingDialog"
 msgid "Sanitized (plain text)"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:327
+#: ui/components/logging_dialog.slint:329
 msgctxt "LoggingDialog"
 msgid "Raw (with ANSI escapes)"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:336
+#: ui/components/logging_dialog.slint:337
+#: ui/components/logging_dialog.slint:337
 msgctxt "LoggingDialog"
-msgid "Timestamp each line with the local [HH:MM:SS]"
+msgid "Timestamp"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:342
+#: ui/components/logging_dialog.slint:348
+#: ui/components/logging_dialog.slint:348
 msgctxt "LoggingDialog"
-msgid "Also record local input (commands you type)"
+msgid "Record input"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:354
+#: ui/components/logging_dialog.slint:365
 msgctxt "LoggingDialog"
 msgid ""
 "Local input is written to the log in plain text, including passwords you "
 "type interactively. Confirm before enabling."
 msgstr ""
 
-#: ui/components/logging_dialog.slint:357
+#: ui/components/logging_dialog.slint:368
+#: ui/components/logging_dialog.slint:368
 msgctxt "LoggingDialog"
 msgid "I understand local input will be recorded"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:372
+#: ui/components/logging_dialog.slint:384
 msgctxt "LoggingDialog"
 msgid ""
 "Logging starts now: existing scrollback is not written; new output is "
 "recorded."
 msgstr ""
 
-#: ui/components/logging_dialog.slint:406
+#: ui/components/logging_dialog.slint:418
 msgctxt "LoggingDialog"
 msgid "Close"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:406
+#: ui/components/logging_dialog.slint:418
 msgctxt "LoggingDialog"
 msgid "Cancel"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:411
+#: ui/components/logging_dialog.slint:423
 msgctxt "LoggingDialog"
 msgid "Stop Logging"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:417
+#: ui/components/logging_dialog.slint:429
 msgctxt "LoggingDialog"
 msgid "Start Logging"
 msgstr ""
@@ -1740,7 +1767,7 @@ msgctxt "TerminalView"
 msgid "Bottom"
 msgstr ""
 
-#: ui/components/terminal_view.slint:514 ui/components/terminal_view.slint:552
+#: ui/components/terminal_view.slint:514 ui/components/terminal_view.slint:553
 msgctxt "TerminalView"
 msgid "Find"
 msgstr ""
@@ -1755,22 +1782,22 @@ msgctxt "TerminalView"
 msgid "Search visible terminal text"
 msgstr ""
 
-#: ui/components/terminal_view.slint:539 ui/components/terminal_view.slint:540
+#: ui/components/terminal_view.slint:540 ui/components/terminal_view.slint:541
 msgctxt "TerminalView"
 msgid "Regex"
 msgstr ""
 
-#: ui/components/terminal_view.slint:560
+#: ui/components/terminal_view.slint:561
 msgctxt "TerminalView"
 msgid "Prev"
 msgstr ""
 
-#: ui/components/terminal_view.slint:568
+#: ui/components/terminal_view.slint:569
 msgctxt "TerminalView"
 msgid "Next"
 msgstr ""
 
-#: ui/components/terminal_view.slint:589
+#: ui/components/terminal_view.slint:590
 msgctxt "TerminalView"
 msgid "Close find bar"
 msgstr ""
@@ -2035,59 +2062,59 @@ msgctxt "TriStateControl"
 msgid "Reset"
 msgstr ""
 
-#: ui/pages/folder_editor.slint:215 ui/pages/folder_editor.slint:247
-#: ui/pages/folder_editor.slint:215 ui/pages/folder_editor.slint:247
+#: ui/pages/folder_editor.slint:215 ui/pages/folder_editor.slint:249
+#: ui/pages/folder_editor.slint:215 ui/pages/folder_editor.slint:249
 msgctxt "FieldRow"
 msgid "(not set)"
 msgstr ""
 
-#: ui/pages/folder_editor.slint:235
+#: ui/pages/folder_editor.slint:236
 msgctxt "FieldRow"
 msgid "Enabled"
 msgstr ""
 
-#: ui/pages/folder_editor.slint:235
+#: ui/pages/folder_editor.slint:236
 msgctxt "FieldRow"
 msgid "Disabled"
 msgstr ""
 
-#: ui/pages/folder_editor.slint:424
+#: ui/pages/folder_editor.slint:426
 msgctxt "FolderEditor"
 msgid "Appearance"
 msgstr ""
 
-#: ui/pages/folder_editor.slint:425
+#: ui/pages/folder_editor.slint:427
 msgctxt "FolderEditor"
 msgid ""
 "Colors and font for new terminals opened in this folder and its subfolders."
 msgstr ""
 
-#: ui/pages/folder_editor.slint:436
+#: ui/pages/folder_editor.slint:438
 msgctxt "FolderEditor"
 msgid "Terminal"
 msgstr ""
 
-#: ui/pages/folder_editor.slint:437
+#: ui/pages/folder_editor.slint:439
 msgctxt "FolderEditor"
 msgid "Scrollback limits applied when a terminal is created for this folder."
 msgstr ""
 
-#: ui/pages/folder_editor.slint:448
+#: ui/pages/folder_editor.slint:450
 msgctxt "FolderEditor"
 msgid "Logging"
 msgstr ""
 
-#: ui/pages/folder_editor.slint:449
+#: ui/pages/folder_editor.slint:451
 msgctxt "FolderEditor"
 msgid "Session logging defaults for this folder."
 msgstr ""
 
-#: ui/pages/folder_editor.slint:491
+#: ui/pages/folder_editor.slint:493
 msgctxt "FolderEditor"
 msgid "Reset All"
 msgstr ""
 
-#: ui/pages/folder_editor.slint:496
+#: ui/pages/folder_editor.slint:498
 msgctxt "FolderEditor"
 msgid "Save"
 msgstr ""
@@ -2385,7 +2412,7 @@ msgctxt "ProxiesPage"
 msgid "Duplicate"
 msgstr ""
 
-#: ui/pages/proxies.slint:214 ui/pages/proxies.slint:545
+#: ui/pages/proxies.slint:214 ui/pages/proxies.slint:547
 msgctxt "ProxiesPage"
 msgid "Test"
 msgstr ""
@@ -2475,32 +2502,32 @@ msgctxt "ProxiesPage"
 msgid "Proxy password (optional)"
 msgstr ""
 
-#: ui/pages/proxies.slint:531
+#: ui/pages/proxies.slint:531 ui/pages/proxies.slint:536
 msgctxt "ProxiesPage"
 msgid "DNS via proxy"
 msgstr ""
 
-#: ui/pages/proxies.slint:534
+#: ui/pages/proxies.slint:535
 msgctxt "ProxiesPage"
 msgid "On"
 msgstr ""
 
-#: ui/pages/proxies.slint:534
+#: ui/pages/proxies.slint:535
 msgctxt "ProxiesPage"
 msgid "Off"
 msgstr ""
 
-#: ui/pages/proxies.slint:553
+#: ui/pages/proxies.slint:555
 msgctxt "ProxiesPage"
 msgid "Profile id: {0}"
 msgstr ""
 
-#: ui/pages/proxies.slint:620
+#: ui/pages/proxies.slint:622
 msgctxt "ProxiesPage"
 msgid "Cancel"
 msgstr ""
 
-#: ui/pages/proxies.slint:625
+#: ui/pages/proxies.slint:627
 msgctxt "ProxiesPage"
 msgid "Save"
 msgstr ""
@@ -2560,441 +2587,441 @@ msgctxt "QuickConnectPage"
 msgid "Enable it in Settings to list recent targets here."
 msgstr ""
 
-#: ui/pages/session_editor.slint:157
+#: ui/pages/session_editor.slint:126 ui/pages/session_editor.slint:134
 msgctxt "InheritBar"
 msgid "Inherit"
 msgstr ""
 
-#: ui/pages/session_editor.slint:178
+#: ui/pages/session_editor.slint:148
 msgctxt "InheritSourceText"
 msgid "Using parent: Folder «{0}» / Global"
 msgstr ""
 
-#: ui/pages/session_editor.slint:179
+#: ui/pages/session_editor.slint:149
 msgctxt "InheritSourceText"
 msgid "Using parent: Global"
 msgstr ""
 
-#: ui/pages/session_editor.slint:180
+#: ui/pages/session_editor.slint:150
 msgctxt "InheritSourceText"
 msgid "Custom — copied from the parent; changes stay with this session."
 msgstr ""
 
-#: ui/pages/session_editor.slint:444
+#: ui/pages/session_editor.slint:414
 msgctxt "LoginStepMenu"
 msgid "Edit"
 msgstr ""
 
-#: ui/pages/session_editor.slint:445
+#: ui/pages/session_editor.slint:415
 msgctxt "LoginStepMenu"
 msgid "Duplicate"
 msgstr ""
 
-#: ui/pages/session_editor.slint:447
+#: ui/pages/session_editor.slint:417
 msgctxt "LoginStepMenu"
 msgid "Delete"
 msgstr ""
 
-#: ui/pages/session_editor.slint:453
+#: ui/pages/session_editor.slint:423
 msgctxt "LoginStepMenu"
 msgid "Move Up"
 msgstr ""
 
-#: ui/pages/session_editor.slint:455 ui/pages/session_editor.slint:468
+#: ui/pages/session_editor.slint:425 ui/pages/session_editor.slint:438
 msgctxt "LoginStepMenu"
 msgid "Already at the top."
 msgstr ""
 
-#: ui/pages/session_editor.slint:459
+#: ui/pages/session_editor.slint:429
 msgctxt "LoginStepMenu"
 msgid "Move Down"
 msgstr ""
 
-#: ui/pages/session_editor.slint:461 ui/pages/session_editor.slint:474
+#: ui/pages/session_editor.slint:431 ui/pages/session_editor.slint:444
 msgctxt "LoginStepMenu"
 msgid "Already at the bottom."
 msgstr ""
 
-#: ui/pages/session_editor.slint:466
+#: ui/pages/session_editor.slint:436
 msgctxt "LoginStepMenu"
 msgid "Move to Top"
 msgstr ""
 
-#: ui/pages/session_editor.slint:472
+#: ui/pages/session_editor.slint:442
 msgctxt "LoginStepMenu"
 msgid "Move to Bottom"
 msgstr ""
 
-#: ui/pages/session_editor.slint:501
+#: ui/pages/session_editor.slint:471
 msgctxt "TunnelMenu"
 msgid "Edit"
 msgstr ""
 
-#: ui/pages/session_editor.slint:502
+#: ui/pages/session_editor.slint:472
 msgctxt "TunnelMenu"
 msgid "Duplicate"
 msgstr ""
 
-#: ui/pages/session_editor.slint:505
+#: ui/pages/session_editor.slint:475
 msgctxt "TunnelMenu"
 msgid "Delete"
 msgstr ""
 
-#: ui/pages/session_editor.slint:666
+#: ui/pages/session_editor.slint:636
 msgctxt "SessionEditor"
 msgid "Remote forward"
 msgstr ""
 
-#: ui/pages/session_editor.slint:667
+#: ui/pages/session_editor.slint:637
 msgctxt "SessionEditor"
 msgid "Dynamic (SOCKS)"
 msgstr ""
 
-#: ui/pages/session_editor.slint:668
+#: ui/pages/session_editor.slint:638
 msgctxt "SessionEditor"
 msgid "Local forward"
 msgstr ""
 
-#: ui/pages/session_editor.slint:705
+#: ui/pages/session_editor.slint:675
 msgctxt "SessionEditor"
 msgid "General"
 msgstr ""
 
-#: ui/pages/session_editor.slint:706
+#: ui/pages/session_editor.slint:676
 msgctxt "SessionEditor"
 msgid "Authentication"
 msgstr ""
 
-#: ui/pages/session_editor.slint:707
+#: ui/pages/session_editor.slint:677
 msgctxt "SessionEditor"
 msgid "Login Script"
 msgstr ""
 
-#: ui/pages/session_editor.slint:708
+#: ui/pages/session_editor.slint:678
 msgctxt "SessionEditor"
 msgid "Proxy"
 msgstr ""
 
-#: ui/pages/session_editor.slint:709
+#: ui/pages/session_editor.slint:679
 msgctxt "SessionEditor"
 msgid "Tunnels"
 msgstr ""
 
-#: ui/pages/session_editor.slint:710
+#: ui/pages/session_editor.slint:680
 msgctxt "SessionEditor"
 msgid "Terminal Style"
 msgstr ""
 
-#: ui/pages/session_editor.slint:713
+#: ui/pages/session_editor.slint:683
 msgctxt "SessionEditor"
 msgid "SFTP"
 msgstr ""
 
-#: ui/pages/session_editor.slint:716 ui/pages/session_editor.slint:722
+#: ui/pages/session_editor.slint:686 ui/pages/session_editor.slint:692
 msgctxt "SessionEditor"
 msgid "Not in this version."
 msgstr ""
 
-#: ui/pages/session_editor.slint:719
+#: ui/pages/session_editor.slint:689
 msgctxt "SessionEditor"
 msgid "Advanced"
 msgstr ""
 
-#: ui/pages/session_editor.slint:761
+#: ui/pages/session_editor.slint:731
 msgctxt "SessionEditor"
 msgid "Folder"
 msgstr ""
 
-#: ui/pages/session_editor.slint:774
+#: ui/pages/session_editor.slint:744
 msgctxt "SessionEditor"
 msgid "Name"
 msgstr ""
 
-#: ui/pages/session_editor.slint:778
+#: ui/pages/session_editor.slint:748
 msgctxt "SessionEditor"
 msgid "Session name"
 msgstr ""
 
-#: ui/pages/session_editor.slint:784 ui/pages/session_editor.slint:788
+#: ui/pages/session_editor.slint:754 ui/pages/session_editor.slint:758
 msgctxt "SessionEditor"
 msgid "Host"
 msgstr ""
 
-#: ui/pages/session_editor.slint:792
+#: ui/pages/session_editor.slint:762
 msgctxt "SessionEditor"
 msgid "Port"
 msgstr ""
 
-#: ui/pages/session_editor.slint:807
+#: ui/pages/session_editor.slint:777
 msgctxt "SessionEditor"
 msgid "Icon"
 msgstr ""
 
-#: ui/pages/session_editor.slint:832
+#: ui/pages/session_editor.slint:802
 msgctxt "SessionEditor"
 msgid "Default"
 msgstr ""
 
-#: ui/pages/session_editor.slint:833
+#: ui/pages/session_editor.slint:803
 msgctxt "SessionEditor"
 msgid "Preset · Server"
 msgstr ""
 
-#: ui/pages/session_editor.slint:834
+#: ui/pages/session_editor.slint:804
 msgctxt "SessionEditor"
 msgid "Preset · Database"
 msgstr ""
 
-#: ui/pages/session_editor.slint:835
+#: ui/pages/session_editor.slint:805
 msgctxt "SessionEditor"
 msgid "Custom image"
 msgstr ""
 
-#: ui/pages/session_editor.slint:843 ui/pages/session_editor.slint:844
+#: ui/pages/session_editor.slint:813 ui/pages/session_editor.slint:814
 msgctxt "SessionEditor"
 msgid "Browse"
 msgstr ""
 
-#: ui/pages/session_editor.slint:850 ui/pages/session_editor.slint:851
+#: ui/pages/session_editor.slint:820 ui/pages/session_editor.slint:821
 msgctxt "SessionEditor"
 msgid "Reset to default"
 msgstr ""
 
-#: ui/pages/session_editor.slint:859
+#: ui/pages/session_editor.slint:829
 msgctxt "SessionEditor"
 msgid "No image selected yet."
 msgstr ""
 
-#: ui/pages/session_editor.slint:869
+#: ui/pages/session_editor.slint:839
 msgctxt "SessionEditor"
 msgid "Notes"
 msgstr ""
 
-#: ui/pages/session_editor.slint:872
+#: ui/pages/session_editor.slint:842
 msgctxt "SessionEditor"
 msgid "Optional notes for this session"
 msgstr ""
 
-#: ui/pages/session_editor.slint:878
+#: ui/pages/session_editor.slint:848
 msgctxt "SessionEditor"
 msgid "A session name and a host are required before saving."
 msgstr ""
 
-#: ui/pages/session_editor.slint:901 ui/pages/session_editor.slint:1216
+#: ui/pages/session_editor.slint:871 ui/pages/session_editor.slint:1186
 msgctxt "SessionEditor"
 msgid "Parent"
 msgstr ""
 
-#: ui/pages/session_editor.slint:914 ui/pages/session_editor.slint:918
+#: ui/pages/session_editor.slint:884 ui/pages/session_editor.slint:888
 msgctxt "SessionEditor"
 msgid "Username"
 msgstr ""
 
-#: ui/pages/session_editor.slint:925
+#: ui/pages/session_editor.slint:895
 msgctxt "SessionEditor"
 msgid "Method"
 msgstr ""
 
-#: ui/pages/session_editor.slint:929 ui/pages/session_editor.slint:950
+#: ui/pages/session_editor.slint:899 ui/pages/session_editor.slint:920
 msgctxt "SessionEditor"
 msgid "Password"
 msgstr ""
 
-#: ui/pages/session_editor.slint:935
+#: ui/pages/session_editor.slint:905
 msgctxt "SessionEditor"
 msgid "Private Key"
 msgstr ""
 
-#: ui/pages/session_editor.slint:941
+#: ui/pages/session_editor.slint:911
 msgctxt "SessionEditor"
 msgid "Keyboard Interactive"
 msgstr ""
 
-#: ui/pages/session_editor.slint:957
+#: ui/pages/session_editor.slint:927
 msgctxt "SessionEditor"
 msgid "Leave blank to keep the saved password"
 msgstr ""
 
-#: ui/pages/session_editor.slint:958
+#: ui/pages/session_editor.slint:928
 msgctxt "SessionEditor"
 msgid "Empty = ask on connect"
 msgstr ""
 
-#: ui/pages/session_editor.slint:964
+#: ui/pages/session_editor.slint:934
 msgctxt "SessionEditor"
 msgid "Private key"
 msgstr ""
 
-#: ui/pages/session_editor.slint:969
+#: ui/pages/session_editor.slint:939
 msgctxt "SessionEditor"
 msgid "Choose a managed key"
 msgstr ""
 
-#: ui/pages/session_editor.slint:974 ui/pages/session_editor.slint:975
+#: ui/pages/session_editor.slint:944 ui/pages/session_editor.slint:945
 msgctxt "SessionEditor"
 msgid "Manage keys"
 msgstr ""
 
-#: ui/pages/session_editor.slint:982
+#: ui/pages/session_editor.slint:952
 msgctxt "SessionEditor"
 msgid ""
 "Import an OpenSSH private key in the Private Keys manager, then pick it here."
 msgstr ""
 
-#: ui/pages/session_editor.slint:983
+#: ui/pages/session_editor.slint:953
 msgctxt "SessionEditor"
 msgid "Keys are managed in Private Keys."
 msgstr ""
 
-#: ui/pages/session_editor.slint:987
+#: ui/pages/session_editor.slint:957
 msgctxt "SessionEditor"
 msgid "Passphrase"
 msgstr ""
 
-#: ui/pages/session_editor.slint:993
+#: ui/pages/session_editor.slint:963
 msgctxt "SessionEditor"
 msgid "Empty = ask when needed"
 msgstr ""
 
-#: ui/pages/session_editor.slint:999
+#: ui/pages/session_editor.slint:969
 msgctxt "SessionEditor"
 msgid "The selected managed key is no longer available. Choose another key."
 msgstr ""
 
-#: ui/pages/session_editor.slint:1006
+#: ui/pages/session_editor.slint:976
 msgctxt "SessionEditor"
 msgid "Legacy key"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1021
+#: ui/pages/session_editor.slint:991
 msgctxt "SessionEditor"
 msgid ""
 "Legacy key path with a saved passphrase. Select a managed key to migrate "
 "this session."
 msgstr ""
 
-#: ui/pages/session_editor.slint:1022
+#: ui/pages/session_editor.slint:992
 msgctxt "SessionEditor"
 msgid "Legacy key path. Select a managed key to migrate this session."
 msgstr ""
 
-#: ui/pages/session_editor.slint:1026
+#: ui/pages/session_editor.slint:996
 msgctxt "SessionEditor"
 msgid "Choose a managed private key before saving."
 msgstr ""
 
-#: ui/pages/session_editor.slint:1056
+#: ui/pages/session_editor.slint:1026
 msgctxt "SessionEditor"
 msgid "Keys"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1060
+#: ui/pages/session_editor.slint:1030
 msgctxt "SessionEditor"
 msgid "Wait"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1077
+#: ui/pages/session_editor.slint:1047
 msgctxt "SessionEditor"
 msgid "No steps — use Keys / Wait above"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1196
+#: ui/pages/session_editor.slint:1166
 msgctxt "SessionEditor"
 msgid ""
 "Inherited from the parent. Turn off Inherit to edit the steps for this "
 "session."
 msgstr ""
 
-#: ui/pages/session_editor.slint:1229
+#: ui/pages/session_editor.slint:1199
 msgctxt "SessionEditor"
 msgid "Profile"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1245 ui/pages/session_editor.slint:1246
+#: ui/pages/session_editor.slint:1215 ui/pages/session_editor.slint:1216
 msgctxt "SessionEditor"
 msgid "Manage proxies"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1252
+#: ui/pages/session_editor.slint:1222
 msgctxt "SessionEditor"
 msgid "Profiles are managed in Proxies."
 msgstr ""
 
-#: ui/pages/session_editor.slint:1265
+#: ui/pages/session_editor.slint:1235
 msgctxt "SessionEditor"
 msgid ""
 "The selected managed proxy is no longer available. Choose another proxy or "
 "No Proxy."
 msgstr ""
 
-#: ui/pages/session_editor.slint:1272
+#: ui/pages/session_editor.slint:1242
 msgctxt "SessionEditor"
 msgid "Legacy proxy"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1307 ui/pages/session_editor.slint:1308
+#: ui/pages/session_editor.slint:1277 ui/pages/session_editor.slint:1278
 msgctxt "SessionEditor"
 msgid "Add Tunnel"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1313 ui/pages/session_editor.slint:1314
+#: ui/pages/session_editor.slint:1283 ui/pages/session_editor.slint:1284
 msgctxt "SessionEditor"
 msgid "Clear Tunnels"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1331
+#: ui/pages/session_editor.slint:1301
 msgctxt "SessionEditor"
 msgid "No tunnels — use + above"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1405
+#: ui/pages/session_editor.slint:1375
 msgctxt "SessionEditor"
 msgid ""
 "Using {0} tunnel(s) from the parent. Turn off Inherit to edit them for this "
 "session."
 msgstr ""
 
-#: ui/pages/session_editor.slint:1425
+#: ui/pages/session_editor.slint:1395
 msgctxt "SessionEditor"
 msgid "Style"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1435 ui/pages/session_editor.slint:1436
+#: ui/pages/session_editor.slint:1405 ui/pages/session_editor.slint:1406
 msgctxt "SessionEditor"
 msgid "Manage terminal styles"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1443
+#: ui/pages/session_editor.slint:1413
 msgctxt "SessionEditor"
 msgid "Using parent style: {0}"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1444
+#: ui/pages/session_editor.slint:1414
 msgctxt "SessionEditor"
 msgid "Fonts and colors are edited in Terminal Styles."
 msgstr ""
 
-#: ui/pages/session_editor.slint:1448
+#: ui/pages/session_editor.slint:1418
 msgctxt "SessionEditor"
 msgid "Preview"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1482
+#: ui/pages/session_editor.slint:1452
 msgctxt "SessionEditor"
 msgid "Test Connection"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1485
+#: ui/pages/session_editor.slint:1455
 msgctxt "SessionEditor"
 msgid "Cancel"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1487
+#: ui/pages/session_editor.slint:1457
 msgctxt "SessionEditor"
 msgid "Save"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1492
+#: ui/pages/session_editor.slint:1462
 msgctxt "SessionEditor"
 msgid "Save and Connect"
 msgstr ""
@@ -3039,10 +3066,10 @@ msgctxt "SettingsDialog"
 msgid "Shortcuts"
 msgstr ""
 
-#: ui/pages/settings.slint:455 ui/pages/settings.slint:1050
-#: ui/pages/settings.slint:455 ui/pages/settings.slint:1050 ui/pages/settings.slint:1063
-#: ui/pages/settings.slint:455 ui/pages/settings.slint:1050 ui/pages/settings.slint:1063 ui/pages/settings.slint:1087
-#: ui/pages/settings.slint:455 ui/pages/settings.slint:1050 ui/pages/settings.slint:1063 ui/pages/settings.slint:1087
+#: ui/pages/settings.slint:455 ui/pages/settings.slint:1056
+#: ui/pages/settings.slint:455 ui/pages/settings.slint:1056 ui/pages/settings.slint:1069
+#: ui/pages/settings.slint:455 ui/pages/settings.slint:1056 ui/pages/settings.slint:1069 ui/pages/settings.slint:1094
+#: ui/pages/settings.slint:455 ui/pages/settings.slint:1056 ui/pages/settings.slint:1069 ui/pages/settings.slint:1094
 msgctxt "SettingsDialog"
 msgid "Not available in this version."
 msgstr ""
@@ -3072,466 +3099,466 @@ msgctxt "SettingsDialog"
 msgid "Applies immediately."
 msgstr ""
 
-#: ui/pages/settings.slint:515
+#: ui/pages/settings.slint:515 ui/pages/settings.slint:518
 msgctxt "SettingsDialog"
 msgid "Confirm close"
 msgstr ""
 
-#: ui/pages/settings.slint:517 ui/pages/settings.slint:531
-#: ui/pages/settings.slint:517 ui/pages/settings.slint:531 ui/pages/settings.slint:760
-#: ui/pages/settings.slint:517 ui/pages/settings.slint:531 ui/pages/settings.slint:760 ui/pages/settings.slint:1032
-#: ui/pages/settings.slint:517 ui/pages/settings.slint:531 ui/pages/settings.slint:760 ui/pages/settings.slint:1032 ui/pages/settings.slint:1161
+#: ui/pages/settings.slint:517 ui/pages/settings.slint:532
+#: ui/pages/settings.slint:517 ui/pages/settings.slint:532 ui/pages/settings.slint:763
+#: ui/pages/settings.slint:517 ui/pages/settings.slint:532 ui/pages/settings.slint:763 ui/pages/settings.slint:1037
+#: ui/pages/settings.slint:517 ui/pages/settings.slint:532 ui/pages/settings.slint:763 ui/pages/settings.slint:1037 ui/pages/settings.slint:1170
 msgctxt "SettingsDialog"
 msgid "On"
 msgstr ""
 
-#: ui/pages/settings.slint:517 ui/pages/settings.slint:531
-#: ui/pages/settings.slint:517 ui/pages/settings.slint:531 ui/pages/settings.slint:760
-#: ui/pages/settings.slint:517 ui/pages/settings.slint:531 ui/pages/settings.slint:760 ui/pages/settings.slint:1032
-#: ui/pages/settings.slint:517 ui/pages/settings.slint:531 ui/pages/settings.slint:760 ui/pages/settings.slint:1032 ui/pages/settings.slint:1093
-#: ui/pages/settings.slint:517 ui/pages/settings.slint:531 ui/pages/settings.slint:760 ui/pages/settings.slint:1032 ui/pages/settings.slint:1093 ui/pages/settings.slint:1161
+#: ui/pages/settings.slint:517 ui/pages/settings.slint:532
+#: ui/pages/settings.slint:517 ui/pages/settings.slint:532 ui/pages/settings.slint:763
+#: ui/pages/settings.slint:517 ui/pages/settings.slint:532 ui/pages/settings.slint:763 ui/pages/settings.slint:1037
+#: ui/pages/settings.slint:517 ui/pages/settings.slint:532 ui/pages/settings.slint:763 ui/pages/settings.slint:1037 ui/pages/settings.slint:1100
+#: ui/pages/settings.slint:517 ui/pages/settings.slint:532 ui/pages/settings.slint:763 ui/pages/settings.slint:1037 ui/pages/settings.slint:1100 ui/pages/settings.slint:1170
 msgctxt "SettingsDialog"
 msgid "Off"
 msgstr ""
 
-#: ui/pages/settings.slint:525
+#: ui/pages/settings.slint:526
 msgctxt "SettingsDialog"
 msgid "Ask before closing an active session."
 msgstr ""
 
-#: ui/pages/settings.slint:529
+#: ui/pages/settings.slint:530 ui/pages/settings.slint:533
 msgctxt "SettingsDialog"
 msgid "Confirm quit"
 msgstr ""
 
-#: ui/pages/settings.slint:539
+#: ui/pages/settings.slint:541
 msgctxt "SettingsDialog"
 msgid "Ask before quitting YShell."
 msgstr ""
 
-#: ui/pages/settings.slint:543
+#: ui/pages/settings.slint:545 ui/pages/settings.slint:548
 msgctxt "SettingsDialog"
 msgid "Reduce motion"
 msgstr ""
 
-#: ui/pages/settings.slint:555
+#: ui/pages/settings.slint:558
 msgctxt "SettingsDialog"
 msgid "Turns off transitions."
 msgstr ""
 
-#: ui/pages/settings.slint:565
+#: ui/pages/settings.slint:568
 msgctxt "SettingsDialog"
 msgid "App theme"
 msgstr ""
 
-#: ui/pages/settings.slint:569
+#: ui/pages/settings.slint:572
 msgctxt "SettingsDialog"
 msgid "Mode"
 msgstr ""
 
-#: ui/pages/settings.slint:574
+#: ui/pages/settings.slint:577
 msgctxt "SettingsDialog"
 msgid "System"
 msgstr ""
 
-#: ui/pages/settings.slint:575
+#: ui/pages/settings.slint:578
 msgctxt "SettingsDialog"
 msgid "Follow system"
 msgstr ""
 
-#: ui/pages/settings.slint:580 ui/pages/settings.slint:581
+#: ui/pages/settings.slint:583 ui/pages/settings.slint:584
 msgctxt "SettingsDialog"
 msgid "Light"
 msgstr ""
 
-#: ui/pages/settings.slint:586 ui/pages/settings.slint:587
+#: ui/pages/settings.slint:589 ui/pages/settings.slint:590
 msgctxt "SettingsDialog"
 msgid "Dark"
 msgstr ""
 
-#: ui/pages/settings.slint:594
+#: ui/pages/settings.slint:597
 msgctxt "SettingsDialog"
 msgid "Applies to the whole app."
 msgstr ""
 
-#: ui/pages/settings.slint:598
+#: ui/pages/settings.slint:601
 msgctxt "SettingsDialog"
 msgid "Accent"
 msgstr ""
 
-#: ui/pages/settings.slint:613
+#: ui/pages/settings.slint:616
 msgctxt "SettingsDialog"
 msgid "Used for buttons, focus, and selection."
 msgstr ""
 
-#: ui/pages/settings.slint:617
+#: ui/pages/settings.slint:620
 msgctxt "SettingsDialog"
 msgid "Terminal style"
 msgstr ""
 
-#: ui/pages/settings.slint:621
+#: ui/pages/settings.slint:624
 msgctxt "SettingsDialog"
 msgid "Style"
 msgstr ""
 
-#: ui/pages/settings.slint:638 ui/pages/settings.slint:639
+#: ui/pages/settings.slint:641 ui/pages/settings.slint:642
 msgctxt "SettingsDialog"
 msgid "Manage terminal styles"
 msgstr ""
 
-#: ui/pages/settings.slint:645
+#: ui/pages/settings.slint:648
 msgctxt "SettingsDialog"
 msgid ""
 "Default for new terminals; fonts and colors are edited in Terminal Styles."
 msgstr ""
 
-#: ui/pages/settings.slint:661
+#: ui/pages/settings.slint:664
 msgctxt "SettingsDialog"
 msgid "Scrollback"
 msgstr ""
 
-#: ui/pages/settings.slint:665
+#: ui/pages/settings.slint:668
 msgctxt "SettingsDialog"
 msgid "Scrollback lines"
 msgstr ""
 
-#: ui/pages/settings.slint:675
+#: ui/pages/settings.slint:678
 msgctxt "SettingsDialog"
 msgid "Max cells"
 msgstr ""
 
-#: ui/pages/settings.slint:699 ui/pages/settings.slint:700
+#: ui/pages/settings.slint:702 ui/pages/settings.slint:703
 msgctxt "SettingsDialog"
 msgid "Reset defaults"
 msgstr ""
 
-#: ui/pages/settings.slint:706
+#: ui/pages/settings.slint:709
 msgctxt "SettingsDialog"
 msgid "Mouse & paste"
 msgstr ""
 
-#: ui/pages/settings.slint:710
+#: ui/pages/settings.slint:713
 msgctxt "SettingsDialog"
 msgid "Middle click"
 msgstr ""
 
-#: ui/pages/settings.slint:714 ui/pages/settings.slint:730
-#: ui/pages/settings.slint:714 ui/pages/settings.slint:730
+#: ui/pages/settings.slint:717 ui/pages/settings.slint:733
+#: ui/pages/settings.slint:717 ui/pages/settings.slint:733
 msgctxt "SettingsDialog"
 msgid "Paste"
 msgstr ""
 
-#: ui/pages/settings.slint:714 ui/pages/settings.slint:730
+#: ui/pages/settings.slint:717 ui/pages/settings.slint:733
 msgctxt "SettingsDialog"
 msgid "Do nothing"
 msgstr ""
 
-#: ui/pages/settings.slint:722
+#: ui/pages/settings.slint:725
 msgctxt "SettingsDialog"
 msgid "Paste from the clipboard or ignore the click."
 msgstr ""
 
-#: ui/pages/settings.slint:726
+#: ui/pages/settings.slint:729
 msgctxt "SettingsDialog"
 msgid "Right click"
 msgstr ""
 
-#: ui/pages/settings.slint:730
+#: ui/pages/settings.slint:733
 msgctxt "SettingsDialog"
 msgid "Context menu"
 msgstr ""
 
-#: ui/pages/settings.slint:738
+#: ui/pages/settings.slint:741
 msgctxt "SettingsDialog"
 msgid "Open the terminal menu, paste, or ignore the click."
 msgstr ""
 
-#: ui/pages/settings.slint:742
+#: ui/pages/settings.slint:745
 msgctxt "SettingsDialog"
 msgid "Multi-line paste"
 msgstr ""
 
-#: ui/pages/settings.slint:746 ui/pages/settings.slint:961
+#: ui/pages/settings.slint:749 ui/pages/settings.slint:966
 msgctxt "SettingsDialog"
 msgid "Ask"
 msgstr ""
 
-#: ui/pages/settings.slint:746
+#: ui/pages/settings.slint:749
 msgctxt "SettingsDialog"
 msgid "Block"
 msgstr ""
 
-#: ui/pages/settings.slint:754
+#: ui/pages/settings.slint:757
 msgctxt "SettingsDialog"
 msgid "Ask before sending text with more than one line."
 msgstr ""
 
-#: ui/pages/settings.slint:758
+#: ui/pages/settings.slint:761 ui/pages/settings.slint:764
 msgctxt "SettingsDialog"
 msgid "Auto copy"
 msgstr ""
 
-#: ui/pages/settings.slint:768
+#: ui/pages/settings.slint:772
 msgctxt "SettingsDialog"
 msgid "Copy selected terminal text to the clipboard automatically."
 msgstr ""
 
-#: ui/pages/settings.slint:810
+#: ui/pages/settings.slint:814
 msgctxt "SettingsDialog"
 msgid "Master password"
 msgstr ""
 
-#: ui/pages/settings.slint:839
+#: ui/pages/settings.slint:843
 msgctxt "SettingsDialog"
 msgid "Sessions and keys are encrypted."
 msgstr ""
 
-#: ui/pages/settings.slint:840
+#: ui/pages/settings.slint:844
 msgctxt "SettingsDialog"
 msgid "Sessions and keys are not encrypted."
 msgstr ""
 
-#: ui/pages/settings.slint:853
+#: ui/pages/settings.slint:857
 msgctxt "SettingsDialog"
 msgid "Set"
 msgstr ""
 
-#: ui/pages/settings.slint:854
+#: ui/pages/settings.slint:858
 msgctxt "SettingsDialog"
 msgid "Set master password"
 msgstr ""
 
-#: ui/pages/settings.slint:859
+#: ui/pages/settings.slint:863
 msgctxt "SettingsDialog"
 msgid "Change"
 msgstr ""
 
-#: ui/pages/settings.slint:860
+#: ui/pages/settings.slint:864
 msgctxt "SettingsDialog"
 msgid "Change master password"
 msgstr ""
 
-#: ui/pages/settings.slint:864
+#: ui/pages/settings.slint:868
 msgctxt "SettingsDialog"
 msgid "Remove"
 msgstr ""
 
-#: ui/pages/settings.slint:865
+#: ui/pages/settings.slint:869
 msgctxt "SettingsDialog"
 msgid "Remove master password"
 msgstr ""
 
-#: ui/pages/settings.slint:874
+#: ui/pages/settings.slint:878
 msgctxt "SettingsDialog"
 msgid "Forgot password?"
 msgstr ""
 
-#: ui/pages/settings.slint:875
+#: ui/pages/settings.slint:879
 msgctxt "SettingsDialog"
 msgid "Reset master password"
 msgstr ""
 
-#: ui/pages/settings.slint:882
+#: ui/pages/settings.slint:886
 msgctxt "SettingsDialog"
 msgid "Set a password to encrypt saved sessions and keys."
 msgstr ""
 
-#: ui/pages/settings.slint:888
+#: ui/pages/settings.slint:892
 msgctxt "SettingsDialog"
 msgid "Remove decrypts files; Reset deletes them."
 msgstr ""
 
-#: ui/pages/settings.slint:897
+#: ui/pages/settings.slint:901
 msgctxt "SettingsDialog"
 msgid "Managers"
 msgstr ""
 
-#: ui/pages/settings.slint:912
+#: ui/pages/settings.slint:916
 msgctxt "SettingsDialog"
 msgid "Known Hosts"
 msgstr ""
 
-#: ui/pages/settings.slint:914
+#: ui/pages/settings.slint:918
 msgctxt "SettingsDialog"
 msgid "Open Known Hosts"
 msgstr ""
 
-#: ui/pages/settings.slint:920
+#: ui/pages/settings.slint:924
 msgctxt "SettingsDialog"
 msgid "Private Keys"
 msgstr ""
 
-#: ui/pages/settings.slint:922
+#: ui/pages/settings.slint:926
 msgctxt "SettingsDialog"
 msgid "Open Private Keys"
 msgstr ""
 
-#: ui/pages/settings.slint:928
+#: ui/pages/settings.slint:932
 msgctxt "SettingsDialog"
 msgid "Proxies"
 msgstr ""
 
-#: ui/pages/settings.slint:930
+#: ui/pages/settings.slint:934
 msgctxt "SettingsDialog"
 msgid "Open Proxies"
 msgstr ""
 
-#: ui/pages/settings.slint:943
+#: ui/pages/settings.slint:947 ui/pages/settings.slint:950
 msgctxt "SettingsDialog"
 msgid "Show hidden"
 msgstr ""
 
-#: ui/pages/settings.slint:953
+#: ui/pages/settings.slint:958
 msgctxt "SettingsDialog"
 msgid "New SFTP tabs start with hidden files shown."
 msgstr ""
 
-#: ui/pages/settings.slint:957
+#: ui/pages/settings.slint:962
 msgctxt "SettingsDialog"
 msgid "Conflict"
 msgstr ""
 
-#: ui/pages/settings.slint:961
+#: ui/pages/settings.slint:966
 msgctxt "SettingsDialog"
 msgid "Replace"
 msgstr ""
 
-#: ui/pages/settings.slint:961
+#: ui/pages/settings.slint:966
 msgctxt "SettingsDialog"
 msgid "Skip"
 msgstr ""
 
-#: ui/pages/settings.slint:961
+#: ui/pages/settings.slint:966
 msgctxt "SettingsDialog"
 msgid "Stop"
 msgstr ""
 
-#: ui/pages/settings.slint:969
+#: ui/pages/settings.slint:974
 msgctxt "SettingsDialog"
 msgid "Ask opens a dialog; the others apply automatically."
 msgstr ""
 
-#: ui/pages/settings.slint:973
+#: ui/pages/settings.slint:978
 msgctxt "SettingsDialog"
 msgid "External editor"
 msgstr ""
 
-#: ui/pages/settings.slint:991
+#: ui/pages/settings.slint:996
 msgctxt "SettingsDialog"
 msgid "Used to open remote files for editing."
 msgstr ""
 
-#: ui/pages/settings.slint:1000
+#: ui/pages/settings.slint:1005
 msgctxt "SettingsDialog"
 msgid "Path to editor executable"
 msgstr ""
 
-#: ui/pages/settings.slint:1007 ui/pages/settings.slint:1008
+#: ui/pages/settings.slint:1012 ui/pages/settings.slint:1013
 msgctxt "SettingsDialog"
 msgid "Browse"
 msgstr ""
 
-#: ui/pages/settings.slint:1030
+#: ui/pages/settings.slint:1035 ui/pages/settings.slint:1038
 msgctxt "SettingsDialog"
 msgid "Enable"
 msgstr ""
 
-#: ui/pages/settings.slint:1038
+#: ui/pages/settings.slint:1044
 msgctxt "SettingsDialog"
 msgid "Off by default; other MCP controls are disabled."
 msgstr ""
 
-#: ui/pages/settings.slint:1042
+#: ui/pages/settings.slint:1048
 msgctxt "SettingsDialog"
 msgid "Port"
 msgstr ""
 
-#: ui/pages/settings.slint:1054
+#: ui/pages/settings.slint:1060
 msgctxt "SettingsDialog"
 msgid "Listen"
 msgstr ""
 
-#: ui/pages/settings.slint:1056
+#: ui/pages/settings.slint:1062
 msgctxt "SettingsDialog"
 msgid "Local"
 msgstr ""
 
-#: ui/pages/settings.slint:1067
+#: ui/pages/settings.slint:1073
 msgctxt "SettingsDialog"
 msgid "API key"
 msgstr ""
 
-#: ui/pages/settings.slint:1079
+#: ui/pages/settings.slint:1085 ui/pages/settings.slint:1088
 msgctxt "SettingsDialog"
 msgid "View user"
 msgstr ""
 
-#: ui/pages/settings.slint:1091
+#: ui/pages/settings.slint:1098 ui/pages/settings.slint:1101
 msgctxt "SettingsDialog"
 msgid "Control user"
 msgstr ""
 
-#: ui/pages/settings.slint:1103
+#: ui/pages/settings.slint:1111 ui/pages/settings.slint:1114
 msgctxt "SettingsDialog"
 msgid "Auto-approve"
 msgstr ""
 
-#: ui/pages/settings.slint:1114
+#: ui/pages/settings.slint:1123
 msgctxt "SettingsDialog"
 msgid "Skip the control consent dialog."
 msgstr ""
 
-#: ui/pages/settings.slint:1128
+#: ui/pages/settings.slint:1137
 msgctxt "SettingsDialog"
 msgid "Add this stdio server in your AI host; do not run it yourself."
 msgstr ""
 
-#: ui/pages/settings.slint:1156
+#: ui/pages/settings.slint:1165 ui/pages/settings.slint:1171
 msgctxt "SettingsDialog"
 msgid "Debug logging"
 msgstr ""
 
-#: ui/pages/settings.slint:1169 ui/pages/settings.slint:1170
+#: ui/pages/settings.slint:1179 ui/pages/settings.slint:1180
 msgctxt "SettingsDialog"
 msgid "Open debug log folder"
 msgstr ""
 
-#: ui/pages/settings.slint:1176
+#: ui/pages/settings.slint:1186
 msgctxt "SettingsDialog"
 msgid "Writes logs under the config directory."
 msgstr ""
 
-#: ui/pages/settings.slint:1180
+#: ui/pages/settings.slint:1190
 msgctxt "SettingsDialog"
 msgid "Config directory"
 msgstr ""
 
-#: ui/pages/settings.slint:1189 ui/pages/settings.slint:1190
+#: ui/pages/settings.slint:1199 ui/pages/settings.slint:1200
 msgctxt "SettingsDialog"
 msgid "Open config directory"
 msgstr ""
 
-#: ui/pages/settings.slint:1195
+#: ui/pages/settings.slint:1205
 msgctxt "SettingsDialog"
 msgid "Read-only path to sessions, keys, and logs."
 msgstr ""
 
-#: ui/pages/settings.slint:1227
+#: ui/pages/settings.slint:1237
 msgctxt "SettingsDialog"
 msgid "Cancel"
 msgstr ""
 
-#: ui/pages/settings.slint:1228
+#: ui/pages/settings.slint:1238
 msgctxt "SettingsDialog"
 msgid "Discard changes and close"
 msgstr ""
 
-#: ui/pages/settings.slint:1232
+#: ui/pages/settings.slint:1242
 msgctxt "SettingsDialog"
 msgid "Save"
 msgstr ""
 
-#: ui/pages/settings.slint:1233
+#: ui/pages/settings.slint:1243
 msgctxt "SettingsDialog"
 msgid "Save all sections and close"
 msgstr ""
@@ -6660,7 +6687,8 @@ msgctxt "CompactConfirmWindow"
 msgid "Type {0} to confirm"
 msgstr ""
 
-#: ui/windows/compact_confirm_window.slint:116
+#: ui/windows/compact_confirm_window.slint:117
+#: ui/windows/compact_confirm_window.slint:117
 msgctxt "CompactConfirmWindow"
 msgid "Don't ask again"
 msgstr ""
@@ -7264,118 +7292,118 @@ msgctxt "SettingsWindow"
 msgid "Settings"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:76
-#: ui/windows/sftp_chmod_window.slint:76
+#: ui/windows/sftp_chmod_window.slint:48
+#: ui/windows/sftp_chmod_window.slint:48
 msgctxt "SftpChmodWindow"
 msgid "Change permissions"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:139
+#: ui/windows/sftp_chmod_window.slint:111
 msgctxt "SftpChmodWindow"
 msgid "{0}{1}{2}"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:173
+#: ui/windows/sftp_chmod_window.slint:145
 msgctxt "SftpChmodWindow"
 msgid "Path"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:185
+#: ui/windows/sftp_chmod_window.slint:157
 msgctxt "SftpChmodWindow"
 msgid "Mode"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:195
+#: ui/windows/sftp_chmod_window.slint:167
 msgctxt "SftpChmodWindow"
 msgid "Octal, e.g. 755. Changes sync with the checkboxes."
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:209
+#: ui/windows/sftp_chmod_window.slint:181
 msgctxt "SftpChmodWindow"
 msgid "Owner"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:210
+#: ui/windows/sftp_chmod_window.slint:182
 msgctxt "SftpChmodWindow"
 msgid "Group"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:211
+#: ui/windows/sftp_chmod_window.slint:183
 msgctxt "SftpChmodWindow"
 msgid "Other"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:216
+#: ui/windows/sftp_chmod_window.slint:188
 msgctxt "SftpChmodWindow"
 msgid "Read"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:224
+#: ui/windows/sftp_chmod_window.slint:197
 msgctxt "SftpChmodWindow"
 msgid "Owner read"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:229
+#: ui/windows/sftp_chmod_window.slint:203
 msgctxt "SftpChmodWindow"
 msgid "Group read"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:234
+#: ui/windows/sftp_chmod_window.slint:209
 msgctxt "SftpChmodWindow"
 msgid "Other read"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:241
+#: ui/windows/sftp_chmod_window.slint:216
 msgctxt "SftpChmodWindow"
 msgid "Write"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:249
+#: ui/windows/sftp_chmod_window.slint:225
 msgctxt "SftpChmodWindow"
 msgid "Owner write"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:254
+#: ui/windows/sftp_chmod_window.slint:231
 msgctxt "SftpChmodWindow"
 msgid "Group write"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:259
+#: ui/windows/sftp_chmod_window.slint:237
 msgctxt "SftpChmodWindow"
 msgid "Other write"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:266
+#: ui/windows/sftp_chmod_window.slint:244
 msgctxt "SftpChmodWindow"
 msgid "Execute"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:274
+#: ui/windows/sftp_chmod_window.slint:253
 msgctxt "SftpChmodWindow"
 msgid "Owner execute"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:279
+#: ui/windows/sftp_chmod_window.slint:259
 msgctxt "SftpChmodWindow"
 msgid "Group execute"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:284
+#: ui/windows/sftp_chmod_window.slint:265
 msgctxt "SftpChmodWindow"
 msgid "Other execute"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:290
+#: ui/windows/sftp_chmod_window.slint:271
 msgctxt "SftpChmodWindow"
 msgid "Mode must be three octal digits, e.g. 755."
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:317
+#: ui/windows/sftp_chmod_window.slint:298
 msgctxt "SftpChmodWindow"
 msgid "Cancel"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:322
+#: ui/windows/sftp_chmod_window.slint:303
 msgctxt "SftpChmodWindow"
 msgid "Apply"
 msgstr ""

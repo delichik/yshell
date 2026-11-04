@@ -17,7 +17,7 @@
 // 独立工具窗口内使用（`logging_window.slint`）：填满父级，无遮罩；Esc 走 `cancel()`。
 
 import { Theme } from "../theme.slint";
-import { WinButton, WinToggle, WinInfoBar, WinScrollIndicator } from "basic/controls.slint";
+import { WinButton, WinRadio, WinSwitch, WinInfoBar, WinScrollIndicator } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 import { Icon } from "basic/icons.slint";
 
@@ -297,8 +297,10 @@ export component LoggingDialog inherits Rectangle {
                         }
                     }
 
-                    if root.file-exists : WinToggle {
-                        text: @tr("Overwrite the existing file");
+                    // 目标文件已存在：布尔选项用共享开关（原型未画，行为与其它布尔一致）。
+                    if root.file-exists : WinSwitch {
+                        text: root.overwrite-confirmed ? @tr("On") : @tr("Off");
+                        accessible-name: @tr("Overwrite the existing file");
                         checked <=> root.overwrite-confirmed;
                         toggled => { root.notify-options(); }
                     }
@@ -314,38 +316,47 @@ export component LoggingDialog inherits Rectangle {
                         label: @tr("Format");
 
                         HorizontalLayout {
-                            spacing: Theme.spacing-8;
+                            spacing: Theme.spacing-16;
 
-                            WinToggle {
+                            // 互斥选项：原型 `.radio-line`（原生 radio），用共享 WinRadio。
+                            WinRadio {
                                 text: @tr("Sanitized (plain text)");
-                                radio: true;
                                 checked <=> root.sanitized-format;
                                 toggled => { root.sanitized-format = true; root.raw-format = false; root.notify-options(); }
                             }
 
-                            WinToggle {
+                            WinRadio {
                                 text: @tr("Raw (with ANSI escapes)");
-                                radio: true;
                                 checked <=> root.raw-format;
                                 toggled => { root.raw-format = true; root.sanitized-format = false; root.notify-options(); }
                             }
                         }
                     }
 
-                    WinToggle {
-                        text: @tr("Timestamp each line with the local [HH:MM:SS]");
-                        checked <=> root.timestamps;
-                        toggled => { root.notify-options(); }
+                    LoggingFormRow {
+                        label: @tr("Timestamp");
+
+                        WinSwitch {
+                            text: root.timestamps ? @tr("On") : @tr("Off");
+                            accessible-name: @tr("Timestamp");
+                            checked <=> root.timestamps;
+                            toggled => { root.notify-options(); }
+                        }
                     }
 
-                    WinToggle {
-                        text: @tr("Also record local input (commands you type)");
-                        checked <=> root.include-input;
-                        toggled => {
-                            if (!root.include-input) {
-                                root.input-confirmed = false;
+                    LoggingFormRow {
+                        label: @tr("Record input");
+
+                        WinSwitch {
+                            text: root.include-input ? @tr("On") : @tr("Off");
+                            accessible-name: @tr("Record input");
+                            checked <=> root.include-input;
+                            toggled => {
+                                if (!root.include-input) {
+                                    root.input-confirmed = false;
+                                }
+                                root.notify-options();
                             }
-                            root.notify-options();
                         }
                     }
 
@@ -353,8 +364,9 @@ export component LoggingDialog inherits Rectangle {
                         severity: "warning";
                         text: @tr("Local input is written to the log in plain text, including passwords you type interactively. Confirm before enabling.");
 
-                        WinToggle {
+                        WinSwitch {
                             text: @tr("I understand local input will be recorded");
+                            accessible-name: @tr("I understand local input will be recorded");
                             checked <=> root.input-confirmed;
                             toggled => { root.notify-options(); }
                         }

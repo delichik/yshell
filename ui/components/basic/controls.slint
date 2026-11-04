@@ -273,35 +273,369 @@ export component WinIconButton inherits Rectangle {
     }
 }
 
-// 开关型按钮（如 SFTP / 隧道 / 命令面板开关）
-export component WinToggle inherits Rectangle {
+// ---------------------------------------------------------------- 选择类（§5.3）
+/// §5.3 Switch：轨道 40×20、滑块 12、位移动画 167ms（`Theme.duration-fast`）；
+/// On = accent，Off = control-fill + control-stroke。整行（轨道 + 文案）可点。
+///
+/// 右侧状态文案（On/Off、Enabled/Disabled、Use/Don't use …）由调用方按原型给；
+/// 空文案 = 只显示轨道（紧凑行/工具栏）。**文本型布尔一律用本组件**，不要用方框冒充开关。
+export component WinSwitch inherits Rectangle {
+    in-out property <bool> checked: false;
+    in property <bool> enabled <=> touch.enabled;
+    /// 右侧状态文案；空 = 不显示文案。
     in property <string> text: "";
-    in property <string> icon: "";
-    /// 纯图标模式下的无障碍名称
+    /// 无障碍名称（通常是同一 form-row 左侧的 label）。
+    in property <string> accessible-name: "";
+    callback toggled();
+    /// 键盘焦点（E1）
+    out property <bool> has-focus: switch_focus.has-focus;
+
+    // 行高 32（= `control-height`）；20px 轨道在行内垂直居中。
+    height: Theme.control-height;
+    width: Theme.switch-width + (root.text == "" ? 0px : Theme.spacing-8 + status-text.preferred-width);
+    background: transparent;
+
+    accessible-role: switch;
+    accessible-enabled: root.enabled;
+    accessible-checkable: true;
+    accessible-checked: root.checked;
+    accessible-label: root.accessible-name != "" ? root.accessible-name : root.text;
+    accessible-action-default => { if (root.enabled) { root.toggle(); } }
+
+    FocusRing {
+        visible-ring: root.keyboard-focus && root.enabled;
+        radius: Theme.radius-control;
+        target-width: root.width;
+        target-height: root.height;
+    }
+
+    // E1：键盘壳（Tab 可达 + Enter/Space 切换 + 禁用不可聚焦）
+    switch_focus := FocusScope {
+        enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (root.enabled && (event.text == Key.Space || event.text == Key.Return)) {
+                root.toggle();
+                return accept;
+            }
+            return reject;
+        }
+        focus-gained(reason) => { root.keyboard-focus = reason == FocusReason.tab-navigation; }
+        focus-lost(reason) => { root.keyboard-focus = false; }
+    }
+
+    private property <bool> keyboard-focus: false;
+
+    // 轨道 + 滑块：Off 时滑块贴左（`switch-padding`），On 时贴右。
+    track := Rectangle {
+        width: Theme.switch-width;
+        height: Theme.switch-height;
+        y: (parent.height - self.height) / 2;
+        border-radius: Theme.switch-height / 2;
+        border-width: 1px;
+        border-color: !root.enabled ? Theme.control-stroke
+            : root.checked ? Theme.accent
+            : touch.has-hover ? Theme.text-secondary
+            : Theme.control-stroke;
+        background: !root.enabled ? Theme.control-fill-disabled
+            : root.checked ? (touch.pressed ? Theme.accent-pressed : touch.has-hover ? Theme.accent-hover : Theme.accent)
+            : touch.pressed ? Theme.control-fill-pressed
+            : touch.has-hover ? Theme.control-fill-hover
+            : Theme.control-fill;
+        animate background { duration: Theme.duration-fast; easing: ease-out; }
+        animate border-color { duration: Theme.duration-fast; easing: ease-out; }
+
+        Rectangle {
+            width: Theme.switch-knob-size;
+            height: Theme.switch-knob-size;
+            y: (parent.height - self.height) / 2;
+            x: root.checked
+                ? parent.width - self.width - Theme.switch-padding
+                : Theme.switch-padding;
+            border-radius: Theme.switch-knob-size / 2;
+            background: !root.enabled ? Theme.text-disabled
+                : root.checked ? Theme.accent-text
+                : Theme.text-secondary;
+            animate x { duration: Theme.duration-fast; easing: ease-out; }
+            animate background { duration: Theme.duration-fast; easing: ease-out; }
+        }
+    }
+
+    // 右侧上下文文案（可选）
+    status-text := Text {
+        visible: root.text != "";
+        x: Theme.switch-width + Theme.spacing-8;
+        y: 0;
+        width: parent.width - (Theme.switch-width + Theme.spacing-8);
+        height: parent.height;
+        text: root.text;
+        color: !root.enabled ? Theme.text-disabled : Theme.text-secondary;
+        font-size: Theme.font-body;
+        vertical-alignment: center;
+        wrap: no-wrap;
+        overflow: elide;
+    }
+
+    touch := TouchArea {
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                switch_focus.focus();
+            }
+        }
+        clicked => { root.toggle(); }
+    }
+
+    function toggle() {
+        root.checked = !root.checked;
+        root.toggled();
+    }
+
+    /// 供宿主把键盘焦点移入本控件
+    public function focus-switch() {
+        switch_focus.focus();
+    }
+}
+
+/// §5.3 CheckBox：20×20、圆角 4、选中 accent 实底 + check 图标。
+/// 用于**多选/勾选**语义（权限九宫格、查找 regex 选项、确认框「不再询问」等），不是开关。
+export component WinCheckBox inherits Rectangle {
+    in-out property <bool> checked: false;
+    in property <bool> enabled <=> touch.enabled;
+    /// 右侧标签文案；空 = 只有勾选框（表格/紧凑行）。
+    in property <string> text: "";
+    /// 无障碍名称（无标签时必填）。
+    in property <string> accessible-name: "";
+    callback toggled();
+    /// 键盘焦点（E1）
+    out property <bool> has-focus: check_focus.has-focus;
+
+    height: Theme.control-height;
+    width: Theme.choice-size + (root.text == "" ? 0px : Theme.spacing-8 + label-text.preferred-width);
+    background: transparent;
+
+    accessible-role: checkbox;
+    accessible-enabled: root.enabled;
+    accessible-checkable: true;
+    accessible-checked: root.checked;
+    accessible-label: root.accessible-name != "" ? root.accessible-name : root.text;
+    accessible-action-default => { if (root.enabled) { root.toggle(); } }
+
+    FocusRing {
+        visible-ring: root.keyboard-focus && root.enabled;
+        radius: Theme.radius-control;
+        target-width: root.width;
+        target-height: root.height;
+    }
+
+    // E1：键盘壳（Tab 可达 + Enter/Space 切换 + 禁用不可聚焦）
+    check_focus := FocusScope {
+        enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (root.enabled && (event.text == Key.Space || event.text == Key.Return)) {
+                root.toggle();
+                return accept;
+            }
+            return reject;
+        }
+        focus-gained(reason) => { root.keyboard-focus = reason == FocusReason.tab-navigation; }
+        focus-lost(reason) => { root.keyboard-focus = false; }
+    }
+
+    private property <bool> keyboard-focus: false;
+
+    marker := Rectangle {
+        width: Theme.choice-size;
+        height: Theme.choice-size;
+        y: (parent.height - self.height) / 2;
+        border-radius: Theme.radius-control;
+        border-width: 1px;
+        border-color: !root.enabled ? Theme.text-disabled : root.checked ? Theme.accent : Theme.text-secondary;
+        background: !root.enabled ? Theme.control-fill-disabled
+            : root.checked ? (touch.pressed ? Theme.accent-pressed : touch.has-hover ? Theme.accent-hover : Theme.accent)
+            : touch.pressed ? Theme.control-fill-pressed
+            : touch.has-hover ? Theme.control-fill-hover
+            : Theme.control-fill;
+        animate background { duration: Theme.duration-faster; easing: ease-out; }
+        animate border-color { duration: Theme.duration-faster; easing: ease-out; }
+
+        Icon {
+            visible: root.checked;
+            name: "check";
+            icon-color: root.enabled ? Theme.accent-text : Theme.text-disabled;
+            icon-size: 12px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+        }
+    }
+
+    label-text := Text {
+        visible: root.text != "";
+        x: Theme.choice-size + Theme.spacing-8;
+        y: 0;
+        width: parent.width - (Theme.choice-size + Theme.spacing-8);
+        height: parent.height;
+        text: root.text;
+        color: !root.enabled ? Theme.text-disabled : Theme.text-primary;
+        font-size: Theme.font-body;
+        vertical-alignment: center;
+        wrap: no-wrap;
+        overflow: elide;
+    }
+
+    touch := TouchArea {
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                check_focus.focus();
+            }
+        }
+        clicked => { root.toggle(); }
+    }
+
+    function toggle() {
+        root.checked = !root.checked;
+        root.toggled();
+    }
+
+    /// 供宿主把键盘焦点移入本控件
+    public function focus-check() {
+        check_focus.focus();
+    }
+}
+
+/// §5.3 Radio：20×20 圆形标记 + 内圆点，用于互斥选项（如 Logging → Format）。
+export component WinRadio inherits Rectangle {
+    in-out property <bool> checked: false;
+    in property <bool> enabled <=> touch.enabled;
+    /// 右侧标签文案；空 = 只有圆形标记。
+    in property <string> text: "";
+    /// 无障碍名称（无标签时必填）。
+    in property <string> accessible-name: "";
+    callback toggled();
+    /// 键盘焦点（E1）
+    out property <bool> has-focus: radio_focus.has-focus;
+
+    height: Theme.control-height;
+    width: Theme.choice-size + (root.text == "" ? 0px : Theme.spacing-8 + label-text.preferred-width);
+    background: transparent;
+
+    // 互斥语义：已选中时再点不取消（与原生 radio 一致）。
+    accessible-role: radio-button;
+    accessible-enabled: root.enabled;
+    accessible-checkable: true;
+    accessible-checked: root.checked;
+    accessible-label: root.accessible-name != "" ? root.accessible-name : root.text;
+    accessible-action-default => { if (root.enabled) { root.toggle(); } }
+
+    FocusRing {
+        visible-ring: root.keyboard-focus && root.enabled;
+        radius: Theme.choice-size / 2;
+        target-width: root.width;
+        target-height: root.height;
+    }
+
+    radio_focus := FocusScope {
+        enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (root.enabled && (event.text == Key.Space || event.text == Key.Return)) {
+                root.toggle();
+                return accept;
+            }
+            return reject;
+        }
+        focus-gained(reason) => { root.keyboard-focus = reason == FocusReason.tab-navigation; }
+        focus-lost(reason) => { root.keyboard-focus = false; }
+    }
+
+    private property <bool> keyboard-focus: false;
+
+    marker := Rectangle {
+        width: Theme.choice-size;
+        height: Theme.choice-size;
+        y: (parent.height - self.height) / 2;
+        border-radius: Theme.choice-size / 2;
+        border-width: 1px;
+        border-color: !root.enabled ? Theme.text-disabled : root.checked ? Theme.accent : Theme.text-secondary;
+        background: !root.enabled ? Theme.control-fill-disabled
+            : touch.has-hover && !root.checked ? Theme.control-fill-hover
+            : Theme.control-fill;
+        animate background { duration: Theme.duration-faster; easing: ease-out; }
+        animate border-color { duration: Theme.duration-faster; easing: ease-out; }
+
+        Rectangle {
+            visible: root.checked;
+            width: Theme.choice-size / 2;
+            height: Theme.choice-size / 2;
+            border-radius: Theme.choice-size / 4;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            background: root.enabled ? Theme.accent : Theme.text-disabled;
+            animate background { duration: Theme.duration-faster; easing: ease-out; }
+        }
+    }
+
+    label-text := Text {
+        visible: root.text != "";
+        x: Theme.choice-size + Theme.spacing-8;
+        y: 0;
+        width: parent.width - (Theme.choice-size + Theme.spacing-8);
+        height: parent.height;
+        text: root.text;
+        color: !root.enabled ? Theme.text-disabled : Theme.text-primary;
+        font-size: Theme.font-body;
+        vertical-alignment: center;
+        wrap: no-wrap;
+        overflow: elide;
+    }
+
+    touch := TouchArea {
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                radio_focus.focus();
+            }
+        }
+        clicked => { root.toggle(); }
+    }
+
+    // 互斥语义：已选中时再点不取消。
+    function toggle() {
+        if (root.checked) {
+            return;
+        }
+        root.checked = true;
+        root.toggled();
+    }
+
+    /// 供宿主把键盘焦点移入本控件
+    public function focus-radio() {
+        radio_focus.focus();
+    }
+}
+
+/// 工具栏/图标切换按钮（如文件面板「显示隐藏文件」）：32×32 命中区；
+/// 选中 accent 前景 + accent-soft 底。语义是“切换动作”的图标按钮，
+/// 不要用开关冒充；文本型布尔请用 `WinSwitch` / `WinCheckBox`。
+export component WinIconToggle inherits Rectangle {
+    in property <string> icon: "eye";
+    /// 无障碍名称（图标按钮必填）。
     in property <string> accessible-name: "";
     in-out property <bool> checked: false;
-    /// 单选语义：已选中时再点不取消（用于两选一格式等）。
-    in property <bool> radio: false;
     in property <bool> enabled <=> touch.enabled;
     callback toggled();
     /// 键盘焦点（E1）
     out property <bool> has-focus: toggle_focus.has-focus;
 
+    width: Theme.control-height;
     height: Theme.control-height;
-    // 文本模式宽度随内容，但封顶避免长文案无限撑宽（配合下面的 `overflow: elide`）。
-    width: root.text == "" ? Theme.control-height : min(content.preferred-width, Theme.nav-width * 2);
     border-radius: Theme.radius-control;
-    // 文本模式是"复选框 + 标签"（无按钮外框）；纯图标模式保留 32×32 图标按钮形态。
-    border-width: root.text == "" ? 1px : 0px;
-    border-color: !root.enabled ? Theme.control-stroke
-        : root.text == "" ? (root.checked ? Theme.accent : Theme.control-stroke)
-        : transparent;
-    background: !root.enabled ? (root.text == "" ? Theme.control-fill-disabled : transparent)
-        : root.text == "" ? (root.checked ? Theme.accent-soft
-            : touch.pressed ? Theme.control-fill-pressed
-            : touch.has-hover ? Theme.control-fill-hover
-            : Theme.control-fill)
-        : (touch.pressed ? Theme.subtle-pressed : touch.has-hover ? Theme.subtle-hover : transparent);
+    border-width: 1px;
+    border-color: !root.enabled ? Theme.control-stroke : root.checked ? Theme.accent : Theme.control-stroke;
+    background: !root.enabled ? Theme.control-fill-disabled
+        : root.checked ? (touch.pressed ? Theme.accent-pressed : touch.has-hover ? Theme.accent-hover : Theme.accent-soft)
+        : touch.pressed ? Theme.control-fill-pressed
+        : touch.has-hover ? Theme.control-fill-hover
+        : Theme.control-fill;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
     animate border-color { duration: Theme.duration-faster; easing: ease-out; }
 
@@ -309,12 +643,12 @@ export component WinToggle inherits Rectangle {
     accessible-enabled: root.enabled;
     accessible-checkable: true;
     accessible-checked: root.checked;
-    accessible-label: root.text == "" ? root.accessible-name : root.text;
+    accessible-label: root.accessible-name;
     accessible-action-default => { if (root.enabled) { root.toggle(); } }
 
     FocusRing {
         visible-ring: root.keyboard-focus && root.enabled;
-        radius: root.border-radius;
+        radius: Theme.radius-control;
         target-width: root.width;
         target-height: root.height;
     }
@@ -336,69 +670,13 @@ export component WinToggle inherits Rectangle {
 
     private property <bool> keyboard-focus: false;
 
-    content := HorizontalLayout {
-        // 文本模式 12/12；纯图标模式（text==""）无内边距，20px 图标在 32×32 命中区里居中。
-        // 注意：Text 必须随 text=="" 一起从布局中移除——空文本仍是 0 宽单元格，
-        // 其 spacing 会参与 alignment: center 的计算，把图标挤偏 4px。
-        padding-left: root.text == "" ? 0px : Theme.spacing-12;
-        padding-right: root.text == "" ? 0px : Theme.spacing-12;
-        spacing: Theme.spacing-8;
-        alignment: center;
-
-        // 文本模式的勾选框（三态：选中 accent 实底 + 勾 / 未选描边 / 禁用弱化）
-        //
-        // §5.3：CheckBox 20×20、圆角 4（控件圆角 token）。
-        // 交叉轴：勾选框是写死高度的固定尺寸子项，默认 stretch 会把它放在行顶
-        // （padding.begin），比标签文字高 8px → 用 cross-axis-self-alignment 居中。
-        if root.text != "" : Rectangle {
-            width: Theme.icon-size;
-            height: Theme.icon-size;
-            border-radius: Theme.radius-control;
-            border-width: 1px;
-            cross-axis-self-alignment: center;
-            border-color: !root.enabled ? Theme.text-disabled : root.checked ? Theme.accent : Theme.text-secondary;
-            background: root.checked ? (root.enabled ? Theme.accent : Theme.control-fill-disabled) : transparent;
-            animate background { duration: Theme.duration-faster; easing: ease-out; }
-
-            Icon {
-                visible: root.checked;
-                name: "check";
-                icon-color: root.enabled ? Theme.accent-text : Theme.text-disabled;
-                icon-size: 12px;
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
-            }
-        }
-
-        if root.icon != "" : Rectangle {
-            width: root.text == "" ? Theme.icon-size : Theme.icon-size-small;
-            vertical-stretch: 1;
-            background: transparent;
-
-            Icon {
-                name: root.icon;
-                icon-color: root.icon-tint;
-                icon-size: root.text == "" ? Theme.icon-size : Theme.icon-size-small;
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
-            }
-        }
-
-        if root.text != "" : Text {
-            text: root.text;
-            color: root.text-color;
-            font-size: Theme.font-body;
-            vertical-alignment: center;
-            wrap: no-wrap;
-            overflow: elide;
-        }
+    Icon {
+        name: root.icon;
+        icon-color: !root.enabled ? Theme.text-disabled : root.checked ? Theme.accent : Theme.text-primary;
+        icon-size: Theme.icon-size;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
     }
-
-    // 文本模式：选中不加亮文字（勾选框表达状态）；纯图标模式选中用 accent 前景 + accent-soft 底。
-    private property <brush> text-color: !root.enabled ? Theme.text-disabled : Theme.text-primary;
-    private property <brush> icon-tint: !root.enabled ? Theme.text-disabled
-        : root.text == "" ? (root.checked ? Theme.accent : Theme.text-primary)
-        : root.text-color;
 
     touch := TouchArea {
         pointer-event(event) => {
@@ -410,13 +688,6 @@ export component WinToggle inherits Rectangle {
     }
 
     function toggle() {
-        if (root.radio) {
-            if (!root.checked) {
-                root.checked = true;
-                root.toggled();
-            }
-            return;
-        }
         root.checked = !root.checked;
         root.toggled();
     }

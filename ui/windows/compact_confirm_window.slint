@@ -6,7 +6,7 @@
 
 import { Theme } from "../theme.slint";
 import { Icon } from "../components/basic/icons.slint";
-import { WinButton, WinToggle } from "../components/basic/controls.slint";
+import { WinButton, WinCheckBox } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
@@ -112,8 +112,10 @@ export component CompactConfirmWindow inherits Window {
                 placeholder-text: root.confirmation-token;
             }
 
-            if root.show-dont-ask-again : WinToggle {
+            // 原型 close-tab-confirm：页脚行内「Don't ask again」是勾选框（非开关）。
+            if root.show-dont-ask-again : WinCheckBox {
                 text: @tr("Don't ask again");
+                accessible-name: @tr("Don't ask again");
                 checked <=> root.dont-ask-again;
                 horizontal-stretch: 0;
             }

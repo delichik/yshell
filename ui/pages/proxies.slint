@@ -13,7 +13,7 @@
 import { Theme } from "../theme.slint";
 import { TextFormats } from "../text_formats.slint";
 import {
-    WinButton, WinComboBox, WinIconButton, WinScrollIndicator, WinToggle,
+    WinButton, WinComboBox, WinIconButton, WinScrollIndicator, WinSwitch,
 } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { MenuPopup, MenuEntry } from "../components/menu_popup.slint";
@@ -530,8 +530,10 @@ export component ProxiesPage inherits Rectangle {
                                 ProxyFormRow {
                                     label: @tr("DNS via proxy");
 
-                                    WinToggle {
+                                    // 原型 proxies/index.html：form-switch + On/Off 文案。
+                                    WinSwitch {
                                         text: root.editor-dns-by-proxy ? @tr("On") : @tr("Off");
+                                        accessible-name: @tr("DNS via proxy");
                                         checked: root.editor-dns-by-proxy;
                                         toggled => { root.toggle-proxy-dns(); }
                                     }

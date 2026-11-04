@@ -218,6 +218,16 @@ export global Theme {
     out property <length> icon-size-large: 28px;
     out property <length> control-height: 32px;
     out property <length> control-height-compact: 24px;
+    // §5.3 选择类控件：CheckBox / Radio 20×20；Switch 40×20 轨道 + 12 滑块
+    // （滑块动画统一用 `duration-fast` = 167ms）。
+    /// CheckBox / Radio 的标记尺寸（§5.3）。
+    out property <length> choice-size: 20px;
+    /// Switch 轨道。
+    out property <length> switch-width: 40px;
+    out property <length> switch-height: 20px;
+    /// Switch 滑块直径与离轨道边缘的内边距。
+    out property <length> switch-knob-size: 12px;
+    out property <length> switch-padding: 4px;
     out property <length> row-height-nav: 40px;
     out property <length> row-height-list: 32px;
     out property <length> row-height-tree: 28px;

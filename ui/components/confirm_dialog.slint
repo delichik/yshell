@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { WinButton, WinToggle } from "basic/controls.slint";
+import { WinButton, WinCheckBox } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 
 // Legacy overlay ConfirmDialog (unused by live path; live confirms use CompactConfirmWindow).
@@ -91,8 +91,10 @@ export component ConfirmDialog inherits Rectangle {
                     placeholder-text: root.confirmation-placeholder;
                 }
 
-                if root.show-dont-ask-again : WinToggle {
+                // 原型 close-tab-confirm：页脚行内「Don't ask again」是勾选框（非开关）。
+                if root.show-dont-ask-again : WinCheckBox {
                     text: @tr("Don't ask again");
+                    accessible-name: @tr("Don't ask again");
                     checked <=> root.dont-ask-again;
                     horizontal-stretch: 0;
                 }
