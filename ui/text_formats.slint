@@ -1707,6 +1707,13 @@ export global TextFormats {
         if kind == "private-key-deploy-target" {
             return @tr("MainWindow" => "Deploy target set to {0}.", param_1);
         }
+        // Host-key 变更态的 Copy Details。
+        if kind == "host-key-details-copied" {
+            return @tr("MainWindow" => "Copied the host key details ({0} chars) to the clipboard.", param_1);
+        }
+        if kind == "host-key-clipboard-unavailable" {
+            return @tr("MainWindow" => "Could not access the system clipboard; select the details manually.");
+        }
         return fallback;
     }
 

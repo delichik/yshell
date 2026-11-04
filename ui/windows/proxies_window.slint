@@ -5,7 +5,7 @@ import { ProxiesPage, ProxyRow } from "../pages/proxies.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component ProxiesWindow inherits Window {
-    title: @tr("Proxy Manager");
+    title: @tr("Proxies");
     no-frame: true;
     resize-border-width: 0px;
     preferred-width: Theme.tool-window-width-wide;
@@ -25,7 +25,7 @@ export component ProxiesWindow inherits Window {
 
     in property <[ProxyRow]> proxies;
     in property <string> list-summary-text;
-    in property <string> empty-text;
+    in property <string> empty-text: @tr("No managed proxies yet. Create one to use it in a session.");
     in property <string> status-text;
     in property <string> status-kind-text;
     in property <string> status-param-1-text;
@@ -76,7 +76,7 @@ export component ProxiesWindow inherits Window {
     chrome := ToolWindowChrome {
         width: Theme.tool-window-width-wide;
         height: Theme.tool-window-height-tall;
-        title-text: @tr("Proxy Manager");
+        title-text: @tr("Proxies");
         summary-text: root.list-summary-text;
         native-title-drag: root.native_title_drag;
         close-requested => { root.dismiss(); }

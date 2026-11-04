@@ -1918,25 +1918,6 @@ impl AppRuntime {
         self.projection()
     }
 
-    /// 从文件导入主机密钥（rfd 选路后读文本，再走 `import_host_keys_from_text`）。
-    pub fn import_host_keys_from_path(&mut self, path: &str) -> AppProjection {
-        match std::fs::read_to_string(path) {
-            Ok(text) => {
-                self.host_keys_import_text = text;
-                self.host_keys_import_visible = false;
-                let _ = self.import_host_keys_from_text();
-                self.host_keys_import_text.clear();
-                self.projection()
-            }
-            Err(error) => self.set_host_keys_status_feedback(
-                "host-keys-import-read-failed",
-                format!("Import failed to read `{path}`: {error}"),
-                path.to_owned(),
-                error.to_string(),
-            ),
-        }
-    }
-
     /// 解析 `host:port <公钥行 | SHA256:指纹>` 行并写入 persistent known hosts。
     ///
     /// 返回 `(写入条数, 跳过行及原因)`；不落盘、不写状态（调用方负责）。
@@ -2267,9 +2248,6 @@ impl AppRuntime {
 /// 当前 feature 集下可用；ECDSA 曲线 feature 未启用，故不提供。
 pub(crate) const PRIVATE_KEY_GENERATE_ALGORITHMS: [&str; 2] = ["ED25519", "RSA"];
 
-// TODO(wave2-managers): Known Hosts / Private Keys 的 Add·Import·Export·右键菜单
-// 子窗接线后删除本行 allow（当前这些窗口尚未接线）。
-#[allow(dead_code)]
 impl AppRuntime {
     /// 清空私钥管理器的子窗/菜单暂态（打开/关闭管理器时调用）。
     fn reset_private_keys_dialog_state(&mut self) {
@@ -2343,11 +2321,7 @@ impl AppRuntime {
         let target = format!("{}:{}", selected.host, selected.port);
         self.hosts_add_visible = true;
         self.hosts_add_edit_target = Some(target.clone());
-        self.hosts_add_text = format!(
-            "{target} {} {}",
-            key.algorithm,
-            format_fingerprint_groups(&key.fingerprint)
-        );
+        self.hosts_add_text = format!("{target} {} {}", key.algorithm, key.fingerprint);
         self.hosts_add_error_text.clear();
         self.host_keys_selected_group = Some(group_index);
         self.host_keys_selected_entry = Some(entry_index);
@@ -2656,30 +2630,6 @@ impl AppRuntime {
         let text = format!("Selected host key {host_text} ({algorithm}).");
         self.set_host_keys_status_kind("host-key-selected", text, host_text, algorithm);
         self.projection()
-    }
-
-    /// 行右键 Edit（无菜单目标时退化为当前选中条目）。
-    pub fn edit_host_key_from_menu(&mut self) -> AppProjection {
-        let (group, entry) = self
-            .hosts_menu_group
-            .zip(self.hosts_menu_entry)
-            .or_else(|| {
-                self.host_keys_selected_group
-                    .zip(self.host_keys_selected_entry)
-            })
-            .map_or((0, 0), |(group, entry)| (group as i32, entry as i32));
-        self.open_host_keys_edit_dialog(group, entry)
-    }
-
-    /// 行右键 Remove（复用选中条目的删除逻辑，由宿主确认框承接）。
-    pub fn remove_host_key_from_menu(&mut self) -> AppResult<AppProjection> {
-        if let Some((group, entry)) = self.hosts_menu_group.zip(self.hosts_menu_entry) {
-            self.host_keys_selected_group = Some(group);
-            self.host_keys_selected_entry = Some(entry);
-        }
-        self.hosts_menu_group = None;
-        self.hosts_menu_entry = None;
-        self.remove_selected_host_key()
     }
 
     // --- Private Keys：Generate 子窗 --------------------------------------
@@ -3723,10 +3673,12 @@ mod tests {
 
         let _ = runtime.prepare_host_keys_context_menu(1, 0);
         let projection = runtime
-            .remove_host_key_from_menu()
-            .expect("remove from menu");
+            .remove_selected_host_key()
+            .expect("remove selected host key");
         assert_eq!(projection.host_keys_key_count, 1);
-        assert_eq!(runtime.hosts_menu_group, None);
+        let _ = runtime.prepare_host_keys_context_menu(0, 0);
+        let _ = runtime.remove_selected_host_key();
+        assert!(runtime.known_host_entries().is_empty());
     }
 
     #[test]
@@ -3788,5 +3740,51 @@ mod tests {
         );
         let _ = runtime.close_private_keys_deploy_dialog();
         assert!(!runtime.private_keys_deploy_confirm_visible);
+    }
+
+    // --- managers-dialogs：子窗投影字段（接线后的 UI 数据源） -----------------
+
+    #[test]
+    fn manager_subwindow_projection_fields_are_populated() {
+        let (_temp, mut runtime) = test_runtime_with_keychain();
+        let entry = runtime
+            .import_private_key("projection-key", ED25519_PLAIN, None, false)
+            .expect("import");
+        runtime.open_private_keys_manager();
+
+        // Generate：算法下拉 + 口令不一致的错误落到投影。
+        let projection = runtime.open_private_keys_generate_dialog();
+        assert!(projection.keys_generate_visible);
+        assert_eq!(
+            projection.keys_generate_algorithm_options,
+            vec!["ED25519".to_owned(), "RSA".to_owned()]
+        );
+        runtime.update_private_keys_generate_passphrase("one");
+        runtime.update_private_keys_generate_confirm("two");
+        let projection = runtime.generate_private_key_from_form();
+        assert!(projection
+            .keys_generate_error_text
+            .contains("does not match"));
+
+        // Deploy：无活动 SSH 会话时 Deploy 子窗仍打开，错误投影给窗口。
+        let projection = runtime.request_private_key_deploy();
+        assert!(projection.private_keys_deploy_confirm_visible);
+        assert!(!projection.keys_deploy_error_text.is_empty());
+        assert_eq!(projection.keys_deploy_key_label_text, entry.label);
+        let _ = runtime.close_private_keys_deploy_dialog();
+    }
+
+    #[test]
+    fn theme_manager_font_projection_mirrors_appearance_draft() {
+        let (_temp, mut runtime) = test_runtime_with_keychain();
+        runtime.update_settings_appearance_font_size("16");
+        let projection = runtime.projection();
+        assert_eq!(projection.themes_font_size_text, "16");
+        // 主题编辑器未打开时字体字段只读。
+        assert!(!projection.themes_font_editable);
+        let _ = runtime.open_theme_manager();
+        let projection = runtime.projection();
+        assert!(projection.theme_manager_visible);
+        assert!(!projection.themes_font_options.is_empty());
     }
 }

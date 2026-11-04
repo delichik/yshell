@@ -39,7 +39,7 @@ export component HostKeysWindow inherits Window {
     in property <string> status-kind-text;
     in property <string> status-param-1-text;
     in property <string> status-param-2-text;
-    in property <string> empty-text;
+    in property <string> empty-text: @tr("No host keys have been saved yet. They are recorded when you trust a host.");
     in-out property <int> selected-group;
     in-out property <int> selected-entry;
     in-out property <bool> import-visible;

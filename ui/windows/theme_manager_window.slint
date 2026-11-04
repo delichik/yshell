@@ -5,7 +5,7 @@ import { ThemeManagerPage, ThemeManagerRow } from "../pages/theme_manager.slint"
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component ThemeManagerWindow inherits Window {
-    title: @tr("Theme Manager");
+    title: @tr("Terminal Styles");
     no-frame: true;
     resize-border-width: 0px;
     preferred-width: Theme.tool-window-width-wide;
@@ -68,13 +68,14 @@ export component ThemeManagerWindow inherits Window {
     callback update-font-family(string);
     callback update-font-size(string);
     callback update-backup-font(string);
-    callback browse-font-file();
+    callback browse-font-family-file();
+    callback browse-font-fallback-file();
     callback title_drag_requested();
 
     chrome := ToolWindowChrome {
         width: Theme.tool-window-width-wide;
         height: Theme.tool-window-height-tall;
-        title-text: @tr("Theme Manager");
+        title-text: @tr("Terminal Styles");
         summary-text: @tr("Built-in {0} · Custom {1}", root.builtin-count, root.user-count);
         native-title-drag: root.native_title_drag;
         close-requested => { root.dismiss(); }
@@ -126,7 +127,8 @@ export component ThemeManagerWindow inherits Window {
             update-font-family(string) => { root.update-font-family(string); }
             update-font-size(string) => { root.update-font-size(string); }
             update-backup-font(string) => { root.update-backup-font(string); }
-            browse-font-file => { root.browse-font-file(); }
+            browse-font-family-file => { root.browse-font-family-file(); }
+            browse-font-fallback-file => { root.browse-font-fallback-file(); }
         }
     }
 

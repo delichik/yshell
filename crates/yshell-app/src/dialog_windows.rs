@@ -12,13 +12,23 @@ use std::rc::{Rc, Weak};
 
 use slint::{CloseRequestResponse, ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
+use copypasta::{ClipboardContext, ClipboardProvider};
+
 use crate::bootstrap::generated_ui::{
     AboutWindow, AuthKeyOption, AuthPromptWindow, CompactConfirmWindow, EditorTunnelRow,
-    FolderEditorWindow, HostKeyWindow, HostKeysWindow, InheritSource, KnownHostsWindow,
-    LoggingWindow, LoginStepKeysWindow, LoginStepRow, LoginStepWaitWindow, MainWindow,
-    MasterPasswordUnlockWindow, MasterPasswordWindow, NewFolderWindow, PasswordPromptWindow,
-    PrivateKeysWindow, ProxiesWindow, SessionEditorWindow, SettingsWindow, SftpConflictWindow,
-    SftpEntryWindow, SftpPropertiesWindow, Theme, ThemeManagerWindow, TunnelEditorWindow,
+    FolderEditorWindow, HostKeyWindow, HostKeysWindow, InheritSource, KnownHostAddWindow,
+    KnownHostExportWindow, KnownHostImportWindow, KnownHostsWindow, LoggingWindow,
+    LoginStepKeysWindow, LoginStepRow, LoginStepWaitWindow, MainWindow, MasterPasswordUnlockWindow,
+    MasterPasswordWindow, NewFolderWindow, PasswordPromptWindow, PrivateKeyDeployWindow,
+    PrivateKeyExportWindow, PrivateKeyGenerateWindow, PrivateKeyImportWindow, PrivateKeysWindow,
+    ProxiesWindow, SessionEditorWindow, SettingsWindow, SftpConflictWindow, SftpEntryWindow,
+    SftpPropertiesWindow, Theme, ThemeManagerWindow, TunnelEditorWindow,
+};
+use crate::bootstrap::{
+    frame_image, host_key_group_from, host_key_group_matches, private_key_row_from,
+    private_key_row_matches, proxy_row_from, proxy_row_matches, slint_color_from_hex,
+    slint_color_from_rgb, spawn_pick_manager_file, spawn_pick_manager_save_path,
+    theme_manager_row_from, theme_manager_row_matches, DialogKind, FileDialogOutcome,
 };
 use crate::error::{AppError, AppResult};
 use crate::runtime::{
@@ -69,7 +79,6 @@ enum ConfirmKind {
     CloseWindow,
     EditorDiscard,
     PrivateKeysRemove,
-    PrivateKeysDeploy,
     ProxiesRemove,
     ThemeManagerRemove,
     HostKeysClear,
@@ -156,6 +165,24 @@ pub(crate) struct DialogWindowManager {
     theme_manager_shown: bool,
     host_keys: Option<HostKeysWindow>,
     host_keys_shown: bool,
+    // managers-dialogs：Known Hosts / Private Keys 的管理器子窗（Add / Import /
+    // Export / Generate / Deploy）。只在对应管理器打开时叠在其上。
+    known_host_add: Option<KnownHostAddWindow>,
+    known_host_add_shown: bool,
+    known_host_import: Option<KnownHostImportWindow>,
+    known_host_import_shown: bool,
+    known_host_export: Option<KnownHostExportWindow>,
+    known_host_export_shown: bool,
+    private_key_generate: Option<PrivateKeyGenerateWindow>,
+    private_key_generate_shown: bool,
+    private_key_import: Option<PrivateKeyImportWindow>,
+    private_key_import_shown: bool,
+    private_key_export: Option<PrivateKeyExportWindow>,
+    private_key_export_shown: bool,
+    private_key_deploy: Option<PrivateKeyDeployWindow>,
+    private_key_deploy_shown: bool,
+    /// rfd 结果通道（bootstrap 的 `apply_dialog_outcome` 在 UI tick 里消费）。
+    file_dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
     logging: Option<LoggingWindow>,
     logging_shown: bool,
     password: Option<PasswordPromptWindow>,
@@ -179,10 +206,12 @@ pub(crate) struct DialogWindowManager {
 impl DialogWindowManager {
     pub(crate) fn create(
         runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+        file_dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
     ) -> Rc<RefCell<DialogHost>> {
         let host = Rc::new(RefCell::new(DialogHost {
             dialogs: DialogWindowManager {
                 runtime,
+                file_dialog_tx,
                 host: Weak::new(),
                 manager: Weak::new(),
                 close_window_id: None,
@@ -223,6 +252,20 @@ impl DialogWindowManager {
                 theme_manager_shown: false,
                 host_keys: None,
                 host_keys_shown: false,
+                known_host_add: None,
+                known_host_add_shown: false,
+                known_host_import: None,
+                known_host_import_shown: false,
+                known_host_export: None,
+                known_host_export_shown: false,
+                private_key_generate: None,
+                private_key_generate_shown: false,
+                private_key_import: None,
+                private_key_import_shown: false,
+                private_key_export: None,
+                private_key_export_shown: false,
+                private_key_deploy: None,
+                private_key_deploy_shown: false,
                 logging: None,
                 logging_shown: false,
                 password: None,
@@ -310,6 +353,8 @@ impl DialogWindowManager {
     ) -> AppResult<()> {
         let runtime = Rc::clone(&self.runtime);
         let host = self.host.clone();
+        // managers-dialogs：子窗的 rfd 入口复用应用的 dialog worker 通道。
+        let file_dialog_tx = self.file_dialog_tx.clone();
         self.sync_about(projection, main, owner_id)?;
         self.sync_confirm(projection, main, owner_id, window_runtime.clone())?;
         self.sync_settings(projection, main, owner_id, window_runtime.clone())?;
@@ -454,7 +499,7 @@ impl DialogWindowManager {
                 &mut self.theme_manager,
                 || ThemeManagerWindow::new().map_err(AppError::from_error),
                 |w| prep_tool_window!(w),
-                |w| wire_theme_manager_window(w, Rc::clone(&runtime)),
+                |w| wire_theme_manager_window(w, Rc::clone(&runtime), file_dialog_tx.clone()),
                 sync_theme_manager,
                 projection,
                 main,
@@ -474,6 +519,113 @@ impl DialogWindowManager {
                 main,
             )?,
             host_keys
+        );
+        // --- managers-dialogs：管理器子窗（叠在对应管理器之上）---------------
+        apply_modal!(
+            sync_projection_tool(
+                projection.hosts_add_visible,
+                &mut self.known_host_add_shown,
+                &mut self.known_host_add,
+                || KnownHostAddWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_known_host_add_window(w, Rc::clone(&runtime)),
+                sync_known_host_add,
+                projection,
+                main,
+            )?,
+            known_host_add
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.host_keys_import_visible,
+                &mut self.known_host_import_shown,
+                &mut self.known_host_import,
+                || KnownHostImportWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| {
+                    wire_known_host_import_window(w, Rc::clone(&runtime), file_dialog_tx.clone())
+                },
+                sync_known_host_import,
+                projection,
+                main,
+            )?,
+            known_host_import
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.hosts_export_visible,
+                &mut self.known_host_export_shown,
+                &mut self.known_host_export,
+                || KnownHostExportWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| {
+                    wire_known_host_export_window(w, Rc::clone(&runtime), file_dialog_tx.clone())
+                },
+                sync_known_host_export,
+                projection,
+                main,
+            )?,
+            known_host_export
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.keys_generate_visible,
+                &mut self.private_key_generate_shown,
+                &mut self.private_key_generate,
+                || PrivateKeyGenerateWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_private_key_generate_window(w, Rc::clone(&runtime)),
+                sync_private_key_generate,
+                projection,
+                main,
+            )?,
+            private_key_generate
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.keys_import_visible,
+                &mut self.private_key_import_shown,
+                &mut self.private_key_import,
+                || PrivateKeyImportWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| {
+                    wire_private_key_import_window(w, Rc::clone(&runtime), file_dialog_tx.clone())
+                },
+                sync_private_key_import,
+                projection,
+                main,
+            )?,
+            private_key_import
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.keys_export_visible,
+                &mut self.private_key_export_shown,
+                &mut self.private_key_export,
+                || PrivateKeyExportWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| {
+                    wire_private_key_export_window(w, Rc::clone(&runtime), file_dialog_tx.clone())
+                },
+                sync_private_key_export,
+                projection,
+                main,
+            )?,
+            private_key_export
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.private_keys_deploy_confirm_visible,
+                &mut self.private_key_deploy_shown,
+                &mut self.private_key_deploy,
+                || PrivateKeyDeployWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_private_key_deploy_window(w, Rc::clone(&runtime)),
+                sync_private_key_deploy,
+                projection,
+                main,
+            )?,
+            private_key_deploy
         );
         apply_modal!(
             sync_projection_tool(
@@ -655,26 +807,6 @@ impl DialogWindowManager {
                 message: projection.private_keys_remove_warning_text.clone(),
                 confirm_label: "Remove".into(),
                 destructive: true,
-                show_dont_ask: false,
-                dont_ask: false,
-            });
-        }
-        if projection.private_keys_deploy_confirm_visible {
-            let message = if projection.private_keys_deploy_command_text.is_empty() {
-                projection.private_keys_deploy_summary_text.clone()
-            } else {
-                format!(
-                    "{}\n\n{}",
-                    projection.private_keys_deploy_summary_text,
-                    projection.private_keys_deploy_command_text
-                )
-            };
-            return Some(ConfirmSpec {
-                kind: ConfirmKind::PrivateKeysDeploy,
-                title: "Deploy Public Key".into(),
-                message,
-                confirm_label: "Deploy".into(),
-                destructive: false,
                 show_dont_ask: false,
                 dont_ask: false,
             });
@@ -1779,33 +1911,337 @@ fn wire_private_keys_window(
     wire_tool_title_drag!(window);
     wire_tool_on_close!(window, runtime, |r| r.close_private_keys_manager());
     let rt = Rc::clone(&runtime);
-    window.on_request_remove(move || {
-        let _ = rt.borrow_mut().request_private_key_remove();
+    window.on_select_key(move |index| {
+        let _ = rt.borrow_mut().select_private_key(index);
+    });
+    // 右栏公钥 Copy（图标钮）。
+    let rt = Rc::clone(&runtime);
+    window.on_copy_public_key(move || {
+        let line = {
+            let runtime = rt.borrow();
+            runtime.selected_private_key_public_line()
+        };
+        match line {
+            Ok(text) => {
+                let copied = write_clipboard(&text);
+                let chars = text.chars().count().to_string();
+                if copied {
+                    let _ = rt.borrow_mut().set_private_keys_status_feedback(
+                        "private-key-public-copied",
+                        format!("Copied the derived public key ({chars} chars) to the clipboard."),
+                        chars,
+                        String::new(),
+                    );
+                } else {
+                    let _ = rt.borrow_mut().set_private_keys_status_feedback(
+                        "private-key-clipboard-unavailable",
+                        "Could not access the system clipboard; select the key text manually."
+                            .to_owned(),
+                        String::new(),
+                        String::new(),
+                    );
+                }
+            }
+            Err(error) => {
+                let _ = rt.borrow_mut().set_private_keys_status_feedback(
+                    "private-key-copy-failed",
+                    format!("Copy failed: {error}"),
+                    error.to_string(),
+                    String::new(),
+                );
+            }
+        }
     });
     let rt = Rc::clone(&runtime);
-    window.on_request_deploy(move || {
-        let _ = rt.borrow_mut().request_private_key_deploy();
+    window.on_save_passphrase(move || {
+        let _ = rt.borrow_mut().save_selected_private_key_passphrase();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_forget_passphrase(move || {
+        let _ = rt.borrow_mut().forget_selected_private_key_passphrase();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_passphrase(move |value: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_private_keys_passphrase_input(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_rename_key(move |label: SharedString| {
+        let _ = rt.borrow_mut().rename_selected_private_key(label.as_ref());
+    });
+    // 工具条图标钮：Generate / Import 独立子窗。
+    let rt = Rc::clone(&runtime);
+    window.on_open_generate_dialog(move || {
+        let _ = rt.borrow_mut().open_private_keys_generate_dialog();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_open_import_dialog(move || {
+        let _ = rt.borrow_mut().open_private_keys_import_dialog();
+    });
+    // 行右键：Test / Export public key / Deploy / Remove。
+    let rt = Rc::clone(&runtime);
+    window.on_prepare_context_menu(move |index| {
+        let _ = rt.borrow_mut().prepare_private_key_context_menu(index);
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_test_from_menu(move || {
+        let _ = rt.borrow_mut().test_private_key_from_menu();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_export_from_menu(move || {
+        let _ = rt.borrow_mut().export_private_key_from_menu();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_deploy_from_menu(move || {
+        let _ = rt.borrow_mut().deploy_private_key_from_menu();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_remove_from_menu(move || {
+        let _ = rt.borrow_mut().remove_private_key_from_menu();
     });
 }
 
 fn wire_proxies_window(window: &ProxiesWindow, runtime: Rc<RefCell<crate::runtime::AppRuntime>>) {
     wire_tool_title_drag!(window);
     wire_tool_on_close!(window, runtime, |r| r.close_proxies_manager());
+    // 行点击：选中并载入右栏编辑表单（工具条已无 Edit 钮）。
     let rt = Rc::clone(&runtime);
-    window.on_request_remove_proxy(move || {
-        let _ = rt.borrow_mut().request_proxy_remove();
+    window.on_select_proxy(move |index| {
+        let mut rt = rt.borrow_mut();
+        let _ = rt.select_proxy(index);
+        let _ = rt.begin_edit_proxy();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_start_new_proxy(move || {
+        let _ = rt.borrow_mut().start_new_proxy();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_save_proxy_editor(move || {
+        let _ = rt.borrow_mut().save_proxy_editor();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_cancel_proxy_editor(move || {
+        let _ = rt.borrow_mut().cancel_proxy_editor();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_proxy_name(move |value: SharedString| {
+        let _ = rt.borrow_mut().update_proxy_editor_name(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_proxy_host(move |value: SharedString| {
+        let _ = rt.borrow_mut().update_proxy_editor_host(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_proxy_port(move |value: SharedString| {
+        let _ = rt.borrow_mut().update_proxy_editor_port(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_proxy_username(move |value: SharedString| {
+        let _ = rt.borrow_mut().update_proxy_editor_username(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_proxy_password(move |value: SharedString| {
+        let _ = rt.borrow_mut().update_proxy_editor_password(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_select_proxy_protocol(move |index| {
+        let _ = rt.borrow_mut().select_proxy_editor_protocol(index);
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_toggle_proxy_dns(move || {
+        let _ = rt.borrow_mut().toggle_proxy_editor_dns();
+    });
+    // 表单末行的 Test（与行右键 Test 同一 runtime 动作）。
+    let rt = Rc::clone(&runtime);
+    window.on_test_proxy(move || {
+        let _ = rt.borrow_mut().test_selected_proxy();
+    });
+    // D8：删除被引用时提供显式"设为无代理"迁移动作。
+    let rt = Rc::clone(&runtime);
+    window.on_clear_proxy_references(move || {
+        let _ = rt.borrow_mut().set_referencing_sessions_to_no_proxy();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_dismiss_proxy_warning(move || {
+        let _ = rt.borrow_mut().dismiss_proxy_remove_warning();
+    });
+    // 行右键：Duplicate / Test / Delete。
+    let rt = Rc::clone(&runtime);
+    window.on_prepare_context_menu(move |index| {
+        let _ = rt.borrow_mut().prepare_proxy_context_menu(index);
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_duplicate_from_menu(move || {
+        let _ = rt.borrow_mut().duplicate_proxy_from_menu();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_test_from_menu(move || {
+        let _ = rt.borrow_mut().test_proxy_from_menu();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_remove_from_menu(move || {
+        // 走宿主 ConfirmDialog（D8：被引用时阻止删除并说明）。
+        let _ = rt.borrow_mut().remove_proxy_from_menu();
     });
 }
 
 fn wire_theme_manager_window(
     window: &ThemeManagerWindow,
     runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+    dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
 ) {
     wire_tool_title_drag!(window);
     wire_tool_on_close!(window, runtime, |r| r.close_theme_manager());
     let rt = Rc::clone(&runtime);
+    window.on_select_theme(move |index| {
+        let _ = rt.borrow_mut().select_theme_manager_row(index);
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_set_default_theme(move || {
+        let mut rt = rt.borrow_mut();
+        if let Err(error) = rt.apply_theme_manager_selection() {
+            rt.set_status_kind(
+                "editor-submit-failed",
+                format!("{error}"),
+                String::new(),
+                String::new(),
+            );
+        }
+    });
+    // 工具条 `+`：以当前选中样式为模板新建自定义样式。
+    let rt = Rc::clone(&runtime);
+    window.on_new_style(move || {
+        let mut rt = rt.borrow_mut();
+        let source = rt.theme_manager_selection_id();
+        if let Err(error) = rt.clone_color_theme(&source) {
+            rt.set_status_kind(
+                "editor-submit-failed",
+                format!("{error}"),
+                String::new(),
+                String::new(),
+            );
+        }
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_clone_theme(move |id: SharedString| {
+        let mut rt = rt.borrow_mut();
+        if let Err(error) = rt.clone_color_theme(id.as_ref()) {
+            rt.set_status_kind(
+                "editor-submit-failed",
+                format!("{error}"),
+                String::new(),
+                String::new(),
+            );
+        }
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_edit_theme(move |id: SharedString| {
+        let _ = rt.borrow_mut().open_theme_editor(id.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
     window.on_request_delete_theme(move |id: SharedString| {
         let _ = rt.borrow_mut().request_delete_color_theme(id.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_close_theme_editor(move || {
+        let _ = rt.borrow_mut().close_theme_editor();
+    });
+    // Save：主题文件 + 全局终端外观（字体字段）一起落盘。
+    let rt = Rc::clone(&runtime);
+    window.on_save_theme_editor(move || {
+        let mut rt = rt.borrow_mut();
+        match rt.save_theme_editor() {
+            Ok(_projection) => {
+                if let Err(error) = rt.save_settings_appearance() {
+                    rt.set_status_kind(
+                        "editor-submit-failed",
+                        format!("{error}"),
+                        String::new(),
+                        String::new(),
+                    );
+                }
+            }
+            Err(error) => rt.set_status_kind(
+                "editor-submit-failed",
+                format!("{error}"),
+                String::new(),
+                String::new(),
+            ),
+        }
+        rt.mark_ui_dirty();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_theme_editor_name(move |value: SharedString| {
+        let _ = rt.borrow_mut().update_theme_editor_name(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_theme_editor_role(move |role: SharedString, hex: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_theme_editor_role_color(role.as_ref(), hex.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_theme_editor_ansi(move |index, hex: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_theme_editor_ansi_color(index, hex.as_ref());
+    });
+    // 行右键：Clone / Edit / Delete。
+    let rt = Rc::clone(&runtime);
+    window.on_prepare_context_menu(move |index| {
+        let _ = rt.borrow_mut().select_theme_manager_row(index);
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_clone_from_menu(move || {
+        let mut rt = rt.borrow_mut();
+        let source = rt.theme_manager_selection_id();
+        if let Err(error) = rt.clone_color_theme(&source) {
+            rt.set_status_kind(
+                "editor-submit-failed",
+                format!("{error}"),
+                String::new(),
+                String::new(),
+            );
+        }
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_delete_from_menu(move || {
+        let mut rt = rt.borrow_mut();
+        let id = rt.theme_manager_selection_id();
+        let _ = rt.request_delete_color_theme(&id);
+    });
+    // Font 字段（全局终端外观草稿）。
+    let rt = Rc::clone(&runtime);
+    window.on_update_font_family(move |value: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_settings_appearance_font_family(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_font_size(move |value: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_settings_appearance_font_size(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_backup_font(move |value: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_settings_appearance_backup_font(value.as_ref());
+    });
+    // Add Font File：rfd 失败（无显示服务器）时保持可手输路径的输入框。
+    let tx = dialog_tx.clone();
+    window.on_browse_font_family_file(move || {
+        spawn_pick_manager_file(tx.clone(), DialogKind::TerminalFontPrimary, "Add font file");
+    });
+    let tx = dialog_tx.clone();
+    window.on_browse_font_fallback_file(move || {
+        spawn_pick_manager_file(
+            tx.clone(),
+            DialogKind::TerminalFontBackup,
+            "Add fallback font file",
+        );
     });
 }
 
@@ -1816,18 +2252,402 @@ fn wire_host_keys_window(
 ) {
     wire_tool_title_drag!(window);
     wire_tool_on_close!(window, runtime, |r| r.close_host_keys_manager());
-    let host_clear = host.clone();
-    window.on_request_clear_all(move || {
-        if let Some(host) = host_clear.upgrade() {
-            host.borrow_mut().dialogs.local.host_keys_clear = true;
+    // 列表行点击 → 右栏详情。
+    let rt = Rc::clone(&runtime);
+    window.on_select_entry(move |group, entry| {
+        let _ = rt.borrow_mut().select_host_key(group, entry);
+    });
+    // 工具条图标钮：Add / Import / Export 独立子窗。
+    let rt = Rc::clone(&runtime);
+    window.on_open_add_dialog(move || {
+        let _ = rt.borrow_mut().open_host_keys_add_dialog();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_open_import_dialog(move || {
+        let _ = rt.borrow_mut().open_host_keys_import_dialog();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_open_export_dialog(move || {
+        let _ = rt.borrow_mut().open_host_keys_export_dialog();
+    });
+    // 行右键 Edit：打开预填的 Add/Edit 单字段窗。
+    let rt = Rc::clone(&runtime);
+    window.on_request_edit(move |group, entry| {
+        let _ = rt.borrow_mut().open_host_keys_edit_dialog(group, entry);
+    });
+    // 行右键 Remove：记录菜单目标 → 宿主 ConfirmDialog（整组删除）。
+    let rt = Rc::clone(&runtime);
+    let host_remove_at = host.clone();
+    window.on_request_remove_at(move |group, entry| {
+        let _ = rt.borrow_mut().prepare_host_keys_context_menu(group, entry);
+        if let Some(host) = host_remove_at.upgrade() {
+            host.borrow_mut().dialogs.local.host_keys_remove = true;
         }
     });
+    // 旧版无参 Remove（保留窗口 API 兼容）：按当前选中条目走确认框。
     let host_remove = host.clone();
     window.on_request_remove(move || {
         if let Some(host) = host_remove.upgrade() {
             host.borrow_mut().dialogs.local.host_keys_remove = true;
         }
     });
+    // Clear All：破坏性确认由宿主 ConfirmDialog 承接（无 CLEAR 打字确认）。
+    let host_clear = host.clone();
+    window.on_request_clear_all(move || {
+        if let Some(host) = host_clear.upgrade() {
+            host.borrow_mut().dialogs.local.host_keys_clear = true;
+        }
+    });
+}
+
+/// Known Hosts · Add/Edit（单字段粘贴窗）。
+fn wire_known_host_add_window(
+    window: &KnownHostAddWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+) {
+    wire_tool_title_drag!(window);
+    let rt = Rc::clone(&runtime);
+    window.on_canceled(move || {
+        let _ = rt.borrow_mut().cancel_host_keys_add_dialog();
+    });
+    let rt = Rc::clone(&runtime);
+    let weak = window.as_weak();
+    window.window().on_close_requested(move || {
+        let _ = rt.borrow_mut().cancel_host_keys_add_dialog();
+        let _ = weak;
+        CloseRequestResponse::HideWindow
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_text(move |value: SharedString| {
+        let _ = rt.borrow_mut().update_host_keys_add_text(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_submitted(move || {
+        let _ = rt.borrow_mut().submit_host_keys_add_dialog();
+    });
+}
+
+/// Known Hosts · Import（文件 + Browse）。
+fn wire_known_host_import_window(
+    window: &KnownHostImportWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+    dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
+) {
+    wire_tool_title_drag!(window);
+    let rt = Rc::clone(&runtime);
+    window.on_canceled(move || {
+        let _ = rt.borrow_mut().close_host_keys_import_dialog();
+    });
+    let rt = Rc::clone(&runtime);
+    let weak = window.as_weak();
+    window.window().on_close_requested(move || {
+        let _ = rt.borrow_mut().close_host_keys_import_dialog();
+        let _ = weak;
+        CloseRequestResponse::HideWindow
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_path(move |value: SharedString| {
+        let _ = rt.borrow_mut().update_host_keys_import_path(value.as_ref());
+    });
+    let tx = dialog_tx.clone();
+    window.on_browse_file(move || {
+        spawn_pick_manager_file(
+            tx.clone(),
+            DialogKind::HostKeysImport,
+            "Import known_hosts file",
+        );
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_imported(move || {
+        let _ = rt.borrow_mut().import_host_keys_from_dialog();
+    });
+}
+
+/// Known Hosts · Export（目标路径 + Browse）。
+fn wire_known_host_export_window(
+    window: &KnownHostExportWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+    dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
+) {
+    wire_tool_title_drag!(window);
+    let rt = Rc::clone(&runtime);
+    window.on_canceled(move || {
+        let _ = rt.borrow_mut().close_host_keys_export_dialog();
+    });
+    let rt = Rc::clone(&runtime);
+    let weak = window.as_weak();
+    window.window().on_close_requested(move || {
+        let _ = rt.borrow_mut().close_host_keys_export_dialog();
+        let _ = weak;
+        CloseRequestResponse::HideWindow
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_path(move |value: SharedString| {
+        let _ = rt.borrow_mut().update_host_keys_export_path(value.as_ref());
+    });
+    let tx = dialog_tx.clone();
+    let weak = window.as_weak();
+    window.on_browse_file(move || {
+        let file_name = weak
+            .upgrade()
+            .map(|window| file_name_of(window.get_path_text().as_str(), "known_hosts_export"))
+            .unwrap_or_else(|| "known_hosts_export".to_owned());
+        spawn_pick_manager_save_path(
+            tx.clone(),
+            DialogKind::HostKeysExport,
+            "Export known hosts",
+            &file_name,
+        );
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_exported(move || {
+        let _ = rt.borrow_mut().export_host_keys_to_path();
+    });
+}
+
+/// Private Keys · Generate（表单 → 结果页）。
+fn wire_private_key_generate_window(
+    window: &PrivateKeyGenerateWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+) {
+    wire_tool_title_drag!(window);
+    let rt = Rc::clone(&runtime);
+    window.on_canceled(move || {
+        let _ = rt.borrow_mut().close_private_keys_generate_dialog();
+    });
+    // × / Esc：结果页时等价 Done（保留已生成密钥），表单页等价 Cancel。
+    let rt = Rc::clone(&runtime);
+    let weak = window.as_weak();
+    window.window().on_close_requested(move || {
+        if weak
+            .upgrade()
+            .is_some_and(|window| window.get_result_visible())
+        {
+            let _ = rt.borrow_mut().finish_private_keys_generate_dialog();
+        } else {
+            let _ = rt.borrow_mut().close_private_keys_generate_dialog();
+        }
+        CloseRequestResponse::HideWindow
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_label(move |value: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_private_keys_generate_label(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_comment(move |value: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_private_keys_generate_comment(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_passphrase(move |value: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_private_keys_generate_passphrase(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_confirm(move |value: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_private_keys_generate_confirm(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_select_algorithm(move |index| {
+        let _ = rt
+            .borrow_mut()
+            .select_private_keys_generate_algorithm(index);
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_submitted(move || {
+        let _ = rt.borrow_mut().generate_private_key_from_form();
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_done(move || {
+        let _ = rt.borrow_mut().finish_private_keys_generate_dialog();
+    });
+    // 结果页 Copy Public Key。
+    let rt = Rc::clone(&runtime);
+    window.on_copy_public_key(move || {
+        let line = {
+            let runtime = rt.borrow();
+            runtime.generated_private_key_public_line()
+        };
+        let Some(text) = line else {
+            return;
+        };
+        let copied = write_clipboard(&text);
+        let chars = text.chars().count().to_string();
+        if copied {
+            let _ = rt.borrow_mut().set_private_keys_status_feedback(
+                "private-key-public-copied",
+                format!("Copied the derived public key ({chars} chars) to the clipboard."),
+                chars,
+                String::new(),
+            );
+        } else {
+            let _ = rt.borrow_mut().set_private_keys_status_feedback(
+                "private-key-clipboard-unavailable",
+                "Could not access the system clipboard; select the key text manually.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+        }
+    });
+}
+
+/// Private Keys · Import（文件 / 粘贴两个 tab）。
+fn wire_private_key_import_window(
+    window: &PrivateKeyImportWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+    dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
+) {
+    wire_tool_title_drag!(window);
+    let rt = Rc::clone(&runtime);
+    window.on_canceled(move || {
+        let _ = rt.borrow_mut().close_private_keys_import_dialog();
+    });
+    let rt = Rc::clone(&runtime);
+    let weak = window.as_weak();
+    window.window().on_close_requested(move || {
+        let _ = rt.borrow_mut().close_private_keys_import_dialog();
+        let _ = weak;
+        CloseRequestResponse::HideWindow
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_select_tab(move |tab| {
+        let _ = rt.borrow_mut().select_private_keys_import_tab(tab);
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_label(move |value: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_private_keys_import_label(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_path(move |value: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_private_keys_import_path(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_passphrase(move |value: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_private_keys_import_passphrase(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_paste(move |value: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_private_keys_import_paste_text(value.as_ref());
+    });
+    let tx = dialog_tx.clone();
+    window.on_browse_file(move || {
+        spawn_pick_manager_file(
+            tx.clone(),
+            DialogKind::PrivateKeyImport,
+            "Select private key file",
+        );
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_imported(move || {
+        let _ = rt.borrow_mut().import_private_key_from_dialog();
+    });
+}
+
+/// Private Keys · Export public key。
+fn wire_private_key_export_window(
+    window: &PrivateKeyExportWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+    dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
+) {
+    wire_tool_title_drag!(window);
+    let rt = Rc::clone(&runtime);
+    window.on_canceled(move || {
+        let _ = rt.borrow_mut().close_private_keys_export_dialog();
+    });
+    let rt = Rc::clone(&runtime);
+    let weak = window.as_weak();
+    window.window().on_close_requested(move || {
+        let _ = rt.borrow_mut().close_private_keys_export_dialog();
+        let _ = weak;
+        CloseRequestResponse::HideWindow
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_path(move |value: SharedString| {
+        let _ = rt
+            .borrow_mut()
+            .update_private_keys_export_path(value.as_ref());
+    });
+    let tx = dialog_tx.clone();
+    let weak = window.as_weak();
+    window.on_browse_file(move || {
+        let file_name = weak
+            .upgrade()
+            .map(|window| file_name_of(window.get_path_text().as_str(), "public_key.pub"))
+            .unwrap_or_else(|| "public_key.pub".to_owned());
+        spawn_pick_manager_save_path(
+            tx.clone(),
+            DialogKind::PublicKeyExport,
+            "Export public key",
+            &file_name,
+        );
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_exported(move || {
+        let _ = rt.borrow_mut().export_private_key_to_path();
+    });
+}
+
+/// Private Keys · Deploy（目标会话选择）。
+fn wire_private_key_deploy_window(
+    window: &PrivateKeyDeployWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+) {
+    wire_tool_title_drag!(window);
+    let rt = Rc::clone(&runtime);
+    window.on_canceled(move || {
+        let _ = rt.borrow_mut().close_private_keys_deploy_dialog();
+    });
+    let rt = Rc::clone(&runtime);
+    let weak = window.as_weak();
+    window.window().on_close_requested(move || {
+        let _ = rt.borrow_mut().close_private_keys_deploy_dialog();
+        let _ = weak;
+        CloseRequestResponse::HideWindow
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_select_target(move |index| {
+        let _ = rt.borrow_mut().select_private_key_deploy_target(index);
+    });
+    // 执行部署：连接目标会话追加 authorized_keys（失败写页面状态）。
+    let rt = Rc::clone(&runtime);
+    window.on_deployed(move || {
+        let _ = rt.borrow_mut().confirm_private_key_deploy();
+    });
+}
+
+/// Path basename for rfd `set_file_name`（路径为空/无文件名时用 fallback）。
+fn file_name_of(path: &str, fallback: &str) -> String {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return fallback.to_owned();
+    }
+    let name = trimmed.rsplit(['/', '\\']).next().unwrap_or(trimmed).trim();
+    if name.is_empty() {
+        fallback.to_owned()
+    } else {
+        name.to_owned()
+    }
+}
+
+/// 写系统剪贴板（失败返回 false；调用方写状态反馈）。
+fn write_clipboard(text: &str) -> bool {
+    ClipboardContext::new()
+        .ok()
+        .is_some_and(|mut clipboard| clipboard.set_contents(text.to_owned()).is_ok())
 }
 
 fn wire_logging_window(window: &LoggingWindow, runtime: Rc<RefCell<crate::runtime::AppRuntime>>) {
@@ -1902,6 +2722,42 @@ fn wire_host_key_window(window: &HostKeyWindow, runtime: Rc<RefCell<crate::runti
     let rt = Rc::clone(&runtime);
     window.on_trust_and_save(move || {
         let _ = rt.borrow_mut().trust_host_key_and_save();
+    });
+    // changed 态：Copy Details（主机/模式/路径/Expected/Presented）。
+    let rt = Rc::clone(&runtime);
+    let weak = window.as_weak();
+    window.on_copy_details(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let text = format!(
+            "Target: {}\nMode: {}\nKnown hosts: {}\nExpected: {} {}\nPresented: {} {}\n",
+            window.get_target_text(),
+            window.get_mode_text(),
+            window.get_known_hosts_path_text(),
+            window.get_expected_algorithm_text(),
+            window.get_expected_fingerprint_text(),
+            window.get_algorithm_text(),
+            window.get_fingerprint_text(),
+        );
+        let copied = write_clipboard(&text);
+        let mut rt = rt.borrow_mut();
+        if copied {
+            let chars = text.chars().count().to_string();
+            rt.set_status_kind(
+                "host-key-details-copied",
+                format!("Copied the host key details ({chars} chars) to the clipboard."),
+                chars,
+                String::new(),
+            );
+        } else {
+            rt.set_status_kind(
+                "host-key-clipboard-unavailable",
+                "Could not access the system clipboard; select the details manually.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+        }
     });
     let rt = Rc::clone(&runtime);
     let weak = window.as_weak();
@@ -2080,12 +2936,6 @@ fn dispatch_confirm(
         }
         ConfirmKind::PrivateKeysRemove => {
             let _ = runtime.cancel_private_key_remove();
-        }
-        ConfirmKind::PrivateKeysDeploy if confirmed => {
-            let _ = runtime.confirm_private_key_deploy();
-        }
-        ConfirmKind::PrivateKeysDeploy => {
-            let _ = runtime.cancel_private_key_deploy();
         }
         ConfirmKind::ProxiesRemove if confirmed => {
             let _ = runtime.confirm_proxy_remove();
@@ -2917,48 +3767,173 @@ fn sync_known_hosts(w: &KnownHostsWindow, p: &AppProjection) {
     w.set_clear_confirmation_text(p.known_hosts_clear_confirmation_text.clone().into());
 }
 
-fn sync_private_keys(w: &PrivateKeysWindow, p: &AppProjection, m: Option<&MainWindow>) {
+fn sync_private_keys(w: &PrivateKeysWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+    // 清单模型（只在内容变化时重建，sync 每个 tick 都跑）。
+    let current = w.get_keys();
+    let rebuild = current.row_count() != p.private_keys_rows.len()
+        || !(0..p.private_keys_rows.len()).all(|index| {
+            current
+                .row_data(index)
+                .is_some_and(|row| private_key_row_matches(&row, &p.private_keys_rows[index]))
+        });
+    if rebuild {
+        w.set_keys(ModelRc::new(VecModel::from(
+            p.private_keys_rows
+                .iter()
+                .map(private_key_row_from)
+                .collect::<Vec<_>>(),
+        )));
+    }
     w.set_list_summary_text(p.private_keys_summary_text.clone().into());
     w.set_details_text(p.private_keys_details_text.clone().into());
+    w.set_public_key_text(p.private_keys_public_key_text.clone().into());
+    w.set_test_result_text(p.private_keys_test_result_text.clone().into());
     w.set_status_text(p.private_keys_status_text.clone().into());
     w.set_status_kind_text(p.private_keys_status_kind_text.clone().into());
     w.set_status_param_1_text(p.private_keys_status_param_1_text.clone().into());
     w.set_status_param_2_text(p.private_keys_status_param_2_text.clone().into());
     w.set_remove_warning_text(p.private_keys_remove_warning_text.clone().into());
     w.set_selected_index(p.private_keys_selected_index);
-    // TODO: sync `keys` ModelRc from `p.private_keys_rows` (same as MainWindow projection).
-    if let Some(main) = m {
-        w.set_import_label_text(main.get_private_keys_import_label_text());
-        w.set_import_path_text(main.get_private_keys_import_path_text());
-        w.set_passphrase_text(main.get_private_keys_passphrase_text());
-    }
+    w.set_busy(false);
+    w.set_passphrase_text(p.private_keys_passphrase_text.clone().into());
+    w.set_passphrase_stored(p.private_keys_passphrase_stored);
+    w.set_passphrase_manage_enabled(p.private_keys_passphrase_manage_enabled);
 }
 
-fn sync_proxies(w: &ProxiesWindow, p: &AppProjection, m: Option<&MainWindow>) {
+fn sync_proxies(w: &ProxiesWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+    let current = w.get_proxies();
+    let rebuild = current.row_count() != p.proxies_rows.len()
+        || !(0..p.proxies_rows.len()).all(|index| {
+            current
+                .row_data(index)
+                .is_some_and(|row| proxy_row_matches(&row, &p.proxies_rows[index]))
+        });
+    if rebuild {
+        w.set_proxies(ModelRc::new(VecModel::from(
+            p.proxies_rows
+                .iter()
+                .map(proxy_row_from)
+                .collect::<Vec<_>>(),
+        )));
+    }
     w.set_list_summary_text(p.proxies_summary_text.clone().into());
     w.set_status_text(p.proxies_status_text.clone().into());
     w.set_status_kind_text(p.proxies_status_kind_text.clone().into());
     w.set_status_param_1_text(p.proxies_status_param_1_text.clone().into());
     w.set_status_param_2_text(p.proxies_status_param_2_text.clone().into());
+    w.set_test_result_text(p.proxies_test_result_text.clone().into());
+    w.set_test_in_flight(p.proxies_test_in_flight);
     w.set_selected_index(p.proxies_selected_index);
-    // TODO: sync `proxies` ModelRc from `p.proxies_rows`.
-    let _ = m;
+    w.set_remove_blocked(p.proxies_remove_blocked);
+    w.set_referencing_text(p.proxies_referencing_text.clone().into());
+    w.set_editor_is_new(p.proxies_editor_is_new);
+    w.set_editor_id_text(p.proxies_editor_id_text.clone().into());
+    w.set_editor_name_text(p.proxies_editor_name_text.clone().into());
+    w.set_editor_host_text(p.proxies_editor_host_text.clone().into());
+    w.set_editor_port_text(p.proxies_editor_port_text.clone().into());
+    w.set_editor_username_text(p.proxies_editor_username_text.clone().into());
+    w.set_editor_password_text(p.proxies_editor_password_text.clone().into());
+    w.set_editor_password_stored(p.proxies_editor_password_stored);
+    w.set_editor_dns_by_proxy(p.proxies_editor_dns_by_proxy);
+    w.set_editor_protocol_index(p.proxies_editor_protocol_index);
+    w.set_editor_save_enabled(p.proxies_editor_save_enabled);
 }
 
-fn sync_theme_manager(w: &ThemeManagerWindow, p: &AppProjection, m: Option<&MainWindow>) {
+fn sync_theme_manager(w: &ThemeManagerWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+    let current = w.get_themes();
+    let rebuild = current.row_count() != p.theme_manager_rows.len()
+        || !(0..p.theme_manager_rows.len()).all(|index| {
+            current
+                .row_data(index)
+                .is_some_and(|row| theme_manager_row_matches(&row, &p.theme_manager_rows[index]))
+        });
+    if rebuild {
+        w.set_themes(ModelRc::new(VecModel::from(
+            p.theme_manager_rows
+                .iter()
+                .map(theme_manager_row_from)
+                .collect::<Vec<_>>(),
+        )));
+    }
     w.set_default_name_text(p.theme_manager_default_name_text.clone().into());
     w.set_selected_index(p.theme_manager_selected_index);
     w.set_selected_is_default(p.theme_manager_selected_is_default);
     w.set_builtin_count(p.theme_manager_builtin_count);
     w.set_user_count(p.theme_manager_user_count);
-    // TODO: sync `themes` ModelRc from `p.theme_manager_rows`.
-    if let Some(main) = m {
-        w.set_preview(main.get_theme_manager_preview());
-        w.set_preview_background(main.get_theme_manager_preview_background());
+    if let Some(preview) = p.theme_manager_preview.as_ref() {
+        w.set_preview(frame_image(preview));
     }
+    w.set_preview_background(slint_color_from_rgb(p.theme_manager_preview_background));
+    // 编辑器（Colors / ANSI）。
+    w.set_theme_editor_open(p.theme_editor_open);
+    w.set_theme_editor_builtin(p.theme_editor_builtin);
+    w.set_theme_editor_id(p.theme_editor_id.clone().into());
+    w.set_theme_editor_name(p.theme_editor_name.clone().into());
+    w.set_theme_editor_foreground(slint_color_from_hex(&p.theme_editor_foreground));
+    w.set_theme_editor_background(slint_color_from_hex(&p.theme_editor_background));
+    w.set_theme_editor_cursor(slint_color_from_hex(&p.theme_editor_cursor));
+    w.set_theme_editor_selection(slint_color_from_hex(&p.theme_editor_selection));
+    let ansi = p
+        .theme_editor_ansi
+        .iter()
+        .map(|hex| slint_color_from_hex(hex))
+        .collect::<Vec<_>>();
+    let current_ansi = w.get_theme_editor_ansi();
+    if current_ansi.row_count() != ansi.len()
+        || !current_ansi
+            .iter()
+            .zip(ansi.iter())
+            .all(|(current, next)| current == *next)
+    {
+        w.set_theme_editor_ansi(ModelRc::new(VecModel::from(ansi)));
+    }
+    // 角色色块条（Foreground / Background / Cursor / Selection）。
+    let palette = [
+        p.theme_editor_foreground.clone(),
+        p.theme_editor_background.clone(),
+        p.theme_editor_cursor.clone(),
+        p.theme_editor_selection.clone(),
+    ];
+    let palette_colors = palette
+        .iter()
+        .map(|hex| slint_color_from_hex(hex))
+        .collect::<Vec<_>>();
+    if w.get_editor_palette_swatches().row_count() != palette_colors.len()
+        || !w
+            .get_editor_palette_swatches()
+            .iter()
+            .zip(palette_colors.iter())
+            .all(|(current, next)| current == *next)
+    {
+        w.set_editor_palette_swatches(ModelRc::new(VecModel::from(palette_colors)));
+    }
+    // Font（全局终端外观草稿；Built-in 只读）。
+    w.set_font_editable(p.themes_font_editable);
+    if !string_model_matches(&w.get_font_options(), &p.themes_font_options) {
+        w.set_font_options(option_model(&p.themes_font_options));
+    }
+    w.set_font_index(p.themes_font_index);
+    w.set_font_family_text(p.themes_font_family_text.clone().into());
+    w.set_font_size_text(p.themes_font_size_text.clone().into());
+    w.set_backup_font_text(p.themes_backup_font_text.clone().into());
 }
 
 fn sync_host_keys(w: &HostKeysWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+    let current = w.get_groups();
+    let rebuild = current.row_count() != p.host_keys_groups.len()
+        || !(0..p.host_keys_groups.len()).all(|index| {
+            current
+                .row_data(index)
+                .is_some_and(|group| host_key_group_matches(&group, &p.host_keys_groups[index]))
+        });
+    if rebuild {
+        w.set_groups(ModelRc::new(VecModel::from(
+            p.host_keys_groups
+                .iter()
+                .map(host_key_group_from)
+                .collect::<Vec<_>>(),
+        )));
+    }
     w.set_path_text(p.host_keys_path_text.clone().into());
     w.set_details_text(p.host_keys_details_text.clone().into());
     w.set_status_text(p.host_keys_status_text.clone().into());
@@ -2972,9 +3947,91 @@ fn sync_host_keys(w: &HostKeysWindow, p: &AppProjection, _m: Option<&MainWindow>
     w.set_detail_algorithm_text(p.host_keys_detail_algorithm_text.clone().into());
     w.set_detail_fingerprint_text(p.host_keys_detail_fingerprint_text.clone().into());
     w.set_detail_path_text(p.host_keys_detail_path_text.clone().into());
-    w.set_import_visible(p.host_keys_import_visible);
-    w.set_import_text(p.host_keys_import_text.clone().into());
-    // TODO: sync `groups` ModelRc from `p.host_keys_groups`.
+}
+
+// --- managers-dialogs：管理器的 7 个子窗 sync --------------------------------
+
+fn sync_known_host_add(w: &KnownHostAddWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+    w.set_edit_mode(p.hosts_add_edit_mode);
+    w.set_entries_text(p.hosts_add_text.clone().into());
+    w.set_error_text(p.hosts_add_error_text.clone().into());
+}
+
+fn sync_known_host_import(w: &KnownHostImportWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+    w.set_path_text(p.hosts_import_path_text.clone().into());
+    w.set_error_text(p.hosts_import_error_text.clone().into());
+}
+
+fn sync_known_host_export(w: &KnownHostExportWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+    w.set_path_text(p.hosts_export_path_text.clone().into());
+    w.set_error_text(p.hosts_export_error_text.clone().into());
+}
+
+fn sync_private_key_generate(
+    w: &PrivateKeyGenerateWindow,
+    p: &AppProjection,
+    _m: Option<&MainWindow>,
+) {
+    w.set_result_visible(p.keys_generate_result_visible);
+    w.set_algorithm_index(p.keys_generate_algorithm_index);
+    if !string_model_matches(
+        &w.get_algorithm_options(),
+        &p.keys_generate_algorithm_options,
+    ) {
+        w.set_algorithm_options(option_model(&p.keys_generate_algorithm_options));
+    }
+    w.set_label_text(p.keys_generate_label_text.clone().into());
+    w.set_comment_text(p.keys_generate_comment_text.clone().into());
+    w.set_passphrase_text(p.keys_generate_passphrase_text.clone().into());
+    w.set_confirm_text(p.keys_generate_confirm_text.clone().into());
+    w.set_error_text(p.keys_generate_error_text.clone().into());
+    w.set_result_label_text(p.keys_generate_result_label_text.clone().into());
+    w.set_result_fingerprint_text(p.keys_generate_fingerprint_text.clone().into());
+    w.set_result_public_key_text(p.keys_generate_public_key_text.clone().into());
+    let result_type = p
+        .keys_generate_public_key_text
+        .split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .to_owned();
+    w.set_result_type_text(result_type.into());
+}
+
+fn sync_private_key_import(w: &PrivateKeyImportWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+    w.set_tab(p.keys_import_tab);
+    w.set_label_text(p.private_keys_import_label_text.clone().into());
+    w.set_path_text(p.private_keys_import_path_text.clone().into());
+    w.set_passphrase_text(p.private_keys_import_passphrase_text.clone().into());
+    w.set_paste_text(p.keys_import_paste_text.clone().into());
+    w.set_error_text(p.keys_import_error_text.clone().into());
+}
+
+fn sync_private_key_export(w: &PrivateKeyExportWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+    w.set_path_text(p.keys_export_path_text.clone().into());
+    w.set_public_key_text(p.keys_export_public_key_text.clone().into());
+    w.set_error_text(p.keys_export_error_text.clone().into());
+}
+
+fn sync_private_key_deploy(w: &PrivateKeyDeployWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+    w.set_key_label_text(p.keys_deploy_key_label_text.clone().into());
+    w.set_public_key_text(p.keys_export_public_key_text.clone().into());
+    if !string_model_matches(&w.get_target_options(), &p.keys_deploy_target_options) {
+        w.set_target_options(option_model(&p.keys_deploy_target_options));
+    }
+    w.set_target_index(p.keys_deploy_target_index);
+    let target = usize::try_from(p.keys_deploy_target_index)
+        .ok()
+        .and_then(|index| p.keys_deploy_target_options.get(index))
+        .cloned()
+        .unwrap_or_default();
+    let summary = if target.is_empty() {
+        "Open an SSH session to the target host first.".to_owned()
+    } else {
+        format!("Append the public key to ~/.ssh/authorized_keys on {target} (idempotent; directory/file permissions are fixed).")
+    };
+    w.set_summary_text(summary.into());
+    w.set_command_text(p.private_keys_deploy_command_text.clone().into());
+    w.set_error_text(p.keys_deploy_error_text.clone().into());
 }
 
 fn sync_logging(w: &LoggingWindow, p: &AppProjection, _m: Option<&MainWindow>) {

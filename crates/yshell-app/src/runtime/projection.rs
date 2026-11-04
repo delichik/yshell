@@ -1075,8 +1075,25 @@ impl AppRuntime {
             hosts_add_error_text: self.hosts_add_error_text.clone(),
             hosts_add_edit_mode: self.hosts_add_edit_target.is_some(),
             hosts_import_path_text: self.hosts_import_path_text.clone(),
+            hosts_import_error_text: if self.host_keys_import_visible
+                && self.host_keys_status_kind.starts_with("host-keys-import")
+                && self.host_keys_status_kind != "host-keys-imported"
+                && self.host_keys_status_kind != "host-keys-import-opened"
+            {
+                self.host_keys_status_text.clone()
+            } else {
+                String::new()
+            },
             hosts_export_visible: self.hosts_export_visible,
             hosts_export_path_text: self.hosts_export_path_text.clone(),
+            hosts_export_error_text: if self.hosts_export_visible
+                && self.host_keys_status_kind.starts_with("host-keys-export")
+                && self.host_keys_status_kind != "host-keys-exported"
+            {
+                self.host_keys_status_text.clone()
+            } else {
+                String::new()
+            },
             keys_generate_visible: self.keys_generate_visible,
             keys_generate_result_visible: self.keys_generate_result_visible,
             keys_generate_algorithm_index: self.keys_generate_algorithm_index,
@@ -1095,8 +1112,45 @@ impl AppRuntime {
             keys_import_visible: self.keys_import_visible,
             keys_import_tab: self.keys_import_tab,
             keys_import_paste_text: self.keys_import_paste_text.clone(),
+            keys_import_error_text: if self.keys_import_visible
+                && self
+                    .private_keys_status_kind
+                    .starts_with("private-key-import")
+                && self.private_keys_status_kind != "private-key-imported"
+                && self.private_keys_status_kind != "private-key-import-opened"
+            {
+                self.private_keys_status_text.clone()
+            } else {
+                String::new()
+            },
             keys_export_visible: self.keys_export_visible,
             keys_export_path_text: self.keys_export_path_text.clone(),
+            keys_export_error_text: if self.keys_export_visible
+                && self
+                    .private_keys_status_kind
+                    .starts_with("private-key-export")
+                && self.private_keys_status_kind != "private-key-exported"
+            {
+                self.private_keys_status_text.clone()
+            } else {
+                String::new()
+            },
+            keys_deploy_error_text: if self.private_keys_deploy_confirm_visible
+                && self
+                    .private_keys_status_kind
+                    .starts_with("private-key-deploy")
+                && !matches!(
+                    self.private_keys_status_kind.as_str(),
+                    "private-key-deploy-ready" | "private-key-deploy-target"
+                ) {
+                self.private_keys_status_text.clone()
+            } else {
+                String::new()
+            },
+            keys_deploy_key_label_text: self
+                .selected_private_key_entry()
+                .map(|entry| entry.label)
+                .unwrap_or_default(),
             keys_export_public_key_text: self
                 .selected_private_key_entry()
                 .map(|entry| entry.public_key)
@@ -2605,8 +2659,10 @@ pub struct AppProjection {
     pub hosts_add_edit_mode: bool,
     /// Known Hosts Import 子窗的路径（可见性复用 `host_keys_import_visible`）
     pub hosts_import_path_text: String,
+    pub hosts_import_error_text: String,
     pub hosts_export_visible: bool,
     pub hosts_export_path_text: String,
+    pub hosts_export_error_text: String,
     /// Private Keys：Generate 子窗（表单 / 结果页）
     pub keys_generate_visible: bool,
     pub keys_generate_result_visible: bool,
@@ -2625,13 +2681,17 @@ pub struct AppProjection {
     pub keys_import_visible: bool,
     pub keys_import_tab: i32,
     pub keys_import_paste_text: String,
+    pub keys_import_error_text: String,
     /// Private Keys：Export 公钥子窗
     pub keys_export_visible: bool,
     pub keys_export_path_text: String,
     pub keys_export_public_key_text: String,
+    pub keys_export_error_text: String,
     /// Private Keys：Deploy 子窗（目标会话选择）
     pub keys_deploy_target_options: Vec<String>,
     pub keys_deploy_target_index: i32,
+    pub keys_deploy_key_label_text: String,
+    pub keys_deploy_error_text: String,
     /// Terminal Styles：字体字段（复用全局终端外观草稿；Built-in 只读）。
     pub themes_font_family_text: String,
     pub themes_font_options: Vec<String>,

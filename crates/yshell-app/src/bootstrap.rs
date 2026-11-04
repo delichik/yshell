@@ -4828,6 +4828,54 @@ fn spawn_save_text(
     });
 }
 
+// --- managers-dialogs：管理器子窗的 rfd 入口 --------------------------------
+
+/// 管理器子窗的 `pick_file`（Import 文件 / Add Font File）。
+///
+/// Windows 的系统文件对话框始终可用；其它平台无显示服务器时静默返回，
+/// 子窗保留可手输的路径输入框（原型要求失败回落路径输入）。
+pub(crate) fn spawn_pick_manager_file(
+    dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
+    kind: DialogKind,
+    title: &str,
+) {
+    if !cfg!(windows) && !file_dialogs_available() {
+        return;
+    }
+    spawn_pick_file(dialog_tx, kind, title);
+}
+
+/// 管理器子窗的 `save_file` 路径选择（**只回填路径，不写盘**；导出由 runtime
+/// 的 `export_*_to_path` 在用户点 Export/Apply 时完成）。
+pub(crate) fn spawn_pick_manager_save_path(
+    dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
+    kind: DialogKind,
+    title: &str,
+    file_name: &str,
+) {
+    if !cfg!(windows) && !file_dialogs_available() {
+        return;
+    }
+    if DIALOG_IN_FLIGHT.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let title = title.to_owned();
+    let file_name = file_name.to_owned();
+    std::thread::spawn(move || {
+        let picked = rfd::FileDialog::new()
+            .set_title(title)
+            .set_file_name(file_name)
+            .save_file();
+        DIALOG_IN_FLIGHT.store(false, Ordering::SeqCst);
+        if let Some(path) = picked {
+            let _ = dialog_tx.send(FileDialogOutcome::Picked {
+                kind,
+                path: path.display().to_string(),
+            });
+        }
+    });
+}
+
 // ---------------------------------------------------------------------------
 // N1 Phase 2：SFTP 拖动载荷、落点与上下文菜单动作
 // ---------------------------------------------------------------------------
@@ -5177,7 +5225,8 @@ pub(crate) fn apply_dialog_outcome(
         FileDialogOutcome::Picked { kind, path } => match kind {
             DialogKind::PrivateKeyImport => runtime.update_private_keys_import_path(&path),
             DialogKind::AuthKeyFile => runtime.set_auth_prompt_key_path(&path),
-            DialogKind::HostKeysImport => runtime.import_host_keys_from_path(&path),
+            // managers-dialogs：Import 子窗只回填路径，点 Import 再读文件。
+            DialogKind::HostKeysImport => runtime.update_host_keys_import_path(&path),
             // N6：终端日志弹窗的保存位置。
             DialogKind::LoggingDirectory => runtime.update_logging_dialog_directory(&path),
             // N1：rfd 直接触发的 SFTP 上传/下载（错误 → 状态栏）。
@@ -5203,8 +5252,9 @@ pub(crate) fn apply_dialog_outcome(
                     );
                     runtime.projection()
                 }),
-            // 保存类对话框不会产生 Picked。
-            DialogKind::PublicKeyExport | DialogKind::HostKeysExport => runtime.projection(),
+            // managers-dialogs：导出子窗的 Browse 只回填目标路径，点 Export 再写盘。
+            DialogKind::PublicKeyExport => runtime.update_private_keys_export_path(&path),
+            DialogKind::HostKeysExport => runtime.update_host_keys_export_path(&path),
             // N5：终端外观的字体文件（主字体 / 备用字体）。
             DialogKind::TerminalFontPrimary => {
                 runtime.update_settings_appearance_font_family(&path)
@@ -5320,7 +5370,7 @@ fn tri_state_field_model(fields: &[TriStateFieldData]) -> ModelRc<TriStateField>
 }
 
 /// `[ThemeManagerRowData]` → Slint model (TERM-1).
-fn theme_manager_row_from(row: &ThemeManagerRowData) -> ThemeManagerRow {
+pub(crate) fn theme_manager_row_from(row: &ThemeManagerRowData) -> ThemeManagerRow {
     ThemeManagerRow {
         id: row.id.clone().into(),
         name: row.name.clone().into(),
@@ -5331,7 +5381,10 @@ fn theme_manager_row_from(row: &ThemeManagerRowData) -> ThemeManagerRow {
     }
 }
 
-fn theme_manager_row_matches(current: &ThemeManagerRow, next: &ThemeManagerRowData) -> bool {
+pub(crate) fn theme_manager_row_matches(
+    current: &ThemeManagerRow,
+    next: &ThemeManagerRowData,
+) -> bool {
     let swatches_match = current.swatches.row_count() == next.swatches.len()
         && (0..next.swatches.len()).all(|index| {
             current.swatches.row_data(index).is_some_and(|color| {
@@ -5375,7 +5428,7 @@ fn swatch_model(swatches: &[[u8; 3]]) -> ModelRc<slint::Color> {
 }
 
 /// `#rrggbb` (or bare hex) → Slint color; invalid input falls back to black.
-fn slint_color_from_hex(hex: &str) -> slint::Color {
+pub(crate) fn slint_color_from_hex(hex: &str) -> slint::Color {
     match yshell_terminal::TerminalColor::from_hex(hex) {
         Some(color) => slint::Color::from_rgb_u8(color.red, color.green, color.blue),
         None => slint::Color::from_rgb_u8(0, 0, 0),
@@ -5383,12 +5436,12 @@ fn slint_color_from_hex(hex: &str) -> slint::Color {
 }
 
 /// RGB 三元组 → Slint color（预览表面底色等）。
-fn slint_color_from_rgb(rgb: [u8; 3]) -> slint::Color {
+pub(crate) fn slint_color_from_rgb(rgb: [u8; 3]) -> slint::Color {
     slint::Color::from_rgb_u8(rgb[0], rgb[1], rgb[2])
 }
 
 /// Rasterized terminal frame → Slint image.
-fn frame_image(frame: &yshell_terminal::TerminalFrame) -> slint::Image {
+pub(crate) fn frame_image(frame: &yshell_terminal::TerminalFrame) -> slint::Image {
     slint::Image::from_rgba8(SharedPixelBuffer::clone_from_slice(
         &frame.rgba,
         frame.width,
@@ -6197,7 +6250,7 @@ fn set_quick_connect_rows_if_changed(
 
 // --- N4：密钥管理页 / 认证弹窗的模型转换（带变更检测，避免重建行实例）--------
 
-fn private_key_row_from(row: &PrivateKeyRowData) -> PrivateKeyRow {
+pub(crate) fn private_key_row_from(row: &PrivateKeyRowData) -> PrivateKeyRow {
     PrivateKeyRow {
         id: row.id.clone().into(),
         label: row.label.clone().into(),
@@ -6210,7 +6263,7 @@ fn private_key_row_from(row: &PrivateKeyRowData) -> PrivateKeyRow {
     }
 }
 
-fn private_key_row_matches(current: &PrivateKeyRow, next: &PrivateKeyRowData) -> bool {
+pub(crate) fn private_key_row_matches(current: &PrivateKeyRow, next: &PrivateKeyRowData) -> bool {
     current.id == next.id.as_str()
         && current.label == next.label.as_str()
         && current.algorithm == next.algorithm.as_str()
@@ -6240,7 +6293,7 @@ fn set_private_keys_rows_if_changed(window: &MainWindow, rows: &[PrivateKeyRowDa
 
 // --- NET-1：代理管理器页 / 会话编辑器代理下拉的模型转换 ----------------------
 
-fn proxy_row_from(row: &ProxyRowData) -> ProxyRow {
+pub(crate) fn proxy_row_from(row: &ProxyRowData) -> ProxyRow {
     ProxyRow {
         id: row.id.clone().into(),
         name: row.name.clone().into(),
@@ -6253,7 +6306,7 @@ fn proxy_row_from(row: &ProxyRowData) -> ProxyRow {
     }
 }
 
-fn proxy_row_matches(current: &ProxyRow, next: &ProxyRowData) -> bool {
+pub(crate) fn proxy_row_matches(current: &ProxyRow, next: &ProxyRowData) -> bool {
     current.id == next.id.as_str()
         && current.name == next.name.as_str()
         && current.protocol == next.protocol.as_str()
@@ -6316,7 +6369,7 @@ fn host_key_entry_from(entry: &crate::runtime::HostKeyEntryData) -> HostKeyEntry
     }
 }
 
-fn host_key_group_from(group: &HostKeyGroupData) -> HostKeyGroup {
+pub(crate) fn host_key_group_from(group: &HostKeyGroupData) -> HostKeyGroup {
     HostKeyGroup {
         host: group.host.clone().into(),
         port: i32::from(group.port),
@@ -6330,7 +6383,7 @@ fn host_key_group_from(group: &HostKeyGroupData) -> HostKeyGroup {
     }
 }
 
-fn host_key_group_matches(current: &HostKeyGroup, next: &HostKeyGroupData) -> bool {
+pub(crate) fn host_key_group_matches(current: &HostKeyGroup, next: &HostKeyGroupData) -> bool {
     if current.host != next.host.as_str() || current.port != i32::from(next.port) {
         return false;
     }
@@ -7541,8 +7594,9 @@ pub fn init_logging_for_runtime(runtime: &AppRuntime) -> AppResult<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        accent_id_from_config, platform_default_ui_font, resolve_appearance_with_config,
-        resolve_language, terminal_grid_cell, terminal_size_from_viewport, theme_mode_from_config,
+        accent_id_from_config, apply_dialog_outcome, platform_default_ui_font,
+        resolve_appearance_with_config, resolve_language, terminal_grid_cell,
+        terminal_size_from_viewport, theme_mode_from_config, DialogKind, FileDialogOutcome,
     };
     use crate::runtime::AppRuntime;
     use tempfile::tempdir;
@@ -7799,5 +7853,49 @@ mod tests {
     fn ui_font_is_the_platform_default() {
         // UI 字体只取平台默认（不读环境变量）；不写死字体名，跨平台 CI 均可通过。
         assert!(!platform_default_ui_font().is_empty());
+    }
+
+    #[test]
+    fn manager_dialog_outcomes_only_fill_paths() {
+        let temp = tempdir().expect("tempdir");
+        let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+
+        // Known Hosts Import：只回填路径，点 Import 才读文件。
+        runtime.open_host_keys_manager();
+        let _ = runtime.open_host_keys_import_dialog();
+        let projection = apply_dialog_outcome(
+            &mut runtime,
+            FileDialogOutcome::Picked {
+                kind: DialogKind::HostKeysImport,
+                path: "C:/tmp/known_hosts".to_owned(),
+            },
+        );
+        assert!(projection.host_keys_import_visible);
+        assert_eq!(projection.hosts_import_path_text, "C:/tmp/known_hosts");
+
+        // Known Hosts Export：只回填目标路径，点 Export 才写盘。
+        runtime.open_host_keys_export_dialog();
+        let projection = apply_dialog_outcome(
+            &mut runtime,
+            FileDialogOutcome::Picked {
+                kind: DialogKind::HostKeysExport,
+                path: "C:/tmp/known_hosts_export".to_owned(),
+            },
+        );
+        assert!(projection.hosts_export_visible);
+        assert_eq!(
+            projection.hosts_export_path_text,
+            "C:/tmp/known_hosts_export"
+        );
+
+        // Add Font File（fallback）直接回填字体草稿。
+        let projection = apply_dialog_outcome(
+            &mut runtime,
+            FileDialogOutcome::Picked {
+                kind: DialogKind::TerminalFontBackup,
+                path: "C:/fonts/fallback.ttf".to_owned(),
+            },
+        );
+        assert_eq!(projection.themes_backup_font_text, "C:/fonts/fallback.ttf");
     }
 }

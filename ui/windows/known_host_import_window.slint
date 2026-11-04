@@ -63,7 +63,6 @@ export component KnownHostImportWindow inherits Window {
                     placeholder-text: @tr("Path to known_hosts file");
                     font-family: Theme.font-mono;
                     font-size: Theme.font-caption;
-                    read-only: true;
                     edited => { root.update-path(self.text); }
                 }
 

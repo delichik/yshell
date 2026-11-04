@@ -137,7 +137,6 @@ export component PrivateKeyImportWindow inherits Window {
                                 placeholder-text: @tr("Path to private key");
                                 font-family: Theme.font-mono;
                                 font-size: Theme.font-caption;
-                                read-only: true;
                                 edited => { root.update-path(self.text); }
                             }
 

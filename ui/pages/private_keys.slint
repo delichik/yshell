@@ -546,6 +546,7 @@ export component PrivateKeysPage inherits Rectangle {
                                     placeholder-text: @tr("New or replace");
                                     input-type: password;
                                     enabled: root.passphrase-manage-enabled;
+                                    edited => { root.update-passphrase(self.text); }
                                     accepted => { root.save-passphrase(); }
                                 }
 

@@ -168,7 +168,10 @@ impl WindowManager {
             let limit = runtime.config_document.ui.sftp_max_parallel_transfers;
             runtime.set_sftp_parallel_transfer_limit(limit);
         }
-        let dialog_host = crate::dialog_windows::DialogWindowManager::create(Rc::clone(&runtime));
+        let dialog_host = crate::dialog_windows::DialogWindowManager::create(
+            Rc::clone(&runtime),
+            dialog_tx.clone(),
+        );
         let mcp_inbox = crate::mcp_server::McpInbox::new();
         // MCP is opt-in: clear any stale endpoint until Settings enables it.
         {

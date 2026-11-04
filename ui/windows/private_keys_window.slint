@@ -25,7 +25,7 @@ export component PrivateKeysWindow inherits Window {
 
     in property <[PrivateKeyRow]> keys;
     in property <string> list-summary-text;
-    in property <string> empty-text;
+    in property <string> empty-text: @tr("No managed private keys yet. Generate a key or import an OpenSSH private key.");
     in property <string> details-text;
     in property <string> public-key-text;
     in property <string> test-result-text;

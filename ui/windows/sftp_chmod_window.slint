@@ -137,8 +137,8 @@ export component SftpChmodWindow inherits Window {
             background: transparent;
 
             VerticalLayout {
-                width: root.width;
-                height: root.height;
+                width: parent.width;
+                height: parent.height;
                 spacing: Theme.spacing-12;
 
                 ChmodFormRow {
@@ -174,7 +174,7 @@ export component SftpChmodWindow inherits Window {
 
                 // --- Permissions: Owner / Group / Other × Read / Write / Execute --
                 GridLayout {
-                    width: min(parent.width, 420px);
+                    width: 420px;
                     spacing: Theme.spacing-4;
 
                     Text { row: 0; col: 0; text: ""; height: Theme.control-height; }
