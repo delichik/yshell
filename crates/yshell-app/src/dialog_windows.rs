@@ -13,14 +13,17 @@ use std::rc::{Rc, Weak};
 use slint::{CloseRequestResponse, ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
 use crate::bootstrap::generated_ui::{
-    AboutWindow, AuthPromptWindow, CompactConfirmWindow, FolderEditorWindow, HostKeyWindow,
-    HostKeysWindow, KnownHostsWindow, LoggingWindow, MainWindow, MasterPasswordUnlockWindow,
-    MasterPasswordWindow, NewFolderWindow, PasswordPromptWindow, PrivateKeysWindow, ProxiesWindow,
-    SessionEditorWindow, SettingsWindow, SftpConflictWindow, SftpEntryWindow, SftpPropertiesWindow,
-    Theme, ThemeManagerWindow,
+    AboutWindow, AuthKeyOption, AuthPromptWindow, CompactConfirmWindow, EditorTunnelRow,
+    FolderEditorWindow, HostKeyWindow, HostKeysWindow, InheritSource, KnownHostsWindow,
+    LoggingWindow, LoginStepKeysWindow, LoginStepRow, LoginStepWaitWindow, MainWindow,
+    MasterPasswordUnlockWindow, MasterPasswordWindow, NewFolderWindow, PasswordPromptWindow,
+    PrivateKeysWindow, ProxiesWindow, SessionEditorWindow, SettingsWindow, SftpConflictWindow,
+    SftpEntryWindow, SftpPropertiesWindow, Theme, ThemeManagerWindow, TunnelEditorWindow,
 };
 use crate::error::{AppError, AppResult};
-use crate::runtime::AppProjection;
+use crate::runtime::{
+    AppProjection, EditorInheritSourceData, EditorLoginStepRowData, EditorTunnelRowData,
+};
 use crate::windows::{WindowManager, WindowRuntime};
 
 macro_rules! prep_tool_window {
@@ -134,6 +137,13 @@ pub(crate) struct DialogWindowManager {
     // Additional tool windows are created lazily in sync_* helpers.
     session_editor: Option<SessionEditorWindow>,
     session_editor_shown: bool,
+    // Session Editor 的子窗（Login Script 步骤 / Tunnel 编辑）：叠在编辑器之上。
+    login_step_keys: Option<LoginStepKeysWindow>,
+    login_step_keys_shown: bool,
+    login_step_wait: Option<LoginStepWaitWindow>,
+    login_step_wait_shown: bool,
+    tunnel_editor: Option<TunnelEditorWindow>,
+    tunnel_editor_shown: bool,
     folder_editor: Option<FolderEditorWindow>,
     folder_editor_shown: bool,
     known_hosts: Option<KnownHostsWindow>,
@@ -195,6 +205,12 @@ impl DialogWindowManager {
                 master_password_unlock_shown: false,
                 session_editor: None,
                 session_editor_shown: false,
+                login_step_keys: None,
+                login_step_keys_shown: false,
+                login_step_wait: None,
+                login_step_wait_shown: false,
+                tunnel_editor: None,
+                tunnel_editor_shown: false,
                 folder_editor: None,
                 folder_editor_shown: false,
                 known_hosts: None,
@@ -328,6 +344,52 @@ impl DialogWindowManager {
                 main,
             )?,
             session_editor
+        );
+        // Session Editor 子窗：Login Script 步骤（Keys / Wait）与 Tunnel 编辑。
+        // 只在对应分区/编辑态需要时叠在编辑器之上；同一时刻两窗最多一个可见。
+        apply_modal!(
+            sync_projection_tool(
+                projection.editor_login_step_dialog_visible
+                    && projection.editor_login_step_kind_text == "keys",
+                &mut self.login_step_keys_shown,
+                &mut self.login_step_keys,
+                || LoginStepKeysWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_login_step_keys_window(w, Rc::clone(&runtime)),
+                sync_login_step_keys,
+                projection,
+                main,
+            )?,
+            login_step_keys
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.editor_login_step_dialog_visible
+                    && projection.editor_login_step_kind_text == "wait",
+                &mut self.login_step_wait_shown,
+                &mut self.login_step_wait,
+                || LoginStepWaitWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_login_step_wait_window(w, Rc::clone(&runtime)),
+                sync_login_step_wait,
+                projection,
+                main,
+            )?,
+            login_step_wait
+        );
+        apply_modal!(
+            sync_projection_tool(
+                projection.editor_tunnel_dialog_visible,
+                &mut self.tunnel_editor_shown,
+                &mut self.tunnel_editor,
+                || TunnelEditorWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_tunnel_editor_window(w, Rc::clone(&runtime)),
+                sync_tunnel_editor,
+                projection,
+                main,
+            )?,
+            tunnel_editor
         );
         apply_modal!(
             sync_projection_tool(
@@ -1265,21 +1327,432 @@ where
     Ok(ModalAction::None)
 }
 
+/// Session Editor 回调：执行运行时动作并把 UI 标记为脏（下一个 tick 重新投影）。
+macro_rules! editor_cb {
+    ($window:expr, $runtime:expr, $callback:ident, |$rt:ident| $body:expr) => {{
+        let rt = Rc::clone(&$runtime);
+        $window.$callback(move || {
+            let mut $rt = rt.borrow_mut();
+            #[allow(unused_must_use)]
+            {
+                $body;
+            }
+            $rt.mark_ui_dirty();
+        });
+    }};
+}
+
+/// 同 [`editor_cb!`]，但回调带一个参数（string / int）。
+macro_rules! editor_cb1 {
+    ($window:expr, $runtime:expr, $callback:ident, $arg:ident : $arg_ty:ty, |$rt:ident| $body:expr) => {{
+        let rt = Rc::clone(&$runtime);
+        $window.$callback(move |$arg: $arg_ty| {
+            let mut $rt = rt.borrow_mut();
+            #[allow(unused_must_use)]
+            {
+                $body;
+            }
+            $rt.mark_ui_dirty();
+        });
+    }};
+}
+
+/// 同 [`editor_cb!`]，但动作为 `AppResult`：失败写状态栏（窗口保持打开）。
+macro_rules! editor_cb_result {
+    ($window:expr, $runtime:expr, $callback:ident, |$rt:ident| $body:expr) => {{
+        let rt = Rc::clone(&$runtime);
+        $window.$callback(move || {
+            let mut $rt = rt.borrow_mut();
+            if let Err(error) = $body {
+                $rt.set_status_kind(
+                    "editor-submit-failed",
+                    format!("{error}"),
+                    String::new(),
+                    String::new(),
+                );
+            }
+            $rt.mark_ui_dirty();
+        });
+    }};
+}
+
 fn wire_session_editor_window(
     window: &SessionEditorWindow,
     runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
 ) {
     wire_tool_title_drag!(window);
-    let rt = Rc::clone(&runtime);
-    window.on_dismiss(move || {
-        let _ = rt.borrow_mut().request_close_session_editor_modal();
+    editor_cb!(window, runtime, on_dismiss, |rt| {
+        let _ = rt.request_close_session_editor_modal();
     });
     let rt = Rc::clone(&runtime);
-    let weak = window.as_weak();
     window.window().on_close_requested(move || {
         let _ = rt.borrow_mut().request_close_session_editor_modal();
-        let _ = weak;
         CloseRequestResponse::HideWindow
+    });
+
+    // --- 分区导航 / 页级 Inherit -----------------------------------------
+    editor_cb!(window, runtime, on_select_general, |rt| {
+        let _ = rt.select_session_editor_general();
+    });
+    editor_cb!(window, runtime, on_select_authentication, |rt| {
+        let _ = rt.select_session_editor_authentication();
+    });
+    editor_cb!(window, runtime, on_select_login_script, |rt| {
+        let _ = rt.select_session_editor_login_script();
+    });
+    editor_cb!(window, runtime, on_select_proxy, |rt| {
+        let _ = rt.select_session_editor_proxy();
+    });
+    editor_cb!(window, runtime, on_select_tunnels, |rt| {
+        let _ = rt.select_session_editor_tunnels();
+    });
+    editor_cb!(window, runtime, on_select_terminal_style, |rt| {
+        let _ = rt.select_session_editor_appearance();
+    });
+    editor_cb1!(window, runtime, on_toggle_inherit_auth, value: bool, |rt| {
+        let _ = rt.set_editor_inherit_auth(value);
+    });
+    editor_cb1!(
+        window,
+        runtime,
+        on_toggle_inherit_login_script,
+        value: bool,
+        |rt| {
+            let _ = rt.set_editor_inherit_login_script(value);
+        }
+    );
+    editor_cb1!(window, runtime, on_toggle_inherit_proxy, value: bool, |rt| {
+        let _ = rt.set_editor_inherit_proxy(value);
+    });
+    editor_cb1!(
+        window,
+        runtime,
+        on_toggle_inherit_tunnels,
+        value: bool,
+        |rt| {
+            let _ = rt.set_editor_inherit_tunnels(value);
+        }
+    );
+    editor_cb1!(
+        window,
+        runtime,
+        on_toggle_inherit_terminal_style,
+        value: bool,
+        |rt| {
+            let _ = rt.set_editor_inherit_terminal_style(value);
+        }
+    );
+
+    // --- General：Name / Host / Port / Username / Icon / Notes -------------
+    editor_cb1!(window, runtime, on_update_name, value: SharedString, |rt| {
+        let _ = rt.update_editor_name(value.as_ref());
+    });
+    editor_cb1!(window, runtime, on_update_host, value: SharedString, |rt| {
+        let _ = rt.update_editor_host(value.as_ref());
+    });
+    editor_cb1!(window, runtime, on_update_port, value: SharedString, |rt| {
+        let _ = rt.update_editor_port(value.as_ref());
+    });
+    editor_cb1!(
+        window,
+        runtime,
+        on_update_username,
+        value: SharedString,
+        |rt| {
+            let _ = rt.update_editor_username(value.as_ref());
+        }
+    );
+    editor_cb1!(
+        window,
+        runtime,
+        on_update_icon_index,
+        value: i32,
+        |rt| {
+            let _ = rt.update_editor_icon_index(value);
+        }
+    );
+    editor_cb!(window, runtime, on_browse_icon, |rt| {
+        rt.request_editor_icon_browse();
+    });
+    editor_cb!(window, runtime, on_reset_icon, |rt| {
+        let _ = rt.reset_editor_icon();
+    });
+    editor_cb1!(window, runtime, on_update_notes, value: SharedString, |rt| {
+        let _ = rt.update_editor_notes(value.as_ref());
+    });
+
+    // --- Authentication ---------------------------------------------------
+    editor_cb!(window, runtime, on_set_auth_method_password, |rt| {
+        let _ = rt.set_editor_auth_method_password();
+    });
+    editor_cb!(window, runtime, on_set_auth_method_private_key, |rt| {
+        let _ = rt.set_editor_auth_method_private_key();
+    });
+    editor_cb!(
+        window,
+        runtime,
+        on_set_auth_method_keyboard_interactive,
+        |rt| {
+            let _ = rt.set_editor_auth_method_keyboard_interactive();
+        }
+    );
+    editor_cb1!(
+        window,
+        runtime,
+        on_update_password,
+        value: SharedString,
+        |rt| {
+            let _ = rt.update_editor_password(value.as_ref());
+        }
+    );
+    editor_cb1!(
+        window,
+        runtime,
+        on_update_passphrase,
+        value: SharedString,
+        |rt| {
+            let _ = rt.update_editor_passphrase(value.as_ref());
+        }
+    );
+    editor_cb1!(
+        window,
+        runtime,
+        on_select_key,
+        value: i32,
+        |rt| {
+            let _ = rt.select_editor_key(value);
+        }
+    );
+    editor_cb!(window, runtime, on_manage_keys, |rt| {
+        let _ = rt.open_private_keys_manager();
+    });
+
+    // --- Login Script 清单 ------------------------------------------------
+    editor_cb1!(
+        window,
+        runtime,
+        on_add_login_step,
+        kind: SharedString,
+        |rt| {
+            let _ = rt.add_editor_login_step(kind.as_ref());
+        }
+    );
+    editor_cb1!(
+        window,
+        runtime,
+        on_edit_login_step,
+        index: i32,
+        |rt| {
+            let _ = rt.edit_editor_login_step(index);
+        }
+    );
+    editor_cb1!(
+        window,
+        runtime,
+        on_select_login_step,
+        index: i32,
+        |rt| {
+            let _ = rt.select_editor_login_step(index);
+        }
+    );
+    editor_cb1!(
+        window,
+        runtime,
+        on_duplicate_login_step,
+        index: i32,
+        |rt| {
+            let _ = rt.duplicate_editor_login_step(index);
+        }
+    );
+    editor_cb1!(
+        window,
+        runtime,
+        on_delete_login_step,
+        index: i32,
+        |rt| {
+            let _ = rt.delete_editor_login_step(index);
+        }
+    );
+    let rt = Rc::clone(&runtime);
+    window.on_move_login_step(move |from: i32, to: i32| {
+        let mut runtime = rt.borrow_mut();
+        let _ = runtime.move_editor_login_step(from, to);
+        runtime.mark_ui_dirty();
+    });
+
+    // --- Tunnels 清单 -----------------------------------------------------
+    editor_cb!(window, runtime, on_add_tunnel, |rt| {
+        let _ = rt.begin_add_editor_tunnel();
+    });
+    editor_cb1!(window, runtime, on_edit_tunnel, index: i32, |rt| {
+        let _ = rt.begin_edit_editor_tunnel(index);
+    });
+    editor_cb1!(window, runtime, on_select_tunnel, index: i32, |rt| {
+        let _ = rt.select_editor_tunnel(index);
+    });
+    editor_cb1!(
+        window,
+        runtime,
+        on_duplicate_tunnel,
+        index: i32,
+        |rt| {
+            let _ = rt.duplicate_editor_tunnel(index);
+        }
+    );
+    editor_cb1!(window, runtime, on_delete_tunnel, index: i32, |rt| {
+        let _ = rt.delete_editor_tunnel(index);
+    });
+    editor_cb!(window, runtime, on_clear_tunnels, |rt| {
+        let _ = rt.clear_editor_tunnels();
+    });
+
+    // --- Proxy / Terminal Style ------------------------------------------
+    editor_cb!(window, runtime, on_set_proxy_mode_none, |rt| {
+        let _ = rt.set_editor_proxy_mode_none();
+    });
+    editor_cb1!(
+        window,
+        runtime,
+        on_select_proxy_profile,
+        index: i32,
+        |rt| {
+            let _ = rt.select_editor_proxy(index);
+        }
+    );
+    editor_cb!(window, runtime, on_manage_proxies, |rt| {
+        let _ = rt.open_proxies_manager();
+    });
+    editor_cb1!(window, runtime, on_select_scheme, index: i32, |rt| {
+        let _ = rt.select_editor_scheme_index(index);
+    });
+    editor_cb!(window, runtime, on_manage_terminal_styles, |rt| {
+        let _ = rt.open_theme_manager();
+    });
+
+    // --- 页脚：Test Connection | Cancel | Save | Save and Connect ---------
+    editor_cb!(window, runtime, on_test_auth, |rt| {
+        let _ = rt.test_editor_auth();
+    });
+    editor_cb_result!(window, runtime, on_save, |rt| rt
+        .save_editor_to_saved_session());
+    editor_cb_result!(window, runtime, on_save_connect, |rt| rt
+        .save_editor_and_connect());
+}
+
+/// Login Script · Keys 子窗：保存 / 删除 / 取消与字段编辑。
+fn wire_login_step_keys_window(
+    window: &LoginStepKeysWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+) {
+    wire_tool_title_drag!(window);
+    editor_cb!(window, runtime, on_dismiss, |rt| {
+        let _ = rt.cancel_editor_login_step();
+    });
+    let rt = Rc::clone(&runtime);
+    window.window().on_close_requested(move || {
+        let _ = rt.borrow_mut().cancel_editor_login_step();
+        CloseRequestResponse::HideWindow
+    });
+    editor_cb_result!(window, runtime, on_save, |rt| rt.save_editor_login_step());
+    editor_cb!(window, runtime, on_delete_step, |rt| {
+        let index = rt.editor_selected_login_step_index();
+        let _ = rt.delete_editor_login_step(index);
+    });
+    editor_cb1!(window, runtime, on_update_name, value: SharedString, |rt| {
+        let _ = rt.update_editor_login_step_name(value.as_ref());
+    });
+    editor_cb1!(window, runtime, on_update_keys, value: SharedString, |rt| {
+        let _ = rt.update_editor_login_step_keys(value.as_ref());
+    });
+    editor_cb1!(window, runtime, on_set_tokens, tokens: bool, |rt| {
+        let _ = rt.set_editor_login_step_tokens(tokens);
+    });
+}
+
+/// Login Script · Wait 子窗：保存 / 删除 / 取消与毫秒编辑。
+fn wire_login_step_wait_window(
+    window: &LoginStepWaitWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+) {
+    wire_tool_title_drag!(window);
+    editor_cb!(window, runtime, on_dismiss, |rt| {
+        let _ = rt.cancel_editor_login_step();
+    });
+    let rt = Rc::clone(&runtime);
+    window.window().on_close_requested(move || {
+        let _ = rt.borrow_mut().cancel_editor_login_step();
+        CloseRequestResponse::HideWindow
+    });
+    editor_cb_result!(window, runtime, on_save, |rt| rt.save_editor_login_step());
+    editor_cb!(window, runtime, on_delete_step, |rt| {
+        let index = rt.editor_selected_login_step_index();
+        let _ = rt.delete_editor_login_step(index);
+    });
+    editor_cb1!(window, runtime, on_update_millis, value: SharedString, |rt| {
+        let _ = rt.update_editor_login_step_millis(value.as_ref());
+    });
+}
+
+/// Tunnel Editor 子窗：保存 / 取消与字段编辑。
+fn wire_tunnel_editor_window(
+    window: &TunnelEditorWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+) {
+    wire_tool_title_drag!(window);
+    editor_cb!(window, runtime, on_dismiss, |rt| {
+        let _ = rt.cancel_editor_tunnel_dialog();
+    });
+    let rt = Rc::clone(&runtime);
+    window.window().on_close_requested(move || {
+        let _ = rt.borrow_mut().cancel_editor_tunnel_dialog();
+        CloseRequestResponse::HideWindow
+    });
+    editor_cb_result!(window, runtime, on_save, |rt| rt
+        .save_editor_tunnel_dialog());
+    editor_cb1!(window, runtime, on_update_name, value: SharedString, |rt| {
+        let _ = rt.update_editor_tunnel_name(value.as_ref());
+    });
+    editor_cb1!(window, runtime, on_set_kind, kind: SharedString, |rt| {
+        let _ = rt.set_editor_tunnel_kind(kind.as_ref());
+    });
+    editor_cb1!(
+        window,
+        runtime,
+        on_update_bind_host,
+        value: SharedString,
+        |rt| {
+            let _ = rt.update_editor_tunnel_dialog_bind_host(value.as_ref());
+        }
+    );
+    editor_cb1!(
+        window,
+        runtime,
+        on_update_bind_port,
+        value: SharedString,
+        |rt| {
+            let _ = rt.update_editor_tunnel_dialog_bind_port(value.as_ref());
+        }
+    );
+    editor_cb1!(
+        window,
+        runtime,
+        on_update_target_host,
+        value: SharedString,
+        |rt| {
+            let _ = rt.update_editor_tunnel_dialog_target_host(value.as_ref());
+        }
+    );
+    editor_cb1!(
+        window,
+        runtime,
+        on_update_target_port,
+        value: SharedString,
+        |rt| {
+            let _ = rt.update_editor_tunnel_dialog_target_port(value.as_ref());
+        }
+    );
+    editor_cb1!(window, runtime, on_set_enabled, enabled: bool, |rt| {
+        let _ = rt.set_editor_tunnel_enabled(enabled);
     });
 }
 
@@ -1663,14 +2136,160 @@ fn close_tabs_copy(projection: &AppProjection) -> (String, String) {
 }
 
 fn sync_session_editor(w: &SessionEditorWindow, p: &AppProjection, m: Option<&MainWindow>) {
+    // 分区 / 目标
+    w.set_section(p.editor_section_text.clone().into());
+    w.set_target_text(
+        if p.editor_target_editing {
+            p.editor_target_session_id_text.clone()
+        } else {
+            String::new()
+        }
+        .into(),
+    );
+    w.set_folder_text(
+        if p.editor_folder_known {
+            format!(
+                "{} ({})",
+                p.editor_folder_label_text, p.editor_folder_id_text
+            )
+        } else {
+            format!("Unknown folder ({})", p.editor_folder_id_text)
+        }
+        .into(),
+    );
+    w.set_folder_mode(false);
+    // General
     w.set_name_text(p.editor_name_text.clone().into());
     w.set_host_text(p.editor_host_text.clone().into());
     w.set_port_text(p.editor_port_text.clone().into());
     w.set_username_text(p.editor_username_text.clone().into());
+    w.set_icon_index(p.editor_icon_index);
+    w.set_icon_custom_text(p.editor_icon_custom_text.clone().into());
+    w.set_notes_text(p.editor_notes_text.clone().into());
+    // Authentication
+    w.set_auth_method_text(p.editor_auth_method_text.clone().into());
+    w.set_password_text(p.editor_password_text.clone().into());
+    w.set_passphrase_text(p.editor_passphrase_text.clone().into());
+    w.set_key_options(ModelRc::new(VecModel::from(
+        p.editor_key_options
+            .iter()
+            .map(|option| AuthKeyOption {
+                id: option.id.clone().into(),
+                label: option.label.clone().into(),
+                detail: option.detail.clone().into(),
+            })
+            .collect::<Vec<_>>(),
+    )));
+    w.set_selected_key_index(p.editor_selected_key_index);
+    w.set_selected_key_missing(p.editor_selected_key_missing);
+    w.set_legacy_key_path_text(p.editor_legacy_key_path_text.clone().into());
+    w.set_legacy_key_has_passphrase(p.editor_legacy_key_has_passphrase);
+    w.set_has_stored_password(p.editor_has_stored_password);
+    w.set_auth_test_kind_text(p.editor_auth_test_kind_text.clone().into());
+    w.set_auth_test_host_text(p.editor_auth_test_host_text.clone().into());
+    w.set_auth_test_startup_text(p.editor_auth_test_startup_text.clone().into());
+    w.set_auth_test_error_text(p.editor_auth_test_error_text.clone().into());
+    // 页级 Inherit
+    w.set_inherit_auth(p.editor_inherit_auth);
+    w.set_inherit_login_script(p.editor_inherit_login_script);
+    w.set_inherit_proxy(p.editor_inherit_proxy);
+    w.set_inherit_tunnels(p.editor_inherit_tunnels);
+    w.set_inherit_terminal_style(p.editor_inherit_terminal_style);
+    w.set_inherit_sources(inherit_source_model(&p.editor_inherit_sources));
+    w.set_parent_auth_text(p.editor_parent_auth_summary_text.clone().into());
+    w.set_parent_proxy_text(p.editor_parent_proxy_summary_text.clone().into());
+    w.set_parent_terminal_style_text(p.editor_parent_terminal_style_text.clone().into());
+    w.set_parent_login_step_count(p.editor_parent_login_step_count);
+    w.set_parent_tunnel_count(p.editor_parent_tunnel_count);
+    // Login Script
+    w.set_login_steps(login_step_row_model(&p.editor_login_steps));
+    w.set_selected_login_step(p.editor_selected_login_step);
+    // Tunnels
+    w.set_tunnels(tunnel_editor_row_model(&p.editor_tunnels));
+    w.set_selected_tunnel(p.editor_selected_tunnel);
+    // Proxy / Terminal Style
+    w.set_proxy_option_labels(ModelRc::new(VecModel::from(
+        p.editor_proxy_option_labels
+            .iter()
+            .map(|label| SharedString::from(label.as_str()))
+            .collect::<Vec<_>>(),
+    )));
+    w.set_proxy_option_index(p.editor_proxy_option_index);
+    w.set_proxy_selected_detail_text(p.editor_proxy_selected_detail_text.clone().into());
+    w.set_proxy_legacy_text(p.editor_proxy_legacy_text.clone().into());
+    w.set_proxy_selected_missing(p.editor_proxy_selected_missing);
+    w.set_scheme_options(ModelRc::new(VecModel::from(
+        p.editor_scheme_options
+            .iter()
+            .map(|label| SharedString::from(label.as_str()))
+            .collect::<Vec<_>>(),
+    )));
+    w.set_scheme_index(p.editor_scheme_index);
     if let Some(main) = m {
         w.set_preview_frame(main.get_session_editor_preview());
         w.set_preview_background(main.get_session_editor_preview_background());
     }
+}
+
+fn inherit_source_model(items: &[EditorInheritSourceData]) -> ModelRc<InheritSource> {
+    ModelRc::new(VecModel::from(
+        items
+            .iter()
+            .map(|item| InheritSource {
+                kind: item.kind.into(),
+                param: item.param.clone().into(),
+            })
+            .collect::<Vec<_>>(),
+    ))
+}
+
+fn login_step_row_model(items: &[EditorLoginStepRowData]) -> ModelRc<LoginStepRow> {
+    ModelRc::new(VecModel::from(
+        items
+            .iter()
+            .map(|item| LoginStepRow {
+                kind: item.kind.into(),
+                name: item.name.clone().into(),
+                detail: item.detail.clone().into(),
+            })
+            .collect::<Vec<_>>(),
+    ))
+}
+
+fn tunnel_editor_row_model(items: &[EditorTunnelRowData]) -> ModelRc<EditorTunnelRow> {
+    ModelRc::new(VecModel::from(
+        items
+            .iter()
+            .map(|item| EditorTunnelRow {
+                kind: item.kind.into(),
+                name: item.name.clone().into(),
+                route: item.route.clone().into(),
+            })
+            .collect::<Vec<_>>(),
+    ))
+}
+
+fn sync_login_step_keys(w: &LoginStepKeysWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+    w.set_edit_mode(p.editor_login_step_is_edit);
+    w.set_name_text(p.editor_login_step_name_text.clone().into());
+    w.set_keys_text(p.editor_login_step_keys_text.clone().into());
+    w.set_tokens(p.editor_login_step_tokens);
+}
+
+fn sync_login_step_wait(w: &LoginStepWaitWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+    w.set_edit_mode(p.editor_login_step_is_edit);
+    w.set_millis_text(p.editor_login_step_millis_text.clone().into());
+}
+
+fn sync_tunnel_editor(w: &TunnelEditorWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+    w.set_edit_mode(p.editor_tunnel_is_edit);
+    w.set_name_text(p.editor_tunnel_name_text.clone().into());
+    w.set_kind_text(p.editor_tunnel_dialog_kind_text.clone().into());
+    w.set_bind_host_text(p.editor_tunnel_dialog_bind_host_text.clone().into());
+    w.set_bind_port_text(p.editor_tunnel_dialog_bind_port_text.clone().into());
+    w.set_target_host_text(p.editor_tunnel_dialog_target_host_text.clone().into());
+    w.set_target_port_text(p.editor_tunnel_dialog_target_port_text.clone().into());
+    w.set_enabled(p.editor_tunnel_enabled);
 }
 
 // --- D35: master-password windows -----------------------------------------

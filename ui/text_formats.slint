@@ -1184,6 +1184,10 @@ export global TextFormats {
         if kind == "editor-saved" {
             return @tr("MainWindow" => "Saved session editor changes into `{0}`.", param_1);
         }
+        // Session Editor：页脚 / 子窗提交失败（窗口保持打开，错误进状态栏）。
+        if kind == "editor-submit-failed" {
+            return @tr("MainWindow" => "Could not save: {0}", param_1);
+        }
         // --- session-editor：Login Script 步骤 / Tunnel 清单 / 执行挂点 --------
         if kind == "editor-login-step-added" {
             return @tr("MainWindow" => "Added a login script {0} step.", param_1);

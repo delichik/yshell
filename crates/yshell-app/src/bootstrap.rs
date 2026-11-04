@@ -4685,6 +4685,8 @@ pub(crate) enum DialogKind {
     TerminalFontBackup,
     /// D33：Settings → SFTP → External editor 的可执行文件（pick_file；仅 Custom）。
     SettingsSftpEditor,
+    /// Session Editor：Icon → Custom image（pick_file；Windows 图片/任意文件）。
+    SessionIcon,
 }
 
 /// rfd 的 GTK 后端是单个全局线程：并发/重复调用会在同一 GTK 主循环上嵌套对话框。
@@ -4780,6 +4782,17 @@ pub(crate) fn spawn_pick_settings_sftp_editor(
         DialogKind::SettingsSftpEditor,
         "Choose editor executable",
     );
+}
+
+/// Session Editor：Icon → Custom image 的文件选择（pick_file）。
+///
+/// Windows 的系统文件对话框始终可用；其它平台沿用 DISPLAY 预检，不可用时
+/// 由调用方写状态提示（Icon 也有 Default/预设可选，不阻塞编辑）。
+pub(crate) fn spawn_pick_session_icon(dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>) {
+    if !cfg!(windows) && !file_dialogs_available() {
+        return;
+    }
+    spawn_pick_file(dialog_tx, DialogKind::SessionIcon, "Select a session icon");
 }
 
 /// N4：在 worker 线程上打开 `save_file` 并写文本（结果经 mpsc 回填状态）。
@@ -5201,6 +5214,8 @@ pub(crate) fn apply_dialog_outcome(
             DialogKind::SettingsSftpEditor => {
                 runtime.update_settings_sftp_external_editor_path(&path)
             }
+            // Session Editor：Icon → Custom image（Browse 选中即回填草稿）。
+            DialogKind::SessionIcon => runtime.update_editor_icon_custom(&path),
         },
         FileDialogOutcome::Saved { kind, path, error } => match kind {
             DialogKind::HostKeysExport | DialogKind::HostKeysImport => match &error {

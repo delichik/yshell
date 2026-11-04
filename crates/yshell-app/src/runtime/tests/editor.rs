@@ -4,8 +4,9 @@ use std::{fs, sync::Arc};
 use tempfile::tempdir;
 use yshell_config::{
     AuthMethod as ConfigAuthMethod, AuthProfile, ConfigDocument, ConfigStore, FolderProfile,
-    HostKeyPolicy as ConfigHostKeyPolicy, ProxyProfile, ProxyProtocol, QuickConnectTarget,
-    SessionProfile, TunnelForward, TunnelForwardKind, TunnelProfile,
+    HostKeyPolicy as ConfigHostKeyPolicy, LoginScriptProfile, LoginStep, LoginStepAction,
+    ProxyProfile, ProxyProtocol, QuickConnectTarget, SessionProfile, TunnelForward,
+    TunnelForwardKind, TunnelProfile,
 };
 use yshell_secret::{FakeKeychain, Keychain, SecretRef, SecretString};
 use yshell_ssh::{AuthMethod as SshAuthMethod, ForwardingKind, HostKeyPolicy, ProxyConfig};
@@ -1345,4 +1346,107 @@ fn deleting_selected_managed_key_clears_editor_selection() {
     assert_eq!(projection.editor_selected_key_index, -1);
     assert!(!projection.editor_selected_key_missing);
     assert!(runtime.editor.key_id.is_none());
+}
+
+/// Login Script 执行挂点：保存会话连接后自动启动，只执行一次并在执行完毕后清空。
+#[test]
+fn login_script_runs_once_after_a_saved_session_connects() {
+    let temp = tempdir().expect("tempdir");
+    let store = ConfigStore::new(temp.path());
+    let mut document = ConfigDocument::default();
+    let mut folder = FolderProfile::new(SAVED_SESSIONS_FOLDER_ID, SAVED_SESSIONS_FOLDER_NAME);
+    let mut profile = SessionProfile::new("scripted", "Scripted", "script.example.test");
+    profile.login_script = Some(LoginScriptProfile {
+        steps: vec![
+            LoginStep {
+                name: "whoami".to_owned(),
+                action: LoginStepAction::Keys {
+                    keys: "whoami{Enter}".to_owned(),
+                    tokens: false,
+                },
+            },
+            LoginStep {
+                name: String::new(),
+                action: LoginStepAction::Wait { millis: 0 },
+            },
+        ],
+    });
+    folder.sessions.push(profile);
+    document.folders.push(folder);
+    store.save_all(&document).expect("save config");
+
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime
+        .open_saved_session("scripted")
+        .expect("open saved session");
+    let session_key = runtime.active_session_id.clone().expect("active session");
+
+    // 连接成功后一次 pump 即启动并跑完（Keys → Wait 0 → 结束）。
+    assert!(runtime.pump_login_script());
+    assert!(runtime.editor_login_script_run.is_none());
+    let text = runtime.sessions[&session_key].visible_text();
+    assert_eq!(
+        text.matches("received input: whoami").count(),
+        1,
+        "login script keys must be written exactly once"
+    );
+
+    // 已跑过：后续 tick 不再重复执行。
+    assert!(!runtime.pump_login_script());
+    assert_eq!(
+        runtime.sessions[&session_key]
+            .visible_text()
+            .matches("received input: whoami")
+            .count(),
+        1
+    );
+}
+
+/// 没有 login script / 非保存会话：pump 不启动任何执行。
+#[test]
+fn login_script_pump_skips_sessions_without_a_script() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 1);
+    let tab = open_saved_tab(&mut runtime, "saved-0");
+    assert!(!runtime.pump_login_script());
+    assert!(runtime.editor_login_script_run.is_none());
+    let _ = tab;
+}
+
+/// 连接断开时中止正在执行的 login script。
+#[test]
+fn login_script_aborts_when_the_session_disconnects() {
+    let temp = tempdir().expect("tempdir");
+    let store = ConfigStore::new(temp.path());
+    let mut document = ConfigDocument::default();
+    let mut folder = FolderProfile::new(SAVED_SESSIONS_FOLDER_ID, SAVED_SESSIONS_FOLDER_NAME);
+    let mut profile = SessionProfile::new("waiting", "Waiting", "wait.example.test");
+    profile.login_script = Some(LoginScriptProfile {
+        steps: vec![LoginStep {
+            name: String::new(),
+            action: LoginStepAction::Wait { millis: 60_000 },
+        }],
+    });
+    folder.sessions.push(profile);
+    document.folders.push(folder);
+    store.save_all(&document).expect("save config");
+
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime
+        .open_saved_session("waiting")
+        .expect("open saved session");
+    let tab = runtime.active_tab_id.clone().expect("active tab");
+    assert!(runtime.pump_login_script());
+    assert!(
+        runtime.editor_login_script_run.is_some(),
+        "wait keeps the run pending"
+    );
+
+    runtime
+        .disconnect_tab_session(&tab)
+        .expect("disconnect session");
+    assert!(runtime.pump_login_script());
+    assert!(runtime.editor_login_script_run.is_none());
 }

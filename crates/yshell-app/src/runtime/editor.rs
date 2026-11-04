@@ -7,6 +7,7 @@ use yshell_config::{
     LoginStepAction, ProxyProfile, ResolvedSessionProfile, SessionProfile, TerminalProfile,
     ThemeCatalog, TunnelForward, TunnelForwardKind, TunnelProfile, LOGIN_STEP_MAX_WAIT_MILLIS,
 };
+use yshell_core::SessionState;
 
 use super::panels::{
     SETTINGS_SCROLLBACK_LINES_MAX, SETTINGS_SCROLLBACK_LINES_MIN,
@@ -29,6 +30,7 @@ impl AppRuntime {
         self.editor_modal_visible = true;
         self.editor_section = EditorSection::General;
         self.editor_auth_test_status = EditorAuthTestStatus::Hint;
+        self.editor_clear_sub_dialogs();
         self.editor_set_theme_baseline(None);
         self.editor_baseline = Some(self.editor.clone());
         self.set_status_kind(
@@ -59,6 +61,7 @@ impl AppRuntime {
         self.editor_modal_visible = true;
         self.editor_section = EditorSection::General;
         self.editor_auth_test_status = EditorAuthTestStatus::LoadedHint;
+        self.editor_clear_sub_dialogs();
         self.set_status_kind(
             "editor-loaded",
             format!("Loaded saved session `{profile_id}` into the editor."),
@@ -103,6 +106,7 @@ impl AppRuntime {
         self.editor_modal_visible = false;
         self.editor_discard_dialog_visible = false;
         self.editor_baseline = None;
+        self.editor_clear_sub_dialogs();
         self.set_status_kind(
             "editor-closed",
             "Closed Session Editor.".to_owned(),
@@ -110,6 +114,14 @@ impl AppRuntime {
             String::new(),
         );
         self.projection()
+    }
+
+    /// 关闭编辑器/切换目标时清掉子窗与清单选中态，避免下次打开立刻弹出旧子窗。
+    fn editor_clear_sub_dialogs(&mut self) {
+        self.editor_login_step_dialog = None;
+        self.editor_tunnel_dialog = None;
+        self.editor_selected_login_step = None;
+        self.editor_selected_tunnel = None;
     }
 
     pub(crate) fn editor_is_dirty(&self) -> bool {
@@ -1176,8 +1188,6 @@ pub(crate) enum EditorProxyMode {
 pub(crate) enum EditorSection {
     General,
     Authentication,
-    // TODO(wave2-editor): Session Editor 的 Login Script 分区接线后删除。
-    #[allow(dead_code)]
     LoginScript,
     Sftp,
     Tunnels,
@@ -1232,11 +1242,7 @@ pub(crate) struct SessionEditorDraft {
     // --- session-editor：General（Icon / Notes）--------------------------------
     /// Icon 引用：空 = Default，`server` / `database` = 预设，其余按自定义图片路径。
     pub(crate) icon: String,
-    /// Notes 草稿。
-    ///
-    /// 注意：`SessionProfile` / `FolderProfile` 目前没有 notes 字段（config 本波冻结），
-    /// 所以备注只在本轮编辑会话内保留；接线见
-    /// `D:\NewSpace\ui-evidence\wiring\session-editor.md`。
+    /// Notes 草稿（保存进 `SessionProfile.notes` / `FolderProfile.notes`）。
     pub(crate) notes: String,
     // --- session-editor：页级 Inherit -----------------------------------------
     /// Authentication 页级 Inherit：true = 使用父级解析值，保存不写本级 auth。
@@ -1443,8 +1449,6 @@ pub(crate) struct EditorTunnelRowData {
 }
 
 /// Login Script 步骤子窗种类。
-// TODO(wave2-editor): Login Script 步骤子窗接线后删除本行 allow。
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EditorLoginStepKind {
     Keys,
@@ -1459,8 +1463,6 @@ impl EditorLoginStepKind {
         }
     }
 
-    // TODO(wave2-editor): Login Script 步骤子窗接线后删除。
-    #[allow(dead_code)]
     pub(crate) fn from_label(value: &str) -> Self {
         if value == "wait" {
             Self::Wait
@@ -1483,8 +1485,6 @@ pub(crate) struct EditorLoginStepDialog {
     pub(crate) millis_text: String,
 }
 
-// TODO(wave2-editor): Login Script 步骤子窗接线后删除本行 allow。
-#[allow(dead_code)]
 impl EditorLoginStepDialog {
     fn add(kind: EditorLoginStepKind) -> Self {
         Self {
@@ -1534,8 +1534,6 @@ pub(crate) struct EditorTunnelDialog {
     pub(crate) enabled: bool,
 }
 
-// TODO(wave2-editor): Tunnel 子窗接线后删除本行 allow。
-#[allow(dead_code)]
 impl EditorTunnelDialog {
     fn add() -> Self {
         Self {
@@ -1581,9 +1579,6 @@ pub(crate) struct LoginScriptRun {
     pub(crate) tokens: LoginScriptTokens,
 }
 
-// TODO(wave2-editor): Session Editor 的 Icon / 继承开关 / 登录脚本 / 隧道 / Passphrase
-// 分区接线后删除本行 allow（当前 Session Editor 子窗尚未接线）。
-#[allow(dead_code)]
 impl AppRuntime {
     // --- General：Icon / Notes -------------------------------------------
     /// Icon 下拉下标：0 Default / 1 预设 Server / 2 预设 Database / 3 自定义图片。
@@ -2061,6 +2056,15 @@ impl AppRuntime {
         self.projection()
     }
 
+    /// 子窗 Delete 入口用的目标下标：正在编辑的步骤（-1 = 没有可删对象）。
+    pub(crate) fn editor_selected_login_step_index(&self) -> i32 {
+        self.editor_login_step_dialog
+            .as_ref()
+            .and_then(|dialog| dialog.index)
+            .map(|index| i32::try_from(index).unwrap_or(-1))
+            .unwrap_or(-1)
+    }
+
     pub fn delete_editor_login_step(&mut self, index: i32) -> AppProjection {
         let Some(index) = usize::try_from(index).ok() else {
             return self.projection();
@@ -2325,8 +2329,6 @@ impl AppRuntime {
 }
 
 /// Login Script 步骤等待上限校验（配置 sanitize 同一上限）。
-// TODO(wave2-editor): Login Script 步骤子窗接线后删除。
-#[allow(dead_code)]
 fn parse_login_step_millis(value: &str) -> AppResult<u64> {
     let millis = value
         .trim()
@@ -2336,8 +2338,6 @@ fn parse_login_step_millis(value: &str) -> AppResult<u64> {
 }
 
 /// 由 Tunnel 子窗草稿构建 `TunnelForward`（校验端口与目标；Dynamic 无目标）。
-// TODO(wave2-editor): Tunnel 子窗接线后删除。
-#[allow(dead_code)]
 fn build_tunnel_forward_from_dialog(dialog: &EditorTunnelDialog) -> AppResult<TunnelForward> {
     let bind_host = dialog.bind_host.trim();
     if bind_host.is_empty() {
@@ -2383,10 +2383,6 @@ fn build_tunnel_forward_from_dialog(dialog: &EditorTunnelDialog) -> AppResult<Tu
 /// * 特殊键写成 `{Enter}` / `{Tab}` / `{Ctrl+C}` …（大小写不敏感）；
 /// * `{host}` / `{username}` 在 `expand_tokens` 时展开为会话上下文；
 /// * 未知 token 原样保留（含花括号），不吞用户输入。
-#[allow(dead_code)]
-// 接线：连接成功后由 `bootstrap` 调用（见 wiring note）。
-// TODO(wave2-editor): 接线后把整段 unescape 循环改成 clippy 建议的 `for … by_ref()`。
-#[allow(clippy::while_let_on_iterator)]
 pub(crate) fn login_keys_to_bytes(
     keys: &str,
     expand_tokens: bool,
@@ -2394,18 +2390,25 @@ pub(crate) fn login_keys_to_bytes(
 ) -> Vec<u8> {
     let mut out: Vec<u8> = Vec::new();
     let mut literal = String::new();
-    let mut chars = keys.chars().peekable();
-    while let Some(ch) = chars.next() {
+    // 用 `Vec<char>` + 下标解析：token 内需要“读到 `}` 为止”的前瞻，普通迭代器
+    // 会同时触发 while_let_on_iterator / while_let_loop 两条 clippy 规则。
+    let chars: Vec<char> = keys.chars().collect();
+    let mut index = 0usize;
+    while index < chars.len() {
+        let ch = chars[index];
+        index += 1;
         match ch {
             '{' => {
-                if chars.peek() == Some(&'{') {
-                    chars.next();
+                if chars.get(index) == Some(&'{') {
+                    index += 1;
                     literal.push('{');
                     continue;
                 }
                 let mut token = String::new();
                 let mut closed = false;
-                while let Some(next) = chars.next() {
+                while index < chars.len() {
+                    let next = chars[index];
+                    index += 1;
                     if next == '}' {
                         closed = true;
                         break;
@@ -2429,12 +2432,10 @@ pub(crate) fn login_keys_to_bytes(
                 }
             }
             '}' => {
-                if chars.peek() == Some(&'}') {
-                    chars.next();
-                    literal.push('}');
-                } else {
-                    literal.push('}');
+                if chars.get(index) == Some(&'}') {
+                    index += 1;
                 }
+                literal.push('}');
             }
             other => literal.push(other),
         }
@@ -2451,7 +2452,6 @@ fn flush_literal(out: &mut Vec<u8>, literal: &mut String) {
 }
 
 /// 单个 `{…}` token → 字节；`None` = 未知 token（保留原文）。
-#[allow(dead_code)] // 仅供 `login_keys_to_bytes` 内部使用（接线前不计入 reachable）。
 fn login_key_token(
     token: &str,
     expand_tokens: bool,
@@ -2479,7 +2479,6 @@ fn login_key_token(
     simple_key_bytes(&lower)
 }
 
-#[allow(dead_code)] // 仅供 `login_key_token` 内部使用。
 fn simple_key_bytes(key: &str) -> Option<Vec<u8>> {
     let bytes: Vec<u8> = match key {
         "enter" | "return" => vec![b'\r'],
@@ -2502,7 +2501,6 @@ fn simple_key_bytes(key: &str) -> Option<Vec<u8>> {
     Some(bytes)
 }
 
-#[allow(dead_code)] // 仅供 `login_key_token` 内部使用。
 fn modified_key_bytes(modifiers: &[String], base: &str) -> Vec<u8> {
     let has = |name: &str| modifiers.iter().any(|modifier| modifier == name);
     // 命名基键（Enter / Tab / 方向键…）带修饰符时按基键发送。
@@ -2552,9 +2550,8 @@ fn modified_key_bytes(modifiers: &[String], base: &str) -> Vec<u8> {
 }
 
 impl AppRuntime {
-    // --- Login Script 执行挂点（连接成功后调用；见 wiring note）-------------
+    // --- Login Script 执行挂点（连接成功后自动起停；UI tick 推进）------------
     /// 连接成功后启动该会话的 Login Script（空列表 = 不启动）。
-    #[allow(dead_code)] // 接线：连接成功后调用（见 wiring note）。
     pub fn start_login_script_for_session(&mut self, profile_id: &str) -> AppProjection {
         let Some(resolved) = self.config_document.resolve_session(profile_id) else {
             return self.projection();
@@ -2595,19 +2592,15 @@ impl AppRuntime {
     }
 
     /// 推进 Login Script（UI tick 调用；Wait 到期后再继续下一段）。
-    #[allow(dead_code)]
-    // 接线：UI tick 每帧调用（见 wiring note）。
-    // TODO(wave2-editor): 接线后把外层 `loop {}` 改成 clippy 建议的 `while let`。
-    #[allow(clippy::while_let_loop)]
-    pub fn tick_login_script(&mut self) -> AppProjection {
-        loop {
-            let Some((next_index, wait_until, total)) = self
-                .editor_login_script_run
-                .as_ref()
-                .map(|run| (run.next_index, run.wait_until, run.steps.len()))
-            else {
-                break;
-            };
+    ///
+    /// 返回 `true` 表示状态有变化（调用方据此重投影 / 重绘）。
+    pub(crate) fn tick_login_script(&mut self) -> bool {
+        let mut changed = false;
+        while let Some((next_index, wait_until, total)) = self
+            .editor_login_script_run
+            .as_ref()
+            .map(|run| (run.next_index, run.wait_until, run.steps.len()))
+        {
             if let Some(deadline) = wait_until {
                 if std::time::Instant::now() < deadline {
                     break;
@@ -2621,6 +2614,7 @@ impl AppRuntime {
                     String::new(),
                     String::new(),
                 );
+                changed = true;
                 break;
             }
             let Some(run) = self.editor_login_script_run.as_ref() else {
@@ -2664,22 +2658,92 @@ impl AppRuntime {
                                 error.to_string(),
                                 String::new(),
                             );
+                            changed = true;
                             break;
                         }
                     }
                 }
             }
         }
-        self.projection()
+        changed
+    }
+
+    /// UI tick：自动起停 Login Script 并推进执行。
+    ///
+    /// 连接成功（保存会话变为 `Connected`）→ 启动；断开/关闭 → 中止；
+    /// 运行中 → 推进 Keys/Wait。返回 `true` 表示状态有变化（需要重投影）。
+    pub(crate) fn pump_login_script(&mut self) -> bool {
+        let mut changed = false;
+        // 1) 当前已连接且有登录脚本的标签（每个标签每次连接只启动一次）。
+        let mut newly_connected: Vec<(String, String)> = Vec::new(); // (tab_id, session_key)
+        for tab in &self.tabs {
+            let Some(session_key) = tab.session_id() else {
+                continue;
+            };
+            if self
+                .sessions
+                .get(session_key)
+                .is_some_and(|runtime| runtime.state == SessionState::Connected)
+            {
+                newly_connected.push((tab.tab_id.clone(), session_key.to_owned()));
+            }
+        }
+        // 断开/关闭的标签从“已启动”集合里移除，重连后会再次执行。
+        self.editor_login_script_tabs.retain(|tab_id| {
+            newly_connected
+                .iter()
+                .any(|(connected, _)| connected == tab_id)
+        });
+        for (tab_id, session_key) in newly_connected {
+            if self.editor_login_script_tabs.contains(&tab_id) {
+                continue;
+            }
+            let Some(runtime) = self.sessions.get(&session_key) else {
+                continue;
+            };
+            let SessionSource::SavedSession { profile_id } = &runtime.source else {
+                self.editor_login_script_tabs.insert(tab_id);
+                continue;
+            };
+            let profile_id = profile_id.clone();
+            let has_script = self
+                .config_document
+                .resolve_session(&profile_id)
+                .and_then(|resolved| resolved.login_script)
+                .is_some_and(|script| script.steps.iter().any(login_step_has_effect));
+            self.editor_login_script_tabs.insert(tab_id);
+            if has_script {
+                let _ = self.start_login_script_for_session(&profile_id);
+                changed = true;
+            }
+        }
+        // 2) 运行中的脚本：会话已断开 → 中止；否则推进。
+        if let Some(profile_id) = self
+            .editor_login_script_run
+            .as_ref()
+            .map(|run| run.profile_id.clone())
+        {
+            let still_connected = self.sessions.values().any(|runtime| {
+                matches!(
+                    &runtime.source,
+                    SessionSource::SavedSession { profile_id: current } if current == &profile_id
+                ) && runtime.state == SessionState::Connected
+            });
+            if still_connected {
+                changed |= self.tick_login_script();
+            } else {
+                self.abort_login_script();
+                changed = true;
+            }
+        }
+        changed
     }
 
     /// 中止正在执行的 Login Script（断开 / 关标签时调用）。
-    #[allow(dead_code)] // 接线：断开 / 关标签时调用（见 wiring note）。
     pub fn abort_login_script(&mut self) {
         self.editor_login_script_run = None;
     }
 
-    #[allow(dead_code)] // 仅供 `tick_login_script` 内部使用。
     fn write_login_script_bytes(&mut self, profile_id: &str, bytes: &[u8]) -> AppResult<()> {
         let session_key = self
             .sessions
@@ -2704,11 +2768,22 @@ impl AppRuntime {
 }
 
 /// 空 Keys 步骤不产生输入，直接跳过。
-#[allow(dead_code)] // 接线：连接成功路径调用（见 wiring note）。
 fn login_step_has_effect(step: &LoginStep) -> bool {
     match &step.action {
         LoginStepAction::Keys { keys, .. } => !keys.trim().is_empty(),
         LoginStepAction::Wait { .. } => true,
+    }
+}
+
+impl AppRuntime {
+    // --- Session Editor：Icon Browse（rfd worker 由宿主 tick 拉起）------------
+    /// Browse 按钮 → 记一次请求；`windows.rs` 的 tick 消费它并拉起 rfd worker。
+    pub fn request_editor_icon_browse(&mut self) {
+        self.editor_icon_browse_requested = true;
+    }
+
+    pub(crate) fn take_editor_icon_browse_request(&mut self) -> bool {
+        std::mem::take(&mut self.editor_icon_browse_requested)
     }
 }
 

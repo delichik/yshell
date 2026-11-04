@@ -339,6 +339,8 @@ impl AppRuntime {
             editor_selected_login_step: None,
             editor_selected_tunnel: None,
             editor_login_script_run: None,
+            editor_login_script_tabs: BTreeSet::new(),
+            editor_icon_browse_requested: false,
             host_key_policy_override: None,
             recovered_from_backup,
             next_runtime_ordinal: 1,
@@ -740,6 +742,10 @@ pub struct AppRuntime {
     pub(crate) editor_selected_tunnel: Option<usize>,
     /// 正在执行的 Login Script（连接成功后的 Keys/Wait 推进）。
     pub(crate) editor_login_script_run: Option<LoginScriptRun>,
+    /// 已经为哪几个标签启动过 Login Script（断开/关闭即移除，重连后会再跑一次）。
+    pub(crate) editor_login_script_tabs: BTreeSet<String>,
+    /// Session Editor 的 Icon Browse 请求（`windows.rs` tick 消费 → 拉起 rfd）。
+    pub(crate) editor_icon_browse_requested: bool,
     pub(crate) host_key_policy_override: Option<HostKeyPolicy>,
     pub(crate) recovered_from_backup: Option<PathBuf>,
     pub(crate) next_runtime_ordinal: usize,

@@ -24,8 +24,10 @@ export struct LoginStepRow {
     detail: string, // 未命名时的摘要：Keys 原文首行 / "N ms"
 }
 
-// Tile 清单行（Rust `EditorTunnelRowData` 的镜像）。
-export struct TunnelRow {
+// Tunnel 清单行（Rust `EditorTunnelRowData` 的镜像）。
+// 名字带 `Editor` 前缀：`TunnelRow` 已被 Tunnel 面板占用，Slint 生成代码
+// 不会导出同名结构（会变成不可访问的 `TunnelRow2`）。
+export struct EditorTunnelRow {
     kind: string, // "local" | "remote" | "dynamic"
     name: string,
     route: string,
@@ -550,7 +552,7 @@ export component SessionEditor inherits Rectangle {
     in property <[LoginStepRow]> login-steps: [];
     in property <int> selected-login-step: -1;
     // --- session-editor：Tunnels -------------------------------------------
-    in property <[TunnelRow]> tunnels: [];
+    in property <[EditorTunnelRow]> tunnels: [];
     in property <int> selected-tunnel: -1;
     // --- session-editor：Proxy / Terminal Style ----------------------------
     in property <[string]> proxy-option-labels: [];
@@ -580,6 +582,7 @@ export component SessionEditor inherits Rectangle {
     callback update-notes(string);
     callback set-auth-method-password();
     callback set-auth-method-private-key();
+    callback set-auth-method-keyboard-interactive();
     callback update-password(string);
     callback update-passphrase(string);
     callback select-key(int);
@@ -934,6 +937,12 @@ export component SessionEditor inherits Rectangle {
                                                 enabled: !root.inherit-auth;
                                                 clicked => { root.set-auth-method-private-key(); }
                                             }
+                                            WinButton {
+                                                text: @tr("Keyboard Interactive");
+                                                accent: root.auth-method-text == "keyboard_interactive";
+                                                enabled: !root.inherit-auth;
+                                                clicked => { root.set-auth-method-keyboard-interactive(); }
+                                            }
                                         }
                                     }
 
@@ -1039,16 +1048,16 @@ export component SessionEditor inherits Rectangle {
                                     }
 
                                     // 工具条固定在清单**上方**（区分 Keys / Wait 两种添加）。
+                                    // Inherit 下也可直接添加：第一次编辑会自动切成 Custom
+                                    // （"已从父级拷贝；改动只留在本会话"）。
                                     HorizontalLayout {
                                         spacing: Theme.spacing-8;
                                         WinButton {
                                             text: @tr("Keys");
-                                            enabled: !root.inherit-login-script;
                                             clicked => { root.add-login-step("keys"); }
                                         }
                                         WinButton {
                                             text: @tr("Wait");
-                                            enabled: !root.inherit-login-script;
                                             clicked => { root.add-login-step("wait"); }
                                         }
                                     }
@@ -1290,18 +1299,17 @@ export component SessionEditor inherits Rectangle {
                                     }
 
                                     // 顶栏只放全局动作（添加 / 清空），行级动作走右键。
+                                    // Inherit 下添加/清空会自动切成 Custom（同原型）。
                                     HorizontalLayout {
                                         spacing: Theme.spacing-8;
                                         WinIconButton {
                                             icon: "plus";
-                                            enabled: !root.inherit-tunnels;
                                             accessible-name: @tr("Add Tunnel");
                                             tooltip-text: @tr("Add Tunnel");
                                             clicked => { root.add-tunnel(); }
                                         }
                                         WinIconButton {
                                             icon: "clear";
-                                            enabled: !root.inherit-tunnels;
                                             accessible-name: @tr("Clear Tunnels");
                                             tooltip-text: @tr("Clear Tunnels");
                                             clicked => { root.clear-tunnels(); }

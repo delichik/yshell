@@ -737,6 +737,15 @@ impl WindowManager {
                 let _ = apply_dialog_outcome(&mut runtime, outcome);
                 dirty = true;
             }
+            // Session Editor：Icon Browse 请求 → rfd worker（结果经 dialog 通道回填）。
+            if runtime.take_editor_icon_browse_request() {
+                crate::bootstrap::spawn_pick_session_icon(self.dialog_tx.clone());
+                dirty = true;
+            }
+            // Session Editor：Login Script 自动起停（连接成功/断开）+ 按 Keys/Wait 推进。
+            if runtime.pump_login_script() {
+                dirty = true;
+            }
             while let Ok(message) = self.sftp_job_rx.try_recv() {
                 let _ = runtime.apply_sftp_job_message(message);
                 dirty = true;

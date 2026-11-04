@@ -4,7 +4,8 @@
 // `ui/pages/session_editor.slint`（六分区 + 页级 Inherit + 行右键菜单）。
 
 import { Theme } from "../theme.slint";
-import { SessionEditor, InheritSource, LoginStepRow, TunnelRow } from "../pages/session_editor.slint";
+import { TextFormats } from "../text_formats.slint";
+import { SessionEditor, EditorTunnelRow, InheritSource, LoginStepRow } from "../pages/session_editor.slint";
 import { AuthKeyOption } from "../components/auth_prompt_dialog.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
@@ -50,7 +51,20 @@ export component SessionEditorWindow inherits Window {
     in property <string> legacy-key-path-text: "";
     in property <bool> legacy-key-has-passphrase: false;
     in property <bool> has-stored-password: false;
-    in property <string> auth-test-status-text: "";
+    // Auth Test 结果：kind + 参数在窗口侧用 `TextFormats` 组成本地化句子
+    // （与旧内联编辑器同一模板，避免 Rust 直投英文）。
+    in property <string> auth-test-kind-text: "hint";
+    in property <string> auth-test-host-text: "";
+    in property <string> auth-test-startup-text: "";
+    in property <string> auth-test-error-text: "";
+    property <string> auth-test-status-text:
+        TextFormats.editor-auth-test-status(
+            root.auth-test-kind-text,
+            root.auth-test-host-text,
+            "",
+            root.auth-test-startup-text,
+            root.auth-test-error-text,
+        );
     // --- 页级 Inherit -----------------------------------------------------
     in property <bool> inherit-auth: true;
     in property <bool> inherit-login-script: true;
@@ -67,7 +81,7 @@ export component SessionEditorWindow inherits Window {
     in property <[LoginStepRow]> login-steps: [];
     in property <int> selected-login-step: -1;
     // --- Tunnels ----------------------------------------------------------
-    in property <[TunnelRow]> tunnels: [];
+    in property <[EditorTunnelRow]> tunnels: [];
     in property <int> selected-tunnel: -1;
     // --- Proxy / Terminal Style -------------------------------------------
     in property <[string]> proxy-option-labels: [];
@@ -99,6 +113,7 @@ export component SessionEditorWindow inherits Window {
     callback update-notes(string);
     callback set-auth-method-password();
     callback set-auth-method-private-key();
+    callback set-auth-method-keyboard-interactive();
     callback update-password(string);
     callback update-passphrase(string);
     callback select-key(int);
@@ -206,6 +221,7 @@ export component SessionEditorWindow inherits Window {
             update-notes(string) => { root.update-notes(string); }
             set-auth-method-password => { root.set-auth-method-password(); }
             set-auth-method-private-key => { root.set-auth-method-private-key(); }
+            set-auth-method-keyboard-interactive => { root.set-auth-method-keyboard-interactive(); }
             update-password(string) => { root.update-password(string); }
             update-passphrase(string) => { root.update-passphrase(string); }
             select-key(int) => { root.select-key(int); }
