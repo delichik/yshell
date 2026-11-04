@@ -638,6 +638,9 @@ pub(crate) fn wire_callbacks(
         window.on_title_drag_requested(move || {
             if let Some(window) = weak.upgrade() {
                 crate::win_chrome::start_native_window_move(window.window());
+                // 系统移动循环吞掉 mouse-up：移动结束后清掉 Slint 残留的指针抓取，
+                // 否则拖完的第一次点击会被残留的标题栏 TouchArea 吃掉。
+                crate::win_chrome::reset_pointer_state_after_native_move(window.as_weak());
             }
         });
     }

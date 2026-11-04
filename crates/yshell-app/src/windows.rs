@@ -810,6 +810,18 @@ impl WindowManager {
         }
     }
 
+    /// 模态子窗关闭后：前台激活 owner，并把 Slint 键盘焦点还给窗口级快捷键层。
+    ///
+    /// owned 子窗隐藏时 Windows 不保证把前台交还 owner；Slint 的 focus 也仍停在
+    /// 子窗组件上。缺少这一步时后续快捷键（Ctrl+, / Ctrl+O 等）不响应，直到用户
+    /// 手动点一下主窗口。
+    pub(crate) fn restore_main_window_focus(&mut self, window_id: u64) {
+        if let Some(entry) = self.entry(window_id) {
+            crate::win_chrome::focus_window(entry.window.window());
+            entry.window.invoke_focus_global_shortcuts();
+        }
+    }
+
     /// Promote MainWindow dialog flags → independent OS windows; refresh props.
     fn sync_dialog_windows(&mut self) {
         {

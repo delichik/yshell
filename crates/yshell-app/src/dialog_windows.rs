@@ -35,6 +35,8 @@ macro_rules! wire_tool_title_drag {
         $window.on_title_drag_requested(move || {
             if let Some(window) = weak.upgrade() {
                 crate::win_chrome::start_native_window_move(window.window());
+                // HTCAPTION 移动循环吞掉 mouse-up：移动结束后清掉 Slint 残留的抓取。
+                crate::win_chrome::reset_pointer_state_after_native_move(window.as_weak());
             }
         });
     }};
@@ -520,6 +522,9 @@ impl DialogWindowManager {
                     if let Some(host) = host.upgrade() {
                         if let Some(about) = host.borrow().dialogs.about.as_ref() {
                             crate::win_chrome::start_native_window_move(about.window());
+                            crate::win_chrome::reset_pointer_state_after_native_move(
+                                about.as_weak(),
+                            );
                         }
                     }
                 });
@@ -910,6 +915,9 @@ impl DialogWindowManager {
                     if let Some(host) = host.upgrade() {
                         if let Some(settings) = host.borrow().dialogs.settings.as_ref() {
                             crate::win_chrome::start_native_window_move(settings.window());
+                            crate::win_chrome::reset_pointer_state_after_native_move(
+                                settings.as_weak(),
+                            );
                         }
                     }
                 });
@@ -1140,7 +1148,11 @@ impl DialogWindowManager {
         }
         let owner_id = self.modal_owner_id.take();
         if let (Some(owner_id), Some(manager)) = (owner_id, self.manager.upgrade()) {
-            manager.borrow_mut().set_main_window_enabled(owner_id, true);
+            let mut manager = manager.borrow_mut();
+            manager.set_main_window_enabled(owner_id, true);
+            // 系统不会因为 owned 子窗隐藏就把前台还给 owner；显式激活父窗并把
+            // Slint 键盘焦点交还快捷键 FocusScope，否则关窗后快捷键不响应。
+            manager.restore_main_window_focus(owner_id);
         }
     }
 
@@ -1154,23 +1166,21 @@ impl DialogWindowManager {
         crate::win_chrome::prepare_aux_window(window.window());
         if let Some(owner) = owner {
             crate::win_chrome::attach_owned_popup(window.window(), owner.window());
+            // 子窗默认居中于父窗客户区（Windows）。show 时 HWND 往往还没创建，
+            // 先就地试一次，再由 `finish_owned_aux_window_when_ready` 在句柄就绪
+            // 后补 owner 关系 + 居中。
+            crate::win_chrome::center_aux_window(window.window(), owner.window());
             self.begin_modal(owner, owner_id);
-            let aux_weak = window.as_weak();
-            let owner_weak = owner.as_weak();
-            let _ = slint::invoke_from_event_loop(move || {
-                let (Some(aux), Some(owner)) = (aux_weak.upgrade(), owner_weak.upgrade()) else {
-                    return;
-                };
-                crate::win_chrome::prepare_aux_window(aux.window());
-                crate::win_chrome::attach_owned_popup(aux.window(), owner.window());
-            });
+            crate::win_chrome::finish_owned_aux_window_when_ready(
+                window.as_weak(),
+                owner.as_weak(),
+                AUX_WINDOW_READY_ATTEMPTS,
+            );
         } else {
-            let weak = window.as_weak();
-            let _ = slint::invoke_from_event_loop(move || {
-                if let Some(window) = weak.upgrade() {
-                    crate::win_chrome::prepare_aux_window(window.window());
-                }
-            });
+            crate::win_chrome::prepare_aux_window_when_ready(
+                window.as_weak(),
+                AUX_WINDOW_READY_ATTEMPTS,
+            );
         }
         Ok(())
     }
@@ -1181,6 +1191,10 @@ enum ModalAction {
     Show,
     Hide,
 }
+
+/// 子窗 `show()` 后等待 winit 惰性创建 HWND 的事件循环轮数上限。
+/// 实测 2~3 轮即就绪；留 8 轮覆盖慢机器/首次创建窗口。
+const AUX_WINDOW_READY_ATTEMPTS: u8 = 8;
 
 // A dialog pipeline has one parameter per stage (create / prep / wire / sync /
 // projection / main); bundling them into a struct would only hide the coupling.
