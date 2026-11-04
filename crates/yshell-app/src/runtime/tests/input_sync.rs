@@ -1,4 +1,5 @@
-//! N9: key input sync — state machine, fan-out and invariants.
+//! N9: input sync — bidirectional group model (no source/target roles),
+//! membership fan-out, pause/stop and the AI/MCP opt-out.
 
 use tempfile::tempdir;
 use yshell_core::SessionState;
@@ -28,93 +29,134 @@ fn target_text(runtime: &AppRuntime, session: &str) -> String {
     runtime.sessions[session].visible_text()
 }
 
+fn join_group(runtime: &mut AppRuntime, tab_id: &str) {
+    runtime
+        .toggle_tab_receives_key_input(tab_id)
+        .expect("join sync group");
+}
+
 #[test]
-fn start_input_sync_all_collects_connected_targets_and_marks_roles() {
-    let (_temp, mut runtime, tabs, sessions) = sync_setup(3);
-    runtime.activate_tab(&tabs[0]).expect("activate source");
+fn enabling_sync_adds_the_focused_session_to_the_group() {
+    let (_temp, mut runtime, tabs, _sessions) = sync_setup(3);
+    runtime.activate_tab(&tabs[0]).expect("activate terminal");
 
-    let projection = runtime.start_input_sync_mode("all").expect("start sync");
-
+    // 组模型：第一个加入的会话即创建组（不再有 “no targets” 错误）。
+    let projection = runtime
+        .start_input_sync_mode("toggle")
+        .expect("enable sync");
     assert!(projection.input_sync_active);
-    assert_eq!(projection.input_sync_mode_text, "all");
-    assert_eq!(projection.input_sync_target_count, 2);
+    assert_eq!(projection.input_sync_mode_text, "group");
+    assert_eq!(projection.input_sync_target_count, 0);
     assert!(projection.terminal_sync_stop_enabled);
     assert!(projection.terminal_sync_all_enabled);
+    // `terminal_sync_visible_enabled` = 焦点会话已在组内（菜单勾选/文案）。
     assert!(projection.terminal_sync_visible_enabled);
-    assert_eq!(projection.tabs[0].sync_role_text, "source");
-    assert_eq!(projection.tabs[1].sync_role_text, "target");
-    assert_eq!(projection.tabs[2].sync_role_text, "target");
-    assert_eq!(projection.status_kind, "input-sync-started");
-    assert!(projection.status_text.contains("Sending key input"));
-    assert_eq!(projection.input_sync_source_name_text, "Session 0");
-
-    // 不变量：源不在 targets；目标 = 其它全部已连接终端。
-    assert_eq!(runtime.input_sync.source.as_deref(), Some(tabs[0].as_str()));
-    assert!(!runtime.input_sync.targets.contains(&tabs[0]));
-    for tab in &tabs[1..] {
-        assert!(runtime.input_sync.targets.contains(tab));
-    }
-    let _ = sessions;
+    assert_eq!(projection.status_kind, "input-sync-member-on");
+    assert_eq!(projection.tabs[0].sync_role_text, "sync");
+    assert_eq!(projection.tabs[1].sync_role_text, "");
+    // 组模型没有“源会话”投影。
+    assert_eq!(projection.input_sync_source_name_text, "");
+    assert_eq!(runtime.input_sync.members.len(), 1);
+    assert!(runtime.input_sync.is_member(&tabs[0]));
 }
 
 #[test]
-fn visible_mode_matches_all_while_split_view_is_absent() {
-    let (_temp, mut runtime, tabs, _sessions) = sync_setup(3);
-    runtime.activate_tab(&tabs[0]).expect("activate source");
-
-    let projection = runtime
-        .start_input_sync_mode("visible")
-        .expect("start visible sync");
-
-    // 当前无分屏：Visible 与 All 的目标集合一致（Slint 侧用 note 说明）。
-    assert_eq!(projection.input_sync_mode_text, "visible");
-    assert_eq!(projection.input_sync_target_count, 2);
-    assert_eq!(projection.status_kind, "input-sync-started");
-    assert_eq!(projection.status_param_2, "visible");
-    assert_eq!(runtime.input_sync.targets.len(), 2);
-}
-
-#[test]
-fn fanout_writes_every_target_once_in_source_order_without_feedback() {
+fn group_members_broadcast_bidirectionally_in_member_order() {
     let (_temp, mut runtime, tabs, sessions) = sync_setup(3);
-    runtime.activate_tab(&tabs[0]).expect("activate source");
-    runtime.start_input_sync_mode("all").expect("start sync");
+    runtime.activate_tab(&tabs[0]).expect("activate first");
+    for tab in &tabs {
+        join_group(&mut runtime, tab);
+    }
+    let projection = runtime.projection();
+    assert_eq!(projection.input_sync_target_count, 2);
 
-    let source_projection = runtime
+    // 焦点在成员 0：写入 → 其它两个成员各收到一次。
+    runtime
         .send_active_terminal_input("first\n")
         .expect("send first");
-    assert!(source_projection.input_sync_active);
     runtime
         .send_active_terminal_input("second\n")
         .expect("send second");
-
     for session in &sessions[1..] {
         let text = target_text(&runtime, session);
-        assert_eq!(
-            text.matches("received input: first").count(),
-            1,
-            "target must receive each source write exactly once"
-        );
-        let first = text.find("received input: first").expect("first write");
-        let second = text.find("received input: second").expect("second write");
-        assert!(
-            first < second,
-            "fan-out order must follow source input order"
-        );
+        assert_eq!(text.matches("received input: first").count(), 1);
+        assert_eq!(text.matches("received input: second").count(), 1);
+        assert!(text.find("first") < text.find("second"), "order preserved");
     }
-    // 目标回显不再回灌源：源只看到自己的一次写入。
-    let source_text = target_text(&runtime, &sessions[0]);
-    assert_eq!(source_text.matches("received input: first").count(), 1);
+
+    // 焦点换到另一个成员：同样广播回其余成员（双向，无源/目的角色）。
+    runtime.activate_tab(&tabs[1]).expect("activate member 1");
+    runtime
+        .send_active_terminal_input("from-member-one\n")
+        .expect("send from member 1");
+    assert!(target_text(&runtime, &sessions[0]).contains("received input: from-member-one"));
+    assert!(target_text(&runtime, &sessions[2]).contains("received input: from-member-one"));
 }
 
 #[test]
-fn stop_input_sync_clears_state_and_stops_fanout() {
+fn input_from_a_non_member_is_not_broadcast() {
     let (_temp, mut runtime, tabs, sessions) = sync_setup(3);
-    runtime.activate_tab(&tabs[0]).expect("activate source");
-    runtime.start_input_sync_mode("all").expect("start sync");
+    runtime.activate_tab(&tabs[0]).expect("activate first");
+    join_group(&mut runtime, &tabs[0]);
+    join_group(&mut runtime, &tabs[1]);
+
+    // 焦点落在非成员 tab2：输入只写给 tab2，不进组。
+    runtime.activate_tab(&tabs[2]).expect("activate non-member");
+    let before_first = target_text(&runtime, &sessions[0]);
+    let before_second = target_text(&runtime, &sessions[1]);
+    runtime
+        .send_active_terminal_input("local-only\n")
+        .expect("type on non-member");
+    assert_eq!(target_text(&runtime, &sessions[0]), before_first);
+    assert_eq!(target_text(&runtime, &sessions[1]), before_second);
+    assert!(target_text(&runtime, &sessions[2]).contains("received input: local-only"));
+}
+
+#[test]
+fn pause_keeps_the_group_but_stops_broadcast_until_resume() {
+    let (_temp, mut runtime, tabs, sessions) = sync_setup(3);
+    runtime.activate_tab(&tabs[0]).expect("activate first");
+    for tab in &tabs {
+        join_group(&mut runtime, tab);
+    }
+
+    let paused = runtime.start_input_sync_mode("pause").expect("pause");
+    assert!(paused.input_sync_active, "paused group keeps its members");
+    assert!(runtime.input_sync.paused);
+    assert_eq!(paused.input_sync_mode_text, "paused");
+    assert_eq!(paused.status_kind, "input-sync-paused");
+    assert_eq!(runtime.input_sync.members.len(), 3);
+
+    let before = target_text(&runtime, &sessions[1]);
+    runtime
+        .send_active_terminal_input("while-paused\n")
+        .expect("send while paused");
+    assert_eq!(
+        target_text(&runtime, &sessions[1]),
+        before,
+        "paused sync must not copy input"
+    );
+
+    let resumed = runtime.start_input_sync_mode("resume").expect("resume");
+    assert_eq!(resumed.input_sync_mode_text, "group");
+    assert_eq!(resumed.status_kind, "input-sync-resumed");
+    runtime
+        .send_active_terminal_input("after-resume\n")
+        .expect("send after resume");
+    assert!(target_text(&runtime, &sessions[1]).contains("received input: after-resume"));
+}
+
+#[test]
+fn stop_clears_the_group_and_stops_broadcast() {
+    let (_temp, mut runtime, tabs, sessions) = sync_setup(3);
+    runtime.activate_tab(&tabs[0]).expect("activate first");
+    for tab in &tabs {
+        join_group(&mut runtime, tab);
+    }
 
     let stopped = runtime.stop_input_sync_command();
     assert!(!stopped.input_sync_active);
+    assert_eq!(stopped.input_sync_mode_text, "");
     assert_eq!(stopped.input_sync_target_count, 0);
     assert!(!stopped.terminal_sync_stop_enabled);
     assert!(stopped.tabs.iter().all(|tab| tab.sync_role_text.is_empty()));
@@ -124,89 +166,73 @@ fn stop_input_sync_clears_state_and_stops_fanout() {
     runtime
         .send_active_terminal_input("after-stop\n")
         .expect("send after stop");
-    assert_eq!(
-        target_text(&runtime, &sessions[1]),
-        before,
-        "stopped sync must not copy input"
-    );
+    assert_eq!(target_text(&runtime, &sessions[1]), before);
 }
 
 #[test]
-fn closing_target_tab_removes_it_but_keeps_sync() {
+fn closing_a_member_removes_it_and_keeps_the_rest_of_the_group() {
     let (_temp, mut runtime, tabs, sessions) = sync_setup(3);
-    runtime.activate_tab(&tabs[0]).expect("activate source");
-    runtime.start_input_sync_mode("all").expect("start sync");
+    runtime.activate_tab(&tabs[0]).expect("activate first");
+    for tab in &tabs {
+        join_group(&mut runtime, tab);
+    }
 
     runtime.close_tab_immediate(&tabs[2]);
     let projection = runtime.projection();
     assert!(projection.input_sync_active);
     assert_eq!(projection.input_sync_target_count, 1);
-    assert_eq!(projection.input_sync_notice_kind_text, "target-removed");
+    assert_eq!(projection.input_sync_notice_kind_text, "member-removed");
     assert!(projection
         .input_sync_notice_param_text
         .contains("Session 2"));
-    assert!(projection.tabs.iter().all(|tab| tab.title != "Session 2"));
 
     runtime
         .send_active_terminal_input("still\n")
-        .expect("send to remaining target");
+        .expect("send to remaining member");
     assert!(target_text(&runtime, &sessions[1]).contains("received input: still"));
 }
 
 #[test]
-fn closing_source_tab_stops_sync_with_notice() {
-    let (_temp, mut runtime, tabs, _sessions) = sync_setup(3);
-    runtime.activate_tab(&tabs[0]).expect("activate source");
-    runtime.start_input_sync_mode("all").expect("start sync");
-
-    runtime.close_tab_immediate(&tabs[0]);
-    let projection = runtime.projection();
-    assert!(!projection.input_sync_active);
-    assert_eq!(projection.input_sync_target_count, 0);
-    assert_eq!(projection.input_sync_notice_kind_text, "source-closed");
-    assert!(projection
-        .tabs
-        .iter()
-        .all(|tab| tab.sync_role_text.is_empty()));
-}
-
-#[test]
-fn disconnecting_target_or_source_reconciles_the_sync_state() {
+fn disconnecting_a_member_reconciles_the_group() {
     let (_temp, mut runtime, tabs, sessions) = sync_setup(3);
-    runtime.activate_tab(&tabs[0]).expect("activate source");
-    runtime.start_input_sync_mode("all").expect("start sync");
+    runtime.activate_tab(&tabs[0]).expect("activate first");
+    for tab in &tabs {
+        join_group(&mut runtime, tab);
+    }
 
-    // 目标断开：立即移出，源与其它目标继续。
     let after_target = runtime
         .disconnect_tab_session(&tabs[1])
-        .expect("disconnect target");
+        .expect("disconnect member");
     assert!(after_target.input_sync_active);
     assert_eq!(after_target.input_sync_target_count, 1);
-    assert_eq!(after_target.input_sync_notice_kind_text, "target-removed");
+    assert_eq!(after_target.input_sync_notice_kind_text, "member-removed");
     assert_eq!(after_target.tabs[1].sync_role_text, "");
     let _ = &sessions;
 
-    // 源断开：同步停止并留下可见提示。
-    let after_source = runtime
+    // 断开最后一个成员 → 组清空、chip 不再显示。
+    runtime
         .disconnect_tab_session(&tabs[0])
-        .expect("disconnect source");
-    assert!(!after_source.input_sync_active);
-    assert_eq!(
-        after_source.input_sync_notice_kind_text,
-        "source-disconnected"
-    );
+        .expect("disconnect focus member");
+    runtime
+        .disconnect_tab_session(&tabs[2])
+        .expect("disconnect last member");
+    let projection = runtime.projection();
+    assert!(!projection.input_sync_active);
+    assert!(!runtime.input_sync.paused);
 }
 
 #[test]
-fn poll_tick_removes_targets_whose_connection_dropped() {
+fn poll_tick_removes_members_whose_connection_dropped() {
     let (_temp, mut runtime, tabs, sessions) = sync_setup(3);
-    runtime.activate_tab(&tabs[0]).expect("activate source");
-    runtime.start_input_sync_mode("all").expect("start sync");
+    runtime.activate_tab(&tabs[0]).expect("activate first");
+    for tab in &tabs {
+        join_group(&mut runtime, tab);
+    }
 
     runtime
         .sessions
         .get_mut(&sessions[2])
-        .expect("target session")
+        .expect("member session")
         .set_state(SessionState::Disconnected);
     let polled = runtime
         .poll_all_terminal_outputs()
@@ -214,44 +240,48 @@ fn poll_tick_removes_targets_whose_connection_dropped() {
         .expect("sync reconciliation must refresh the projection");
     assert!(polled.input_sync_active);
     assert_eq!(polled.input_sync_target_count, 1);
-    assert_eq!(polled.input_sync_notice_kind_text, "target-removed");
-    assert!(!runtime.input_sync.targets.contains(&tabs[2]));
+    assert_eq!(polled.input_sync_notice_kind_text, "member-removed");
+    assert!(!runtime.input_sync.is_member(&tabs[2]));
 }
 
 #[test]
-fn toggle_receive_key_input_switches_to_selected_mode() {
-    let (_temp, mut runtime, tabs, _sessions) = sync_setup(3);
-    runtime.activate_tab(&tabs[0]).expect("activate source");
-    runtime.start_input_sync_mode("all").expect("start sync");
+fn ai_input_opts_the_target_session_out_of_sync() {
+    let (_temp, mut runtime, tabs, sessions) = sync_setup(3);
+    runtime.activate_tab(&tabs[0]).expect("activate first");
+    for tab in &tabs {
+        join_group(&mut runtime, tab);
+    }
 
-    let off = runtime
-        .toggle_tab_receives_key_input(&tabs[2])
-        .expect("toggle off");
-    assert_eq!(off.input_sync_mode_text, "selected");
-    assert_eq!(off.input_sync_target_count, 1);
-    assert_eq!(off.tabs[2].sync_role_text, "");
-    assert_eq!(off.tabs[1].sync_role_text, "target");
-    assert_eq!(off.status_kind, "input-sync-receive-toggled");
-    assert_eq!(off.status_param_2, "off");
-
-    let on = runtime
-        .toggle_tab_receives_key_input(&tabs[2])
-        .expect("toggle on");
-    assert_eq!(on.input_sync_target_count, 2);
-    assert_eq!(on.tabs[2].sync_role_text, "target");
-    assert_eq!(on.status_param_2, "on");
-
-    // 源不能接收自己的输入；未同步时勾选报错（UI 侧禁用 + tooltip 说明）。
-    assert!(runtime.toggle_tab_receives_key_input(&tabs[0]).is_err());
-    runtime.stop_input_sync_command();
-    assert!(runtime.toggle_tab_receives_key_input(&tabs[2]).is_err());
+    let before_other = target_text(&runtime, &sessions[2]);
+    // MCP/AI 写入 tab1：tab1 自动退出同步，且这次输入不广播给其它成员。
+    runtime
+        .mcp_send_terminal_input(&tabs[1], "ai-command", true)
+        .expect("ai input");
+    let projection = runtime.projection();
+    assert!(!runtime.input_sync.is_member(&tabs[1]));
+    assert_eq!(projection.tabs[1].sync_role_text, "");
+    assert_eq!(projection.input_sync_notice_kind_text, "ai-input-opt-out");
+    assert!(projection
+        .input_sync_notice_param_text
+        .contains("Session 1"));
+    assert_eq!(projection.status_kind, "input-sync-ai-opt-out");
+    assert_eq!(
+        target_text(&runtime, &sessions[2]),
+        before_other,
+        "AI input must never be broadcast to group members"
+    );
+    // 其余成员仍在组内（只把该会话移出）。
+    assert!(runtime.input_sync.is_member(&tabs[0]));
+    assert!(runtime.input_sync.is_member(&tabs[2]));
 }
 
 #[test]
-fn control_key_broadcast_sets_non_blocking_notice() {
+fn control_key_broadcast_sets_a_non_blocking_notice() {
     let (_temp, mut runtime, tabs, sessions) = sync_setup(2);
-    runtime.activate_tab(&tabs[0]).expect("activate source");
-    runtime.start_input_sync_mode("all").expect("start sync");
+    runtime.activate_tab(&tabs[0]).expect("activate first");
+    for tab in &tabs {
+        join_group(&mut runtime, tab);
+    }
 
     let before_writes = target_text(&runtime, &sessions[1])
         .matches("received input:")
@@ -263,7 +293,6 @@ fn control_key_broadcast_sets_non_blocking_notice() {
     assert_eq!(ctrl_c.input_sync_notice_param_text, "Ctrl+C");
     // D4：按键本身不写状态文案（提示只在 chip 上，不弹窗）。
     assert!(!ctrl_c.status_text.contains("Sent"));
-    // 控制字节（0x03）会被终端解析器当控制字符丢弃，但 shell 侧确实收到了一次写入。
     assert_eq!(
         target_text(&runtime, &sessions[1])
             .matches("received input:")
@@ -271,20 +300,11 @@ fn control_key_broadcast_sets_non_blocking_notice() {
         before_writes + 1
     );
 
-    // bootstrap 的 Ctrl+C 无选区路径：控制字符（ctrl 标志为 false）也要识别。
-    let control_byte = runtime
-        .send_active_terminal_key("\u{3}", false, false, false, false)
-        .expect("control byte");
-    assert_eq!(control_byte.input_sync_notice_param_text, "Ctrl+C");
-
-    let normal = runtime
-        .send_active_terminal_key("x", false, false, false, false)
-        .expect("normal key");
-    assert_eq!(normal.input_sync_notice_kind_text, "control-broadcast");
-
-    // Enter / 普通粘贴不触发控制键提示。
+    // Enter / 普通粘贴不触发控制键提示（先清掉上一条 notice）。
     runtime.stop_input_sync_command();
-    runtime.start_input_sync_mode("all").expect("restart sync");
+    for tab in &tabs {
+        join_group(&mut runtime, tab);
+    }
     let enter = runtime
         .send_active_terminal_key("\u{000a}", false, false, false, false)
         .expect("enter");
@@ -298,10 +318,11 @@ fn control_key_broadcast_sets_non_blocking_notice() {
 #[test]
 fn ime_commit_text_is_sent_once_and_empty_keys_are_noops() {
     let (_temp, mut runtime, tabs, sessions) = sync_setup(2);
-    runtime.activate_tab(&tabs[0]).expect("activate source");
-    runtime.start_input_sync_mode("all").expect("start sync");
+    runtime.activate_tab(&tabs[0]).expect("activate first");
+    for tab in &tabs {
+        join_group(&mut runtime, tab);
+    }
 
-    // 组合期间的按键不会到达汇聚点（Slint 只在提交后给文本）；空文本 = 无操作。
     let before_source = target_text(&runtime, &sessions[0]);
     let before_target = target_text(&runtime, &sessions[1]);
     let _ = runtime
@@ -310,7 +331,6 @@ fn ime_commit_text_is_sent_once_and_empty_keys_are_noops() {
     assert_eq!(target_text(&runtime, &sessions[0]), before_source);
     assert_eq!(target_text(&runtime, &sessions[1]), before_target);
 
-    // 提交后的整段文本按一次写入同步。
     runtime
         .send_active_terminal_input("你好\n")
         .expect("commit");
@@ -319,59 +339,34 @@ fn ime_commit_text_is_sent_once_and_empty_keys_are_noops() {
 }
 
 #[test]
-fn input_to_non_source_tab_is_not_broadcast() {
-    let (_temp, mut runtime, tabs, sessions) = sync_setup(3);
-    runtime.activate_tab(&tabs[0]).expect("activate source");
-    runtime.start_input_sync_mode("all").expect("start sync");
-
-    // 切到目标标签（T2）打字：只写给 T2，不广播给 T3。
-    runtime.activate_tab(&tabs[1]).expect("activate target");
-    let before_third = target_text(&runtime, &sessions[2]);
-    runtime
-        .send_active_terminal_input("direct-only\n")
-        .expect("type on target");
-    assert!(target_text(&runtime, &sessions[1]).contains("received input: direct-only"));
-    assert_eq!(
-        target_text(&runtime, &sessions[2]),
-        before_third,
-        "input typed on a target tab must not be re-broadcast"
-    );
-
-    // 切回源标签：广播恢复。
-    runtime
-        .activate_tab(&tabs[0])
-        .expect("activate source again");
-    runtime
-        .send_active_terminal_input("broadcast-again\n")
-        .expect("type on source");
-    assert!(target_text(&runtime, &sessions[2]).contains("received input: broadcast-again"));
-}
-
-#[test]
-fn no_targets_start_is_reported_without_ghost_sync() {
+fn unknown_action_and_disconnected_tab_are_rejected() {
     let (_temp, mut runtime, tabs, _sessions) = sync_setup(1);
-    runtime.activate_tab(&tabs[0]).expect("activate source");
-
-    let projection = runtime.start_input_sync_mode("all").expect("start sync");
-    assert!(!projection.input_sync_active);
-    assert_eq!(projection.input_sync_target_count, 0);
-    assert_eq!(projection.status_kind, "input-sync-no-targets");
-    assert!(runtime.input_sync.source.is_none());
+    runtime.activate_tab(&tabs[0]).expect("activate");
     assert!(runtime.start_input_sync_mode("bogus").is_err());
+
+    // 断开后不能加入同步组（标签右键/终端菜单会以 tooltip 说明原因）。
+    runtime
+        .disconnect_tab_session(&tabs[0])
+        .expect("disconnect");
+    assert!(runtime.toggle_tab_receives_key_input(&tabs[0]).is_err());
 }
 
-/// New Tab 是标签页，不破坏已有的输入同步状态；关闭后同步仍保持。
+/// New Tab 是标签页，不破坏已有的同步组；关闭后组保持。
 #[test]
 fn new_tab_does_not_change_input_sync_state() {
     let (_temp, mut runtime, tabs, _sessions) = sync_setup(2);
-    runtime.activate_tab(&tabs[0]).expect("activate source");
-    runtime.start_input_sync_mode("all").expect("start sync");
+    runtime.activate_tab(&tabs[0]).expect("activate first");
+    for tab in &tabs {
+        join_group(&mut runtime, tab);
+    }
 
     let opened = runtime.open_quick_connect();
     assert!(opened.quick_connect_visible);
     assert_eq!(opened.tab_count, 3);
     assert!(opened.input_sync_active);
-    assert_eq!(opened.input_sync_target_count, 1);
+    // 焦点在 New Tab（非成员）时，chip 把全部组成员都算作目标。
+    assert_eq!(opened.input_sync_target_count, 2);
+    assert_tab_invariants(&runtime);
 
     let closed = runtime.dismiss_quick_connect();
     assert!(!closed.quick_connect_visible);

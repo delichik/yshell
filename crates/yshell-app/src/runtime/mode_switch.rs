@@ -228,12 +228,11 @@ impl AppRuntime {
         Ok(self.projection())
     }
 
-    /// Stops terminal-only features (input sync targets, logging) before a
+    /// Stops terminal-only features (input sync membership, logging) before a
     /// terminal shell channel is closed.
     fn detach_mode_from_terminal_support(&mut self, tab_id: &str, session_key: &str) {
-        if self.input_sync.source.as_deref() == Some(tab_id) {
-            let _ = self.stop_input_sync_command();
-        } else if self.input_sync.targets.remove(tab_id) {
+        // N9 组模型：该标签若是同步组成员，直接移出（没有“源”角色需要停整组）。
+        if self.input_sync.members.remove(tab_id) {
             self.reconcile_input_sync();
         }
         let _ = self.stop_session_logging(session_key);

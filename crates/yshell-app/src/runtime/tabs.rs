@@ -2644,27 +2644,28 @@ impl AppRuntime {
     }
 }
 
-// --- N9：同步发送按键（Input Sync）-----------------------------------------
+// --- N9：同步输入（Input Sync，双向组模型）----------------------------------
 //
-// 设计：`docs/product/archive/yshell-next-n9-sync-input.md`（D23/D24 已确认）。
-// * 源 = 一个终端标签；目标 = 当前窗口内的一批已连接终端标签（不持久化）。
-// * 扇出发生在输入的唯一汇聚点（`runtime/keys.rs::send_active_terminal_bytes`），
-//   目标只写输入，其回显不再回灌到源。
-// * `Visible` 在分屏落地前等同 `All`（UI 侧有说明）；`Selected` = 用户通过标签
-//   右键勾选/取消"接收键输入"手工挑选过的目标集合。
+// 语义（用户已确认，见 `docs/product/yshell-ui-interaction-contract.md` §8.1）：
+// * **没有源/目的角色**：每个终端会话只有一个 `Sync Input` 开关；开关为 On 的
+//   已连接 SSH 会话组成**同一个同步组**（成员集合）。
+// * 任意组成员里的用户输入都复制给其它成员（实际使用中焦点会话只有一个，等价于
+//   “焦点会话输入 → 组内其它成员”）；注入路径（`broadcast_synced_input`）直接写
+//   目标会话，不经过用户按键路径，因此不会回环。
+// * `paused` 期间保留成员但不广播；Stop 清空组。
+// * AI/MCP 输入前自动把目标会话移出同步组（`disable_input_sync_for_tab`），并在
+//   状态栏留一次性提示。
 //
-// 不变量：源不在 targets 内；源关闭/断开 → 停止；目标关闭/断开 → 自动移出
+// 不变量：成员必须是已连接的 SSH 终端标签；标签关闭/断开 → 自动移出
 // （见 `reconcile_input_sync`，由轮询 tick / 关闭 / 断开路径调用）。
 
-/// N9：同步发送按键的运行时会话态（内存态，不落盘）。
+/// N9：同步输入的运行时态（内存态，不落盘）。
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct InputSyncState {
-    /// 源标签 id（`None` = 未在同步）。
-    pub(crate) source: Option<String>,
-    /// 目标标签 id 集合（`BTreeSet`：扇出顺序稳定）。
-    pub(crate) targets: BTreeSet<String>,
-    /// 目标选择模式（All/Visible/Selected）。
-    pub(crate) mode: InputSyncMode,
+    /// 同步组成员标签 id（`BTreeSet`：广播顺序稳定）。
+    pub(crate) members: BTreeSet<String>,
+    /// 暂停：成员保留、不广播（Pause / Resume）。
+    pub(crate) paused: bool,
     /// 状态栏 chip 的一次性提示：kind（空 = 无提示）+ 参数。
     pub(crate) notice_kind: String,
     pub(crate) notice_param: String,
@@ -2672,12 +2673,23 @@ pub(crate) struct InputSyncState {
 
 impl InputSyncState {
     pub(crate) fn is_active(&self) -> bool {
-        self.source.is_some()
+        !self.members.is_empty()
     }
 
-    /// 标签是否参与当前同步（源或目标）。
+    pub(crate) fn is_member(&self, tab_id: &str) -> bool {
+        self.members.contains(tab_id)
+    }
+
     pub(crate) fn involves(&self, tab_id: &str) -> bool {
-        self.source.as_deref() == Some(tab_id) || self.targets.contains(tab_id)
+        self.members.contains(tab_id)
+    }
+
+    /// 相对焦点标签的“其它组成员”数量（状态栏 `SYNC → n targets`）。
+    pub(crate) fn target_count_for(&self, focused: Option<&str>) -> usize {
+        match focused {
+            Some(tab_id) if self.members.contains(tab_id) => self.members.len().saturating_sub(1),
+            _ => self.members.len(),
+        }
     }
 
     pub(crate) fn set_notice(&mut self, kind: &str, param: String) {
@@ -2689,100 +2701,99 @@ impl InputSyncState {
         self.notice_kind.clear();
         self.notice_param.clear();
     }
-}
 
-/// N9：目标选择模式（`Send to Current` 是"取消同步"，不是一种模式）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) enum InputSyncMode {
-    /// 当前窗口内所有已连接的终端标签（排除源）。
-    #[default]
-    All,
-    /// 当前无分屏，暂等同 `All`；分屏落地后收紧为"可见终端"。
-    Visible,
-    /// 用户通过标签右键"接收键输入"手工挑选过的目标集合。
-    Selected,
-}
-
-impl InputSyncMode {
-    pub(crate) const fn id(self) -> &'static str {
-        match self {
-            Self::All => "all",
-            Self::Visible => "visible",
-            Self::Selected => "selected",
-        }
-    }
-
-    fn from_id(id: &str) -> Option<Self> {
-        match id {
-            "all" => Some(Self::All),
-            "visible" => Some(Self::Visible),
-            "selected" => Some(Self::Selected),
-            _ => None,
-        }
+    /// Stop：清空同步组（暂停标记一并复位）。
+    pub(crate) fn clear(&mut self) {
+        self.members.clear();
+        self.paused = false;
     }
 }
 
 impl AppRuntime {
-    /// N9：从活动终端开始同步发送按键（终端右键菜单 `Send Key Input to …`）。
+    /// N9：同步输入菜单/快捷键的动作入口（`mode_id` 即动作 id）。
     ///
-    /// 目标集合 = 当前窗口内所有已连接、非源的终端标签；没有目标时只写状态栏提示，
-    /// 不进入同步态（避免 `SYNC → 0 targets` 的幽灵状态）。
+    /// * `toggle` / `enable` / `disable`：把焦点终端加入 / 移出同步组
+    ///   （旧预设 id `all` / `visible` / `connected` / `selected` 按 `enable` 处理，
+    ///   仅为兼容旧接线，不再有“选择目标”语义）。
+    /// * `pause` / `resume`：暂停 / 恢复广播（成员保留）。
     pub fn start_input_sync_mode(&mut self, mode_id: &str) -> AppResult<AppProjection> {
-        let mode = InputSyncMode::from_id(mode_id)
-            .ok_or_else(|| AppError::new(format!("unknown input sync mode `{mode_id}`")))?;
-        let source = self
-            .active_tab_id
-            .clone()
-            .ok_or_else(|| AppError::new("no active terminal to send key input from"))?;
-        if !self.input_sync_tab_connected(&source) {
-            return Err(AppError::new("the active terminal is not connected"));
+        match mode_id {
+            "pause" => {
+                if self.input_sync.is_active() && !self.input_sync.paused {
+                    self.input_sync.paused = true;
+                    self.input_sync.clear_notice();
+                    self.set_status_kind(
+                        "input-sync-paused",
+                        "Input sync paused; the group is kept.".to_owned(),
+                        String::new(),
+                        String::new(),
+                    );
+                }
+                Ok(self.projection())
+            }
+            "resume" => {
+                if self.input_sync.paused {
+                    self.input_sync.paused = false;
+                    self.input_sync.clear_notice();
+                    self.set_status_kind(
+                        "input-sync-resumed",
+                        "Input sync resumed.".to_owned(),
+                        String::new(),
+                        String::new(),
+                    );
+                }
+                Ok(self.projection())
+            }
+            "toggle" => {
+                let tab_id = self
+                    .active_tab_id
+                    .clone()
+                    .ok_or_else(|| AppError::new("no active terminal to sync input from"))?;
+                self.toggle_tab_receives_key_input(&tab_id)
+            }
+            "enable" | "all" | "visible" | "connected" | "selected" => {
+                let tab_id = self
+                    .active_tab_id
+                    .clone()
+                    .ok_or_else(|| AppError::new("no active terminal to sync input from"))?;
+                if !self.input_sync_tab_connected(&tab_id) {
+                    return Err(AppError::new("the active terminal is not connected"));
+                }
+                if self.input_sync.members.insert(tab_id.clone()) {
+                    self.input_sync.clear_notice();
+                    let title = self.tab_display_title(&tab_id);
+                    self.set_status_kind(
+                        "input-sync-member-on",
+                        format!("`{title}` joined input sync."),
+                        title,
+                        "on".to_owned(),
+                    );
+                }
+                Ok(self.projection())
+            }
+            "disable" => {
+                let tab_id = self
+                    .active_tab_id
+                    .clone()
+                    .ok_or_else(|| AppError::new("no active terminal to sync input from"))?;
+                self.toggle_tab_receives_key_input(&tab_id)
+            }
+            other => Err(AppError::new(format!(
+                "unknown input sync action `{other}`"
+            ))),
         }
-        // N7：目标 = 源标签所在窗口（当前窗口）内所有已连接终端标签。
-        let source_window = self.window_of_tab(&source);
-        let targets: BTreeSet<String> = self
-            .tabs
-            .iter()
-            .filter(|tab| tab.tab_id != source && self.input_sync_tab_connected(&tab.tab_id))
-            .filter(|tab| {
-                source_window.is_none() || self.window_of_tab(&tab.tab_id) == source_window
-            })
-            .map(|tab| tab.tab_id.clone())
-            .collect();
-        self.input_sync.clear_notice();
-        if targets.is_empty() {
-            self.set_status_kind(
-                "input-sync-no-targets",
-                "No other connected terminal tab can receive key input.".to_owned(),
-                String::new(),
-                String::new(),
-            );
-            return Ok(self.projection());
-        }
-        let target_count = targets.len();
-        self.input_sync.source = Some(source);
-        self.input_sync.targets = targets;
-        self.input_sync.mode = mode;
-        self.set_status_kind(
-            "input-sync-started",
-            format!("Sending key input to {target_count} target tab(s)."),
-            target_count.to_string(),
-            mode.id().to_owned(),
-        );
-        Ok(self.projection())
     }
 
-    /// N9：停止同步（终端右键 `Stop Sending Key Input` / 状态栏 chip 一键停止）。
+    /// N9：停止同步（终端右键 `Stop Sync Input` / 状态栏 chip 一键停止）。
     pub fn stop_input_sync_command(&mut self) -> AppProjection {
         if self.input_sync.is_active() {
-            let target_count = self.input_sync.targets.len();
-            self.input_sync.source = None;
-            self.input_sync.targets.clear();
-            self.input_sync.mode = InputSyncMode::All;
+            let member_count = self.input_sync.members.len();
+            self.input_sync.clear();
             self.input_sync.clear_notice();
             self.set_status_kind(
                 "input-sync-stopped",
-                format!("Stopped sending key input to {target_count} tab(s)."),
-                target_count.to_string(),
+                format!("Stopped input sync for {member_count} session(s)."),
+                member_count.to_string(),
                 String::new(),
             );
         } else {
@@ -2792,66 +2803,77 @@ impl AppRuntime {
         self.projection()
     }
 
-    /// N9：标签右键"接收键输入"勾选/取消（仅在同步进行时可用）。
+    /// N9：把某个标签加入/移出同步组（标签右键“Sync Input for This Tab”）。
+    ///
+    /// 组模型下不再要求“同步已开启”：第一个加入的会话即创建组。
     pub fn toggle_tab_receives_key_input(&mut self, tab_id: &str) -> AppResult<AppProjection> {
-        if !self.input_sync.is_active() {
-            return Err(AppError::new("key input sync is not active"));
-        }
-        if self.input_sync.source.as_deref() == Some(tab_id) {
-            return Err(AppError::new(
-                "the source tab cannot receive its own key input",
-            ));
+        if self.tab_index(tab_id).is_none() {
+            return Err(AppError::new("the tab no longer exists"));
         }
         if !self.input_sync_tab_connected(tab_id) {
             return Err(AppError::new("the tab is not a connected terminal"));
         }
-        let receiving = if self.input_sync.targets.remove(tab_id) {
+        let joined = if self.input_sync.members.remove(tab_id) {
+            if self.input_sync.members.is_empty() {
+                self.input_sync.paused = false;
+            }
             false
         } else {
-            self.input_sync.targets.insert(tab_id.to_owned());
+            self.input_sync.members.insert(tab_id.to_owned());
             true
         };
-        self.input_sync.mode = InputSyncMode::Selected;
         self.input_sync.clear_notice();
         let title = self.tab_display_title(tab_id);
         self.set_status_kind(
-            "input-sync-receive-toggled",
-            if receiving {
-                format!("`{title}` now receives key input.")
+            if joined {
+                "input-sync-member-on"
             } else {
-                format!("`{title}` no longer receives key input.")
+                "input-sync-member-off"
+            },
+            if joined {
+                format!("`{title}` joined input sync.")
+            } else {
+                format!("`{title}` left input sync.")
             },
             title,
-            if receiving { "on" } else { "off" }.to_owned(),
+            if joined { "on" } else { "off" }.to_owned(),
         );
         Ok(self.projection())
     }
 
-    /// N9：把源输入同步写入全部目标（在 `send_active_terminal_bytes` 成功写源之后调用）。
+    /// N9：把焦点会话的输入广播给其它组成员（在 `send_active_terminal_bytes`
+    /// 成功写焦点会话之后调用）。
     ///
-    /// 顺序 = `targets`（BTreeSet）顺序；单个目标失败只移出该目标并写提示，
-    /// 不影响源与其它目标。目标只写输入——它的回显由轮询进它自己的网格，
-    /// 不会经过这里回灌。
+    /// 注入路径与用户按键路径分离：这里只 `write_terminal_input`，不再触发广播，
+    /// 因此不会回环。Pause 期间直接跳过；单个目标失败只移出该成员并写提示。
     pub(crate) fn broadcast_synced_input(&mut self, bytes: &[u8]) {
-        if bytes.is_empty() || !self.input_sync.is_active() {
+        if bytes.is_empty() || !self.input_sync.is_active() || self.input_sync.paused {
             return;
         }
-        // 只有源标签持有活动终端时输入才广播：切到目标标签上打字 = 只写给该标签
-        // （源语义锚定在标签，而不是"任意活动输入"）。
-        if self.active_tab_id.as_deref() != self.input_sync.source.as_deref() {
+        // 只有组成员里的活动标签才广播：焦点不在组成员上 = 输入只写给该标签。
+        let Some(focused) = self.active_tab_id.clone() else {
+            return;
+        };
+        if !self.input_sync.is_member(&focused) {
             return;
         }
-        let targets: Vec<String> = self.input_sync.targets.iter().cloned().collect();
+        let targets: Vec<String> = self
+            .input_sync
+            .members
+            .iter()
+            .filter(|tab_id| tab_id.as_str() != focused)
+            .cloned()
+            .collect();
         for tab_id in targets {
             let Some(session_key) = self
                 .tab_index(&tab_id)
                 .and_then(|index| self.tabs[index].session_id().map(str::to_owned))
             else {
-                self.drop_input_sync_target(&tab_id, "target-removed");
+                self.drop_input_sync_member(&tab_id, "member-removed");
                 continue;
             };
             if !self.input_sync_tab_connected(&tab_id) {
-                self.drop_input_sync_target(&tab_id, "target-removed");
+                self.drop_input_sync_member(&tab_id, "member-removed");
                 continue;
             }
             let session_id = self
@@ -2872,9 +2894,29 @@ impl AppRuntime {
                     .get_mut(&session_key)
                     .is_some_and(|runtime| runtime.write_terminal_input(bytes).is_ok());
             if !written {
-                self.drop_input_sync_target(&tab_id, "target-removed");
+                self.drop_input_sync_member(&tab_id, "member-removed");
             }
         }
+    }
+
+    /// N9：AI/MCP 输入前自动退出同步（AI 输入不得被广播），返回是否发生了变更。
+    ///
+    /// 提示走状态栏 chip 的一次性 notice（`ai-input-opt-out`）。
+    pub(crate) fn disable_input_sync_for_tab(&mut self, tab_id: &str) -> bool {
+        if !self.input_sync.members.remove(tab_id) {
+            return false;
+        }
+        if self.input_sync.members.is_empty() {
+            self.input_sync.paused = false;
+        }
+        let title = self.tab_display_title(tab_id);
+        let param = if title.is_empty() {
+            tab_id.to_owned()
+        } else {
+            title
+        };
+        self.input_sync.set_notice("ai-input-opt-out", param);
+        true
     }
 
     /// N9：控制键（Ctrl/Alt/Meta 组合或控制字符）广播时的一次性非阻塞提示。
@@ -2889,7 +2931,14 @@ impl AppRuntime {
         meta: bool,
         bytes: &[u8],
     ) -> bool {
-        if !self.input_sync.is_active() || bytes.is_empty() {
+        if !self.input_sync.is_active() || self.input_sync.paused || bytes.is_empty() {
+            return false;
+        }
+        if !self
+            .active_tab_id
+            .as_deref()
+            .is_some_and(|tab_id| self.input_sync.is_member(tab_id))
+        {
             return false;
         }
         if !input_sync_is_control_key(text, ctrl, alt, shift, meta, bytes) {
@@ -2900,7 +2949,7 @@ impl AppRuntime {
         true
     }
 
-    /// N9：收敛同步状态（源/目标关闭、断开、shell 掉线）。
+    /// N9：收敛同步状态（成员关闭、断开、shell 掉线、被切成 SFTP）。
     ///
     /// 返回 `true` 表示状态有变化（需要重投影）。只改运行时状态与 chip 提示，
     /// 不改 `status_text`（断开/关闭自己的状态文案优先保留）。
@@ -2908,103 +2957,75 @@ impl AppRuntime {
         self.reconcile_input_sync_with(None)
     }
 
-    /// 同 [`Self::reconcile_input_sync`]，但可为"刚被关闭的标签"提供显示名（标签
+    /// 同 [`Self::reconcile_input_sync`]，但可为“刚被关闭的标签”提供显示名（标签
     /// 移除后已查不到标题）。
     pub(crate) fn reconcile_input_sync_with(&mut self, closed_title: Option<String>) -> bool {
         if !self.input_sync.is_active() {
             return false;
         }
-        let Some(source) = self.input_sync.source.clone() else {
-            return false;
-        };
-        if self.tab_index(&source).is_none() {
-            let param = closed_title.unwrap_or_default();
-            self.stop_input_sync_with_notice("source-closed", param);
-            return true;
-        }
-        if !self.input_sync_tab_connected(&source) {
-            self.stop_input_sync_with_notice("source-disconnected", String::new());
-            return true;
-        }
-        // 先处理"关闭/断开"的目标（关闭的标签已查不到标题，用 closed_title 兜底），
-        // 再处理 N7 的"被移到别的窗口"（仍连接、但已不属于当前窗口）。
         let stale: Vec<String> = self
             .input_sync
-            .targets
+            .members
             .iter()
             .filter(|tab_id| !self.input_sync_tab_connected(tab_id))
             .cloned()
             .collect();
         let mut changed = false;
         for tab_id in stale {
-            self.input_sync.targets.remove(&tab_id);
+            self.input_sync.members.remove(&tab_id);
             let title = self.tab_display_title(&tab_id);
             let param = if title.is_empty() {
                 closed_title.clone().unwrap_or_else(|| tab_id.clone())
             } else {
                 title
             };
-            self.input_sync.set_notice("target-removed", param);
+            self.input_sync.set_notice("member-removed", param);
             changed = true;
         }
-        // N7：目标被移到别的窗口后不再是"当前窗口"的目标，同样移出（源仍在同一
-        // 窗口时才保留）；没有目标时同步态自动收敛为停止。
-        if let Some(source_window) = self.window_of_tab(&source) {
-            let moved_tabs: Vec<String> = self
-                .input_sync
-                .targets
-                .iter()
-                .filter(|tab_id| {
-                    self.tab_index(tab_id).is_some()
-                        && self.window_of_tab(tab_id) != Some(source_window)
-                })
-                .cloned()
-                .collect();
-            let mut removed_moved = false;
-            for tab_id in moved_tabs {
-                self.drop_input_sync_target(&tab_id, "target-removed");
-                removed_moved = true;
-                changed = true;
-            }
-            if removed_moved && self.input_sync.targets.is_empty() {
-                self.stop_input_sync_with_notice("source-moved", String::new());
-            }
+        if changed && self.input_sync.members.is_empty() {
+            self.input_sync.paused = false;
         }
         changed
     }
 
-    /// N9：投影用——标签的同步角色（空/`source`/`target`）。
+    /// N9：投影用——标签是否在同步组内（`sync` / 空串；UI 渲染 SYNC 徽标）。
     pub(crate) fn tab_sync_role_text(&self, tab_id: &str) -> String {
+        if self.input_sync.is_member(tab_id) {
+            "sync".to_owned()
+        } else {
+            String::new()
+        }
+    }
+
+    /// N9：状态栏 chip 的状态文本 id：`""`（无组）/ `group` / `paused`。
+    pub(crate) fn input_sync_mode_text(&self) -> String {
         if !self.input_sync.is_active() {
-            return String::new();
+            String::new()
+        } else if self.input_sync.paused {
+            "paused".to_owned()
+        } else {
+            "group".to_owned()
         }
-        if self.input_sync.source.as_deref() == Some(tab_id) {
-            return "source".to_owned();
-        }
-        if self.input_sync.targets.contains(tab_id) {
-            return "target".to_owned();
-        }
-        String::new()
     }
 
-    /// N9：同步源的显示名（状态栏 chip 的 accessible label / 状态文案用）。
-    pub(crate) fn input_sync_source_name(&self) -> String {
+    /// N9：状态栏 chip 的目标数（相对焦点标签的其它成员数）。
+    pub(crate) fn input_sync_target_count(&self) -> usize {
         self.input_sync
-            .source
+            .target_count_for(self.active_tab_id.as_deref())
+    }
+
+    /// N9：焦点终端是否是同步组成员（菜单项文案/勾选状态用）。
+    pub(crate) fn input_sync_focused_is_member(&self) -> bool {
+        self.active_tab_id
             .as_deref()
-            .map(|tab_id| self.tab_display_title(tab_id))
-            .unwrap_or_default()
+            .is_some_and(|tab_id| self.input_sync.is_member(tab_id))
     }
 
-    fn stop_input_sync_with_notice(&mut self, kind: &str, param: String) {
-        self.input_sync.source = None;
-        self.input_sync.targets.clear();
-        self.input_sync.mode = InputSyncMode::All;
-        self.input_sync.set_notice(kind, param);
-    }
-
-    fn drop_input_sync_target(&mut self, tab_id: &str, kind: &str) {
-        self.input_sync.targets.remove(tab_id);
+    fn drop_input_sync_member(&mut self, tab_id: &str, kind: &str) {
+        self.input_sync.members.remove(tab_id);
+        if self.input_sync.members.is_empty() {
+            self.input_sync.paused = false;
+        }
         let title = self.tab_display_title(tab_id);
         let param = if title.is_empty() {
             tab_id.to_owned()
@@ -3014,12 +3035,12 @@ impl AppRuntime {
         self.input_sync.set_notice(kind, param);
     }
 
-    /// N9：标签是否是可作为同步源/目标的"已连接终端标签"。
+    /// N9：标签是否是可加入同步组的“已连接 SSH 终端标签”（本地 shell 不参与）。
     pub(crate) fn input_sync_tab_connected(&self, tab_id: &str) -> bool {
         self.tab_index(tab_id)
             .and_then(|index| self.tabs[index].session_id())
             .and_then(|session_id| self.sessions.get(session_id))
-            .is_some_and(|runtime| runtime.state == SessionState::Connected)
+            .is_some_and(|runtime| runtime.state == SessionState::Connected && !runtime.is_local())
     }
 }
 

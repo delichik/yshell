@@ -188,7 +188,7 @@ impl AppRuntime {
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
-        // N9：同步发送按键（终端/标签菜单旗标 + 状态栏 chip / 标签角标数据）。
+        // N9：同步输入（组模型：终端/标签菜单旗标 + 状态栏 chip / 标签徽标数据）。
         let (terminal_sync_all_enabled, terminal_sync_visible_enabled, terminal_sync_stop_enabled) =
             self.input_sync_menu_flags();
         let (
@@ -197,10 +197,11 @@ impl AppRuntime {
             tab_menu_receive_key_input_reason_text,
         ) = self.tab_menu_receive_key_input_flags();
         let input_sync_active = self.input_sync.is_active();
-        let input_sync_mode_text = self.input_sync.mode.id().to_owned();
+        // `""`（无组）/ `group` / `paused`。
+        let input_sync_mode_text = self.input_sync_mode_text();
         let input_sync_target_count =
-            i32::try_from(self.input_sync.targets.len()).unwrap_or(i32::MAX);
-        let input_sync_source_name_text = self.input_sync_source_name();
+            i32::try_from(self.input_sync_target_count()).unwrap_or(i32::MAX);
+        let input_sync_source_name_text = String::new();
         let input_sync_notice_kind_text = self.input_sync.notice_kind.clone();
         let input_sync_notice_param_text = self.input_sync.notice_param.clone();
         let (quick_connect_rows, quick_connect_summary_text) = (
@@ -344,6 +345,8 @@ impl AppRuntime {
         let editor_scheme_index = self.editor_scheme_selected_index();
         let editor_icon_index = self.editor_icon_index();
         let editor_icon_custom_text = self.editor_icon_custom_text();
+        // session-editor：Private Key 口令草稿（口令字段不落盘，只有草稿值）。
+        let editor_passphrase_text = self.editor.passphrase.clone();
         let mut editor_proxy_option_labels = vec!["No Proxy".to_owned()];
         editor_proxy_option_labels.extend(
             editor_proxy_options
@@ -505,6 +508,7 @@ impl AppRuntime {
             // --- session-editor：波 2-B 投影 ------------------------------
             editor_icon_index,
             editor_icon_custom_text,
+            editor_passphrase_text,
             editor_notes_text: self.editor.notes.clone(),
             editor_inherit_auth: self.editor.inherit_auth,
             editor_inherit_login_script: self.editor.inherit_login_script,
@@ -2075,6 +2079,8 @@ pub struct AppProjection {
     // --- session-editor：波 2-B（General / Inherit / Login Script / Tunnels）--
     pub editor_icon_index: i32,
     pub editor_icon_custom_text: String,
+    /// Private Key 口令草稿（填写即保存；无 Remember）。
+    pub editor_passphrase_text: String,
     pub editor_notes_text: String,
     pub editor_inherit_auth: bool,
     pub editor_inherit_login_script: bool,
@@ -2230,22 +2236,24 @@ pub struct AppProjection {
     /// Close Current Pane 是否可用。
     pub tab_menu_close_pane_enabled: bool,
 
-    // --- N9：同步发送按键（终端/标签菜单 + 状态栏 chip + 标签角标）------
-    /// 终端右键菜单：`Send Key Input to All Tabs` / `… to Visible Tabs` 可用性。
+    // --- N9：同步输入（组模型：终端/标签菜单 + 状态栏 chip + 标签徽标）------
+    /// 终端右键菜单：`Sync Input for This Session` 可用性（焦点终端已连接）。
     pub terminal_sync_all_enabled: bool,
+    /// 焦点终端是否已在同步组内（菜单文案 Enable/Disable；`input_sync_active` = 组非空）。
     pub terminal_sync_visible_enabled: bool,
-    /// 终端右键菜单：`Stop Sending Key Input` 可用性（同步进行中）。
+    /// 终端右键菜单：`Pause` / `Stop Sync Input` 可用性（组非空）。
     pub terminal_sync_stop_enabled: bool,
-    /// 标签右键菜单：`Receive Key Input` 的启用/勾选/禁用原因。
+    /// 标签右键菜单：`Sync Input for This Tab` 的启用/勾选/禁用原因。
     pub tab_menu_receive_key_input_enabled: bool,
     pub tab_menu_receives_key_input_checked: bool,
     pub tab_menu_receive_key_input_reason_text: String,
-    /// 是否正在同步发送按键（状态栏 chip / 标签角标）。
+    /// 同步组是否非空（状态栏 chip / 标签徽标）。
     pub input_sync_active: bool,
-    /// 目标选择模式 id（`all`/`visible`/`selected`）。
+    /// 组状态 id：`""`（无组）/ `group` / `paused`。
     pub input_sync_mode_text: String,
+    /// 相对焦点会话的其它组成员数（`SYNC → n targets`）。
     pub input_sync_target_count: i32,
-    /// 同步源标签的显示名（chip 的 accessible label 用）。
+    /// 兼容字段：组模型下没有“源会话”，恒为空。
     pub input_sync_source_name_text: String,
     /// chip 的一次性提示（kind + 参数；kind 空 = 无提示）。
     pub input_sync_notice_kind_text: String,

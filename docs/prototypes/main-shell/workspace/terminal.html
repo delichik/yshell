@@ -397,11 +397,12 @@
         <div class="ctx-item" data-action="find">Find <span class="shortcut">Ctrl+F</span></div>
         <div class="ctx-item" data-action="find-across">Find Across SSH</div>
         <div class="ctx-item" data-action="clear-scrollback">Clear Scrollback</div>
-        <div class="ctx-item sub pinned" id="sendKeySub">
-          Send Key Input To
-          <div class="ctx-flyout" aria-label="Send key targets">
-            <div class="ctx-item">Active tab only</div>
-            <div class="ctx-item">All SSH tabs in window</div>
+        <div class="ctx-item sub pinned" id="syncSub">
+          Input Sync
+          <div class="ctx-flyout" aria-label="Input sync actions">
+            <div class="ctx-item">Sync Input for This Session</div>
+            <div class="ctx-item">Pause Sync Input</div>
+            <div class="ctx-item">Stop Sync Input</div>
             <div class="ctx-item disabled">Local shell tabs (N/A)</div>
           </div>
         </div>
@@ -424,8 +425,8 @@
   <div class="legend">
     <strong>Paths &amp; shortcuts</strong>
     <ul>
-      <li>Right-click terminal (or state <em>Context menu open</em>) — pin flyout on <strong>Send Key Input To</strong>.</li>
-      <li><strong>Sync banner</strong> — only when Sync input ≠ Off; left text changes with the right switch: On = sending to current session, Off = not sending.</li>
+      <li>Right-click terminal (or state <em>Context menu open</em>) — pin flyout on <strong>Input Sync</strong> (per-session toggle / Pause / Stop; group model, see <a href="sync-input.html">sync-input</a>).</li>
+      <li><strong>Sync chip</strong> — status bar shows <code>SYNC → n targets</code> while the group is non-empty; the terminal banner is a wave-3 target (see <a href="sync-input.html">sync-input</a>).</li>
       <li><strong>Clear Scrollback</strong> → in-board confirm (no typed confirm word) · full pattern → <a href="../../compact-confirm/index.html">compact-confirm</a>.</li>
       <li><strong>Start Logging</strong> → <a href="../../logging/index.html">logging</a> · <strong>REC</strong> state shows chip + note at bottom.</li>
       <li><strong>Find Across SSH</strong> — side panel (default) or stack bottom when toggled in HUD demo; click match focuses that session tab (<a href="tab-bar.html">tab-bar</a>).</li>

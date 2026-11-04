@@ -211,7 +211,7 @@ Sessions 是可停靠工具面板（`PanelId::Sessions`），内容为会话树�
 | Rename Tab | 行内编辑标签名，仅影响当前 tab。 | 始终启用。 |
 | Split Right | 将标签移入右侧分屏。 | 当前工作区可分屏时启用。 |
 | Split Down | 将标签移入下方分屏。 | 当前工作区可分屏时启用。 |
-| Receive Key Input | 勾选/取消该标签作为键输入接收目标。 | 仅 Terminal 标签。 |
+| Sync Input for This Tab | 勾选/取消该标签是否加入输入同步组（组模型，无源/目的角色）。 | 仅 Terminal 标签（connected SSH shell）。 |
 | Move to New Window | 将标签迁移到新窗口。 | 当前窗口存在标签时启用。 |
 | Move to Main Window | 将标签迁回主窗口。 | 标签不在主窗口时启用。 |
 | Switch to SFTP | 关闭 shell 通道、保留 SSH transport，原标签转为 SFTP。 | Terminal 标签且连接可用时启用。 |
@@ -223,7 +223,7 @@ Sessions 是可停靠工具面板（`PanelId::Sessions`），内容为会话树�
 | Close Disconnected Tabs | 关闭断开或错误标签。 | 存在断开/错误标签时启用。 |
 | Close | 关闭当前标签。 | 始终启用。 |
 
-模式过滤：New Tab 隐藏 Reconnect / Disconnect / Receive Key Input / Switch；SFTP 隐藏 Receive Key Input。隐藏项不占菜单高度。
+模式过滤：New Tab 隐藏 Reconnect / Disconnect / Sync Input / Switch；SFTP 隐藏 Sync Input。隐藏项不占菜单高度。
 
 ## 6.3 分屏交互
 
@@ -291,6 +291,11 @@ Split 下拉菜单：
 | Clear Screen | 发送清屏并清空当前屏幕。 | 已连接时启用。 |
 | Clear Scrollback | 清除 scrollback，弹确认。 | scrollback 非空时启用。 |
 | Save Output As | 将 scrollback 保存为文本。 | scrollback 非空时启用。 |
+| Sync Input for This Session | 把当前终端加入/移出输入同步组（无源/目的角色）。 | 当前终端已连接时启用。 |
+| Pause Sync Input / Resume Sync Input | 暂停/恢复广播，组成员保留、连接不断。 | 同步组非空时启用。 |
+| Stop Sync Input | 清空同步组（所有成员退出同步）。 | 同步组非空时启用。 |
+
+> 同步输入是**组模型**（见 §8.1）：没有 SRC/RCV 角色，也没有 All SSH / All Visible / All Connected 预设；启停只改变“哪些会话在组里”。
 
 ### 7.3 终端搜索栏
 
@@ -338,31 +343,39 @@ Split 下拉菜单：
 
 面板拖拽换边/换序与栏宽、分栏比例持久化见 status N3 与 `[ui.layout]`。原型：`docs/prototypes/main-shell/tool-dock.html`、`main-shell/panels/*`。
 
-## 8.1 Send Key Input To 状态条
+## 8.1 Input Sync（同步输入，N9）
 
-当 Send Key Input To 启用时，终端上方必须显示状态条。该功能表示用户在源 SSH 窗口直接按下的终端输入事件会实时复制到目标 SSH 窗口，不是发送命令文本。
+同步输入是**双向的组模型**，没有固定的源/目的地址、没有 SRC/RCV 角色、也没有“选择目标”的预设（All SSH / All Visible / All Connected 等一律废弃）。
+
+规则：
+
+- 每个终端会话有一个 **Sync Input 开关**（终端右键 / 标签右键 / pane header 开关，语义相同）。开关为 On 的已连接 SSH 会话组成**同一个同步组**。
+- 任意组成员里的终端输入（字符、Enter、Backspace、Tab、方向键、Ctrl/Alt 组合、粘贴等）都会复制给**其它所有组成员**。实际使用中焦点会话只有一个，因此等价于“焦点会话输入 → 组内其它会话”。
+- 注入到其它成员的输入**不能再触发广播**（输入注入路径与用户按键路径分开），不产生回环。
+- 不在组里的会话完全不受影响；断开/关闭的会话自动退出组。
+- **Pause**：保留组、暂停广播；**Stop**：清空组。
+- **AI/MCP 输入自动退出同步**：AI/MCP 向某会话发送输入、按键或执行命令时，该会话的 Sync Input 自动关闭（AI 输入不得被广播），并在状态栏留一条一次性说明。注入的 AI 输入同样不广播。
+- 不弹 KEYS / 大段粘贴 / Ctrl+C 打字确认（D23）；控制键广播只在状态栏 chip 提示。
+
+状态栏 chip（本版实现）：
 
 | 控件 ID | 类型 | 行为 |
 |---|---|---|
-| `key_broadcast.banner` | 状态条 | 显示 `Send Key Input To: source -> N targets`。 |
-| `key_broadcast.preset` | 下拉 | 选择 All SSH / All Visible / All Connected / Current Split / Current Tab Group / Same Folder / Manual。 |
-| `key_broadcast.target_list` | 链接按钮 | 左键打开目标窗口列表。 |
-| `key_broadcast.pause` | toggle 按钮 | 暂停/恢复复制键输入，不断开会话。 |
-| `key_broadcast.stop` | 危险按钮 | 立即停止复制键输入。 |
+| `key_broadcast.chip` | 状态栏 chip | 同步组非空时显示 `SYNC → n targets`，`n` = 相对焦点会话的其它组成员数；Pause 时标 `PAUSED`。点击 = 停止同步（`Stop Sync Input`）。 |
+| `key_broadcast.notice` | 状态栏 chip 提示位 | 一次性提示：控制键已广播、成员因断开退出、AI 输入导致该会话退出同步等；点击 = 清除提示。 |
 
-状态条必须使用警示色，不允许和普通连接状态混淆。
+终端上方 banner（原型目标，**本波不做**）：
 
-终端单窗（`main-shell/workspace/terminal.html`）不再显示 Session 信息；当 sync input ≠ Off 时，终端上方显示接收横幅：
+原型 `main-shell/workspace/sync-input.html` 保留 Input Sync banner（组会话数、Pause、Stop、控制键警示）作为目标形态；**本波不实现 banner**，入口与反馈只走状态栏 chip + 菜单项。banner 留待波 3。
+
+pane header（分屏时）与标签徽标：
 
 | 控件 ID | 类型 | 行为 |
 |---|---|---|
-| `pane.receive_key_input_banner` | 状态条 | 左侧文字随右侧 switch 变化：On = `Sending keys to current session`，Off = `Not sending keys to current session`。仅 sync input ≠ Off 时显示。 |
+| `pane.sync_input_toggle` | switch + On/Off | 将当前 pane 加入/移出同步组；仅 connected SSH shell pane 启用。 |
+| `tab.sync_badge` | 静态徽标 | 组成员标签显示 `SYNC` 徽标（不再是 SRC/RCV）；非成员不显示。 |
 
-分屏时每个可见 SSH pane 的 pane header 仍显示接收开关：
-
-| 控件 ID | 类型 | 左键行为 | 状态 |
-|---|---|---|---|
-| `pane.receive_key_input_toggle` | switch + On/Off | 将当前 pane 加入或移出 Send Key Input To 目标。 | 仅 connected SSH shell pane 启用；源 pane disabled。单窗时用上方 banner switch。 |
+原型：`docs/prototypes/main-shell/workspace/sync-input.html`。
 
 ## 9. SFTP Tab
 
@@ -696,45 +709,26 @@ General **不继承**。Username 在 Authentication。
 | 页脚 | Cancel \| Save；无 Test Connection / Save and Connect。 |
 | 影响范围 | 保存时不逐个确认子会话；可选显示受影响子项数量（预览）。 |
 
-## 13.11 Send Key Input To Dialog
+## 13.11 Input Sync 入口（无对话框）
 
-触发入口：
+同步输入没有设置对话框，也没有“选择目标”的向导。全部入口落在菜单与逐会话开关上（语义见 §8.1）：
 
-- Quick Commands Panel 的 `Send Key Input To`。
-- 终端右键菜单 `Send Key Input To`。
-- 标签右键菜单 `Send Key Input To`。
-- 每个可见 SSH pane header 上的接收开关。
-
-控件：
-
-| 控件 ID | 类型 | 默认 | 行为 |
-|---|---|---|---|
-| `key_broadcast.source_session` | 只读文本 | 当前 active SSH pane | 显示源窗口。 |
-| `key_broadcast.preset` | segmented/dropdown | All Visible | All SSH / All Visible / All Connected / Current Split / Current Tab Group / Same Folder / Manual。 |
-| `key_broadcast.target_toggles` | checkbox list | 按 preset 自动计算 | 每一行表示一个 SSH 窗口；用户可直接勾选/取消。 |
-| `key_broadcast.filter.username` | checkbox + 输入 | false | 可选：只匹配同用户名或输入的用户名。 |
-| `key_broadcast.filter.host_prefix` | checkbox + 输入 | false | 可选：按 host 前缀匹配。 |
-| `key_broadcast.filter.tags` | token input | 空 | 可选：匹配 session tag。 |
-| `key_broadcast.event_scope` | 只读说明 | All terminal input events | 明确会复制字符、Enter、Backspace、方向键、Ctrl/Alt 组合、粘贴等。 |
-| `key_broadcast.preview` | 只读文本 | 无 | 显示将接收键输入的目标数量和名称。 |
-| `key_broadcast.confirm_text` | 单行输入框 | 空 | 必须输入 `KEYS` 才启用 Start。 |
-| `key_broadcast.cancel` | 按钮 | 无 | 关闭。 |
-| `key_broadcast.start` | 危险主按钮 | disabled | 启动 Send Key Input To。 |
-
-排除规则：
-
-- 排除源会话自身。
-- 排除 disconnected、connecting、error 状态会话。
-- 排除没有交互式 Shell channel 的会话。
-- 排除 SFTP-only 操作。
-- 排除当前正在接收其它 Send Key Input To 的会话，避免循环。
+| 入口 | 行为 |
+|---|---|
+| 终端右键 `Sync Input for This Session` | 把当前终端加入/移出同步组。 |
+| 终端右键 `Pause Sync Input` / `Resume Sync Input` | 暂停/恢复广播（组成员保留）。 |
+| 终端右键 `Stop Sync Input` | 清空同步组。 |
+| 标签右键 `Sync Input for This Tab` | 同上，作用于该标签对应会话。 |
+| pane header switch | 分屏时逐 pane 加入/移出同步组。 |
+| 状态栏 chip | 显示 `SYNC → n targets`；点击 = 停止同步 / 清除一次性提示。 |
 
 启用期间：
 
-- 源终端每次终端输入事件先发送给源 SSH，再复制到目标 SSH。
+- 组成员每次终端输入事件先发送给本会话，再复制到其它组成员；注入路径不再广播。
 - 复制的事件包括普通字符、Enter、Backspace、Tab、方向键、Home/End、PageUp/PageDown、功能键、Ctrl/Alt 组合和粘贴。
 - 不复制 UI 操作，例如切换标签、打开菜单、拖拽 pane、SFTP 操作。
-- **本版（D23 / N9）**：N9 广播路径不弹 KEYS / 大段粘贴 / Ctrl+C 确认；用状态栏 chip + 控制键警示替代。普通终端粘贴的确认由 Settings → Terminal → Multi-line paste 决定（§14.5）。下列「粘贴确认 / Ctrl+C 确认」为旧契约残留，**不以本版验收**。
+- **AI/MCP 输入**：向某会话写入前自动关闭该会话的同步标志并提示；AI 输入不广播。
+- **本版（D23 / N9）**：不弹 KEYS / 大段粘贴 / Ctrl+C 确认；用状态栏 chip + 控制键警示替代。普通终端粘贴的确认由 Settings → Terminal → Multi-line paste 决定（§14.5）。
 - 停止后不关闭任何 SSH 会话。
 
 ## 14. Settings
@@ -849,7 +843,7 @@ Master password 语义：
 | `master_password_unlock.forgot` | 危险文字链 | → Reset；删除受保护数据后重新开始。 |
 | `master_password_unlock.quit` | 按钮 / × / Esc | 退出 YShell，不读取任何受保护文件。 |
 
-Headless（CLI / MCP）不弹 GUI 解锁：若主密码已设，需通过 `YSHELL_MASTER_PASSWORD` 提供；否则以 locked 错误失败，不读取受保护文件。
+Headless（CLI / MCP）不弹 GUI 解锁：主密码无法通过环境变量提供；无头路径使用 OS keychain 或显式注入的密钥库，否则以 locked 错误失败，不读取受保护文件。
 
 Settings **不**使用 Danger Zone，也 **不**提供打字令牌确认的 `RESET SECRETS` / `CLEAR` 入口（Reset Master Password 用明确破坏性按钮，无确认词）。启动解锁原型见 `master-password-unlock.html`；本分区只管设置入口与状态。Known Hosts / Private Keys 亦可从 Session 菜单打开。
 
@@ -997,8 +991,11 @@ Known Hosts / Private Keys 由 Session 菜单打开（与 Settings 同级独立�
 | Tunnel Add | 左键 | Tunnel Editor | 当前 SessionProfile id。 |
 | Command Button | 左键 | Terminal | command text。 |
 | Broadcast Button | 左键 | Broadcast Confirmation | selected session ids + command text。 |
-| Send Key Input To Button | 左键 | Send Key Input To Dialog | source pane id + target preset。 |
-| Pane Receive Key Input Toggle | 左键 | Update Send Key Input Targets | pane session id + checked state。 |
+| Sync Input for This Session | 左键 | Runtime Sync Group（无对话框） | tab/session id（加入或移出组）。 |
+| Pause / Resume Sync Input | 左键 | Runtime Sync Group | 无（切组内 `paused`）。 |
+| Stop Sync Input | 左键 | Runtime Sync Group | 无（清空组）。 |
+| Tab / Pane Sync Input Toggle | 左键 | Runtime Sync Group | session id + On/Off。 |
+| Status Bar SYNC chip | 左键 | Runtime Sync Group | 无（Stop Sync Input / 清除提示）。 |
 | Host Key Prompt | Trust and Save | Terminal Tab | host key record。 |
 | Session Editor Save and Connect | 左键 | Terminal Tab | saved SessionProfile id。 |
 

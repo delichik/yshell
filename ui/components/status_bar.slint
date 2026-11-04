@@ -26,7 +26,8 @@ export component StatusBar inherits Rectangle {
     /// 同步目标数（宿主渲染 `SYNC → n targets` 的输入）。
     in property <int> sync-target-count: 0;
     /// 目标选择模式 id（`all`/`visible`/`selected`；供 accessible label/说明）。
-    in property <string> sync-mode-text: "all";
+    /// 同步组状态 id：`""`（无组）/ `group` / `paused`。
+    in property <string> sync-mode-text: "";
     /// chip 文案（宿主用 @tr 模板渲染；空 = 无同步）。
     in property <string> sync-text: "";
     /// 一次性提示（目标断开移除 / 控制键广播 / 源关闭；空 = 无）。
@@ -196,8 +197,8 @@ export component StatusBar inherits Rectangle {
             }
         }
 
-        // N9：同步发送按键 chip（`SYNC → n targets` + 一键停止）与一次性提示。
-        // 整条 chip 是命中区：点击 = 停止同步（非同步态 = 清除残留提示）。
+        // N9：同步输入 chip（`SYNC → n targets` / Pause + 一键停止）与一次性提示。
+        // 整条 chip 是命中区：点击 = 停止同步（组为空 = 清除残留提示）。
         if root.sync-active || root.sync-notice-text != "" : Rectangle {
             min-width: 32px;
             border-radius: Theme.radius-control;
@@ -242,8 +243,8 @@ export component StatusBar inherits Rectangle {
             sync-touch := TouchArea {
                 accessible-role: button;
                 accessible-label: root.sync-active
-                    ? @tr("StatusBar" => "Stop sending key input")
-                    : @tr("StatusBar" => "Dismiss key input sync notice");
+                    ? @tr("StatusBar" => "Stop input sync")
+                    : @tr("StatusBar" => "Dismiss input sync notice");
                 clicked => { root.sync-stop-clicked(); }
             }
         }

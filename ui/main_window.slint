@@ -750,23 +750,24 @@ export component MainWindow inherits Window {
     in-out property <bool> logging_dialog_input_confirmed: false;
     in-out property <bool> logging_dialog_overwrite_confirmed: false;
 
-    // --- N9：同步发送按键（终端/标签右键菜单 + 状态栏 chip + 标签角标）--------
-    /// 是否正在把源终端的按键同步发送给目标标签。
+    // --- N9：同步输入（组模型：终端/标签右键菜单 + 状态栏 chip + 标签徽标）-----
+    /// 同步组是否非空。
     in-out property <bool> input_sync_active: false;
-    /// 目标选择模式 id（`all`/`visible`/`selected`）。
-    in-out property <string> input_sync_mode_text: "all";
-    /// 同步目标数（chip 文案）。
+    /// 组状态 id：`""`（无组）/ `group` / `paused`。
+    in-out property <string> input_sync_mode_text: "";
+    /// 相对焦点会话的其它组成员数（chip 文案 `SYNC → n targets`）。
     in-out property <int> input_sync_target_count: 0;
-    /// 同步源标签显示名（chip 的 accessible label）。
+    /// 兼容字段：组模型下没有“源会话”，恒为空。
     in-out property <string> input_sync_source_name_text: "";
     /// chip 一次性提示（kind + 参数；kind 空 = 无提示）。
     in-out property <string> input_sync_notice_kind_text: "";
     in-out property <string> input_sync_notice_param_text: "";
-    /// 终端右键菜单启用条件（Rust 计算）。
+    /// 终端右键菜单启用条件（Rust 计算）：17 加入/移出、18 暂停/恢复、19 停止。
     in-out property <bool> terminal_sync_all_enabled: false;
+    /// 焦点会话是否已在同步组内（菜单文案 On/Off + 勾选态）。
     in-out property <bool> terminal_sync_visible_enabled: false;
     in-out property <bool> terminal_sync_stop_enabled: false;
-    /// 标签右键"接收键输入"启用/勾选/禁用原因（Rust 计算）。
+    /// 标签右键"Sync Input for This Tab"启用/勾选/禁用原因（Rust 计算）。
     in-out property <bool> tab_menu_receive_key_input_enabled: false;
     in-out property <bool> tab_menu_receives_key_input_checked: false;
     in-out property <string> tab_menu_receive_key_input_reason_text: "";
@@ -1576,24 +1577,33 @@ export component MainWindow inherits Window {
             checked: false, separator: false,
             tooltip: root.terminal_logging_open_folder_enabled ? "" : @tr("No log folder is available yet.")
         },
-        // N9：同步发送按键（索引 17 All / 18 Visible / 19 Stop）。
+        // N9：同步输入（组模型；索引 17 加入/移出当前会话 / 18 暂停-恢复 / 19 停止）。
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         {
-            label: @tr("Send Key Input to All Tabs"), shortcut: "",
-            enabled: root.terminal_sync_all_enabled, checked: false, separator: false,
-            tooltip: root.terminal_sync_all_enabled ? "" : @tr("Connect a terminal session first.")
+            label: root.terminal_sync_visible_enabled
+                ? @tr("Sync Input for This Session (On)")
+                : @tr("Sync Input for This Session"),
+            shortcut: "",
+            enabled: root.terminal_sync_all_enabled,
+            checked: root.terminal_sync_visible_enabled,
+            separator: false,
+            tooltip: root.terminal_sync_all_enabled
+                ? ""
+                : @tr("Connect an SSH terminal session first.")
         },
         {
-            label: @tr("Send Key Input to Visible Tabs"), shortcut: "",
-            enabled: root.terminal_sync_visible_enabled, checked: false, separator: false,
-            tooltip: root.terminal_sync_visible_enabled
-                ? TextFormats.input-sync-visible-note()
-                : @tr("Connect a terminal session first.")
+            label: root.input_sync_mode_text == "paused"
+                ? @tr("Resume Sync Input")
+                : @tr("Pause Sync Input"),
+            shortcut: "", enabled: root.terminal_sync_stop_enabled, checked: false, separator: false,
+            tooltip: root.terminal_sync_stop_enabled
+                ? ""
+                : @tr("Input sync is not active.")
         },
         {
-            label: @tr("Stop Sending Key Input"), shortcut: "",
+            label: @tr("Stop Sync Input"), shortcut: "",
             enabled: root.terminal_sync_stop_enabled, checked: false, separator: false,
-            tooltip: root.terminal_sync_stop_enabled ? "" : @tr("Key input sync is not active.")
+            tooltip: root.terminal_sync_stop_enabled ? "" : @tr("Input sync is not active.")
         },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true,
             hidden: root.active_tab_mode_text != "terminal" },
@@ -1695,16 +1705,16 @@ export component MainWindow inherits Window {
             enabled: root.tab_menu_split_enabled, checked: false, separator: false,
             tooltip: root.tab_menu_split_enabled ? "" : @tr("Open a terminal session before splitting, or close a pane (max 4).")
         },
-        // N9：接收键输入勾选（索引 14；仅终端标签显示）。
+        // N9：同步输入成员勾选（索引 14；仅终端标签显示）。
         { label: "", shortcut: "", enabled: false, checked: false, separator: true,
             hidden: root.tab_menu_mode_text != "terminal" },
         {
-            label: @tr("Receive Key Input"), shortcut: "",
+            label: @tr("Sync Input for This Tab"), shortcut: "",
             enabled: root.tab_menu_receive_key_input_enabled,
             checked: root.tab_menu_receives_key_input_checked, separator: false,
             hidden: root.tab_menu_mode_text != "terminal",
             tooltip: root.tab_menu_receive_key_input_enabled
-                ? ""
+                ? @tr("Any member's input is copied to the other sessions in the sync group.")
                 : TextFormats.receive-key-input-reason(root.tab_menu_receive_key_input_reason_text)
         },
         // N7：跨窗口迁移（索引 16/17；只换 UI 所有权，会话不重建）。
@@ -2102,9 +2112,9 @@ export component MainWindow inherits Window {
             else if (index == 13) { root.terminal_logging_stop(); }
             else if (index == 14) { root.terminal_logging_open_file(); }
             else if (index == 15) { root.terminal_logging_open_folder(); }
-            // N9：同步发送按键（All / Visible / Stop；Stop 即"Send to Current"语义）。
-            else if (index == 17) { root.send_key_input_to("all"); }
-            else if (index == 18) { root.send_key_input_to("visible"); }
+            // N9：同步输入（组模型；17 加入/移出当前会话，18 暂停/恢复，19 停止）。
+            else if (index == 17) { root.send_key_input_to("toggle"); }
+            else if (index == 18) { root.send_key_input_to(root.input_sync_mode_text == "paused" ? "resume" : "pause"); }
             else if (index == 19) { root.stop_input_sync(); }
             else if (index == 21) { root.switch_active_tab_to_sftp(); }
         } else if (which == 7) {
@@ -2656,11 +2666,11 @@ export component MainWindow inherits Window {
                 terminal-rows: root.terminal_viewport_rows;
                 cursor-col: root.terminal_cursor_column;
                 cursor-row: root.terminal_cursor_row;
-                // N9：同步发送按键 chip（`SYNC → n targets` + 一键停止 + 一次性提示）。
+                // N9：同步输入 chip（`SYNC → n targets` / Pause + 一键停止 + 一次性提示）。
                 sync-active: root.input_sync_active;
                 sync-target-count: root.input_sync_target_count;
                 sync-mode-text: root.input_sync_mode_text;
-                sync-text: TextFormats.input-sync-chip(root.input_sync_target_count);
+                sync-text: TextFormats.input-sync-chip(root.input_sync_target_count, root.input_sync_mode_text);
                 sync-notice-text: TextFormats.input-sync-notice(root.input_sync_notice_kind_text, root.input_sync_notice_param_text, root.input_sync_target_count);
                 sync-stop-clicked() => { root.stop_input_sync(); }
                 mcp-controlling: root.mcp_controlling;

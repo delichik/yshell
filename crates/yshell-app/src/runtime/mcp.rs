@@ -772,6 +772,17 @@ impl AppRuntime {
             .find(|tab| tab.tab_id == tab_id)
             .and_then(|tab| tab.session_id().map(str::to_owned))
             .ok_or_else(|| AppError::new(format!("tab `{tab_id}` was not found")))?;
+        // N9（组模型）：AI/MCP 输入不得被广播——写入前把该会话移出同步组，
+        // 并在状态栏留一次性说明（chip notice + status kind）。
+        if self.disable_input_sync_for_tab(tab_id) {
+            let title = self.tab_display_title(tab_id);
+            self.set_status_kind(
+                "input-sync-ai-opt-out",
+                format!("AI input turned off input sync for `{title}`."),
+                title,
+                String::new(),
+            );
+        }
         let session_id = self
             .sessions
             .get(&session_key)

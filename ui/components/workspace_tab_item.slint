@@ -14,7 +14,7 @@ export component WorkspaceTabItem inherits Rectangle {
     in property <bool> tab-active: false;
     /// N6：该会话正在写日志（REC 圆点）。
     in property <bool> tab-logging: false;
-    /// N9：同步发送按键角色（空 / `source` / `target`）。
+    /// N9：是否在输入同步组内（`sync` / 空串；组模型没有源/目的角色）。
     in property <string> tab-sync-role-text: "";
     /// WP4：未读输出计数。
     in property <int> tab-unread: 0;
@@ -34,10 +34,8 @@ export component WorkspaceTabItem inherits Rectangle {
     /// 双击：复制 session（新建同源标签）。
     callback double-click-requested();
 
-    /// N9：角标悬停提示（源/接收的完整说明；@markdown 插值用）。
-    property <string> tab-sync-tooltip: root.tab-sync-role-text == "source"
-        ? @tr("Key input source")
-        : @tr("Receiving key input");
+    /// N9：徽标悬停提示（组内成员说明；@markdown 插值用）。
+    property <string> tab-sync-tooltip: @tr("Input sync is on for this tab");
 
     height: Theme.bar-height-tabs;
     horizontal-stretch: 0;
@@ -153,20 +151,20 @@ export component WorkspaceTabItem inherits Rectangle {
             overflow: elide;
         }
 
-        // N9：同步发送按键角标（源 = accent 实底；目标 = accent-soft 底 + accent 描边）。
+        // N9：输入同步成员徽标（组模型：没有 SRC/RCV 角色，只有“在组里”一个状态）。
         // 角标是写死 16px 的固定尺寸子项 → 显式交叉轴居中（默认 stretch 会贴行顶）。
         if root.tab-sync-role-text != "" : Rectangle {
             height: 16px;
             width: sync-badge-text.preferred-width + 10px;
             border-radius: 8px;
-            background: root.tab-sync-role-text == "source" ? Theme.accent : Theme.accent-soft;
-            border-width: root.tab-sync-role-text == "source" ? 0px : 1px;
+            background: Theme.accent-soft;
+            border-width: 1px;
             border-color: Theme.accent;
             cross-axis-self-alignment: center;
 
             sync-badge-text := Text {
-                text: root.tab-sync-role-text == "source" ? @tr("SRC") : @tr("RCV");
-                color: root.tab-sync-role-text == "source" ? Theme.accent-text : Theme.text-primary;
+                text: @tr("SYNC");
+                color: Theme.text-primary;
                 font-size: Theme.font-caption;
                 font-weight: Theme.weight-semibold;
                 vertical-alignment: center;
