@@ -1,0 +1,103 @@
+// 共享表单布局（唯一实现；原型 `docs/prototypes/form.css`）。
+//
+// 度量契约（与原型逐项对齐）：
+//   * `.form-row`：label 列 `--lbl-w` = 120px、右对齐，label 与控件列 gap 12px，
+//     行 min-height `--ctrl-h` = 32px，行间距 `margin-bottom` = 10px；
+//   * `.form-row .lbl`：font-size 13、color `text.secondary`、line-height 1.2；
+//   * `.hint-indent`：缩进 120 + 12，12px、`text.tertiary`、max-width `--field-w` = 420；
+//   * `.group-label`：12px / semibold / `text.secondary`。
+//
+// 用法：表单放在一个 `VerticalLayout { spacing: Theme.form-row-gap; }` 里，
+// 行与行之间的 10px 由该布局提供（组件自身不带 margin）；hint 同理。
+// Settings 与 Session Editor 必须用这里的组件，不要再各页自建 FormRow/SettingsFieldRow。
+
+import { Theme } from "../../theme.slint";
+
+/// 表单行：左标签（右对齐）+ 右控件列（可多个控件，列内 gap 8）。
+export component FormRow inherits Rectangle {
+    in property <string> label: "";
+    /// 标签列宽（原型 `--lbl-w`；默认 120px）。
+    in property <length> label-width: Theme.form-label-width;
+    /// 控件列内多控件间距（原型 `.ctl-with-btn` gap = 8）。
+    in property <length> content-spacing: Theme.spacing-8;
+
+    // 行高 = 内容自然高度（至少 1× ctrl-h；Notes 等多行控件把行撑高）。
+    height: max(Theme.control-height, body.preferred-height);
+    background: transparent;
+
+    body := HorizontalLayout {
+        spacing: Theme.spacing-12;
+        cross-axis-alignment: start;
+
+        // 标签列：右对齐、13px、secondary；高值行（Notes）里保持顶端对齐。
+        Text {
+            width: root.label-width;
+            height: Theme.control-height;
+            text: root.label;
+            color: Theme.text-secondary;
+            font-size: Theme.font-label;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        // 控件列：占满剩余宽度；子控件上限宽由调用方给（≤ `--field-w`）。
+        HorizontalLayout {
+            horizontal-stretch: 1;
+            spacing: root.content-spacing;
+            cross-axis-alignment: start;
+            @children
+        }
+    }
+}
+
+/// 表单 hint / 说明：缩进到控件列（原型 `.hint-indent`）；`indent: false` 用于
+/// 分区级说明（原型 `.source`，不缩进）。
+export component FormHint inherits HorizontalLayout {
+    in property <string> text: "";
+    in property <color> hint-color: Theme.text-tertiary;
+    /// true = 缩进 120 + 12（字段说明）；false = 分区级说明。
+    in property <bool> indent: true;
+    in property <length> label-width: Theme.form-label-width;
+
+    spacing: 0px;
+    alignment: start;
+    cross-axis-alignment: start;
+
+    if root.indent : Rectangle {
+        width: root.label-width + Theme.spacing-12;
+        height: 1px;
+        background: transparent;
+    }
+
+    Text {
+        horizontal-stretch: 1;
+        max-width: Theme.form-field-width;
+        text: root.text;
+        color: root.hint-color;
+        font-size: Theme.font-caption;
+        wrap: word-wrap;
+    }
+}
+
+/// 表单分组标题（原型 `.group-label`：12px / semibold / secondary）。
+/// 原型分组标题上间距 20px、下间距 8px；本组件用 `first: false` 时自带 10px 上间距，
+/// 配合分区布局的 10px 行间距得到 20px；`first: true`（分区内第一个标题）不加。
+export component FormGroupLabel inherits Rectangle {
+    in property <string> text: "";
+    /// true = 分区内第一个分组标题（原型 `:first-child` 上间距 0）。
+    in property <bool> first: false;
+
+    height: (root.first ? 0px : Theme.form-row-gap) + label.preferred-height;
+    background: transparent;
+
+    label := Text {
+        y: root.first ? 0px : Theme.form-row-gap;
+        text: root.text;
+        color: Theme.text-secondary;
+        font-size: Theme.font-caption;
+        font-weight: Theme.weight-semibold;
+        wrap: no-wrap;
+    }
+}

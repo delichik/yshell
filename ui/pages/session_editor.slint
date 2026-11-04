@@ -11,6 +11,7 @@ import { Theme } from "../theme.slint";
 import {
     WinButton, WinComboBox, WinIconButton, WinNavItem, WinScrollIndicator, WinSwitch,
 } from "../components/basic/controls.slint";
+import { FormHint, FormRow } from "../components/basic/forms.slint";
 import { Icon } from "../components/basic/icons.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { TerminalPreview } from "../components/terminal_preview.slint";
@@ -39,46 +40,8 @@ export struct InheritSource {
     param: string, // 就近父级文件夹名
 }
 
-// 表单行：左侧固定宽度标签 + 右侧控件（高值控件把行撑高，行高仍是 32 的整数倍）。
-component FormRow inherits Rectangle {
-    in property <string> label: "";
-    in property <length> label-width: Theme.form-label-width;
-
-    height: max(Theme.control-height, body.preferred-height);
-    background: transparent;
-
-    body := HorizontalLayout {
-        spacing: Theme.spacing-12;
-        cross-axis-alignment: start;
-
-        Text {
-            text: root.label;
-            color: Theme.text-secondary;
-            font-size: Theme.font-body;
-            width: root.label-width;
-            height: Theme.control-height;
-            vertical-alignment: center;
-            wrap: no-wrap;
-            overflow: elide;
-        }
-
-        HorizontalLayout {
-            horizontal-stretch: 1;
-            spacing: Theme.spacing-8;
-            cross-axis-alignment: center;
-            @children
-        }
-    }
-}
-
-// 字段说明 / 来源 / 状态：低对比小字。
-component HintText inherits Text {
-    in property <string> hint: "";
-    text: root.hint;
-    color: Theme.text-tertiary;
-    font-size: Theme.font-caption;
-    wrap: word-wrap;
-}
+// 表单行/说明使用共享 `forms.slint`（与 Settings 同一实现：
+// label 120 右对齐 / 13px、gap 12、行间距 10；hint 缩进到控件列）。
 
 // 分区导航项：WinNavItem + 禁用说明 tooltip。
 component EditorNavItem inherits Rectangle {
@@ -588,7 +551,7 @@ export component SessionEditor inherits Rectangle {
     callback save-connect();
 
     // --- 页内状态 ---------------------------------------------------------
-    private property <length> field-width: 420px;
+    private property <length> field-width: Theme.form-field-width;
     private property <int> drag-from: -1;
     private property <int> drag-over: -1;
     private property <bool> login-menu-open: false;
@@ -703,7 +666,7 @@ export component SessionEditor inherits Rectangle {
                 border-color: Theme.card-stroke;
 
                 VerticalLayout {
-                    padding: Theme.spacing-16;
+                    padding: Theme.spacing-20;
                     spacing: Theme.spacing-12;
 
                     Rectangle {
@@ -720,12 +683,12 @@ export component SessionEditor inherits Rectangle {
 
                             form-content := VerticalLayout {
                                 alignment: start;
-                                spacing: Theme.spacing-12;
+                                spacing: Theme.form-row-gap;
 
                                 // ---------------- General ----------------
                                 if root.section == "general" : VerticalLayout {
                                     alignment: start;
-                                    spacing: Theme.spacing-12;
+                                    spacing: Theme.form-row-gap;
 
                                     if root.folder-text != "" : FormRow {
                                         label: @tr("Folder");
@@ -750,21 +713,19 @@ export component SessionEditor inherits Rectangle {
                                         }
                                     }
 
+                                    // 原型 General：Name / Host / Port 各占独立行（不并排）。
                                     if root.session-mode : FormRow {
                                         label: @tr("Host");
                                         WinTextInput {
-                                            width: root.field-width - Theme.form-port-width - Theme.spacing-8 - 46px;
+                                            width: root.field-width;
                                             text <=> root.host-text;
                                             placeholder-text: @tr("Host");
                                             edited => { root.update-host(self.text); }
                                         }
-                                        Text {
-                                            text: @tr("Port");
-                                            color: Theme.text-secondary;
-                                            font-size: Theme.font-caption;
-                                            vertical-alignment: center;
-                                            wrap: no-wrap;
-                                        }
+                                    }
+
+                                    if root.session-mode : FormRow {
+                                        label: @tr("Port");
                                         WinTextInput {
                                             width: Theme.form-port-width;
                                             text <=> root.port-text;
@@ -823,17 +784,8 @@ export component SessionEditor inherits Rectangle {
                                         }
                                     }
 
-                                    if root.icon-index == 3 : FormRow {
-                                        label: "";
-                                        Text {
-                                            text: root.icon-custom-text == "" ? @tr("No image selected yet.") : root.icon-custom-text;
-                                            color: root.icon-custom-text == "" ? Theme.text-tertiary : Theme.text-secondary;
-                                            font-size: Theme.font-caption;
-                                            font-family: Theme.font-mono;
-                                            wrap: no-wrap;
-                                            overflow: elide;
-                                        }
-                                    }
+                                    // 原型 General 只有 Icon 一行（预览块 + 下拉 + Browse/Reset）；
+                                    // 自定义图片文件名不再单独占一行。
 
                                     FormRow {
                                         label: @tr("Notes");
@@ -855,7 +807,7 @@ export component SessionEditor inherits Rectangle {
                                 // ---------------- Authentication ----------------
                                 if root.section == "authentication" : VerticalLayout {
                                     alignment: start;
-                                    spacing: Theme.spacing-12;
+                                    spacing: Theme.form-row-gap;
 
                                     InheritBar {
                                         inherit: root.inherit-auth;
@@ -947,8 +899,8 @@ export component SessionEditor inherits Rectangle {
                                         }
                                     }
 
-                                    if root.show-key-auth : HintText {
-                                        hint: root.key-options.length == 0
+                                    if root.show-key-auth : FormHint {
+                                        text: root.key-options.length == 0
                                             ? @tr("Import an OpenSSH private key in the Private Keys manager, then pick it here.")
                                             : @tr("Keys are managed in Private Keys.");
                                     }
@@ -986,8 +938,8 @@ export component SessionEditor inherits Rectangle {
                                         }
                                     }
 
-                                    if root.show-key-auth && root.legacy-key-path-text != "" : HintText {
-                                        hint: root.legacy-key-has-passphrase
+                                    if root.show-key-auth && root.legacy-key-path-text != "" : FormHint {
+                                        text: root.legacy-key-has-passphrase
                                             ? @tr("Legacy key path with a saved passphrase. Select a managed key to migrate this session.")
                                             : @tr("Legacy key path. Select a managed key to migrate this session.");
                                     }
@@ -999,13 +951,13 @@ export component SessionEditor inherits Rectangle {
                                         wrap: word-wrap;
                                     }
 
-                                    HintText { hint: root.auth-test-status-text; }
+                                    FormHint { text: root.auth-test-status-text; }
                                 }
 
                                 // ---------------- Login Script ----------------
                                 if root.section == "login-script" : VerticalLayout {
                                     alignment: start;
-                                    spacing: Theme.spacing-12;
+                                    spacing: Theme.form-row-gap;
 
                                     InheritBar {
                                         inherit: root.inherit-login-script;
@@ -1162,15 +1114,16 @@ export component SessionEditor inherits Rectangle {
                                     }
 
                                     // 拖动时整行高亮依赖 drag-over；清单外松手不产生移动。
-                                    if root.inherit-login-script : HintText {
-                                        hint: @tr("Inherited from the parent. Turn off Inherit to edit the steps for this session.");
+                                    if root.inherit-login-script : FormHint {
+                                        text: @tr("Inherited from the parent. Turn off Inherit to edit the steps for this session.");
+                                        indent: false;
                                     }
                                 }
 
                                 // ---------------- Proxy ----------------
                                 if root.section == "proxy" : VerticalLayout {
                                     alignment: start;
-                                    spacing: Theme.spacing-12;
+                                    spacing: Theme.form-row-gap;
 
                                     InheritBar {
                                         inherit: root.inherit-proxy;
@@ -1218,8 +1171,8 @@ export component SessionEditor inherits Rectangle {
                                         }
                                     }
 
-                                    if !root.inherit-proxy : HintText {
-                                        hint: @tr("Profiles are managed in Proxies.");
+                                    if !root.inherit-proxy : FormHint {
+                                        text: @tr("Profiles are managed in Proxies.");
                                     }
 
                                     if root.proxy-selected-detail-text != "" : Text {
@@ -1256,7 +1209,7 @@ export component SessionEditor inherits Rectangle {
                                 // ---------------- Tunnels ----------------
                                 if root.section == "tunnels" : VerticalLayout {
                                     alignment: start;
-                                    spacing: Theme.spacing-12;
+                                    spacing: Theme.form-row-gap;
 
                                     InheritBar {
                                         inherit: root.inherit-tunnels;
@@ -1371,15 +1324,16 @@ export component SessionEditor inherits Rectangle {
                                         }
                                     }
 
-                                    if root.inherit-tunnels && root.parent-tunnel-count > 0 : HintText {
-                                        hint: @tr("Using {0} tunnel(s) from the parent. Turn off Inherit to edit them for this session.", root.parent-tunnel-count);
+                                    if root.inherit-tunnels && root.parent-tunnel-count > 0 : FormHint {
+                                        text: @tr("Using {0} tunnel(s) from the parent. Turn off Inherit to edit them for this session.", root.parent-tunnel-count);
+                                        indent: false;
                                     }
                                 }
 
                                 // ---------------- Terminal Style ----------------
                                 if root.section == "terminal-style" : VerticalLayout {
                                     alignment: start;
-                                    spacing: Theme.spacing-12;
+                                    spacing: Theme.form-row-gap;
 
                                     InheritBar {
                                         inherit: root.inherit-terminal-style;
@@ -1408,20 +1362,18 @@ export component SessionEditor inherits Rectangle {
                                         }
                                     }
 
-                                    HintText {
-                                        hint: root.inherit-terminal-style && root.parent-terminal-style-text != ""
+                                    FormHint {
+                                        text: root.inherit-terminal-style && root.parent-terminal-style-text != ""
                                             ? @tr("Using parent style: {0}", root.parent-terminal-style-text)
                                             : @tr("Fonts and colors are edited in Terminal Styles.");
                                     }
 
-                                    FormRow {
-                                        label: @tr("Preview");
-                                        // 尺寸与 Rust `SESSION_EDITOR_PREVIEW_AREA_PX` 对应（480×98）。
-                                        TerminalPreview {
-                                            frame: root.preview-frame;
-                                            surface-background: root.preview-background;
-                                            surface-height: 100px;
-                                        }
+                                    // 特殊块：预览没有左侧 label、占满整行（与 Settings 预览一致；
+                                    // 高度统一走 `Theme.terminal-preview-height`）。
+                                    TerminalPreview {
+                                        frame: root.preview-frame;
+                                        surface-background: root.preview-background;
+                                        surface-height: Theme.terminal-preview-height;
                                     }
                                 }
                             }

@@ -1,5 +1,6 @@
 import { Theme } from "../theme.slint";
 import { WinButton, WinComboBox, WinIconButton, WinNavItem, WinScrollIndicator, WinSwitch } from "../components/basic/controls.slint";
+import { FormGroupLabel, FormHint, FormRow } from "../components/basic/forms.slint";
 import { Icon } from "../components/basic/icons.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { TerminalPreview } from "../components/terminal_preview.slint";
@@ -35,59 +36,8 @@ component SettingsNavItem inherits Rectangle {
     }
 }
 
-// 表单行：右对齐标签列 + 内容列（行高 = `--ctrl-h` 的整数倍；控件宽 ≤420）。
-// 标签列宽可按字段调整（长标签用 wide 档）。
-component SettingsFieldRow inherits HorizontalLayout {
-    in property <string> label: "";
-    in property <length> label-width: Theme.form-label-width-wide;
-    spacing: Theme.spacing-12;
-    alignment: stretch;
-    cross-axis-alignment: start;
-
-    Text {
-        text: root.label;
-        width: root.label-width;
-        height: Theme.control-height;
-        horizontal-alignment: right;
-        vertical-alignment: center;
-        color: Theme.text-secondary;
-        font-size: Theme.font-body;
-        wrap: no-wrap;
-        overflow: elide;
-    }
-
-    @children
-}
-
-// 分组标题（App theme / Scrollback / Managers…）：分区内容区不再复述分区大标题。
-component SettingsGroupLabel inherits Text {
-    color: Theme.text-secondary;
-    font-size: Theme.font-body;
-    font-weight: Theme.weight-semibold;
-    wrap: no-wrap;
-}
-
-// 行内 hint：只写非显而易见的产品行为；缩进与控件列对齐。
-component SettingsHint inherits HorizontalLayout {
-    in property <string> text: "";
-    in property <color> hint-color: Theme.text-tertiary;
-    spacing: 0px;
-    alignment: start;
-
-    Rectangle {
-        width: Theme.form-label-width-wide + Theme.spacing-12;
-        height: 1px;
-        background: transparent;
-    }
-
-    Text {
-        horizontal-stretch: 1;
-        text: root.text;
-        color: root.hint-color;
-        font-size: Theme.font-caption;
-        wrap: word-wrap;
-    }
-}
+// 表单行/分组标题/hint 使用共享 `forms.slint`（与 Session Editor 同一实现，
+// 度量按原型 form.css：label 120 右对齐 / 13px、gap 12、行间距 10）。
 
 // 文字按钮 + tooltip（规范：每个可点按钮都要有悬停提示）。
 component SettingsActionButton inherits Rectangle {
@@ -489,12 +439,12 @@ export component SettingsDialog inherits Rectangle {
                                 // --- General -------------------------------------
                                 if root.section == "general" : VerticalLayout {
                                     alignment: start;
-                                    spacing: Theme.spacing-12;
+                                    spacing: Theme.form-row-gap;
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Language");
                                         WinComboBox {
-                                            max-width: 420px;
+                                            max-width: Theme.form-field-width;
                                             horizontal-stretch: 1;
                                             model: [@tr("System default"), @tr("English"), @tr("中文")];
                                             current-index: root.language-text == "zh-CN" ? 2
@@ -507,11 +457,11 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Applies immediately.");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Confirm close");
                                         WinSwitch {
                                             text: root.confirm-close-session-enabled ? @tr("On") : @tr("Off");
@@ -522,11 +472,11 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Ask before closing an active session.");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Confirm quit");
                                         WinSwitch {
                                             text: root.confirm-quit-app-enabled ? @tr("On") : @tr("Off");
@@ -537,11 +487,11 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Ask before quitting YShell.");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Reduce motion");
                                         WinSwitch {
                                             text: Theme.reduce-motion ? @tr("On") : @tr("Off");
@@ -554,7 +504,7 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Turns off transitions.");
                                     }
                                 }
@@ -562,13 +512,14 @@ export component SettingsDialog inherits Rectangle {
                                 // --- Appearance（D36：App theme + Terminal style）--
                                 if root.section == "appearance" : VerticalLayout {
                                     alignment: start;
-                                    spacing: Theme.spacing-12;
+                                    spacing: Theme.form-row-gap;
 
-                                    SettingsGroupLabel {
+                                    FormGroupLabel {
                                         text: @tr("App theme");
+                                        first: true;
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Mode");
                                         HorizontalLayout {
                                             spacing: Theme.spacing-8;
@@ -593,11 +544,11 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Applies to the whole app.");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Accent");
                                         HorizontalLayout {
                                             spacing: Theme.spacing-8;
@@ -612,15 +563,15 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Used for buttons, focus, and selection.");
                                     }
 
-                                    SettingsGroupLabel {
+                                    FormGroupLabel {
                                         text: @tr("Terminal style");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Style");
                                         HorizontalLayout {
                                             spacing: Theme.spacing-8;
@@ -628,7 +579,7 @@ export component SettingsDialog inherits Rectangle {
                                             // `alignment: start` 会让样式下拉只剩零宽（只剩眼睛按钮）。
                                             alignment: stretch;
                                             WinComboBox {
-                                                max-width: 420px;
+                                                max-width: Theme.form-field-width;
                                                 horizontal-stretch: 1;
                                                 model: root.settings-appearance-style-options;
                                                 current-index: root.settings-appearance-style-index;
@@ -644,47 +595,50 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Default for new terminals; fonts and colors are edited in Terminal Styles.");
                                     }
 
                                     // 颜色方案即时预览（字体 / 配色在管理器里编辑）。
+                                    // 特殊块：无 label、占满整行（与 Session Editor 预览一致）。
                                     TerminalPreview {
                                         frame: root.appearance-preview;
                                         surface-background: root.appearance-preview-background;
+                                        surface-height: Theme.terminal-preview-height;
                                     }
                                 }
 
                                 // --- Terminal（D37）-----------------------------
                                 if root.section == "terminal" : VerticalLayout {
                                     alignment: start;
-                                    spacing: Theme.spacing-12;
+                                    spacing: Theme.form-row-gap;
 
-                                    SettingsGroupLabel {
+                                    FormGroupLabel {
                                         text: @tr("Scrollback");
+                                        first: true;
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Scrollback lines");
                                         WinTextInput {
-                                            max-width: 420px;
+                                            max-width: Theme.form-field-width;
                                             horizontal-stretch: 1;
                                             text <=> root.scrollback-lines-text;
                                             placeholder-text: "10000";
                                             edited => { root.update-scrollback-lines(self.text); }
                                         }
                                     }
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Max cells");
                                         WinTextInput {
-                                            max-width: 420px;
+                                            max-width: Theme.form-field-width;
                                             horizontal-stretch: 1;
                                             text <=> root.scrollback-max-cells-text;
                                             placeholder-text: "2000000";
                                             edited => { root.update-scrollback-max-cells(self.text); }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: TextFormats.settings-terminal-status(
                                             root.settings-terminal-status-kind-text,
                                             root.settings-terminal-status-field-text,
@@ -696,7 +650,7 @@ export component SettingsDialog inherits Rectangle {
                                             ? Theme.text-tertiary : Theme.critical;
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: "";
                                         SettingsActionButton {
                                             text: @tr("Reset defaults");
@@ -705,14 +659,14 @@ export component SettingsDialog inherits Rectangle {
                                         }
                                     }
 
-                                    SettingsGroupLabel {
+                                    FormGroupLabel {
                                         text: @tr("Mouse & paste");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Middle click");
                                         WinComboBox {
-                                            max-width: 420px;
+                                            max-width: Theme.form-field-width;
                                             horizontal-stretch: 1;
                                             model: [@tr("Paste"), @tr("Do nothing")];
                                             current-index: root.settings-terminal-middle-click-index;
@@ -721,14 +675,14 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Paste from the clipboard or ignore the click.");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Right click");
                                         WinComboBox {
-                                            max-width: 420px;
+                                            max-width: Theme.form-field-width;
                                             horizontal-stretch: 1;
                                             model: [@tr("Context menu"), @tr("Paste"), @tr("Do nothing")];
                                             current-index: root.settings-terminal-right-click-index;
@@ -737,14 +691,14 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Open the terminal menu, paste, or ignore the click.");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Multi-line paste");
                                         WinComboBox {
-                                            max-width: 420px;
+                                            max-width: Theme.form-field-width;
                                             horizontal-stretch: 1;
                                             model: [@tr("Ask"), @tr("Paste"), @tr("Block")];
                                             current-index: root.settings-terminal-multi-line-paste-index;
@@ -753,11 +707,11 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Ask before sending text with more than one line.");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Auto copy");
                                         WinSwitch {
                                             text: root.settings-terminal-auto-copy ? @tr("On") : @tr("Off");
@@ -768,7 +722,7 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Copy selected terminal text to the clipboard automatically.");
                                     }
                                 }
@@ -776,7 +730,7 @@ export component SettingsDialog inherits Rectangle {
                                 // --- Security（D35）----------------------------
                                 if root.section == "security" : VerticalLayout {
                                     alignment: start;
-                                    spacing: Theme.spacing-16;
+                                    spacing: Theme.form-row-gap;
 
                                     // Master password 卡片：图标 + 标题 + 状态 pill + 说明 + 动作区。
                                     Rectangle {
@@ -897,7 +851,7 @@ export component SettingsDialog inherits Rectangle {
                                         }
                                     }
 
-                                    SettingsGroupLabel {
+                                    FormGroupLabel {
                                         text: @tr("Managers");
                                     }
 
@@ -941,9 +895,9 @@ export component SettingsDialog inherits Rectangle {
                                 // --- SFTP（D33）--------------------------------
                                 if root.section == "sftp" : VerticalLayout {
                                     alignment: start;
-                                    spacing: Theme.spacing-12;
+                                    spacing: Theme.form-row-gap;
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Show hidden");
                                         WinSwitch {
                                             text: root.settings-sftp-show-hidden ? @tr("On") : @tr("Off");
@@ -954,14 +908,14 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("New SFTP tabs start with hidden files shown.");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Conflict");
                                         WinComboBox {
-                                            max-width: 420px;
+                                            max-width: Theme.form-field-width;
                                             horizontal-stretch: 1;
                                             model: [@tr("Ask"), @tr("Replace"), @tr("Skip"), @tr("Stop")];
                                             current-index: root.settings-sftp-conflict-index;
@@ -970,14 +924,14 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Ask opens a dialog; the others apply automatically.");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("External editor");
                                         WinComboBox {
-                                            max-width: 420px;
+                                            max-width: Theme.form-field-width;
                                             horizontal-stretch: 1;
                                             // Rust 投影稳定 id（`system-default` / `custom` / 编辑器名），
                                             // 显示文案用 @tr 映射（`TextFormats.settings-sftp-editor-label`）。
@@ -992,11 +946,11 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Used to open remote files for editing.");
                                     }
 
-                                    if root.settings-sftp-editor-custom-visible : SettingsFieldRow {
+                                    if root.settings-sftp-editor-custom-visible : FormRow {
                                         label: "";
                                         WinTextInput {
                                             max-width: 388px;
@@ -1015,7 +969,7 @@ export component SettingsDialog inherits Rectangle {
                                         }
                                     }
 
-                                    SettingsHint {
+                                    FormHint {
                                         text: TextFormats.settings-sftp-status(
                                             root.settings-sftp-status-kind-text,
                                             "",
@@ -1029,9 +983,9 @@ export component SettingsDialog inherits Rectangle {
                                 // View user / Control user 本版不可用，按原型保留行 + 短 hint）--
                                 if root.section == "mcp" : VerticalLayout {
                                     alignment: start;
-                                    spacing: Theme.spacing-12;
+                                    spacing: Theme.form-row-gap;
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Enable");
                                         WinSwitch {
                                             text: root.mcp-enabled ? @tr("On") : @tr("Off");
@@ -1040,23 +994,23 @@ export component SettingsDialog inherits Rectangle {
                                             toggled => { root.set-mcp-enabled(root.mcp-enabled); }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Off by default; other MCP controls are disabled.");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Port");
                                         WinTextInput {
-                                            width: 100px;
+                                            width: Theme.form-port-width;
                                             enabled: false;
                                             text: "18765";
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Not available in this version.");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Listen");
                                         SettingsMethodButton {
                                             text: @tr("Local");
@@ -1065,23 +1019,23 @@ export component SettingsDialog inherits Rectangle {
                                             enabled: false;
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Not available in this version.");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("API key");
                                         WinTextInput {
-                                            max-width: 420px;
+                                            max-width: Theme.form-field-width;
                                             horizontal-stretch: 1;
                                             enabled: false;
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Not available in this version.");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("View user");
                                         WinSwitch {
                                             text: @tr("Off");
@@ -1090,11 +1044,11 @@ export component SettingsDialog inherits Rectangle {
                                             checked: false;
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Not available in this version.");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Control user");
                                         WinSwitch {
                                             text: @tr("Off");
@@ -1103,11 +1057,11 @@ export component SettingsDialog inherits Rectangle {
                                             checked: false;
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Not available in this version.");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Auto-approve");
                                         WinSwitch {
                                             text: root.mcp-auto-approve-control-enabled ? @tr("On") : @tr("Off");
@@ -1119,12 +1073,12 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Skip the control consent dialog.");
                                     }
 
                                     // 状态：Rust 投影 kind id + detail，句子由 TextFormats 渲染。
-                                    SettingsHint {
+                                    FormHint {
                                         text: TextFormats.settings-mcp-status(
                                             root.mcp-status-kind-text,
                                             root.mcp-status-detail-text,
@@ -1133,7 +1087,7 @@ export component SettingsDialog inherits Rectangle {
                                             ? Theme.critical : Theme.text-tertiary;
                                     }
 
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Add this stdio server in your AI host; do not run it yourself.");
                                     }
                                     HorizontalLayout {
@@ -1141,7 +1095,7 @@ export component SettingsDialog inherits Rectangle {
                                         alignment: start;
 
                                         Rectangle {
-                                            width: Theme.form-label-width-wide + Theme.spacing-12;
+                                            width: Theme.form-label-width + Theme.spacing-12;
                                             height: 1px;
                                             background: transparent;
                                         }
@@ -1159,9 +1113,9 @@ export component SettingsDialog inherits Rectangle {
                                 // --- Advanced ----------------------------------
                                 if root.section == "advanced" : VerticalLayout {
                                     alignment: start;
-                                    spacing: Theme.spacing-12;
+                                    spacing: Theme.form-row-gap;
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Debug logging");
                                         HorizontalLayout {
                                             spacing: Theme.spacing-8;
@@ -1182,11 +1136,11 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Writes logs under the config directory.");
                                     }
 
-                                    SettingsFieldRow {
+                                    FormRow {
                                         label: @tr("Config directory");
                                         WinTextInput {
                                             max-width: 388px;
@@ -1201,7 +1155,7 @@ export component SettingsDialog inherits Rectangle {
                                             clicked => { root.open-config-dir(); }
                                         }
                                     }
-                                    SettingsHint {
+                                    FormHint {
                                         text: @tr("Read-only path to sessions, keys, and logs.");
                                     }
                                 }

@@ -290,9 +290,8 @@ export component WinSwitch inherits Rectangle {
     /// 键盘焦点（E1）
     out property <bool> has-focus: switch_focus.has-focus;
 
-    // 行高 32（= `control-height`）；20px 轨道在行内垂直居中。
+    // 行高 32（= `control-height`）；轨道 20、文案行高与轨道在行内垂直居中。
     height: Theme.control-height;
-    width: Theme.switch-width + (root.text == "" ? 0px : Theme.spacing-8 + status-text.preferred-width);
     background: transparent;
 
     accessible-role: switch;
@@ -326,55 +325,63 @@ export component WinSwitch inherits Rectangle {
 
     private property <bool> keyboard-focus: false;
 
-    // 轨道 + 滑块：Off 时滑块贴左（`switch-padding`），On 时贴右。
-    track := Rectangle {
-        width: Theme.switch-width;
-        height: Theme.switch-height;
-        y: (parent.height - self.height) / 2;
-        border-radius: Theme.switch-height / 2;
-        border-width: 1px;
-        border-color: !root.enabled ? Theme.control-stroke
-            : root.checked ? Theme.accent
-            : touch.has-hover ? Theme.text-secondary
-            : Theme.control-stroke;
-        background: !root.enabled ? Theme.control-fill-disabled
-            : root.checked ? (touch.pressed ? Theme.accent-pressed : touch.has-hover ? Theme.accent-hover : Theme.accent)
-            : touch.pressed ? Theme.control-fill-pressed
-            : touch.has-hover ? Theme.control-fill-hover
-            : Theme.control-fill;
-        animate background { duration: Theme.duration-fast; easing: ease-out; }
-        animate border-color { duration: Theme.duration-fast; easing: ease-out; }
+    // 轨道 + 右侧状态文案：普通横向布局（不再绝对定位 / 不再给 Text 显式 width），
+    // 宽度由内容 preferred-width 决定。显式 width 与 preferred-width 会形成循环，
+    // 窄容器里会塌成 48px 导致文案压到轨道上。
+    content := HorizontalLayout {
+        alignment: start;
+        spacing: Theme.spacing-8;
+        cross-axis-alignment: center;
 
-        Rectangle {
-            width: Theme.switch-knob-size;
-            height: Theme.switch-knob-size;
-            y: (parent.height - self.height) / 2;
-            x: root.checked
-                ? parent.width - self.width - Theme.switch-padding
-                : Theme.switch-padding;
-            border-radius: Theme.switch-knob-size / 2;
-            background: !root.enabled ? Theme.text-disabled
-                : root.checked ? Theme.accent-text
-                : Theme.text-secondary;
-            animate x { duration: Theme.duration-fast; easing: ease-out; }
+        track := Rectangle {
+            width: Theme.switch-width;
+            height: Theme.switch-height;
+            horizontal-stretch: 0;
+            border-radius: Theme.switch-height / 2;
+            border-width: 1px;
+            border-color: !root.enabled ? Theme.control-stroke
+                : root.checked ? Theme.accent
+                : touch.has-hover ? Theme.text-secondary
+                : Theme.control-stroke;
+            background: !root.enabled ? Theme.control-fill-disabled
+                : root.checked ? (touch.pressed ? Theme.accent-pressed : touch.has-hover ? Theme.accent-hover : Theme.accent)
+                : touch.pressed ? Theme.control-fill-pressed
+                : touch.has-hover ? Theme.control-fill-hover
+                : Theme.control-fill;
             animate background { duration: Theme.duration-fast; easing: ease-out; }
+            animate border-color { duration: Theme.duration-fast; easing: ease-out; }
+
+            // 滑块：Off 贴左（`switch-padding`），On 贴右。
+            Rectangle {
+                width: Theme.switch-knob-size;
+                height: Theme.switch-knob-size;
+                y: (parent.height - self.height) / 2;
+                x: root.checked
+                    ? parent.width - self.width - Theme.switch-padding
+                    : Theme.switch-padding;
+                border-radius: Theme.switch-knob-size / 2;
+                background: !root.enabled ? Theme.text-disabled
+                    : root.checked ? Theme.accent-text
+                    : Theme.text-secondary;
+                animate x { duration: Theme.duration-fast; easing: ease-out; }
+                animate background { duration: Theme.duration-fast; easing: ease-out; }
+            }
+        }
+
+        // 右侧上下文文案（可选；空文本不进布局）。原型 `.form-switch` = 13px。
+        if root.text != "" : Text {
+            text: root.text;
+            color: !root.enabled ? Theme.text-disabled : Theme.text-secondary;
+            font-size: Theme.font-label;
+            vertical-alignment: center;
+            horizontal-stretch: 0;
+            wrap: no-wrap;
+            overflow: elide;
         }
     }
 
-    // 右侧上下文文案（可选）
-    status-text := Text {
-        visible: root.text != "";
-        x: Theme.switch-width + Theme.spacing-8;
-        y: 0;
-        width: parent.width - (Theme.switch-width + Theme.spacing-8);
-        height: parent.height;
-        text: root.text;
-        color: !root.enabled ? Theme.text-disabled : Theme.text-secondary;
-        font-size: Theme.font-body;
-        vertical-alignment: center;
-        wrap: no-wrap;
-        overflow: elide;
-    }
+    // 组件宽度 = 轨道 + 可选文案；布局本身同样用 preferred-width，二者一致。
+    width: content.preferred-width;
 
     touch := TouchArea {
         pointer-event(event) => {
