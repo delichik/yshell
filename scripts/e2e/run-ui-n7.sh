@@ -115,6 +115,11 @@ write_config() {
       echo "  { id = \"n7-$i\", name = \"S$i\", host = \"127.0.0.1\", port = $ssh_port, username = \"root\", auth_profile_id = \"auth-key\", host_key_policy = \"accept_any_for_testing\" },"
     done
     echo ']'
+    echo ''
+    echo '# Application configuration comes from this file (no YSHELL_* env overrides).'
+    echo '[ui]'
+    echo "language = \"$lang\""
+    echo "appearance_mode = \"$theme\""
   } >"$config_dir/config.toml"
 }
 [ "$keep_config" = 0 ] && rm -rf "$config_dir"

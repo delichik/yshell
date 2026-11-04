@@ -424,8 +424,9 @@ slint::select_bundled_translation(lang) ──▶  运行时切换（立即重�
 软件渲染器也**没有逐字形回退**。因此字体族本身必须同时覆盖拉丁与 CJK，否则缺失字形渲染为空白
 （后端默认的 DejaVu Sans 就缺 CJK 字形，中文界面曾整片空白）。
 
-`Theme.font-ui`（`in-out`）由 Rust 启动时按平台写入**一个**字体族（`bootstrap.rs::resolve_ui_font`），
-窗口通过 `default-font-family: Theme.font-ui` 应用；验收/调试可用 `YSHELL_UI_FONT` 覆盖。
+`Theme.font-ui`（`in-out`）由 Rust 启动时按平台写入**一个**字体族（`bootstrap.rs::platform_default_ui_font`），
+窗口通过 `default-font-family: Theme.font-ui` 应用。UI 字体只取平台默认，没有环境变量或产品配置覆盖
+（应用配置一律来自配置文件 / `--config-dir`）。
 
 | 平台 | UI 字体（单一值） | CJK |
 |---|---|---|

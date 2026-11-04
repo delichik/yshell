@@ -147,8 +147,7 @@ use crate::{
     error::AppError, error::AppResult, session_runtime::SessionRuntime, sftp_view::SftpSortColumn,
 };
 use std::{
-    cell::Cell, collections::BTreeMap, collections::BTreeSet, env, fmt, fs, path::Path,
-    path::PathBuf, sync::Arc,
+    cell::Cell, collections::BTreeMap, collections::BTreeSet, fmt, fs, path::PathBuf, sync::Arc,
 };
 use yshell_config::{
     ConfigDocument, ConfigStore, KeyCatalog, LoadOutcome, MiddleClickAction, MultiLinePastePolicy,
@@ -159,7 +158,7 @@ use yshell_core::CoreCommandDispatcher;
 use yshell_core::SessionCommand;
 #[cfg(test)]
 use yshell_core::SessionEvent;
-use yshell_secret::{FileKeychain, Keychain, OsKeychain};
+use yshell_secret::{Keychain, OsKeychain};
 use yshell_sftp::{FsEntry, RemoteEditSession, TransferQueue};
 use yshell_ssh::{HostKeyPolicy, KnownHosts};
 use yshell_terminal::SearchMatch;
@@ -167,7 +166,7 @@ use yshell_terminal::TerminalSnapshot;
 
 impl AppRuntime {
     pub fn new(config_dir: PathBuf) -> AppResult<Self> {
-        let selection = default_runtime_keychain(&config_dir)?;
+        let selection = default_runtime_keychain()?;
         Self::new_with_keychain_and_secret_store_path(
             config_dir,
             selection.keychain,
@@ -492,40 +491,11 @@ impl AppRuntime {
         if path.exists() {
             fs::remove_file(&path).map_err(AppError::from_error)?;
         }
-        let Some(master_password) = env::var("YSHELL_MASTER_PASSWORD").ok() else {
-            self.keychain = None;
-            self.secret_store_kind = SecretStoreKind::Disabled;
-            self.secret_reset_confirmation.clear();
-            let path_text = path.display().to_string();
-            self.set_status_kind(
-                "secrets-reset",
-                format!(
-                    "Deleted `{path_text}` and left the secret store disabled because YSHELL_MASTER_PASSWORD is not set."
-                ),
-                path_text,
-                "master-password-missing".to_owned(),
-            );
-            return Ok(self.projection());
-        };
-        if master_password.trim().is_empty() {
-            self.keychain = None;
-            self.secret_store_kind = SecretStoreKind::Disabled;
-            self.secret_reset_confirmation.clear();
-            let path_text = path.display().to_string();
-            self.set_status_kind(
-                "secrets-reset",
-                format!(
-                    "Deleted `{path_text}` and left the secret store disabled because YSHELL_MASTER_PASSWORD is empty."
-                ),
-                path_text,
-                "master-password-empty".to_owned(),
-            );
-            return Ok(self.projection());
-        }
-        let keychain =
-            FileKeychain::open_or_create(&path, master_password).map_err(AppError::from_error)?;
-        self.keychain = Some(RuntimeKeychain(Arc::new(keychain)));
-        self.secret_store_kind = SecretStoreKind::File;
+        // No environment-supplied master password exists: after the reset the
+        // file-backed store stays disabled until a keychain is injected again
+        // (tests / future encrypted-store UI).
+        self.keychain = None;
+        self.secret_store_kind = SecretStoreKind::Disabled;
         self.secret_reset_confirmation.clear();
         let path_text = path.display().to_string();
         self.set_status_kind(
@@ -980,6 +950,10 @@ pub(crate) struct RuntimeKeychain(Arc<dyn Keychain>);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SecretStoreKind {
     Disabled,
+    // TODO(env-cleanup): the file-backed store is only injected by tests now —
+    // there is no production selector after removing YSHELL_MASTER_PASSWORD.
+    // Drop this allow once the encrypted-store UI configures it.
+    #[allow(dead_code)]
     File,
     Os,
     #[cfg(test)]
@@ -1303,26 +1277,13 @@ pub(crate) struct DefaultRuntimeKeychainSelection {
     pub(crate) kind: SecretStoreKind,
 }
 
-pub(crate) fn default_runtime_keychain(
-    config_dir: &Path,
-) -> AppResult<DefaultRuntimeKeychainSelection> {
-    let path = config_dir.join("secret-store.toml");
-    if let Ok(master_password) = env::var("YSHELL_MASTER_PASSWORD") {
-        if master_password.trim().is_empty() {
-            return Ok(DefaultRuntimeKeychainSelection {
-                keychain: None,
-                secret_store_path: Some(path),
-                kind: SecretStoreKind::Disabled,
-            });
-        }
-        let keychain = FileKeychain::open_or_create(path.clone(), master_password)
-            .map_err(AppError::from_error)?;
-        return Ok(DefaultRuntimeKeychainSelection {
-            keychain: Some(Arc::new(keychain)),
-            secret_store_path: Some(path),
-            kind: SecretStoreKind::File,
-        });
-    }
+/// Production keychain selection: the operating-system keychain is the only
+/// default.
+///
+/// The file-backed encrypted store is never selected from an environment
+/// variable; tests inject it explicitly through
+/// [`AppRuntime::new_with_keychain_and_secret_store_path`].
+pub(crate) fn default_runtime_keychain() -> AppResult<DefaultRuntimeKeychainSelection> {
     Ok(DefaultRuntimeKeychainSelection {
         keychain: Some(Arc::new(OsKeychain::new("yshell"))),
         secret_store_path: None,

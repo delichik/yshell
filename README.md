@@ -15,11 +15,14 @@ Running `yshell` without arguments starts the native Slint main window with the 
 The CLI also exposes smoke-friendly commands:
 
 ```bash
-yshell --check-config
-yshell --print-config-dir
+yshell --config-dir /tmp/yshell-config --check-config
+yshell --config-dir /tmp/yshell-config --print-config-dir
+yshell --config-dir /tmp/yshell-config
 yshell --quick-connect user@example.com
 yshell --version
 ```
+
+`--config-dir <path>` selects the configuration directory (test / smoke isolation and portable runs) and is the **only** configuration override: app settings (language, appearance, motion, fonts, local shell, secret store) are read from that directory, never from `YSHELL_*` environment variables.
 
 Quick Connect input is parsed and validated both from the CLI and from the native toolbar.
 

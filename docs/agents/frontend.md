@@ -32,7 +32,7 @@
 ## 3. 实现约束
 
 - **Token 优先**：颜色、间距、字号、时长走 `Theme`；避免散落魔法数（既有 `ui_token_discipline` 测试需继续满足）。
-- **动效**：可关（减少动画 / `YSHELL_REDUCE_MOTION`）；新动效必须尊重 `Theme.animations-enabled`。
+- **动效**：可关（Settings → General → Reduce motion，持久化在 `[ui] reduce_motion`）；新动效必须尊重 `Theme.animations-enabled`。
 - **i18n**：用户可见文案走既有翻译流程，勿硬编码中英混用新串而不入库。
 - **无障碍与对比度**：改对比度相关时参考设计语言与 xtask 对比度检查（若已有）。
 - **弹窗**：遵循 L2 约定（Esc / 遮罩 / 阻断安全对话框不可 Esc 关掉等），与契约一致。

@@ -162,6 +162,20 @@ impl AppRuntime {
         Ok(dir)
     }
 
+    /// Settings → General → Motion：持久化"减少动画"（`[ui] reduce_motion`）。
+    ///
+    /// 配置是唯一持久化来源；dialog 侧在调用本方法的同时把新值写进所有窗口的
+    /// `Theme.reduce-motion`，启动时由 `apply_appearance` 从配置读回。
+    pub fn set_reduce_motion(&mut self, enabled: bool) -> AppResult<AppProjection> {
+        if self.config_document.ui.reduce_motion != enabled {
+            self.config_document.ui.reduce_motion = enabled;
+            self.config_store
+                .save(&self.config_document)
+                .map_err(AppError::from_error)?;
+        }
+        Ok(self.projection())
+    }
+
     pub fn update_settings_scrollback_lines(&mut self, value: &str) -> AppProjection {
         self.settings_scrollback_lines_text = value.to_owned();
         self.projection()

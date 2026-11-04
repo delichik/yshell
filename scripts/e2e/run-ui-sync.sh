@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # N9 同步发送按键 UI E2E（无头 Xvfb 驱动）。
 #
-# Fake SSH 离线路径已移除：本脚本默认跳过。需要真实 SSH 的同步 UI 验收请走
-# `scripts/e2e/run-ui-ssh.sh`（或设置 YSHELL_E2E_ALLOW_OFFLINE_SYNC=1 并自行
-# 提供可达会话——无 Fake 时已保存会话无法离线直连）。
+# **已过时（跳过）**：同步发送改为「组模型」语义（SYNC 徽标、逐会话开关、
+# Pause / Stop），本脚本下面的旧断言（Visible tooltip、SRC/RCV 角标、All /
+# Visible 预设）已对不上当前 UI。默认直接跳过；等组模型流程移植后重写本脚本
+# （跟踪项）。真实 SSH 的 UI 验收请走 `scripts/e2e/run-ui-ssh.sh`。
 #
 # 用法：
 #   bash scripts/e2e/run-ui-sync.sh [--theme dark|light] [--lang zh-CN|en-US]
 #                                   [--outdir dist/ui-checks] [--prefix n9]
 #                                   [--keep-config]
 #
-# 坐标按 1440×900 窗口校准（窗口原点固定 (0,0)）：
+# 旧坐标（仅历史参考，当前 UI 已不适用）：
 #   * 终端右键锚点 (700,300)；菜单内边距 4，行高 32、分隔符 9——
 #     索引 11 All=626 / 12 Visible=658 / 13 Stop=690，点击 x=750。
 #   * 标签右键锚点 (tab_x,100)；索引 7 Reconnect=321 / 8 Disconnect=353 / 10 Receive=394。
@@ -65,8 +66,12 @@ done
 case "$theme" in dark | light) ;; *) echo "--theme 只支持 dark|light" >&2; exit 2 ;; esac
 case "$lang" in zh-CN | en-US) ;; *) echo "--lang 只支持 zh-CN|en-US" >&2; exit 2 ;; esac
 
-if [ -z "${YSHELL_E2E_ALLOW_OFFLINE_SYNC:-}" ]; then
-  e2e_warn "Offline Fake SSH sync e2e was removed. Use scripts/e2e/run-ui-ssh.sh (or set YSHELL_E2E_ALLOW_OFFLINE_SYNC=1)."
+# Sync-input UI is now the group model: a SYNC badge, per-session toggles, and
+# Pause / Stop. The historical asserts below (Visible tooltip, SRC/RCV badges,
+# All/Visible presets) describe the removed UI and must not be treated as
+# acceptance. Set YSHELL_E2E_SYNC_GROUP_MODEL_PORTED=1 only while porting them.
+if [ -z "${YSHELL_E2E_SYNC_GROUP_MODEL_PORTED:-}" ]; then
+  e2e_warn "sync-input UI now uses the group model (SYNC badge, per-session toggles, Pause/Stop); this e2e is skipped until ported. Use scripts/e2e/run-ui-ssh.sh for real-SSH UI checks."
   exit 0
 fi
 
@@ -100,6 +105,10 @@ write_config() {
     echo '  { id = "sync-1", name = "T1", host = "one.example.test", port = 22, username = "root" },'
     echo '  { id = "sync-2", name = "T2", host = "two.example.test", port = 22, username = "root" },'
     echo ']'
+    echo ''
+    echo '[ui]'
+    echo "language = \"$lang\""
+    echo "appearance_mode = \"$theme\""
   } >"$config_dir/config.toml"
 }
 
@@ -107,14 +116,11 @@ write_config() {
 write_config
 
 # ---------------------------------------------------------------- 启动
+# Configuration comes from the files / `--config-dir` (no YSHELL_* env).
 sync_launch_app() {
   DISPLAY="${E2E_DISPLAY:-$display}" \
-    env -u YSHELL_MASTER_PASSWORD \
     WINIT_X11_SCALE_FACTOR="$E2E_WINIT_SCALE" \
-    YSHELL_THEME="$theme" \
-    YSHELL_LANG="$lang" \
-    YSHELL_CONFIG_DIR="$config_dir" \
-    "$bin" >"$log_file" 2>&1 &
+    "$bin" --config-dir "$config_dir" >"$log_file" 2>&1 &
   E2E_APP_PID=$!
   E2E_APP_WIN=$(e2e_wait_window "$E2E_APP_PID" 15) || {
     e2e_warn "未找到窗口（pid $E2E_APP_PID），日志尾部："

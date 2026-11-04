@@ -26,9 +26,6 @@ use crate::color::TerminalColor;
 use crate::palette::TerminalPalette;
 use crate::selection::SelectionRange;
 
-/// Environment variable that overrides the on-disk fonts directory.
-pub const FONTS_DIR_ENV: &str = "YSHELL_FONTS_DIR";
-
 /// Filenames of the product-shipped DejaVu Sans Mono family (regular required).
 const FONT_REGULAR_FILE: &str = "DejaVuSansMono.ttf";
 const FONT_BOLD_FILE: &str = "DejaVuSansMono-Bold.ttf";
@@ -485,17 +482,12 @@ fn bundled_font_faces() -> &'static BundledFontFaces {
 
 /// Resolves the directory that holds product-shipped font files.
 ///
-/// Search order: `YSHELL_FONTS_DIR`, `<exe_dir>/fonts`,
-/// `/usr/share/yshell/fonts` (Linux packages), then the crate's `assets/`
-/// folder (dev / unit tests via `CARGO_MANIFEST_DIR`).
+/// Search order: `<exe_dir>/fonts`, `/usr/share/yshell/fonts` (Linux packages),
+/// then the crate's `assets/` folder (dev / unit tests via
+/// `CARGO_MANIFEST_DIR`). The directory is not configurable through environment
+/// variables (application configuration never comes from the environment).
 #[must_use]
 pub fn resolve_fonts_dir() -> PathBuf {
-    if let Ok(dir) = env::var(FONTS_DIR_ENV) {
-        let path = PathBuf::from(dir);
-        if path.is_dir() {
-            return path;
-        }
-    }
     if let Ok(exe) = env::current_exe() {
         if let Some(parent) = exe.parent() {
             let beside = parent.join("fonts");

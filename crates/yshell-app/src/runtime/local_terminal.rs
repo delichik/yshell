@@ -2,7 +2,8 @@
 //!
 //! `+`（[`AppRuntime::handle_new_tab_default`]）和冷启动都走
 //! [`AppRuntime::open_local_terminal`]：用 `yshell-local` 的
-//! `LocalPty::spawn_boxed` 启动平台默认 shell（D3；`YSHELL_LOCAL_SHELL` 可覆盖），
+//! `LocalPty::spawn_boxed` 启动平台默认 shell（D3；不同 shell 由调用方显式构造
+//! `LocalPtyConfig`，不读环境变量），
 //! 再通过既有的 `ShellSession` 管线接入终端网格/输入/尺寸同步。
 //!
 //! 本地标签与 SSH 标签共享标签/会话登记，但**没有** SSH 连接：`SessionSource::Local`

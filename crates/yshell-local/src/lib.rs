@@ -32,8 +32,9 @@
 //!
 //! On Unix the default shell is `$SHELL` when executable, otherwise `/bin/sh`.
 //! On Windows the default is probed in the order `pwsh.exe` ->
-//! `powershell.exe` -> `cmd.exe`. [`SHELL_OVERRIDE_ENV`] takes precedence on
-//! both platforms, and the working directory defaults to the user's home.
+//! `powershell.exe` -> `cmd.exe`. Callers that need a different program build a
+//! [`LocalPtyConfig`] explicitly; there is no environment-variable override.
+//! The working directory defaults to the user's home.
 //!
 //! ```no_run
 //! use yshell_local::{LocalPty, LocalPtyConfig, PtySize, ShellSession};
@@ -58,5 +59,5 @@ mod shell;
 
 pub use config::LocalPtyConfig;
 pub use pty::{LocalExitStatus, LocalPty};
-pub use shell::{default_shell, home_dir, ResolvedShell, ShellSource, SHELL_OVERRIDE_ENV};
+pub use shell::{default_shell, home_dir, ResolvedShell, ShellSource};
 pub use yshell_ssh::{PtySize, ShellSession};

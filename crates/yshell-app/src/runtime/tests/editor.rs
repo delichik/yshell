@@ -450,10 +450,8 @@ fn editor_built_ssh_config_uses_strict_policy_unless_testing_override() {
 
 #[test]
 fn editor_selects_managed_proxy_without_creating_profiles() {
-    let _guard = lock_env();
-    std::env::set_var("YSHELL_MASTER_PASSWORD", "proxy-master");
     let temp = tempdir().expect("tempdir");
-    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    let mut runtime = file_keychain_runtime(temp.path());
 
     // NET-1：先通过代理管理器创建一条托管条目。
     let _ = runtime.open_proxies_manager();
@@ -556,7 +554,14 @@ fn editor_selects_managed_proxy_without_creating_profiles() {
     assert!(saved[0].proxy_profile_id.is_none());
     assert_eq!(runtime.config_document.proxy_profiles.len(), 1);
 
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
+    // 切回 No Proxy：只清会话引用，托管条目本身保留。
+    let _ = runtime.set_editor_proxy_mode_none();
+    runtime
+        .save_editor_to_saved_session()
+        .expect("save without proxy");
+    let saved = runtime.saved_session_profiles();
+    assert!(saved[0].proxy_profile_id.is_none());
+    assert_eq!(runtime.config_document.proxy_profiles.len(), 1);
 }
 
 #[test]
@@ -831,11 +836,8 @@ fn saved_session_tunnel_profile_is_applied_to_runtime_shell_config() {
 
 #[test]
 fn editor_can_create_password_saved_session_and_persist_secret() {
-    let _guard = lock_env();
     let temp = tempdir().expect("tempdir");
-    std::env::set_var("YSHELL_MASTER_PASSWORD", "editor-master");
-
-    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    let mut runtime = file_keychain_runtime(temp.path());
     let _ = runtime.start_new_saved_session_editor();
     let _ = runtime.update_editor_name("Password Session");
     let _ = runtime.update_editor_host("editor-password.example.test");
@@ -867,17 +869,12 @@ fn editor_can_create_password_saved_session_and_persist_secret() {
         fs::read_to_string(temp.path().join("secret-store.toml")).expect("read store");
     assert!(store_contents.contains(&secret_key));
     assert!(!store_contents.contains("super-secret"));
-
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
 }
 
 #[test]
 fn editing_password_session_keeps_secret_when_password_left_blank() {
-    let _guard = lock_env();
     let temp = tempdir().expect("tempdir");
-    std::env::set_var("YSHELL_MASTER_PASSWORD", "editor-master");
-
-    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    let mut runtime = file_keychain_runtime(temp.path());
     let _ = runtime.start_new_saved_session_editor();
     let _ = runtime.update_editor_name("Keep Secret Session");
     let _ = runtime.update_editor_host("keep-secret.example.test");
@@ -922,17 +919,12 @@ fn editing_password_session_keeps_secret_when_password_left_blank() {
         .resolve_secret_value(&secret_key)
         .expect("resolve kept secret");
     assert_eq!(resolved, "original-secret");
-
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
 }
 
 #[test]
 fn editor_can_create_keyboard_interactive_saved_session_and_persist_secret() {
-    let _guard = lock_env();
     let temp = tempdir().expect("tempdir");
-    std::env::set_var("YSHELL_MASTER_PASSWORD", "editor-master");
-
-    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    let mut runtime = file_keychain_runtime(temp.path());
     let _ = runtime.start_new_saved_session_editor();
     let _ = runtime.update_editor_name("Keyboard Interactive Session");
     let _ = runtime.update_editor_host("editor-kbdint.example.test");
@@ -963,14 +955,10 @@ fn editor_can_create_keyboard_interactive_saved_session_and_persist_secret() {
         fs::read_to_string(temp.path().join("secret-store.toml")).expect("read store");
     assert!(store_contents.contains(&secret_key));
     assert!(!store_contents.contains("challenge-secret"));
-
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
 }
 
 #[test]
 fn editor_password_save_requires_enabled_secret_store() {
-    let _guard = lock_env();
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), None)
         .expect("runtime without keychain");

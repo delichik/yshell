@@ -3,9 +3,10 @@
 //! Scope of this round (D35, "Set / Change / Remove / Reset + startup unlock"):
 //! the optional master password encrypts saved sessions and keys. This module
 //! owns the **state machine and validation**; the file-encryption layer itself
-//! still runs through [`yshell_secret`] and the `YSHELL_MASTER_PASSWORD`
-//! fallback (see `docs/product/yshell-current-status.md` §3 — fully closing the
-//! loop is tracked as a real gap).
+//! still runs through [`yshell_secret`] (OS keychain by default, or a keychain
+//! injected by tests) — there is no environment-variable master password
+//! (see `docs/product/yshell-current-status.md` §3 — fully closing the loop is
+//! tracked as a real gap).
 //!
 //! What is implemented here:
 //!

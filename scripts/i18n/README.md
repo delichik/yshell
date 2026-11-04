@@ -11,7 +11,7 @@ gettext 模板 `translations/yshell-app.pot`，再合并进各语言的
 | 提取脚本 | `scripts/i18n/extract.sh` |
 | 翻译目录 | `translations/en-US/LC_MESSAGES/yshell-app.po`、`translations/zh-CN/LC_MESSAGES/yshell-app.po` |
 | 构建期内嵌 | `crates/yshell-app/build.rs` 的 `.with_bundled_translations("../../translations")` |
-| 运行时切换 | `crates/yshell-app/src/bootstrap.rs::apply_language()`（`YSHELL_LANG` 环境变量） |
+| 运行时切换 | `crates/yshell-app/src/bootstrap.rs::apply_language()`（`[ui] language` 配置，Settings → General） |
 
 ## 0. 一次性准备
 
@@ -146,9 +146,10 @@ slint_build::compile_with_config("../../ui/main_window.slint", config)
 slint::select_bundled_translation("zh-CN")?; // 或 "en-US"
 ```
 
-- 应用侧入口：`YSHELL_LANG=system|zh-CN|en-US` 环境变量
-  （`bootstrap.rs::apply_language()`）；未设置时读 `LC_ALL`/`LANG`，判断不了则回退 `en-US`。
-- 后续设置页语言下拉会接同一个函数，切换后立即生效，无需重启。
+- 应用侧入口：配置 `[ui] language = "system" | "zh-CN" | "en-US"`（Settings → General → Language，
+  `bootstrap.rs::apply_language()`）；`system` 由 OS locale API 决定，判断不了则回退 `en-US`。
+  不再有 `YSHELL_LANG` / `LC_ALL` / `LANG` 环境变量入口（应用配置只来自配置文件）。
+- 设置页语言下拉接同一个函数，切换后立即生效，无需重启。
 - 查不到的 msgid 回退显示 msgid 本身（英文源文），不会显示 key。
 
 ## 常见问题
@@ -158,5 +159,5 @@ slint::select_bundled_translation("zh-CN")?; // 或 "en-US"
 | `slint-tr-extractor: command not found` | `cargo install slint-tr-extractor`；确认 `~/.cargo/bin` 在 PATH 中 |
 | 新文案没被提取 | 确认写的是 `@tr("...")` 而非普通字符串；extractor 不解析注释，且**不会跟进 import**（脚本已全量 glob） |
 | `cargo build` 时 polib panic | `.po` 头部缺字段，按第 3 节补全 |
-| 界面仍是英文 | 检查 `YSHELL_LANG`；确认 `.po` 里的 `msgid`/`msgctxt` 与 `.pot` 完全一致 |
+| 界面仍是英文 | 检查配置 `[ui] language` / OS locale；确认 `.po` 里的 `msgid`/`msgctxt` 与 `.pot` 完全一致 |
 | 切换语言后布局截断 | 按设计规范 §7.4 保持文本容器弹性，不写死宽度 |

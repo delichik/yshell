@@ -115,6 +115,9 @@ pub(crate) struct DialogWindowManager {
     modal_depth: Cell<u32>,
     /// Main window id whose input is disabled for the modal session.
     modal_owner_id: Cell<Option<u64>>,
+    /// Owner re-enabled/focused after a modal hide that happened inside the app
+    /// tick (the timer already holds the manager borrow there).
+    pending_restore_owner: Cell<Option<u64>>,
     local: LocalDialogFlags,
     about: Option<AboutWindow>,
     about_shown: bool,
@@ -175,6 +178,7 @@ impl DialogWindowManager {
                 close_window_id: None,
                 modal_depth: Cell::new(0),
                 modal_owner_id: Cell::new(None),
+                pending_restore_owner: Cell::new(None),
                 local: LocalDialogFlags {
                     sftp_dialog_kind: "none".into(),
                     ..LocalDialogFlags::default()
@@ -925,7 +929,8 @@ impl DialogWindowManager {
                 self.settings = Some(window);
             }
             if let Some(settings) = self.settings.as_ref() {
-                sync_settings_from(settings, projection, main);
+                let reduce_motion = self.runtime.borrow().config_document.ui.reduce_motion;
+                sync_settings_from(settings, projection, main, reduce_motion);
                 if !self.settings_shown {
                     self.show_aux_modal(settings, main, owner_id)?;
                     self.settings_shown = true;
@@ -1147,13 +1152,32 @@ impl DialogWindowManager {
             return;
         }
         let owner_id = self.modal_owner_id.take();
-        if let (Some(owner_id), Some(manager)) = (owner_id, self.manager.upgrade()) {
-            let mut manager = manager.borrow_mut();
+        let Some(owner_id) = owner_id else {
+            return;
+        };
+        let Some(manager) = self.manager.upgrade() else {
+            return;
+        };
+        if let Ok(mut manager) = manager.try_borrow_mut() {
             manager.set_main_window_enabled(owner_id, true);
             // 系统不会因为 owned 子窗隐藏就把前台还给 owner；显式激活父窗并把
             // Slint 键盘焦点交还快捷键 FocusScope，否则关窗后快捷键不响应。
             manager.restore_main_window_focus(owner_id);
+            return;
         }
+        // Called from inside the app tick (`sync_dialog_windows` hides a window
+        // whose projection flag cleared): the manager is already mutably
+        // borrowed by the timer. Record the owner and let the tick re-enable it
+        // right after the dialog sync returns (see `take_pending_restore_owner`).
+        self.pending_restore_owner.set(Some(owner_id));
+    }
+
+    /// Owner window id whose modal state ended inside the app tick.
+    ///
+    /// `WindowManager::sync_dialog_windows` consumes this after the dialog sync
+    /// (the timer already holds the manager borrow while dialogs sync).
+    pub(crate) fn take_pending_restore_owner(&self) -> Option<u64> {
+        self.pending_restore_owner.take()
     }
 
     fn show_aux_modal<W: ComponentHandle + 'static>(
@@ -2020,12 +2044,37 @@ fn wire_settings_actions(
             }
         }
     });
+
+    // --- Reduce motion：配置是唯一来源，开关即时应用并落盘 -------------------
+    let weak = window.as_weak();
+    let wr = window_runtime.clone();
+    let set_host = host.clone();
+    window.on_set_reduce_motion(move |enabled| {
+        if let Some(wr) = wr.as_ref() {
+            if let Err(error) = wr.borrow_mut().set_reduce_motion(enabled) {
+                tracing::warn!(
+                    target: "yshell::app",
+                    "could not save the reduce-motion setting: {error}"
+                );
+            }
+        }
+        if let Some(window) = weak.upgrade() {
+            crate::bootstrap::apply_reduce_motion(&window.global::<Theme>(), enabled);
+        }
+        if let Some(host) = set_host.upgrade() {
+            let manager = host.borrow().dialogs.manager.upgrade();
+            if let Some(manager) = manager {
+                manager.borrow().apply_reduce_motion(enabled);
+            }
+        }
+    });
 }
 
 fn sync_settings_from(
     settings: &SettingsWindow,
     projection: &AppProjection,
     main: Option<&MainWindow>,
+    reduce_motion: bool,
 ) {
     settings.set_config_dir_text(projection.config_dir_text.clone().into());
     settings.set_scrollback_lines_text(projection.settings_scrollback_lines_text.clone().into());
@@ -2145,6 +2194,8 @@ fn sync_settings_from(
     }
     // D36: the Settings window itself follows the App theme instant preview.
     crate::bootstrap::apply_app_theme_preview(&settings.global::<Theme>(), projection);
+    // Settings → General → Motion：`[ui] reduce_motion` 是唯一来源（无环境变量）。
+    crate::bootstrap::apply_reduce_motion(&settings.global::<Theme>(), reduce_motion);
 }
 
 /// `[color]` models are rebuilt only when the palette actually changed: the sync

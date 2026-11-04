@@ -83,6 +83,11 @@ mkdir -p "$config_dir"
     echo "  { id = \"perf-$i\", name = \"P$i\", host = \"127.0.0.1\", port = $ssh_port, username = \"root\", auth_profile_id = \"auth-key\", host_key_policy = \"accept_any_for_testing\" },"
   done
   echo ']'
+  echo ''
+  echo '# Application configuration comes from this file (no YSHELL_* env overrides).'
+  echo '[ui]'
+  echo "language = \"$lang\""
+  echo "appearance_mode = \"$theme\""
 } >"$config_dir/config.toml"
 
 e2e_launch_app "$bin" "$config_dir" "$theme" "$lang" "$log_file" "$E2E_DISPLAY" || exit 1

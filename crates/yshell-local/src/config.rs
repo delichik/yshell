@@ -53,10 +53,9 @@ impl LocalPtyConfig {
     /// Configuration for the platform default shell (see D3) in the user's home
     /// directory.
     ///
-    /// This is the entry point a local terminal tab should use. It does not
-    /// read application settings; an override from settings should be applied
-    /// by constructing the config explicitly or by setting
-    /// [`SHELL_OVERRIDE_ENV`](crate::SHELL_OVERRIDE_ENV).
+    /// This is the entry point a local terminal tab should use. It does not read
+    /// application settings; a different program is selected by constructing the
+    /// config explicitly with [`Self::new`].
     pub fn for_default_shell() -> Self {
         let shell = default_shell();
         let mut config = Self::new(shell.program).with_args(shell.args);

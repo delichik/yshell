@@ -740,6 +740,12 @@ pub struct UiProfile {
     /// App theme accent preset.
     #[serde(default)]
     pub appearance_accent: AccentColor,
+    /// Reduce (disable) UI animations globally (Settings → General → Motion).
+    ///
+    /// Persisted so the motion preference survives a restart without relying on
+    /// any process environment variable.
+    #[serde(default)]
+    pub reduce_motion: bool,
     /// Terminal middle-click behavior.
     #[serde(default)]
     pub terminal_middle_click: MiddleClickAction,
@@ -791,6 +797,7 @@ impl Default for UiProfile {
             language: default_ui_language(),
             appearance_mode: AppearanceMode::default(),
             appearance_accent: AccentColor::default(),
+            reduce_motion: false,
             terminal_middle_click: MiddleClickAction::default(),
             terminal_right_click: RightClickAction::default(),
             terminal_multi_line_paste: MultiLinePastePolicy::default(),
@@ -1809,6 +1816,7 @@ mod tests {
                 narrow_collapsed_side: Some(PanelSide::Right),
             },
             multi_window_enabled: false,
+            reduce_motion: true,
             ..UiProfile::default()
         }
     }
@@ -2294,6 +2302,7 @@ collapsed = true
         // Unspecified fields keep their defaults.
         assert_eq!(parsed.ui.layout.left.len(), 1);
         assert_eq!(parsed.ui.layout.right_width, 320);
+        assert!(!parsed.ui.reduce_motion);
         assert!(parsed.ui.confirm_close_session);
         assert!(parsed.ui.confirm_quit_app);
         assert_eq!(
@@ -2490,6 +2499,7 @@ host = "example.test"
         let document = ConfigDocument::from_toml_str("schema_version = 2\n").expect("minimal");
         assert_eq!(document.ui.appearance_mode, AppearanceMode::System);
         assert_eq!(document.ui.appearance_accent, AccentColor::FollowSystem);
+        assert!(!document.ui.reduce_motion);
         assert_eq!(document.ui.terminal_middle_click, MiddleClickAction::Paste);
         assert_eq!(
             document.ui.terminal_right_click,
@@ -2510,6 +2520,7 @@ schema_version = 2
 [ui]
 appearance_mode = "light"
 appearance_accent = "teal"
+reduce_motion = true
 terminal_middle_click = "do_nothing"
 terminal_right_click = "paste"
 terminal_multi_line_paste = "block"
@@ -2523,6 +2534,7 @@ external_editor = "code"
         let document = ConfigDocument::from_toml_str(input).expect("parse");
         assert_eq!(document.ui.appearance_mode, AppearanceMode::Light);
         assert_eq!(document.ui.appearance_accent, AccentColor::Teal);
+        assert!(document.ui.reduce_motion);
         assert_eq!(
             document.ui.terminal_middle_click,
             MiddleClickAction::DoNothing

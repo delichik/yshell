@@ -120,6 +120,24 @@ fn confirmation_settings_project_and_persist() {
 }
 
 #[test]
+fn reduce_motion_setting_persists_to_the_config_file() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    assert!(!runtime.config_document.ui.reduce_motion);
+
+    let _ = runtime.set_reduce_motion(true).expect("save reduce motion");
+    assert!(runtime.config_document.ui.reduce_motion);
+    // `[ui] reduce_motion` is the only source (no environment variable).
+    let toml = fs::read_to_string(temp.path().join("config.toml")).expect("read config");
+    assert!(toml.contains("reduce_motion = true"), "{toml}");
+
+    let reloaded =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("reloaded runtime");
+    assert!(reloaded.config_document.ui.reduce_motion);
+}
+
+#[test]
 fn status_kind_expires_when_text_is_overwritten() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");

@@ -1,6 +1,5 @@
 //! Host-key trust prompts, known-hosts persistence and secret-store reset flows.
 
-use std::fs;
 use tempfile::tempdir;
 use yshell_config::{
     AuthMethod as ConfigAuthMethod, AuthProfile, ConfigDocument, ConfigStore, FolderProfile,
@@ -27,9 +26,7 @@ fn runtime_boots_with_startup_projection() {
 }
 
 #[test]
-fn runtime_new_defaults_to_operating_system_keychain_without_master_password_env() {
-    let _guard = lock_env();
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
+fn runtime_new_defaults_to_the_operating_system_keychain() {
     let temp = tempdir().expect("tempdir");
     let runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
 
@@ -468,17 +465,15 @@ fn host_key_trust_resumes_password_prompt_for_password_sessions() {
 }
 
 #[test]
-fn runtime_new_uses_default_file_keychain_when_master_password_env_is_set() {
-    let _guard = lock_env();
+fn injected_file_keychain_resolves_saved_password_auth() {
     let temp = tempdir().expect("tempdir");
-    std::env::set_var("YSHELL_MASTER_PASSWORD", "env-master");
 
     let secret_store_path = temp.path().join("secret-store.toml");
-    let keychain =
-        FileKeychain::open_or_create(&secret_store_path, "env-master").expect("file keychain");
+    let keychain = FileKeychain::open_or_create(&secret_store_path, "test-master-password")
+        .expect("file keychain");
     let secret_ref = SecretRef::new("file://saved/password");
     keychain
-        .put(secret_ref.clone(), SecretString::from("env-secret"))
+        .put(secret_ref.clone(), SecretString::from("file-secret"))
         .expect("put secret");
 
     let store = ConfigStore::new(temp.path());
@@ -505,7 +500,15 @@ fn runtime_new_uses_default_file_keychain_when_master_password_env_is_set() {
     document.folders.push(folder);
     store.save_all(&document).expect("save config");
 
-    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    // The production default is the OS keychain; tests inject the file-backed
+    // store explicitly (there is no YSHELL_MASTER_PASSWORD selection any more).
+    let mut runtime = AppRuntime::new_with_keychain_and_secret_store_path(
+        temp.path().to_path_buf(),
+        Some(std::sync::Arc::new(keychain)),
+        Some(secret_store_path),
+        SecretStoreKind::File,
+    )
+    .expect("runtime");
     let _ = runtime
         .open_saved_session("saved-password")
         .expect("open saved session");
@@ -517,54 +520,48 @@ fn runtime_new_uses_default_file_keychain_when_master_password_env_is_set() {
         SshAuthMethod::Password {
             ref username,
             ref password
-        } if username == "root" && password == "env-secret"
+        } if username == "root" && password == "file-secret"
     ));
-
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
 }
 
 #[test]
 fn reset_secret_store_requires_exact_confirmation_phrase() {
-    let _guard = lock_env();
     let temp = tempdir().expect("tempdir");
-    std::env::set_var("YSHELL_MASTER_PASSWORD", "env-master");
-
     let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
     runtime.update_secret_reset_confirmation("almost");
     let error = runtime
         .reset_secret_store()
         .expect_err("confirmation should be required");
     assert!(error.to_string().contains("type `RESET SECRETS` exactly"));
-
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
 }
 
 #[test]
 fn reset_secret_store_deletes_local_file_and_clears_confirmation() {
-    let _guard = lock_env();
     let temp = tempdir().expect("tempdir");
-    std::env::set_var("YSHELL_MASTER_PASSWORD", "env-master");
 
     let secret_store_path = temp.path().join("secret-store.toml");
-    let keychain =
-        FileKeychain::open_or_create(&secret_store_path, "env-master").expect("file keychain");
+    let keychain = FileKeychain::open_or_create(&secret_store_path, "test-master-password")
+        .expect("file keychain");
     keychain
         .put(
             SecretRef::new("file://saved/password"),
-            SecretString::from("env-secret"),
+            SecretString::from("file-secret"),
         )
         .expect("put secret");
     assert!(secret_store_path.exists());
 
-    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    // Injected file-backed store (production defaults to the OS keychain).
+    let mut runtime = AppRuntime::new_with_keychain_and_secret_store_path(
+        temp.path().to_path_buf(),
+        Some(std::sync::Arc::new(keychain)),
+        Some(secret_store_path.clone()),
+        SecretStoreKind::File,
+    )
+    .expect("runtime");
     let _ = runtime.update_secret_reset_confirmation("RESET SECRETS");
     let projection = runtime.reset_secret_store().expect("reset secret store");
 
-    if secret_store_path.exists() {
-        let on_disk = fs::read_to_string(&secret_store_path).expect("read store");
-        assert!(!on_disk.contains("env-secret"));
-        assert!(!on_disk.contains("file://saved/password"));
-    }
+    assert!(!secret_store_path.exists(), "reset deletes the store file");
     assert_eq!(projection.secret_reset_confirmation_text, "");
     assert!(projection
         .status_text
@@ -572,6 +569,4 @@ fn reset_secret_store_deletes_local_file_and_clears_confirmation() {
     assert_eq!(projection.status_kind, "secrets-reset");
     assert!(projection.status_param_1.ends_with("secret-store.toml"));
     assert_eq!(projection.status_param_2, "");
-
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
 }

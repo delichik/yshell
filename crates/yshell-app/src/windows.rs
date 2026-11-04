@@ -25,7 +25,7 @@ use slint::CloseRequestResponse;
 use slint::{ComponentHandle, Timer, TimerMode};
 use yshell_terminal::{TerminalRenderer, DEFAULT_FONT_SIZE};
 
-use crate::bootstrap::generated_ui::MainWindow;
+use crate::bootstrap::generated_ui::{MainWindow, Theme};
 use crate::bootstrap::{
     apply_appearance, apply_dialog_outcome, apply_fonts, apply_language, apply_projection,
     sanitize_scale_factor, terminal_size_from_viewport, wire_callbacks, FileDialogOutcome,
@@ -524,6 +524,16 @@ impl WindowManager {
         }
     }
 
+    /// Settings → General：把"减少动画"即时写进所有主窗口的 `Theme` 全局。
+    ///
+    /// 持久化在 `[ui] reduce_motion`（runtime 负责写盘）；这里只同步已打开的
+    /// 窗口，启动时由 `apply_appearance` 从配置读回。
+    pub(crate) fn apply_reduce_motion(&self, enabled: bool) {
+        for entry in &self.windows {
+            crate::bootstrap::apply_reduce_motion(&entry.window.global::<Theme>(), enabled);
+        }
+    }
+
     /// D33: Settings → SFTP → External editor 的 Browse（rfd 走 worker 线程，
     /// 结果经应用级 dialog channel 回填到 runtime 的 SFTP 草稿）。
     pub(crate) fn browse_settings_sftp_editor(&self) {
@@ -850,6 +860,19 @@ impl WindowManager {
                 .sync(&projection, main, window_id, window_runtime)
         {
             tracing::warn!(target: "yshell::app", "dialog window sync failed: {error}");
+        }
+        // A modal hide can happen *inside* this sync (a projection flag cleared,
+        // e.g. the startup unlock window after a successful unlock). The timer
+        // already holds the manager borrow, so `end_modal` only records the
+        // owner; re-enable/focus it now that the dialog sync has returned.
+        let pending_owner = self
+            .dialog_host
+            .borrow_mut()
+            .dialogs
+            .take_pending_restore_owner();
+        if let Some(owner_id) = pending_owner {
+            self.set_main_window_enabled(owner_id, true);
+            self.restore_main_window_focus(owner_id);
         }
     }
 }

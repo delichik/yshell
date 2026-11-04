@@ -48,10 +48,8 @@ fn store_with_proxies(
 
 #[test]
 fn proxy_manager_create_edit_duplicate_delete() {
-    let _guard = lock_env();
-    std::env::set_var("YSHELL_MASTER_PASSWORD", "proxy-manager-master");
     let temp = tempdir().expect("tempdir");
-    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    let mut runtime = file_keychain_runtime(temp.path());
 
     let opened = runtime.open_proxies_manager();
     assert!(opened.proxies_modal_visible);
@@ -145,8 +143,6 @@ fn proxy_manager_create_edit_duplicate_delete() {
         .config_document
         .proxy_profiles
         .contains_key(&copy.id));
-
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
 }
 
 #[test]

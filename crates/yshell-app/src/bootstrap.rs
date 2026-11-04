@@ -273,8 +273,8 @@ impl YShellApp {
             .prepare_desktop_startup_workspace();
         let manager = crate::windows::WindowManager::new(Rc::clone(&self.runtime))?;
         self.manager = Some(manager);
-        // D35：启动主密码解锁（仅 GUI 路径；CLI / MCP 保持 `YSHELL_MASTER_PASSWORD`
-        // 现状，见契约 §14.4b）。投影标志置位后 `dialog_windows` 同步创建解锁窗。
+        // D35：启动主密码解锁（仅 GUI 路径；CLI / MCP 不弹窗，也不读任何
+        // 主密码环境变量；见契约 §14.4b）。投影标志置位后 `dialog_windows` 同步创建解锁窗。
         let _ = self.runtime.borrow_mut().request_master_password_unlock();
         Ok(())
     }
@@ -288,19 +288,6 @@ impl YShellApp {
         self.show()?;
         self.run_event_loop()
     }
-}
-
-/// 解析外观设置（W1 用环境变量作为验收开关；`config.toml [appearance]` 接线在 W4/W5）。
-///
-/// `YSHELL_THEME`：`system`（默认）/ `light` / `dark`
-/// `YSHELL_ACCENT`：强调色预设 id（`blue` 默认，另有 teal/purple/green/orange/magenta）
-fn resolve_appearance(
-    theme_env: Option<&str>,
-    accent_env: Option<&str>,
-) -> (ThemeMode, AccentColors) {
-    let mode = theme_env.and_then(ThemeMode::from_id).unwrap_or_default();
-    let accent = appearance::resolve_accent(accent_env.unwrap_or_default());
-    (mode, accent)
 }
 
 /// 把配置里的主题模式映射成 UI 侧模式。
@@ -325,28 +312,17 @@ pub(crate) fn accent_id_from_config(accent: yshell_config::AccentColor) -> &'sta
     }
 }
 
-/// 生效外观：`YSHELL_THEME` / `YSHELL_ACCENT` 环境变量优先（测试与 CI 用），
-/// 其次 `[ui]` 配置，最后内置默认。
+/// 生效外观：只读 `[ui] appearance_mode / appearance_accent`。
+///
+/// 应用配置一律来自配置文件，不读任何环境变量；测试 / 冒烟通过 `--config-dir`
+/// 隔离配置目录（见 `crates/yshell-app/src/main.rs`）。
 pub(crate) fn resolve_appearance_with_config(
     ui: &yshell_config::UiProfile,
 ) -> (ThemeMode, AccentColors) {
-    let mode_env = std::env::var("YSHELL_THEME").ok();
-    let accent_env = std::env::var("YSHELL_ACCENT").ok();
-    let (env_mode, env_accent) = resolve_appearance(mode_env.as_deref(), accent_env.as_deref());
-    let mode = if mode_env.as_deref().and_then(ThemeMode::from_id).is_some() {
-        env_mode
-    } else {
-        theme_mode_from_config(ui.appearance_mode)
-    };
-    let accent = if accent_env
-        .as_deref()
-        .is_some_and(|value| !value.trim().is_empty())
-    {
-        env_accent
-    } else {
-        appearance::resolve_accent(accent_id_from_config(ui.appearance_accent))
-    };
-    (mode, accent)
+    (
+        theme_mode_from_config(ui.appearance_mode),
+        appearance::resolve_accent(accent_id_from_config(ui.appearance_accent)),
+    )
 }
 
 /// 把解析后的主题模式与强调色写入 Slint 的 `Theme` 全局。
@@ -359,19 +335,9 @@ pub(crate) fn apply_appearance(window: &MainWindow, ui: &yshell_config::UiProfil
     let theme = window.global::<Theme>();
     theme.set_mode(theme_mode_index(mode));
 
-    // §6.4.4 / §6.1.5："减少动画"总开关。设置页的开关直接写 Theme.reduce-motion，
-    // 这里只负责启动时的初值（`YSHELL_REDUCE_MOTION=1` 关闭所有过渡）。
-    if std::env::var("YSHELL_REDUCE_MOTION")
-        .ok()
-        .is_some_and(|value| {
-            matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "1" | "true" | "yes" | "on"
-            )
-        })
-    {
-        theme.set_reduce_motion(true);
-    }
+    // §6.4.4 / §6.1.5："减少动画"总开关。只读 `[ui] reduce_motion`（Settings →
+    // General → Motion 会即时写回配置）；启动不再接受任何环境变量开关。
+    theme.set_reduce_motion(ui.reduce_motion);
 
     // 显式浅色/深色时同步覆盖 std-widgets 的色板，保证整窗一致；跟随系统时不动。
     // T0：Slint 1.18.1 起 `slint::language::ColorScheme` 是公开类型（1.9 只能用
@@ -420,28 +386,19 @@ fn apply_accent_to_theme(theme: &Theme, accent: AccentColors) {
 /// D36：把当前生效的 App theme（Mode + 强调色）写入任意窗口的 `Theme` 全局。
 ///
 /// Settings 打开期间投影里的值来自 App theme 草稿（即时预览）；关闭后投影回到
-/// 持久化基线，所以 Cancel / × / Esc 的回滚也走这条路径。`YSHELL_THEME` /
-/// `YSHELL_ACCENT` 仍然优先（验收 / CI 开关不能被配置文件或预览覆盖）。
+/// 持久化基线，所以 Cancel / × / Esc 的回滚也走这条路径。外观只来自配置文件，
+/// 不再有环境变量覆盖。
 ///
 /// 只写 `Theme.mode` 与强调色，不动 std-widgets 的 `Palette`：`Theme.system-
 /// scheme` 是 `Palette.color-scheme` 的实时绑定，覆盖 `Palette` 会让"跟随系统"
 /// 再也读不回系统值（启动时的 `apply_appearance` 是 `Palette` 的唯一写入点）。
 pub(crate) fn apply_app_theme_preview(theme: &Theme<'_>, projection: &AppProjection) {
-    let mode_env = std::env::var("YSHELL_THEME")
-        .ok()
-        .and_then(|value| ThemeMode::from_id(&value));
-    let mode_index = mode_env.map_or(projection.settings_appearance_mode_index, theme_mode_index);
-    theme.set_mode(mode_index.clamp(0, 2));
-    let accent_env = std::env::var("YSHELL_ACCENT").unwrap_or_default();
-    let accent = if accent_env.trim().is_empty() {
-        // Swatch order = `runtime/settings.rs::APP_ACCENT_IDS`
-        // (0 = Follow system → Windows Blue, 1 = Blue, then the presets).
-        appearance::resolve_accent(accent_preset_id(
-            projection.settings_appearance_accent_index,
-        ))
-    } else {
-        appearance::resolve_accent(accent_env.trim())
-    };
+    theme.set_mode(projection.settings_appearance_mode_index.clamp(0, 2));
+    // Swatch order = `runtime/settings.rs::APP_ACCENT_IDS`
+    // (0 = Follow system → Windows Blue, 1 = Blue, then the presets).
+    let accent = appearance::resolve_accent(accent_preset_id(
+        projection.settings_appearance_accent_index,
+    ));
     apply_accent_to_theme(theme, accent);
 }
 
@@ -461,6 +418,7 @@ fn accent_preset_id(index: i32) -> &'static str {
 ///
 /// Slint 1.9 的 `font-family` 只接受单一字体族（不支持逗号列表），软件渲染器也没有
 /// 逐字形回退，所以不能像 Web 那样写字体链（见设计规范 §7.5）。
+/// UI 字体只取平台默认，不读环境变量（产品配置一律来自配置文件）。
 fn platform_default_ui_font() -> &'static str {
     if cfg!(target_os = "windows") {
         "Microsoft YaHei UI"
@@ -468,16 +426,6 @@ fn platform_default_ui_font() -> &'static str {
         "PingFang SC"
     } else {
         "Noto Sans SC"
-    }
-}
-
-/// 解析 UI 字体族：`YSHELL_UI_FONT` 非空时优先（验收/调试用），否则按平台取默认。
-///
-/// 覆盖值来自运行时环境，无法保证 `'static`，故返回 `String`；空串或纯空白视为未覆盖。
-fn resolve_ui_font(env_override: Option<&str>) -> String {
-    match env_override.map(str::trim) {
-        Some(font) if !font.is_empty() => font.to_owned(),
-        _ => platform_default_ui_font().to_owned(),
     }
 }
 
@@ -511,8 +459,7 @@ fn platform_default_mono_font() -> &'static str {
 /// 把 UI / 等宽字体族写入 `Theme` 全局（须在窗口创建后、`run()` 前调用）。
 pub(crate) fn apply_fonts(window: &MainWindow) {
     let theme = window.global::<Theme>();
-    let font = resolve_ui_font(std::env::var("YSHELL_UI_FONT").ok().as_deref());
-    theme.set_font_ui(font.into());
+    theme.set_font_ui(platform_default_ui_font().into());
     theme.set_font_mono(platform_default_mono_font().into());
 }
 
@@ -533,32 +480,30 @@ fn resolve_language(requested: &str, system_locale: Option<&str>) -> &'static st
     }
 }
 
-/// 系统 locale：优先环境变量（验收/CI），否则 `sys-locale`（覆盖 Windows）。
+/// 系统 locale：只走 `sys-locale`（覆盖 Windows / macOS / Unix，含 OS API）。
+///
+/// 不读 `LC_ALL` / `LANG` / `LC_MESSAGES`：界面语言是产品配置，来自
+/// `[ui] language`；`system` 分支由 OS API 决定。
 fn detect_system_locale() -> Option<String> {
-    std::env::var("LC_ALL")
-        .or_else(|_| std::env::var("LANG"))
-        .or_else(|_| std::env::var("LC_MESSAGES"))
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .or_else(sys_locale::get_locale)
+    sys_locale::get_locale()
 }
 
 /// 应用界面语言。
 ///
-/// 优先级：`YSHELL_LANG` 环境变量（验收开关）> 配置 `ui.language` > 系统 locale。
-/// `requested` 为空时等同 `system`。
+/// 只读配置 `ui.language`（`system` 跟随 OS locale）。`requested` 为空时等同
+/// `system`；不再接受 `YSHELL_LANG` 之类的环境变量覆盖。
 pub(crate) fn apply_language(requested: &str) {
-    let env_override = std::env::var("YSHELL_LANG").unwrap_or_default();
-    let preference = if env_override.trim().is_empty() {
-        requested
-    } else {
-        env_override.as_str()
-    };
     let system_locale = detect_system_locale();
-    let language = resolve_language(preference, system_locale.as_deref());
+    let language = resolve_language(requested, system_locale.as_deref());
     if let Err(error) = slint::select_bundled_translation(language) {
         eprintln!("failed to select bundled translation '{language}': {error}");
     }
+}
+
+/// D36/Settings：把 `[ui] reduce_motion` 写入窗口的 `Theme` 全局（启动初值与
+/// Settings → General → Motion 开关共用；配置是唯一来源，不读环境变量）。
+pub(crate) fn apply_reduce_motion(theme: &Theme<'_>, enabled: bool) {
+    theme.set_reduce_motion(enabled);
 }
 
 pub(crate) fn wire_callbacks(
@@ -7532,10 +7477,18 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
 /// Tool windows are non-modal; keep the hook so projection call sites stay stable.
 fn restore_shortcut_focus_after_modal(_window: &MainWindow, _projection: &AppProjection) {}
 
-pub fn bootstrap_app() -> AppResult<YShellApp> {
+/// Boots the GUI application.
+///
+/// `config_dir_override` is the `--config-dir` CLI argument used by tests / smoke
+/// runs to isolate the configuration; `None` means the platform default.
+/// Application configuration never comes from environment variables.
+pub fn bootstrap_app(config_dir_override: Option<PathBuf>) -> AppResult<YShellApp> {
     // 须在首个 Window 创建之前：关掉 Windows 无框窗默认透明（顶栏透缝）。
     crate::win_chrome::select_backend()?;
-    let config_dir = yshell_config::discover_config_dir().map_err(AppError::from_error)?;
+    let config_dir = match config_dir_override {
+        Some(dir) => dir,
+        None => yshell_config::discover_config_dir().map_err(AppError::from_error)?,
+    };
     let runtime = AppState::new(config_dir)?.runtime;
     init_logging_for_runtime(&runtime)?;
     Ok(YShellApp::new(runtime))
@@ -7573,9 +7526,8 @@ pub fn init_logging_for_runtime(runtime: &AppRuntime) -> AppResult<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        accent_id_from_config, platform_default_ui_font, resolve_appearance,
-        resolve_appearance_with_config, resolve_language, resolve_ui_font, terminal_grid_cell,
-        terminal_size_from_viewport, theme_mode_from_config,
+        accent_id_from_config, platform_default_ui_font, resolve_appearance_with_config,
+        resolve_language, terminal_grid_cell, terminal_size_from_viewport, theme_mode_from_config,
     };
     use crate::runtime::AppRuntime;
     use tempfile::tempdir;
@@ -7752,21 +7704,26 @@ mod tests {
     }
 
     #[test]
-    fn appearance_defaults_to_system_and_windows_blue() {
-        let (mode, accent) = resolve_appearance(None, None);
+    fn appearance_defaults_to_system_and_windows_blue_from_config() {
+        let ui = yshell_config::UiProfile::default();
+        let (mode, accent) = resolve_appearance_with_config(&ui);
         assert_eq!(mode, ThemeMode::System);
         assert_eq!(accent, appearance::resolve_accent("blue"));
     }
 
     #[test]
-    fn appearance_accepts_env_values_and_falls_back_on_unknown() {
-        let (mode, accent) = resolve_appearance(Some("Dark"), Some("teal"));
+    fn config_appearance_is_the_only_source() {
+        let ui = yshell_config::UiProfile {
+            appearance_mode: yshell_config::AppearanceMode::Dark,
+            appearance_accent: yshell_config::AccentColor::Magenta,
+            reduce_motion: true,
+            ..yshell_config::UiProfile::default()
+        };
+        let (mode, accent) = resolve_appearance_with_config(&ui);
         assert_eq!(mode, ThemeMode::Dark);
-        assert_eq!(accent, appearance::resolve_accent("teal"));
-
-        let (mode, accent) = resolve_appearance(Some("bogus"), Some("bogus"));
-        assert_eq!(mode, ThemeMode::System);
-        assert_eq!(accent, appearance::resolve_accent("blue"));
+        assert_eq!(accent, appearance::resolve_accent("magenta"));
+        // The motion preference comes from the same config document.
+        assert!(ui.reduce_motion);
     }
 
     #[test]
@@ -7802,22 +7759,6 @@ mod tests {
     }
 
     #[test]
-    fn config_appearance_is_used_when_env_is_absent() {
-        if std::env::var_os("YSHELL_THEME").is_some() || std::env::var_os("YSHELL_ACCENT").is_some()
-        {
-            return;
-        }
-        let ui = yshell_config::UiProfile {
-            appearance_mode: yshell_config::AppearanceMode::Dark,
-            appearance_accent: yshell_config::AccentColor::Magenta,
-            ..yshell_config::UiProfile::default()
-        };
-        let (mode, accent) = resolve_appearance_with_config(&ui);
-        assert_eq!(mode, ThemeMode::Dark);
-        assert_eq!(accent, appearance::resolve_accent("magenta"));
-    }
-
-    #[test]
     fn language_accepts_explicit_chinese_and_english_values() {
         assert_eq!(resolve_language("zh-CN", None), "zh-CN");
         assert_eq!(resolve_language("zh", None), "zh-CN");
@@ -7840,17 +7781,8 @@ mod tests {
     }
 
     #[test]
-    fn ui_font_prefers_a_non_blank_override() {
-        // 显式传参，不读真实环境变量，避免 CI 平台差异。
-        assert_eq!(resolve_ui_font(Some("Inter")), "Inter");
-        assert_eq!(resolve_ui_font(Some("  Noto Sans SC  ")), "Noto Sans SC");
-    }
-
-    #[test]
-    fn ui_font_uses_the_platform_default_when_override_is_missing_or_blank() {
-        // 不写死平台字体名，跨平台 CI 均可通过。
-        assert_eq!(resolve_ui_font(None), platform_default_ui_font());
-        assert_eq!(resolve_ui_font(Some("")), platform_default_ui_font());
-        assert_eq!(resolve_ui_font(Some(" \t ")), platform_default_ui_font());
+    fn ui_font_is_the_platform_default() {
+        // UI 字体只取平台默认（不读环境变量）；不写死字体名，跨平台 CI 均可通过。
+        assert!(!platform_default_ui_font().is_empty());
     }
 }

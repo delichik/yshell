@@ -100,6 +100,7 @@ export component SettingsWindow inherits Window {
     callback set-debug-logging(bool);
     callback set-confirm-close-session(bool);
     callback set-confirm-quit-app(bool);
+    callback set-reduce-motion(bool);
     callback set-mcp-enabled(bool);
     callback set-mcp-auto-approve-control(bool);
     callback open-debug-log-dir();
@@ -214,6 +215,7 @@ export component SettingsWindow inherits Window {
             set-debug-logging(bool) => { root.set-debug-logging(bool); }
             set-confirm-close-session(bool) => { root.set-confirm-close-session(bool); }
             set-confirm-quit-app(bool) => { root.set-confirm-quit-app(bool); }
+            set-reduce-motion(bool) => { root.set-reduce-motion(bool); }
             set-mcp-enabled(bool) => { root.set-mcp-enabled(bool); }
             set-mcp-auto-approve-control(bool) => { root.set-mcp-auto-approve-control(bool); }
             open-debug-log-dir => { root.open-debug-log-dir(); }

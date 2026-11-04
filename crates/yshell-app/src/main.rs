@@ -19,29 +19,30 @@ mod win_chrome;
 mod windows;
 
 use std::env;
+use std::path::PathBuf;
 
 use bootstrap::bootstrap_app;
 use error::{AppError, AppResult};
 use runtime::AppRuntime;
 
 fn main() -> AppResult<()> {
-    let command = CliCommand::parse(env::args().skip(1))?;
-    if !matches!(command, CliCommand::RunShell) {
+    let invocation = CliInvocation::parse(env::args().skip(1))?;
+    if !matches!(invocation.command, CliCommand::RunShell) {
         attach_parent_console();
     }
-    match command {
+    match invocation.command {
         CliCommand::CheckConfig => {
-            let config_dir = yshell_config::discover_config_dir().map_err(AppError::from_error)?;
+            let config_dir = resolve_config_dir(invocation.config_dir)?;
             println!("configuration OK: {}", config_dir.display());
             Ok(())
         }
         CliCommand::PrintConfigDir => {
-            let config_dir = yshell_config::discover_config_dir().map_err(AppError::from_error)?;
+            let config_dir = resolve_config_dir(invocation.config_dir)?;
             println!("{}", config_dir.display());
             Ok(())
         }
         CliCommand::QuickConnect(input) => {
-            let config_dir = yshell_config::discover_config_dir().map_err(AppError::from_error)?;
+            let config_dir = resolve_config_dir(invocation.config_dir)?;
             let mut runtime = AppRuntime::new(config_dir)?;
             let projection = runtime.handle_quick_connect(&input)?;
             println!(
@@ -59,13 +60,23 @@ fn main() -> AppResult<()> {
             Ok(())
         }
         CliCommand::Mcp => {
-            let config_dir = yshell_config::discover_config_dir().map_err(AppError::from_error)?;
+            let config_dir = resolve_config_dir(invocation.config_dir)?;
             yshell_mcp::run_stdio_server(&config_dir).map_err(AppError::from_error)
         }
         CliCommand::RunShell => {
-            let app = bootstrap_app()?;
+            let app = bootstrap_app(invocation.config_dir)?;
             app.run()
         }
+    }
+}
+
+/// Resolves the configuration directory: explicit `--config-dir` or the
+/// platform default. Application configuration never comes from environment
+/// variables (only the `--config-dir` CLI argument is honoured).
+fn resolve_config_dir(override_dir: Option<PathBuf>) -> AppResult<PathBuf> {
+    match override_dir {
+        Some(dir) => Ok(dir),
+        None => yshell_config::discover_config_dir().map_err(AppError::from_error),
     }
 }
 
@@ -92,29 +103,66 @@ enum CliCommand {
     RunShell,
 }
 
-impl CliCommand {
+/// Parsed command line: one optional command plus the `--config-dir` override.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CliInvocation {
+    /// Test / smoke configuration directory (`--config-dir <path>`). This is a
+    /// CLI argument on purpose: the product must not read its configuration
+    /// from environment variables.
+    config_dir: Option<PathBuf>,
+    command: CliCommand,
+}
+
+impl CliInvocation {
     fn parse(args: impl IntoIterator<Item = String>) -> AppResult<Self> {
+        let mut config_dir = None;
+        let mut command = None;
         let mut args = args.into_iter();
-        let Some(first) = args.next() else {
-            return Ok(Self::RunShell);
-        };
-        match first.as_str() {
-            "--check-config" => Ok(Self::CheckConfig),
-            "--print-config-dir" => Ok(Self::PrintConfigDir),
-            "--quick-connect" => args.next().map(Self::QuickConnect).ok_or_else(|| {
-                AppError::new("--quick-connect requires an input such as user@example.com")
-            }),
-            "--version" | "-V" => Ok(Self::Version),
-            "--help" | "-h" => Ok(Self::Help),
-            "--mcp" => Ok(Self::Mcp),
-            unknown => Err(AppError::new(format!("unknown argument: {unknown}"))),
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "--config-dir" => {
+                    let value = args
+                        .next()
+                        .ok_or_else(|| AppError::new("--config-dir requires a directory path"))?;
+                    if value.trim().is_empty() {
+                        return Err(AppError::new(
+                            "--config-dir requires a non-empty directory path",
+                        ));
+                    }
+                    config_dir = Some(PathBuf::from(value));
+                }
+                "--check-config" => set_command(&mut command, CliCommand::CheckConfig)?,
+                "--print-config-dir" => set_command(&mut command, CliCommand::PrintConfigDir)?,
+                "--quick-connect" => {
+                    let input = args.next().ok_or_else(|| {
+                        AppError::new("--quick-connect requires an input such as user@example.com")
+                    })?;
+                    set_command(&mut command, CliCommand::QuickConnect(input))?;
+                }
+                "--version" | "-V" => set_command(&mut command, CliCommand::Version)?,
+                "--help" | "-h" => set_command(&mut command, CliCommand::Help)?,
+                "--mcp" => set_command(&mut command, CliCommand::Mcp)?,
+                unknown => return Err(AppError::new(format!("unknown argument: {unknown}"))),
+            }
         }
+        Ok(Self {
+            config_dir,
+            command: command.unwrap_or(CliCommand::RunShell),
+        })
     }
+}
+
+fn set_command(slot: &mut Option<CliCommand>, command: CliCommand) -> AppResult<()> {
+    if slot.is_some() {
+        return Err(AppError::new("only one command may be given"));
+    }
+    *slot = Some(command);
+    Ok(())
 }
 
 fn print_help() {
     println!(
-        "YShell\n\nUSAGE:\n    yshell [OPTIONS]\n\nOPTIONS:\n    --check-config            Validate configuration discovery\n    --print-config-dir        Print the configuration directory\n    --quick-connect <input>   Run the runtime quick-connect path without launching UI\n    --mcp                     Host-facing MCP stdio server (AI clients only; enable MCP in the GUI Settings first)\n    --version                 Print version\n    --help                    Print help\n\nENVIRONMENT:\n    YSHELL_MASTER_PASSWORD    Enables the local encrypted secret store at <config>/secret-store.toml"
+        "YShell\n\nUSAGE:\n    yshell [OPTIONS]\n\nOPTIONS:\n    --config-dir <path>       Use <path> as the configuration directory (test / smoke isolation)\n    --check-config            Validate configuration discovery\n    --print-config-dir        Print the configuration directory\n    --quick-connect <input>   Run the runtime quick-connect path without launching UI\n    --mcp                     Host-facing MCP stdio server (AI clients only; enable MCP in the GUI Settings first)\n    --version                 Print version\n    --help                    Print help\n\nCONFIGURATION:\n    All application settings (language, appearance, motion, fonts, local shell,\n    secret store) are read from the configuration directory only; YShell does\n    not use environment variables for configuration."
     );
 }
 
@@ -122,10 +170,54 @@ fn print_help() {
 mod tests {
     use super::*;
 
+    fn parse(args: &[&str]) -> AppResult<CliInvocation> {
+        CliInvocation::parse(args.iter().map(|arg| (*arg).to_owned()))
+    }
+
     #[test]
     fn parses_quick_connect_input() {
-        let command = CliCommand::parse(["--quick-connect".to_owned(), "me@example".to_owned()])
-            .expect("parse");
-        assert_eq!(command, CliCommand::QuickConnect("me@example".to_owned()));
+        let invocation = parse(&["--quick-connect", "me@example"]).expect("parse");
+        assert_eq!(
+            invocation.command,
+            CliCommand::QuickConnect("me@example".to_owned())
+        );
+        assert!(invocation.config_dir.is_none());
+    }
+
+    #[test]
+    fn defaults_to_the_shell_with_the_platform_config_dir() {
+        let invocation = parse(&[]).expect("parse");
+        assert_eq!(invocation.command, CliCommand::RunShell);
+        assert!(invocation.config_dir.is_none());
+    }
+
+    #[test]
+    fn config_dir_works_before_or_after_the_command() {
+        let before = parse(&["--config-dir", r"D:\tmp\smoke", "--print-config-dir"])
+            .expect("parse with leading config dir");
+        assert_eq!(before.command, CliCommand::PrintConfigDir);
+        assert_eq!(
+            before.config_dir.as_deref(),
+            Some(std::path::Path::new(r"D:\tmp\smoke"))
+        );
+
+        let after = parse(&["--check-config", "--config-dir", "/tmp/smoke"]).expect("parse");
+        assert_eq!(after.command, CliCommand::CheckConfig);
+        assert_eq!(
+            after.config_dir.as_deref(),
+            Some(std::path::Path::new("/tmp/smoke"))
+        );
+    }
+
+    #[test]
+    fn config_dir_requires_a_non_empty_value() {
+        assert!(parse(&["--config-dir"]).is_err());
+        assert!(parse(&["--config-dir", "  "]).is_err());
+    }
+
+    #[test]
+    fn rejects_unknown_and_duplicate_commands() {
+        assert!(parse(&["--bogus"]).is_err());
+        assert!(parse(&["--version", "--help"]).is_err());
     }
 }

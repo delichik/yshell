@@ -1,30 +1,22 @@
 //! Default shell and home directory discovery.
 //!
-//! The rules mirror D3 in `problems.md`: an explicit override wins, then the
-//! platform's notion of the user shell. On Windows the practical probe order is
+//! The rules mirror D3 in `problems.md`: the platform's notion of the user shell
+//! is used, with no environment-variable override (application configuration
+//! must not come from the environment). On Windows the practical probe order is
 //! `pwsh.exe` -> `powershell.exe` -> `cmd.exe`; on Unix `$SHELL` is used when it
 //! is executable and `/bin/sh` is the fallback.
 //!
 //! Reading Windows Terminal's default profile is intentionally not implemented
-//! here yet: the app settings layer can pass an explicit override once it can
-//! resolve that profile, and the probe order above is D3's documented fallback.
+//! here yet: the app settings layer can pass an explicit program by building a
+//! [`LocalPtyConfig`](crate::LocalPtyConfig), and the probe order above is D3's
+//! documented fallback.
 
 use std::env;
 use std::path::{Path, PathBuf};
 
-/// Environment variable that overrides the default local shell.
-///
-/// A future settings UI can set this variable (or construct a
-/// [`LocalPtyConfig`](crate::LocalPtyConfig) explicitly) without changing this
-/// crate. The value is a program path; it is not validated here so that spawn
-/// errors stay visible to the caller.
-pub const SHELL_OVERRIDE_ENV: &str = "YSHELL_LOCAL_SHELL";
-
 /// Where a resolved shell program came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShellSource {
-    /// Explicit override from [`SHELL_OVERRIDE_ENV`].
-    Override,
     /// Platform environment, e.g. `$SHELL` on Unix or `%COMSPEC%` on Windows.
     Environment,
     /// A shell discovered by probing the system (Windows `pwsh`/PowerShell).
@@ -62,22 +54,10 @@ pub(crate) fn program_name(program: &Path) -> String {
 
 /// Resolve the default local shell for this platform.
 ///
-/// This function is cheap and never fails: an unusable override is surfaced by
-/// [`LocalPty::spawn`](crate::LocalPty::spawn) with a readable error instead of
-/// being silently replaced.
+/// This function is cheap and never fails. A caller-selected program is passed
+/// through the explicit [`LocalPtyConfig`](crate::LocalPtyConfig) constructor
+/// instead of an environment override.
 pub fn default_shell() -> ResolvedShell {
-    resolve_shell(shell_override())
-}
-
-fn resolve_shell(override_program: Option<PathBuf>) -> ResolvedShell {
-    if let Some(program) = override_program {
-        return ResolvedShell {
-            program,
-            args: Vec::new(),
-            source: ShellSource::Override,
-        };
-    }
-
     platform_default_shell()
 }
 
@@ -103,10 +83,6 @@ pub fn home_dir() -> Option<PathBuf> {
     {
         non_empty_env("HOME").map(PathBuf::from)
     }
-}
-
-fn shell_override() -> Option<PathBuf> {
-    non_empty_env(SHELL_OVERRIDE_ENV).map(PathBuf::from)
 }
 
 fn non_empty_env(name: &str) -> Option<std::ffi::OsString> {
@@ -295,20 +271,5 @@ mod tests {
 
         assert_eq!(resolved.program, PathBuf::from("/bin/sh"));
         assert_eq!(resolved.source, ShellSource::Fallback);
-    }
-
-    #[test]
-    fn override_wins_and_uses_the_program_stem_as_name() {
-        // The override path is deliberately not validated here; spawn reports
-        // unusable explicit paths instead of silently replacing them.
-        let resolved = resolve_shell(Some(PathBuf::from("/opt/yshell-override-shell")));
-
-        assert_eq!(
-            resolved.program,
-            PathBuf::from("/opt/yshell-override-shell")
-        );
-        assert_eq!(resolved.source, ShellSource::Override);
-        assert_eq!(resolved.name(), "yshell-override-shell");
-        assert!(resolved.args.is_empty());
     }
 }
