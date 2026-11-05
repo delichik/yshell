@@ -66,7 +66,7 @@ $env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
 | 14 | 管理器表单/详情行全面改用共享 `FormRow`/`DetailRow`/`FormHint`（本地行实现清零），3 条新文案补译 | ✅ | `3d3b37f` |
 | 15 | 剩余弹窗 A：sftp-chmod 窗入口/注册/投影、关标签与退出的后果清单、auth-prompt 收口、About 开源许可正文 | ✅ | `ef940f5` |
 | 16 | 剩余弹窗 B：About / Logging / SFTP Conflict / SFTP Properties 按原型收口 | ✅ | `6635820` |
-| 17 | 波 3 · 主壳：6 个一级菜单（补 Tools）、Session 菜单项、`Ctrl+Shift+S`、`F11`、Full Screen/Focus Mode、状态栏 UTF-8、sync banner | 🔍 待用户核验 | （提交后填入） |
+| 17 | 波 3 · 主壳：6 个一级菜单（补 Tools）、Session 菜单项、`Ctrl+Shift+S`、`F11`、Full Screen/Focus Mode、状态栏 UTF-8、sync banner | 🔍 待用户核验 | `de3aef8` |
 
 ### 4.2 进行中（未提交）
 
@@ -138,7 +138,7 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 
 - 2026-11-03：`fe7f037` 基线修复；`f530299` 差距清单+计划；`c6d1102`/`edb0243` 波 1 基础层；`2d26a06` Settings 窗口；`bed84bc` i18n 全量；`8d442ec` MCP 收敛；`eb3533e` 窗口行为修复（此提交及之前曾被意外 push 到 origin）。
 - 2026-11-04：`936bb10` 环境变量配置清理；`9489104` N9 双向同步组；`d48fe84` i18n 再同步；`8f016d7` Session Editor 接线；`7b25790` 开关统一；`177f634` 管理器接线；`fa3dece` 共享表单/视觉一致性。
-- 2026-11-05：`bde53dd`/`0c82331` 现行计划与完成状态文档化；`72c4189` 预览尺寸统一 + tunnel/login-step 表单行收口；`3d3b37f` 管理器表单/详情行收口；`ef940f5` sftp-chmod 入口 + 关标签/退出后果清单 + auth-prompt + 开源许可正文；`6635820` About/Logging/SFTP Conflict/Properties 收口；`ee9c807` 弹窗文案 i18n 同步；`2fbc72d` 波 2 完成状态；波 3 #17 主壳（Tools / Session / F11 / Focus / UTF-8 / sync banner / dock 260·280）。
+- 2026-11-05：`bde53dd`/`0c82331` 现行计划与完成状态文档化；`72c4189` 预览尺寸统一 + tunnel/login-step 表单行收口；`3d3b37f` 管理器表单/详情行收口；`ef940f5` sftp-chmod 入口 + 关标签/退出后果清单 + auth-prompt + 开源许可正文；`6635820` About/Logging/SFTP Conflict/Properties 收口；`ee9c807` 弹窗文案 i18n 同步；`2fbc72d` 波 2 完成状态；`de3aef8` 波 3 #17 主壳（Tools / Session / F11 / Focus / UTF-8 / sync banner / dock 260·280）。
 
 ---
 
