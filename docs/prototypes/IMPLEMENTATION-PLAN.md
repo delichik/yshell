@@ -64,6 +64,8 @@ $env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
 | 12 | 现行完整计划文档化（交付方式/决策/状态/覆盖清单） | ✅ | `bde53dd` |
 | 13 | 预览尺寸统一（单一 `PREVIEW_AREA_PX` + 两页一致性回归测试）、tunnel/login-step 子窗改用共享 FormRow/WinSwitch、Session Editor 残留字面量收口 | ✅ | `72c4189` |
 | 14 | 管理器表单/详情行全面改用共享 `FormRow`/`DetailRow`/`FormHint`（本地行实现清零），3 条新文案补译 | ✅ | `3d3b37f` |
+| 15 | 剩余弹窗 A：sftp-chmod 窗入口/注册/投影、关标签与退出的后果清单、auth-prompt 收口、About 开源许可正文 | ✅ | `ef940f5` |
+| 16 | 剩余弹窗 B：About / Logging / SFTP Conflict / SFTP Properties 按原型收口 | ✅ | `6635820` |
 
 ### 4.2 进行中（未提交）
 
@@ -73,13 +75,12 @@ $env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
 
 | # | 事项 | 状态 | 备注 |
 |---|---|---|---|
-| 15 | 剩余弹窗与交互：sftp-chmod 窗**入口**（窗已建、未注册/未接）、关标签/退出**后果清单**内容、auth-prompt 去 Remember 核验、logging/about/sftp-conflict/properties 收口 | ⬜ | host-key 已 compact；auth-prompt 代码已去 Remember |
-| 16 | 波 3 · 主壳：6 个一级菜单（补 Tools）、Session 菜单项、`Ctrl+Shift+S`、`F11`、Full Screen/Focus Mode、状态栏 UTF-8、sync banner | ⬜ | 原型已就绪 |
-| 17 | 波 3 · 停靠面板：Sessions 图标/原地改名/右键项/New Folder 禁用；Transfers 批量；Tunnels `+`；dock 宽度 | ⬜ | 原型已就绪 |
-| 18 | 波 3 · 工作区：标签图标/原地改名/分屏上限 4；Find Across；REC 条；N9 pane Receive；QC Clear；SFTP 原地 New Folder/Rename + chmod 入口 | ⬜ | 原型已就绪 |
-| 19 | 波 4 · i18n 尾部：`No Proxy`、`Discard`、Rust 弹窗标题（`Close Session`/`Rename Tab`） | ⬜ | — |
-| 20 | 波 4 · 遗留清理：旧 `known_hosts` 页、`CLEAR` 打字确认、focus ring/tooltip 覆盖、文档同步 | ⬜ | — |
-| 21 | 波 5 · 验收：全量门禁 + 用户逐窗核验 + 证据归档 | ⬜ | — |
+| 17 | 波 3 · 主壳：6 个一级菜单（补 Tools）、Session 菜单项、`Ctrl+Shift+S`、`F11`、Full Screen/Focus Mode、状态栏 UTF-8、sync banner | ⬜ | 原型已就绪 |
+| 18 | 波 3 · 停靠面板：Sessions 图标/原地改名/右键项/New Folder 禁用；Transfers 批量；Tunnels `+`；dock 宽度 | ⬜ | 原型已就绪 |
+| 19 | 波 3 · 工作区：标签图标/原地改名/分屏上限 4；Find Across；REC 条；N9 pane Receive；QC Clear；SFTP 原地 New Folder/Rename + chmod 入口 | ⬜ | 原型已就绪 |
+| 20 | 波 4 · i18n 尾部：`No Proxy`、`Discard`、Rust 弹窗标题（`Close Session`/`Rename Tab`） | ⬜ | — |
+| 21 | 波 4 · 遗留清理：旧 `known_hosts` 页、`CLEAR` 打字确认、focus ring/tooltip 覆盖、文档同步 | ⬜ | — |
+| 22 | 波 5 · 验收：全量门禁 + 用户逐窗核验 + 证据归档 | ⬜ | — |
 
 ### 4.4 本版不做（⛔，来自 status §2 与决策）
 
@@ -94,9 +95,9 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 | `tunnel-editor/` | ✅/🔍 | 已接入 Session Editor / Tunnels 流程，待核验 |
 | `known-hosts/`、`private-keys/`、`proxies/`、`terminal-styles/` | ✅/🔍 | 已实现，待核验 |
 | `host-key/`（compact 560×400）、`auth-prompt/` | ✅/🔍 | host-key 已 compact；auth-prompt 已去 Remember |
-| `logging/`、`about/`、`sftp-conflict/`、`sftp-properties/`、`password-prompt/` | ✅/🔍 | 既有实现保留，待核验 |
-| `compact-confirm/`、`close-tab-confirm/` | 🔍/⬜ | 确认框已用；退出/关标签的后果清单内容待补 |
-| `sftp-chmod/` | ⬜ | 窗口文件已建，**入口与注册未接** |
+| `logging/`、`about/`、`sftp-conflict/`、`sftp-properties/`、`password-prompt/` | ✅/🔍 | 已按原型收口，待核验 |
+| `compact-confirm/`、`close-tab-confirm/` | ✅/🔍 | 已补后果清单/Don't ask again 位置，待核验 |
+| `sftp-chmod/` | ✅/🔍 | 窗已注册并接入 SFTP 行右键，待核验 |
 | `main-shell/`（index、tool-dock、menu、status、快捷键） | ⬜ | 波 3 |
 | `main-shell/panels/`（sessions/transfers/tunnels/commands） | 🔄/⬜ | 基础面板已有；图标/原地改名/右键/批量在波 3 |
 | `main-shell/workspace/`（tab-bar/terminal/sftp/quick-connect/split/sync-input） | 🔄/⬜ | 基础已有；Find Across/REC/banner/原地操作在波 3；sync 组语义已完成、banner 待做 |
@@ -104,10 +105,9 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 
 ## 5. 剩余顺序（按用户「逐项核验」节奏）
 
-1. #13/#14 已本地提交（`72c4189`、`3d3b37f`），Lead 已跑四道门禁并重建 exe → **当前等待用户核验 #7–#14**（Session Editor / 管理器 / 开关 / 表单 / 预览 / 同步组 / 环境变量）。
-2. 用户确认后：做 #15 剩余弹窗（逐窗一项：sftp-chmod 入口、close-tab/quit 后果清单、auth-prompt 核验、logging/about/sftp-conflict/properties 收口）。
-3. 再做 #16–#18 波 3（主壳 → 面板 → 工作区，按热点文件串行接线；sync banner 在此项实现）。
-4. 最后 #19–#20 清理 + #21 验收。
+1. **第 2 波已全部完成**：#0–#16 均已本地提交（`fe7f037` … `ee9c807`），Lead 已跑四道门禁并重建 exe → **当前等待用户核验第 2 波成果**（Settings / Session Editor / 管理器 / 开关 / 表单 / 预览 / 剩余弹窗 / 同步组 / 环境变量）。
+2. 用户确认后：进入**第 3 波** #17–#19（主壳 → 面板 → 工作区，按热点文件串行接线；sync banner 在此项实现）。
+3. 最后 #20–#21 清理 + #22 验收。
 
 ## 6. 已知未收口 / 风险
 
@@ -120,13 +120,17 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 | e2e | `scripts/e2e/run-ui-sync.sh` 旧同步语义断言默认跳过，组模型 e2e 待移植 |
 | 遗留代码 | 旧 `ui/pages/known_hosts.slint`、`CLEAR` 打字确认、focus ring/tooltip 未全覆盖 |
 | 安全债 | 主密码未整体加密 session/key 文件；KDF 未升级 |
-| 未实机核验 | Session Editor / 管理器 / 开关 / 表单观感（按用户要求未测） |
+| SFTP 权限入口 | 当前入口仅 SFTP 行右键；工具条 `⋯ More` 菜单（原型）尚未实现，随波 3 工作区补 |
+| Close Window 确认 | 关标签/退出已用后果清单；“关闭窗口”确认未加后果行（原型无，保留现状） |
+| 开源许可资源 | `assets/open_source_licenses.txt` 按 Windows GNU target 生成；发布 Linux/macOS 包需按对应 target 重生成 |
+| 未实机核验 | Session Editor / 管理器 / 开关 / 表单 / 剩余弹窗观感（按用户要求未测） |
 
 ## 7. 每项由用户核验的要点（简表）
 
 - Settings：七分区、开关/表单观感、App theme 即时预览、Save/Cancel、主密码 Set/解锁。
 - Session Editor：六分区、label 右对齐、Host/Port 分行、终端预览整行、Login Script 子窗、Tunnel Editor、Save/Save and Connect。
 - 管理器：四周管理器清单/右键/工具条、7 个子窗（Add/Import/Export/Generate/Deploy）。
+- 剩余弹窗：SFTP 行右键 Change Permissions（compact 560×400，八进制↔勾选）；关标签/退出后果清单与 Don't ask again；About 开源许可展开；Logging；SFTP Conflict/Properties。
 - N9 同步：组内广播、非成员不广播、Pause/Stop、AI 输入自动退组。
 - 环境：无任何 `YSHELL_*`；语言/外观/减少动画只由 `config.toml` 决定。
 
@@ -134,7 +138,7 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 
 - 2026-11-03：`fe7f037` 基线修复；`f530299` 差距清单+计划；`c6d1102`/`edb0243` 波 1 基础层；`2d26a06` Settings 窗口；`bed84bc` i18n 全量；`8d442ec` MCP 收敛；`eb3533e` 窗口行为修复（此提交及之前曾被意外 push 到 origin）。
 - 2026-11-04：`936bb10` 环境变量配置清理；`9489104` N9 双向同步组；`d48fe84` i18n 再同步；`8f016d7` Session Editor 接线；`7b25790` 开关统一；`177f634` 管理器接线；`fa3dece` 共享表单/视觉一致性。
-- 2026-11-05：`bde53dd`/`0c82331` 现行计划与完成状态文档化；`72c4189` 预览尺寸统一 + tunnel/login-step 表单行收口；`3d3b37f` 管理器表单/详情行收口。
+- 2026-11-05：`bde53dd`/`0c82331` 现行计划与完成状态文档化；`72c4189` 预览尺寸统一 + tunnel/login-step 表单行收口；`3d3b37f` 管理器表单/详情行收口；`ef940f5` sftp-chmod 入口 + 关标签/退出后果清单 + auth-prompt + 开源许可正文；`6635820` About/Logging/SFTP Conflict/Properties 收口；`ee9c807` 弹窗文案 i18n 同步。
 
 ---
 
