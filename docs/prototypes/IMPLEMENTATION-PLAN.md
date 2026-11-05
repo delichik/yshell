@@ -1,164 +1,117 @@
-# 原型实现计划（`win/ui2`）
+# 原型实现计划（`win/ui2`）· 现行版本 2026-11-05
 
 > 目标：以 `docs/prototypes/` 为唯一 UI 真源，把每个页面 / 弹窗 / 交互在 `ui/` + `crates/` 中实现并对齐。
-> 差距清单：[`IMPLEMENTATION-GAPS.md`](./IMPLEMENTATION-GAPS.md)（2026-11-03 审计：91 项，54 缺口 = P0 5 / P1 36 / P2 13）。
-> 本文件随进度更新；波次结束在此记录结果。
+> 差距清单：[`IMPLEMENTATION-GAPS.md`](./IMPLEMENTATION-GAPS.md)（2026-11-03 审计：91 项，54 缺口）。
+> 本文件是**现行完整计划**：交付方式、决策、事项状态、剩余顺序、已知问题、变更记录。
+> 历史波次记录保留在文末附录。
 
-## 0. 基线
+---
 
-| 项 | 值 |
-|---|---|
-| 分支 | `win/ui2`，从 `dev` @ `13c2e6a` 切出。`dev/win/ui2` 与 `dev` 引用命名冲突（git 不允许），CI 的 `dev-build.yml` 接受 `win/**`（即 `<system>/<topic>`） |
-| 上一轮成果 | 归档 ref `refs/archive/win-ui-opt`（`18c1cd6`，304 文件 +51k/−34k，17 提交），**只作参考**，不 cherry-pick |
-| 构建环境 | `D:\SDK\msys64\ucrt64\bin` 进 PATH；`CARGO_HOME=D:\SDK\cargo-home`；`CARGO_TARGET_DIR=D:\SDK\cargo-target` |
-| 工具 | `slint-tr-extractor 1.18.1`；WSL `python3 3.13.5`；Edge headless（原型截图） |
-| 基线 `cargo xtask check` | 通过（修基线后）。原基线红：rust 1.99 rustfmt 与仓库 CRLF 冲突 + 4 处 clippy + 过期 `product_smoke` 测试；已加 `rustfmt.toml`（`newline_style = "Windows"`）并清理 |
-| 基线 `cargo xtask test` 等价命令 | 通过：`cargo test --workspace --exclude xtask` 27 个测试套件全绿（yshell-app 391 + 集成 6）。原基线红：7 个过期断言（编辑器/会话树文案与顺序、清单格式）、1 个环境相关字体断言、7 个 MCP status kind 缺模板、2 个 token 纪律注释误报、过期 `product_smoke` 测试；已修 |
+## 1. 交付方式（现行，2026-11-04 起）
 
-审计是上一轮中途快照，其中「本轮实施中」的 4 项（Settings → Appearance / Terminal / Security、主密码两窗）在当前 dev 上仍是缺口，执行时按缺口处理。
+- **Lead 不写实现代码**：每个窗口/弹窗/交互作为一个「项」，委派 teammate 实现与接线；Lead 负责范围拆分、核验、提交、构建、汇报。
+- **单项流程**：定义范围 → teammate 实现 + 单测 → Lead 跑四道门禁 → **本地语义化提交** → 本地重建 exe → 用户核验 → 通过后才进入下一项。
+- **不 push**（用户 2026-11-04 要求）：只本地提交、本地构建；`origin/win/ui2` 目前停在 `eb3533e`（此前一次意外 push），本地领先 7 个提交。
+- **暂不做 UI 测试/截图**（用户 2026-11-04 要求）：teammate 只做代码 + 单测 + 门禁，观感由用户实机核验。
+- 每项完成后向用户汇报：改动摘要、提交号、exe 路径、门禁结果、已知遗留、需要核验的点。
 
-## 1. 决策（默认执行；要改请在这一波结束前提出）
+## 2. 环境与命令
 
-| # | 决策 | 默认 |
+```powershell
+$env:PATH='D:\SDK\msys64\ucrt64\bin;D:\SDK\msys64\usr\bin;'+$env:PATH
+$env:CARGO_HOME='D:\SDK\cargo-home'
+$env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
+```
+
+- `D:\SDK\msys64\usr\bin` 提供 `perl`，vendored OpenSSL 构建需要；缺了会重编/失败。
+- 门禁：`cargo check -p yshell-app`、`cargo test -p yshell-app`、`cargo fmt --all --check`、`cargo xtask check`、`bash scripts/i18n/check.sh`。
+- 本地运行：`D:\SDK\cargo-target\debug\yshell.exe --config-dir <隔离目录>`（**配置不读任何 `YSHELL_*` 环境变量**；语言/外观等写在 `config.toml` 的 `[ui]`）。
+- 旧路径 `D:\NewSpace\yshell\target\debug\yshell.exe` 也已替换为新构建；桌面快捷方式 `YShell (dev)` 指向新路径。
+
+## 3. 决策记录（现行）
+
+| # | 决策 | 说明 |
 |---|---|---|
-| D-1 | Settings → AI / MCP 方向 | 保持现有 stdio 实现：只做 Enable / Auto-approve / 状态；原型的 Port / Listen(LAN) / API key 标「本版不做」并同步原型 |
-| D-2 | 主密码范围 | 按 D35 做闭环：Set / Change / Remove / Reset + 启动解锁 + 受保护 session/key 加密；KDF 升级（argon2/AEAD）列为后续安全债，不在本轮 |
-| D-3 | i18n | 新文案全部 `@tr`；波次末统一抽取；zh-CN 由 agent 初译，验收时抽审 |
-| D-4 | 分支 / 提交 | 本地 `win/ui2` 按波次语义提交；**不 push**，验收通过后再定合并 |
-| D-5 | 节奏 | 每波结束停一次，给截图 + 变更摘要 + 下一波计划 |
+| D-1 | MCP 保持 stdio | Settings → MCP 只做 Enable / Auto-approve / 状态 + stdio 连接片段；Port / Listen / API key / View user / Control user 为禁用占位「本版未提供」。 |
+| D-2 | 配置不读环境变量 | 删除 `YSHELL_CONFIG_DIR/THEME/ACCENT/LANG/REDUCE_MOTION/UI_FONT/MASTER_PASSWORD/LOCAL_SHELL/FONTS_DIR` 的读取；只读配置文件；隔离用 `--config-dir`；测试用显式注入。保留 `RUST_LOG` 与测试/打包专用变量。 |
+| D-3 | N9 同步按键 = 双向组 | 无固定源/目的；所有开启同步的终端组成一组，任一成员输入广播给组内其它成员；Pause/Stop 保留；**AI/MCP 向某会话写入前自动把该会话移出同步组**。同步横幅按用户要求留到波 3。 |
+| D-4 | 布尔控件统一 | 布尔设置一律 `WinSwitch`（40×20 胶囊、12 滑块、167ms）；真正多选用 `WinCheckBox`（20×20）；已删除旧 `WinToggle`/本地 switch 实现（剩余收口中）。 |
+| D-5 | 表单统一 | 唯一表单布局 `ui/components/basic/forms.slint`（`FormRow`/`FormHint`/`FormGroupLabel`/`DetailRow`）：label 120 右对齐 13px、gap 12、控件 ≤420、行高 32 整数倍、行距 10、hint 缩进 132、窗内 padding 28。Settings / Session Editor 已用；管理器收口中。 |
+| D-6 | 主密码范围 | 本轮只做 GUI 锁 + verifier + Set/Change/Remove/Reset + 启动解锁；session/key 文件整体加密与 KDF（argon2/AEAD）升级为后续安全债。 |
+| D-7 | 不 push | 只本地提交/本地构建；未来的 push/CI 流程暂停，等用户通知恢复。 |
+| D-8 | 暂不做 UI 自动化测试 | 只跑代码门禁；截图/鼠标自动化暂停，观感由用户核验。 |
 
-## 2. 波次与顺序
+## 4. 事项清单与状态
 
-排序原则：**配置 / 运行时先行 → 页面并行 → 主壳最后（唯一热点文件）→ i18n / 清理 → 统一验收**。
-
-| 波次 | 内容 | 主要执行 | 出口 |
+| # | 事项 | 状态 | 提交 / 证据 |
 |---|---|---|---|
-| 0 | 基线、差距清单、任务板、计划 | Lead | 基线绿、清单可用 |
-| 1 | 基础层：config schema + runtime + 共享组件 + i18n 管线 | Lead / 1 人 | 字段与 API 定稿，单测绿 |
-| 2 | Settings + 主密码 / Session Editor / 管理器 + 弹窗（3 并行） | 3 个 teammate | 每页功能 / 布局对齐 |
-| 3 | 主壳菜单与快捷键 / 停靠面板 / 工作区（3 并行） | 3 个 teammate + Lead | 主流程可点通 |
-| 4 | 跨切规范 + i18n + 遗留清理 + 文档（2 并行） | 2 个 teammate + Lead | 规范项清零 |
-| 5 | 全量验收：ci、实机逐页截图、修复、提交 | Lead + 全员 | 验收清单全绿 |
+| 0 | 基线修复（fmt/clippy/测试漂移、CRLF、过期测试） | ✅ 已交付 | `fe7f037`、`f530299` |
+| 1 | 基础层：config schema + runtime（外观/终端交互/SFTP/图标/备注/登录脚本/文件夹继承/终端输入） | ✅ 已交付 | `c6d1102`、`edb0243` |
+| 2 | Settings 窗口（七分区 + 主密码两窗 + App theme 预览 + Save/Cancel） | ✅ 已交付且用户已接受；后续修复见 #4/#7/#11/#13 | `2d26a06` |
+| 3 | i18n：catalogs 重建 + zh-CN 全量翻译 + 多次增量 | ✅ 已交付，随新文案持续增量 | `bed84bc`、`d48fe84` 等 |
+| 4 | MCP 分区按原型收敛 + Rust 侧残留英文（状态/外部编辑器下拉） | ✅ 已交付 | `8d442ec` |
+| 5 | 窗口行为：拖拽后首击失效、二次拖拽、子窗居中、关闭回焦 | ✅ 已交付；真机脚本 0 failure | `eb3533e` |
+| 6 | 环境变量配置清理 + `--config-dir` + `[ui] reduce_motion` + 解锁崩溃修复 | ✅ 已交付 | `936bb10` |
+| 7 | N9 同步按键双向组 + AI 自动退组 | ✅ 已交付（待用户核验） | `9489104` |
+| 8 | Session Editor 窗口：六分区 + Inherit + Login Script 执行 + 子窗 + Save/Save and Connect | ✅ 已交付（待用户核验） | `8f016d7` |
+| 9 | 布尔控件统一为 `WinSwitch`/`WinCheckBox` | ✅ 已交付（待用户核验） | `7b25790` |
+| 10 | 管理器：Known Hosts / Private Keys / Proxies / Terminal Styles + 7 个子窗接线 | ✅ 已交付（待用户核验） | `177f634` |
+| 11 | 共享表单 + 开关视觉一致性（5 条用户反馈） | ✅ 已交付（待用户核验） | `fa3dece` |
+| 12 | 收口：预览位图尺寸统一、tunnel/login-step 本地表单行→共享组件、420 字面量 | 🔄 进行中 | 进行中（teammate） |
+| 13 | 收口：管理器/子窗的本地表单行/详情行→共享 `FormRow`/`DetailRow` | 🔄 进行中 | 进行中（teammate） |
+| 14 | 剩余弹窗与交互：host-key 紧凑窗确认、auth-prompt 去 Remember、sftp-chmod 入口、关标签/退出后果清单、logging/about/sftp-conflict/properties 收口 | ⬜ 待做 | — |
+| 15 | 波 3：主壳菜单（Tools/Session 菜单、Ctrl+Shift+S、F11/Focus Mode）、状态栏、停靠面板（Sessions/Transfers/Tunnels/Commands）、工作区（标签图标/原地改名/分屏上限/Find Across/REC/N9 banner/QC Clear/SFTP 原地操作 + chmod 入口） | ⬜ 待做 | 原型已就绪 |
+| 16 | 波 4：i18n 尾部（No Proxy、Discard、Rust 弹窗标题）、遗留清理（旧 known_hosts 页、`CLEAR` 打字确认、focus ring/tooltip 覆盖）、文档同步（status/契约） | ⬜ 待做 | — |
+| 17 | 波 5：全量验收（四道门禁 + 用户逐窗核验 + 证据归档） | ⬜ 待做 | — |
 
-## 3. 各波任务
+## 5. 剩余顺序（按用户「逐项核验」节奏）
 
-### 波 1 · 基础层（Lead）
+1. 当前收口 #12/#13 完成后：Lead 门禁 + 本地提交 + 重建 exe → 交用户核验 #7–#13。
+2. 用户确认后：做 #14 剩余弹窗（逐窗一项：host-key、auth-prompt、sftp-chmod 入口、close-tab/quit 后果、logging/about/sftp-conflict/properties）。
+3. 再做 #15 波 3（主壳 → 面板 → 工作区，按热点文件串行接线；sync banner 在此项实现）。
+4. 最后 #16 清理 + #17 验收。
 
-1. **config schema + 迁移**（`crates/yshell-config`）：`[ui] appearance_mode / appearance_accent`；`TerminalProfile` 增 `middle_click / right_click / multi_line_paste / auto_copy`；`[sftp] show_hidden / conflict_action / external_editor`；login script 步骤模型；session icon；folder 级继承字段；主密码状态。serde 默认 + sanitize + 迁移测试。
-2. **runtime 状态机**（`crates/yshell-app/src/runtime`）：`terminal_input`（点击 / 粘贴 / 自动复制 / 多行确认）纯逻辑 + 单测；settings 草稿；Appearance 预览 / 提交 / 回退；SFTP 默认值应用；login script 连接挂点；SecretVault 状态机 + 启动解锁。
-3. **共享组件**：`WinTextInput` / Picker 焦点环、tooltip 覆盖、缺失图标、三档窗口工具。
-4. **i18n 管线**：WSL 下 `scripts/i18n/extract.sh` + `catalogs.py` 跑通，确认幂等。
+## 6. 已知未收口 / 风险
 
-### 波 2 · 数据驱动页面（3 并行）
-
-- **A settings-security**：`ui/pages/settings.slint`、`ui/windows/settings_window.slint`；Appearance / Terminal / Security / SFTP / Advanced 五个分区 + AI/MCP 收口；新增 `master_password_window`、`master_password_unlock_window`（compact 560×400）。
-- **B session-editor**：`ui/pages/session_editor.slint` + `ui/windows/session_editor_window.slint`；六个分区 + 页级 Inherit；Login Script 分区 + `login-step-keys` / `login-step-wait` 子窗；`tunnel-editor` 窗；Save 并关闭 / Save and Connect。
-- **C managers-dialogs**：`host_keys` / `private_keys` / `proxies` / `theme_manager` 四页 + 各自子窗；host-key 改 compact；auth-prompt 去 Remember；新增 `sftp-chmod` 窗；关标签 / 退出后果清单。
-
-### 波 3 · 主壳 + 面板 + 工作区（3 并行）
-
-- **E shell**（`main_window.slint` 主写者）：6 个一级菜单（补 Tools）、Session 菜单、`Ctrl+Shift+S`、`F11`、Full Screen / Focus Mode、状态栏 UTF-8。
-- **F docks-panels**：Sessions 树图标 / 原地改名 / 右键项 / New Folder 禁用；Transfers 批量；Tunnels `+` + 禁用 Start；Commands；dock 宽度。
-- **G workspace**：标签图标 / 原地改名 / 分屏上限 4；Find Across；REC 条；N9 banner + pane Receive；Quick Connect Clear；SFTP 原地 New Folder / Rename + chmod 入口。
-
-### 波 4 · 规范 + i18n + 清理（2 并行）
-
-- i18n：抽取 `.pot`、同步 `en-US` / `zh-CN`、初译、零 diff 校验；Rust 侧 I18N-1 kind 补文案。
-- 规范：工具条图标化 + 全量 tooltip、禁止打字确认、无省略号、一窗一页脚、分区标题移除、焦点环。
-- 清理：删遗留 `known_hosts` 页与 `CLEAR` 路径；原型 / 契约注释同步；status / 契约文档更新。
-
-### 波 5 · 验收
-
-- `cargo xtask ci`；`cargo xtask run` 实机逐页走查；截图对照 `docs/prototypes`；交互清单打勾；修复回归；按波次提交。
-
-## 4. 热点文件与并行规则
-
-| 文件 | 规则 |
+| 项 | 说明 |
 |---|---|
-| `ui/main_window.slint`（165KB） | 单写者：波 2 为 Lead，波 3 为 shell 队友；别人只交 wiring note |
-| `crates/yshell-app/src/{bootstrap,dialog_windows,windows}.rs` | Lead 单写 |
-| `crates/yshell-config/src/schema.rs` | 波 1 定稿，之后只读 |
-| `runtime/theme.rs` | settings 队友独占 |
-| `ui/theme.slint`、`ui/components/basic/*` | 波 1 定稿，之后只加不改 |
-| `translations/**` | 波 4 统一生成 |
+| 预览位图尺寸 | Settings `(420,198)` vs Session Editor `(480,98)` 的 Rust 常量（#12 收口中） |
+| 旧本地 switch/表单实现 | `tunnel_editor_window` 的 `SwitchToggle`（#12）、管理器各类 `*FormRow`/`DetailRow`（#13） |
+| Settings 窗口尺寸 | 保持原型 1100×820；label 已从 200 改 120。若用户仍觉得宽，需确认后改为 1000×800（偏离原型 wide 档） |
+| Login Wait 子窗 | 现为 standard 720×580，原型是 compact 560×400（待用户决定） |
+| MCP failed 状态 | 单测覆盖，未实机造 |
+| 残留英文 | `No Proxy`（Rust 投影）、`Discard`（全局硬编码）、部分 Rust 弹窗标题（`Close Session`/`Rename Tab`）、专有名词 |
+| e2e | `scripts/e2e/run-ui-sync.sh` 旧同步语义断言默认跳过，组模型 e2e 待移植 |
+| 遗留代码 | 旧 `ui/pages/known_hosts.slint`、`CLEAR` 打字确认、focus ring/tooltip 未全覆盖 |
+| 安全债 | 主密码未整体加密 session/key 文件；KDF 未升级 |
+| 未实机核验 | Session Editor / 管理器 / 开关 / 表单观感（按用户要求未测） |
 
-wiring note 格式：新增 property / callback 名 + 期望绑定 + 插入锚点（函数 / 注释关键字），由热点文件所有者落地。
+## 7. 每项由用户核验的要点（简表）
 
-## 5. 验证
+- Settings：七分区、开关/表单观感、App theme 即时预览、Save/Cancel、主密码 Set/解锁。
+- Session Editor：六分区、label 右对齐、Host/Port 分行、终端预览整行、Login Script 子窗、Tunnel Editor、Save/Save and Connect。
+- 管理器：四周管理器清单/右键/工具条、7 个子窗（Add/Import/Export/Generate/Deploy）。
+- N9 同步：组内广播、非成员不广播、Pause/Stop、AI 输入自动退组。
+- 环境：无任何 `YSHELL_*`；语言/外观/减少动画只由 `config.toml` 决定。
 
-- 每波：`cargo fmt --all --check`；`cargo check -p yshell-app`；`cargo xtask check`；相关 `cargo test`。
-- 视觉：`cargo xtask run` 截图 vs 原型 headless 截图；证据存仓库外 `D:\NewSpace\ui-evidence\`。
-- 交互：按原型页内状态条与菜单路径逐项走查，禁用项确认仍禁用。
-- i18n：抽取脚本重复运行零 diff；`.po` 头部 / msgctxt 按 `scripts/i18n/README.md` 校验。
+## 8. 变更记录（本地提交时间线，未 push）
 
-## 6. 风险
+- 2026-11-03：`fe7f037` 基线修复；`f530299` 差距清单+计划；`c6d1102`/`edb0243` 波 1 基础层；`2d26a06` Settings 窗口；`bed84bc` i18n 全量；`8d442ec` MCP 收敛；`eb3533e` 窗口行为修复（此提交及之前曾被意外 push 到 origin）。
+- 2026-11-04：`936bb10` 环境变量配置清理；`9489104` N9 双向同步组；`d48fe84` i18n 再同步；`8f016d7` Session Editor 接线；`7b25790` 开关统一；`177f634` 管理器接线；`fa3dece` 共享表单/视觉一致性。
+- 2026-11-05：收口 #12/#13（进行中，待提交）。
 
-- `main_window.slint` 热点 → 单写者 + wiring note，每次合并必编译。
-- Slint 1.18 布局坑（`cross-axis-*` 与手写 `y:` 冲突）。
-- 基线测试可能有既有失败（字体环境 / 过期断言）→ 只保证不新增。
-- Windows 下 app 运行时不能覆盖 exe → 验收前后关窗再构建。
-- 原型与实现冲突项（MCP、Tunnels）→ 先改原型 / status 再实现。
+---
 
-## 7. 波次记录
+## 附录：历史波次记录（2026-11-03）
 
-### 交付流程（2026-11-03 用户要求，后续所有项适用）
+### 第 0 波 · 完成
 
-- **Lead 不再亲自写实现代码**：每个窗口/弹窗作为一项，委派 teammate 完成实现与接线。
-- 每项完成标准：`cargo check -p yshell-app`、`cargo test -p yshell-app`、`cargo fmt --all --check`、`cargo xtask check` 全绿 + 实机冒烟证据。
-- 每项单独提交，**只 push 到当前分支 `win/ui2`**（不合并、不 PR）；push 后等 **dev-build（Windows）CI 绿**。
-- 用户只核验 Windows 平台产物/行为；用户核验通过后才开始下一项。
-- 项顺序：Settings（含主密码两窗）→ Session Editor → 管理器（Known Hosts / Private Keys / Proxies / Terminal Styles 逐项）→ host-key / auth-prompt / sftp-chmod 等弹窗 → 主壳/面板/工作区。
+- 基线修复：`rustfmt.toml` 固定 CRLF + 当前工具链重排；4 处 clippy；7 个 MCP status 模板；7 条过期测试断言；删除过期 `product_smoke`。
+- 差距清单恢复、计划落盘、旧一轮成果归档 `refs/archive/win-ui-opt`。
+- 验证：`cargo xtask check` 通过；workspace 测试 27 套件全绿；GUI 启动冒烟通过。
 
-### 第 1 项 · Settings 窗口（含主密码两窗）· 待用户核验（2026-11-03）
+### 第 1 波 · 完成
 
-- 委派 `settings-security`（实现）→ `settings-wire`（接线，中途失败）→ `settings-fixer`（补接线/门禁，失败）→ `settings-render-fix`（修复 + 验收，完成）。
-- 根因修复：`ui/windows/settings_window.slint` 的窗口级 `section` 属性无默认值，覆盖了页面默认 `"general"`，导致内容区空白；同类 Slint 陷阱（`alignment: start` 忽略 stretch、输入框/下拉 preferred-width=0）一并修掉。
-- 交付：Settings 七分区（通用/外观/终端/安全/MCP/高级/SFTP）+ 主密码 Set 子窗/解锁窗接线；App theme 即时预览；Save=保存并关闭、Cancel 回滚；Settings Terminal 四项、SFTP 三项落盘。
-- 门禁：`cargo check` / `cargo test -p yshell-app`（452）/ `cargo fmt --all --check` / `cargo xtask check` 全绿。
-- 证据：`D:\NewSpace\ui-evidence\wave2\settings\`（7 分区截图、Appearance 即时预览、Save/Cancel 持久化与回滚、主密码子窗）+ `settings-render-fix.md`。
-- 已知未改：zh-CN 部分文案仍英文（波 4 i18n）；Terminal 分区保存后残留状态文案。
-
-### 第 0 波 · 完成（2026-11-03）
-
-- 分支 `win/ui2`，基线提交 `fe7f037`（chore: 清 fmt/clippy/test 漂移）。
-- 基线修复：`rustfmt.toml` 固定 CRLF + 当前工具链重排；4 处 clippy；7 个 MCP status kind 模板；7 个过期/环境相关断言；删除过期 `product_smoke` 测试。
-- 验证：`cargo xtask check` 通过；`cargo test --workspace --exclude xtask` 27 个测试套件全绿；`yshell.exe` 启动冒烟通过（1440×900，见 `D:\NewSpace\ui-evidence\wave0\app-launch.png`）。
-- 差距清单恢复：`IMPLEMENTATION-GAPS.md`；任务板：task-1 … task-11。
-- 旧一轮成果归档在 `refs/archive/win-ui-opt`（只读参考）。
-
-### 第 2 波 · 进行中（2026-11-03，3 人并行）
-
-- **2-A settings-security**：Settings 五分区重写 + `master_password_window` / `master_password_unlock_window`；`runtime/settings.rs`（App theme / SFTP 草稿、整窗 Save）、`runtime/security.rs`（主密码状态机 + verifier）、`SettingsAppearanceDraft` 扩展；wiring note 已交（40 个投影字段 + 回调 + 窗口注册 + 启动解锁）。
-- **2-C managers-dialogs**：四管理器页收口 + `known_host_*` / `private_key_*` / `sftp_chmod` / `host-key compact` 子窗；`auth.rs` / `proxies.rs` / `sftp_chmod.rs` 逻辑；wiring note 已交。
-- **2-B session-editor**：Session Editor 六分区 + Login Script + `login-step-*` / `tunnel-editor` 窗；仍在收尾。
-- 基础层补充（Lead）：`SessionProfile.notes` / `FolderProfile.notes`、`TunnelForward.name` + `enabled`（含持久化/sanitize/测试）；启用 `ssh-key` 的 ed25519 + getrandom（Private Keys Generate）；`main_window.slint` 已导出全部新窗口（编译验证通过）。
-- 当前 `cargo check -p yshell-app` 通过（剩余为接线前的 dead_code warning）。集成（projection setter / bootstrap 回调 / dialog 注册）待 Lead 逐人落地。
-
-### 第 1 波 · 完成（2026-11-03）
-
-提交：`c6d1102`（config + runtime 基础）、`edb0243`（Settings 草稿 / SFTP 默认值）。
-
-- **config**（`crates/yshell-config`）：
-  - `[ui]` 新字段：`appearance_mode`（system/light/dark）、`appearance_accent`（follow/6 预设，与 `yshell_ui::appearance` 同名）、终端交互四项（middle/right click、multi-line paste、auto copy）。
-  - `[sftp]` 新字段：`show_hidden`（默认开）、`conflict_action`（ask/replace/skip/stop）、`external_editor`（None = 系统默认）。
-  - `SessionProfile`：`icon`（None = 默认 / 预设 id / 自定义路径）、`login_script`；`LoginScriptProfile` + `LoginStepAction::{Keys, Wait}`。
-  - `FolderProfile`：auth / proxy / sftp / tunnel / login-script 五类可继承覆盖；`ResolvedSessionProfile` 解析 nearest-first，并随 `.folder.toml` 持久化。
-  - sanitize：图标与外部编辑器去空白、空值回 None；登录脚本名字补齐、等待上限 60s。
-- **runtime**：
-  - App theme 改为读配置（`YSHELL_THEME` / `YSHELL_ACCENT` 环境变量仍优先，兼容测试与 CI）。
-  - 新增 `runtime/terminal_input` 纯逻辑模块（点击语义 / 多行粘贴裁决 / 自动复制）+ 7 单测。
-  - Settings → Terminal 草稿新增四项交互（update / Save 写 `[ui]` / Reset 回 D37 默认）。
-  - 多行粘贴 `Block` 已在两条粘贴路径生效（新状态 kind + 模板）；选区结束且开自动复制时写入系统剪贴板。
-  - 新 SFTP 标签与本地栏按配置继承 Show hidden（默认开，对齐原型）。
-  - 新增 TextFormats 模板：MCP 七个状态、`terminal-paste-blocked-multiline`。
-
-验证：`cargo xtask check` 通过；`cargo test --workspace --exclude xtask` 全绿（yshell-config 60 / yshell-app 402 + 集成）。
-
-移交波 2：
-
-- 主密码 / SecretVault 状态机与启动解锁 → 波 2-A（随 Settings → Security 一起做）。
-- login script 连接后执行挂点 → 波 2-B（随 Session Editor 一起做）。
-- Settings 四项交互的 projection / Slint 接线 → 波 2-A。
-- SFTP conflict 默认动作、external editor 启动 → 波 3-G / 波 4 收口。
-
-
+- config：`[ui] appearance_mode/accent`、终端交互四项、`[sftp]` 三项、session icon/notes、login script、folder 级 auth/proxy/sftp/tunnel/login-script 继承、主密码 verifier；sanitize + 测试。
+- runtime：App theme 读配置、`terminal_input` 纯逻辑、多行粘贴 Block、自动复制、Settings 终端草稿、SFTP Show hidden 默认。
+- 验证：`cargo xtask check` 通过；config 60 / app 402 + 集成全绿。
