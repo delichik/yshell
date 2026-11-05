@@ -14,7 +14,7 @@
 | 0 | 基线修复、差距审计、计划与任务板 | ✅ 完成 | 2026-11-03 · `fe7f037`、`f530299` |
 | 1 | 配置 / runtime 基础层（外观、终端交互、SFTP、登录脚本、文件夹继承） | ✅ 完成 | 2026-11-03 · `c6d1102`、`edb0243` |
 | 2 | 页面与弹窗：Settings + 主密码、Session Editor、管理器、剩余弹窗、控件/表单/预览规范 | ✅ 完成（待用户核验） | 2026-11-05 · `2d26a06` … `2fbc72d`（#2–#16） |
-| 3 | 主壳菜单/快捷键/sync banner、停靠面板、工作区 | 🔍 待用户核验 | #17 `de3aef8`、#18 `1125e6a` 已提交；#19 见 §4.1 |
+| 3 | 主壳菜单/快捷键/sync banner、停靠面板、工作区 | 🔍 待用户核验 | #17 `de3aef8`、#18 `1125e6a`、#19 `07ed35d` |
 | 4 | i18n 尾部、遗留清理、文档同步 | ⬜ 未开始 | — |
 | 5 | 全量验收（门禁 + 用户逐窗核验 + 证据归档） | ⬜ 未开始 | — |
 
@@ -83,7 +83,7 @@ $env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
 | 16 | 剩余弹窗 B：About / Logging / SFTP Conflict / SFTP Properties 按原型收口 | ✅ | `6635820` |
 | 17 | 波 3 · 主壳：6 个一级菜单（补 Tools）、Session 菜单项、`Ctrl+Shift+S`、`F11`、Full Screen/Focus Mode、状态栏 UTF-8、sync banner | 🔍 待用户核验 | `de3aef8`（含修正 `5f7cbb2`/`034f3d3`/`ae0abba`/`9150b1e`/`a7f72ad`/`64da296`） |
 | 18 | 波 3 · 停靠面板：Sessions 图标/原地改名/右键项/New Folder 禁用；Transfers 批量 Pause/Resume All；Tunnels `+`；dock 宽度 | 🔍 待用户核验 | `1125e6a` |
-| 19 | 波 3 · 工作区：标签图标/原地改名/AI 标志；Find Across；REC 底条；QC Clear；SFTP 原地 New Folder/Rename + chmod 入口；SSH PTY 视口初尺寸；Don't ask again 勾选布局（**无**分屏叶数硬上限、**无** N9 Pause / pane Receive） | 🔍 待用户核验 | （提交后回填） |
+| 19 | 波 3 · 工作区：标签图标/原地改名/AI 标志；Find Across；REC 底条；QC Clear；SFTP 原地 New Folder/Rename + chmod 入口；SSH PTY 视口初尺寸；Don't ask again 勾选布局（**无**分屏叶数硬上限、**无** N9 Pause / pane Receive） | 🔍 待用户核验 | `07ed35d` |
 
 ### 4.2 进行中（未提交）
 
