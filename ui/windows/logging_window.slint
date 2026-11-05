@@ -5,7 +5,7 @@ import { LoggingDialog } from "../components/logging_dialog.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component LoggingWindow inherits Window {
-    title: @tr("Session Logging");
+    title: @tr("Session logging");
     no-frame: true;
     resize-border-width: 0px;
     preferred-width: Theme.tool-window-width-standard;
@@ -55,7 +55,7 @@ export component LoggingWindow inherits Window {
     ToolWindowChrome {
         width: Theme.tool-window-width-standard;
         height: Theme.tool-window-height-standard;
-        title-text: @tr("Terminal Logging");
+        title-text: @tr("Session logging");
         native-title-drag: root.native_title_drag;
         close-requested => { root.cancel(); }
         title-drag-requested => { root.title_drag_requested(); }

@@ -1,7 +1,13 @@
 // About as an independent tool window (title bar + content, no scrim).
+//
+// 原型：`docs/prototypes/about/index.html`（standard 720×580）。
+// 结构：产品名 + 一句说明 → Config directory / License 只读详情 → 可折叠的
+// open source licenses（默认折叠，展开为固定高度滚动区，窗口尺寸不变）→ Close。
+// 只读行使用共享 `DetailRow`，不再在本窗自绘 label/val 网格。
 
 import { Theme } from "../theme.slint";
 import { WinButton } from "../components/basic/controls.slint";
+import { DetailRow } from "../components/basic/forms.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component AboutWindow inherits Window {
@@ -20,7 +26,12 @@ export component AboutWindow inherits Window {
 
     in property <string> version-text: "";
     in property <string> config-dir-text: "";
+    /// 开源许可正文（产品侧从编译内置的资源文件载入；空 = 显示占位说明）。
+    in property <string> licenses-text: "";
     in-out property <bool> native_title_drag: false;
+
+    /// open source licenses 面板是否展开（默认折叠；展开后窗口尺寸不变）。
+    private property <bool> licenses-open: false;
 
     callback dismiss();
     callback title_drag_requested();
@@ -45,85 +56,116 @@ export component AboutWindow inherits Window {
             close-requested => { root.dismiss(); }
             title-drag-requested => { root.title_drag_requested(); }
 
-            Text {
-                text: @tr("YShell {0}", root.version-text);
-                color: Theme.text-primary;
-                font-size: Theme.font-subtitle;
-                font-weight: Theme.weight-semibold;
-            }
-
-            Text {
-                text: @tr("A Slint desktop shell for SSH, SFTP, tunnels and terminal workflows.");
-                color: Theme.text-secondary;
-                font-size: Theme.font-body;
-                wrap: word-wrap;
-            }
-
-            GridLayout {
-                spacing: Theme.spacing-16;
-                padding-top: Theme.spacing-8;
-
-                Text {
-                    row: 0;
-                    col: 0;
-                    text: @tr("Config directory");
-                    color: Theme.text-secondary;
-                    font-size: Theme.font-body;
-                    vertical-alignment: top;
-                    width: max(Theme.form-label-width, self.preferred-width);
-                }
-
-                Text {
-                    row: 0;
-                    col: 1;
-                    text: root.config-dir-text;
-                    color: Theme.text-primary;
-                    font-size: Theme.font-body;
-                    font-family: Theme.font-mono;
-                    vertical-alignment: top;
-                    wrap: word-wrap;
-                }
-
-                Text {
-                    row: 1;
-                    col: 0;
-                    text: @tr("License");
-                    color: Theme.text-secondary;
-                    font-size: Theme.font-body;
-                    vertical-alignment: top;
-                }
-
-                Text {
-                    row: 1;
-                    col: 1;
-                    text: "MIT OR Apache-2.0";
-                    color: Theme.text-primary;
-                    font-size: Theme.font-body;
-                    vertical-alignment: top;
-                    wrap: word-wrap;
-                }
-            }
-
-            Rectangle {
+            VerticalLayout {
                 vertical-stretch: 1;
-                min-height: 0px;
-                background: transparent;
-            }
+                spacing: Theme.spacing-16;
 
-            Rectangle {
-                height: 1px;
-                vertical-stretch: 0;
-                background: Theme.divider;
-            }
+                // --- A · copy：产品名 + 一句说明 ---------------------------
+                VerticalLayout {
+                    spacing: Theme.spacing-4;
 
-            HorizontalLayout {
-                alignment: end;
-                vertical-stretch: 0;
-                padding-top: Theme.spacing-4;
+                    Text {
+                        text: @tr("YShell {0}", root.version-text);
+                        color: Theme.text-primary;
+                        font-size: Theme.font-subtitle;
+                        font-weight: Theme.weight-semibold;
+                        wrap: no-wrap;
+                        overflow: elide;
+                    }
 
-                WinButton {
-                    text: @tr("Close");
-                    clicked => { root.dismiss(); }
+                    Text {
+                        text: @tr("A Slint desktop shell for SSH, SFTP, tunnels and terminal workflows.");
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-body;
+                        wrap: word-wrap;
+                    }
+                }
+
+                // --- B · grid：只读详情（共享 DetailRow） -------------------
+                VerticalLayout {
+                    spacing: 0px;
+
+                    DetailRow {
+                        label: @tr("Config directory");
+                        value: root.config-dir-text;
+                        mono: true;
+                    }
+
+                    DetailRow {
+                        label: @tr("License");
+                        value: "MIT OR Apache-2.0";
+                        last: true;
+                    }
+                }
+
+                // --- C · open source licenses（默认折叠，展开为滚动区） -----
+                VerticalLayout {
+                    vertical-stretch: root.licenses-open ? 1 : 0;
+                    spacing: Theme.spacing-8;
+
+                    WinButton {
+                        text: @tr("Open source licenses");
+                        icon: root.licenses-open ? "chevron-down" : "chevron-right";
+                        tooltip-text: @tr("Open source licenses");
+                        clicked => { root.licenses-open = !root.licenses-open; }
+                    }
+
+                    if root.licenses-open : Rectangle {
+                        vertical-stretch: 1;
+                        min-height: 120px;
+                        max-height: 220px;
+                        background: Theme.control-fill;
+                        border-radius: Theme.radius-control;
+                        border-width: 1px;
+                        border-color: Theme.control-stroke;
+                        clip: true;
+
+                        Flickable {
+                            width: parent.width;
+                            height: parent.height;
+                            interactive: true;
+                            content-width: self.width;
+                            content-height: licenses_text.preferred-height + 2 * Theme.spacing-8;
+
+                            licenses_text := Text {
+                                x: Theme.spacing-12;
+                                y: Theme.spacing-8;
+                                width: parent.width - 2 * Theme.spacing-12;
+                                text: root.licenses-text == ""
+                                    ? @tr("Open source licenses are not bundled in this build.")
+                                    : root.licenses-text;
+                                color: Theme.text-secondary;
+                                font-size: Theme.font-caption;
+                                font-family: Theme.font-mono;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                }
+
+                // 折叠时由 spacer 吸收剩余高度；展开时滚动区吸收。
+                Rectangle {
+                    visible: !root.licenses-open;
+                    vertical-stretch: 1;
+                    min-height: 0px;
+                    background: transparent;
+                }
+
+                Rectangle {
+                    height: 1px;
+                    vertical-stretch: 0;
+                    background: Theme.divider;
+                }
+
+                HorizontalLayout {
+                    alignment: end;
+                    vertical-stretch: 0;
+
+                    WinButton {
+                        text: @tr("Close");
+                        tooltip-text: @tr("Close");
+                        clicked => { root.dismiss(); }
+                    }
                 }
             }
         }

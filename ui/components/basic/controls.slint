@@ -51,6 +51,8 @@ export component WinButton inherits Rectangle {
     in property <bool> subtle: false;
     /// 破坏性操作：文字用 `critical` 色（不做红色实底）
     in property <bool> critical: false;
+    /// 悬停提示（规范：所有可点按钮都要有 title）；空 = 不显示。
+    in property <string> tooltip-text: "";
     in property <bool> enabled <=> touch.enabled;
     callback clicked();
     /// 键盘焦点（调用方可用它做弹窗默认焦点/焦点链断言）
@@ -144,6 +146,11 @@ export component WinButton inherits Rectangle {
             }
         }
         clicked => { root.clicked(); }
+    }
+
+    // §5.7：所有可点按钮都要有悬停提示（文字钮 title 与可见文案一致或略完整）。
+    if root.tooltip-text != "" : Tooltip {
+        text: @markdown("\{root.tooltip-text}");
     }
 
     /// 供宿主/弹窗把键盘焦点移入本按钮（`focus` 是内建函数名，不能直接复用）
