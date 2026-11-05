@@ -102,7 +102,7 @@
     .tab-spacer { flex: 1; }
     .sync-banner {
       flex: 0 0 var(--banner-h);
-      display: none;
+      display: flex;
       align-items: center;
       gap: 10px;
       padding: 0 10px;
@@ -110,7 +110,7 @@
       background: #FFF4CE;
       font-size: 12px;
     }
-    body[data-mode="paused"] .sync-banner {
+    .sync-banner.is-off {
       background: var(--soft);
       border-bottom-color: var(--line);
     }
@@ -145,11 +145,6 @@
     .sync-banner .btn-stop {
       font-weight: 700;
       border-width: 2px;
-    }
-    .sync-banner .btn-pause[aria-pressed="true"] {
-      background: var(--line);
-      color: var(--fill);
-      font-weight: 600;
     }
     .workspace {
       flex: 1 1 auto;
@@ -190,8 +185,8 @@
     }
     .pane-header .badge .i { width: 12px; height: 12px; }
     /* Panes not in the sync group carry no badge (input stays local to them). */
-    body[data-mode="off"] .pane-header .badge,
-    body[data-mode="paused"] .pane-header .badge { display: none; }
+    body[data-mode="off"] .pane-header .badge { display: none; }
+    .pane.idle .badge { display: none; }
     .recv {
       display: inline-flex;
       align-items: center;
@@ -269,26 +264,16 @@
     .legend ul { margin: 8px 0 0; padding-left: 18px; }
     .legend li { margin: 4px 0; }
 
-    /* Banner is always visible on sync-capable sessions (switch shows Off). */
-    .sync-banner { display: flex; }
     body[data-mode="off"] .status-chip { display: none !important; }
-    body[data-mode="off"] .sync-banner .btn-pause,
+    body[data-mode="active"] .status-chip { display: inline-flex; }
     body[data-mode="off"] .sync-banner .btn-stop { display: none; }
-    body[data-mode="active"] .status-chip,
-    body[data-mode="paused"] .status-chip { display: inline-flex; }
-    body[data-mode="off"] .sync-banner {
-      background: var(--soft);
-      border-bottom-color: var(--line);
-    }
-
-    /* Group membership is per session: the third pane is not in the group. */
-    body[data-mode="active"] .pane.idle .badge { display: none; }
+    body[data-mode="off"] .sync-banner { background: var(--soft); border-bottom-color: var(--line); }
   </style>
 </head>
 <body data-mode="active">
   <p class="meta">
     <strong>N9 — Input Sync</strong> workspace slice · board <code>960×560</code>.
-    <strong>D23:</strong> no KEYS / paste / Ctrl+C confirmation dialog — status chip + per-session sync toggles only.
+    <strong>D23:</strong> no KEYS confirm. Banner = per session; switch On/Off + End all sync only.
     Hub: <a href="../../index.html">prototypes index</a> · shell: <a href="../index.html">main-window</a>
     · split layouts: <a href="split.html">workspace-split</a>.
   </p>
@@ -297,7 +282,6 @@
     <span>State:</span>
     <button type="button" data-mode="off" aria-pressed="false" title="Off">Off</button>
     <button type="button" data-mode="active" aria-pressed="true" title="Group active">Group active</button>
-    <button type="button" data-mode="paused" aria-pressed="false" title="Paused">Paused</button>
   </div>
 
   <div class="stage">
@@ -310,26 +294,20 @@
         <span class="tab-spacer" aria-hidden="true"></span>
       </div>
 
-      <div class="sync-banner" role="region" aria-label="Input sync banner">
-        <span class="i i-sync" aria-hidden="true"></span>
-        <strong>Input Sync</strong>
-        <span class="chip-warn" title="Control keys may broadcast">Ctrl / Alt warn</span>
-        <span class="title" id="syncTitle">2 sessions · broadcasting to 1 targets</span>
-        <button type="button" class="btn btn-stop" title="End all sync">End all sync</button>
-        <label class="recv" title="Sync input for this session">
-          <input type="checkbox" id="bannerSyncSwitch" checked aria-label="Input Sync" />
-          <span class="switch" aria-hidden="true"></span>
-          <span class="switch-txt"><span class="txt-on">On</span><span class="txt-off">Off</span></span>
-        </label>
-      </div>
-
       <div class="workspace">
         <div class="pane">
           <div class="pane-header">
             <span class="name">edge-01</span>
             <span class="badge" title="In sync group" aria-label="In sync group"><span class="i i-sync" aria-hidden="true"></span></span>
-            <label class="recv">
-              <input type="checkbox" checked aria-label="Sync input for this session" />
+          </div>
+          <div class="sync-banner" role="region" aria-label="Input sync banner">
+            <span class="i i-sync" aria-hidden="true"></span>
+            <strong>Input Sync</strong>
+            <span class="chip-warn" title="Control keys may broadcast">Ctrl / Alt warn</span>
+            <span class="title">2 sessions · broadcasting to 1 targets</span>
+            <button type="button" class="btn btn-stop" title="End all sync">End all sync</button>
+            <label class="recv" title="Sync input for this session">
+              <input type="checkbox" class="banner-sync" checked aria-label="Input Sync" />
               <span class="switch" aria-hidden="true"></span>
               <span class="switch-txt"><span class="txt-on">On</span><span class="txt-off">Off</span></span>
             </label>
@@ -345,8 +323,14 @@
           <div class="pane-header">
             <span class="name">db-replica</span>
             <span class="badge" title="In sync group" aria-label="In sync group"><span class="i i-sync" aria-hidden="true"></span></span>
-            <label class="recv">
-              <input type="checkbox" checked aria-label="Sync input for this session" />
+          </div>
+          <div class="sync-banner" role="region" aria-label="Input sync banner">
+            <span class="i i-sync" aria-hidden="true"></span>
+            <strong>Input Sync</strong>
+            <span class="title">2 sessions · broadcasting to 1 targets</span>
+            <button type="button" class="btn btn-stop" title="End all sync">End all sync</button>
+            <label class="recv" title="Sync input for this session">
+              <input type="checkbox" class="banner-sync" checked aria-label="Input Sync" />
               <span class="switch" aria-hidden="true"></span>
               <span class="switch-txt"><span class="txt-on">On</span><span class="txt-off">Off</span></span>
             </label>
@@ -360,15 +344,21 @@
           <div class="pane-header">
             <span class="name">build-box</span>
             <span class="badge" title="In sync group" aria-label="In sync group"><span class="i i-sync" aria-hidden="true"></span></span>
-            <label class="recv">
-              <input type="checkbox" aria-label="Sync input for this session" />
+          </div>
+          <div class="sync-banner is-off" role="region" aria-label="Input sync banner">
+            <span class="i i-sync" aria-hidden="true"></span>
+            <strong>Input Sync</strong>
+            <span class="title">Outside the group — switch Off</span>
+            <button type="button" class="btn btn-stop" title="End all sync">End all sync</button>
+            <label class="recv" title="Sync input for this session">
+              <input type="checkbox" class="banner-sync" aria-label="Input Sync" />
               <span class="switch" aria-hidden="true"></span>
               <span class="switch-txt"><span class="txt-on">On</span><span class="txt-off">Off</span></span>
             </label>
           </div>
           <div class="terminal">
             ci@build-box:~$<br>
-            <em>(not in the group — input stays local to this session)</em>
+            <em>(not in the group — banner still shown; switch Off; input stays local)</em>
           </div>
         </div>
       </div>
@@ -389,41 +379,38 @@
     <ul>
       <li><strong>One group, no roles:</strong> every session whose sync switch is On joins the same group. There is no SRC/RCV role and no “pick targets” preset — input typed in any group member (in practice the focused session) is copied to the other group members.</li>
       <li><strong>Bidirectional:</strong> focusing another member and typing copies that input to the remaining members; the injected copy is never re-broadcast (no feedback loop).</li>
-      <li><strong>Per-session switch:</strong> the pane/tab header switch adds or removes one session from the group; sessions that are Off are never written to. Disconnected sessions leave the group automatically.</li>
-      <li><strong>Two controls only:</strong> right-side switch = this session in/out of the group; <strong>End all sync</strong> dissolves the whole group. No Pause.</li>
-      <li><strong>All sessions show the banner</strong> once any session has sync On; sessions outside the group simply show the switch Off.</li>
-      <li><strong>Membership badge:</strong> tab/pane uses a sync icon (not the SYNC text label).</li>
-      <li><strong>AI/MCP input opts out:</strong> when an AI/MCP client sends input, key or a command to a session, that session is switched Off automatically (it must not broadcast AI input) and a one-shot notice appears in the status chip.</li>
-      <li><strong>No modal (D23):</strong> enabling sync never opens a KEYS / paste / Ctrl+C type-to-confirm dialog. Control keys are only flagged in the status chip.</li>
-      <li><strong>Status chip:</strong> <code>SYNC → n targets</code>, where n counts the other group members relative to the focused session.</li>
-      <li><strong>Destructive Stop:</strong> greyscale wireframe uses heavier border/weight on Stop (not color).</li>
+      <li><strong>Two controls only:</strong> banner right-side switch = this session in/out; <strong>End all sync</strong> dissolves the whole group. No Pause.</li>
+      <li><strong>All sessions show the banner</strong> once any session has sync On (split = one banner per pane); outsiders simply show Off.</li>
+      <li><strong>Membership badge:</strong> tab/pane uses a sync icon (not SYNC text).</li>
+      <li><strong>AI/MCP input opts out:</strong> AI/MCP write turns that session Off and shows a one-shot status notice.</li>
+      <li><strong>No modal (D23):</strong> never KEYS / paste / Ctrl+C type-to-confirm.</li>
+      <li><strong>Status chip:</strong> <code>SYNC → n targets</code> relative to the focused session.</li>
     </ul>
   </div>
 
   <script>
     (function () {
-      var pauseBtn = document.querySelector(".btn-pause");
       function applyMode(mode) {
         document.body.setAttribute("data-mode", mode);
         document.querySelectorAll(".tools [data-mode]").forEach(function (b) {
           b.setAttribute("aria-pressed", b.getAttribute("data-mode") === mode ? "true" : "false");
         });
-        if (pauseBtn) {
-          pauseBtn.setAttribute("aria-pressed", mode === "paused" ? "true" : "false");
-          pauseBtn.textContent = mode === "paused" ? "Resume" : "Pause";
-        }
-        var sw = document.getElementById("bannerSyncSwitch");
-        var title = document.getElementById("syncTitle");
-        if (sw) {
-          sw.checked = mode !== "off";
-        }
-        if (title) {
-          title.textContent = mode === "off"
-            ? "Turn on to join the sync group for this session."
-            : mode === "paused"
-              ? "2 sessions · 1 targets · broadcast paused"
-              : "2 sessions · broadcasting to 1 targets";
-        }
+        document.querySelectorAll(".banner-sync").forEach(function (sw) {
+          var pane = sw.closest(".pane");
+          var outside = pane && pane.classList.contains("idle");
+          sw.checked = mode === "active" && !outside;
+        });
+        document.querySelectorAll(".sync-banner .title").forEach(function (title) {
+          var pane = title.closest(".pane");
+          var outside = pane && pane.classList.contains("idle");
+          if (mode === "off") {
+            title.textContent = "Turn on to join the sync group for this session.";
+          } else if (outside) {
+            title.textContent = "Outside the group — switch Off";
+          } else {
+            title.textContent = "2 sessions · broadcasting to 1 targets";
+          }
+        });
       }
       document.querySelectorAll(".tools [data-mode]").forEach(function (btn) {
         btn.addEventListener("click", function () {
