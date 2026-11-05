@@ -13,6 +13,7 @@ import { ListView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
 import { WinButton, WinIconButton } from "basic/controls.slint";
+import { DetailRow } from "basic/forms.slint";
 import { WinTextInput } from "basic/text_input.slint";
 import { MenuEntry, MenuPopup } from "menu_popup.slint";
 import { FileCrumb, FilePane, FileRow, ListScrollBar } from "file_pane.slint";
@@ -875,7 +876,7 @@ export component SftpContextMenu inherits Rectangle {
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         { label: @tr("Rename..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
         { label: @tr("Delete..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
-        { label: @tr("Chmod..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Change Permissions"), shortcut: "", enabled: root.connected, checked: false, separator: false },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         { label: @tr("Copy"), shortcut: "", enabled: root.connected, checked: false, separator: false },
         { label: @tr("Copy Remote Path"), shortcut: "", enabled: root.connected, checked: false, separator: false, tooltip: root.connected ? "" : @tr("Connect to the remote host first.") },
@@ -893,7 +894,7 @@ export component SftpContextMenu inherits Rectangle {
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         { label: @tr("Rename..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
         { label: @tr("Delete..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
-        { label: @tr("Chmod..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Change Permissions"), shortcut: "", enabled: root.connected, checked: false, separator: false },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         { label: @tr("Copy"), shortcut: "", enabled: root.connected, checked: false, separator: false },
         { label: @tr("Copy Remote Path"), shortcut: "", enabled: root.connected, checked: false, separator: false, tooltip: root.connected ? "" : @tr("Connect to the remote host first.") },
@@ -922,7 +923,7 @@ export component SftpContextMenu inherits Rectangle {
         { label: @tr("Download Selected"), shortcut: "", enabled: root.connected, checked: false, separator: false },
         { label: @tr("Copy To..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
         { label: @tr("Delete Selected"), shortcut: "", enabled: root.connected, checked: false, separator: false },
-        { label: @tr("Chmod Selected..."), shortcut: "", enabled: root.connected, checked: false, separator: false },
+        { label: @tr("Change Permissions for Selection"), shortcut: "", enabled: root.connected, checked: false, separator: false },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         { label: @tr("Copy"), shortcut: "", enabled: root.connected, checked: false, separator: false },
         { label: @tr("Copy Remote Paths"), shortcut: "", enabled: root.connected, checked: false, separator: false, tooltip: root.connected ? "" : @tr("Connect to the remote host first.") }
@@ -1407,18 +1408,22 @@ export component SftpConflictDialog inherits Rectangle {
 
                 WinButton {
                     text: @tr("Cancel");
+                    tooltip-text: @tr("Cancel");
                     clicked => { root.canceled(); }
                 }
                 WinButton {
                     text: @tr("Skip");
+                    tooltip-text: @tr("Skip");
                     clicked => { root.resolve("skip"); }
                 }
                 WinButton {
                     text: @tr("Rename");
+                    tooltip-text: @tr("Rename");
                     clicked => { root.resolve("rename"); }
                 }
                 WinButton {
                     text: @tr("Overwrite");
+                    tooltip-text: @tr("Overwrite");
                     accent: true;
                     clicked => { root.resolve("overwrite"); }
                 }
@@ -1473,26 +1478,16 @@ export component SftpPropertiesDialog inherits Rectangle {
             height: root.height;
             spacing: Theme.spacing-16;
 
-            GridLayout {
-                spacing: Theme.spacing-16;
+            // 六行只读属性：共享 `DetailRow`（label 120 右对齐 + 值列，最后一行无分隔线）。
+            VerticalLayout {
+                spacing: 0px;
 
-                Text { row: 0; col: 0; text: @tr("Name"); color: Theme.text-secondary; font-size: Theme.font-body; width: Theme.form-label-width; }
-                Text { row: 0; col: 1; text: root.name-text; color: Theme.text-primary; font-size: Theme.font-body; wrap: no-wrap; overflow: elide; }
-
-                Text { row: 1; col: 0; text: @tr("Path"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                Text { row: 1; col: 1; text: root.path-text; color: Theme.text-primary; font-size: Theme.font-body; font-family: Theme.font-mono; wrap: word-wrap; }
-
-                Text { row: 2; col: 0; text: @tr("Kind"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                Text { row: 2; col: 1; text: root.kind-text; color: Theme.text-primary; font-size: Theme.font-body; }
-
-                Text { row: 3; col: 0; text: @tr("Size"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                Text { row: 3; col: 1; text: root.size-text; color: Theme.text-primary; font-size: Theme.font-body; }
-
-                Text { row: 4; col: 0; text: @tr("Modified"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                Text { row: 4; col: 1; text: root.modified-text; color: Theme.text-primary; font-size: Theme.font-body; }
-
-                Text { row: 5; col: 0; text: @tr("Permissions"); color: Theme.text-secondary; font-size: Theme.font-body; }
-                Text { row: 5; col: 1; text: root.permissions-text; color: Theme.text-primary; font-size: Theme.font-body; font-family: Theme.font-mono; }
+                DetailRow { label: @tr("Name"); value: root.name-text; }
+                DetailRow { label: @tr("Path"); value: root.path-text; mono: true; }
+                DetailRow { label: @tr("Kind"); value: root.kind-text; }
+                DetailRow { label: @tr("Size"); value: root.size-text; }
+                DetailRow { label: @tr("Modified"); value: root.modified-text; }
+                DetailRow { label: @tr("Permissions"); value: root.permissions-text; mono: true; last: true; }
             }
 
             Rectangle {
@@ -1513,12 +1508,16 @@ export component SftpPropertiesDialog inherits Rectangle {
                 vertical-stretch: 0;
                 padding-top: Theme.spacing-4;
 
-                WinButton {
-                    text: @tr("Copy Path");
+                // 原型页脚：图标 Copy Path + 主按钮 Close。
+                WinIconButton {
+                    icon: "copy";
+                    accessible-name: @tr("Copy Path");
+                    tooltip-text: @tr("Copy Path");
                     clicked => { root.copy-path(); }
                 }
                 WinButton {
                     text: @tr("Close");
+                    tooltip-text: @tr("Close");
                     accent: true;
                     clicked => { root.canceled(); }
                 }

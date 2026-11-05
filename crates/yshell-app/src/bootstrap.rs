@@ -5099,12 +5099,7 @@ fn dispatch_sftp_menu_action(
             window.set_sftp_dialog_kind("delete".into());
             Ok(runtime.projection())
         }
-        "chmod" | "chmod-selection" => {
-            let permissions = runtime.sftp_selected_permissions_text();
-            window.set_sftp_dialog_permissions_text(permissions.into());
-            window.set_sftp_dialog_kind("chmod".into());
-            Ok(runtime.projection())
-        }
+        "chmod" | "chmod-selection" => Ok(runtime.open_sftp_chmod_dialog()),
         "copy-to" => {
             window.set_sftp_dialog_local_text(runtime.sftp_path.clone().into());
             window.set_sftp_dialog_kind("copy-to".into());

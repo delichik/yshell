@@ -21,8 +21,8 @@ use crate::bootstrap::generated_ui::{
     LoginStepKeysWindow, LoginStepRow, LoginStepWaitWindow, MainWindow, MasterPasswordUnlockWindow,
     MasterPasswordWindow, NewFolderWindow, PasswordPromptWindow, PrivateKeyDeployWindow,
     PrivateKeyExportWindow, PrivateKeyGenerateWindow, PrivateKeyImportWindow, PrivateKeysWindow,
-    ProxiesWindow, SessionEditorWindow, SettingsWindow, SftpConflictWindow, SftpEntryWindow,
-    SftpPropertiesWindow, Theme, ThemeManagerWindow, TunnelEditorWindow,
+    ProxiesWindow, SessionEditorWindow, SettingsWindow, SftpChmodWindow, SftpConflictWindow,
+    SftpEntryWindow, SftpPropertiesWindow, Theme, ThemeManagerWindow, TunnelEditorWindow,
 };
 use crate::bootstrap::{
     frame_image, host_key_group_from, host_key_group_matches, private_key_row_from,
@@ -94,6 +94,33 @@ struct ConfirmSpec {
     destructive: bool,
     show_dont_ask: bool,
     dont_ask: bool,
+    /// 关标签 / 退出确认的后果清单（项目符号行；空 = 只显示 message）。
+    details: Vec<String>,
+    /// 后果清单下的补充说明（端口转发等；空 = 不显示）。
+    note: String,
+}
+
+/// 绝大多数确认框只有一句话说明；后果清单仅在关标签 / 退出确认里使用。
+fn confirm_spec(
+    kind: ConfirmKind,
+    title: &str,
+    message: impl Into<String>,
+    confirm_label: &str,
+    destructive: bool,
+    show_dont_ask: bool,
+    dont_ask: bool,
+) -> ConfirmSpec {
+    ConfirmSpec {
+        kind,
+        title: title.to_owned(),
+        message: message.into(),
+        confirm_label: confirm_label.to_owned(),
+        destructive,
+        show_dont_ask,
+        dont_ask,
+        details: Vec::new(),
+        note: String::new(),
+    }
 }
 
 #[derive(Debug, Default)]
@@ -201,6 +228,9 @@ pub(crate) struct DialogWindowManager {
     sftp_conflict_shown: bool,
     sftp_properties: Option<SftpPropertiesWindow>,
     sftp_properties_shown: bool,
+    /// dialogs-closeout-a：SFTP chmod 窗（compact，八进制 + 9 勾选联动）。
+    sftp_chmod: Option<SftpChmodWindow>,
+    sftp_chmod_shown: bool,
 }
 
 impl DialogWindowManager {
@@ -284,6 +314,8 @@ impl DialogWindowManager {
                 sftp_conflict_shown: false,
                 sftp_properties: None,
                 sftp_properties_shown: false,
+                sftp_chmod: None,
+                sftp_chmod_shown: false,
             },
         }));
         host.borrow_mut().dialogs.host = Rc::downgrade(&host);
@@ -714,6 +746,21 @@ impl DialogWindowManager {
             )?,
             sftp_properties
         );
+        // dialogs-closeout-a：SFTP 行右键 / 工具条 “Change Permissions”。
+        apply_modal!(
+            sync_projection_tool(
+                projection.sftp_chmod_visible,
+                &mut self.sftp_chmod_shown,
+                &mut self.sftp_chmod,
+                || SftpChmodWindow::new().map_err(AppError::from_error),
+                |w| prep_tool_window!(w),
+                |w| wire_sftp_chmod_window(w, Rc::clone(&runtime)),
+                |w, p, _| sync_sftp_chmod(w, p),
+                projection,
+                main,
+            )?,
+            sftp_chmod
+        );
         let _ = window_runtime;
         Ok(())
     }
@@ -728,6 +775,10 @@ impl DialogWindowManager {
             if self.about.is_none() {
                 let window = AboutWindow::new().map_err(AppError::from_error)?;
                 window.set_native_title_drag(cfg!(windows));
+                // open-source licenses 正文是构建期静态资源（third-party 清单由
+                // `cargo metadata --offline` 生成）；随窗口创建回填一次，不在
+                // 每个 tick 重复设置。
+                window.set_licenses_text(include_str!("../assets/open_source_licenses.txt").into());
                 let host = self.host.clone();
                 window.on_dismiss(move || {
                     if let Some(host) = host.upgrade() {
@@ -801,26 +852,26 @@ impl DialogWindowManager {
         main: Option<&MainWindow>,
     ) -> Option<ConfirmSpec> {
         if projection.private_keys_remove_confirm_visible {
-            return Some(ConfirmSpec {
-                kind: ConfirmKind::PrivateKeysRemove,
-                title: "Remove Managed Key".into(),
-                message: projection.private_keys_remove_warning_text.clone(),
-                confirm_label: "Remove".into(),
-                destructive: true,
-                show_dont_ask: false,
-                dont_ask: false,
-            });
+            return Some(confirm_spec(
+                ConfirmKind::PrivateKeysRemove,
+                "Remove Managed Key",
+                projection.private_keys_remove_warning_text.clone(),
+                "Remove",
+                true,
+                false,
+                false,
+            ));
         }
         if projection.proxies_remove_confirm_visible {
-            return Some(ConfirmSpec {
-                kind: ConfirmKind::ProxiesRemove,
-                title: "Delete Proxy Profile".into(),
-                message: "This removes the managed proxy profile and its saved password from the secret store.".into(),
-                confirm_label: "Delete".into(),
-                destructive: true,
-                show_dont_ask: false,
-                dont_ask: false,
-            });
+            return Some(confirm_spec(
+                ConfirmKind::ProxiesRemove,
+                "Delete Proxy Profile",
+                "This removes the managed proxy profile and its saved password from the secret store.",
+                "Delete",
+                true,
+                false,
+                false,
+            ));
         }
         if projection.theme_manager_remove_confirm_visible {
             let message = if projection.theme_manager_remove_reference_count > 0 {
@@ -835,130 +886,137 @@ impl DialogWindowManager {
                     projection.theme_manager_remove_name_text
                 )
             };
-            return Some(ConfirmSpec {
-                kind: ConfirmKind::ThemeManagerRemove,
-                title: "Delete Theme".into(),
+            return Some(confirm_spec(
+                ConfirmKind::ThemeManagerRemove,
+                "Delete Theme",
                 message,
-                confirm_label: "Delete".into(),
-                destructive: true,
-                show_dont_ask: false,
-                dont_ask: false,
-            });
+                "Delete",
+                true,
+                false,
+                false,
+            ));
         }
         if self.local.host_keys_clear {
-            return Some(ConfirmSpec {
-                kind: ConfirmKind::HostKeysClear,
-                title: "Clear All Host Keys".into(),
-                message: "Remove every saved host key from disk? This cannot be undone.".into(),
-                confirm_label: "Clear All".into(),
-                destructive: true,
-                show_dont_ask: false,
-                dont_ask: false,
-            });
+            return Some(confirm_spec(
+                ConfirmKind::HostKeysClear,
+                "Clear All Host Keys",
+                "Remove every saved host key from disk? This cannot be undone.",
+                "Clear All",
+                true,
+                false,
+                false,
+            ));
         }
         if self.local.host_keys_remove {
-            return Some(ConfirmSpec {
-                kind: ConfirmKind::HostKeysRemove,
-                title: "Remove Host Keys".into(),
-                message: "Remove all saved keys for the selected host:port? This deletes the entire group, not just the selected key.".into(),
-                confirm_label: "Remove".into(),
-                destructive: true,
-                show_dont_ask: false,
-                dont_ask: false,
-            });
+            return Some(confirm_spec(
+                ConfirmKind::HostKeysRemove,
+                "Remove Host Keys",
+                "Remove all saved keys for the selected host:port? This deletes the entire group, not just the selected key.",
+                "Remove",
+                true,
+                false,
+                false,
+            ));
         }
         if projection.editor_discard_dialog_visible {
-            return Some(ConfirmSpec {
-                kind: ConfirmKind::EditorDiscard,
-                title: "Discard Changes".into(),
-                message: "Discard unsaved changes to this session?".into(),
-                confirm_label: "Discard".into(),
-                destructive: true,
-                show_dont_ask: false,
-                dont_ask: false,
-            });
+            return Some(confirm_spec(
+                ConfirmKind::EditorDiscard,
+                "Discard Changes",
+                "Discard unsaved changes to this session?",
+                "Discard",
+                true,
+                false,
+                false,
+            ));
         }
         if projection.close_tabs_confirm_visible {
             let (title, message) = close_tabs_copy(projection);
-            return Some(ConfirmSpec {
-                kind: ConfirmKind::CloseTabs,
-                title,
+            let mut spec = confirm_spec(
+                ConfirmKind::CloseTabs,
+                &title,
                 message,
-                confirm_label: "Close".into(),
-                destructive: true,
-                show_dont_ask: true,
-                dont_ask: main
-                    .map(|w| w.get_close_confirm_dont_ask_again())
+                "Close",
+                true,
+                true,
+                main.map(|w| w.get_close_confirm_dont_ask_again())
                     .unwrap_or(false),
-            });
+            );
+            spec.details = projection.close_tabs_confirm_details.clone();
+            spec.note = projection.close_tabs_confirm_note_text.clone();
+            return Some(spec);
         }
         if projection.close_window_confirm_visible {
             let message = if projection.close_window_confirm_active_count == 1 {
-                "Close this window? 1 active session will be disconnected.".into()
+                "Close this window? 1 active session will be disconnected.".to_owned()
             } else {
                 format!(
                     "Close this window? {} active sessions will be disconnected.",
                     projection.close_window_confirm_active_count
                 )
             };
-            return Some(ConfirmSpec {
-                kind: ConfirmKind::CloseWindow,
-                title: "Close Window".into(),
+            return Some(confirm_spec(
+                ConfirmKind::CloseWindow,
+                "Close Window",
                 message,
-                confirm_label: "Close".into(),
-                destructive: true,
-                show_dont_ask: true,
-                dont_ask: main
-                    .map(|w| w.get_close_window_confirm_dont_ask_again())
+                "Close",
+                true,
+                true,
+                main.map(|w| w.get_close_window_confirm_dont_ask_again())
                     .unwrap_or(false),
-            });
+            ));
         }
         if self.local.clear_scrollback {
-            return Some(ConfirmSpec {
-                kind: ConfirmKind::ClearScrollback,
-                title: "Clear Scrollback".into(),
-                message: "Clear the terminal scrollback buffer? The live screen stays as-is."
-                    .into(),
-                confirm_label: "Clear Scrollback".into(),
-                destructive: true,
-                show_dont_ask: false,
-                dont_ask: false,
-            });
+            return Some(confirm_spec(
+                ConfirmKind::ClearScrollback,
+                "Clear Scrollback",
+                "Clear the terminal scrollback buffer? The live screen stays as-is.",
+                "Clear Scrollback",
+                true,
+                false,
+                false,
+            ));
         }
         if self.local.delete_session {
-            return Some(ConfirmSpec {
-                kind: ConfirmKind::DeleteSession,
-                title: "Delete Saved Session".into(),
-                message: "This permanently removes the selected saved session from disk.".into(),
-                confirm_label: "Delete".into(),
-                destructive: true,
-                show_dont_ask: false,
-                dont_ask: false,
-            });
+            return Some(confirm_spec(
+                ConfirmKind::DeleteSession,
+                "Delete Saved Session",
+                "This permanently removes the selected saved session from disk.",
+                "Delete",
+                true,
+                false,
+                false,
+            ));
         }
         if self.local.quit {
-            return Some(ConfirmSpec {
-                kind: ConfirmKind::Quit,
-                title: "Quit YShell".into(),
-                message: "Quit YShell now? Active runtime sessions will be disconnected.".into(),
-                confirm_label: "Quit".into(),
-                destructive: true,
-                show_dont_ask: true,
-                dont_ask: main
-                    .map(|w| w.get_quit_confirm_dont_ask_again())
+            let message = if projection.quit_confirm_details.is_empty() {
+                "Quit YShell now? Active runtime sessions will be disconnected.".to_owned()
+            } else {
+                "Quit the application while sessions are still active?".to_owned()
+            };
+            let mut spec = confirm_spec(
+                ConfirmKind::Quit,
+                "Quit YShell",
+                message,
+                "Quit",
+                true,
+                true,
+                main.map(|w| w.get_quit_confirm_dont_ask_again())
                     .unwrap_or(false),
-            });
+            );
+            spec.details = projection.quit_confirm_details.clone();
+            spec.note = projection.quit_confirm_note_text.clone();
+            return Some(spec);
         }
         if projection.mcp_consent_visible {
-            return Some(ConfirmSpec {
-                kind: ConfirmKind::McpControl,
-                title: "Allow AI control of terminals".into(),
-                message: "An AI agent wants control of YShell terminal sessions: run commands, read the screen, and open or close tabs. It cannot fill passwords or accept host keys — those stay in this app. Allow?".into(),
-                confirm_label: "Allow".into(),
-                destructive: false,
-                show_dont_ask: true,
-                dont_ask: projection.settings_mcp_auto_approve_control,
-            });
+            return Some(confirm_spec(
+                ConfirmKind::McpControl,
+                "Allow AI control of terminals",
+                "An AI agent wants control of YShell terminal sessions: run commands, read the screen, and open or close tabs. It cannot fill passwords or accept host keys — those stay in this app. Allow?",
+                "Allow",
+                false,
+                true,
+                projection.settings_mcp_auto_approve_control,
+            ));
         }
         None
     }
@@ -980,6 +1038,8 @@ impl DialogWindowManager {
         let window = self.confirm.as_ref().expect("confirm");
         window.set_title_text(spec.title.into());
         window.set_message_text(spec.message.into());
+        window.set_details(option_model(&spec.details));
+        window.set_note_text(spec.note.into());
         window.set_confirm_label(spec.confirm_label.into());
         window.set_destructive(spec.destructive);
         window.set_show_dont_ask_again(spec.show_dont_ask);
@@ -2804,6 +2864,32 @@ fn wire_sftp_properties_window(
     });
 }
 
+fn wire_sftp_chmod_window(
+    window: &SftpChmodWindow,
+    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
+) {
+    wire_tool_title_drag!(window);
+    let rt = Rc::clone(&runtime);
+    window.on_canceled(move || {
+        let _ = rt.borrow_mut().cancel_sftp_chmod_dialog();
+    });
+    let rt = Rc::clone(&runtime);
+    let weak = window.as_weak();
+    window.window().on_close_requested(move || {
+        let _ = rt.borrow_mut().cancel_sftp_chmod_dialog();
+        let _ = weak;
+        CloseRequestResponse::HideWindow
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_update_mode(move |value: SharedString| {
+        let _ = rt.borrow_mut().update_sftp_chmod_mode(value.as_ref());
+    });
+    let rt = Rc::clone(&runtime);
+    window.on_applied(move || {
+        let _ = rt.borrow_mut().apply_sftp_chmod_dialog();
+    });
+}
+
 fn wire_new_folder_window(
     window: &NewFolderWindow,
     runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
@@ -2970,17 +3056,14 @@ fn close_tabs_copy(projection: &AppProjection) -> (String, String) {
         (
             "Close Session".into(),
             format!(
-                "Close “{}”? The active connection will be disconnected.",
+                "Close the tab for session “{}”?",
                 projection.close_tabs_confirm_name_text
             ),
         )
     } else {
         (
             "Close Tabs".into(),
-            format!(
-                "Close {} tabs? {} active connection(s) will be disconnected.",
-                projection.close_tabs_confirm_count, projection.close_tabs_confirm_active_count
-            ),
+            format!("Close {} tabs?", projection.close_tabs_confirm_count),
         )
     }
 }
@@ -4076,4 +4159,13 @@ fn sync_sftp_conflict(w: &SftpConflictWindow, p: &AppProjection) {
 fn sync_sftp_properties(w: &SftpPropertiesWindow, p: &AppProjection) {
     w.set_name_text(p.sftp_properties_name_text.clone().into());
     w.set_path_text(p.sftp_properties_path_text.clone().into());
+}
+
+/// dialogs-closeout-a：SFTP chmod 窗（八进制 ↔ 9 勾选联动在 Slint 侧）。
+fn sync_sftp_chmod(w: &SftpChmodWindow, p: &AppProjection) {
+    w.set_path_text(p.sftp_chmod_path_text.clone().into());
+    w.set_mode_text(p.sftp_chmod_mode_text.clone().into());
+    w.set_error_text(p.sftp_chmod_error_text.clone().into());
+    // 窗口复用：重新打开时把勾选框按当前八进制文本重置（changed 不一定触发）。
+    w.invoke_sync_mode();
 }

@@ -1170,6 +1170,25 @@ impl AppRuntime {
                 .theme_editor
                 .as_ref()
                 .is_some_and(|draft| !draft.builtin),
+            // --- dialogs-closeout-a ---
+            sftp_chmod_visible: self.sftp_chmod_visible,
+            sftp_chmod_path_text: self.sftp_chmod_path_text.clone(),
+            sftp_chmod_mode_text: self.sftp_chmod_mode_text.clone(),
+            sftp_chmod_error_text: self.sftp_chmod_error_text.clone(),
+            close_tabs_confirm_details: pending_close
+                .map(|pending| {
+                    self.close_tabs_consequences(&pending.tab_ids, pending.active_connections)
+                        .0
+                })
+                .unwrap_or_default(),
+            close_tabs_confirm_note_text: pending_close
+                .map(|pending| {
+                    self.close_tabs_consequences(&pending.tab_ids, pending.active_connections)
+                        .1
+                })
+                .unwrap_or_default(),
+            quit_confirm_details: self.quit_consequences().0,
+            quit_confirm_note_text: self.quit_consequences().1,
             // --- managers-dialogs end
         }
     }
@@ -2699,6 +2718,18 @@ pub struct AppProjection {
     pub themes_font_size_text: String,
     pub themes_backup_font_text: String,
     pub themes_font_editable: bool,
+    // --- dialogs-closeout-a ---
+    /// SFTP chmod 窗（compact）：目标（路径 / "N selected item(s)"）、八进制文本、
+    /// 内联错误；勾选联动在 Slint 侧完成。
+    pub sftp_chmod_visible: bool,
+    pub sftp_chmod_path_text: String,
+    pub sftp_chmod_mode_text: String,
+    pub sftp_chmod_error_text: String,
+    /// 关标签 / 退出确认的「后果清单」（项目符号行 + 底部 note）。
+    pub close_tabs_confirm_details: Vec<String>,
+    pub close_tabs_confirm_note_text: String,
+    pub quit_confirm_details: Vec<String>,
+    pub quit_confirm_note_text: String,
     // --- managers-dialogs end
 }
 

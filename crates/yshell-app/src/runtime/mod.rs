@@ -441,6 +441,12 @@ impl AppRuntime {
             keys_deploy_target_index: 0,
             keys_menu_key_id: None,
             proxies_menu_id: None,
+            // --- dialogs-closeout-a ---
+            sftp_chmod_visible: false,
+            sftp_chmod_path_text: String::new(),
+            sftp_chmod_mode_text: String::new(),
+            sftp_chmod_error_text: String::new(),
+            sftp_chmod_selection_count: 0,
             // --- settings-security ---
             settings_app_theme,
             settings_app_theme_baseline: settings_app_theme,
@@ -899,6 +905,14 @@ pub struct AppRuntime {
     pub(crate) keys_menu_key_id: Option<String>,
     /// Proxies：行右键菜单指向的 profile id。
     pub(crate) proxies_menu_id: Option<String>,
+    // --- dialogs-closeout-a ---
+    /// SFTP chmod 窗（compact）：目标路径/选择数 + 八进制文本 + 内联错误。
+    pub(crate) sftp_chmod_visible: bool,
+    pub(crate) sftp_chmod_path_text: String,
+    pub(crate) sftp_chmod_mode_text: String,
+    pub(crate) sftp_chmod_error_text: String,
+    /// 打开时针对的选择数（>1 = 批量 chmod）。
+    pub(crate) sftp_chmod_selection_count: usize,
     // --- settings-security ---
     /// D36 App theme draft (instant preview until Save).
     pub(crate) settings_app_theme: settings::AppThemeDraft,
@@ -1327,3 +1341,119 @@ impl AppRuntime {
 // --- managers-dialogs ---
 // 波2-C：SFTP chmod 窗（八进制 <-> 9 个勾选）的纯逻辑；入口接线在波 3-G。
 pub(crate) mod sftp_chmod;
+
+// --- dialogs-closeout-a ---
+// 关标签 / 退出确认的「后果清单」：按要关闭的标签集合汇总将断开的
+// SSH 会话 / SFTP 面板 / 在途传输 / 端口转发，供 CompactConfirmWindow 以
+// 项目符号行展示（文案在 dialog_windows 组装，保持与既有确认框一致）。
+impl AppRuntime {
+    /// 关标签确认的后果行 + 底部 note。
+    pub(crate) fn close_tabs_consequences(
+        &self,
+        tab_ids: &[String],
+        active_connections: usize,
+    ) -> (Vec<String>, String) {
+        let mut rows = Vec::new();
+        let mut sftp_tabs = 0usize;
+        let mut terminal_tabs = 0usize;
+        let mut tunnel_count = 0usize;
+        for tab_id in tab_ids {
+            let Some(tab) = self.tabs.iter().find(|tab| &tab.tab_id == tab_id) else {
+                continue;
+            };
+            match &tab.kind {
+                tabs::TabKind::Sftp { session_id } => {
+                    sftp_tabs += 1;
+                    if let Some(session) = self.sessions.get(session_id) {
+                        tunnel_count += session.ssh_config.tunnels.len();
+                    }
+                }
+                tabs::TabKind::Terminal { session_id } => {
+                    terminal_tabs += 1;
+                    if let Some(session) = self.sessions.get(session_id) {
+                        tunnel_count += session.ssh_config.tunnels.len();
+                    }
+                }
+                tabs::TabKind::NewTab => {}
+            }
+        }
+        if active_connections > 0 {
+            rows.push(format!(
+                "Disconnect {active_connections} active SSH session(s) on the closing tab(s)."
+            ));
+        }
+        if sftp_tabs > 0 {
+            rows.push(format!(
+                "Stop the SFTP panel on {sftp_tabs} closing tab(s)."
+            ));
+        }
+        if terminal_tabs > 0 {
+            rows.push("Unsaved terminal buffer content is not preserved.".to_owned());
+        }
+        let transfers = self.sftp_transfer_counts().active;
+        if transfers > 0 {
+            rows.push(format!("Cancel {transfers} in-flight file transfer(s)."));
+        }
+        if tunnel_count > 0 {
+            rows.push(format!(
+                "Stop {tunnel_count} port forward(s) attached to the closing session(s)."
+            ));
+        }
+        let note = if tunnel_count > 0 {
+            "Port forwards tied to those sessions stop with them (see Tunnels panel).".to_owned()
+        } else {
+            String::new()
+        };
+        (rows, note)
+    }
+
+    /// 退出确认的后果行 + 底部 note（应用级：所有标签/会话/传输）。
+    pub(crate) fn quit_consequences(&self) -> (Vec<String>, String) {
+        let active_sessions = self
+            .sessions
+            .values()
+            .filter(|session| {
+                matches!(
+                    session.state,
+                    yshell_core::SessionState::Connected | yshell_core::SessionState::Connecting
+                )
+            })
+            .count();
+        let sftp_tabs = self
+            .tabs
+            .iter()
+            .filter(|tab| matches!(tab.kind, tabs::TabKind::Sftp { .. }))
+            .count();
+        let transfers = self.sftp_transfer_counts().active;
+        let tunnel_count = self
+            .sessions
+            .values()
+            .map(|session| session.ssh_config.tunnels.len())
+            .sum::<usize>();
+        let mut rows = Vec::new();
+        if active_sessions > 0 {
+            rows.push(format!(
+                "Disconnect {active_sessions} active SSH session(s)."
+            ));
+        }
+        if sftp_tabs > 0 || transfers > 0 {
+            rows.push(format!(
+                "Stop SFTP where open ({sftp_tabs} tab(s)) and cancel {transfers} in-flight file transfer(s)."
+            ));
+        }
+        if !self.tabs.is_empty() {
+            rows.push(format!("Close all workspace tabs ({}).", self.tabs.len()));
+        }
+        if tunnel_count > 0 {
+            rows.push(format!(
+                "Stop {tunnel_count} port forward(s) tied to those sessions."
+            ));
+        }
+        let note = if tunnel_count > 0 || active_sessions > 0 {
+            "Port forwards tied to those sessions stop with them (see Tunnels panel).".to_owned()
+        } else {
+            String::new()
+        };
+        (rows, note)
+    }
+}

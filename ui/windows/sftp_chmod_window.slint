@@ -280,6 +280,11 @@ export component SftpChmodWindow inherits Window {
         }
     }
 
+    /// 宿主每次 sync 后调用：按当前八进制文本重置 9 个勾选（窗口复用）。
+    public function sync-mode() {
+        root.sync-from-mode();
+    }
+
     init => {
         root.sync-from-mode();
     }

@@ -12,6 +12,8 @@
 
 use crate::error::{AppError, AppResult};
 
+use super::{AppProjection, AppRuntime};
+
 /// 九个权限位（`[owner-r, owner-w, owner-x, group-r, ... other-x]`）。
 pub(crate) const PERMISSION_BIT_COUNT: usize = 9;
 
@@ -98,6 +100,103 @@ pub(crate) fn bits_from_octal_text(text: &str) -> [bool; PERMISSION_BIT_COUNT] {
         .unwrap_or([false; PERMISSION_BIT_COUNT])
 }
 
+// --- dialogs-closeout-a：SFTP chmod 窗的宿主状态机 ---------------------------
+impl AppRuntime {
+    /// 打开 SFTP chmod 窗：预填目标（单文件路径 / N 个选择）与当前八进制权限。
+    pub fn open_sftp_chmod_dialog(&mut self) -> AppProjection {
+        let selection = self.sftp_selected_paths();
+        let count = selection.len();
+        let (path_text, mode_text) = if count > 1 {
+            (
+                format!("{count} selected item(s)"),
+                self.sftp_selected_permissions_text(),
+            )
+        } else if let Some(entry) = self.selected_sftp_entry() {
+            (
+                entry.path.clone(),
+                format_octal_mode(entry.permissions & 0o777),
+            )
+        } else if let Some(path) = selection.first() {
+            (path.clone(), self.sftp_selected_permissions_text())
+        } else {
+            self.set_status_kind(
+                "sftp-chmod-requires-selection",
+                "Select an SFTP entry before changing permissions.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+            return self.projection();
+        };
+        let mode_text = if mode_text.is_empty() {
+            "644".to_owned()
+        } else {
+            mode_text
+        };
+        self.sftp_chmod_visible = true;
+        self.sftp_chmod_path_text = path_text;
+        self.sftp_chmod_mode_text = mode_text;
+        self.sftp_chmod_error_text.clear();
+        self.sftp_chmod_selection_count = count.max(1);
+        self.projection()
+    }
+
+    /// 八进制输入变更：仅做内联校验（勾选联动在 Slint 侧完成）。
+    pub fn update_sftp_chmod_mode(&mut self, value: &str) -> AppProjection {
+        self.sftp_chmod_mode_text = value.to_owned();
+        self.sftp_chmod_error_text = if value.trim().is_empty() {
+            String::new()
+        } else {
+            match parse_octal_mode(value) {
+                Ok(_) => String::new(),
+                Err(error) => error.to_string(),
+            }
+        };
+        self.projection()
+    }
+
+    /// 应用（Cancel | OK 的唯一提交路径）：批量选择走 `chmod_sftp_selection`，
+    /// 单文件走 `chmod_sftp_selected`；成功关闭窗口，失败留在窗内显示原因。
+    pub fn apply_sftp_chmod_dialog(&mut self) -> AppProjection {
+        let mode = match parse_octal_mode(&self.sftp_chmod_mode_text) {
+            Ok(mode) => mode,
+            Err(error) => {
+                self.sftp_chmod_error_text = error.to_string();
+                return self.projection();
+            }
+        };
+        let octal = format_octal_mode(mode);
+        let result = if self.sftp_chmod_selection_count > 1 {
+            self.chmod_sftp_selection(&octal)
+        } else {
+            self.chmod_sftp_selected(&octal)
+        };
+        match result {
+            Ok(projection) => {
+                self.sftp_chmod_visible = false;
+                self.sftp_chmod_error_text.clear();
+                projection
+            }
+            Err(error) => {
+                self.sftp_chmod_error_text = format!("Could not change permissions: {error}");
+                self.set_status_kind(
+                    "sftp-chmod-failed",
+                    self.sftp_chmod_error_text.clone(),
+                    error.to_string(),
+                    String::new(),
+                );
+                self.projection()
+            }
+        }
+    }
+
+    /// Cancel / Esc / ×：关闭窗口且不应用。
+    pub fn cancel_sftp_chmod_dialog(&mut self) -> AppProjection {
+        self.sftp_chmod_visible = false;
+        self.sftp_chmod_error_text.clear();
+        self.projection()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,5 +255,47 @@ mod tests {
     fn bits_from_octal_text_tolerates_invalid_input() {
         assert_eq!(bits_from_octal_text("644"), mode_to_permission_bits(0o644));
         assert_eq!(bits_from_octal_text("nope"), [false; PERMISSION_BIT_COUNT]);
+    }
+
+    // --- dialogs-closeout-a：窗口状态机 -------------------------------------
+
+    fn test_runtime() -> (tempfile::TempDir, AppRuntime) {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+        (temp, runtime)
+    }
+
+    #[test]
+    fn chmod_dialog_requires_a_selection_then_validates_mode() {
+        let (_temp, mut runtime) = test_runtime();
+        // 没有 SFTP 选择：不打开窗口，只给状态提示。
+        let projection = runtime.open_sftp_chmod_dialog();
+        assert!(!projection.sftp_chmod_visible);
+        assert_eq!(runtime.status_kind, "sftp-chmod-requires-selection");
+
+        // 宿主状态机：非法八进制 → 内联错误；合法 → 清除。
+        runtime.sftp_chmod_visible = true;
+        let projection = runtime.update_sftp_chmod_mode("9x");
+        assert!(!projection.sftp_chmod_error_text.is_empty());
+        let projection = runtime.apply_sftp_chmod_dialog();
+        assert!(
+            projection.sftp_chmod_visible,
+            "invalid mode keeps the window open"
+        );
+        let projection = runtime.update_sftp_chmod_mode("755");
+        assert_eq!(projection.sftp_chmod_error_text, "");
+        let projection = runtime.cancel_sftp_chmod_dialog();
+        assert!(!projection.sftp_chmod_visible);
+    }
+
+    #[test]
+    fn close_and_quit_consequences_are_empty_without_open_tabs() {
+        let (_temp, runtime) = test_runtime();
+        let (rows, note) = runtime.close_tabs_consequences(&[], 0);
+        assert!(rows.is_empty());
+        assert_eq!(note, "");
+        let (rows, note) = runtime.quit_consequences();
+        assert!(rows.is_empty());
+        assert_eq!(note, "");
     }
 }

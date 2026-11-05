@@ -26,6 +26,10 @@ export component CompactConfirmWindow inherits Window {
 
     in property <string> title-text: @tr("Confirm");
     in property <string> message-text: "";
+    /// 关标签 / 退出确认的后果清单（项目符号行；空 = 只显示 message）。
+    in property <[string]> details: [];
+    /// 后果清单下的补充说明（端口转发等；空 = 不显示）。
+    in property <string> note-text: "";
     in property <string> confirmation-token: "";
     in property <string> confirmation-placeholder: "";
     in-out property <string> confirmation-text: "";
@@ -94,6 +98,40 @@ export component CompactConfirmWindow inherits Window {
                 }
             }
 
+            // --- Consequences list (close tab / quit) -----------------------
+            if root.details.length > 0 : VerticalLayout {
+                spacing: Theme.spacing-8;
+                vertical-stretch: 0;
+
+                for line in root.details : HorizontalLayout {
+                    spacing: Theme.spacing-8;
+                    alignment: start;
+                    cross-axis-alignment: start;
+
+                    Text {
+                        text: "•";
+                        color: root.is-dangerous ? Theme.critical : Theme.text-secondary;
+                        font-size: Theme.font-body;
+                        vertical-alignment: top;
+                    }
+
+                    Text {
+                        text: line;
+                        color: Theme.text-primary;
+                        font-size: Theme.font-body;
+                        horizontal-stretch: 1;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+
+            if root.note-text != "" : Text {
+                text: root.note-text;
+                color: Theme.text-tertiary;
+                font-size: Theme.font-caption;
+                wrap: word-wrap;
+            }
+
             // --- Typed confirmation (host key REPLACE / secret reset style) -
             if root.needs-token : Text {
                 text: root.confirmation-placeholder != ""
@@ -110,14 +148,6 @@ export component CompactConfirmWindow inherits Window {
                 enabled: root.needs-token;
                 text <=> root.confirmation-text;
                 placeholder-text: root.confirmation-token;
-            }
-
-            // 原型 close-tab-confirm：页脚行内「Don't ask again」是勾选框（非开关）。
-            if root.show-dont-ask-again : WinCheckBox {
-                text: @tr("Don't ask again");
-                accessible-name: @tr("Don't ask again");
-                checked <=> root.dont-ask-again;
-                horizontal-stretch: 0;
             }
 
             Rectangle {
@@ -138,6 +168,17 @@ export component CompactConfirmWindow inherits Window {
                 spacing: Theme.spacing-8;
                 vertical-stretch: 0;
                 padding-top: Theme.spacing-4;
+
+                // 原型 close-tab-confirm：「Don't ask again」是勾选框（非开关），
+                // 与 Cancel / 主操作同一行、位于最左。
+                if root.show-dont-ask-again : WinCheckBox {
+                    text: @tr("Don't ask again");
+                    accessible-name: @tr("Don't ask again");
+                    checked <=> root.dont-ask-again;
+                    horizontal-stretch: 0;
+                }
+
+                Rectangle { horizontal-stretch: 1; }
 
                 cancel_button := WinButton {
                     text: root.cancel-label;
