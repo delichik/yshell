@@ -2454,17 +2454,22 @@ export component MainWindow inherits Window {
                 // 投影与回调由本文件转发，viewport/焦点 out 属性继续对 Rust 暴露。
                 terminal_workspace := TerminalWorkspace {
                     horizontal-stretch: 1;
-                    // N9：终端上方 sync banner（组活跃 / 暂停；Pause / Stop）。
-                    sync-banner-visible: root.input_sync_active;
+                    // N9：可同步会话常驻 banner；WinSwitch = 本会话是否在组内。
+                    sync-banner-visible: root.terminal_sync_all_enabled || root.input_sync_active;
+                    sync-banner-member-enabled: root.terminal_sync_visible_enabled;
+                    sync-banner-member-toggle-enabled: root.terminal_sync_all_enabled;
                     sync-banner-title: TextFormats.input-sync-banner-title(
                         root.input-sync-member-count,
                         root.input_sync_target_count,
-                        root.input_sync_mode_text
+                        root.input_sync_mode_text,
+                        root.terminal_sync_visible_enabled
                     );
                     sync-banner-warn: root.input_sync_notice_kind_text == "control-broadcast"
                         ? @tr("MainWindow" => "Ctrl / Alt warn")
                         : "";
+                    sync-banner-group-active: root.input_sync_active;
                     sync-banner-paused: root.input_sync_mode_text == "paused";
+                    sync-banner-member-toggled() => { root.send_key_input_to("toggle"); }
                     sync-banner-pause() => {
                         root.send_key_input_to(root.input_sync_mode_text == "paused" ? "resume" : "pause");
                     }

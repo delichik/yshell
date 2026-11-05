@@ -300,19 +300,25 @@ export global TextFormats {
         return @tr("MainWindow" => "SYNC → {n} target" | "SYNC → {n} targets" % count);
     }
 
-    /// N9 终端上方横幅标题（组模型：状态 chip 另渲染 ON/PAUSED，此处只写规模）。
+    /// N9 终端上方横幅副标题（开/关由 WinSwitch 表达；此处写组规模或空闲提示）。
     ///
-    /// `members` = 组内会话数；`targets` = 相对焦点的其它成员数；`mode` 保留兼容，标题不再重复 PAUSED。
-    public pure function input-sync-banner-title(members: int, targets: int, mode: string) -> string {
+    /// `members` = 组内会话数；`targets` = 相对焦点的其它成员数；`mode` = `""`/`group`/`paused`；
+    /// `member_on` = 焦点会话是否在组内。
+    public pure function input-sync-banner-title(members: int, targets: int, mode: string, member_on: bool) -> string {
+        if mode == "" || members <= 0 {
+            return member_on
+                ? @tr("MainWindow" => "This session is alone in the sync group.")
+                : @tr("MainWindow" => "Turn on to join the sync group for this session.");
+        }
         if mode == "paused" {
             return @tr(
-                "MainWindow" => "Input Sync: {0} sessions · {1} targets (broadcast paused)",
+                "MainWindow" => "{0} sessions · {1} targets · broadcast paused",
                 members,
                 targets
             );
         }
         return @tr(
-            "MainWindow" => "Input Sync: {0} sessions · broadcasting to {1} targets",
+            "MainWindow" => "{0} sessions · broadcasting to {1} targets",
             members,
             targets
         );

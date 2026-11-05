@@ -1,32 +1,41 @@
-// N9：终端工作区上方的同步输入横幅（组模型；Pause / Stop；无 KEYS 确认）。
+// N9：终端工作区上方的同步输入横幅（组模型；无 KEYS 确认）。
 // 原型：docs/prototypes/main-shell/workspace/sync-input.html
-// 醒目要求：ON / PAUSED 状态 chip + 警告色底，一眼能看出同步是否在广播。
+// 开/关用共享 WinSwitch（与 Settings / Session Editor 同一套）；Pause / Stop 只管组级暂停与解散。
 import { Theme } from "../theme.slint";
-import { WinButton } from "basic/controls.slint";
+import { WinButton, WinSwitch } from "basic/controls.slint";
 import { Icon } from "basic/icons.slint";
 
 export component SyncInputBanner inherits Rectangle {
+    /// 当前焦点会话是否在同步组内（WinSwitch 勾选态）。
+    in property <bool> member-enabled: false;
+    /// 是否允许切换成员（未连接 / 本地终端时为 false）。
+    in property <bool> member-toggle-enabled: false;
     in property <string> title-text: "";
     /// 控制键广播提示（非空时显示 Ctrl/Alt warn chip）。
     in property <string> warn-text: "";
+    /// 组是否非空（有成员时显示 Pause / Stop）。
+    in property <bool> group-active: false;
     /// Pause 按下态（paused 时为 true）。
     in property <bool> paused: false;
+    callback member-toggled();
     callback pause-clicked();
     callback stop-clicked();
 
     height: 40px;
     vertical-stretch: 0;
-    // 开启广播：警告黄底；暂停：略淡但仍可读，避免与普通 chrome 混淆。
-    background: root.paused
-        ? Theme.banner-info-background
-        : Theme.banner-warning-background;
+    // 本会话 On 且未暂停：警告黄；否则用普通 chrome，靠 WinSwitch 表达 Off。
+    background: root.member-enabled && !root.paused
+        ? Theme.banner-warning-background
+        : Theme.banner-info-background;
     border-width: 0px;
 
     Rectangle {
         y: parent.height - 2px;
         height: 2px;
         width: 100%;
-        background: root.paused ? Theme.layer-stroke : Theme.caution;
+        background: root.member-enabled && !root.paused
+            ? Theme.caution
+            : Theme.layer-stroke;
     }
 
     HorizontalLayout {
@@ -35,41 +44,36 @@ export component SyncInputBanner inherits Rectangle {
         spacing: Theme.spacing-8;
         cross-axis-alignment: center;
 
-        // 状态 chip：ON（广播中）/ PAUSED（组仍在、不广播）。
-        Rectangle {
-            border-radius: Theme.radius-control;
-            border-width: 1px;
-            border-color: root.paused ? Theme.layer-stroke : Theme.caution;
-            background: root.paused
-                ? Theme.subtle-selected
-                : Theme.attention-background;
+        Icon {
+            name: "sync";
+            icon-color: root.member-enabled && !root.paused
+                ? Theme.caution
+                : Theme.text-secondary;
+            icon-size: Theme.icon-size-small;
+            cross-axis-self-alignment: center;
+        }
+
+        Text {
+            text: @tr("MainWindow" => "Input Sync");
+            color: root.member-enabled && !root.paused
+                ? Theme.banner-warning-text
+                : Theme.text-primary;
+            font-size: Theme.font-caption;
+            font-weight: Theme.weight-semibold;
+            vertical-alignment: center;
+            wrap: no-wrap;
             horizontal-stretch: 0;
-            HorizontalLayout {
-                padding-left: Theme.spacing-8;
-                padding-right: Theme.spacing-8;
-                padding-top: 2px;
-                padding-bottom: 2px;
-                spacing: Theme.spacing-4;
-                cross-axis-alignment: center;
+        }
 
-                Icon {
-                    name: "sync";
-                    icon-color: root.paused ? Theme.text-secondary : Theme.caution;
-                    icon-size: 12px;
-                    cross-axis-self-alignment: center;
-                }
-
-                Text {
-                    text: root.paused
-                        ? @tr("MainWindow" => "PAUSED")
-                        : @tr("MainWindow" => "ON");
-                    color: root.paused ? Theme.text-secondary : Theme.banner-warning-text;
-                    font-size: Theme.font-caption;
-                    font-weight: Theme.weight-semibold;
-                    vertical-alignment: center;
-                    wrap: no-wrap;
-                }
-            }
+        // 通用 WinSwitch：一眼看出本会话开没开（On = 在组内）。
+        WinSwitch {
+            checked: root.member-enabled;
+            enabled: root.member-toggle-enabled;
+            text: root.member-enabled
+                ? @tr("MainWindow" => "On")
+                : @tr("MainWindow" => "Off");
+            accessible-name: @tr("MainWindow" => "Input Sync");
+            toggled => { root.member-toggled(); }
         }
 
         if root.warn-text != "" : Rectangle {
@@ -96,9 +100,10 @@ export component SyncInputBanner inherits Rectangle {
 
         Text {
             text: root.title-text;
-            color: root.paused ? Theme.text-secondary : Theme.banner-warning-text;
+            color: root.member-enabled && !root.paused
+                ? Theme.banner-warning-text
+                : Theme.text-secondary;
             font-size: Theme.font-caption;
-            font-weight: Theme.weight-semibold;
             vertical-alignment: center;
             wrap: no-wrap;
             overflow: elide;
@@ -106,7 +111,7 @@ export component SyncInputBanner inherits Rectangle {
             min-width: 0px;
         }
 
-        WinButton {
+        if root.group-active : WinButton {
             text: root.paused
                 ? @tr("MainWindow" => "Resume")
                 : @tr("MainWindow" => "Pause");
@@ -116,7 +121,7 @@ export component SyncInputBanner inherits Rectangle {
             clicked => { root.pause-clicked(); }
         }
 
-        WinButton {
+        if root.group-active : WinButton {
             text: @tr("MainWindow" => "Stop");
             horizontal-stretch: 0;
             height: Theme.control-height-compact + 2px;

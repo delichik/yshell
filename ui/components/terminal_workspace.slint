@@ -27,11 +27,15 @@ import { SyncInputBanner } from "sync_input_banner.slint";
 export { WorkspaceTab }
 
 export component TerminalWorkspace inherits VerticalLayout {
-    // --- N9：同步输入横幅（组活跃 / 暂停时显示；Pause / Stop）----------------
+    // --- N9：同步输入横幅（可同步会话常驻；WinSwitch 开/关 + Pause / Stop）----
     in property <bool> sync-banner-visible: false;
+    in property <bool> sync-banner-member-enabled: false;
+    in property <bool> sync-banner-member-toggle-enabled: false;
     in property <string> sync-banner-title: "";
     in property <string> sync-banner-warn: "";
+    in property <bool> sync-banner-group-active: false;
     in property <bool> sync-banner-paused: false;
+    callback sync-banner-member-toggled();
     callback sync-banner-pause();
     callback sync-banner-stop();
 
@@ -405,9 +409,13 @@ export component TerminalWorkspace inherits VerticalLayout {
 
                     // N9：同步横幅在标签栏下方、终端内容上方（原型 sync-input.html）。
                     if root.sync-banner-visible && !root.split-active : SyncInputBanner {
+                        member-enabled: root.sync-banner-member-enabled;
+                        member-toggle-enabled: root.sync-banner-member-toggle-enabled;
                         title-text: root.sync-banner-title;
                         warn-text: root.sync-banner-warn;
+                        group-active: root.sync-banner-group-active;
                         paused: root.sync-banner-paused;
+                        member-toggled() => { root.sync-banner-member-toggled(); }
                         pause-clicked() => { root.sync-banner-pause(); }
                         stop-clicked() => { root.sync-banner-stop(); }
                     }
@@ -633,9 +641,13 @@ export component TerminalWorkspace inherits VerticalLayout {
             padding: 0px;
             // N9：分屏时无共享标签栏，横幅压在整组分屏上方。
             if root.sync-banner-visible && root.split-active : SyncInputBanner {
+                member-enabled: root.sync-banner-member-enabled;
+                member-toggle-enabled: root.sync-banner-member-toggle-enabled;
                 title-text: root.sync-banner-title;
                 warn-text: root.sync-banner-warn;
+                group-active: root.sync-banner-group-active;
                 paused: root.sync-banner-paused;
+                member-toggled() => { root.sync-banner-member-toggled(); }
                 pause-clicked() => { root.sync-banner-pause(); }
                 stop-clicked() => { root.sync-banner-stop(); }
             }
