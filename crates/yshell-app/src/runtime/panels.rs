@@ -690,9 +690,9 @@ pub(crate) const LEFT_WIDTH_MAX: u32 = 420;
 /// 右栏宽度范围（设计语言 §4.1：右 280–480）。
 pub(crate) const RIGHT_WIDTH_MIN: u32 = 280;
 pub(crate) const RIGHT_WIDTH_MAX: u32 = 480;
-/// 默认栏宽（与 C0 `LayoutProfile` 的默认值一致；右栏默认 §4.1 的 320）。
-pub(crate) const DEFAULT_LEFT_WIDTH: u32 = 240;
-pub(crate) const DEFAULT_RIGHT_WIDTH: u32 = 320;
+/// 默认栏宽（与原型 main-shell 及 `LayoutProfile` 默认一致：左 260 / 右 280）。
+pub(crate) const DEFAULT_LEFT_WIDTH: u32 = 260;
+pub(crate) const DEFAULT_RIGHT_WIDTH: u32 = 280;
 /// 分栏边界比例范围与相邻边界最小间距（与 UI 的每面板最小高度配合）。
 pub(crate) const SPLIT_RATIO_MIN: f32 = 0.05;
 pub(crate) const SPLIT_RATIO_MAX: f32 = 0.95;
@@ -2317,13 +2317,22 @@ mod tests {
     }
 
     #[test]
+    fn default_dock_widths_match_prototype() {
+        assert_eq!(DEFAULT_LEFT_WIDTH, 260);
+        assert_eq!(DEFAULT_RIGHT_WIDTH, 280);
+        let layout = LayoutProfile::default();
+        assert_eq!(layout.left_width, DEFAULT_LEFT_WIDTH);
+        assert_eq!(layout.right_width, DEFAULT_RIGHT_WIDTH);
+    }
+
+    #[test]
     fn layout_view_keeps_sessions_and_the_remaining_docks() {
         let layout = LayoutProfile::default();
         let view = compute_panel_layout(&layout, 1440.0, 794.0, None);
-        assert_eq!(view.left_width, 240.0);
-        assert_eq!(view.right_width, 320.0);
-        assert_eq!(view.left_effective_width, 240.0);
-        assert_eq!(view.right_effective_width, 320.0);
+        assert_eq!(view.left_width, 260.0);
+        assert_eq!(view.right_width, 280.0);
+        assert_eq!(view.left_effective_width, 260.0);
+        assert_eq!(view.right_effective_width, 280.0);
         assert!(!view.rail_active);
         assert!(!view.dock_toggle_visible);
         assert!(!view.right_collapsed);
@@ -2337,7 +2346,7 @@ mod tests {
             (
                 PANEL_CARD_INSET,
                 12.0,
-                240.0 - 2.0 * PANEL_CARD_INSET,
+                260.0 - 2.0 * PANEL_CARD_INSET,
                 770.0
             )
         );
@@ -2350,14 +2359,14 @@ mod tests {
         assert_eq!(
             (tunnels.x, tunnels.y, tunnels.width),
             (
-                1120.0 + PANEL_CARD_INSET,
+                1160.0 + PANEL_CARD_INSET,
                 12.0,
-                320.0 - 2.0 * PANEL_CARD_INSET
+                280.0 - 2.0 * PANEL_CARD_INSET
             )
         );
         assert!(tunnels.visible);
         let commands = *view.frame(PanelId::QuickCommands).expect("commands");
-        assert_eq!(commands.x, 1120.0 + PANEL_CARD_INSET);
+        assert_eq!(commands.x, 1160.0 + PANEL_CARD_INSET);
         assert!(commands.y > tunnels.y);
         assert!(commands.visible);
         assert!(view.frame(PanelId::Transfers).is_none());
@@ -2373,7 +2382,7 @@ mod tests {
         assert_eq!(view.right_effective_width, 0.0);
         assert!(!view.frame(PanelId::Tunnels).expect("tunnels").visible);
         assert!(view.frame(PanelId::Sessions).expect("sessions").visible);
-        assert_eq!(view.left_effective_width, 240.0);
+        assert_eq!(view.left_effective_width, 260.0);
 
         // 960 以下：左栏收成 48px 图标条。
         let view = compute_panel_layout(&layout, 900.0, 600.0, None);
@@ -2385,13 +2394,13 @@ mod tests {
         // 用户在 900px 手动展开左栏：图标条让位给完整左栏。
         let view = compute_panel_layout(&layout, 900.0, 600.0, Some(PanelSide::Left));
         assert!(!view.rail_active);
-        assert_eq!(view.left_effective_width, 240.0);
+        assert_eq!(view.left_effective_width, 260.0);
         assert!(view.frame(PanelId::Sessions).expect("sessions").visible);
 
         // 用户在 1000px 手动展开右栏：右栏恢复。
         let view = compute_panel_layout(&layout, 1000.0, 600.0, Some(PanelSide::Right));
         assert!(!view.right_collapsed);
-        assert_eq!(view.right_effective_width, 320.0);
+        assert_eq!(view.right_effective_width, 280.0);
         assert!(view.frame(PanelId::Tunnels).expect("tunnels").visible);
     }
 

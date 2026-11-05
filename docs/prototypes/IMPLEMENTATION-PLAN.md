@@ -66,6 +66,7 @@ $env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
 | 14 | 管理器表单/详情行全面改用共享 `FormRow`/`DetailRow`/`FormHint`（本地行实现清零），3 条新文案补译 | ✅ | `3d3b37f` |
 | 15 | 剩余弹窗 A：sftp-chmod 窗入口/注册/投影、关标签与退出的后果清单、auth-prompt 收口、About 开源许可正文 | ✅ | `ef940f5` |
 | 16 | 剩余弹窗 B：About / Logging / SFTP Conflict / SFTP Properties 按原型收口 | ✅ | `6635820` |
+| 17 | 波 3 · 主壳：6 个一级菜单（补 Tools）、Session 菜单项、`Ctrl+Shift+S`、`F11`、Full Screen/Focus Mode、状态栏 UTF-8、sync banner | 🔍 待用户核验 | （提交后填入） |
 
 ### 4.2 进行中（未提交）
 
@@ -75,7 +76,6 @@ $env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
 
 | # | 事项 | 状态 | 备注 |
 |---|---|---|---|
-| 17 | 波 3 · 主壳：6 个一级菜单（补 Tools）、Session 菜单项、`Ctrl+Shift+S`、`F11`、Full Screen/Focus Mode、状态栏 UTF-8、sync banner | ⬜ | 原型已就绪 |
 | 18 | 波 3 · 停靠面板：Sessions 图标/原地改名/右键项/New Folder 禁用；Transfers 批量；Tunnels `+`；dock 宽度 | ⬜ | 原型已就绪 |
 | 19 | 波 3 · 工作区：标签图标/原地改名/分屏上限 4；Find Across；REC 条；N9 pane Receive；QC Clear；SFTP 原地 New Folder/Rename + chmod 入口 | ⬜ | 原型已就绪 |
 | 20 | 波 4 · i18n 尾部：`No Proxy`、`Discard`、Rust 弹窗标题（`Close Session`/`Rename Tab`） | ⬜ | — |
@@ -98,15 +98,15 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 | `logging/`、`about/`、`sftp-conflict/`、`sftp-properties/`、`password-prompt/` | ✅/🔍 | 已按原型收口，待核验 |
 | `compact-confirm/`、`close-tab-confirm/` | ✅/🔍 | 已补后果清单/Don't ask again 位置，待核验 |
 | `sftp-chmod/` | ✅/🔍 | 窗已注册并接入 SFTP 行右键，待核验 |
-| `main-shell/`（index、tool-dock、menu、status、快捷键） | ⬜ | 波 3 |
-| `main-shell/panels/`（sessions/transfers/tunnels/commands） | 🔄/⬜ | 基础面板已有；图标/原地改名/右键/批量在波 3 |
-| `main-shell/workspace/`（tab-bar/terminal/sftp/quick-connect/split/sync-input） | 🔄/⬜ | 基础已有；Find Across/REC/banner/原地操作在波 3；sync 组语义已完成、banner 待做 |
+| `main-shell/`（index、tool-dock、menu、status、快捷键） | 🔍 | 波 3 #17：菜单/快捷键/全屏/Focus/UTF-8/banner；待核验 |
+| `main-shell/panels/`（sessions/transfers/tunnels/commands） | 🔄/⬜ | 基础面板已有；图标/原地改名/右键/批量在波 3 #18 |
+| `main-shell/workspace/`（tab-bar/terminal/sftp/quick-connect/split/sync-input） | 🔄/⬜ | banner 已随 #17；Find Across/REC/原地操作在波 3 #19 |
 | `forms.html`、`annotations.html`、`index.html`、`_form-audit.html` | — | 设计参考页，非应用页面 |
 
 ## 5. 剩余顺序（按用户「逐项核验」节奏）
 
-1. **第 2 波已全部完成**：#0–#16 均已本地提交（`fe7f037` … `ee9c807`），Lead 已跑四道门禁并重建 exe → **当前等待用户核验第 2 波成果**（Settings / Session Editor / 管理器 / 开关 / 表单 / 预览 / 剩余弹窗 / 同步组 / 环境变量）。
-2. 用户确认后：进入**第 3 波** #17–#19（主壳 → 面板 → 工作区，按热点文件串行接线；sync banner 在此项实现）。
+1. **第 2 波已全部完成**：#0–#16 均已本地提交（`fe7f037` … `ee9c807` / `2fbc72d`）。
+2. **第 3 波进行中**：#17 主壳已实现并本地提交 → **等待用户核验**；通过后继续 #18 面板 → #19 工作区。
 3. 最后 #20–#21 清理 + #22 验收。
 
 ## 6. 已知未收口 / 风险
@@ -138,7 +138,7 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 
 - 2026-11-03：`fe7f037` 基线修复；`f530299` 差距清单+计划；`c6d1102`/`edb0243` 波 1 基础层；`2d26a06` Settings 窗口；`bed84bc` i18n 全量；`8d442ec` MCP 收敛；`eb3533e` 窗口行为修复（此提交及之前曾被意外 push 到 origin）。
 - 2026-11-04：`936bb10` 环境变量配置清理；`9489104` N9 双向同步组；`d48fe84` i18n 再同步；`8f016d7` Session Editor 接线；`7b25790` 开关统一；`177f634` 管理器接线；`fa3dece` 共享表单/视觉一致性。
-- 2026-11-05：`bde53dd`/`0c82331` 现行计划与完成状态文档化；`72c4189` 预览尺寸统一 + tunnel/login-step 表单行收口；`3d3b37f` 管理器表单/详情行收口；`ef940f5` sftp-chmod 入口 + 关标签/退出后果清单 + auth-prompt + 开源许可正文；`6635820` About/Logging/SFTP Conflict/Properties 收口；`ee9c807` 弹窗文案 i18n 同步。
+- 2026-11-05：`bde53dd`/`0c82331` 现行计划与完成状态文档化；`72c4189` 预览尺寸统一 + tunnel/login-step 表单行收口；`3d3b37f` 管理器表单/详情行收口；`ef940f5` sftp-chmod 入口 + 关标签/退出后果清单 + auth-prompt + 开源许可正文；`6635820` About/Logging/SFTP Conflict/Properties 收口；`ee9c807` 弹窗文案 i18n 同步；`2fbc72d` 波 2 完成状态；波 3 #17 主壳（Tools / Session / F11 / Focus / UTF-8 / sync banner / dock 260·280）。
 
 ---
 

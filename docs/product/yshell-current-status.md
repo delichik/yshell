@@ -1,6 +1,6 @@
 # YShell 本 build 产品现状
 
-更新时间：2026-11-02  
+更新时间：2026-11-05  
 性质：**唯一现行产品范围文档**（有什么 / 砍了什么 / 还缺什么 / 仍生效的决策）
 
 冲突时：本文 > 实现与单测 > [`yshell-ui-interaction-contract.md`](./yshell-ui-interaction-contract.md) > [`archive/`](./archive/README.md) 历史稿。
@@ -19,7 +19,7 @@
 | 终端样式 N5 / N5a | 继承链、配色、字体（Terminal Styles 管理器）；物理像素光栅 / CJK |
 | 日志 UI N6 | 右键启停、REC、弹窗、rfd |
 | 多窗口 N7 Phase 1 | 菜单迁窗、关窗确认 |
-| 同步输入 N9 | **双向组模型**：逐会话 Sync 开关，任意成员输入广播给其它成员（无 SRC/RCV、无 All/Visible 预设）；Pause / Stop；状态栏 `SYNC → n targets` chip；AI/MCP 输入自动退出同步；不弹 KEYS 确认（D23）。终端上方 banner 见 §2 |
+| 同步输入 N9 | **双向组模型**：逐会话 Sync 开关，任意成员输入广播给其它成员（无 SRC/RCV、无 All/Visible 预设）；Pause / Stop；状态栏 `SYNC → n targets` chip + 终端上方 sync banner（Pause/Stop）；AI/MCP 输入自动退出同步；不弹 KEYS 确认（D23） |
 | 本地终端 | 本机 shell 标签 |
 | 基建 | Slint 1.18、R1/R2 拆分、L2 Esc/遮罩、对比度 xtask、真实 SSH only |
 | MCP（终端控制） | Settings → **MCP** 独立分区（原型）：Enable / Port / Listen(Local\|LAN) / API key / View user / Control user / Auto-approve；默认关。AI 创建的标签带 AI 标志（TabBar 原型）。实现仍含授权锁 + `session_run`/blocker；不含 SFTP、不含代填密码/host key（见 D34） |
@@ -33,7 +33,7 @@ UI 为 disabled + tooltip、空态，或决策延后。**不是待补闭环。**
 | 项 | 说明 |
 |---|---|
 | Quick Commands 内容 | Dock 仅空态；View 仍可显隐面板 |
-| Import / Export Config | File 菜单无入口；空白区 Import disabled |
+| Import / Export Config | File 菜单禁用占位（Not in this version）；空白区 Import disabled |
 | Expand All / Collapse All | 空白区 disabled |
 | 文件夹：New Folder / Rename / Delete / Connect All | 仅 New Session Here、Edit…（与 Session 共用编辑器） |
 | Session Editor：SFTP / Advanced 分区 | nav disabled |
@@ -43,7 +43,6 @@ UI 为 disabled + tooltip、空态，或决策延后。**不是待补闭环。**
 | OS 拖出到资源管理器 | 等 winit 0.31 + Slint（D3） |
 | 标签拖出成新窗 | 等上游；现仅菜单迁窗（D5） |
 | 主题导入导出 / 光标形状 | 首版不做（D16） |
-| 同步输入 banner（终端上方状态条） | 原型已按新语义更新（组模型、Pause/Stop）；**本波不实现 banner**，反馈只走状态栏 chip + 菜单（留波 3） |
 | 仅路径引用私钥（不托管内容） | 不做（D19） |
 
 ---
@@ -58,7 +57,7 @@ UI 为 disabled + tooltip、空态，或决策延后。**不是待补闭环。**
 | Appearance 主题 | 原型已有 App theme（Mode / Accent）+ Terminal style 下拉，Settings 已有控件并即时预览 / Save 持久化；外观只读 `[ui] appearance_mode / appearance_accent`（不再有 `YSHELL_THEME` / `YSHELL_ACCENT` 环境变量）；Appearance 仍在页面内内联编辑字体 / 主题，未改为 Profile 下拉 |
 | Terminal 交互设置 | 原型已有 Middle / Right click、Multi-line paste、Auto copy；runtime 未接线 |
 | 弹窗尺寸 / 特殊窗 | 原型已统一为 compact / standard / wide；Host key Slint 仍 standard，SFTP Permissions 新窗未接线；旧 NewFolder / SftpEntry 窗口仍在代码中 |
-| N9 Visible | ~~目标集等同 All~~ 已随组模型改版删除（无 All/Visible 预设）；剩余：终端上方 banner 未实现（§2，波 3） |
+| N9 Visible | ~~目标集等同 All~~ 已随组模型改版删除（无 All/Visible 预设）；终端上方 banner 已随波 3 #17 落地 |
 | N6 遗留 | R-107 存为会话默认；日志大小上限 |
 | `ui.new_tab_mode` | schema 有；`+` 忽略 session-editor；Settings 无项（相对 D11） |
 | `ui.multi_window_enabled` | schema 幽灵字段，未接线 |

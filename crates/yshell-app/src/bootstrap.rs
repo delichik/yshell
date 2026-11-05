@@ -968,6 +968,38 @@ pub(crate) fn wire_callbacks(
         }
     });
 
+    // Session → Duplicate Tab：复制活动标签同源会话。
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_duplicate_active_tab(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let tab_id = runtime_ref.borrow().active_tab_id.clone();
+        let Some(tab_id) = tab_id else {
+            return;
+        };
+        match runtime_ref.borrow_mut().duplicate_tab(&tab_id) {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not duplicate the tab.", &error),
+        }
+    });
+
+    // View → Full Screen / F11：Slint Window 无 fullscreen 属性，走 Window API。
+    let weak = window.as_weak();
+    window.on_toggle_fullscreen(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let next = !window.window().is_fullscreen();
+        window.window().set_fullscreen(next);
+        window.set_window_fullscreen(next);
+    });
+
     // N9：同步发送按键（终端右键 `Send Key Input to …` / 标签右键"接收键输入" /
     // 状态栏 chip 一键停止）。
     let weak = window.as_weak();

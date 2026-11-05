@@ -22,10 +22,19 @@ import { QuickConnectPage, QuickConnectRow } from "../pages/quick_connect.slint"
 import { SftpPanel } from "sftp_panel.slint";
 import { FileCrumb, FileRow } from "file_pane.slint";
 import { SftpTabPage } from "sftp_tab_page.slint";
+import { SyncInputBanner } from "sync_input_banner.slint";
 
 export { WorkspaceTab }
 
 export component TerminalWorkspace inherits VerticalLayout {
+    // --- N9：同步输入横幅（组活跃 / 暂停时显示；Pause / Stop）----------------
+    in property <bool> sync-banner-visible: false;
+    in property <string> sync-banner-title: "";
+    in property <string> sync-banner-warn: "";
+    in property <bool> sync-banner-paused: false;
+    callback sync-banner-pause();
+    callback sync-banner-stop();
+
     in property <[WorkspaceTab]> tabs: [];
     // E21：这些默认值都会被宿主投影覆盖；置空避免投影到达前闪现英文（muse 轮1 中#35）
     in property <string> title-text: "";
@@ -394,6 +403,15 @@ export component TerminalWorkspace inherits VerticalLayout {
                         tab-bar-dropped(_data) => { }
                     }
 
+                    // N9：同步横幅在标签栏下方、终端内容上方（原型 sync-input.html）。
+                    if root.sync-banner-visible && !root.split-active : SyncInputBanner {
+                        title-text: root.sync-banner-title;
+                        warn-text: root.sync-banner-warn;
+                        paused: root.sync-banner-paused;
+                        pause-clicked() => { root.sync-banner-pause(); }
+                        stop-clicked() => { root.sync-banner-stop(); }
+                    }
+
                     // TAB-3：内容区常驻；QC 全页作为覆盖层叠在这里（tab 栏之下），
                     // 终端视图保持满尺寸垫底，视口 out 属性不受 QC 显隐影响。
                     single_content := Rectangle {
@@ -613,6 +631,14 @@ export component TerminalWorkspace inherits VerticalLayout {
 
         VerticalLayout {
             padding: 0px;
+            // N9：分屏时无共享标签栏，横幅压在整组分屏上方。
+            if root.sync-banner-visible && root.split-active : SyncInputBanner {
+                title-text: root.sync-banner-title;
+                warn-text: root.sync-banner-warn;
+                paused: root.sync-banner-paused;
+                pause-clicked() => { root.sync-banner-pause(); }
+                stop-clicked() => { root.sync-banner-stop(); }
+            }
             split_view := WorkspaceSplitView {
                 vertical-stretch: 1;
                 leaves: root.split-leaves;

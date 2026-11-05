@@ -134,8 +134,8 @@ export component ToolDock inherits Rectangle {
     in property <length> left-effective-width: 0px;
     in property <length> right-effective-width: 0px;
     /// 模型记忆的期望栏宽（拖拽起点快照用）。
-    in property <length> left-width: 240px;
-    in property <length> right-width: 340px;
+    in property <length> left-width: 260px;
+    in property <length> right-width: 280px;
     in property <bool> nav-rail-active: false;
     in property <float> layout-drag-scale: 1.0;
     in property <PanelFrameData> sessions-frame;
@@ -303,7 +303,7 @@ export component ToolDock inherits Rectangle {
 
     // --- 中部：三列占位（左栏占位 / @children 工作区 / 右栏占位）--------------
     // 面板在下方绝对定位覆盖左右占位；占位撑出与旧版一致的几何
-    // （左 240 + 4px 把手 + 工作区 + 4px 把手 + 右 320 @1440×900）。
+    // （左 260 + 4px 把手 + 工作区 + 4px 把手 + 右 280 @1440×900）。
     HorizontalLayout {
         spacing: 0px;
 

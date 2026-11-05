@@ -300,6 +300,24 @@ export global TextFormats {
         return @tr("MainWindow" => "SYNC → {n} target" | "SYNC → {n} targets" % count);
     }
 
+    /// N9 终端上方横幅标题（组模型：`Input Sync: n sessions · SYNC → m targets`）。
+    ///
+    /// `members` = 组内会话数；`targets` = 相对焦点的其它成员数；`mode` = `group`/`paused`。
+    public pure function input-sync-banner-title(members: int, targets: int, mode: string) -> string {
+        if mode == "paused" {
+            return @tr(
+                "MainWindow" => "Input Sync: {0} sessions · SYNC → {1} targets · PAUSED",
+                members,
+                targets
+            );
+        }
+        return @tr(
+            "MainWindow" => "Input Sync: {0} sessions · SYNC → {1} targets",
+            members,
+            targets
+        );
+    }
+
     /// chip 区域的一次性提示（kind 由 Rust 投影：control-broadcast / member-removed /
     /// ai-input-opt-out）。
     public pure function input-sync-notice(kind: string, param: string, count: int) -> string {

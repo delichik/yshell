@@ -1,0 +1,84 @@
+// N9：终端工作区上方的同步输入横幅（组模型；Pause / Stop；无 KEYS 确认）。
+// 原型：docs/prototypes/main-shell/workspace/sync-input.html
+import { Theme } from "../theme.slint";
+import { WinButton } from "basic/controls.slint";
+
+export component SyncInputBanner inherits Rectangle {
+    in property <string> title-text: "";
+    /// 控制键广播提示（非空时显示 Ctrl/Alt warn chip）。
+    in property <string> warn-text: "";
+    /// Pause 按下态（paused 时为 true）。
+    in property <bool> paused: false;
+    callback pause-clicked();
+    callback stop-clicked();
+
+    height: 40px;
+    vertical-stretch: 0;
+    background: Theme.banner-info-background;
+    border-width: 0px;
+    // 底部分隔：与终端内容划界（原型用更粗底边）。
+    Rectangle {
+        y: parent.height - 2px;
+        height: 2px;
+        width: 100%;
+        background: Theme.layer-stroke;
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-12;
+        padding-right: Theme.spacing-12;
+        spacing: Theme.spacing-8;
+        cross-axis-alignment: center;
+
+        if root.warn-text != "" : Rectangle {
+            border-radius: Theme.radius-control;
+            border-width: 1px;
+            border-color: Theme.caution;
+            background: Theme.attention-background;
+            horizontal-stretch: 0;
+            VerticalLayout {
+                padding-left: Theme.spacing-8;
+                padding-right: Theme.spacing-8;
+                padding-top: 2px;
+                padding-bottom: 2px;
+                Text {
+                    text: root.warn-text;
+                    color: Theme.caution;
+                    font-size: Theme.font-caption;
+                    font-weight: Theme.weight-semibold;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                }
+            }
+        }
+
+        Text {
+            text: root.title-text;
+            color: Theme.text-primary;
+            font-size: Theme.font-caption;
+            font-weight: Theme.weight-semibold;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+            horizontal-stretch: 1;
+            min-width: 0px;
+        }
+
+        WinButton {
+            text: root.paused
+                ? @tr("MainWindow" => "Resume")
+                : @tr("MainWindow" => "Pause");
+            subtle: true;
+            horizontal-stretch: 0;
+            height: Theme.control-height-compact + 2px;
+            clicked => { root.pause-clicked(); }
+        }
+
+        WinButton {
+            text: @tr("MainWindow" => "Stop");
+            horizontal-stretch: 0;
+            height: Theme.control-height-compact + 2px;
+            clicked => { root.stop-clicked(); }
+        }
+    }
+}

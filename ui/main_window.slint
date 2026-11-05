@@ -696,10 +696,15 @@ export component MainWindow inherits Window {
 
     // --- N3：面板停靠布局（全部由 Rust 计算/下发；Slint 只做投影接收）----------
     // 面板框 px 几何（相对内容区左上角）+ 两侧有效栏宽 + 断点标志。
-    in-out property <length> layout_left_effective_width: 240px;
-    in-out property <length> layout_right_effective_width: 340px;
-    in-out property <length> layout_left_width: 240px;
-    in-out property <length> layout_right_width: 340px;
+    in-out property <length> layout_left_effective_width: 260px;
+    in-out property <length> layout_right_effective_width: 280px;
+    in-out property <length> layout_left_width: 260px;
+    in-out property <length> layout_right_width: 280px;
+    /// View → Focus Mode：隐藏左右停靠栈，保留工作区 + 状态栏。
+    in-out property <bool> focus_mode: false;
+    /// View → Full Screen / F11：由 Rust `Window::set_fullscreen` 驱动；本属性镜像勾选态。
+    in-out property <bool> window_fullscreen: false;
+    callback toggle_fullscreen();
     in-out property <bool> layout_rail_active: false;
     in-out property <bool> layout_rail_available: false;
     in-out property <bool> layout_dock_toggle_visible: false;
@@ -980,6 +985,8 @@ export component MainWindow inherits Window {
     callback drop_on_local_gutter(data-transfer, DragAction);
     callback disconnect_session();
     callback reconnect_session();
+    /// Session → Duplicate Tab：复制活动标签同源会话。
+    callback duplicate_active_tab();
     callback retry_connection_overlay();
     callback cancel_connection_overlay();
     callback copy_connection_overlay_error();
@@ -1199,15 +1206,24 @@ export component MainWindow inherits Window {
     property <string> shortcut-quit: "Ctrl+Q";
     property <string> shortcut-reconnect: "F5";
     property <string> shortcut-settings: "Ctrl+,";
+    property <string> shortcut-open-sftp: "Ctrl+Shift+S";
+    property <string> shortcut-fullscreen: "F11";
+    property <string> shortcut-connect: "Enter";
     // 终端里已实现的复制/粘贴组合键（由 bootstrap.rs 的终端按键处理分发）。
     property <string> shortcut-copy: "Ctrl+Shift+C";
     property <string> shortcut-paste: "Ctrl+V";
 
-    // F5 在 Slint 里是特殊键码（见 i-slint-common `key_codes.rs`）。
+    // F5 / F11 在 Slint 里是特殊键码（见 i-slint-common `key_codes.rs`）。
     // T0（Slint 1.18.1）核对：`KeyEvent` 仍然只有 text/modifiers/repeat
     //（i-slint-common `builtin_structs.rs`），没有 `key` 字段，因此特殊键继续按
     // `event.text` 的私有区键码比较。
     property <string> key-code-f5: "\u{F708}";
+    property <string> key-code-f11: "\u{F70E}";
+
+    /// N9 横幅：组内会话数（焦点在组内 = targets+1，否则 = targets）。
+    property <int> input-sync-member-count: root.terminal_sync_visible_enabled
+        ? root.input_sync_target_count + 1
+        : root.input_sync_target_count;
 
     // 弹窗已改为独立非模态 OS 窗口：主窗口快捷键不再因弹窗让位。
     property <bool> global-shortcuts-blocked: false;
@@ -1286,9 +1302,21 @@ export component MainWindow inherits Window {
                 }
                 return true;
             }
+            // F11：全屏（与 View > Full Screen 同一切换；Rust 调 Window::set_fullscreen）
+            if (!shift && text == root.key-code-f11) {
+                root.toggle_fullscreen();
+                return true;
+            }
             return false;
         }
         if (shift) {
+            // Ctrl+Shift+S：打开活动会话 SFTP（与 Session > Open SFTP 同一门限）
+            if (shortcut-key(text, "s", "S")) {
+                if (root.active_tab_can_switch_to_sftp) {
+                    root.switch_active_tab_to_sftp();
+                }
+                return true;
+            }
             // Ctrl+Shift+K：清屏（Ctrl+Shift+C / Ctrl+Shift+V 留给终端复制、粘贴，不拦截）
             if (shortcut-key(text, "k", "K")) {
                 if (root.has_active_session) {
@@ -1373,6 +1401,12 @@ export component MainWindow inherits Window {
             tooltip: root.has_active_session ? "" : @tr("Open a session before saving it.")
         },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        // status §2：Import/Export 本版不做（原型菜单栏旁禁用占位 → File 菜单项）。
+        {
+            label: @tr("Import/Export"), shortcut: "",
+            enabled: false, checked: false, separator: false,
+            tooltip: @tr("Not in this version.")
+        },
         { label: @tr("Settings..."), shortcut: root.shortcut-settings, enabled: true, checked: false, separator: false },
         { label: @tr("Quit"), shortcut: root.shortcut-quit, enabled: true, checked: false, separator: false }
     ];
@@ -1420,7 +1454,12 @@ export component MainWindow inherits Window {
         }
     ];
     property <[MenuEntry]> session_menu_entries: [
-        // W5-A3：已连接才能断开；有活动会话（且未连接）才能重连。
+        // 原型 Session：Connect / Disconnect / Reconnect / Duplicate / Edit / Open SFTP / Tunnels。
+        {
+            label: @tr("Connect"), shortcut: root.shortcut-connect,
+            enabled: root.has_saved_selection, checked: false, separator: false,
+            tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
+        },
         {
             label: @tr("Disconnect"), shortcut: "",
             enabled: root.active_session_connected, checked: false, separator: false,
@@ -1434,30 +1473,28 @@ export component MainWindow inherits Window {
                 : @tr("Open a session first.")
         },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
-        // W5-A3：Edit / Delete 需要选中的已保存会话；Update 还需要活动会话作为来源。
         {
-            label: @tr("Edit Selected Session..."), shortcut: "",
-            enabled: root.has_saved_selection, checked: false, separator: false,
-            tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
+            label: @tr("Duplicate Tab"), shortcut: "",
+            enabled: root.has_active_session, checked: false, separator: false,
+            tooltip: root.has_active_session ? "" : @tr("Open a session first.")
         },
         {
-            label: @tr("Update Selected From Active"), shortcut: "",
-            enabled: root.has_saved_selection && root.has_active_session, checked: false, separator: false,
-            tooltip: root.has_saved_selection
-                ? @tr("Open the active session first.")
-                : @tr("Select a saved session first.")
-        },
-        {
-            label: @tr("Delete Selected Session..."), shortcut: "",
+            label: @tr("Edit Session"), shortcut: "",
             enabled: root.has_saved_selection, checked: false, separator: false,
             tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
         },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
-        // N4：两个同级、独立入口（私钥页 / 主机密钥页）；NET-1 增加代理管理器。
-        { label: @tr("Host Keys..."), shortcut: "", enabled: true, checked: false, separator: false },
-        { label: @tr("Private Keys..."), shortcut: "", enabled: true, checked: false, separator: false },
-        { label: @tr("Proxy Manager..."), shortcut: "", enabled: true, checked: false, separator: false },
-        { label: @tr("Theme Manager..."), shortcut: "", enabled: true, checked: false, separator: false }
+        {
+            label: @tr("Open SFTP"), shortcut: root.shortcut-open-sftp,
+            enabled: root.active_tab_can_switch_to_sftp, checked: false, separator: false,
+            tooltip: root.active_tab_can_switch_to_sftp
+                ? ""
+                : @tr("Connect the terminal before switching to SFTP.")
+        },
+        {
+            label: @tr("Tunnels"), shortcut: "", enabled: true, checked: root.tunnels_visible, separator: false,
+            tooltip: @tr("Configured tunnels for the active session.")
+        }
     ];
     property <[MenuEntry]> view_menu_entries: [
         { label: @tr("Session Manager"), shortcut: root.shortcut-toggle-sidebar, enabled: true, checked: root.sessions_visible, separator: false },
@@ -1489,6 +1526,32 @@ export component MainWindow inherits Window {
             label: @tr("Close Current Pane"), shortcut: "",
             enabled: root.tab_menu_close_pane_enabled, checked: false, separator: false,
             tooltip: root.tab_menu_close_pane_enabled ? "" : @tr("Split the workspace first.")
+        },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        // 波 3 #17：Full Screen / Focus Mode（索引 9/10）。
+        {
+            label: @tr("Full Screen"), shortcut: root.shortcut-fullscreen,
+            enabled: true, checked: root.window_fullscreen, separator: false
+        },
+        {
+            label: @tr("Focus Mode"), shortcut: "",
+            enabled: true, checked: root.focus_mode, separator: false,
+            tooltip: @tr("Hide left and right tool docks while keeping the workspace and status bar.")
+        }
+    ];
+    // 波 3 #17：管理器入口从 Session 迁到 Tools（原型 tools 菜单）。
+    property <[MenuEntry]> tools_menu_entries: [
+        { label: @tr("Known Hosts..."), shortcut: "", enabled: true, checked: false, separator: false },
+        { label: @tr("Private Keys..."), shortcut: "", enabled: true, checked: false, separator: false },
+        { label: @tr("Proxies..."), shortcut: "", enabled: true, checked: false, separator: false },
+        { label: @tr("Terminal Styles..."), shortcut: "", enabled: true, checked: false, separator: false },
+        {
+            label: @tr("Logging..."), shortcut: "",
+            enabled: root.terminal_logging_start_enabled || root.terminal_logging_stop_enabled,
+            checked: false, separator: false,
+            tooltip: (root.terminal_logging_start_enabled || root.terminal_logging_stop_enabled)
+                ? ""
+                : @tr("Open a session first.")
         }
     ];
     property <[MenuEntry]> help_menu_entries: [
@@ -1947,19 +2010,18 @@ export component MainWindow inherits Window {
         }
     }
 
-    /// 一级菜单选中：menu 0..4 = File/Edit/Session/View/Help（模型数组见下方）。
-    /// 逐条与拆分前各 MenuPopup 的 selected 分支一致。
+    /// 一级菜单选中：menu 0..5 = File/Edit/Session/View/Tools/Help。
     function dispatch_menu(menu: int, index: int) {
         if (menu == 0) {
-            // File
+            // File（4 = Import/Export 禁用占位，无动作）
             if (index == 0) { root.start_new_saved_session_editor(); }
             else if (index == 1) { root.focus-quick-connect(); }
             else if (index == 2) { root.save_session(); }
-            else if (index == 4) {
+            else if (index == 5) {
                 root.open_settings_appearance();
                 root.settings_dialog_visible = true;
             }
-            else if (index == 5) {
+            else if (index == 6) {
                 if (root.settings_confirm_quit_app) { root.quit_dialog_visible = true; }
                 else { root.quit_app(); }
             }
@@ -1990,21 +2052,20 @@ export component MainWindow inherits Window {
                 }
             }
         } else if (menu == 2) {
-            // Session
-            if (index == 0) { root.disconnect_session(); }
-            else if (index == 1) { root.reconnect_session(); }
-            else if (index == 3) { root.load_selected_saved_session_into_editor(); }
-            else if (index == 4) { root.update_selected_saved_session(); }
-            else if (index == 5) {
-                root.delete_session_confirmation_text = "";
-                root.delete_session_dialog_visible = true;
+            // Session：0 Connect / 1 Disconnect / 2 Reconnect / 4 Duplicate / 5 Edit / 7 Open SFTP / 8 Tunnels
+            if (index == 0) { root.open_selected_saved_session(); }
+            else if (index == 1) { root.disconnect_session(); }
+            else if (index == 2) { root.reconnect_session(); }
+            else if (index == 4) { root.duplicate_active_tab(); }
+            else if (index == 5) { root.load_selected_saved_session_into_editor(); }
+            else if (index == 7) {
+                if (root.active_tab_can_switch_to_sftp) {
+                    root.switch_active_tab_to_sftp();
+                }
             }
-            else if (index == 7) { root.open_host_keys_manager(); }
-            else if (index == 8) { root.open_private_keys_manager(); }
-            else if (index == 9) { root.open_proxies_manager(); }
-            else if (index == 10) { root.open_theme_manager(); }
+            else if (index == 8) { root.toggle_panel("tunnels"); }
         } else if (menu == 3) {
-            // View：面板可见性 + 分屏（Local/SFTP 已并入 SFTP 标签）。
+            // View：面板可见性 + 分屏 + Full Screen / Focus Mode。
             if (index == 0) { root.toggle_panel("sessions"); }
             else if (index == 1) { root.toggle_panel("tunnels"); }
             else if (index == 2) { root.toggle_panel("quick_commands"); }
@@ -2018,7 +2079,22 @@ export component MainWindow inherits Window {
             else if (index == 5) { root.split_workspace("right"); }
             else if (index == 6) { root.split_workspace("down"); }
             else if (index == 7) { root.close_split_pane(-1); }
+            else if (index == 9) { root.toggle_fullscreen(); }
+            else if (index == 10) { root.focus_mode = !root.focus_mode; }
         } else if (menu == 4) {
+            // Tools：Known Hosts / Private Keys / Proxies / Terminal Styles / Logging
+            if (index == 0) { root.open_host_keys_manager(); }
+            else if (index == 1) { root.open_private_keys_manager(); }
+            else if (index == 2) { root.open_proxies_manager(); }
+            else if (index == 3) { root.open_theme_manager(); }
+            else if (index == 4) {
+                if (root.terminal_logging_start_enabled) {
+                    root.terminal_logging_start();
+                } else if (root.terminal_logging_stop_enabled) {
+                    root.terminal_logging_stop();
+                }
+            }
+        } else if (menu == 5) {
             // Help
             if (index == 0) { root.about_dialog_visible = true; }
         }
@@ -2287,7 +2363,7 @@ export component MainWindow inherits Window {
             // New Session 强调按钮已去掉：File 菜单 / Ctrl+N / 其它入口仍可用。
             MenuBar {
                 open-index: root.open_menu_index;
-                dock-toggle-visible: root.layout_dock_toggle_visible;
+                dock-toggle-visible: !root.focus_mode && root.layout_dock_toggle_visible;
                 right-collapsed: root.layout_dock_collapsed;
                 window-maximized: root.maximized;
                 native-title-drag: root.native_title_drag;
@@ -2311,11 +2387,12 @@ export component MainWindow inherits Window {
             // 面板框绝对定位、内容常驻；中间 `@children` 槽放 TerminalWorkspace。
             tool_dock := ToolDock {
                 vertical-stretch: 1;
-                left-effective-width: root.layout_left_effective_width;
-                right-effective-width: root.layout_right_effective_width;
+                // Focus Mode：本地隐藏左右栈（不改 Rust 布局记忆；再次切换即恢复）。
+                left-effective-width: root.focus_mode ? 0px : root.layout_left_effective_width;
+                right-effective-width: root.focus_mode ? 0px : root.layout_right_effective_width;
                 left-width: root.layout_left_width;
                 right-width: root.layout_right_width;
-                nav-rail-active: root.layout_rail_active;
+                nav-rail-active: root.focus_mode ? false : root.layout_rail_active;
                 layout-drag-scale: root.layout_drag_scale;
                 sessions-frame: root.layout_sessions_frame;
                 local-frame: root.layout_local_frame;
@@ -2377,6 +2454,21 @@ export component MainWindow inherits Window {
                 // 投影与回调由本文件转发，viewport/焦点 out 属性继续对 Rust 暴露。
                 terminal_workspace := TerminalWorkspace {
                     horizontal-stretch: 1;
+                    // N9：终端上方 sync banner（组活跃 / 暂停；Pause / Stop）。
+                    sync-banner-visible: root.input_sync_active;
+                    sync-banner-title: TextFormats.input-sync-banner-title(
+                        root.input-sync-member-count,
+                        root.input_sync_target_count,
+                        root.input_sync_mode_text
+                    );
+                    sync-banner-warn: root.input_sync_notice_kind_text == "control-broadcast"
+                        ? @tr("MainWindow" => "Ctrl / Alt warn")
+                        : "";
+                    sync-banner-paused: root.input_sync_mode_text == "paused";
+                    sync-banner-pause() => {
+                        root.send_key_input_to(root.input_sync_mode_text == "paused" ? "resume" : "pause");
+                    }
+                    sync-banner-stop() => { root.stop_input_sync(); }
                     // TAB-3/TAB-6：QC 覆盖层只盖单窗格内容区（tab 栏常驻）；单终端实例保留
                     // 在底层但置为非交互（terminal-visible=false）。分屏时覆盖层只叠在聚焦
                     // 叶上（由叶子投影的 quick-connect 控制），其它叶保持正常终端。
@@ -2701,6 +2793,7 @@ export component MainWindow inherits Window {
         edit-entries: root.edit_menu_entries;
         session-entries: root.session_menu_entries;
         view-entries: root.view_menu_entries;
+        tools-entries: root.tools_menu_entries;
         help-entries: root.help_menu_entries;
         selected(menu, index) => { root.dispatch_menu(menu, index); }
         dismissed() => {

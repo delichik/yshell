@@ -137,6 +137,17 @@ export component StatusBar inherits Rectangle {
             min-width: 0px;
         }
 
+        // 编码指示（本版会话恒为 UTF-8；静态展示）。
+        Text {
+            text: @tr("StatusBar" => "UTF-8");
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            font-family: Theme.font-mono;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            horizontal-stretch: 0;
+        }
+
         // 终端尺寸 + 光标（有活动视口时显示；光标按 1-based 给用户看）。
         if root.terminal-cols > 0 && root.terminal-rows > 0 : Text {
             text: @tr("StatusBar" => "{0}×{1}", root.terminal-cols, root.terminal-rows);
