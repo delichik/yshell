@@ -19,6 +19,10 @@ export struct WorkspacePaneLeaf {
     quick-connect-error-text: string,
     sftp: SftpPaneData,
     tabs: [WorkspaceTab],
+    /// N9：活动标签是否在同步组内。
+    sync-member: bool,
+    /// N9：活动标签是否可加入同步组。
+    sync-eligible: bool,
 }
 
 /// Flattened splitter handle (normalized geometry 0..1).

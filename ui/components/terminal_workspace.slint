@@ -36,6 +36,8 @@ export component TerminalWorkspace inherits VerticalLayout {
     in property <bool> sync-banner-group-active: false;
     in property <bool> sync-banner-paused: false;
     callback sync-banner-member-toggled();
+    /// 分屏叶：按标签 id 切换成员（不依赖焦点）。
+    callback sync-banner-member-toggled-for-tab(string);
     callback sync-banner-pause();
     callback sync-banner-stop();
 
@@ -639,23 +641,17 @@ export component TerminalWorkspace inherits VerticalLayout {
 
         VerticalLayout {
             padding: 0px;
-            // N9：分屏时无共享标签栏，横幅压在整组分屏上方。
-            if root.sync-banner-visible && root.split-active : SyncInputBanner {
-                member-enabled: root.sync-banner-member-enabled;
-                member-toggle-enabled: root.sync-banner-member-toggle-enabled;
-                title-text: root.sync-banner-title;
-                warn-text: root.sync-banner-warn;
-                group-active: root.sync-banner-group-active;
-                paused: root.sync-banner-paused;
-                member-toggled() => { root.sync-banner-member-toggled(); }
-                pause-clicked() => { root.sync-banner-pause(); }
-                stop-clicked() => { root.sync-banner-stop(); }
-            }
+            // N9：分屏时每叶各自 banner（组开启后组外叶也显示，开关为 Off）。
             split_view := WorkspaceSplitView {
                 vertical-stretch: 1;
                 leaves: root.split-leaves;
                 splitters: root.split-splitters;
                 focused-pane: root.split-focused-pane;
+                sync-group-active: root.sync-banner-group-active;
+                sync-banner-title: root.sync-banner-title;
+                sync-banner-warn: root.sync-banner-warn;
+                sync-member-toggled(tab-id) => { root.sync-banner-member-toggled-for-tab(tab-id); }
+                sync-stop-clicked() => { root.sync-banner-stop(); }
                 primary-image: root.terminal-image;
                 secondary-image: root.terminal-image-secondary;
                 primary-surface-background: root.terminal-surface-background;

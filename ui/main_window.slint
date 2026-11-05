@@ -1640,7 +1640,7 @@ export component MainWindow inherits Window {
             checked: false, separator: false,
             tooltip: root.terminal_logging_open_folder_enabled ? "" : @tr("No log folder is available yet.")
         },
-        // N9：同步输入（组模型；索引 17 加入/移出当前会话 / 18 暂停-恢复 / 19 停止）。
+        // N9：同步输入（索引 17 本会话开关 / 18 结束全部同步）。不做暂停。
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         {
             label: root.terminal_sync_visible_enabled
@@ -1655,16 +1655,7 @@ export component MainWindow inherits Window {
                 : @tr("Connect an SSH terminal session first.")
         },
         {
-            label: root.input_sync_mode_text == "paused"
-                ? @tr("Resume Sync Input")
-                : @tr("Pause Sync Input"),
-            shortcut: "", enabled: root.terminal_sync_stop_enabled, checked: false, separator: false,
-            tooltip: root.terminal_sync_stop_enabled
-                ? ""
-                : @tr("Input sync is not active.")
-        },
-        {
-            label: @tr("Stop Sync Input"), shortcut: "",
+            label: @tr("End all sync"), shortcut: "",
             enabled: root.terminal_sync_stop_enabled, checked: false, separator: false,
             tooltip: root.terminal_sync_stop_enabled ? "" : @tr("Input sync is not active.")
         },
@@ -2188,11 +2179,10 @@ export component MainWindow inherits Window {
             else if (index == 13) { root.terminal_logging_stop(); }
             else if (index == 14) { root.terminal_logging_open_file(); }
             else if (index == 15) { root.terminal_logging_open_folder(); }
-            // N9：同步输入（组模型；17 加入/移出当前会话，18 暂停/恢复，19 停止）。
+            // N9：同步输入（17 本会话开关，18 结束全部同步）；20 = Switch to SFTP。
             else if (index == 17) { root.send_key_input_to("toggle"); }
-            else if (index == 18) { root.send_key_input_to(root.input_sync_mode_text == "paused" ? "resume" : "pause"); }
-            else if (index == 19) { root.stop_input_sync(); }
-            else if (index == 21) { root.switch_active_tab_to_sftp(); }
+            else if (index == 18) { root.stop_input_sync(); }
+            else if (index == 20) { root.switch_active_tab_to_sftp(); }
         } else if (which == 7) {
             // N6：状态栏日志菜单（与终端菜单同一组语义动作）。
             if (index == 0) { root.terminal_logging_start(); }
@@ -2454,8 +2444,8 @@ export component MainWindow inherits Window {
                 // 投影与回调由本文件转发，viewport/焦点 out 属性继续对 Rust 暴露。
                 terminal_workspace := TerminalWorkspace {
                     horizontal-stretch: 1;
-                    // N9：可同步会话常驻 banner；WinSwitch = 本会话是否在组内。
-                    sync-banner-visible: root.terminal_sync_all_enabled || root.input_sync_active;
+                    // N9：组开启后所有会话都显示 banner（组外 = Off）；未开启时仅可同步会话显示以便打开。
+                    sync-banner-visible: root.input_sync_active || root.terminal_sync_all_enabled;
                     sync-banner-member-enabled: root.terminal_sync_visible_enabled;
                     sync-banner-member-toggle-enabled: root.terminal_sync_all_enabled;
                     sync-banner-title: TextFormats.input-sync-banner-title(
@@ -2468,11 +2458,10 @@ export component MainWindow inherits Window {
                         ? @tr("MainWindow" => "Ctrl / Alt warn")
                         : "";
                     sync-banner-group-active: root.input_sync_active;
-                    sync-banner-paused: root.input_sync_mode_text == "paused";
+                    sync-banner-paused: false;
                     sync-banner-member-toggled() => { root.send_key_input_to("toggle"); }
-                    sync-banner-pause() => {
-                        root.send_key_input_to(root.input_sync_mode_text == "paused" ? "resume" : "pause");
-                    }
+                    sync-banner-member-toggled-for-tab(id) => { root.toggle_tab_receive_key_input(id); }
+                    sync-banner-pause() => { }
                     sync-banner-stop() => { root.stop_input_sync(); }
                     // TAB-3/TAB-6：QC 覆盖层只盖单窗格内容区（tab 栏常驻）；单终端实例保留
                     // 在底层但置为非交互（terminal-visible=false）。分屏时覆盖层只叠在聚焦

@@ -315,8 +315,7 @@
         <strong>Input Sync</strong>
         <span class="chip-warn" title="Control keys may broadcast">Ctrl / Alt warn</span>
         <span class="title" id="syncTitle">2 sessions · broadcasting to 1 targets</span>
-        <button type="button" class="btn btn-pause" aria-pressed="false" title="Pause">Pause</button>
-        <button type="button" class="btn btn-stop" title="Stop">Stop</button>
+        <button type="button" class="btn btn-stop" title="End all sync">End all sync</button>
         <label class="recv" title="Sync input for this session">
           <input type="checkbox" id="bannerSyncSwitch" checked aria-label="Input Sync" />
           <span class="switch" aria-hidden="true"></span>
@@ -391,7 +390,8 @@
       <li><strong>One group, no roles:</strong> every session whose sync switch is On joins the same group. There is no SRC/RCV role and no “pick targets” preset — input typed in any group member (in practice the focused session) is copied to the other group members.</li>
       <li><strong>Bidirectional:</strong> focusing another member and typing copies that input to the remaining members; the injected copy is never re-broadcast (no feedback loop).</li>
       <li><strong>Per-session switch:</strong> the pane/tab header switch adds or removes one session from the group; sessions that are Off are never written to. Disconnected sessions leave the group automatically.</li>
-      <li><strong>Banner switch:</strong> shared form switch (On/Off) for <em>this session</em> membership — same control as Settings. Yellow bar when On and broadcasting; Pause/Stop only while the group is non-empty.</li>
+      <li><strong>Two controls only:</strong> right-side switch = this session in/out of the group; <strong>End all sync</strong> dissolves the whole group. No Pause.</li>
+      <li><strong>All sessions show the banner</strong> once any session has sync On; sessions outside the group simply show the switch Off.</li>
       <li><strong>Membership badge:</strong> tab/pane uses a sync icon (not the SYNC text label).</li>
       <li><strong>AI/MCP input opts out:</strong> when an AI/MCP client sends input, key or a command to a session, that session is switched Off automatically (it must not broadcast AI input) and a one-shot notice appears in the status chip.</li>
       <li><strong>No modal (D23):</strong> enabling sync never opens a KEYS / paste / Ctrl+C type-to-confirm dialog. Control keys are only flagged in the status chip.</li>

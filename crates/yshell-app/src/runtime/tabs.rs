@@ -1400,6 +1400,8 @@ impl AppRuntime {
                 } else {
                     Default::default()
                 };
+                let sync_eligible = !tab_id.is_empty() && self.input_sync_tab_connected(&tab_id);
+                let sync_member = !tab_id.is_empty() && self.input_sync.is_member(&tab_id);
                 WorkspacePaneLeafProjection {
                     pane_id: i32::try_from(leaf.pane_id).unwrap_or(0),
                     x: leaf.rect.x,
@@ -1420,6 +1422,8 @@ impl AppRuntime {
                     quick_connect_error_text,
                     sftp,
                     tabs: self.pane_tab_data(&leaf.pane),
+                    sync_member,
+                    sync_eligible,
                 }
             })
             .collect::<Vec<_>>();
@@ -2571,6 +2575,10 @@ pub struct WorkspacePaneLeafProjection {
     /// Per-SFTP-tab pane data (default for terminal/New Tab leaves).
     pub sftp: super::sftp::SftpPaneProjection,
     pub tabs: Vec<TabData>,
+    /// N9：活动标签是否在同步组内（banner 开关勾选）。
+    pub sync_member: bool,
+    /// N9：活动标签是否可加入同步组（已连接 SSH；本地终端为 false）。
+    pub sync_eligible: bool,
 }
 
 /// 分屏把手投影。

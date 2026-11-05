@@ -290,32 +290,18 @@ export global TextFormats {
     }
 
     // --- N9：同步输入（组模型：状态栏 chip / 一次性提示 / 菜单禁用原因）--------
-    /// 状态栏 chip 文案（`SYNC → n targets`；Pause 时带 `PAUSED`）。
-    ///
-    /// `mode` = `group`（正常广播）/ `paused`（暂停）。组为空时宿主不渲染 chip。
+    /// 状态栏 chip 文案（`SYNC → n targets`）。组为空时宿主不渲染 chip。
     public pure function input-sync-chip(count: int, mode: string) -> string {
-        if mode == "paused" {
-            return @tr("MainWindow" => "SYNC · PAUSED → {n} target" | "SYNC · PAUSED → {n} targets" % count);
-        }
+        // `mode` 仍可能投影 `paused`（运行时遗留）；界面已去掉暂停入口，chip 不再单独标 PAUSED。
         return @tr("MainWindow" => "SYNC → {n} target" | "SYNC → {n} targets" % count);
     }
 
     /// N9 终端上方横幅副标题（开/关由 WinSwitch 表达；此处写组规模或空闲提示）。
-    ///
-    /// `members` = 组内会话数；`targets` = 相对焦点的其它成员数；`mode` = `""`/`group`/`paused`；
-    /// `member_on` = 焦点会话是否在组内。
     public pure function input-sync-banner-title(members: int, targets: int, mode: string, member_on: bool) -> string {
         if mode == "" || members <= 0 {
             return member_on
                 ? @tr("MainWindow" => "This session is alone in the sync group.")
                 : @tr("MainWindow" => "Turn on to join the sync group for this session.");
-        }
-        if mode == "paused" {
-            return @tr(
-                "MainWindow" => "{0} sessions · {1} targets · broadcast paused",
-                members,
-                targets
-            );
         }
         return @tr(
             "MainWindow" => "{0} sessions · broadcasting to {1} targets",

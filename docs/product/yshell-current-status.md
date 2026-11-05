@@ -19,7 +19,7 @@
 | 终端样式 N5 / N5a | 继承链、配色、字体（Terminal Styles 管理器）；物理像素光栅 / CJK |
 | 日志 UI N6 | 右键启停、REC、弹窗、rfd |
 | 多窗口 N7 Phase 1 | 菜单迁窗、关窗确认 |
-| 同步输入 N9 | **双向组模型**：逐会话 Sync 开关，任意成员输入广播给其它成员（无 SRC/RCV、无 All/Visible 预设）；Pause / Stop；状态栏 `SYNC → n targets` chip + 终端上方 sync banner（Pause/Stop）；AI/MCP 输入自动退出同步；不弹 KEYS 确认（D23） |
+| 同步输入 N9 | **双向组模型**：逐会话 Sync 开关（进/出组）；组一旦开启，**所有会话都显示 banner**（组外为 Off）；**结束全部同步**解散整组（不做 Pause）；状态栏 chip；AI/MCP 输入自动退出同步；不弹 KEYS 确认（D23） |
 | 本地终端 | 本机 shell 标签 |
 | 基建 | Slint 1.18、R1/R2 拆分、L2 Esc/遮罩、对比度 xtask、真实 SSH only |
 | MCP（终端控制） | Settings → **MCP** 独立分区（原型）：Enable / Port / Listen(Local\|LAN) / API key / View user / Control user / Auto-approve；默认关。AI 创建的标签带 AI 标志（TabBar 原型）。实现仍含授权锁 + `session_run`/blocker；不含 SFTP、不含代填密码/host key（见 D34） |

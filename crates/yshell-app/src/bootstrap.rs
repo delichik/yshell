@@ -6030,6 +6030,8 @@ fn workspace_pane_leaf_from(
         tabs: ModelRc::new(VecModel::from(
             leaf.tabs.iter().map(workspace_tab_from).collect::<Vec<_>>(),
         )),
+        sync_member: leaf.sync_member,
+        sync_eligible: leaf.sync_eligible,
     }
 }
 
@@ -6109,6 +6111,8 @@ fn apply_workspace_split_leaves(
                         row.quick_connect_input_text = next.quick_connect_input_text.clone().into();
                         row.quick_connect_error_text = next.quick_connect_error_text.clone().into();
                         row.sftp = sftp_pane_data_from(&next.sftp);
+                        row.sync_member = next.sync_member;
+                        row.sync_eligible = next.sync_eligible;
                         model.set_row_data(index, row);
                     }
                     return;

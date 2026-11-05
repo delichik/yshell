@@ -10,10 +10,19 @@ import { WorkspaceTabBar } from "workspace_tab_bar.slint";
 import { WorkspacePaneLeaf, WorkspaceSplitter } from "workspace_pane_model.slint";
 import { QuickConnectPage, QuickConnectRow } from "../pages/quick_connect.slint";
 import { SftpPaneData, SftpTabPage } from "sftp_tab_page.slint";
+import { SyncInputBanner } from "sync_input_banner.slint";
 
 component SplitPaneLeaf inherits Rectangle {
     in property <bool> empty: false;
     in property <bool> focused: false;
+    /// N9：全局同步组是否非空（组开启后每个会话都显示 banner）。
+    in property <bool> sync-group-active: false;
+    in property <bool> sync-member: false;
+    in property <bool> sync-eligible: false;
+    in property <string> sync-banner-title: "";
+    in property <string> sync-banner-warn: "";
+    callback sync-member-toggled();
+    callback sync-stop-clicked();
     /// TAB-6：本叶被 Quick Connect 覆盖层盖住（只可能是聚焦叶）。终端实例仍按满尺寸
     /// 布局并保持存活，但不再接收键盘/鼠标/焦点；其它叶保持正常终端。
     in property <bool> quick-connect: false;
@@ -281,6 +290,19 @@ component SplitPaneLeaf inherits Rectangle {
                 tab-bar-dropped(data) => { root.tab-dropped(data); }
             }
 
+            // N9：组一旦开启，每个会话叶都显示 banner；组外只是开关 Off。
+            if !root.empty && (root.sync-group-active || root.sync-eligible) : SyncInputBanner {
+                member-enabled: root.sync-member;
+                member-toggle-enabled: root.sync-eligible;
+                title-text: root.sync-banner-title;
+                warn-text: root.focused ? root.sync-banner-warn : "";
+                group-active: root.sync-group-active;
+                paused: false;
+                member-toggled() => { root.sync-member-toggled(); }
+                pause-clicked() => { }
+                stop-clicked() => { root.sync-stop-clicked(); }
+            }
+
             content := Rectangle {
                 vertical-stretch: 1;
                 min-height: 0px;
@@ -487,6 +509,12 @@ export component WorkspaceSplitView inherits Rectangle {
     in property <int> focused-pane: 0;
     in property <image> primary-image;
     in property <image> secondary-image;
+    /// N9：同步组非空时每个会话叶都显示 banner。
+    in property <bool> sync-group-active: false;
+    in property <string> sync-banner-title: "";
+    in property <string> sync-banner-warn: "";
+    callback sync-member-toggled(string);
+    callback sync-stop-clicked();
 
     in property <int> cursor-column: 0;
     in property <int> cursor-row: 0;
@@ -612,6 +640,13 @@ export component WorkspaceSplitView inherits Rectangle {
         pane-id: leaf.pane-id;
         tabs: leaf.tabs;
         focused: leaf.focused;
+        sync-group-active: root.sync-group-active;
+        sync-member: leaf.sync-member;
+        sync-eligible: leaf.sync-eligible;
+        sync-banner-title: root.sync-banner-title;
+        sync-banner-warn: root.sync-banner-warn;
+        sync-member-toggled() => { root.sync-member-toggled(leaf.tab-id); }
+        sync-stop-clicked() => { root.sync-stop-clicked(); }
         focus-generation: root.focus-generation;
         terminal-image: leaf.focused ? root.primary-image : root.secondary-image;
         surface-background: leaf.focused ? root.primary-surface-background : root.secondary-surface-background;
