@@ -1,6 +1,6 @@
 // N9：终端工作区上方的同步输入横幅（组模型；无 KEYS 确认）。
 // 原型：docs/prototypes/main-shell/workspace/sync-input.html
-// 开/关用共享 WinSwitch（与 Settings / Session Editor 同一套）；Pause / Stop 只管组级暂停与解散。
+// 布局：左标题/提示 · 中弹性空白 · 右 Pause/Stop · 最右 WinSwitch（与 pane 头同一侧）。
 import { Theme } from "../theme.slint";
 import { WinButton, WinSwitch } from "basic/controls.slint";
 import { Icon } from "basic/icons.slint";
@@ -23,7 +23,6 @@ export component SyncInputBanner inherits Rectangle {
 
     height: 40px;
     vertical-stretch: 0;
-    // 本会话 On 且未暂停：警告黄；否则用普通 chrome，靠 WinSwitch 表达 Off。
     background: root.member-enabled && !root.paused
         ? Theme.banner-warning-background
         : Theme.banner-info-background;
@@ -63,17 +62,6 @@ export component SyncInputBanner inherits Rectangle {
             vertical-alignment: center;
             wrap: no-wrap;
             horizontal-stretch: 0;
-        }
-
-        // 通用 WinSwitch：一眼看出本会话开没开（On = 在组内）。
-        WinSwitch {
-            checked: root.member-enabled;
-            enabled: root.member-toggle-enabled;
-            text: root.member-enabled
-                ? @tr("MainWindow" => "On")
-                : @tr("MainWindow" => "Off");
-            accessible-name: @tr("MainWindow" => "Input Sync");
-            toggled => { root.member-toggled(); }
         }
 
         if root.warn-text != "" : Rectangle {
@@ -126,6 +114,18 @@ export component SyncInputBanner inherits Rectangle {
             horizontal-stretch: 0;
             height: Theme.control-height-compact + 2px;
             clicked => { root.stop-clicked(); }
+        }
+
+        // 原型：开关在右侧（pane 头 / banner 末尾），不是标题旁。
+        WinSwitch {
+            checked: root.member-enabled;
+            enabled: root.member-toggle-enabled;
+            text: root.member-enabled
+                ? @tr("MainWindow" => "On")
+                : @tr("MainWindow" => "Off");
+            accessible-name: @tr("MainWindow" => "Input Sync");
+            horizontal-stretch: 0;
+            toggled => { root.member-toggled(); }
         }
     }
 }
