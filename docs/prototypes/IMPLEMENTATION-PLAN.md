@@ -43,40 +43,79 @@ $env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
 
 ## 4. 事项清单与状态
 
+状态图例：✅ 已完成（代码实现+门禁+本地提交，未 push）· 🔍 已完成、待用户核验 · 🔄 进行中（未提交）· ⬜ 未完成 · ⛔ 本版不做。
+
+### 4.1 已完成（本地提交，未 push）
+
 | # | 事项 | 状态 | 提交 / 证据 |
 |---|---|---|---|
-| 0 | 基线修复（fmt/clippy/测试漂移、CRLF、过期测试） | ✅ 已交付 | `fe7f037`、`f530299` |
-| 1 | 基础层：config schema + runtime（外观/终端交互/SFTP/图标/备注/登录脚本/文件夹继承/终端输入） | ✅ 已交付 | `c6d1102`、`edb0243` |
-| 2 | Settings 窗口（七分区 + 主密码两窗 + App theme 预览 + Save/Cancel） | ✅ 已交付且用户已接受；后续修复见 #4/#7/#11/#13 | `2d26a06` |
-| 3 | i18n：catalogs 重建 + zh-CN 全量翻译 + 多次增量 | ✅ 已交付，随新文案持续增量 | `bed84bc`、`d48fe84` 等 |
-| 4 | MCP 分区按原型收敛 + Rust 侧残留英文（状态/外部编辑器下拉） | ✅ 已交付 | `8d442ec` |
-| 5 | 窗口行为：拖拽后首击失效、二次拖拽、子窗居中、关闭回焦 | ✅ 已交付；真机脚本 0 failure | `eb3533e` |
-| 6 | 环境变量配置清理 + `--config-dir` + `[ui] reduce_motion` + 解锁崩溃修复 | ✅ 已交付 | `936bb10` |
-| 7 | N9 同步按键双向组 + AI 自动退组 | ✅ 已交付（待用户核验） | `9489104` |
-| 8 | Session Editor 窗口：六分区 + Inherit + Login Script 执行 + 子窗 + Save/Save and Connect | ✅ 已交付（待用户核验） | `8f016d7` |
-| 9 | 布尔控件统一为 `WinSwitch`/`WinCheckBox` | ✅ 已交付（待用户核验） | `7b25790` |
-| 10 | 管理器：Known Hosts / Private Keys / Proxies / Terminal Styles + 7 个子窗接线 | ✅ 已交付（待用户核验） | `177f634` |
-| 11 | 共享表单 + 开关视觉一致性（5 条用户反馈） | ✅ 已交付（待用户核验） | `fa3dece` |
-| 12 | 收口：预览位图尺寸统一、tunnel/login-step 本地表单行→共享组件、420 字面量 | 🔄 进行中 | 进行中（teammate） |
-| 13 | 收口：管理器/子窗的本地表单行/详情行→共享 `FormRow`/`DetailRow` | 🔄 进行中 | 进行中（teammate） |
-| 14 | 剩余弹窗与交互：host-key 紧凑窗确认、auth-prompt 去 Remember、sftp-chmod 入口、关标签/退出后果清单、logging/about/sftp-conflict/properties 收口 | ⬜ 待做 | — |
-| 15 | 波 3：主壳菜单（Tools/Session 菜单、Ctrl+Shift+S、F11/Focus Mode）、状态栏、停靠面板（Sessions/Transfers/Tunnels/Commands）、工作区（标签图标/原地改名/分屏上限/Find Across/REC/N9 banner/QC Clear/SFTP 原地操作 + chmod 入口） | ⬜ 待做 | 原型已就绪 |
-| 16 | 波 4：i18n 尾部（No Proxy、Discard、Rust 弹窗标题）、遗留清理（旧 known_hosts 页、`CLEAR` 打字确认、focus ring/tooltip 覆盖）、文档同步（status/契约） | ⬜ 待做 | — |
-| 17 | 波 5：全量验收（四道门禁 + 用户逐窗核验 + 证据归档） | ⬜ 待做 | — |
+| 0 | 基线修复（fmt/clippy/测试漂移、CRLF、过期测试） | ✅ | `fe7f037`、`f530299` |
+| 1 | 基础层：config schema + runtime（外观/终端交互/SFTP/图标/备注/登录脚本/文件夹继承/终端输入） | ✅ | `c6d1102`、`edb0243` |
+| 2 | Settings 窗口（七分区 + 主密码两窗 + App theme 预览 + Save/Cancel） | ✅ 用户已接受 | `2d26a06` |
+| 3 | i18n：catalogs 重建 + zh-CN 全量翻译 + 多次增量 | ✅ 随新文案增量 | `bed84bc`、`d48fe84` 等 |
+| 4 | MCP 分区按原型收敛 + Rust 侧残留英文（状态/外部编辑器下拉） | ✅ | `8d442ec` |
+| 5 | 窗口行为：拖拽后首击失效、二次拖拽、子窗居中、关闭回焦 | ✅ 真机脚本 0 failure | `eb3533e` |
+| 6 | 环境变量配置清理 + `--config-dir` + `[ui] reduce_motion` + 解锁崩溃修复 | ✅ | `936bb10` |
+| 7 | N9 同步按键双向组 + AI 自动退组 | 🔍 待用户核验 | `9489104` |
+| 8 | Session Editor 窗口（六分区 + Inherit + Login Script 执行 + 子窗 + Save/Save and Connect） | 🔍 待用户核验 | `8f016d7` |
+| 9 | 布尔控件统一为 `WinSwitch`/`WinCheckBox` | 🔍 待用户核验 | `7b25790` |
+| 10 | 管理器：Known Hosts / Private Keys / Proxies / Terminal Styles + 7 个子窗接线 | 🔍 待用户核验 | `177f634` |
+| 11 | 共享表单 + 开关视觉一致性（用户 5 条反馈） | 🔍 待用户核验 | `fa3dece` |
+| 12 | 现行完整计划文档化（交付方式/决策/状态/覆盖清单） | ✅ | `bde53dd` |
+
+### 4.2 进行中（未提交）
+
+| # | 事项 | 状态 | 说明 |
+|---|---|---|---|
+| 13 | 收口：预览位图尺寸统一、tunnel/login-step 本地表单行→共享组件、420 字面量 | 🔄 | teammate 进行中 |
+| 14 | 收口：管理器/子窗的本地表单行/详情行→共享 `FormRow`/`DetailRow` | 🔄 | teammate 进行中 |
+
+### 4.3 未完成（待做）
+
+| # | 事项 | 状态 | 备注 |
+|---|---|---|---|
+| 15 | 剩余弹窗与交互：sftp-chmod 窗**入口**（窗已建、未注册/未接）、关标签/退出**后果清单**内容、auth-prompt 去 Remember 核验、logging/about/sftp-conflict/properties 收口 | ⬜ | host-key 已 compact；auth-prompt 代码已去 Remember |
+| 16 | 波 3 · 主壳：6 个一级菜单（补 Tools）、Session 菜单项、`Ctrl+Shift+S`、`F11`、Full Screen/Focus Mode、状态栏 UTF-8、sync banner | ⬜ | 原型已就绪 |
+| 17 | 波 3 · 停靠面板：Sessions 图标/原地改名/右键项/New Folder 禁用；Transfers 批量；Tunnels `+`；dock 宽度 | ⬜ | 原型已就绪 |
+| 18 | 波 3 · 工作区：标签图标/原地改名/分屏上限 4；Find Across；REC 条；N9 pane Receive；QC Clear；SFTP 原地 New Folder/Rename + chmod 入口 | ⬜ | 原型已就绪 |
+| 19 | 波 4 · i18n 尾部：`No Proxy`、`Discard`、Rust 弹窗标题（`Close Session`/`Rename Tab`） | ⬜ | — |
+| 20 | 波 4 · 遗留清理：旧 `known_hosts` 页、`CLEAR` 打字确认、focus ring/tooltip 覆盖、文档同步 | ⬜ | — |
+| 21 | 波 5 · 验收：全量门禁 + 用户逐窗核验 + 证据归档 | ⬜ | — |
+
+### 4.4 本版不做（⛔，来自 status §2 与决策）
+
+Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All · Import/Export Config · Settings Shortcuts · Session Editor SFTP/Advanced 分区 · Expand/Collapse All · OS 拖出 / 标签拖出成窗 · 主题导入导出 / 光标形状 · MCP Port/Listen/API key/View user/Control user（stdio 方案）· Tunnels 转发运行时（Start/Stop 禁用）· 会话 Proxy 真连 · 主密码整体文件加密 / KDF 升级（后续安全债）。
+
+### 4.5 原型覆盖清单（`docs/prototypes/` → 实现状态）
+
+| 原型目录 | 状态 | 说明 |
+|---|---|---|
+| `settings/`（hub + sections + master-password + mcp-consent） | ✅/🔍 | 已实现，待用户核验观感 |
+| `session-editor/`（hub + sections + login-step-*） | ✅/🔍 | 已实现，待核验 |
+| `tunnel-editor/` | ✅/🔍 | 已接入 Session Editor / Tunnels 流程，待核验 |
+| `known-hosts/`、`private-keys/`、`proxies/`、`terminal-styles/` | ✅/🔍 | 已实现，待核验 |
+| `host-key/`（compact 560×400）、`auth-prompt/` | ✅/🔍 | host-key 已 compact；auth-prompt 已去 Remember |
+| `logging/`、`about/`、`sftp-conflict/`、`sftp-properties/`、`password-prompt/` | ✅/🔍 | 既有实现保留，待核验 |
+| `compact-confirm/`、`close-tab-confirm/` | 🔍/⬜ | 确认框已用；退出/关标签的后果清单内容待补 |
+| `sftp-chmod/` | ⬜ | 窗口文件已建，**入口与注册未接** |
+| `main-shell/`（index、tool-dock、menu、status、快捷键） | ⬜ | 波 3 |
+| `main-shell/panels/`（sessions/transfers/tunnels/commands） | 🔄/⬜ | 基础面板已有；图标/原地改名/右键/批量在波 3 |
+| `main-shell/workspace/`（tab-bar/terminal/sftp/quick-connect/split/sync-input） | 🔄/⬜ | 基础已有；Find Across/REC/banner/原地操作在波 3；sync 组语义已完成、banner 待做 |
+| `forms.html`、`annotations.html`、`index.html`、`_form-audit.html` | — | 设计参考页，非应用页面 |
 
 ## 5. 剩余顺序（按用户「逐项核验」节奏）
 
-1. 当前收口 #12/#13 完成后：Lead 门禁 + 本地提交 + 重建 exe → 交用户核验 #7–#13。
-2. 用户确认后：做 #14 剩余弹窗（逐窗一项：host-key、auth-prompt、sftp-chmod 入口、close-tab/quit 后果、logging/about/sftp-conflict/properties）。
-3. 再做 #15 波 3（主壳 → 面板 → 工作区，按热点文件串行接线；sync banner 在此项实现）。
-4. 最后 #16 清理 + #17 验收。
+1. 当前收口 #13/#14 完成后：Lead 门禁 + 本地提交 + 重建 exe → 交用户核验 #7–#14。
+2. 用户确认后：做 #15 剩余弹窗（逐窗一项：sftp-chmod 入口、close-tab/quit 后果清单、auth-prompt 核验、logging/about/sftp-conflict/properties 收口）。
+3. 再做 #16–#18 波 3（主壳 → 面板 → 工作区，按热点文件串行接线；sync banner 在此项实现）。
+4. 最后 #19–#20 清理 + #21 验收。
 
 ## 6. 已知未收口 / 风险
 
 | 项 | 说明 |
 |---|---|
-| 预览位图尺寸 | Settings `(420,198)` vs Session Editor `(480,98)` 的 Rust 常量（#12 收口中） |
-| 旧本地 switch/表单实现 | `tunnel_editor_window` 的 `SwitchToggle`（#12）、管理器各类 `*FormRow`/`DetailRow`（#13） |
+| 预览位图尺寸 | Settings `(420,198)` vs Session Editor `(480,98)` 的 Rust 常量（#13 收口中） |
+| 旧本地 switch/表单实现 | `tunnel_editor_window` 的 `SwitchToggle`（#13）、管理器各类 `*FormRow`/`DetailRow`（#14） |
 | Settings 窗口尺寸 | 保持原型 1100×820；label 已从 200 改 120。若用户仍觉得宽，需确认后改为 1000×800（偏离原型 wide 档） |
 | Login Wait 子窗 | 现为 standard 720×580，原型是 compact 560×400（待用户决定） |
 | MCP failed 状态 | 单测覆盖，未实机造 |
@@ -98,7 +137,7 @@ $env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
 
 - 2026-11-03：`fe7f037` 基线修复；`f530299` 差距清单+计划；`c6d1102`/`edb0243` 波 1 基础层；`2d26a06` Settings 窗口；`bed84bc` i18n 全量；`8d442ec` MCP 收敛；`eb3533e` 窗口行为修复（此提交及之前曾被意外 push 到 origin）。
 - 2026-11-04：`936bb10` 环境变量配置清理；`9489104` N9 双向同步组；`d48fe84` i18n 再同步；`8f016d7` Session Editor 接线；`7b25790` 开关统一；`177f634` 管理器接线；`fa3dece` 共享表单/视觉一致性。
-- 2026-11-05：收口 #12/#13（进行中，待提交）。
+- 2026-11-05：`bde53dd` 现行计划文档化；收口 #13/#14（进行中，待提交）。
 
 ---
 
