@@ -420,3 +420,62 @@ fn open_first_saved_session_uses_minimal_ui_path() {
         .recent_sessions_rows_text
         .contains("saved.example.test"));
 }
+
+#[test]
+fn duplicate_and_rename_saved_session_update_tree() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    runtime
+        .handle_quick_connect("ops@dup.example.test:2222")
+        .expect("quick connect");
+    runtime.save_active_session().expect("save active session");
+    let original_id = runtime.saved_session_profiles()[0].id.clone();
+
+    let duplicated = runtime
+        .duplicate_selected_saved_session()
+        .expect("duplicate");
+    assert_eq!(duplicated.status_kind, "session-duplicated");
+    assert_eq!(runtime.saved_session_profiles().len(), 2);
+
+    runtime.select_saved_session_by_id(&original_id);
+    runtime
+        .rename_saved_session(&original_id, "Renamed Edge")
+        .expect("rename");
+    let row = runtime
+        .projection()
+        .session_tree_rows
+        .into_iter()
+        .find(|row| row.id == original_id)
+        .expect("renamed row");
+    assert_eq!(row.label, "Renamed Edge");
+}
+
+#[test]
+fn session_tree_row_includes_icon_name_from_profile() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    runtime
+        .handle_quick_connect("ops@icon.example.test:2222")
+        .expect("quick connect");
+    runtime.save_active_session().expect("save active session");
+    let profile_id = runtime.saved_session_profiles()[0].id.clone();
+    let mut profile = runtime
+        .config_document
+        .find_session(&profile_id)
+        .cloned()
+        .expect("profile");
+    profile.icon = Some("server".to_owned());
+    runtime
+        .config_store
+        .session_tree()
+        .update_session(&mut runtime.config_document.folders, profile)
+        .expect("update icon");
+
+    let row = runtime
+        .projection()
+        .session_tree_rows
+        .into_iter()
+        .find(|row| row.id == profile_id)
+        .expect("tree row");
+    assert_eq!(row.icon_name, "globe");
+}

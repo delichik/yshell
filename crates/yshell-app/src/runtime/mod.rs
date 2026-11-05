@@ -35,6 +35,7 @@ mod panels;
 mod projection;
 mod proxies;
 mod quick_connect;
+mod session_icon;
 mod sessions;
 mod sftp;
 mod sftp_ops;

@@ -184,6 +184,11 @@ export component ToolDock inherits Rectangle {
     callback session-blank-menu-requested(length, length);
     /// A8：Sessions 面板头部的「新建会话」入口。
     callback session-new-requested();
+    in-out property <string> session-inline-rename-id: "";
+    in-out property <string> session-inline-rename-text: "";
+    callback session-inline-rename-start(string);
+    callback session-inline-rename-commit(string);
+    callback session-inline-rename-cancel();
     /// A9：会话栏空白处左键（清空选择）。
     callback session-clear-selection-requested();
 
@@ -192,8 +197,11 @@ export component ToolDock inherits Rectangle {
     in property <string> tunnels-empty-kind: "no-active";
     callback start-tunnel(string);
     callback stop-tunnel(string);
+    callback tunnel-add-requested();
     /// Opens/expands the SFTP transfer drawer (shared transfer model).
     callback transfer-open-sftp-drawer();
+    callback transfer-pause-all();
+    callback transfer-resume-all();
 
     // ---- N1：SftpPanel 投影透传（面板壳只提供弹性高度与标题条）--------------
     in property <[FileRow]> sftp-rows: [];
@@ -449,6 +457,11 @@ export component ToolDock inherits Rectangle {
             row-context-menu-requested(id, x, y) => { root.session-row-context-menu-requested(id, x, y); }
             blank-menu-requested(x, y) => { root.session-blank-menu-requested(x, y); }
             clear-selection() => { root.session-clear-selection-requested(); }
+            inline-rename-id <=> root.session-inline-rename-id;
+            inline-rename-text <=> root.session-inline-rename-text;
+            inline-rename-start(id) => { root.session-inline-rename-start(id); }
+            inline-rename-commit(text) => { root.session-inline-rename-commit(text); }
+            inline-rename-cancel() => { root.session-inline-rename-cancel(); }
         }
     }
 
@@ -610,6 +623,9 @@ export component ToolDock inherits Rectangle {
         title-text: @tr("MainWindow" => "Tunnels");
         icon: "globe";
         collapsed: root.tunnels-frame.collapsed;
+        header-action-icon: "plus";
+        header-action-label: @tr("MainWindow" => "Add Tunnel");
+        header-action() => { root.tunnel-add-requested(); }
         menu-requested(x, y) => { root.panel-menu-requested("tunnels", x, y); }
         collapse-toggled() => { root.panel-collapse-requested("tunnels"); }
         hide-requested() => { root.panel-hide-requested("tunnels"); }
@@ -696,6 +712,8 @@ export component ToolDock inherits Rectangle {
             cancel(id) => { root.transfer-cancel(id); }
             remove(id) => { root.transfer-remove(id); }
             clear-completed() => { root.transfer-clear-completed(); }
+            pause-all() => { root.transfer-pause-all(); }
+            resume-all() => { root.transfer-resume-all(); }
             open-sftp-drawer() => { root.transfer-open-sftp-drawer(); }
         }
     }
@@ -716,7 +734,7 @@ export component ToolDock inherits Rectangle {
         grip-height: 44px;
         // Sessions 头部有 `+` 主操作：拖拽区要为「32px 按钮 + 8px 间距 + 36px ⋯」
         // 让位，否则点击 `+` 会被拖拽层吞掉。
-        grip-inset: frame.p == "sessions" ? 76px : 40px;
+        grip-inset: frame.p == "sessions" || frame.p == "tunnels" ? 76px : 40px;
         visible: frame.f.visible && !frame.f.collapsed;
         drag-start(id, x, y) => { root.panel-drag-start(id, x - root.absolute-position.x, y - root.absolute-position.y); }
         drag-move(id, x, y) => {

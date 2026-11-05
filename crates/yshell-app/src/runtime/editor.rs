@@ -42,6 +42,40 @@ impl AppRuntime {
         self.projection()
     }
 
+    /// Tunnels dock panel `+`: load the selected saved session into the editor,
+    /// switch to Tunnels, and open the tunnel-editor add flow.
+    pub fn add_tunnel_from_dock_panel(&mut self) -> AppProjection {
+        let Some(profile_id) = self.selected_saved_session_id.clone() else {
+            self.set_status_kind(
+                "tunnel-add-no-selection",
+                "Select a saved session before adding a tunnel.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+            return self.projection();
+        };
+        if self.config_document.find_session(&profile_id).is_none() {
+            self.set_status_kind(
+                "tunnel-add-missing",
+                format!("Saved session `{profile_id}` was not found."),
+                profile_id,
+                String::new(),
+            );
+            return self.projection();
+        }
+        if let Err(error) = self.load_selected_saved_session_into_editor() {
+            self.set_status_kind(
+                "tunnel-add-load-failed",
+                error.to_string(),
+                profile_id,
+                String::new(),
+            );
+            return self.projection();
+        }
+        self.editor_section = EditorSection::Tunnels;
+        self.begin_add_editor_tunnel()
+    }
+
     pub fn load_selected_saved_session_into_editor(&mut self) -> AppResult<AppProjection> {
         let profile_id = self
             .selected_saved_session_id

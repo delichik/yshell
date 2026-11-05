@@ -476,6 +476,12 @@ export global TextFormats {
         if kind == "session-deleted" {
             return @tr("MainWindow" => "Deleted saved session `{0}` and persisted the updated config.", param_1);
         }
+        if kind == "session-duplicated" {
+            return @tr("MainWindow" => "Duplicated saved session `{1}` as `{0}`.", param_1, param_2);
+        }
+        if kind == "session-renamed" {
+            return @tr("MainWindow" => "Renamed saved session `{0}`.", param_1);
+        }
         // --- A26（WS-D / D5 + D15 + D19）：连接生命周期 / 终端尺寸 / 本地目录状态文案 -----
         // kind 与参数来自 Rust `set_status_kind(...)`（详情的英文错误只进 tracing 日志）。
         if kind == "session-connected" {
@@ -928,6 +934,18 @@ export global TextFormats {
         if kind == "transfers-none-completed" {
             return @tr("MainWindow" => "No completed transfers to clear.");
         }
+        if kind == "transfers-paused-all" {
+            return @tr("MainWindow" => "Paused {n} transfer." | "Paused {n} transfers." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "transfers-nothing-to-pause" {
+            return @tr("MainWindow" => "No queued or running transfers to pause.");
+        }
+        if kind == "transfers-resumed-all" {
+            return @tr("MainWindow" => "Resumed {n} transfer." | "Resumed {n} transfers." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "transfers-nothing-to-resume" {
+            return @tr("MainWindow" => "No paused transfers to resume.");
+        }
         // --- I18N-1：文件剪贴板 ----------------------------------------------
         if kind == "clipboard-select-local-copy" {
             return @tr("MainWindow" => "Select local entries before copying.");
@@ -1298,6 +1316,15 @@ export global TextFormats {
         }
         if kind == "tunnel-no-active-session" {
             return @tr("MainWindow" => "No active session to start a tunnel on.");
+        }
+        if kind == "tunnel-add-no-selection" {
+            return @tr("MainWindow" => "Select a saved session before adding a tunnel.");
+        }
+        if kind == "tunnel-add-missing" {
+            return @tr("MainWindow" => "Saved session `{0}` was not found.", param_1);
+        }
+        if kind == "tunnel-add-load-failed" {
+            return @tr("MainWindow" => "Could not load the saved session for tunnel editing: {0}", param_1);
         }
         if kind == "tunnel-unknown" {
             return @tr("MainWindow" => "Unknown tunnel `{0}`.", param_1);

@@ -153,6 +153,51 @@ impl AppRuntime {
         Ok(self.projection())
     }
 
+    /// Pauses every queued or running transfer in the shared queue.
+    pub fn pause_all_sftp_transfers(&mut self) -> AppProjection {
+        let changed = self.transfer_queue.pause_all_pausable();
+        if changed > 0 {
+            self.set_status_kind(
+                "transfers-paused-all",
+                format!("Paused {changed} transfer(s)."),
+                changed.to_string(),
+                String::new(),
+            );
+        } else {
+            self.set_status_kind(
+                "transfers-nothing-to-pause",
+                "No queued or running transfers to pause.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+        }
+        self.projection()
+    }
+
+    /// Resumes every paused transfer in the shared queue.
+    pub fn resume_all_sftp_transfers(&mut self) -> AppProjection {
+        let changed = self.transfer_queue.resume_all_paused();
+        if changed > 0 {
+            for _ in 0..changed {
+                let _ = self.transfer_queue.start_next();
+            }
+            self.set_status_kind(
+                "transfers-resumed-all",
+                format!("Resumed {changed} transfer(s)."),
+                changed.to_string(),
+                String::new(),
+            );
+        } else {
+            self.set_status_kind(
+                "transfers-nothing-to-resume",
+                "No paused transfers to resume.".to_owned(),
+                String::new(),
+                String::new(),
+            );
+        }
+        self.projection()
+    }
+
     /// Puts a paused transfer back into the queue.
     pub fn resume_sftp_transfer(&mut self, transfer_id: &str) -> AppResult<AppProjection> {
         let changed = self

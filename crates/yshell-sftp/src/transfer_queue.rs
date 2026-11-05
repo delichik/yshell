@@ -114,6 +114,33 @@ impl TransferQueue {
         Ok(())
     }
 
+    /// Pause every queued or running task; returns how many changed state.
+    pub fn pause_all_pausable(&mut self) -> usize {
+        let mut changed = 0usize;
+        for task in &mut self.tasks {
+            if matches!(
+                task.status,
+                TransferStatus::Queued | TransferStatus::Running
+            ) {
+                task.status = TransferStatus::Paused;
+                changed += 1;
+            }
+        }
+        changed
+    }
+
+    /// Re-queue every paused task; returns how many changed state.
+    pub fn resume_all_paused(&mut self) -> usize {
+        let mut changed = 0usize;
+        for task in &mut self.tasks {
+            if task.status == TransferStatus::Paused {
+                task.status = TransferStatus::Queued;
+                changed += 1;
+            }
+        }
+        changed
+    }
+
     /// Drop every completed task, returning how many were removed.
     pub fn clear_completed(&mut self) -> usize {
         let before = self.tasks.len();
@@ -215,6 +242,32 @@ mod tests {
         queue.remove("running").unwrap();
         assert!(queue.tasks.is_empty());
         assert!(queue.remove("running").is_err());
+    }
+
+    #[test]
+    fn pause_all_and_resume_all() {
+        let mut queue = TransferQueue::default();
+        queue.enqueue(TransferTask::new(
+            "a",
+            TransferDirection::Upload,
+            "a",
+            "/remote/a",
+            Some(4),
+        ));
+        queue.enqueue(TransferTask::new(
+            "b",
+            TransferDirection::Download,
+            "/remote/b",
+            "b",
+            None,
+        ));
+        queue.start_next();
+        assert_eq!(queue.pause_all_pausable(), 2);
+        assert_eq!(queue.tasks[0].status, TransferStatus::Paused);
+        assert_eq!(queue.tasks[1].status, TransferStatus::Paused);
+        assert_eq!(queue.resume_all_paused(), 2);
+        assert_eq!(queue.tasks[0].status, TransferStatus::Queued);
+        assert_eq!(queue.tasks[1].status, TransferStatus::Queued);
     }
 
     #[test]

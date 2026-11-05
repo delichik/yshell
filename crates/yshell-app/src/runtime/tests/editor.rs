@@ -825,9 +825,9 @@ fn saved_session_tunnel_profile_is_applied_to_runtime_shell_config() {
     assert_eq!(projection.tunnel_rows[0].status_id, "idle");
     let session_key = runtime.active_session_id.clone().expect("active session");
     let session = runtime.sessions.get(&session_key).expect("runtime session");
-    assert_eq!(
-        projection.tunnel_rows[0].can_start,
-        session.state == yshell_core::SessionState::Connected
+    assert!(
+        !projection.tunnel_rows[0].can_start,
+        "Start stays disabled until forwarding runtime is provisioned"
     );
     assert!(!projection.tunnel_rows[0].can_stop);
     assert_eq!(session.ssh_config.tunnels.len(), 2);

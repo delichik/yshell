@@ -532,6 +532,8 @@ export component MainWindow inherits Window {
     // 会话树：Rust 侧按显示顺序压平的行模型 + 当前选中节点 id（旧文本投影保留但不再渲染）
     in-out property <[SessionTreeRow]> session_tree_rows: [];
     in-out property <string> saved_session_tree_selected_id: "";
+    in-out property <string> session_tree_inline_rename_id: "";
+    in-out property <string> session_tree_inline_rename_text: "";
     in-out property <string> recent_sessions_rows_text: "";
     in-out property <bool> recent_sessions_empty: true;
     in-out property <string> tab_name_text: "";
@@ -835,7 +837,10 @@ export component MainWindow inherits Window {
     callback update_session_search(string);
     callback open_saved_session();
     callback open_selected_saved_session();
+    callback open_selected_saved_session_in_new_tab();
     callback open_selected_saved_session_sftp();
+    callback duplicate_selected_saved_session();
+    callback rename_saved_session(string, string);
     callback update_selected_saved_session();
     callback delete_selected_saved_session();
     callback select_previous_saved_session();
@@ -958,6 +963,9 @@ export component MainWindow inherits Window {
     callback transfer_cancel(string);
     callback transfer_remove(string);
     callback transfer_clear_completed();
+    callback transfer_pause_all();
+    callback transfer_resume_all();
+    callback add_tunnel_from_dock_panel();
     callback local_refresh();
     callback local_up();
     callback local_home();
@@ -1801,37 +1809,51 @@ export component MainWindow inherits Window {
     ];
     property <[MenuEntry]> saved_session_context_menu_entries: [
         // W5-A3：没有选中的已保存会话时，各项操作禁用；A12：禁用必须给出原因。
-        // A13：右键目标是文件夹时本套菜单不适用（New Session 也不是在该文件夹下创建）——
-        // 按 kind 分流需要 Rust 投影"被右键节点类型"，见 WS-A 报告的跨组请求。
+        // A13：右键目标是文件夹时本套菜单不适用 —— 按 kind 分流（见 `saved_tree_menu_kind_text`）。
         {
-            label: @tr("Session" => "Open"), shortcut: "",
+            label: @tr("Connect"), shortcut: "",
             enabled: root.has_saved_selection, checked: false, separator: false,
             tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
         },
         {
-            label: @tr("Open SFTP"), shortcut: "",
+            label: @tr("Open in New Tab"), shortcut: "",
             enabled: root.has_saved_selection, checked: false, separator: false,
             tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
         },
         {
-            label: @tr("Edit..."), shortcut: "",
+            label: @tr("Open SFTP"), shortcut: root.shortcut-open-sftp,
             enabled: root.has_saved_selection, checked: false, separator: false,
             tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
         },
         {
-            label: @tr("Update From Active"), shortcut: "",
-            enabled: root.has_saved_selection && root.has_active_session, checked: false, separator: false,
-            tooltip: root.has_saved_selection
-                ? @tr("Open the active session first.")
-                : @tr("Select a saved session first.")
+            label: @tr("Edit Session"), shortcut: "",
+            enabled: root.has_saved_selection, checked: false, separator: false,
+            tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
+        },
+        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
+        {
+            label: @tr("Rename"), shortcut: "",
+            enabled: root.has_saved_selection, checked: false, separator: false,
+            tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
+        },
+        {
+            label: @tr("Duplicate"), shortcut: "",
+            enabled: root.has_saved_selection, checked: false, separator: false,
+            tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
+        },
+        {
+            label: @tr("Favorite"), shortcut: "", enabled: false, checked: false, separator: false,
+            tooltip: @tr("Not available in this version.")
+        },
+        {
+            label: @tr("Export Session"), shortcut: "", enabled: false, checked: false, separator: false,
+            tooltip: @tr("Exporting sessions is not available in this build.")
         },
         {
             label: @tr("Delete..."), shortcut: "",
             enabled: root.has_saved_selection, checked: false, separator: false,
             tooltip: root.has_saved_selection ? "" : @tr("Select a saved session first.")
-        },
-        { label: "", shortcut: "", enabled: false, checked: false, separator: true },
-        { label: @tr("New Session"), shortcut: root.shortcut-new-session, enabled: true, checked: false, separator: false }
+        }
     ];
     // A27（D12）：会话树"文件夹行"右键菜单。与 `saved_session_context_menu_entries`
     // 共用 `dispatch_context_menu(which = 0)`，由 `saved_tree_menu_kind_text` 分流。
@@ -1870,7 +1892,10 @@ export component MainWindow inherits Window {
     // Import/Expand All/Collapse All 本版不实现：disabled + tooltip 说明原因。
     property <[MenuEntry]> saved_session_blank_menu_entries: [
         { label: @tr("New Session"), shortcut: root.shortcut-new-session, enabled: true, checked: false, separator: false },
-        { label: @tr("New Folder..."), shortcut: "", enabled: true, checked: false, separator: false },
+        {
+            label: @tr("New Folder..."), shortcut: "", enabled: false, checked: false, separator: false,
+            tooltip: @tr("Not available in this version.")
+        },
         { label: "", shortcut: "", enabled: false, checked: false, separator: true },
         {
             label: @tr("Import Config..."),
@@ -2099,6 +2124,14 @@ export component MainWindow inherits Window {
     /// 无法按 id 遍历 `session_tree_rows`；这里改用"右键先选中"路径中**同步更新**的
     /// 投影：`saved_session_tree_selected_id`（被选中行的 id，文件夹会话都在内）与
     /// `saved_folder_selected`（该选中行是否为文件夹）。未知 id 选中不变 → "none"。
+    function begin_session_tree_inline_rename() {
+        if (!root.has_saved_selection || root.saved_folder_selected) {
+            return;
+        }
+        root.session_tree_inline_rename_id = root.saved_session_tree_selected_id;
+        root.session_tree_inline_rename_text = root.saved_session_selection_name_text;
+    }
+
     function saved_tree_menu_kind_for_id(id: string) -> string {
         if (root.saved_session_tree_selected_id != id) {
             return "none";
@@ -2122,22 +2155,19 @@ export component MainWindow inherits Window {
                 else if (index == 5) { root.edit_folder_defaults(); }
             } else {
                 if (index == 0) { root.open_selected_saved_session(); }
-                else if (index == 1) { root.open_selected_saved_session_sftp(); }
-                else if (index == 2) { root.load_selected_saved_session_into_editor(); }
-                else if (index == 3) { root.update_selected_saved_session(); }
-                else if (index == 4) {
+                else if (index == 1) { root.open_selected_saved_session_in_new_tab(); }
+                else if (index == 2) { root.open_selected_saved_session_sftp(); }
+                else if (index == 3) { root.load_selected_saved_session_into_editor(); }
+                else if (index == 5) { root.begin_session_tree_inline_rename(); }
+                else if (index == 6) { root.duplicate_selected_saved_session(); }
+                else if (index == 9) {
                     root.delete_session_confirmation_text = "";
                     root.delete_session_dialog_visible = true;
                 }
-                else if (index == 6) { root.start_new_saved_session_editor(); }
             }
         } else if (which == 1) {
             // 会话树空白区菜单
             if (index == 0) { root.start_new_saved_session_editor(); }
-            else if (index == 1) {
-                root.new_root_folder_name_text = "";
-                root.new_folder_dialog_visible = true;
-            }
             else if (index == 7) { root.refresh_saved_sessions(); }
         } else if (which == 2) {
             // 图标条菜单
@@ -2412,6 +2442,13 @@ export component MainWindow inherits Window {
                 // A31（B24/B25）：SessionSidebarContent 头部 `+` / 空白区左键 → 宿主回调。
                 session-new-requested() => { root.start_new_saved_session_editor(); }
                 session-clear-selection-requested() => { root.clear_saved_session_selection(); }
+                session-inline-rename-id <=> root.session_tree_inline_rename_id;
+                session-inline-rename-text <=> root.session_tree_inline_rename_text;
+                session-inline-rename-start(_id) => { /* Slint 已写入 id/text */ }
+                session-inline-rename-commit(text) => {
+                    root.rename_saved_session(root.session_tree_inline_rename_id, text);
+                }
+                session-inline-rename-cancel() => { /* 清空由 SessionTree 完成 */ }
 
                 // Sessions 面板内容（搜索/树/空白区右键）
                 session-search-text <=> root.session_search_text;
@@ -2435,7 +2472,10 @@ export component MainWindow inherits Window {
                 tunnels-empty-kind: root.tunnels_summary_kind_text;
                 start-tunnel(id) => { root.start_tunnel(id); }
                 stop-tunnel(id) => { root.stop_tunnel(id); }
+                tunnel-add-requested() => { root.add_tunnel_from_dock_panel(); }
                 transfer-open-sftp-drawer() => { root.transfer_open_sftp_drawer(); }
+                transfer-pause-all() => { root.transfer_pause_all(); }
+                transfer-resume-all() => { root.transfer_resume_all(); }
                 // 本地栏（独立 dock 面板）与 SFTP 标签页共用同一个 FilePane 组件。
                 local-crumbs: root.local_crumbs;
 

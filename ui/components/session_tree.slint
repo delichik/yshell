@@ -10,6 +10,7 @@
 //       Theme token。导出的属性/回调是主窗口与 Rust 的契约，名字与类型保持稳定。
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
+import { WinTextInput } from "basic/text_input.slint";
 
 /// Rust 侧 `yshell_app::SessionTreeRow` 的 Slint 镜像（字段一一对应）。
 export struct SessionTreeRow {
@@ -20,12 +21,19 @@ export struct SessionTreeRow {
     id: string,
     expanded: bool,
     selected: bool,
+    /// Preset icon name for session rows (`Icon`); empty for folders.
+    icon-name: string,
 }
 
 /// 单行：整行命中区（单击选中 / 双击激活 / 右键菜单）。
 component SessionTreeRowItem inherits Rectangle {
     in property <SessionTreeRow> node;
     in property <bool> selected: false;
+    in property <bool> renaming: false;
+    in-out property <string> rename-text: "";
+    callback rename-requested();
+    callback rename-committed(string);
+    callback rename-canceled();
     /// 每级缩进宽度
     in property <length> indent-step: Theme.spacing-16;
     /// 右侧次要信息至少要有这么宽才显示
@@ -156,23 +164,62 @@ component SessionTreeRowItem inherits Rectangle {
             background: transparent;
 
             Icon {
-                name: root.node.kind == "folder" ? "folder" : "terminal";
+                name: root.node.kind == "folder"
+                    ? "folder"
+                    : (root.node.icon-name != "" ? root.node.icon-name : "terminal");
                 icon-size: Theme.icon-size-small;
                 icon-color: root.selected ? Theme.accent : Theme.text-secondary;
                 y: (parent.height - self.height) / 2;
             }
         }
 
-        // 名称：显式宽度 + 省略号
-        label_text := Text {
-            text: root.node.label;
-            color: Theme.text-primary;
-            font-size: Theme.font-body;
-            font-weight: root.selected ? Theme.weight-semibold : 400;
-            vertical-alignment: center;
-            wrap: no-wrap;
-            overflow: elide;
+        // 名称列：显式宽度；会话行双击名称进入原地改名（Enter 提交 / Esc 取消）。
+        label_slot := Rectangle {
             width: root.label-width;
+            height: parent.height;
+
+            rename_input := WinTextInput {
+                visible: root.renaming;
+                enabled: root.renaming;
+                width: parent.width;
+                height: Theme.control-height-compact;
+                y: (parent.height - self.height) / 2;
+                font-size: Theme.font-body;
+                text <=> root.rename-text;
+                accepted => { root.rename-committed(root.rename-text); }
+            }
+
+            rename_scope := FocusScope {
+                visible: root.renaming;
+                width: parent.width;
+                height: parent.height;
+                key-pressed(event) => {
+                    if (event.text == "\u{001b}") {
+                        root.rename-canceled();
+                        return accept;
+                    }
+                    return reject;
+                }
+            }
+
+            label_text := Text {
+                visible: !root.renaming;
+                text: root.node.label;
+                color: Theme.text-primary;
+                font-size: Theme.font-body;
+                font-weight: root.selected ? Theme.weight-semibold : 400;
+                vertical-alignment: center;
+                wrap: no-wrap;
+                overflow: elide;
+                width: parent.width;
+                height: parent.height;
+            }
+
+            if !root.renaming && root.node.kind == "session" : TouchArea {
+                width: parent.width;
+                height: parent.height;
+                double-clicked => { root.rename-requested(); }
+            }
         }
 
         // 右侧次要信息：会话 = user@host；文件夹 = 子树可见会话数（右对齐）。
@@ -208,6 +255,12 @@ export component SessionTree inherits Rectangle {
     callback blank-context-menu-requested(length, length);
     /// A9：会话树空白区左键 —— 宿主据此清空选中（契约 §5.2）。
     callback blank-clicked();
+    /// 原地改名：当前行 id（空 = 未在编辑）与草稿名称。
+    in-out property <string> inline-rename-id: "";
+    in-out property <string> inline-rename-text: "";
+    callback inline-rename-start(string);
+    callback inline-rename-commit(string);
+    callback inline-rename-cancel();
 
     /// 内容高度（行数 × 行高）；宿主可用来判断占位。
     out property <length> content-height: root.rows.length * root.row-height;
@@ -284,6 +337,8 @@ export component SessionTree inherits Rectangle {
                     // （i-slint-core window.rs 在"光标下 item 变化"时 click_state.reset()），
                     // 双击就会退化成两次单击。
                     selected: entry.id == root.selected-id;
+                    renaming: entry.kind == "session" && entry.id == root.inline-rename-id;
+                    rename-text <=> root.inline-rename-text;
                     select() => {
                         tree_focus.focus();
                         root.select(entry.id);
@@ -295,6 +350,21 @@ export component SessionTree inherits Rectangle {
                     }
                     context-menu-requested(x, y) => {
                         root.context-menu-requested(entry.id, x, y);
+                    }
+                    rename-requested() => {
+                        root.inline-rename-id = entry.id;
+                        root.inline-rename-text = entry.label;
+                        root.inline-rename-start(entry.id);
+                    }
+                    rename-committed(text) => {
+                        root.inline-rename-commit(text);
+                        root.inline-rename-id = "";
+                        root.inline-rename-text = "";
+                    }
+                    rename-canceled() => {
+                        root.inline-rename-cancel();
+                        root.inline-rename-id = "";
+                        root.inline-rename-text = "";
                     }
                 }
             }

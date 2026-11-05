@@ -409,12 +409,11 @@ impl AppRuntime {
         else {
             return Vec::new();
         };
-        let session_connected = session.state == SessionState::Connected;
         session
             .ssh_config
             .tunnels
             .iter()
-            .map(|tunnel| tunnel_row_data(tunnel, session_connected))
+            .map(tunnel_row_data)
             .collect()
     }
 
@@ -1221,16 +1220,15 @@ fn tunnel_endpoint_summary(config: &TunnelConfig) -> String {
     }
 }
 
-fn tunnel_row_data(config: &TunnelConfig, session_connected: bool) -> TunnelRowData {
+fn tunnel_row_data(config: &TunnelConfig) -> TunnelRowData {
     let kind_id = tunnel_kind_id(config.kind);
     let kind_text = tunnel_kind_display(config.kind);
-    // No live TunnelState tracking yet: configured tunnels stay idle until the
-    // SSH layer provisions forwards (see yshell-ssh real shell startup note).
-    let (status_id, status_text, can_start, can_stop) = if session_connected {
-        ("idle", "Idle", true, false)
-    } else {
-        ("idle", "Idle", false, false)
-    };
+    // No live TunnelState tracking yet: Start/Stop stay disabled until the SSH
+    // layer provisions forwards (see yshell-ssh real shell startup note).
+    let status_id = "idle";
+    let status_text = "Idle";
+    let can_start = false;
+    let can_stop = false;
     TunnelRowData {
         id: config.id.clone(),
         name_text: format!("{kind_text} :{}", config.listen_port),

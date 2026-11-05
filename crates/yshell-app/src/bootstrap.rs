@@ -1253,6 +1253,67 @@ pub(crate) fn wire_callbacks(
     let weak = window.as_weak();
     let runtime_ref = Rc::clone(&runtime);
     let surface = surface_source.clone();
+    window.on_open_selected_saved_session_in_new_tab(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let result = runtime_ref
+            .borrow_mut()
+            .open_selected_saved_session_in_new_tab();
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(
+                &window,
+                "Could not open the saved session in a new tab.",
+                &error,
+            ),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_duplicate_selected_saved_session(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let result = runtime_ref.borrow_mut().duplicate_selected_saved_session();
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => {
+                set_error_status(&window, "Could not duplicate the saved session.", &error)
+            }
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_rename_saved_session(move |session_id: SharedString, name: SharedString| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let result = runtime_ref
+            .borrow_mut()
+            .rename_saved_session(session_id.as_ref(), name.as_ref());
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not rename the saved session.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
     window.on_open_selected_saved_session_sftp(move || {
         let Some(window) = weak.upgrade() else {
             return;
@@ -4552,6 +4613,12 @@ fn wire_n1_sftp_callbacks(
     wire_result!(on_transfer_clear_completed, "SFTP transfer", |runtime| {
         runtime.clear_completed_sftp_transfers()
     });
+    wire_projection!(on_transfer_pause_all, |runtime| runtime
+        .pause_all_sftp_transfers());
+    wire_projection!(on_transfer_resume_all, |runtime| runtime
+        .resume_all_sftp_transfers());
+    wire_projection!(on_add_tunnel_from_dock_panel, |runtime| runtime
+        .add_tunnel_from_dock_panel());
 
     // ---------------------------------------------------------- 剪贴板
     // Ctrl+C/X 取"有选择的栏"（远端优先）；Ctrl+V 总是跨栏粘贴。
@@ -6532,6 +6599,7 @@ fn session_tree_row_from(row: &crate::runtime::SessionTreeRow) -> SessionTreeRow
         id: row.id.clone().into(),
         expanded: row.expanded,
         selected: row.selected,
+        icon_name: row.icon_name.clone().into(),
     }
 }
 
@@ -6554,6 +6622,7 @@ fn session_tree_row_matches(
         && current.detail.as_str() == next.detail
         && current.id.as_str() == next.id
         && current.expanded == next.expanded
+        && current.icon_name.as_str() == next.icon_name
 }
 
 /// Replaces the session-tree row model only when the projection changed, so a
@@ -7772,6 +7841,7 @@ mod tests {
             id: "saved-one".to_owned(),
             expanded: false,
             selected,
+            icon_name: "terminal".to_owned(),
         };
         let modelled = |selected: bool| SessionTreeRow {
             kind: "session".into(),
@@ -7781,6 +7851,7 @@ mod tests {
             id: "saved-one".into(),
             expanded: false,
             selected,
+            icon_name: "terminal".into(),
         };
 
         // 只有 selected 不同（模型里还是旧值）→ 判定为"无需重建"。
