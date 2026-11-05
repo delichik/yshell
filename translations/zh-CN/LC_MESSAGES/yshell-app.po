@@ -18,7 +18,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: yshell\n"
-"POT-Creation-Date: 2026-11-05 06:06+0000\n"
+"POT-Creation-Date: 2026-11-05 08:19+0000\n"
 "PO-Revision-Date: 2026-09-27 00:00+0000\n"
 "Last-Translator: YShell\n"
 "Language-Team: YShell\n"
@@ -587,103 +587,108 @@ msgid "Local"
 msgstr "本地"
 
 #. 多轮：中间轮是 Continue，最后一轮才是 Connect（宿主判断）
-#: ui/components/auth_prompt_dialog.slint:129
+#: ui/components/auth_prompt_dialog.slint:133
 msgctxt "AuthPromptDialog"
 msgid "Continue"
 msgstr "继续"
 
 #. 多轮：中间轮是 Continue，最后一轮才是 Connect（宿主判断）
-#: ui/components/auth_prompt_dialog.slint:130
+#: ui/components/auth_prompt_dialog.slint:134
 msgctxt "AuthPromptDialog"
 msgid "Connect"
 msgstr "连接"
 
-#: ui/components/auth_prompt_dialog.slint:162
+#: ui/components/auth_prompt_dialog.slint:166
 msgctxt "AuthPromptDialog"
 msgid "Sign in to {0}"
 msgstr "登录到 {0}"
 
-#: ui/components/auth_prompt_dialog.slint:171
+#: ui/components/auth_prompt_dialog.slint:175
 msgctxt "AuthPromptDialog"
 msgid "Pick a method the server accepts. You can switch and retry without losing what you typed."
 msgstr "选择服务器接受的方式。可随时切换并重试，已输入的内容不会丢失。"
 
-#: ui/components/auth_prompt_dialog.slint:185
+#: ui/components/auth_prompt_dialog.slint:189
 msgctxt "AuthPromptDialog"
 msgid "The server does not offer any authentication method YShell supports."
 msgstr "服务器未提供 YShell 支持的任何认证方式。"
 
-#: ui/components/auth_prompt_dialog.slint:193
+#: ui/components/auth_prompt_dialog.slint:197
 msgctxt "AuthPromptDialog"
 msgid "Password"
 msgstr "密码"
 
-#: ui/components/auth_prompt_dialog.slint:199
+#: ui/components/auth_prompt_dialog.slint:203
 msgctxt "AuthPromptDialog"
 msgid "Public key"
 msgstr "公钥"
 
-#: ui/components/auth_prompt_dialog.slint:205
+#: ui/components/auth_prompt_dialog.slint:209
 msgctxt "AuthPromptDialog"
 msgid "Keyboard interactive"
 msgstr "键盘交互"
 
-#: ui/components/auth_prompt_dialog.slint:242
+#: ui/components/auth_prompt_dialog.slint:246
 msgctxt "AuthPromptDialog"
 msgid "Private key"
 msgstr "私钥"
 
-#: ui/components/auth_prompt_dialog.slint:293
+#: ui/components/auth_prompt_dialog.slint:298
 msgctxt "AuthPromptDialog"
 msgid "No managed private key. Import one on the Private Keys page, or browse for a key file."
 msgstr "没有托管的私钥。请在“私钥”页导入，或浏览选择密钥文件。"
 
-#: ui/components/auth_prompt_dialog.slint:307
+#: ui/components/auth_prompt_dialog.slint:312
 msgctxt "AuthPromptDialog"
 msgid "No key selected"
 msgstr "未选择密钥"
 
-#: ui/components/auth_prompt_dialog.slint:317
+#: ui/components/auth_prompt_dialog.slint:322
 msgctxt "AuthPromptDialog"
 msgid "Browse…"
 msgstr "浏览…"
 
-#: ui/components/auth_prompt_dialog.slint:328
+#: ui/components/auth_prompt_dialog.slint:334
 msgctxt "AuthPromptDialog"
 msgid "Key passphrase"
 msgstr "密钥口令"
 
-#: ui/components/auth_prompt_dialog.slint:335
+#: ui/components/auth_prompt_dialog.slint:341
 msgctxt "AuthPromptDialog"
 msgid "Optional"
 msgstr "可选"
 
-#: ui/components/auth_prompt_dialog.slint:347
+#: ui/components/auth_prompt_dialog.slint:358
+msgctxt "AuthPromptDialog"
+msgid "ssh-agent"
+msgstr "ssh-agent"
+
+#: ui/components/auth_prompt_dialog.slint:367
 msgctxt "AuthPromptDialog"
 msgid "Use"
 msgstr "使用"
 
-#: ui/components/auth_prompt_dialog.slint:347
+#: ui/components/auth_prompt_dialog.slint:367
 msgctxt "AuthPromptDialog"
 msgid "Don't use"
 msgstr "不使用"
 
-#: ui/components/auth_prompt_dialog.slint:348
+#: ui/components/auth_prompt_dialog.slint:368
 msgctxt "AuthPromptDialog"
 msgid "Use ssh-agent"
 msgstr "使用 ssh-agent"
 
-#: ui/components/auth_prompt_dialog.slint:359
+#: ui/components/auth_prompt_dialog.slint:380
 msgctxt "AuthPromptDialog"
 msgid "Round {0} of {1}"
 msgstr "第 {0} 轮，共 {1} 轮"
 
-#: ui/components/auth_prompt_dialog.slint:380
+#: ui/components/auth_prompt_dialog.slint:401
 msgctxt "AuthPromptDialog"
 msgid "Waiting for the server challenge…"
 msgstr "正在等待服务器挑战…"
 
-#: ui/components/auth_prompt_dialog.slint:425
+#: ui/components/auth_prompt_dialog.slint:446
 msgctxt "AuthPromptDialog"
 msgid "Cancel"
 msgstr "取消"
@@ -886,132 +891,132 @@ msgctxt "LoggingDialog"
 msgid "Recording terminal output to this file:"
 msgstr "正在把终端输出记录到此文件："
 
-#: ui/components/logging_dialog.slint:192
+#: ui/components/logging_dialog.slint:193
 msgctxt "LoggingDialog"
 msgid "Open File"
 msgstr "打开文件"
 
-#: ui/components/logging_dialog.slint:200
+#: ui/components/logging_dialog.slint:202
 msgctxt "LoggingDialog"
 msgid "Open Folder"
 msgstr "打开文件夹"
 
-#: ui/components/logging_dialog.slint:214
+#: ui/components/logging_dialog.slint:217
 msgctxt "LoggingDialog"
 msgid "Destination"
 msgstr "目标位置"
 
-#: ui/components/logging_dialog.slint:221
+#: ui/components/logging_dialog.slint:224
 msgctxt "LoggingDialog"
 msgid "Save to"
 msgstr "保存到"
 
-#: ui/components/logging_dialog.slint:232
+#: ui/components/logging_dialog.slint:235
 msgctxt "LoggingDialog"
 msgid "Log folder"
 msgstr "日志文件夹"
 
-#: ui/components/logging_dialog.slint:237
+#: ui/components/logging_dialog.slint:242
 msgctxt "LoggingDialog"
-msgid "Browse…"
-msgstr "浏览…"
+msgid "Browse"
+msgstr "浏览"
 
-#: ui/components/logging_dialog.slint:246
+#: ui/components/logging_dialog.slint:251
 msgctxt "LoggingDialog"
 msgid "Default: the last used folder, or the configured logs directory."
 msgstr "默认：上次使用的文件夹，或已配置的日志目录。"
 
-#: ui/components/logging_dialog.slint:250
+#: ui/components/logging_dialog.slint:255
 msgctxt "LoggingDialog"
 msgid "File name"
 msgstr "文件名"
 
-#: ui/components/logging_dialog.slint:257
+#: ui/components/logging_dialog.slint:262
 msgctxt "LoggingDialog"
 msgid "session-{{timestamp}}.log"
 msgstr "session-{{timestamp}}.log"
 
-#: ui/components/logging_dialog.slint:268
+#: ui/components/logging_dialog.slint:273
 msgctxt "LoggingDialog"
 msgid "This file already exists. Confirm to overwrite it, or choose another name."
 msgstr "该文件已存在。请确认覆盖，或选择其他名称。"
 
-#: ui/components/logging_dialog.slint:274
+#: ui/components/logging_dialog.slint:279
 msgctxt "LoggingDialog"
 msgid "Overwrite the existing file"
 msgstr "覆盖现有文件"
 
-#: ui/components/logging_dialog.slint:277
+#: ui/components/logging_dialog.slint:282
 msgctxt "LoggingDialog"
 msgid "On"
 msgstr "开"
 
-#: ui/components/logging_dialog.slint:277
+#: ui/components/logging_dialog.slint:282
 msgctxt "LoggingDialog"
 msgid "Off"
 msgstr "关"
 
-#: ui/components/logging_dialog.slint:285
+#: ui/components/logging_dialog.slint:290
 msgctxt "LoggingDialog"
 msgid "Options"
 msgstr "选项"
 
-#: ui/components/logging_dialog.slint:292
+#: ui/components/logging_dialog.slint:297
 msgctxt "LoggingDialog"
 msgid "Format"
 msgstr "格式"
 
-#: ui/components/logging_dialog.slint:299
+#: ui/components/logging_dialog.slint:304
 msgctxt "LoggingDialog"
 msgid "Sanitized (plain text)"
 msgstr "净化（纯文本）"
 
-#: ui/components/logging_dialog.slint:305
+#: ui/components/logging_dialog.slint:310
 msgctxt "LoggingDialog"
 msgid "Raw (with ANSI escapes)"
 msgstr "原始（含 ANSI 转义）"
 
-#: ui/components/logging_dialog.slint:313
+#: ui/components/logging_dialog.slint:318
 msgctxt "LoggingDialog"
 msgid "Timestamp"
 msgstr "时间戳"
 
-#: ui/components/logging_dialog.slint:324
+#: ui/components/logging_dialog.slint:329
 msgctxt "LoggingDialog"
 msgid "Record input"
 msgstr "记录输入"
 
-#: ui/components/logging_dialog.slint:341
+#: ui/components/logging_dialog.slint:346
+msgctxt "LoggingDialog"
+msgid "Starts from now — existing scrollback is not written."
+msgstr "从现在开始 — 已有的回滚内容不会写入。"
+
+#: ui/components/logging_dialog.slint:351
 msgctxt "LoggingDialog"
 msgid "Local input is written to the log in plain text, including passwords you type interactively. Confirm before enabling."
 msgstr "本地输入会以明文写入日志，包括你交互输入的密码。启用前请确认。"
 
-#: ui/components/logging_dialog.slint:344
+#: ui/components/logging_dialog.slint:354
 msgctxt "LoggingDialog"
 msgid "I understand local input will be recorded"
 msgstr "我了解本地输入将被记录"
 
-#: ui/components/logging_dialog.slint:358
-msgctxt "LoggingDialog"
-msgid "Logging starts now: existing scrollback is not written; new output is recorded."
-msgstr "日志从现在开始：已有回滚内容不会写入；新输出会被记录。"
-
-#: ui/components/logging_dialog.slint:389
+#: ui/components/logging_dialog.slint:394
 msgctxt "LoggingDialog"
 msgid "Close"
 msgstr "关闭"
 
-#: ui/components/logging_dialog.slint:389
+#: ui/components/logging_dialog.slint:394
 msgctxt "LoggingDialog"
 msgid "Cancel"
 msgstr "取消"
 
-#: ui/components/logging_dialog.slint:394
+#: ui/components/logging_dialog.slint:400
 msgctxt "LoggingDialog"
 msgid "Stop Logging"
 msgstr "停止记录"
 
-#: ui/components/logging_dialog.slint:400
+#: ui/components/logging_dialog.slint:407
 msgctxt "LoggingDialog"
 msgid "Start Logging"
 msgstr "开始记录"
@@ -1153,437 +1158,437 @@ msgctxt "MainWindow"
 msgid "SAVED"
 msgstr "已保存"
 
-#: ui/components/sftp_panel.slint:104
+#: ui/components/sftp_panel.slint:105
 msgctxt "SftpTransferDrawer"
 msgid "Hide transfers"
 msgstr "收起传输队列"
 
-#: ui/components/sftp_panel.slint:104
+#: ui/components/sftp_panel.slint:105
 msgctxt "SftpTransferDrawer"
 msgid "Show transfers"
 msgstr "展开传输队列"
 
-#: ui/components/sftp_panel.slint:139
+#: ui/components/sftp_panel.slint:140
 msgctxt "SftpTransferDrawer"
 msgid "Clear completed"
 msgstr "清除已完成"
 
-#: ui/components/sftp_panel.slint:154
+#: ui/components/sftp_panel.slint:155
 msgctxt "SftpTransferDrawer"
 msgid "No transfer tasks yet"
 msgstr "暂无传输任务"
 
 #. 行内动作按钮的无障碍名 / Tooltip 文案（§5.7：图标化操作必须带提示）。
-#: ui/components/sftp_panel.slint:314
+#: ui/components/sftp_panel.slint:315
 msgctxt "SftpTransferDrawer"
 msgid "Pause transfer"
 msgstr "暂停任务"
 
-#: ui/components/sftp_panel.slint:315
+#: ui/components/sftp_panel.slint:316
 msgctxt "SftpTransferDrawer"
 msgid "Resume transfer"
 msgstr "恢复任务"
 
-#: ui/components/sftp_panel.slint:316
+#: ui/components/sftp_panel.slint:317
 msgctxt "SftpTransferDrawer"
 msgid "Retry transfer"
 msgstr "重试任务"
 
-#: ui/components/sftp_panel.slint:317
+#: ui/components/sftp_panel.slint:318
 msgctxt "SftpTransferDrawer"
 msgid "Cancel transfer"
 msgstr "取消任务"
 
-#: ui/components/sftp_panel.slint:318
+#: ui/components/sftp_panel.slint:319
 msgctxt "SftpTransferDrawer"
 msgid "Remove transfer"
 msgstr "移除任务"
 
-#: ui/components/sftp_panel.slint:336
+#: ui/components/sftp_panel.slint:337
 msgctxt "SftpTransferDrawer"
 msgid "{0} transfer(s)"
 msgstr "{0} 个任务"
 
-#: ui/components/sftp_panel.slint:337
+#: ui/components/sftp_panel.slint:338
 msgctxt "SftpTransferDrawer"
 msgid " · {0} active"
 msgstr " · {0} 进行中"
 
-#: ui/components/sftp_panel.slint:338
+#: ui/components/sftp_panel.slint:339
 msgctxt "SftpTransferDrawer"
 msgid " · {0} paused"
 msgstr " · {0} 已暂停"
 
-#: ui/components/sftp_panel.slint:339
+#: ui/components/sftp_panel.slint:340
 msgctxt "SftpTransferDrawer"
 msgid " · {0} failed"
 msgstr " · {0} 失败"
 
-#: ui/components/sftp_panel.slint:340
+#: ui/components/sftp_panel.slint:341
 msgctxt "SftpTransferDrawer"
 msgid " · {0} completed"
 msgstr " · {0} 已完成"
 
-#: ui/components/sftp_panel.slint:695 ui/components/sftp_panel.slint:746
+#: ui/components/sftp_panel.slint:696 ui/components/sftp_panel.slint:747
 msgctxt "SftpPanel"
 msgid "Loading {0}…"
 msgstr "正在加载 {0}…"
 
-#: ui/components/sftp_panel.slint:701 ui/components/sftp_panel.slint:752
+#: ui/components/sftp_panel.slint:702 ui/components/sftp_panel.slint:753
 msgctxt "SftpPanel"
 msgid "Remote"
 msgstr "远端"
 
-#: ui/components/sftp_panel.slint:870 ui/components/sftp_panel.slint:887
+#: ui/components/sftp_panel.slint:871 ui/components/sftp_panel.slint:888
 msgctxt "SftpContextMenu"
 msgid "Open"
 msgstr "打开"
 
-#: ui/components/sftp_panel.slint:871
+#: ui/components/sftp_panel.slint:872
 msgctxt "SftpContextMenu"
 msgid "Edit Remote File"
 msgstr "编辑远端文件"
 
-#: ui/components/sftp_panel.slint:872 ui/components/sftp_panel.slint:888
+#: ui/components/sftp_panel.slint:873 ui/components/sftp_panel.slint:889
 msgctxt "SftpContextMenu"
 msgid "Download"
 msgstr "下载"
 
-#: ui/components/sftp_panel.slint:873 ui/components/sftp_panel.slint:889
+#: ui/components/sftp_panel.slint:874 ui/components/sftp_panel.slint:890
 msgctxt "SftpContextMenu"
 msgid "Download To..."
 msgstr "下载到…"
 
-#: ui/components/sftp_panel.slint:874 ui/components/sftp_panel.slint:890
+#: ui/components/sftp_panel.slint:875 ui/components/sftp_panel.slint:891
 msgctxt "SftpContextMenu"
 msgid "Copy To..."
 msgstr "复制到…"
 
-#: ui/components/sftp_panel.slint:876 ui/components/sftp_panel.slint:894
+#: ui/components/sftp_panel.slint:877 ui/components/sftp_panel.slint:895
 msgctxt "SftpContextMenu"
 msgid "Rename..."
 msgstr "重命名…"
 
-#: ui/components/sftp_panel.slint:877 ui/components/sftp_panel.slint:895
+#: ui/components/sftp_panel.slint:878 ui/components/sftp_panel.slint:896
 msgctxt "SftpContextMenu"
 msgid "Delete..."
 msgstr "删除…"
 
-#: ui/components/sftp_panel.slint:878 ui/components/sftp_panel.slint:896
+#: ui/components/sftp_panel.slint:879 ui/components/sftp_panel.slint:897
 msgctxt "SftpContextMenu"
-msgid "Chmod..."
-msgstr "改权限…"
+msgid "Change Permissions"
+msgstr "修改权限"
 
-#: ui/components/sftp_panel.slint:880 ui/components/sftp_panel.slint:898 ui/components/sftp_panel.slint:934
+#: ui/components/sftp_panel.slint:881 ui/components/sftp_panel.slint:899 ui/components/sftp_panel.slint:935
 msgctxt "SftpContextMenu"
 msgid "Copy"
 msgstr "复制"
 
-#: ui/components/sftp_panel.slint:881 ui/components/sftp_panel.slint:899
+#: ui/components/sftp_panel.slint:882 ui/components/sftp_panel.slint:900
 msgctxt "SftpContextMenu"
 msgid "Copy Remote Path"
 msgstr "复制远端路径"
 
 #. 行为是 `open_sftp_path("/")`（远端根），不是登录用户家目录，
 #. 文案如实描述（B12）。
-#: ui/components/sftp_panel.slint:881 ui/components/sftp_panel.slint:883 ui/components/sftp_panel.slint:901 ui/components/sftp_panel.slint:918 ui/components/sftp_panel.slint:941
+#: ui/components/sftp_panel.slint:882 ui/components/sftp_panel.slint:884 ui/components/sftp_panel.slint:902 ui/components/sftp_panel.slint:919 ui/components/sftp_panel.slint:942
 msgctxt "SftpContextMenu"
 msgid "Connect to the remote host first."
 msgstr "请先连接远程主机。"
 
-#: ui/components/sftp_panel.slint:883 ui/components/sftp_panel.slint:901
+#: ui/components/sftp_panel.slint:884 ui/components/sftp_panel.slint:902
 msgctxt "SftpContextMenu"
 msgid "Properties"
 msgstr "属性"
 
-#: ui/components/sftp_panel.slint:891
+#: ui/components/sftp_panel.slint:892
 msgctxt "SftpContextMenu"
 msgid "Upload Here..."
 msgstr "上传到此处…"
 
-#: ui/components/sftp_panel.slint:892 ui/components/sftp_panel.slint:906
+#: ui/components/sftp_panel.slint:893 ui/components/sftp_panel.slint:907
 msgctxt "SftpContextMenu"
 msgid "New Folder"
 msgstr "新建文件夹"
 
-#: ui/components/sftp_panel.slint:905
+#: ui/components/sftp_panel.slint:906
 msgctxt "SftpContextMenu"
 msgid "Upload Files..."
 msgstr "上传文件…"
 
-#: ui/components/sftp_panel.slint:908 ui/components/sftp_panel.slint:938
+#: ui/components/sftp_panel.slint:909 ui/components/sftp_panel.slint:939
 msgctxt "SftpContextMenu"
 msgid "Refresh"
 msgstr "刷新"
 
-#: ui/components/sftp_panel.slint:909 ui/components/sftp_panel.slint:939
+#: ui/components/sftp_panel.slint:910 ui/components/sftp_panel.slint:940
 msgctxt "SftpContextMenu"
 msgid "Show Hidden Files"
 msgstr "显示隐藏文件"
 
-#: ui/components/sftp_panel.slint:910 ui/components/sftp_panel.slint:949
+#: ui/components/sftp_panel.slint:911 ui/components/sftp_panel.slint:950
 msgctxt "SftpContextMenu"
 msgid "Copy Current Path"
 msgstr "复制当前路径"
 
-#: ui/components/sftp_panel.slint:912 ui/components/sftp_panel.slint:952
+#: ui/components/sftp_panel.slint:913 ui/components/sftp_panel.slint:953
 msgctxt "SftpContextMenu"
 msgid "Paste"
 msgstr "粘贴"
 
-#: ui/components/sftp_panel.slint:914
+#: ui/components/sftp_panel.slint:915
 msgctxt "SftpContextMenu"
 msgid "Parent directory"
 msgstr "上级目录"
 
 #. 行为是 `open_sftp_path("/")`（远端根），不是登录用户家目录，
 #. 文案如实描述（B12）。
-#: ui/components/sftp_panel.slint:916
+#: ui/components/sftp_panel.slint:917
 msgctxt "SftpContextMenu"
 msgid "Root directory (/)"
 msgstr "根目录 (/)"
 
-#: ui/components/sftp_panel.slint:918 ui/components/sftp_panel.slint:941
+#: ui/components/sftp_panel.slint:919 ui/components/sftp_panel.slint:942
 msgctxt "SftpContextMenu"
 msgid "Switch to Terminal"
 msgstr "切换为终端"
 
-#: ui/components/sftp_panel.slint:922
+#: ui/components/sftp_panel.slint:923
 msgctxt "SftpContextMenu"
 msgid "Download Selected"
 msgstr "下载所选"
 
-#: ui/components/sftp_panel.slint:924 ui/components/sftp_panel.slint:936
+#: ui/components/sftp_panel.slint:925 ui/components/sftp_panel.slint:937
 msgctxt "SftpContextMenu"
 msgid "Delete Selected"
 msgstr "删除所选"
 
-#: ui/components/sftp_panel.slint:925
+#: ui/components/sftp_panel.slint:926
 msgctxt "SftpContextMenu"
-msgid "Chmod Selected..."
-msgstr "批量改权限…"
+msgid "Change Permissions for Selection"
+msgstr "修改所选权限"
 
-#: ui/components/sftp_panel.slint:928
+#: ui/components/sftp_panel.slint:929
 msgctxt "SftpContextMenu"
 msgid "Copy Remote Paths"
 msgstr "复制远端路径"
 
-#: ui/components/sftp_panel.slint:932
+#: ui/components/sftp_panel.slint:933
 msgctxt "SftpContextMenu"
 msgid "Upload to Remote"
 msgstr "上传到远端"
 
-#: ui/components/sftp_panel.slint:933
+#: ui/components/sftp_panel.slint:934
 msgctxt "SftpContextMenu"
 msgid "Move to Remote"
 msgstr "移动到远端"
 
-#: ui/components/sftp_panel.slint:935
+#: ui/components/sftp_panel.slint:936
 msgctxt "SftpContextMenu"
 msgid "Copy Path"
 msgstr "复制路径"
 
-#: ui/components/sftp_panel.slint:950
+#: ui/components/sftp_panel.slint:951
 msgctxt "SftpContextMenu"
 msgid "Home directory"
 msgstr "主目录"
 
-#: ui/components/sftp_panel.slint:1109
+#: ui/components/sftp_panel.slint:1110
 msgctxt "SftpEntryDialog"
 msgid "New Folder"
 msgstr "新建文件夹"
 
-#: ui/components/sftp_panel.slint:1110 ui/components/sftp_panel.slint:1147
+#: ui/components/sftp_panel.slint:1111 ui/components/sftp_panel.slint:1148
 msgctxt "SftpEntryDialog"
 msgid "Rename"
 msgstr "重命名"
 
-#: ui/components/sftp_panel.slint:1111
+#: ui/components/sftp_panel.slint:1112
 msgctxt "SftpEntryDialog"
 msgid "Change Permissions"
 msgstr "修改权限"
 
-#: ui/components/sftp_panel.slint:1112 ui/components/sftp_panel.slint:1149
+#: ui/components/sftp_panel.slint:1113 ui/components/sftp_panel.slint:1150
 msgctxt "SftpEntryDialog"
 msgid "Delete"
 msgstr "删除"
 
-#: ui/components/sftp_panel.slint:1113
+#: ui/components/sftp_panel.slint:1114
 msgctxt "SftpEntryDialog"
 msgid "Upload File"
 msgstr "上传文件"
 
-#: ui/components/sftp_panel.slint:1114 ui/components/sftp_panel.slint:1151
+#: ui/components/sftp_panel.slint:1115 ui/components/sftp_panel.slint:1152
 msgctxt "SftpEntryDialog"
 msgid "Download"
 msgstr "下载"
 
-#: ui/components/sftp_panel.slint:1115
+#: ui/components/sftp_panel.slint:1116
 msgctxt "SftpEntryDialog"
 msgid "Copy To..."
 msgstr "复制到…"
 
-#: ui/components/sftp_panel.slint:1116
+#: ui/components/sftp_panel.slint:1117
 msgctxt "SftpEntryDialog"
 msgid "SFTP"
 msgstr "SFTP"
 
-#: ui/components/sftp_panel.slint:1120
+#: ui/components/sftp_panel.slint:1121
 msgctxt "SftpEntryDialog"
 msgid "Relative names are created inside the current remote directory."
 msgstr "相对名称将创建在当前远程目录内。"
 
-#: ui/components/sftp_panel.slint:1121
+#: ui/components/sftp_panel.slint:1122
 msgctxt "SftpEntryDialog"
 msgid "Relative names stay inside the current remote directory."
 msgstr "相对名称保持在当前远程目录内。"
 
-#: ui/components/sftp_panel.slint:1122
+#: ui/components/sftp_panel.slint:1123
 msgctxt "SftpEntryDialog"
 msgid "Three-digit octal permissions, for example 644 or 755."
 msgstr "三位八进制权限，例如 644 或 755。"
 
-#: ui/components/sftp_panel.slint:1125
+#: ui/components/sftp_panel.slint:1126
 msgctxt "SftpEntryDialog"
 msgid "This permanently removes the {0} selected remote entries, directories recursively."
 msgstr "这将永久删除选中的 {0} 个远端条目（目录会递归删除）。"
 
-#: ui/components/sftp_panel.slint:1126
+#: ui/components/sftp_panel.slint:1127
 msgctxt "SftpEntryDialog"
 msgid "This permanently removes the remote entry."
 msgstr "这将永久删除该远程条目。"
 
-#: ui/components/sftp_panel.slint:1128
+#: ui/components/sftp_panel.slint:1129
 msgctxt "SftpEntryDialog"
 msgid "Uploads the local file or directory into the current remote directory using its name."
 msgstr "将本地文件或目录按原名上传到当前远端目录。"
 
-#: ui/components/sftp_panel.slint:1129
+#: ui/components/sftp_panel.slint:1130
 msgctxt "SftpEntryDialog"
 msgid "Downloads the selected remote entries into this local directory."
 msgstr "把选中的远端条目下载到该本地目录。"
 
-#: ui/components/sftp_panel.slint:1130
+#: ui/components/sftp_panel.slint:1131
 msgctxt "SftpEntryDialog"
 msgid "Downloads to a temporary copy and uploads it into this remote directory."
 msgstr "先下载到临时副本，再上传到该远端目录。"
 
-#: ui/components/sftp_panel.slint:1135
+#: ui/components/sftp_panel.slint:1136
 msgctxt "SftpEntryDialog"
 msgid "Folder name"
 msgstr "文件夹名称"
 
-#: ui/components/sftp_panel.slint:1136
+#: ui/components/sftp_panel.slint:1137
 msgctxt "SftpEntryDialog"
 msgid "New name"
 msgstr "新名称"
 
-#: ui/components/sftp_panel.slint:1140
+#: ui/components/sftp_panel.slint:1141
 msgctxt "SftpEntryDialog"
 msgid "Local file or directory"
 msgstr "本地文件或目录"
 
-#: ui/components/sftp_panel.slint:1141
+#: ui/components/sftp_panel.slint:1142
 msgctxt "SftpEntryDialog"
 msgid "Remote destination directory"
 msgstr "远端目标目录"
 
-#: ui/components/sftp_panel.slint:1142
+#: ui/components/sftp_panel.slint:1143
 msgctxt "SftpEntryDialog"
 msgid "Local destination directory"
 msgstr "本地目标目录"
 
-#: ui/components/sftp_panel.slint:1146
+#: ui/components/sftp_panel.slint:1147
 msgctxt "SftpEntryDialog"
 msgid "Create Folder"
 msgstr "创建文件夹"
 
-#: ui/components/sftp_panel.slint:1148
+#: ui/components/sftp_panel.slint:1149
 msgctxt "SftpEntryDialog"
 msgid "Apply"
 msgstr "应用"
 
-#: ui/components/sftp_panel.slint:1150
+#: ui/components/sftp_panel.slint:1151
 msgctxt "SftpEntryDialog"
 msgid "Upload"
 msgstr "上传"
 
-#: ui/components/sftp_panel.slint:1152
+#: ui/components/sftp_panel.slint:1153
 msgctxt "SftpEntryDialog"
 msgid "Copy"
 msgstr "复制"
 
-#: ui/components/sftp_panel.slint:1153
+#: ui/components/sftp_panel.slint:1154
 msgctxt "SftpEntryDialog"
 msgid "Run"
 msgstr "运行"
 
-#: ui/components/sftp_panel.slint:1210
+#: ui/components/sftp_panel.slint:1211
 msgctxt "SftpEntryDialog"
 msgid "{0} entries"
 msgstr "{0} 个条目"
 
-#: ui/components/sftp_panel.slint:1240
+#: ui/components/sftp_panel.slint:1241
 msgctxt "SftpEntryDialog"
 msgid "Permissions (octal)"
 msgstr "权限（八进制）"
 
-#: ui/components/sftp_panel.slint:1277
+#: ui/components/sftp_panel.slint:1278
 msgctxt "SftpEntryDialog"
 msgid "Cancel"
 msgstr "取消"
 
-#: ui/components/sftp_panel.slint:1342
+#: ui/components/sftp_panel.slint:1343
 msgctxt "SftpConflictDialog"
 msgid "{0} destination path(s) already exist."
 msgstr "已有 {0} 个目标路径存在。"
 
-#: ui/components/sftp_panel.slint:1350
+#: ui/components/sftp_panel.slint:1351
 msgctxt "SftpConflictDialog"
 msgid "{0} → {1}"
 msgstr "{0} → {1}"
 
-#: ui/components/sftp_panel.slint:1362
+#: ui/components/sftp_panel.slint:1363
 msgctxt "SftpConflictDialog"
 msgid "Conflicting paths"
 msgstr "冲突路径"
 
-#: ui/components/sftp_panel.slint:1390
+#: ui/components/sftp_panel.slint:1391
 msgctxt "SftpConflictDialog"
 msgid "Overwrite replaces them, Rename keeps both by adding a number, Skip leaves them untouched."
 msgstr "覆盖会替换目标；重命名会加序号保留两者；跳过则不做处理。"
 
-#: ui/components/sftp_panel.slint:1409
+#: ui/components/sftp_panel.slint:1410 ui/components/sftp_panel.slint:1411
 msgctxt "SftpConflictDialog"
 msgid "Cancel"
 msgstr "取消"
 
-#: ui/components/sftp_panel.slint:1413
+#: ui/components/sftp_panel.slint:1415 ui/components/sftp_panel.slint:1416
 msgctxt "SftpConflictDialog"
 msgid "Skip"
 msgstr "跳过"
 
-#: ui/components/sftp_panel.slint:1417
+#: ui/components/sftp_panel.slint:1420 ui/components/sftp_panel.slint:1421
 msgctxt "SftpConflictDialog"
 msgid "Rename"
 msgstr "重命名"
 
-#: ui/components/sftp_panel.slint:1421
+#: ui/components/sftp_panel.slint:1425 ui/components/sftp_panel.slint:1426
 msgctxt "SftpConflictDialog"
 msgid "Overwrite"
 msgstr "覆盖"
 
-#: ui/components/sftp_panel.slint:1479
+#: ui/components/sftp_panel.slint:1485
 msgctxt "SftpPropertiesDialog"
 msgid "Name"
 msgstr "名称"
 
-#: ui/components/sftp_panel.slint:1482
+#: ui/components/sftp_panel.slint:1486
 msgctxt "SftpPropertiesDialog"
 msgid "Path"
 msgstr "路径"
 
-#: ui/components/sftp_panel.slint:1485
+#: ui/components/sftp_panel.slint:1487
 msgctxt "SftpPropertiesDialog"
 msgid "Kind"
 msgstr "类型"
@@ -1593,22 +1598,22 @@ msgctxt "SftpPropertiesDialog"
 msgid "Size"
 msgstr "大小"
 
-#: ui/components/sftp_panel.slint:1491
+#: ui/components/sftp_panel.slint:1489
 msgctxt "SftpPropertiesDialog"
 msgid "Modified"
 msgstr "修改时间"
 
-#: ui/components/sftp_panel.slint:1494
+#: ui/components/sftp_panel.slint:1490
 msgctxt "SftpPropertiesDialog"
 msgid "Permissions"
 msgstr "权限"
 
-#: ui/components/sftp_panel.slint:1517
+#: ui/components/sftp_panel.slint:1514 ui/components/sftp_panel.slint:1515
 msgctxt "SftpPropertiesDialog"
 msgid "Copy Path"
 msgstr "复制路径"
 
-#: ui/components/sftp_panel.slint:1521
+#: ui/components/sftp_panel.slint:1519 ui/components/sftp_panel.slint:1520
 msgctxt "SftpPropertiesDialog"
 msgid "Close"
 msgstr "关闭"
@@ -6488,32 +6493,42 @@ msgctxt "MainWindow"
 msgid "Custom"
 msgstr "自定义"
 
-#: ui/windows/about_window.slint:8 ui/windows/about_window.slint:43
+#: ui/windows/about_window.slint:14 ui/windows/about_window.slint:54
 msgctxt "AboutWindow"
 msgid "About YShell"
 msgstr "关于 YShell"
 
-#: ui/windows/about_window.slint:49
+#: ui/windows/about_window.slint:68
 msgctxt "AboutWindow"
 msgid "YShell {0}"
 msgstr "YShell {0}"
 
-#: ui/windows/about_window.slint:56
+#: ui/windows/about_window.slint:77
 msgctxt "AboutWindow"
 msgid "A Slint desktop shell for SSH, SFTP, tunnels and terminal workflows."
 msgstr "用于 SSH、SFTP、隧道与终端工作流的 Slint 桌面外壳。"
 
-#: ui/windows/about_window.slint:69
+#: ui/windows/about_window.slint:89
 msgctxt "AboutWindow"
 msgid "Config directory"
 msgstr "配置目录"
 
-#: ui/windows/about_window.slint:90
+#: ui/windows/about_window.slint:95
 msgctxt "AboutWindow"
 msgid "License"
 msgstr "许可证"
 
-#: ui/windows/about_window.slint:125
+#: ui/windows/about_window.slint:107 ui/windows/about_window.slint:109
+msgctxt "AboutWindow"
+msgid "Open source licenses"
+msgstr "开源许可证"
+
+#: ui/windows/about_window.slint:135
+msgctxt "AboutWindow"
+msgid "Open source licenses are not bundled in this build."
+msgstr "此版本未附带开源许可证。"
+
+#: ui/windows/about_window.slint:165 ui/windows/about_window.slint:166
 msgctxt "AboutWindow"
 msgid "Close"
 msgstr "关闭"
@@ -6533,17 +6548,17 @@ msgctxt "CompactConfirmWindow"
 msgid "Confirm"
 msgstr "确认"
 
-#: ui/windows/compact_confirm_window.slint:33
+#: ui/windows/compact_confirm_window.slint:37
 msgctxt "CompactConfirmWindow"
 msgid "Cancel"
 msgstr "取消"
 
-#: ui/windows/compact_confirm_window.slint:101
+#: ui/windows/compact_confirm_window.slint:139
 msgctxt "CompactConfirmWindow"
 msgid "Type {0} to confirm"
 msgstr "输入 {0} 以确认"
 
-#: ui/windows/compact_confirm_window.slint:117
+#: ui/windows/compact_confirm_window.slint:175
 msgctxt "CompactConfirmWindow"
 msgid "Don't ask again"
 msgstr "不再询问"
@@ -6668,15 +6683,10 @@ msgctxt "KnownHostsWindow"
 msgid "Known Hosts"
 msgstr "已知主机"
 
-#: ui/windows/logging_window.slint:8
+#: ui/windows/logging_window.slint:8 ui/windows/logging_window.slint:58
 msgctxt "LoggingWindow"
-msgid "Session Logging"
+msgid "Session logging"
 msgstr "会话日志"
-
-#: ui/windows/logging_window.slint:58
-msgctxt "LoggingWindow"
-msgid "Terminal Logging"
-msgstr "终端日志"
 
 #: ui/windows/login_step_keys.slint:28 ui/windows/login_step_keys.slint:55
 msgctxt "LoginStepKeysWindow"
@@ -7255,8 +7265,8 @@ msgstr "应用"
 
 #: ui/windows/sftp_conflict_window.slint:8
 msgctxt "SftpConflictWindow"
-msgid "Resolve name conflicts"
-msgstr "解决命名冲突"
+msgid "Resolve conflicts"
+msgstr "解决冲突"
 
 #: ui/windows/sftp_entry_window.slint:8 ui/windows/sftp_entry_window.slint:54
 msgctxt "SftpEntryWindow"
