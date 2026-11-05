@@ -5,40 +5,12 @@
 
 import { Theme } from "../theme.slint";
 import { WinButton, WinIconButton } from "../components/basic/controls.slint";
+import { FormRow } from "../components/basic/forms.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 import { EditorTextArea } from "../pages/session_editor.slint";
 
-// 表单行：左侧固定宽度标签 + 右侧控件（与 Session Editor 同形态）。
-component FormRow inherits Rectangle {
-    in property <string> label: "";
-
-    height: max(Theme.control-height, body.preferred-height);
-    background: transparent;
-
-    body := HorizontalLayout {
-        spacing: Theme.spacing-12;
-        cross-axis-alignment: start;
-
-        Text {
-            text: root.label;
-            color: Theme.text-secondary;
-            font-size: Theme.font-body;
-            width: Theme.form-label-width-narrow;
-            height: Theme.control-height;
-            vertical-alignment: center;
-            wrap: no-wrap;
-            overflow: elide;
-        }
-
-        HorizontalLayout {
-            horizontal-stretch: 1;
-            spacing: Theme.spacing-8;
-            cross-axis-alignment: center;
-            @children
-        }
-    }
-}
+// 表单行：共享 `FormRow`（label 120 右对齐 / 13px、gap 12）。
 
 export component LoginStepKeysWindow inherits Window {
     no-frame: true;
@@ -88,12 +60,12 @@ export component LoginStepKeysWindow inherits Window {
         VerticalLayout {
             width: root.body-width;
             height: root.body-height;
-            spacing: Theme.spacing-12;
+            spacing: Theme.form-row-gap;
 
             FormRow {
                 label: @tr("Name");
                 WinTextInput {
-                    width: 420px;
+                    width: Theme.form-field-width;
                     text <=> root.name-text;
                     placeholder-text: @tr("Optional");
                     edited => { root.update-name(self.text); }
@@ -104,8 +76,9 @@ export component LoginStepKeysWindow inherits Window {
                 label: @tr("Keys");
 
                 EditorTextArea {
-                    width: 420px;
-                    area-height: 232px;
+                    width: Theme.form-field-width;
+                    // 7 × ctrl-h（行高必须是 control-height 整数倍）。
+                    area-height: Theme.control-height * 7;
                     monospace: true;
                     text <=> root.keys-text;
                     placeholder-text: "cd /opt/app{Enter}\nsudo -i{Enter}";
@@ -118,8 +91,9 @@ export component LoginStepKeysWindow inherits Window {
                 label: @tr("Tokens");
 
                 Rectangle {
-                    width: 420px;
-                    height: 132px;
+                    width: Theme.form-field-width;
+                    // 4 × ctrl-h。
+                    height: Theme.control-height * 4;
                     border-radius: Theme.radius-control;
                     border-width: 1px;
                     border-color: Theme.layer-stroke;

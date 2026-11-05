@@ -5,67 +5,12 @@
 // 页脚 Cancel | Save。本版只存定义，转发引擎后续里程碑。
 
 import { Theme } from "../theme.slint";
-import { WinButton, WinComboBox } from "../components/basic/controls.slint";
+import { WinButton, WinComboBox, WinSwitch } from "../components/basic/controls.slint";
+import { FormHint, FormRow } from "../components/basic/forms.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
-component FormRow inherits Rectangle {
-    in property <string> label: "";
-
-    height: max(Theme.control-height, body.preferred-height);
-    background: transparent;
-
-    body := HorizontalLayout {
-        spacing: Theme.spacing-12;
-        cross-axis-alignment: start;
-
-        Text {
-            text: root.label;
-            color: Theme.text-secondary;
-            font-size: Theme.font-body;
-            width: Theme.form-label-width-narrow;
-            height: Theme.control-height;
-            vertical-alignment: center;
-            wrap: no-wrap;
-            overflow: elide;
-        }
-
-        HorizontalLayout {
-            horizontal-stretch: 1;
-            spacing: Theme.spacing-8;
-            cross-axis-alignment: center;
-            @children
-        }
-    }
-}
-
-// 开关（40×20 轨道 + 12px 拇指）。
-component SwitchToggle inherits Rectangle {
-    in-out property <bool> checked: false;
-    callback toggled();
-
-    width: 40px;
-    height: 20px;
-    border-radius: 10px;
-    background: root.checked ? Theme.accent : Theme.control-stroke;
-
-    Rectangle {
-        width: 12px;
-        height: 12px;
-        y: 4px;
-        x: root.checked ? parent.width - 14px : 2px;
-        border-radius: 6px;
-        background: root.checked ? Theme.accent-text : Theme.text-secondary;
-        animate x { duration: Theme.duration-faster; easing: ease-out; }
-    }
-
-    touch := TouchArea {
-        clicked => {
-            root.checked = !root.checked;
-            root.toggled();
-        }
-    }
-}
+// 表单行/开关：使用共享 `forms.slint` + `WinSwitch`（不再自建行/开关实现）。
 
 export component TunnelEditorWindow inherits Window {
     no-frame: true;
@@ -123,12 +68,12 @@ export component TunnelEditorWindow inherits Window {
         VerticalLayout {
             width: root.body-width;
             height: root.body-height;
-            spacing: Theme.spacing-12;
+            spacing: Theme.form-row-gap;
 
             FormRow {
                 label: @tr("Name");
                 WinTextInput {
-                    width: 420px;
+                    width: Theme.form-field-width;
                     text <=> root.name-text;
                     placeholder-text: @tr("Optional");
                     edited => { root.update-name(self.text); }
@@ -138,7 +83,7 @@ export component TunnelEditorWindow inherits Window {
             FormRow {
                 label: @tr("Type");
                 WinComboBox {
-                    width: 420px;
+                    width: Theme.form-field-width;
                     model: [
                         @tr("Local forward"),
                         @tr("Remote forward"),
@@ -154,7 +99,7 @@ export component TunnelEditorWindow inherits Window {
             FormRow {
                 label: @tr("Bind host");
                 WinTextInput {
-                    width: 420px;
+                    width: Theme.form-field-width;
                     text <=> root.bind-host-text;
                     placeholder-text: "127.0.0.1";
                     edited => { root.update-bind-host(self.text); }
@@ -175,7 +120,8 @@ export component TunnelEditorWindow inherits Window {
             if !root.dynamic : FormRow {
                 label: @tr("Destination");
                 WinTextInput {
-                    width: 320px;
+                    // 原型 `.inline-pair`：主机输入占满控件列剩余宽度，端口固定 100。
+                    width: Theme.form-field-width - Theme.form-port-width - Theme.spacing-8;
                     text <=> root.target-host-text;
                     placeholder-text: @tr("Host");
                     edited => { root.update-target-host(self.text); }
@@ -189,25 +135,20 @@ export component TunnelEditorWindow inherits Window {
                 }
             }
 
+            // 原型 tunnel-editor：On connect 是 form-switch + Enabled/Disabled 文案。
             FormRow {
                 label: @tr("On connect");
-                SwitchToggle {
+                WinSwitch {
+                    text: root.enabled ? @tr("Enabled") : @tr("Disabled");
+                    accessible-name: @tr("On connect");
                     checked: root.enabled;
                     toggled => { root.set-enabled(!root.enabled); }
                 }
-                Text {
-                    text: root.enabled ? @tr("Enabled") : @tr("Disabled");
-                    color: Theme.text-secondary;
-                    font-size: Theme.font-body;
-                    vertical-alignment: center;
-                }
             }
 
-            Text {
+            FormHint {
                 text: @tr("Tunnels are saved with the session; forwarding starts when the tunnel engine is available.");
-                color: Theme.text-tertiary;
-                font-size: Theme.font-caption;
-                wrap: word-wrap;
+                indent: false;
             }
 
             Rectangle { vertical-stretch: 1; background: transparent; }

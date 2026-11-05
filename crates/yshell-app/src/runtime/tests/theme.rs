@@ -1026,8 +1026,8 @@ fn preview_lines_keep_the_wide_cell_and_preview_width_conventions() {
     );
 
     // The sample must stay within the preview surface at the default font/DPI:
-    // 29 cells × 10 physical px = 290 px, well inside the 420 px bitmap area
-    // (`SETTINGS_PREVIEW_AREA_PX`); larger fonts shrink the rendered grid.
+    // 29 cells × 10 physical px = 290 px, well inside the shared 738 px bitmap
+    // area (`PREVIEW_AREA_PX`); larger fonts shrink the rendered grid.
     let widest = lines.iter().map(Vec::len).max().unwrap_or(0);
     assert!(
         widest <= 29,
@@ -1124,18 +1124,18 @@ fn settings_preview_uses_the_window_scale_factor() {
         // 1:1 physical-pixel contract: the bitmap is an exact multiple of the
         // physical cell and floors into the preview area (never stretched).
         let (columns, rows) = crate::runtime::theme::preview_grid_size(
-            crate::runtime::theme::SETTINGS_PREVIEW_AREA_PX,
+            crate::runtime::theme::PREVIEW_AREA_PX,
             scale,
             expected,
         );
         assert_eq!(scaled.width, u32::from(columns) * u32::from(expected.0));
         assert_eq!(scaled.height, u32::from(rows) * u32::from(expected.1));
         assert!(
-            scaled.width as f32 <= crate::runtime::theme::SETTINGS_PREVIEW_AREA_PX.0 * scale,
+            scaled.width as f32 <= crate::runtime::theme::PREVIEW_AREA_PX.0 * scale,
             "preview bitmap must fit the surface at {scale}x DPI"
         );
         assert!(
-            scaled.height as f32 <= crate::runtime::theme::SETTINGS_PREVIEW_AREA_PX.1 * scale,
+            scaled.height as f32 <= crate::runtime::theme::PREVIEW_AREA_PX.1 * scale,
             "preview bitmap must fit the surface at {scale}x DPI"
         );
     }
@@ -1156,7 +1156,7 @@ fn settings_preview_does_not_clamp_the_profile_font_size() {
         AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
     runtime.open_settings_appearance();
     runtime.note_ui_scale_factor(1.0);
-    let area = crate::runtime::theme::SETTINGS_PREVIEW_AREA_PX;
+    let area = crate::runtime::theme::PREVIEW_AREA_PX;
 
     // 40 px used to be clamped to 20 px for the preview only.
     runtime.update_settings_appearance_font_size("40");
@@ -1386,7 +1386,7 @@ fn session_editor_preview_only_renders_while_appearance_is_active() {
     let expected = yshell_terminal::TerminalRenderer::with_scale_factor(16.0, 1.0).cell_size();
     assert_eq!((frame.cell_width, frame.cell_height), expected);
     // 1:1 physical-pixel bitmap floored into the fixed surface area.
-    let area = crate::runtime::theme::SESSION_EDITOR_PREVIEW_AREA_PX;
+    let area = crate::runtime::theme::PREVIEW_AREA_PX;
     let (columns, rows) = crate::runtime::theme::preview_grid_size(area, 1.0, expected);
     assert_eq!(frame.width, u32::from(columns) * u32::from(expected.0));
     assert_eq!(frame.height, u32::from(rows) * u32::from(expected.1));
@@ -1422,6 +1422,54 @@ fn session_editor_preview_only_renders_while_appearance_is_active() {
     let closed = runtime.request_close_session_editor_modal();
     assert!(!closed.editor_modal_visible);
     assert!(closed.session_editor_preview.is_none());
+}
+
+/// Settings → Appearance and Session Editor → Terminal Style must render the
+/// same preview grid: one shared [`PREVIEW_AREA_PX`], therefore identical
+/// bitmap dimensions, cell metrics and row/column counts for the same
+/// font/DPI. Regression guard for the old 420×198 vs 480×98 split.
+#[test]
+fn settings_and_session_editor_previews_share_the_same_bitmap_size() {
+    use crate::runtime::theme::PREVIEW_AREA_PX;
+
+    let temp = tempdir().expect("tempdir");
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime.note_ui_scale_factor(1.0);
+
+    let settings = runtime
+        .open_settings_appearance()
+        .settings_appearance_preview
+        .expect("Settings preview frame");
+    let session = runtime
+        .start_new_saved_session_editor()
+        .session_editor_preview;
+    assert!(
+        session.is_none(),
+        "editor preview must not render outside the Appearance section"
+    );
+    let session = runtime
+        .select_session_editor_appearance()
+        .session_editor_preview
+        .expect("Session Editor preview frame");
+
+    assert_eq!(
+        (settings.width, settings.height),
+        (session.width, session.height),
+        "both previews must rasterize the same shared bitmap area"
+    );
+    assert_eq!(
+        (settings.cell_width, settings.cell_height),
+        (session.cell_width, session.cell_height),
+        "both previews must use the same live-terminal cell metrics"
+    );
+    assert!(settings.width as f32 <= PREVIEW_AREA_PX.0);
+    assert!(settings.height as f32 <= PREVIEW_AREA_PX.1);
+
+    let expected = yshell_terminal::TerminalRenderer::with_scale_factor(16.0, 1.0).cell_size();
+    let (columns, rows) = crate::runtime::theme::preview_grid_size(PREVIEW_AREA_PX, 1.0, expected);
+    assert_eq!(settings.width, u32::from(columns) * u32::from(expected.0));
+    assert_eq!(settings.height, u32::from(rows) * u32::from(expected.1));
 }
 
 #[test]

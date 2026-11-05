@@ -5,38 +5,10 @@
 
 import { Theme } from "../theme.slint";
 import { WinButton, WinIconButton } from "../components/basic/controls.slint";
+import { FormHint, FormRow } from "../components/basic/forms.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
-component FormRow inherits Rectangle {
-    in property <string> label: "";
-
-    height: max(Theme.control-height, body.preferred-height);
-    background: transparent;
-
-    body := HorizontalLayout {
-        spacing: Theme.spacing-12;
-        cross-axis-alignment: start;
-
-        Text {
-            text: root.label;
-            color: Theme.text-secondary;
-            font-size: Theme.font-body;
-            width: Theme.form-label-width-narrow;
-            height: Theme.control-height;
-            vertical-alignment: center;
-            wrap: no-wrap;
-            overflow: elide;
-        }
-
-        HorizontalLayout {
-            horizontal-stretch: 1;
-            spacing: Theme.spacing-8;
-            cross-axis-alignment: center;
-            @children
-        }
-    }
-}
 
 export component LoginStepWaitWindow inherits Window {
     no-frame: true;
@@ -81,7 +53,7 @@ export component LoginStepWaitWindow inherits Window {
         VerticalLayout {
             width: root.body-width;
             height: root.body-height;
-            spacing: Theme.spacing-12;
+            spacing: Theme.form-row-gap;
 
             FormRow {
                 label: @tr("Wait (ms)");
@@ -94,11 +66,8 @@ export component LoginStepWaitWindow inherits Window {
                 }
             }
 
-            Text {
+            FormHint {
                 text: @tr("Waits this long before the next step runs.");
-                color: Theme.text-tertiary;
-                font-size: Theme.font-caption;
-                wrap: word-wrap;
             }
 
             Rectangle { vertical-stretch: 1; background: transparent; }

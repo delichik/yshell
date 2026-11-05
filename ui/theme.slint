@@ -161,6 +161,9 @@ export global Theme {
     out property <length> terminal-padding-y: 0px;
     /// 终端配色预览表面高度（Settings 外观 / Session Editor Terminal Style 共用，
     /// 两边视觉一致；宽度跟随内容区整行）。
+    ///
+    /// Rust 侧按同一个 `PREVIEW_AREA_PX`（738×198，= 整行内容宽 − 2 边框 −
+    /// 2×`terminal-padding-x`）光栅化；不要给任一页单独传别的高度。
     out property <length> terminal-preview-height: 200px;
 
     // -------------------------------------------------------------------- 字阶
@@ -240,6 +243,8 @@ export global Theme {
     out property <length> row-height-nav: 40px;
     out property <length> row-height-list: 32px;
     out property <length> row-height-tree: 28px;
+    /// 上下文菜单行高（右键菜单项；与 tree 行同高）。
+    out property <length> row-height-menu: 28px;
     /// 自绘顶栏（菜单 + 窗口控件）：§4.1 / §5.16 = 32px
     /// （Win11 原生标题栏高度，caption 按钮 46×32 正好满高）。
     out property <length> bar-height-menubar: 32px;

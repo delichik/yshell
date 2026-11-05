@@ -122,11 +122,12 @@ export component EditorTextArea inherits Rectangle {
     in property <string> placeholder-text: "";
     in property <bool> enabled: true;
     in property <bool> monospace: false;
-    in property <length> area-height: 128px;
+    // 4 × ctrl-h（行高/控件高必须是 control-height 整数倍）。
+    in property <length> area-height: Theme.control-height * 4;
     callback edited(string);
 
     height: root.area-height;
-    width: 420px;
+    width: Theme.form-field-width;
     border-radius: Theme.radius-control;
     border-width: 1px;
     border-color: input.has-focus ? Theme.accent : Theme.control-stroke;
@@ -258,7 +259,8 @@ component ManagedKeyPicker inherits Rectangle {
                     spacing: 0px;
 
                     for option[index] in root.options : Rectangle {
-                        height: 44px;
+                        // 两行下拉选项（主标签 + 明细）：1×ctrl-h 再加一行 caption。
+                        height: Theme.control-height + Theme.spacing-12;
                         border-radius: Theme.radius-control;
                         background: option_touch.pressed ? Theme.subtle-pressed
                             : option_touch.has-hover ? Theme.subtle-hover
@@ -314,7 +316,7 @@ component ContextMenuItem inherits Rectangle {
     in property <string> disabled-hint: "";
     callback clicked();
 
-    height: 28px;
+    height: Theme.row-height-menu;
     background: root.enabled && item_touch.has-hover ? Theme.subtle-hover : transparent;
 
     Text {
@@ -986,7 +988,8 @@ export component SessionEditor inherits Rectangle {
 
                                     Rectangle {
                                         width: parent.width;
-                                        height: 224px;
+                                        // 7 × ctrl-h：清单可视高度按行高整数倍。
+                                        height: Theme.control-height * 7;
                                         border-radius: Theme.radius-control;
                                         border-width: 1px;
                                         border-color: Theme.layer-stroke;
@@ -1241,7 +1244,8 @@ export component SessionEditor inherits Rectangle {
 
                                     Rectangle {
                                         width: parent.width;
-                                        height: 224px;
+                                        // 7 × ctrl-h：清单可视高度按行高整数倍。
+                                        height: Theme.control-height * 7;
                                         border-radius: Theme.radius-control;
                                         border-width: 1px;
                                         border-color: Theme.layer-stroke;

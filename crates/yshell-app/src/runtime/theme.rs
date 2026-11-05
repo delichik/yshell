@@ -2005,8 +2005,9 @@ impl AppRuntime {
     /// * the window's real scale factor is applied, so cell metrics and glyphs
     ///   are rasterized at `font_size * scale_factor` physical pixels;
     /// * the profile's resolved font size is used as-is (no preview-only clamp);
-    /// * the grid is floored into [`SETTINGS_PREVIEW_AREA_PX`], so a font that
-    ///   does not fit yields fewer rows/columns instead of a stretched bitmap.
+    /// * the grid is floored into [`PREVIEW_AREA_PX`] (shared with the Session
+    ///   Editor preview), so a font that does not fit yields fewer rows/columns
+    ///   instead of a stretched bitmap.
     pub(crate) fn settings_appearance_preview_frame(&self) -> Option<TerminalFrame> {
         if !self.settings_appearance_visible {
             return None;
@@ -2019,7 +2020,7 @@ impl AppRuntime {
             font,
             font_size,
             self.ui_scale_factor(),
-            SETTINGS_PREVIEW_AREA_PX,
+            PREVIEW_AREA_PX,
             self.ui_language(),
         ))
     }
@@ -2038,8 +2039,8 @@ impl AppRuntime {
     ///   the combo/font choices immediately;
     /// * the real window DPR is applied and the profile font size is used
     ///   as-is (no preview-only 8–20 clamp);
-    /// * the grid is floored into [`SESSION_EDITOR_PREVIEW_AREA_PX`], so a
-    ///   large font yields fewer rows/columns instead of a stretched bitmap;
+    /// * the grid is floored into [`PREVIEW_AREA_PX`] — the *same* bitmap area
+    ///   as the Settings preview, so both surfaces show an identical grid;
     /// * the localized + CJK sample, block cursor and selection decorations
     ///   come from the same helpers as Settings and the live terminal.
     ///
@@ -2057,7 +2058,7 @@ impl AppRuntime {
             font,
             resolve_font_size(resolved.font_size),
             self.ui_scale_factor(),
-            SESSION_EDITOR_PREVIEW_AREA_PX,
+            PREVIEW_AREA_PX,
             self.ui_language(),
         ))
     }
@@ -2087,36 +2088,28 @@ impl AppRuntime {
 }
 
 // ---------------------------------------------------------------------------
-// Settings live preview geometry (TERM-2)
+// Live preview geometry (TERM-2 / TERM-4)
 // ---------------------------------------------------------------------------
 
-/// Logical-pixel bitmap area of the Settings live preview surface.
+/// Logical-pixel bitmap area of the **shared** terminal live preview surface.
 ///
-/// Mirrors `ui/pages/settings.slint`: the preview surface spans the Settings
-/// card content width (434 px = 760 dialog − 40 body padding − 240 navigation −
-/// 12 gap − 2 card border − 32 card padding) and is 200 px tall; subtracting
-/// the surface border (1 px) and the terminal horizontal padding
-/// (`Theme.terminal-padding-x`, 6 px per side) leaves 420 × 198 logical pixels.
+/// Settings → Appearance and Session Editor → Terminal Style render the same
+/// widget (`TerminalPreview`) inside identical tool windows, so they must use
+/// exactly one bitmap area — otherwise the two previews show a different grid
+/// (row/column count) for the same font and DPI.
+///
+/// Mirrors both `ui/pages/settings.slint` and `ui/pages/session_editor.slint`:
+/// * tool window 1100 px − 2 × `Theme.tool-window-padding` (28) = 1044 px body;
+/// * − navigation 240 px − 12 px gap = 792 px card;
+/// * − 2 × card padding (20) = 752 px preview surface width;
+/// * − 2 × surface border (1) − 2 × `Theme.terminal-padding-x` (6) = **738 px**;
+/// * surface height 200 px (`Theme.terminal-preview-height`) − 2 × border = **198 px**.
 ///
 /// The renderer **floors** the grid into this area exactly like the live
 /// terminal floors its PTY grid: when a font/DPI combination does not fit, the
 /// preview drops columns/rows and keeps the bitmap at 1:1 physical pixels; the
 /// remainder stays as surface background (never a stretched image).
-pub(crate) const SETTINGS_PREVIEW_AREA_PX: (f32, f32) = (420.0, 198.0);
-
-/// Logical-pixel bitmap area of the Session Editor live preview surface.
-///
-/// Mirrors `ui/pages/session_editor.slint`: the Session Editor card content is
-/// 760 dialog − 40 body padding − 180 navigation − 12 gap − 2 card border −
-/// 32 card padding = 494 px wide, and the fixed preview surface is 100 px tall.
-/// The surface border (1 px) and `Theme.terminal-padding-x` (6 px per side)
-/// leave this 480 × 98 px bitmap area.
-///
-/// The renderer **floors** the grid into this area exactly like Settings and
-/// the live terminal: a font/DPI combination that does not fit drops
-/// columns/rows and keeps the bitmap at 1:1 physical pixels (never a stretched
-/// image).
-pub(crate) const SESSION_EDITOR_PREVIEW_AREA_PX: (f32, f32) = (480.0, 98.0);
+pub(crate) const PREVIEW_AREA_PX: (f32, f32) = (738.0, 198.0);
 
 /// Logical-pixel bitmap area of the Theme Manager live preview surface.
 ///
