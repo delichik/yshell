@@ -140,7 +140,7 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 | 安全债 | 主密码未整体加密 session/key 文件；KDF 未升级 |
 | SFTP 权限入口 | 当前入口仅 SFTP 行右键；工具条 `⋯ More` 菜单（原型）尚未实现，随波 3 工作区补 |
 | Close Window 确认 | 关标签/退出已用后果清单；“关闭窗口”确认未加后果行（原型无，保留现状） |
-| 开源许可资源 | `assets/open_source_licenses.txt` 按 Windows GNU target 生成；发布 Linux/macOS 包需按对应 target 重生成 |
+| 开源许可资源 | `assets/open_source_licenses.txt` 由 `scripts/licenses/generate_open_source_licenses.py` 按 Windows GNU target 生成（含各 crate 全文）；发布 Linux/macOS 包需按对应 target 重生成 |
 | 未实机核验 | Session Editor / 管理器 / 开关 / 表单 / 剩余弹窗观感（按用户要求未测） |
 
 ## 7. 每项由用户核验的要点（简表）

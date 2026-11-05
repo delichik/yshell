@@ -117,4 +117,7 @@ Linux 主机，可以继续使用：
 
 - `i18n/extract.sh`：从源码提取翻译字符串到 `translations/`。
 - `ui-icons/`：Slint 图标资源生成脚本。
+- `licenses/generate_open_source_licenses.py`：按 target 生成 About 内嵌的
+  `crates/yshell-app/assets/open_source_licenses.txt`（YShell / 字体 / 各 crate 全文）。
+  例：`python3 scripts/licenses/generate_open_source_licenses.py --target x86_64-pc-windows-gnu`。
 - `measure-scrollback.sh`：终端回滚性能测量辅助脚本。

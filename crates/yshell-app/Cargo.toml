@@ -71,7 +71,7 @@ yshell-test-support = { path = "../yshell-test-support" }
 name = "yshell"
 maintainer = "YShell contributors"
 copyright = "2026, YShell contributors"
-license-file = ["../../LICENSE", "4"]
+license-file = ["../../LICENSE", "0"]
 extended-description = """\
 YShell is a native, cross-platform SSH terminal and SFTP client with a session \
 manager, terminal tabs, SFTP browser, tunnels and quick commands."""

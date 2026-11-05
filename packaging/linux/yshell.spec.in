@@ -10,7 +10,7 @@ Name:           yshell
 Version:        @VERSION@
 Release:        @RELEASE@
 Summary:        SSH terminal and SFTP client
-License:        MIT OR Apache-2.0
+License:        GPL-3.0-only
 URL:            https://github.com/delichik/yshell
 BuildArch:      @ARCH@
 
