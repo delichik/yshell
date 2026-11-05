@@ -436,7 +436,9 @@
     Blank tree: Import Config, Expand All, Collapse All, New Folder disabled. Folder context allows
     <em>New Session Here</em> / <em>Edit</em>（Folder）→ 共用 <a href="../../session-editor/index.html">session-editor</a>（Folder 用 <code>#folder</code>）。<br>
     <strong>Session context</strong> — Connect · Open in New Tab · Open SFTP · Edit → session-editor · Duplicate ·
-    Rename (inline) · Delete → <a href="../../compact-confirm/index.html">compact-confirm</a>. Double-click session name starts rename.<br>
+    Rename (inline) · Delete → <a href="../../compact-confirm/index.html">compact-confirm</a>.
+    <strong>Favorite / Export</strong> 本版禁用（契约 Favorites 愿景不作设计；无收藏面）。
+    Double-click session name starts rename.<br>
     <strong>session.icon</strong> — General 里配置（Default / Preset · Server / Database / Custom image）。
     Saved Sessions 行与已打开的 session 标签均显示此图标（标签见 <a href="../workspace/tab-bar.html">tab-bar</a>）。
   </div>
@@ -515,7 +517,7 @@
             '<hr class="sep">' +
             menuItem("Rename", "", "ctx-rename") +
             menuItem("Duplicate", "", "ctx-duplicate") +
-            menuItem("Favorite", "", "ctx-favorite") +
+            menuItem("Favorite", "", "ctx-favorite", { disabled: true }) +
             menuItem("Export Session", "", "ctx-export", { disabled: true }) +
             menuItem("Delete", "", "ctx-delete", { href: paths.compactConfirm });
         }
@@ -699,8 +701,8 @@
               showToast("Duplicate (opens editor)");
               break;
             case "ctx-favorite":
-              recordAction(label, "Toggle favorite");
-              showToast("Favorite toggled");
+              recordAction(label, "Not available in this version");
+              showToast("Favorite not available in this version");
               break;
             case "ctx-rename":
               if (ctxTarget) beginInlineRename(ctxTarget, label, { sticky: false });

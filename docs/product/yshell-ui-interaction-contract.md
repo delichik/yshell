@@ -1,8 +1,13 @@
 # YShell UI 交互契约
 
-更新注记（2026-10-29）：**范围与砍项以 [`yshell-current-status.md`](./yshell-current-status.md) 为准。** 下文含愿景级控件时，凡标注「本版不做」或与 status §2 冲突的，实现须 disabled/空态/无入口，不得按「始终启用」验收。
+> **性质（2026-11-05）：参考文档，不是设计稿。**  
+> - **产品范围** → [`yshell-current-status.md`](./yshell-current-status.md)  
+> - **UI 设计（功能 / 布局 / 交互）** → [`docs/prototypes/`](../prototypes/README.md) 及原型规则  
+> 下文含大量早期愿景（如「第一版最多 4 pane」、Favorites 等）。与原型或 status 冲突时 **以原型 / status 为准**；不得按本文「补齐」实现。
 
-本文档是**唯一现行 UI 契约**（原独立 `context-menu-design.md` 已并入各区域菜单节并迁入 `archive/`）。右键以各节「实现状态」与 status 为准。
+更新注记（2026-10-29，仍有效）：范围与砍项以 status 为准；标注「本版不做」或与 status §2 冲突的，实现须 disabled/空态/无入口。
+
+原独立 `context-menu-design.md` 已并入各区域菜单节并迁入 `archive/`。
 
 ## 1. 全局规则
 

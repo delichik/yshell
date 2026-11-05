@@ -29,7 +29,7 @@
 1. **切片 A（P0 收口）**：会话编辑器补 `Login Script` 分区 + `login-step-keys/wait` 子窗；`sessions/tab/SFTP` 改回**就地输入**（去掉 NewFolderDialog / SftpEntryDialog 的改名/新建路径）；`host-key` 窗改回 compact 560×400。
 2. **切片 B（主壳导航）**：补 `Tools` 一级菜单与 `Session` 菜单的 Connect / Duplicate Tab / Open SFTP / Tunnels 入口；补 `Ctrl+Shift+S`、`F11`、Focus Mode；菜单项与快捷键一并回归。
 3. **切片 C（SFTP 收口）**：独立 `sftp-chmod` compact 窗（八进制 + 9 勾选联动）；Tunnels 面板 `+` → `tunnel-editor` standard 窗；Transfers 批量 Pause All/Resume All；Settings → SFTP 三字段（Show hidden / Conflict / External editor）。
-4. **切片 D（终端体验）**：`Find Across SSH` 侧栏；N9 同步 banner（预设下拉 + Pause/Stop）与 pane 头 Receive 开关；REC 底部提示条；Clear Scrollback 改窗内确认。
+4. **切片 D（终端体验）**：`Find Across SSH` 侧栏；N9 banner = **On/Off + End all**（无 Pause / 无 All·Visible / 无 SRC·RCV Receive 角色）；REC 底部提示条；Clear Scrollback 改窗内确认。
 5. **切片 E（管理器规范收口）**：私钥 `Generate` 流程；管理器工具条改图标钮（正文只进 title）、行级动作改右键菜单；Rust 侧窗口标题/确认文案进 i18n；删除无入口的遗留 KnownHosts 页与 `CLEAR` 打字确认。
 
 ---
@@ -57,7 +57,7 @@
 |---|---|---|---|
 | 会话树显示 `session.icon`（Default / 预设 / 自定义图） | 缺失：固定 `terminal` 图标，无图标数据模型 | `ui/components/session_tree.slint:147-161`；`docs/prototypes/main-shell/panels/sessions.html:384-398` | P1 |
 | Session 原地改名（右键 Rename / 双击名称） | 缺失：菜单无 Rename，双击只打开 | `ui/main_window.slint:1725-1758`；`sessions.html:431-439` | P1 |
-| Session 右键：Connect / Open in New Tab / Open SFTP / Edit / Rename / Duplicate / Favorite / Export(disabled) / Delete | 部分：有 Open / Open SFTP / Edit / Update From Active / Delete / New Session | `ui/main_window.slint:1725-1758` | P1 |
+| Session 右键：Connect / Open in New Tab / Open SFTP / Edit / Rename / Duplicate / Favorite(**disabled**) / Export(disabled) / Delete | 波 3 #18 已对齐原型（Favorite/Export 禁用） | `sessions.html`；`main_window.slint` saved session menu | — |
 | 会话树空白区 New Folder 本版禁用 | 冲突：实现启用（可创建根文件夹） | `ui/main_window.slint:1794-1815`；`sessions.html:417-420` | P1 |
 | Folder 右键 New Folder / Rename / Delete / Connect All 禁用 + 原因 | 已实现 | `ui/main_window.slint:1764-1791` | — |
 | Transfers 行状态/进度/行内 Pause·Resume·Retry·Cancel + Clear completed | 已实现 | `ui/components/transfer_queue.slint:209-243` | — |
@@ -74,16 +74,15 @@
 | 标签显示会话图标（与树同套）+ AI 标志（AI 创建的连接） | 部分：图标缺失（见上）；AI 标志无数据来源，未实现 | `workspace_tab_item.slint:86-143`；`tab-bar.html:276-278,297` | P1（图标）/ P2（AI） |
 | 标签原地改名（右键 Rename Tab） | 部分：使用独立 Rename Tab 弹窗，不是就地输入 | `ui/main_window.slint:1893-1896`；`dialog_windows.rs:942-975`；`tab-bar.html:298` | P1 |
 | 分屏：每叶自有 TabBar、拖标签到边缘分屏、空 pane 提示、关掉末标签合并 | 已实现 | `ui/components/workspace_split.slint:290,603` | — |
-| 分屏上限 **4 叶** | 冲突：实现允许 10 叶，但 UI 文案写 max 4 | `crates/yshell-app/src/runtime/split_tree.rs:358`；`ui/main_window.slint:1467`；`split.html:346` | P1 |
+| ~~分屏上限 4 叶~~ | **作废**：产品不设叶数硬上限；原型已 scrub。实现 `MAX_LEAVES=10` 仅为运行时上限 | `split.html`；`split_tree.rs` | — |
 | 终端 Find 栏（Ctrl+F，含 regex） | 已实现 | `ui/components/terminal_view.slint:464-540` | — |
 | 终端 Find Across SSH（跨会话匹配侧栏） | 缺失 | `docs/prototypes/main-shell/workspace/terminal.html:375-385,398`；全仓无实现 | P1 |
 | REC 底部提示条（REC chip + 文件路径 + 停止入口） | 部分：REC 只在状态栏/标签角标体现，无底部提示条 | `status_bar.slint:251-294`；`terminal.html:387-391` | P2 |
 | 终端右键菜单（Copy/Paste/Find/Clear Scrollback/Logging/Send Key Input To） | 已实现（项比原型更多） | `ui/main_window.slint:1483-1594` | — |
 | Clear Scrollback 用**窗内**确认 | 部分：走独立 compact 确认窗 | `dialog_windows.rs:751-757`；`terminal.html:411-420` | P2 |
 | 本地终端（Local terminal） | 已实现 | `crates/yshell-app/src/runtime/local_terminal.rs` | — |
-| N9：发送按键核心 + 状态栏 `SYNC → n` chip + 标签 SRC/RCV + 标签菜单 Receive Key Input | 已实现 | `status_bar.slint:199-249`；`workspace_tab_item.slint:156-181`；`main_window.slint:1685-1696` | — |
-| N9 同步 banner（预设下拉 + Pause + Stop，无弹窗确认） | 缺失：只保留右键菜单与 chip | `docs/prototypes/main-shell/workspace/sync-input.html:321-332`；全仓无 banner | P1 |
-| N9 pane 头部 Receive 开关（源 pane 禁用） | 缺失：接收开关只在标签右键菜单 | `sync-input.html:334-366` | P2 |
+| N9：双向组 + 状态栏 chip + banner On/Off + End all（无 Pause / 无 SRC·RCV） | 波 3 #17 已落地；对齐 `sync-input.html` | `sync-input.html`；`sync_input_banner.slint` | — |
+| ~~N9 预设下拉 + Pause + Stop~~ / ~~pane Receive 角色~~ | **作废**（旧契约愿景）；勿再当缺口 | — | — |
 | Quick Connect：Target + Connect + Recent 列表 + 空态 + Copy target + 历史开关 | 已实现 | `ui/pages/quick_connect.slint:152-333`；`crates/yshell-app/src/runtime/quick_connect.rs:146-166` | — |
 | Quick Connect 输入框 Clear 图标钮 | 缺失 | `quick-connect.html:219` | P2 |
 
@@ -176,6 +175,6 @@
 4. **Folder 的 New Folder / Rename / Delete / Connect All，以及树的 Import Config / Expand All / Collapse All**：原型明确「本版不做/禁用」（`sessions.html:419,435-437`）。
 5. **Session Editor 的 SFTP 与 Advanced 分区**：原型为 `not this version`（`session-editor/index.html:109-110`）。
 6. **AI 标签标志**：依赖 MCP 控制链路定型（`tab-bar.html:297`），当前无 tab 来源模型，建议随后续 MCP 批次一起做。
-7. **MCP 的 Port / Listen(LAN) / API key**：实现已选 stdio MCP 方向（`mcp.rs:145-177`），与原型端口方案冲突；先确认方向并改原型，再谈实现。
+7. **MCP 的 Port / Listen(LAN) / API key / View / Control**：以 status **D34** + `settings/sections/mcp.html` 为设计；旧「stdio 本版砍 UI」计划作废。实现缺口仍记上表 P1。
 8. **终端内边距 12/12、圆角 8、遮罩色、树箭头旋转**：problems.md 已标记「待定」，与 Rust 像素契约耦合，不属 UI 缺口（`problems.md:62-67,82-84`）。
 9. **主密码 / Settings 三分区**：本轮实施中，验收前不列为缺口。

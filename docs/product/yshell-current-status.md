@@ -3,7 +3,8 @@
 更新时间：2026-11-05  
 性质：**唯一现行产品范围文档**（有什么 / 砍了什么 / 还缺什么 / 仍生效的决策）
 
-冲突时：本文 > 实现与单测 > [`yshell-ui-interaction-contract.md`](./yshell-ui-interaction-contract.md) > [`archive/`](./archive/README.md) 历史稿。
+冲突时：**本文（产品范围）> [`docs/prototypes/`](../prototypes/README.md) 及其文档（设计稿）> 实现与单测 > 参考文档**（[`yshell-ui-interaction-contract.md`](./yshell-ui-interaction-contract.md)、设计语言、[`archive/`](./archive/README.md) 等）。  
+交互契约与 archive **不是设计真源**，仅供参考；不得把其中愿景条款直接当成待实现需求。
 
 ---
 
@@ -95,7 +96,8 @@ UI 为 disabled + tooltip、空态，或决策延后。**不是待补闭环。**
 
 ## 5. 维护约定
 
-- 砍功能 → 改实现 + 更新 §2；契约对应节加「本版不做」。
-- 补闭环 → 改代码 + 从 §3 删行或移入 §1。
+- 砍功能 → 改实现 + 更新 §2；相关原型标禁用/空态；参考契约可事后同步，非必须先改。
+- 补闭环 → 改代码 + 从 §3 删行或移入 §1；设计面先对齐 [`docs/prototypes/`](../prototypes/README.md)。
 - 新决策 → 写入 §4（递增 Dn），不必复活 requirements 长文。
+- UI 设计变更 → 只改原型（及计划跟踪）；勿把契约/archive 愿景直接写成缺口。
 - 历史任务设计、spike、早期规格一律只放 [`archive/`](./archive/README.md)，不在本目录平铺。

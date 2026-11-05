@@ -344,8 +344,8 @@
   </div>
   <div class="tools" role="group" aria-label="Sync input demo">
     <span>Sync input:</span>
-    <button type="button" data-sync="off" aria-pressed="false" title="Sync input off">Off</button>
-    <button type="button" data-sync="visible" aria-pressed="true" title="Sync to visible sessions">Visible</button>
+    <button type="button" data-sync="off" aria-pressed="false" title="This session Off (out of group)">Off</button>
+    <button type="button" data-sync="on" aria-pressed="true" title="This session On (in group)">On</button>
   </div>
 
   <div class="stage">
@@ -401,8 +401,7 @@
           Input Sync
           <div class="ctx-flyout" aria-label="Input sync actions">
             <div class="ctx-item">Sync Input for This Session</div>
-            <div class="ctx-item">Pause Sync Input</div>
-            <div class="ctx-item">Stop Sync Input</div>
+            <div class="ctx-item">End All Sync</div>
             <div class="ctx-item disabled">Local shell tabs (N/A)</div>
           </div>
         </div>
@@ -425,8 +424,8 @@
   <div class="legend">
     <strong>Paths &amp; shortcuts</strong>
     <ul>
-      <li>Right-click terminal (or state <em>Context menu open</em>) — pin flyout on <strong>Input Sync</strong> (per-session toggle / Pause / Stop; group model, see <a href="sync-input.html">sync-input</a>).</li>
-      <li><strong>Sync chip</strong> — status bar shows <code>SYNC → n targets</code> while the group is non-empty; the terminal banner is a wave-3 target (see <a href="sync-input.html">sync-input</a>).</li>
+      <li>Right-click terminal (or state <em>Context menu open</em>) — pin flyout on <strong>Input Sync</strong>：本会话开关 · <strong>End All Sync</strong>（无 Pause / 无 All·Visible 预设；见 <a href="sync-input.html">sync-input</a>）。</li>
+      <li><strong>Sync chip</strong> — status bar shows <code>SYNC → n targets</code> while the group is non-empty；banner 已随主壳落地（见 <a href="sync-input.html">sync-input</a>）。</li>
       <li><strong>Clear Scrollback</strong> → in-board confirm (no typed confirm word) · full pattern → <a href="../../compact-confirm/index.html">compact-confirm</a>.</li>
       <li><strong>Start Logging</strong> → <a href="../../logging/index.html">logging</a> · <strong>REC</strong> state shows chip + note at bottom.</li>
       <li><strong>Find Across SSH</strong> — side panel (default) or stack bottom when toggled in HUD demo; click match focuses that session tab (<a href="tab-bar.html">tab-bar</a>).</li>
@@ -499,7 +498,7 @@
         var labels = {
           default: "Default SSH terminal",
           local: "Local terminal (PS / local bash)",
-          ctx: "Context menu pinned — Send Key Input To flyout",
+          ctx: "Context menu pinned — Input Sync flyout",
           find: "Inline find bar (Ctrl+F)",
           "find-across": "Find Across SSH — side match list",
           rec: "REC active — logging to file"
@@ -517,7 +516,7 @@
         btn.addEventListener("click", function () {
           var mode = btn.getAttribute("data-sync");
           applySync(mode);
-          setHud(mode === "off" ? "Sync input off" : "Sync input → visible sessions");
+          setHud(mode === "off" ? "Sync input Off (out of group)" : "Sync input On (in group)");
         });
       });
 
@@ -561,7 +560,7 @@
         }
       });
 
-      applySync("visible");
+      applySync("on");
       applyState("default");
     })();
   </script>

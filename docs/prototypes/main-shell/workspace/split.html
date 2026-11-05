@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YShell — Workspace split wireframe</title>
   <style>
-    /* Per-pane TabBar + content; max 4 leaves. */
+    /* Per-pane TabBar + content. No product leaf-cap in this wireframe (4-pane is a demo layout only). */
     :root {
       --board-w: 1100px;
       --board-h: 640px;
@@ -213,8 +213,8 @@
 </head>
 <body data-layout="2v">
   <p class="meta">
-    <strong>Workspace split</strong> · board <code>1100×640</code> · 最多 <strong>4</strong> 叶。
-    <strong>每叶自有 TabBar + 内容</strong>（不是整窗一条全局标签条盖住所有 pane）。
+    <strong>Workspace split</strong> · board <code>1100×640</code> · 每叶自有 TabBar + 内容（不是整窗一条全局标签条盖住所有 pane）。
+    <strong>无固定叶数上限</strong>（下方案板的「4-pane grid」只是演示布局，不是产品约束）。
     Hub: <a href="../../index.html">prototypes index</a> ·
     <a href="../index.html">main-shell</a> ·
     <a href="tab-bar.html">tab-bar</a>（mode）·
@@ -236,7 +236,7 @@
       <div class="toolbar-row">
         <span>View</span>
         <button type="button" class="btn-lite" disabled title="Balance Panes">Balance Panes</button>
-        <span style="margin-left:auto">Splitters 4px · drag tab to edge to split · max 4 leaves</span>
+        <span style="margin-left:auto">Splitters 4px · drag tab to edge to split · no fixed leaf cap</span>
       </div>
 
       <div class="split-root layout-1">
@@ -343,7 +343,7 @@
       <li><strong>叶结构</strong>：每个 pane = 自己的 <a href="tab-bar.html">TabBar</a> + 活动标签内容（Terminal / SFTP / New Tab）。不要画「一条全局 TabBar + 下面多分屏内容」。</li>
       <li><strong>mode</strong>：New Tab / Terminal / SFTP 都可进分屏；叶子数与 mode 无关。SFTP 是标签 mode，不是 dock 面板。</li>
       <li><strong>Switch</strong>：某叶内 Terminal↔SFTP 仍是<strong>原标签改 mode</strong>（见 tab-bar），不会因为分屏变成两个标签。</li>
-      <li><strong>上限</strong>：最多 4 叶；拖标签到 pane 边缘分屏；关叶内最后标签后合并相邻叶。</li>
+      <li><strong>分屏操作</strong>：拖标签到 pane 边缘分屏；关叶内最后标签后合并相邻叶。产品<strong>不设</strong>「最多 N 叶」硬上限（契约旧文「第一版 4 pane」作废；实现可有运行时上限，不写进本设计）。</li>
       <li><strong>Balance Panes</strong>：同级 ratio → 50%。</li>
     </ul>
   </div>

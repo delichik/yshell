@@ -61,8 +61,9 @@ docs/prototypes/
 
 - **UI 设计阶段 = 改原型**：讨论「做成什么样」时，默认打开并修改 `docs/prototypes/` 下文件，用浏览器展示预期效果；不要只改口头描述或只画 ASCII。
 - **无原型不开工实现**：新建页面、大改布局、改交互路径前，须已有对应原型（或本轮先补齐再写 Slint）。
-- **实现跟随原型**：Slint 实现应对齐原型中的结构与交互；细节视觉再遵循 [`ui-winui3-design-language.md`](../product/ui-winui3-design-language.md) 与契约。
+- **实现跟随原型**：Slint 实现应对齐原型中的结构与交互；token / Fluent 观感可参考设计语言，但**设计对错以原型为准**。
 - **范围仍受 status 约束**：原型不得把「本版不做」画成可点通功能而不标注；禁用 / 空态要在原型里标出来。
+- **参考文档不是设计稿**：[`yshell-ui-interaction-contract.md`](../product/yshell-ui-interaction-contract.md)、archive、旧规格仅供参考。发现原型误抄了参考愿景（例如从未拍板的「最多 4 pane」），**先改原型**，再改实现 / 计划；不要按契约「补缺口」。
 
 ## 原型写法约定
 
@@ -93,7 +94,7 @@ docs/prototypes/
 - **主窗按 N3 拆原型（`main-shell/`）**：根上 `index.html`（整壳）+ `tool-dock.html`；`panels/`（sessions / transfers / tunnels / commands）；`workspace/`（tab-bar / terminal / sftp / quick-connect / split / sync-input）。**禁止**再画固定 Left Sidebar / RightDock Tab。N9 用 banner/chip，禁止 KEYS 打字确认（D23）。
 - **原地重命名 / 新建名**：标签 Rename Tab、**SFTP** Rename / New Folder、Sessions 树 **Session** 改名均为**原地输入框**（插行再编辑），不是另开对话框；`Enter` 或失焦确认，`Esc` 取消（新建取消则移除该行）。对应分区原型必须用状态钮（或默认演示态）把输入框钉在画面上。Folder 的 New Folder / Rename / Delete 以 status「本版不做」为准（菜单 disabled）。不再提供 `sftp-entry` / `new-folder` 短表单（已删除）。
 - **禁止打字确认破坏操作**：删除、清空、覆盖等高危动作**永远不要**让用户手输 `CLEAR` / `DELETE` / 确认词。用清晰文案 + 明确的破坏性按钮（及可选二次确认窗）即可；主按钮可标 critical，安全默认焦点在 Cancel。
-- 与 [`yshell-ui-interaction-contract.md`](../product/yshell-ui-interaction-contract.md) 冲突时，先改契约或 status，再改原型。
+- 与交互契约等参考文档冲突时：**改原型（设计）或 status（范围）**；不必先改契约。契约随后可作参考性同步，但不是开工前提。
 
 ## 尺寸与滚动（强制）
 
