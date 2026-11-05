@@ -62,13 +62,12 @@ $env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
 | 10 | 管理器：Known Hosts / Private Keys / Proxies / Terminal Styles + 7 个子窗接线 | 🔍 待用户核验 | `177f634` |
 | 11 | 共享表单 + 开关视觉一致性（用户 5 条反馈） | 🔍 待用户核验 | `fa3dece` |
 | 12 | 现行完整计划文档化（交付方式/决策/状态/覆盖清单） | ✅ | `bde53dd` |
+| 13 | 预览尺寸统一（单一 `PREVIEW_AREA_PX` + 两页一致性回归测试）、tunnel/login-step 子窗改用共享 FormRow/WinSwitch、Session Editor 残留字面量收口 | ✅ | `72c4189` |
+| 14 | 管理器表单/详情行全面改用共享 `FormRow`/`DetailRow`/`FormHint`（本地行实现清零），3 条新文案补译 | ✅ | `3d3b37f` |
 
 ### 4.2 进行中（未提交）
 
-| # | 事项 | 状态 | 说明 |
-|---|---|---|---|
-| 13 | 收口：预览位图尺寸统一、tunnel/login-step 本地表单行→共享组件、420 字面量 | 🔄 | teammate 进行中 |
-| 14 | 收口：管理器/子窗的本地表单行/详情行→共享 `FormRow`/`DetailRow` | 🔄 | teammate 进行中 |
+（无）
 
 ### 4.3 未完成（待做）
 
@@ -105,7 +104,7 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 
 ## 5. 剩余顺序（按用户「逐项核验」节奏）
 
-1. 当前收口 #13/#14 完成后：Lead 门禁 + 本地提交 + 重建 exe → 交用户核验 #7–#14。
+1. #13/#14 已本地提交（`72c4189`、`3d3b37f`），Lead 已跑四道门禁并重建 exe → **当前等待用户核验 #7–#14**（Session Editor / 管理器 / 开关 / 表单 / 预览 / 同步组 / 环境变量）。
 2. 用户确认后：做 #15 剩余弹窗（逐窗一项：sftp-chmod 入口、close-tab/quit 后果清单、auth-prompt 核验、logging/about/sftp-conflict/properties 收口）。
 3. 再做 #16–#18 波 3（主壳 → 面板 → 工作区，按热点文件串行接线；sync banner 在此项实现）。
 4. 最后 #19–#20 清理 + #21 验收。
@@ -114,8 +113,6 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 
 | 项 | 说明 |
 |---|---|
-| 预览位图尺寸 | Settings `(420,198)` vs Session Editor `(480,98)` 的 Rust 常量（#13 收口中） |
-| 旧本地 switch/表单实现 | `tunnel_editor_window` 的 `SwitchToggle`（#13）、管理器各类 `*FormRow`/`DetailRow`（#14） |
 | Settings 窗口尺寸 | 保持原型 1100×820；label 已从 200 改 120。若用户仍觉得宽，需确认后改为 1000×800（偏离原型 wide 档） |
 | Login Wait 子窗 | 现为 standard 720×580，原型是 compact 560×400（待用户决定） |
 | MCP failed 状态 | 单测覆盖，未实机造 |
@@ -137,7 +134,7 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 
 - 2026-11-03：`fe7f037` 基线修复；`f530299` 差距清单+计划；`c6d1102`/`edb0243` 波 1 基础层；`2d26a06` Settings 窗口；`bed84bc` i18n 全量；`8d442ec` MCP 收敛；`eb3533e` 窗口行为修复（此提交及之前曾被意外 push 到 origin）。
 - 2026-11-04：`936bb10` 环境变量配置清理；`9489104` N9 双向同步组；`d48fe84` i18n 再同步；`8f016d7` Session Editor 接线；`7b25790` 开关统一；`177f634` 管理器接线；`fa3dece` 共享表单/视觉一致性。
-- 2026-11-05：`bde53dd` 现行计划文档化；收口 #13/#14（进行中，待提交）。
+- 2026-11-05：`bde53dd`/`0c82331` 现行计划与完成状态文档化；`72c4189` 预览尺寸统一 + tunnel/login-step 表单行收口；`3d3b37f` 管理器表单/详情行收口。
 
 ---
 
