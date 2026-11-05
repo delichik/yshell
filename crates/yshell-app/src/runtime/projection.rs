@@ -743,6 +743,12 @@ impl AppRuntime {
             terminal_search_kind_text: terminal_search_kind_text.to_owned(),
             terminal_search_match_count,
             terminal_search_current_index,
+            terminal_search_across: self.terminal_search_across,
+            terminal_find_across_rows: self.terminal_search_across_rows.clone(),
+            terminal_find_across_selected_index: self
+                .terminal_search_across_selected
+                .and_then(|index| i32::try_from(index).ok())
+                .unwrap_or(-1),
             sftp_path_text: self.sftp_path.clone(),
             sftp_column_ratio: self.sftp_column_ratio,
             sftp_listing_kind_text: self.sftp_listing.kind_id().to_owned(),
@@ -1986,6 +1992,15 @@ impl AppRuntime {
     }
 }
 
+/// One SSH tab hit in Find Across SSH (sidebar row).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TerminalFindAcrossRow {
+    pub tab_id: String,
+    pub title: String,
+    pub snippet: String,
+    pub match_count: i32,
+}
+
 /// Value-only projection for the window. Natural-language templates live in
 /// `ui/main_window.slint` (`@tr`), so every field here is either a raw value
 /// (host/path/count/enum id) or machine data assembled from values.
@@ -2360,6 +2375,9 @@ pub struct AppProjection {
     pub terminal_search_kind_text: String,
     pub terminal_search_match_count: i32,
     pub terminal_search_current_index: i32,
+    pub terminal_search_across: bool,
+    pub terminal_find_across_rows: Vec<TerminalFindAcrossRow>,
+    pub terminal_find_across_selected_index: i32,
     pub sftp_path_text: String,
     /// Per-SFTP-tab local/remote split ratio (0..1).
     pub sftp_column_ratio: f32,

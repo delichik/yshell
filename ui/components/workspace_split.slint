@@ -11,6 +11,8 @@ import { WorkspacePaneLeaf, WorkspaceSplitter } from "workspace_pane_model.slint
 import { QuickConnectPage, QuickConnectRow } from "../pages/quick_connect.slint";
 import { SftpPaneData, SftpTabPage } from "sftp_tab_page.slint";
 import { SyncInputBanner } from "sync_input_banner.slint";
+import { FindAcrossPanel, FindAcrossMatchRow } from "find_across_panel.slint";
+import { TerminalRecBar } from "terminal_rec_bar.slint";
 
 component SplitPaneLeaf inherits Rectangle {
     in property <bool> empty: false;
@@ -125,7 +127,18 @@ component SplitPaneLeaf inherits Rectangle {
     callback tab-split-dropped(data-transfer, string);
     callback activate-tab(string);
     callback close-tab(string);
-    callback tab-double-click(string);
+    in-out property <string> inline-rename-id: "";
+    in-out property <string> inline-rename-text: "";
+    callback inline-rename-start(string);
+    callback inline-rename-commit(string);
+    callback inline-rename-cancel();
+    in property <bool> find-across-visible: false;
+    in property <[FindAcrossMatchRow]> find-across-rows: [];
+    in property <int> find-across-selected-index: -1;
+    callback find-across-row-selected(int);
+    in property <bool> rec-bar-active: false;
+    in property <string> rec-bar-path-text: "";
+    callback rec-bar-stop();
     callback tab-context-menu-requested(string, string, length, length);
     callback new-session();
     pure callback drag-tab-transfer(string) -> data-transfer;
@@ -278,7 +291,11 @@ component SplitPaneLeaf inherits Rectangle {
                 drop-enabled: root.view-visible;
                 activate-tab(id) => { root.activate-tab(id); }
                 close-tab(id) => { root.close-tab(id); }
-                tab-double-click(id) => { root.tab-double-click(id); }
+                inline-rename-id <=> root.inline-rename-id;
+                inline-rename-text <=> root.inline-rename-text;
+                inline-rename-start(id) => { root.inline-rename-start(id); }
+                inline-rename-commit(text) => { root.inline-rename-commit(text); }
+                inline-rename-cancel() => { root.inline-rename-cancel(); }
                 tab-context-menu-requested(id, title, x, y) => {
                     root.tab-context-menu-requested(id, title, x, y);
                 }
@@ -290,16 +307,14 @@ component SplitPaneLeaf inherits Rectangle {
                 tab-bar-dropped(data) => { root.tab-dropped(data); }
             }
 
-            // N9：组一旦开启，每个会话叶都显示 banner；组外只是开关 Off。
-            if !root.empty && (root.sync-group-active || root.sync-eligible) : SyncInputBanner {
+            // N9：仅已加入同步组的叶显示 banner；组外无横幅，靠菜单「Sync Input」加入。
+            if !root.empty && root.sync-member : SyncInputBanner {
                 member-enabled: root.sync-member;
                 member-toggle-enabled: root.sync-eligible;
                 title-text: root.sync-banner-title;
                 warn-text: root.focused ? root.sync-banner-warn : "";
                 group-active: root.sync-group-active;
-                paused: false;
                 member-toggled() => { root.sync-member-toggled(); }
-                pause-clicked() => { }
                 stop-clicked() => { root.sync-stop-clicked(); }
             }
 
@@ -326,7 +341,13 @@ component SplitPaneLeaf inherits Rectangle {
                     max-height: root.show-terminal ? 100000px : 0px;
                     spacing: 0;
 
+                    term_row := HorizontalLayout {
+                        vertical-stretch: 1;
+                        min-height: 0px;
+                        spacing: 0;
+
                     leaf_tv := TerminalView {
+                        horizontal-stretch: 1;
                         vertical-stretch: 1;
                         preferred-width: 0px;
                         preferred-height: 0px;
@@ -376,6 +397,19 @@ component SplitPaneLeaf inherits Rectangle {
                         find-regex-changed(e) => { root.find-regex-changed(e); }
                         dismiss-find() => { root.dismiss-find(); }
                         context-menu-requested(x, y) => { root.context-menu-requested(x, y); }
+                    }
+
+                    if root.focused && root.find-across-visible : FindAcrossPanel {
+                        rows: root.find-across-rows;
+                        selected-index: root.find-across-selected-index;
+                        row-selected(i) => { root.find-across-row-selected(i); }
+                    }
+                    }
+
+                    if root.focused : TerminalRecBar {
+                        active: root.rec-bar-active;
+                        path-text: root.rec-bar-path-text;
+                        stop-logging() => { root.rec-bar-stop(); }
                     }
                 }
 
@@ -573,7 +607,18 @@ export component WorkspaceSplitView inherits Rectangle {
     callback tab-split-dropped(data-transfer, int, string);
     callback activate-tab(string);
     callback close-tab(string);
-    callback tab-double-click(string);
+    in-out property <string> inline-rename-id: "";
+    in-out property <string> inline-rename-text: "";
+    callback inline-rename-start(string);
+    callback inline-rename-commit(string);
+    callback inline-rename-cancel();
+    in property <bool> find-across-visible: false;
+    in property <[FindAcrossMatchRow]> find-across-rows: [];
+    in property <int> find-across-selected-index: -1;
+    callback find-across-row-selected(int);
+    in property <bool> rec-bar-active: false;
+    in property <string> rec-bar-path-text: "";
+    callback rec-bar-stop();
     callback tab-context-menu-requested(string, string, length, length);
     callback new-session();
     pure callback drag-tab-transfer(string) -> data-transfer;
@@ -694,7 +739,18 @@ export component WorkspaceSplitView inherits Rectangle {
         tab-split-dropped(data, dir) => { root.tab-split-dropped(data, leaf.pane-id, dir); }
         activate-tab(id) => { root.activate-tab(id); }
         close-tab(id) => { root.close-tab(id); }
-        tab-double-click(id) => { root.tab-double-click(id); }
+        inline-rename-id <=> root.inline-rename-id;
+        inline-rename-text <=> root.inline-rename-text;
+        inline-rename-start(id) => { root.inline-rename-start(id); }
+        inline-rename-commit(text) => { root.inline-rename-commit(text); }
+        inline-rename-cancel() => { root.inline-rename-cancel(); }
+        find-across-visible: root.find-across-visible;
+        find-across-rows: root.find-across-rows;
+        find-across-selected-index: root.find-across-selected-index;
+        find-across-row-selected(i) => { root.find-across-row-selected(i); }
+        rec-bar-active: root.rec-bar-active;
+        rec-bar-path-text: root.rec-bar-path-text;
+        rec-bar-stop() => { root.rec-bar-stop(); }
         tab-context-menu-requested(id, title, x, y) => {
             root.tab-context-menu-requested(id, title, x, y);
         }

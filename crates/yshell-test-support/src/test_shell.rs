@@ -76,6 +76,16 @@ impl TestShellSession {
     pub fn open_boxed(config: &SshConnectionConfig) -> SshResult<Box<dyn ShellSession>> {
         Self::open(config).map(|session| Box::new(session) as Box<dyn ShellSession>)
     }
+
+    /// Queue extra output to be returned from subsequent [`ShellSession::poll_output`] calls.
+    pub fn push_pending_output(&mut self, bytes: impl Into<Vec<u8>>) {
+        self.pending_output.push_back(bytes.into());
+    }
+
+    /// Drop any buffered handshake / prior output without attaching the shell.
+    pub fn clear_pending_output(&mut self) {
+        self.pending_output.clear();
+    }
 }
 
 /// [`ShellAdapter`] that opens [`TestShellSession`] instances.

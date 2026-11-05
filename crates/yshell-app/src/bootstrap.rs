@@ -34,10 +34,11 @@ pub(crate) mod generated_ui {
 }
 
 use generated_ui::{
-    AuthKeyOption, AuthKeyboardPrompt, FileCrumb, FileRow, HostKeyEntry, HostKeyGroup, MainWindow,
-    Palette, PanelFrameData, PrivateKeyRow, ProxyProfileOption, ProxyRow, QuickConnectRow,
-    SessionTreeRow, SftpPaneData, SftpTransferRow, SplitHandleData, TerminalScrollInfo, Theme,
-    ThemeManagerRow, TriStateField, TunnelRow, WorkspacePaneLeaf, WorkspaceSplitter, WorkspaceTab,
+    AuthKeyOption, AuthKeyboardPrompt, FileCrumb, FileRow, FindAcrossMatchRow, HostKeyEntry,
+    HostKeyGroup, MainWindow, Palette, PanelFrameData, PrivateKeyRow, ProxyProfileOption, ProxyRow,
+    QuickConnectRow, SessionTreeRow, SftpPaneData, SftpTransferRow, SplitHandleData,
+    TerminalScrollInfo, Theme, ThemeManagerRow, TriStateField, TunnelRow, WorkspacePaneLeaf,
+    WorkspaceSplitter, WorkspaceTab,
 };
 
 /// Keeps the pixel-rendered terminal surface in sync with the runtime.
@@ -750,23 +751,6 @@ pub(crate) fn wire_callbacks(
                 surface.refresh(&window);
             }
             Err(error) => set_error_status(&window, "Could not rename the tab.", &error),
-        }
-    });
-
-    // 双击标签：已断开/未连接就重连，否则复制 session。
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_tab_double_click(move |tab_id| {
-        let Some(window) = weak.upgrade() else {
-            return;
-        };
-        match runtime_ref.borrow_mut().tab_double_click(tab_id.as_ref()) {
-            Ok(projection) => {
-                apply_projection(&window, &projection);
-                surface.refresh(&window);
-            }
-            Err(error) => set_error_status(&window, "Could not open the tab.", &error),
         }
     });
 
@@ -1961,6 +1945,54 @@ pub(crate) fn wire_callbacks(
                 surface.refresh(&window);
             }
             Err(error) => set_error_status(&window, "Find failed.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_set_terminal_search_across(move |across| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let result = runtime_ref.borrow_mut().set_terminal_search_across(across);
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Find failed.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_activate_terminal_find_across_match(move |index| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let index = usize::try_from(index).unwrap_or(0);
+        let result = runtime_ref
+            .borrow_mut()
+            .activate_terminal_find_across_match(index);
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Find failed.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_quick_connect_clear_input(move || {
+        if let Some(window) = weak.upgrade() {
+            let projection = runtime_ref.borrow_mut().update_quick_connect_input("");
+            apply_projection(&window, &projection);
+            surface.refresh(&window);
         }
     });
 
@@ -5184,14 +5216,16 @@ fn dispatch_sftp_menu_action(
             }
         }
         "new-folder" => {
-            window.set_sftp_dialog_name_text("".into());
-            window.set_sftp_dialog_kind("new-folder".into());
+            window.set_sftp_remote_inline_new_folder_text("".into());
+            window.set_sftp_remote_inline_new_folder_visible(true);
+            window.set_sftp_remote_inline_rename_index(-1);
             Ok(runtime.projection())
         }
         "rename" => {
             let name = runtime.sftp_selected_name_text();
-            window.set_sftp_dialog_name_text(name.into());
-            window.set_sftp_dialog_kind("rename".into());
+            window.set_sftp_remote_inline_rename_text(name.into());
+            window.set_sftp_remote_inline_rename_index(window.get_sftp_selected_index());
+            window.set_sftp_remote_inline_new_folder_visible(false);
             Ok(runtime.projection())
         }
         "delete" | "delete-selection" => {
@@ -6052,6 +6086,8 @@ fn workspace_tab_from(tab: &TabData) -> WorkspaceTab {
         logging: tab.logging,
         sync_role_text: tab.sync_role_text.clone().into(),
         unread: i32::try_from(tab.unread).unwrap_or(i32::MAX),
+        icon_name: tab.icon_name.clone().into(),
+        ai_origin: tab.ai_origin,
     }
 }
 
@@ -6065,6 +6101,38 @@ fn workspace_tab_matches(current: &WorkspaceTab, next: &TabData) -> bool {
         && current.logging == next.logging
         && current.sync_role_text.as_str() == next.sync_role_text
         && current.unread == i32::try_from(next.unread).unwrap_or(i32::MAX)
+        && current.icon_name.as_str() == next.icon_name
+        && current.connection_badge.as_str() == next.connection_badge
+        && current.ai_origin == next.ai_origin
+}
+
+fn find_across_row_from(row: &crate::runtime::TerminalFindAcrossRow) -> FindAcrossMatchRow {
+    FindAcrossMatchRow {
+        tab_id: row.tab_id.clone().into(),
+        title: row.title.clone().into(),
+        snippet: row.snippet.clone().into(),
+        match_count: row.match_count,
+    }
+}
+
+fn set_find_across_rows_if_changed(
+    window: &MainWindow,
+    rows: &[crate::runtime::TerminalFindAcrossRow],
+) {
+    let current = window.get_terminal_find_across_rows();
+    let unchanged = current.row_count() == rows.len()
+        && current.iter().zip(rows).all(|(current, next)| {
+            current.tab_id.as_str() == next.tab_id
+                && current.title.as_str() == next.title
+                && current.snippet.as_str() == next.snippet
+                && current.match_count == next.match_count
+        });
+    if unchanged {
+        return;
+    }
+    window.set_terminal_find_across_rows(ModelRc::new(VecModel::from(
+        rows.iter().map(find_across_row_from).collect::<Vec<_>>(),
+    )));
 }
 
 /// Replaces the tab model only when the projected tabs changed, so that a
@@ -7322,6 +7390,9 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_terminal_search_kind_text(projection.terminal_search_kind_text.clone().into());
     window.set_terminal_search_match_count(projection.terminal_search_match_count);
     window.set_terminal_search_current_index(projection.terminal_search_current_index);
+    window.set_terminal_search_across(projection.terminal_search_across);
+    set_find_across_rows_if_changed(window, &projection.terminal_find_across_rows);
+    window.set_terminal_find_across_selected_index(projection.terminal_find_across_selected_index);
     window.set_sftp_path_text(projection.sftp_path_text.clone().into());
     window.set_sftp_column_ratio(projection.sftp_column_ratio);
     window.set_active_tab_mode_text(projection.active_tab_mode_text.clone().into());

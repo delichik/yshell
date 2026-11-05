@@ -666,6 +666,10 @@ impl AppRuntime {
     }
 
     pub(crate) fn refresh_terminal_search_for_active_session(&mut self) {
+        if self.terminal_search_across {
+            self.refresh_terminal_search_across_sessions();
+            return;
+        }
         let query = self.terminal_search_query.clone();
         self.terminal_search_error.clear();
         if query.trim().is_empty() {
@@ -696,7 +700,140 @@ impl AppRuntime {
         }
     }
 
+    pub fn set_terminal_search_across(&mut self, across: bool) -> AppResult<AppProjection> {
+        self.terminal_search_across = across;
+        if !across {
+            self.terminal_search_across_rows.clear();
+            self.terminal_search_across_selected = None;
+        }
+        self.refresh_terminal_search_for_active_session();
+        self.set_terminal_search_status();
+        Ok(self.projection())
+    }
+
+    pub fn activate_terminal_find_across_match(
+        &mut self,
+        index: usize,
+    ) -> AppResult<AppProjection> {
+        let Some(row) = self.terminal_search_across_rows.get(index) else {
+            return Err(AppError::new(format!(
+                "find-across match index `{index}` is out of range"
+            )));
+        };
+        let tab_id = row.tab_id.clone();
+        self.terminal_search_across_selected = Some(index);
+        self.activate_tab(&tab_id)?;
+        self.terminal_search_across = false;
+        self.terminal_search_across_rows.clear();
+        self.terminal_search_across_selected = None;
+        self.refresh_terminal_search_for_active_session();
+        self.set_terminal_search_status();
+        Ok(self.projection())
+    }
+
+    fn refresh_terminal_search_across_sessions(&mut self) {
+        use super::TerminalFindAcrossRow;
+
+        let query = self.terminal_search_query.clone();
+        self.terminal_search_error.clear();
+        self.terminal_search_across_rows.clear();
+        self.terminal_search_matches.clear();
+        self.terminal_search_current_index = None;
+        if query.trim().is_empty() {
+            self.terminal_search_across_selected = None;
+            return;
+        }
+        let regex = self.terminal_search_regex;
+        let mut invalid: Option<String> = None;
+        for tab in &self.tabs {
+            if tab.is_new_tab() || tab.kind.mode_text() == "sftp" {
+                continue;
+            }
+            let Some(session_id) = tab.session_id() else {
+                continue;
+            };
+            let Some(runtime) = self.sessions.get(session_id) else {
+                continue;
+            };
+            if runtime.is_sftp() {
+                continue;
+            }
+            match runtime.find_visible_text(&query, false, regex) {
+                Ok(matches) if !matches.is_empty() => {
+                    let snippet = Self::terminal_search_snippet(runtime, &query, &matches[0]);
+                    let title = self.tab_display_title(&tab.tab_id);
+                    let match_count = i32::try_from(matches.len()).unwrap_or(i32::MAX);
+                    self.terminal_search_across_rows
+                        .push(TerminalFindAcrossRow {
+                            tab_id: tab.tab_id.clone(),
+                            title,
+                            snippet,
+                            match_count,
+                        });
+                }
+                Err(error) if invalid.is_none() => invalid = Some(error),
+                _ => {}
+            }
+        }
+        if let Some(error) = invalid {
+            if self.terminal_search_across_rows.is_empty() {
+                self.terminal_search_error = error;
+            }
+        }
+        self.terminal_search_across_selected = if self.terminal_search_across_rows.is_empty() {
+            None
+        } else {
+            Some(0)
+        };
+    }
+
+    fn terminal_search_snippet(
+        runtime: &crate::session_runtime::SessionRuntime,
+        query: &str,
+        first_match: &yshell_terminal::SearchMatch,
+    ) -> String {
+        let lines = runtime.visible_lines();
+        let row = first_match.start.row as usize;
+        let line = lines.get(row).map(String::as_str).unwrap_or("");
+        let q = query.trim();
+        if q.is_empty() || line.is_empty() {
+            return line.chars().take(72).collect();
+        }
+        let lower_line = line.to_lowercase();
+        let lower_q = q.to_lowercase();
+        let Some(pos) = lower_line.find(&lower_q) else {
+            return line.chars().take(72).collect();
+        };
+        let start = pos.saturating_sub(24);
+        let end = (pos + q.len() + 24).min(line.len());
+        let mut snippet = String::new();
+        if start > 0 {
+            snippet.push('…');
+        }
+        snippet.push_str(&line[start..end]);
+        if end < line.len() {
+            snippet.push('…');
+        }
+        snippet
+    }
+
     pub(crate) fn rotate_terminal_match(&mut self, forward: bool) {
+        if self.terminal_search_across {
+            if self.terminal_search_across_rows.is_empty() {
+                return;
+            }
+            let len = self.terminal_search_across_rows.len();
+            let current = self.terminal_search_across_selected.unwrap_or(0);
+            let next = if forward {
+                (current + 1) % len
+            } else if current == 0 {
+                len - 1
+            } else {
+                current - 1
+            };
+            self.terminal_search_across_selected = Some(next);
+            return;
+        }
         if self.terminal_search_matches.is_empty() {
             return;
         }
@@ -718,6 +855,15 @@ impl AppRuntime {
         }
         if self.terminal_search_query.trim().is_empty() {
             return ("prompt", 0, 0);
+        }
+        if self.terminal_search_across {
+            if self.terminal_search_across_rows.is_empty() {
+                return ("empty", 0, 0);
+            }
+            let count = i32::try_from(self.terminal_search_across_rows.len()).unwrap_or(i32::MAX);
+            let current = i32::try_from(self.terminal_search_across_selected.unwrap_or(0) + 1)
+                .unwrap_or(i32::MAX);
+            return ("found", count, current);
         }
         if self.terminal_search_matches.is_empty() {
             return ("empty", 0, 0);

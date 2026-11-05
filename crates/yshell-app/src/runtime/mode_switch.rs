@@ -177,7 +177,8 @@ impl AppRuntime {
 
         #[cfg(not(test))]
         {
-            let (transport, pty) = {
+            let viewport = self.viewport_pty_size();
+            let (transport, mut pty) = {
                 let runtime = self
                     .sessions
                     .get(&session_key)
@@ -187,6 +188,7 @@ impl AppRuntime {
                 })?;
                 (transport, runtime.ssh_config.pty.clone())
             };
+            pty.size = viewport;
             let shell = match transport.open_shell(&pty) {
                 Ok(shell) => shell,
                 Err(error) => {
@@ -212,7 +214,10 @@ impl AppRuntime {
             runtime.set_view_mode(SessionViewMode::Terminal);
             runtime.clear_visible_terminal();
             runtime.attach_shell_session(shell);
-            let _ = runtime.poll_shell_output().map_err(AppError::from_error)?;
+            let _ = runtime
+                .resize_shell_pty(viewport.columns, viewport.rows)
+                .map_err(AppError::from_error)?;
+            runtime.clear_pty_force_resync();
             self.tabs[index].kind = TabKind::Terminal {
                 session_id: session_key.clone(),
             };

@@ -14,8 +14,12 @@ export component WorkspaceTabBar inherits Rectangle {
 
     callback activate-tab(string);
     callback close-tab(string);
-    callback tab-double-click(string);
     callback tab-context-menu-requested(string, string, length, length);
+    in-out property <string> inline-rename-id: "";
+    in-out property <string> inline-rename-text: "";
+    callback inline-rename-start(string);
+    callback inline-rename-commit(string);
+    callback inline-rename-cancel();
     callback new-session();
     pure callback drag-tab-transfer(string) -> data-transfer;
     /// 标签拖放到本条（移入本叶）。
@@ -75,13 +79,31 @@ export component WorkspaceTabBar inherits Rectangle {
                                 tab-logging: tab.logging;
                                 tab-sync-role-text: tab.sync_role_text;
                                 tab-unread: tab.unread;
+                                tab-icon-name: tab.icon_name;
+                                tab-ai-origin: tab.ai_origin;
                                 connection-badge: tab.connection_badge;
+                                renaming: tab.id == root.inline-rename-id;
+                                rename-text <=> root.inline-rename-text;
                                 drag-enabled: true;
                                 drag-payload: root.drag-tab-transfer(tab.id);
                                 show-divider: i > 0 && !tab.active && !root.tabs[i - 1].active;
                                 activate() => { root.activate-tab(tab.id); }
                                 close-requested() => { root.close-tab(tab.id); }
-                                double-click-requested() => { root.tab-double-click(tab.id); }
+                                rename-requested() => {
+                                    root.inline-rename-id = tab.id;
+                                    root.inline-rename-text = tab.title;
+                                    root.inline-rename-start(tab.id);
+                                }
+                                rename-committed(text) => {
+                                    root.inline-rename-commit(text);
+                                    root.inline-rename-id = "";
+                                    root.inline-rename-text = "";
+                                }
+                                rename-canceled() => {
+                                    root.inline-rename-cancel();
+                                    root.inline-rename-id = "";
+                                    root.inline-rename-text = "";
+                                }
                                 context-menu-requested(x, y) => {
                                     root.tab-context-menu-requested(
                                         tab.id,

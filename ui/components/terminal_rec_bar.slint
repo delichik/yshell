@@ -1,0 +1,66 @@
+// N6：终端底部 REC 提示条（terminal.html rec-note；状态栏 REC 可并存）。
+import { Theme } from "../theme.slint";
+import { WinButton } from "basic/controls.slint";
+
+export component TerminalRecBar inherits Rectangle {
+    in property <bool> active: false;
+    in property <string> path-text: "";
+    callback stop-logging();
+
+    visible: root.active && root.path-text != "";
+    height: 28px;
+    background: Theme.layer-fill;
+
+    Rectangle {
+        y: 0;
+        height: 1px;
+        width: 100%;
+        background: Theme.divider;
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-12;
+        padding-right: Theme.spacing-12;
+        spacing: Theme.spacing-8;
+        cross-axis-alignment: center;
+
+        Rectangle {
+            height: 18px;
+            width: 34px;
+            border-radius: 9px;
+            background: Theme.critical;
+            cross-axis-self-alignment: center;
+
+            Text {
+                text: @tr("REC");
+                color: Theme.accent-text;
+                font-size: Theme.font-caption;
+                font-weight: Theme.weight-semibold;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                width: parent.width;
+                height: parent.height;
+                wrap: no-wrap;
+            }
+        }
+
+        Text {
+            text: "→ " + root.path-text;
+            color: Theme.text-secondary;
+            font-family: Theme.font-mono;
+            font-size: Theme.font-caption;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+            horizontal-stretch: 1;
+            min-width: 0px;
+        }
+
+        WinButton {
+            text: @tr("Stop");
+            subtle: true;
+            height: Theme.control-height-compact;
+            clicked => { root.stop-logging(); }
+        }
+    }
+}

@@ -424,7 +424,9 @@ export component WinCheckBox inherits Rectangle {
     out property <bool> has-focus: check_focus.has-focus;
 
     height: Theme.control-height;
-    width: Theme.choice-size + (root.text == "" ? 0px : Theme.spacing-8 + label-text.preferred-width);
+    // HorizontalLayout 给标签自然宽度；勿把 label.width 绑回 parent.width，
+    // 否则 preferred-width 循环塌成 0，勾选框与文案叠在一起。
+    width: row.preferred-width;
     background: transparent;
 
     accessible-role: checkbox;
@@ -458,43 +460,42 @@ export component WinCheckBox inherits Rectangle {
 
     private property <bool> keyboard-focus: false;
 
-    marker := Rectangle {
-        width: Theme.choice-size;
-        height: Theme.choice-size;
-        y: (parent.height - self.height) / 2;
-        border-radius: Theme.radius-control;
-        border-width: 1px;
-        border-color: !root.enabled ? Theme.text-disabled : root.checked ? Theme.accent : Theme.text-secondary;
-        background: !root.enabled ? Theme.control-fill-disabled
-            : root.checked ? (touch.pressed ? Theme.accent-pressed : touch.has-hover ? Theme.accent-hover : Theme.accent)
-            : touch.pressed ? Theme.control-fill-pressed
-            : touch.has-hover ? Theme.control-fill-hover
-            : Theme.control-fill;
-        animate background { duration: Theme.duration-faster; easing: ease-out; }
-        animate border-color { duration: Theme.duration-faster; easing: ease-out; }
+    row := HorizontalLayout {
+        spacing: root.text == "" ? 0px : Theme.spacing-8;
+        alignment: start;
 
-        Icon {
-            visible: root.checked;
-            name: "check";
-            icon-color: root.enabled ? Theme.accent-text : Theme.text-disabled;
-            icon-size: 12px;
-            x: (parent.width - self.width) / 2;
+        marker := Rectangle {
+            width: Theme.choice-size;
+            height: Theme.choice-size;
             y: (parent.height - self.height) / 2;
-        }
-    }
+            border-radius: Theme.radius-control;
+            border-width: 1px;
+            border-color: !root.enabled ? Theme.text-disabled : root.checked ? Theme.accent : Theme.text-secondary;
+            background: !root.enabled ? Theme.control-fill-disabled
+                : root.checked ? (touch.pressed ? Theme.accent-pressed : touch.has-hover ? Theme.accent-hover : Theme.accent)
+                : touch.pressed ? Theme.control-fill-pressed
+                : touch.has-hover ? Theme.control-fill-hover
+                : Theme.control-fill;
+            animate background { duration: Theme.duration-faster; easing: ease-out; }
+            animate border-color { duration: Theme.duration-faster; easing: ease-out; }
 
-    label-text := Text {
-        visible: root.text != "";
-        x: Theme.choice-size + Theme.spacing-8;
-        y: 0;
-        width: parent.width - (Theme.choice-size + Theme.spacing-8);
-        height: parent.height;
-        text: root.text;
-        color: !root.enabled ? Theme.text-disabled : Theme.text-primary;
-        font-size: Theme.font-body;
-        vertical-alignment: center;
-        wrap: no-wrap;
-        overflow: elide;
+            Icon {
+                visible: root.checked;
+                name: "check";
+                icon-color: root.enabled ? Theme.accent-text : Theme.text-disabled;
+                icon-size: 12px;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        if root.text != "" : Text {
+            text: root.text;
+            color: !root.enabled ? Theme.text-disabled : Theme.text-primary;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            wrap: no-wrap;
+        }
     }
 
     touch := TouchArea {

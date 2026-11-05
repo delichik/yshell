@@ -1,6 +1,7 @@
 // 工作区标签项：全局标签条与分屏叶子标签条共用同一视觉与命中规则。
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
+import { WinTextInput } from "basic/text_input.slint";
 
 /// 单个标签：复刻 `WinTab` 的视觉（32px 行高、活动标签底部强调条、右内边距 4 的
 /// 18×18 关闭按钮 + 32×32 命中区），额外支持右键菜单。左键点击激活；标签整体
@@ -18,6 +19,12 @@ export component WorkspaceTabItem inherits Rectangle {
     in property <string> tab-sync-role-text: "";
     /// WP4：未读输出计数。
     in property <int> tab-unread: 0;
+    /// Session icon from runtime (`icon_name` on `WorkspaceTab`).
+    in property <string> tab-icon-name: "terminal";
+    /// MCP/AI-created — solid AI chip (prototype tab-bar `ai-chip`).
+    in property <bool> tab-ai-origin: false;
+    in property <bool> renaming: false;
+    in-out property <string> rename-text: "";
     /// E11：在标签左缘之后画 1px 分隔线（位于 4px 标签间距中央）。
     in property <bool> show-divider: false;
     /// 会话连接态：决定图标右下角的绿勾/红叉角标（New Tab 不显示角标）。
@@ -31,11 +38,13 @@ export component WorkspaceTabItem inherits Rectangle {
     callback activate();
     callback close-requested();
     callback context-menu-requested(length, length);
-    /// 双击：复制 session（新建同源标签）。
-    callback double-click-requested();
+    callback rename-requested();
+    callback rename-committed(string);
+    callback rename-canceled();
 
     /// N9：徽标悬停提示（组内成员说明；@markdown 插值用）。
     property <string> tab-sync-tooltip: @tr("Input sync is on for this tab");
+    property <string> ai-origin-tooltip: @tr("Created by AI");
 
     height: Theme.bar-height-tabs;
     horizontal-stretch: 0;
@@ -87,9 +96,10 @@ export component WorkspaceTabItem inherits Rectangle {
             background: transparent;
 
             Icon {
-                name: root.tab-mode-text == "sftp" ? "upload"
+                name: root.tab-icon-name != "" ? root.tab-icon-name
+                    : (root.tab-mode-text == "sftp" ? "upload"
                     : root.tab-mode-text == "new" ? "plus"
-                    : "terminal";
+                    : "terminal");
                 icon-color: root.tab-active ? Theme.text-primary : Theme.text-secondary;
                 icon-size: Theme.icon-size-small;
                 x: (parent.width - self.width) / 2;
@@ -130,14 +140,73 @@ export component WorkspaceTabItem inherits Rectangle {
             }
         }
 
-        Text {
-            // WP4：自定义 title 非空时优先显示；New Tab 使用本地化标题。
-            text: root.tab-mode-text == "new" ? @tr("New Tab") : root.tab-title;
-            color: root.tab-active ? Theme.text-primary : Theme.text-secondary;
-            font-size: Theme.font-body;
-            vertical-alignment: center;
-            wrap: no-wrap;
-            overflow: elide;
+        Rectangle {
+            horizontal-stretch: 1;
+            min-width: 48px;
+            height: parent.height;
+
+            rename_input := WinTextInput {
+                visible: root.renaming;
+                enabled: root.renaming;
+                width: parent.width;
+                height: Theme.control-height-compact;
+                y: (parent.height - self.height) / 2;
+                font-size: Theme.font-body;
+                text <=> root.rename-text;
+                accepted => { root.rename-committed(root.rename-text); }
+            }
+
+            rename_scope := FocusScope {
+                visible: root.renaming;
+                width: parent.width;
+                height: parent.height;
+                key-pressed(event) => {
+                    if (event.text == "\u{001b}") {
+                        root.rename-canceled();
+                        return accept;
+                    }
+                    return reject;
+                }
+            }
+
+            title_text := Text {
+                visible: !root.renaming;
+                text: root.tab-mode-text == "new" ? @tr("New Tab") : root.tab-title;
+                color: root.tab-active ? Theme.text-primary : Theme.text-secondary;
+                font-size: Theme.font-body;
+                vertical-alignment: center;
+                wrap: no-wrap;
+                overflow: elide;
+                width: parent.width;
+                height: parent.height;
+            }
+        }
+
+        // D34：MCP/AI 创建的标签 — 名称旁实心 AI 标志（用户创建的不显示）。
+        if root.tab-ai-origin && !root.renaming : Rectangle {
+            height: 16px;
+            width: Math.max(ai-chip-text.preferred-width + 8px, 18px);
+            border-radius: Theme.radius-control;
+            background: Theme.text-primary;
+            border-width: 1px;
+            border-color: Theme.text-primary;
+            cross-axis-self-alignment: center;
+
+            ai-chip-text := Text {
+                text: @tr("AI");
+                color: Theme.window-background;
+                font-size: Theme.font-caption;
+                font-weight: Theme.weight-semibold;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+                width: parent.width;
+                height: parent.height;
+                wrap: no-wrap;
+            }
+
+            Tooltip {
+                text: @markdown("\{root.ai-origin-tooltip}");
+            }
         }
 
         // E11：状态独立成段（8px spacing + text-tertiary），不再用两个字面空格拼接
@@ -249,7 +318,11 @@ export component WorkspaceTabItem inherits Rectangle {
             width: 100%;
             height: 100%;
             clicked => { root.activate(); }
-            double-clicked => { root.double-click-requested(); }
+            double-clicked => {
+                if (root.tab-mode-text != "new") {
+                    root.rename-requested();
+                }
+            }
             pointer-event(event) => {
                 if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
                     root.context-menu-requested(

@@ -69,6 +69,7 @@ pub(crate) use connection::PendingPasswordPrompt;
 pub(crate) use local_pane::local_crumbs_for;
 pub(crate) use local_pane::LocalPaneState;
 pub(crate) use projection::local_path_separator;
+pub use projection::TerminalFindAcrossRow;
 pub(crate) use sessions::collect_session_inventory_lines;
 pub(crate) use sessions::find_session_folder_id;
 pub use sessions::SessionTreeRow;
@@ -286,6 +287,9 @@ impl AppRuntime {
             terminal_search_error: String::new(),
             terminal_search_matches: Vec::new(),
             terminal_search_current_index: None,
+            terminal_search_across: false,
+            terminal_search_across_rows: Vec::new(),
+            terminal_search_across_selected: None,
             sftp_path: "/".to_owned(),
             sftp_listing: SftpListingState::ConnectReal,
             sftp_local_path: config_dir.join("sftp-transfer.txt").display().to_string(),
@@ -547,21 +551,39 @@ impl AppRuntime {
         ordinal
     }
 
-    /// TAB-4：记录窗口布局同步出的终端视口尺寸（本地 PTY 初始尺寸提示）。
+    /// 记录窗口布局同步出的终端视口尺寸（本地 PTY 与 SSH `request_pty` 的初始尺寸提示）。
     pub(crate) fn note_terminal_viewport_size(&mut self, columns: u16, rows: u16) {
         if columns > 0 && rows > 0 {
             self.terminal_viewport_hint = (columns, rows);
         }
     }
 
-    /// TAB-4：新建本地终端时使用的初始 PTY 尺寸。
+    /// 新建本地终端 / SSH 开壳时使用的初始 PTY 尺寸。
     ///
-    /// 窗口尚未创建/尚未同步视口时退回 `120x32`（`LocalPtyConfig` 默认尺寸为
-    /// `80x24`，这里给一个更接近常见终端窗口的起点）。
+    /// 窗口尚未创建/尚未同步视口时退回 `120x32`（`PtySize` / `LocalPtyConfig` 默认
+    /// 为 `80x24`，这里给一个更接近常见终端窗口的起点，避免 MOTD 先按 24 行排版
+    /// 再被视口拉高后留下 scrollback）。
     #[must_use]
-    #[allow(dead_code)]
     pub const fn local_terminal_initial_size(&self) -> (u16, u16) {
         self.terminal_viewport_hint
+    }
+
+    /// 把最近一次视口尺寸写成 [`yshell_ssh::PtySize`]（列/行至少为 1）。
+    #[must_use]
+    pub(crate) fn viewport_pty_size(&self) -> yshell_ssh::PtySize {
+        let (columns, rows) = self.local_terminal_initial_size();
+        yshell_ssh::PtySize {
+            columns: columns.max(1),
+            rows: rows.max(1),
+            pixel_width: 0,
+            pixel_height: 0,
+        }
+    }
+
+    /// 用视口提示覆盖会话期望的 PTY 尺寸与渲染网格（无 shell 也可调用）。
+    pub(crate) fn seed_session_pty_from_viewport(&self, runtime: &mut SessionRuntime) {
+        let size = self.viewport_pty_size();
+        let _ = runtime.resize_shell_pty(size.columns, size.rows);
     }
 
     pub(crate) fn active_session_key(&self) -> AppResult<String> {
@@ -667,6 +689,9 @@ pub struct AppRuntime {
     pub(crate) terminal_search_error: String,
     pub(crate) terminal_search_matches: Vec<SearchMatch>,
     pub(crate) terminal_search_current_index: Option<usize>,
+    pub(crate) terminal_search_across: bool,
+    pub(crate) terminal_search_across_rows: Vec<TerminalFindAcrossRow>,
+    pub(crate) terminal_search_across_selected: Option<usize>,
     pub(crate) sftp_path: String,
     pub(crate) sftp_listing: SftpListingState,
     pub(crate) sftp_local_path: String,

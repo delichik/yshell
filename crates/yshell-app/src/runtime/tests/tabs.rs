@@ -648,40 +648,17 @@ fn duplicate_tab_opens_sibling_session() {
 }
 
 #[test]
-fn double_clicking_a_disconnected_tab_reconnects_it() {
+fn rename_tab_updates_title_without_changing_tab_count() {
+    // 原型：Rename Tab → 原地改名；Rust 只改 custom_title，不重连/复制。
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 1);
     let tab_id = open_saved_tab(&mut runtime, "saved-0");
-    let session_id = runtime.tabs[0]
-        .session_id()
-        .expect("terminal tab")
-        .to_owned();
-    runtime
-        .disconnect_session_by_key(&session_id)
-        .expect("disconnect");
+    let before = runtime.tabs.len();
 
-    // 断开的标签双击 = 重连：不新开标签。
-    let projection = runtime.tab_double_click(&tab_id).expect("double click");
-    assert_eq!(runtime.tabs.len(), 1);
+    let projection = runtime.rename_tab(&tab_id, "renamed-lab").expect("rename");
+    assert_eq!(runtime.tabs.len(), before);
     assert_eq!(projection.active_tab_id, tab_id);
-    assert_eq!(
-        runtime.tabs[0].session_id(),
-        Some(session_id.as_str()),
-        "the same session is reconnected"
-    );
-    assert_tab_invariants(&runtime);
-}
-
-#[test]
-fn double_clicking_a_live_tab_duplicates_it() {
-    let temp = tempdir().expect("tempdir");
-    let mut runtime = tab_runtime(temp.path(), 1);
-    let tab_id = open_saved_tab(&mut runtime, "saved-0");
-
-    // 还连着的标签双击 = 复制（新开一个标签）。
-    let projection = runtime.tab_double_click(&tab_id).expect("double click");
-    assert_eq!(runtime.tabs.len(), 2);
-    assert_ne!(projection.active_tab_id, tab_id);
+    assert_eq!(runtime.tab_display_title(&tab_id), "renamed-lab");
     assert_tab_invariants(&runtime);
 }
 

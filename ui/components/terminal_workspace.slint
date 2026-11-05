@@ -23,23 +23,37 @@ import { SftpPanel } from "sftp_panel.slint";
 import { FileCrumb, FileRow } from "file_pane.slint";
 import { SftpTabPage } from "sftp_tab_page.slint";
 import { SyncInputBanner } from "sync_input_banner.slint";
+import { FindAcrossPanel, FindAcrossMatchRow } from "find_across_panel.slint";
+import { TerminalRecBar } from "terminal_rec_bar.slint";
 
 export { WorkspaceTab }
 
 export component TerminalWorkspace inherits VerticalLayout {
-    // --- N9：同步输入横幅（可同步会话常驻；WinSwitch 开/关 + Pause / Stop）----
+    // --- N9：同步输入横幅（On/Off + End all；无 Pause / Visible 预设）----
     in property <bool> sync-banner-visible: false;
     in property <bool> sync-banner-member-enabled: false;
     in property <bool> sync-banner-member-toggle-enabled: false;
     in property <string> sync-banner-title: "";
     in property <string> sync-banner-warn: "";
     in property <bool> sync-banner-group-active: false;
-    in property <bool> sync-banner-paused: false;
     callback sync-banner-member-toggled();
     /// 分屏叶：按标签 id 切换成员（不依赖焦点）。
     callback sync-banner-member-toggled-for-tab(string);
-    callback sync-banner-pause();
     callback sync-banner-stop();
+
+    in property <bool> find-across-visible: false;
+    in property <[FindAcrossMatchRow]> find-across-rows: [];
+    in property <int> find-across-selected-index: -1;
+    callback find-across-row-selected(int);
+    in property <bool> rec-bar-active: false;
+    in property <string> rec-bar-path-text: "";
+    callback rec-bar-stop();
+
+    in-out property <string> tab-inline-rename-id: "";
+    in-out property <string> tab-inline-rename-text: "";
+    callback tab-inline-rename-start(string);
+    callback tab-inline-rename-commit(string);
+    callback tab-inline-rename-cancel();
 
     in property <[WorkspaceTab]> tabs: [];
     // E21：这些默认值都会被宿主投影覆盖；置空避免投影到达前闪现英文（muse 轮1 中#35）
@@ -260,8 +274,6 @@ export component TerminalWorkspace inherits VerticalLayout {
     callback close-tab(string);
     /// 参数：tab id, 当前显示名, x, y。
     callback tab-context-menu-requested(string, string, length, length);
-    /// 双击标签：复制 session（参数 = tab id）。
-    callback tab-double-click-requested(string);
     callback context-menu-requested(length, length);
     // WP4：分屏动作。
     callback focus-split-pane(int);
@@ -302,6 +314,16 @@ export component TerminalWorkspace inherits VerticalLayout {
     callback quick-connect-connect-target(string);
     callback quick-connect-copy-target(string);
     callback quick-connect-clear-history();
+    callback quick-connect-clear-input();
+
+    in-out property <bool> sftp-remote-inline-new-folder-visible: false;
+    in-out property <string> sftp-remote-inline-new-folder-text: "";
+    in property <int> sftp-remote-inline-rename-index: -1;
+    in-out property <string> sftp-remote-inline-rename-text: "";
+    callback sftp-remote-inline-new-folder-commit(string);
+    callback sftp-remote-inline-new-folder-cancel();
+    callback sftp-remote-inline-rename-commit(string);
+    callback sftp-remote-inline-rename-cancel();
 
     /// WP1：连接 overlay 投影（由宿主绑定）。
     in property <bool> connection-overlay-visible: false;
@@ -400,7 +422,11 @@ export component TerminalWorkspace inherits VerticalLayout {
                         drop-enabled: false;
                         activate-tab(id) => { root.activate-tab(id); }
                         close-tab(id) => { root.close-tab(id); }
-                        tab-double-click(id) => { root.tab-double-click-requested(id); }
+                        inline-rename-id <=> root.tab-inline-rename-id;
+                        inline-rename-text <=> root.tab-inline-rename-text;
+                        inline-rename-start(id) => { root.tab-inline-rename-start(id); }
+                        inline-rename-commit(text) => { root.tab-inline-rename-commit(text); }
+                        inline-rename-cancel() => { root.tab-inline-rename-cancel(); }
                         tab-context-menu-requested(id, title, x, y) => {
                             root.tab-context-menu-requested(id, title, x, y);
                         }
@@ -416,9 +442,7 @@ export component TerminalWorkspace inherits VerticalLayout {
                         title-text: root.sync-banner-title;
                         warn-text: root.sync-banner-warn;
                         group-active: root.sync-banner-group-active;
-                        paused: root.sync-banner-paused;
                         member-toggled() => { root.sync-banner-member-toggled(); }
-                        pause-clicked() => { root.sync-banner-pause(); }
                         stop-clicked() => { root.sync-banner-stop(); }
                     }
 
@@ -430,8 +454,18 @@ export component TerminalWorkspace inherits VerticalLayout {
                         background: Theme.terminal-background;
                         clip: true;
 
-                        single_drop := DropArea {
+                        term_stack := VerticalLayout {
                             width: 100%;
+                            height: 100%;
+                            spacing: 0;
+
+                        term_row := HorizontalLayout {
+                            vertical-stretch: 1;
+                            min-height: 0px;
+                            spacing: 0;
+
+                        single_drop := DropArea {
+                            horizontal-stretch: 1;
                             height: 100%;
                             enabled: !root.split-active && root.terminal-visible;
                             can-drop(event) => {
@@ -516,6 +550,20 @@ export component TerminalWorkspace inherits VerticalLayout {
                             }
                         }
 
+                        if root.find-across-visible && !root.split-active : FindAcrossPanel {
+                            rows: root.find-across-rows;
+                            selected-index: root.find-across-selected-index;
+                            row-selected(i) => { root.find-across-row-selected(i); }
+                        }
+                        }
+
+                        if !root.split-active : TerminalRecBar {
+                            active: root.rec-bar-active;
+                            path-text: root.rec-bar-path-text;
+                            stop-logging() => { root.rec-bar-stop(); }
+                        }
+                        }
+
                         // SFTP tab: fixed two columns (local left, remote
                         // right). Declared after the terminal DropArea so it
                         // covers the terminal surface when active.
@@ -598,6 +646,14 @@ export component TerminalWorkspace inherits VerticalLayout {
                             copy-selection => { root.sftp-copy-selection(); }
                             cut-selection => { root.sftp-cut-selection(); }
                             paste-cross-pane => { root.sftp-paste-cross-pane(); }
+                            remote-inline-new-folder-visible <=> root.sftp-remote-inline-new-folder-visible;
+                            remote-inline-new-folder-text <=> root.sftp-remote-inline-new-folder-text;
+                            remote-inline-rename-index: root.sftp-remote-inline-rename-index;
+                            remote-inline-rename-text <=> root.sftp-remote-inline-rename-text;
+                            remote-inline-new-folder-commit(text) => { root.sftp-remote-inline-new-folder-commit(text); }
+                            remote-inline-new-folder-cancel() => { root.sftp-remote-inline-new-folder-cancel(); }
+                            remote-inline-rename-commit(text) => { root.sftp-remote-inline-rename-commit(text); }
+                            remote-inline-rename-cancel() => { root.sftp-remote-inline-rename-cancel(); }
                         }
 
                         // TAB-3：未分屏 QC 全页改为内容区覆盖层——只盖终端 I/O，
@@ -625,6 +681,7 @@ export component TerminalWorkspace inherits VerticalLayout {
                             connect-target(target) => { root.quick-connect-connect-target(target); }
                             copy-target(target) => { root.quick-connect-copy-target(target); }
                             clear-history() => { root.quick-connect-clear-history(); }
+                            clear-input() => { root.quick-connect-clear-input(); }
                         }
                     }
                 }
@@ -705,7 +762,18 @@ export component TerminalWorkspace inherits VerticalLayout {
                 tab-split-dropped(data, pane-id, dir) => { root.drop-tab-split(data, pane-id, dir); }
                 activate-tab(id) => { root.activate-tab(id); }
                 close-tab(id) => { root.close-tab(id); }
-                tab-double-click(id) => { root.tab-double-click-requested(id); }
+                inline-rename-id <=> root.tab-inline-rename-id;
+                inline-rename-text <=> root.tab-inline-rename-text;
+                inline-rename-start(id) => { root.tab-inline-rename-start(id); }
+                inline-rename-commit(text) => { root.tab-inline-rename-commit(text); }
+                inline-rename-cancel() => { root.tab-inline-rename-cancel(); }
+                find-across-visible: root.find-across-visible;
+                find-across-rows: root.find-across-rows;
+                find-across-selected-index: root.find-across-selected-index;
+                find-across-row-selected(i) => { root.find-across-row-selected(i); }
+                rec-bar-active: root.rec-bar-active;
+                rec-bar-path-text: root.rec-bar-path-text;
+                rec-bar-stop() => { root.rec-bar-stop(); }
                 tab-context-menu-requested(id, title, x, y) => {
                     root.tab-context-menu-requested(id, title, x, y);
                 }
@@ -774,6 +842,7 @@ export component TerminalWorkspace inherits VerticalLayout {
             connect-target(target) => { root.quick-connect-connect-target(target); }
             copy-target(target) => { root.quick-connect-copy-target(target); }
             clear-history() => { root.quick-connect-clear-history(); }
+            clear-input() => { root.quick-connect-clear-input(); }
         }
     }
 }

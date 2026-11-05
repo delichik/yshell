@@ -167,6 +167,7 @@ export component QuickConnectPage inherits Rectangle {
     callback clear-history();
     /// 输入框逐键回传：宿主保存副本，投影回写时不会吃掉用户正在输入的内容。
     callback input-changed(string);
+    callback clear-input();
 
     /// Ctrl+O（及非终端焦点下的 Ctrl+L）与 File > Quick Connect：聚焦输入框并全选（设计 §3）。
     public function focus-quick-connect() {
@@ -240,6 +241,16 @@ export component QuickConnectPage inherits Rectangle {
                         text <=> root.input-text;
                         accepted => { root.submit(root.input-text); }
                         edited(text) => { root.input-changed(text); }
+                    }
+
+                    if root.input-text != "" : WinIconButton {
+                        icon: "close";
+                        accessible-name: @tr("Clear target");
+                        cross-axis-self-alignment: center;
+                        clicked => {
+                            root.input-text = "";
+                            root.clear-input();
+                        }
                     }
 
                     // 主操作只保留文案：图标+「连接」在输入行会显得过宽。

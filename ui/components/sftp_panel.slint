@@ -464,6 +464,15 @@ export component SftpPanel inherits Rectangle {
     callback copy-selection();
     callback cut-selection();
     callback paste-cross-pane();
+    // 远端 New Folder / Rename 就地输入（#19；chmod 仍走 compact 窗）。
+    in-out property <bool> remote-inline-new-folder-visible: false;
+    in-out property <string> remote-inline-new-folder-text: "";
+    in property <int> remote-inline-rename-index: -1;
+    in-out property <string> remote-inline-rename-text: "";
+    callback remote-inline-new-folder-commit(string);
+    callback remote-inline-new-folder-cancel();
+    callback remote-inline-rename-commit(string);
+    callback remote-inline-rename-cancel();
 
     background: transparent;
     // 内容按可用高度分配；极端窄高时不再画到卡片外（B9）。
@@ -722,6 +731,14 @@ export component SftpPanel inherits Rectangle {
                     drag-payload(key) => { return root.drag-remote-transfer(key); }
                     drop-on-row(index, data, action) => { root.drop-on-remote-row(index, data, action); }
                     drop-on-blank(data, action) => { root.drop-on-remote-blank(data, action); }
+                    inline-new-folder-visible <=> root.remote-inline-new-folder-visible;
+                    inline-new-folder-text <=> root.remote-inline-new-folder-text;
+                    inline-rename-index: root.remote-inline-rename-index;
+                    inline-rename-text <=> root.remote-inline-rename-text;
+                    inline-new-folder-commit(text) => { root.remote-inline-new-folder-commit(text); }
+                    inline-new-folder-cancel() => { root.remote-inline-new-folder-cancel(); }
+                    inline-rename-commit(text) => { root.remote-inline-rename-commit(text); }
+                    inline-rename-cancel() => { root.remote-inline-rename-cancel(); }
                 }
             }
 
@@ -773,6 +790,14 @@ export component SftpPanel inherits Rectangle {
                 drag-payload(key) => { return root.drag-remote-transfer(key); }
                 drop-on-row(index, data, action) => { root.drop-on-remote-row(index, data, action); }
                 drop-on-blank(data, action) => { root.drop-on-remote-blank(data, action); }
+                inline-new-folder-visible <=> root.remote-inline-new-folder-visible;
+                inline-new-folder-text <=> root.remote-inline-new-folder-text;
+                inline-rename-index: root.remote-inline-rename-index;
+                inline-rename-text <=> root.remote-inline-rename-text;
+                inline-new-folder-commit(text) => { root.remote-inline-new-folder-commit(text); }
+                inline-new-folder-cancel() => { root.remote-inline-new-folder-cancel(); }
+                inline-rename-commit(text) => { root.remote-inline-rename-commit(text); }
+                inline-rename-cancel() => { root.remote-inline-rename-cancel(); }
             }
 
             if root.show-transfers : SftpTransferDrawer {

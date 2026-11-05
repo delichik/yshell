@@ -141,6 +141,15 @@ export component SftpTabPage inherits Rectangle {
     callback paste-cross-pane();
     callback focus-requested();
 
+    in-out property <bool> remote-inline-new-folder-visible: false;
+    in-out property <string> remote-inline-new-folder-text: "";
+    in property <int> remote-inline-rename-index: -1;
+    in-out property <string> remote-inline-rename-text: "";
+    callback remote-inline-new-folder-commit(string);
+    callback remote-inline-new-folder-cancel();
+    callback remote-inline-rename-commit(string);
+    callback remote-inline-rename-cancel();
+
     SftpPanel {
         width: 100%;
         height: 100%;
@@ -222,5 +231,13 @@ export component SftpTabPage inherits Rectangle {
         copy-selection => { root.copy-selection(); }
         cut-selection => { root.cut-selection(); }
         paste-cross-pane => { root.paste-cross-pane(); }
+        remote-inline-new-folder-visible <=> root.remote-inline-new-folder-visible;
+        remote-inline-new-folder-text <=> root.remote-inline-new-folder-text;
+        remote-inline-rename-index: root.remote-inline-rename-index;
+        remote-inline-rename-text <=> root.remote-inline-rename-text;
+        remote-inline-new-folder-commit(text) => { root.remote-inline-new-folder-commit(text); }
+        remote-inline-new-folder-cancel() => { root.remote-inline-new-folder-cancel(); }
+        remote-inline-rename-commit(text) => { root.remote-inline-rename-commit(text); }
+        remote-inline-rename-cancel() => { root.remote-inline-rename-cancel(); }
     }
 }

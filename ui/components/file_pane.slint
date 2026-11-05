@@ -23,6 +23,7 @@ import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
 import { WinButton, WinIconButton, WinIconToggle, WinSpinner } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
+import { FilePaneInlineNewFolderRow } from "file_pane_inline_row.slint";
 
 // ---------------------------------------------------------------- 数据结构
 
@@ -385,6 +386,16 @@ export component FilePane inherits Rectangle {
     private property <bool> path-editing: false;
     /// 编辑中的路径文本（组件本地副本：后台投影不会把用户正在输入的内容覆盖掉）。
     private property <string> path-edit-text: "";
+
+    /// SFTP 远端：New Folder 占位行（就地输入，不另开对话框）。
+    in-out property <bool> inline-new-folder-visible: false;
+    in-out property <string> inline-new-folder-text: "";
+    in property <int> inline-rename-index: -1;
+    in-out property <string> inline-rename-text: "";
+    callback inline-new-folder-commit(string);
+    callback inline-new-folder-cancel();
+    callback inline-rename-commit(string);
+    callback inline-rename-cancel();
 
     /// 面包屑分隔符：前一段不是根 `/` 时显示。
     pure function shows-crumb-separator(index: int) -> bool {
@@ -865,15 +876,41 @@ export component FilePane inherits Rectangle {
                         height: parent.height;
                         clip: true;
 
+                        rename_input := WinTextInput {
+                            visible: index == root.inline-rename-index && !row.is-parent;
+                            width: parent.width;
+                            height: Theme.control-height-compact;
+                            y: (parent.height - self.height) / 2;
+                            text <=> root.inline-rename-text;
+                            accepted => {
+                                root.inline-rename-commit(root.inline-rename-text);
+                            }
+                        }
+
+                        rename_scope := FocusScope {
+                            visible: index == root.inline-rename-index && !row.is-parent;
+                            width: parent.width;
+                            height: parent.height;
+                            key-pressed(event) => {
+                                if (event.text == "\u{001b}") {
+                                    root.inline-rename-cancel();
+                                    return accept;
+                                }
+                                return reject;
+                            }
+                        }
+
                         // 测量完整名字的宽度（不显示）。
                         name_measure := Text {
+                            visible: index != root.inline-rename-index || row.is-parent;
                             text: row.name;
                             wrap: no-wrap;
                             opacity: 0;
                         }
 
                         Text {
-                            visible: name_measure.preferred-width <= parent.width;
+                            visible: (index != root.inline-rename-index || row.is-parent)
+                                && name_measure.preferred-width <= parent.width;
                             x: 0;
                             y: 0;
                             width: parent.width;
@@ -887,7 +924,8 @@ export component FilePane inherits Rectangle {
                         }
 
                         Text {
-                            visible: name_measure.preferred-width > parent.width;
+                            visible: (index != root.inline-rename-index || row.is-parent)
+                                && name_measure.preferred-width > parent.width;
                             x: 0;
                             y: 0;
                             width: parent.width;
@@ -1018,6 +1056,17 @@ export component FilePane inherits Rectangle {
                         }
                     }
                 }
+            }
+
+            // New Folder 占位行：叠在 ListView 顶上（不能放进虚拟化 for 循环）。
+            if root.inline-new-folder-visible : FilePaneInlineNewFolderRow {
+                x: list.content-x;
+                y: 0;
+                z: 2;
+                content-width: root.content-width;
+                edit-text <=> root.inline-new-folder-text;
+                committed(text) => { root.inline-new-folder-commit(text); }
+                canceled => { root.inline-new-folder-cancel(); }
             }
 
             // 框选矩形（画在行之上：按下点是一个角，可向四个方向伸展）。

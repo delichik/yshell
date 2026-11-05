@@ -183,14 +183,18 @@ export component TerminalView inherits Rectangle {
                         if (!root.interactive) {
                             return;
                         }
+                        // Move 事件的 button 通常是 none，不能跟 left 绑在一起，
+                        // 否则拖选过程中 selection-update 从不触发，松手才画出选区。
+                        if (event.kind == PointerEventKind.move) {
+                            if (self.pressed) {
+                                root.selection-update(self.mouse-x / 1px, self.mouse-y / 1px);
+                            }
+                            return;
+                        }
                         if (event.button == PointerEventButton.left) {
                             if (event.kind == PointerEventKind.down) {
                                 terminal_focus.focus();
                                 root.selection-begin(self.mouse-x / 1px, self.mouse-y / 1px);
-                            } else if (event.kind == PointerEventKind.move) {
-                                if (self.pressed) {
-                                    root.selection-update(self.mouse-x / 1px, self.mouse-y / 1px);
-                                }
                             } else if (event.kind == PointerEventKind.up) {
                                 root.selection-end(self.mouse-x / 1px, self.mouse-y / 1px);
                             }

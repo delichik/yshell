@@ -14,15 +14,12 @@ export component SyncInputBanner inherits Rectangle {
     in property <string> warn-text: "";
     /// 组是否非空（有成员时显示「结束全部同步」）。
     in property <bool> group-active: false;
-    /// 保留属性：宿主仍投影 paused，横幅不再提供 Pause 按钮。
-    in property <bool> paused: false;
     callback member-toggled();
-    callback pause-clicked();
     callback stop-clicked();
 
     height: 40px;
     vertical-stretch: 0;
-    background: root.member-enabled && !root.paused
+    background: root.member-enabled
         ? Theme.banner-warning-background
         : Theme.banner-info-background;
     border-width: 0px;
@@ -31,7 +28,7 @@ export component SyncInputBanner inherits Rectangle {
         y: parent.height - 2px;
         height: 2px;
         width: 100%;
-        background: root.member-enabled && !root.paused
+        background: root.member-enabled
             ? Theme.caution
             : Theme.layer-stroke;
     }
@@ -44,7 +41,7 @@ export component SyncInputBanner inherits Rectangle {
 
         Icon {
             name: "sync";
-            icon-color: root.member-enabled && !root.paused
+            icon-color: root.member-enabled
                 ? Theme.caution
                 : Theme.text-secondary;
             icon-size: Theme.icon-size-small;
@@ -53,7 +50,7 @@ export component SyncInputBanner inherits Rectangle {
 
         Text {
             text: @tr("MainWindow" => "Input Sync");
-            color: root.member-enabled && !root.paused
+            color: root.member-enabled
                 ? Theme.banner-warning-text
                 : Theme.text-primary;
             font-size: Theme.font-caption;
@@ -87,7 +84,7 @@ export component SyncInputBanner inherits Rectangle {
 
         Text {
             text: root.title-text;
-            color: root.member-enabled && !root.paused
+            color: root.member-enabled
                 ? Theme.banner-warning-text
                 : Theme.text-secondary;
             font-size: Theme.font-caption;

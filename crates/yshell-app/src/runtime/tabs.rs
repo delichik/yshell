@@ -8,6 +8,7 @@ use crate::{
 };
 use yshell_core::{CommandDispatcher, SessionCommand, SessionState};
 
+use super::session_icon::session_tree_icon_name;
 use super::*;
 
 /// 分屏时为第二 pane 再开同源会话的来源。
@@ -451,6 +452,7 @@ impl AppRuntime {
     }
 
     /// 标签是否可以直接重连（与右键菜单的 Reconnect 同一套判定）。
+    #[allow(dead_code)] // Menu enablement historically inlined; kept for callers/tests.
     pub(crate) fn tab_reconnectable(&self, tab_id: &str) -> bool {
         let Some(index) = self.tab_index(tab_id) else {
             return false;
@@ -540,21 +542,6 @@ impl AppRuntime {
             String::new(),
         );
         Ok(self.projection())
-    }
-
-    /// 双击标签：已断开/未连接的标签直接重连，其它情况复制同源 session。
-    ///
-    /// 断开的标签里没有可用的终端内容，复制它没有意义；用户双击的意图是
-    /// "把它连回去"。可重连的判定与右键菜单的 Reconnect 同一套。
-    pub fn tab_double_click(&mut self, tab_id: &str) -> AppResult<AppProjection> {
-        if self.tab_index(tab_id).is_none() {
-            return Err(AppError::new(format!("tab `{tab_id}` was not found")));
-        }
-        if self.tab_reconnectable(tab_id) {
-            // `reconnect_session_by_key` 会顺带激活该标签（与右键 Reconnect 一致）。
-            return self.reconnect_tab_session(tab_id);
-        }
-        self.duplicate_tab(tab_id)
     }
 
     /// 双击标签：复制同源 session（新开独立标签 + runtime）。
@@ -1544,6 +1531,7 @@ impl AppRuntime {
                     None => ("failed".to_owned(), String::new()),
                 };
                 let title = tab.custom_title.clone().unwrap_or(default_title);
+                let icon_name = self.tab_icon_name(tab);
                 TabData {
                     id: tab.tab_id.clone(),
                     title,
@@ -1558,6 +1546,8 @@ impl AppRuntime {
                         .is_some_and(|session_id| self.session_logging_active(session_id)),
                     sync_role_text,
                     unread: tab.unread,
+                    icon_name,
+                    ai_origin: tab.ai_origin,
                 }
             })
             .collect()
@@ -1595,6 +1585,8 @@ impl AppRuntime {
                 logging: false,
                 sync_role_text: String::new(),
                 unread: 0,
+                icon_name: "terminal".to_owned(),
+                ai_origin: false,
             };
         };
         let tab = &self.tabs[index];
@@ -1634,7 +1626,40 @@ impl AppRuntime {
                 .is_some_and(|session_id| self.session_logging_active(session_id)),
             sync_role_text,
             unread: tab.unread,
+            icon_name: self.tab_icon_name(tab),
+            ai_origin: tab.ai_origin,
         }
+    }
+
+    /// Mark a tab as MCP/AI-created (solid AI chip on the tab bar).
+    pub(crate) fn mark_tab_ai_origin(&mut self, tab_id: &str) {
+        if let Some(index) = self.tab_index(tab_id) {
+            self.tabs[index].ai_origin = true;
+        }
+    }
+
+    /// Session icon for tabs (`session.icon` presets; custom paths → `link` like the tree).
+    fn tab_icon_name(&self, tab: &TabEntry) -> String {
+        if tab.is_new_tab() {
+            return "plus".to_owned();
+        }
+        if tab.kind.mode_text() == "sftp" {
+            return "upload".to_owned();
+        }
+        let icon = tab.session_id().and_then(|session_id| {
+            let runtime = self.sessions.get(session_id)?;
+            if runtime.is_local() {
+                return Some("terminal");
+            }
+            match &runtime.source {
+                crate::session_runtime::SessionSource::SavedSession { profile_id } => self
+                    .config_document
+                    .find_session(profile_id)
+                    .and_then(|profile| profile.icon.as_deref()),
+                _ => None,
+            }
+        });
+        session_tree_icon_name(icon).to_owned()
     }
 
     pub(crate) fn session_has_active_connection(&self, session_id: &str) -> bool {
@@ -2435,6 +2460,8 @@ pub(crate) struct TabEntry {
     pub(crate) unread: u32,
     /// WP4：标签显示名覆盖（仅内存，会话生命周期内有效；不落盘）。
     pub(crate) custom_title: Option<String>,
+    /// MCP/AI 创建的连接（原型 AI chip；用户手动打开的标签为 false）。
+    pub(crate) ai_origin: bool,
     /// New Tab mode: per-tab Quick Connect input text (multiple New Tabs are
     /// independent, including when split across panes).
     pub(crate) quick_connect_input: String,
@@ -2449,6 +2476,7 @@ impl TabEntry {
             kind: TabKind::NewTab,
             unread: 0,
             custom_title: None,
+            ai_origin: false,
             quick_connect_input: String::new(),
             quick_connect_error: String::new(),
         }
@@ -2460,6 +2488,7 @@ impl TabEntry {
             kind: TabKind::Terminal { session_id },
             unread: 0,
             custom_title: None,
+            ai_origin: false,
             quick_connect_input: String::new(),
             quick_connect_error: String::new(),
         }
@@ -2471,6 +2500,7 @@ impl TabEntry {
             kind: TabKind::Sftp { session_id },
             unread: 0,
             custom_title: None,
+            ai_origin: false,
             quick_connect_input: String::new(),
             quick_connect_error: String::new(),
         }
@@ -2532,6 +2562,10 @@ pub struct TabData {
     pub sync_role_text: String,
     /// WP4：未读输出计数（角标；0 = 不显示）。
     pub unread: u32,
+    /// Slint preset icon name (`terminal` / `globe` / `link` / `plus` / `upload` / …).
+    pub icon_name: String,
+    /// MCP/AI 创建的标签（名称旁实心 AI 标志）。
+    pub ai_origin: bool,
 }
 
 /// N0：等待用户确认的关闭请求（单个或批量），确认后按 `tab_ids` 顺序逐个关闭。

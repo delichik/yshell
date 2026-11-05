@@ -17,4 +17,8 @@ export struct WorkspaceTab {
     sync_role_text: string,
     /// WP4：未读输出计数（0 = 不显示角标）。
     unread: int,
+    /// Session icon preset (`terminal` / `globe` / `link` / `plus` / `upload` / …).
+    icon_name: string,
+    /// MCP/AI-created tab — solid AI chip next to the title.
+    ai_origin: bool,
 }

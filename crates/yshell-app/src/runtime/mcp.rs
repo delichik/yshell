@@ -655,6 +655,8 @@ impl AppRuntime {
                     .find(|id| !before.contains(id))
                     .or_else(|| self.active_tab_id.clone())
                     .unwrap_or_default();
+                // D34 / tab-bar 原型：MCP 打开的工作区标签带 AI 标志。
+                self.mark_tab_ai_origin(&tab_id);
                 let info = self.mcp_connected_info_for_tab(&tab_id);
                 let session_id = info.as_ref().map(|s| s.session_id.clone());
                 let state = info
@@ -713,6 +715,7 @@ impl AppRuntime {
                     .find(|id| !before.contains(id))
                     .or_else(|| self.active_tab_id.clone())
                     .unwrap_or_default();
+                self.mark_tab_ai_origin(&new_tab);
                 let info = self.mcp_connected_info_for_tab(&new_tab);
                 IpcResponse::ok(
                     request.id,

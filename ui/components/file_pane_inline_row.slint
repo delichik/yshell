@@ -1,0 +1,50 @@
+// SFTP / 文件列表：新建文件夹占位行（就地输入，不另开对话框）。
+import { Theme } from "../theme.slint";
+import { Icon } from "basic/icons.slint";
+import { WinTextInput } from "basic/text_input.slint";
+
+export component FilePaneInlineNewFolderRow inherits Rectangle {
+    in-out property <string> edit-text: "";
+    in property <length> content-width;
+
+    callback committed(string);
+    callback canceled();
+
+    width: root.content-width;
+    height: Theme.row-height-list;
+    background: Theme.subtle-selected;
+
+    Icon {
+        name: "folder";
+        icon-color: Theme.accent;
+        icon-size: Theme.icon-size-small;
+        x: 0;
+        y: (parent.height - self.height) / 2;
+    }
+
+    edit_input := WinTextInput {
+        x: Theme.icon-size-small + Theme.spacing-8;
+        width: parent.width - self.x - Theme.spacing-8;
+        height: Theme.control-height-compact;
+        y: (parent.height - self.height) / 2;
+        text <=> root.edit-text;
+        placeholder-text: "new-folder";
+        accepted => { root.committed(root.edit-text); }
+    }
+
+    focus_scope := FocusScope {
+        width: parent.width;
+        height: parent.height;
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.canceled();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    init => {
+        edit_input.focus-input();
+    }
+}

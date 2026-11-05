@@ -14,7 +14,7 @@
 | 0 | 基线修复、差距审计、计划与任务板 | ✅ 完成 | 2026-11-03 · `fe7f037`、`f530299` |
 | 1 | 配置 / runtime 基础层（外观、终端交互、SFTP、登录脚本、文件夹继承） | ✅ 完成 | 2026-11-03 · `c6d1102`、`edb0243` |
 | 2 | 页面与弹窗：Settings + 主密码、Session Editor、管理器、剩余弹窗、控件/表单/预览规范 | ✅ 完成（待用户核验） | 2026-11-05 · `2d26a06` … `2fbc72d`（#2–#16） |
-| 3 | 主壳菜单/快捷键/sync banner、停靠面板、工作区 | 🔄 进行中 | #17 `de3aef8`、#18 `1125e6a` 已提交；#19 本地进行中（未提交） |
+| 3 | 主壳菜单/快捷键/sync banner、停靠面板、工作区 | 🔍 待用户核验 | #17 `de3aef8`、#18 `1125e6a` 已提交；#19 见 §4.1 |
 | 4 | i18n 尾部、遗留清理、文档同步 | ⬜ 未开始 | — |
 | 5 | 全量验收（门禁 + 用户逐窗核验 + 证据归档） | ⬜ 未开始 | — |
 
@@ -83,12 +83,13 @@ $env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
 | 16 | 剩余弹窗 B：About / Logging / SFTP Conflict / SFTP Properties 按原型收口 | ✅ | `6635820` |
 | 17 | 波 3 · 主壳：6 个一级菜单（补 Tools）、Session 菜单项、`Ctrl+Shift+S`、`F11`、Full Screen/Focus Mode、状态栏 UTF-8、sync banner | 🔍 待用户核验 | `de3aef8`（含修正 `5f7cbb2`/`034f3d3`/`ae0abba`/`9150b1e`/`a7f72ad`/`64da296`） |
 | 18 | 波 3 · 停靠面板：Sessions 图标/原地改名/右键项/New Folder 禁用；Transfers 批量 Pause/Resume All；Tunnels `+`；dock 宽度 | 🔍 待用户核验 | `1125e6a` |
+| 19 | 波 3 · 工作区：标签图标/原地改名/AI 标志；Find Across；REC 底条；QC Clear；SFTP 原地 New Folder/Rename + chmod 入口；SSH PTY 视口初尺寸；Don't ask again 勾选布局（**无**分屏叶数硬上限、**无** N9 Pause / pane Receive） | 🔍 待用户核验 | （提交后回填） |
 
 ### 4.2 进行中（未提交）
 
 | # | 事项 | 状态 | 当前进度 |
 |---|---|---|---|
-| 19 | 波 3 · 工作区：标签图标/原地改名；Find Across；REC 底条；QC Clear；SFTP 原地 New Folder/Rename + chmod 入口（**无**分屏叶数硬上限、**无** N9 Pause / pane Receive） | 🔄 | 本地改动：`runtime/keys.rs`（Find Across）、新 `ui/components/find_across_panel.slint`、`workspace_tab_bar/item/model`、`main_window.slint`、原型/文档同步（terminal/split/sessions、status/contract）；尚未提交 |
+| — | （无） | — | — |
 
 ### 4.3 未完成（待做）
 
@@ -117,13 +118,13 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 | `sftp-chmod/` | ✅/🔍 | 窗已注册并接入 SFTP 行右键，待核验 |
 | `main-shell/`（index、tool-dock、menu、status、快捷键） | 🔍 | 波 3 #17：菜单/快捷键/全屏/Focus/UTF-8/banner；待核验 |
 | `main-shell/panels/`（sessions/transfers/tunnels/commands） | 🔍 | 波 3 #18 已实现，待用户核验 |
-| `main-shell/workspace/`（tab-bar/terminal/sftp/quick-connect/split/sync-input） | 🔄/⬜ | banner/#17 已齐；split **无**叶数硬上限；#19 余项见上表 |
+| `main-shell/workspace/`（tab-bar/terminal/sftp/quick-connect/split/sync-input） | 🔍 | #19 工作区项已实现；split **无**叶数硬上限；待用户核验 |
 | `forms.html`、`annotations.html`、`index.html`、`_form-audit.html` | — | 设计参考页，非应用页面 |
 
 ## 5. 剩余顺序（按用户「逐项核验」节奏）
 
 1. **第 2 波已全部完成**：#0–#16 均已本地提交（`fe7f037` … `ee9c807` / `2fbc72d`）。
-2. **第 3 波**：#17 / #18 已本地提交待核验；#19 按 scrub 后的原型继续（不含分屏上限 4 / N9 Pause·Receive）。
+2. **第 3 波**：#17 / #18 / #19 已本地提交，待用户核验（不含分屏上限 4 / N9 Pause·Receive）。
 3. 最后 #20–#21 清理 + #22 验收。
 4. **设计权威**：仅 `docs/prototypes/**` 及其文档为设计稿；交互契约 / archive 仅参考（见根 `AGENTS.md`）。
 
@@ -182,9 +183,9 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 - 证据：`D:\NewSpace\ui-evidence\wiring\`（form-consistency / preview-switch-closeout / manager-forms-closeout / dialogs-closeout-a/b 等）与 `wave2\*` 截图/日志。
 - 遗留：SFTP 工具条 `⋯ More` 菜单（权限入口暂仅行右键）；开源许可清单按平台 target 生成；Settings 窗口尺寸待用户确认；Login Wait 子窗尺寸待定。
 
-### 第 3 波 · 进行中（2026-11-05）
+### 第 3 波 · 完成（2026-11-05，待用户核验）
 
 - #17 主壳（待用户核验）：`de3aef8` 主壳菜单/快捷键/F11/Focus/UTF-8/sync banner/dock 260·280；随后修正 `5f7cbb2`、`034f3d3`、`ae0abba`、`9150b1e`、`a7f72ad`、`64da296`。按用户裁定：sync 横幅改为 On/Off 开关 + End all sync，**无 Pause/Visible**，AI 写入前自动 Off；`main-shell` 设计稿已同步。
 - #18 停靠面板（待用户核验）：`1125e6a` Sessions 图标/原地改名/右键/空白处 New Folder 禁用；Transfers Pause/Resume All；Tunnels `+`，Start/Stop 保持禁用。
-- #19 工作区（进行中，未提交）：Find Across（`runtime/keys.rs` 查询/跳转 + 新 `ui/components/find_across_panel.slint`）、标签栏/标签项（图标/原地改名）、`main_window.slint` 接线；原型与文档同步（`terminal.html`/`split.html`/`sessions.html`、status/契约、AGENTS 文档权威）。
+- #19 工作区（待用户核验）：标签图标/原地改名/AI 标志；Find Across；REC 底条；QC Clear；SFTP 原地 New Folder/Rename + chmod；SSH 开壳用视口尺寸（避免 MOTD 顶行进 scrollback）；`WinCheckBox` Don't ask again 布局；原型 scrub（无分屏叶数硬上限 / 无 N9 Pause·Receive）。提交号见 §4.1。
 - 用户裁定（2026-11-05）：设计稿只以 `docs/prototypes/` 为准；scrub 分屏「最多 4 叶」、N9 Pause/Visible、Favorite 禁用等愿景条款写入原型/文档，不作为实现必做项。
