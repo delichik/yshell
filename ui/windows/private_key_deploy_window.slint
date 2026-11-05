@@ -6,6 +6,7 @@
 
 import { Theme } from "../theme.slint";
 import { WinButton, WinComboBox, WinScrollIndicator } from "../components/basic/controls.slint";
+import { FormHint, FormRow } from "../components/basic/forms.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component PrivateKeyDeployWindow inherits Window {
@@ -53,32 +54,28 @@ export component PrivateKeyDeployWindow inherits Window {
         VerticalLayout {
             width: root.body-width;
             height: root.body-height;
-            spacing: Theme.spacing-12;
+            spacing: Theme.form-row-gap;
 
-            Text {
-                text: @tr("Target session");
-                color: Theme.text-secondary;
-                font-size: Theme.font-body;
+            FormRow {
+                label: @tr("Target session");
+
+                WinComboBox {
+                    width: Theme.form-field-width;
+                    model: root.target-options;
+                    current-index <=> root.target-index;
+                    selected(index) => { root.select-target(index); }
+                }
             }
 
-            WinComboBox {
-                model: root.target-options;
-                current-index <=> root.target-index;
-                selected(index) => { root.select-target(index); }
-            }
-
-            if root.target-options.length == 0 : Text {
-                text: @tr("No live SSH session is available. Open an SSH session, then deploy again.");
-                color: Theme.critical;
-                font-size: Theme.font-caption;
-                wrap: word-wrap;
-            }
-
-            Text {
+            FormHint {
                 text: root.summary-text;
-                color: Theme.text-tertiary;
-                font-size: Theme.font-caption;
-                wrap: word-wrap;
+                indent: false;
+            }
+
+            if root.target-options.length == 0 : FormHint {
+                text: @tr("No live SSH session is available. Open an SSH session, then deploy again.");
+                hint-color: Theme.critical;
+                indent: false;
             }
 
             Rectangle {
@@ -119,11 +116,10 @@ export component PrivateKeyDeployWindow inherits Window {
                 }
             }
 
-            if root.error-text != "" : Text {
+            if root.error-text != "" : FormHint {
                 text: root.error-text;
-                color: Theme.critical;
-                font-size: Theme.font-caption;
-                wrap: word-wrap;
+                hint-color: Theme.critical;
+                indent: false;
             }
 
             Rectangle { vertical-stretch: 1; }

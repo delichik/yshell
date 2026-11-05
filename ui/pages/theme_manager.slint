@@ -17,6 +17,7 @@
 import { Theme } from "../theme.slint";
 import { WinButton, WinIconButton, WinComboBox, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
+import { FormHint, FormRow } from "../components/basic/forms.slint";
 import { ThemeEditor } from "../components/theme_editor.slint";
 import { TerminalPreview } from "../components/terminal_preview.slint";
 import { MenuPopup, MenuEntry } from "../components/menu_popup.slint";
@@ -132,28 +133,7 @@ component ThemeListRow inherits Rectangle {
     }
 }
 
-/// 字体表单行：左标签 + 右控件。
-component FontFieldRow inherits HorizontalLayout {
-    in property <string> label: "";
-    spacing: Theme.spacing-12;
-    cross-axis-alignment: start;
-
-    Text {
-        text: root.label;
-        width: Theme.form-label-width-medium;
-        color: Theme.text-secondary;
-        font-size: Theme.font-body;
-        vertical-alignment: center;
-        wrap: no-wrap;
-    }
-
-    HorizontalLayout {
-        horizontal-stretch: 1;
-        spacing: Theme.spacing-8;
-        cross-axis-alignment: center;
-        @children
-    }
-}
+/// 字体表单行由共享 `forms.slint` 提供（FormRow / FormHint）。
 
 export component ThemeManagerPage inherits Rectangle {
     in property <bool> open: false;
@@ -397,15 +377,15 @@ export component ThemeManagerPage inherits Rectangle {
                             content-height: editor-body.preferred-height;
 
                             editor-body := VerticalLayout {
-                                spacing: Theme.spacing-12;
+                                spacing: Theme.form-row-gap;
                                 padding: Theme.spacing-12;
 
                                 // --- Font（family / size / fallback）-----------
-                                FontFieldRow {
+                                FormRow {
                                     label: @tr("Font family");
 
                                     HorizontalLayout {
-                                        horizontal-stretch: 1;
+                                        width: Theme.form-field-width;
                                         spacing: Theme.spacing-8;
 
                                         WinComboBox {
@@ -431,7 +411,7 @@ export component ThemeManagerPage inherits Rectangle {
                                     }
                                 }
 
-                                FontFieldRow {
+                                FormRow {
                                     label: @tr("Font size");
 
                                     WinTextInput {
@@ -441,21 +421,17 @@ export component ThemeManagerPage inherits Rectangle {
                                         enabled: root.fonts-enabled;
                                         edited => { root.update-font-size(self.text); }
                                     }
-
-                                    Text {
-                                        text: @tr("6–72");
-                                        color: Theme.text-tertiary;
-                                        font-size: Theme.font-caption;
-                                        vertical-alignment: center;
-                                        wrap: no-wrap;
-                                    }
                                 }
 
-                                FontFieldRow {
+                                FormHint {
+                                    text: @tr("6–72");
+                                }
+
+                                FormRow {
                                     label: @tr("Fallback");
 
                                     HorizontalLayout {
-                                        horizontal-stretch: 1;
+                                        width: Theme.form-field-width;
                                         spacing: Theme.spacing-8;
 
                                         WinTextInput {
@@ -478,11 +454,9 @@ export component ThemeManagerPage inherits Rectangle {
                                     }
                                 }
 
-                                if root.selected-builtin : Text {
+                                if root.selected-builtin : FormHint {
                                     text: @tr("Built-in styles are read-only. Clone this style to make a custom copy.");
-                                    color: Theme.text-tertiary;
-                                    font-size: Theme.font-caption;
-                                    wrap: word-wrap;
+                                    indent: false;
                                 }
 
                                 // --- Colors / ANSI（既有 ThemeEditor）-----------
@@ -505,11 +479,9 @@ export component ThemeManagerPage inherits Rectangle {
                                     update-ansi(index, hex) => { root.update-theme-editor-ansi(index, hex); }
                                 }
 
-                                if !root.theme-editor-open && !root.selected-builtin : Text {
+                                if !root.theme-editor-open && !root.selected-builtin : FormHint {
                                     text: @tr("Select a custom style to edit its colors, or right-click a built-in style to clone it.");
-                                    color: Theme.text-tertiary;
-                                    font-size: Theme.font-caption;
-                                    wrap: word-wrap;
+                                    indent: false;
                                 }
                             }
                         }

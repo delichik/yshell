@@ -6,6 +6,7 @@
 import { Theme } from "../theme.slint";
 import { WinButton, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
+import { FormHint, FormRow } from "../components/basic/forms.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component PrivateKeyExportWindow inherits Window {
@@ -50,84 +51,79 @@ export component PrivateKeyExportWindow inherits Window {
         VerticalLayout {
             width: root.body-width;
             height: root.body-height;
-            spacing: Theme.spacing-12;
+            spacing: Theme.form-row-gap;
 
-            Text {
-                text: @tr("Public key");
-                color: Theme.text-secondary;
-                font-size: Theme.font-body;
-            }
+            FormRow {
+                label: @tr("Public key");
 
-            Rectangle {
-                height: 140px;
-                clip: true;
-                background: Theme.control-fill;
-                border-radius: Theme.radius-control;
-                border-width: 1px;
-                border-color: Theme.control-stroke;
+                Rectangle {
+                    width: Theme.form-field-width;
+                    height: 140px;
+                    clip: true;
+                    background: Theme.control-fill;
+                    border-radius: Theme.radius-control;
+                    border-width: 1px;
+                    border-color: Theme.control-stroke;
 
-                pubkey-scroll := Flickable {
-                    width: parent.width;
-                    height: parent.height;
-                    interactive: true;
-                    content-width: self.width;
-                    content-height: pubkey-block.preferred-height + 20px;
+                    pubkey-scroll := Flickable {
+                        width: parent.width;
+                        height: parent.height;
+                        interactive: true;
+                        content-width: self.width;
+                        content-height: pubkey-block.preferred-height + 20px;
 
-                    pubkey-block := Text {
-                        x: Theme.spacing-8;
-                        y: Theme.spacing-8;
-                        width: parent.width - 2 * Theme.spacing-8;
-                        text: root.public-key-text;
-                        color: Theme.text-secondary;
-                        font-size: Theme.font-caption;
-                        font-family: Theme.font-mono;
-                        wrap: word-wrap;
+                        pubkey-block := Text {
+                            x: Theme.spacing-8;
+                            y: Theme.spacing-8;
+                            width: parent.width - 2 * Theme.spacing-8;
+                            text: root.public-key-text;
+                            color: Theme.text-secondary;
+                            font-size: Theme.font-caption;
+                            font-family: Theme.font-mono;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    WinScrollIndicator {
+                        x: parent.width - self.width - Theme.spacing-4;
+                        y: Theme.spacing-4;
+                        height: parent.height - 2 * Theme.spacing-4;
+                        viewport-position: pubkey-scroll.content-y;
+                        content-extent: pubkey-scroll.content-height;
+                        viewport-extent: pubkey-scroll.height;
+                        thumb-min-length: 24px;
                     }
                 }
-
-                WinScrollIndicator {
-                    x: parent.width - self.width - Theme.spacing-4;
-                    y: Theme.spacing-4;
-                    height: parent.height - 2 * Theme.spacing-4;
-                    viewport-position: pubkey-scroll.content-y;
-                    content-extent: pubkey-scroll.content-height;
-                    viewport-extent: pubkey-scroll.height;
-                    thumb-min-length: 24px;
-                }
             }
 
-            Text {
-                text: @tr("Destination");
-                color: Theme.text-secondary;
-                font-size: Theme.font-body;
-            }
+            FormRow {
+                label: @tr("Destination");
 
-            HorizontalLayout {
-                spacing: Theme.spacing-8;
-                cross-axis-alignment: center;
-
-                WinTextInput {
+                HorizontalLayout {
                     horizontal-stretch: 1;
-                    text <=> root.path-text;
-                    placeholder-text: @tr("Destination file");
-                    font-family: Theme.font-mono;
-                    font-size: Theme.font-caption;
-                    edited => { root.update-path(self.text); }
-                }
+                    spacing: Theme.spacing-8;
 
-                WinIconButton {
-                    icon: "file";
-                    accessible-name: @tr("Browse");
-                    tooltip-text: @tr("Browse");
-                    clicked => { root.browse-file(); }
+                    WinTextInput {
+                        horizontal-stretch: 1;
+                        text <=> root.path-text;
+                        placeholder-text: @tr("Destination file");
+                        font-family: Theme.font-mono;
+                        font-size: Theme.font-caption;
+                        edited => { root.update-path(self.text); }
+                    }
+
+                    WinIconButton {
+                        icon: "file";
+                        accessible-name: @tr("Browse");
+                        tooltip-text: @tr("Browse");
+                        clicked => { root.browse-file(); }
+                    }
                 }
             }
 
-            if root.error-text != "" : Text {
+            if root.error-text != "" : FormHint {
                 text: root.error-text;
-                color: Theme.critical;
-                font-size: Theme.font-caption;
-                wrap: word-wrap;
+                hint-color: Theme.critical;
             }
 
             Rectangle { vertical-stretch: 1; }

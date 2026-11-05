@@ -7,30 +7,8 @@
 import { Theme } from "../theme.slint";
 import { WinButton, WinIconButton } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
+import { FormHint, FormRow } from "../components/basic/forms.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
-
-/// 表单行：左标签 + 右控件。
-component ImportFormRow inherits HorizontalLayout {
-    in property <string> label: "";
-    spacing: Theme.spacing-12;
-    cross-axis-alignment: start;
-
-    Text {
-        text: root.label;
-        width: Theme.form-label-width-medium;
-        color: Theme.text-secondary;
-        font-size: Theme.font-body;
-        vertical-alignment: center;
-        wrap: no-wrap;
-    }
-
-    HorizontalLayout {
-        horizontal-stretch: 1;
-        spacing: Theme.spacing-8;
-        cross-axis-alignment: center;
-        @children
-    }
-}
 
 export component PrivateKeyImportWindow inherits Window {
     title: @tr("Import Private Key");
@@ -115,45 +93,50 @@ export component PrivateKeyImportWindow inherits Window {
                     content-height: form-body.preferred-height;
 
                     form-body := VerticalLayout {
-                        spacing: Theme.spacing-12;
+                        spacing: Theme.form-row-gap;
 
-                        ImportFormRow {
+                        FormRow {
                             label: @tr("Label");
 
                             WinTextInput {
-                                horizontal-stretch: 1;
+                                width: Theme.form-field-width;
                                 text <=> root.label-text;
                                 placeholder-text: @tr("Optional · defaults to the key comment");
                                 edited => { root.update-label(self.text); }
                             }
                         }
 
-                        if root.tab == 0 : ImportFormRow {
+                        if root.tab == 0 : FormRow {
                             label: @tr("Key file");
 
-                            WinTextInput {
+                            HorizontalLayout {
                                 horizontal-stretch: 1;
-                                text <=> root.path-text;
-                                placeholder-text: @tr("Path to private key");
-                                font-family: Theme.font-mono;
-                                font-size: Theme.font-caption;
-                                edited => { root.update-path(self.text); }
-                            }
+                                spacing: Theme.spacing-8;
 
-                            WinIconButton {
-                                icon: "file";
-                                accessible-name: @tr("Browse");
-                                tooltip-text: @tr("Browse");
-                                clicked => { root.browse-file(); }
+                                WinTextInput {
+                                    horizontal-stretch: 1;
+                                    text <=> root.path-text;
+                                    placeholder-text: @tr("Path to private key");
+                                    font-family: Theme.font-mono;
+                                    font-size: Theme.font-caption;
+                                    edited => { root.update-path(self.text); }
+                                }
+
+                                WinIconButton {
+                                    icon: "file";
+                                    accessible-name: @tr("Browse");
+                                    tooltip-text: @tr("Browse");
+                                    clicked => { root.browse-file(); }
+                                }
                             }
                         }
 
-                        if root.tab == 1 : ImportFormRow {
+                        if root.tab == 1 : FormRow {
                             label: @tr("Private key");
 
                             Rectangle {
-                                horizontal-stretch: 1;
-                                height: 200px;
+                                width: Theme.form-field-width;
+                                height: 160px;
                                 clip: true;
                                 background: Theme.control-fill;
                                 border-radius: Theme.radius-control;
@@ -176,11 +159,11 @@ export component PrivateKeyImportWindow inherits Window {
                             }
                         }
 
-                        ImportFormRow {
+                        FormRow {
                             label: @tr("Passphrase");
 
                             WinTextInput {
-                                horizontal-stretch: 1;
+                                width: Theme.form-field-width;
                                 text <=> root.passphrase-text;
                                 placeholder-text: @tr("If the key is encrypted");
                                 input-type: password;
@@ -188,11 +171,9 @@ export component PrivateKeyImportWindow inherits Window {
                             }
                         }
 
-                        if root.error-text != "" : Text {
+                        if root.error-text != "" : FormHint {
                             text: root.error-text;
-                            color: Theme.critical;
-                            font-size: Theme.font-caption;
-                            wrap: word-wrap;
+                            hint-color: Theme.critical;
                         }
                     }
                 }

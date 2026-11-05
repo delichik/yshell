@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2026-11-04 15:07+0000\n"
+"POT-Creation-Date: 2026-11-05 06:06+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -807,29 +807,29 @@ msgctxt "FilePane"
 msgid "{0} · {1} selected · {2}"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:104
+#: ui/components/host_key_dialog.slint:81
 msgctxt "HostKeyDialog"
 msgid "Host key changed for {0}."
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:106
+#: ui/components/host_key_dialog.slint:83
 msgctxt "HostKeyDialog"
 msgid "First-time host key for {0}."
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:107
+#: ui/components/host_key_dialog.slint:84
 msgctxt "HostKeyDialog"
 msgid "Verify the host key before continuing."
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:115
+#: ui/components/host_key_dialog.slint:92
 msgctxt "HostKeyDialog"
 msgid ""
 "Compare the fingerprint with a trusted source, then trust once or save it "
 "for next time."
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:125
+#: ui/components/host_key_dialog.slint:102
 msgctxt "HostKeyDialog"
 msgid ""
 "The presented key does not match the stored key. This may indicate a man-in-"
@@ -837,205 +837,206 @@ msgid ""
 "only if you verified the new key elsewhere."
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:133
+#: ui/components/host_key_dialog.slint:110
 msgctxt "HostKeyDialog"
 msgid "Known hosts"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:138
+#: ui/components/host_key_dialog.slint:116
 msgctxt "HostKeyDialog"
 msgid "Expected"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:139
-#: ui/components/host_key_dialog.slint:139
+#: ui/components/host_key_dialog.slint:117
+#: ui/components/host_key_dialog.slint:117
 msgctxt "HostKeyDialog"
 msgid "{0} {1}"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:143
+#: ui/components/host_key_dialog.slint:122
 msgctxt "HostKeyDialog"
 msgid "Presented"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:143
+#: ui/components/host_key_dialog.slint:122
 msgctxt "HostKeyDialog"
 msgid "Fingerprint"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:176
+#: ui/components/host_key_dialog.slint:157
 msgctxt "HostKeyDialog"
 msgid "Cancel Connection"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:181
+#: ui/components/host_key_dialog.slint:162
 msgctxt "HostKeyDialog"
 msgid "Trust Once"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:186
+#: ui/components/host_key_dialog.slint:167
 msgctxt "HostKeyDialog"
 msgid "Copy Details"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:192
+#: ui/components/host_key_dialog.slint:173
 msgctxt "HostKeyDialog"
 msgid "Replace and Trust"
 msgstr ""
 
-#: ui/components/host_key_dialog.slint:193
+#: ui/components/host_key_dialog.slint:174
 msgctxt "HostKeyDialog"
 msgid "Trust and Save"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:137
+#: ui/components/logging_dialog.slint:116
 msgctxt "LoggingDialog"
 msgid "Session: {0}"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:183
+#: ui/components/logging_dialog.slint:162
 msgctxt "LoggingDialog"
 msgid "Recording terminal output to this file:"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:213
+#: ui/components/logging_dialog.slint:192
 msgctxt "LoggingDialog"
 msgid "Open File"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:221
+#: ui/components/logging_dialog.slint:200
 msgctxt "LoggingDialog"
 msgid "Open Folder"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:235
+#: ui/components/logging_dialog.slint:214
 msgctxt "LoggingDialog"
 msgid "Destination"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:242
+#: ui/components/logging_dialog.slint:221
 msgctxt "LoggingDialog"
 msgid "Save to"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:251
+#: ui/components/logging_dialog.slint:232
 msgctxt "LoggingDialog"
 msgid "Log folder"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:256
+#: ui/components/logging_dialog.slint:237
 msgctxt "LoggingDialog"
 msgid "Browse…"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:264
+#: ui/components/logging_dialog.slint:246
 msgctxt "LoggingDialog"
 msgid "Default: the last used folder, or the configured logs directory."
 msgstr ""
 
-#: ui/components/logging_dialog.slint:273
+#: ui/components/logging_dialog.slint:250
 msgctxt "LoggingDialog"
 msgid "File name"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:279
+#: ui/components/logging_dialog.slint:257
 msgctxt "LoggingDialog"
 msgid "session-{{timestamp}}.log"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:292
+#: ui/components/logging_dialog.slint:268
 msgctxt "LoggingDialog"
 msgid ""
 "This file already exists. Confirm to overwrite it, or choose another name."
 msgstr ""
 
-#: ui/components/logging_dialog.slint:302
-#: ui/components/logging_dialog.slint:302
-#: ui/components/logging_dialog.slint:302
-msgctxt "LoggingDialog"
-msgid "On"
-msgstr ""
-
-#: ui/components/logging_dialog.slint:302
-#: ui/components/logging_dialog.slint:302
-#: ui/components/logging_dialog.slint:302
-msgctxt "LoggingDialog"
-msgid "Off"
-msgstr ""
-
-#: ui/components/logging_dialog.slint:303
+#: ui/components/logging_dialog.slint:274
+#: ui/components/logging_dialog.slint:274
 msgctxt "LoggingDialog"
 msgid "Overwrite the existing file"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:309
+#: ui/components/logging_dialog.slint:277
+#: ui/components/logging_dialog.slint:277
+#: ui/components/logging_dialog.slint:277
+msgctxt "LoggingDialog"
+msgid "On"
+msgstr ""
+
+#: ui/components/logging_dialog.slint:277
+#: ui/components/logging_dialog.slint:277
+#: ui/components/logging_dialog.slint:277
+msgctxt "LoggingDialog"
+msgid "Off"
+msgstr ""
+
+#: ui/components/logging_dialog.slint:285
 msgctxt "LoggingDialog"
 msgid "Options"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:316
+#: ui/components/logging_dialog.slint:292
 msgctxt "LoggingDialog"
 msgid "Format"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:323
+#: ui/components/logging_dialog.slint:299
 msgctxt "LoggingDialog"
 msgid "Sanitized (plain text)"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:329
+#: ui/components/logging_dialog.slint:305
 msgctxt "LoggingDialog"
 msgid "Raw (with ANSI escapes)"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:337
-#: ui/components/logging_dialog.slint:337
+#: ui/components/logging_dialog.slint:313
+#: ui/components/logging_dialog.slint:313
 msgctxt "LoggingDialog"
 msgid "Timestamp"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:348
-#: ui/components/logging_dialog.slint:348
+#: ui/components/logging_dialog.slint:324
+#: ui/components/logging_dialog.slint:324
 msgctxt "LoggingDialog"
 msgid "Record input"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:365
+#: ui/components/logging_dialog.slint:341
 msgctxt "LoggingDialog"
 msgid ""
 "Local input is written to the log in plain text, including passwords you "
 "type interactively. Confirm before enabling."
 msgstr ""
 
-#: ui/components/logging_dialog.slint:368
-#: ui/components/logging_dialog.slint:368
+#: ui/components/logging_dialog.slint:344
+#: ui/components/logging_dialog.slint:344
 msgctxt "LoggingDialog"
 msgid "I understand local input will be recorded"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:384
+#: ui/components/logging_dialog.slint:358
 msgctxt "LoggingDialog"
 msgid ""
 "Logging starts now: existing scrollback is not written; new output is "
 "recorded."
 msgstr ""
 
-#: ui/components/logging_dialog.slint:418
+#: ui/components/logging_dialog.slint:389
 msgctxt "LoggingDialog"
 msgid "Close"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:418
+#: ui/components/logging_dialog.slint:389
 msgctxt "LoggingDialog"
 msgid "Cancel"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:423
+#: ui/components/logging_dialog.slint:394
 msgctxt "LoggingDialog"
 msgid "Stop Logging"
 msgstr ""
 
-#: ui/components/logging_dialog.slint:429
+#: ui/components/logging_dialog.slint:400
 msgctxt "LoggingDialog"
 msgid "Start Logging"
 msgstr ""
@@ -1802,67 +1803,67 @@ msgctxt "TerminalView"
 msgid "Close find bar"
 msgstr ""
 
-#: ui/components/theme_editor.slint:116
+#: ui/components/theme_editor.slint:98
 msgctxt "ThemeEditor"
 msgid "Theme (read-only)"
 msgstr ""
 
-#: ui/components/theme_editor.slint:116
+#: ui/components/theme_editor.slint:98
 msgctxt "ThemeEditor"
 msgid "Edit theme"
 msgstr ""
 
-#: ui/components/theme_editor.slint:123
+#: ui/components/theme_editor.slint:105
 msgctxt "ThemeEditor"
 msgid "Name"
 msgstr ""
 
-#: ui/components/theme_editor.slint:135
+#: ui/components/theme_editor.slint:116
 msgctxt "ThemeEditor"
 msgid "Theme id: {0}"
 msgstr ""
 
-#: ui/components/theme_editor.slint:159
+#: ui/components/theme_editor.slint:139
 msgctxt "ThemeEditor"
 msgid "Foreground"
 msgstr ""
 
-#: ui/components/theme_editor.slint:169
+#: ui/components/theme_editor.slint:149
 msgctxt "ThemeEditor"
 msgid "Background"
 msgstr ""
 
-#: ui/components/theme_editor.slint:179
+#: ui/components/theme_editor.slint:159
 msgctxt "ThemeEditor"
 msgid "Cursor"
 msgstr ""
 
-#: ui/components/theme_editor.slint:189
+#: ui/components/theme_editor.slint:169
 msgctxt "ThemeEditor"
 msgid "Selection"
 msgstr ""
 
-#: ui/components/theme_editor.slint:199
+#: ui/components/theme_editor.slint:179
 msgctxt "ThemeEditor"
 msgid "ANSI colors"
 msgstr ""
 
-#: ui/components/theme_editor.slint:221
+#: ui/components/theme_editor.slint:204
 msgctxt "ThemeEditor"
 msgid "Clone to edit"
 msgstr ""
 
-#: ui/components/theme_editor.slint:226
+#: ui/components/theme_editor.slint:209
 msgctxt "ThemeEditor"
 msgid "Save Theme"
 msgstr ""
 
-#: ui/components/theme_editor.slint:232
+#: ui/components/theme_editor.slint:215
 msgctxt "ThemeEditor"
 msgid "Close"
 msgstr ""
 
-#: ui/components/theme_editor.slint:232
+#: ui/components/theme_editor.slint:215
 msgctxt "ThemeEditor"
 msgid "Discard Changes"
 msgstr ""
@@ -2119,93 +2120,93 @@ msgctxt "FolderEditor"
 msgid "Save"
 msgstr ""
 
-#: ui/pages/host_keys.slint:69
+#: ui/pages/host_keys.slint:70
 msgctxt "HostGroupHeader"
 msgid "{0} keys"
 msgstr ""
 
-#: ui/pages/host_keys.slint:212
+#: ui/pages/host_keys.slint:187
 msgctxt "HostKeysPage"
 msgid ""
 "No host keys have been saved yet. They are recorded when you trust a host."
 msgstr ""
 
-#: ui/pages/host_keys.slint:259
+#: ui/pages/host_keys.slint:234
 msgctxt "HostKeysPage"
 msgid "Edit"
 msgstr ""
 
-#: ui/pages/host_keys.slint:273
+#: ui/pages/host_keys.slint:248
 msgctxt "HostKeysPage"
 msgid "Remove"
 msgstr ""
 
-#: ui/pages/host_keys.slint:317 ui/pages/host_keys.slint:343
+#: ui/pages/host_keys.slint:292 ui/pages/host_keys.slint:318
 msgctxt "HostKeysPage"
 msgid "Add"
 msgstr ""
 
-#: ui/pages/host_keys.slint:323 ui/pages/host_keys.slint:350
+#: ui/pages/host_keys.slint:298 ui/pages/host_keys.slint:325
 msgctxt "HostKeysPage"
 msgid "Import"
 msgstr ""
 
-#: ui/pages/host_keys.slint:344
+#: ui/pages/host_keys.slint:319
 msgctxt "HostKeysPage"
 msgid "Add known host"
 msgstr ""
 
-#: ui/pages/host_keys.slint:351
+#: ui/pages/host_keys.slint:326
 msgctxt "HostKeysPage"
 msgid "Import known hosts"
 msgstr ""
 
-#: ui/pages/host_keys.slint:357
+#: ui/pages/host_keys.slint:332
 msgctxt "HostKeysPage"
 msgid "Export"
 msgstr ""
 
-#: ui/pages/host_keys.slint:358
+#: ui/pages/host_keys.slint:333
 msgctxt "HostKeysPage"
 msgid "Export known hosts"
 msgstr ""
 
-#: ui/pages/host_keys.slint:363
+#: ui/pages/host_keys.slint:338
 msgctxt "HostKeysPage"
 msgid "Clear all host keys"
 msgstr ""
 
-#: ui/pages/host_keys.slint:371
+#: ui/pages/host_keys.slint:346
 msgctxt "HostKeysPage"
 msgid "{0} host(s) · {1} key(s)"
 msgstr ""
 
-#: ui/pages/host_keys.slint:458
+#: ui/pages/host_keys.slint:433
 msgctxt "HostKeysPage"
 msgid "Host"
 msgstr ""
 
-#: ui/pages/host_keys.slint:463
+#: ui/pages/host_keys.slint:438
 msgctxt "HostKeysPage"
 msgid "Algorithm"
 msgstr ""
 
-#: ui/pages/host_keys.slint:468
+#: ui/pages/host_keys.slint:443
 msgctxt "HostKeysPage"
 msgid "Fingerprint"
 msgstr ""
 
-#: ui/pages/host_keys.slint:473
+#: ui/pages/host_keys.slint:449
 msgctxt "HostKeysPage"
 msgid "Known hosts"
 msgstr ""
 
-#: ui/pages/host_keys.slint:486
+#: ui/pages/host_keys.slint:464
 msgctxt "HostKeysPage"
 msgid "Select a host to see its key details."
 msgstr ""
 
-#: ui/pages/host_keys.slint:526
+#: ui/pages/host_keys.slint:504
 msgctxt "HostKeysPage"
 msgid "Close"
 msgstr ""
@@ -2296,238 +2297,253 @@ msgctxt "KnownHostsPage"
 msgid "Close"
 msgstr ""
 
-#: ui/pages/private_keys.slint:120
+#: ui/pages/private_keys.slint:96
 msgctxt "PrivateKeysPage"
 msgid ""
 "No managed private keys yet. Generate a key or import an OpenSSH private key."
 msgstr ""
 
-#: ui/pages/private_keys.slint:192
+#: ui/pages/private_keys.slint:174
 msgctxt "PrivateKeysPage"
 msgid "Test"
 msgstr ""
 
-#: ui/pages/private_keys.slint:199
+#: ui/pages/private_keys.slint:181
 msgctxt "PrivateKeysPage"
 msgid "Export public key"
 msgstr ""
 
-#: ui/pages/private_keys.slint:206
+#: ui/pages/private_keys.slint:188
 msgctxt "PrivateKeysPage"
 msgid "Deploy"
 msgstr ""
 
-#: ui/pages/private_keys.slint:220
+#: ui/pages/private_keys.slint:202
 msgctxt "PrivateKeysPage"
 msgid "Remove"
 msgstr ""
 
-#: ui/pages/private_keys.slint:263 ui/pages/private_keys.slint:359
+#: ui/pages/private_keys.slint:245 ui/pages/private_keys.slint:341
 msgctxt "PrivateKeysPage"
 msgid "Generate"
 msgstr ""
 
-#: ui/pages/private_keys.slint:264
+#: ui/pages/private_keys.slint:246
 msgctxt "PrivateKeysPage"
 msgid "Generate private key"
 msgstr ""
 
-#: ui/pages/private_keys.slint:271 ui/pages/private_keys.slint:367
+#: ui/pages/private_keys.slint:253 ui/pages/private_keys.slint:349
 msgctxt "PrivateKeysPage"
 msgid "Import"
 msgstr ""
 
-#: ui/pages/private_keys.slint:272
+#: ui/pages/private_keys.slint:254
 msgctxt "PrivateKeysPage"
 msgid "Import private key"
 msgstr ""
 
-#: ui/pages/private_keys.slint:394
+#: ui/pages/private_keys.slint:376
 msgctxt "PrivateKeysPage"
 msgid "No key selected. Generate or import a key first."
 msgstr ""
 
-#: ui/pages/private_keys.slint:458
+#: ui/pages/private_keys.slint:386
+msgctxt "PrivateKeysPage"
+msgid "Algorithm"
+msgstr ""
+
+#: ui/pages/private_keys.slint:391
+msgctxt "PrivateKeysPage"
+msgid "Fingerprint"
+msgstr ""
+
+#: ui/pages/private_keys.slint:397
+msgctxt "PrivateKeysPage"
+msgid "Used by"
+msgstr ""
+
+#: ui/pages/private_keys.slint:412
 msgctxt "PrivateKeysPage"
 msgid "Public key"
 msgstr ""
 
-#: ui/pages/private_keys.slint:501 ui/pages/private_keys.slint:502
+#: ui/pages/private_keys.slint:455 ui/pages/private_keys.slint:456
 msgctxt "PrivateKeysPage"
 msgid "Copy public key"
 msgstr ""
 
-#: ui/pages/private_keys.slint:509 ui/pages/private_keys.slint:514
+#: ui/pages/private_keys.slint:463 ui/pages/private_keys.slint:468
 msgctxt "PrivateKeysPage"
 msgid "Label"
 msgstr ""
 
-#: ui/pages/private_keys.slint:520
+#: ui/pages/private_keys.slint:474
 msgctxt "PrivateKeysPage"
 msgid "Rename"
 msgstr ""
 
-#: ui/pages/private_keys.slint:533
+#: ui/pages/private_keys.slint:487
 msgctxt "PrivateKeysPage"
 msgid "A passphrase is saved for this key."
 msgstr ""
 
-#: ui/pages/private_keys.slint:534
+#: ui/pages/private_keys.slint:488
 msgctxt "PrivateKeysPage"
 msgid "No passphrase is saved for this key."
 msgstr ""
 
-#: ui/pages/private_keys.slint:541
+#: ui/pages/private_keys.slint:492
 msgctxt "PrivateKeysPage"
 msgid "Passphrase"
 msgstr ""
 
-#: ui/pages/private_keys.slint:546
+#: ui/pages/private_keys.slint:497
 msgctxt "PrivateKeysPage"
 msgid "New or replace"
 msgstr ""
 
-#: ui/pages/private_keys.slint:555 ui/pages/private_keys.slint:556
+#: ui/pages/private_keys.slint:506 ui/pages/private_keys.slint:507
 msgctxt "PrivateKeysPage"
 msgid "Remember passphrase"
 msgstr ""
 
-#: ui/pages/private_keys.slint:564 ui/pages/private_keys.slint:565
+#: ui/pages/private_keys.slint:515 ui/pages/private_keys.slint:516
 msgctxt "PrivateKeysPage"
 msgid "Forget passphrase"
 msgstr ""
 
-#: ui/pages/private_keys.slint:605
+#: ui/pages/private_keys.slint:553
 msgctxt "PrivateKeysPage"
 msgid "Close"
 msgstr ""
 
-#: ui/pages/proxies.slint:132
+#: ui/pages/proxies.slint:106
 msgctxt "ProxiesPage"
 msgid "No managed proxies yet. Create one to use it in a session."
 msgstr ""
 
-#: ui/pages/proxies.slint:207
+#: ui/pages/proxies.slint:181
 msgctxt "ProxiesPage"
 msgid "Duplicate"
 msgstr ""
 
-#: ui/pages/proxies.slint:214 ui/pages/proxies.slint:547
+#: ui/pages/proxies.slint:188 ui/pages/proxies.slint:517
 msgctxt "ProxiesPage"
 msgid "Test"
 msgstr ""
 
-#: ui/pages/proxies.slint:228
+#: ui/pages/proxies.slint:202
 msgctxt "ProxiesPage"
 msgid "Delete"
 msgstr ""
 
-#: ui/pages/proxies.slint:279 ui/pages/proxies.slint:365
+#: ui/pages/proxies.slint:253 ui/pages/proxies.slint:339
 msgctxt "ProxiesPage"
 msgid "New"
 msgstr ""
 
-#: ui/pages/proxies.slint:280
+#: ui/pages/proxies.slint:254
 msgctxt "ProxiesPage"
 msgid "New proxy"
 msgstr ""
 
-#: ui/pages/proxies.slint:386
+#: ui/pages/proxies.slint:360
 msgctxt "ProxiesPage"
 msgid "Cannot delete this proxy: it is used by saved sessions."
 msgstr ""
 
-#: ui/pages/proxies.slint:405
+#: ui/pages/proxies.slint:379
 msgctxt "ProxiesPage"
 msgid "Set Sessions to No Proxy"
 msgstr ""
 
-#: ui/pages/proxies.slint:411
+#: ui/pages/proxies.slint:385
 msgctxt "ProxiesPage"
 msgid "Dismiss"
 msgstr ""
 
-#: ui/pages/proxies.slint:456
+#: ui/pages/proxies.slint:430
 msgctxt "ProxiesPage"
 msgid "Name"
 msgstr ""
 
-#: ui/pages/proxies.slint:461
+#: ui/pages/proxies.slint:435
 msgctxt "ProxiesPage"
 msgid "Proxy name"
 msgstr ""
 
-#: ui/pages/proxies.slint:467
+#: ui/pages/proxies.slint:441
 msgctxt "ProxiesPage"
 msgid "Protocol"
 msgstr ""
 
-#: ui/pages/proxies.slint:480
+#: ui/pages/proxies.slint:454
 msgctxt "ProxiesPage"
 msgid "Host"
 msgstr ""
 
-#: ui/pages/proxies.slint:485
+#: ui/pages/proxies.slint:459
 msgctxt "ProxiesPage"
 msgid "Proxy host"
 msgstr ""
 
-#: ui/pages/proxies.slint:490
+#: ui/pages/proxies.slint:465
 msgctxt "ProxiesPage"
 msgid "Port"
 msgstr ""
 
-#: ui/pages/proxies.slint:506
+#: ui/pages/proxies.slint:476
 msgctxt "ProxiesPage"
 msgid "Username"
 msgstr ""
 
-#: ui/pages/proxies.slint:511
+#: ui/pages/proxies.slint:481
 msgctxt "ProxiesPage"
 msgid "Proxy username (optional)"
 msgstr ""
 
-#: ui/pages/proxies.slint:517
+#: ui/pages/proxies.slint:487
 msgctxt "ProxiesPage"
 msgid "Password"
 msgstr ""
 
-#: ui/pages/proxies.slint:524
+#: ui/pages/proxies.slint:494
 msgctxt "ProxiesPage"
 msgid "Leave blank to keep the saved password"
 msgstr ""
 
-#: ui/pages/proxies.slint:525
+#: ui/pages/proxies.slint:495
 msgctxt "ProxiesPage"
 msgid "Proxy password (optional)"
 msgstr ""
 
-#: ui/pages/proxies.slint:531 ui/pages/proxies.slint:536
+#: ui/pages/proxies.slint:501 ui/pages/proxies.slint:506
 msgctxt "ProxiesPage"
 msgid "DNS via proxy"
 msgstr ""
 
-#: ui/pages/proxies.slint:535
+#: ui/pages/proxies.slint:505
 msgctxt "ProxiesPage"
 msgid "On"
 msgstr ""
 
-#: ui/pages/proxies.slint:535
+#: ui/pages/proxies.slint:505
 msgctxt "ProxiesPage"
 msgid "Off"
 msgstr ""
 
-#: ui/pages/proxies.slint:555
+#: ui/pages/proxies.slint:525
 msgctxt "ProxiesPage"
 msgid "Profile id: {0}"
 msgstr ""
 
-#: ui/pages/proxies.slint:622
+#: ui/pages/proxies.slint:587
 msgctxt "ProxiesPage"
 msgid "Cancel"
 msgstr ""
 
-#: ui/pages/proxies.slint:627
+#: ui/pages/proxies.slint:592
 msgctxt "ProxiesPage"
 msgid "Save"
 msgstr ""
@@ -2607,411 +2623,411 @@ msgctxt "InheritSourceText"
 msgid "Custom — copied from the parent; changes stay with this session."
 msgstr ""
 
-#: ui/pages/session_editor.slint:377
+#: ui/pages/session_editor.slint:379
 msgctxt "LoginStepMenu"
 msgid "Edit"
-msgstr ""
-
-#: ui/pages/session_editor.slint:378
-msgctxt "LoginStepMenu"
-msgid "Duplicate"
 msgstr ""
 
 #: ui/pages/session_editor.slint:380
 msgctxt "LoginStepMenu"
+msgid "Duplicate"
+msgstr ""
+
+#: ui/pages/session_editor.slint:382
+msgctxt "LoginStepMenu"
 msgid "Delete"
 msgstr ""
 
-#: ui/pages/session_editor.slint:386
+#: ui/pages/session_editor.slint:388
 msgctxt "LoginStepMenu"
 msgid "Move Up"
 msgstr ""
 
-#: ui/pages/session_editor.slint:388 ui/pages/session_editor.slint:401
+#: ui/pages/session_editor.slint:390 ui/pages/session_editor.slint:403
 msgctxt "LoginStepMenu"
 msgid "Already at the top."
 msgstr ""
 
-#: ui/pages/session_editor.slint:392
+#: ui/pages/session_editor.slint:394
 msgctxt "LoginStepMenu"
 msgid "Move Down"
 msgstr ""
 
-#: ui/pages/session_editor.slint:394 ui/pages/session_editor.slint:407
+#: ui/pages/session_editor.slint:396 ui/pages/session_editor.slint:409
 msgctxt "LoginStepMenu"
 msgid "Already at the bottom."
 msgstr ""
 
-#: ui/pages/session_editor.slint:399
+#: ui/pages/session_editor.slint:401
 msgctxt "LoginStepMenu"
 msgid "Move to Top"
 msgstr ""
 
-#: ui/pages/session_editor.slint:405
+#: ui/pages/session_editor.slint:407
 msgctxt "LoginStepMenu"
 msgid "Move to Bottom"
 msgstr ""
 
-#: ui/pages/session_editor.slint:434
+#: ui/pages/session_editor.slint:436
 msgctxt "TunnelMenu"
 msgid "Edit"
 msgstr ""
 
-#: ui/pages/session_editor.slint:435
+#: ui/pages/session_editor.slint:437
 msgctxt "TunnelMenu"
 msgid "Duplicate"
 msgstr ""
 
-#: ui/pages/session_editor.slint:438
+#: ui/pages/session_editor.slint:440
 msgctxt "TunnelMenu"
 msgid "Delete"
 msgstr ""
 
-#: ui/pages/session_editor.slint:599
+#: ui/pages/session_editor.slint:601
 msgctxt "SessionEditor"
 msgid "Remote forward"
 msgstr ""
 
-#: ui/pages/session_editor.slint:600
+#: ui/pages/session_editor.slint:602
 msgctxt "SessionEditor"
 msgid "Dynamic (SOCKS)"
 msgstr ""
 
-#: ui/pages/session_editor.slint:601
+#: ui/pages/session_editor.slint:603
 msgctxt "SessionEditor"
 msgid "Local forward"
 msgstr ""
 
-#: ui/pages/session_editor.slint:638
+#: ui/pages/session_editor.slint:640
 msgctxt "SessionEditor"
 msgid "General"
 msgstr ""
 
-#: ui/pages/session_editor.slint:639
+#: ui/pages/session_editor.slint:641
 msgctxt "SessionEditor"
 msgid "Authentication"
 msgstr ""
 
-#: ui/pages/session_editor.slint:640
+#: ui/pages/session_editor.slint:642
 msgctxt "SessionEditor"
 msgid "Login Script"
 msgstr ""
 
-#: ui/pages/session_editor.slint:641
+#: ui/pages/session_editor.slint:643
 msgctxt "SessionEditor"
 msgid "Proxy"
 msgstr ""
 
-#: ui/pages/session_editor.slint:642
+#: ui/pages/session_editor.slint:644
 msgctxt "SessionEditor"
 msgid "Tunnels"
 msgstr ""
 
-#: ui/pages/session_editor.slint:643
+#: ui/pages/session_editor.slint:645
 msgctxt "SessionEditor"
 msgid "Terminal Style"
 msgstr ""
 
-#: ui/pages/session_editor.slint:646
+#: ui/pages/session_editor.slint:648
 msgctxt "SessionEditor"
 msgid "SFTP"
 msgstr ""
 
-#: ui/pages/session_editor.slint:649 ui/pages/session_editor.slint:655
+#: ui/pages/session_editor.slint:651 ui/pages/session_editor.slint:657
 msgctxt "SessionEditor"
 msgid "Not in this version."
 msgstr ""
 
-#: ui/pages/session_editor.slint:652
+#: ui/pages/session_editor.slint:654
 msgctxt "SessionEditor"
 msgid "Advanced"
 msgstr ""
 
-#: ui/pages/session_editor.slint:694
+#: ui/pages/session_editor.slint:696
 msgctxt "SessionEditor"
 msgid "Folder"
 msgstr ""
 
-#: ui/pages/session_editor.slint:707
+#: ui/pages/session_editor.slint:709
 msgctxt "SessionEditor"
 msgid "Name"
 msgstr ""
 
-#: ui/pages/session_editor.slint:711
+#: ui/pages/session_editor.slint:713
 msgctxt "SessionEditor"
 msgid "Session name"
 msgstr ""
 
-#: ui/pages/session_editor.slint:718 ui/pages/session_editor.slint:722
+#: ui/pages/session_editor.slint:720 ui/pages/session_editor.slint:724
 msgctxt "SessionEditor"
 msgid "Host"
 msgstr ""
 
-#: ui/pages/session_editor.slint:728
+#: ui/pages/session_editor.slint:730
 msgctxt "SessionEditor"
 msgid "Port"
 msgstr ""
 
-#: ui/pages/session_editor.slint:738
+#: ui/pages/session_editor.slint:740
 msgctxt "SessionEditor"
 msgid "Icon"
 msgstr ""
 
-#: ui/pages/session_editor.slint:763
+#: ui/pages/session_editor.slint:765
 msgctxt "SessionEditor"
 msgid "Default"
 msgstr ""
 
-#: ui/pages/session_editor.slint:764
+#: ui/pages/session_editor.slint:766
 msgctxt "SessionEditor"
 msgid "Preset · Server"
 msgstr ""
 
-#: ui/pages/session_editor.slint:765
+#: ui/pages/session_editor.slint:767
 msgctxt "SessionEditor"
 msgid "Preset · Database"
 msgstr ""
 
-#: ui/pages/session_editor.slint:766
+#: ui/pages/session_editor.slint:768
 msgctxt "SessionEditor"
 msgid "Custom image"
 msgstr ""
 
-#: ui/pages/session_editor.slint:774 ui/pages/session_editor.slint:775
+#: ui/pages/session_editor.slint:776 ui/pages/session_editor.slint:777
 msgctxt "SessionEditor"
 msgid "Browse"
 msgstr ""
 
-#: ui/pages/session_editor.slint:781 ui/pages/session_editor.slint:782
+#: ui/pages/session_editor.slint:783 ui/pages/session_editor.slint:784
 msgctxt "SessionEditor"
 msgid "Reset to default"
 msgstr ""
 
-#: ui/pages/session_editor.slint:791
+#: ui/pages/session_editor.slint:793
 msgctxt "SessionEditor"
 msgid "Notes"
 msgstr ""
 
-#: ui/pages/session_editor.slint:794
+#: ui/pages/session_editor.slint:796
 msgctxt "SessionEditor"
 msgid "Optional notes for this session"
 msgstr ""
 
-#: ui/pages/session_editor.slint:800
+#: ui/pages/session_editor.slint:802
 msgctxt "SessionEditor"
 msgid "A session name and a host are required before saving."
 msgstr ""
 
-#: ui/pages/session_editor.slint:823 ui/pages/session_editor.slint:1139
+#: ui/pages/session_editor.slint:825 ui/pages/session_editor.slint:1142
 msgctxt "SessionEditor"
 msgid "Parent"
 msgstr ""
 
-#: ui/pages/session_editor.slint:836 ui/pages/session_editor.slint:840
+#: ui/pages/session_editor.slint:838 ui/pages/session_editor.slint:842
 msgctxt "SessionEditor"
 msgid "Username"
 msgstr ""
 
-#: ui/pages/session_editor.slint:847
+#: ui/pages/session_editor.slint:849
 msgctxt "SessionEditor"
 msgid "Method"
 msgstr ""
 
-#: ui/pages/session_editor.slint:851 ui/pages/session_editor.slint:872
+#: ui/pages/session_editor.slint:853 ui/pages/session_editor.slint:874
 msgctxt "SessionEditor"
 msgid "Password"
 msgstr ""
 
-#: ui/pages/session_editor.slint:857
+#: ui/pages/session_editor.slint:859
 msgctxt "SessionEditor"
 msgid "Private Key"
 msgstr ""
 
-#: ui/pages/session_editor.slint:863
+#: ui/pages/session_editor.slint:865
 msgctxt "SessionEditor"
 msgid "Keyboard Interactive"
 msgstr ""
 
-#: ui/pages/session_editor.slint:879
+#: ui/pages/session_editor.slint:881
 msgctxt "SessionEditor"
 msgid "Leave blank to keep the saved password"
 msgstr ""
 
-#: ui/pages/session_editor.slint:880
+#: ui/pages/session_editor.slint:882
 msgctxt "SessionEditor"
 msgid "Empty = ask on connect"
 msgstr ""
 
-#: ui/pages/session_editor.slint:886
+#: ui/pages/session_editor.slint:888
 msgctxt "SessionEditor"
 msgid "Private key"
 msgstr ""
 
-#: ui/pages/session_editor.slint:891
+#: ui/pages/session_editor.slint:893
 msgctxt "SessionEditor"
 msgid "Choose a managed key"
 msgstr ""
 
-#: ui/pages/session_editor.slint:896 ui/pages/session_editor.slint:897
+#: ui/pages/session_editor.slint:898 ui/pages/session_editor.slint:899
 msgctxt "SessionEditor"
 msgid "Manage keys"
 msgstr ""
 
-#: ui/pages/session_editor.slint:904
+#: ui/pages/session_editor.slint:906
 msgctxt "SessionEditor"
 msgid ""
 "Import an OpenSSH private key in the Private Keys manager, then pick it here."
 msgstr ""
 
-#: ui/pages/session_editor.slint:905
+#: ui/pages/session_editor.slint:907
 msgctxt "SessionEditor"
 msgid "Keys are managed in Private Keys."
 msgstr ""
 
-#: ui/pages/session_editor.slint:909
+#: ui/pages/session_editor.slint:911
 msgctxt "SessionEditor"
 msgid "Passphrase"
 msgstr ""
 
-#: ui/pages/session_editor.slint:915
+#: ui/pages/session_editor.slint:917
 msgctxt "SessionEditor"
 msgid "Empty = ask when needed"
 msgstr ""
 
-#: ui/pages/session_editor.slint:921
+#: ui/pages/session_editor.slint:923
 msgctxt "SessionEditor"
 msgid "The selected managed key is no longer available. Choose another key."
 msgstr ""
 
-#: ui/pages/session_editor.slint:928
+#: ui/pages/session_editor.slint:930
 msgctxt "SessionEditor"
 msgid "Legacy key"
 msgstr ""
 
-#: ui/pages/session_editor.slint:943
+#: ui/pages/session_editor.slint:945
 msgctxt "SessionEditor"
 msgid ""
 "Legacy key path with a saved passphrase. Select a managed key to migrate "
 "this session."
 msgstr ""
 
-#: ui/pages/session_editor.slint:944
+#: ui/pages/session_editor.slint:946
 msgctxt "SessionEditor"
 msgid "Legacy key path. Select a managed key to migrate this session."
 msgstr ""
 
-#: ui/pages/session_editor.slint:948
+#: ui/pages/session_editor.slint:950
 msgctxt "SessionEditor"
 msgid "Choose a managed private key before saving."
 msgstr ""
 
-#: ui/pages/session_editor.slint:978
+#: ui/pages/session_editor.slint:980
 msgctxt "SessionEditor"
 msgid "Keys"
 msgstr ""
 
-#: ui/pages/session_editor.slint:982
+#: ui/pages/session_editor.slint:984
 msgctxt "SessionEditor"
 msgid "Wait"
 msgstr ""
 
-#: ui/pages/session_editor.slint:999
+#: ui/pages/session_editor.slint:1002
 msgctxt "SessionEditor"
 msgid "No steps — use Keys / Wait above"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1118
+#: ui/pages/session_editor.slint:1121
 msgctxt "SessionEditor"
 msgid ""
 "Inherited from the parent. Turn off Inherit to edit the steps for this "
 "session."
 msgstr ""
 
-#: ui/pages/session_editor.slint:1152
+#: ui/pages/session_editor.slint:1155
 msgctxt "SessionEditor"
 msgid "Profile"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1168 ui/pages/session_editor.slint:1169
+#: ui/pages/session_editor.slint:1171 ui/pages/session_editor.slint:1172
 msgctxt "SessionEditor"
 msgid "Manage proxies"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1175
+#: ui/pages/session_editor.slint:1178
 msgctxt "SessionEditor"
 msgid "Profiles are managed in Proxies."
 msgstr ""
 
-#: ui/pages/session_editor.slint:1188
+#: ui/pages/session_editor.slint:1191
 msgctxt "SessionEditor"
 msgid ""
 "The selected managed proxy is no longer available. Choose another proxy or "
 "No Proxy."
 msgstr ""
 
-#: ui/pages/session_editor.slint:1195
+#: ui/pages/session_editor.slint:1198
 msgctxt "SessionEditor"
 msgid "Legacy proxy"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1230 ui/pages/session_editor.slint:1231
+#: ui/pages/session_editor.slint:1233 ui/pages/session_editor.slint:1234
 msgctxt "SessionEditor"
 msgid "Add Tunnel"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1236 ui/pages/session_editor.slint:1237
+#: ui/pages/session_editor.slint:1239 ui/pages/session_editor.slint:1240
 msgctxt "SessionEditor"
 msgid "Clear Tunnels"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1254
+#: ui/pages/session_editor.slint:1258
 msgctxt "SessionEditor"
 msgid "No tunnels — use + above"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1328
+#: ui/pages/session_editor.slint:1332
 msgctxt "SessionEditor"
 msgid ""
 "Using {0} tunnel(s) from the parent. Turn off Inherit to edit them for this "
 "session."
 msgstr ""
 
-#: ui/pages/session_editor.slint:1349
+#: ui/pages/session_editor.slint:1353
 msgctxt "SessionEditor"
 msgid "Style"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1359 ui/pages/session_editor.slint:1360
+#: ui/pages/session_editor.slint:1363 ui/pages/session_editor.slint:1364
 msgctxt "SessionEditor"
 msgid "Manage terminal styles"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1367
+#: ui/pages/session_editor.slint:1371
 msgctxt "SessionEditor"
 msgid "Using parent style: {0}"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1368
+#: ui/pages/session_editor.slint:1372
 msgctxt "SessionEditor"
 msgid "Fonts and colors are edited in Terminal Styles."
 msgstr ""
 
-#: ui/pages/session_editor.slint:1404
+#: ui/pages/session_editor.slint:1408
 msgctxt "SessionEditor"
 msgid "Test Connection"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1407
+#: ui/pages/session_editor.slint:1411
 msgctxt "SessionEditor"
 msgid "Cancel"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1409
+#: ui/pages/session_editor.slint:1413
 msgctxt "SessionEditor"
 msgid "Save"
 msgstr ""
 
-#: ui/pages/session_editor.slint:1414
+#: ui/pages/session_editor.slint:1418
 msgctxt "SessionEditor"
 msgid "Save and Connect"
 msgstr ""
@@ -3553,105 +3569,105 @@ msgctxt "SettingsDialog"
 msgid "Save all sections and close"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:108
+#: ui/pages/theme_manager.slint:109
 msgctxt "ThemeListRow"
 msgid "Default"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:114
+#: ui/pages/theme_manager.slint:115
 msgctxt "ThemeListRow"
 msgid "Built-in"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:114
+#: ui/pages/theme_manager.slint:115
 msgctxt "ThemeListRow"
 msgid "Custom"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:228
+#: ui/pages/theme_manager.slint:208
 msgctxt "ThemeManagerPage"
 msgid "Clone"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:235
+#: ui/pages/theme_manager.slint:215
 msgctxt "ThemeManagerPage"
 msgid "Edit"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:249
+#: ui/pages/theme_manager.slint:229
 msgctxt "ThemeManagerPage"
 msgid "Delete"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:281 ui/pages/theme_manager.slint:282
+#: ui/pages/theme_manager.slint:261 ui/pages/theme_manager.slint:262
 msgctxt "ThemeManagerPage"
 msgid "New style"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:292
+#: ui/pages/theme_manager.slint:272
 msgctxt "ThemeManagerPage"
 msgid "Built-in {0} · Custom {1}"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:360
+#: ui/pages/theme_manager.slint:340
 msgctxt "ThemeManagerPage"
 msgid "No themes available."
 msgstr ""
 
-#: ui/pages/theme_manager.slint:405
+#: ui/pages/theme_manager.slint:385
 msgctxt "ThemeManagerPage"
 msgid "Font family"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:426 ui/pages/theme_manager.slint:427
-#: ui/pages/theme_manager.slint:426 ui/pages/theme_manager.slint:427 ui/pages/theme_manager.slint:474
+#: ui/pages/theme_manager.slint:406 ui/pages/theme_manager.slint:407
+#: ui/pages/theme_manager.slint:406 ui/pages/theme_manager.slint:407 ui/pages/theme_manager.slint:450
 msgctxt "ThemeManagerPage"
 msgid "Add Font File"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:435
+#: ui/pages/theme_manager.slint:415
 msgctxt "ThemeManagerPage"
 msgid "Font size"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:446
+#: ui/pages/theme_manager.slint:427
 msgctxt "ThemeManagerPage"
 msgid "6–72"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:455
+#: ui/pages/theme_manager.slint:431
 msgctxt "ThemeManagerPage"
 msgid "Fallback"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:464
+#: ui/pages/theme_manager.slint:440
 msgctxt "ThemeManagerPage"
 msgid "Font file (optional)"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:482
+#: ui/pages/theme_manager.slint:458
 msgctxt "ThemeManagerPage"
 msgid "Built-in styles are read-only. Clone this style to make a custom copy."
 msgstr ""
 
-#: ui/pages/theme_manager.slint:509
+#: ui/pages/theme_manager.slint:483
 msgctxt "ThemeManagerPage"
 msgid ""
 "Select a custom style to edit its colors, or right-click a built-in style to "
 "clone it."
 msgstr ""
 
-#: ui/pages/theme_manager.slint:545
+#: ui/pages/theme_manager.slint:517
 msgctxt "ThemeManagerPage"
 msgid "Current default: {0}"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:555
+#: ui/pages/theme_manager.slint:527
 msgctxt "ThemeManagerPage"
 msgid "Set as Default"
 msgstr ""
 
-#: ui/pages/theme_manager.slint:561
+#: ui/pages/theme_manager.slint:533
 msgctxt "ThemeManagerPage"
 msgid "Close"
 msgstr ""
@@ -6730,87 +6746,87 @@ msgctxt "HostKeyWindow"
 msgid "Host Key Confirmation"
 msgstr ""
 
-#: ui/windows/known_host_add_window.slint:14
-#: ui/windows/known_host_add_window.slint:14
+#: ui/windows/known_host_add_window.slint:15
+#: ui/windows/known_host_add_window.slint:15
 msgctxt "KnownHostAddWindow"
 msgid "Add Known Host"
 msgstr ""
 
-#: ui/windows/known_host_add_window.slint:46
+#: ui/windows/known_host_add_window.slint:47
 msgctxt "KnownHostAddWindow"
 msgid "Edit Known Host"
 msgstr ""
 
-#: ui/windows/known_host_add_window.slint:98
+#: ui/windows/known_host_add_window.slint:99
 msgctxt "KnownHostAddWindow"
 msgid "Cancel"
 msgstr ""
 
-#: ui/windows/known_host_add_window.slint:103
+#: ui/windows/known_host_add_window.slint:104
 msgctxt "KnownHostAddWindow"
 msgid "Edit"
 msgstr ""
 
-#: ui/windows/known_host_add_window.slint:103
+#: ui/windows/known_host_add_window.slint:104
 msgctxt "KnownHostAddWindow"
 msgid "Add"
 msgstr ""
 
-#: ui/windows/known_host_export_window.slint:14
-#: ui/windows/known_host_export_window.slint:14
+#: ui/windows/known_host_export_window.slint:15
+#: ui/windows/known_host_export_window.slint:15
 msgctxt "KnownHostExportWindow"
 msgid "Export Known Hosts"
 msgstr ""
 
-#: ui/windows/known_host_export_window.slint:63
+#: ui/windows/known_host_export_window.slint:65
 msgctxt "KnownHostExportWindow"
 msgid "Destination file"
 msgstr ""
 
-#: ui/windows/known_host_export_window.slint:71
-#: ui/windows/known_host_export_window.slint:71
+#: ui/windows/known_host_export_window.slint:73
+#: ui/windows/known_host_export_window.slint:73
 msgctxt "KnownHostExportWindow"
 msgid "Browse"
 msgstr ""
 
-#: ui/windows/known_host_export_window.slint:78
+#: ui/windows/known_host_export_window.slint:80
 msgctxt "KnownHostExportWindow"
 msgid "Writes one `host:port algorithm fingerprint` line per saved host key."
 msgstr ""
 
-#: ui/windows/known_host_export_window.slint:105
+#: ui/windows/known_host_export_window.slint:104
 msgctxt "KnownHostExportWindow"
 msgid "Cancel"
 msgstr ""
 
-#: ui/windows/known_host_export_window.slint:110
+#: ui/windows/known_host_export_window.slint:109
 msgctxt "KnownHostExportWindow"
 msgid "Export"
 msgstr ""
 
-#: ui/windows/known_host_import_window.slint:14
-#: ui/windows/known_host_import_window.slint:14
+#: ui/windows/known_host_import_window.slint:15
+#: ui/windows/known_host_import_window.slint:15
 msgctxt "KnownHostImportWindow"
 msgid "Import Known Hosts"
 msgstr ""
 
-#: ui/windows/known_host_import_window.slint:63
+#: ui/windows/known_host_import_window.slint:65
 msgctxt "KnownHostImportWindow"
 msgid "Path to known_hosts file"
 msgstr ""
 
-#: ui/windows/known_host_import_window.slint:71
-#: ui/windows/known_host_import_window.slint:71
+#: ui/windows/known_host_import_window.slint:73
+#: ui/windows/known_host_import_window.slint:73
 msgctxt "KnownHostImportWindow"
 msgid "Browse"
 msgstr ""
 
-#: ui/windows/known_host_import_window.slint:98
+#: ui/windows/known_host_import_window.slint:99
 msgctxt "KnownHostImportWindow"
 msgid "Cancel"
 msgstr ""
 
-#: ui/windows/known_host_import_window.slint:103
+#: ui/windows/known_host_import_window.slint:104
 msgctxt "KnownHostImportWindow"
 msgid "Import"
 msgstr ""
@@ -6831,44 +6847,44 @@ msgctxt "LoggingWindow"
 msgid "Terminal Logging"
 msgstr ""
 
-#: ui/windows/login_step_keys.slint:56 ui/windows/login_step_keys.slint:83
+#: ui/windows/login_step_keys.slint:28 ui/windows/login_step_keys.slint:55
 msgctxt "LoginStepKeysWindow"
 msgid "Edit Keys"
 msgstr ""
 
-#: ui/windows/login_step_keys.slint:56 ui/windows/login_step_keys.slint:83
+#: ui/windows/login_step_keys.slint:28 ui/windows/login_step_keys.slint:55
 msgctxt "LoginStepKeysWindow"
 msgid "Add Keys"
 msgstr ""
 
-#: ui/windows/login_step_keys.slint:94
+#: ui/windows/login_step_keys.slint:66
 msgctxt "LoginStepKeysWindow"
 msgid "Name"
 msgstr ""
 
-#: ui/windows/login_step_keys.slint:98
+#: ui/windows/login_step_keys.slint:70
 msgctxt "LoginStepKeysWindow"
 msgid "Optional"
 msgstr ""
 
-#: ui/windows/login_step_keys.slint:104
+#: ui/windows/login_step_keys.slint:76
 msgctxt "LoginStepKeysWindow"
 msgid "Keys"
 msgstr ""
 
-#: ui/windows/login_step_keys.slint:118
+#: ui/windows/login_step_keys.slint:91
 msgctxt "LoginStepKeysWindow"
 msgid "Tokens"
 msgstr ""
 
-#: ui/windows/login_step_keys.slint:133
+#: ui/windows/login_step_keys.slint:107
 msgctxt "LoginStepKeysWindow"
 msgid ""
 "Type special keys as {{…}} (case-insensitive); double the braces for a "
 "literal brace."
 msgstr ""
 
-#: ui/windows/login_step_keys.slint:140
+#: ui/windows/login_step_keys.slint:114
 msgctxt "LoginStepKeysWindow"
 msgid ""
 "{{Enter}} / {{Return}} · {{Tab}} · {{Esc}} · {{Space}} · {{Backspace}} · "
@@ -6876,57 +6892,57 @@ msgid ""
 "{{Ctrl+C}} {{Ctrl+D}} {{Ctrl+Z}} · {{Alt+…}} {{Shift+…}} · {{ {{ }} }}"
 msgstr ""
 
-#: ui/windows/login_step_keys.slint:148
+#: ui/windows/login_step_keys.slint:122
 msgctxt "LoginStepKeysWindow"
 msgid "Example: yes{{Enter}} · echo {{{{a}}}}{{Enter}}"
 msgstr ""
 
-#: ui/windows/login_step_keys.slint:168 ui/windows/login_step_keys.slint:169
+#: ui/windows/login_step_keys.slint:142 ui/windows/login_step_keys.slint:143
 msgctxt "LoginStepKeysWindow"
 msgid "Delete"
 msgstr ""
 
-#: ui/windows/login_step_keys.slint:175
+#: ui/windows/login_step_keys.slint:149
 msgctxt "LoginStepKeysWindow"
 msgid "Cancel"
 msgstr ""
 
-#: ui/windows/login_step_keys.slint:177
+#: ui/windows/login_step_keys.slint:151
 msgctxt "LoginStepKeysWindow"
 msgid "Save"
 msgstr ""
 
-#: ui/windows/login_step_wait.slint:54 ui/windows/login_step_wait.slint:76
+#: ui/windows/login_step_wait.slint:26 ui/windows/login_step_wait.slint:48
 msgctxt "LoginStepWaitWindow"
 msgid "Edit Wait"
 msgstr ""
 
-#: ui/windows/login_step_wait.slint:54 ui/windows/login_step_wait.slint:76
+#: ui/windows/login_step_wait.slint:26 ui/windows/login_step_wait.slint:48
 msgctxt "LoginStepWaitWindow"
 msgid "Add Wait"
 msgstr ""
 
-#: ui/windows/login_step_wait.slint:87
+#: ui/windows/login_step_wait.slint:59
 msgctxt "LoginStepWaitWindow"
 msgid "Wait (ms)"
 msgstr ""
 
-#: ui/windows/login_step_wait.slint:98
+#: ui/windows/login_step_wait.slint:70
 msgctxt "LoginStepWaitWindow"
 msgid "Waits this long before the next step runs."
 msgstr ""
 
-#: ui/windows/login_step_wait.slint:113 ui/windows/login_step_wait.slint:114
+#: ui/windows/login_step_wait.slint:82 ui/windows/login_step_wait.slint:83
 msgctxt "LoginStepWaitWindow"
 msgid "Delete"
 msgstr ""
 
-#: ui/windows/login_step_wait.slint:120
+#: ui/windows/login_step_wait.slint:89
 msgctxt "LoginStepWaitWindow"
 msgid "Cancel"
 msgstr ""
 
-#: ui/windows/login_step_wait.slint:122
+#: ui/windows/login_step_wait.slint:91
 msgctxt "LoginStepWaitWindow"
 msgid "Save"
 msgstr ""
@@ -7039,44 +7055,44 @@ msgctxt "PasswordPromptWindow"
 msgid "Password required"
 msgstr ""
 
-#: ui/windows/private_key_deploy_window.slint:12
+#: ui/windows/private_key_deploy_window.slint:13
 msgctxt "PrivateKeyDeployWindow"
 msgid "Deploy Public Key"
 msgstr ""
 
-#: ui/windows/private_key_deploy_window.slint:48
+#: ui/windows/private_key_deploy_window.slint:49
 msgctxt "PrivateKeyDeployWindow"
 msgid "Deploy {0}"
 msgstr ""
 
-#: ui/windows/private_key_deploy_window.slint:59
+#: ui/windows/private_key_deploy_window.slint:60
 msgctxt "PrivateKeyDeployWindow"
 msgid "Target session"
 msgstr ""
 
-#: ui/windows/private_key_deploy_window.slint:71
+#: ui/windows/private_key_deploy_window.slint:76
 msgctxt "PrivateKeyDeployWindow"
 msgid ""
 "No live SSH session is available. Open an SSH session, then deploy again."
 msgstr ""
 
-#: ui/windows/private_key_deploy_window.slint:143
+#: ui/windows/private_key_deploy_window.slint:139
 msgctxt "PrivateKeyDeployWindow"
 msgid "Cancel"
 msgstr ""
 
-#: ui/windows/private_key_deploy_window.slint:148
+#: ui/windows/private_key_deploy_window.slint:144
 msgctxt "PrivateKeyDeployWindow"
 msgid "Deploy"
 msgstr ""
 
-#: ui/windows/private_key_export_window.slint:12
-#: ui/windows/private_key_export_window.slint:12
+#: ui/windows/private_key_export_window.slint:13
+#: ui/windows/private_key_export_window.slint:13
 msgctxt "PrivateKeyExportWindow"
 msgid "Export Public Key"
 msgstr ""
 
-#: ui/windows/private_key_export_window.slint:56
+#: ui/windows/private_key_export_window.slint:57
 msgctxt "PrivateKeyExportWindow"
 msgid "Public key"
 msgstr ""
@@ -7086,192 +7102,192 @@ msgctxt "PrivateKeyExportWindow"
 msgid "Destination"
 msgstr ""
 
-#: ui/windows/private_key_export_window.slint:112
+#: ui/windows/private_key_export_window.slint:109
 msgctxt "PrivateKeyExportWindow"
 msgid "Destination file"
 msgstr ""
 
-#: ui/windows/private_key_export_window.slint:120
-#: ui/windows/private_key_export_window.slint:120
+#: ui/windows/private_key_export_window.slint:117
+#: ui/windows/private_key_export_window.slint:117
 msgctxt "PrivateKeyExportWindow"
 msgid "Browse"
 msgstr ""
 
-#: ui/windows/private_key_export_window.slint:147
+#: ui/windows/private_key_export_window.slint:143
 msgctxt "PrivateKeyExportWindow"
 msgid "Cancel"
 msgstr ""
 
-#: ui/windows/private_key_export_window.slint:152
+#: ui/windows/private_key_export_window.slint:148
 msgctxt "PrivateKeyExportWindow"
 msgid "Export"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:37
-#: ui/windows/private_key_generate_window.slint:37
+#: ui/windows/private_key_generate_window.slint:15
+#: ui/windows/private_key_generate_window.slint:15
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Generate Private Key"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:85
+#: ui/windows/private_key_generate_window.slint:63
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Key Generated — {0}"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:115
+#: ui/windows/private_key_generate_window.slint:93
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Algorithm"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:126
+#: ui/windows/private_key_generate_window.slint:104
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Label"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:131
+#: ui/windows/private_key_generate_window.slint:109
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Managed key label (optional)"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:137
+#: ui/windows/private_key_generate_window.slint:115
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Comment"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:142
+#: ui/windows/private_key_generate_window.slint:120
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Comment (optional)"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:148
+#: ui/windows/private_key_generate_window.slint:126
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Passphrase"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:153
+#: ui/windows/private_key_generate_window.slint:131
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Optional"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:160
+#: ui/windows/private_key_generate_window.slint:138
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Confirm"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:165
+#: ui/windows/private_key_generate_window.slint:143
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Repeat passphrase"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:208
+#: ui/windows/private_key_generate_window.slint:184
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Private key saved to the secret store."
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:216
+#: ui/windows/private_key_generate_window.slint:192
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Fingerprint"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:229
+#: ui/windows/private_key_generate_window.slint:198
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Type"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:241
+#: ui/windows/private_key_generate_window.slint:204
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Public key"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:284
-#: ui/windows/private_key_generate_window.slint:284
+#: ui/windows/private_key_generate_window.slint:247
+#: ui/windows/private_key_generate_window.slint:247
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Copy public key"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:315
+#: ui/windows/private_key_generate_window.slint:278
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Cancel"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:320
+#: ui/windows/private_key_generate_window.slint:283
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Generate"
 msgstr ""
 
-#: ui/windows/private_key_generate_window.slint:326
+#: ui/windows/private_key_generate_window.slint:289
 msgctxt "PrivateKeyGenerateWindow"
 msgid "Done"
 msgstr ""
 
-#: ui/windows/private_key_import_window.slint:36
-#: ui/windows/private_key_import_window.slint:36
+#: ui/windows/private_key_import_window.slint:14
+#: ui/windows/private_key_import_window.slint:14
 msgctxt "PrivateKeyImportWindow"
 msgid "Import Private Key"
 msgstr ""
 
-#: ui/windows/private_key_import_window.slint:77
+#: ui/windows/private_key_import_window.slint:55
 msgctxt "PrivateKeyImportWindow"
 msgid "Paste Private Key"
 msgstr ""
 
-#: ui/windows/private_key_import_window.slint:93
+#: ui/windows/private_key_import_window.slint:71
 msgctxt "PrivateKeyImportWindow"
 msgid "From file"
 msgstr ""
 
-#: ui/windows/private_key_import_window.slint:99
+#: ui/windows/private_key_import_window.slint:77
 msgctxt "PrivateKeyImportWindow"
 msgid "Paste key"
 msgstr ""
 
-#: ui/windows/private_key_import_window.slint:121
+#: ui/windows/private_key_import_window.slint:99
 msgctxt "PrivateKeyImportWindow"
 msgid "Label"
 msgstr ""
 
-#: ui/windows/private_key_import_window.slint:126
+#: ui/windows/private_key_import_window.slint:104
 msgctxt "PrivateKeyImportWindow"
 msgid "Optional · defaults to the key comment"
 msgstr ""
 
-#: ui/windows/private_key_import_window.slint:132
+#: ui/windows/private_key_import_window.slint:110
 msgctxt "PrivateKeyImportWindow"
 msgid "Key file"
 msgstr ""
 
-#: ui/windows/private_key_import_window.slint:137
+#: ui/windows/private_key_import_window.slint:119
 msgctxt "PrivateKeyImportWindow"
 msgid "Path to private key"
 msgstr ""
 
-#: ui/windows/private_key_import_window.slint:145
-#: ui/windows/private_key_import_window.slint:145
+#: ui/windows/private_key_import_window.slint:127
+#: ui/windows/private_key_import_window.slint:127
 msgctxt "PrivateKeyImportWindow"
 msgid "Browse"
 msgstr ""
 
-#: ui/windows/private_key_import_window.slint:152
+#: ui/windows/private_key_import_window.slint:135
 msgctxt "PrivateKeyImportWindow"
 msgid "Private key"
 msgstr ""
 
-#: ui/windows/private_key_import_window.slint:180
+#: ui/windows/private_key_import_window.slint:163
 msgctxt "PrivateKeyImportWindow"
 msgid "Passphrase"
 msgstr ""
 
-#: ui/windows/private_key_import_window.slint:185
+#: ui/windows/private_key_import_window.slint:168
 msgctxt "PrivateKeyImportWindow"
 msgid "If the key is encrypted"
 msgstr ""
 
-#: ui/windows/private_key_import_window.slint:213
+#: ui/windows/private_key_import_window.slint:194
 msgctxt "PrivateKeyImportWindow"
 msgid "Cancel"
 msgstr ""
 
-#: ui/windows/private_key_import_window.slint:218
+#: ui/windows/private_key_import_window.slint:199
 msgctxt "PrivateKeyImportWindow"
 msgid "Import"
 msgstr ""
@@ -7309,118 +7325,118 @@ msgctxt "SettingsWindow"
 msgid "Settings"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:48
-#: ui/windows/sftp_chmod_window.slint:48
+#: ui/windows/sftp_chmod_window.slint:26
+#: ui/windows/sftp_chmod_window.slint:26
 msgctxt "SftpChmodWindow"
 msgid "Change permissions"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:111
+#: ui/windows/sftp_chmod_window.slint:89
 msgctxt "SftpChmodWindow"
 msgid "{0}{1}{2}"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:145
+#: ui/windows/sftp_chmod_window.slint:123
 msgctxt "SftpChmodWindow"
 msgid "Path"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:157
+#: ui/windows/sftp_chmod_window.slint:135
 msgctxt "SftpChmodWindow"
 msgid "Mode"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:167
+#: ui/windows/sftp_chmod_window.slint:146
 msgctxt "SftpChmodWindow"
 msgid "Octal, e.g. 755. Changes sync with the checkboxes."
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:181
+#: ui/windows/sftp_chmod_window.slint:155
 msgctxt "SftpChmodWindow"
 msgid "Owner"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:182
+#: ui/windows/sftp_chmod_window.slint:156
 msgctxt "SftpChmodWindow"
 msgid "Group"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:183
+#: ui/windows/sftp_chmod_window.slint:157
 msgctxt "SftpChmodWindow"
 msgid "Other"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:188
+#: ui/windows/sftp_chmod_window.slint:162
 msgctxt "SftpChmodWindow"
 msgid "Read"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:197
+#: ui/windows/sftp_chmod_window.slint:171
 msgctxt "SftpChmodWindow"
 msgid "Owner read"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:203
+#: ui/windows/sftp_chmod_window.slint:177
 msgctxt "SftpChmodWindow"
 msgid "Group read"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:209
+#: ui/windows/sftp_chmod_window.slint:183
 msgctxt "SftpChmodWindow"
 msgid "Other read"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:216
+#: ui/windows/sftp_chmod_window.slint:190
 msgctxt "SftpChmodWindow"
 msgid "Write"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:225
+#: ui/windows/sftp_chmod_window.slint:199
 msgctxt "SftpChmodWindow"
 msgid "Owner write"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:231
+#: ui/windows/sftp_chmod_window.slint:205
 msgctxt "SftpChmodWindow"
 msgid "Group write"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:237
+#: ui/windows/sftp_chmod_window.slint:211
 msgctxt "SftpChmodWindow"
 msgid "Other write"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:244
+#: ui/windows/sftp_chmod_window.slint:218
 msgctxt "SftpChmodWindow"
 msgid "Execute"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:253
+#: ui/windows/sftp_chmod_window.slint:227
 msgctxt "SftpChmodWindow"
 msgid "Owner execute"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:259
+#: ui/windows/sftp_chmod_window.slint:233
 msgctxt "SftpChmodWindow"
 msgid "Group execute"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:265
+#: ui/windows/sftp_chmod_window.slint:239
 msgctxt "SftpChmodWindow"
 msgid "Other execute"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:271
+#: ui/windows/sftp_chmod_window.slint:245
 msgctxt "SftpChmodWindow"
 msgid "Mode must be three octal digits, e.g. 755."
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:298
+#: ui/windows/sftp_chmod_window.slint:268
 msgctxt "SftpChmodWindow"
 msgid "Cancel"
 msgstr ""
 
-#: ui/windows/sftp_chmod_window.slint:303
+#: ui/windows/sftp_chmod_window.slint:273
 msgctxt "SftpChmodWindow"
 msgid "Apply"
 msgstr ""
@@ -7488,102 +7504,103 @@ msgctxt "ThemeManagerWindow"
 msgid "Built-in {0} · Custom {1}"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:83
-#: ui/windows/tunnel_editor_window.slint:83
+#: ui/windows/tunnel_editor_window.slint:28
+#: ui/windows/tunnel_editor_window.slint:28
 msgctxt "TunnelEditorWindow"
 msgid "Edit Tunnel"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:83
-#: ui/windows/tunnel_editor_window.slint:83
+#: ui/windows/tunnel_editor_window.slint:28
+#: ui/windows/tunnel_editor_window.slint:28
 msgctxt "TunnelEditorWindow"
 msgid "Add Tunnel"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:129
+#: ui/windows/tunnel_editor_window.slint:74
 msgctxt "TunnelEditorWindow"
 msgid "Name"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:133
+#: ui/windows/tunnel_editor_window.slint:78
 msgctxt "TunnelEditorWindow"
 msgid "Optional"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:139
+#: ui/windows/tunnel_editor_window.slint:84
 msgctxt "TunnelEditorWindow"
 msgid "Type"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:143
+#: ui/windows/tunnel_editor_window.slint:88
 msgctxt "TunnelEditorWindow"
 msgid "Local forward"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:144
+#: ui/windows/tunnel_editor_window.slint:89
 msgctxt "TunnelEditorWindow"
 msgid "Remote forward"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:145
+#: ui/windows/tunnel_editor_window.slint:90
 msgctxt "TunnelEditorWindow"
 msgid "Dynamic (SOCKS)"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:155
+#: ui/windows/tunnel_editor_window.slint:100
 msgctxt "TunnelEditorWindow"
 msgid "Bind host"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:165
+#: ui/windows/tunnel_editor_window.slint:110
 msgctxt "TunnelEditorWindow"
 msgid "Bind port"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:170
-#: ui/windows/tunnel_editor_window.slint:170
+#: ui/windows/tunnel_editor_window.slint:115
+#: ui/windows/tunnel_editor_window.slint:115
 msgctxt "TunnelEditorWindow"
 msgid "Port"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:176
+#: ui/windows/tunnel_editor_window.slint:121
 msgctxt "TunnelEditorWindow"
 msgid "Destination"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:180
+#: ui/windows/tunnel_editor_window.slint:126
 msgctxt "TunnelEditorWindow"
 msgid "Host"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:193
+#: ui/windows/tunnel_editor_window.slint:140
+#: ui/windows/tunnel_editor_window.slint:140
 msgctxt "TunnelEditorWindow"
 msgid "On connect"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:199
+#: ui/windows/tunnel_editor_window.slint:142
 msgctxt "TunnelEditorWindow"
 msgid "Enabled"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:199
+#: ui/windows/tunnel_editor_window.slint:142
 msgctxt "TunnelEditorWindow"
 msgid "Disabled"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:207
+#: ui/windows/tunnel_editor_window.slint:150
 msgctxt "TunnelEditorWindow"
 msgid ""
 "Tunnels are saved with the session; forwarding starts when the tunnel engine "
 "is available."
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:221
+#: ui/windows/tunnel_editor_window.slint:162
 msgctxt "TunnelEditorWindow"
 msgid "Cancel"
 msgstr ""
 
-#: ui/windows/tunnel_editor_window.slint:223
+#: ui/windows/tunnel_editor_window.slint:164
 msgctxt "TunnelEditorWindow"
 msgid "Save"
 msgstr ""

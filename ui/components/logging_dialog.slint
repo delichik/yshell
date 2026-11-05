@@ -20,28 +20,7 @@ import { Theme } from "../theme.slint";
 import { WinButton, WinRadio, WinSwitch, WinInfoBar, WinScrollIndicator } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 import { Icon } from "basic/icons.slint";
-
-// 表单行：左侧固定宽度标签 + 右侧控件列（与 session_editor 的 FormRow 同形）。
-component LoggingFormRow inherits HorizontalLayout {
-    in property <string> label: "";
-    spacing: Theme.spacing-12;
-
-    Text {
-        text: root.label;
-        color: Theme.text-secondary;
-        font-size: Theme.font-body;
-        width: Theme.form-label-width;
-        vertical-alignment: center;
-        wrap: no-wrap;
-        overflow: elide;
-    }
-
-    VerticalLayout {
-        horizontal-stretch: 1;
-        spacing: Theme.spacing-4;
-        @children
-    }
-}
+import { FormHint, FormRow } from "basic/forms.slint";
 
 export component LoggingDialog inherits Rectangle {
     in property <bool> open: false;
@@ -229,7 +208,7 @@ export component LoggingDialog inherits Rectangle {
 
                 // ------------------------------------------------- 开启表单视图
                 if !root.logging-active : VerticalLayout {
-                    spacing: Theme.spacing-16;
+                    spacing: Theme.form-row-gap;
 
                     Text {
                         text: @tr("Destination");
@@ -238,13 +217,15 @@ export component LoggingDialog inherits Rectangle {
                         font-weight: Theme.weight-semibold;
                     }
 
-                    LoggingFormRow {
+                    FormRow {
                         label: @tr("Save to");
 
                         HorizontalLayout {
+                            width: Theme.form-field-width;
                             spacing: Theme.spacing-8;
 
                             WinTextInput {
+                                horizontal-stretch: 1;
                                 text <=> root.directory-text;
                                 font-family: Theme.font-mono;
                                 font-size: Theme.font-caption;
@@ -259,50 +240,45 @@ export component LoggingDialog inherits Rectangle {
                                 clicked => { root.browse-requested(); }
                             }
                         }
-
-                        Text {
-                            text: @tr("Default: the last used folder, or the configured logs directory.");
-                            color: Theme.text-tertiary;
-                            font-size: Theme.font-caption;
-                            wrap: word-wrap;
-                            width: root.field-width;
-                        }
                     }
 
-                    LoggingFormRow {
+                    FormHint {
+                        text: @tr("Default: the last used folder, or the configured logs directory.");
+                    }
+
+                    FormRow {
                         label: @tr("File name");
 
                         WinTextInput {
+                            width: Theme.form-field-width;
                             text <=> root.file-name-text;
                             font-family: Theme.font-mono;
                             font-size: Theme.font-caption;
                             placeholder-text: @tr("session-{{timestamp}}.log");
                             edited(text) => { root.file-name-changed(text); }
                         }
-
-                        if root.file-name-error-text != "" : Text {
-                            text: root.file-name-error-text;
-                            color: Theme.critical;
-                            font-size: Theme.font-caption;
-                            wrap: word-wrap;
-                            width: root.field-width;
-                        }
-
-                        if root.file-exists && root.file-name-error-text == "" : Text {
-                            text: @tr("This file already exists. Confirm to overwrite it, or choose another name.");
-                            color: Theme.caution;
-                            font-size: Theme.font-caption;
-                            wrap: word-wrap;
-                            width: root.field-width;
-                        }
                     }
 
-                    // 目标文件已存在：布尔选项用共享开关（原型未画，行为与其它布尔一致）。
-                    if root.file-exists : WinSwitch {
-                        text: root.overwrite-confirmed ? @tr("On") : @tr("Off");
-                        accessible-name: @tr("Overwrite the existing file");
-                        checked <=> root.overwrite-confirmed;
-                        toggled => { root.notify-options(); }
+                    if root.file-name-error-text != "" : FormHint {
+                        text: root.file-name-error-text;
+                        hint-color: Theme.critical;
+                    }
+
+                    if root.file-exists && root.file-name-error-text == "" : FormHint {
+                        text: @tr("This file already exists. Confirm to overwrite it, or choose another name.");
+                        hint-color: Theme.caution;
+                    }
+
+                    // 目标文件已存在：布尔选项用共享开关 + form-row（原型未画，行为与其它布尔一致）。
+                    if root.file-exists : FormRow {
+                        label: @tr("Overwrite the existing file");
+
+                        WinSwitch {
+                            text: root.overwrite-confirmed ? @tr("On") : @tr("Off");
+                            accessible-name: @tr("Overwrite the existing file");
+                            checked <=> root.overwrite-confirmed;
+                            toggled => { root.notify-options(); }
+                        }
                     }
 
                     Text {
@@ -312,7 +288,7 @@ export component LoggingDialog inherits Rectangle {
                         font-weight: Theme.weight-semibold;
                     }
 
-                    LoggingFormRow {
+                    FormRow {
                         label: @tr("Format");
 
                         HorizontalLayout {
@@ -333,7 +309,7 @@ export component LoggingDialog inherits Rectangle {
                         }
                     }
 
-                    LoggingFormRow {
+                    FormRow {
                         label: @tr("Timestamp");
 
                         WinSwitch {
@@ -344,7 +320,7 @@ export component LoggingDialog inherits Rectangle {
                         }
                     }
 
-                    LoggingFormRow {
+                    FormRow {
                         label: @tr("Record input");
 
                         WinSwitch {
@@ -372,20 +348,15 @@ export component LoggingDialog inherits Rectangle {
                         }
                     }
 
-                    if root.path-error-text != "" : Text {
+                    if root.path-error-text != "" : FormHint {
                         text: root.path-error-text;
-                        color: Theme.critical;
-                        font-size: Theme.font-caption;
-                        wrap: word-wrap;
-                        width: root.content-width;
+                        hint-color: Theme.critical;
+                        indent: false;
                     }
 
-                    Text {
+                    FormHint {
                         text: @tr("Logging starts now: existing scrollback is not written; new output is recorded.");
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-caption;
-                        wrap: word-wrap;
-                        width: root.content-width;
+                        indent: false;
                     }
                 }
                         }

@@ -15,6 +15,7 @@ import { Theme } from "../theme.slint";
 import { TextFormats } from "../text_formats.slint";
 import { WinButton, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
+import { DetailRow, FormHint, FormRow } from "../components/basic/forms.slint";
 import { MenuPopup, MenuEntry } from "../components/menu_popup.slint";
 import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
 
@@ -86,32 +87,7 @@ component PrivateKeyListItem inherits Rectangle {
     }
 }
 
-/// 表单/详情行：左侧固定宽度标签 + 右侧内容。
-component KeyFormRow inherits Rectangle {
-    in property <string> label: "";
-    height: max(Theme.control-height, body.preferred-height);
-    background: transparent;
-
-    body := HorizontalLayout {
-        spacing: Theme.spacing-12;
-        cross-axis-alignment: start;
-
-        Text {
-            text: root.label;
-            color: Theme.text-secondary;
-            font-size: Theme.font-body;
-            width: Theme.form-label-width-medium;
-            vertical-alignment: center;
-            wrap: no-wrap;
-        }
-
-        HorizontalLayout {
-            horizontal-stretch: 1;
-            spacing: Theme.spacing-8;
-            @children
-        }
-    }
-}
+/// 表单/详情行由共享 `forms.slint` 提供（FormRow / DetailRow / FormHint）。
 
 export component PrivateKeysPage inherits Rectangle {
     in property <bool> open: false;
@@ -176,6 +152,12 @@ export component PrivateKeysPage inherits Rectangle {
         root.selected-index >= 0 && root.selected-index < root.keys.length;
     private property <string> selected-label:
         root.has-selection ? root.keys[root.selected-index].label : "";
+    private property <string> selected-algorithm:
+        root.has-selection ? root.keys[root.selected-index].algorithm : "";
+    private property <string> selected-fingerprint:
+        root.has-selection ? root.keys[root.selected-index].fingerprint : "";
+    private property <string> selected-used-by:
+        root.has-selection ? root.keys[root.selected-index].used-by : "";
     private property <string> status-display: TextFormats.status-message(
         root.status-kind-text,
         root.status-param-1-text,
@@ -388,7 +370,7 @@ export component PrivateKeysPage inherits Rectangle {
                     content-height: sections.preferred-height;
 
                     sections := VerticalLayout {
-                        spacing: Theme.spacing-12;
+                        spacing: Theme.form-row-gap;
 
                         if root.keys.length == 0 : Text {
                             text: @tr("No key selected. Generate or import a key first.");
@@ -398,68 +380,40 @@ export component PrivateKeysPage inherits Rectangle {
                         }
 
                         if root.keys.length > 0 : VerticalLayout {
-                            spacing: Theme.spacing-8;
+                            spacing: Theme.form-row-gap;
 
-                            Rectangle {
-                                height: max(120px, min(280px, details-block.preferred-height + 20px));
-                                clip: true;
-                                background: Theme.control-fill;
-                                border-radius: Theme.radius-control;
-                                border-width: 1px;
-                                border-color: Theme.control-stroke;
-
-                                details-scroll := Flickable {
-                                    width: parent.width;
-                                    height: parent.height;
-                                    interactive: true;
-                                    content-width: self.width;
-                                    content-height: details-block.preferred-height + 20px;
-
-                                    details-block := Text {
-                                        x: Theme.spacing-12;
-                                        y: Theme.spacing-12;
-                                        width: parent.width - 2 * Theme.spacing-12;
-                                        text: root.details-text;
-                                        color: Theme.text-secondary;
-                                        font-size: Theme.font-caption;
-                                        font-family: Theme.font-mono;
-                                        wrap: word-wrap;
-                                    }
-                                }
-
-                                WinScrollIndicator {
-                                    x: parent.width - self.width - Theme.spacing-4;
-                                    y: Theme.spacing-4;
-                                    height: parent.height - 2 * Theme.spacing-4;
-                                    viewport-position: details-scroll.content-y;
-                                    content-extent: details-scroll.content-height;
-                                    viewport-extent: details-scroll.height;
-                                    thumb-min-length: 24px;
-                                }
+                            DetailRow {
+                                label: @tr("Algorithm");
+                                value: root.selected-algorithm;
                             }
 
-                            if root.status-display != "" : Text {
+                            DetailRow {
+                                label: @tr("Fingerprint");
+                                value: root.selected-fingerprint;
+                                mono: true;
+                            }
+
+                            DetailRow {
+                                label: @tr("Used by");
+                                value: root.selected-used-by;
+                                last: true;
+                            }
+
+                            if root.status-display != "" : FormHint {
                                 text: root.status-display;
-                                color: Theme.text-secondary;
-                                font-size: Theme.font-caption;
-                                wrap: word-wrap;
                             }
 
-                            if root.test-result-text != "" : Text {
+                            if root.test-result-text != "" : FormHint {
                                 text: root.test-result-text;
-                                color: Theme.text-secondary;
-                                font-size: Theme.font-caption;
-                                font-family: Theme.font-mono;
-                                wrap: word-wrap;
                             }
 
                             // 派生公钥（等宽块 + Copy 图标钮）。
-                            if root.public-key-text != "" : KeyFormRow {
+                            if root.public-key-text != "" : FormRow {
                                 label: @tr("Public key");
 
                                 Rectangle {
-                                    horizontal-stretch: 1;
-                                    height: max(72px, min(200px, pubkey-block.preferred-height + 20px));
+                                    width: Theme.form-field-width;
+                                    height: max(128px, min(160px, pubkey-block.preferred-height + 20px));
                                     clip: true;
                                     background: Theme.control-fill;
                                     border-radius: Theme.radius-control;
@@ -505,11 +459,11 @@ export component PrivateKeysPage inherits Rectangle {
                             }
 
                             // 重命名（标签就地编辑；保存由宿主落盘）。
-                            KeyFormRow {
+                            FormRow {
                                 label: @tr("Label");
 
                                 rename-input := WinTextInput {
-                                    horizontal-stretch: 1;
+                                    width: Theme.form-field-width;
                                     text: root.selected-label;
                                     placeholder-text: @tr("Label");
                                     enabled: root.has-selection && !root.busy;
@@ -526,22 +480,19 @@ export component PrivateKeysPage inherits Rectangle {
 
                         // 口令管理（选中的托管密钥）
                         if root.has-selection : VerticalLayout {
-                            spacing: Theme.spacing-8;
+                            spacing: Theme.form-row-gap;
 
-                            Text {
+                            FormHint {
                                 text: root.passphrase-stored
                                     ? @tr("A passphrase is saved for this key.")
                                     : @tr("No passphrase is saved for this key.");
-                                color: Theme.text-tertiary;
-                                font-size: Theme.font-caption;
-                                wrap: word-wrap;
                             }
 
-                            KeyFormRow {
+                            FormRow {
                                 label: @tr("Passphrase");
 
                                 WinTextInput {
-                                    horizontal-stretch: 1;
+                                    width: Theme.form-field-width;
                                     text <=> root.passphrase-text;
                                     placeholder-text: @tr("New or replace");
                                     input-type: password;
@@ -569,11 +520,8 @@ export component PrivateKeysPage inherits Rectangle {
                                 }
                             }
 
-                            if root.remove-warning-text != "" : Text {
+                            if root.remove-warning-text != "" : FormHint {
                                 text: root.remove-warning-text;
-                                color: Theme.text-tertiary;
-                                font-size: Theme.font-caption;
-                                wrap: word-wrap;
                             }
                         }
                     }

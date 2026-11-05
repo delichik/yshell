@@ -8,30 +8,8 @@
 import { Theme } from "../theme.slint";
 import { WinButton, WinComboBox, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
+import { DetailRow, FormHint, FormRow } from "../components/basic/forms.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
-
-/// 表单行：左标签 + 右控件。
-component GenerateFormRow inherits HorizontalLayout {
-    in property <string> label: "";
-    spacing: Theme.spacing-12;
-    cross-axis-alignment: start;
-
-    Text {
-        text: root.label;
-        width: Theme.form-label-width-medium;
-        color: Theme.text-secondary;
-        font-size: Theme.font-body;
-        vertical-alignment: center;
-        wrap: no-wrap;
-    }
-
-    HorizontalLayout {
-        horizontal-stretch: 1;
-        spacing: Theme.spacing-8;
-        cross-axis-alignment: center;
-        @children
-    }
-}
 
 export component PrivateKeyGenerateWindow inherits Window {
     title: @tr("Generate Private Key");
@@ -109,46 +87,46 @@ export component PrivateKeyGenerateWindow inherits Window {
                     content-height: form-body.preferred-height;
 
                     form-body := VerticalLayout {
-                        spacing: Theme.spacing-12;
+                        spacing: Theme.form-row-gap;
 
-                        GenerateFormRow {
+                        FormRow {
                             label: @tr("Algorithm");
 
                             WinComboBox {
-                                horizontal-stretch: 1;
+                                width: Theme.form-field-width;
                                 model: root.algorithm-options;
                                 current-index <=> root.algorithm-index;
                                 selected(index) => { root.select-algorithm(index); }
                             }
                         }
 
-                        GenerateFormRow {
+                        FormRow {
                             label: @tr("Label");
 
                             WinTextInput {
-                                horizontal-stretch: 1;
+                                width: Theme.form-field-width;
                                 text <=> root.label-text;
                                 placeholder-text: @tr("Managed key label (optional)");
                                 edited => { root.update-label(self.text); }
                             }
                         }
 
-                        GenerateFormRow {
+                        FormRow {
                             label: @tr("Comment");
 
                             WinTextInput {
-                                horizontal-stretch: 1;
+                                width: Theme.form-field-width;
                                 text <=> root.comment-text;
                                 placeholder-text: @tr("Comment (optional)");
                                 edited => { root.update-comment(self.text); }
                             }
                         }
 
-                        GenerateFormRow {
+                        FormRow {
                             label: @tr("Passphrase");
 
                             WinTextInput {
-                                horizontal-stretch: 1;
+                                width: Theme.form-field-width;
                                 text <=> root.passphrase-text;
                                 placeholder-text: @tr("Optional");
                                 input-type: password;
@@ -156,11 +134,11 @@ export component PrivateKeyGenerateWindow inherits Window {
                             }
                         }
 
-                        GenerateFormRow {
+                        FormRow {
                             label: @tr("Confirm");
 
                             WinTextInput {
-                                horizontal-stretch: 1;
+                                width: Theme.form-field-width;
                                 text <=> root.confirm-text;
                                 placeholder-text: @tr("Repeat passphrase");
                                 input-type: password;
@@ -168,11 +146,9 @@ export component PrivateKeyGenerateWindow inherits Window {
                             }
                         }
 
-                        if root.error-text != "" : Text {
+                        if root.error-text != "" : FormHint {
                             text: root.error-text;
-                            color: Theme.critical;
-                            font-size: Theme.font-caption;
-                            wrap: word-wrap;
+                            hint-color: Theme.critical;
                         }
                     }
                 }
@@ -202,7 +178,7 @@ export component PrivateKeyGenerateWindow inherits Window {
                     content-height: result-body.preferred-height;
 
                     result-body := VerticalLayout {
-                        spacing: Theme.spacing-12;
+                        spacing: Theme.form-row-gap;
 
                         Text {
                             text: @tr("Private key saved to the secret store.");
@@ -212,37 +188,24 @@ export component PrivateKeyGenerateWindow inherits Window {
                             wrap: word-wrap;
                         }
 
-                        GenerateFormRow {
+                        DetailRow {
                             label: @tr("Fingerprint");
-
-                            Text {
-                                horizontal-stretch: 1;
-                                text: root.result-fingerprint-text;
-                                color: Theme.text-secondary;
-                                font-size: Theme.font-caption;
-                                font-family: Theme.font-mono;
-                                wrap: word-wrap;
-                            }
+                            value: root.result-fingerprint-text;
+                            mono: true;
                         }
 
-                        GenerateFormRow {
+                        DetailRow {
                             label: @tr("Type");
-
-                            Text {
-                                horizontal-stretch: 1;
-                                text: root.result-type-text;
-                                color: Theme.text-secondary;
-                                font-size: Theme.font-body;
-                                wrap: word-wrap;
-                            }
+                            value: root.result-type-text;
+                            last: true;
                         }
 
-                        GenerateFormRow {
+                        FormRow {
                             label: @tr("Public key");
 
                             Rectangle {
-                                horizontal-stretch: 1;
-                                height: max(96px, min(180px, pubkey-block.preferred-height + 20px));
+                                width: Theme.form-field-width;
+                                height: max(128px, min(160px, pubkey-block.preferred-height + 20px));
                                 clip: true;
                                 background: Theme.control-fill;
                                 border-radius: Theme.radius-control;

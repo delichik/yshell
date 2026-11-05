@@ -16,6 +16,7 @@ import { Theme } from "../theme.slint";
 import { TextFormats } from "../text_formats.slint";
 import { Icon } from "../components/basic/icons.slint";
 import { WinButton, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
+import { DetailRow } from "../components/basic/forms.slint";
 import { MenuPopup, MenuEntry } from "../components/menu_popup.slint";
 import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
 
@@ -129,32 +130,6 @@ component HostKeyListItem inherits Rectangle {
                 );
             }
         }
-    }
-}
-
-// 详情行（标签 + 等宽值；只读）。
-component DetailRow inherits HorizontalLayout {
-    in property <string> label: "";
-    in property <string> value: "";
-    spacing: Theme.spacing-12;
-
-    Text {
-        text: root.label;
-        color: Theme.text-secondary;
-        font-size: Theme.font-body;
-        width: Theme.form-label-width-narrow;
-        vertical-alignment: top;
-        wrap: no-wrap;
-        overflow: elide;
-    }
-
-    Text {
-        text: root.value;
-        color: Theme.text-primary;
-        font-size: Theme.font-body;
-        font-family: Theme.font-mono;
-        horizontal-stretch: 1;
-        wrap: word-wrap;
     }
 }
 
@@ -452,7 +427,7 @@ export component HostKeysPage inherits Rectangle {
                         content-height: sections.preferred-height;
 
                         sections := VerticalLayout {
-                            spacing: Theme.spacing-12;
+                            spacing: Theme.spacing-8;
 
                             if root.detail-host-text != "" : DetailRow {
                                 label: @tr("Host");
@@ -467,11 +442,14 @@ export component HostKeysPage inherits Rectangle {
                             if root.detail-fingerprint-text != "" : DetailRow {
                                 label: @tr("Fingerprint");
                                 value: root.detail-fingerprint-text;
+                                mono: true;
                             }
 
                             if root.detail-path-text != "" : DetailRow {
                                 label: @tr("Known hosts");
                                 value: root.detail-path-text;
+                                mono: true;
+                                last: true;
                             }
 
                             if !root.detail-split-visible && root.details-text != "" : Text {

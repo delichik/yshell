@@ -8,6 +8,7 @@
 
 import { Theme } from "../theme.slint";
 import { WinButton } from "../components/basic/controls.slint";
+import { FormHint } from "../components/basic/forms.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component KnownHostAddWindow inherits Window {
@@ -51,8 +52,9 @@ export component KnownHostAddWindow inherits Window {
         VerticalLayout {
             width: root.body-width;
             height: root.body-height;
-            spacing: Theme.spacing-12;
+            spacing: Theme.form-row-gap;
 
+            // 单字段子窗：无 label、无缩进，编辑框顶满内容区。
             Rectangle {
                 vertical-stretch: 1;
                 clip: true;
@@ -76,11 +78,10 @@ export component KnownHostAddWindow inherits Window {
                 }
             }
 
-            if root.error-text != "" : Text {
+            if root.error-text != "" : FormHint {
                 text: root.error-text;
-                color: Theme.critical;
-                font-size: Theme.font-caption;
-                wrap: word-wrap;
+                hint-color: Theme.critical;
+                indent: false;
             }
 
             Rectangle {

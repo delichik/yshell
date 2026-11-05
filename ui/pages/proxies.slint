@@ -16,6 +16,7 @@ import {
     WinButton, WinComboBox, WinIconButton, WinScrollIndicator, WinSwitch,
 } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
+import { FormHint, FormRow } from "../components/basic/forms.slint";
 import { MenuPopup, MenuEntry } from "../components/menu_popup.slint";
 import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
 
@@ -96,34 +97,7 @@ component ProxyListItem inherits Rectangle {
     }
 }
 
-/// 表单行：左侧固定宽度标签 + 右侧控件。
-component ProxyFormRow inherits Rectangle {
-    in property <string> label: "";
-    height: max(Theme.control-height, body.preferred-height);
-    background: transparent;
-
-    body := HorizontalLayout {
-        spacing: Theme.spacing-12;
-        cross-axis-alignment: start;
-
-        Text {
-            text: root.label;
-            color: Theme.text-secondary;
-            font-size: Theme.font-body;
-            width: Theme.form-label-width;
-            vertical-alignment: center;
-            wrap: no-wrap;
-            overflow: elide;
-        }
-
-        HorizontalLayout {
-            horizontal-stretch: 1;
-            spacing: Theme.spacing-8;
-            cross-axis-alignment: center;
-            @children
-        }
-    }
-}
+/// 表单行由共享 `forms.slint` 提供（FormRow / FormHint）。
 
 export component ProxiesPage inherits Rectangle {
     in property <bool> open: false;
@@ -450,24 +424,24 @@ export component ProxiesPage inherits Rectangle {
                             content-height: sections.preferred-height;
 
                             sections := VerticalLayout {
-                                spacing: Theme.spacing-12;
+                                spacing: Theme.form-row-gap;
 
-                                ProxyFormRow {
+                                FormRow {
                                     label: @tr("Name");
 
                                     WinTextInput {
-                                        horizontal-stretch: 1;
+                                        width: Theme.form-field-width;
                                         text <=> root.editor-name-text;
                                         placeholder-text: @tr("Proxy name");
                                         edited => { root.update-proxy-name(self.text); }
                                     }
                                 }
 
-                                ProxyFormRow {
+                                FormRow {
                                     label: @tr("Protocol");
 
                                     WinComboBox {
-                                        horizontal-stretch: 1;
+                                        width: Theme.form-field-width;
                                         model: root.protocol-options;
                                         current-index <=> root.editor-protocol-index;
                                         selected(index) => {
@@ -476,23 +450,19 @@ export component ProxiesPage inherits Rectangle {
                                     }
                                 }
 
-                                ProxyFormRow {
+                                FormRow {
                                     label: @tr("Host");
 
                                     WinTextInput {
-                                        horizontal-stretch: 1;
+                                        width: Theme.form-field-width;
                                         text <=> root.editor-host-text;
                                         placeholder-text: @tr("Proxy host");
                                         edited => { root.update-proxy-host(self.text); }
                                     }
+                                }
 
-                                    Text {
-                                        text: @tr("Port");
-                                        color: Theme.text-secondary;
-                                        font-size: Theme.font-caption;
-                                        vertical-alignment: center;
-                                        wrap: no-wrap;
-                                    }
+                                FormRow {
+                                    label: @tr("Port");
 
                                     WinTextInput {
                                         width: Theme.form-port-width;
@@ -502,22 +472,22 @@ export component ProxiesPage inherits Rectangle {
                                     }
                                 }
 
-                                ProxyFormRow {
+                                FormRow {
                                     label: @tr("Username");
 
                                     WinTextInput {
-                                        horizontal-stretch: 1;
+                                        width: Theme.form-field-width;
                                         text <=> root.editor-username-text;
                                         placeholder-text: @tr("Proxy username (optional)");
                                         edited => { root.update-proxy-username(self.text); }
                                     }
                                 }
 
-                                ProxyFormRow {
+                                FormRow {
                                     label: @tr("Password");
 
                                     WinTextInput {
-                                        horizontal-stretch: 1;
+                                        width: Theme.form-field-width;
                                         text <=> root.editor-password-text;
                                         input-type: password;
                                         placeholder-text: root.editor-password-stored
@@ -527,7 +497,7 @@ export component ProxiesPage inherits Rectangle {
                                     }
                                 }
 
-                                ProxyFormRow {
+                                FormRow {
                                     label: @tr("DNS via proxy");
 
                                     // 原型 proxies/index.html：form-switch + On/Off 文案。
@@ -540,7 +510,7 @@ export component ProxiesPage inherits Rectangle {
                                 }
 
                                 // Test 放到表单末行（原型）；行右键同样可用。
-                                ProxyFormRow {
+                                FormRow {
                                     label: "";
 
                                     WinButton {
@@ -551,13 +521,8 @@ export component ProxiesPage inherits Rectangle {
                                     }
                                 }
 
-                                if !root.editor-is-new && root.editor-id-text != "" : Text {
+                                if !root.editor-is-new && root.editor-id-text != "" : FormHint {
                                     text: @tr("Profile id: {0}", root.editor-id-text);
-                                    color: Theme.text-tertiary;
-                                    font-size: Theme.font-caption;
-                                    font-family: Theme.font-mono;
-                                    wrap: no-wrap;
-                                    overflow: elide;
                                 }
 
                                 if root.test-result-text != "" : Rectangle {

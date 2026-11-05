@@ -8,6 +8,7 @@
 import { Theme } from "../theme.slint";
 import { WinButton, WinIconButton } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
+import { FormHint } from "../components/basic/forms.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component KnownHostExportWindow inherits Window {
@@ -51,8 +52,9 @@ export component KnownHostExportWindow inherits Window {
         VerticalLayout {
             width: root.body-width;
             height: root.body-height;
-            spacing: Theme.spacing-12;
+            spacing: Theme.form-row-gap;
 
+            // 单字段子窗：无 label、无缩进，控件顶满内容区。
             HorizontalLayout {
                 spacing: Theme.spacing-8;
                 cross-axis-alignment: center;
@@ -74,18 +76,15 @@ export component KnownHostExportWindow inherits Window {
                 }
             }
 
-            Text {
+            FormHint {
                 text: @tr("Writes one `host:port algorithm fingerprint` line per saved host key.");
-                color: Theme.text-tertiary;
-                font-size: Theme.font-caption;
-                wrap: word-wrap;
+                indent: false;
             }
 
-            if root.error-text != "" : Text {
+            if root.error-text != "" : FormHint {
                 text: root.error-text;
-                color: Theme.critical;
-                font-size: Theme.font-caption;
-                wrap: word-wrap;
+                hint-color: Theme.critical;
+                indent: false;
             }
 
             Rectangle { vertical-stretch: 1; }
