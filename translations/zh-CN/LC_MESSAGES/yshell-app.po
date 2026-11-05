@@ -18,7 +18,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: yshell\n"
-"POT-Creation-Date: 2026-11-05 10:42+0000\n"
+"POT-Creation-Date: 2026-11-05 11:54+0000\n"
 "PO-Revision-Date: 2026-09-27 00:00+0000\n"
 "Last-Translator: YShell\n"
 "Language-Team: YShell\n"
@@ -1712,37 +1712,47 @@ msgctxt "StatusBar"
 msgid "Exit AI control"
 msgstr "退出 AI 控制"
 
-#: ui/components/status_bar.slint:257
+#: ui/components/status_bar.slint:267
 msgctxt "StatusBar"
 msgid "Stop input sync"
 msgstr "停止输入同步"
 
-#: ui/components/status_bar.slint:258
+#: ui/components/status_bar.slint:268
 msgctxt "StatusBar"
 msgid "Dismiss input sync notice"
 msgstr "关闭输入同步提示"
 
-#: ui/components/status_bar.slint:302
+#: ui/components/status_bar.slint:311
 msgctxt "StatusBar"
 msgid "Recording — open logging menu"
 msgstr "正在记录 — 打开日志菜单"
 
-#: ui/components/status_bar.slint:303
+#: ui/components/status_bar.slint:312
 msgctxt "StatusBar"
 msgid "Logging — open logging menu"
 msgstr "日志 — 打开日志菜单"
 
-#: ui/components/sync_input_banner.slint:69
+#: ui/components/sync_input_banner.slint:64
+msgctxt "MainWindow"
+msgid "PAUSED"
+msgstr "已暂停"
+
+#: ui/components/sync_input_banner.slint:65
+msgctxt "MainWindow"
+msgid "ON"
+msgstr "开启"
+
+#: ui/components/sync_input_banner.slint:111
 msgctxt "MainWindow"
 msgid "Resume"
 msgstr "继续"
 
-#: ui/components/sync_input_banner.slint:70
+#: ui/components/sync_input_banner.slint:112
 msgctxt "MainWindow"
 msgid "Pause"
 msgstr "暂停"
 
-#: ui/components/sync_input_banner.slint:78
+#: ui/components/sync_input_banner.slint:120
 msgctxt "MainWindow"
 msgid "Stop"
 msgstr "停止"
@@ -2030,11 +2040,6 @@ msgstr "此标签已开启输入同步"
 msgctxt "WorkspaceTabItem"
 msgid "New Tab"
 msgstr "新标签"
-
-#: ui/components/workspace_tab_item.slint:166
-msgctxt "WorkspaceTabItem"
-msgid "SYNC"
-msgstr "同步"
 
 #: ui/pages/about.slint:70
 msgctxt "AboutDialog"
@@ -4057,13 +4062,13 @@ msgstr[0] "同步 → {n} 个目标"
 
 #: ui/text_formats.slint:308
 msgctxt "MainWindow"
-msgid "Input Sync: {0} sessions · SYNC → {1} targets · PAUSED"
-msgstr "输入同步：{0} 个会话 · SYNC → {1} 个目标 · 已暂停"
+msgid "Input Sync: {0} sessions · {1} targets (broadcast paused)"
+msgstr "输入同步：{0} 个会话 · {1} 个目标（广播已暂停）"
 
 #: ui/text_formats.slint:314
 msgctxt "MainWindow"
-msgid "Input Sync: {0} sessions · SYNC → {1} targets"
-msgstr "输入同步：{0} 个会话 · SYNC → {1} 个目标"
+msgid "Input Sync: {0} sessions · broadcasting to {1} targets"
+msgstr "输入同步：{0} 个会话 · 正在广播到 {1} 个目标"
 
 #: ui/text_formats.slint:325
 msgctxt "MainWindow"

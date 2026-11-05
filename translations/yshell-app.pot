@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2026-11-05 10:42+0000\n"
+"POT-Creation-Date: 2026-11-05 11:54+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1763,37 +1763,47 @@ msgctxt "StatusBar"
 msgid "Exit AI control"
 msgstr ""
 
-#: ui/components/status_bar.slint:257
+#: ui/components/status_bar.slint:267
 msgctxt "StatusBar"
 msgid "Stop input sync"
 msgstr ""
 
-#: ui/components/status_bar.slint:258
+#: ui/components/status_bar.slint:268
 msgctxt "StatusBar"
 msgid "Dismiss input sync notice"
 msgstr ""
 
-#: ui/components/status_bar.slint:302
+#: ui/components/status_bar.slint:311
 msgctxt "StatusBar"
 msgid "Recording — open logging menu"
 msgstr ""
 
-#: ui/components/status_bar.slint:303
+#: ui/components/status_bar.slint:312
 msgctxt "StatusBar"
 msgid "Logging — open logging menu"
 msgstr ""
 
-#: ui/components/sync_input_banner.slint:69
+#: ui/components/sync_input_banner.slint:64
+msgctxt "MainWindow"
+msgid "PAUSED"
+msgstr ""
+
+#: ui/components/sync_input_banner.slint:65
+msgctxt "MainWindow"
+msgid "ON"
+msgstr ""
+
+#: ui/components/sync_input_banner.slint:111
 msgctxt "MainWindow"
 msgid "Resume"
 msgstr ""
 
-#: ui/components/sync_input_banner.slint:70
+#: ui/components/sync_input_banner.slint:112
 msgctxt "MainWindow"
 msgid "Pause"
 msgstr ""
 
-#: ui/components/sync_input_banner.slint:78
+#: ui/components/sync_input_banner.slint:120
 msgctxt "MainWindow"
 msgid "Stop"
 msgstr ""
@@ -2083,11 +2093,6 @@ msgstr ""
 #: ui/components/workspace_tab_item.slint:135
 msgctxt "WorkspaceTabItem"
 msgid "New Tab"
-msgstr ""
-
-#: ui/components/workspace_tab_item.slint:166
-msgctxt "WorkspaceTabItem"
-msgid "SYNC"
 msgstr ""
 
 #: ui/pages/about.slint:70
@@ -4148,12 +4153,12 @@ msgstr[1] ""
 
 #: ui/text_formats.slint:308
 msgctxt "MainWindow"
-msgid "Input Sync: {0} sessions · SYNC → {1} targets · PAUSED"
+msgid "Input Sync: {0} sessions · {1} targets (broadcast paused)"
 msgstr ""
 
 #: ui/text_formats.slint:314
 msgctxt "MainWindow"
-msgid "Input Sync: {0} sessions · SYNC → {1} targets"
+msgid "Input Sync: {0} sessions · broadcasting to {1} targets"
 msgstr ""
 
 #: ui/text_formats.slint:325

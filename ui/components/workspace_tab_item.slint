@@ -151,26 +151,22 @@ export component WorkspaceTabItem inherits Rectangle {
             overflow: elide;
         }
 
-        // N9：输入同步成员徽标（组模型：没有 SRC/RCV 角色，只有“在组里”一个状态）。
-        // 角标是写死 16px 的固定尺寸子项 → 显式交叉轴居中（默认 stretch 会贴行顶）。
+        // N9：输入同步成员徽标（组模型：图标代替 SYNC 字样）。
         if root.tab-sync-role-text != "" : Rectangle {
-            height: 16px;
-            width: sync-badge-text.preferred-width + 10px;
-            border-radius: 8px;
+            height: 18px;
+            width: 18px;
+            border-radius: 9px;
             background: Theme.accent-soft;
             border-width: 1px;
             border-color: Theme.accent;
             cross-axis-self-alignment: center;
 
-            sync-badge-text := Text {
-                text: @tr("SYNC");
-                color: Theme.text-primary;
-                font-size: Theme.font-caption;
-                font-weight: Theme.weight-semibold;
-                vertical-alignment: center;
+            Icon {
+                name: "sync";
+                icon-color: Theme.accent;
+                icon-size: 12px;
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
-                wrap: no-wrap;
             }
 
             Tooltip {

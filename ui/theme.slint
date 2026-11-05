@@ -250,7 +250,8 @@ export global Theme {
     out property <length> bar-height-menubar: 32px;
     /// 旧 CommandBar 高度（已并入菜单栏，保留 token 以免外部引用断裂）。
     out property <length> bar-height-commandbar: 48px;
-    out property <length> bar-height-status: 26px;
+    /// 状态栏高度（原型 main-shell 28px；略高于旧 26，改善 chip 可读性）。
+    out property <length> bar-height-status: 28px;
     out property <length> bar-height-tabs: 32px;
     /// 右侧面板头部高度（tool_dock 的 6 个面板头；§3.3 控件高 32，这里另有一档）。
     out property <length> bar-height-panel-header: 44px;

@@ -1,7 +1,9 @@
 // N9：终端工作区上方的同步输入横幅（组模型；Pause / Stop；无 KEYS 确认）。
 // 原型：docs/prototypes/main-shell/workspace/sync-input.html
+// 醒目要求：ON / PAUSED 状态 chip + 警告色底，一眼能看出同步是否在广播。
 import { Theme } from "../theme.slint";
 import { WinButton } from "basic/controls.slint";
+import { Icon } from "basic/icons.slint";
 
 export component SyncInputBanner inherits Rectangle {
     in property <string> title-text: "";
@@ -14,14 +16,17 @@ export component SyncInputBanner inherits Rectangle {
 
     height: 40px;
     vertical-stretch: 0;
-    background: Theme.banner-info-background;
+    // 开启广播：警告黄底；暂停：略淡但仍可读，避免与普通 chrome 混淆。
+    background: root.paused
+        ? Theme.banner-info-background
+        : Theme.banner-warning-background;
     border-width: 0px;
-    // 底部分隔：与终端内容划界（原型用更粗底边）。
+
     Rectangle {
         y: parent.height - 2px;
         height: 2px;
         width: 100%;
-        background: Theme.layer-stroke;
+        background: root.paused ? Theme.layer-stroke : Theme.caution;
     }
 
     HorizontalLayout {
@@ -29,6 +34,43 @@ export component SyncInputBanner inherits Rectangle {
         padding-right: Theme.spacing-12;
         spacing: Theme.spacing-8;
         cross-axis-alignment: center;
+
+        // 状态 chip：ON（广播中）/ PAUSED（组仍在、不广播）。
+        Rectangle {
+            border-radius: Theme.radius-control;
+            border-width: 1px;
+            border-color: root.paused ? Theme.layer-stroke : Theme.caution;
+            background: root.paused
+                ? Theme.subtle-selected
+                : Theme.attention-background;
+            horizontal-stretch: 0;
+            HorizontalLayout {
+                padding-left: Theme.spacing-8;
+                padding-right: Theme.spacing-8;
+                padding-top: 2px;
+                padding-bottom: 2px;
+                spacing: Theme.spacing-4;
+                cross-axis-alignment: center;
+
+                Icon {
+                    name: "sync";
+                    icon-color: root.paused ? Theme.text-secondary : Theme.caution;
+                    icon-size: 12px;
+                    cross-axis-self-alignment: center;
+                }
+
+                Text {
+                    text: root.paused
+                        ? @tr("MainWindow" => "PAUSED")
+                        : @tr("MainWindow" => "ON");
+                    color: root.paused ? Theme.text-secondary : Theme.banner-warning-text;
+                    font-size: Theme.font-caption;
+                    font-weight: Theme.weight-semibold;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                }
+            }
+        }
 
         if root.warn-text != "" : Rectangle {
             border-radius: Theme.radius-control;
@@ -54,7 +96,7 @@ export component SyncInputBanner inherits Rectangle {
 
         Text {
             text: root.title-text;
-            color: Theme.text-primary;
+            color: root.paused ? Theme.text-secondary : Theme.banner-warning-text;
             font-size: Theme.font-caption;
             font-weight: Theme.weight-semibold;
             vertical-alignment: center;

@@ -56,6 +56,7 @@ export component Icon inherits Image {
             : name == "search" ? @image-url("../../icons/24/search.png")
             : name == "settings" ? @image-url("../../icons/24/settings.png")
             : name == "shield" ? @image-url("../../icons/24/shield.png")
+            : name == "sync" ? @image-url("../../icons/24/sync.png")
             : name == "terminal" ? @image-url("../../icons/24/terminal.png")
             : name == "trash" ? @image-url("../../icons/24/trash.png")
             : name == "up" ? @image-url("../../icons/24/up.png")
@@ -91,6 +92,7 @@ export component Icon inherits Image {
             : name == "search" ? @image-url("../../icons/32/search.png")
             : name == "settings" ? @image-url("../../icons/32/settings.png")
             : name == "shield" ? @image-url("../../icons/32/shield.png")
+            : name == "sync" ? @image-url("../../icons/32/sync.png")
             : name == "terminal" ? @image-url("../../icons/32/terminal.png")
             : name == "trash" ? @image-url("../../icons/32/trash.png")
             : name == "up" ? @image-url("../../icons/32/up.png")
@@ -126,6 +128,7 @@ export component Icon inherits Image {
             : name == "search" ? @image-url("../../icons/40/search.png")
             : name == "settings" ? @image-url("../../icons/40/settings.png")
             : name == "shield" ? @image-url("../../icons/40/shield.png")
+            : name == "sync" ? @image-url("../../icons/40/sync.png")
             : name == "terminal" ? @image-url("../../icons/40/terminal.png")
             : name == "trash" ? @image-url("../../icons/40/trash.png")
             : name == "up" ? @image-url("../../icons/40/up.png")
@@ -134,7 +137,7 @@ export component Icon inherits Image {
             : @image-url("../../icons/40/blank.png"));
 
     // E15：未知图标名回退到透明占位（不再凭空显示一个"+"），debug 构建打告警。
-    private property <bool> name-known: name == "blank" || name == "check" || name == "chevron-down" || name == "chevron-left" || name == "chevron-right" || name == "clear" || name == "close" || name == "code" || name == "connect" || name == "copy" || name == "download" || name == "edit" || name == "eye" || name == "file" || name == "folder" || name == "globe" || name == "home" || name == "link" || name == "minus" || name == "more" || name == "paste" || name == "pause" || name == "play" || name == "plus" || name == "refresh" || name == "search" || name == "settings" || name == "shield" || name == "terminal" || name == "trash" || name == "up" || name == "upload" || name == "warning";
+    private property <bool> name-known: name == "blank" || name == "check" || name == "chevron-down" || name == "chevron-left" || name == "chevron-right" || name == "clear" || name == "close" || name == "code" || name == "connect" || name == "copy" || name == "download" || name == "edit" || name == "eye" || name == "file" || name == "folder" || name == "globe" || name == "home" || name == "link" || name == "minus" || name == "more" || name == "paste" || name == "pause" || name == "play" || name == "plus" || name == "refresh" || name == "search" || name == "settings" || name == "shield" || name == "sync" || name == "terminal" || name == "trash" || name == "up" || name == "upload" || name == "warning";
 
     changed name => {
         if (!root.name-known) {

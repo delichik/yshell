@@ -10,7 +10,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: yshell\n"
-"POT-Creation-Date: 2026-11-05 10:42+0000\n"
+"POT-Creation-Date: 2026-11-05 11:54+0000\n"
 "PO-Revision-Date: 2026-09-27 00:00+0000\n"
 "Last-Translator: YShell\n"
 "Language-Team: YShell\n"
@@ -1706,37 +1706,47 @@ msgctxt "StatusBar"
 msgid "Exit AI control"
 msgstr "Exit AI control"
 
-#: ui/components/status_bar.slint:257
+#: ui/components/status_bar.slint:267
 msgctxt "StatusBar"
 msgid "Stop input sync"
 msgstr "Stop input sync"
 
-#: ui/components/status_bar.slint:258
+#: ui/components/status_bar.slint:268
 msgctxt "StatusBar"
 msgid "Dismiss input sync notice"
 msgstr "Dismiss input sync notice"
 
-#: ui/components/status_bar.slint:302
+#: ui/components/status_bar.slint:311
 msgctxt "StatusBar"
 msgid "Recording — open logging menu"
 msgstr "Recording — open logging menu"
 
-#: ui/components/status_bar.slint:303
+#: ui/components/status_bar.slint:312
 msgctxt "StatusBar"
 msgid "Logging — open logging menu"
 msgstr "Logging — open logging menu"
 
-#: ui/components/sync_input_banner.slint:69
+#: ui/components/sync_input_banner.slint:64
+msgctxt "MainWindow"
+msgid "PAUSED"
+msgstr "PAUSED"
+
+#: ui/components/sync_input_banner.slint:65
+msgctxt "MainWindow"
+msgid "ON"
+msgstr "ON"
+
+#: ui/components/sync_input_banner.slint:111
 msgctxt "MainWindow"
 msgid "Resume"
 msgstr "Resume"
 
-#: ui/components/sync_input_banner.slint:70
+#: ui/components/sync_input_banner.slint:112
 msgctxt "MainWindow"
 msgid "Pause"
 msgstr "Pause"
 
-#: ui/components/sync_input_banner.slint:78
+#: ui/components/sync_input_banner.slint:120
 msgctxt "MainWindow"
 msgid "Stop"
 msgstr "Stop"
@@ -2025,11 +2035,6 @@ msgstr "Input sync is on for this tab"
 msgctxt "WorkspaceTabItem"
 msgid "New Tab"
 msgstr "New Tab"
-
-#: ui/components/workspace_tab_item.slint:166
-msgctxt "WorkspaceTabItem"
-msgid "SYNC"
-msgstr "SYNC"
 
 #: ui/pages/about.slint:70
 msgctxt "AboutDialog"
@@ -4056,13 +4061,13 @@ msgstr[1] "SYNC → {n} targets"
 
 #: ui/text_formats.slint:308
 msgctxt "MainWindow"
-msgid "Input Sync: {0} sessions · SYNC → {1} targets · PAUSED"
-msgstr "Input Sync: {0} sessions · SYNC → {1} targets · PAUSED"
+msgid "Input Sync: {0} sessions · {1} targets (broadcast paused)"
+msgstr "Input Sync: {0} sessions · {1} targets (broadcast paused)"
 
 #: ui/text_formats.slint:314
 msgctxt "MainWindow"
-msgid "Input Sync: {0} sessions · SYNC → {1} targets"
-msgstr "Input Sync: {0} sessions · SYNC → {1} targets"
+msgid "Input Sync: {0} sessions · broadcasting to {1} targets"
+msgstr "Input Sync: {0} sessions · broadcasting to {1} targets"
 
 #: ui/text_formats.slint:325
 msgctxt "MainWindow"

@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YShell — N9 Input Sync wireframe</title>
+  <link rel="stylesheet" href="../../_icons.css">
   <style>
     /* Workspace slice — board 960×560; fixed size, stage scrolls horizontally. */
     :root {
@@ -105,9 +106,13 @@
       align-items: center;
       gap: 10px;
       padding: 0 10px;
-      border-bottom: 2px solid var(--line);
-      background: var(--soft);
+      border-bottom: 2px solid #9D5D00;
+      background: #FFF4CE;
       font-size: 12px;
+    }
+    body[data-mode="paused"] .sync-banner {
+      background: var(--soft);
+      border-bottom-color: var(--line);
     }
     .sync-banner .title {
       flex: 1;
@@ -116,6 +121,25 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+    .sync-banner .chip-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      border: 1px solid #9D5D00;
+      padding: 2px 6px;
+      background: #FFF4CE;
+      color: #5C4200;
+      white-space: nowrap;
+    }
+    body[data-mode="paused"] .sync-banner .chip-state {
+      border-color: var(--line);
+      background: var(--fill);
+      color: var(--mute);
     }
     .sync-banner .chip-warn {
       font-size: 10px;
@@ -172,13 +196,17 @@
     }
     .pane-header .name { font-weight: 600; flex: 1; }
     .pane-header .badge {
-      font-size: 10px;
-      font-weight: 700;
+      width: 18px;
+      height: 18px;
       border: 1px solid var(--line);
-      padding: 0 4px;
-      line-height: 16px;
+      border-radius: 9px;
       background: var(--soft);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
     }
+    .pane-header .badge .i { width: 12px; height: 12px; }
     /* Panes not in the sync group carry no badge (input stays local to them). */
     body[data-mode="off"] .pane-header .badge,
     body[data-mode="paused"] .pane-header .badge { display: none; }
@@ -269,11 +297,6 @@
     body[data-mode="active"] .status-chip,
     body[data-mode="paused"] .status-chip { display: inline-flex; }
 
-    body[data-mode="paused"] .sync-banner .title::after {
-      content: " · PAUSED";
-      font-weight: 700;
-    }
-
     /* Group membership is per session: the third pane is not in the group. */
     body[data-mode="active"] .pane.idle .badge { display: none; }
   </style>
@@ -304,8 +327,9 @@
       </div>
 
       <div class="sync-banner" role="region" aria-label="Input sync banner">
+        <span class="chip-state" id="syncStateChip" title="Sync is broadcasting"><span class="i i-sync" aria-hidden="true"></span> ON</span>
         <span class="chip-warn" title="Control keys may broadcast">Ctrl / Alt warn</span>
-        <span class="title">Input Sync: 2 sessions · SYNC → 1 target</span>
+        <span class="title" id="syncTitle">Input Sync: 2 sessions · broadcasting to 1 targets</span>
         <button type="button" class="btn btn-pause" aria-pressed="false" title="Pause">Pause</button>
         <button type="button" class="btn btn-stop" title="Stop">Stop</button>
       </div>
@@ -314,7 +338,7 @@
         <div class="pane">
           <div class="pane-header">
             <span class="name">edge-01</span>
-            <span class="badge">SYNC</span>
+            <span class="badge" title="In sync group" aria-label="In sync group"><span class="i i-sync" aria-hidden="true"></span></span>
             <label class="recv">
               <input type="checkbox" checked aria-label="Sync input for this session" />
               <span class="switch" aria-hidden="true"></span>
@@ -331,7 +355,7 @@
         <div class="pane">
           <div class="pane-header">
             <span class="name">db-replica</span>
-            <span class="badge">SYNC</span>
+            <span class="badge" title="In sync group" aria-label="In sync group"><span class="i i-sync" aria-hidden="true"></span></span>
             <label class="recv">
               <input type="checkbox" checked aria-label="Sync input for this session" />
               <span class="switch" aria-hidden="true"></span>
@@ -346,7 +370,7 @@
         <div class="pane idle">
           <div class="pane-header">
             <span class="name">build-box</span>
-            <span class="badge">SYNC</span>
+            <span class="badge" title="In sync group" aria-label="In sync group"><span class="i i-sync" aria-hidden="true"></span></span>
             <label class="recv">
               <input type="checkbox" aria-label="Sync input for this session" />
               <span class="switch" aria-hidden="true"></span>
@@ -377,7 +401,8 @@
       <li><strong>One group, no roles:</strong> every session whose sync switch is On joins the same group. There is no SRC/RCV role and no “pick targets” preset — input typed in any group member (in practice the focused session) is copied to the other group members.</li>
       <li><strong>Bidirectional:</strong> focusing another member and typing copies that input to the remaining members; the injected copy is never re-broadcast (no feedback loop).</li>
       <li><strong>Per-session switch:</strong> the pane/tab header switch adds or removes one session from the group; sessions that are Off are never written to. Disconnected sessions leave the group automatically.</li>
-      <li><strong>Pause / Stop:</strong> Pause keeps the group but sends nothing; Stop clears the group. Both live in the terminal context menu and the status chip; the banner (this wireframe's top bar) is <strong>deferred to wave 3</strong> — the shipped UI uses the status chip + menu entries only.</li>
+      <li><strong>Pause / Stop:</strong> Pause keeps the group but sends nothing; Stop clears the group. Banner shows an <strong>ON / PAUSED</strong> chip (yellow when broadcasting); status chip + menu keep the same actions.</li>
+      <li><strong>Membership badge:</strong> tab/pane uses a sync icon (not the SYNC text label).</li>
       <li><strong>AI/MCP input opts out:</strong> when an AI/MCP client sends input, key or a command to a session, that session is switched Off automatically (it must not broadcast AI input) and a one-shot notice appears in the status chip.</li>
       <li><strong>No modal (D23):</strong> enabling sync never opens a KEYS / paste / Ctrl+C type-to-confirm dialog. Control keys are only flagged in the status chip.</li>
       <li><strong>Status chip:</strong> <code>SYNC → n targets</code>, where n counts the other group members relative to the focused session.</li>
@@ -395,6 +420,20 @@
         });
         if (pauseBtn) {
           pauseBtn.setAttribute("aria-pressed", mode === "paused" ? "true" : "false");
+          pauseBtn.textContent = mode === "paused" ? "Resume" : "Pause";
+        }
+        var chip = document.getElementById("syncStateChip");
+        var title = document.getElementById("syncTitle");
+        if (chip) {
+          chip.innerHTML = mode === "paused"
+            ? '<span class="i i-sync" aria-hidden="true"></span> PAUSED'
+            : '<span class="i i-sync" aria-hidden="true"></span> ON';
+          chip.title = mode === "paused" ? "Sync paused" : "Sync is broadcasting";
+        }
+        if (title) {
+          title.textContent = mode === "paused"
+            ? "Input Sync: 2 sessions · 1 targets (broadcast paused)"
+            : "Input Sync: 2 sessions · broadcasting to 1 targets";
         }
       }
       document.querySelectorAll(".tools [data-mode]").forEach(function (btn) {

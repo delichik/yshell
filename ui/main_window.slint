@@ -700,7 +700,7 @@ export component MainWindow inherits Window {
     in-out property <length> layout_right_effective_width: 280px;
     in-out property <length> layout_left_width: 260px;
     in-out property <length> layout_right_width: 280px;
-    /// View → Focus Mode：隐藏左右停靠栈，保留工作区 + 状态栏。
+    /// View → Focus Mode：隐藏左右停靠栈，保留工作区 + 状态栏（会话内本地态，不写入布局配置）。
     in-out property <bool> focus_mode: false;
     /// View → Full Screen / F11：由 Rust `Window::set_fullscreen` 驱动；本属性镜像勾选态。
     in-out property <bool> window_fullscreen: false;
@@ -2743,7 +2743,7 @@ export component MainWindow inherits Window {
                     drop-on-local(data, action) => { root.drop_on_local(data, action); }
             }
 
-            // --- StatusBar（26px）------------------------------------------------
+            // --- StatusBar（28px）------------------------------------------------
             // 视图见 components/status_bar.slint；文案仍由本文件的 status_display 渲染。
             // N6：右侧日志入口/REC；点击打开与终端右键菜单相同的日志菜单。
             StatusBar {

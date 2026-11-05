@@ -27,6 +27,7 @@
 .i-copy { --i: url("_icons/copy.svg"); }
 .i-clear { --i: url("_icons/clear.svg"); }
 .i-trash { --i: url("_icons/trash.svg"); }
+.i-sync { --i: url("_icons/sync.svg"); }
 .i-close { --i: url("_icons/close.svg"); }
 .i-edit { --i: url("_icons/edit.svg"); }
 .i-search { --i: url("_icons/search.svg"); }
