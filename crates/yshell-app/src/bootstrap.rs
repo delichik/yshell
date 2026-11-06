@@ -2565,127 +2565,6 @@ pub(crate) fn wire_callbacks(
         surface.refresh(&window);
     });
 
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_update_secret_reset_confirmation(move |confirmation| {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref
-                .borrow_mut()
-                .update_secret_reset_confirmation(confirmation.as_ref());
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_reset_secrets(move || {
-        let Some(window) = weak.upgrade() else {
-            return;
-        };
-        let result = runtime_ref.borrow_mut().reset_secret_store();
-        match result {
-            Ok(projection) => {
-                apply_projection(&window, &projection);
-                surface.refresh(&window);
-            }
-            Err(error) => set_error_status(&window, "Could not reset the secret store.", &error),
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_open_known_hosts_manager(move || {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref.borrow_mut().open_known_hosts_manager();
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_close_known_hosts_manager(move || {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref.borrow_mut().close_known_hosts_manager();
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_select_previous_known_host(move || {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref.borrow_mut().select_previous_known_host();
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_select_next_known_host(move || {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref.borrow_mut().select_next_known_host();
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_remove_selected_known_host(move || {
-        let Some(window) = weak.upgrade() else {
-            return;
-        };
-        let result = runtime_ref.borrow_mut().remove_selected_known_host();
-        match result {
-            Ok(projection) => {
-                apply_projection(&window, &projection);
-                surface.refresh(&window);
-            }
-            Err(error) => set_error_status(&window, "Known hosts operation failed.", &error),
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_update_known_hosts_clear_confirmation(move |value| {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref
-                .borrow_mut()
-                .update_known_hosts_clear_confirmation(value.as_ref());
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_clear_all_known_hosts(move || {
-        let Some(window) = weak.upgrade() else {
-            return;
-        };
-        let result = runtime_ref.borrow_mut().clear_all_known_hosts();
-        match result {
-            Ok(projection) => {
-                apply_projection(&window, &projection);
-                surface.refresh(&window);
-            }
-            Err(error) => set_error_status(&window, "Known hosts operation failed.", &error),
-        }
-    });
-
     // --- N4：私钥管理页 -----------------------------------------------------
     wire_n4!(on_open_private_keys_manager, |runtime| runtime
         .open_private_keys_manager());
@@ -6884,9 +6763,6 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_config_dir(projection.config_dir_text.clone().into());
     window.set_secret_store_kind_text(projection.secret_store_kind_text.clone().into());
     window.set_secret_store_path_text(projection.secret_store_path_text.clone().into());
-    window.set_secret_reset_confirmation_text(
-        projection.secret_reset_confirmation_text.clone().into(),
-    );
     window.set_editor_folder_label_text(projection.editor_folder_label_text.clone().into());
     window.set_editor_folder_id_text(projection.editor_folder_id_text.clone().into());
     window.set_editor_folder_known(projection.editor_folder_known);
@@ -6917,43 +6793,6 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window
         .set_editor_auth_test_startup_text(projection.editor_auth_test_startup_text.clone().into());
     window.set_editor_auth_test_error_text(projection.editor_auth_test_error_text.clone().into());
-    window.set_known_hosts_modal_visible(projection.known_hosts_modal_visible);
-    window.set_known_hosts_inventory_rows_text(
-        projection.known_hosts_inventory_rows_text.clone().into(),
-    );
-    window.set_known_hosts_inventory_empty(projection.known_hosts_inventory_empty);
-    window.set_known_hosts_selection_kind_text(
-        projection.known_hosts_selection_kind_text.clone().into(),
-    );
-    window.set_known_hosts_selection_host_text(
-        projection.known_hosts_selection_host_text.clone().into(),
-    );
-    window.set_known_hosts_selection_port_text(
-        projection.known_hosts_selection_port_text.clone().into(),
-    );
-    window.set_known_hosts_selection_index(projection.known_hosts_selection_index);
-    window.set_known_hosts_selection_total(projection.known_hosts_selection_total);
-    window.set_known_hosts_details_text(projection.known_hosts_details_text.clone().into());
-    // D17：详情拆分字段（标签由 UI 侧 @tr 渲染）。
-    window.set_known_hosts_detail_host_text(projection.known_hosts_detail_host_text.clone().into());
-    window.set_known_hosts_detail_port_text(projection.known_hosts_detail_port_text.clone().into());
-    window.set_known_hosts_detail_algorithm_text(
-        projection.known_hosts_detail_algorithm_text.clone().into(),
-    );
-    window.set_known_hosts_detail_fingerprint_text(
-        projection
-            .known_hosts_detail_fingerprint_text
-            .clone()
-            .into(),
-    );
-    window.set_known_hosts_detail_path_text(projection.known_hosts_detail_path_text.clone().into());
-    window.set_known_hosts_path_text(projection.known_hosts_path_text.clone().into());
-    window.set_known_hosts_clear_confirmation_text(
-        projection
-            .known_hosts_clear_confirmation_text
-            .clone()
-            .into(),
-    );
     window.set_editor_proxy_mode_text(projection.editor_proxy_mode_text.clone().into());
     set_editor_proxy_options_if_changed(window, &projection.editor_proxy_options);
     window.set_editor_selected_proxy_index(projection.editor_selected_proxy_index);

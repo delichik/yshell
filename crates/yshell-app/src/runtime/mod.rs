@@ -262,7 +262,6 @@ impl AppRuntime {
             panel_drag: None,
             secret_store_path,
             secret_store_kind,
-            secret_reset_confirmation: String::new(),
             editor: SessionEditorDraft::default(),
             editor_baseline: None,
             editor_discard_dialog_visible: false,
@@ -331,9 +330,6 @@ impl AppRuntime {
             connect_jobs: None,
             persistent_known_hosts,
             temporary_known_hosts: KnownHosts::new(),
-            known_hosts_modal_visible: false,
-            known_hosts_selected_key: None,
-            known_hosts_clear_confirmation: String::new(),
             pending_host_key_prompt: None,
             pending_password_prompt: None,
             editor_modal_visible: false,
@@ -485,41 +481,6 @@ impl AppRuntime {
         Ok(runtime)
     }
 
-    pub fn update_secret_reset_confirmation(&mut self, confirmation: &str) -> AppProjection {
-        self.secret_reset_confirmation = confirmation.to_owned();
-        self.projection()
-    }
-
-    pub fn reset_secret_store(&mut self) -> AppResult<AppProjection> {
-        if self.secret_reset_confirmation.trim() != "RESET SECRETS" {
-            return Err(AppError::new(
-                "type `RESET SECRETS` exactly before resetting the local secret store",
-            ));
-        }
-        let Some(path) = self.secret_store_path.clone() else {
-            return Err(AppError::new(
-                "secret reset is only available for the local file-backed secret store",
-            ));
-        };
-        if path.exists() {
-            fs::remove_file(&path).map_err(AppError::from_error)?;
-        }
-        // No environment-supplied master password exists: after the reset the
-        // file-backed store stays disabled until a keychain is injected again
-        // (tests / future encrypted-store UI).
-        self.keychain = None;
-        self.secret_store_kind = SecretStoreKind::Disabled;
-        self.secret_reset_confirmation.clear();
-        let path_text = path.display().to_string();
-        self.set_status_kind(
-            "secrets-reset",
-            format!("Reset the local secret store at `{path_text}`."),
-            path_text,
-            String::new(),
-        );
-        Ok(self.projection())
-    }
-
     pub(crate) fn status_i18n_parts(&self) -> (String, String, String) {
         if self.status_kind.is_empty() || self.status_text != self.status_kind_source {
             return (String::new(), String::new(), String::new());
@@ -659,7 +620,6 @@ pub struct AppRuntime {
     pub(crate) panel_drag: Option<panels::PanelDragState>,
     pub(crate) secret_store_path: Option<PathBuf>,
     pub(crate) secret_store_kind: SecretStoreKind,
-    pub(crate) secret_reset_confirmation: String,
     pub(crate) editor: SessionEditorDraft,
     /// Snapshot taken when the Session Editor opens; used for Discard Changes.
     pub(crate) editor_baseline: Option<SessionEditorDraft>,
@@ -756,9 +716,6 @@ pub struct AppRuntime {
     pub(crate) connect_jobs: Option<crate::connect_jobs::ConnectJobHandle>,
     pub(crate) persistent_known_hosts: KnownHosts,
     pub(crate) temporary_known_hosts: KnownHosts,
-    pub(crate) known_hosts_modal_visible: bool,
-    pub(crate) known_hosts_selected_key: Option<String>,
-    pub(crate) known_hosts_clear_confirmation: String,
     pub(crate) pending_host_key_prompt: Option<PendingHostKeyPrompt>,
     /// W5：密码型认证缺少密钥时的挂起目标（仅内存；重试连接用）。
     pub(crate) pending_password_prompt: Option<PendingPasswordPrompt>,
@@ -995,6 +952,9 @@ pub(crate) struct RuntimeKeychain(Arc<dyn Keychain>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SecretStoreKind {
+    /// No keychain. Tests construct this when they open a runtime without one;
+    /// production startup always uses [`Self::Os`].
+    #[allow(dead_code)]
     Disabled,
     // TODO(env-cleanup): the file-backed store is only injected by tests now —
     // there is no production selector after removing YSHELL_MASTER_PASSWORD.
@@ -1041,7 +1001,6 @@ impl fmt::Debug for AppRuntime {
             .field("tunnels_visible", &self.tunnels_visible)
             .field("commands_visible", &self.commands_visible)
             .field("secret_store_path", &self.secret_store_path)
-            .field("secret_reset_confirmation", &self.secret_reset_confirmation)
             .field("editor", &self.editor)
             .field("status_text", &self.status_text)
             .field(

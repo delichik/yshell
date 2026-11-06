@@ -273,68 +273,6 @@ fn first_trust_once_does_not_persist() {
 }
 
 #[test]
-fn known_hosts_manager_lists_and_removes_persisted_entries() {
-    let temp = tempdir().expect("tempdir");
-    let store = ConfigStore::new(temp.path());
-    let mut known_hosts = KnownHosts::new();
-    known_hosts.pin(
-        "alpha.example.test",
-        22,
-        HostKeyFingerprint {
-            algorithm: "ssh-ed25519".to_owned(),
-            fingerprint: "sha256:alpha".to_owned(),
-        },
-    );
-    known_hosts.pin(
-        "beta.example.test",
-        2200,
-        HostKeyFingerprint {
-            algorithm: "ssh-rsa".to_owned(),
-            fingerprint: "sha256:beta".to_owned(),
-        },
-    );
-    store
-        .save_known_hosts(&known_hosts)
-        .expect("save known_hosts");
-
-    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
-    let opened = runtime.open_known_hosts_manager();
-    assert!(opened.known_hosts_modal_visible);
-    assert!(opened
-        .known_hosts_inventory_rows_text
-        .contains("alpha.example.test:22"));
-    assert!(opened
-        .known_hosts_inventory_rows_text
-        .contains("beta.example.test:2200"));
-    assert!(!opened.known_hosts_inventory_empty);
-    assert!(opened.known_hosts_details_text.contains("Fingerprint:"));
-    // D17：详情拆分字段（无英文标签，指纹分组/原样）。
-    assert_eq!(opened.known_hosts_detail_host_text, "alpha.example.test");
-    assert_eq!(opened.known_hosts_detail_port_text, "22");
-    assert_eq!(opened.known_hosts_detail_algorithm_text, "ssh-ed25519");
-    assert_eq!(opened.known_hosts_detail_fingerprint_text, "sha256:alpha");
-    assert_eq!(
-        opened.known_hosts_detail_path_text,
-        runtime
-            .config_store
-            .known_hosts_file()
-            .display()
-            .to_string()
-    );
-
-    let _ = runtime.select_next_known_host();
-    let removed = runtime
-        .remove_selected_known_host()
-        .expect("remove selected known host");
-    assert!(removed.status_text.contains("Removed known host entry"));
-    let persisted = runtime
-        .config_store
-        .load_known_hosts()
-        .expect("reload known hosts");
-    assert!(persisted.snapshot().len() == 1);
-}
-
-#[test]
 fn host_keys_manager_detail_fields_match_selected_entry() {
     let temp = tempdir().expect("tempdir");
     let store = ConfigStore::new(temp.path());
@@ -369,44 +307,6 @@ fn host_keys_manager_detail_fields_match_selected_entry() {
             .display()
             .to_string()
     );
-}
-
-#[test]
-fn known_hosts_manager_clear_requires_confirmation_and_persists_empty_store() {
-    let temp = tempdir().expect("tempdir");
-    let store = ConfigStore::new(temp.path());
-    let mut known_hosts = KnownHosts::new();
-    known_hosts.pin(
-        "gamma.example.test",
-        2022,
-        HostKeyFingerprint {
-            algorithm: "ssh-ed25519".to_owned(),
-            fingerprint: "sha256:gamma".to_owned(),
-        },
-    );
-    store
-        .save_known_hosts(&known_hosts)
-        .expect("save known_hosts");
-
-    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
-    let error = runtime
-        .clear_all_known_hosts()
-        .expect_err("clear should require confirmation");
-    assert!(error.message.contains("type CLEAR"));
-
-    let _ = runtime.update_known_hosts_clear_confirmation("CLEAR");
-    let cleared = runtime
-        .clear_all_known_hosts()
-        .expect("clear persisted known hosts");
-    assert!(cleared.known_hosts_inventory_empty);
-    assert_eq!(cleared.known_hosts_inventory_rows_text, "");
-    assert_eq!(cleared.known_hosts_clear_confirmation_text, "");
-    assert!(runtime
-        .config_store
-        .load_known_hosts()
-        .expect("reload known hosts")
-        .snapshot()
-        .is_empty());
 }
 
 /// D7：TOFU 顺序——密码型会话的主机密钥确认完成后回到密码弹窗（而不是直接重连：
@@ -522,51 +422,4 @@ fn injected_file_keychain_resolves_saved_password_auth() {
             ref password
         } if username == "root" && password == "file-secret"
     ));
-}
-
-#[test]
-fn reset_secret_store_requires_exact_confirmation_phrase() {
-    let temp = tempdir().expect("tempdir");
-    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
-    runtime.update_secret_reset_confirmation("almost");
-    let error = runtime
-        .reset_secret_store()
-        .expect_err("confirmation should be required");
-    assert!(error.to_string().contains("type `RESET SECRETS` exactly"));
-}
-
-#[test]
-fn reset_secret_store_deletes_local_file_and_clears_confirmation() {
-    let temp = tempdir().expect("tempdir");
-
-    let secret_store_path = temp.path().join("secret-store.toml");
-    let keychain = FileKeychain::open_or_create(&secret_store_path, "test-master-password")
-        .expect("file keychain");
-    keychain
-        .put(
-            SecretRef::new("file://saved/password"),
-            SecretString::from("file-secret"),
-        )
-        .expect("put secret");
-    assert!(secret_store_path.exists());
-
-    // Injected file-backed store (production defaults to the OS keychain).
-    let mut runtime = AppRuntime::new_with_keychain_and_secret_store_path(
-        temp.path().to_path_buf(),
-        Some(std::sync::Arc::new(keychain)),
-        Some(secret_store_path.clone()),
-        SecretStoreKind::File,
-    )
-    .expect("runtime");
-    let _ = runtime.update_secret_reset_confirmation("RESET SECRETS");
-    let projection = runtime.reset_secret_store().expect("reset secret store");
-
-    assert!(!secret_store_path.exists(), "reset deletes the store file");
-    assert_eq!(projection.secret_reset_confirmation_text, "");
-    assert!(projection
-        .status_text
-        .contains("Reset the local secret store"));
-    assert_eq!(projection.status_kind, "secrets-reset");
-    assert!(projection.status_param_1.ends_with("secret-store.toml"));
-    assert_eq!(projection.status_param_2, "");
 }

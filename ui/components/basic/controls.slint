@@ -10,7 +10,7 @@ import { Icon } from "icons.slint";
 /// §3.5 键盘焦点环：2px 双色环（focus-outer 外 + focus-inner 内），贴合控件圆角 +2px。
 /// 环画在控件外缘 2px 处，可能被外层 `clip` 裁掉。
 /// 可见性只认 `FocusReason.tab-navigation`：鼠标点击走 TouchArea → `.focus()`（programmatic），不画环。
-component FocusRing inherits Rectangle {
+export component FocusRing inherits Rectangle {
     in property <bool> visible-ring: false;
     in property <length> radius: Theme.radius-control;
     /// 被装饰控件的尺寸（组件根元素不能引用 `parent`，由调用方传入）

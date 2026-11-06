@@ -347,14 +347,14 @@ impl AppRuntime {
         let editor_icon_custom_text = self.editor_icon_custom_text();
         // session-editor：Private Key 口令草稿（口令字段不落盘，只有草稿值）。
         let editor_passphrase_text = self.editor.passphrase.clone();
-        let mut editor_proxy_option_labels = vec!["No Proxy".to_owned()];
+        let mut editor_proxy_option_labels = vec!["no-proxy".to_owned()];
         editor_proxy_option_labels.extend(
             editor_proxy_options
                 .iter()
                 .map(|option| option.label.clone()),
         );
         let editor_proxy_option_index = if self.editor.inherit_proxy {
-            // Inherit：下拉显示父级解析值（0 = No Proxy / 未继承到 profile）。
+            // Inherit：下拉显示父级解析值（0 = no-proxy / 未继承到 profile）。
             self.editor_parent_resolved()
                 .proxy
                 .as_ref()
@@ -379,7 +379,6 @@ impl AppRuntime {
                 .as_ref()
                 .map(|path| path.display().to_string())
                 .unwrap_or_default(),
-            secret_reset_confirmation_text: self.secret_reset_confirmation.clone(),
             editor_folder_label_text,
             editor_folder_id_text,
             editor_folder_known,
@@ -589,22 +588,6 @@ impl AppRuntime {
             editor_scheme_index,
             editor_proxy_option_labels,
             editor_proxy_option_index,
-            known_hosts_modal_visible: self.known_hosts_modal_visible,
-            known_hosts_inventory_rows_text: self.known_hosts_inventory_rows_text(),
-            known_hosts_inventory_empty: self.known_hosts_inventory_empty(),
-            known_hosts_selection_kind_text: self.known_hosts_selection_kind().to_owned(),
-            known_hosts_selection_host_text: self.known_hosts_selection_host_text(),
-            known_hosts_selection_port_text: self.known_hosts_selection_port_text(),
-            known_hosts_selection_index: self.known_hosts_selection_index(),
-            known_hosts_selection_total: self.known_hosts_selection_total(),
-            known_hosts_details_text: self.known_hosts_details_text(),
-            known_hosts_detail_host_text: self.known_hosts_detail_host_text(),
-            known_hosts_detail_port_text: self.known_hosts_detail_port_text(),
-            known_hosts_detail_algorithm_text: self.known_hosts_detail_algorithm_text(),
-            known_hosts_detail_fingerprint_text: self.known_hosts_detail_fingerprint_text(),
-            known_hosts_detail_path_text: self.known_hosts_detail_path_text(),
-            known_hosts_path_text: self.config_store.known_hosts_file().display().to_string(),
-            known_hosts_clear_confirmation_text: self.known_hosts_clear_confirmation.clone(),
             active_session_kind_text: active_kind_text.to_owned(),
             active_session_name_text: active_name_text,
             active_session_state_text: active_state_text,
@@ -2010,7 +1993,6 @@ pub struct AppProjection {
     pub config_dir_text: String,
     pub secret_store_kind_text: String,
     pub secret_store_path_text: String,
-    pub secret_reset_confirmation_text: String,
     pub editor_folder_label_text: String,
     pub editor_folder_id_text: String,
     pub editor_folder_known: bool,
@@ -2204,26 +2186,9 @@ pub struct AppProjection {
     pub editor_tunnel_enabled: bool,
     pub editor_scheme_options: Vec<String>,
     pub editor_scheme_index: i32,
-    /// Proxy 下拉模型：`["No Proxy", ...托管 profile 名]`
+    /// Proxy 下拉模型：`["no-proxy", ...托管 profile 名]`（`no-proxy` 由 UI 映射文案）。
     pub editor_proxy_option_labels: Vec<String>,
     pub editor_proxy_option_index: i32,
-    pub known_hosts_modal_visible: bool,
-    pub known_hosts_inventory_rows_text: String,
-    pub known_hosts_inventory_empty: bool,
-    pub known_hosts_selection_kind_text: String,
-    pub known_hosts_selection_host_text: String,
-    pub known_hosts_selection_port_text: String,
-    pub known_hosts_selection_index: i32,
-    pub known_hosts_selection_total: i32,
-    pub known_hosts_details_text: String,
-    /// D17：已知主机详情拆分字段（标签由 UI 侧 `@tr` 渲染；指纹为 D9 分组格式）。
-    pub known_hosts_detail_host_text: String,
-    pub known_hosts_detail_port_text: String,
-    pub known_hosts_detail_algorithm_text: String,
-    pub known_hosts_detail_fingerprint_text: String,
-    pub known_hosts_detail_path_text: String,
-    pub known_hosts_path_text: String,
-    pub known_hosts_clear_confirmation_text: String,
     pub active_session_kind_text: String,
     pub active_session_name_text: String,
     pub active_session_state_text: String,

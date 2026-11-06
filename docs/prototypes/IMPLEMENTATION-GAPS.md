@@ -150,17 +150,17 @@
 | Proxies：工具条只放 `+`，Duplicate/Delete 走行右键 | 冲突：New/Edit/Duplicate/Test/Delete 全是文字按钮 | `ui/pages/proxies.slint:305-353`；`proxies/index.html:66-131` | P1 |
 | Terminal Styles：Font（family/size/Fallback + Add Font File）+ Colors + ANSI + 预览 | 缺失：编辑器只有配色/ANSI；字体配置散在 Settings→Appearance（本轮） | `ui/components/theme_editor.slint:101-212`；`terminal-styles/index.html:182-229` | P2 |
 | Terminal Styles：Built-in 只读 + Clone + Delete + live preview | 已实现 | `ui/pages/theme_manager.slint:60-183,240-370` | — |
-| 遗留 `known_hosts` 页（无入口）含「Type CLEAR」打字确认 | 冲突：仍在仓库且违反「禁止打字确认」；当前无 UI 入口 | `ui/main_window.slint:980`（callback 无调用点）；`ui/pages/known_hosts.slint:238-256`；`crates/yshell-app/src/runtime/auth.rs:119` | P2 |
+| 遗留 `known_hosts` 页（无入口）含「Type CLEAR」打字确认 | 已实现：旧页、窗口和 CLEAR 打字 API 已删除；主机密钥走 Host Keys，清空走 ConfirmDialog | `ui/pages/host_keys.slint`；`clear_all_host_keys` | — |
 
 ## 8. 跨切面规范（6 项）
 
 | 原型/规范要求 | 现状 | 证据（文件:行） | 优先级 |
 |---|---|---|---|
 | Rust 侧不再把英文句子直接投到 UI（窗口标题/确认文案/i18n） | 部分：确认窗标题与正文、错误状态仍硬编码英文 | `crates/yshell-app/src/dialog_windows.rs:568-570,601,634-636,646,701-703,715,726,739,1558-1570`；`problems.md:100-101` | P1 |
-| 原地编辑：Sessions 改名、Tab 改名、SFTP New Folder/Rename 一律就地输入，禁止另开对话框 | 缺失：SFTP 走 `SftpEntryDialog`（compact 窗），Sessions 无改名，Tab 用弹窗 | `ui/components/sftp_panel.slint:1074-1078`；`ui/windows/sftp_entry_window.slint:68`；`docs/agents/prototypes.md:94` | P0 |
-| 禁止打字确认破坏操作（CLEAR/DELETE 等） | 冲突：遗留 KnownHosts 页仍在用 `CLEAR`；确认窗保留了未使用的 token 输入位 | `crates/yshell-app/src/runtime/auth.rs:113-121`；`ui/pages/known_hosts.slint:238-256`；`compact_confirm_window.slint:97-113` | P2 |
-| WinTextInput / ManagedKeyPicker / ProxyPicker 有焦点环 | 缺失：文本输入仅底部 accent 条，两个 Picker 无焦点反馈 | `problems.md:86-88` | P1 |
-| 可点按钮均有 tooltip / 禁用项有原因 | 部分：菜单项已普遍带 tooltip，面板折叠、菜单栏右栏开关、标签「＋」等图标钮仍缺 | `problems.md:85`；`ui/components/panel_frame.slint:56-65` | P1 |
+| 原地编辑：Sessions 改名、Tab 改名、SFTP New Folder/Rename 一律就地输入，禁止另开对话框 | 已实现（波 3 #18/#19）：Sessions / Tab / SFTP New Folder·Rename 均为就地输入；旧 Rename Tab / SFTP Entry 弹窗路径已删 | `ui/components/workspace_tab_bar.slint`；`ui/components/file_pane_inline_row.slint`；`docs/agents/prototypes.md` | — |
+| 禁止打字确认破坏操作（CLEAR/DELETE 等） | 已实现：确认窗无 token 输入；Host Keys 清空与删除走 ConfirmDialog，无打字令牌 | `ui/windows/compact_confirm_window.slint`；`clear_all_host_keys` | — |
+| WinTextInput / ManagedKeyPicker / ProxyPicker 有焦点环 | 已实现：WinTextInput 聚焦时画 FocusRing；ManagedKeyPicker 在键盘聚焦时画 FocusRing；Proxy 使用已有焦点环的 WinComboBox | `ui/components/basic/text_input.slint`；`ui/pages/session_editor.slint`；`ui/components/basic/controls.slint` | — |
+| 可点按钮均有 tooltip / 禁用项有原因 | 已实现（波 4）：标签「＋」、菜单栏停靠开关、面板 `⋯` / 头部主操作均有 tooltip；面板折叠走 `⋯` 菜单（含禁用原因） | `ui/components/workspace_tab_bar.slint`；`ui/components/menu_bar.slint`；`ui/components/panel_frame.slint` | — |
 | 清单元件优秀实现（清单/键盘对齐/尺寸 token） | 已实现：清单行高、表单行高、三档窗宽均已 token 化 | `ui/theme.slint:207-222`；`ui/components/basic/controls.slint` | — |
 
 ---

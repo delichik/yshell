@@ -15,7 +15,7 @@
 | 1 | 配置 / runtime 基础层（外观、终端交互、SFTP、登录脚本、文件夹继承） | ✅ 完成 | 2026-11-03 · `c6d1102`、`edb0243` |
 | 2 | 页面与弹窗：Settings + 主密码、Session Editor、管理器、剩余弹窗、控件/表单/预览规范 | ✅ 完成（待用户核验） | 2026-11-05 · `2d26a06` … `2fbc72d`（#2–#16） |
 | 3 | 主壳菜单/快捷键/sync banner、停靠面板、工作区 | 🔍 待用户核验 | #17 `de3aef8`、#18 `1125e6a`、#19 `07ed35d` |
-| 4 | i18n 尾部、遗留清理、文档同步 | ⬜ 未开始 | — |
+| 4 | i18n 尾部、遗留清理、文档同步 | 🔍 待用户核验 | #20/#21（见 §4.1；提交后补哈希） |
 | 5 | 全量验收（门禁 + 用户逐窗核验 + 证据归档） | ⬜ 未开始 | — |
 
 > 波次状态以本表为准；事项级细节见 §4，历史记录见文末附录。
@@ -84,6 +84,8 @@ $env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
 | 17 | 波 3 · 主壳：6 个一级菜单（补 Tools）、Session 菜单项、`Ctrl+Shift+S`、`F11`、Full Screen/Focus Mode、状态栏 UTF-8、sync banner | 🔍 待用户核验 | `de3aef8`（含修正 `5f7cbb2`/`034f3d3`/`ae0abba`/`9150b1e`/`a7f72ad`/`64da296`） |
 | 18 | 波 3 · 停靠面板：Sessions 图标/原地改名/右键项/New Folder 禁用；Transfers 批量 Pause/Resume All；Tunnels `+`；dock 宽度 | 🔍 待用户核验 | `1125e6a` |
 | 19 | 波 3 · 工作区：标签图标/原地改名/AI 标志；Find Across；REC 底条；QC Clear；SFTP 原地 New Folder/Rename + chmod 入口；SSH PTY 视口初尺寸；Don't ask again 勾选布局（**无**分屏叶数硬上限、**无** N9 Pause / pane Receive） | 🔍 待用户核验 | `07ed35d` |
+| 20 | 波 4 · i18n 尾部：`No Proxy` sentinel + `@tr`；Discard / Close Session·Tabs 走 TextFormats；删除死路径 Rename Tab 弹窗 | 🔍 待用户核验 | 见波次记录 |
+| 21 | 波 4 · 遗留清理：删旧 `known_hosts` 页与 CLEAR/`RESET SECRETS` 打字 API；确认窗去 token；FocusRing/tooltip；文档与 i18n 同步 | 🔍 待用户核验 | 见波次记录 |
 
 ### 4.2 进行中（未提交）
 
@@ -95,8 +97,6 @@ $env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
 
 | # | 事项 | 状态 | 备注 |
 |---|---|---|---|
-| 20 | 波 4 · i18n 尾部：`No Proxy`、`Discard`、Rust 弹窗标题（`Close Session`/`Rename Tab`） | ⬜ | — |
-| 21 | 波 4 · 遗留清理：旧 `known_hosts` 页、`CLEAR` 打字确认、focus ring/tooltip 覆盖、文档同步 | ⬜ | — |
 | 22 | 波 5 · 验收：全量门禁 + 用户逐窗核验 + 证据归档 | ⬜ | — |
 
 ### 4.4 本版不做（⛔，来自 status §2 与决策）
@@ -125,7 +125,7 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 
 1. **第 2 波已全部完成**：#0–#16 均已本地提交（`fe7f037` … `ee9c807` / `2fbc72d`）。
 2. **第 3 波**：#17 / #18 / #19 已本地提交，待用户核验（不含分屏上限 4 / N9 Pause·Receive）。
-3. 最后 #20–#21 清理 + #22 验收。
+3. **第 4 波**：#20 / #21 已实现并过门禁，待用户核验；接着 #22 验收。
 4. **设计权威**：仅 `docs/prototypes/**` 及其文档为设计稿；交互契约 / archive 仅参考（见根 `AGENTS.md`）。
 
 ## 6. 已知未收口 / 风险
@@ -135,9 +135,8 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 | Settings 窗口尺寸 | 保持原型 1100×820；label 已从 200 改 120。若用户仍觉得宽，需确认后改为 1000×800（偏离原型 wide 档） |
 | Login Wait 子窗 | 现为 standard 720×580，原型是 compact 560×400（待用户决定） |
 | MCP failed 状态 | 单测覆盖，未实机造 |
-| 残留英文 | `No Proxy`（Rust 投影）、`Discard`（全局硬编码）、部分 Rust 弹窗标题（`Close Session`/`Rename Tab`）、专有名词 |
+| 残留英文 | 其余 CompactConfirm kind（Quit / Close Window / Host Keys / MCP 等）标题与正文仍由 Rust 英文直投；专有名词除外 |
 | e2e | `scripts/e2e/run-ui-sync.sh` 旧同步语义断言默认跳过，组模型 e2e 待移植 |
-| 遗留代码 | 旧 `ui/pages/known_hosts.slint`、`CLEAR` 打字确认、focus ring/tooltip 未全覆盖 |
 | 安全债 | 主密码未整体加密 session/key 文件；KDF 未升级 |
 | SFTP 权限入口 | 当前入口仅 SFTP 行右键；工具条 `⋯ More` 菜单（原型）尚未实现，随波 3 工作区补 |
 | Close Window 确认 | 关标签/退出已用后果清单；“关闭窗口”确认未加后果行（原型无，保留现状） |
@@ -189,3 +188,10 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 - #18 停靠面板（待用户核验）：`1125e6a` Sessions 图标/原地改名/右键/空白处 New Folder 禁用；Transfers Pause/Resume All；Tunnels `+`，Start/Stop 保持禁用。
 - #19 工作区（待用户核验）：标签图标/原地改名/AI 标志；Find Across；REC 底条；QC Clear；SFTP 原地 New Folder/Rename + chmod；SSH 开壳用视口尺寸（避免 MOTD 顶行进 scrollback）；`WinCheckBox` Don't ask again 布局；原型 scrub（无分屏叶数硬上限 / 无 N9 Pause·Receive）。提交号见 §4.1。
 - 用户裁定（2026-11-05）：设计稿只以 `docs/prototypes/` 为准；scrub 分屏「最多 4 叶」、N9 Pause/Visible、Favorite 禁用等愿景条款写入原型/文档，不作为实现必做项。
+
+### 第 4 波 · 完成（2026-11-06，待用户核验）
+
+- #20 i18n 尾部：Session Editor Proxy 投影 `no-proxy` + `TextFormats.proxy-option-label`；CompactConfirm 的 `editor-discard` / `close-tabs` 走 TextFormats（含既有 Close Session 模板）；删除死路径 Rename Tab 弹窗（原地改名保留）。
+- #21 遗留清理：删除 `known_hosts` 页/窗与 CLEAR 打字 API；删除死路径 `RESET SECRETS` API（活路径仍是主密码 Reset 破坏性按钮）；CompactConfirm 去掉 token 输入；删除未使用的 `confirm_dialog.slint`；WinTextInput / ManagedKeyPicker FocusRing；标签「＋」与菜单栏停靠开关 tooltip；status / GAPS / catalogs 同步。
+- 门禁：`cargo xtask check`、`cargo test -p yshell-app`（463 + 集成 2/3/3）、`bash scripts/i18n/check.sh` 全绿。
+- 遗留：其余确认框（Quit / Close Window / Host Keys / MCP 等）标题正文仍为 Rust 英文直投（非本波点名项）。

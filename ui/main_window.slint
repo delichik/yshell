@@ -34,7 +34,6 @@ export { MasterPasswordWindow } from "windows/master_password_window.slint";
 export { MasterPasswordUnlockWindow } from "windows/master_password_unlock_window.slint";
 export { SessionEditorWindow } from "windows/session_editor_window.slint";
 export { FolderEditorWindow } from "windows/folder_editor_window.slint";
-export { KnownHostsWindow } from "windows/known_hosts_window.slint";
 export { PrivateKeysWindow } from "windows/private_keys_window.slint";
 export { ProxiesWindow } from "windows/proxies_window.slint";
 export { ThemeManagerWindow } from "windows/theme_manager_window.slint";
@@ -98,7 +97,6 @@ export component MainWindow inherits Window {
     in-out property <string> status_text: "";
     in-out property <string> config_dir: "";
     in-out property <string> secret_store_status_text: "Secret store disabled.";
-    in-out property <string> secret_reset_confirmation_text: "";
     in-out property <string> editor_folder_text: "Saved Sessions (saved-sessions)";
     in-out property <string> new_folder_name_text: "";
     in-out property <string> editor_name_text: "";
@@ -120,18 +118,6 @@ export component MainWindow inherits Window {
     in-out property <bool> editor_is_dirty: false;
     in-out property <string> editor_section_text: "general";
     in-out property <string> editor_auth_test_status_text: "Run Auth Test to validate the current editor fields without saving.";
-    in-out property <bool> known_hosts_modal_visible: false;
-    in-out property <string> known_hosts_inventory_text: "No persisted known hosts yet.";
-    in-out property <string> known_hosts_selection_text: "No persisted known hosts are available.";
-    in-out property <string> known_hosts_details_text: "";
-    in-out property <string> known_hosts_path_text: "";
-    in-out property <string> known_hosts_clear_confirmation_text: "";
-    // A30（D17）：主机详情字段拆分（Rust 投影；页面用 @tr 标签渲染，替代英文拼接串）。
-    in-out property <string> known_hosts_detail_host_text: "";
-    in-out property <string> known_hosts_detail_port_text: "";
-    in-out property <string> known_hosts_detail_algorithm_text: "";
-    in-out property <string> known_hosts_detail_fingerprint_text: "";
-    in-out property <string> known_hosts_detail_path_text: "";
     // --- N4：私钥管理页 -----------------------------------------------------
     in-out property <bool> private_keys_modal_visible: false;
     in-out property <[PrivateKeyRow]> private_keys_rows: [];
@@ -495,13 +481,6 @@ export component MainWindow inherits Window {
     // N5：Session Editor 的 Appearance/Terminal 三态字段。
     in property <[TriStateField]> editor_appearance_fields: [];
     in property <[TriStateField]> editor_terminal_fields: [];
-    in-out property <string> known_hosts_inventory_rows_text: "";
-    in-out property <bool> known_hosts_inventory_empty: true;
-    in-out property <string> known_hosts_selection_kind_text: "empty";
-    in-out property <string> known_hosts_selection_host_text: "";
-    in-out property <string> known_hosts_selection_port_text: "";
-    in-out property <int> known_hosts_selection_index: 0;
-    in-out property <int> known_hosts_selection_total: 0;
     in-out property <string> active_session_kind_text: "welcome";
     in-out property <string> active_session_name_text: "";
     in-out property <string> active_session_state_text: "";
@@ -602,10 +581,6 @@ export component MainWindow inherits Window {
     in-out property <float> workspace_split_qc_leaf_y: 0.0;
     in-out property <float> workspace_split_qc_leaf_w: 0.0;
     in-out property <float> workspace_split_qc_leaf_h: 0.0;
-    // WP4：标签重命名弹窗（显示名仅内存，会话生命周期内有效）。
-    in-out property <bool> tab_rename_dialog_visible: false;
-    in-out property <string> tab_rename_tab_id: "";
-    in-out property <string> tab_rename_name_text: "";
     // 关闭确认弹窗（单关显示会话名；批量显示数量与活动连接数）。
     in-out property <bool> close_tabs_confirm_visible: false;
     in-out property <bool> close_tabs_confirm_single: false;
@@ -1016,15 +991,6 @@ export component MainWindow inherits Window {
     /// Expands the SFTP transfer drawer (shared transfer model with Transfers dock).
     callback transfer_open_sftp_drawer();
     callback toggle_commands();
-    callback update_secret_reset_confirmation(string);
-    callback reset_secrets();
-    callback open_known_hosts_manager();
-    callback close_known_hosts_manager();
-    callback select_previous_known_host();
-    callback select_next_known_host();
-    callback remove_selected_known_host();
-    callback update_known_hosts_clear_confirmation(string);
-    callback clear_all_known_hosts();
     // --- N4：私钥管理页 -----------------------------------------------------
     callback open_private_keys_manager();
     callback close_private_keys_manager();

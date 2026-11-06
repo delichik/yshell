@@ -8,8 +8,9 @@
 // 业务状态在 Rust（`runtime/editor.rs`）：本页只做展示与回调。
 
 import { Theme } from "../theme.slint";
+import { TextFormats } from "../text_formats.slint";
 import {
-    WinButton, WinComboBox, WinIconButton, WinNavItem, WinScrollIndicator, WinSwitch,
+    FocusRing, WinButton, WinComboBox, WinIconButton, WinNavItem, WinScrollIndicator, WinSwitch,
 } from "../components/basic/controls.slint";
 import { FormHint, FormRow } from "../components/basic/forms.slint";
 import { Icon } from "../components/basic/icons.slint";
@@ -182,6 +183,14 @@ component ManagedKeyPicker inherits Rectangle {
 
     accessible-role: combobox;
     accessible-label: root.has-selection ? root.selected-label : root.placeholder-text;
+    private property <bool> keyboard-focus: false;
+
+    FocusRing {
+        visible-ring: root.keyboard-focus;
+        radius: root.border-radius;
+        target-width: root.width;
+        target-height: root.height;
+    }
 
     HorizontalLayout {
         padding-left: Theme.spacing-12;
@@ -221,6 +230,8 @@ component ManagedKeyPicker inherits Rectangle {
             }
             return reject;
         }
+        focus-gained(reason) => { root.keyboard-focus = reason == FocusReason.tab-navigation; }
+        focus-lost(reason) => { root.keyboard-focus = false; }
     }
 
     picker_touch := TouchArea {
@@ -1155,7 +1166,13 @@ export component SessionEditor inherits Rectangle {
                                         label: @tr("Profile");
                                         WinComboBox {
                                             width: root.field-width - Theme.control-height - Theme.spacing-8;
+                                            // Rust 投影稳定 id（`no-proxy` / 托管 profile 名），
+                                            // 显示文案用 @tr 映射（`TextFormats.proxy-option-label`）。
                                             model: root.proxy-option-labels;
+                                            has-label-map: true;
+                                            label-for(id) => {
+                                                return TextFormats.proxy-option-label(id);
+                                            }
                                             current-index: root.proxy-option-index;
                                             enabled: !root.inherit-proxy;
                                             selected(index) => {

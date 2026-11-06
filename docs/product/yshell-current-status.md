@@ -54,7 +54,7 @@ UI 为 disabled + tooltip、空态，或决策延后。**不是待补闭环。**
 |---|---|
 | SSH 端口转发 | 可配 + Dock Start/Stop；runtime 不 provision |
 | 会话 Proxy 真连 | Manager/探测可用；native SSH/SFTP 拒绝 proxy |
-| Secret Store / 主密码 | 原型已补：Security 卡片、Set/Change/Remove/Reset、启动解锁（D35）。主密码状态机与启动解锁已接线；不再读 `YSHELL_MASTER_PASSWORD`（生产默认 OS keychain，文件加密库只在测试中显式注入），仍未加密 session/key 文件（真缺口）；runtime reset 仍要求 `RESET SECRETS`（与 D35 冲突） |
+| Secret Store / 主密码 | 原型已补：Security 卡片、Set/Change/Remove/Reset、启动解锁（D35）。主密码状态机与启动解锁已接线；不再读 `YSHELL_MASTER_PASSWORD`（生产默认 OS keychain，文件加密库只在测试中显式注入），仍未加密 session/key 文件（真缺口） |
 | Appearance 主题 | 原型已有 App theme（Mode / Accent）+ Terminal style 下拉，Settings 已有控件并即时预览 / Save 持久化；外观只读 `[ui] appearance_mode / appearance_accent`（不再有 `YSHELL_THEME` / `YSHELL_ACCENT` 环境变量）；Appearance 仍在页面内内联编辑字体 / 主题，未改为 Profile 下拉 |
 | Terminal 交互设置 | 原型已有 Middle / Right click、Multi-line paste、Auto copy；runtime 未接线 |
 | 弹窗尺寸 / 特殊窗 | 原型已统一为 compact / standard / wide；Host key Slint 仍 standard，SFTP Permissions 新窗未接线；旧 NewFolder / SftpEntry 窗口仍在代码中 |

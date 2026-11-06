@@ -17,12 +17,12 @@ use copypasta::{ClipboardContext, ClipboardProvider};
 use crate::bootstrap::generated_ui::{
     AboutWindow, AuthKeyOption, AuthPromptWindow, CompactConfirmWindow, EditorTunnelRow,
     FolderEditorWindow, HostKeyWindow, HostKeysWindow, InheritSource, KnownHostAddWindow,
-    KnownHostExportWindow, KnownHostImportWindow, KnownHostsWindow, LoggingWindow,
-    LoginStepKeysWindow, LoginStepRow, LoginStepWaitWindow, MainWindow, MasterPasswordUnlockWindow,
-    MasterPasswordWindow, NewFolderWindow, PasswordPromptWindow, PrivateKeyDeployWindow,
-    PrivateKeyExportWindow, PrivateKeyGenerateWindow, PrivateKeyImportWindow, PrivateKeysWindow,
-    ProxiesWindow, SessionEditorWindow, SettingsWindow, SftpChmodWindow, SftpConflictWindow,
-    SftpEntryWindow, SftpPropertiesWindow, Theme, ThemeManagerWindow, TunnelEditorWindow,
+    KnownHostExportWindow, KnownHostImportWindow, LoggingWindow, LoginStepKeysWindow, LoginStepRow,
+    LoginStepWaitWindow, MainWindow, MasterPasswordUnlockWindow, MasterPasswordWindow,
+    NewFolderWindow, PasswordPromptWindow, PrivateKeyDeployWindow, PrivateKeyExportWindow,
+    PrivateKeyGenerateWindow, PrivateKeyImportWindow, PrivateKeysWindow, ProxiesWindow,
+    SessionEditorWindow, SettingsWindow, SftpChmodWindow, SftpConflictWindow, SftpEntryWindow,
+    SftpPropertiesWindow, Theme, ThemeManagerWindow, TunnelEditorWindow,
 };
 use crate::bootstrap::{
     frame_image, host_key_group_from, host_key_group_matches, private_key_row_from,
@@ -98,6 +98,11 @@ struct ConfirmSpec {
     details: Vec<String>,
     /// 后果清单下的补充说明（端口转发等；空 = 不显示）。
     note: String,
+    /// CloseTabs：CompactConfirm 用这些参数走 TextFormats，不显示 Rust 英文句子。
+    close_tabs_single: bool,
+    close_tabs_name: String,
+    close_tabs_count: i32,
+    close_tabs_active_count: i32,
 }
 
 /// 绝大多数确认框只有一句话说明；后果清单仅在关标签 / 退出确认里使用。
@@ -120,6 +125,10 @@ fn confirm_spec(
         dont_ask,
         details: Vec::new(),
         note: String::new(),
+        close_tabs_single: false,
+        close_tabs_name: String::new(),
+        close_tabs_count: 0,
+        close_tabs_active_count: 0,
     }
 }
 
@@ -131,8 +140,6 @@ struct LocalDialogFlags {
     delete_session: bool,
     quit: bool,
     new_folder: bool,
-    tab_rename: bool,
-    tab_rename_tab_id: String,
     host_keys_clear: bool,
     host_keys_remove: bool,
     /// Non-"none" opens the SFTP entry tool window.
@@ -182,8 +189,6 @@ pub(crate) struct DialogWindowManager {
     tunnel_editor_shown: bool,
     folder_editor: Option<FolderEditorWindow>,
     folder_editor_shown: bool,
-    known_hosts: Option<KnownHostsWindow>,
-    known_hosts_shown: bool,
     private_keys: Option<PrivateKeysWindow>,
     private_keys_shown: bool,
     proxies: Option<ProxiesWindow>,
@@ -220,8 +225,6 @@ pub(crate) struct DialogWindowManager {
     host_key_shown: bool,
     new_folder: Option<NewFolderWindow>,
     new_folder_shown: bool,
-    tab_rename: Option<NewFolderWindow>,
-    tab_rename_shown: bool,
     sftp_entry: Option<SftpEntryWindow>,
     sftp_entry_shown: bool,
     sftp_conflict: Option<SftpConflictWindow>,
@@ -272,8 +275,6 @@ impl DialogWindowManager {
                 tunnel_editor_shown: false,
                 folder_editor: None,
                 folder_editor_shown: false,
-                known_hosts: None,
-                known_hosts_shown: false,
                 private_keys: None,
                 private_keys_shown: false,
                 proxies: None,
@@ -306,8 +307,6 @@ impl DialogWindowManager {
                 host_key_shown: false,
                 new_folder: None,
                 new_folder_shown: false,
-                tab_rename: None,
-                tab_rename_shown: false,
                 sftp_entry: None,
                 sftp_entry_shown: false,
                 sftp_conflict: None,
@@ -355,11 +354,6 @@ impl DialogWindowManager {
         if window.get_new_folder_dialog_visible() {
             self.local.new_folder = true;
             window.set_new_folder_dialog_visible(false);
-        }
-        if window.get_tab_rename_dialog_visible() {
-            self.local.tab_rename = true;
-            self.local.tab_rename_tab_id = window.get_tab_rename_tab_id().to_string();
-            window.set_tab_rename_dialog_visible(false);
         }
         if window.get_host_keys_clear_dialog_visible() {
             self.local.host_keys_clear = true;
@@ -481,20 +475,6 @@ impl DialogWindowManager {
                 main,
             )?,
             folder_editor
-        );
-        apply_modal!(
-            sync_projection_tool(
-                projection.known_hosts_modal_visible,
-                &mut self.known_hosts_shown,
-                &mut self.known_hosts,
-                || KnownHostsWindow::new().map_err(AppError::from_error),
-                |w| prep_tool_window!(w),
-                |w| wire_known_hosts_window(w, Rc::clone(&runtime)),
-                |w, p, _| sync_known_hosts(w, p),
-                projection,
-                main,
-            )?,
-            known_hosts
         );
         apply_modal!(
             sync_projection_tool(
@@ -716,7 +696,6 @@ impl DialogWindowManager {
             host_key
         );
         self.sync_local_new_folder(Rc::clone(&runtime), host.clone(), main, owner_id)?;
-        self.sync_local_tab_rename(Rc::clone(&runtime), host.clone(), main, owner_id)?;
         self.sync_sftp_entry(projection, main, owner_id)?;
         apply_modal!(
             sync_projection_tool(
@@ -943,6 +922,10 @@ impl DialogWindowManager {
             );
             spec.details = projection.close_tabs_confirm_details.clone();
             spec.note = projection.close_tabs_confirm_note_text.clone();
+            spec.close_tabs_single = projection.close_tabs_confirm_single;
+            spec.close_tabs_name = projection.close_tabs_confirm_name_text.clone();
+            spec.close_tabs_count = projection.close_tabs_confirm_count;
+            spec.close_tabs_active_count = projection.close_tabs_confirm_active_count;
             return Some(spec);
         }
         if projection.close_window_confirm_visible {
@@ -1041,11 +1024,19 @@ impl DialogWindowManager {
         window.set_details(option_model(&spec.details));
         window.set_note_text(spec.note.into());
         window.set_confirm_label(spec.confirm_label.into());
+        let ui_kind = match spec.kind {
+            ConfirmKind::EditorDiscard => "editor-discard",
+            ConfirmKind::CloseTabs => "close-tabs",
+            _ => "",
+        };
+        window.set_kind(ui_kind.into());
+        window.set_close_tabs_single(spec.close_tabs_single);
+        window.set_close_tabs_name(spec.close_tabs_name.clone().into());
+        window.set_close_tabs_count(spec.close_tabs_count);
+        window.set_close_tabs_active_count(spec.close_tabs_active_count);
         window.set_destructive(spec.destructive);
         window.set_show_dont_ask_again(spec.show_dont_ask);
         window.set_dont_ask_again(spec.dont_ask);
-        window.set_confirmation_token("".into());
-        window.set_confirmation_text("".into());
         let was_open = self.confirm_kind.is_some();
         self.confirm_kind = Some(spec.kind);
         if !was_open {
@@ -1285,7 +1276,7 @@ impl DialogWindowManager {
         if want {
             if self.new_folder.is_none() {
                 let window = NewFolderWindow::new().map_err(AppError::from_error)?;
-                wire_new_folder_window(&window, runtime, host, false);
+                wire_new_folder_window(&window, runtime, host);
                 self.new_folder = Some(window);
             }
             if let Some(window) = self.new_folder.as_ref() {
@@ -1302,41 +1293,6 @@ impl DialogWindowManager {
                 let _ = window.hide();
             }
             self.new_folder_shown = false;
-            self.end_modal();
-        }
-        Ok(())
-    }
-
-    fn sync_local_tab_rename(
-        &mut self,
-        runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
-        host: Weak<RefCell<DialogHost>>,
-        main: Option<&MainWindow>,
-        owner_id: Option<u64>,
-    ) -> AppResult<()> {
-        let want = self.local.tab_rename;
-        if want {
-            if self.tab_rename.is_none() {
-                let window = NewFolderWindow::new().map_err(AppError::from_error)?;
-                window.set_title_text("Rename Tab".into());
-                window.set_confirm_label("Rename".into());
-                wire_new_folder_window(&window, runtime, host, true);
-                self.tab_rename = Some(window);
-            }
-            if let Some(window) = self.tab_rename.as_ref() {
-                if let Some(main) = main {
-                    window.set_name_text(main.get_tab_rename_name_text());
-                }
-                if !self.tab_rename_shown {
-                    self.show_aux_modal(window, main, owner_id)?;
-                    self.tab_rename_shown = true;
-                }
-            }
-        } else if self.tab_rename_shown {
-            if let Some(window) = self.tab_rename.as_ref() {
-                let _ = window.hide();
-            }
-            self.tab_rename_shown = false;
             self.end_modal();
         }
         Ok(())
@@ -1954,14 +1910,6 @@ fn wire_folder_editor_window(
 ) {
     wire_tool_title_drag!(window);
     wire_tool_on_close!(window, runtime, |r| r.close_folder_editor());
-}
-
-fn wire_known_hosts_window(
-    window: &KnownHostsWindow,
-    runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
-) {
-    wire_tool_title_drag!(window);
-    wire_tool_on_close!(window, runtime, |r| r.close_known_hosts_manager());
 }
 
 fn wire_private_keys_window(
@@ -2894,33 +2842,19 @@ fn wire_new_folder_window(
     window: &NewFolderWindow,
     runtime: Rc<RefCell<crate::runtime::AppRuntime>>,
     host: Weak<RefCell<DialogHost>>,
-    tab_rename: bool,
 ) {
     wire_tool_title_drag!(window);
     let host_cancel = host.clone();
     window.on_canceled(move || {
         if let Some(host) = host_cancel.upgrade() {
-            if tab_rename {
-                host.borrow_mut().dialogs.local.tab_rename = false;
-            } else {
-                host.borrow_mut().dialogs.local.new_folder = false;
-            }
+            host.borrow_mut().dialogs.local.new_folder = false;
         }
     });
     let rt = Rc::clone(&runtime);
-    let host_confirm = host.clone();
     window.on_confirmed(move |name| {
-        if let Some(host) = host_confirm.upgrade() {
-            if tab_rename {
-                let tab_id = host.borrow().dialogs.local.tab_rename_tab_id.clone();
-                host.borrow_mut().dialogs.local.tab_rename = false;
-                if !tab_id.is_empty() {
-                    let _ = rt.borrow_mut().rename_tab(tab_id.as_ref(), name.as_ref());
-                }
-            } else {
-                host.borrow_mut().dialogs.local.new_folder = false;
-                let _ = rt.borrow_mut().create_root_saved_folder(name.as_ref());
-            }
+        if let Some(host) = host.upgrade() {
+            host.borrow_mut().dialogs.local.new_folder = false;
+            let _ = rt.borrow_mut().create_root_saved_folder(name.as_ref());
         }
     });
 }
@@ -3824,30 +3758,6 @@ fn sync_folder_editor(w: &FolderEditorWindow, p: &AppProjection, _m: Option<&Mai
     w.set_folder_name(p.folder_editor_name_text.clone().into());
     w.set_folder_path(p.folder_editor_path_text.clone().into());
     w.set_status_text(p.folder_editor_status_text.clone().into());
-}
-
-fn sync_known_hosts(w: &KnownHostsWindow, p: &AppProjection) {
-    w.set_inventory_text(p.known_hosts_inventory_rows_text.clone().into());
-    let selection = if p.known_hosts_selection_total > 0 {
-        format!(
-            "{} {} ({}/{})",
-            p.known_hosts_selection_kind_text,
-            p.known_hosts_selection_host_text,
-            p.known_hosts_selection_index + 1,
-            p.known_hosts_selection_total
-        )
-    } else {
-        String::new()
-    };
-    w.set_selection_text(selection.into());
-    w.set_path_text(p.known_hosts_path_text.clone().into());
-    w.set_details_text(p.known_hosts_details_text.clone().into());
-    w.set_detail_host_text(p.known_hosts_detail_host_text.clone().into());
-    w.set_detail_port_text(p.known_hosts_detail_port_text.clone().into());
-    w.set_detail_algorithm_text(p.known_hosts_detail_algorithm_text.clone().into());
-    w.set_detail_fingerprint_text(p.known_hosts_detail_fingerprint_text.clone().into());
-    w.set_detail_path_text(p.known_hosts_detail_path_text.clone().into());
-    w.set_clear_confirmation_text(p.known_hosts_clear_confirmation_text.clone().into());
 }
 
 fn sync_private_keys(w: &PrivateKeysWindow, p: &AppProjection, _m: Option<&MainWindow>) {

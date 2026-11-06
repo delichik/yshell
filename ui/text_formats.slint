@@ -35,12 +35,6 @@ export global TextFormats {
         return @tr("MainWindow" => "global={0} format={1} directory={2}", enabled, format, directory);
     }
 
-    public pure function known-hosts-inventory-display(empty: bool, rows: string) -> string {
-        return empty
-            ? @tr("MainWindow" => "No persisted known hosts yet.")
-            : rows;
-    }
-
     public pure function active-session-display(kind: string, name: string, state: string, saved_count: int) -> string {
         return kind == "session"
             ? name + "  " + state
@@ -171,16 +165,6 @@ export global TextFormats {
             return @tr("MainWindow" => "{0} must be a whole number.", settings-terminal-field-label(field));
         }
         return @tr("MainWindow" => "{0} must be between {1} and {2}.", settings-terminal-field-label(field), value, limit);
-    }
-
-    public pure function known-hosts-selection(kind: string, host: string, port: string, index: int, total: int) -> string {
-        if kind == "selected" {
-            return @tr("MainWindow" => "Selected known host {0}:{1} ({2} of {3}).", host, port, index, total);
-        }
-        if kind == "loaded" {
-            return @tr("MainWindow" => "Known hosts manager loaded {n} entry." | "Known hosts manager loaded {n} entries." % total);
-        }
-        return @tr("MainWindow" => "No persisted known hosts are available.");
     }
 
     public pure function saved-session-selection(kind: string, name: string, host: string, id: string) -> string {
@@ -459,13 +443,6 @@ export global TextFormats {
         }
         if kind == "logging-no-session" {
             return @tr("MainWindow" => "Open a session before starting terminal logging.");
-        }
-        if kind == "secrets-reset" {
-            // The old `master-password-missing` / `master-password-empty`
-            // branches had no remaining producer once the environment-variable
-            // master password was removed (the reset path disables the file
-            // store and reports the generic copy below).
-            return @tr("MainWindow" => "Reset the local secret store at `{0}`.", param_1);
         }
         if kind == "quick-connect-error" {
             return @tr("MainWindow" => "Quick Connect error: {0}", param_1);
@@ -1372,27 +1349,6 @@ export global TextFormats {
     // I18N-1：status-message 分组（避免单个函数体过深）。
     public pure function status-message-managers(kind: string, param_1: string, param_2: string, fallback: string) -> string {
         // --- I18N-1：密钥管理器 / 代理 / 主题 / 文件夹默认值 -------------------
-        if kind == "known-hosts-opened" {
-            return @tr("MainWindow" => "Known hosts manager opened with {n} persisted entry." | "Known hosts manager opened with {n} persisted entries." % round(param_1.to-float()), round(param_1.to-float()));
-        }
-        if kind == "known-hosts-closed" {
-            return @tr("MainWindow" => "Closed known hosts manager.");
-        }
-        if kind == "known-hosts-selected" {
-            return @tr("MainWindow" => "Selected known host {0}.", param_1);
-        }
-        if kind == "known-hosts-empty" {
-            return @tr("MainWindow" => "No persisted known hosts are available.");
-        }
-        if kind == "known-hosts-loaded" {
-            return @tr("MainWindow" => "Known hosts manager loaded {n} entry." | "Known hosts manager loaded {n} entries." % round(param_1.to-float()), round(param_1.to-float()));
-        }
-        if kind == "known-hosts-removed" {
-            return @tr("MainWindow" => "Removed known host entry for {0} from `{1}`.", param_1, param_2);
-        }
-        if kind == "known-hosts-cleared" {
-            return @tr("MainWindow" => "Cleared all persisted known hosts from `{0}`.", param_1);
-        }
         if kind == "private-keys-opened" {
             return @tr("MainWindow" => "Private keys manager opened with {n} managed key." | "Private keys manager opened with {n} managed keys." % round(param_1.to-float()), round(param_1.to-float()));
         }
@@ -1775,6 +1731,22 @@ export global TextFormats {
             + (@tr("MainWindow" => "{n} of them has an active connection and will be disconnected." | "{n} of them have active connections and will be disconnected." % active_count, active_count));
     }
 
+    public pure function close-tabs-confirm-label() -> string {
+        return @tr("MainWindow" => "Close");
+    }
+
+    public pure function editor-discard-confirm-title() -> string {
+        return @tr("MainWindow" => "Discard Changes");
+    }
+
+    public pure function editor-discard-confirm-message() -> string {
+        return @tr("MainWindow" => "Discard unsaved changes to this session?");
+    }
+
+    public pure function editor-discard-confirm-label() -> string {
+        return @tr("MainWindow" => "Discard");
+    }
+
     // --- N5：三态字段的来源提示 -----------------------------------------------
     /// `kind` 由 Rust 投影：builtin / global / folder / local-folder /
     /// local-session / scheme。`param` 是文件夹名或方案名（其余为空）。
@@ -1982,6 +1954,14 @@ export global TextFormats {
         }
         if id == "custom" {
             return @tr("MainWindow" => "Custom");
+        }
+        return id;
+    }
+
+    /// Session Editor Proxy 下拉：`no-proxy` 走翻译，托管 profile 名原样显示。
+    public pure function proxy-option-label(id: string) -> string {
+        if id == "no-proxy" {
+            return @tr("MainWindow" => "No Proxy");
         }
         return id;
     }

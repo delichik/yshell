@@ -118,6 +118,7 @@ export component WorkspaceTabBar inherits Rectangle {
                             WinIconButton {
                                 icon: "plus";
                                 accessible-name: @tr("MainWindow" => "New session");
+                                tooltip-text: @tr("MainWindow" => "New session");
                                 clicked => { root.new-session(); }
                             }
                         }

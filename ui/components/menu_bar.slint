@@ -221,6 +221,9 @@ export component MenuBar inherits Rectangle {
                     accessible-name: root.right-collapsed
                         ? @tr("MainWindow" => "Expand tool panels")
                         : @tr("MainWindow" => "Collapse tool panels");
+                    tooltip-text: root.right-collapsed
+                        ? @tr("MainWindow" => "Expand tool panels")
+                        : @tr("MainWindow" => "Collapse tool panels");
                     clicked => { root.toggle-right-side(); }
                 }
             }
