@@ -16,7 +16,7 @@
 | 2 | 页面与弹窗：Settings + 主密码、Session Editor、管理器、剩余弹窗、控件/表单/预览规范 | ✅ 完成（待用户核验） | 2026-11-05 · `2d26a06` … `2fbc72d`（#2–#16） |
 | 3 | 主壳菜单/快捷键/sync banner、停靠面板、工作区 | 🔍 待用户核验 | #17 `de3aef8`、#18 `1125e6a`、#19 `07ed35d` |
 | 4 | i18n 尾部、遗留清理、文档同步 | 🔍 待用户核验 | #20/#21 `1ee6b45` |
-| 5 | 全量验收（门禁 + 用户逐窗核验 + 证据归档） | ⬜ 未开始 | — |
+| 5 | 全量验收（门禁 + 用户逐窗核验 + 证据归档） | 🔄 门禁已过，待用户核验 | 2026-11-06 · HEAD `7b168d1` |
 
 > 波次状态以本表为准；事项级细节见 §4，历史记录见文末附录。
 
@@ -41,7 +41,7 @@ $env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
 - `D:\SDK\msys64\usr\bin` 提供 `perl`，vendored OpenSSL 构建需要；缺了会重编/失败。
 - 门禁：`cargo check -p yshell-app`、`cargo test -p yshell-app`、`cargo fmt --all --check`、`cargo xtask check`、`bash scripts/i18n/check.sh`。
 - 本地运行：`D:\SDK\cargo-target\debug\yshell.exe --config-dir <隔离目录>`（**配置不读任何 `YSHELL_*` 环境变量**；语言/外观等写在 `config.toml` 的 `[ui]`）。
-- 旧路径 `D:\NewSpace\yshell\target\debug\yshell.exe` 也已替换为新构建；桌面快捷方式 `YShell (dev)` 指向新路径。
+- 仓库 `target` 内的 exe 副本与桌面快捷方式已按用户要求清理；不再在仓库外创建证据/截图目录。
 
 ## 3. 决策记录（现行）
 
@@ -91,13 +91,14 @@ $env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
 
 | # | 事项 | 状态 | 当前进度 |
 |---|---|---|---|
-| 22a | D34 MCP 字段闭环：Port / Listen / API key / View / Control + TCP bind + 用户标签 ACL | 🔍 待提交 / 核验 | 本工作区未提交改动 |
+| — | （无） | — | — |
 
 ### 4.3 未完成（待做）
 
 | # | 事项 | 状态 | 备注 |
 |---|---|---|---|
-| 22 | 波 5 · 验收：全量门禁 + 用户逐窗核验 + 证据归档 | ⬜ | — |
+| 22 | 波 5 · 验收：全量门禁 + 用户逐窗核验 | 🔄 | 门禁已过；**待用户逐窗核验**（证据只记波次记录，不建仓库外目录） |
+| 22a | D34 MCP 字段闭环 | 🔍 待核验 | 已提交 `7b168d1`（随波 5 一起核验） |
 
 ### 4.4 本版不做（⛔，来自 status §2 与决策）
 
@@ -123,10 +124,10 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 
 ## 5. 剩余顺序（按用户「逐项核验」节奏）
 
-1. **第 2 波已全部完成**：#0–#16 均已本地提交（`fe7f037` … `ee9c807` / `2fbc72d`）。
-2. **第 3 波**：#17 / #18 / #19 已本地提交，待用户核验（不含分屏上限 4 / N9 Pause·Receive）。
-3. **第 4 波**：#20 / #21 已实现并过门禁，待用户核验；接着 #22 验收。
-4. **设计权威**：仅 `docs/prototypes/**` 及其文档为设计稿；交互契约 / archive 仅参考（见根 `AGENTS.md`）。
+1. **第 2–4 波代码已全部落地**（含 D34 MCP `7b168d1`）；门禁结果见 §8/波次记录。
+2. **当前**：波 5 —— 用户按 §7 逐窗核验；通过后在文末波次记录标 ✅ 并归档结论。
+3. **设计权威**：仅 `docs/prototypes/**` 及其文档为设计稿；交互契约 / archive 仅参考（见根 `AGENTS.md`）。
+4. **本版不做 / status §3 真缺口**不进本波（端口转发、Proxy 真连、主密码文件加密等）。
 
 ## 6. 已知未收口 / 风险
 
@@ -146,10 +147,12 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 ## 7. 每项由用户核验的要点（简表）
 
 - Settings：七分区、开关/表单观感、App theme 即时预览、Save/Cancel、主密码 Set/解锁。
+- **Settings → MCP（D34）**：Enable 后 Port/Listen/API key/View/Control/Auto-approve 可改；LAN 无密钥应拒绝；Generate/Copy；状态行显示 `host:port`；`yshell --mcp` 仍作 stdio 桥。
 - Session Editor：六分区、label 右对齐、Host/Port 分行、终端预览整行、Login Script 子窗、Tunnel Editor、Save/Save and Connect。
 - 管理器：四周管理器清单/右键/工具条、7 个子窗（Add/Import/Export/Generate/Deploy）。
 - 剩余弹窗：SFTP 行右键 Change Permissions（compact 560×400，八进制↔勾选）；关标签/退出后果清单与 Don't ask again；About 开源许可展开；Logging；SFTP Conflict/Properties。
 - N9 同步：组内广播、非成员不广播、banner On/Off + End all（无 Pause）、AI 输入自动退组。
+- 主壳 / 波 3–4：Tools/Session 菜单、`Ctrl+Shift+S`、`F11`/Focus、标签图标与原地改名、Find Across、REC、QC Clear、SFTP 原地新建/改名、标题栏约 40px、启动时窗体不在屏外透桌面。
 - 环境：无任何 `YSHELL_*`；语言/外观/减少动画只由 `config.toml` 决定。
 
 ## 8. 变更记录（本地提交时间线，未 push）
@@ -179,7 +182,7 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 - 交付事项：#2–#16 —— Settings 七分区 + 主密码两窗、Session Editor 全分区 + Login Script + 子窗、四个管理器 + 7 个子窗、布尔控件统一、共享表单/详情行、终端预览尺寸统一、剩余弹窗（sftp-chmod 入口、关标签/退出后果清单、auth-prompt、About 开源许可、Logging/Conflict/Properties）、i18n 随文案增量。
 - 提交范围：`2d26a06` … `2fbc72d`（共 15 个本地提交；其中含用户反馈修复：开关/表单/预览、拖拽/居中回焦、环境变量配置清理、N9 双向同步组）。
 - 门禁：`cargo check`、`cargo test -p yshell-app`（462 + 集成 2/3/3）、`cargo fmt --all --check`、`cargo xtask check`、i18n `check.sh` 全绿；**未做 UI 自动化测试**（用户要求）。
-- 证据：`D:\NewSpace\ui-evidence\wiring\`（form-consistency / preview-switch-closeout / manager-forms-closeout / dialogs-closeout-a/b 等）与 `wave2\*` 截图/日志。
+- 证据：门禁结果与结论记入本波次记录（截图/脚本等临时产物已按用户要求清理，不再在仓库外保留）。
 - 遗留：SFTP 工具条 `⋯ More` 菜单（权限入口暂仅行右键）；开源许可清单按平台 target 生成；Settings 窗口尺寸待用户确认；Login Wait 子窗尺寸待定。
 
 ### 第 3 波 · 完成（2026-11-05，待用户核验）
@@ -195,3 +198,15 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
 - #21 遗留清理：删除 `known_hosts` 页/窗与 CLEAR 打字 API；删除死路径 `RESET SECRETS` API（活路径仍是主密码 Reset 破坏性按钮）；CompactConfirm 去掉 token 输入；删除未使用的 `confirm_dialog.slint`；WinTextInput / ManagedKeyPicker FocusRing；标签「＋」与菜单栏停靠开关 tooltip；status / GAPS / catalogs 同步。
 - 门禁：`cargo xtask check`、`cargo test -p yshell-app`（463 + 集成 2/3/3）、`bash scripts/i18n/check.sh` 全绿。
 - 遗留：其余确认框（Quit / Close Window / Host Keys / MCP 等）标题正文仍为 Rust 英文直投（非本波点名项）。
+
+### 第 5 波 · 进行中（2026-11-06，门禁已过 / 待用户核验）
+
+- 范围：全量门禁 + 用户逐窗核验 + 证据归档（**不做** UI 自动化；**不 push**）。
+- HEAD：`7b168d1`（含 D34 MCP Port/Listen/API key/View/Control + 标题栏 40px + 启动钳回屏幕）。
+- 门禁（2026-11-06）：
+  - `cargo xtask check` ✅
+  - `cargo test -p yshell-app --locked` ✅ **469** + 集成 2/3/3
+  - `bash scripts/i18n/check.sh` ✅ 1480 msgid 同步
+  - `cargo build -p yshell-app --locked` ✅ → `D:\SDK\cargo-target\debug\yshell.exe`
+- 证据：门禁结果记在本波次记录（**不**在仓库外另建证据目录）。
+- 请用户按 §7 核验；重点补核：**Settings → MCP**（Enable/Port/Listen/LAN 密钥/View/Control）、**标题栏高度**、**启动时窗体不在屏外透桌面**；波 3/4 其余项一并过一遍即可。
