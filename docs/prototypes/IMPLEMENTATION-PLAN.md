@@ -34,14 +34,13 @@
 
 ```powershell
 $env:PATH='D:\SDK\msys64\ucrt64\bin;D:\SDK\msys64\usr\bin;'+$env:PATH
-$env:CARGO_HOME='D:\SDK\cargo-home'
-$env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
+# CARGO_HOME / CARGO_TARGET_DIR 使用 Cargo 默认值（%USERPROFILE%\.cargo、仓库 target/）
 ```
 
 - `D:\SDK\msys64\usr\bin` 提供 `perl`，vendored OpenSSL 构建需要；缺了会重编/失败。
 - 门禁：`cargo check -p yshell-app`、`cargo test -p yshell-app`、`cargo fmt --all --check`、`cargo xtask check`、`bash scripts/i18n/check.sh`。
-- 本地运行：`D:\SDK\cargo-target\debug\yshell.exe --config-dir <隔离目录>`（**配置不读任何 `YSHELL_*` 环境变量**；语言/外观等写在 `config.toml` 的 `[ui]`）。
-- 仓库 `target` 内的 exe 副本与桌面快捷方式已按用户要求清理；不再在仓库外创建证据/截图目录。
+- 本地运行：`D:\NewSpace\yshell\target\debug\yshell.exe --config-dir <隔离目录>`（**配置不读任何 `YSHELL_*` 环境变量**；语言/外观等写在 `config.toml` 的 `[ui]`）。
+- 构建/运行产物只落在仓库内 `target/` 与默认 Cargo home；`D:\SDK` 下的临时构建目录、日志、脚本、exe 副本与桌面快捷方式已按用户要求清理，不再在仓库外创建产物。
 
 ## 3. 决策记录（现行）
 
@@ -207,6 +206,6 @@ Quick Commands 内容（仅空态）· 文件夹 New/Rename/Delete/Connect All �
   - `cargo xtask check` ✅
   - `cargo test -p yshell-app --locked` ✅ **469** + 集成 2/3/3
   - `bash scripts/i18n/check.sh` ✅ 1480 msgid 同步
-  - `cargo build -p yshell-app --locked` ✅ → `D:\SDK\cargo-target\debug\yshell.exe`
+  - `cargo build -p yshell-app --locked` ✅ → 仓库 `target/debug/yshell.exe`（`D:\SDK\cargo-*` 临时构建目录已按用户要求删除）
 - 证据：门禁结果记在本波次记录（**不**在仓库外另建证据目录）。
 - 请用户按 §7 核验；重点补核：**Settings → MCP**（Enable/Port/Listen/LAN 密钥/View/Control）、**标题栏高度**、**启动时窗体不在屏外透桌面**；波 3/4 其余项一并过一遍即可。
