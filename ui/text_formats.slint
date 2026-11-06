@@ -1929,7 +1929,8 @@ export global TextFormats {
             if detail == "" {
                 return @tr("MainWindow" => "On");
             }
-            return @tr("MainWindow" => "Listening on 127.0.0.1:{0}", detail);
+            // `detail` is `host:port` (Local = 127.0.0.1, LAN = 0.0.0.0).
+            return @tr("MainWindow" => "Listening on {0}", detail);
         }
         if kind == "failed" {
             if detail == "" {

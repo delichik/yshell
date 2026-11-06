@@ -339,6 +339,149 @@ pub fn select_backend() -> AppResult<()> {
     Ok(())
 }
 
+/// 把窗口整体钳回最近显示器的工作区，并强制整窗重绘。
+///
+/// Windows 上无框 + 软件渲染 + DWM 圆角时，若启动时窗体有一部分在屏幕外，
+/// 屏外客户区往往不会进入 DWM 表面；拖回或露出后那一块会透出桌面。
+/// 启动后把原点钳进 `rcWork`，再 `RedrawWindow`，避免首帧就留下未绘制区域。
+/// 最大化 / 最小化不改位置。非 Windows / HWND 未就绪为 no-op。
+pub fn ensure_window_on_screen(window: &slint::Window) {
+    #[cfg(windows)]
+    ensure_window_on_screen_windows(window);
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+    }
+}
+
+/// `show()` 后 HWND / 尺寸可能尚未落地：轮询补做 on-screen 钳位 + 圆角。
+pub fn finish_main_window_chrome_when_ready<W: slint::ComponentHandle + 'static>(
+    weak: slint::Weak<W>,
+    attempts_left: u8,
+) {
+    slint::Timer::single_shot(AUX_WINDOW_READY_POLL, move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        ensure_window_on_screen(window.window());
+        apply_rounded_corners(window.window());
+        if !window_hwnd_ready(window.window()) && attempts_left > 0 {
+            finish_main_window_chrome_when_ready(window.as_weak(), attempts_left - 1);
+        }
+    });
+}
+
+/// 将窗口矩形的左上角钳到工作区内（物理像素）。窗比工作区还大时贴齐工作区左上角。
+#[cfg(any(windows, test))]
+fn clamp_window_origin_to_work_area(
+    window: (i32, i32, i32, i32),
+    work: (i32, i32, i32, i32),
+) -> (i32, i32) {
+    let (left, top, right, bottom) = window;
+    let (work_left, work_top, work_right, work_bottom) = work;
+    let width = (right - left).max(1);
+    let height = (bottom - top).max(1);
+    let work_width = (work_right - work_left).max(1);
+    let work_height = (work_bottom - work_top).max(1);
+    let max_left = if width >= work_width {
+        work_left
+    } else {
+        work_right - width
+    };
+    let max_top = if height >= work_height {
+        work_top
+    } else {
+        work_bottom - height
+    };
+    (
+        left.clamp(work_left, max_left.max(work_left)),
+        top.clamp(work_top, max_top.max(work_top)),
+    )
+}
+
+#[cfg(windows)]
+fn ensure_window_on_screen_windows(window: &slint::Window) {
+    use windows_sys::Win32::Foundation::{HWND, RECT};
+    use windows_sys::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromWindow, RedrawWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+        RDW_ALLCHILDREN, RDW_ERASE, RDW_FRAME, RDW_INVALIDATE, RDW_UPDATENOW,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetWindowRect, IsIconic, IsZoomed, SetWindowPos, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER,
+    };
+
+    let Some(hwnd) = hwnd_of(window) else {
+        return;
+    };
+
+    #[allow(unsafe_code)]
+    unsafe {
+        if IsZoomed(hwnd) != 0 || IsIconic(hwnd) != 0 {
+            return;
+        }
+        let mut rect = RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
+        if GetWindowRect(hwnd, &mut rect) == 0 || rect.right <= rect.left || rect.bottom <= rect.top
+        {
+            return;
+        }
+        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if monitor.is_null() {
+            return;
+        }
+        let mut info = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            rcMonitor: RECT {
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0,
+            },
+            rcWork: RECT {
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0,
+            },
+            dwFlags: 0,
+        };
+        if GetMonitorInfoW(monitor, &mut info) == 0 {
+            return;
+        }
+        let (new_left, new_top) = clamp_window_origin_to_work_area(
+            (rect.left, rect.top, rect.right, rect.bottom),
+            (
+                info.rcWork.left,
+                info.rcWork.top,
+                info.rcWork.right,
+                info.rcWork.bottom,
+            ),
+        );
+        if new_left != rect.left || new_top != rect.top {
+            SetWindowPos(
+                hwnd,
+                std::ptr::null_mut(),
+                new_left,
+                new_top,
+                0,
+                0,
+                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+            );
+        }
+        // 即使位置未变，也对整窗强制重绘：屏外首帧留下的透明洞需要一次全客户区刷新。
+        let _ = RedrawWindow(
+            hwnd as HWND,
+            std::ptr::null(),
+            std::ptr::null_mut(),
+            RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW,
+        );
+    }
+}
+
 /// 为无框窗口请求 Win11 DWM 圆角。
 ///
 /// `show()` 之后、事件循环首帧之前 HWND 可能尚未就绪；调用方可在
@@ -515,7 +658,7 @@ fn restored_drag_origin(
 
 #[cfg(test)]
 mod tests {
-    use super::{centered_aux_origin, restored_drag_origin};
+    use super::{centered_aux_origin, clamp_window_origin_to_work_area, restored_drag_origin};
 
     #[test]
     fn center_aux_origin_centers_in_owner_client_rect() {
@@ -569,6 +712,36 @@ mod tests {
         assert_eq!(
             restored_drag_origin((2880, 50), 1920, 1920, 24, 1400),
             (2180, 26)
+        );
+    }
+
+    #[test]
+    fn clamp_origin_pulls_partially_offscreen_window_back() {
+        // 1920×1080 工作区；窗口 800×600，左边越出 100px → 贴回 x=0。
+        assert_eq!(
+            clamp_window_origin_to_work_area((-100, 80, 700, 680), (0, 0, 1920, 1080)),
+            (0, 80)
+        );
+        // 右边越出：left 钳到 1920-800=1120。
+        assert_eq!(
+            clamp_window_origin_to_work_area((1500, 100, 2300, 700), (0, 0, 1920, 1080)),
+            (1120, 100)
+        );
+    }
+
+    #[test]
+    fn clamp_origin_keeps_onscreen_window() {
+        assert_eq!(
+            clamp_window_origin_to_work_area((200, 120, 1000, 720), (0, 0, 1920, 1080)),
+            (200, 120)
+        );
+    }
+
+    #[test]
+    fn clamp_origin_pins_oversized_window_to_work_top_left() {
+        assert_eq!(
+            clamp_window_origin_to_work_area((-40, -30, 2000, 1200), (0, 0, 1920, 1080)),
+            (0, 0)
         );
     }
 }

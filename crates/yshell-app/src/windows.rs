@@ -148,6 +148,9 @@ pub(crate) struct WindowManager {
     mcp_inbox: crate::mcp_server::McpInbox,
     /// Loopback MCP acceptor; started only while Settings → MCP is enabled.
     mcp_server: Option<crate::mcp_server::McpServerHandle>,
+    /// Last failed bind fingerprint (`bind_host`, port, token) so we do not
+    /// retry every tick until Settings changes.
+    mcp_failed_bind: Option<(String, u16, String)>,
 }
 
 impl WindowManager {
@@ -194,6 +197,7 @@ impl WindowManager {
             dialog_host,
             mcp_inbox,
             mcp_server: None,
+            mcp_failed_bind: None,
         }));
         {
             let weak = Rc::downgrade(&manager);
@@ -289,17 +293,12 @@ impl WindowManager {
         window.show().map_err(AppError::from_error)?;
         surface.sync_scale_factor(&window);
         surface.refresh(&window);
-        // Win11：无框窗口默认直角；DWM 圆角需显式 opt-in。HWND 可能要等事件循环
-        // 首帧才就绪，因此 show 后立即试一次，并再排队到事件循环补一次。
+        // Win11：无框窗口默认直角；DWM 圆角需显式 opt-in。同时把可能落在屏外的
+        // 窗口钳回工作区并强制整窗重绘（屏外客户区否则会透出桌面）。HWND 可能要
+        // 等事件循环首帧才就绪，因此 show 后立即试一次，再定时补几轮。
+        crate::win_chrome::ensure_window_on_screen(window.window());
         crate::win_chrome::apply_rounded_corners(window.window());
-        {
-            let weak = window.as_weak();
-            let _ = slint::invoke_from_event_loop(move || {
-                if let Some(window) = weak.upgrade() {
-                    crate::win_chrome::apply_rounded_corners(window.window());
-                }
-            });
-        }
+        crate::win_chrome::finish_main_window_chrome_when_ready(window.as_weak(), 8);
 
         // X（窗口关闭按钮）：窗口级语义（带活动连接 → 确认后断开；最后一个窗口 = 退出）。
         //
@@ -652,71 +651,98 @@ impl WindowManager {
         dirty || changed || secondary_changed
     }
 
-    /// Start or stop the MCP loopback server to match Settings → Enable MCP.
+    /// Start / stop / restart the MCP TCP acceptor to match Settings → MCP.
     fn reconcile_mcp_server(&mut self) -> bool {
         let enabled = self.runtime.borrow().mcp_enabled();
-        if enabled {
-            if self.mcp_server.is_some() {
+        if !enabled {
+            self.mcp_failed_bind = None;
+            if self.mcp_server.take().is_some() {
+                let mut runtime = self.runtime.borrow_mut();
+                runtime.mcp_endpoint_token = None;
+                runtime.set_mcp_listener_status(crate::runtime::mcp::McpListenerStatus::Disabled);
+                return true;
+            }
+            return false;
+        }
+
+        let (bind_host, port, token, config_dir) = {
+            let runtime = self.runtime.borrow();
+            if let Err(error) = runtime.mcp_validate_listen_config() {
+                drop(runtime);
+                let mut runtime = self.runtime.borrow_mut();
+                runtime.mcp_endpoint_token = None;
+                runtime.set_mcp_listener_status(crate::runtime::mcp::McpListenerStatus::Failed {
+                    message: error.to_string(),
+                });
+                let _ = self.mcp_server.take();
+                return true;
+            }
+            (
+                runtime.config_document.ui.mcp_listen.bind_host().to_owned(),
+                runtime.config_document.ui.mcp_port,
+                runtime.mcp_resolve_endpoint_token(),
+                runtime.config_dir.clone(),
+            )
+        };
+
+        if let Some(server) = self.mcp_server.as_ref() {
+            if server.matches(&bind_host, port, &token) {
                 return false;
             }
-            // Stay on Failed until the user toggles MCP off/on (set_mcp_enabled
-            // clears status back to Disabled so we retry once per enable).
-            if matches!(
-                self.runtime.borrow().mcp_listener_status,
-                crate::runtime::mcp::McpListenerStatus::Failed { .. }
-            ) {
-                return false;
+            let _ = self.mcp_server.take();
+        }
+
+        if self
+            .mcp_failed_bind
+            .as_ref()
+            .is_some_and(|(h, p, t)| h == &bind_host && *p == port && t == &token)
+        {
+            return false;
+        }
+
+        match crate::mcp_server::start_mcp_server(
+            config_dir,
+            &bind_host,
+            port,
+            "127.0.0.1",
+            token.clone(),
+            self.mcp_inbox.clone(),
+        ) {
+            Ok(handle) => {
+                let bound_port = handle.port;
+                self.mcp_server = Some(handle);
+                self.mcp_failed_bind = None;
+                let mut runtime = self.runtime.borrow_mut();
+                runtime.mcp_endpoint_token = Some(token);
+                runtime.set_mcp_listener_status(crate::runtime::mcp::McpListenerStatus::Ready {
+                    port: bound_port,
+                });
+                runtime.set_status_kind(
+                    "mcp-listener-ready",
+                    format!(
+                        "MCP ready on {bind_host}:{bound_port}. Point your AI host at yshell --mcp."
+                    ),
+                    bound_port.to_string(),
+                    String::new(),
+                );
+                true
             }
-            let token = crate::mcp_server::new_endpoint_token();
-            let config_dir = self.runtime.borrow().config_dir.clone();
-            match crate::mcp_server::start_mcp_server(
-                config_dir,
-                token.clone(),
-                self.mcp_inbox.clone(),
-            ) {
-                Ok(handle) => {
-                    let port = handle.port;
-                    self.mcp_server = Some(handle);
-                    let mut runtime = self.runtime.borrow_mut();
-                    runtime.mcp_endpoint_token = Some(token);
-                    runtime.set_mcp_listener_status(
-                        crate::runtime::mcp::McpListenerStatus::Ready { port },
-                    );
-                    runtime.set_status_kind(
-                        "mcp-listener-ready",
-                        format!(
-                            "MCP ready on 127.0.0.1:{port}. Point your AI host at yshell --mcp."
-                        ),
-                        port.to_string(),
-                        String::new(),
-                    );
-                    true
-                }
-                Err(error) => {
-                    tracing::warn!(error = %error, "MCP IPC server failed to start");
-                    let mut runtime = self.runtime.borrow_mut();
-                    runtime.mcp_endpoint_token = None;
-                    runtime.set_mcp_listener_status(
-                        crate::runtime::mcp::McpListenerStatus::Failed {
-                            message: error.to_string(),
-                        },
-                    );
-                    runtime.set_status_kind(
-                        "mcp-listener-failed",
-                        format!("MCP failed to start: {error}"),
-                        String::new(),
-                        String::new(),
-                    );
-                    true
-                }
+            Err(error) => {
+                tracing::warn!(error = %error, "MCP IPC server failed to start");
+                self.mcp_failed_bind = Some((bind_host, port, token));
+                let mut runtime = self.runtime.borrow_mut();
+                runtime.mcp_endpoint_token = None;
+                runtime.set_mcp_listener_status(crate::runtime::mcp::McpListenerStatus::Failed {
+                    message: error.to_string(),
+                });
+                runtime.set_status_kind(
+                    "mcp-listener-failed",
+                    format!("MCP failed to start: {error}"),
+                    String::new(),
+                    String::new(),
+                );
+                true
             }
-        } else if self.mcp_server.take().is_some() {
-            let mut runtime = self.runtime.borrow_mut();
-            runtime.mcp_endpoint_token = None;
-            runtime.set_mcp_listener_status(crate::runtime::mcp::McpListenerStatus::Disabled);
-            true
-        } else {
-            false
         }
     }
 

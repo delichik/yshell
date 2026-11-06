@@ -117,7 +117,7 @@
 | Terminal：Scrollback lines/max cells + Reset + Mouse&paste（middle/right/multi-line/auto copy） | **本轮实施中，未计入缺口** | `settings.slint:806-966` | — |
 | Security：主密码卡片（Not set/Set，Set/Change/Remove/Forgot）+ Managers 清单计数 | **本轮实施中，未计入缺口** | `settings.slint:1009-1186` | — |
 | master-password（Set/Change/Remove/Reset）与启动解锁窗 | **本轮实施中，未计入缺口** | `ui/pages/settings.slint:366-369`；`ui/windows/master_password_window.slint`、`master_password_unlock_window.slint`（本轮新增） | — |
-| MCP：Enable + Port + Listen(Local/LAN) + API key(Generate/Copy) + View user + Control user + Auto-approve | 部分：仅 Enable + Auto-approve；实现为 stdio MCP（`--mcp`），无端口/监听/API key | `settings.slint:1187-1302`；`crates/yshell-app/src/runtime/mcp.rs:145-177`；`settings/sections/mcp.html:52-116` | P1 |
+| MCP：Enable + Port + Listen(Local/LAN) + API key(Generate/Copy) + View user + Control user + Auto-approve | 已实现（D34）：GUI 按 Port/Listen 绑定 TCP；`yshell --mcp` 仍为 stdio 桥；LAN 必填 API key；View/Control 门控用户标签 | `settings.slint` MCP 分区；`runtime/mcp.rs`；`windows.rs::reconcile_mcp_server`；`settings/sections/mcp.html` | — |
 | Advanced：Debug logging 开关 + 打开日志目录 + Config directory 只读 + 打开目录 | 部分：缺 Config directory 的「打开目录」按钮 | `settings.slint:1303-1376`；`settings/sections/advanced.html:48-72` | P2 |
 | SFTP：Show hidden（默认开）/ Conflict（Ask/Replace/Skip/Stop）/ External editor（含 Custom 路径） | 缺失：仅有原型没有的「Max parallel transfers」 | `settings.slint:967-1007`；`settings/sections/sftp.html:52-92` | P1 |
 | 分区内容区不再放 General/Authentication 等大标题 | 冲突：SFTP / AI MCP / Advanced 三个分区顶部仍复述分区名大标题（Security 分区本轮正按规则收口） | `ui/pages/settings.slint:974-979,1191-1196,1307-1312`；`docs/agents/prototypes.md:81` | P1 |
@@ -175,6 +175,6 @@
 4. **Folder 的 New Folder / Rename / Delete / Connect All，以及树的 Import Config / Expand All / Collapse All**：原型明确「本版不做/禁用」（`sessions.html:419,435-437`）。
 5. **Session Editor 的 SFTP 与 Advanced 分区**：原型为 `not this version`（`session-editor/index.html:109-110`）。
 6. **AI 标签标志**：依赖 MCP 控制链路定型（`tab-bar.html:297`），当前无 tab 来源模型，建议随后续 MCP 批次一起做。
-7. **MCP 的 Port / Listen(LAN) / API key / View / Control**：以 status **D34** + `settings/sections/mcp.html` 为设计；旧「stdio 本版砍 UI」计划作废。实现缺口仍记上表 P1。
+7. **MCP 的 Port / Listen(LAN) / API key / View / Control**：已按 status **D34** + `settings/sections/mcp.html` 落地（上表已勾）。
 8. **终端内边距 12/12、圆角 8、遮罩色、树箭头旋转**：problems.md 已标记「待定」，与 Rust 像素契约耦合，不属 UI 缺口（`problems.md:62-67,82-84`）。
 9. **主密码 / Settings 三分区**：本轮实施中，验收前不列为缺口。

@@ -91,7 +91,7 @@ $env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
 
 | # | 事项 | 状态 | 当前进度 |
 |---|---|---|---|
-| — | （无） | — | — |
+| 22a | D34 MCP 字段闭环：Port / Listen / API key / View / Control + TCP bind + 用户标签 ACL | 🔍 待提交 / 核验 | 本工作区未提交改动 |
 
 ### 4.3 未完成（待做）
 

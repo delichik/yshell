@@ -245,9 +245,10 @@ export global Theme {
     out property <length> row-height-tree: 28px;
     /// 上下文菜单行高（右键菜单项；与 tree 行同高）。
     out property <length> row-height-menu: 28px;
-    /// 自绘顶栏（菜单 + 窗口控件）：§4.1 / §5.16 = 32px
-    /// （Win11 原生标题栏高度，caption 按钮 46×32 正好满高）。
-    out property <length> bar-height-menubar: 32px;
+    /// 自绘顶栏（菜单 + 窗口控件）与工具窗标题栏：40px。
+    /// 比 Win11 原生 32px caption 略高，菜单文字与 ─ □ × 更好点按；
+    /// CaptionButton 宽仍 46、高随顶栏（height: 100%）。
+    out property <length> bar-height-menubar: 40px;
     /// 旧 CommandBar 高度（已并入菜单栏，保留 token 以免外部引用断裂）。
     out property <length> bar-height-commandbar: 48px;
     /// 状态栏高度（原型 main-shell 28px；略高于旧 26，改善 chip 可读性）。

@@ -1,6 +1,6 @@
 # YShell 本 build 产品现状
 
-更新时间：2026-11-05  
+更新时间：2026-11-06  
 性质：**唯一现行产品范围文档**（有什么 / 砍了什么 / 还缺什么 / 仍生效的决策）
 
 冲突时：**本文（产品范围）> [`docs/prototypes/`](../prototypes/README.md) 及其文档（设计稿）> 实现与单测 > 参考文档**（[`yshell-ui-interaction-contract.md`](./yshell-ui-interaction-contract.md)、设计语言、[`archive/`](./archive/README.md) 等）。  

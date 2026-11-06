@@ -101,7 +101,7 @@ docs/prototypes/
 原型必须能验收 **真实占位**，不能用「跟着视口挤扁」的假布局。
 
 1. **对标 Theme 固定尺寸**  
-   工具窗 / 主窗区域用 `ui/theme.slint` 里的 token 写死宽高，例如 standard 工具窗 `720×580`、标题栏 `32`、`tool-window-padding` `28`。在 HTML 顶注释或 CSS 变量里写明对应 token 名。  
+   工具窗 / 主窗区域用 `ui/theme.slint` 里的 token 写死宽高，例如 standard 工具窗 `720×580`、标题栏 `40`（`bar-height-menubar`）、`tool-window-padding` `28`。在 HTML 顶注释或 CSS 变量里写明对应 token 名。  
    **弹窗只有三档**：compact `560×400` / standard `720×580` / wide `1100×820`；新增弹窗不得自造尺寸。确需特殊尺寸时在 meta 与 README 标注原因。`960×560`、`800×640` 等是工作区 / 内容切片尺寸，**不是弹窗尺寸**。
 2. **禁止用视口百分比压扁对话框**  
    不要 `height: min(580px, 78vh)`、`width: min(720px, 100%)` 这类会改变产品几何的写法。舞台比对话框窄时：舞台 `overflow-x: auto`，对话框 `flex-shrink: 0` 保持设计尺寸。

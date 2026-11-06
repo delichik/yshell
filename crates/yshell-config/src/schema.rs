@@ -555,6 +555,54 @@ pub enum AppearanceMode {
     Dark,
 }
 
+/// MCP listen scope (Settings → MCP → Listen).
+///
+/// * [`Self::Local`] — bind `127.0.0.1` (loopback only).
+/// * [`Self::Lan`] — bind `0.0.0.0` (reachable on the LAN; API key required).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum McpListenMode {
+    /// Loopback only (`127.0.0.1`).
+    #[default]
+    Local,
+    /// All interfaces (`0.0.0.0`); requires a non-empty API key.
+    Lan,
+}
+
+impl McpListenMode {
+    /// Bind address used by the GUI MCP TCP acceptor.
+    #[must_use]
+    pub const fn bind_host(self) -> &'static str {
+        match self {
+            Self::Local => "127.0.0.1",
+            Self::Lan => "0.0.0.0",
+        }
+    }
+
+    /// Stable id for UI / projection (`local` / `lan`).
+    #[must_use]
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::Local => "local",
+            Self::Lan => "lan",
+        }
+    }
+
+    /// Parse a stable id; unknown values fall back to [`Self::Local`].
+    #[must_use]
+    pub fn from_id(id: &str) -> Self {
+        match id {
+            "lan" => Self::Lan,
+            _ => Self::Local,
+        }
+    }
+}
+
+/// Default MCP TCP port (Settings → MCP → Port).
+pub const fn default_mcp_port() -> u16 {
+    18765
+}
+
 /// Accent color preset (Settings → Appearance → App theme).
 ///
 /// Ids match `yshell_ui::appearance::ACCENT_PRESETS`; `follow_system` keeps the
@@ -771,9 +819,26 @@ pub struct UiProfile {
     #[serde(default = "default_true")]
     pub confirm_quit_app: bool,
     /// When true, the GUI hosts the local MCP IPC endpoint for `yshell --mcp`.
-    /// Default off: MCP is opt-in from Settings → AI / MCP.
+    /// Default off: MCP is opt-in from Settings → MCP.
     #[serde(default)]
     pub mcp_enabled: bool,
+    /// TCP port for the GUI MCP acceptor (`1–65535`; default 18765).
+    #[serde(default = "default_mcp_port")]
+    pub mcp_port: u16,
+    /// Bind scope: Local (`127.0.0.1`) or LAN (`0.0.0.0`).
+    #[serde(default)]
+    pub mcp_listen: McpListenMode,
+    /// Shared secret required on every MCP IPC request. Required when
+    /// [`Self::mcp_listen`] is [`McpListenMode::Lan`]; optional for Local
+    /// (empty → mint a session token into `mcp-endpoint.json` on start).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub mcp_api_key: String,
+    /// When true, AI may **view** user-created connections (not only AI-origin tabs).
+    #[serde(default)]
+    pub mcp_view_user_connections: bool,
+    /// When true, AI may **control** user-created connections; implies view.
+    #[serde(default)]
+    pub mcp_control_user_connections: bool,
     /// When true, MCP `request_control` skips the consent dialog (Settings /
     /// the dialog's "don't ask again" both write this flag). Only meaningful
     /// while [`Self::mcp_enabled`] is true.
@@ -807,6 +872,11 @@ impl Default for UiProfile {
             confirm_close_session: true,
             confirm_quit_app: true,
             mcp_enabled: false,
+            mcp_port: default_mcp_port(),
+            mcp_listen: McpListenMode::default(),
+            mcp_api_key: String::new(),
+            mcp_view_user_connections: false,
+            mcp_control_user_connections: false,
             mcp_auto_approve_control: false,
             sftp_max_parallel_transfers: default_sftp_max_parallel_transfers(),
         }
@@ -1285,6 +1355,17 @@ impl ConfigDocument {
         sanitize_tunnel_profile(&mut self.tunnel);
         self.ui.sftp_max_parallel_transfers =
             clamp_sftp_max_parallel_transfers(self.ui.sftp_max_parallel_transfers);
+        if self.ui.mcp_port == 0 {
+            self.ui.mcp_port = default_mcp_port();
+        }
+        // Control implies View (D34 / contract §14.3).
+        if self.ui.mcp_control_user_connections {
+            self.ui.mcp_view_user_connections = true;
+        }
+        // LAN without a key cannot stay enabled.
+        if self.ui.mcp_listen == McpListenMode::Lan && self.ui.mcp_api_key.trim().is_empty() {
+            self.ui.mcp_enabled = false;
+        }
         for folder in &mut self.folders {
             let prefix = format!("folders[{}]", folder.id);
             sanitize_folder(folder, &prefix, &mut warnings);
@@ -2964,5 +3045,23 @@ key_id = "key-1"
         assert_eq!(merged.backup_font.as_deref(), Some("/fonts/farther.ttf"));
         // Scrollback is concrete and always comes from the nearer profile.
         assert_eq!(merged.scrollback_lines, 10_000);
+    }
+
+    #[test]
+    fn sanitize_mcp_d34_rules() {
+        let mut document = ConfigDocument::default();
+        document.ui.mcp_enabled = true;
+        document.ui.mcp_listen = McpListenMode::Lan;
+        document.ui.mcp_api_key.clear();
+        document.ui.mcp_control_user_connections = true;
+        document.ui.mcp_view_user_connections = false;
+        document.ui.mcp_port = 0;
+
+        let _ = document.sanitize();
+
+        assert!(!document.ui.mcp_enabled);
+        assert!(document.ui.mcp_view_user_connections);
+        assert_eq!(document.ui.mcp_port, default_mcp_port());
+        assert_eq!(document.ui.mcp_listen.bind_host(), "0.0.0.0");
     }
 }

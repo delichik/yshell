@@ -81,8 +81,7 @@ impl McpInbox {
                         continue;
                     }
                     if !runtime.mcp_enabled() {
-                        let _ =
-                            reply.send(Err("MCP is disabled in Settings → AI / MCP".to_owned()));
+                        let _ = reply.send(Err("MCP is disabled in Settings → MCP".to_owned()));
                         continue;
                     }
                     runtime.mcp_begin_request_control(client_id, reply);
@@ -108,9 +107,19 @@ pub struct McpServerHandle {
     shutdown: Arc<AtomicBool>,
     config_dir: PathBuf,
     pub port: u16,
+    /// Bind host used at start (`127.0.0.1` or `0.0.0.0`).
+    pub bind_host: String,
+    /// Endpoint token published for this listener.
+    pub token: String,
 }
 
 impl McpServerHandle {
+    /// Whether this running listener still matches the desired bind/token.
+    #[must_use]
+    pub fn matches(&self, bind_host: &str, port: u16, token: &str) -> bool {
+        self.bind_host == bind_host && self.port == port && self.token == token
+    }
+
     pub fn shutdown(&self) {
         self.shutdown.store(true, Ordering::SeqCst);
         let _ = clear_endpoint(&self.config_dir);
@@ -123,15 +132,25 @@ impl Drop for McpServerHandle {
     }
 }
 
-/// Bind loopback TCP, publish `mcp-endpoint.json`, and accept connections.
+/// Bind TCP on `bind_host:port`, publish `mcp-endpoint.json`, and accept connections.
+///
+/// `endpoint_host` is what `yshell --mcp` connects to (normally `127.0.0.1` even
+/// when the acceptor listens on `0.0.0.0` for LAN).
 pub fn start_mcp_server(
     config_dir: PathBuf,
+    bind_host: &str,
+    port: u16,
+    endpoint_host: &str,
     endpoint_token: String,
     inbox: McpInbox,
 ) -> AppResult<McpServerHandle> {
-    let listener = TcpListener::bind(("127.0.0.1", 0)).map_err(AppError::from_error)?;
-    let port = listener.local_addr().map_err(AppError::from_error)?.port();
-    let info = EndpointInfo::loopback(port, endpoint_token);
+    let listener = TcpListener::bind((bind_host, port)).map_err(AppError::from_error)?;
+    let bound_port = listener.local_addr().map_err(AppError::from_error)?.port();
+    let info = EndpointInfo {
+        host: endpoint_host.to_owned(),
+        port: bound_port,
+        token: endpoint_token.clone(),
+    };
     write_endpoint(&config_dir, &info).map_err(AppError::from_error)?;
 
     let shutdown = Arc::new(AtomicBool::new(false));
@@ -144,7 +163,9 @@ pub fn start_mcp_server(
     Ok(McpServerHandle {
         shutdown,
         config_dir,
-        port,
+        port: bound_port,
+        bind_host: bind_host.to_owned(),
+        token: endpoint_token,
     })
 }
 

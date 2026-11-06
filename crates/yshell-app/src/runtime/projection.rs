@@ -438,6 +438,15 @@ impl AppRuntime {
             settings_confirm_close_session: self.config_document.ui.confirm_close_session,
             settings_confirm_quit_app: self.config_document.ui.confirm_quit_app,
             settings_mcp_enabled: self.config_document.ui.mcp_enabled,
+            settings_mcp_port_text: self.config_document.ui.mcp_port.to_string(),
+            settings_mcp_listen_lan: self.config_document.ui.mcp_listen
+                == yshell_config::McpListenMode::Lan,
+            settings_mcp_api_key_text: self.config_document.ui.mcp_api_key.clone(),
+            settings_mcp_view_user_connections: self.config_document.ui.mcp_view_user_connections,
+            settings_mcp_control_user_connections: self
+                .config_document
+                .ui
+                .mcp_control_user_connections,
             settings_mcp_auto_approve_control: self.config_document.ui.mcp_auto_approve_control,
             settings_mcp_status_text: self.mcp_status_kind().to_owned(),
             settings_mcp_boundaries_text: self.mcp_status_detail(),
@@ -2050,6 +2059,16 @@ pub struct AppProjection {
     pub settings_confirm_quit_app: bool,
     /// Whether the GUI hosts the MCP IPC endpoint.
     pub settings_mcp_enabled: bool,
+    /// Settings → MCP → Port (decimal text for the input).
+    pub settings_mcp_port_text: String,
+    /// Settings → MCP → Listen == LAN.
+    pub settings_mcp_listen_lan: bool,
+    /// Settings → MCP → API key (may be empty for Local).
+    pub settings_mcp_api_key_text: String,
+    /// Settings → MCP → View user connections.
+    pub settings_mcp_view_user_connections: bool,
+    /// Settings → MCP → Control user connections.
+    pub settings_mcp_control_user_connections: bool,
     /// Whether MCP `request_control` skips the consent dialog.
     pub settings_mcp_auto_approve_control: bool,
     /// Settings → MCP status **kind id** (`disabled` / `starting` / `ready` /

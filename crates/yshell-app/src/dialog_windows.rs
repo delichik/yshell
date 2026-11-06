@@ -3326,6 +3326,60 @@ fn wire_settings_actions(
         }
     });
     let wr = window_runtime.clone();
+    window.on_update_mcp_port(move |text| {
+        if let Some(wr) = wr.as_ref() {
+            let Ok(port) = text.as_str().parse::<u16>() else {
+                return;
+            };
+            let _ = wr.borrow_mut().set_mcp_port(port);
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_set_mcp_listen_lan(move |lan| {
+        if let Some(wr) = wr.as_ref() {
+            let mode = if lan {
+                yshell_config::McpListenMode::Lan
+            } else {
+                yshell_config::McpListenMode::Local
+            };
+            let _ = wr.borrow_mut().set_mcp_listen_mode(mode);
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_update_mcp_api_key(move |key| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr.borrow_mut().set_mcp_api_key(key.as_str());
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_generate_mcp_api_key(move || {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr.borrow_mut().generate_mcp_api_key();
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_copy_mcp_api_key(move || {
+        if let Some(wr) = wr.as_ref() {
+            let key = wr.borrow().config_document.ui.mcp_api_key.clone();
+            if key.is_empty() {
+                return;
+            }
+            let _ = write_clipboard(&key);
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_set_mcp_view_user_connections(move |enabled| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr.borrow_mut().set_mcp_view_user_connections(enabled);
+        }
+    });
+    let wr = window_runtime.clone();
+    window.on_set_mcp_control_user_connections(move |enabled| {
+        if let Some(wr) = wr.as_ref() {
+            let _ = wr.borrow_mut().set_mcp_control_user_connections(enabled);
+        }
+    });
+    let wr = window_runtime.clone();
     window.on_set_mcp_auto_approve_control(move |enabled| {
         if let Some(wr) = wr.as_ref() {
             let _ = wr.borrow_mut().set_mcp_auto_approve_control(enabled);
@@ -3579,6 +3633,11 @@ fn sync_settings_from(
     settings.set_confirm_close_session_enabled(projection.settings_confirm_close_session);
     settings.set_confirm_quit_app_enabled(projection.settings_confirm_quit_app);
     settings.set_mcp_enabled(projection.settings_mcp_enabled);
+    settings.set_mcp_port_text(projection.settings_mcp_port_text.clone().into());
+    settings.set_mcp_listen_lan(projection.settings_mcp_listen_lan);
+    settings.set_mcp_api_key_text(projection.settings_mcp_api_key_text.clone().into());
+    settings.set_mcp_view_user_connections(projection.settings_mcp_view_user_connections);
+    settings.set_mcp_control_user_connections(projection.settings_mcp_control_user_connections);
     settings.set_mcp_auto_approve_control_enabled(projection.settings_mcp_auto_approve_control);
     settings.set_mcp_status_text(projection.settings_mcp_status_text.clone().into());
     settings.set_mcp_boundaries_text(projection.settings_mcp_boundaries_text.clone().into());

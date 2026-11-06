@@ -217,6 +217,16 @@ export component SettingsDialog inherits Rectangle {
     in-out property <bool> confirm-quit-app-enabled: true;
     /// MCP master switch (hosts the local endpoint for AI clients).
     in-out property <bool> mcp-enabled: false;
+    /// MCP TCP port text (`1–65535`).
+    in-out property <string> mcp-port-text: "18765";
+    /// Listen == LAN (`0.0.0.0`); false = Local (`127.0.0.1`).
+    in-out property <bool> mcp-listen-lan: false;
+    /// API key (required for LAN).
+    in-out property <string> mcp-api-key-text: "";
+    /// Allow AI to view user-created connections.
+    in-out property <bool> mcp-view-user-connections: false;
+    /// Allow AI to control user-created connections (implies view).
+    in-out property <bool> mcp-control-user-connections: false;
     /// Auto-approve MCP AI control requests (skip the consent dialog).
     in-out property <bool> mcp-auto-approve-control-enabled: false;
     /// MCP listener / control status kind id (rendered by
@@ -294,6 +304,13 @@ export component SettingsDialog inherits Rectangle {
     /// General → Motion：持久化到 `[ui] reduce_motion`（应用配置只来自配置文件）。
     callback set-reduce-motion(bool);
     callback set-mcp-enabled(bool);
+    callback update-mcp-port(string);
+    callback set-mcp-listen-lan(bool);
+    callback update-mcp-api-key(string);
+    callback generate-mcp-api-key();
+    callback copy-mcp-api-key();
+    callback set-mcp-view-user-connections(bool);
+    callback set-mcp-control-user-connections(bool);
     callback set-mcp-auto-approve-control(bool);
     callback open-debug-log-dir();
     // Appearance（字体；主题编辑已迁移到 Theme Manager）
@@ -979,8 +996,8 @@ export component SettingsDialog inherits Rectangle {
                                     }
                                 }
 
-                                // --- MCP（D-1：stdio 现状；Port / Listen / API key /
-                                // View user / Control user 本版不可用，按原型保留行 + 短 hint）--
+                                // --- MCP（D34：Enable / Port / Listen / API key /
+                                // View user / Control user / Auto-approve）----------------
                                 if root.section == "mcp" : VerticalLayout {
                                     alignment: start;
                                     spacing: Theme.form-row-gap;
@@ -1002,63 +1019,105 @@ export component SettingsDialog inherits Rectangle {
                                         label: @tr("Port");
                                         WinTextInput {
                                             width: Theme.form-port-width;
-                                            enabled: false;
-                                            text: "18765";
+                                            enabled: root.mcp-enabled;
+                                            text <=> root.mcp-port-text;
+                                            accepted => { root.update-mcp-port(root.mcp-port-text); }
+                                            edited => { root.update-mcp-port(root.mcp-port-text); }
                                         }
                                     }
                                     FormHint {
-                                        text: @tr("Not available in this version.");
+                                        text: @tr("1–65535.");
                                     }
 
                                     FormRow {
                                         label: @tr("Listen");
-                                        SettingsMethodButton {
-                                            text: @tr("Local");
-                                            hint: @tr("Not available in this version.");
-                                            selected: true;
-                                            enabled: false;
+                                        HorizontalLayout {
+                                            spacing: Theme.spacing-8;
+                                            SettingsMethodButton {
+                                                text: @tr("Local");
+                                                hint: @tr("Local = 127.0.0.1");
+                                                selected: !root.mcp-listen-lan;
+                                                enabled: root.mcp-enabled;
+                                                clicked => { root.set-mcp-listen-lan(false); }
+                                            }
+                                            SettingsMethodButton {
+                                                text: @tr("LAN");
+                                                hint: @tr("LAN = 0.0.0.0; API key required");
+                                                selected: root.mcp-listen-lan;
+                                                enabled: root.mcp-enabled;
+                                                clicked => { root.set-mcp-listen-lan(true); }
+                                            }
                                         }
                                     }
                                     FormHint {
-                                        text: @tr("Not available in this version.");
+                                        text: @tr("Local = 127.0.0.1; LAN = 0.0.0.0.");
                                     }
 
                                     FormRow {
                                         label: @tr("API key");
-                                        WinTextInput {
+                                        HorizontalLayout {
+                                            spacing: Theme.spacing-8;
                                             max-width: Theme.form-field-width;
                                             horizontal-stretch: 1;
-                                            enabled: false;
+                                            WinTextInput {
+                                                horizontal-stretch: 1;
+                                                enabled: root.mcp-enabled;
+                                                input-type: password;
+                                                text <=> root.mcp-api-key-text;
+                                                placeholder-text: @tr("Required for LAN");
+                                                edited => { root.update-mcp-api-key(root.mcp-api-key-text); }
+                                                accepted => { root.update-mcp-api-key(root.mcp-api-key-text); }
+                                            }
+                                            WinIconButton {
+                                                icon: "refresh";
+                                                enabled: root.mcp-enabled;
+                                                accessible-name: @tr("Generate");
+                                                tooltip-text: @tr("Generate");
+                                                clicked => { root.generate-mcp-api-key(); }
+                                            }
+                                            WinIconButton {
+                                                icon: "copy";
+                                                enabled: root.mcp-enabled && root.mcp-api-key-text != "";
+                                                accessible-name: @tr("Copy");
+                                                tooltip-text: @tr("Copy");
+                                                clicked => { root.copy-mcp-api-key(); }
+                                            }
                                         }
                                     }
                                     FormHint {
-                                        text: @tr("Not available in this version.");
+                                        text: @tr("Required for LAN.");
                                     }
 
                                     FormRow {
                                         label: @tr("View user");
                                         WinSwitch {
-                                            text: @tr("Off");
+                                            text: root.mcp-view-user-connections ? @tr("On") : @tr("Off");
                                             accessible-name: @tr("View user");
-                                            enabled: false;
-                                            checked: false;
+                                            enabled: root.mcp-enabled;
+                                            checked <=> root.mcp-view-user-connections;
+                                            toggled => {
+                                                root.set-mcp-view-user-connections(root.mcp-view-user-connections);
+                                            }
                                         }
                                     }
                                     FormHint {
-                                        text: @tr("Not available in this version.");
+                                        text: @tr("AI can see user-created connections.");
                                     }
 
                                     FormRow {
                                         label: @tr("Control user");
                                         WinSwitch {
-                                            text: @tr("Off");
+                                            text: root.mcp-control-user-connections ? @tr("On") : @tr("Off");
                                             accessible-name: @tr("Control user");
-                                            enabled: false;
-                                            checked: false;
+                                            enabled: root.mcp-enabled;
+                                            checked <=> root.mcp-control-user-connections;
+                                            toggled => {
+                                                root.set-mcp-control-user-connections(root.mcp-control-user-connections);
+                                            }
                                         }
                                     }
                                     FormHint {
-                                        text: @tr("Not available in this version.");
+                                        text: @tr("AI can operate user-created connections.");
                                     }
 
                                     FormRow {
@@ -1077,7 +1136,6 @@ export component SettingsDialog inherits Rectangle {
                                         text: @tr("Skip the control consent dialog.");
                                     }
 
-                                    // 状态：Rust 投影 kind id + detail，句子由 TextFormats 渲染。
                                     FormHint {
                                         text: TextFormats.settings-mcp-status(
                                             root.mcp-status-kind-text,

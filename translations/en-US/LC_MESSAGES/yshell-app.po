@@ -10,7 +10,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: yshell\n"
-"POT-Creation-Date: 2026-11-06 02:37+0000\n"
+"POT-Creation-Date: 2026-11-06 06:29+0000\n"
 "PO-Revision-Date: 2026-09-27 00:00+0000\n"
 "Last-Translator: YShell\n"
 "Language-Team: YShell\n"
@@ -2995,527 +2995,582 @@ msgctxt "SessionEditor"
 msgid "Save and Connect"
 msgstr "Save and Connect"
 
-#: ui/pages/settings.slint:360
+#: ui/pages/settings.slint:377
 msgctxt "SettingsDialog"
 msgid "General"
 msgstr "General"
 
-#: ui/pages/settings.slint:366
+#: ui/pages/settings.slint:383
 msgctxt "SettingsDialog"
 msgid "Appearance"
 msgstr "Appearance"
 
-#: ui/pages/settings.slint:372
+#: ui/pages/settings.slint:389
 msgctxt "SettingsDialog"
 msgid "Terminal"
 msgstr "Terminal"
 
-#: ui/pages/settings.slint:378
+#: ui/pages/settings.slint:395
 msgctxt "SettingsDialog"
 msgid "Security"
 msgstr "Security"
 
-#: ui/pages/settings.slint:384
+#: ui/pages/settings.slint:401
 msgctxt "SettingsDialog"
 msgid "MCP"
 msgstr "MCP"
 
-#: ui/pages/settings.slint:390
+#: ui/pages/settings.slint:407
 msgctxt "SettingsDialog"
 msgid "Advanced"
 msgstr "Advanced"
 
-#: ui/pages/settings.slint:396
+#: ui/pages/settings.slint:413
 msgctxt "SettingsDialog"
 msgid "SFTP"
 msgstr "SFTP"
 
-#: ui/pages/settings.slint:402
+#: ui/pages/settings.slint:419
 msgctxt "SettingsDialog"
 msgid "Shortcuts"
 msgstr "Shortcuts"
 
-#: ui/pages/settings.slint:405 ui/pages/settings.slint:1010 ui/pages/settings.slint:1023 ui/pages/settings.slint:1048
+#: ui/pages/settings.slint:422
 msgctxt "SettingsDialog"
 msgid "Not available in this version."
 msgstr "Not available in this version."
 
-#: ui/pages/settings.slint:445
+#: ui/pages/settings.slint:462
 msgctxt "SettingsDialog"
 msgid "Language"
 msgstr "Language"
 
-#: ui/pages/settings.slint:449
+#: ui/pages/settings.slint:466
 msgctxt "SettingsDialog"
 msgid "System default"
 msgstr "System default"
 
-#: ui/pages/settings.slint:449
+#: ui/pages/settings.slint:466
 msgctxt "SettingsDialog"
 msgid "English"
 msgstr "English"
 
-#: ui/pages/settings.slint:449
+#: ui/pages/settings.slint:466
 msgctxt "SettingsDialog"
 msgid "中文"
 msgstr "中文"
 
-#: ui/pages/settings.slint:461
+#: ui/pages/settings.slint:478
 msgctxt "SettingsDialog"
 msgid "Applies immediately."
 msgstr "Applies immediately."
 
-#: ui/pages/settings.slint:465 ui/pages/settings.slint:468
+#: ui/pages/settings.slint:482 ui/pages/settings.slint:485
 msgctxt "SettingsDialog"
 msgid "Confirm close"
 msgstr "Confirm close"
 
-#: ui/pages/settings.slint:467 ui/pages/settings.slint:482 ui/pages/settings.slint:717 ui/pages/settings.slint:991 ui/pages/settings.slint:1124
+#: ui/pages/settings.slint:484 ui/pages/settings.slint:499 ui/pages/settings.slint:734 ui/pages/settings.slint:1008 ui/pages/settings.slint:1110 ui/pages/settings.slint:1182
 msgctxt "SettingsDialog"
 msgid "On"
 msgstr "On"
 
-#: ui/pages/settings.slint:467 ui/pages/settings.slint:482 ui/pages/settings.slint:717 ui/pages/settings.slint:991 ui/pages/settings.slint:1054 ui/pages/settings.slint:1124
+#: ui/pages/settings.slint:484 ui/pages/settings.slint:499 ui/pages/settings.slint:734 ui/pages/settings.slint:1008 ui/pages/settings.slint:1110 ui/pages/settings.slint:1182
 msgctxt "SettingsDialog"
 msgid "Off"
 msgstr "Off"
 
-#: ui/pages/settings.slint:476
+#: ui/pages/settings.slint:493
 msgctxt "SettingsDialog"
 msgid "Ask before closing an active session."
 msgstr "Ask before closing an active session."
 
-#: ui/pages/settings.slint:480 ui/pages/settings.slint:483
+#: ui/pages/settings.slint:497 ui/pages/settings.slint:500
 msgctxt "SettingsDialog"
 msgid "Confirm quit"
 msgstr "Confirm quit"
 
-#: ui/pages/settings.slint:491
+#: ui/pages/settings.slint:508
 msgctxt "SettingsDialog"
 msgid "Ask before quitting YShell."
 msgstr "Ask before quitting YShell."
 
-#: ui/pages/settings.slint:495 ui/pages/settings.slint:498
+#: ui/pages/settings.slint:512 ui/pages/settings.slint:515
 msgctxt "SettingsDialog"
 msgid "Reduce motion"
 msgstr "Reduce motion"
 
-#: ui/pages/settings.slint:508
+#: ui/pages/settings.slint:525
 msgctxt "SettingsDialog"
 msgid "Turns off transitions."
 msgstr "Turns off transitions."
 
-#: ui/pages/settings.slint:518
+#: ui/pages/settings.slint:535
 msgctxt "SettingsDialog"
 msgid "App theme"
 msgstr "App theme"
 
-#: ui/pages/settings.slint:523
+#: ui/pages/settings.slint:540
 msgctxt "SettingsDialog"
 msgid "Mode"
 msgstr "Mode"
 
-#: ui/pages/settings.slint:528
+#: ui/pages/settings.slint:545
 msgctxt "SettingsDialog"
 msgid "System"
 msgstr "System"
 
-#: ui/pages/settings.slint:529
+#: ui/pages/settings.slint:546
 msgctxt "SettingsDialog"
 msgid "Follow system"
 msgstr "Follow system"
 
-#: ui/pages/settings.slint:534 ui/pages/settings.slint:535
+#: ui/pages/settings.slint:551 ui/pages/settings.slint:552
 msgctxt "SettingsDialog"
 msgid "Light"
 msgstr "Light"
 
-#: ui/pages/settings.slint:540 ui/pages/settings.slint:541
+#: ui/pages/settings.slint:557 ui/pages/settings.slint:558
 msgctxt "SettingsDialog"
 msgid "Dark"
 msgstr "Dark"
 
-#: ui/pages/settings.slint:548
+#: ui/pages/settings.slint:565
 msgctxt "SettingsDialog"
 msgid "Applies to the whole app."
 msgstr "Applies to the whole app."
 
-#: ui/pages/settings.slint:552
+#: ui/pages/settings.slint:569
 msgctxt "SettingsDialog"
 msgid "Accent"
 msgstr "Accent"
 
-#: ui/pages/settings.slint:567
+#: ui/pages/settings.slint:584
 msgctxt "SettingsDialog"
 msgid "Used for buttons, focus, and selection."
 msgstr "Used for buttons, focus, and selection."
 
-#: ui/pages/settings.slint:571
+#: ui/pages/settings.slint:588
 msgctxt "SettingsDialog"
 msgid "Terminal style"
 msgstr "Terminal style"
 
-#: ui/pages/settings.slint:575
+#: ui/pages/settings.slint:592
 msgctxt "SettingsDialog"
 msgid "Style"
 msgstr "Style"
 
-#: ui/pages/settings.slint:592 ui/pages/settings.slint:593
+#: ui/pages/settings.slint:609 ui/pages/settings.slint:610
 msgctxt "SettingsDialog"
 msgid "Manage terminal styles"
 msgstr "Manage terminal styles"
 
-#: ui/pages/settings.slint:599
+#: ui/pages/settings.slint:616
 msgctxt "SettingsDialog"
 msgid "Default for new terminals; fonts and colors are edited in Terminal Styles."
 msgstr "Default for new terminals; fonts and colors are edited in Terminal Styles."
 
-#: ui/pages/settings.slint:617
+#: ui/pages/settings.slint:634
 msgctxt "SettingsDialog"
 msgid "Scrollback"
 msgstr "Scrollback"
 
-#: ui/pages/settings.slint:622
+#: ui/pages/settings.slint:639
 msgctxt "SettingsDialog"
 msgid "Scrollback lines"
 msgstr "Scrollback lines"
 
-#: ui/pages/settings.slint:632
+#: ui/pages/settings.slint:649
 msgctxt "SettingsDialog"
 msgid "Max cells"
 msgstr "Max cells"
 
-#: ui/pages/settings.slint:656 ui/pages/settings.slint:657
+#: ui/pages/settings.slint:673 ui/pages/settings.slint:674
 msgctxt "SettingsDialog"
 msgid "Reset defaults"
 msgstr "Reset defaults"
 
-#: ui/pages/settings.slint:663
+#: ui/pages/settings.slint:680
 msgctxt "SettingsDialog"
 msgid "Mouse & paste"
 msgstr "Mouse & paste"
 
-#: ui/pages/settings.slint:667
+#: ui/pages/settings.slint:684
 msgctxt "SettingsDialog"
 msgid "Middle click"
 msgstr "Middle click"
 
-#: ui/pages/settings.slint:671 ui/pages/settings.slint:687
+#: ui/pages/settings.slint:688 ui/pages/settings.slint:704
 msgctxt "SettingsDialog"
 msgid "Paste"
 msgstr "Paste"
 
-#: ui/pages/settings.slint:671 ui/pages/settings.slint:687
+#: ui/pages/settings.slint:688 ui/pages/settings.slint:704
 msgctxt "SettingsDialog"
 msgid "Do nothing"
 msgstr "Do nothing"
 
-#: ui/pages/settings.slint:679
+#: ui/pages/settings.slint:696
 msgctxt "SettingsDialog"
 msgid "Paste from the clipboard or ignore the click."
 msgstr "Paste from the clipboard or ignore the click."
 
-#: ui/pages/settings.slint:683
+#: ui/pages/settings.slint:700
 msgctxt "SettingsDialog"
 msgid "Right click"
 msgstr "Right click"
 
-#: ui/pages/settings.slint:687
+#: ui/pages/settings.slint:704
 msgctxt "SettingsDialog"
 msgid "Context menu"
 msgstr "Context menu"
 
-#: ui/pages/settings.slint:695
+#: ui/pages/settings.slint:712
 msgctxt "SettingsDialog"
 msgid "Open the terminal menu, paste, or ignore the click."
 msgstr "Open the terminal menu, paste, or ignore the click."
 
-#: ui/pages/settings.slint:699
+#: ui/pages/settings.slint:716
 msgctxt "SettingsDialog"
 msgid "Multi-line paste"
 msgstr "Multi-line paste"
 
-#: ui/pages/settings.slint:703 ui/pages/settings.slint:920
+#: ui/pages/settings.slint:720 ui/pages/settings.slint:937
 msgctxt "SettingsDialog"
 msgid "Ask"
 msgstr "Ask"
 
-#: ui/pages/settings.slint:703
+#: ui/pages/settings.slint:720
 msgctxt "SettingsDialog"
 msgid "Block"
 msgstr "Block"
 
-#: ui/pages/settings.slint:711
+#: ui/pages/settings.slint:728
 msgctxt "SettingsDialog"
 msgid "Ask before sending text with more than one line."
 msgstr "Ask before sending text with more than one line."
 
-#: ui/pages/settings.slint:715 ui/pages/settings.slint:718
+#: ui/pages/settings.slint:732 ui/pages/settings.slint:735
 msgctxt "SettingsDialog"
 msgid "Auto copy"
 msgstr "Auto copy"
 
-#: ui/pages/settings.slint:726
+#: ui/pages/settings.slint:743
 msgctxt "SettingsDialog"
 msgid "Copy selected terminal text to the clipboard automatically."
 msgstr "Copy selected terminal text to the clipboard automatically."
 
-#: ui/pages/settings.slint:768
+#: ui/pages/settings.slint:785
 msgctxt "SettingsDialog"
 msgid "Master password"
 msgstr "Master password"
 
-#: ui/pages/settings.slint:797
+#: ui/pages/settings.slint:814
 msgctxt "SettingsDialog"
 msgid "Sessions and keys are encrypted."
 msgstr "Sessions and keys are encrypted."
 
-#: ui/pages/settings.slint:798
+#: ui/pages/settings.slint:815
 msgctxt "SettingsDialog"
 msgid "Sessions and keys are not encrypted."
 msgstr "Sessions and keys are not encrypted."
 
-#: ui/pages/settings.slint:811
+#: ui/pages/settings.slint:828
 msgctxt "SettingsDialog"
 msgid "Set"
 msgstr "Set"
 
-#: ui/pages/settings.slint:812
+#: ui/pages/settings.slint:829
 msgctxt "SettingsDialog"
 msgid "Set master password"
 msgstr "Set master password"
 
-#: ui/pages/settings.slint:817
+#: ui/pages/settings.slint:834
 msgctxt "SettingsDialog"
 msgid "Change"
 msgstr "Change"
 
-#: ui/pages/settings.slint:818
+#: ui/pages/settings.slint:835
 msgctxt "SettingsDialog"
 msgid "Change master password"
 msgstr "Change master password"
 
-#: ui/pages/settings.slint:822
+#: ui/pages/settings.slint:839
 msgctxt "SettingsDialog"
 msgid "Remove"
 msgstr "Remove"
 
-#: ui/pages/settings.slint:823
+#: ui/pages/settings.slint:840
 msgctxt "SettingsDialog"
 msgid "Remove master password"
 msgstr "Remove master password"
 
-#: ui/pages/settings.slint:832
+#: ui/pages/settings.slint:849
 msgctxt "SettingsDialog"
 msgid "Forgot password?"
 msgstr "Forgot password?"
 
-#: ui/pages/settings.slint:833
+#: ui/pages/settings.slint:850
 msgctxt "SettingsDialog"
 msgid "Reset master password"
 msgstr "Reset master password"
 
-#: ui/pages/settings.slint:840
+#: ui/pages/settings.slint:857
 msgctxt "SettingsDialog"
 msgid "Set a password to encrypt saved sessions and keys."
 msgstr "Set a password to encrypt saved sessions and keys."
 
-#: ui/pages/settings.slint:846
+#: ui/pages/settings.slint:863
 msgctxt "SettingsDialog"
 msgid "Remove decrypts files; Reset deletes them."
 msgstr "Remove decrypts files; Reset deletes them."
 
-#: ui/pages/settings.slint:855
+#: ui/pages/settings.slint:872
 msgctxt "SettingsDialog"
 msgid "Managers"
 msgstr "Managers"
 
-#: ui/pages/settings.slint:870
+#: ui/pages/settings.slint:887
 msgctxt "SettingsDialog"
 msgid "Known Hosts"
 msgstr "Known Hosts"
 
-#: ui/pages/settings.slint:872
+#: ui/pages/settings.slint:889
 msgctxt "SettingsDialog"
 msgid "Open Known Hosts"
 msgstr "Open Known Hosts"
 
-#: ui/pages/settings.slint:878
+#: ui/pages/settings.slint:895
 msgctxt "SettingsDialog"
 msgid "Private Keys"
 msgstr "Private Keys"
 
-#: ui/pages/settings.slint:880
+#: ui/pages/settings.slint:897
 msgctxt "SettingsDialog"
 msgid "Open Private Keys"
 msgstr "Open Private Keys"
 
-#: ui/pages/settings.slint:886
+#: ui/pages/settings.slint:903
 msgctxt "SettingsDialog"
 msgid "Proxies"
 msgstr "Proxies"
 
-#: ui/pages/settings.slint:888
+#: ui/pages/settings.slint:905
 msgctxt "SettingsDialog"
 msgid "Open Proxies"
 msgstr "Open Proxies"
 
-#: ui/pages/settings.slint:901 ui/pages/settings.slint:904
+#: ui/pages/settings.slint:918 ui/pages/settings.slint:921
 msgctxt "SettingsDialog"
 msgid "Show hidden"
 msgstr "Show hidden"
 
-#: ui/pages/settings.slint:912
+#: ui/pages/settings.slint:929
 msgctxt "SettingsDialog"
 msgid "New SFTP tabs start with hidden files shown."
 msgstr "New SFTP tabs start with hidden files shown."
 
-#: ui/pages/settings.slint:916
+#: ui/pages/settings.slint:933
 msgctxt "SettingsDialog"
 msgid "Conflict"
 msgstr "Conflict"
 
-#: ui/pages/settings.slint:920
+#: ui/pages/settings.slint:937
 msgctxt "SettingsDialog"
 msgid "Replace"
 msgstr "Replace"
 
-#: ui/pages/settings.slint:920
+#: ui/pages/settings.slint:937
 msgctxt "SettingsDialog"
 msgid "Skip"
 msgstr "Skip"
 
-#: ui/pages/settings.slint:920
+#: ui/pages/settings.slint:937
 msgctxt "SettingsDialog"
 msgid "Stop"
 msgstr "Stop"
 
-#: ui/pages/settings.slint:928
+#: ui/pages/settings.slint:945
 msgctxt "SettingsDialog"
 msgid "Ask opens a dialog; the others apply automatically."
 msgstr "Ask opens a dialog; the others apply automatically."
 
-#: ui/pages/settings.slint:932
+#: ui/pages/settings.slint:949
 msgctxt "SettingsDialog"
 msgid "External editor"
 msgstr "External editor"
 
-#: ui/pages/settings.slint:950
+#: ui/pages/settings.slint:967
 msgctxt "SettingsDialog"
 msgid "Used to open remote files for editing."
 msgstr "Used to open remote files for editing."
 
-#: ui/pages/settings.slint:959
+#: ui/pages/settings.slint:976
 msgctxt "SettingsDialog"
 msgid "Path to editor executable"
 msgstr "Path to editor executable"
 
-#: ui/pages/settings.slint:966 ui/pages/settings.slint:967
+#: ui/pages/settings.slint:983 ui/pages/settings.slint:984
 msgctxt "SettingsDialog"
 msgid "Browse"
 msgstr "Browse"
 
-#: ui/pages/settings.slint:989 ui/pages/settings.slint:992
+#: ui/pages/settings.slint:1006 ui/pages/settings.slint:1009
 msgctxt "SettingsDialog"
 msgid "Enable"
 msgstr "Enable"
 
-#: ui/pages/settings.slint:998
+#: ui/pages/settings.slint:1015
 msgctxt "SettingsDialog"
 msgid "Off by default; other MCP controls are disabled."
 msgstr "Off by default; other MCP controls are disabled."
 
-#: ui/pages/settings.slint:1002
+#: ui/pages/settings.slint:1019
 msgctxt "SettingsDialog"
 msgid "Port"
 msgstr "Port"
 
-#: ui/pages/settings.slint:1014
+#: ui/pages/settings.slint:1029
+msgctxt "SettingsDialog"
+msgid "1–65535."
+msgstr "1–65535."
+
+#: ui/pages/settings.slint:1033
 msgctxt "SettingsDialog"
 msgid "Listen"
 msgstr "Listen"
 
-#: ui/pages/settings.slint:1016
+#: ui/pages/settings.slint:1037
 msgctxt "SettingsDialog"
 msgid "Local"
 msgstr "Local"
 
-#: ui/pages/settings.slint:1027
+#: ui/pages/settings.slint:1038
+msgctxt "SettingsDialog"
+msgid "Local = 127.0.0.1"
+msgstr "Local = 127.0.0.1"
+
+#: ui/pages/settings.slint:1044
+msgctxt "SettingsDialog"
+msgid "LAN"
+msgstr "LAN"
+
+#: ui/pages/settings.slint:1045
+msgctxt "SettingsDialog"
+msgid "LAN = 0.0.0.0; API key required"
+msgstr "LAN = 0.0.0.0; API key required"
+
+#: ui/pages/settings.slint:1053
+msgctxt "SettingsDialog"
+msgid "Local = 127.0.0.1; LAN = 0.0.0.0."
+msgstr "Local = 127.0.0.1; LAN = 0.0.0.0."
+
+#: ui/pages/settings.slint:1057
 msgctxt "SettingsDialog"
 msgid "API key"
 msgstr "API key"
 
-#: ui/pages/settings.slint:1039 ui/pages/settings.slint:1042
+#: ui/pages/settings.slint:1067
+msgctxt "SettingsDialog"
+msgid "Required for LAN"
+msgstr "Required for LAN"
+
+#: ui/pages/settings.slint:1074 ui/pages/settings.slint:1075
+msgctxt "SettingsDialog"
+msgid "Generate"
+msgstr "Generate"
+
+#: ui/pages/settings.slint:1081 ui/pages/settings.slint:1082
+msgctxt "SettingsDialog"
+msgid "Copy"
+msgstr "Copy"
+
+#: ui/pages/settings.slint:1088
+msgctxt "SettingsDialog"
+msgid "Required for LAN."
+msgstr "Required for LAN."
+
+#: ui/pages/settings.slint:1092 ui/pages/settings.slint:1095
 msgctxt "SettingsDialog"
 msgid "View user"
 msgstr "View user"
 
-#: ui/pages/settings.slint:1052 ui/pages/settings.slint:1055
+#: ui/pages/settings.slint:1104
+msgctxt "SettingsDialog"
+msgid "AI can see user-created connections."
+msgstr "AI can see user-created connections."
+
+#: ui/pages/settings.slint:1108 ui/pages/settings.slint:1111
 msgctxt "SettingsDialog"
 msgid "Control user"
 msgstr "Control user"
 
-#: ui/pages/settings.slint:1065 ui/pages/settings.slint:1068
+#: ui/pages/settings.slint:1120
+msgctxt "SettingsDialog"
+msgid "AI can operate user-created connections."
+msgstr "AI can operate user-created connections."
+
+#: ui/pages/settings.slint:1124 ui/pages/settings.slint:1127
 msgctxt "SettingsDialog"
 msgid "Auto-approve"
 msgstr "Auto-approve"
 
-#: ui/pages/settings.slint:1077
+#: ui/pages/settings.slint:1136
 msgctxt "SettingsDialog"
 msgid "Skip the control consent dialog."
 msgstr "Skip the control consent dialog."
 
-#: ui/pages/settings.slint:1091
+#: ui/pages/settings.slint:1149
 msgctxt "SettingsDialog"
 msgid "Add this stdio server in your AI host; do not run it yourself."
 msgstr "Add this stdio server in your AI host; do not run it yourself."
 
-#: ui/pages/settings.slint:1119 ui/pages/settings.slint:1125
+#: ui/pages/settings.slint:1177 ui/pages/settings.slint:1183
 msgctxt "SettingsDialog"
 msgid "Debug logging"
 msgstr "Debug logging"
 
-#: ui/pages/settings.slint:1133 ui/pages/settings.slint:1134
+#: ui/pages/settings.slint:1191 ui/pages/settings.slint:1192
 msgctxt "SettingsDialog"
 msgid "Open debug log folder"
 msgstr "Open debug log folder"
 
-#: ui/pages/settings.slint:1140
+#: ui/pages/settings.slint:1198
 msgctxt "SettingsDialog"
 msgid "Writes logs under the config directory."
 msgstr "Writes logs under the config directory."
 
-#: ui/pages/settings.slint:1144
+#: ui/pages/settings.slint:1202
 msgctxt "SettingsDialog"
 msgid "Config directory"
 msgstr "Config directory"
 
-#: ui/pages/settings.slint:1153 ui/pages/settings.slint:1154
+#: ui/pages/settings.slint:1211 ui/pages/settings.slint:1212
 msgctxt "SettingsDialog"
 msgid "Open config directory"
 msgstr "Open config directory"
 
-#: ui/pages/settings.slint:1159
+#: ui/pages/settings.slint:1217
 msgctxt "SettingsDialog"
 msgid "Read-only path to sessions, keys, and logs."
 msgstr "Read-only path to sessions, keys, and logs."
 
-#: ui/pages/settings.slint:1191
+#: ui/pages/settings.slint:1249
 msgctxt "SettingsDialog"
 msgid "Cancel"
 msgstr "Cancel"
 
-#: ui/pages/settings.slint:1192
+#: ui/pages/settings.slint:1250
 msgctxt "SettingsDialog"
 msgid "Discard changes and close"
 msgstr "Discard changes and close"
 
-#: ui/pages/settings.slint:1196
+#: ui/pages/settings.slint:1254
 msgctxt "SettingsDialog"
 msgid "Save"
 msgstr "Save"
 
-#: ui/pages/settings.slint:1197
+#: ui/pages/settings.slint:1255
 msgctxt "SettingsDialog"
 msgid "Save all sections and close"
 msgstr "Save all sections and close"
@@ -4061,7 +4116,7 @@ msgctxt "MainWindow"
 msgid "Connected"
 msgstr "Connected"
 
-#: ui/text_formats.slint:350 ui/text_formats.slint:1936
+#: ui/text_formats.slint:350 ui/text_formats.slint:1937
 msgctxt "MainWindow"
 msgid "Failed"
 msgstr "Failed"
@@ -6530,37 +6585,37 @@ msgctxt "MainWindow"
 msgid "Starting"
 msgstr "Starting"
 
-#: ui/text_formats.slint:1932
+#: ui/text_formats.slint:1933
 msgctxt "MainWindow"
-msgid "Listening on 127.0.0.1:{0}"
-msgstr "Listening on 127.0.0.1:{0}"
+msgid "Listening on {0}"
+msgstr "Listening on {0}"
 
-#: ui/text_formats.slint:1938
+#: ui/text_formats.slint:1939
 msgctxt "MainWindow"
 msgid "Failed: {0}"
 msgstr "Failed: {0}"
 
-#: ui/text_formats.slint:1941
+#: ui/text_formats.slint:1942
 msgctxt "MainWindow"
 msgid "AI is controlling a terminal"
 msgstr "AI is controlling a terminal"
 
-#: ui/text_formats.slint:1944
+#: ui/text_formats.slint:1945
 msgctxt "MainWindow"
 msgid "Waiting for approval"
 msgstr "Waiting for approval"
 
-#: ui/text_formats.slint:1953
+#: ui/text_formats.slint:1954
 msgctxt "MainWindow"
 msgid "System default"
 msgstr "System default"
 
-#: ui/text_formats.slint:1956
+#: ui/text_formats.slint:1957
 msgctxt "MainWindow"
 msgid "Custom"
 msgstr "Custom"
 
-#: ui/text_formats.slint:1964
+#: ui/text_formats.slint:1965
 msgctxt "MainWindow"
 msgid "No Proxy"
 msgstr "No Proxy"
@@ -7205,7 +7260,7 @@ msgctxt "SessionEditorWindow"
 msgid "Session Editor"
 msgstr "Session Editor"
 
-#: ui/windows/settings_window.slint:8 ui/windows/settings_window.slint:138
+#: ui/windows/settings_window.slint:8 ui/windows/settings_window.slint:150
 msgctxt "SettingsWindow"
 msgid "Settings"
 msgstr "Settings"

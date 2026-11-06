@@ -120,8 +120,8 @@ export component MenuBar inherits Rectangle {
                 spacing: 2px;
                 alignment: stretch;
                 // 应用图标与 MenuTitle（24px）垂直居中，避免图标相对菜单文字偏上/偏下。
-                // 不设纵向 padding：顶栏已是 §4.1 的 32px，再留 4px 会把 32px 的
-                // 面板折叠按钮挤出内容区。
+                // 不设纵向 padding：顶栏已是 bar-height-menubar（40px），再留纵向
+                // padding 会把 32px 的面板折叠按钮挤出内容区。
                 cross-axis-alignment: center;
 
                 // 最左应用图标（落在拖动区内，可拖窗；无独立点击）。
