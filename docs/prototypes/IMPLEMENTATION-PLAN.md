@@ -15,7 +15,7 @@
 | 1 | 配置 / runtime 基础层（外观、终端交互、SFTP、登录脚本、文件夹继承） | ✅ 完成 | 2026-11-03 · `c6d1102`、`edb0243` |
 | 2 | 页面与弹窗：Settings + 主密码、Session Editor、管理器、剩余弹窗、控件/表单/预览规范 | ✅ 完成（待用户核验） | 2026-11-05 · `2d26a06` … `2fbc72d`（#2–#16） |
 | 3 | 主壳菜单/快捷键/sync banner、停靠面板、工作区 | 🔍 待用户核验 | #17 `de3aef8`、#18 `1125e6a`、#19 `07ed35d` |
-| 4 | i18n 尾部、遗留清理、文档同步 | 🔍 待用户核验 | #20/#21（见 §4.1；提交后补哈希） |
+| 4 | i18n 尾部、遗留清理、文档同步 | 🔍 待用户核验 | #20/#21 `1ee6b45` |
 | 5 | 全量验收（门禁 + 用户逐窗核验 + 证据归档） | ⬜ 未开始 | — |
 
 > 波次状态以本表为准；事项级细节见 §4，历史记录见文末附录。
@@ -84,8 +84,8 @@ $env:CARGO_TARGET_DIR='D:\SDK\cargo-target'
 | 17 | 波 3 · 主壳：6 个一级菜单（补 Tools）、Session 菜单项、`Ctrl+Shift+S`、`F11`、Full Screen/Focus Mode、状态栏 UTF-8、sync banner | 🔍 待用户核验 | `de3aef8`（含修正 `5f7cbb2`/`034f3d3`/`ae0abba`/`9150b1e`/`a7f72ad`/`64da296`） |
 | 18 | 波 3 · 停靠面板：Sessions 图标/原地改名/右键项/New Folder 禁用；Transfers 批量 Pause/Resume All；Tunnels `+`；dock 宽度 | 🔍 待用户核验 | `1125e6a` |
 | 19 | 波 3 · 工作区：标签图标/原地改名/AI 标志；Find Across；REC 底条；QC Clear；SFTP 原地 New Folder/Rename + chmod 入口；SSH PTY 视口初尺寸；Don't ask again 勾选布局（**无**分屏叶数硬上限、**无** N9 Pause / pane Receive） | 🔍 待用户核验 | `07ed35d` |
-| 20 | 波 4 · i18n 尾部：`No Proxy` sentinel + `@tr`；Discard / Close Session·Tabs 走 TextFormats；删除死路径 Rename Tab 弹窗 | 🔍 待用户核验 | 见波次记录 |
-| 21 | 波 4 · 遗留清理：删旧 `known_hosts` 页与 CLEAR/`RESET SECRETS` 打字 API；确认窗去 token；FocusRing/tooltip；文档与 i18n 同步 | 🔍 待用户核验 | 见波次记录 |
+| 20 | 波 4 · i18n 尾部：`No Proxy` sentinel + `@tr`；Discard / Close Session·Tabs 走 TextFormats；删除死路径 Rename Tab 弹窗 | 🔍 待用户核验 | `1ee6b45` |
+| 21 | 波 4 · 遗留清理：删旧 `known_hosts` 页与 CLEAR/`RESET SECRETS` 打字 API；确认窗去 token；FocusRing/tooltip；文档与 i18n 同步 | 🔍 待用户核验 | `1ee6b45` |
 
 ### 4.2 进行中（未提交）
 
