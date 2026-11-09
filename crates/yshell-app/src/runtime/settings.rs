@@ -188,9 +188,16 @@ pub(crate) fn rgb_parts(color: appearance::RgbColor) -> [u8; 3] {
 
 /// Light-theme swatch colors for [`APP_ACCENT_IDS`] (dark variants are separate
 /// so the row follows the resolved app theme, like the prototype board).
+///
+/// Index 0 (Follow system) is a placeholder: the Slint `AccentSwatch` paints a
+/// half-white / half-dark gradient instead of this solid color.
 pub(crate) fn accent_swatches_light() -> Vec<[u8; 3]> {
     let mut swatches = Vec::with_capacity(APP_ACCENT_IDS.len());
     for accent in (0..7).filter_map(accent_from_index) {
+        if matches!(accent, AccentColor::FollowSystem) {
+            swatches.push([0xff, 0xff, 0xff]);
+            continue;
+        }
         let colors = appearance::resolve_accent(accent_id(accent));
         swatches.push(rgb_parts(colors.light));
     }
@@ -198,9 +205,16 @@ pub(crate) fn accent_swatches_light() -> Vec<[u8; 3]> {
 }
 
 /// Dark-theme swatch colors for [`APP_ACCENT_IDS`].
+///
+/// Index 0 placeholder matches [`accent_swatches_light`]; UI uses the system
+/// split gradient for Follow system.
 pub(crate) fn accent_swatches_dark() -> Vec<[u8; 3]> {
     let mut swatches = Vec::with_capacity(APP_ACCENT_IDS.len());
     for accent in (0..7).filter_map(accent_from_index) {
+        if matches!(accent, AccentColor::FollowSystem) {
+            swatches.push([0x20, 0x20, 0x20]);
+            continue;
+        }
         let colors = appearance::resolve_accent(accent_id(accent));
         swatches.push(rgb_parts(colors.dark));
     }
@@ -830,8 +844,15 @@ mod tests {
         assert_eq!(follow.accent_colors(), appearance::resolve_accent("blue"));
 
         // The swatch rows are 1:1 with APP_ACCENT_IDS in both themes.
+        // Index 0 is Follow system (placeholder; UI paints a split gradient).
         assert_eq!(accent_swatches_light().len(), APP_ACCENT_IDS.len());
         assert_eq!(accent_swatches_dark().len(), APP_ACCENT_IDS.len());
+        assert_eq!(accent_swatches_light()[0], [0xff, 0xff, 0xff]);
+        assert_eq!(accent_swatches_dark()[0], [0x20, 0x20, 0x20]);
+        assert_ne!(
+            accent_swatches_light()[0],
+            rgb_parts(appearance::resolve_accent("blue").light)
+        );
         assert_eq!(
             accent_swatches_light()[1],
             rgb_parts(appearance::resolve_accent("blue").light)

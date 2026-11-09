@@ -90,10 +90,13 @@ component SettingsMethodButton inherits Rectangle {
 }
 
 // 强调色色板：Follow system + 6 预设；选中项加粗描边（原型 `aria-pressed` 态）。
+// Follow system 用半白半黑渐变（原型 `.accent-system`），与 Blue 实色区分。
 component AccentSwatch inherits Rectangle {
     in property <color> swatch: transparent;
     in property <string> hint: "";
     in property <bool> selected: false;
+    /// Index 0 = Follow system：半白半黑，不吃 `swatch` 实色。
+    in property <bool> follow-system: false;
     callback clicked();
 
     width: Theme.control-height;
@@ -101,7 +104,10 @@ component AccentSwatch inherits Rectangle {
     border-radius: Theme.radius-control;
     border-width: root.selected ? 2px : 1px;
     border-color: root.selected ? Theme.text-primary : Theme.control-stroke;
-    background: root.swatch;
+    background: root.follow-system
+        ? @linear-gradient(90deg, #ffffff 0%, #ffffff 50%, #202020 50%, #202020 100%)
+        : root.swatch;
+    clip: true;
 
     TouchArea {
         clicked => { root.clicked(); }
@@ -574,6 +580,7 @@ export component SettingsDialog inherits Rectangle {
                                                 ? root.settings-appearance-accent-dark-swatches
                                                 : root.settings-appearance-accent-light-swatches : AccentSwatch {
                                                 swatch: swatch;
+                                                follow-system: index == 0;
                                                 selected: root.settings-appearance-accent-index == index;
                                                 hint: TextFormats.appearance-accent-label(index);
                                                 clicked => { root.update-settings-appearance-accent(index); }
