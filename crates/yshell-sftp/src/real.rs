@@ -432,7 +432,7 @@ fn verify_host_key(session: &Session, config: &SshConnectionConfig) -> SftpResul
     };
     let presented = yshell_ssh::HostKeyFingerprint {
         algorithm: host_key_algorithm_label(key_type).to_owned(),
-        fingerprint: bytes_to_hex(key),
+        fingerprint: yshell_ssh::openssh_sha256_fingerprint(key),
     };
     // 唯一静默信任的分支：显式测试策略。
     if matches!(
@@ -442,7 +442,7 @@ fn verify_host_key(session: &Session, config: &SshConnectionConfig) -> SftpResul
         return Ok(());
     }
     match config.known_hosts.get(&config.host, config.port) {
-        Some(expected) if expected == &presented => Ok(()),
+        Some(expected) if expected.matches(&presented) => Ok(()),
         Some(expected) => Err(SftpError::new(
             SftpErrorKind::PermissionDenied,
             format!(
@@ -686,15 +686,6 @@ fn host_key_algorithm_label(key_type: ssh2::HostKeyType) -> &'static str {
         ssh2::HostKeyType::Ecdsa521 => "ecdsa-sha2-nistp521",
         ssh2::HostKeyType::Ed25519 => "ssh-ed25519",
     }
-}
-
-fn bytes_to_hex(bytes: &[u8]) -> String {
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        use std::fmt::Write as _;
-        let _ = write!(&mut output, "{byte:02x}");
-    }
-    output
 }
 
 #[cfg(test)]

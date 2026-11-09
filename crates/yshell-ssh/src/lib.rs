@@ -24,7 +24,10 @@ pub use client::{
 };
 pub use error::{HostKeyProblem, SshError, SshErrorKind, SshResult};
 pub use forwarding::{ForwardingKind, TunnelConfig, TunnelState};
-pub use host_key::{HostKeyDecision, HostKeyFingerprint, HostKeyPolicy, KnownHosts};
+pub use host_key::{
+    legacy_key_blob_hex, normalize_host_key_fingerprint, openssh_sha256_fingerprint,
+    HostKeyDecision, HostKeyFingerprint, HostKeyPolicy, KnownHosts,
+};
 pub use proxy::{probe_proxy_connectivity, ProxyConfig, ProxyProbeReport, ProxyState};
 pub use pty::{PtyConfig, PtySize};
 pub use real::{
