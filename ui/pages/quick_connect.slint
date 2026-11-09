@@ -238,17 +238,23 @@ export component QuickConnectPage inherits Rectangle {
                 alignment: start;
                 vertical-stretch: 0;
 
+                // 注意：父 VerticalLayout 的交叉轴是水平方向。
+                // 绝不能给本行设 `cross-axis-self-alignment: center`，否则整行只取
+                // preferred-width（≈ Connect 钮宽），WinTextInput（preferred-width:0
+                // + stretch:1）分到的剩余宽度为 0 → 地址框塌成一条光标。
                 HorizontalLayout {
                     spacing: Theme.spacing-8;
-                    // 输入框 40px、按钮 32px：按钮是写死高度的固定尺寸子项，
-                    // 默认 stretch 会把它贴行顶（比输入框中线高 4px）→ 显式交叉轴居中。
-                    cross-axis-self-alignment: center;
+                    // 行内交叉轴（竖直）：输入 40px / 按钮 32px 居中对齐。
+                    cross-axis-alignment: center;
+                    horizontal-stretch: 1;
 
                     target-input := WinTextInput {
                         height: Theme.row-height-nav;
                         font-size: Theme.font-body-large;
                         placeholder-text: "ssh://user@host:22";
                         horizontal-stretch: 1;
+                        // 保底：即使 stretch 失效也不要塌成 0 宽。
+                        min-width: 240px;
                         text <=> root.input-text;
                         accepted => { root.submit(root.input-text); }
                         edited(text) => { root.input-changed(text); }
@@ -257,7 +263,6 @@ export component QuickConnectPage inherits Rectangle {
                     if root.input-text != "" : WinIconButton {
                         icon: "close";
                         accessible-name: @tr("Clear target");
-                        cross-axis-self-alignment: center;
                         clicked => {
                             root.input-text = "";
                             root.clear-input();
@@ -270,7 +275,6 @@ export component QuickConnectPage inherits Rectangle {
                         accent: true;
                         // 空输入没有可解析的目标（与 W5-A3 的状态门限一致）。
                         enabled: root.input-text != "";
-                        cross-axis-self-alignment: center;
                         clicked => { root.submit(root.input-text); }
                     }
                 }
