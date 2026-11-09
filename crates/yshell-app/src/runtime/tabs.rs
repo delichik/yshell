@@ -1640,8 +1640,10 @@ impl AppRuntime {
 
     /// Session icon for tabs (`session.icon` presets; custom paths → `link` like the tree).
     fn tab_icon_name(&self, tab: &TabEntry) -> String {
+        // Use `connect`, not `plus` — the tab strip already has a trailing `+`
+        // for new tabs, and a plus icon next to "New Tab" looked duplicated.
         if tab.is_new_tab() {
-            return "plus".to_owned();
+            return "connect".to_owned();
         }
         if tab.kind.mode_text() == "sftp" {
             return "upload".to_owned();

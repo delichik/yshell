@@ -98,7 +98,7 @@ export component WorkspaceTabItem inherits Rectangle {
             Icon {
                 name: root.tab-icon-name != "" ? root.tab-icon-name
                     : (root.tab-mode-text == "sftp" ? "upload"
-                    : root.tab-mode-text == "new" ? "plus"
+                    : root.tab-mode-text == "new" ? "connect"
                     : "terminal");
                 icon-color: root.tab-active ? Theme.text-primary : Theme.text-secondary;
                 icon-size: Theme.icon-size-small;
