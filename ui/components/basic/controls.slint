@@ -137,8 +137,9 @@ export component WinButton inherits Rectangle {
         }
     }
 
+    // 禁用强调色：软底 + 主文字，比 text-secondary 更易辨认（QC Connect 空态）。
     private property <brush> text-color: !root.enabled
-        ? (root.accent ? Theme.text-secondary : Theme.text-disabled)
+        ? (root.accent ? Theme.text-primary : Theme.text-disabled)
         : root.accent ? Theme.accent-text
         : root.critical ? Theme.critical
         : Theme.text-primary;
