@@ -556,22 +556,12 @@ export component ProxiesPage inherits Rectangle {
                             thumb-min-length: 24px;
                         }
                     }
-
-                    // 底栏唯一状态条。
-                    Text {
-                        height: Theme.control-height;
-                        text: root.status-display;
-                        color: Theme.text-secondary;
-                        font-size: Theme.font-caption;
-                        vertical-alignment: center;
-                        wrap: no-wrap;
-                        overflow: elide;
-                    }
                 }
             }
         }
 
-        // 一窗一条提交/关闭栏：Cancel | Save（Cancel/×/Esc 同弃稿关闭；Save = 保存并关闭）。
+        // 一窗一条提交/关闭栏：状态 | Cancel | Save（Cancel/×/Esc 同弃稿关闭；Save = 保存并关闭）。
+        // 状态放页脚左侧，避免右栏「Test ↔ 状态」之间被 stretch 撑出大片空洞（对齐原型 spacer + footer）。
         Rectangle {
             height: 1px;
             background: Theme.divider;
@@ -579,9 +569,20 @@ export component ProxiesPage inherits Rectangle {
         }
 
         HorizontalLayout {
-            alignment: end;
             vertical-stretch: 0;
             spacing: Theme.spacing-8;
+            cross-axis-alignment: center;
+
+            Text {
+                horizontal-stretch: 1;
+                height: Theme.control-height;
+                text: root.status-display;
+                color: Theme.text-secondary;
+                font-size: Theme.font-caption;
+                vertical-alignment: center;
+                wrap: no-wrap;
+                overflow: elide;
+            }
 
             WinButton {
                 text: @tr("Cancel");
