@@ -61,9 +61,13 @@ export component WinButton inherits Rectangle {
     height: Theme.control-height;
     border-radius: Theme.radius-control;
     border-width: 1px;
-    border-color: !enabled ? Theme.control-stroke
+    // Disabled accent keeps a soft accent fill + secondary text so primary
+    // actions (e.g. QC Connect) stay readable instead of nearly invisible.
+    border-color: !enabled
+        ? (accent ? transparent : Theme.control-stroke)
         : (accent || subtle) ? transparent : Theme.control-stroke;
-    background: !enabled ? Theme.control-fill-disabled
+    background: !enabled
+        ? (accent ? Theme.accent-soft : Theme.control-fill-disabled)
         : accent ? (touch.pressed ? Theme.accent-pressed : touch.has-hover ? Theme.accent-hover : Theme.accent)
         : subtle ? (touch.pressed ? Theme.subtle-pressed : touch.has-hover ? Theme.subtle-hover : transparent)
         : (touch.pressed ? Theme.control-fill-pressed : touch.has-hover ? Theme.control-fill-hover : Theme.control-fill);
@@ -133,7 +137,8 @@ export component WinButton inherits Rectangle {
         }
     }
 
-    private property <brush> text-color: !root.enabled ? Theme.text-disabled
+    private property <brush> text-color: !root.enabled
+        ? (root.accent ? Theme.text-secondary : Theme.text-disabled)
         : root.accent ? Theme.accent-text
         : root.critical ? Theme.critical
         : Theme.text-primary;
