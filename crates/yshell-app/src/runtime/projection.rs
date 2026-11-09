@@ -887,7 +887,9 @@ impl AppRuntime {
             local_visible: self.panel_visible(PanelId::Local),
             transfers_visible: self.panel_visible(PanelId::Transfers),
             layout: layout_projection(&panel_view),
-            app_version_text: env!("CARGO_PKG_VERSION").to_owned(),
+            // `YSHELL_VERSION` is set by build.rs to match `xtask dist` labels
+            // (`YSHELL_RELEASE_VERSION` or `0.0.0-dev.<sha>`), not Cargo.toml 0.1.0.
+            app_version_text: env!("YSHELL_VERSION").to_owned(),
             quick_connect_visible: self.projection_quick_connect_visible(),
             quick_connect_input_text,
             quick_connect_error_text,

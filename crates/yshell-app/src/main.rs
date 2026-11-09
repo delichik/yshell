@@ -52,7 +52,7 @@ fn main() -> AppResult<()> {
             Ok(())
         }
         CliCommand::Version => {
-            println!("yshell {}", env!("CARGO_PKG_VERSION"));
+            println!("yshell {}", env!("YSHELL_VERSION"));
             Ok(())
         }
         CliCommand::Help => {
