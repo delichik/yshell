@@ -119,11 +119,7 @@ impl AppRuntime {
     /// Whitespace-only input is stored as empty so Connect / Clear stay gated
     /// the same as a truly blank field (Slint has no `trim` for the enable check).
     pub fn update_quick_connect_input(&mut self, value: &str) -> AppProjection {
-        let value = if value.trim().is_empty() {
-            ""
-        } else {
-            value
-        };
+        let value = if value.trim().is_empty() { "" } else { value };
         if let Some(index) = self
             .active_tab_id
             .as_deref()

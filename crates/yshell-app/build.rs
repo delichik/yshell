@@ -99,7 +99,10 @@ fn embed_windows_version_info(version: &str) {
     resource.set("ProductName", "YShell");
     resource.set("FileDescription", "YShell SSH terminal and SFTP client");
     resource.set("LegalCopyright", "YShell contributors");
-    resource.set_version_info(winresource::VersionInfo::FILEVERSION, pe_u64(major, minor, patch, build));
+    resource.set_version_info(
+        winresource::VersionInfo::FILEVERSION,
+        pe_u64(major, minor, patch, build),
+    );
     resource.set_version_info(
         winresource::VersionInfo::PRODUCTVERSION,
         pe_u64(major, minor, patch, build),
@@ -111,8 +114,13 @@ fn embed_windows_version_info(version: &str) {
 
 fn parse_pe_version_parts(version: &str) -> (u16, u16, u16, u16) {
     let stripped = version.strip_prefix('v').unwrap_or(version);
-    let numeric = stripped.split(|c: char| !c.is_ascii_digit() && c != '.').next().unwrap_or("");
-    let mut parts = numeric.split('.').filter_map(|part| part.parse::<u16>().ok());
+    let numeric = stripped
+        .split(|c: char| !c.is_ascii_digit() && c != '.')
+        .next()
+        .unwrap_or("");
+    let mut parts = numeric
+        .split('.')
+        .filter_map(|part| part.parse::<u16>().ok());
     (
         parts.next().unwrap_or(0),
         parts.next().unwrap_or(0),
