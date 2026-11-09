@@ -597,26 +597,22 @@ export component SettingsDialog inherits Rectangle {
 
                                     FormRow {
                                         label: @tr("Style");
-                                        HorizontalLayout {
-                                            spacing: Theme.spacing-8;
-                                            // stretch：WinComboBox 的 preferred-width 为 0，
-                                            // `alignment: start` 会让样式下拉只剩零宽（只剩眼睛按钮）。
-                                            alignment: stretch;
-                                            WinComboBox {
-                                                max-width: Theme.form-field-width;
-                                                horizontal-stretch: 1;
-                                                model: root.settings-appearance-style-options;
-                                                current-index: root.settings-appearance-style-index;
-                                                selected(index) => {
-                                                    root.select-settings-appearance-style(index);
-                                                }
+                                        // 与 session-editor / 原型 `.ctl-with-btn` 一致：下拉固定宽 +
+                                        // manage（settings）图标钮；不用 eye，避免与 ComboBox 箭头粘成一块易误点。
+                                        // 显式宽度也避开 WinComboBox preferred-width=0 在 start 对齐下塌成零宽。
+                                        WinComboBox {
+                                            width: Theme.form-field-width - Theme.control-height - Theme.spacing-8;
+                                            model: root.settings-appearance-style-options;
+                                            current-index: root.settings-appearance-style-index;
+                                            selected(index) => {
+                                                root.select-settings-appearance-style(index);
                                             }
-                                            WinIconButton {
-                                                icon: "eye";
-                                                tooltip-text: @tr("Manage terminal styles");
-                                                accessible-name: @tr("Manage terminal styles");
-                                                clicked => { root.open-theme-manager(); }
-                                            }
+                                        }
+                                        WinIconButton {
+                                            icon: "settings";
+                                            tooltip-text: @tr("Manage terminal styles");
+                                            accessible-name: @tr("Manage terminal styles");
+                                            clicked => { root.open-theme-manager(); }
                                         }
                                     }
                                     FormHint {
