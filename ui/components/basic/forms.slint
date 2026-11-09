@@ -157,10 +157,12 @@ export component FormGroupLabel inherits Rectangle {
 
     label := Text {
         y: root.first ? 0px : Theme.form-row-gap;
+        width: parent.width;
         text: root.text;
         color: Theme.text-secondary;
         font-size: Theme.font-caption;
         font-weight: Theme.weight-semibold;
+        horizontal-alignment: left;
         wrap: no-wrap;
     }
 }
