@@ -203,6 +203,8 @@ export component QuickConnectPage inherits Rectangle {
             x: (parent.width - self.width) / 2;
             y: Theme.spacing-24;
             width: min(720px, parent.width - 2 * Theme.spacing-24);
+            // 钉住 preferred 高度，避免 Flickable 把列撑满视口后在标题与输入之间「长」出空白。
+            height: self.preferred-height;
             // 对齐原型 `.qc { gap: 12px }`：标题/说明与输入行之间不要再多留一截空白。
             spacing: Theme.spacing-12;
             // 主轴 start：子项各取 preferred 高度、剩余空间留在底部。
@@ -213,6 +215,7 @@ export component QuickConnectPage inherits Rectangle {
             VerticalLayout {
                 spacing: Theme.spacing-4;
                 alignment: start;
+                vertical-stretch: 0;
 
                 Text {
                     text: @tr("Quick Connect");
@@ -233,6 +236,7 @@ export component QuickConnectPage inherits Rectangle {
             VerticalLayout {
                 spacing: Theme.spacing-4;
                 alignment: start;
+                vertical-stretch: 0;
 
                 HorizontalLayout {
                     spacing: Theme.spacing-8;
@@ -314,6 +318,7 @@ export component QuickConnectPage inherits Rectangle {
             // 最近连接：QC 历史 + 已保存会话最近使用（运行时去重排序）
             VerticalLayout {
                 spacing: Theme.spacing-8;
+                vertical-stretch: 0;
 
                 HorizontalLayout {
                     spacing: Theme.spacing-8;
