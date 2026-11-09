@@ -197,7 +197,8 @@ export component QuickConnectPage inherits Rectangle {
             x: (parent.width - self.width) / 2;
             y: Theme.spacing-24;
             width: min(720px, parent.width - 2 * Theme.spacing-24);
-            spacing: Theme.spacing-20;
+            // 对齐原型 `.qc { gap: 12px }`：标题/说明与输入行之间不要再多留一截空白。
+            spacing: Theme.spacing-12;
             // 主轴 start：子项各取 preferred 高度、剩余空间留在底部。
             // （默认 alignment=stretch 会把多余空间均分给可增长的子项，卡片/行会被撑开。）
             alignment: start;
