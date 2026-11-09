@@ -257,8 +257,9 @@ export component ProxiesPage inherits Rectangle {
 
                             Rectangle { horizontal-stretch: 1; }
 
+                            // 对齐原型工具条右侧短计数（`2 proxies`）。
                             Text {
-                                text: root.list-summary-text;
+                                text: @tr("{0} proxies", root.proxies.length);
                                 color: Theme.text-tertiary;
                                 font-size: Theme.font-caption;
                                 vertical-alignment: center;

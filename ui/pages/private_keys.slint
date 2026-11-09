@@ -258,8 +258,9 @@ export component PrivateKeysPage inherits Rectangle {
 
                         Rectangle { horizontal-stretch: 1; }
 
+                        // 对齐原型工具条右侧短计数（`3 keys`）；长英文摘要留给状态栏/详情。
                         Text {
-                            text: root.list-summary-text;
+                            text: @tr("{0} key(s)", root.keys.length);
                             color: Theme.text-tertiary;
                             font-size: Theme.font-caption;
                             vertical-alignment: center;
