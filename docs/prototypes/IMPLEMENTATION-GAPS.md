@@ -80,7 +80,7 @@
 | REC 底部提示条（REC chip + 文件路径 + 停止入口） | 部分：REC 只在状态栏/标签角标体现，无底部提示条 | `status_bar.slint:251-294`；`terminal.html:387-391` | P2 |
 | 终端右键菜单（Copy/Paste/Find/Clear Scrollback/Logging/Send Key Input To） | 已实现（项比原型更多） | `ui/main_window.slint:1483-1594` | — |
 | Clear Scrollback 用**窗内**确认 | 部分：走独立 compact 确认窗 | `dialog_windows.rs:751-757`；`terminal.html:411-420` | P2 |
-| 本地终端（Local terminal） | 已实现 | `crates/yshell-app/src/runtime/local_terminal.rs` | — |
+| 本地终端（Local terminal） | runtime 有、**无 UI 入口**（`+`=QC；见 status） | `local_terminal.rs`（`open_local_terminal` 仅测试/预留） | P1 |
 | N9：双向组 + 状态栏 chip + banner On/Off + End all（无 Pause / 无 SRC·RCV） | 波 3 #17 已落地；对齐 `sync-input.html` | `sync-input.html`；`sync_input_banner.slint` | — |
 | ~~N9 预设下拉 + Pause + Stop~~ / ~~pane Receive 角色~~ | **作废**（旧契约愿景）；勿再当缺口 | — | — |
 | Quick Connect：Target + Connect + Recent 列表 + 空态 + Copy target + 历史开关 | 已实现 | `ui/pages/quick_connect.slint:152-333`；`crates/yshell-app/src/runtime/quick_connect.rs:146-166` | — |
