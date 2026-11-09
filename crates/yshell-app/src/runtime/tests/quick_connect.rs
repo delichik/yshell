@@ -75,6 +75,24 @@ fn failed_submit_does_not_record_history() {
 }
 
 #[test]
+fn whitespace_only_input_is_treated_as_empty() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 0);
+    runtime.open_new_tab();
+
+    let projection = runtime.update_quick_connect_input("   \t  ");
+    assert_eq!(projection.quick_connect_input_text, "");
+    assert_eq!(projection.quick_connect_error_text, "");
+
+    let projection = runtime
+        .submit_quick_connect("  \n")
+        .expect("whitespace submit is a no-op");
+    assert!(projection.quick_connect_visible);
+    assert!(runtime.tabs[0].is_new_tab());
+    assert!(runtime.config_document.quick_connect.history.is_empty());
+}
+
+#[test]
 fn submit_invalid_target_sets_inline_error_without_tab() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 0);

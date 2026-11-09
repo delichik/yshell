@@ -149,6 +149,7 @@ component SplitPaneLeaf inherits Rectangle {
     callback quick-connect-connect-target(string);
     callback quick-connect-copy-target(string);
     callback quick-connect-clear-history();
+    callback quick-connect-clear-input();
 
     // --- SFTP page ------------------------------------------------------
     callback sftp-refresh();
@@ -431,6 +432,10 @@ component SplitPaneLeaf inherits Rectangle {
                     connect-target(target) => { root.quick-connect-connect-target(target); }
                     copy-target(target) => { root.quick-connect-copy-target(target); }
                     clear-history() => { root.quick-connect-clear-history(); }
+                    clear-input() => {
+                        root.focus-requested();
+                        root.quick-connect-clear-input();
+                    }
                 }
 
                 if root.mode-text == "sftp" : SftpTabPage {
@@ -629,6 +634,7 @@ export component WorkspaceSplitView inherits Rectangle {
     callback quick-connect-connect-target(string);
     callback quick-connect-copy-target(string);
     callback quick-connect-clear-history();
+    callback quick-connect-clear-input();
 
     // SFTP page.
     callback sftp-refresh();
@@ -761,6 +767,7 @@ export component WorkspaceSplitView inherits Rectangle {
         quick-connect-connect-target(target) => { root.quick-connect-connect-target(target); }
         quick-connect-copy-target(target) => { root.quick-connect-copy-target(target); }
         quick-connect-clear-history() => { root.quick-connect-clear-history(); }
+        quick-connect-clear-input() => { root.quick-connect-clear-input(); }
         sftp-refresh() => { root.sftp-refresh(); }
         sftp-up() => { root.sftp-up(); }
         sftp-home() => { root.sftp-home(); }

@@ -794,7 +794,8 @@ export component MainWindow inherits Window {
     callback quick_connect_copy(string);
     /// D12：清空连接历史。
     callback quick_connect_clear_history();
-    /// `+` 按钮：总是新建一个本地终端标签（Ctrl+N 仍打开 Session Editor）。
+    /// `+` 按钮：新建 New Tab（快速连接页）。Ctrl+N 仍打开 Session Editor。
+    /// 本地终端本版无 UI 入口（见 status）。
     callback new_tab_default();
     // --- N3：面板停靠（语义动作全部交给 Rust：布局是全局持久化状态）-----------
     /// ⋯ 菜单动作：id + "move-left"/"move-right"/"collapse"/"expand"/"hide"。
