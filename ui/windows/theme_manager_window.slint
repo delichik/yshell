@@ -76,7 +76,8 @@ export component ThemeManagerWindow inherits Window {
         width: Theme.tool-window-width-wide;
         height: Theme.tool-window-height-tall;
         title-text: @tr("Terminal Styles");
-        summary-text: @tr("Built-in {0} · Custom {1}", root.builtin-count, root.user-count);
+        // 计数只在页内工具条右侧；标题栏不重复（对齐原型 title = 名称）。
+        summary-text: "";
         native-title-drag: root.native_title_drag;
         close-requested => { root.dismiss(); }
         title-drag-requested => { root.title_drag_requested(); }
