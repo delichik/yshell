@@ -286,3 +286,25 @@ fn proxy_manager_open_close_and_password_input_hygiene() {
     assert!(!closed.proxies_modal_visible);
     assert!(runtime.proxies_editor_password.is_empty());
 }
+
+#[test]
+fn cancel_proxy_editor_discards_and_closes_like_chrome_x() {
+    let temp = tempdir().expect("tempdir");
+    store_with_proxies(
+        temp.path(),
+        vec![proxy_profile("proxy-1", "SOCKS", "127.0.0.1", 1080)],
+        Vec::new(),
+    );
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    let keychain: Arc<dyn Keychain> = Arc::new(FakeKeychain::new("proxy-cancel-master"));
+    runtime.keychain = Some(RuntimeKeychain(keychain));
+    let opened = runtime.open_proxies_manager();
+    assert!(opened.proxies_modal_visible);
+    let _ = runtime.update_proxy_editor_name("unsaved-rename");
+    let canceled = runtime.cancel_proxy_editor();
+    assert!(
+        !canceled.proxies_modal_visible,
+        "Cancel must close the manager (same path as ×)"
+    );
+    assert!(runtime.proxies_editor_password.is_empty());
+}

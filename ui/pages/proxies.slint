@@ -4,7 +4,7 @@
 //   * `open` 由宿主投影驱动；`close`（Esc / 标题栏关闭）走同一条路径。
 //   * `proxies` 是按名称排序的极简行模型（名称 + protocol·host:port）。
 //   * 工具条只放 `+`（New）；行级 Duplicate / Test / Delete 全部走右键菜单。
-//   * 右栏是编辑表单（Password 只写不回显）；页脚唯一提交栏 Cancel | Save。
+//   * 右栏是编辑表单（Password 只写不回显）；页脚 Cancel | Save（均关闭；Save 先持久化）。
 //   * 破坏性操作走 `request-remove-proxy`：被已保存会话引用时宿主阻止删除并在
 //     本页说明（D8），同时提供"设为无代理"的显式动作。
 //
@@ -571,7 +571,7 @@ export component ProxiesPage inherits Rectangle {
             }
         }
 
-        // 一窗一条提交/关闭栏：Cancel | Save（Save = 保存并留在管理器）。
+        // 一窗一条提交/关闭栏：Cancel | Save（Cancel/×/Esc 同弃稿关闭；Save = 保存并关闭）。
         Rectangle {
             height: 1px;
             background: Theme.divider;

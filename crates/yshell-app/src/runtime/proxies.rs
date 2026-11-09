@@ -353,20 +353,9 @@ impl AppRuntime {
         self.projection()
     }
 
+    /// Cancel = discard unsaved form fields and close (same path as × / Esc).
     pub fn cancel_proxy_editor(&mut self) -> AppProjection {
-        self.proxies_editor_password.clear();
-        if self.proxies_selected_id.is_some() {
-            self.begin_edit_proxy();
-        } else {
-            self.start_new_proxy();
-        }
-        self.set_proxies_status_kind(
-            "proxies-editor-discarded",
-            "Discarded proxy editor changes.".to_owned(),
-            String::new(),
-            String::new(),
-        );
-        self.projection()
+        self.close_proxies_manager()
     }
 
     /// Validates the form and creates/updates the managed profile.
