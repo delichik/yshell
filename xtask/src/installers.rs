@@ -182,6 +182,11 @@ fn msi(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
     let license_rtf_path = work.join("license.rtf");
     fs::write(&license_rtf_path, license_rtf(&ctx.root.join("LICENSE"))?)?;
 
+    // Ship fonts beside the exe (`INSTALLFOLDER\fonts\`) — required by
+    // `resolve_fonts_dir()`; without them the binary panics at startup.
+    let fonts_dir = work.join("fonts");
+    crate::dist::copy_shipped_fonts_public(ctx.root, &fonts_dir)?;
+
     let template = ctx.root.join("packaging/windows/yshell.wxs");
     let rendered = render_template(
         &template,
@@ -191,6 +196,7 @@ fn msi(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
             ("@README@", &absolute_path(&ctx.root.join("README.md"))?),
             ("@LICENSE@", &absolute_path(&ctx.root.join("LICENSE"))?),
             ("@LICENSE_RTF@", &absolute_path(&license_rtf_path)?),
+            ("@FONTS_DIR@", &absolute_path(&fonts_dir)?),
         ],
     )?;
     let source = work.join("yshell.wxs");
@@ -244,6 +250,8 @@ fn dmg(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
         fs::create_dir_all(&resources_dir)?;
 
         copy_file(ctx.binary, &macos_dir.join("yshell"), true)?;
+        // Beside the binary (`Contents/MacOS/fonts`) for `resolve_fonts_dir()`.
+        crate::dist::copy_shipped_fonts_public(ctx.root, &macos_dir.join("fonts"))?;
 
         let icon_source = ctx.root.join("assets/icons/yshell.icns");
         let icon_entry = if icon_source.is_file() {
@@ -624,6 +632,29 @@ mod tests {
         assert_eq!(
             rpm_version("portable-0.0.5"),
             ("0.0.5".to_string(), "1".to_string())
+        );
+    }
+
+    #[test]
+    fn msi_wxs_ships_fonts_beside_the_executable() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let wxs = fs::read_to_string(root.join("packaging/windows/yshell.wxs"))
+            .expect("read packaging/windows/yshell.wxs");
+        assert!(
+            wxs.contains("@FONTS_DIR@"),
+            "MSI template must take a staged fonts directory"
+        );
+        assert!(
+            wxs.contains("Name=\"fonts\""),
+            "MSI must install fonts next to the exe (resolve_fonts_dir)"
+        );
+        assert!(
+            wxs.contains("ComponentRef Id=\"YShellFonts\""),
+            "MSI feature must include the fonts component"
+        );
+        assert!(
+            wxs.contains("DejaVuSansMono.ttf"),
+            "MSI must package the primary DejaVu face"
         );
     }
 }

@@ -73,6 +73,9 @@ impl AppRuntime {
     }
 
     /// 关闭当前 New Tab（无论当前模式，用于重置/测试路径）。
+    ///
+    /// Unlike clicking the tab's ×, Esc / Ctrl+O dismiss must leave an empty
+    /// workspace when this was the last tab — not request window close.
     pub fn close_quick_connect(&mut self) -> AppProjection {
         let Some(tab_id) = self.active_tab_id.clone().filter(|tab_id| {
             self.tab_index(tab_id)
@@ -81,6 +84,9 @@ impl AppRuntime {
             return self.projection();
         };
         self.close_tab_immediate(&tab_id);
+        // `close_tab_immediate` treats "last tab closed" like the window ×;
+        // QC dismiss is overlay semantics and must not quit the app.
+        self.requested_window_close = None;
         self.set_status_kind(
             "quick-connect-closed",
             "Closed the Quick Connect page.".to_owned(),

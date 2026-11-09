@@ -294,11 +294,27 @@ fn closing_the_last_new_tab_leaves_an_empty_workspace_until_reopened() {
     assert!(closed.tabs.is_empty());
     assert_eq!(closed.active_tab_id, "");
     assert!(!closed.has_active_session);
+    // Esc / Ctrl+O dismiss must not quit the window (unlike tab × on last tab).
+    assert_eq!(runtime.take_requested_window_close(), None);
 
     // Ctrl+O 仍可重新打开新标签页。
     let reopened = runtime.open_quick_connect();
     assert!(reopened.quick_connect_visible);
     assert_eq!(reopened.tab_count, 1);
+}
+
+#[test]
+fn toggle_quick_connect_on_sole_new_tab_does_not_request_window_close() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 1);
+
+    assert!(runtime.toggle_quick_connect().quick_connect_visible);
+    let toggled_off = runtime.toggle_quick_connect();
+    assert!(!toggled_off.quick_connect_visible);
+    assert!(toggled_off.tabs.is_empty());
+    assert_eq!(runtime.take_requested_window_close(), None);
+
+    assert!(runtime.toggle_quick_connect().quick_connect_visible);
 }
 
 #[test]

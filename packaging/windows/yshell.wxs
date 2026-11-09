@@ -2,8 +2,9 @@
 <!--
   WiX v3 source for the YShell MSI, rendered by `cargo xtask dist` with the
   msi format selected (see xtask/src/installers.rs). @VERSION@ is a three part
-  numeric version, @BINARY@/@README@/@LICENSE@/@LICENSE_RTF@ are absolute
-  paths.
+  numeric version, @BINARY@/@README@/@LICENSE@/@LICENSE_RTF@/@FONTS_DIR@ are
+  absolute paths. Fonts must sit beside the exe as INSTALLFOLDER\fonts\ — see
+  resolve_fonts_dir() in crates/yshell-terminal.
 -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*"
@@ -32,6 +33,17 @@
             <File Id="YShellReadme" Source="@README@" />
             <File Id="YShellLicense" Source="@LICENSE@" />
           </Component>
+          <Directory Id="FontsFolder" Name="fonts">
+            <Component Id="YShellFonts" Guid="{A7E2C91F-4B5D-4E8A-9C1D-6F3A2B8E0D47}">
+              <File Id="FontDejaVuRegular" Source="@FONTS_DIR@\DejaVuSansMono.ttf" KeyPath="yes" />
+              <File Id="FontDejaVuBold" Source="@FONTS_DIR@\DejaVuSansMono-Bold.ttf" />
+              <File Id="FontDejaVuOblique" Source="@FONTS_DIR@\DejaVuSansMono-Oblique.ttf" />
+              <File Id="FontDejaVuBoldOblique" Source="@FONTS_DIR@\DejaVuSansMono-BoldOblique.ttf" />
+              <File Id="FontNotoCjk" Source="@FONTS_DIR@\NotoSansMonoCJKsc-GB2312-Subset.otf" />
+              <File Id="FontLicenseDejaVu" Source="@FONTS_DIR@\LICENSE-DejaVu.txt" />
+              <File Id="FontLicenseNoto" Source="@FONTS_DIR@\LICENSE-NotoSansMonoCJK-OFL-1.1.txt" />
+            </Component>
+          </Directory>
         </Directory>
       </Directory>
       <Directory Id="ProgramMenuFolder">
@@ -59,6 +71,7 @@
     <Feature Id="YShellFeature" Title="YShell" Level="1">
       <ComponentRef Id="YShellExecutable" />
       <ComponentRef Id="YShellDocs" />
+      <ComponentRef Id="YShellFonts" />
       <ComponentRef Id="YShellShortcut" />
     </Feature>
   </Product>

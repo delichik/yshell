@@ -84,4 +84,12 @@ assets = [
     ["target/release/yshell", "usr/bin/", "755"],
     ["../../packaging/linux/yshell.desktop", "usr/share/applications/", "644"],
     ["../../README.md", "usr/share/doc/yshell/README.md", "644"],
+    # Shipped terminal fonts — `resolve_fonts_dir()` looks under /usr/share/yshell/fonts.
+    ["../yshell-terminal/assets/DejaVuSansMono.ttf", "usr/share/yshell/fonts/", "644"],
+    ["../yshell-terminal/assets/DejaVuSansMono-Bold.ttf", "usr/share/yshell/fonts/", "644"],
+    ["../yshell-terminal/assets/DejaVuSansMono-Oblique.ttf", "usr/share/yshell/fonts/", "644"],
+    ["../yshell-terminal/assets/DejaVuSansMono-BoldOblique.ttf", "usr/share/yshell/fonts/", "644"],
+    ["../yshell-terminal/assets/NotoSansMonoCJKsc-GB2312-Subset.otf", "usr/share/yshell/fonts/", "644"],
+    ["../yshell-terminal/assets/LICENSE-DejaVu.txt", "usr/share/yshell/fonts/", "644"],
+    ["../yshell-terminal/assets/LICENSE-NotoSansMonoCJK-OFL-1.1.txt", "usr/share/yshell/fonts/", "644"],
 ]
