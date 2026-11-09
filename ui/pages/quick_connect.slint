@@ -118,29 +118,35 @@ component QuickConnectRowItem inherits Rectangle {
             }
         }
 
-        if root.data.last_used_text != "" : Text {
-            text: root.data.last_used_text;
-            color: Theme.text-tertiary;
-            font-size: Theme.font-caption;
-            horizontal-alignment: left;
-            vertical-alignment: center;
-            wrap: no-wrap;
-            // M 轮2 中#8：原先既无 elide 也无宽度上限，长时间戳会挤占其它列
-            overflow: elide;
-            width: min(160px, self.preferred-width);
-        }
+        // 时间戳与动作钮成组，避免 outer spacing 把「3 天前」与图标拉开一大截。
+        HorizontalLayout {
+            spacing: Theme.spacing-8;
+            cross-axis-alignment: center;
 
-        // 与 copy 同为图标按钮，避免「Connect」文字按钮把行动作区撑得过长。
-        WinIconButton {
-            icon: "connect";
-            accessible-name: @tr("Connect");
-            clicked => { root.connect(); }
-        }
+            if root.data.last_used_text != "" : Text {
+                text: root.data.last_used_text;
+                color: Theme.text-tertiary;
+                font-size: Theme.font-caption;
+                horizontal-alignment: left;
+                vertical-alignment: center;
+                wrap: no-wrap;
+                // M 轮2 中#8：原先既无 elide 也无宽度上限，长时间戳会挤占其它列
+                overflow: elide;
+                width: min(160px, self.preferred-width);
+            }
 
-        WinIconButton {
-            icon: "copy";
-            accessible-name: @tr("Copy target");
-            clicked => { root.copy(); }
+            // 与 copy 同为图标按钮，避免「Connect」文字按钮把行动作区撑得过长。
+            WinIconButton {
+                icon: "connect";
+                accessible-name: @tr("Connect");
+                clicked => { root.connect(); }
+            }
+
+            WinIconButton {
+                icon: "copy";
+                accessible-name: @tr("Copy target");
+                clicked => { root.copy(); }
+            }
         }
     }
 }
