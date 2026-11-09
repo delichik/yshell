@@ -849,10 +849,12 @@ export component WinNavItem inherits Rectangle {
         padding-left: root.indented ? 32px : 8px;
         padding-right: 8px;
         spacing: 12px;
+        // 固定高度图标盒 + 交叉轴居中，避免 stretch 行里图标相对文字光学偏下（MCP link 等）。
+        cross-axis-alignment: center;
 
         Rectangle {
             width: Theme.icon-size;
-            vertical-stretch: 1;
+            height: Theme.icon-size;
             background: transparent;
 
             Icon {
