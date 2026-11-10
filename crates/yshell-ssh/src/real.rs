@@ -2218,7 +2218,7 @@ fn verify_native_host_key(session: &Session, attempt: &mut RealConnectionAttempt
     })?;
     let presented = crate::host_key::HostKeyFingerprint {
         algorithm: native_host_key_algorithm_label(key_type).to_owned(),
-        fingerprint: bytes_to_hex(key),
+        fingerprint: crate::host_key::openssh_sha256_fingerprint(key),
     };
     let server = format!("{}:{}", attempt.plan.host, attempt.plan.port);
     let policy = attempt.plan.host_key_policy.clone();
@@ -2298,7 +2298,7 @@ fn native_host_key_problem(
     presented: &crate::host_key::HostKeyFingerprint,
 ) -> Option<crate::error::HostKeyProblem> {
     match known_hosts.get(host, port) {
-        Some(expected) if expected == presented => None,
+        Some(expected) if expected.matches(presented) => None,
         Some(expected) => Some(crate::error::HostKeyProblem::Changed {
             host: host.to_owned(),
             port,
@@ -2376,15 +2376,6 @@ fn native_host_key_algorithm_label(key_type: ssh2::HostKeyType) -> &'static str 
         ssh2::HostKeyType::Ecdsa521 => "ecdsa-sha2-nistp521",
         ssh2::HostKeyType::Ed25519 => "ssh-ed25519",
     }
-}
-
-fn bytes_to_hex(bytes: &[u8]) -> String {
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        use std::fmt::Write as _;
-        let _ = write!(&mut output, "{byte:02x}");
-    }
-    output
 }
 
 fn native_stage_error(
@@ -2506,6 +2497,25 @@ mod tests {
                 presented,
                 expected: pinned,
             })
+        );
+    }
+
+    #[test]
+    fn known_host_key_problem_accepts_legacy_hex_pin_for_sha256_presentation() {
+        let key_blob = b"0123456789abcdef0123456789abcdef";
+        let legacy = crate::host_key::HostKeyFingerprint {
+            algorithm: "ssh-ed25519".to_owned(),
+            fingerprint: crate::host_key::legacy_key_blob_hex(key_blob),
+        };
+        let presented = crate::host_key::HostKeyFingerprint {
+            algorithm: "ssh-ed25519".to_owned(),
+            fingerprint: crate::host_key::openssh_sha256_fingerprint(key_blob),
+        };
+        let mut known_hosts = crate::host_key::KnownHosts::new();
+        known_hosts.pin("legacy.example.test", 22, legacy);
+        assert_eq!(
+            native_host_key_problem(&known_hosts, "legacy.example.test", 22, &presented),
+            None
         );
     }
 

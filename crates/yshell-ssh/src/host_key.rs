@@ -2,12 +2,88 @@
 
 use std::collections::BTreeMap;
 
+use base64::engine::general_purpose::STANDARD_NO_PAD;
+use base64::Engine as _;
+use sha2::{Digest, Sha256};
+
 use crate::error::{SshError, SshErrorKind, SshResult};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HostKeyFingerprint {
     pub algorithm: String,
     pub fingerprint: String,
+}
+
+impl HostKeyFingerprint {
+    /// Trust match: algorithm equal, and fingerprints equal or legacy-equivalent.
+    ///
+    /// Older builds stored the raw SSH wire key blob as lowercase hex and labeled
+    /// it `fingerprint`. New presentations use OpenSSH `SHA256:` form; both
+    /// represent the same key when the hex decodes to the blob that hashes to
+    /// the SHA256 fingerprint.
+    pub fn matches(&self, other: &Self) -> bool {
+        self.algorithm == other.algorithm
+            && fingerprints_equivalent(&self.fingerprint, &other.fingerprint)
+    }
+}
+
+/// OpenSSH-style fingerprint: `SHA256:` + unpadded standard base64 of SHA256(key blob).
+pub fn openssh_sha256_fingerprint(key_blob: &[u8]) -> String {
+    let digest = Sha256::digest(key_blob);
+    format!("SHA256:{}", STANDARD_NO_PAD.encode(digest))
+}
+
+/// Legacy presentation used before OpenSSH-style fingerprints: lowercase hex of the key blob.
+pub fn legacy_key_blob_hex(key_blob: &[u8]) -> String {
+    let mut output = String::with_capacity(key_blob.len() * 2);
+    for byte in key_blob {
+        use std::fmt::Write as _;
+        let _ = write!(&mut output, "{byte:02x}");
+    }
+    output
+}
+
+/// Normalize a stored fingerprint for display / compare.
+///
+/// Continuous even-length hex (legacy key-blob encoding) becomes OpenSSH
+/// `SHA256:…`. Values that already look like `SHA256:…` (or anything else) are
+/// returned unchanged.
+pub fn normalize_host_key_fingerprint(fingerprint: &str) -> String {
+    if let Some(migrated) = migrate_legacy_hex_fingerprint(fingerprint) {
+        migrated
+    } else {
+        fingerprint.to_owned()
+    }
+}
+
+fn fingerprints_equivalent(left: &str, right: &str) -> bool {
+    if left == right {
+        return true;
+    }
+    normalize_host_key_fingerprint(left) == normalize_host_key_fingerprint(right)
+}
+
+fn migrate_legacy_hex_fingerprint(fingerprint: &str) -> Option<String> {
+    if fingerprint.is_empty()
+        || !fingerprint.len().is_multiple_of(2)
+        || !fingerprint.chars().all(|ch| ch.is_ascii_hexdigit())
+    {
+        return None;
+    }
+    // Keep short/ambiguous hex (e.g. toy test pins) exact-match only. Real SSH
+    // wire blobs are typically ≥ ~51 bytes (ed25519), so require ≥ 32 bytes of
+    // hex (64 nybbles) before treating the value as a legacy key blob.
+    if fingerprint.len() < 64 {
+        return None;
+    }
+    let (pairs, _) = fingerprint.as_bytes().as_chunks::<2>();
+    let mut bytes = Vec::with_capacity(pairs.len());
+    for &[hi, lo] in pairs {
+        let hi = char::from(hi).to_digit(16)?;
+        let lo = char::from(lo).to_digit(16)?;
+        bytes.push(((hi << 4) | lo) as u8);
+    }
+    Some(openssh_sha256_fingerprint(&bytes))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,7 +99,9 @@ pub enum HostKeyDecision {
     /// 兼容保留：产品决定（2026-09-27）后不再有静默 pin 新密钥的路径，
     /// `TrustOnFirstUse` 首次连接也必须由用户确认（见 `KnownHosts::verify`）。
     PinNewKey,
-    Rejected { expected: HostKeyFingerprint },
+    Rejected {
+        expected: HostKeyFingerprint,
+    },
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -84,7 +162,7 @@ impl KnownHosts {
         }
 
         match self.get(host, port) {
-            Some(expected) if expected == &presented => Ok(HostKeyDecision::Trusted),
+            Some(expected) if expected.matches(&presented) => Ok(HostKeyDecision::Trusted),
             Some(expected) => Ok(HostKeyDecision::Rejected {
                 expected: expected.clone(),
             }),
@@ -190,5 +268,50 @@ mod tests {
             HostKeyDecision::Trusted
         );
         assert_eq!(known_hosts.get("test.example.test", 22), None);
+    }
+
+    #[test]
+    fn openssh_sha256_fingerprint_matches_common_client_form() {
+        // 32-byte stand-in for an SSH wire blob; form must be SHA256: + unpadded base64.
+        let key_blob = b"0123456789abcdef0123456789abcdef";
+        let fp = openssh_sha256_fingerprint(key_blob);
+        assert!(fp.starts_with("SHA256:"));
+        assert!(
+            !fp.contains('='),
+            "OpenSSH fingerprints omit base64 padding"
+        );
+        assert_eq!(fp, "SHA256:PrG9Q5lH63YpmOVmzMLgmceREYsvQFecxPfaK1Bht/k");
+    }
+
+    #[test]
+    fn legacy_hex_pin_matches_openssh_sha256_presentation() {
+        let key_blob = b"0123456789abcdef0123456789abcdef";
+        let legacy = fingerprint("ssh-ed25519", &legacy_key_blob_hex(key_blob));
+        let presented = fingerprint("ssh-ed25519", &openssh_sha256_fingerprint(key_blob));
+        assert!(legacy.matches(&presented));
+        assert!(presented.matches(&legacy));
+
+        let mut known_hosts = KnownHosts::new();
+        known_hosts.pin("legacy.example.test", 22, legacy);
+        assert_eq!(
+            known_hosts
+                .verify(
+                    "legacy.example.test",
+                    22,
+                    presented,
+                    &HostKeyPolicy::TrustOnFirstUse
+                )
+                .expect("legacy hex pin must still trust the same key"),
+            HostKeyDecision::Trusted
+        );
+    }
+
+    #[test]
+    fn short_hex_is_not_treated_as_legacy_key_blob() {
+        // Toy / non-blob hex stays exact-match only so tests and odd pins do not
+        // silently migrate into unrelated SHA256 values.
+        assert_eq!(normalize_host_key_fingerprint("abc123"), "abc123");
+        assert!(!fingerprint("ssh-ed25519", "aabbccdd")
+            .matches(&fingerprint("ssh-ed25519", "SHA256:nope")));
     }
 }

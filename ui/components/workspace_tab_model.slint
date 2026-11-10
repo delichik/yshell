@@ -13,8 +13,12 @@ export struct WorkspaceTab {
     active: bool,
     /// N6：该会话正在写日志（标签角标 REC）。
     logging: bool,
-    /// N9：同步发送按键角色（空 / `source` / `target`；标签角标 SRC/RCV）。
+    /// N9：输入同步成员标记（`sync` / 空串；组模型没有源/目的角色）。
     sync_role_text: string,
     /// WP4：未读输出计数（0 = 不显示角标）。
     unread: int,
+    /// Session icon preset (`terminal` / `globe` / `link` / `plus` / `upload` / …).
+    icon_name: string,
+    /// MCP/AI-created tab — solid AI chip next to the title.
+    ai_origin: bool,
 }

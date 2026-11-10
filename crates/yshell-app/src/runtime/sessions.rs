@@ -9,6 +9,7 @@ use std::collections::BTreeSet;
 use yshell_config::{FolderProfile, KeyCatalog, LoadOutcome, SessionProfile};
 use yshell_core::SessionEvent;
 
+use super::session_icon::session_tree_icon_name;
 use super::*;
 
 impl AppRuntime {
@@ -269,6 +270,118 @@ impl AppRuntime {
         self.open_saved_session(&profile_id)
     }
 
+    /// Session tree context menu: always open in a new tab (never reuse Quick Connect / New Tab).
+    pub fn open_selected_saved_session_in_new_tab(&mut self) -> AppResult<AppProjection> {
+        let profile_id = self
+            .selected_saved_session_id
+            .clone()
+            .ok_or_else(|| AppError::new("no saved session is currently selected"))?;
+        self.open_saved_session_in_new_tab(&profile_id)
+    }
+
+    pub fn open_saved_session_in_new_tab(&mut self, profile_id: &str) -> AppResult<AppProjection> {
+        let profile = self
+            .config_document
+            .find_session(profile_id)
+            .cloned()
+            .ok_or_else(|| AppError::new(format!("saved session `{profile_id}` was not found")))?;
+        let runtime = SessionRuntime::from_profile(&profile, self.allocate_runtime_ordinal());
+        self.activate_runtime_session_bound(runtime, None)
+    }
+
+    /// Session tree context menu: clone the selected profile with a new id and sibling-unique name.
+    pub fn duplicate_selected_saved_session(&mut self) -> AppResult<AppProjection> {
+        let profile_id = self
+            .selected_saved_session_id
+            .clone()
+            .ok_or_else(|| AppError::new("no saved session is currently selected"))?;
+        let source = self
+            .config_document
+            .find_session(&profile_id)
+            .cloned()
+            .ok_or_else(|| AppError::new(format!("saved session `{profile_id}` was not found")))?;
+        let folder_id = self
+            .saved_session_parent_folder_id(&profile_id)
+            .unwrap_or_else(|| SAVED_SESSIONS_FOLDER_ID.to_owned());
+        let new_id = self.next_saved_profile_id(&source.host);
+        let mut duplicate = source;
+        duplicate.id = new_id.clone();
+        duplicate.name = self.allocate_unique_session_name(
+            &folder_id,
+            &format!("{} Copy", duplicate.name),
+            None,
+        )?;
+        self.config_store
+            .session_tree()
+            .add_session(&mut self.config_document.folders, &folder_id, duplicate)
+            .map_err(AppError::from_error)?;
+        self.selected_saved_session_id = Some(new_id.clone());
+        self.set_status_kind(
+            "session-duplicated",
+            format!("Duplicated saved session `{profile_id}` as `{new_id}`."),
+            new_id,
+            profile_id,
+        );
+        Ok(self.projection())
+    }
+
+    /// Commit an inline rename from the Sessions tree (session rows only).
+    pub fn rename_saved_session(
+        &mut self,
+        session_id: &str,
+        new_name: &str,
+    ) -> AppResult<AppProjection> {
+        let trimmed = new_name.trim();
+        if trimmed.is_empty() {
+            return Err(AppError::new("session name cannot be empty"));
+        }
+        let mut session = self
+            .config_document
+            .find_session(session_id)
+            .cloned()
+            .ok_or_else(|| AppError::new(format!("saved session `{session_id}` was not found")))?;
+        if session.name == trimmed {
+            return Ok(self.projection());
+        }
+        if let Some(folder_id) = self.saved_session_parent_folder_id(session_id) {
+            session.name =
+                self.allocate_unique_session_name(&folder_id, trimmed, Some(session_id))?;
+        } else {
+            session.name = yshell_config::sanitize_entry_name(trimmed, "session");
+        }
+        self.config_store
+            .session_tree()
+            .update_session(&mut self.config_document.folders, session)
+            .map_err(AppError::from_error)?;
+        self.set_status_kind(
+            "session-renamed",
+            format!("Renamed saved session `{session_id}`."),
+            session_id.to_owned(),
+            String::new(),
+        );
+        Ok(self.projection())
+    }
+
+    /// 已保存会话所在目录的 id（用于同目录内的名称清洗与去重）。
+    fn saved_session_parent_folder_id(&self, session_id: &str) -> Option<String> {
+        fn walk(folders: &[FolderProfile], session_id: &str) -> Option<String> {
+            for folder in folders {
+                if folder
+                    .sessions
+                    .iter()
+                    .any(|session| session.id == session_id)
+                {
+                    return Some(folder.id.clone());
+                }
+                if let Some(found) = walk(&folder.folders, session_id) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        walk(&self.config_document.folders, session_id)
+    }
+
     pub fn update_selected_saved_session_from_active(&mut self) -> AppResult<AppProjection> {
         let profile_id = self
             .selected_saved_session_id
@@ -285,11 +398,18 @@ impl AppRuntime {
                 "local terminal sessions cannot update saved SSH sessions",
             ));
         }
-        let active_runtime = self
-            .sessions
-            .get(&session_key)
-            .ok_or_else(|| AppError::new("active runtime session is missing"))?;
-        let updated = active_runtime.to_session_profile(profile_id.clone());
+        let mut updated = {
+            let active_runtime = self
+                .sessions
+                .get(&session_key)
+                .ok_or_else(|| AppError::new("active runtime session is missing"))?;
+            active_runtime.to_session_profile(profile_id.clone())
+        };
+        // 名称来自活动连接（如 `host:port`），落盘前按条目名规则清洗并在同目录内去重。
+        if let Some(folder_id) = self.saved_session_parent_folder_id(&profile_id) {
+            updated.name =
+                self.allocate_unique_session_name(&folder_id, &updated.name, Some(&profile_id))?;
+        }
         if self.config_document.find_session(&profile_id).is_none() {
             return Err(AppError::new(format!(
                 "saved session `{profile_id}` was not found"
@@ -692,8 +812,7 @@ impl AppRuntime {
                 .session_tree()
                 .ensure_folder(&self.config_document.folders, SAVED_SESSIONS_FOLDER_ID);
         } else {
-            let folder =
-                FolderProfile::new(SAVED_SESSIONS_FOLDER_ID, SAVED_SESSIONS_FOLDER_NAME);
+            let folder = FolderProfile::new(SAVED_SESSIONS_FOLDER_ID, SAVED_SESSIONS_FOLDER_NAME);
             let _ = self.config_store.session_tree().create_folder(
                 &mut self.config_document.folders,
                 None,
@@ -794,6 +913,8 @@ pub struct SessionTreeRow {
     pub expanded: bool,
     /// Whether this row is the current tree selection.
     pub selected: bool,
+    /// Slint `Icon` name for session rows; empty for folders.
+    pub icon_name: String,
 }
 
 pub(crate) const SAVED_SESSIONS_FOLDER_ID: &str = "saved-sessions";
@@ -910,6 +1031,7 @@ pub(crate) fn collect_session_tree_rows(
                 id: session.id.clone(),
                 expanded: false,
                 selected: projection.selected_session_id == Some(session.id.as_str()),
+                icon_name: session_tree_icon_name(session.icon.as_deref()).to_owned(),
             });
         }
 
@@ -935,6 +1057,7 @@ pub(crate) fn collect_session_tree_rows(
             id: folder.id.clone(),
             expanded,
             selected: projection.selected_folder_id == Some(folder.id.as_str()),
+            icon_name: String::new(),
         });
         if expanded {
             out.append(&mut session_rows);

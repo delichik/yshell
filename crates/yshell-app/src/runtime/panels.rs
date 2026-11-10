@@ -10,7 +10,10 @@ use crate::{
     session_runtime::SessionSource,
 };
 use std::collections::BTreeSet;
-use yshell_config::{LayoutProfile, PanelId, PanelSide, PanelSlot, TerminalProfile};
+use yshell_config::{
+    LayoutProfile, MiddleClickAction, MultiLinePastePolicy, PanelId, PanelSide, PanelSlot,
+    RightClickAction, TerminalProfile,
+};
 use yshell_core::SessionState;
 use yshell_ssh::{ForwardingKind, TunnelConfig};
 use yshell_terminal::{DEFAULT_SCROLLBACK_LINES, DEFAULT_SCROLLBACK_MAX_CELLS};
@@ -159,6 +162,20 @@ impl AppRuntime {
         Ok(dir)
     }
 
+    /// Settings → General → Motion：持久化"减少动画"（`[ui] reduce_motion`）。
+    ///
+    /// 配置是唯一持久化来源；dialog 侧在调用本方法的同时把新值写进所有窗口的
+    /// `Theme.reduce-motion`，启动时由 `apply_appearance` 从配置读回。
+    pub fn set_reduce_motion(&mut self, enabled: bool) -> AppResult<AppProjection> {
+        if self.config_document.ui.reduce_motion != enabled {
+            self.config_document.ui.reduce_motion = enabled;
+            self.config_store
+                .save(&self.config_document)
+                .map_err(AppError::from_error)?;
+        }
+        Ok(self.projection())
+    }
+
     pub fn update_settings_scrollback_lines(&mut self, value: &str) -> AppProjection {
         self.settings_scrollback_lines_text = value.to_owned();
         self.projection()
@@ -172,6 +189,34 @@ impl AppRuntime {
     /// Edits the "max parallel SFTP transfers" field (settings page).
     pub fn update_settings_sftp_max_parallel_transfers(&mut self, value: &str) -> AppProjection {
         self.settings_sftp_max_parallel_transfers_text = value.to_owned();
+        self.projection()
+    }
+
+    /// Settings → Terminal：中键行为（0 = Paste，1 = Do nothing）。
+    pub fn update_settings_terminal_middle_click(&mut self, index: i32) -> AppProjection {
+        self.settings_terminal_middle_click = middle_click_from_index(index);
+        self.settings_terminal_status = SettingsTerminalStatus::Hint;
+        self.projection()
+    }
+
+    /// Settings → Terminal：右键行为（0 = Context menu，1 = Paste，2 = Do nothing）。
+    pub fn update_settings_terminal_right_click(&mut self, index: i32) -> AppProjection {
+        self.settings_terminal_right_click = right_click_from_index(index);
+        self.settings_terminal_status = SettingsTerminalStatus::Hint;
+        self.projection()
+    }
+
+    /// Settings → Terminal：多行粘贴策略（0 = Ask，1 = Paste，2 = Block）。
+    pub fn update_settings_terminal_multi_line_paste(&mut self, index: i32) -> AppProjection {
+        self.settings_terminal_multi_line_paste = multi_line_paste_from_index(index);
+        self.settings_terminal_status = SettingsTerminalStatus::Hint;
+        self.projection()
+    }
+
+    /// Settings → Terminal：选区结束自动复制。
+    pub fn update_settings_terminal_auto_copy(&mut self, enabled: bool) -> AppProjection {
+        self.settings_terminal_auto_copy = enabled;
+        self.settings_terminal_status = SettingsTerminalStatus::Hint;
         self.projection()
     }
 
@@ -229,6 +274,11 @@ impl AppRuntime {
     pub fn reset_settings_terminal_defaults(&mut self) -> AppProjection {
         self.settings_scrollback_lines_text = DEFAULT_SCROLLBACK_LINES.to_string();
         self.settings_scrollback_max_cells_text = DEFAULT_SCROLLBACK_MAX_CELLS.to_string();
+        // D37：Reset defaults 一并重置终端交互四项。
+        self.settings_terminal_middle_click = MiddleClickAction::default();
+        self.settings_terminal_right_click = RightClickAction::default();
+        self.settings_terminal_multi_line_paste = MultiLinePastePolicy::default();
+        self.settings_terminal_auto_copy = false;
         self.settings_terminal_status = SettingsTerminalStatus::DefaultsLoaded;
         self.projection()
     }
@@ -262,9 +312,15 @@ impl AppRuntime {
         let terminal = TerminalProfile {
             scrollback_lines,
             scrollback_max_cells,
-            ..TerminalProfile::default()
+            color_scheme: self.config_document.terminal.color_scheme.clone(),
+            ..self.config_document.terminal.clone()
         };
         self.config_document.terminal = terminal.clone();
+        // D37：终端交互四项保存在 `[ui]`，且对新旧终端立即生效（读取方直接看配置）。
+        self.config_document.ui.terminal_middle_click = self.settings_terminal_middle_click;
+        self.config_document.ui.terminal_right_click = self.settings_terminal_right_click;
+        self.config_document.ui.terminal_multi_line_paste = self.settings_terminal_multi_line_paste;
+        self.config_document.ui.terminal_auto_copy = self.settings_terminal_auto_copy;
         self.config_store
             .save(&self.config_document)
             .map_err(AppError::from_error)?;
@@ -353,12 +409,11 @@ impl AppRuntime {
         else {
             return Vec::new();
         };
-        let session_connected = session.state == SessionState::Connected;
         session
             .ssh_config
             .tunnels
             .iter()
-            .map(|tunnel| tunnel_row_data(tunnel, session_connected))
+            .map(tunnel_row_data)
             .collect()
     }
 
@@ -459,6 +514,32 @@ impl SettingsTerminalField {
             Self::ScrollbackLines => "Scrollback lines",
             Self::ScrollbackMaxCells => "Scrollback memory cap",
         }
+    }
+}
+
+/// Settings → Terminal 中键下拉索引 → 行为（与 settings 页下拉顺序一致）。
+fn middle_click_from_index(index: i32) -> MiddleClickAction {
+    match index {
+        1 => MiddleClickAction::DoNothing,
+        _ => MiddleClickAction::Paste,
+    }
+}
+
+/// Settings → Terminal 右键下拉索引 → 行为。
+fn right_click_from_index(index: i32) -> RightClickAction {
+    match index {
+        1 => RightClickAction::Paste,
+        2 => RightClickAction::DoNothing,
+        _ => RightClickAction::ContextMenu,
+    }
+}
+
+/// Settings → Terminal 多行粘贴下拉索引 → 策略。
+fn multi_line_paste_from_index(index: i32) -> MultiLinePastePolicy {
+    match index {
+        1 => MultiLinePastePolicy::Paste,
+        2 => MultiLinePastePolicy::Block,
+        _ => MultiLinePastePolicy::Ask,
     }
 }
 
@@ -608,9 +689,9 @@ pub(crate) const LEFT_WIDTH_MAX: u32 = 420;
 /// 右栏宽度范围（设计语言 §4.1：右 280–480）。
 pub(crate) const RIGHT_WIDTH_MIN: u32 = 280;
 pub(crate) const RIGHT_WIDTH_MAX: u32 = 480;
-/// 默认栏宽（与 C0 `LayoutProfile` 的默认值一致；右栏默认 §4.1 的 320）。
-pub(crate) const DEFAULT_LEFT_WIDTH: u32 = 240;
-pub(crate) const DEFAULT_RIGHT_WIDTH: u32 = 320;
+/// 默认栏宽（与原型 main-shell 及 `LayoutProfile` 默认一致：左 260 / 右 280）。
+pub(crate) const DEFAULT_LEFT_WIDTH: u32 = 260;
+pub(crate) const DEFAULT_RIGHT_WIDTH: u32 = 280;
 /// 分栏边界比例范围与相邻边界最小间距（与 UI 的每面板最小高度配合）。
 pub(crate) const SPLIT_RATIO_MIN: f32 = 0.05;
 pub(crate) const SPLIT_RATIO_MAX: f32 = 0.95;
@@ -1139,16 +1220,15 @@ fn tunnel_endpoint_summary(config: &TunnelConfig) -> String {
     }
 }
 
-fn tunnel_row_data(config: &TunnelConfig, session_connected: bool) -> TunnelRowData {
+fn tunnel_row_data(config: &TunnelConfig) -> TunnelRowData {
     let kind_id = tunnel_kind_id(config.kind);
     let kind_text = tunnel_kind_display(config.kind);
-    // No live TunnelState tracking yet: configured tunnels stay idle until the
-    // SSH layer provisions forwards (see yshell-ssh real shell startup note).
-    let (status_id, status_text, can_start, can_stop) = if session_connected {
-        ("idle", "Idle", true, false)
-    } else {
-        ("idle", "Idle", false, false)
-    };
+    // No live TunnelState tracking yet: Start/Stop stay disabled until the SSH
+    // layer provisions forwards (see yshell-ssh real shell startup note).
+    let status_id = "idle";
+    let status_text = "Idle";
+    let can_start = false;
+    let can_stop = false;
     TunnelRowData {
         id: config.id.clone(),
         name_text: format!("{kind_text} :{}", config.listen_port),
@@ -2235,13 +2315,22 @@ mod tests {
     }
 
     #[test]
+    fn default_dock_widths_match_prototype() {
+        assert_eq!(DEFAULT_LEFT_WIDTH, 260);
+        assert_eq!(DEFAULT_RIGHT_WIDTH, 280);
+        let layout = LayoutProfile::default();
+        assert_eq!(layout.left_width, DEFAULT_LEFT_WIDTH);
+        assert_eq!(layout.right_width, DEFAULT_RIGHT_WIDTH);
+    }
+
+    #[test]
     fn layout_view_keeps_sessions_and_the_remaining_docks() {
         let layout = LayoutProfile::default();
         let view = compute_panel_layout(&layout, 1440.0, 794.0, None);
-        assert_eq!(view.left_width, 240.0);
-        assert_eq!(view.right_width, 320.0);
-        assert_eq!(view.left_effective_width, 240.0);
-        assert_eq!(view.right_effective_width, 320.0);
+        assert_eq!(view.left_width, 260.0);
+        assert_eq!(view.right_width, 280.0);
+        assert_eq!(view.left_effective_width, 260.0);
+        assert_eq!(view.right_effective_width, 280.0);
         assert!(!view.rail_active);
         assert!(!view.dock_toggle_visible);
         assert!(!view.right_collapsed);
@@ -2255,7 +2344,7 @@ mod tests {
             (
                 PANEL_CARD_INSET,
                 12.0,
-                240.0 - 2.0 * PANEL_CARD_INSET,
+                260.0 - 2.0 * PANEL_CARD_INSET,
                 770.0
             )
         );
@@ -2268,14 +2357,14 @@ mod tests {
         assert_eq!(
             (tunnels.x, tunnels.y, tunnels.width),
             (
-                1120.0 + PANEL_CARD_INSET,
+                1160.0 + PANEL_CARD_INSET,
                 12.0,
-                320.0 - 2.0 * PANEL_CARD_INSET
+                280.0 - 2.0 * PANEL_CARD_INSET
             )
         );
         assert!(tunnels.visible);
         let commands = *view.frame(PanelId::QuickCommands).expect("commands");
-        assert_eq!(commands.x, 1120.0 + PANEL_CARD_INSET);
+        assert_eq!(commands.x, 1160.0 + PANEL_CARD_INSET);
         assert!(commands.y > tunnels.y);
         assert!(commands.visible);
         assert!(view.frame(PanelId::Transfers).is_none());
@@ -2291,7 +2380,7 @@ mod tests {
         assert_eq!(view.right_effective_width, 0.0);
         assert!(!view.frame(PanelId::Tunnels).expect("tunnels").visible);
         assert!(view.frame(PanelId::Sessions).expect("sessions").visible);
-        assert_eq!(view.left_effective_width, 240.0);
+        assert_eq!(view.left_effective_width, 260.0);
 
         // 960 以下：左栏收成 48px 图标条。
         let view = compute_panel_layout(&layout, 900.0, 600.0, None);
@@ -2303,13 +2392,13 @@ mod tests {
         // 用户在 900px 手动展开左栏：图标条让位给完整左栏。
         let view = compute_panel_layout(&layout, 900.0, 600.0, Some(PanelSide::Left));
         assert!(!view.rail_active);
-        assert_eq!(view.left_effective_width, 240.0);
+        assert_eq!(view.left_effective_width, 260.0);
         assert!(view.frame(PanelId::Sessions).expect("sessions").visible);
 
         // 用户在 1000px 手动展开右栏：右栏恢复。
         let view = compute_panel_layout(&layout, 1000.0, 600.0, Some(PanelSide::Right));
         assert!(!view.right_collapsed);
-        assert_eq!(view.right_effective_width, 320.0);
+        assert_eq!(view.right_effective_width, 280.0);
         assert!(view.frame(PanelId::Tunnels).expect("tunnels").visible);
     }
 

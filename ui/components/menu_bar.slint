@@ -2,7 +2,7 @@
 //
 // 无系统装饰（MainWindow.no-frame）时本行同时承担：
 //   * 最左应用图标
-//   * 一级菜单 File / Edit / Session / View / Help（左对齐）
+//   * 一级菜单 File / Edit / Session / View / Tools / Help（左对齐）
 //   * 空白区拖动（非 Windows 用 WindowMoveArea；Windows 走原生移动循环）与双击最大化
 //   * 窄窗右栏 chevron
 //   * 最小化 / 最大化·还原 / 关闭
@@ -70,9 +70,9 @@ export component MenuBar inherits Rectangle {
     /// 不再使用 WindowMoveArea → winit drag_window()。
     in property <bool> native-title-drag: false;
 
-    /// 点击一级菜单：index = 0..4，anchor-x = 该项的窗口绝对 x。
+    /// 点击一级菜单：index = 0..5，anchor-x = 该项的窗口绝对 x。
     callback menu-activated(int, length);
-    /// 菜单已展开时悬停到另一项：index = 0..4，anchor-x = 该项的窗口绝对 x。
+    /// 菜单已展开时悬停到另一项：index = 0..5，anchor-x = 该项的窗口绝对 x。
     callback menu-hovered(int, length);
     /// 点击菜单栏空白（非一级标题）：收起已展开的菜单。
     callback menu-dismiss-requested();
@@ -120,8 +120,8 @@ export component MenuBar inherits Rectangle {
                 spacing: 2px;
                 alignment: stretch;
                 // 应用图标与 MenuTitle（24px）垂直居中，避免图标相对菜单文字偏上/偏下。
-                // 不设纵向 padding：顶栏已是 §4.1 的 32px，再留 4px 会把 32px 的
-                // 面板折叠按钮挤出内容区。
+                // 不设纵向 padding：顶栏已是 bar-height-menubar（40px），再留纵向
+                // padding 会把 32px 的面板折叠按钮挤出内容区。
                 cross-axis-alignment: center;
 
                 // 最左应用图标（落在拖动区内，可拖窗；无独立点击）。
@@ -179,13 +179,21 @@ export component MenuBar inherits Rectangle {
                     hovered => { root.menu-hovered(3, view_menu_title.absolute-position.x); }
                     activated => { root.menu-activated(3, view_menu_title.absolute-position.x); }
                 }
-                help_menu_title := MenuTitle {
-                    label: @tr("MenuBar" => "Help");
+                tools_menu_title := MenuTitle {
+                    label: @tr("MenuBar" => "Tools");
                     open: root.open-index == 4;
                     menu-open: root.open-index >= 0;
                     horizontal-stretch: 0;
-                    hovered => { root.menu-hovered(4, help_menu_title.absolute-position.x); }
-                    activated => { root.menu-activated(4, help_menu_title.absolute-position.x); }
+                    hovered => { root.menu-hovered(4, tools_menu_title.absolute-position.x); }
+                    activated => { root.menu-activated(4, tools_menu_title.absolute-position.x); }
+                }
+                help_menu_title := MenuTitle {
+                    label: @tr("MenuBar" => "Help");
+                    open: root.open-index == 5;
+                    menu-open: root.open-index >= 0;
+                    horizontal-stretch: 0;
+                    hovered => { root.menu-hovered(5, help_menu_title.absolute-position.x); }
+                    activated => { root.menu-activated(5, help_menu_title.absolute-position.x); }
                 }
 
                 // 弹性空白：拖动主区域；双击切换最大化；菜单展开时单击收起。
@@ -213,6 +221,9 @@ export component MenuBar inherits Rectangle {
                     accessible-name: root.right-collapsed
                         ? @tr("MainWindow" => "Expand tool panels")
                         : @tr("MainWindow" => "Collapse tool panels");
+                    tooltip-text: root.right-collapsed
+                        ? @tr("MainWindow" => "Expand tool panels")
+                        : @tr("MainWindow" => "Collapse tool panels");
                     clicked => { root.toggle-right-side(); }
                 }
             }
@@ -237,7 +248,7 @@ export component MenuBar inherits Rectangle {
     }
 }
 
-// 5 个一级菜单的 MenuPopup（模型数组仍由 main_window 持有并传入）。
+// 6 个一级菜单的 MenuPopup（模型数组仍由 main_window 持有并传入）。
 // 宿主在窗口层级实例化本组件（内容之后、模态弹窗之前）。
 export component MenuBarPopups inherits Rectangle {
     in property <int> open-index: -1;
@@ -249,9 +260,10 @@ export component MenuBarPopups inherits Rectangle {
     in property <[MenuEntry]> edit-entries: [];
     in property <[MenuEntry]> session-entries: [];
     in property <[MenuEntry]> view-entries: [];
+    in property <[MenuEntry]> tools-entries: [];
     in property <[MenuEntry]> help-entries: [];
 
-    /// (菜单序号 0..4, 条目序号)；点击后的动作由宿主执行（保持原 dispatch 位置）。
+    /// (菜单序号 0..5, 条目序号)；点击后的动作由宿主执行（保持原 dispatch 位置）。
     callback selected(int, int);
     callback dismissed();
 
@@ -312,16 +324,29 @@ export component MenuBarPopups inherits Rectangle {
         selected(index) => { root.selected(3, index); }
     }
 
-    help_menu_popup := MenuPopup {
+    tools_menu_popup := MenuPopup {
         width: parent.width;
         height: parent.height;
         open: root.open-index == 4;
+        entries: root.tools-entries;
+        anchor-x: root.anchor-x;
+        anchor-y: root.anchor-y;
+        panel-width: 240px;
+        scrim-top: root.scrim-top;
+        dismissed => { root.dismissed(); }
+        selected(index) => { root.selected(4, index); }
+    }
+
+    help_menu_popup := MenuPopup {
+        width: parent.width;
+        height: parent.height;
+        open: root.open-index == 5;
         entries: root.help-entries;
         anchor-x: root.anchor-x;
         anchor-y: root.anchor-y;
         panel-width: 210px;
         scrim-top: root.scrim-top;
         dismissed => { root.dismissed(); }
-        selected(index) => { root.selected(4, index); }
+        selected(index) => { root.selected(5, index); }
     }
 }

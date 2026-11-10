@@ -2,6 +2,9 @@
 
 use crate::error::AppResult;
 
+/// 等待 winit 惰性创建原生窗口的轮询间隔（约一帧）。
+const AUX_WINDOW_READY_POLL: std::time::Duration = std::time::Duration::from_millis(16);
+
 /// 将窗口钉成不可缩放（独立弹窗 / 工具窗口）。
 ///
 /// Slint 的 `Window` 没有公开 `resizable` 属性；通过 winit accessor 关闭缩放。
@@ -42,6 +45,224 @@ pub fn set_window_enabled(window: &slint::Window, enabled: bool) {
     }
 }
 
+/// 把模态子窗按 owner 的客户区居中（Windows；非 Windows no-op）。
+///
+/// 全部使用物理像素：owner 客户区原点由 `ClientToScreen` 换算，客户区尺寸来自
+/// `GetClientRect`，子窗尺寸来自 `GetWindowRect`。因此高 DPI 缩放下不需要再做
+/// 额外换算，多显示器时也天然跟随 owner 所在显示器居中。
+///
+/// `show()` 刚返回时 winit 可能还没把首选尺寸落到实处，调用方在事件循环下一轮
+/// 再调一次即可（幂等）。
+pub fn center_aux_window(aux: &slint::Window, owner: &slint::Window) {
+    #[cfg(windows)]
+    center_aux_window_windows(aux, owner);
+    #[cfg(not(windows))]
+    {
+        let _ = (aux, owner);
+    }
+}
+
+/// 把前台与键盘焦点还给主窗口（模态子窗关闭后调用）。
+///
+/// Windows 上 owned 子窗隐藏后系统不保证把前台交还 owner；显式
+/// `BringWindowToTop` + `SetForegroundWindow` 恢复到父窗。键盘焦点本身由 Slint
+/// 管（调用方随后 `invoke_focus_global_shortcuts`）。非 Windows no-op。
+pub fn focus_window(window: &slint::Window) {
+    #[cfg(windows)]
+    focus_window_windows(window);
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+    }
+}
+
+/// 子窗 `show()` 后，winit 在事件循环里惰性创建原生窗口；因此用短定时器在后续
+/// 事件循环轮次补一次圆角 / 不可缩放收尾，直到 HWND 就绪（最多 `attempts_left` 轮）。
+pub fn prepare_aux_window_when_ready<W: slint::ComponentHandle + 'static>(
+    weak: slint::Weak<W>,
+    attempts_left: u8,
+) {
+    slint::Timer::single_shot(AUX_WINDOW_READY_POLL, move || {
+        let Some(aux) = weak.upgrade() else {
+            return;
+        };
+        prepare_aux_window(aux.window());
+        if !window_hwnd_ready(aux.window()) && attempts_left > 0 {
+            prepare_aux_window_when_ready(aux.as_weak(), attempts_left - 1);
+        }
+    });
+}
+
+/// 同上，但用于有 owner 的模态子窗：等 HWND 就绪后补 owner 关系与居中摆放。
+///
+/// `show()` 返回时 HWND 通常还不存在（winit 在事件循环里惰性创建），直接调
+/// `attach_owned_popup` / `center_aux_window` 会静默 no-op；这里按事件循环轮次
+/// 重试直到句柄可用。
+pub fn finish_owned_aux_window_when_ready<W, O>(
+    aux: slint::Weak<W>,
+    owner: slint::Weak<O>,
+    attempts_left: u8,
+) where
+    W: slint::ComponentHandle + 'static,
+    O: slint::ComponentHandle + 'static,
+{
+    slint::Timer::single_shot(AUX_WINDOW_READY_POLL, move || {
+        let (Some(aux), Some(owner)) = (aux.upgrade(), owner.upgrade()) else {
+            return;
+        };
+        prepare_aux_window(aux.window());
+        attach_owned_popup(aux.window(), owner.window());
+        center_aux_window(aux.window(), owner.window());
+        let ready = window_hwnd_ready(aux.window()) && window_hwnd_ready(owner.window());
+        if !ready && attempts_left > 0 {
+            finish_owned_aux_window_when_ready(aux.as_weak(), owner.as_weak(), attempts_left - 1);
+        }
+    });
+}
+
+/// 模态子窗在 owner 客户区里的居中左上角（物理像素）。
+///
+/// 全部输入输出都是物理像素，因此 DPI 缩放下不需要额外换算；多显示器时
+/// `owner_origin` 已带上 owner 所在显示器的屏幕坐标。
+/// 子窗比 owner 客户区还大时贴齐 owner 客户区左上角（`.max(0)`），避免把标题栏
+/// 摆到屏幕外。
+#[cfg(any(windows, test))]
+fn centered_aux_origin(
+    owner_origin: (i32, i32),
+    owner_client_size: (i32, i32),
+    aux_size: (i32, i32),
+) -> (i32, i32) {
+    let x = owner_origin.0 + ((owner_client_size.0 - aux_size.0) / 2).max(0);
+    let y = owner_origin.1 + ((owner_client_size.1 - aux_size.1) / 2).max(0);
+    (x, y)
+}
+
+/// 原生窗口句柄与尺寸是否已就绪（非 Windows 视为始终就绪）。
+fn window_hwnd_ready(window: &slint::Window) -> bool {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Foundation::RECT;
+        use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowRect;
+
+        let Some(hwnd) = hwnd_of(window) else {
+            return false;
+        };
+        let mut rect = RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
+        #[allow(unsafe_code)]
+        let sized = unsafe { GetWindowRect(hwnd, &mut rect) != 0 };
+        sized && rect.right > rect.left && rect.bottom > rect.top
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+        true
+    }
+}
+
+/// 原生 `HTCAPTION` 移动循环结束后，清掉 Slint 残留的指针抓取 / 按下状态。
+///
+/// 系统移动循环会吞掉 mouse-up，Slint 的 `MouseInputState` 仍把标题栏
+/// `TitleBarDragTouch` 当作抓取者；下一次按下会被这个残留抓取消费并改写成
+/// 合成 Moved（表现为“拖动后第一次点击按钮不生效，要点第二次”）。这里在事件
+/// 循环的下一轮补发一次 `PointerExited`，让核心按 Cancel 清掉 grab/pressed，
+/// 之后第一次按下就能正常命中控件。
+///
+/// 必须异步执行：`process_mouse_input` 在输入回调返回后才写回新的
+/// `MouseInputState`，在回调里同步嵌套派发会被外层状态覆盖。
+pub fn reset_pointer_state_after_native_move<T: slint::ComponentHandle + 'static>(
+    weak: slint::Weak<T>,
+) {
+    // 0ms 单次定时器：在当前输入回调返回、Slint 写回新的 MouseInputState 之后再清。
+    slint::Timer::single_shot(std::time::Duration::ZERO, move || {
+        let Some(component) = weak.upgrade() else {
+            return;
+        };
+        let _ = component
+            .window()
+            .dispatch_event_with_result(slint::platform::WindowEvent::PointerExited);
+    });
+}
+
+#[cfg(windows)]
+fn center_aux_window_windows(aux: &slint::Window, owner: &slint::Window) {
+    use windows_sys::Win32::Foundation::{POINT, RECT};
+    use windows_sys::Win32::Graphics::Gdi::ClientToScreen;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetClientRect, GetWindowRect, SetWindowPos, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER,
+    };
+
+    let (Some(owner_hwnd), Some(aux_hwnd)) = (hwnd_of(owner), hwnd_of(aux)) else {
+        return;
+    };
+
+    #[allow(unsafe_code)]
+    unsafe {
+        let mut client = RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
+        if GetClientRect(owner_hwnd, &mut client) == 0 {
+            return;
+        }
+        let mut origin = POINT { x: 0, y: 0 };
+        if ClientToScreen(owner_hwnd, &mut origin) == 0 {
+            return;
+        }
+        let mut aux_rect = RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
+        if GetWindowRect(aux_hwnd, &mut aux_rect) == 0 {
+            return;
+        }
+        let client_width = client.right - client.left;
+        let client_height = client.bottom - client.top;
+        let aux_width = aux_rect.right - aux_rect.left;
+        let aux_height = aux_rect.bottom - aux_rect.top;
+        if aux_width <= 0 || aux_height <= 0 {
+            return;
+        }
+        let (x, y) = centered_aux_origin(
+            (origin.x, origin.y),
+            (client_width, client_height),
+            (aux_width, aux_height),
+        );
+        SetWindowPos(
+            aux_hwnd,
+            std::ptr::null_mut(),
+            x,
+            y,
+            0,
+            0,
+            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+        );
+    }
+}
+
+#[cfg(windows)]
+fn focus_window_windows(window: &slint::Window) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{BringWindowToTop, SetForegroundWindow};
+
+    let Some(hwnd) = hwnd_of(window) else {
+        return;
+    };
+    // 模态结束仍在本进程内，前台锁定不阻止 SetForegroundWindow。
+    #[allow(unsafe_code)]
+    unsafe {
+        BringWindowToTop(hwnd);
+        SetForegroundWindow(hwnd);
+    }
+}
+
 #[cfg(windows)]
 fn hwnd_of(window: &slint::Window) -> Option<windows_sys::Win32::Foundation::HWND> {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -63,11 +284,9 @@ fn hwnd_of(window: &slint::Window) -> Option<windows_sys::Win32::Foundation::HWN
 
 #[cfg(windows)]
 fn attach_owned_popup_windows(aux: &slint::Window, owner: &slint::Window) {
-    use slint::winit_030::WinitWindowAccessor;
     use slint::winit_030::winit::platform::windows::WindowExtWindows;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GWLP_HWNDPARENT, SetWindowLongPtrW,
-    };
+    use slint::winit_030::WinitWindowAccessor;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{SetWindowLongPtrW, GWLP_HWNDPARENT};
 
     let Some(owner_hwnd) = hwnd_of(owner) else {
         return;
@@ -89,8 +308,8 @@ fn attach_owned_popup_windows(aux: &slint::Window, owner: &slint::Window) {
 
 #[cfg(windows)]
 fn set_window_enabled_windows(window: &slint::Window, enabled: bool) {
-    use slint::winit_030::WinitWindowAccessor;
     use slint::winit_030::winit::platform::windows::WindowExtWindows;
+    use slint::winit_030::WinitWindowAccessor;
 
     let _ = window.with_winit_window(|winit_window| {
         winit_window.set_enable(enabled);
@@ -99,8 +318,8 @@ fn set_window_enabled_windows(window: &slint::Window, enabled: bool) {
 
 /// 在创建任何窗口之前选定 winit 后端，并关掉默认的窗口透明。
 ///
-/// Slint winit 默认 `WindowAttributes::with_transparent(true)`。Windows 上无框
-/// + DWM 圆角时，顶边会出现一条透到桌面的细缝（自绘标题栏/菜单栏上方）。
+/// Slint winit 默认 `WindowAttributes::with_transparent(true)`；Windows 上无框 + DWM
+/// 圆角时，顶边会出现一条透到桌面的细缝（自绘标题栏/菜单栏上方）。
 /// Slint 只在原生 `MenuBar` 时自动关透明；我们用自绘顶栏，需显式关掉。
 /// 见 <https://github.com/slint-ui/slint/issues/7730>。
 ///
@@ -118,6 +337,149 @@ pub fn select_backend() -> AppResult<()> {
 #[cfg(not(windows))]
 pub fn select_backend() -> AppResult<()> {
     Ok(())
+}
+
+/// 把窗口整体钳回最近显示器的工作区，并强制整窗重绘。
+///
+/// Windows 上无框 + 软件渲染 + DWM 圆角时，若启动时窗体有一部分在屏幕外，
+/// 屏外客户区往往不会进入 DWM 表面；拖回或露出后那一块会透出桌面。
+/// 启动后把原点钳进 `rcWork`，再 `RedrawWindow`，避免首帧就留下未绘制区域。
+/// 最大化 / 最小化不改位置。非 Windows / HWND 未就绪为 no-op。
+pub fn ensure_window_on_screen(window: &slint::Window) {
+    #[cfg(windows)]
+    ensure_window_on_screen_windows(window);
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+    }
+}
+
+/// `show()` 后 HWND / 尺寸可能尚未落地：轮询补做 on-screen 钳位 + 圆角。
+pub fn finish_main_window_chrome_when_ready<W: slint::ComponentHandle + 'static>(
+    weak: slint::Weak<W>,
+    attempts_left: u8,
+) {
+    slint::Timer::single_shot(AUX_WINDOW_READY_POLL, move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        ensure_window_on_screen(window.window());
+        apply_rounded_corners(window.window());
+        if !window_hwnd_ready(window.window()) && attempts_left > 0 {
+            finish_main_window_chrome_when_ready(window.as_weak(), attempts_left - 1);
+        }
+    });
+}
+
+/// 将窗口矩形的左上角钳到工作区内（物理像素）。窗比工作区还大时贴齐工作区左上角。
+#[cfg(any(windows, test))]
+fn clamp_window_origin_to_work_area(
+    window: (i32, i32, i32, i32),
+    work: (i32, i32, i32, i32),
+) -> (i32, i32) {
+    let (left, top, right, bottom) = window;
+    let (work_left, work_top, work_right, work_bottom) = work;
+    let width = (right - left).max(1);
+    let height = (bottom - top).max(1);
+    let work_width = (work_right - work_left).max(1);
+    let work_height = (work_bottom - work_top).max(1);
+    let max_left = if width >= work_width {
+        work_left
+    } else {
+        work_right - width
+    };
+    let max_top = if height >= work_height {
+        work_top
+    } else {
+        work_bottom - height
+    };
+    (
+        left.clamp(work_left, max_left.max(work_left)),
+        top.clamp(work_top, max_top.max(work_top)),
+    )
+}
+
+#[cfg(windows)]
+fn ensure_window_on_screen_windows(window: &slint::Window) {
+    use windows_sys::Win32::Foundation::{HWND, RECT};
+    use windows_sys::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromWindow, RedrawWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+        RDW_ALLCHILDREN, RDW_ERASE, RDW_FRAME, RDW_INVALIDATE, RDW_UPDATENOW,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetWindowRect, IsIconic, IsZoomed, SetWindowPos, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER,
+    };
+
+    let Some(hwnd) = hwnd_of(window) else {
+        return;
+    };
+
+    #[allow(unsafe_code)]
+    unsafe {
+        if IsZoomed(hwnd) != 0 || IsIconic(hwnd) != 0 {
+            return;
+        }
+        let mut rect = RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
+        if GetWindowRect(hwnd, &mut rect) == 0 || rect.right <= rect.left || rect.bottom <= rect.top
+        {
+            return;
+        }
+        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if monitor.is_null() {
+            return;
+        }
+        let mut info = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            rcMonitor: RECT {
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0,
+            },
+            rcWork: RECT {
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0,
+            },
+            dwFlags: 0,
+        };
+        if GetMonitorInfoW(monitor, &mut info) == 0 {
+            return;
+        }
+        let (new_left, new_top) = clamp_window_origin_to_work_area(
+            (rect.left, rect.top, rect.right, rect.bottom),
+            (
+                info.rcWork.left,
+                info.rcWork.top,
+                info.rcWork.right,
+                info.rcWork.bottom,
+            ),
+        );
+        if new_left != rect.left || new_top != rect.top {
+            SetWindowPos(
+                hwnd,
+                std::ptr::null_mut(),
+                new_left,
+                new_top,
+                0,
+                0,
+                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+            );
+        }
+        // 即使位置未变，也对整窗强制重绘：屏外首帧留下的透明洞需要一次全客户区刷新。
+        let _ = RedrawWindow(
+            hwnd as HWND,
+            std::ptr::null(),
+            std::ptr::null_mut(),
+            RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW,
+        );
+    }
 }
 
 /// 为无框窗口请求 Win11 DWM 圆角。
@@ -181,7 +543,7 @@ pub fn start_native_window_move(window: &slint::Window) {
     use windows_sys::Win32::Foundation::{HWND, POINT};
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetCursorPos, HTCAPTION, SendMessageW, WM_NCLBUTTONDOWN,
+        GetCursorPos, SendMessageW, HTCAPTION, WM_NCLBUTTONDOWN,
     };
 
     let _ = window.with_winit_window(|winit_window| {
@@ -224,8 +586,8 @@ unsafe fn restore_maximized_for_drag(
 ) {
     use windows_sys::Win32::Foundation::RECT;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetWindowRect, IsZoomed, SW_RESTORE, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
-        ShowWindow,
+        GetWindowRect, IsZoomed, SetWindowPos, ShowWindow, SWP_NOACTIVATE, SWP_NOSIZE,
+        SWP_NOZORDER, SW_RESTORE,
     };
 
     if IsZoomed(hwnd) == 0 {
@@ -296,25 +658,90 @@ fn restored_drag_origin(
 
 #[cfg(test)]
 mod tests {
-    use super::restored_drag_origin;
+    use super::{centered_aux_origin, clamp_window_origin_to_work_area, restored_drag_origin};
+
+    #[test]
+    fn center_aux_origin_centers_in_owner_client_rect() {
+        // 1920x1080 客户区里摆 800x600 子窗 → 左上角 (560, 240)。
+        assert_eq!(
+            centered_aux_origin((0, 0), (1920, 1080), (800, 600)),
+            (560, 240)
+        );
+    }
+
+    #[test]
+    fn center_aux_origin_follows_owner_on_secondary_monitor() {
+        // owner 客户区从副屏 x=1920 开始：居中只在 owner 自己的客户区内平移。
+        assert_eq!(
+            centered_aux_origin((1920, 100), (1200, 800), (800, 600)),
+            (2120, 200)
+        );
+    }
+
+    #[test]
+    fn center_aux_origin_clamps_oversized_aux_to_top_left() {
+        // 子窗比 owner 还大时贴齐左上角，不出现负坐标。
+        assert_eq!(
+            centered_aux_origin((100, 80), (1200, 800), (1400, 900)),
+            (100, 80)
+        );
+    }
 
     #[test]
     fn restore_origin_keeps_grab_point_under_cursor() {
         // 1920 宽最大化窗口，光标在中心 → 1440 宽还原窗口中心仍在光标下；
         // 纵向保留按下点距窗口顶边的距离。
-        assert_eq!(restored_drag_origin((960, 30), 0, 1920, 20, 1440), (240, 10));
+        assert_eq!(
+            restored_drag_origin((960, 30), 0, 1920, 20, 1440),
+            (240, 10)
+        );
     }
 
     #[test]
     fn restore_origin_clamps_relative_x() {
         // 光标越出右缘（极端时序）时按右缘的相对位置摆位，不把窗口甩到光标右侧。
-        assert_eq!(restored_drag_origin((2200, 40), 0, 1920, 20, 1000), (1200, 20));
+        assert_eq!(
+            restored_drag_origin((2200, 40), 0, 1920, 20, 1000),
+            (1200, 20)
+        );
     }
 
     #[test]
     fn restore_origin_ignores_window_left_offset() {
         // 最大化窗口从副屏 x=1920 开始：相对位置按窗口自身宽度计算。
-        assert_eq!(restored_drag_origin((2880, 50), 1920, 1920, 24, 1400), (2180, 26));
+        assert_eq!(
+            restored_drag_origin((2880, 50), 1920, 1920, 24, 1400),
+            (2180, 26)
+        );
+    }
+
+    #[test]
+    fn clamp_origin_pulls_partially_offscreen_window_back() {
+        // 1920×1080 工作区；窗口 800×600，左边越出 100px → 贴回 x=0。
+        assert_eq!(
+            clamp_window_origin_to_work_area((-100, 80, 700, 680), (0, 0, 1920, 1080)),
+            (0, 80)
+        );
+        // 右边越出：left 钳到 1920-800=1120。
+        assert_eq!(
+            clamp_window_origin_to_work_area((1500, 100, 2300, 700), (0, 0, 1920, 1080)),
+            (1120, 100)
+        );
+    }
+
+    #[test]
+    fn clamp_origin_keeps_onscreen_window() {
+        assert_eq!(
+            clamp_window_origin_to_work_area((200, 120, 1000, 720), (0, 0, 1920, 1080)),
+            (200, 120)
+        );
+    }
+
+    #[test]
+    fn clamp_origin_pins_oversized_window_to_work_top_left() {
+        assert_eq!(
+            clamp_window_origin_to_work_area((-40, -30, 2000, 1200), (0, 0, 1920, 1080)),
+            (0, 0)
+        );
     }
 }
-

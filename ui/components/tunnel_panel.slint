@@ -30,6 +30,7 @@ export component TunnelPanel inherits Rectangle {
     // 启停按钮的无障碍名 / Tooltip 文案（§5.7：图标化操作必须带提示）。
     private property <string> start-text: @tr("Start tunnel");
     private property <string> stop-text: @tr("Stop tunnel");
+    private property <string> runtime-not-provisioned-tip: @tr("runtime not provisioned");
 
     // PANEL-2：行高 = padding 4+4 + 名称行 + spacing-4 + compact 动作行 24。
     // 旧值用满血 32 按钮会把窄栏摘要挤没；改用 control-height-compact。
@@ -67,9 +68,8 @@ export component TunnelPanel inherits Rectangle {
                 height: root.row-height;
                 border-radius: Theme.radius-control;
                 // 隔行底色用 `subtle-hover`（深浅两套主题都是 8% 叠加）：
-                // 之前用 `card-fill`，dark 是 #FFFFFF0D（几乎看不出）而 light 是
-                // #FFFFFFB3（70% 白）——两套主题观感完全相反，浅色下隔行底色
-                // 近乎纯白，压过了行内容。
+                // 之前用 `card-fill`，深浅两套主题观感完全相反：深色下几乎
+                // 看不出、浅色下近乎纯白，压过了行内容。
                 background: Math.mod(index, 2) == 0 ? transparent : Theme.subtle-hover;
 
                 VerticalLayout {
@@ -120,30 +120,25 @@ export component TunnelPanel inherits Rectangle {
                         }
 
                         // 与 Transfers 行一致：compact 24×24，窄栏里留给摘要更多宽度。
-                        if row.can-start : WinIconButton {
+                        WinIconButton {
                             icon: "play";
                             width: Theme.control-height-compact;
                             height: Theme.control-height-compact;
+                            enabled: row.can-start;
                             accessible-name: root.start-text;
-                            tooltip-text: root.start-text;
+                            tooltip-text: row.can-start ? root.start-text : root.runtime-not-provisioned-tip;
                             cross-axis-self-alignment: center;
                             clicked => { root.start-tunnel(row.id); }
                         }
-                        if row.can-stop : WinIconButton {
+                        WinIconButton {
                             icon: "pause";
                             width: Theme.control-height-compact;
                             height: Theme.control-height-compact;
+                            enabled: row.can-stop;
                             accessible-name: root.stop-text;
-                            tooltip-text: root.stop-text;
+                            tooltip-text: row.can-stop ? root.stop-text : root.runtime-not-provisioned-tip;
                             cross-axis-self-alignment: center;
                             clicked => { root.stop-tunnel(row.id); }
-                        }
-                        if !row.can-start && !row.can-stop : Text {
-                            text: row.kind-text;
-                            color: Theme.text-tertiary;
-                            font-size: Theme.font-caption;
-                            vertical-alignment: center;
-                            wrap: no-wrap;
                         }
                     }
                 }

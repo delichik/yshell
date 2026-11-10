@@ -31,8 +31,7 @@ fn save_active_session_persists_minimal_profile() {
         "expected session file at {}",
         session_file.display()
     );
-    let config_body =
-        std::fs::read_to_string(runtime.config_store.config_file()).expect("config");
+    let config_body = std::fs::read_to_string(runtime.config_store.config_file()).expect("config");
     assert!(
         !config_body.contains("[[folders]]"),
         "sessions must not be inlined into config.toml"
@@ -85,9 +84,10 @@ fn saved_session_selection_rotates_and_opens_selected_profile() {
     assert!(previous
         .saved_session_selection_name_text
         .contains("one.example.test"));
+    assert!(previous.saved_session_inventory_rows_text.contains("> "));
     assert!(previous
         .saved_session_inventory_rows_text
-        .contains("> ops@one.example.test:2222"));
+        .contains("[one.example.test:2222]"));
 
     let opened = runtime
         .open_selected_saved_session()
@@ -117,15 +117,15 @@ fn session_tree_flattens_folders_and_sessions_in_display_order() {
             ("folder", 0, SAVED_SESSIONS_FOLDER_NAME),
             ("session", 1, "One"),
             ("folder", 1, "Prod"),
-            ("session", 2, "Prod DB"),
             ("session", 2, "Cache"),
+            ("session", 2, "Prod DB"),
         ]
     );
     // 文件夹 detail = 子树内可见会话数；会话 detail = user@host。
     assert_eq!(rows[0].detail, "3");
     assert_eq!(rows[2].detail, "2");
     assert_eq!(rows[1].detail, "one.example.test");
-    assert_eq!(rows[3].detail, "ops@db.example.test");
+    assert_eq!(rows[4].detail, "ops@db.example.test");
     assert!(rows
         .iter()
         .filter(|row| row.kind == "folder")
@@ -222,7 +222,7 @@ fn session_tree_search_keeps_hit_chains_and_folder_subtrees() {
         .collect::<Vec<_>>();
     assert_eq!(
         labels,
-        vec![SAVED_SESSIONS_FOLDER_NAME, "Prod", "Prod DB", "Cache"]
+        vec![SAVED_SESSIONS_FOLDER_NAME, "Prod", "Cache", "Prod DB"]
     );
     assert_eq!(folder_hit.session_tree_rows[0].detail, "2");
 
@@ -419,4 +419,63 @@ fn open_first_saved_session_uses_minimal_ui_path() {
     assert!(projection
         .recent_sessions_rows_text
         .contains("saved.example.test"));
+}
+
+#[test]
+fn duplicate_and_rename_saved_session_update_tree() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    runtime
+        .handle_quick_connect("ops@dup.example.test:2222")
+        .expect("quick connect");
+    runtime.save_active_session().expect("save active session");
+    let original_id = runtime.saved_session_profiles()[0].id.clone();
+
+    let duplicated = runtime
+        .duplicate_selected_saved_session()
+        .expect("duplicate");
+    assert_eq!(duplicated.status_kind, "session-duplicated");
+    assert_eq!(runtime.saved_session_profiles().len(), 2);
+
+    runtime.select_saved_session_by_id(&original_id);
+    runtime
+        .rename_saved_session(&original_id, "Renamed Edge")
+        .expect("rename");
+    let row = runtime
+        .projection()
+        .session_tree_rows
+        .into_iter()
+        .find(|row| row.id == original_id)
+        .expect("renamed row");
+    assert_eq!(row.label, "Renamed Edge");
+}
+
+#[test]
+fn session_tree_row_includes_icon_name_from_profile() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    runtime
+        .handle_quick_connect("ops@icon.example.test:2222")
+        .expect("quick connect");
+    runtime.save_active_session().expect("save active session");
+    let profile_id = runtime.saved_session_profiles()[0].id.clone();
+    let mut profile = runtime
+        .config_document
+        .find_session(&profile_id)
+        .cloned()
+        .expect("profile");
+    profile.icon = Some("server".to_owned());
+    runtime
+        .config_store
+        .session_tree()
+        .update_session(&mut runtime.config_document.folders, profile)
+        .expect("update icon");
+
+    let row = runtime
+        .projection()
+        .session_tree_rows
+        .into_iter()
+        .find(|row| row.id == profile_id)
+        .expect("tree row");
+    assert_eq!(row.icon_name, "globe");
 }

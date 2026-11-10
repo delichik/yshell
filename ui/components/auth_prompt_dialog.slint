@@ -5,7 +5,7 @@
 // cleared by the host on dismiss; this component only presents and edits them.
 
 import { Theme } from "../theme.slint";
-import { WinButton, WinInfoBar, WinToggle, WinScrollIndicator } from "basic/controls.slint";
+import { WinButton, WinInfoBar, WinScrollIndicator, WinSwitch } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 
 export struct AuthKeyOption {
@@ -23,10 +23,13 @@ export struct AuthKeyboardPrompt {
 component AuthKeyListItem inherits Rectangle {
     in property <AuthKeyOption> node;
     in property <bool> selected: false;
+    /// ssh-agent 开启时禁用密钥列表（原型：agent 与下拉/口令互斥）。
+    in property <bool> enabled: true;
     callback clicked();
 
     height: 48px;
     border-radius: Theme.radius-control;
+    opacity: root.enabled ? 1.0 : 0.4;
     background: selected ? Theme.subtle-selected
         : touch.pressed ? Theme.subtle-pressed
         : touch.has-hover ? Theme.subtle-hover
@@ -60,6 +63,7 @@ component AuthKeyListItem inherits Rectangle {
     }
 
     touch := TouchArea {
+        enabled: root.enabled;
         clicked => { root.clicked(); }
     }
 }
@@ -77,7 +81,6 @@ export component AuthPromptDialog inherits Rectangle {
     in property <bool> submit-enabled: true;
 
     in-out property <string> password-text: "";
-    in-out property <bool> remember-password: false;
 
     in property <[AuthKeyOption]> key-options: [];
     in-out property <int> selected-key-index: -1;
@@ -98,7 +101,6 @@ export component AuthPromptDialog inherits Rectangle {
     callback select-method(int);
     callback submit-password();
     callback update-password(string);
-    callback toggle-remember-password(bool);
     callback select-key(int);
     callback update-passphrase(string);
     callback toggle-use-agent(bool);
@@ -231,12 +233,6 @@ export component AuthPromptDialog inherits Rectangle {
                         accepted => { if root.primary-enabled { root.submit-primary(); } }
                     }
                 }
-
-                WinToggle {
-                    text: @tr("Remember password");
-                    checked: root.remember-password;
-                    toggled => { root.toggle-remember-password(self.checked); }
-                }
             }
 
             // --- Public key ------------------------------------------------
@@ -275,6 +271,7 @@ export component AuthPromptDialog inherits Rectangle {
                                 for option[i] in root.key-options : AuthKeyListItem {
                                     node: option;
                                     selected: i == root.selected-key-index;
+                                    enabled: !root.use-agent;
                                     clicked => {
                                         root.selected-key-index = i;
                                         root.select-key(i);
@@ -324,6 +321,7 @@ export component AuthPromptDialog inherits Rectangle {
                         WinButton {
                             text: @tr("Browse…");
                             icon: "file";
+                            enabled: !root.use-agent;
                             clicked => { root.browse-key-file(); }
                         }
                     }
@@ -342,6 +340,7 @@ export component AuthPromptDialog inherits Rectangle {
                         text <=> root.passphrase-text;
                         placeholder-text: @tr("Optional");
                         input-type: password;
+                        enabled: !root.use-agent;
                         edited(text) => { root.update-passphrase(text); }
                         accepted => {
                             if root.primary-enabled { root.submit-primary(); }
@@ -349,10 +348,27 @@ export component AuthPromptDialog inherits Rectangle {
                     }
                 }
 
-                WinToggle {
-                    text: @tr("Use ssh-agent");
-                    checked: root.use-agent;
-                    toggled => { root.toggle-use-agent(self.checked); }
+                // 原型 auth-prompt/index.html：ssh-agent 是 form-switch，
+                // 左侧标签 + 右侧 Use / Don't use 文案；开启后禁用密钥列表与口令。
+                HorizontalLayout {
+                    spacing: Theme.spacing-8;
+                    cross-axis-alignment: center;
+
+                    Text {
+                        text: @tr("ssh-agent");
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-body;
+                        vertical-alignment: center;
+                        wrap: no-wrap;
+                        horizontal-stretch: 1;
+                    }
+
+                    WinSwitch {
+                        text: root.use-agent ? @tr("Use") : @tr("Don't use");
+                        accessible-name: @tr("Use ssh-agent");
+                        checked: root.use-agent;
+                        toggled => { root.toggle-use-agent(self.checked); }
+                    }
                 }
             }
 

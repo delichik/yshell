@@ -5,7 +5,7 @@ import { SftpConflictDialog } from "../components/sftp_panel.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component SftpConflictWindow inherits Window {
-    title: @tr("Resolve name conflicts");
+    title: @tr("Resolve conflicts");
     no-frame: true;
     resize-border-width: 0px;
     preferred-width: Theme.tool-window-width-standard;
@@ -37,7 +37,7 @@ export component SftpConflictWindow inherits Window {
     ToolWindowChrome {
         width: Theme.tool-window-width-standard;
         height: Theme.tool-window-height-standard;
-        title-text: @tr("Resolve name conflicts");
+        title-text: @tr("Resolve conflicts");
         native-title-drag: root.native_title_drag;
         close-requested => { /* destructive: no Esc/× cancel (B23) */ }
         title-drag-requested => { root.title_drag_requested(); }

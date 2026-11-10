@@ -7,8 +7,8 @@ use std::collections::VecDeque;
 use std::fmt;
 
 use yshell_ssh::{
-    channel::ShellSession, error::SshError, error::SshErrorKind, error::SshResult, pty::PtySize,
-    proxy::ProxyState, AuthMethod, ShellAdapter, SshConnectionConfig,
+    channel::ShellSession, error::SshError, error::SshErrorKind, error::SshResult,
+    proxy::ProxyState, pty::PtySize, AuthMethod, ShellAdapter, SshConnectionConfig,
 };
 
 /// Deterministic shell used by offline app unit tests.
@@ -75,6 +75,16 @@ impl TestShellSession {
     /// Convenience: open a boxed shell for attaching to a session runtime.
     pub fn open_boxed(config: &SshConnectionConfig) -> SshResult<Box<dyn ShellSession>> {
         Self::open(config).map(|session| Box::new(session) as Box<dyn ShellSession>)
+    }
+
+    /// Queue extra output to be returned from subsequent [`ShellSession::poll_output`] calls.
+    pub fn push_pending_output(&mut self, bytes: impl Into<Vec<u8>>) {
+        self.pending_output.push_back(bytes.into());
+    }
+
+    /// Drop any buffered handshake / prior output without attaching the shell.
+    pub fn clear_pending_output(&mut self) {
+        self.pending_output.clear();
     }
 }
 

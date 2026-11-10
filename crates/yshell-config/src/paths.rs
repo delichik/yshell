@@ -1,12 +1,11 @@
 //! Cross-platform configuration directory discovery.
 //!
 //! Discovery is intentionally injectable so tests can validate platform rules
-//! without mutating the process environment.
+//! without mutating the process environment. The directory is **not** read from
+//! any product environment variable: the only override is the `--config-dir`
+//! CLI argument handled by the application entry point.
 
 use std::{collections::HashMap, env, error::Error, fmt, path::PathBuf};
-
-/// Environment variable used to override the `YShell` configuration directory.
-pub const CONFIG_DIR_ENV: &str = "YSHELL_CONFIG_DIR";
 
 const APP_DIR_NAME: &str = "yshell";
 
@@ -84,16 +83,12 @@ impl ConfigPathResolver {
     /// Discovers the configuration directory.
     ///
     /// Precedence:
-    /// 1. `YSHELL_CONFIG_DIR`
-    /// 2. Platform default (`XDG_CONFIG_HOME`, `%APPDATA%`, or macOS app support)
-    /// 3. Home-directory fallback for Unix/macOS when applicable
+    /// 1. Platform default (`XDG_CONFIG_HOME`, `%APPDATA%`, or macOS app support)
+    /// 2. Home-directory fallback for Unix/macOS when applicable
     ///
-    /// Empty environment variables are ignored.
+    /// Empty environment variables are ignored. Test/smoke isolation uses the
+    /// `--config-dir` CLI argument instead of an environment override.
     pub fn discover_config_dir(&self) -> Result<PathBuf, ConfigPathError> {
-        if let Some(override_dir) = self.non_empty_env(CONFIG_DIR_ENV) {
-            return Ok(PathBuf::from(override_dir));
-        }
-
         match self.os {
             OperatingSystem::Windows => self
                 .non_empty_env("APPDATA")
@@ -146,18 +141,20 @@ mod tests {
     }
 
     #[test]
-    fn explicit_override_wins_on_unix() {
+    fn legacy_config_dir_env_is_ignored() {
+        // Product configuration must never come from the environment; the only
+        // override is the `--config-dir` CLI argument (handled by the app).
         let path = resolver(
             OperatingSystem::Unix,
             &[
-                (CONFIG_DIR_ENV, "/tmp/custom"),
+                ("YSHELL_CONFIG_DIR", "/tmp/custom"),
                 ("XDG_CONFIG_HOME", "/tmp/xdg"),
             ],
         )
         .discover_config_dir()
-        .expect("override should resolve");
+        .expect("xdg config should resolve");
 
-        assert_eq!(path, PathBuf::from("/tmp/custom"));
+        assert_eq!(path, PathBuf::from("/tmp/xdg").join(APP_DIR_NAME));
     }
 
     #[test]
@@ -213,7 +210,7 @@ mod tests {
 
     #[test]
     fn empty_values_are_ignored() {
-        let error = resolver(OperatingSystem::Unix, &[(CONFIG_DIR_ENV, ""), ("HOME", "")])
+        let error = resolver(OperatingSystem::Unix, &[("HOME", "")])
             .discover_config_dir()
             .expect_err("empty values should not resolve");
 

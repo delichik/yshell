@@ -5,9 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use tempfile::tempdir;
-use yshell_config::NewTabMode;
 use yshell_core::SessionState;
-use yshell_local::LocalPtyConfig;
 use yshell_ssh::{PtySize, ShellSession, SshError, SshErrorKind, SshResult};
 
 use super::*;
@@ -161,6 +159,37 @@ fn local_tab_attaches_shell_receives_input_and_drops_on_close() {
 }
 
 #[test]
+fn default_local_shell_spawns_and_opens_a_tab_without_env_override() {
+    // `YSHELL_LOCAL_SHELL` no longer exists: the platform-default shell must be
+    // probed and spawned from config/platform rules only.
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 0);
+
+    let projection = runtime.open_local_terminal();
+    assert_eq!(projection.tab_count, 1);
+    assert!(
+        projection.has_active_session,
+        "local shell failed to start: {}",
+        projection.status_text
+    );
+    assert_ne!(
+        projection.status_kind, "local-terminal-start-failed",
+        "{}",
+        projection.status_text
+    );
+    let tab = &projection.tabs[0];
+    assert!(tab.connected, "{}", projection.status_text);
+    assert_ne!(tab.title, "New Tab");
+    let session_key = runtime
+        .active_session_key()
+        .expect("active session")
+        .to_owned();
+    assert!(runtime.sessions[&session_key].is_local());
+    runtime.close_tab_immediate(&tab.id);
+    assert!(runtime.sessions.is_empty());
+}
+
+#[test]
 fn dropping_the_runtime_releases_local_shells() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 0);
@@ -232,12 +261,11 @@ fn plus_always_creates_a_new_tab_and_ignores_new_tab_mode() {
 #[cfg(unix)]
 #[test]
 fn local_shell_accepts_input_and_returns_output_over_the_pty() {
-    let _guard = lock_env();
-    std::env::set_var("YSHELL_LOCAL_SHELL", "/bin/sh");
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 0);
 
-    let projection = runtime.open_local_terminal();
+    // 显式传入 shell（不再有 YSHELL_LOCAL_SHELL 环境变量开关）。
+    let projection = runtime.open_local_terminal_with_config(LocalPtyConfig::new("/bin/sh"));
     assert_eq!(projection.tab_count, 1);
     assert_eq!(projection.tabs[0].title, "sh");
     assert_eq!(projection.tabs[0].state_text, "connected");
@@ -260,7 +288,6 @@ fn local_shell_accepts_input_and_returns_output_over_the_pty() {
     assert!(seen, "local PTY output should reach the terminal grid");
 
     runtime.close_tab_immediate("tab-local-1");
-    std::env::remove_var("YSHELL_LOCAL_SHELL");
     assert!(runtime.sessions.is_empty());
     assert!(runtime.tabs.is_empty());
 }

@@ -104,6 +104,88 @@ fn passive_terminal_resize_skips_duplicate_dimensions() {
 }
 
 #[test]
+fn ssh_connect_seeds_pty_size_from_viewport_hint_not_80x24() {
+    use yshell_ssh::PtySize;
+
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    // Simulate a laid-out window before the user opens an SSH session.
+    runtime.note_terminal_viewport_size(106, 40);
+    runtime
+        .handle_quick_connect("alice@example.com:2200")
+        .expect("quick connect");
+    let session_key = runtime.active_session_id.clone().expect("session");
+    let size = runtime.sessions[&session_key].current_pty_size();
+    assert_eq!(
+        size,
+        PtySize {
+            columns: 106,
+            rows: 40,
+            pixel_width: 0,
+            pixel_height: 0,
+        },
+        "SSH request_pty must follow the window, not PtySize::default() 80x24"
+    );
+}
+
+#[test]
+fn attach_resizes_to_viewport_before_draining_motd_so_banner_stays_on_screen() {
+    use yshell_ssh::PtySize;
+
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    runtime.note_terminal_viewport_size(80, 40);
+    runtime
+        .handle_quick_connect("alice@example.com:2200")
+        .expect("quick connect");
+    let session_key = runtime.active_session_id.clone().expect("session");
+
+    // Worker opened at the default 80×24; MOTD is already buffered for that size.
+    let mut stale_config = runtime.sessions[&session_key].ssh_config.clone();
+    stale_config.pty.size = PtySize {
+        columns: 80,
+        rows: 24,
+        pixel_width: 0,
+        pixel_height: 0,
+    };
+    let mut shell =
+        yshell_test_support::TestShellSession::open(&stale_config).expect("open stale shell");
+    // Drop the short handshake banner; inject 26 lines that overflow a 24-row screen.
+    shell.clear_pending_output();
+    let mut banner = String::new();
+    for index in 0..26 {
+        banner.push_str(&format!("motd-line-{index}\n"));
+    }
+    shell.push_pending_output(banner.into_bytes());
+
+    {
+        let session = runtime.sessions.get_mut(&session_key).expect("session");
+        // Mirror finish_shell_attach: resize to the window before the first drain.
+        session.attach_shell_session(Box::new(shell));
+        let _ = session
+            .resize_shell_pty(80, 40)
+            .expect("resize to viewport before drain");
+        session.clear_pty_force_resync();
+    }
+    let session = &runtime.sessions[&session_key];
+    assert_eq!(session.current_pty_size().rows, 40);
+    assert_eq!(
+        session.terminal_grid.scrollback_len(),
+        0,
+        "MOTD must land on the 40-row grid, not leave the top lines in scrollback"
+    );
+    let body = session.visible_text();
+    assert!(
+        body.contains("motd-line-0"),
+        "top MOTD line visible: {body}"
+    );
+    assert!(
+        body.contains("motd-line-25"),
+        "bottom MOTD line visible: {body}"
+    );
+}
+
+#[test]
 fn attach_shell_forces_viewport_pty_resync_even_when_config_matches() {
     use yshell_ssh::PtySize;
 
@@ -127,8 +209,8 @@ fn attach_shell_forces_viewport_pty_resync_even_when_config_matches() {
         pixel_width: 0,
         pixel_height: 0,
     };
-    let shell = yshell_test_support::TestShellSession::open_boxed(&stale_config)
-        .expect("open stale shell");
+    let shell =
+        yshell_test_support::TestShellSession::open_boxed(&stale_config).expect("open stale shell");
     {
         let session = runtime.sessions.get_mut(&session_key).expect("session");
         // Config already at viewport size; live shell is 80x24.
@@ -143,7 +225,9 @@ fn attach_shell_forces_viewport_pty_resync_even_when_config_matches() {
         .sync_active_terminal_size_passive(100, 40)
         .expect("post-attach sync")
         .expect("must push resize onto live shell");
-    assert!(forced.terminal_body_text.contains("test-shell resized to 100x40"));
+    assert!(forced
+        .terminal_body_text
+        .contains("test-shell resized to 100x40"));
     assert!(!runtime.sessions[&session_key].needs_pty_viewport_resync());
 
     let skipped = runtime

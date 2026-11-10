@@ -58,6 +58,11 @@ impl AppRuntime {
             .and_then(|index| self.tabs[index].session_id().map(str::to_owned))
     }
 
+    /// Settings → SFTP 的「显示隐藏文件」默认值；新 SFTP 标签继承它。
+    pub(crate) fn default_sftp_show_hidden(&self) -> bool {
+        self.config_document.sftp.show_hidden
+    }
+
     /// Creates the parked state for a new SFTP tab (local listing included).
     fn fresh_sftp_tab_state(&self, tab_id: &str) -> SftpTabState {
         let session_key = self.sftp_tab_session_key(tab_id);
@@ -99,7 +104,7 @@ impl AppRuntime {
             selected_index: None,
             sort_column: SftpSortColumn::Name,
             sort_ascending: true,
-            show_hidden: false,
+            show_hidden: self.default_sftp_show_hidden(),
             selection: BTreeSet::new(),
             selection_anchor: None,
             session,

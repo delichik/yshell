@@ -11,25 +11,7 @@
 import { Theme } from "../theme.slint";
 import { WinButton } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
-
-// 标签 + 控件行：右对齐 128px 标签列（与原 Settings 内联编辑器一致）。
-component ThemeFieldRow inherits HorizontalLayout {
-    in property <string> label: "";
-    spacing: Theme.spacing-12;
-    alignment: stretch;
-    cross-axis-alignment: center;
-
-    Text {
-        text: root.label;
-        width: Theme.form-label-width-medium;
-        horizontal-alignment: right;
-        color: Theme.text-secondary;
-        font-size: Theme.font-body;
-        vertical-alignment: center;
-    }
-
-    @children
-}
+import { FormGroupLabel, FormHint, FormRow } from "basic/forms.slint";
 
 // 预设色块：点击弹出 16 色预设面板（选择而非手输 hex）。
 component ThemeColorSwatch inherits Rectangle {
@@ -109,7 +91,7 @@ export component ThemeEditor inherits VerticalLayout {
     callback update-role(string, string);
     callback update-ansi(int, string);
 
-    spacing: Theme.spacing-8;
+    spacing: Theme.form-row-gap;
     padding: Theme.spacing-12;
 
     Text {
@@ -119,43 +101,41 @@ export component ThemeEditor inherits VerticalLayout {
         font-weight: Theme.weight-semibold;
     }
 
-    ThemeFieldRow {
+    FormRow {
         label: @tr("Name");
 
         WinTextInput {
-            horizontal-stretch: 1;
+            width: Theme.form-field-width;
             text <=> root.theme-name;
             enabled: !root.builtin;
             edited => { root.update-name(self.text); }
         }
     }
 
-    Text {
-        visible: !root.builtin && root.theme-id != "";
+    if !root.builtin && root.theme-id != "" : FormHint {
         text: @tr("Theme id: {0}", root.theme-id);
-        color: Theme.text-tertiary;
-        font-size: Theme.font-caption;
-        font-family: Theme.font-mono;
-        wrap: no-wrap;
-        overflow: elide;
+        mono: true;
     }
 
-    HorizontalLayout {
-        spacing: Theme.spacing-8;
-        padding-left: Theme.form-label-width-medium + Theme.spacing-12;
-        cross-axis-alignment: center;
+    FormRow {
+        label: "";
 
-        for swatch in root.palette-swatches : Rectangle {
-            width: 14px;
-            height: 14px;
-            border-radius: 3px;
-            border-width: 1px;
-            border-color: Theme.control-stroke;
-            background: swatch;
+        HorizontalLayout {
+            spacing: Theme.spacing-8;
+            cross-axis-alignment: center;
+
+            for swatch in root.palette-swatches : Rectangle {
+                width: Theme.swatch-size;
+                height: Theme.swatch-size;
+                border-radius: 3px;
+                border-width: 1px;
+                border-color: Theme.control-stroke;
+                background: swatch;
+            }
         }
     }
 
-    ThemeFieldRow {
+    FormRow {
         label: @tr("Foreground");
 
         ThemeColorSwatch {
@@ -165,7 +145,7 @@ export component ThemeEditor inherits VerticalLayout {
         }
     }
 
-    ThemeFieldRow {
+    FormRow {
         label: @tr("Background");
 
         ThemeColorSwatch {
@@ -175,7 +155,7 @@ export component ThemeEditor inherits VerticalLayout {
         }
     }
 
-    ThemeFieldRow {
+    FormRow {
         label: @tr("Cursor");
 
         ThemeColorSwatch {
@@ -185,7 +165,7 @@ export component ThemeEditor inherits VerticalLayout {
         }
     }
 
-    ThemeFieldRow {
+    FormRow {
         label: @tr("Selection");
 
         ThemeColorSwatch {
@@ -195,21 +175,24 @@ export component ThemeEditor inherits VerticalLayout {
         }
     }
 
-    Text {
+    FormGroupLabel {
         text: @tr("ANSI colors");
-        color: Theme.text-secondary;
-        font-size: Theme.font-caption;
+        first: true;
     }
 
-    GridLayout {
-        spacing: Theme.spacing-4;
+    FormRow {
+        label: "";
 
-        for ansi-color[ansi-index] in root.ansi : ThemeColorSwatch {
-            row: Math.floor(ansi-index / 8);
-            col: Math.mod(ansi-index, 8);
-            fill: ansi-color;
-            enabled: !root.builtin;
-            picked(hex) => { root.update-ansi(ansi-index, hex); }
+        GridLayout {
+            spacing: Theme.spacing-4;
+
+            for ansi-color[ansi-index] in root.ansi : ThemeColorSwatch {
+                row: Math.floor(ansi-index / 8);
+                col: Math.mod(ansi-index, 8);
+                fill: ansi-color;
+                enabled: !root.builtin;
+                picked(hex) => { root.update-ansi(ansi-index, hex); }
+            }
         }
     }
 

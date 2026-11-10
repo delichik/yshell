@@ -416,7 +416,10 @@ mod tests {
             ("Makef".to_owned(), "ile".to_owned())
         );
         // Short stems have no head at all.
-        assert_eq!(split_file_name("a.txt"), (String::new(), "a.txt".to_owned()));
+        assert_eq!(
+            split_file_name("a.txt"),
+            (String::new(), "a.txt".to_owned())
+        );
         assert_eq!(split_file_name("ab"), (String::new(), "ab".to_owned()));
         // A leading dot is a hidden-file marker, not an extension.
         assert_eq!(

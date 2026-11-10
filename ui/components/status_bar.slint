@@ -1,4 +1,4 @@
-// 状态栏（26px）：连接态圆点 + 目标摘要 + 状态文案 + 弹性空白 + 右侧日志区（N6）。
+// 状态栏（28px）：连接态圆点 + 目标摘要 + 状态文案 + 弹性空白 + 右侧日志区（N6）。
 //
 // 拆分自 `ui/main_window.slint`（R1 结构重构）：只搬代码，不改布局/文案/行为。
 // WP1：左侧增加连接状态点（连接中呼吸）+ user@host 摘要 + busy 指示。
@@ -26,7 +26,8 @@ export component StatusBar inherits Rectangle {
     /// 同步目标数（宿主渲染 `SYNC → n targets` 的输入）。
     in property <int> sync-target-count: 0;
     /// 目标选择模式 id（`all`/`visible`/`selected`；供 accessible label/说明）。
-    in property <string> sync-mode-text: "all";
+    /// 同步组状态 id：`""`（无组）/ `group` / `paused`。
+    in property <string> sync-mode-text: "";
     /// chip 文案（宿主用 @tr 模板渲染；空 = 无同步）。
     in property <string> sync-text: "";
     /// 一次性提示（目标断开移除 / 控制键广播 / 源关闭；空 = 无）。
@@ -136,6 +137,17 @@ export component StatusBar inherits Rectangle {
             min-width: 0px;
         }
 
+        // 编码指示（本版会话恒为 UTF-8；静态展示）。
+        Text {
+            text: @tr("StatusBar" => "UTF-8");
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            font-family: Theme.font-mono;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            horizontal-stretch: 0;
+        }
+
         // 终端尺寸 + 光标（有活动视口时显示；光标按 1-based 给用户看）。
         if root.terminal-cols > 0 && root.terminal-rows > 0 : Text {
             text: @tr("StatusBar" => "{0}×{1}", root.terminal-cols, root.terminal-rows);
@@ -196,14 +208,18 @@ export component StatusBar inherits Rectangle {
             }
         }
 
-        // N9：同步发送按键 chip（`SYNC → n targets` + 一键停止）与一次性提示。
-        // 整条 chip 是命中区：点击 = 停止同步（非同步态 = 清除残留提示）。
+        // N9：同步输入 chip（`SYNC → n targets` / Pause + 一键停止）与一次性提示。
+        // 整条 chip 是命中区：点击 = 停止同步（组为空 = 清除残留提示）。
         if root.sync-active || root.sync-notice-text != "" : Rectangle {
             min-width: 32px;
             border-radius: Theme.radius-control;
+            border-width: root.sync-active ? 1px : 0px;
+            border-color: root.sync-mode-text == "paused" ? Theme.layer-stroke : Theme.caution;
             background: sync-touch.pressed ? Theme.subtle-pressed
                 : sync-touch.has-hover ? Theme.subtle-hover
-                : (root.sync-notice-text != "" ? Theme.attention-background : transparent);
+                : (root.sync-active
+                    ? (root.sync-mode-text == "paused" ? Theme.subtle-selected : Theme.attention-background)
+                    : Theme.attention-background);
             animate background { duration: Theme.duration-faster; easing: ease-out; }
 
             HorizontalLayout {
@@ -212,9 +228,16 @@ export component StatusBar inherits Rectangle {
                 spacing: Theme.spacing-4;
                 alignment: center;
 
+                if root.sync-active : Icon {
+                    name: "sync";
+                    icon-color: root.sync-mode-text == "paused" ? Theme.text-secondary : Theme.caution;
+                    icon-size: 12px;
+                    cross-axis-self-alignment: center;
+                }
+
                 if root.sync-active : Text {
                     text: root.sync-text;
-                    color: Theme.accent;
+                    color: root.sync-mode-text == "paused" ? Theme.text-secondary : Theme.banner-warning-text;
                     font-size: Theme.font-caption;
                     font-weight: Theme.weight-semibold;
                     vertical-alignment: center;
@@ -229,11 +252,10 @@ export component StatusBar inherits Rectangle {
                     wrap: no-wrap;
                 }
 
-                // 一键停止的可点提示（步进/键盘可操作：整条 chip 是 button 角色的命中区）。
-                // 12px 图标是写死尺寸的子项 → 显式交叉轴居中，否则贴行顶、高于文字。
+                // 一键停止：用 close（退出同步），不是 trash（删除）。
                 if root.sync-active : Icon {
                     name: "close";
-                    icon-color: Theme.accent;
+                    icon-color: root.sync-mode-text == "paused" ? Theme.text-secondary : Theme.caution;
                     icon-size: 12px;
                     cross-axis-self-alignment: center;
                 }
@@ -242,16 +264,15 @@ export component StatusBar inherits Rectangle {
             sync-touch := TouchArea {
                 accessible-role: button;
                 accessible-label: root.sync-active
-                    ? @tr("StatusBar" => "Stop sending key input")
-                    : @tr("StatusBar" => "Dismiss key input sync notice");
+                    ? @tr("StatusBar" => "Stop input sync")
+                    : @tr("StatusBar" => "Dismiss input sync notice");
                 clicked => { root.sync-stop-clicked(); }
             }
         }
 
         // N6：日志入口（REC 指示 + 文案；点击 = 日志菜单，与终端右键菜单同一入口）。
         if root.logging-usable : Rectangle {
-            // A10：命中区至少 32px 宽（§8）。状态栏本身只有 26px 高，纵向命中
-            // 受 bar-height-status token 限制（详见 WS-A 报告遗留）。
+            // A10：命中区至少 32px 宽（§8）。状态栏高度由 bar-height-status 决定。
             min-width: 32px;
             border-radius: Theme.radius-control;
             background: logging-touch.pressed ? Theme.subtle-pressed : logging-touch.has-hover ? Theme.subtle-hover : transparent;

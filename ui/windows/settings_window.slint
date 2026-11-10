@@ -1,4 +1,4 @@
-﻿// Settings as an independent non-resizable tool window.
+// Settings as an independent non-resizable tool window.
 
 import { Theme } from "../theme.slint";
 import { SettingsDialog } from "../pages/settings.slint";
@@ -34,12 +34,20 @@ export component SettingsWindow inherits Window {
     in-out property <bool> confirm-close-session-enabled;
     in-out property <bool> confirm-quit-app-enabled;
     in-out property <bool> mcp-enabled;
+    in-out property <string> mcp-port-text: "18765";
+    in-out property <bool> mcp-listen-lan: false;
+    in-out property <string> mcp-api-key-text: "";
+    in-out property <bool> mcp-view-user-connections: false;
+    in-out property <bool> mcp-control-user-connections: false;
     in-out property <bool> mcp-auto-approve-control-enabled;
     in property <string> mcp-status-text;
     in property <string> mcp-boundaries-text;
     in property <string> mcp-host-config-text;
     in property <string> debug-log-dir-text;
-    in-out property <string> section;
+    // 默认分区必须在**窗口**侧也给默认值：`section <=> body.section` 是双向绑定，
+    // 窗口侧未初始化的空串会覆盖 `SettingsDialog` 的 `"general"` 默认值，
+    // 导致所有 `if root.section == ...` 分支都不命中、内容区整块空白。
+    in-out property <string> section: "general";
     in property <string> appearance-color-scheme-name-text;
     in property <bool> appearance-color-scheme-builtin;
     in property <[color]> appearance-palette-swatches;
@@ -50,6 +58,35 @@ export component SettingsWindow inherits Window {
     in property <string> appearance-status-text;
     in property <image> appearance-preview;
     in property <color> appearance-preview-background;
+
+    // --- settings-security ---
+    in property <int> settings-appearance-mode-index: 0;
+    in property <int> settings-appearance-accent-index: 1;
+    in property <[color]> settings-appearance-accent-light-swatches: [];
+    in property <[color]> settings-appearance-accent-dark-swatches: [];
+    in property <[string]> settings-appearance-style-options: [];
+    in property <int> settings-appearance-style-index: 0;
+    in-out property <int> settings-terminal-middle-click-index: 0;
+    in-out property <int> settings-terminal-right-click-index: 0;
+    in-out property <int> settings-terminal-multi-line-paste-index: 0;
+    in-out property <bool> settings-terminal-auto-copy: false;
+    in property <string> settings-terminal-status-kind-text: "";
+    in property <string> settings-terminal-status-field-text: "";
+    in property <string> settings-terminal-status-value-text: "";
+    in property <string> settings-terminal-status-limit-text: "";
+    in-out property <bool> settings-sftp-show-hidden: true;
+    in-out property <int> settings-sftp-conflict-index: 0;
+    in property <[string]> settings-sftp-editor-options: [];
+    in-out property <int> settings-sftp-editor-index: 0;
+    in property <bool> settings-sftp-editor-custom-visible: false;
+    in-out property <string> settings-sftp-editor-path-text: "";
+    in property <string> settings-sftp-status-kind-text: "";
+    in property <bool> settings-master-password-set: false;
+    in property <bool> settings-master-password-locked: false;
+    in property <int> settings-security-known-hosts-count: 0;
+    in property <int> settings-security-private-keys-count: 0;
+    in property <int> settings-security-proxies-count: 0;
+    // --- settings-security end
 
     in-out property <bool> native_title_drag: false;
 
@@ -68,7 +105,15 @@ export component SettingsWindow inherits Window {
     callback set-debug-logging(bool);
     callback set-confirm-close-session(bool);
     callback set-confirm-quit-app(bool);
+    callback set-reduce-motion(bool);
     callback set-mcp-enabled(bool);
+    callback update-mcp-port(string);
+    callback set-mcp-listen-lan(bool);
+    callback update-mcp-api-key(string);
+    callback generate-mcp-api-key();
+    callback copy-mcp-api-key();
+    callback set-mcp-view-user-connections(bool);
+    callback set-mcp-control-user-connections(bool);
     callback set-mcp-auto-approve-control(bool);
     callback open-debug-log-dir();
     callback select-appearance-font(int);
@@ -80,6 +125,23 @@ export component SettingsWindow inherits Window {
     callback clear-appearance-fallbacks();
     callback reset-appearance-defaults();
     callback save-appearance();
+    // --- settings-security ---
+    callback update-settings-appearance-mode(int);
+    callback update-settings-appearance-accent(int);
+    callback select-settings-appearance-style(int);
+    callback update-settings-terminal-middle-click(int);
+    callback update-settings-terminal-right-click(int);
+    callback update-settings-terminal-multi-line-paste(int);
+    callback update-settings-terminal-auto-copy(bool);
+    callback update-settings-sftp-show-hidden(bool);
+    callback update-settings-sftp-conflict-action(int);
+    callback update-settings-sftp-external-editor(int);
+    callback update-settings-sftp-external-editor-path(string);
+    callback browse-settings-sftp-external-editor();
+    callback open-master-password-dialog(string);
+    callback open-config-dir();
+    callback save-settings();
+    // --- settings-security end
     callback title_drag_requested();
 
     chrome := ToolWindowChrome {
@@ -105,10 +167,16 @@ export component SettingsWindow inherits Window {
             confirm-close-session-enabled <=> root.confirm-close-session-enabled;
             confirm-quit-app-enabled <=> root.confirm-quit-app-enabled;
             mcp-enabled <=> root.mcp-enabled;
+            mcp-port-text <=> root.mcp-port-text;
+            mcp-listen-lan <=> root.mcp-listen-lan;
+            mcp-api-key-text <=> root.mcp-api-key-text;
+            mcp-view-user-connections <=> root.mcp-view-user-connections;
+            mcp-control-user-connections <=> root.mcp-control-user-connections;
             mcp-auto-approve-control-enabled <=> root.mcp-auto-approve-control-enabled;
-            mcp-status-text: root.mcp-status-text;
-            mcp-boundaries-text: root.mcp-boundaries-text;
-            mcp-host-config-text: root.mcp-host-config-text;
+            // 注意：窗口属性名由 `dialog_windows.rs::sync_settings_from` 定死（该文件
+            // 由并行任务占用，本项不改）；它承载的是 **kind id / detail**，不是整句文案。
+            mcp-status-kind-text: root.mcp-status-text;
+            mcp-status-detail-text: root.mcp-boundaries-text;
             debug-log-dir-text: root.debug-log-dir-text;
             section <=> root.section;
             appearance-color-scheme-name-text: root.appearance-color-scheme-name-text;
@@ -121,6 +189,34 @@ export component SettingsWindow inherits Window {
             appearance-status-text: root.appearance-status-text;
             appearance-preview: root.appearance-preview;
             appearance-preview-background: root.appearance-preview-background;
+            // --- settings-security ---
+            settings-appearance-mode-index: root.settings-appearance-mode-index;
+            settings-appearance-accent-index: root.settings-appearance-accent-index;
+            settings-appearance-accent-light-swatches: root.settings-appearance-accent-light-swatches;
+            settings-appearance-accent-dark-swatches: root.settings-appearance-accent-dark-swatches;
+            settings-appearance-style-options: root.settings-appearance-style-options;
+            settings-appearance-style-index: root.settings-appearance-style-index;
+            settings-terminal-middle-click-index <=> root.settings-terminal-middle-click-index;
+            settings-terminal-right-click-index <=> root.settings-terminal-right-click-index;
+            settings-terminal-multi-line-paste-index <=> root.settings-terminal-multi-line-paste-index;
+            settings-terminal-auto-copy <=> root.settings-terminal-auto-copy;
+            settings-terminal-status-kind-text: root.settings-terminal-status-kind-text;
+            settings-terminal-status-field-text: root.settings-terminal-status-field-text;
+            settings-terminal-status-value-text: root.settings-terminal-status-value-text;
+            settings-terminal-status-limit-text: root.settings-terminal-status-limit-text;
+            settings-sftp-show-hidden <=> root.settings-sftp-show-hidden;
+            settings-sftp-conflict-index <=> root.settings-sftp-conflict-index;
+            settings-sftp-editor-options: root.settings-sftp-editor-options;
+            settings-sftp-editor-index <=> root.settings-sftp-editor-index;
+            settings-sftp-editor-custom-visible: root.settings-sftp-editor-custom-visible;
+            settings-sftp-editor-path-text <=> root.settings-sftp-editor-path-text;
+            settings-sftp-status-kind-text: root.settings-sftp-status-kind-text;
+            settings-master-password-set: root.settings-master-password-set;
+            settings-master-password-locked: root.settings-master-password-locked;
+            settings-security-known-hosts-count: root.settings-security-known-hosts-count;
+            settings-security-private-keys-count: root.settings-security-private-keys-count;
+            settings-security-proxies-count: root.settings-security-proxies-count;
+            // --- settings-security end
             close => { root.dismiss(); }
             open-host-keys => { root.open-host-keys(); }
             open-private-keys => { root.open-private-keys(); }
@@ -136,7 +232,15 @@ export component SettingsWindow inherits Window {
             set-debug-logging(bool) => { root.set-debug-logging(bool); }
             set-confirm-close-session(bool) => { root.set-confirm-close-session(bool); }
             set-confirm-quit-app(bool) => { root.set-confirm-quit-app(bool); }
+            set-reduce-motion(bool) => { root.set-reduce-motion(bool); }
             set-mcp-enabled(bool) => { root.set-mcp-enabled(bool); }
+            update-mcp-port(string) => { root.update-mcp-port(string); }
+            set-mcp-listen-lan(bool) => { root.set-mcp-listen-lan(bool); }
+            update-mcp-api-key(string) => { root.update-mcp-api-key(string); }
+            generate-mcp-api-key() => { root.generate-mcp-api-key(); }
+            copy-mcp-api-key() => { root.copy-mcp-api-key(); }
+            set-mcp-view-user-connections(bool) => { root.set-mcp-view-user-connections(bool); }
+            set-mcp-control-user-connections(bool) => { root.set-mcp-control-user-connections(bool); }
             set-mcp-auto-approve-control(bool) => { root.set-mcp-auto-approve-control(bool); }
             open-debug-log-dir => { root.open-debug-log-dir(); }
             select-appearance-font(int) => { root.select-appearance-font(int); }
@@ -148,6 +252,23 @@ export component SettingsWindow inherits Window {
             clear-appearance-fallbacks => { root.clear-appearance-fallbacks(); }
             reset-appearance-defaults => { root.reset-appearance-defaults(); }
             save-appearance => { root.save-appearance(); }
+            // --- settings-security ---
+            update-settings-appearance-mode(int) => { root.update-settings-appearance-mode(int); }
+            update-settings-appearance-accent(int) => { root.update-settings-appearance-accent(int); }
+            select-settings-appearance-style(int) => { root.select-settings-appearance-style(int); }
+            update-settings-terminal-middle-click(int) => { root.update-settings-terminal-middle-click(int); }
+            update-settings-terminal-right-click(int) => { root.update-settings-terminal-right-click(int); }
+            update-settings-terminal-multi-line-paste(int) => { root.update-settings-terminal-multi-line-paste(int); }
+            update-settings-terminal-auto-copy(bool) => { root.update-settings-terminal-auto-copy(bool); }
+            update-settings-sftp-show-hidden(bool) => { root.update-settings-sftp-show-hidden(bool); }
+            update-settings-sftp-conflict-action(int) => { root.update-settings-sftp-conflict-action(int); }
+            update-settings-sftp-external-editor(int) => { root.update-settings-sftp-external-editor(int); }
+            update-settings-sftp-external-editor-path(string) => { root.update-settings-sftp-external-editor-path(string); }
+            browse-settings-sftp-external-editor => { root.browse-settings-sftp-external-editor(); }
+            open-master-password-dialog(string) => { root.open-master-password-dialog(string); }
+            open-config-dir => { root.open-config-dir(); }
+            save-settings => { root.save-settings(); }
+            // --- settings-security end
         }
     }
 

@@ -17,13 +17,16 @@ pub use names::{sanitize_entry_name, validate_entry_name, NameError};
 pub use paths::{discover_config_dir, ConfigPathError, ConfigPathResolver, OperatingSystem};
 pub use quick_connect::{parse_quick_connect, QuickConnectError, QuickConnectTarget};
 pub use schema::{
-    clamp_sftp_max_parallel_transfers, migrate_value, migrate_value_with_warnings,
-    AppearanceProfile, AuthMethod, AuthProfile, ConfigDocument, ConfigSchemaError, ConfigWarning,
-    FolderProfile, HostKeyPolicy, KeyProfile, LayoutProfile, LoggingProfile, NewTabMode, PanelId,
-    PanelSide, PanelSlot, PrivateKeySource, ProxyProfile, ProxyProtocol, QuickConnectEntry,
-    QuickConnectProfile, ResolvedSessionProfile, SessionBasicEdit, SessionProfile, SftpProfile,
-    TerminalProfile, TunnelForward, TunnelForwardKind, TunnelProfile, UiProfile,
-    SFTP_MAX_PARALLEL_TRANSFERS_MAX, SFTP_MAX_PARALLEL_TRANSFERS_MIN, SCHEMA_VERSION,
+    clamp_sftp_max_parallel_transfers, default_mcp_port, migrate_value,
+    migrate_value_with_warnings, AccentColor, AppearanceMode, AppearanceProfile, AuthMethod,
+    AuthProfile, ConfigDocument, ConfigSchemaError, ConfigWarning, FolderProfile, HostKeyPolicy,
+    KeyProfile, LayoutProfile, LoggingProfile, LoginScriptProfile, LoginStep, LoginStepAction,
+    McpListenMode, MiddleClickAction, MultiLinePastePolicy, NewTabMode, PanelId, PanelSide,
+    PanelSlot, PrivateKeySource, ProxyProfile, ProxyProtocol, QuickConnectEntry,
+    QuickConnectProfile, ResolvedSessionProfile, RightClickAction, SessionBasicEdit,
+    SessionProfile, SftpConflictAction, SftpProfile, TerminalProfile, TunnelForward,
+    TunnelForwardKind, TunnelProfile, UiProfile, LOGIN_STEP_MAX_WAIT_MILLIS, SCHEMA_VERSION,
+    SFTP_MAX_PARALLEL_TRANSFERS_MAX, SFTP_MAX_PARALLEL_TRANSFERS_MIN,
 };
 pub use sessions::{SessionTreeError, SessionTreeStore, FOLDER_META_FILE_NAME, SESSIONS_DIR_NAME};
 pub use store::{ConfigStore, ConfigStoreError, LoadOutcome};

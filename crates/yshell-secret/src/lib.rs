@@ -13,7 +13,7 @@ use std::{
 };
 
 use keyring::Entry;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Opaque identifier for a credential stored outside normal configuration.
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -77,6 +77,82 @@ impl fmt::Debug for SecretString {
 impl fmt::Display for SecretString {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("[REDACTED]")
+    }
+}
+
+/// Persisted verifier for the optional application master password (D35).
+///
+/// The master password itself is never written to disk: only this one-way
+/// fingerprint stands in for it when the user unlocks at startup. KDF/params
+/// are intentionally minimal for this round (argon2/AEAD are tracked as
+/// security debt in D-2); the verifier is versioned by [`Self::VERSION`] so a
+/// later KDF upgrade can migrate the record.
+///
+/// Serialization stores the fingerprint as a 16-digit hex string: TOML cannot
+/// represent the full `u64` range, and the same record must round-trip through
+/// both TOML (tests/backups) and JSON (the app's `master-password.json`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MasterPasswordVerifier {
+    /// Format version of the verifier record (bump when the KDF changes).
+    version: u32,
+    /// FNV-1a fingerprint of the master password.
+    fingerprint: u64,
+}
+
+impl Serialize for MasterPasswordVerifier {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("MasterPasswordVerifier", 2)?;
+        state.serialize_field("version", &self.version)?;
+        state.serialize_field("fingerprint", &format!("{:016x}", self.fingerprint))?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for MasterPasswordVerifier {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct Record {
+            version: u32,
+            fingerprint: String,
+        }
+        let record = Record::deserialize(deserializer)?;
+        let fingerprint =
+            u64::from_str_radix(record.fingerprint.trim(), 16).map_err(serde::de::Error::custom)?;
+        Ok(Self {
+            version: record.version,
+            fingerprint,
+        })
+    }
+}
+
+impl MasterPasswordVerifier {
+    /// Current verifier format version.
+    pub const VERSION: u32 = 1;
+
+    /// Minimum number of characters accepted for a **new** master password.
+    pub const MIN_LEN: usize = 8;
+
+    /// Builds a verifier from a plaintext master password.
+    #[must_use]
+    pub fn from_password(password: &str) -> Self {
+        Self {
+            version: Self::VERSION,
+            fingerprint: fingerprint(password.as_bytes()),
+        }
+    }
+
+    /// Returns true when `password` matches this verifier.
+    #[must_use]
+    pub fn verify(&self, password: &str) -> bool {
+        self.version == Self::VERSION && fingerprint(password.as_bytes()) == self.fingerprint
+    }
+
+    /// Returns true when `password` may become a new master password
+    /// (length policy only; equality with `confirm` is the caller's job).
+    #[must_use]
+    pub fn is_acceptable_new_password(password: &str) -> bool {
+        password.chars().count() >= Self::MIN_LEN
     }
 }
 
@@ -196,7 +272,10 @@ impl InMemoryEncryptedStore {
 
     #[must_use]
     pub fn encrypted_entries_snapshot(&self) -> HashMap<SecretRef, Vec<u8>> {
-        self.encrypted.lock().map(|entries| entries.clone()).unwrap_or_default()
+        self.encrypted
+            .lock()
+            .map(|entries| entries.clone())
+            .unwrap_or_default()
     }
 
     fn ensure_master(&self, master_password: &str) -> Result<(), SecretError> {
@@ -543,6 +622,47 @@ mod tests {
             reopened.get(&secret_ref).expect("get").expose_secret(),
             "top-secret"
         );
+    }
+
+    #[test]
+    fn master_password_verifier_accepts_only_the_original_password() {
+        let verifier = MasterPasswordVerifier::from_password("correct horse");
+        assert!(verifier.verify("correct horse"));
+        assert!(!verifier.verify("correct horse "));
+        assert!(!verifier.verify(""));
+        assert!(!verifier.verify("Correct horse"));
+    }
+
+    #[test]
+    fn master_password_verifier_never_leaks_the_password() {
+        let verifier = MasterPasswordVerifier::from_password("hunter2-secret");
+        let debug = format!("{verifier:?}");
+        assert!(!debug.contains("hunter2"));
+        assert!(debug.contains("fingerprint"));
+    }
+
+    #[test]
+    fn master_password_verifier_round_trips_through_serde() {
+        let verifier = MasterPasswordVerifier::from_password("seventeen-chars!");
+        let encoded = toml::to_string(&verifier).expect("serialize verifier");
+        assert!(!encoded.contains("seventeen"));
+        let decoded: MasterPasswordVerifier = toml::from_str(&encoded).expect("deserialize");
+        assert_eq!(decoded, verifier);
+        assert!(decoded.verify("seventeen-chars!"));
+    }
+
+    #[test]
+    fn master_password_minimum_length_policy() {
+        assert!(!MasterPasswordVerifier::is_acceptable_new_password(
+            "1234567"
+        ));
+        assert!(MasterPasswordVerifier::is_acceptable_new_password(
+            "12345678"
+        ));
+        // Counted in characters, not bytes (CJK passwords are valid).
+        assert!(MasterPasswordVerifier::is_acceptable_new_password(
+            "密码密码密码密码"
+        ));
     }
 
     #[test]

@@ -279,8 +279,10 @@ impl TerminalGrid {
 
     /// Move the cursor by `(d_col, d_row)` without wrapping; clamped to the screen.
     pub fn move_cursor(&mut self, d_col: i32, d_row: i32) {
-        let column = (i32::from(self.cursor_column) + d_col).clamp(0, i32::from(self.columns.saturating_sub(1)));
-        let row = (i32::from(self.cursor_row) + d_row).clamp(0, i32::from(self.rows.saturating_sub(1)));
+        let column = (i32::from(self.cursor_column) + d_col)
+            .clamp(0, i32::from(self.columns.saturating_sub(1)));
+        let row =
+            (i32::from(self.cursor_row) + d_row).clamp(0, i32::from(self.rows.saturating_sub(1)));
         self.cursor_column = column as u16;
         self.cursor_row = row as u16;
     }

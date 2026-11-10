@@ -26,9 +26,6 @@ use crate::color::TerminalColor;
 use crate::palette::TerminalPalette;
 use crate::selection::SelectionRange;
 
-/// Environment variable that overrides the on-disk fonts directory.
-pub const FONTS_DIR_ENV: &str = "YSHELL_FONTS_DIR";
-
 /// Filenames of the product-shipped DejaVu Sans Mono family (regular required).
 const FONT_REGULAR_FILE: &str = "DejaVuSansMono.ttf";
 const FONT_BOLD_FILE: &str = "DejaVuSansMono-Bold.ttf";
@@ -220,10 +217,7 @@ impl FontFace {
     }
 
     /// Load a face from disk and annotate it with `style`.
-    pub fn from_file_with_style(
-        path: &Path,
-        style: FontFaceStyle,
-    ) -> Result<Self, FontFaceError> {
+    pub fn from_file_with_style(path: &Path, style: FontFaceStyle) -> Result<Self, FontFaceError> {
         let name = path.display().to_string();
         let bytes = std::fs::read(path)
             .map_err(|error| FontFaceError::new(name.clone(), io_reason(&error)))?;
@@ -457,7 +451,11 @@ fn bundled_font_faces() -> &'static BundledFontFaces {
             })
         };
         BundledFontFaces {
-            regular: load(FONT_REGULAR_FILE, FontFaceStyle::Regular, "DejaVu Sans Mono"),
+            regular: load(
+                FONT_REGULAR_FILE,
+                FontFaceStyle::Regular,
+                "DejaVu Sans Mono",
+            ),
             bold: Some(load(
                 FONT_BOLD_FILE,
                 FontFaceStyle::Bold,
@@ -484,17 +482,12 @@ fn bundled_font_faces() -> &'static BundledFontFaces {
 
 /// Resolves the directory that holds product-shipped font files.
 ///
-/// Search order: `YSHELL_FONTS_DIR`, `<exe_dir>/fonts`,
-/// `/usr/share/yshell/fonts` (Linux packages), then the crate's `assets/`
-/// folder (dev / unit tests via `CARGO_MANIFEST_DIR`).
+/// Search order: `<exe_dir>/fonts`, `/usr/share/yshell/fonts` (Linux packages),
+/// then the crate's `assets/` folder (dev / unit tests via
+/// `CARGO_MANIFEST_DIR`). The directory is not configurable through environment
+/// variables (application configuration never comes from the environment).
 #[must_use]
 pub fn resolve_fonts_dir() -> PathBuf {
-    if let Ok(dir) = env::var(FONTS_DIR_ENV) {
-        let path = PathBuf::from(dir);
-        if path.is_dir() {
-            return path;
-        }
-    }
     if let Ok(exe) = env::current_exe() {
         if let Some(parent) = exe.parent() {
             let beside = parent.join("fonts");
@@ -1470,7 +1463,8 @@ fn blend_pixel_subpixel(
 
 /// Blend one sRGB channel in linear light to avoid washed/haloing AA on dark bg.
 fn blend_channel_linear(background: u8, foreground: u8, coverage: f32) -> u8 {
-    let mixed = srgb_to_linear(background) * (1.0 - coverage) + srgb_to_linear(foreground) * coverage;
+    let mixed =
+        srgb_to_linear(background) * (1.0 - coverage) + srgb_to_linear(foreground) * coverage;
     (linear_to_srgb(mixed) * 255.0).round().clamp(0.0, 255.0) as u8
 }
 
@@ -2613,10 +2607,13 @@ mod tests {
         assert!(set.has_dedicated_bold());
         assert!(set.resolve('A', GlyphStyle::default()).is_some());
         assert!(set
-            .resolve('A', GlyphStyle {
-                bold: true,
-                italic: false
-            })
+            .resolve(
+                'A',
+                GlyphStyle {
+                    bold: true,
+                    italic: false
+                }
+            )
             .is_some());
     }
 

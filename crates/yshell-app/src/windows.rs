@@ -25,7 +25,7 @@ use slint::CloseRequestResponse;
 use slint::{ComponentHandle, Timer, TimerMode};
 use yshell_terminal::{TerminalRenderer, DEFAULT_FONT_SIZE};
 
-use crate::bootstrap::generated_ui::MainWindow;
+use crate::bootstrap::generated_ui::{MainWindow, Theme};
 use crate::bootstrap::{
     apply_appearance, apply_dialog_outcome, apply_fonts, apply_language, apply_projection,
     sanitize_scale_factor, terminal_size_from_viewport, wire_callbacks, FileDialogOutcome,
@@ -148,6 +148,9 @@ pub(crate) struct WindowManager {
     mcp_inbox: crate::mcp_server::McpInbox,
     /// Loopback MCP acceptor; started only while Settings → MCP is enabled.
     mcp_server: Option<crate::mcp_server::McpServerHandle>,
+    /// Last failed bind fingerprint (`bind_host`, port, token) so we do not
+    /// retry every tick until Settings changes.
+    mcp_failed_bind: Option<(String, u16, String)>,
 }
 
 impl WindowManager {
@@ -168,7 +171,10 @@ impl WindowManager {
             let limit = runtime.config_document.ui.sftp_max_parallel_transfers;
             runtime.set_sftp_parallel_transfer_limit(limit);
         }
-        let dialog_host = crate::dialog_windows::DialogWindowManager::new(Rc::clone(&runtime));
+        let dialog_host = crate::dialog_windows::DialogWindowManager::create(
+            Rc::clone(&runtime),
+            dialog_tx.clone(),
+        );
         let mcp_inbox = crate::mcp_server::McpInbox::new();
         // MCP is opt-in: clear any stale endpoint until Settings enables it.
         {
@@ -191,6 +197,7 @@ impl WindowManager {
             dialog_host,
             mcp_inbox,
             mcp_server: None,
+            mcp_failed_bind: None,
         }));
         {
             let weak = Rc::downgrade(&manager);
@@ -243,8 +250,9 @@ impl WindowManager {
             // 挂在首个组件创建出来的全局上下文里（提前调用会报 NoTranslationsBundled，
             // 界面整体回退英文），而晚于 show() 会先闪一帧英文。重复调用是幂等的。
             let ui_language = this.runtime.borrow().ui_language().to_owned();
+            let ui_appearance = this.runtime.borrow().config_document.ui.clone();
             apply_language(&ui_language);
-            apply_appearance(&window);
+            apply_appearance(&window, &ui_appearance);
             apply_fonts(&window);
             // W5-A2：窗口级快捷键依赖 root FocusScope 持有键盘焦点。
             window.invoke_focus_global_shortcuts();
@@ -285,17 +293,12 @@ impl WindowManager {
         window.show().map_err(AppError::from_error)?;
         surface.sync_scale_factor(&window);
         surface.refresh(&window);
-        // Win11：无框窗口默认直角；DWM 圆角需显式 opt-in。HWND 可能要等事件循环
-        // 首帧才就绪，因此 show 后立即试一次，并再排队到事件循环补一次。
+        // Win11：无框窗口默认直角；DWM 圆角需显式 opt-in。同时把可能落在屏外的
+        // 窗口钳回工作区并强制整窗重绘（屏外客户区否则会透出桌面）。HWND 可能要
+        // 等事件循环首帧才就绪，因此 show 后立即试一次，再定时补几轮。
+        crate::win_chrome::ensure_window_on_screen(window.window());
         crate::win_chrome::apply_rounded_corners(window.window());
-        {
-            let weak = window.as_weak();
-            let _ = slint::invoke_from_event_loop(move || {
-                if let Some(window) = weak.upgrade() {
-                    crate::win_chrome::apply_rounded_corners(window.window());
-                }
-            });
-        }
+        crate::win_chrome::finish_main_window_chrome_when_ready(window.as_weak(), 8);
 
         // X（窗口关闭按钮）：窗口级语义（带活动连接 → 确认后断开；最后一个窗口 = 退出）。
         //
@@ -523,6 +526,22 @@ impl WindowManager {
         }
     }
 
+    /// Settings → General：把"减少动画"即时写进所有主窗口的 `Theme` 全局。
+    ///
+    /// 持久化在 `[ui] reduce_motion`（runtime 负责写盘）；这里只同步已打开的
+    /// 窗口，启动时由 `apply_appearance` 从配置读回。
+    pub(crate) fn apply_reduce_motion(&self, enabled: bool) {
+        for entry in &self.windows {
+            crate::bootstrap::apply_reduce_motion(&entry.window.global::<Theme>(), enabled);
+        }
+    }
+
+    /// D33: Settings → SFTP → External editor 的 Browse（rfd 走 worker 线程，
+    /// 结果经应用级 dialog channel 回填到 runtime 的 SFTP 草稿）。
+    pub(crate) fn browse_settings_sftp_editor(&self) {
+        crate::bootstrap::spawn_pick_settings_sftp_editor(self.dialog_tx.clone());
+    }
+
     fn entry(&mut self, window_id: u64) -> Option<&mut WindowEntry> {
         self.windows.iter_mut().find(|entry| entry.id == window_id)
     }
@@ -632,69 +651,98 @@ impl WindowManager {
         dirty || changed || secondary_changed
     }
 
-    /// Start or stop the MCP loopback server to match Settings → Enable MCP.
+    /// Start / stop / restart the MCP TCP acceptor to match Settings → MCP.
     fn reconcile_mcp_server(&mut self) -> bool {
         let enabled = self.runtime.borrow().mcp_enabled();
-        if enabled {
-            if self.mcp_server.is_some() {
+        if !enabled {
+            self.mcp_failed_bind = None;
+            if self.mcp_server.take().is_some() {
+                let mut runtime = self.runtime.borrow_mut();
+                runtime.mcp_endpoint_token = None;
+                runtime.set_mcp_listener_status(crate::runtime::mcp::McpListenerStatus::Disabled);
+                return true;
+            }
+            return false;
+        }
+
+        let (bind_host, port, token, config_dir) = {
+            let runtime = self.runtime.borrow();
+            if let Err(error) = runtime.mcp_validate_listen_config() {
+                drop(runtime);
+                let mut runtime = self.runtime.borrow_mut();
+                runtime.mcp_endpoint_token = None;
+                runtime.set_mcp_listener_status(crate::runtime::mcp::McpListenerStatus::Failed {
+                    message: error.to_string(),
+                });
+                let _ = self.mcp_server.take();
+                return true;
+            }
+            (
+                runtime.config_document.ui.mcp_listen.bind_host().to_owned(),
+                runtime.config_document.ui.mcp_port,
+                runtime.mcp_resolve_endpoint_token(),
+                runtime.config_dir.clone(),
+            )
+        };
+
+        if let Some(server) = self.mcp_server.as_ref() {
+            if server.matches(&bind_host, port, &token) {
                 return false;
             }
-            // Stay on Failed until the user toggles MCP off/on (set_mcp_enabled
-            // clears status back to Disabled so we retry once per enable).
-            if matches!(
-                self.runtime.borrow().mcp_listener_status,
-                crate::runtime::mcp::McpListenerStatus::Failed { .. }
-            ) {
-                return false;
+            let _ = self.mcp_server.take();
+        }
+
+        if self
+            .mcp_failed_bind
+            .as_ref()
+            .is_some_and(|(h, p, t)| h == &bind_host && *p == port && t == &token)
+        {
+            return false;
+        }
+
+        match crate::mcp_server::start_mcp_server(
+            config_dir,
+            &bind_host,
+            port,
+            "127.0.0.1",
+            token.clone(),
+            self.mcp_inbox.clone(),
+        ) {
+            Ok(handle) => {
+                let bound_port = handle.port;
+                self.mcp_server = Some(handle);
+                self.mcp_failed_bind = None;
+                let mut runtime = self.runtime.borrow_mut();
+                runtime.mcp_endpoint_token = Some(token);
+                runtime.set_mcp_listener_status(crate::runtime::mcp::McpListenerStatus::Ready {
+                    port: bound_port,
+                });
+                runtime.set_status_kind(
+                    "mcp-listener-ready",
+                    format!(
+                        "MCP ready on {bind_host}:{bound_port}. Point your AI host at yshell --mcp."
+                    ),
+                    bound_port.to_string(),
+                    String::new(),
+                );
+                true
             }
-            let token = crate::mcp_server::new_endpoint_token();
-            let config_dir = self.runtime.borrow().config_dir.clone();
-            match crate::mcp_server::start_mcp_server(
-                config_dir,
-                token.clone(),
-                self.mcp_inbox.clone(),
-            ) {
-                Ok(handle) => {
-                    let port = handle.port;
-                    self.mcp_server = Some(handle);
-                    let mut runtime = self.runtime.borrow_mut();
-                    runtime.mcp_endpoint_token = Some(token);
-                    runtime.set_mcp_listener_status(
-                        crate::runtime::mcp::McpListenerStatus::Ready { port },
-                    );
-                    runtime.set_status_kind(
-                        "mcp-listener-ready",
-                        format!("MCP ready on 127.0.0.1:{port}. Point your AI host at yshell --mcp."),
-                        port.to_string(),
-                        String::new(),
-                    );
-                    true
-                }
-                Err(error) => {
-                    tracing::warn!(error = %error, "MCP IPC server failed to start");
-                    let mut runtime = self.runtime.borrow_mut();
-                    runtime.mcp_endpoint_token = None;
-                    runtime.set_mcp_listener_status(
-                        crate::runtime::mcp::McpListenerStatus::Failed {
-                            message: error.to_string(),
-                        },
-                    );
-                    runtime.set_status_kind(
-                        "mcp-listener-failed",
-                        format!("MCP failed to start: {error}"),
-                        String::new(),
-                        String::new(),
-                    );
-                    true
-                }
+            Err(error) => {
+                tracing::warn!(error = %error, "MCP IPC server failed to start");
+                self.mcp_failed_bind = Some((bind_host, port, token));
+                let mut runtime = self.runtime.borrow_mut();
+                runtime.mcp_endpoint_token = None;
+                runtime.set_mcp_listener_status(crate::runtime::mcp::McpListenerStatus::Failed {
+                    message: error.to_string(),
+                });
+                runtime.set_status_kind(
+                    "mcp-listener-failed",
+                    format!("MCP failed to start: {error}"),
+                    String::new(),
+                    String::new(),
+                );
+                true
             }
-        } else if self.mcp_server.take().is_some() {
-            let mut runtime = self.runtime.borrow_mut();
-            runtime.mcp_endpoint_token = None;
-            runtime.set_mcp_listener_status(crate::runtime::mcp::McpListenerStatus::Disabled);
-            true
-        } else {
-            false
         }
     }
 
@@ -716,6 +764,15 @@ impl WindowManager {
             // N4/N1：worker 线程消息回填（对话框结果、传输进度/冲突）。
             while let Ok(outcome) = self.dialog_rx.try_recv() {
                 let _ = apply_dialog_outcome(&mut runtime, outcome);
+                dirty = true;
+            }
+            // Session Editor：Icon Browse 请求 → rfd worker（结果经 dialog 通道回填）。
+            if runtime.take_editor_icon_browse_request() {
+                crate::bootstrap::spawn_pick_session_icon(self.dialog_tx.clone());
+                dirty = true;
+            }
+            // Session Editor：Login Script 自动起停（连接成功/断开）+ 按 Keys/Wait 推进。
+            if runtime.pump_login_script() {
                 dirty = true;
             }
             while let Ok(message) = self.sftp_job_rx.try_recv() {
@@ -801,6 +858,18 @@ impl WindowManager {
         }
     }
 
+    /// 模态子窗关闭后：前台激活 owner，并把 Slint 键盘焦点还给窗口级快捷键层。
+    ///
+    /// owned 子窗隐藏时 Windows 不保证把前台交还 owner；Slint 的 focus 也仍停在
+    /// 子窗组件上。缺少这一步时后续快捷键（Ctrl+, / Ctrl+O 等）不响应，直到用户
+    /// 手动点一下主窗口。
+    pub(crate) fn restore_main_window_focus(&mut self, window_id: u64) {
+        if let Some(entry) = self.entry(window_id) {
+            crate::win_chrome::focus_window(entry.window.window());
+            entry.window.invoke_focus_global_shortcuts();
+        }
+    }
+
     /// Promote MainWindow dialog flags → independent OS windows; refresh props.
     fn sync_dialog_windows(&mut self) {
         {
@@ -822,13 +891,26 @@ impl WindowManager {
         let main = window_id
             .and_then(|id| self.windows.iter().find(|e| e.id == id).map(|e| &e.window))
             .or_else(|| self.windows.first().map(|e| &e.window));
-        if let Err(error) = self
+        if let Err(error) =
+            self.dialog_host
+                .borrow_mut()
+                .dialogs
+                .sync(&projection, main, window_id, window_runtime)
+        {
+            tracing::warn!(target: "yshell::app", "dialog window sync failed: {error}");
+        }
+        // A modal hide can happen *inside* this sync (a projection flag cleared,
+        // e.g. the startup unlock window after a successful unlock). The timer
+        // already holds the manager borrow, so `end_modal` only records the
+        // owner; re-enable/focus it now that the dialog sync has returned.
+        let pending_owner = self
             .dialog_host
             .borrow_mut()
             .dialogs
-            .sync(&projection, main, window_id, window_runtime)
-        {
-            tracing::warn!(target: "yshell::app", "dialog window sync failed: {error}");
+            .take_pending_restore_owner();
+        if let Some(owner_id) = pending_owner {
+            self.set_main_window_enabled(owner_id, true);
+            self.restore_main_window_focus(owner_id);
         }
     }
 }

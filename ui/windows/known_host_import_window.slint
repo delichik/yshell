@@ -1,0 +1,112 @@
+// Known Hosts · Import（compact 560×400，单字段：文件路径 + Browse）。
+//
+// 规范：docs/prototypes/known-hosts/modals.html。Import 成功由 runtime 关闭子窗；
+// 失败原因写回 `error-text`（留在窗内，不弹二次确认）。
+//
+// 一窗一条提交/关闭栏：Cancel | Import。
+
+import { Theme } from "../theme.slint";
+import { WinButton, WinIconButton } from "../components/basic/controls.slint";
+import { WinTextInput } from "../components/basic/text_input.slint";
+import { FormHint } from "../components/basic/forms.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
+
+export component KnownHostImportWindow inherits Window {
+    title: @tr("Import Known Hosts");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-compact;
+    min-width: Theme.tool-window-width-compact;
+    max-width: Theme.tool-window-width-compact;
+    preferred-height: Theme.tool-window-height-compact;
+    min-height: Theme.tool-window-height-compact;
+    max-height: Theme.tool-window-height-compact;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in-out property <string> path-text: "";
+    in property <string> error-text: "";
+
+    in-out property <bool> native_title_drag: false;
+
+    callback canceled();
+    callback imported();
+    callback browse-file();
+    callback update-path(string);
+    callback title_drag_requested();
+
+    private property <length> body-width:
+        Theme.tool-window-width-compact - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-compact - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+
+    ToolWindowChrome {
+        width: Theme.tool-window-width-compact;
+        height: Theme.tool-window-height-compact;
+        title-text: @tr("Import Known Hosts");
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.canceled(); }
+        title-drag-requested => { root.title_drag_requested(); }
+
+        VerticalLayout {
+            width: root.body-width;
+            height: root.body-height;
+            spacing: Theme.form-row-gap;
+
+            // 单字段子窗：无 label、无缩进，控件顶满内容区。
+            HorizontalLayout {
+                spacing: Theme.spacing-8;
+                cross-axis-alignment: center;
+
+                WinTextInput {
+                    horizontal-stretch: 1;
+                    text <=> root.path-text;
+                    placeholder-text: @tr("Path to known_hosts file");
+                    font-family: Theme.font-mono;
+                    font-size: Theme.font-caption;
+                    edited => { root.update-path(self.text); }
+                }
+
+                WinIconButton {
+                    icon: "file";
+                    accessible-name: @tr("Browse");
+                    tooltip-text: @tr("Browse");
+                    clicked => { root.browse-file(); }
+                }
+            }
+
+            if root.error-text != "" : FormHint {
+                text: root.error-text;
+                hint-color: Theme.critical;
+                indent: false;
+            }
+
+            Rectangle { vertical-stretch: 1; }
+
+            Rectangle {
+                height: 1px;
+                vertical-stretch: 0;
+                background: Theme.divider;
+            }
+
+            HorizontalLayout {
+                alignment: end;
+                vertical-stretch: 0;
+                spacing: Theme.spacing-8;
+
+                WinButton {
+                    text: @tr("Cancel");
+                    clicked => { root.canceled(); }
+                }
+
+                WinButton {
+                    text: @tr("Import");
+                    accent: true;
+                    enabled: root.path-text != "";
+                    clicked => { root.imported(); }
+                }
+            }
+        }
+    }
+}

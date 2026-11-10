@@ -1,0 +1,179 @@
+// Login Script · Keys 步骤子窗（standard 720×580）。
+//
+// 原型：`docs/prototypes/session-editor/sections/login-step-keys.html`。
+// 主列表只读；Keys 正文与 Tokens 速查在本窗编辑。页脚 Delete（编辑态）| Cancel | Save。
+
+import { Theme } from "../theme.slint";
+import { WinButton, WinIconButton } from "../components/basic/controls.slint";
+import { FormRow } from "../components/basic/forms.slint";
+import { WinTextInput } from "../components/basic/text_input.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
+import { EditorTextArea } from "../pages/session_editor.slint";
+
+// 表单行：共享 `FormRow`（label 120 右对齐 / 13px、gap 12）。
+
+export component LoginStepKeysWindow inherits Window {
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-standard;
+    min-width: Theme.tool-window-width-standard;
+    max-width: Theme.tool-window-width-standard;
+    preferred-height: Theme.tool-window-height-standard;
+    min-height: Theme.tool-window-height-standard;
+    max-height: Theme.tool-window-height-standard;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    title: root.edit-mode ? @tr("Edit Keys") : @tr("Add Keys");
+
+    private property <length> body-width:
+        Theme.tool-window-width-standard - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-standard - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+
+    /// true = 编辑已有步骤（标题 Edit Keys，页脚出现 Delete）。
+    in property <bool> edit-mode: false;
+    in-out property <string> name-text: "";
+    in-out property <string> keys-text: "";
+    /// 展开 `{host}` / `{username}` 会话令牌。
+    in property <bool> tokens: false;
+
+    in-out property <bool> native_title_drag: false;
+
+    callback dismiss();
+    callback update-name(string);
+    callback update-keys(string);
+    callback set-tokens(bool);
+    callback save();
+    callback delete-step();
+    callback title_drag_requested();
+
+    chrome := ToolWindowChrome {
+        width: Theme.tool-window-width-standard;
+        height: Theme.tool-window-height-standard;
+        title-text: root.edit-mode ? @tr("Edit Keys") : @tr("Add Keys");
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.dismiss(); }
+        title-drag-requested => { root.title_drag_requested(); }
+
+        VerticalLayout {
+            width: root.body-width;
+            height: root.body-height;
+            spacing: Theme.form-row-gap;
+
+            FormRow {
+                label: @tr("Name");
+                WinTextInput {
+                    width: Theme.form-field-width;
+                    text <=> root.name-text;
+                    placeholder-text: @tr("Optional");
+                    edited => { root.update-name(self.text); }
+                }
+            }
+
+            FormRow {
+                label: @tr("Keys");
+
+                EditorTextArea {
+                    width: Theme.form-field-width;
+                    // 7 × ctrl-h（行高必须是 control-height 整数倍）。
+                    area-height: Theme.control-height * 7;
+                    monospace: true;
+                    text <=> root.keys-text;
+                    placeholder-text: "cd /opt/app{Enter}\nsudo -i{Enter}";
+                    edited(value) => { root.update-keys(value); }
+                }
+            }
+
+            // Tokens 速查（只读说明；宽度与表单列一致）。
+            FormRow {
+                label: @tr("Tokens");
+
+                Rectangle {
+                    width: Theme.form-field-width;
+                    // 4 × ctrl-h。
+                    height: Theme.control-height * 4;
+                    border-radius: Theme.radius-control;
+                    border-width: 1px;
+                    border-color: Theme.layer-stroke;
+                    background: Theme.subtle-hover;
+
+                    VerticalLayout {
+                        padding: Theme.spacing-12;
+                        spacing: Theme.spacing-4;
+
+                        Text {
+                            text: @tr("Type special keys as {{…}} (case-insensitive); double the braces for a literal brace.");
+                            color: Theme.text-secondary;
+                            font-size: Theme.font-caption;
+                            wrap: word-wrap;
+                        }
+
+                        Text {
+                            text: @tr("{{Enter}} / {{Return}} · {{Tab}} · {{Esc}} · {{Space}} · {{Backspace}} · {{Delete}} · {{Up}} {{Down}} {{Left}} {{Right}} · {{Home}} {{End}} · {{Ctrl+C}} {{Ctrl+D}} {{Ctrl+Z}} · {{Alt+…}} {{Shift+…}} · {{ {{ }} }}");
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            font-family: Theme.font-mono;
+                            wrap: word-wrap;
+                        }
+
+                        Text {
+                            text: @tr("Example: yes{{Enter}} · echo {{{{a}}}}{{Enter}}");
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            font-family: Theme.font-mono;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+            }
+
+            Rectangle { horizontal-stretch: 1; background: transparent; }
+
+            Rectangle { height: 1px; background: Theme.layer-stroke; }
+
+            HorizontalLayout {
+                spacing: Theme.spacing-8;
+
+                // Delete 仅编辑态出现（新建步骤没有可删对象）。
+                if root.edit-mode : WinIconButton {
+                    icon: "trash";
+                    accessible-name: @tr("Delete");
+                    tooltip-text: @tr("Delete");
+                    clicked => { root.delete-step(); }
+                }
+
+                Rectangle { horizontal-stretch: 1; background: transparent; }
+
+                WinButton { text: @tr("Cancel"); subtle: true; clicked => { root.dismiss(); } }
+                WinButton {
+                    text: @tr("Save");
+                    accent: true;
+                    enabled: root.keys-text != "";
+                    clicked => { root.save(); }
+                }
+            }
+        }
+    }
+
+    public function focus-dialog() {
+        focus_scope.focus();
+    }
+
+    focus_scope := FocusScope {
+        width: 0px;
+        height: 0px;
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.dismiss();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    init => {
+        root.focus-dialog();
+    }
+}

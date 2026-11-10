@@ -134,6 +134,7 @@ impl AppRuntime {
         self.proxies_remove_blocked = false;
         self.proxies_referencing_text.clear();
         self.proxies_test_result_text.clear();
+        self.proxies_menu_id = None;
         self.ensure_proxy_selection();
         if self.proxies_selected_id.is_some() {
             self.begin_edit_proxy();
@@ -152,12 +153,7 @@ impl AppRuntime {
             count_text.clone(),
             String::new(),
         );
-        self.set_status_kind(
-            "proxies-opened",
-            status_text,
-            count_text,
-            String::new(),
-        );
+        self.set_status_kind("proxies-opened", status_text, count_text, String::new());
         self.projection()
     }
 
@@ -168,6 +164,7 @@ impl AppRuntime {
         self.proxies_remove_confirm_visible = false;
         self.proxies_remove_blocked = false;
         self.proxies_referencing_text.clear();
+        self.proxies_menu_id = None;
         self.set_status_kind(
             "proxies-closed",
             "Closed proxy manager.".to_owned(),
@@ -180,7 +177,10 @@ impl AppRuntime {
     /// Selects a list row (does not overwrite the edit form; use Edit for that).
     pub fn select_proxy(&mut self, index: i32) -> AppProjection {
         let rows = self.proxy_row_data();
-        let Some(row) = usize::try_from(index).ok().and_then(|index| rows.get(index)) else {
+        let Some(row) = usize::try_from(index)
+            .ok()
+            .and_then(|index| rows.get(index))
+        else {
             return self.projection();
         };
         self.proxies_selected_id = Some(row.id.clone());
@@ -353,20 +353,9 @@ impl AppRuntime {
         self.projection()
     }
 
+    /// Cancel = discard unsaved form fields and close (same path as × / Esc).
     pub fn cancel_proxy_editor(&mut self) -> AppProjection {
-        self.proxies_editor_password.clear();
-        if self.proxies_selected_id.is_some() {
-            self.begin_edit_proxy();
-        } else {
-            self.start_new_proxy();
-        }
-        self.set_proxies_status_kind(
-            "proxies-editor-discarded",
-            "Discarded proxy editor changes.".to_owned(),
-            String::new(),
-            String::new(),
-        );
-        self.projection()
+        self.close_proxies_manager()
     }
 
     /// Validates the form and creates/updates the managed profile.
@@ -487,7 +476,9 @@ impl AppRuntime {
         if let Err(error) = self.save_proxy_config() {
             match previous {
                 Some(previous) => {
-                    self.config_document.proxy_profiles.insert(id.clone(), previous);
+                    self.config_document
+                        .proxy_profiles
+                        .insert(id.clone(), previous);
                 }
                 None => {
                     self.config_document.proxy_profiles.remove(&id);
@@ -594,12 +585,7 @@ impl AppRuntime {
                     removed.name.clone(),
                     String::new(),
                 );
-                self.set_status_kind(
-                    "proxies-deleted",
-                    status_text,
-                    removed.name,
-                    String::new(),
-                );
+                self.set_status_kind("proxies-deleted", status_text, removed.name, String::new());
             }
             Err(error) => {
                 self.set_proxies_status_kind(
@@ -618,17 +604,12 @@ impl AppRuntime {
         let Some(profile) = self.selected_proxy_profile() else {
             return self.projection();
         };
-        let cleared = clear_proxy_from_sessions(
-            &mut self.config_document.folders,
-            profile.id.as_str(),
-        );
+        let cleared =
+            clear_proxy_from_sessions(&mut self.config_document.folders, profile.id.as_str());
         if cleared == 0 {
             self.set_proxies_status_kind(
                 "proxies-no-references",
-                format!(
-                    "No saved session references `{}` anymore.",
-                    profile.name
-                ),
+                format!("No saved session references `{}` anymore.", profile.name),
                 profile.name,
                 String::new(),
             );
@@ -813,12 +794,7 @@ impl AppRuntime {
                     report.remote, report.elapsed_ms, report.detail
                 );
                 self.proxies_test_result_text = status_text.clone();
-                self.set_proxies_status_kind(
-                    "proxies-test-passed",
-                    status_text,
-                    param_1,
-                    param_2,
-                );
+                self.set_proxies_status_kind("proxies-test-passed", status_text, param_1, param_2);
             }
             Err(error) => {
                 let status_text = format!("Test failed: {error}");
@@ -944,11 +920,7 @@ impl AppRuntime {
         let mut next = self.config_document.proxy_profiles.len() + 1;
         loop {
             let candidate = format!("proxy-{next}");
-            if !self
-                .config_document
-                .proxy_profiles
-                .contains_key(&candidate)
-            {
+            if !self.config_document.proxy_profiles.contains_key(&candidate) {
                 return candidate;
             }
             next += 1;
@@ -1064,4 +1036,146 @@ fn clear_proxy_from_sessions(folders: &mut [FolderProfile], proxy_id: &str) -> u
         cleared += clear_proxy_from_sessions(&mut folder.folders, proxy_id);
     }
     cleared
+}
+
+// --- managers-dialogs ---
+// 波2-C：Proxies 行右键（Duplicate / Test / Delete）在工具条只留 `+` 之后接管
+// 全部行级动作；菜单先选行（`prepare_*`），动作统一走既有选中态方法。
+// TODO(wave2-proxies): Proxies 行右键菜单接线后删除本行 allow。
+#[allow(dead_code)]
+impl AppRuntime {
+    /// 行右键菜单：选中目标行并记录菜单目标（`proxies_menu_id`）。
+    pub fn prepare_proxy_context_menu(&mut self, index: i32) -> AppProjection {
+        let rows = self.proxy_row_data();
+        let Some(row) = usize::try_from(index)
+            .ok()
+            .and_then(|index| rows.get(index))
+        else {
+            return self.projection();
+        };
+        let id = row.id.clone();
+        let name = row.name.clone();
+        self.proxies_selected_id = Some(id.clone());
+        self.proxies_menu_id = Some(id);
+        self.proxies_remove_confirm_visible = false;
+        self.proxies_remove_blocked = false;
+        self.proxies_referencing_text.clear();
+        self.proxies_test_result_text.clear();
+        let text = format!("Selected proxy profile `{name}`.");
+        self.set_proxies_status_kind(
+            "proxies-selected",
+            text.clone(),
+            name.clone(),
+            String::new(),
+        );
+        self.set_status_kind("proxies-selected", text, name, String::new());
+        self.projection()
+    }
+
+    /// 行右键 Duplicate：按菜单目标复制（无菜单目标时用当前选中行）。
+    pub fn duplicate_proxy_from_menu(&mut self) -> AppProjection {
+        self.apply_proxy_menu_selection();
+        self.duplicate_selected_proxy()
+    }
+
+    /// 行右键 Test：按菜单目标测试连通性。
+    pub fn test_proxy_from_menu(&mut self) -> AppProjection {
+        self.apply_proxy_menu_selection();
+        self.test_selected_proxy()
+    }
+
+    /// 行右键 Delete：按菜单目标打开删除确认（被引用时由宿主阻止并给迁移动作）。
+    pub fn remove_proxy_from_menu(&mut self) -> AppProjection {
+        self.apply_proxy_menu_selection();
+        self.proxies_menu_id = None;
+        self.request_proxy_remove()
+    }
+
+    fn apply_proxy_menu_selection(&mut self) {
+        if let Some(menu_id) = self.proxies_menu_id.clone() {
+            if self.config_document.proxy_profiles.contains_key(&menu_id) {
+                self.proxies_selected_id = Some(menu_id);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod managers_dialogs_tests {
+    use std::sync::Arc;
+
+    use tempfile::tempdir;
+    use yshell_secret::{FakeKeychain, Keychain};
+
+    use super::*;
+
+    fn test_runtime() -> (tempfile::TempDir, AppRuntime) {
+        let temp = tempdir().expect("tempdir");
+        let keychain: Arc<dyn Keychain> = Arc::new(FakeKeychain::new("manager-tests"));
+        let runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), Some(keychain))
+            .expect("runtime");
+        (temp, runtime)
+    }
+
+    fn add_proxy(runtime: &mut AppRuntime, name: &str, host: &str) {
+        runtime.start_new_proxy();
+        runtime.update_proxy_editor_name(name);
+        runtime.update_proxy_editor_host(host);
+        runtime.update_proxy_editor_port("1080");
+        let _ = runtime.save_proxy_editor();
+    }
+
+    #[test]
+    fn context_menu_selects_row_and_duplicates_its_target() {
+        let (_temp, mut runtime) = test_runtime();
+        add_proxy(&mut runtime, "corp-socks5", "proxy.corp");
+        add_proxy(&mut runtime, "dev-http", "127.0.0.1");
+        let _ = runtime.open_proxies_manager();
+        assert_eq!(runtime.proxy_row_data().len(), 2);
+
+        let _ = runtime.prepare_proxy_context_menu(1);
+        assert_eq!(
+            runtime.proxies_menu_id,
+            Some(runtime.proxy_row_data()[1].id.clone())
+        );
+        assert_eq!(
+            runtime.proxies_selected_id,
+            Some(runtime.proxy_row_data()[1].id.clone())
+        );
+
+        let _ = runtime.duplicate_proxy_from_menu();
+        let rows = runtime.proxy_row_data();
+        assert_eq!(rows.len(), 3, "duplicate adds one profile");
+        assert!(
+            rows.iter()
+                .any(|row| row.name.contains("dev-http") || row.name.contains("copy")),
+            "duplicated profile keeps a recognisable name: {rows:?}"
+        );
+    }
+
+    #[test]
+    fn context_menu_out_of_range_keeps_current_selection() {
+        let (_temp, mut runtime) = test_runtime();
+        add_proxy(&mut runtime, "only-one", "127.0.0.1");
+        let _ = runtime.open_proxies_manager();
+        let _ = runtime.prepare_proxy_context_menu(0);
+        let selected = runtime.proxies_selected_id.clone();
+        let _ = runtime.prepare_proxy_context_menu(99);
+        assert_eq!(runtime.proxies_selected_id, selected);
+        assert_eq!(runtime.proxies_menu_id, selected);
+    }
+
+    #[test]
+    fn remove_from_menu_opens_confirmation_for_menu_target() {
+        let (_temp, mut runtime) = test_runtime();
+        add_proxy(&mut runtime, "corp-socks5", "proxy.corp");
+        add_proxy(&mut runtime, "dev-http", "127.0.0.1");
+        let _ = runtime.open_proxies_manager();
+        let target = runtime.proxy_row_data()[1].id.clone();
+        let _ = runtime.prepare_proxy_context_menu(1);
+        let _ = runtime.remove_proxy_from_menu();
+        assert!(runtime.proxies_remove_confirm_visible);
+        assert_eq!(runtime.proxies_selected_id, Some(target));
+        assert_eq!(runtime.proxies_menu_id, None);
+    }
 }

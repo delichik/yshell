@@ -4,8 +4,9 @@ use std::{fs, sync::Arc};
 use tempfile::tempdir;
 use yshell_config::{
     AuthMethod as ConfigAuthMethod, AuthProfile, ConfigDocument, ConfigStore, FolderProfile,
-    HostKeyPolicy as ConfigHostKeyPolicy, ProxyProfile, ProxyProtocol, QuickConnectTarget,
-    SessionProfile, TunnelForward, TunnelForwardKind, TunnelProfile,
+    HostKeyPolicy as ConfigHostKeyPolicy, LoginScriptProfile, LoginStep, LoginStepAction,
+    ProxyProfile, ProxyProtocol, QuickConnectTarget, SessionProfile, TunnelForward,
+    TunnelForwardKind, TunnelProfile,
 };
 use yshell_secret::{FakeKeychain, Keychain, SecretRef, SecretString};
 use yshell_ssh::{AuthMethod as SshAuthMethod, ForwardingKind, HostKeyPolicy, ProxyConfig};
@@ -180,11 +181,18 @@ fn session_editor_section_selection_updates_projection() {
         runtime.select_session_editor_advanced().editor_section_text,
         "advanced"
     );
+    // 分区按原型改名：原 Appearance → Terminal Style（section id `terminal-style`）。
     assert_eq!(
         runtime
             .select_session_editor_appearance()
             .editor_section_text,
-        "appearance"
+        "terminal-style"
+    );
+    assert_eq!(
+        runtime
+            .select_session_editor_login_script()
+            .editor_section_text,
+        "login-script"
     );
     assert_eq!(
         runtime.select_session_editor_general().editor_section_text,
@@ -298,7 +306,9 @@ fn editor_rejects_duplicate_folder_names_under_same_parent() {
         .create_folder_under_editor_target()
         .expect_err("duplicate folder name should fail");
 
-    assert!(error.to_string().contains("already exists under `Prod`"));
+    assert!(error
+        .to_string()
+        .contains("already exists in this location"));
 }
 
 #[test]
@@ -351,13 +361,13 @@ fn refresh_saved_sessions_reloads_config_and_prunes_stale_selection() {
     // 外部编辑（模拟另一个实例写盘）：删掉 Lab，改加 Ops。
     let mut edited = ConfigDocument::default();
     edited.folders.push(FolderProfile::new("folder-ops", "Ops"));
-    store.save(&edited).expect("save edited config");
+    store.save_all(&edited).expect("save edited config");
 
     let projection = runtime.refresh_saved_sessions().expect("refresh");
 
     assert!(projection
         .status_text
-        .contains("Reloaded saved sessions from config.toml"));
+        .contains("Reloaded saved sessions from the sessions/ directory"));
     assert!(projection
         .session_tree_rows
         .iter()
@@ -441,10 +451,8 @@ fn editor_built_ssh_config_uses_strict_policy_unless_testing_override() {
 
 #[test]
 fn editor_selects_managed_proxy_without_creating_profiles() {
-    let _guard = lock_env();
-    std::env::set_var("YSHELL_MASTER_PASSWORD", "proxy-master");
     let temp = tempdir().expect("tempdir");
-    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    let mut runtime = file_keychain_runtime(temp.path());
 
     // NET-1：先通过代理管理器创建一条托管条目。
     let _ = runtime.open_proxies_manager();
@@ -504,7 +512,9 @@ fn editor_selects_managed_proxy_without_creating_profiles() {
         .as_deref()
         .expect("proxy password secret key");
     assert_eq!(
-        runtime.resolve_secret_value(secret_key).expect("stored password"),
+        runtime
+            .resolve_secret_value(secret_key)
+            .expect("stored password"),
         "proxy-secret"
     );
     let store_contents =
@@ -545,7 +555,14 @@ fn editor_selects_managed_proxy_without_creating_profiles() {
     assert!(saved[0].proxy_profile_id.is_none());
     assert_eq!(runtime.config_document.proxy_profiles.len(), 1);
 
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
+    // 切回 No Proxy：只清会话引用，托管条目本身保留。
+    let _ = runtime.set_editor_proxy_mode_none();
+    runtime
+        .save_editor_to_saved_session()
+        .expect("save without proxy");
+    let saved = runtime.saved_session_profiles();
+    assert!(saved[0].proxy_profile_id.is_none());
+    assert_eq!(runtime.config_document.proxy_profiles.len(), 1);
 }
 
 #[test]
@@ -611,7 +628,10 @@ fn legacy_per_session_proxy_loads_and_migrates_to_managed_profile() {
     assert!(projection
         .editor_proxy_legacy_text
         .contains("127.0.0.1:1081"));
-    assert_eq!(runtime.editor.proxy_profile_id.as_deref(), Some("saved-legacy-proxy"));
+    assert_eq!(
+        runtime.editor.proxy_profile_id.as_deref(),
+        Some("saved-legacy-proxy")
+    );
 
     // 旧配置仍可连接：legacy 引用解析到保存的口令。
     match &runtime
@@ -646,7 +666,10 @@ fn legacy_per_session_proxy_loads_and_migrates_to_managed_profile() {
         .config_document
         .proxy_profiles
         .contains_key("saved-legacy-proxy"));
-    assert!(runtime.config_document.proxy_profiles.contains_key("proxy-1"));
+    assert!(runtime
+        .config_document
+        .proxy_profiles
+        .contains_key("proxy-1"));
 }
 
 #[test]
@@ -757,6 +780,8 @@ fn saved_session_tunnel_profile_is_applied_to_runtime_shell_config() {
     profile.tunnel = Some(TunnelProfile {
         forwards: vec![
             TunnelForward {
+                name: None,
+                enabled: true,
                 kind: TunnelForwardKind::Local,
                 bind_host: "127.0.0.1".to_owned(),
                 bind_port: 18080,
@@ -764,6 +789,8 @@ fn saved_session_tunnel_profile_is_applied_to_runtime_shell_config() {
                 target_port: 8080,
             },
             TunnelForward {
+                name: None,
+                enabled: true,
                 kind: TunnelForwardKind::Dynamic,
                 bind_host: "127.0.0.1".to_owned(),
                 bind_port: 19050,
@@ -798,9 +825,9 @@ fn saved_session_tunnel_profile_is_applied_to_runtime_shell_config() {
     assert_eq!(projection.tunnel_rows[0].status_id, "idle");
     let session_key = runtime.active_session_id.clone().expect("active session");
     let session = runtime.sessions.get(&session_key).expect("runtime session");
-    assert_eq!(
-        projection.tunnel_rows[0].can_start,
-        session.state == yshell_core::SessionState::Connected
+    assert!(
+        !projection.tunnel_rows[0].can_start,
+        "Start stays disabled until forwarding runtime is provisioned"
     );
     assert!(!projection.tunnel_rows[0].can_stop);
     assert_eq!(session.ssh_config.tunnels.len(), 2);
@@ -810,11 +837,8 @@ fn saved_session_tunnel_profile_is_applied_to_runtime_shell_config() {
 
 #[test]
 fn editor_can_create_password_saved_session_and_persist_secret() {
-    let _guard = lock_env();
     let temp = tempdir().expect("tempdir");
-    std::env::set_var("YSHELL_MASTER_PASSWORD", "editor-master");
-
-    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    let mut runtime = file_keychain_runtime(temp.path());
     let _ = runtime.start_new_saved_session_editor();
     let _ = runtime.update_editor_name("Password Session");
     let _ = runtime.update_editor_host("editor-password.example.test");
@@ -846,17 +870,12 @@ fn editor_can_create_password_saved_session_and_persist_secret() {
         fs::read_to_string(temp.path().join("secret-store.toml")).expect("read store");
     assert!(store_contents.contains(&secret_key));
     assert!(!store_contents.contains("super-secret"));
-
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
 }
 
 #[test]
 fn editing_password_session_keeps_secret_when_password_left_blank() {
-    let _guard = lock_env();
     let temp = tempdir().expect("tempdir");
-    std::env::set_var("YSHELL_MASTER_PASSWORD", "editor-master");
-
-    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    let mut runtime = file_keychain_runtime(temp.path());
     let _ = runtime.start_new_saved_session_editor();
     let _ = runtime.update_editor_name("Keep Secret Session");
     let _ = runtime.update_editor_host("keep-secret.example.test");
@@ -901,17 +920,12 @@ fn editing_password_session_keeps_secret_when_password_left_blank() {
         .resolve_secret_value(&secret_key)
         .expect("resolve kept secret");
     assert_eq!(resolved, "original-secret");
-
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
 }
 
 #[test]
 fn editor_can_create_keyboard_interactive_saved_session_and_persist_secret() {
-    let _guard = lock_env();
     let temp = tempdir().expect("tempdir");
-    std::env::set_var("YSHELL_MASTER_PASSWORD", "editor-master");
-
-    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    let mut runtime = file_keychain_runtime(temp.path());
     let _ = runtime.start_new_saved_session_editor();
     let _ = runtime.update_editor_name("Keyboard Interactive Session");
     let _ = runtime.update_editor_host("editor-kbdint.example.test");
@@ -942,14 +956,10 @@ fn editor_can_create_keyboard_interactive_saved_session_and_persist_secret() {
         fs::read_to_string(temp.path().join("secret-store.toml")).expect("read store");
     assert!(store_contents.contains(&secret_key));
     assert!(!store_contents.contains("challenge-secret"));
-
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
 }
 
 #[test]
 fn editor_password_save_requires_enabled_secret_store() {
-    let _guard = lock_env();
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
     let temp = tempdir().expect("tempdir");
     let mut runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), None)
         .expect("runtime without keychain");
@@ -1336,4 +1346,107 @@ fn deleting_selected_managed_key_clears_editor_selection() {
     assert_eq!(projection.editor_selected_key_index, -1);
     assert!(!projection.editor_selected_key_missing);
     assert!(runtime.editor.key_id.is_none());
+}
+
+/// Login Script 执行挂点：保存会话连接后自动启动，只执行一次并在执行完毕后清空。
+#[test]
+fn login_script_runs_once_after_a_saved_session_connects() {
+    let temp = tempdir().expect("tempdir");
+    let store = ConfigStore::new(temp.path());
+    let mut document = ConfigDocument::default();
+    let mut folder = FolderProfile::new(SAVED_SESSIONS_FOLDER_ID, SAVED_SESSIONS_FOLDER_NAME);
+    let mut profile = SessionProfile::new("scripted", "Scripted", "script.example.test");
+    profile.login_script = Some(LoginScriptProfile {
+        steps: vec![
+            LoginStep {
+                name: "whoami".to_owned(),
+                action: LoginStepAction::Keys {
+                    keys: "whoami{Enter}".to_owned(),
+                    tokens: false,
+                },
+            },
+            LoginStep {
+                name: String::new(),
+                action: LoginStepAction::Wait { millis: 0 },
+            },
+        ],
+    });
+    folder.sessions.push(profile);
+    document.folders.push(folder);
+    store.save_all(&document).expect("save config");
+
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime
+        .open_saved_session("scripted")
+        .expect("open saved session");
+    let session_key = runtime.active_session_id.clone().expect("active session");
+
+    // 连接成功后一次 pump 即启动并跑完（Keys → Wait 0 → 结束）。
+    assert!(runtime.pump_login_script());
+    assert!(runtime.editor_login_script_run.is_none());
+    let text = runtime.sessions[&session_key].visible_text();
+    assert_eq!(
+        text.matches("received input: whoami").count(),
+        1,
+        "login script keys must be written exactly once"
+    );
+
+    // 已跑过：后续 tick 不再重复执行。
+    assert!(!runtime.pump_login_script());
+    assert_eq!(
+        runtime.sessions[&session_key]
+            .visible_text()
+            .matches("received input: whoami")
+            .count(),
+        1
+    );
+}
+
+/// 没有 login script / 非保存会话：pump 不启动任何执行。
+#[test]
+fn login_script_pump_skips_sessions_without_a_script() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 1);
+    let tab = open_saved_tab(&mut runtime, "saved-0");
+    assert!(!runtime.pump_login_script());
+    assert!(runtime.editor_login_script_run.is_none());
+    let _ = tab;
+}
+
+/// 连接断开时中止正在执行的 login script。
+#[test]
+fn login_script_aborts_when_the_session_disconnects() {
+    let temp = tempdir().expect("tempdir");
+    let store = ConfigStore::new(temp.path());
+    let mut document = ConfigDocument::default();
+    let mut folder = FolderProfile::new(SAVED_SESSIONS_FOLDER_ID, SAVED_SESSIONS_FOLDER_NAME);
+    let mut profile = SessionProfile::new("waiting", "Waiting", "wait.example.test");
+    profile.login_script = Some(LoginScriptProfile {
+        steps: vec![LoginStep {
+            name: String::new(),
+            action: LoginStepAction::Wait { millis: 60_000 },
+        }],
+    });
+    folder.sessions.push(profile);
+    document.folders.push(folder);
+    store.save_all(&document).expect("save config");
+
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime
+        .open_saved_session("waiting")
+        .expect("open saved session");
+    let tab = runtime.active_tab_id.clone().expect("active tab");
+    assert!(runtime.pump_login_script());
+    assert!(
+        runtime.editor_login_script_run.is_some(),
+        "wait keeps the run pending"
+    );
+
+    runtime
+        .disconnect_tab_session(&tab)
+        .expect("disconnect session");
+    assert!(runtime.pump_login_script());
+    assert!(runtime.editor_login_script_run.is_none());
 }

@@ -330,6 +330,15 @@ impl AppRuntime {
             return self.submit_connect_job(&session_key, ssh_config, false, true);
         }
 
+        let viewport = self.viewport_pty_size();
+        if let Some(runtime) = self.sessions.get_mut(&session_key) {
+            let _ = runtime.resize_shell_pty(viewport.columns, viewport.rows);
+        }
+        let ssh_config = self
+            .sessions
+            .get(&session_key)
+            .map(|session| session.ssh_config.clone())
+            .unwrap_or(ssh_config);
         let shell_session = match self.open_shell_for_runtime(&ssh_config) {
             Ok(shell_session) => shell_session,
             Err(error) => {
@@ -351,6 +360,12 @@ impl AppRuntime {
         password_retry: bool,
         is_reconnect: bool,
     ) -> AppResult<AppProjection> {
+        // Seed from the live window before request_pty so MOTD / login banners
+        // are typeset for the real viewport instead of the 80×24 default.
+        let viewport = self.viewport_pty_size();
+        if let Some(runtime) = self.sessions.get_mut(session_key) {
+            let _ = runtime.resize_shell_pty(viewport.columns, viewport.rows);
+        }
         let mut effective = self.effective_ssh_config(&ssh_config);
         // Caller may have cloned ssh_config before the latest viewport sync;
         // prefer the session's current desired PTY size for request_pty.
@@ -417,6 +432,7 @@ impl AppRuntime {
         is_reconnect: bool,
     ) -> AppResult<AppProjection> {
         let shell_connected = shell_session.is_connected();
+        let viewport = self.viewport_pty_size();
         {
             let runtime = self
                 .sessions
@@ -424,7 +440,11 @@ impl AppRuntime {
                 .ok_or_else(|| AppError::new("active runtime session is missing"))?;
             runtime.clear_connection_overlay();
             runtime.attach_shell_session(shell_session);
-            let _ = runtime.poll_shell_output().map_err(AppError::from_error)?;
+            // Resize to the window *before* draining MOTD (see viewport_pty_size).
+            let _ = runtime
+                .resize_shell_pty(viewport.columns, viewport.rows)
+                .map_err(AppError::from_error)?;
+            runtime.clear_pty_force_resync();
             if !shell_connected {
                 runtime.log_runtime_event(
                     "Shell runtime reopened a non-live backend path. Either later SSH stages are still scaffolded, or the live shell has already exited.",
@@ -515,6 +535,7 @@ impl AppRuntime {
             .get(session_key)
             .is_some_and(SessionRuntime::is_sftp);
         let shell_connected = shell.as_ref().is_some_and(|shell| shell.is_connected());
+        let viewport = self.viewport_pty_size();
         let logging_notice = {
             let runtime = self
                 .sessions
@@ -524,7 +545,11 @@ impl AppRuntime {
             runtime.attach_transport(transport);
             if let Some(shell) = shell {
                 runtime.attach_shell_session(shell);
-                let _ = runtime.poll_shell_output().map_err(AppError::from_error)?;
+                // Resize to the window *before* draining MOTD (see viewport_pty_size).
+                let _ = runtime
+                    .resize_shell_pty(viewport.columns, viewport.rows)
+                    .map_err(AppError::from_error)?;
+                runtime.clear_pty_force_resync();
             }
             runtime.take_logging_notice()
         };
@@ -1199,6 +1224,8 @@ impl AppRuntime {
             .map_err(AppError::from_error)?;
         Self::apply_session_events(&session_id, &mut runtime, state_events);
         runtime.ssh_config = ssh_config;
+        // Align config + grid with the window before request_pty / first paint.
+        self.seed_session_pty_from_viewport(&mut runtime);
         self.configure_runtime_logging(&mut runtime);
         self.configure_runtime_terminal_limits(&mut runtime);
         runtime.log_runtime_event("Core session entry created. Opening shell runtime boundary.");
@@ -1274,11 +1301,15 @@ impl AppRuntime {
         let mut shell_open_error: Option<String> = None;
         // D15：连接挂起在主机密钥/认证确认时，状态栏给用户向提示。
         let mut prompt_pending = false;
+        let viewport = self.viewport_pty_size();
         match self.open_shell_for_runtime(&runtime.ssh_config) {
             Ok(shell_session) => {
                 let shell_connected = shell_session.is_connected();
                 runtime.attach_shell_session(shell_session);
-                let _ = runtime.poll_shell_output().map_err(AppError::from_error)?;
+                let _ = runtime
+                    .resize_shell_pty(viewport.columns, viewport.rows)
+                    .map_err(AppError::from_error)?;
+                runtime.clear_pty_force_resync();
                 if shell_connected {
                     let connected_events = self
                         .dispatcher

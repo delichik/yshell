@@ -75,6 +75,24 @@ fn failed_submit_does_not_record_history() {
 }
 
 #[test]
+fn whitespace_only_input_is_treated_as_empty() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 0);
+    runtime.open_new_tab();
+
+    let projection = runtime.update_quick_connect_input("   \t  ");
+    assert_eq!(projection.quick_connect_input_text, "");
+    assert_eq!(projection.quick_connect_error_text, "");
+
+    let projection = runtime
+        .submit_quick_connect("  \n")
+        .expect("whitespace submit is a no-op");
+    assert!(projection.quick_connect_visible);
+    assert!(runtime.tabs[0].is_new_tab());
+    assert!(runtime.config_document.quick_connect.history.is_empty());
+}
+
+#[test]
 fn submit_invalid_target_sets_inline_error_without_tab() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = tab_runtime(temp.path(), 0);
@@ -294,11 +312,27 @@ fn closing_the_last_new_tab_leaves_an_empty_workspace_until_reopened() {
     assert!(closed.tabs.is_empty());
     assert_eq!(closed.active_tab_id, "");
     assert!(!closed.has_active_session);
+    // Esc / Ctrl+O dismiss must not quit the window (unlike tab × on last tab).
+    assert_eq!(runtime.take_requested_window_close(), None);
 
     // Ctrl+O 仍可重新打开新标签页。
     let reopened = runtime.open_quick_connect();
     assert!(reopened.quick_connect_visible);
     assert_eq!(reopened.tab_count, 1);
+}
+
+#[test]
+fn toggle_quick_connect_on_sole_new_tab_does_not_request_window_close() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = tab_runtime(temp.path(), 1);
+
+    assert!(runtime.toggle_quick_connect().quick_connect_visible);
+    let toggled_off = runtime.toggle_quick_connect();
+    assert!(!toggled_off.quick_connect_visible);
+    assert!(toggled_off.tabs.is_empty());
+    assert_eq!(runtime.take_requested_window_close(), None);
+
+    assert!(runtime.toggle_quick_connect().quick_connect_visible);
 }
 
 #[test]

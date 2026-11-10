@@ -35,12 +35,6 @@ export global TextFormats {
         return @tr("MainWindow" => "global={0} format={1} directory={2}", enabled, format, directory);
     }
 
-    public pure function known-hosts-inventory-display(empty: bool, rows: string) -> string {
-        return empty
-            ? @tr("MainWindow" => "No persisted known hosts yet.")
-            : rows;
-    }
-
     public pure function active-session-display(kind: string, name: string, state: string, saved_count: int) -> string {
         return kind == "session"
             ? name + "  " + state
@@ -126,7 +120,9 @@ export global TextFormats {
         if kind == "injected" {
             return @tr("MainWindow" => "Secret store enabled through injected runtime keychain");
         }
-        return @tr("MainWindow" => "Secret store disabled. Set YSHELL_MASTER_PASSWORD to enable the local encrypted store or use the operating system keychain.");
+        // Environment-variable master passwords are gone; the fallback stays
+        // neutral (only reachable for an explicitly disabled/injected store).
+        return @tr("MainWindow" => "Secret store disabled.");
     }
 
     public pure function editor-auth-test-status(kind: string, host: string, backend: string, startup: string, error: string) -> string {
@@ -169,16 +165,6 @@ export global TextFormats {
             return @tr("MainWindow" => "{0} must be a whole number.", settings-terminal-field-label(field));
         }
         return @tr("MainWindow" => "{0} must be between {1} and {2}.", settings-terminal-field-label(field), value, limit);
-    }
-
-    public pure function known-hosts-selection(kind: string, host: string, port: string, index: int, total: int) -> string {
-        if kind == "selected" {
-            return @tr("MainWindow" => "Selected known host {0}:{1} ({2} of {3}).", host, port, index, total);
-        }
-        if kind == "loaded" {
-            return @tr("MainWindow" => "Known hosts manager loaded {n} entry." | "Known hosts manager loaded {n} entries." % total);
-        }
-        return @tr("MainWindow" => "No persisted known hosts are available.");
     }
 
     public pure function saved-session-selection(kind: string, name: string, host: string, id: string) -> string {
@@ -287,48 +273,49 @@ export global TextFormats {
         return @tr("MainWindow" => "REC · {0} · {1}", logging-mode-label(mode), file_name);
     }
 
-    // --- N9：同步发送按键（状态栏 chip / 一次性提示 / 标签菜单禁用原因）--------
-    /// 状态栏 chip 文案（`SYNC → n targets`；非同步态宿主不渲染文本）。
-    public pure function input-sync-chip(count: int) -> string {
+    // --- N9：同步输入（组模型：状态栏 chip / 一次性提示 / 菜单禁用原因）--------
+    /// 状态栏 chip 文案（`SYNC → n targets`）。组为空时宿主不渲染 chip。
+    public pure function input-sync-chip(count: int, mode: string) -> string {
+        // `mode` 仍可能投影 `paused`（运行时遗留）；界面已去掉暂停入口，chip 不再单独标 PAUSED。
         return @tr("MainWindow" => "SYNC → {n} target" | "SYNC → {n} targets" % count);
     }
 
-    /// chip 区域的一次性提示（kind 由 Rust 投影：control-broadcast / target-removed /
-    /// source-closed / source-disconnected / stopped）。
+    /// N9 终端上方横幅副标题（开/关由 WinSwitch 表达；此处写组规模或空闲提示）。
+    public pure function input-sync-banner-title(members: int, targets: int, mode: string, member_on: bool) -> string {
+        if mode == "" || members <= 0 {
+            return member_on
+                ? @tr("MainWindow" => "This session is alone in the sync group.")
+                : @tr("MainWindow" => "Turn on to join the sync group for this session.");
+        }
+        return @tr(
+            "MainWindow" => "{0} sessions · broadcasting to {1} targets",
+            members,
+            targets
+        );
+    }
+
+    /// chip 区域的一次性提示（kind 由 Rust 投影：control-broadcast / member-removed /
+    /// ai-input-opt-out）。
     public pure function input-sync-notice(kind: string, param: string, count: int) -> string {
         if kind == "control-broadcast" {
             return @tr("MainWindow" => "{0} sent to {n} target." | "{0} sent to {n} targets." % count, param);
         }
-        if kind == "target-removed" {
-            return @tr("MainWindow" => "`{0}` left key input sync (disconnected).", param);
+        if kind == "member-removed" {
+            return @tr("MainWindow" => "`{0}` left input sync (disconnected).", param);
         }
-        if kind == "source-closed" {
-            return @tr("MainWindow" => "Key input sync stopped: the source tab was closed.");
-        }
-        if kind == "source-disconnected" {
-            return @tr("MainWindow" => "Key input sync stopped: the source session disconnected.");
-        }
-        if kind == "stopped" {
-            return @tr("MainWindow" => "Key input sync stopped.");
+        if kind == "ai-input-opt-out" {
+            return @tr("MainWindow" => "AI input turned off input sync for `{0}`.", param);
         }
         return "";
     }
 
-    /// `Visible` 目标模式的 UI 说明（分屏落地前等同 `All`，菜单 tooltip / 状态文案用）。
-    public pure function input-sync-visible-note() -> string {
-        return @tr("MainWindow" => "Until split view lands, Visible matches All connected tabs in this window.");
-    }
-
-    /// 标签右键"接收键输入"禁用原因（Rust 投影的 reason id → 用户可读句子）。
+    /// 标签右键"Sync Input for This Tab"禁用原因（Rust 投影的 reason id → 用户可读句子）。
     public pure function receive-key-input-reason(reason: string) -> string {
-        if reason == "no-sync" {
-            return @tr("MainWindow" => "Start key input sync from another terminal first.");
-        }
-        if reason == "source" {
-            return @tr("MainWindow" => "This tab is the key input source.");
-        }
         if reason == "not-connected" {
-            return @tr("MainWindow" => "Connect this tab before it can receive key input.");
+            return @tr("MainWindow" => "Connect this tab before it can join input sync.");
+        }
+        if reason == "local-terminal" {
+            return @tr("MainWindow" => "Local terminals do not take part in input sync.");
         }
         if reason == "no-session" {
             return @tr("MainWindow" => "This tab has no terminal session.");
@@ -457,15 +444,6 @@ export global TextFormats {
         if kind == "logging-no-session" {
             return @tr("MainWindow" => "Open a session before starting terminal logging.");
         }
-        if kind == "secrets-reset" {
-            if param_2 == "master-password-missing" {
-                return @tr("MainWindow" => "Deleted `{0}` and left the secret store disabled because YSHELL_MASTER_PASSWORD is not set.", param_1);
-            }
-            if param_2 == "master-password-empty" {
-                return @tr("MainWindow" => "Deleted `{0}` and left the secret store disabled because YSHELL_MASTER_PASSWORD is empty.", param_1);
-            }
-            return @tr("MainWindow" => "Reset the local secret store at `{0}`.", param_1);
-        }
         if kind == "quick-connect-error" {
             return @tr("MainWindow" => "Quick Connect error: {0}", param_1);
         }
@@ -474,6 +452,12 @@ export global TextFormats {
         }
         if kind == "session-deleted" {
             return @tr("MainWindow" => "Deleted saved session `{0}` and persisted the updated config.", param_1);
+        }
+        if kind == "session-duplicated" {
+            return @tr("MainWindow" => "Duplicated saved session `{1}` as `{0}`.", param_1, param_2);
+        }
+        if kind == "session-renamed" {
+            return @tr("MainWindow" => "Renamed saved session `{0}`.", param_1);
         }
         // --- A26（WS-D / D5 + D15 + D19）：连接生命周期 / 终端尺寸 / 本地目录状态文案 -----
         // kind 与参数来自 Rust `set_status_kind(...)`（详情的英文错误只进 tracing 日志）。
@@ -526,22 +510,24 @@ export global TextFormats {
         if kind == "local-dir-loaded" {
             return @tr("MainWindow" => "Loaded local directory `{0}` ({1} items).", param_1, param_2);
         }
-        // --- N9：同步发送按键的状态栏文案 -------------------------------------
-        if kind == "input-sync-started" {
-            return @tr("MainWindow" => "Sending key input to {n} tab." | "Sending key input to {n} tabs." % round(param_1.to-float()))
-                + (param_2 == "visible" ? " " + input-sync-visible-note() : "");
-        }
+        // --- N9：同步输入（组模型）的状态栏文案 -------------------------------
         if kind == "input-sync-stopped" {
-            return @tr("MainWindow" => "Stopped sending key input.");
+            return @tr("MainWindow" => "Stopped input sync for {n} session." | "Stopped input sync for {n} sessions." % round(param_1.to-float()));
         }
-        if kind == "input-sync-no-targets" {
-            return @tr("MainWindow" => "No other connected terminal tab can receive key input.");
+        if kind == "input-sync-paused" {
+            return @tr("MainWindow" => "Input sync paused; the group is kept.");
         }
-        if kind == "input-sync-receive-toggled" {
-            if param_2 == "on" {
-                return @tr("MainWindow" => "`{0}` now receives key input.", param_1);
-            }
-            return @tr("MainWindow" => "`{0}` no longer receives key input.", param_1);
+        if kind == "input-sync-resumed" {
+            return @tr("MainWindow" => "Input sync resumed.");
+        }
+        if kind == "input-sync-member-on" {
+            return @tr("MainWindow" => "`{0}` joined input sync.", param_1);
+        }
+        if kind == "input-sync-member-off" {
+            return @tr("MainWindow" => "`{0}` left input sync.", param_1);
+        }
+        if kind == "input-sync-ai-opt-out" {
+            return @tr("MainWindow" => "AI input turned off input sync for `{0}`.", param_1);
         }
         return fallback;
     }
@@ -925,6 +911,18 @@ export global TextFormats {
         if kind == "transfers-none-completed" {
             return @tr("MainWindow" => "No completed transfers to clear.");
         }
+        if kind == "transfers-paused-all" {
+            return @tr("MainWindow" => "Paused {n} transfer." | "Paused {n} transfers." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "transfers-nothing-to-pause" {
+            return @tr("MainWindow" => "No queued or running transfers to pause.");
+        }
+        if kind == "transfers-resumed-all" {
+            return @tr("MainWindow" => "Resumed {n} transfer." | "Resumed {n} transfers." % round(param_1.to-float()), round(param_1.to-float()));
+        }
+        if kind == "transfers-nothing-to-resume" {
+            return @tr("MainWindow" => "No paused transfers to resume.");
+        }
         // --- I18N-1：文件剪贴板 ----------------------------------------------
         if kind == "clipboard-select-local-copy" {
             return @tr("MainWindow" => "Select local entries before copying.");
@@ -975,6 +973,9 @@ export global TextFormats {
         }
         if kind == "clipboard-empty-paste" {
             return @tr("MainWindow" => "Clipboard is empty, so nothing was pasted.");
+        }
+        if kind == "terminal-paste-blocked-multiline" {
+            return @tr("MainWindow" => "Multi-line paste is blocked in Settings → Terminal.");
         }
         if kind == "terminal-cleared" {
             return @tr("MainWindow" => "Cleared the visible terminal view.");
@@ -1188,6 +1189,44 @@ export global TextFormats {
         if kind == "editor-saved" {
             return @tr("MainWindow" => "Saved session editor changes into `{0}`.", param_1);
         }
+        // Session Editor：页脚 / 子窗提交失败（窗口保持打开，错误进状态栏）。
+        if kind == "editor-submit-failed" {
+            return @tr("MainWindow" => "Could not save: {0}", param_1);
+        }
+        // --- session-editor：Login Script 步骤 / Tunnel 清单 / 执行挂点 --------
+        if kind == "editor-login-step-added" {
+            return @tr("MainWindow" => "Added a login script {0} step.", param_1);
+        }
+        if kind == "editor-login-step-updated" {
+            return @tr("MainWindow" => "Updated the login script {0} step.", param_1);
+        }
+        if kind == "editor-login-step-deleted" {
+            return @tr("MainWindow" => "Deleted a login script step.");
+        }
+        if kind == "editor-login-step-duplicated" {
+            return @tr("MainWindow" => "Duplicated a login script step.");
+        }
+        if kind == "editor-login-steps-moved" {
+            return @tr("MainWindow" => "Reordered the login script steps.");
+        }
+        if kind == "editor-login-script-started" {
+            return @tr("MainWindow" => "Running the login script for this session.");
+        }
+        if kind == "editor-login-script-finished" {
+            return @tr("MainWindow" => "Login script finished.");
+        }
+        if kind == "editor-login-script-failed" {
+            return @tr("MainWindow" => "Login script stopped: {0}", param_1);
+        }
+        if kind == "editor-tunnel-updated" {
+            return @tr("MainWindow" => "Updated tunnel {0}.", param_1);
+        }
+        if kind == "editor-tunnel-duplicated" {
+            return @tr("MainWindow" => "Duplicated a tunnel configuration.");
+        }
+        if kind == "editor-tunnel-removed" {
+            return @tr("MainWindow" => "Deleted a tunnel configuration.");
+        }
         if kind == "session-folder-created" {
             return @tr("MainWindow" => "Created folder `{0}` under `{1}` and selected it for the editor.", param_1, param_2);
         }
@@ -1255,6 +1294,15 @@ export global TextFormats {
         if kind == "tunnel-no-active-session" {
             return @tr("MainWindow" => "No active session to start a tunnel on.");
         }
+        if kind == "tunnel-add-no-selection" {
+            return @tr("MainWindow" => "Select a saved session before adding a tunnel.");
+        }
+        if kind == "tunnel-add-missing" {
+            return @tr("MainWindow" => "Saved session `{0}` was not found.", param_1);
+        }
+        if kind == "tunnel-add-load-failed" {
+            return @tr("MainWindow" => "Could not load the saved session for tunnel editing: {0}", param_1);
+        }
         if kind == "tunnel-unknown" {
             return @tr("MainWindow" => "Unknown tunnel `{0}`.", param_1);
         }
@@ -1273,33 +1321,34 @@ export global TextFormats {
         if kind == "startup-recovered" {
             return @tr("MainWindow" => "Recovered configuration from backup. Saved sessions: {0}. Backup: {1}", param_1, param_2);
         }
+        // --- I18N-1：AI / MCP ---------------------------------------------------
+        if kind == "settings-mcp-enabled" {
+            return @tr("MainWindow" => "MCP enabled. Starting local endpoint…");
+        }
+        if kind == "settings-mcp-disabled" {
+            return @tr("MainWindow" => "MCP is off. AI hosts cannot connect until you enable it.");
+        }
+        if kind == "settings-mcp-auto-approve-enabled" {
+            return @tr("MainWindow" => "MCP control requests will be approved automatically.");
+        }
+        if kind == "settings-mcp-auto-approve-disabled" {
+            return @tr("MainWindow" => "MCP control requests will ask for confirmation.");
+        }
+        if kind == "mcp-control-granted" {
+            return @tr("MainWindow" => "AI control is active. Exit anytime from the status bar.");
+        }
+        if kind == "mcp-control-denied" {
+            return @tr("MainWindow" => "AI control request was denied.");
+        }
+        if kind == "mcp-control-exited" {
+            return @tr("MainWindow" => "AI control ended. The agent must request control again.");
+        }
         return fallback;
     }
 
     // I18N-1：status-message 分组（避免单个函数体过深）。
     public pure function status-message-managers(kind: string, param_1: string, param_2: string, fallback: string) -> string {
         // --- I18N-1：密钥管理器 / 代理 / 主题 / 文件夹默认值 -------------------
-        if kind == "known-hosts-opened" {
-            return @tr("MainWindow" => "Known hosts manager opened with {n} persisted entry." | "Known hosts manager opened with {n} persisted entries." % round(param_1.to-float()), round(param_1.to-float()));
-        }
-        if kind == "known-hosts-closed" {
-            return @tr("MainWindow" => "Closed known hosts manager.");
-        }
-        if kind == "known-hosts-selected" {
-            return @tr("MainWindow" => "Selected known host {0}.", param_1);
-        }
-        if kind == "known-hosts-empty" {
-            return @tr("MainWindow" => "No persisted known hosts are available.");
-        }
-        if kind == "known-hosts-loaded" {
-            return @tr("MainWindow" => "Known hosts manager loaded {n} entry." | "Known hosts manager loaded {n} entries." % round(param_1.to-float()), round(param_1.to-float()));
-        }
-        if kind == "known-hosts-removed" {
-            return @tr("MainWindow" => "Removed known host entry for {0} from `{1}`.", param_1, param_2);
-        }
-        if kind == "known-hosts-cleared" {
-            return @tr("MainWindow" => "Cleared all persisted known hosts from `{0}`.", param_1);
-        }
         if kind == "private-keys-opened" {
             return @tr("MainWindow" => "Private keys manager opened with {n} managed key." | "Private keys manager opened with {n} managed keys." % round(param_1.to-float()), round(param_1.to-float()));
         }
@@ -1584,6 +1633,80 @@ export global TextFormats {
         if kind == "sftp-unknown-menu-action" {
             return @tr("MainWindow" => "Unknown SFTP menu action `{0}`.", param_1);
         }
+        // --- managers-dialogs：管理器子窗 / 行右键状态 ---------------------------
+        if kind == "host-keys-add-opened" {
+            return @tr("MainWindow" => "Paste a `host:port` entry with an OpenSSH public key or a SHA256 fingerprint.");
+        }
+        if kind == "host-keys-edit-opened" {
+            return @tr("MainWindow" => "Editing the saved host key for {0}.", param_1);
+        }
+        if kind == "host-keys-add-empty" {
+            return @tr("MainWindow" => "Paste a host key entry first.");
+        }
+        if kind == "host-keys-add-failed" {
+            return @tr("MainWindow" => "Could not add the entry: {0}", param_1);
+        }
+        if kind == "host-keys-add-persist-failed" {
+            return @tr("MainWindow" => "Could not save the host key: {0}", param_1);
+        }
+        if kind == "host-keys-added" {
+            return @tr("MainWindow" => "Added the saved host key for {0}.", param_1);
+        }
+        if kind == "host-keys-edited" {
+            return @tr("MainWindow" => "Updated the saved host key for {0}.", param_1);
+        }
+        if kind == "host-keys-import-opened" {
+            return @tr("MainWindow" => "Choose a `known_hosts` file to import.");
+        }
+        if kind == "host-keys-import-path-empty" {
+            return @tr("MainWindow" => "Choose a `known_hosts` file to import.");
+        }
+        if kind == "host-keys-import-failed" {
+            return @tr("MainWindow" => "Import failed: {0}", param_1);
+        }
+        if kind == "host-keys-export-path-empty" {
+            return @tr("MainWindow" => "Choose a destination file first.");
+        }
+        if kind == "private-key-generate-opened" {
+            return @tr("MainWindow" => "Generate a new managed key: choose the algorithm, then confirm the passphrase.");
+        }
+        if kind == "private-key-generate-passphrase-mismatch" {
+            return @tr("MainWindow" => "The passphrase confirmation does not match.");
+        }
+        if kind == "private-key-generate-failed" {
+            return @tr("MainWindow" => "Key generation failed: {0}", param_1);
+        }
+        if kind == "private-key-generated" {
+            return @tr("MainWindow" => "Generated `{0}` ({1}).", param_1, param_2);
+        }
+        if kind == "private-key-import-opened" {
+            return @tr("MainWindow" => "Import an OpenSSH private key from a file or paste its text.");
+        }
+        if kind == "private-key-import-text-empty" {
+            return @tr("MainWindow" => "Paste an OpenSSH private key first.");
+        }
+        if kind == "private-key-export-requires-selection" {
+            return @tr("MainWindow" => "Select a managed key to export its public key.");
+        }
+        if kind == "private-key-export-path-empty" {
+            return @tr("MainWindow" => "Choose a destination file first.");
+        }
+        if kind == "private-key-deploy-ready" {
+            return @tr("MainWindow" => "Ready to deploy to {0}.", param_1);
+        }
+        if kind == "private-key-deploy-no-targets" {
+            return @tr("MainWindow" => "No live SSH session is available to deploy to. Open an SSH session first.");
+        }
+        if kind == "private-key-deploy-target" {
+            return @tr("MainWindow" => "Deploy target set to {0}.", param_1);
+        }
+        // Host-key 变更态的 Copy Details。
+        if kind == "host-key-details-copied" {
+            return @tr("MainWindow" => "Copied the host key details ({0} chars) to the clipboard.", param_1);
+        }
+        if kind == "host-key-clipboard-unavailable" {
+            return @tr("MainWindow" => "Could not access the system clipboard; select the details manually.");
+        }
         return fallback;
     }
 
@@ -1606,6 +1729,22 @@ export global TextFormats {
         return @tr("MainWindow" => "Close {n} tab" | "Close {n} tabs" % count, count)
             + "  "
             + (@tr("MainWindow" => "{n} of them has an active connection and will be disconnected." | "{n} of them have active connections and will be disconnected." % active_count, active_count));
+    }
+
+    public pure function close-tabs-confirm-label() -> string {
+        return @tr("MainWindow" => "Close");
+    }
+
+    public pure function editor-discard-confirm-title() -> string {
+        return @tr("MainWindow" => "Discard Changes");
+    }
+
+    public pure function editor-discard-confirm-message() -> string {
+        return @tr("MainWindow" => "Discard unsaved changes to this session?");
+    }
+
+    public pure function editor-discard-confirm-label() -> string {
+        return @tr("MainWindow" => "Discard");
     }
 
     // --- N5：三态字段的来源提示 -----------------------------------------------
@@ -1674,5 +1813,157 @@ export global TextFormats {
         if key == "logging.format" { return @tr("MainWindow" => "Raw keeps escape sequences"); }
         if key == "logging.directory" { return @tr("MainWindow" => "Log output directory"); }
         return "";
+    }
+
+    // --- settings-security ---------------------------------------------------
+    // Appearance → Accent 色板tooltip（顺序 = `APP_ACCENT_IDS`）。
+    public pure function appearance-accent-label(index: int) -> string {
+        if index == 0 { return @tr("MainWindow" => "Follow system"); }
+        if index == 1 { return @tr("MainWindow" => "Windows Blue"); }
+        if index == 2 { return @tr("MainWindow" => "Teal"); }
+        if index == 3 { return @tr("MainWindow" => "Purple"); }
+        if index == 4 { return @tr("MainWindow" => "Green"); }
+        if index == 5 { return @tr("MainWindow" => "Orange"); }
+        if index == 6 { return @tr("MainWindow" => "Magenta"); }
+        return "";
+    }
+
+    // Settings → Security 主密码卡片状态 pill。
+    public pure function master-password-status(is-set: bool) -> string {
+        return is-set ? @tr("MainWindow" => "Set") : @tr("MainWindow" => "Not set");
+    }
+
+    // Settings → SFTP 分区内联状态。
+    public pure function settings-sftp-status(kind: string, fallback: string) -> string {
+        if kind == "custom-editor-path-required" {
+            return @tr("MainWindow" => "Choose the editor executable before saving.");
+        }
+        if kind == "saved" {
+            return @tr("MainWindow" => "Saved the SFTP defaults.");
+        }
+        if kind == "hint" {
+            return @tr("MainWindow" => "Defaults apply to new SFTP tabs.");
+        }
+        return fallback;
+    }
+
+    // 主密码子窗标题（按 Rust 投影的 kind id）。
+    public pure function master-password-dialog-title(kind: string) -> string {
+        if kind == "change" {
+            return @tr("MainWindow" => "Change Master Password");
+        }
+        if kind == "remove" {
+            return @tr("MainWindow" => "Remove Master Password");
+        }
+        if kind == "reset" {
+            return @tr("MainWindow" => "Reset Master Password");
+        }
+        return @tr("MainWindow" => "Set Master Password");
+    }
+
+    // 主密码子窗页脚主按钮（按 kind id）。
+    public pure function master-password-dialog-primary(kind: string) -> string {
+        if kind == "change" {
+            return @tr("MainWindow" => "Change");
+        }
+        if kind == "remove" {
+            return @tr("MainWindow" => "Remove");
+        }
+        if kind == "reset" {
+            return @tr("MainWindow" => "Reset and Delete");
+        }
+        return @tr("MainWindow" => "Set");
+    }
+
+    // 主密码校验错误（错误条 / 行内错误共用）。
+    public pure function master-password-error(kind: string) -> string {
+        if kind == "too-short" {
+            return @tr("MainWindow" => "Use at least 8 characters.");
+        }
+        if kind == "mismatch" {
+            return @tr("MainWindow" => "The passwords do not match.");
+        }
+        if kind == "current-required" {
+            return @tr("MainWindow" => "Enter the current master password.");
+        }
+        if kind == "wrong-current" {
+            return @tr("MainWindow" => "Incorrect password.");
+        }
+        if kind == "not-set" {
+            return @tr("MainWindow" => "No master password is set.");
+        }
+        return "";
+    }
+
+    // 状态栏模板：Settings 保存与主密码生命周期（第 4 波接入 status-message）。
+    public pure function settings-security-status(kind: string, mode: string, accent: string, fallback: string) -> string {
+        if kind == "settings-saved" {
+            return @tr("MainWindow" => "Saved settings (app theme={0}, accent={1}).", mode, accent);
+        }
+        if kind == "master-password-set" {
+            return @tr("MainWindow" => "Master password set. Sessions and keys will be encrypted.");
+        }
+        if kind == "master-password-changed" {
+            return @tr("MainWindow" => "Master password changed.");
+        }
+        if kind == "master-password-removed" {
+            return @tr("MainWindow" => "Master password removed. Saved data stays decrypted.");
+        }
+        if kind == "master-password-reset" {
+            return @tr("MainWindow" => "Master password reset. Protected sessions and keys were deleted.");
+        }
+        return fallback;
+    }
+
+    // --- settings-mcp / settings-sftp ---------------------------------------
+    // Settings → MCP 连接状态：Rust 只投影稳定 kind id（+ 可选 detail：端口 / 失败原因），
+    // 句子在这里渲染；kind 见 `runtime/mcp.rs::mcp_status_kind`。
+    public pure function settings-mcp-status(kind: string, detail: string) -> string {
+        if kind == "disabled" {
+            return @tr("MainWindow" => "Off");
+        }
+        if kind == "starting" {
+            return @tr("MainWindow" => "Starting");
+        }
+        if kind == "ready" {
+            if detail == "" {
+                return @tr("MainWindow" => "On");
+            }
+            // `detail` is `host:port` (Local = 127.0.0.1, LAN = 0.0.0.0).
+            return @tr("MainWindow" => "Listening on {0}", detail);
+        }
+        if kind == "failed" {
+            if detail == "" {
+                return @tr("MainWindow" => "Failed");
+            }
+            return @tr("MainWindow" => "Failed: {0}", detail);
+        }
+        if kind == "controlling" {
+            return @tr("MainWindow" => "AI is controlling a terminal");
+        }
+        if kind == "awaiting-consent" {
+            return @tr("MainWindow" => "Waiting for approval");
+        }
+        return @tr("MainWindow" => "Off");
+    }
+
+    // Settings → SFTP External editor 下拉的显示文案：Rust 投影稳定 id
+    // （`system-default` / `custom`）或已检测到的编辑器名（专有名词，原样显示）。
+    public pure function settings-sftp-editor-label(id: string) -> string {
+        if id == "system-default" {
+            return @tr("MainWindow" => "System default");
+        }
+        if id == "custom" {
+            return @tr("MainWindow" => "Custom");
+        }
+        return id;
+    }
+
+    /// Session Editor Proxy 下拉：`no-proxy` 走翻译，托管 profile 名原样显示。
+    public pure function proxy-option-label(id: string) -> string {
+        if id == "no-proxy" {
+            return @tr("MainWindow" => "No Proxy");
+        }
+        return id;
     }
 }

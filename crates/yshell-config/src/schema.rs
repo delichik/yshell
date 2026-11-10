@@ -98,6 +98,24 @@ pub struct FolderProfile {
     /// Appearance override for this folder and its descendants.
     #[serde(default)]
     pub appearance: Option<AppearanceProfile>,
+    /// Auth profile inherited by sessions below this folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth_profile_id: Option<String>,
+    /// Proxy profile inherited by sessions below this folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proxy_profile_id: Option<String>,
+    /// SFTP defaults for sessions below this folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sftp: Option<SftpProfile>,
+    /// Tunnel defaults for sessions below this folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tunnel: Option<TunnelProfile>,
+    /// Login script inherited by sessions below this folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub login_script: Option<LoginScriptProfile>,
+    /// Free-form notes shown in the folder/session editor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
 }
 
 impl FolderProfile {
@@ -111,6 +129,12 @@ impl FolderProfile {
             terminal: None,
             logging: None,
             appearance: None,
+            auth_profile_id: None,
+            proxy_profile_id: None,
+            sftp: None,
+            tunnel: None,
+            login_script: None,
+            notes: None,
         }
     }
 
@@ -195,6 +219,15 @@ pub struct SessionProfile {
     pub logging: Option<LoggingProfile>,
     #[serde(default)]
     pub terminal: Option<TerminalProfile>,
+    /// Session icon: `None` = default, a preset id, or a custom image path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    /// Login script steps run after the connection is established.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub login_script: Option<LoginScriptProfile>,
+    /// Free-form notes shown in the Session Editor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
     #[serde(default)]
     pub tags: Vec<String>,
 }
@@ -216,6 +249,9 @@ impl SessionProfile {
             appearance: None,
             logging: None,
             terminal: None,
+            icon: None,
+            login_script: None,
+            notes: None,
             tags: Vec::new(),
         }
     }
@@ -354,6 +390,17 @@ pub struct SftpProfile {
     pub enabled: bool,
     #[serde(default)]
     pub initial_directory: Option<String>,
+    /// Show dot-files in both panes by default.
+    #[serde(default = "default_true")]
+    pub show_hidden: bool,
+    /// What to do when a transfer target already exists.
+    #[serde(default)]
+    pub conflict_action: SftpConflictAction,
+    /// External editor used for remote edits; `None` = system default.
+    ///
+    /// An absolute path or a known editor id, as written by Settings → SFTP.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_editor: Option<String>,
 }
 
 impl Default for SftpProfile {
@@ -361,8 +408,26 @@ impl Default for SftpProfile {
         Self {
             enabled: true,
             initial_directory: None,
+            show_hidden: true,
+            conflict_action: SftpConflictAction::default(),
+            external_editor: None,
         }
     }
+}
+
+/// Default action when an SFTP transfer would overwrite an existing entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SftpConflictAction {
+    /// Ask in the conflict dialog.
+    #[default]
+    Ask,
+    /// Overwrite the target.
+    Replace,
+    /// Skip the conflicting entry.
+    Skip,
+    /// Stop the whole transfer.
+    Stop,
 }
 
 /// Local/remote tunnel defaults or session override.
@@ -374,6 +439,12 @@ pub struct TunnelProfile {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TunnelForward {
+    /// Display name shown in the tunnel list / editor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Whether the tunnel starts with the session ("On connect").
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     pub kind: TunnelForwardKind,
     pub bind_host: String,
     pub bind_port: u16,
@@ -387,6 +458,173 @@ pub enum TunnelForwardKind {
     Local,
     Remote,
     Dynamic,
+}
+
+/// Login script attached to a folder or a session.
+///
+/// Steps run in order after the SSH session is established. The login-script
+/// UI edits one step row at a time; the list order is the execution order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct LoginScriptProfile {
+    #[serde(default)]
+    pub steps: Vec<LoginStep>,
+}
+
+impl LoginScriptProfile {
+    /// Returns true when no step would actually run.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.steps.is_empty()
+    }
+}
+
+/// One login-script step.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LoginStep {
+    /// Display name shown in the step list.
+    pub name: String,
+    pub action: LoginStepAction,
+}
+
+/// What a login-script step does.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum LoginStepAction {
+    /// Send a key sequence (Escape sequences allowed, newline = Enter).
+    Keys {
+        #[serde(default)]
+        keys: String,
+        /// Expand tokens such as `{host}` / `{username}` before sending.
+        #[serde(default)]
+        tokens: bool,
+    },
+    /// Wait before running the next step.
+    Wait {
+        #[serde(default)]
+        millis: u64,
+    },
+}
+
+/// Middle-click behavior on the terminal surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MiddleClickAction {
+    /// Paste the clipboard selection.
+    #[default]
+    Paste,
+    /// Ignore middle clicks.
+    DoNothing,
+}
+
+/// Right-click behavior on the terminal surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RightClickAction {
+    /// Open the terminal context menu.
+    #[default]
+    ContextMenu,
+    /// Paste the clipboard selection.
+    Paste,
+    /// Ignore right clicks.
+    DoNothing,
+}
+
+/// Behavior when the pasted text spans multiple lines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MultiLinePastePolicy {
+    /// Show the multi-line paste confirmation first.
+    #[default]
+    Ask,
+    /// Paste immediately.
+    Paste,
+    /// Refuse the paste.
+    Block,
+}
+
+/// Application color mode (Settings → Appearance → App theme).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AppearanceMode {
+    /// Follow the operating-system theme.
+    #[default]
+    System,
+    /// Always use the light theme.
+    Light,
+    /// Always use the dark theme.
+    Dark,
+}
+
+/// MCP listen scope (Settings → MCP → Listen).
+///
+/// * [`Self::Local`] — bind `127.0.0.1` (loopback only).
+/// * [`Self::Lan`] — bind `0.0.0.0` (reachable on the LAN; API key required).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum McpListenMode {
+    /// Loopback only (`127.0.0.1`).
+    #[default]
+    Local,
+    /// All interfaces (`0.0.0.0`); requires a non-empty API key.
+    Lan,
+}
+
+impl McpListenMode {
+    /// Bind address used by the GUI MCP TCP acceptor.
+    #[must_use]
+    pub const fn bind_host(self) -> &'static str {
+        match self {
+            Self::Local => "127.0.0.1",
+            Self::Lan => "0.0.0.0",
+        }
+    }
+
+    /// Stable id for UI / projection (`local` / `lan`).
+    #[must_use]
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::Local => "local",
+            Self::Lan => "lan",
+        }
+    }
+
+    /// Parse a stable id; unknown values fall back to [`Self::Local`].
+    #[must_use]
+    pub fn from_id(id: &str) -> Self {
+        match id {
+            "lan" => Self::Lan,
+            _ => Self::Local,
+        }
+    }
+}
+
+/// Default MCP TCP port (Settings → MCP → Port).
+pub const fn default_mcp_port() -> u16 {
+    18765
+}
+
+/// Accent color preset (Settings → Appearance → App theme).
+///
+/// Ids match `yshell_ui::appearance::ACCENT_PRESETS`; `follow_system` keeps the
+/// platform accent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AccentColor {
+    /// Follow the operating-system accent.
+    #[default]
+    FollowSystem,
+    /// Windows blue.
+    Blue,
+    /// Teal.
+    Teal,
+    /// Purple.
+    Purple,
+    /// Green.
+    Green,
+    /// Orange.
+    Orange,
+    /// Magenta.
+    Magenta,
 }
 
 /// Visual defaults or session override.
@@ -544,6 +782,30 @@ pub struct UiProfile {
     /// UI language: `system` (follow OS), `zh-CN`, or `en-US`.
     #[serde(default = "default_ui_language")]
     pub language: String,
+    /// App theme color mode (Settings → Appearance → App theme).
+    #[serde(default)]
+    pub appearance_mode: AppearanceMode,
+    /// App theme accent preset.
+    #[serde(default)]
+    pub appearance_accent: AccentColor,
+    /// Reduce (disable) UI animations globally (Settings → General → Motion).
+    ///
+    /// Persisted so the motion preference survives a restart without relying on
+    /// any process environment variable.
+    #[serde(default)]
+    pub reduce_motion: bool,
+    /// Terminal middle-click behavior.
+    #[serde(default)]
+    pub terminal_middle_click: MiddleClickAction,
+    /// Terminal right-click behavior.
+    #[serde(default)]
+    pub terminal_right_click: RightClickAction,
+    /// How multi-line pastes are handled.
+    #[serde(default)]
+    pub terminal_multi_line_paste: MultiLinePastePolicy,
+    /// Copy a terminal selection to the clipboard as soon as it is made.
+    #[serde(default)]
+    pub terminal_auto_copy: bool,
     /// Last directory shown in the Local files panel (absolute path).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub local_directory: Option<String>,
@@ -557,9 +819,26 @@ pub struct UiProfile {
     #[serde(default = "default_true")]
     pub confirm_quit_app: bool,
     /// When true, the GUI hosts the local MCP IPC endpoint for `yshell --mcp`.
-    /// Default off: MCP is opt-in from Settings → AI / MCP.
+    /// Default off: MCP is opt-in from Settings → MCP.
     #[serde(default)]
     pub mcp_enabled: bool,
+    /// TCP port for the GUI MCP acceptor (`1–65535`; default 18765).
+    #[serde(default = "default_mcp_port")]
+    pub mcp_port: u16,
+    /// Bind scope: Local (`127.0.0.1`) or LAN (`0.0.0.0`).
+    #[serde(default)]
+    pub mcp_listen: McpListenMode,
+    /// Shared secret required on every MCP IPC request. Required when
+    /// [`Self::mcp_listen`] is [`McpListenMode::Lan`]; optional for Local
+    /// (empty → mint a session token into `mcp-endpoint.json` on start).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub mcp_api_key: String,
+    /// When true, AI may **view** user-created connections (not only AI-origin tabs).
+    #[serde(default)]
+    pub mcp_view_user_connections: bool,
+    /// When true, AI may **control** user-created connections; implies view.
+    #[serde(default)]
+    pub mcp_control_user_connections: bool,
     /// When true, MCP `request_control` skips the consent dialog (Settings /
     /// the dialog's "don't ask again" both write this flag). Only meaningful
     /// while [`Self::mcp_enabled`] is true.
@@ -581,11 +860,23 @@ impl Default for UiProfile {
             layout: LayoutProfile::default(),
             multi_window_enabled: true,
             language: default_ui_language(),
+            appearance_mode: AppearanceMode::default(),
+            appearance_accent: AccentColor::default(),
+            reduce_motion: false,
+            terminal_middle_click: MiddleClickAction::default(),
+            terminal_right_click: RightClickAction::default(),
+            terminal_multi_line_paste: MultiLinePastePolicy::default(),
+            terminal_auto_copy: false,
             local_directory: None,
             debug_logging: false,
             confirm_close_session: true,
             confirm_quit_app: true,
             mcp_enabled: false,
+            mcp_port: default_mcp_port(),
+            mcp_listen: McpListenMode::default(),
+            mcp_api_key: String::new(),
+            mcp_view_user_connections: false,
+            mcp_control_user_connections: false,
             mcp_auto_approve_control: false,
             sftp_max_parallel_transfers: default_sftp_max_parallel_transfers(),
         }
@@ -606,11 +897,10 @@ pub const SFTP_MAX_PARALLEL_TRANSFERS_MAX: usize = 16;
 /// Clamps a configured parallel-transfer count into the supported range.
 #[must_use]
 pub fn clamp_sftp_max_parallel_transfers(value: usize) -> usize {
-    value
-        .clamp(
-            SFTP_MAX_PARALLEL_TRANSFERS_MIN,
-            SFTP_MAX_PARALLEL_TRANSFERS_MAX,
-        )
+    value.clamp(
+        SFTP_MAX_PARALLEL_TRANSFERS_MIN,
+        SFTP_MAX_PARALLEL_TRANSFERS_MAX,
+    )
 }
 
 fn default_ui_language() -> String {
@@ -805,6 +1095,8 @@ pub struct ResolvedSessionProfile {
     pub appearance: AppearanceProfile,
     pub logging: LoggingProfile,
     pub terminal: TerminalProfile,
+    /// Effective login script (session override, then folder chain).
+    pub login_script: Option<LoginScriptProfile>,
 }
 
 impl ConfigDocument {
@@ -949,26 +1241,51 @@ impl ConfigDocument {
         )
         .clone();
         let terminal = resolve_terminal_profile(session, folder_chain, &self.terminal);
+        let auth_profile_id = session.auth_profile_id.as_deref().or_else(|| {
+            folder_chain
+                .iter()
+                .find_map(|folder| folder.auth_profile_id.as_deref())
+        });
+        let proxy_profile_id = session.proxy_profile_id.as_deref().or_else(|| {
+            folder_chain
+                .iter()
+                .find_map(|folder| folder.proxy_profile_id.as_deref())
+        });
+        let sftp = nearest_or(
+            std::iter::once(session.sftp.as_ref())
+                .chain(folder_chain.iter().map(|folder| folder.sftp.as_ref())),
+            &self.sftp,
+        )
+        .clone();
+        let tunnel = nearest_or(
+            std::iter::once(session.tunnel.as_ref())
+                .chain(folder_chain.iter().map(|folder| folder.tunnel.as_ref())),
+            &self.tunnel,
+        )
+        .clone();
+        let login_script = std::iter::once(session.login_script.as_ref())
+            .chain(
+                folder_chain
+                    .iter()
+                    .map(|folder| folder.login_script.as_ref()),
+            )
+            .flatten()
+            .next()
+            .cloned();
 
         ResolvedSessionProfile {
-            auth: session
-                .auth_profile_id
-                .as_deref()
+            auth: auth_profile_id
                 .and_then(|auth_id| self.auth_profiles.get(auth_id))
                 .cloned(),
-            proxy: session
-                .proxy_profile_id
-                .as_deref()
+            proxy: proxy_profile_id
                 .and_then(|proxy_id| self.proxy_profiles.get(proxy_id))
                 .cloned(),
-            sftp: session.sftp.clone().unwrap_or_else(|| self.sftp.clone()),
-            tunnel: session
-                .tunnel
-                .clone()
-                .unwrap_or_else(|| self.tunnel.clone()),
+            sftp,
+            tunnel,
             appearance,
             logging,
             terminal,
+            login_script,
             session: session.clone(),
         }
     }
@@ -1034,8 +1351,21 @@ impl ConfigDocument {
 
         sanitize_terminal_colors(&mut self.terminal, "terminal", &mut warnings);
         sanitize_terminal_fonts(&mut self.terminal, "terminal", &mut warnings);
+        sanitize_sftp_profile(&mut self.sftp);
+        sanitize_tunnel_profile(&mut self.tunnel);
         self.ui.sftp_max_parallel_transfers =
             clamp_sftp_max_parallel_transfers(self.ui.sftp_max_parallel_transfers);
+        if self.ui.mcp_port == 0 {
+            self.ui.mcp_port = default_mcp_port();
+        }
+        // Control implies View (D34 / contract §14.3).
+        if self.ui.mcp_control_user_connections {
+            self.ui.mcp_view_user_connections = true;
+        }
+        // LAN without a key cannot stay enabled.
+        if self.ui.mcp_listen == McpListenMode::Lan && self.ui.mcp_api_key.trim().is_empty() {
+            self.ui.mcp_enabled = false;
+        }
         for folder in &mut self.folders {
             let prefix = format!("folders[{}]", folder.id);
             sanitize_folder(folder, &prefix, &mut warnings);
@@ -1356,16 +1686,90 @@ fn sanitize_folder(folder: &mut FolderProfile, prefix: &str, warnings: &mut Vec<
         sanitize_terminal_colors(section, &location, warnings);
         sanitize_terminal_fonts(section, &location, warnings);
     }
+    if let Some(section) = folder.sftp.as_mut() {
+        sanitize_sftp_profile(section);
+    }
+    if let Some(script) = folder.login_script.as_mut() {
+        sanitize_login_script(script);
+    }
+    if let Some(tunnel) = folder.tunnel.as_mut() {
+        sanitize_tunnel_profile(tunnel);
+    }
+    sanitize_notes(&mut folder.notes);
     for session in &mut folder.sessions {
+        sanitize_session_entry(session);
         if let Some(section) = session.terminal.as_mut() {
             let location = format!("{prefix}.sessions[{}].terminal", session.id);
             sanitize_terminal_colors(section, &location, warnings);
             sanitize_terminal_fonts(section, &location, warnings);
         }
+        if let Some(section) = session.sftp.as_mut() {
+            sanitize_sftp_profile(section);
+        }
+        if let Some(script) = session.login_script.as_mut() {
+            sanitize_login_script(script);
+        }
+        if let Some(tunnel) = session.tunnel.as_mut() {
+            sanitize_tunnel_profile(tunnel);
+        }
+        sanitize_notes(&mut session.notes);
     }
     for child in &mut folder.folders {
         let child_prefix = format!("{prefix}.folders[{}]", child.id);
         sanitize_folder(child, &child_prefix, warnings);
+    }
+}
+
+/// Trims notes; an empty note means "no notes".
+fn sanitize_notes(notes: &mut Option<String>) {
+    *notes = notes
+        .take()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty());
+}
+
+/// Trims tunnel display names; an empty name means "unnamed".
+fn sanitize_tunnel_profile(profile: &mut TunnelProfile) {
+    for forward in &mut profile.forwards {
+        forward.name = forward
+            .name
+            .take()
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty());
+    }
+}
+
+/// Trims the session icon reference; an empty value means "default icon".
+fn sanitize_session_entry(session: &mut SessionProfile) {
+    session.icon = session
+        .icon
+        .take()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty());
+}
+
+/// Trims the configured external editor; an empty value means "system default".
+fn sanitize_sftp_profile(section: &mut SftpProfile) {
+    section.external_editor = section
+        .external_editor
+        .take()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty());
+}
+
+/// Largest accepted login-script wait, so a stray value cannot hang a connect.
+pub const LOGIN_STEP_MAX_WAIT_MILLIS: u64 = 60_000;
+
+/// Normalizes login-script steps: trims names, fills empty names, clamps waits.
+fn sanitize_login_script(script: &mut LoginScriptProfile) {
+    for (index, step) in script.steps.iter_mut().enumerate() {
+        step.name = step.name.trim().to_owned();
+        if step.name.is_empty() {
+            step.name = format!("Step {}", index + 1);
+        }
+        if let LoginStepAction::Wait { millis } = &mut step.action {
+            *millis = (*millis).min(LOGIN_STEP_MAX_WAIT_MILLIS);
+        }
     }
 }
 
@@ -1414,11 +1818,11 @@ const fn default_quick_connect_limit() -> usize {
 }
 
 const fn default_left_width() -> u32 {
-    240
+    260
 }
 
 const fn default_right_width() -> u32 {
-    320
+    280
 }
 
 fn default_left_panels() -> Vec<PanelSlot> {
@@ -1447,6 +1851,7 @@ mod tests {
             sftp: SftpProfile {
                 enabled: true,
                 initial_directory: Some("/srv".to_owned()),
+                ..SftpProfile::default()
             },
             ..ConfigDocument::default()
         };
@@ -1492,6 +1897,7 @@ mod tests {
                 narrow_collapsed_side: Some(PanelSide::Right),
             },
             multi_window_enabled: false,
+            reduce_motion: true,
             ..UiProfile::default()
         }
     }
@@ -1605,7 +2011,10 @@ mod tests {
         let toml = document.to_toml_string().expect("serialize");
         let reparsed = ConfigDocument::from_toml_str(&toml).expect("parse");
         assert_eq!(reparsed.terminal, document.terminal);
-        assert!(reparsed.folders.is_empty(), "folders live on disk, not in config.toml");
+        assert!(
+            reparsed.folders.is_empty(),
+            "folders live on disk, not in config.toml"
+        );
     }
 
     #[test]
@@ -1932,8 +2341,8 @@ fallback_fonts = ["/fonts/only.ttf"]
                 },
             ]
         );
-        assert_eq!(defaulted.ui.layout.left_width, 240);
-        assert_eq!(defaulted.ui.layout.right_width, 320);
+        assert_eq!(defaulted.ui.layout.left_width, 260);
+        assert_eq!(defaulted.ui.layout.right_width, 280);
         assert_eq!(defaulted.ui.layout.narrow_collapsed_side, None);
 
         let document = ConfigDocument {
@@ -1973,7 +2382,8 @@ collapsed = true
         assert_eq!(parsed.ui.layout.left_width, 300);
         // Unspecified fields keep their defaults.
         assert_eq!(parsed.ui.layout.left.len(), 1);
-        assert_eq!(parsed.ui.layout.right_width, 320);
+        assert_eq!(parsed.ui.layout.right_width, 280);
+        assert!(!parsed.ui.reduce_motion);
         assert!(parsed.ui.confirm_close_session);
         assert!(parsed.ui.confirm_quit_app);
         assert_eq!(
@@ -2163,6 +2573,239 @@ host = "example.test"
         assert_eq!(root_level.appearance.theme, "dark");
         assert!(root_level.logging.enabled);
         assert_eq!(root_level.logging.format, "raw");
+    }
+
+    #[test]
+    fn ui_appearance_and_terminal_defaults_apply_and_round_trip() {
+        let document = ConfigDocument::from_toml_str("schema_version = 2\n").expect("minimal");
+        assert_eq!(document.ui.appearance_mode, AppearanceMode::System);
+        assert_eq!(document.ui.appearance_accent, AccentColor::FollowSystem);
+        assert!(!document.ui.reduce_motion);
+        assert_eq!(document.ui.terminal_middle_click, MiddleClickAction::Paste);
+        assert_eq!(
+            document.ui.terminal_right_click,
+            RightClickAction::ContextMenu
+        );
+        assert_eq!(
+            document.ui.terminal_multi_line_paste,
+            MultiLinePastePolicy::Ask
+        );
+        assert!(!document.ui.terminal_auto_copy);
+        assert_eq!(document.sftp.conflict_action, SftpConflictAction::Ask);
+        assert!(document.sftp.show_hidden);
+        assert!(document.sftp.external_editor.is_none());
+
+        let input = r##"
+schema_version = 2
+
+[ui]
+appearance_mode = "light"
+appearance_accent = "teal"
+reduce_motion = true
+terminal_middle_click = "do_nothing"
+terminal_right_click = "paste"
+terminal_multi_line_paste = "block"
+terminal_auto_copy = true
+
+[sftp]
+show_hidden = false
+conflict_action = "replace"
+external_editor = "code"
+"##;
+        let document = ConfigDocument::from_toml_str(input).expect("parse");
+        assert_eq!(document.ui.appearance_mode, AppearanceMode::Light);
+        assert_eq!(document.ui.appearance_accent, AccentColor::Teal);
+        assert!(document.ui.reduce_motion);
+        assert_eq!(
+            document.ui.terminal_middle_click,
+            MiddleClickAction::DoNothing
+        );
+        assert_eq!(document.ui.terminal_right_click, RightClickAction::Paste);
+        assert_eq!(
+            document.ui.terminal_multi_line_paste,
+            MultiLinePastePolicy::Block
+        );
+        assert!(document.ui.terminal_auto_copy);
+        assert!(!document.sftp.show_hidden);
+        assert_eq!(document.sftp.conflict_action, SftpConflictAction::Replace);
+        assert_eq!(document.sftp.external_editor.as_deref(), Some("code"));
+
+        let serialized = document.to_toml_string().expect("serialize");
+        let reparsed = ConfigDocument::from_toml_str(&serialized).expect("reparse");
+        assert_eq!(reparsed.ui, document.ui);
+        assert_eq!(reparsed.sftp, document.sftp);
+    }
+
+    #[test]
+    fn folder_level_auth_proxy_sftp_tunnel_and_login_script_inherit() {
+        let mut document = ConfigDocument::default();
+        document.auth_profiles.insert(
+            "auth-folder".to_owned(),
+            AuthProfile {
+                id: "auth-folder".to_owned(),
+                name: "Folder key".to_owned(),
+                method: AuthMethod::Agent,
+            },
+        );
+        document.proxy_profiles.insert(
+            "proxy-folder".to_owned(),
+            ProxyProfile {
+                id: "proxy-folder".to_owned(),
+                name: "Folder proxy".to_owned(),
+                protocol: ProxyProtocol::Socks5,
+                host: "proxy.test".to_owned(),
+                port: 1080,
+                username: None,
+                resolve_dns_by_proxy: true,
+                password_secret_key: None,
+            },
+        );
+
+        let mut folder = FolderProfile::new("folder", "Folder");
+        folder.auth_profile_id = Some("auth-folder".to_owned());
+        folder.proxy_profile_id = Some("proxy-folder".to_owned());
+        folder.sftp = Some(SftpProfile {
+            show_hidden: false,
+            ..SftpProfile::default()
+        });
+        folder.tunnel = Some(TunnelProfile {
+            forwards: vec![TunnelForward {
+                name: Some("db".to_owned()),
+                enabled: true,
+                kind: TunnelForwardKind::Local,
+                bind_host: "127.0.0.1".to_owned(),
+                bind_port: 8080,
+                target_host: "db.test".to_owned(),
+                target_port: 5432,
+            }],
+        });
+        folder.login_script = Some(LoginScriptProfile {
+            steps: vec![LoginStep {
+                name: "wait".to_owned(),
+                action: LoginStepAction::Wait { millis: 250 },
+            }],
+        });
+        folder
+            .sessions
+            .push(SessionProfile::new("inherited", "Inherited", "host.test"));
+        document.folders.push(folder);
+
+        let resolved = document.resolve_session("inherited").expect("resolve");
+        assert!(resolved.auth.is_some());
+        assert!(resolved.proxy.is_some());
+        assert!(!resolved.sftp.show_hidden);
+        assert_eq!(resolved.tunnel.forwards.len(), 1);
+        assert_eq!(
+            resolved
+                .login_script
+                .as_ref()
+                .expect("inherited login script")
+                .steps
+                .len(),
+            1
+        );
+
+        // Session-level values win over the folder.
+        let mut explicit = SessionProfile::new("explicit", "Explicit", "host.test");
+        explicit.sftp = Some(SftpProfile {
+            show_hidden: true,
+            ..SftpProfile::default()
+        });
+        explicit.login_script = Some(LoginScriptProfile { steps: Vec::new() });
+        document.folders[0].sessions.push(explicit);
+
+        let resolved = document
+            .resolve_session("explicit")
+            .expect("resolve explicit");
+        assert!(resolved.sftp.show_hidden);
+        assert!(resolved
+            .login_script
+            .as_ref()
+            .is_some_and(LoginScriptProfile::is_empty));
+    }
+
+    #[test]
+    fn login_script_and_icon_are_sanitized() {
+        let input = r##"
+schema_version = 2
+
+[[folders]]
+id = "f"
+name = "F"
+
+[[folders.sessions]]
+id = "s"
+name = "S"
+host = "h"
+icon = "  /icons/server.png  "
+
+[folders.sessions.login_script]
+steps = [
+  { name = "  ", action = { kind = "wait", millis = 999_999 } },
+  { name = " login ", action = { kind = "keys", keys = "echo hi\n", tokens = true } },
+]
+
+[[folders.sessions]]
+id = "empty-icon"
+name = "Empty"
+host = "h"
+icon = "   "
+"##;
+        let document = ConfigDocument::from_toml_str(input).expect("parse");
+        let session = document.find_session("s").expect("session");
+        assert_eq!(session.icon.as_deref(), Some("/icons/server.png"));
+        let script = session.login_script.as_ref().expect("script");
+        assert_eq!(script.steps[0].name, "Step 1");
+        assert!(matches!(
+            script.steps[0].action,
+            LoginStepAction::Wait { millis } if millis == LOGIN_STEP_MAX_WAIT_MILLIS
+        ));
+        assert_eq!(script.steps[1].name, "login");
+        assert!(matches!(
+            &script.steps[1].action,
+            LoginStepAction::Keys { keys, tokens } if keys == "echo hi\n" && *tokens
+        ));
+        assert!(document
+            .find_session("empty-icon")
+            .expect("empty icon session")
+            .icon
+            .is_none());
+    }
+
+    #[test]
+    fn notes_and_tunnel_metadata_are_sanitized() {
+        let input = r##"
+schema_version = 2
+
+[[folders]]
+id = "f"
+name = "F"
+notes = "  folder note  "
+
+[folders.tunnel]
+forwards = [{ name = "  db  ", enabled = false, kind = "local", bind_host = "127.0.0.1", bind_port = 8080, target_host = "db.test", target_port = 5432 }]
+
+[[folders.sessions]]
+id = "s"
+name = "S"
+host = "h"
+notes = "   "
+
+[folders.sessions.tunnel]
+forwards = [{ name = "  ", enabled = true, kind = "local", bind_host = "127.0.0.1", bind_port = 8081, target_host = "x.test", target_port = 1 }]
+"##;
+        let document = ConfigDocument::from_toml_str(input).expect("parse");
+        let folder = &document.folders[0];
+        assert_eq!(folder.notes.as_deref(), Some("folder note"));
+        let folder_tunnel = folder.tunnel.as_ref().expect("folder tunnel");
+        assert_eq!(folder_tunnel.forwards[0].name.as_deref(), Some("db"));
+        assert!(!folder_tunnel.forwards[0].enabled);
+
+        let session = document.find_session("s").expect("session");
+        assert!(session.notes.is_none());
+        let session_tunnel = session.tunnel.as_ref().expect("session tunnel");
+        assert!(session_tunnel.forwards[0].name.is_none());
+        assert!(session_tunnel.forwards[0].enabled);
     }
 
     #[test]
@@ -2402,5 +3045,23 @@ key_id = "key-1"
         assert_eq!(merged.backup_font.as_deref(), Some("/fonts/farther.ttf"));
         // Scrollback is concrete and always comes from the nearer profile.
         assert_eq!(merged.scrollback_lines, 10_000);
+    }
+
+    #[test]
+    fn sanitize_mcp_d34_rules() {
+        let mut document = ConfigDocument::default();
+        document.ui.mcp_enabled = true;
+        document.ui.mcp_listen = McpListenMode::Lan;
+        document.ui.mcp_api_key.clear();
+        document.ui.mcp_control_user_connections = true;
+        document.ui.mcp_view_user_connections = false;
+        document.ui.mcp_port = 0;
+
+        let _ = document.sanitize();
+
+        assert!(!document.ui.mcp_enabled);
+        assert!(document.ui.mcp_view_user_connections);
+        assert_eq!(document.ui.mcp_port, default_mcp_port());
+        assert_eq!(document.ui.mcp_listen.bind_host(), "0.0.0.0");
     }
 }

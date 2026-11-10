@@ -34,10 +34,11 @@ pub(crate) mod generated_ui {
 }
 
 use generated_ui::{
-    AuthKeyOption, AuthKeyboardPrompt, FileCrumb, FileRow, HostKeyEntry, HostKeyGroup, MainWindow,
-    Palette, PanelFrameData, PrivateKeyRow, ProxyProfileOption, ProxyRow, QuickConnectRow,
-    SessionTreeRow, SftpPaneData, SftpTransferRow, SplitHandleData, TerminalScrollInfo, Theme,
-    ThemeManagerRow, TriStateField, TunnelRow, WorkspacePaneLeaf, WorkspaceSplitter, WorkspaceTab,
+    AuthKeyOption, AuthKeyboardPrompt, FileCrumb, FileRow, FindAcrossMatchRow, HostKeyEntry,
+    HostKeyGroup, MainWindow, Palette, PanelFrameData, PrivateKeyRow, ProxyProfileOption, ProxyRow,
+    QuickConnectRow, SessionTreeRow, SftpPaneData, SftpTransferRow, SplitHandleData,
+    TerminalScrollInfo, Theme, ThemeManagerRow, TriStateField, TunnelRow, WorkspacePaneLeaf,
+    WorkspaceSplitter, WorkspaceTab,
 };
 
 /// Keeps the pixel-rendered terminal surface in sync with the runtime.
@@ -273,6 +274,9 @@ impl YShellApp {
             .prepare_desktop_startup_workspace();
         let manager = crate::windows::WindowManager::new(Rc::clone(&self.runtime))?;
         self.manager = Some(manager);
+        // D35：启动主密码解锁（仅 GUI 路径；CLI / MCP 不弹窗，也不读任何
+        // 主密码环境变量；见契约 §14.4b）。投影标志置位后 `dialog_windows` 同步创建解锁窗。
+        let _ = self.runtime.borrow_mut().request_master_password_unlock();
         Ok(())
     }
 
@@ -287,49 +291,54 @@ impl YShellApp {
     }
 }
 
-/// 解析外观设置（W1 用环境变量作为验收开关；`config.toml [appearance]` 接线在 W4/W5）。
+/// 把配置里的主题模式映射成 UI 侧模式。
+fn theme_mode_from_config(mode: yshell_config::AppearanceMode) -> ThemeMode {
+    match mode {
+        yshell_config::AppearanceMode::System => ThemeMode::System,
+        yshell_config::AppearanceMode::Light => ThemeMode::Light,
+        yshell_config::AppearanceMode::Dark => ThemeMode::Dark,
+    }
+}
+
+/// 把配置里的强调色映射成预设 id（`follow_system` 暂回退到 Windows 蓝）。
+pub(crate) fn accent_id_from_config(accent: yshell_config::AccentColor) -> &'static str {
+    use yshell_config::AccentColor as Accent;
+    match accent {
+        Accent::FollowSystem | Accent::Blue => "blue",
+        Accent::Teal => "teal",
+        Accent::Purple => "purple",
+        Accent::Green => "green",
+        Accent::Orange => "orange",
+        Accent::Magenta => "magenta",
+    }
+}
+
+/// 生效外观：只读 `[ui] appearance_mode / appearance_accent`。
 ///
-/// `YSHELL_THEME`：`system`（默认）/ `light` / `dark`
-/// `YSHELL_ACCENT`：强调色预设 id（`blue` 默认，另有 teal/purple/green/orange/magenta）
-fn resolve_appearance(
-    theme_env: Option<&str>,
-    accent_env: Option<&str>,
+/// 应用配置一律来自配置文件，不读任何环境变量；测试 / 冒烟通过 `--config-dir`
+/// 隔离配置目录（见 `crates/yshell-app/src/main.rs`）。
+pub(crate) fn resolve_appearance_with_config(
+    ui: &yshell_config::UiProfile,
 ) -> (ThemeMode, AccentColors) {
-    let mode = theme_env.and_then(ThemeMode::from_id).unwrap_or_default();
-    let accent = appearance::resolve_accent(accent_env.unwrap_or_default());
-    (mode, accent)
+    (
+        theme_mode_from_config(ui.appearance_mode),
+        appearance::resolve_accent(accent_id_from_config(ui.appearance_accent)),
+    )
 }
 
 /// 把解析后的主题模式与强调色写入 Slint 的 `Theme` 全局。
 ///
 /// 明暗的"跟随系统"由 Slint 侧处理（`Theme.mode = unknown` 时读取
 /// std-widgets 的 `Palette.color-scheme`），Rust 只负责用户显式选择的模式。
-pub(crate) fn apply_appearance(window: &MainWindow) {
-    let (mode, accent) = resolve_appearance(
-        std::env::var("YSHELL_THEME").ok().as_deref(),
-        std::env::var("YSHELL_ACCENT").ok().as_deref(),
-    );
+pub(crate) fn apply_appearance(window: &MainWindow, ui: &yshell_config::UiProfile) {
+    let (mode, accent) = resolve_appearance_with_config(ui);
 
     let theme = window.global::<Theme>();
-    theme.set_mode(match mode {
-        ThemeMode::System => 0,
-        ThemeMode::Light => 1,
-        ThemeMode::Dark => 2,
-    });
+    theme.set_mode(theme_mode_index(mode));
 
-    // §6.4.4 / §6.1.5："减少动画"总开关。设置页的开关直接写 Theme.reduce-motion，
-    // 这里只负责启动时的初值（`YSHELL_REDUCE_MOTION=1` 关闭所有过渡）。
-    if std::env::var("YSHELL_REDUCE_MOTION")
-        .ok()
-        .is_some_and(|value| {
-            matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "1" | "true" | "yes" | "on"
-            )
-        })
-    {
-        theme.set_reduce_motion(true);
-    }
+    // §6.4.4 / §6.1.5："减少动画"总开关。只读 `[ui] reduce_motion`（Settings →
+    // General → Motion 会即时写回配置）；启动不再接受任何环境变量开关。
+    theme.set_reduce_motion(ui.reduce_motion);
 
     // 显式浅色/深色时同步覆盖 std-widgets 的色板，保证整窗一致；跟随系统时不动。
     // T0：Slint 1.18.1 起 `slint::language::ColorScheme` 是公开类型（1.9 只能用
@@ -344,6 +353,23 @@ pub(crate) fn apply_appearance(window: &MainWindow) {
             .set_color_scheme(ColorScheme::Dark),
     }
 
+    apply_accent_to_theme(&theme, accent);
+}
+
+/// `ThemeMode` → Slint `Theme.mode` value（0 系统 / 1 浅 / 2 深）。
+fn theme_mode_index(mode: ThemeMode) -> i32 {
+    match mode {
+        ThemeMode::System => 0,
+        ThemeMode::Light => 1,
+        ThemeMode::Dark => 2,
+    }
+}
+
+/// 把解析后的强调色写入 `Theme` 全局。
+///
+/// `apply_appearance`（启动）与 [`apply_app_theme_preview`]（Settings 即时
+/// 预览）共用，派生色规则仍只在 `yshell_ui::appearance` 一处。
+fn apply_accent_to_theme(theme: &Theme, accent: AccentColors) {
     let to_color =
         |value: appearance::RgbColor| slint::Color::from_rgb_u8(value.red, value.green, value.blue);
     theme.set_accent_light(to_color(accent.light));
@@ -358,10 +384,42 @@ pub(crate) fn apply_appearance(window: &MainWindow) {
     theme.set_accent_soft_dark(to_color(accent.soft_dark));
 }
 
+/// D36：把当前生效的 App theme（Mode + 强调色）写入任意窗口的 `Theme` 全局。
+///
+/// Settings 打开期间投影里的值来自 App theme 草稿（即时预览）；关闭后投影回到
+/// 持久化基线，所以 Cancel / × / Esc 的回滚也走这条路径。外观只来自配置文件，
+/// 不再有环境变量覆盖。
+///
+/// 只写 `Theme.mode` 与强调色，不动 std-widgets 的 `Palette`：`Theme.system-
+/// scheme` 是 `Palette.color-scheme` 的实时绑定，覆盖 `Palette` 会让"跟随系统"
+/// 再也读不回系统值（启动时的 `apply_appearance` 是 `Palette` 的唯一写入点）。
+pub(crate) fn apply_app_theme_preview(theme: &Theme<'_>, projection: &AppProjection) {
+    theme.set_mode(projection.settings_appearance_mode_index.clamp(0, 2));
+    // Swatch order = `runtime/settings.rs::APP_ACCENT_IDS`
+    // (0 = Follow system → Windows Blue, 1 = Blue, then the presets).
+    let accent = appearance::resolve_accent(accent_preset_id(
+        projection.settings_appearance_accent_index,
+    ));
+    apply_accent_to_theme(theme, accent);
+}
+
+/// Accent swatch index → accent preset id.
+fn accent_preset_id(index: i32) -> &'static str {
+    match index {
+        2 => "teal",
+        3 => "purple",
+        4 => "green",
+        5 => "orange",
+        6 => "magenta",
+        _ => "blue",
+    }
+}
+
 /// 平台默认 UI 字体族（必须同时覆盖拉丁与 CJK）。
 ///
 /// Slint 1.9 的 `font-family` 只接受单一字体族（不支持逗号列表），软件渲染器也没有
 /// 逐字形回退，所以不能像 Web 那样写字体链（见设计规范 §7.5）。
+/// UI 字体只取平台默认，不读环境变量（产品配置一律来自配置文件）。
 fn platform_default_ui_font() -> &'static str {
     if cfg!(target_os = "windows") {
         "Microsoft YaHei UI"
@@ -369,16 +427,6 @@ fn platform_default_ui_font() -> &'static str {
         "PingFang SC"
     } else {
         "Noto Sans SC"
-    }
-}
-
-/// 解析 UI 字体族：`YSHELL_UI_FONT` 非空时优先（验收/调试用），否则按平台取默认。
-///
-/// 覆盖值来自运行时环境，无法保证 `'static`，故返回 `String`；空串或纯空白视为未覆盖。
-fn resolve_ui_font(env_override: Option<&str>) -> String {
-    match env_override.map(str::trim) {
-        Some(font) if !font.is_empty() => font.to_owned(),
-        _ => platform_default_ui_font().to_owned(),
     }
 }
 
@@ -412,8 +460,7 @@ fn platform_default_mono_font() -> &'static str {
 /// 把 UI / 等宽字体族写入 `Theme` 全局（须在窗口创建后、`run()` 前调用）。
 pub(crate) fn apply_fonts(window: &MainWindow) {
     let theme = window.global::<Theme>();
-    let font = resolve_ui_font(std::env::var("YSHELL_UI_FONT").ok().as_deref());
-    theme.set_font_ui(font.into());
+    theme.set_font_ui(platform_default_ui_font().into());
     theme.set_font_mono(platform_default_mono_font().into());
 }
 
@@ -434,32 +481,30 @@ fn resolve_language(requested: &str, system_locale: Option<&str>) -> &'static st
     }
 }
 
-/// 系统 locale：优先环境变量（验收/CI），否则 `sys-locale`（覆盖 Windows）。
+/// 系统 locale：只走 `sys-locale`（覆盖 Windows / macOS / Unix，含 OS API）。
+///
+/// 不读 `LC_ALL` / `LANG` / `LC_MESSAGES`：界面语言是产品配置，来自
+/// `[ui] language`；`system` 分支由 OS API 决定。
 fn detect_system_locale() -> Option<String> {
-    std::env::var("LC_ALL")
-        .or_else(|_| std::env::var("LANG"))
-        .or_else(|_| std::env::var("LC_MESSAGES"))
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .or_else(sys_locale::get_locale)
+    sys_locale::get_locale()
 }
 
 /// 应用界面语言。
 ///
-/// 优先级：`YSHELL_LANG` 环境变量（验收开关）> 配置 `ui.language` > 系统 locale。
-/// `requested` 为空时等同 `system`。
+/// 只读配置 `ui.language`（`system` 跟随 OS locale）。`requested` 为空时等同
+/// `system`；不再接受 `YSHELL_LANG` 之类的环境变量覆盖。
 pub(crate) fn apply_language(requested: &str) {
-    let env_override = std::env::var("YSHELL_LANG").unwrap_or_default();
-    let preference = if env_override.trim().is_empty() {
-        requested
-    } else {
-        env_override.as_str()
-    };
     let system_locale = detect_system_locale();
-    let language = resolve_language(preference, system_locale.as_deref());
+    let language = resolve_language(requested, system_locale.as_deref());
     if let Err(error) = slint::select_bundled_translation(language) {
         eprintln!("failed to select bundled translation '{language}': {error}");
     }
+}
+
+/// D36/Settings：把 `[ui] reduce_motion` 写入窗口的 `Theme` 全局（启动初值与
+/// Settings → General → Motion 开关共用；配置是唯一来源，不读环境变量）。
+pub(crate) fn apply_reduce_motion(theme: &Theme<'_>, enabled: bool) {
+    theme.set_reduce_motion(enabled);
 }
 
 pub(crate) fn wire_callbacks(
@@ -539,6 +584,9 @@ pub(crate) fn wire_callbacks(
         window.on_title_drag_requested(move || {
             if let Some(window) = weak.upgrade() {
                 crate::win_chrome::start_native_window_move(window.window());
+                // 系统移动循环吞掉 mouse-up：移动结束后清掉 Slint 残留的指针抓取，
+                // 否则拖完的第一次点击会被残留的标题栏 TouchArea 吃掉。
+                crate::win_chrome::reset_pointer_state_after_native_move(window.as_weak());
             }
         });
     }
@@ -703,23 +751,6 @@ pub(crate) fn wire_callbacks(
                 surface.refresh(&window);
             }
             Err(error) => set_error_status(&window, "Could not rename the tab.", &error),
-        }
-    });
-
-    // 双击标签：已断开/未连接就重连，否则复制 session。
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_tab_double_click(move |tab_id| {
-        let Some(window) = weak.upgrade() else {
-            return;
-        };
-        match runtime_ref.borrow_mut().tab_double_click(tab_id.as_ref()) {
-            Ok(projection) => {
-                apply_projection(&window, &projection);
-                surface.refresh(&window);
-            }
-            Err(error) => set_error_status(&window, "Could not open the tab.", &error),
         }
     });
 
@@ -921,6 +952,38 @@ pub(crate) fn wire_callbacks(
         }
     });
 
+    // Session → Duplicate Tab：复制活动标签同源会话。
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_duplicate_active_tab(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let tab_id = runtime_ref.borrow().active_tab_id.clone();
+        let Some(tab_id) = tab_id else {
+            return;
+        };
+        match runtime_ref.borrow_mut().duplicate_tab(&tab_id) {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not duplicate the tab.", &error),
+        }
+    });
+
+    // View → Full Screen / F11：Slint Window 无 fullscreen 属性，走 Window API。
+    let weak = window.as_weak();
+    window.on_toggle_fullscreen(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let next = !window.window().is_fullscreen();
+        window.window().set_fullscreen(next);
+        window.set_window_fullscreen(next);
+    });
+
     // N9：同步发送按键（终端右键 `Send Key Input to …` / 标签右键"接收键输入" /
     // 状态栏 chip 一键停止）。
     let weak = window.as_weak();
@@ -1068,11 +1131,7 @@ pub(crate) fn wire_callbacks(
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
-            Err(error) => set_error_status(
-                &window,
-                "Could not update the MCP setting.",
-                &error,
-            ),
+            Err(error) => set_error_status(&window, "Could not update the MCP setting.", &error),
         }
     });
 
@@ -1083,7 +1142,10 @@ pub(crate) fn wire_callbacks(
         let Some(window) = weak.upgrade() else {
             return;
         };
-        match runtime_ref.borrow_mut().set_mcp_auto_approve_control(enabled) {
+        match runtime_ref
+            .borrow_mut()
+            .set_mcp_auto_approve_control(enabled)
+        {
             Ok(projection) => {
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
@@ -1169,6 +1231,67 @@ pub(crate) fn wire_callbacks(
                 surface.refresh(&window);
             }
             Err(error) => set_error_status(&window, "Could not open the saved session.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_open_selected_saved_session_in_new_tab(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let result = runtime_ref
+            .borrow_mut()
+            .open_selected_saved_session_in_new_tab();
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(
+                &window,
+                "Could not open the saved session in a new tab.",
+                &error,
+            ),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_duplicate_selected_saved_session(move || {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let result = runtime_ref.borrow_mut().duplicate_selected_saved_session();
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => {
+                set_error_status(&window, "Could not duplicate the saved session.", &error)
+            }
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_rename_saved_session(move |session_id: SharedString, name: SharedString| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let result = runtime_ref
+            .borrow_mut()
+            .rename_saved_session(session_id.as_ref(), name.as_ref());
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Could not rename the saved session.", &error),
         }
     });
 
@@ -1681,6 +1804,7 @@ pub(crate) fn wire_callbacks(
     let runtime_ref = Rc::clone(&runtime);
     let surface = surface_source.clone();
     let suppress_ref = Rc::clone(&suppress_selection_end);
+    let clipboard_ref = Rc::clone(&clipboard);
     window.on_terminal_selection_end(move |x, y| {
         let Some(window) = weak.upgrade() else {
             return;
@@ -1698,6 +1822,12 @@ pub(crate) fn wire_callbacks(
         let result = runtime_ref.borrow_mut().finish_active_terminal_selection();
         match result {
             Ok(projection) => {
+                // Settings → Terminal 的自动复制：选区一结束就写系统剪贴板。
+                if let Some(text) = runtime_ref.borrow_mut().auto_copy_terminal_selection() {
+                    if let Some(clipboard) = clipboard_ref.borrow_mut().as_mut() {
+                        let _ = clipboard.set_contents(text);
+                    }
+                }
                 apply_projection(&window, &projection);
                 surface.refresh(&window);
             }
@@ -1815,6 +1945,54 @@ pub(crate) fn wire_callbacks(
                 surface.refresh(&window);
             }
             Err(error) => set_error_status(&window, "Find failed.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_set_terminal_search_across(move |across| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let result = runtime_ref.borrow_mut().set_terminal_search_across(across);
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Find failed.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_activate_terminal_find_across_match(move |index| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let index = usize::try_from(index).unwrap_or(0);
+        let result = runtime_ref
+            .borrow_mut()
+            .activate_terminal_find_across_match(index);
+        match result {
+            Ok(projection) => {
+                apply_projection(&window, &projection);
+                surface.refresh(&window);
+            }
+            Err(error) => set_error_status(&window, "Find failed.", &error),
+        }
+    });
+
+    let weak = window.as_weak();
+    let runtime_ref = Rc::clone(&runtime);
+    let surface = surface_source.clone();
+    window.on_quick_connect_clear_input(move || {
+        if let Some(window) = weak.upgrade() {
+            let projection = runtime_ref.borrow_mut().update_quick_connect_input("");
+            apply_projection(&window, &projection);
+            surface.refresh(&window);
         }
     });
 
@@ -2385,127 +2563,6 @@ pub(crate) fn wire_callbacks(
             set_plain_status(&window, "Could not access the system clipboard.".into());
         }
         surface.refresh(&window);
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_update_secret_reset_confirmation(move |confirmation| {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref
-                .borrow_mut()
-                .update_secret_reset_confirmation(confirmation.as_ref());
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_reset_secrets(move || {
-        let Some(window) = weak.upgrade() else {
-            return;
-        };
-        let result = runtime_ref.borrow_mut().reset_secret_store();
-        match result {
-            Ok(projection) => {
-                apply_projection(&window, &projection);
-                surface.refresh(&window);
-            }
-            Err(error) => set_error_status(&window, "Could not reset the secret store.", &error),
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_open_known_hosts_manager(move || {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref.borrow_mut().open_known_hosts_manager();
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_close_known_hosts_manager(move || {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref.borrow_mut().close_known_hosts_manager();
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_select_previous_known_host(move || {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref.borrow_mut().select_previous_known_host();
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_select_next_known_host(move || {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref.borrow_mut().select_next_known_host();
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_remove_selected_known_host(move || {
-        let Some(window) = weak.upgrade() else {
-            return;
-        };
-        let result = runtime_ref.borrow_mut().remove_selected_known_host();
-        match result {
-            Ok(projection) => {
-                apply_projection(&window, &projection);
-                surface.refresh(&window);
-            }
-            Err(error) => set_error_status(&window, "Known hosts operation failed.", &error),
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_update_known_hosts_clear_confirmation(move |value| {
-        if let Some(window) = weak.upgrade() {
-            let projection = runtime_ref
-                .borrow_mut()
-                .update_known_hosts_clear_confirmation(value.as_ref());
-            apply_projection(&window, &projection);
-            surface.refresh(&window);
-        }
-    });
-
-    let weak = window.as_weak();
-    let runtime_ref = Rc::clone(&runtime);
-    let surface = surface_source.clone();
-    window.on_clear_all_known_hosts(move || {
-        let Some(window) = weak.upgrade() else {
-            return;
-        };
-        let result = runtime_ref.borrow_mut().clear_all_known_hosts();
-        match result {
-            Ok(projection) => {
-                apply_projection(&window, &projection);
-                surface.refresh(&window);
-            }
-            Err(error) => set_error_status(&window, "Known hosts operation failed.", &error),
-        }
     });
 
     // --- N4：私钥管理页 -----------------------------------------------------
@@ -4467,6 +4524,12 @@ fn wire_n1_sftp_callbacks(
     wire_result!(on_transfer_clear_completed, "SFTP transfer", |runtime| {
         runtime.clear_completed_sftp_transfers()
     });
+    wire_projection!(on_transfer_pause_all, |runtime| runtime
+        .pause_all_sftp_transfers());
+    wire_projection!(on_transfer_resume_all, |runtime| runtime
+        .resume_all_sftp_transfers());
+    wire_projection!(on_add_tunnel_from_dock_panel, |runtime| runtime
+        .add_tunnel_from_dock_panel());
 
     // ---------------------------------------------------------- 剪贴板
     // Ctrl+C/X 取"有选择的栏"（远端优先）；Ctrl+V 总是跨栏粘贴。
@@ -4630,6 +4693,10 @@ pub(crate) enum DialogKind {
     TerminalFontPrimary,
     /// N5：终端外观的备用字体文件（pick_file，单值，选中即替换）。
     TerminalFontBackup,
+    /// D33：Settings → SFTP → External editor 的可执行文件（pick_file；仅 Custom）。
+    SettingsSftpEditor,
+    /// Session Editor：Icon → Custom image（pick_file；Windows 图片/任意文件）。
+    SessionIcon,
 }
 
 /// rfd 的 GTK 后端是单个全局线程：并发/重复调用会在同一 GTK 主循环上嵌套对话框。
@@ -4670,7 +4737,7 @@ fn spawn_pick_folder(
 }
 
 /// N6：用系统默认程序打开文件/目录（worker 线程；失败静默——菜单项已按存在性启用）。
-fn spawn_open_path(path: String) {
+pub(crate) fn spawn_open_path(path: String) {
     if path.is_empty() {
         return;
     }
@@ -4711,6 +4778,33 @@ fn spawn_pick_file(
     });
 }
 
+/// D33：Settings → SFTP → External editor（Custom）的可执行文件选择。
+pub(crate) fn spawn_pick_settings_sftp_editor(
+    dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
+) {
+    // Windows 的系统文件对话框始终可用；其它平台沿用 DISPLAY 预检，不可用时
+    // 保持路径输入框（失败回落手工输入，不阻塞 Settings）。
+    if !cfg!(windows) && !file_dialogs_available() {
+        return;
+    }
+    spawn_pick_file(
+        dialog_tx,
+        DialogKind::SettingsSftpEditor,
+        "Choose editor executable",
+    );
+}
+
+/// Session Editor：Icon → Custom image 的文件选择（pick_file）。
+///
+/// Windows 的系统文件对话框始终可用；其它平台沿用 DISPLAY 预检，不可用时
+/// 由调用方写状态提示（Icon 也有 Default/预设可选，不阻塞编辑）。
+pub(crate) fn spawn_pick_session_icon(dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>) {
+    if !cfg!(windows) && !file_dialogs_available() {
+        return;
+    }
+    spawn_pick_file(dialog_tx, DialogKind::SessionIcon, "Select a session icon");
+}
+
 /// N4：在 worker 线程上打开 `save_file` 并写文本（结果经 mpsc 回填状态）。
 fn spawn_save_text(
     dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
@@ -4741,6 +4835,54 @@ fn spawn_save_text(
             path: path.display().to_string(),
             error,
         });
+    });
+}
+
+// --- managers-dialogs：管理器子窗的 rfd 入口 --------------------------------
+
+/// 管理器子窗的 `pick_file`（Import 文件 / Add Font File）。
+///
+/// Windows 的系统文件对话框始终可用；其它平台无显示服务器时静默返回，
+/// 子窗保留可手输的路径输入框（原型要求失败回落路径输入）。
+pub(crate) fn spawn_pick_manager_file(
+    dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
+    kind: DialogKind,
+    title: &str,
+) {
+    if !cfg!(windows) && !file_dialogs_available() {
+        return;
+    }
+    spawn_pick_file(dialog_tx, kind, title);
+}
+
+/// 管理器子窗的 `save_file` 路径选择（**只回填路径，不写盘**；导出由 runtime
+/// 的 `export_*_to_path` 在用户点 Export/Apply 时完成）。
+pub(crate) fn spawn_pick_manager_save_path(
+    dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
+    kind: DialogKind,
+    title: &str,
+    file_name: &str,
+) {
+    if !cfg!(windows) && !file_dialogs_available() {
+        return;
+    }
+    if DIALOG_IN_FLIGHT.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let title = title.to_owned();
+    let file_name = file_name.to_owned();
+    std::thread::spawn(move || {
+        let picked = rfd::FileDialog::new()
+            .set_title(title)
+            .set_file_name(file_name)
+            .save_file();
+        DIALOG_IN_FLIGHT.store(false, Ordering::SeqCst);
+        if let Some(path) = picked {
+            let _ = dialog_tx.send(FileDialogOutcome::Picked {
+                kind,
+                path: path.display().to_string(),
+            });
+        }
     });
 }
 
@@ -4953,26 +5095,23 @@ fn dispatch_sftp_menu_action(
             }
         }
         "new-folder" => {
-            window.set_sftp_dialog_name_text("".into());
-            window.set_sftp_dialog_kind("new-folder".into());
+            window.set_sftp_remote_inline_new_folder_text("".into());
+            window.set_sftp_remote_inline_new_folder_visible(true);
+            window.set_sftp_remote_inline_rename_index(-1);
             Ok(runtime.projection())
         }
         "rename" => {
             let name = runtime.sftp_selected_name_text();
-            window.set_sftp_dialog_name_text(name.into());
-            window.set_sftp_dialog_kind("rename".into());
+            window.set_sftp_remote_inline_rename_text(name.into());
+            window.set_sftp_remote_inline_rename_index(window.get_sftp_selected_index());
+            window.set_sftp_remote_inline_new_folder_visible(false);
             Ok(runtime.projection())
         }
         "delete" | "delete-selection" => {
             window.set_sftp_dialog_kind("delete".into());
             Ok(runtime.projection())
         }
-        "chmod" | "chmod-selection" => {
-            let permissions = runtime.sftp_selected_permissions_text();
-            window.set_sftp_dialog_permissions_text(permissions.into());
-            window.set_sftp_dialog_kind("chmod".into());
-            Ok(runtime.projection())
-        }
+        "chmod" | "chmod-selection" => Ok(runtime.open_sftp_chmod_dialog()),
         "copy-to" => {
             window.set_sftp_dialog_local_text(runtime.sftp_path.clone().into());
             window.set_sftp_dialog_kind("copy-to".into());
@@ -5093,7 +5232,8 @@ pub(crate) fn apply_dialog_outcome(
         FileDialogOutcome::Picked { kind, path } => match kind {
             DialogKind::PrivateKeyImport => runtime.update_private_keys_import_path(&path),
             DialogKind::AuthKeyFile => runtime.set_auth_prompt_key_path(&path),
-            DialogKind::HostKeysImport => runtime.import_host_keys_from_path(&path),
+            // managers-dialogs：Import 子窗只回填路径，点 Import 再读文件。
+            DialogKind::HostKeysImport => runtime.update_host_keys_import_path(&path),
             // N6：终端日志弹窗的保存位置。
             DialogKind::LoggingDirectory => runtime.update_logging_dialog_directory(&path),
             // N1：rfd 直接触发的 SFTP 上传/下载（错误 → 状态栏）。
@@ -5119,13 +5259,20 @@ pub(crate) fn apply_dialog_outcome(
                     );
                     runtime.projection()
                 }),
-            // 保存类对话框不会产生 Picked。
-            DialogKind::PublicKeyExport | DialogKind::HostKeysExport => runtime.projection(),
+            // managers-dialogs：导出子窗的 Browse 只回填目标路径，点 Export 再写盘。
+            DialogKind::PublicKeyExport => runtime.update_private_keys_export_path(&path),
+            DialogKind::HostKeysExport => runtime.update_host_keys_export_path(&path),
             // N5：终端外观的字体文件（主字体 / 备用字体）。
             DialogKind::TerminalFontPrimary => {
                 runtime.update_settings_appearance_font_family(&path)
             }
             DialogKind::TerminalFontBackup => runtime.set_settings_appearance_backup_font(&path),
+            // D33：Settings → SFTP 外部编辑器路径（Custom）。
+            DialogKind::SettingsSftpEditor => {
+                runtime.update_settings_sftp_external_editor_path(&path)
+            }
+            // Session Editor：Icon → Custom image（Browse 选中即回填草稿）。
+            DialogKind::SessionIcon => runtime.update_editor_icon_custom(&path),
         },
         FileDialogOutcome::Saved { kind, path, error } => match kind {
             DialogKind::HostKeysExport | DialogKind::HostKeysImport => match &error {
@@ -5230,7 +5377,7 @@ fn tri_state_field_model(fields: &[TriStateFieldData]) -> ModelRc<TriStateField>
 }
 
 /// `[ThemeManagerRowData]` → Slint model (TERM-1).
-fn theme_manager_row_from(row: &ThemeManagerRowData) -> ThemeManagerRow {
+pub(crate) fn theme_manager_row_from(row: &ThemeManagerRowData) -> ThemeManagerRow {
     ThemeManagerRow {
         id: row.id.clone().into(),
         name: row.name.clone().into(),
@@ -5241,7 +5388,10 @@ fn theme_manager_row_from(row: &ThemeManagerRowData) -> ThemeManagerRow {
     }
 }
 
-fn theme_manager_row_matches(current: &ThemeManagerRow, next: &ThemeManagerRowData) -> bool {
+pub(crate) fn theme_manager_row_matches(
+    current: &ThemeManagerRow,
+    next: &ThemeManagerRowData,
+) -> bool {
     let swatches_match = current.swatches.row_count() == next.swatches.len()
         && (0..next.swatches.len()).all(|index| {
             current.swatches.row_data(index).is_some_and(|color| {
@@ -5285,7 +5435,7 @@ fn swatch_model(swatches: &[[u8; 3]]) -> ModelRc<slint::Color> {
 }
 
 /// `#rrggbb` (or bare hex) → Slint color; invalid input falls back to black.
-fn slint_color_from_hex(hex: &str) -> slint::Color {
+pub(crate) fn slint_color_from_hex(hex: &str) -> slint::Color {
     match yshell_terminal::TerminalColor::from_hex(hex) {
         Some(color) => slint::Color::from_rgb_u8(color.red, color.green, color.blue),
         None => slint::Color::from_rgb_u8(0, 0, 0),
@@ -5293,12 +5443,12 @@ fn slint_color_from_hex(hex: &str) -> slint::Color {
 }
 
 /// RGB 三元组 → Slint color（预览表面底色等）。
-fn slint_color_from_rgb(rgb: [u8; 3]) -> slint::Color {
+pub(crate) fn slint_color_from_rgb(rgb: [u8; 3]) -> slint::Color {
     slint::Color::from_rgb_u8(rgb[0], rgb[1], rgb[2])
 }
 
 /// Rasterized terminal frame → Slint image.
-fn frame_image(frame: &yshell_terminal::TerminalFrame) -> slint::Image {
+pub(crate) fn frame_image(frame: &yshell_terminal::TerminalFrame) -> slint::Image {
     slint::Image::from_rgba8(SharedPixelBuffer::clone_from_slice(
         &frame.rgba,
         frame.width,
@@ -5724,10 +5874,16 @@ fn sftp_pane_data_from(pane: &crate::runtime::SftpPaneProjection) -> SftpPaneDat
         remote_edit_loading_text: pane.remote_edit_loading_text.clone().into(),
         spinner_phase: pane.spinner_phase,
         local_rows: ModelRc::new(VecModel::from(
-            pane.local_rows.iter().map(file_row_from).collect::<Vec<_>>(),
+            pane.local_rows
+                .iter()
+                .map(file_row_from)
+                .collect::<Vec<_>>(),
         )),
         local_crumbs: ModelRc::new(VecModel::from(
-            pane.local_crumbs.iter().map(sftp_crumb_from).collect::<Vec<_>>(),
+            pane.local_crumbs
+                .iter()
+                .map(sftp_crumb_from)
+                .collect::<Vec<_>>(),
         )),
         local_path_text: pane.local_path_text.clone().into(),
         local_path_separator: pane.local_path_separator.clone().into(),
@@ -5809,6 +5965,8 @@ fn workspace_tab_from(tab: &TabData) -> WorkspaceTab {
         logging: tab.logging,
         sync_role_text: tab.sync_role_text.clone().into(),
         unread: i32::try_from(tab.unread).unwrap_or(i32::MAX),
+        icon_name: tab.icon_name.clone().into(),
+        ai_origin: tab.ai_origin,
     }
 }
 
@@ -5822,6 +5980,38 @@ fn workspace_tab_matches(current: &WorkspaceTab, next: &TabData) -> bool {
         && current.logging == next.logging
         && current.sync_role_text.as_str() == next.sync_role_text
         && current.unread == i32::try_from(next.unread).unwrap_or(i32::MAX)
+        && current.icon_name.as_str() == next.icon_name
+        && current.connection_badge.as_str() == next.connection_badge
+        && current.ai_origin == next.ai_origin
+}
+
+fn find_across_row_from(row: &crate::runtime::TerminalFindAcrossRow) -> FindAcrossMatchRow {
+    FindAcrossMatchRow {
+        tab_id: row.tab_id.clone().into(),
+        title: row.title.clone().into(),
+        snippet: row.snippet.clone().into(),
+        match_count: row.match_count,
+    }
+}
+
+fn set_find_across_rows_if_changed(
+    window: &MainWindow,
+    rows: &[crate::runtime::TerminalFindAcrossRow],
+) {
+    let current = window.get_terminal_find_across_rows();
+    let unchanged = current.row_count() == rows.len()
+        && current.iter().zip(rows).all(|(current, next)| {
+            current.tab_id.as_str() == next.tab_id
+                && current.title.as_str() == next.title
+                && current.snippet.as_str() == next.snippet
+                && current.match_count == next.match_count
+        });
+    if unchanged {
+        return;
+    }
+    window.set_terminal_find_across_rows(ModelRc::new(VecModel::from(
+        rows.iter().map(find_across_row_from).collect::<Vec<_>>(),
+    )));
 }
 
 /// Replaces the tab model only when the projected tabs changed, so that a
@@ -5854,6 +6044,8 @@ fn workspace_pane_leaf_from(
         tabs: ModelRc::new(VecModel::from(
             leaf.tabs.iter().map(workspace_tab_from).collect::<Vec<_>>(),
         )),
+        sync_member: leaf.sync_member,
+        sync_eligible: leaf.sync_eligible,
     }
 }
 
@@ -5903,7 +6095,10 @@ fn apply_workspace_split_leaves(
         let handle: Option<std::rc::Rc<dyn Model<Data = WorkspacePaneLeaf>>> =
             current.clone().try_into().ok();
         if let Some(handle) = handle {
-            if let Some(model) = handle.as_any().downcast_ref::<VecModel<WorkspacePaneLeaf>>() {
+            if let Some(model) = handle
+                .as_any()
+                .downcast_ref::<VecModel<WorkspacePaneLeaf>>()
+            {
                 let structure_stable = (0..leaves.len()).all(|index| {
                     model
                         .row_data(index)
@@ -5930,6 +6125,8 @@ fn apply_workspace_split_leaves(
                         row.quick_connect_input_text = next.quick_connect_input_text.clone().into();
                         row.quick_connect_error_text = next.quick_connect_error_text.clone().into();
                         row.sftp = sftp_pane_data_from(&next.sftp);
+                        row.sync_member = next.sync_member;
+                        row.sync_eligible = next.sync_eligible;
                         model.set_row_data(index, row);
                     }
                     return;
@@ -5954,7 +6151,10 @@ fn apply_workspace_split_splitters(
         let handle: Option<std::rc::Rc<dyn Model<Data = WorkspaceSplitter>>> =
             current.clone().try_into().ok();
         if let Some(handle) = handle {
-            if let Some(model) = handle.as_any().downcast_ref::<VecModel<WorkspaceSplitter>>() {
+            if let Some(model) = handle
+                .as_any()
+                .downcast_ref::<VecModel<WorkspaceSplitter>>()
+            {
                 let structure_stable = (0..splitters.len()).all(|index| {
                     model
                         .row_data(index)
@@ -6095,7 +6295,7 @@ fn set_quick_connect_rows_if_changed(
 
 // --- N4：密钥管理页 / 认证弹窗的模型转换（带变更检测，避免重建行实例）--------
 
-fn private_key_row_from(row: &PrivateKeyRowData) -> PrivateKeyRow {
+pub(crate) fn private_key_row_from(row: &PrivateKeyRowData) -> PrivateKeyRow {
     PrivateKeyRow {
         id: row.id.clone().into(),
         label: row.label.clone().into(),
@@ -6108,7 +6308,7 @@ fn private_key_row_from(row: &PrivateKeyRowData) -> PrivateKeyRow {
     }
 }
 
-fn private_key_row_matches(current: &PrivateKeyRow, next: &PrivateKeyRowData) -> bool {
+pub(crate) fn private_key_row_matches(current: &PrivateKeyRow, next: &PrivateKeyRowData) -> bool {
     current.id == next.id.as_str()
         && current.label == next.label.as_str()
         && current.algorithm == next.algorithm.as_str()
@@ -6138,7 +6338,7 @@ fn set_private_keys_rows_if_changed(window: &MainWindow, rows: &[PrivateKeyRowDa
 
 // --- NET-1：代理管理器页 / 会话编辑器代理下拉的模型转换 ----------------------
 
-fn proxy_row_from(row: &ProxyRowData) -> ProxyRow {
+pub(crate) fn proxy_row_from(row: &ProxyRowData) -> ProxyRow {
     ProxyRow {
         id: row.id.clone().into(),
         name: row.name.clone().into(),
@@ -6151,7 +6351,7 @@ fn proxy_row_from(row: &ProxyRowData) -> ProxyRow {
     }
 }
 
-fn proxy_row_matches(current: &ProxyRow, next: &ProxyRowData) -> bool {
+pub(crate) fn proxy_row_matches(current: &ProxyRow, next: &ProxyRowData) -> bool {
     current.id == next.id.as_str()
         && current.name == next.name.as_str()
         && current.protocol == next.protocol.as_str()
@@ -6214,7 +6414,7 @@ fn host_key_entry_from(entry: &crate::runtime::HostKeyEntryData) -> HostKeyEntry
     }
 }
 
-fn host_key_group_from(group: &HostKeyGroupData) -> HostKeyGroup {
+pub(crate) fn host_key_group_from(group: &HostKeyGroupData) -> HostKeyGroup {
     HostKeyGroup {
         host: group.host.clone().into(),
         port: i32::from(group.port),
@@ -6228,7 +6428,7 @@ fn host_key_group_from(group: &HostKeyGroupData) -> HostKeyGroup {
     }
 }
 
-fn host_key_group_matches(current: &HostKeyGroup, next: &HostKeyGroupData) -> bool {
+pub(crate) fn host_key_group_matches(current: &HostKeyGroup, next: &HostKeyGroupData) -> bool {
     if current.host != next.host.as_str() || current.port != i32::from(next.port) {
         return false;
     }
@@ -6346,6 +6546,7 @@ fn session_tree_row_from(row: &crate::runtime::SessionTreeRow) -> SessionTreeRow
         id: row.id.clone().into(),
         expanded: row.expanded,
         selected: row.selected,
+        icon_name: row.icon_name.clone().into(),
     }
 }
 
@@ -6368,6 +6569,7 @@ fn session_tree_row_matches(
         && current.detail.as_str() == next.detail
         && current.id.as_str() == next.id
         && current.expanded == next.expanded
+        && current.icon_name.as_str() == next.icon_name
 }
 
 /// Replaces the session-tree row model only when the projection changed, so a
@@ -6561,9 +6763,6 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_config_dir(projection.config_dir_text.clone().into());
     window.set_secret_store_kind_text(projection.secret_store_kind_text.clone().into());
     window.set_secret_store_path_text(projection.secret_store_path_text.clone().into());
-    window.set_secret_reset_confirmation_text(
-        projection.secret_reset_confirmation_text.clone().into(),
-    );
     window.set_editor_folder_label_text(projection.editor_folder_label_text.clone().into());
     window.set_editor_folder_id_text(projection.editor_folder_id_text.clone().into());
     window.set_editor_folder_known(projection.editor_folder_known);
@@ -6594,43 +6793,6 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window
         .set_editor_auth_test_startup_text(projection.editor_auth_test_startup_text.clone().into());
     window.set_editor_auth_test_error_text(projection.editor_auth_test_error_text.clone().into());
-    window.set_known_hosts_modal_visible(projection.known_hosts_modal_visible);
-    window.set_known_hosts_inventory_rows_text(
-        projection.known_hosts_inventory_rows_text.clone().into(),
-    );
-    window.set_known_hosts_inventory_empty(projection.known_hosts_inventory_empty);
-    window.set_known_hosts_selection_kind_text(
-        projection.known_hosts_selection_kind_text.clone().into(),
-    );
-    window.set_known_hosts_selection_host_text(
-        projection.known_hosts_selection_host_text.clone().into(),
-    );
-    window.set_known_hosts_selection_port_text(
-        projection.known_hosts_selection_port_text.clone().into(),
-    );
-    window.set_known_hosts_selection_index(projection.known_hosts_selection_index);
-    window.set_known_hosts_selection_total(projection.known_hosts_selection_total);
-    window.set_known_hosts_details_text(projection.known_hosts_details_text.clone().into());
-    // D17：详情拆分字段（标签由 UI 侧 @tr 渲染）。
-    window.set_known_hosts_detail_host_text(projection.known_hosts_detail_host_text.clone().into());
-    window.set_known_hosts_detail_port_text(projection.known_hosts_detail_port_text.clone().into());
-    window.set_known_hosts_detail_algorithm_text(
-        projection.known_hosts_detail_algorithm_text.clone().into(),
-    );
-    window.set_known_hosts_detail_fingerprint_text(
-        projection
-            .known_hosts_detail_fingerprint_text
-            .clone()
-            .into(),
-    );
-    window.set_known_hosts_detail_path_text(projection.known_hosts_detail_path_text.clone().into());
-    window.set_known_hosts_path_text(projection.known_hosts_path_text.clone().into());
-    window.set_known_hosts_clear_confirmation_text(
-        projection
-            .known_hosts_clear_confirmation_text
-            .clone()
-            .into(),
-    );
     window.set_editor_proxy_mode_text(projection.editor_proxy_mode_text.clone().into());
     set_editor_proxy_options_if_changed(window, &projection.editor_proxy_options);
     window.set_editor_selected_proxy_index(projection.editor_selected_proxy_index);
@@ -6681,7 +6843,8 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_settings_mcp_auto_approve_control(projection.settings_mcp_auto_approve_control);
     window.set_settings_mcp_status_text(projection.settings_mcp_status_text.clone().into());
     window.set_settings_mcp_boundaries_text(projection.settings_mcp_boundaries_text.clone().into());
-    window.set_settings_mcp_host_config_text(projection.settings_mcp_host_config_text.clone().into());
+    window
+        .set_settings_mcp_host_config_text(projection.settings_mcp_host_config_text.clone().into());
     window.set_mcp_controlling(projection.mcp_controlling);
     window.set_settings_debug_log_dir_text(projection.settings_debug_log_dir_text.clone().into());
     window.set_settings_terminal_status_kind_text(
@@ -7066,6 +7229,9 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_terminal_search_kind_text(projection.terminal_search_kind_text.clone().into());
     window.set_terminal_search_match_count(projection.terminal_search_match_count);
     window.set_terminal_search_current_index(projection.terminal_search_current_index);
+    window.set_terminal_search_across(projection.terminal_search_across);
+    set_find_across_rows_if_changed(window, &projection.terminal_find_across_rows);
+    window.set_terminal_find_across_selected_index(projection.terminal_find_across_selected_index);
     window.set_sftp_path_text(projection.sftp_path_text.clone().into());
     window.set_sftp_column_ratio(projection.sftp_column_ratio);
     window.set_active_tab_mode_text(projection.active_tab_mode_text.clone().into());
@@ -7380,16 +7546,27 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_auth_prompt_challenge_round_total(projection.auth_prompt_challenge_round_total);
     window.set_auth_prompt_keyboard_final_round(projection.auth_prompt_keyboard_final_round);
     window.set_auth_prompt_keyboard_submit_enabled(projection.auth_prompt_keyboard_submit_enabled);
+    // D36: App theme（Settings 即时预览 / 持久化基线）。每次投影刷新都同步到
+    // 本窗口的 `Theme` 全局（N7 多窗口各自一份实例）。
+    apply_app_theme_preview(&window.global::<Theme>(), projection);
     restore_shortcut_focus_after_modal(window, projection);
 }
 
 /// Tool windows are non-modal; keep the hook so projection call sites stay stable.
 fn restore_shortcut_focus_after_modal(_window: &MainWindow, _projection: &AppProjection) {}
 
-pub fn bootstrap_app() -> AppResult<YShellApp> {
+/// Boots the GUI application.
+///
+/// `config_dir_override` is the `--config-dir` CLI argument used by tests / smoke
+/// runs to isolate the configuration; `None` means the platform default.
+/// Application configuration never comes from environment variables.
+pub fn bootstrap_app(config_dir_override: Option<PathBuf>) -> AppResult<YShellApp> {
     // 须在首个 Window 创建之前：关掉 Windows 无框窗默认透明（顶栏透缝）。
     crate::win_chrome::select_backend()?;
-    let config_dir = yshell_config::discover_config_dir().map_err(AppError::from_error)?;
+    let config_dir = match config_dir_override {
+        Some(dir) => dir,
+        None => yshell_config::discover_config_dir().map_err(AppError::from_error)?,
+    };
     let runtime = AppState::new(config_dir)?.runtime;
     init_logging_for_runtime(&runtime)?;
     Ok(YShellApp::new(runtime))
@@ -7427,8 +7604,9 @@ pub fn init_logging_for_runtime(runtime: &AppRuntime) -> AppResult<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        platform_default_ui_font, resolve_appearance, resolve_language, resolve_ui_font,
-        terminal_grid_cell, terminal_size_from_viewport,
+        accent_id_from_config, apply_dialog_outcome, platform_default_ui_font,
+        resolve_appearance_with_config, resolve_language, terminal_grid_cell,
+        terminal_size_from_viewport, theme_mode_from_config, DialogKind, FileDialogOutcome,
     };
     use crate::runtime::AppRuntime;
     use tempfile::tempdir;
@@ -7573,6 +7751,7 @@ mod tests {
             id: "saved-one".to_owned(),
             expanded: false,
             selected,
+            icon_name: "terminal".to_owned(),
         };
         let modelled = |selected: bool| SessionTreeRow {
             kind: "session".into(),
@@ -7582,6 +7761,7 @@ mod tests {
             id: "saved-one".into(),
             expanded: false,
             selected,
+            icon_name: "terminal".into(),
         };
 
         // 只有 selected 不同（模型里还是旧值）→ 判定为"无需重建"。
@@ -7605,21 +7785,58 @@ mod tests {
     }
 
     #[test]
-    fn appearance_defaults_to_system_and_windows_blue() {
-        let (mode, accent) = resolve_appearance(None, None);
+    fn appearance_defaults_to_system_and_windows_blue_from_config() {
+        let ui = yshell_config::UiProfile::default();
+        let (mode, accent) = resolve_appearance_with_config(&ui);
         assert_eq!(mode, ThemeMode::System);
         assert_eq!(accent, appearance::resolve_accent("blue"));
     }
 
     #[test]
-    fn appearance_accepts_env_values_and_falls_back_on_unknown() {
-        let (mode, accent) = resolve_appearance(Some("Dark"), Some("teal"));
+    fn config_appearance_is_the_only_source() {
+        let ui = yshell_config::UiProfile {
+            appearance_mode: yshell_config::AppearanceMode::Dark,
+            appearance_accent: yshell_config::AccentColor::Magenta,
+            reduce_motion: true,
+            ..yshell_config::UiProfile::default()
+        };
+        let (mode, accent) = resolve_appearance_with_config(&ui);
         assert_eq!(mode, ThemeMode::Dark);
-        assert_eq!(accent, appearance::resolve_accent("teal"));
+        assert_eq!(accent, appearance::resolve_accent("magenta"));
+        // The motion preference comes from the same config document.
+        assert!(ui.reduce_motion);
+    }
 
-        let (mode, accent) = resolve_appearance(Some("bogus"), Some("bogus"));
-        assert_eq!(mode, ThemeMode::System);
-        assert_eq!(accent, appearance::resolve_accent("blue"));
+    #[test]
+    fn config_appearance_maps_modes_and_accent_ids() {
+        use yshell_config::{AccentColor, AppearanceMode};
+
+        assert_eq!(
+            theme_mode_from_config(AppearanceMode::System),
+            ThemeMode::System
+        );
+        assert_eq!(
+            theme_mode_from_config(AppearanceMode::Light),
+            ThemeMode::Light
+        );
+        assert_eq!(
+            theme_mode_from_config(AppearanceMode::Dark),
+            ThemeMode::Dark
+        );
+
+        for (accent, id) in [
+            (AccentColor::Blue, "blue"),
+            (AccentColor::Teal, "teal"),
+            (AccentColor::Purple, "purple"),
+            (AccentColor::Green, "green"),
+            (AccentColor::Orange, "orange"),
+            (AccentColor::Magenta, "magenta"),
+        ] {
+            assert_eq!(accent_id_from_config(accent), id);
+            assert_eq!(appearance::preset(id).id, id);
+        }
+        // 跟随系统 accent 暂回退到默认蓝色。
+        assert_eq!(accent_id_from_config(AccentColor::FollowSystem), "blue");
     }
 
     #[test]
@@ -7645,17 +7862,52 @@ mod tests {
     }
 
     #[test]
-    fn ui_font_prefers_a_non_blank_override() {
-        // 显式传参，不读真实环境变量，避免 CI 平台差异。
-        assert_eq!(resolve_ui_font(Some("Inter")), "Inter");
-        assert_eq!(resolve_ui_font(Some("  Noto Sans SC  ")), "Noto Sans SC");
+    fn ui_font_is_the_platform_default() {
+        // UI 字体只取平台默认（不读环境变量）；不写死字体名，跨平台 CI 均可通过。
+        assert!(!platform_default_ui_font().is_empty());
     }
 
     #[test]
-    fn ui_font_uses_the_platform_default_when_override_is_missing_or_blank() {
-        // 不写死平台字体名，跨平台 CI 均可通过。
-        assert_eq!(resolve_ui_font(None), platform_default_ui_font());
-        assert_eq!(resolve_ui_font(Some("")), platform_default_ui_font());
-        assert_eq!(resolve_ui_font(Some(" \t ")), platform_default_ui_font());
+    fn manager_dialog_outcomes_only_fill_paths() {
+        let temp = tempdir().expect("tempdir");
+        let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+
+        // Known Hosts Import：只回填路径，点 Import 才读文件。
+        runtime.open_host_keys_manager();
+        let _ = runtime.open_host_keys_import_dialog();
+        let projection = apply_dialog_outcome(
+            &mut runtime,
+            FileDialogOutcome::Picked {
+                kind: DialogKind::HostKeysImport,
+                path: "C:/tmp/known_hosts".to_owned(),
+            },
+        );
+        assert!(projection.host_keys_import_visible);
+        assert_eq!(projection.hosts_import_path_text, "C:/tmp/known_hosts");
+
+        // Known Hosts Export：只回填目标路径，点 Export 才写盘。
+        runtime.open_host_keys_export_dialog();
+        let projection = apply_dialog_outcome(
+            &mut runtime,
+            FileDialogOutcome::Picked {
+                kind: DialogKind::HostKeysExport,
+                path: "C:/tmp/known_hosts_export".to_owned(),
+            },
+        );
+        assert!(projection.hosts_export_visible);
+        assert_eq!(
+            projection.hosts_export_path_text,
+            "C:/tmp/known_hosts_export"
+        );
+
+        // Add Font File（fallback）直接回填字体草稿。
+        let projection = apply_dialog_outcome(
+            &mut runtime,
+            FileDialogOutcome::Picked {
+                kind: DialogKind::TerminalFontBackup,
+                path: "C:/fonts/fallback.ttf".to_owned(),
+            },
+        );
+        assert_eq!(projection.themes_backup_font_text, "C:/fonts/fallback.ttf");
     }
 }

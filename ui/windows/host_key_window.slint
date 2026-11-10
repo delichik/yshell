@@ -1,4 +1,7 @@
 // Host Key as an independent non-resizable tool window.
+//
+// 尺寸 = compact 560×400（D 契约：host-key 窗只有三档里的 compact）。
+// changed（主机密钥变更）时页脚额外提供 Copy Details（原型 C · Actions）。
 
 import { Theme } from "../theme.slint";
 import { HostKeyDialog } from "../components/host_key_dialog.slint";
@@ -8,12 +11,12 @@ export component HostKeyWindow inherits Window {
     title: @tr("Host Key");
     no-frame: true;
     resize-border-width: 0px;
-    preferred-width: Theme.tool-window-width-standard;
-    min-width: Theme.tool-window-width-standard;
-    max-width: Theme.tool-window-width-standard;
-    preferred-height: Theme.tool-window-height-standard;
-    min-height: Theme.tool-window-height-standard;
-    max-height: Theme.tool-window-height-standard;
+    preferred-width: Theme.tool-window-width-compact;
+    min-width: Theme.tool-window-width-compact;
+    max-width: Theme.tool-window-width-compact;
+    preferred-height: Theme.tool-window-height-compact;
+    min-height: Theme.tool-window-height-compact;
+    max-height: Theme.tool-window-height-compact;
     background: Theme.window-background;
     default-font-size: Theme.font-body;
     default-font-family: Theme.font-ui;
@@ -32,17 +35,18 @@ export component HostKeyWindow inherits Window {
     callback cancel();
     callback trust-once();
     callback trust-and-save();
+    callback copy-details();
     callback dismissed();
     callback title_drag_requested();
 
     private property <length> body-width:
-        Theme.tool-window-width-standard - 2 * Theme.tool-window-padding;
+        Theme.tool-window-width-compact - 2 * Theme.tool-window-padding;
     private property <length> body-height:
-        Theme.tool-window-height-standard - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+        Theme.tool-window-height-compact - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
 
     ToolWindowChrome {
-        width: Theme.tool-window-width-standard;
-        height: Theme.tool-window-height-standard;
+        width: Theme.tool-window-width-compact;
+        height: Theme.tool-window-height-compact;
         title-text: @tr("Host Key Confirmation");
         native-title-drag: root.native_title_drag;
         close-requested => { root.dismissed(); }
@@ -63,6 +67,7 @@ export component HostKeyWindow inherits Window {
             cancel => { root.cancel(); }
             trust-once => { root.trust-once(); }
             trust-and-save => { root.trust-and-save(); }
+            copy-details => { root.copy-details(); }
             dismissed => { root.dismissed(); }
         }
     }

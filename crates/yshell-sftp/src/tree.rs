@@ -189,12 +189,10 @@ pub(crate) fn delete_many<B: SftpBackend + ?Sized>(
 ) -> Vec<BatchOpResult> {
     paths
         .iter()
-        .map(
-            |path| match backend.delete(path) {
-                Ok(()) => BatchOpResult::ok(path.clone()),
-                Err(error) => BatchOpResult::error(path.clone(), error),
-            },
-        )
+        .map(|path| match backend.delete(path) {
+            Ok(()) => BatchOpResult::ok(path.clone()),
+            Err(error) => BatchOpResult::error(path.clone(), error),
+        })
         .collect()
 }
 
@@ -207,12 +205,10 @@ pub(crate) fn chmod_many<B: SftpBackend + ?Sized>(
 ) -> Vec<BatchOpResult> {
     paths
         .iter()
-        .map(
-            |path| match backend.chmod(path, permissions) {
-                Ok(()) => BatchOpResult::ok(path.clone()),
-                Err(error) => BatchOpResult::error(path.clone(), error),
-            },
-        )
+        .map(|path| match backend.chmod(path, permissions) {
+            Ok(()) => BatchOpResult::ok(path.clone()),
+            Err(error) => BatchOpResult::error(path.clone(), error),
+        })
         .collect()
 }
 
@@ -260,7 +256,13 @@ pub(crate) fn upload_tree<B: SftpBackend + ?Sized>(
         }
     };
 
-    let mut ctx = ProcessCtx::new(options, cancel, progress, TransferDirection::Upload, scan.bytes_total);
+    let mut ctx = ProcessCtx::new(
+        options,
+        cancel,
+        progress,
+        TransferDirection::Upload,
+        scan.bytes_total,
+    );
     if ctx.is_cancelled() {
         return Ok(ctx.finish());
     }
@@ -292,7 +294,13 @@ pub(crate) fn download_tree<B: SftpBackend + ?Sized>(
         }
     };
 
-    let mut ctx = ProcessCtx::new(options, cancel, progress, TransferDirection::Download, scan.bytes_total);
+    let mut ctx = ProcessCtx::new(
+        options,
+        cancel,
+        progress,
+        TransferDirection::Download,
+        scan.bytes_total,
+    );
     if ctx.is_cancelled() {
         return Ok(ctx.finish());
     }
@@ -476,7 +484,9 @@ fn scan_local_dir(
     }
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
-        Err(error) => return ScanDir::Failed(local_io_error(dir, "read local directory", error).to_string()),
+        Err(error) => {
+            return ScanDir::Failed(local_io_error(dir, "read local directory", error).to_string())
+        }
     };
     let mut paths = Vec::new();
     for entry in entries {
@@ -662,7 +672,9 @@ fn build_download_nodes<B: SftpBackend + ?Sized>(
                 }
                 let child = join_remote(dir, &name);
                 match backend.list_dir(&child) {
-                    Ok(inner) if depth + 1 < MAX_TREE_DEPTH && symlink_depth < MAX_SYMLINK_DEPTH => {
+                    Ok(inner)
+                        if depth + 1 < MAX_TREE_DEPTH && symlink_depth < MAX_SYMLINK_DEPTH =>
+                    {
                         let children = ScanDir::Ready(build_download_nodes(
                             backend,
                             &child,
@@ -864,10 +876,7 @@ fn resolve_upload_root<B: SftpBackend + ?Sized>(
 }
 
 /// Create every missing segment of an absolute remote directory path.
-fn ensure_remote_dir_chain<B: SftpBackend + ?Sized>(
-    backend: &mut B,
-    path: &str,
-) -> SftpResult<()> {
+fn ensure_remote_dir_chain<B: SftpBackend + ?Sized>(backend: &mut B, path: &str) -> SftpResult<()> {
     let mut prefix = String::new();
     for segment in path.trim_matches('/').split('/') {
         if segment.is_empty() {
@@ -984,11 +993,9 @@ fn process_upload_nodes<B: SftpBackend + ?Sized>(
                     }
                 }
             }
-            UploadNode::File {
-                local,
-                name,
-                size,
-            } => process_upload_file(backend, base, name, local, *size, ctx),
+            UploadNode::File { local, name, size } => {
+                process_upload_file(backend, base, name, local, *size, ctx)
+            }
             UploadNode::Skipped { name, reason } => {
                 let path = join_remote(base, name);
                 ctx.skip_item(&path, reason.clone());
@@ -1139,7 +1146,9 @@ fn process_download_nodes<B: SftpBackend + ?Sized>(
                 let remote_path = join_remote(remote_base, name);
                 match children {
                     ScanDir::Skipped(reason) => ctx.skip_item(&remote_path, reason.clone()),
-                    ScanDir::Failed(reason) => ctx.record_failure_reason(&remote_path, reason.clone()),
+                    ScanDir::Failed(reason) => {
+                        ctx.record_failure_reason(&remote_path, reason.clone())
+                    }
                     ScanDir::Ready(children) => {
                         match ensure_local_dir(
                             &local_base.join(name),
@@ -1149,7 +1158,13 @@ fn process_download_nodes<B: SftpBackend + ?Sized>(
                             ctx,
                         ) {
                             Ok(Some(actual)) => {
-                                process_download_nodes(backend, &remote_path, &actual, children, ctx);
+                                process_download_nodes(
+                                    backend,
+                                    &remote_path,
+                                    &actual,
+                                    children,
+                                    ctx,
+                                );
                             }
                             Ok(None) => {
                                 ctx.skipped += 1 + download_node_count(children);
@@ -1207,7 +1222,10 @@ fn process_download_file<B: SftpBackend + ?Sized>(
         },
         Err(error) if error.kind() == io::ErrorKind::NotFound => {}
         Err(error) => {
-            ctx.record_failure(&remote_path, &local_io_error(&desired, "read local metadata of", error));
+            ctx.record_failure(
+                &remote_path,
+                &local_io_error(&desired, "read local metadata of", error),
+            );
             return;
         }
     }

@@ -18,5 +18,8 @@ path = "src/lib.rs"
 # keys". openssl-on-win32 builds libssh2 against the vendored OpenSSL so
 # curve25519-sha256 / ecdh-sha2-nistp* are available again.
 ssh2 = { version = "0.9.5", features = ["vendored-openssl", "openssl-on-win32"] }
+# Host-key fingerprints: OpenSSH `SHA256:` + unpadded base64(SHA256(key blob)).
+sha2 = "0.10"
+base64 = "0.22"
 # D1：脚手架/传输诊断只进 tracing 日志，不再写进终端网格（pending_output）。
 tracing.workspace = true

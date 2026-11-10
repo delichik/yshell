@@ -156,8 +156,8 @@ impl SplitNode {
                 true
             }
             Self::Leaf { .. } => false,
-            Self::Split { first, second, .. } => first
-                .split_leaf(
+            Self::Split { first, second, .. } => {
+                first.split_leaf(
                     target,
                     orientation,
                     ratio,
@@ -165,8 +165,7 @@ impl SplitNode {
                     new_split_id,
                     new_pane.clone(),
                     dragged_is_first,
-                )
-                || second.split_leaf(
+                ) || second.split_leaf(
                     target,
                     orientation,
                     ratio,
@@ -174,7 +173,8 @@ impl SplitNode {
                     new_split_id,
                     new_pane,
                     dragged_is_first,
-                ),
+                )
+            }
         }
     }
 
@@ -190,11 +190,23 @@ impl SplitNode {
                     CloseLeafResult::NotFound
                 }
             }
-            Self::Split { first, second, .. } => {
-                match first.close_leaf(target) {
+            Self::Split { first, second, .. } => match first.close_leaf(target) {
+                CloseLeafResult::ClosedHere => {
+                    let replacement = std::mem::replace(
+                        second.as_mut(),
+                        SplitNode::Leaf {
+                            pane_id: 0,
+                            pane: SplitPane::default(),
+                        },
+                    );
+                    *self = replacement;
+                    CloseLeafResult::Replaced
+                }
+                CloseLeafResult::Replaced => CloseLeafResult::Replaced,
+                CloseLeafResult::NotFound => match second.close_leaf(target) {
                     CloseLeafResult::ClosedHere => {
                         let replacement = std::mem::replace(
-                            second.as_mut(),
+                            first.as_mut(),
                             SplitNode::Leaf {
                                 pane_id: 0,
                                 pane: SplitPane::default(),
@@ -203,23 +215,9 @@ impl SplitNode {
                         *self = replacement;
                         CloseLeafResult::Replaced
                     }
-                    CloseLeafResult::Replaced => CloseLeafResult::Replaced,
-                    CloseLeafResult::NotFound => match second.close_leaf(target) {
-                        CloseLeafResult::ClosedHere => {
-                            let replacement = std::mem::replace(
-                                first.as_mut(),
-                                SplitNode::Leaf {
-                                    pane_id: 0,
-                                    pane: SplitPane::default(),
-                                },
-                            );
-                            *self = replacement;
-                            CloseLeafResult::Replaced
-                        }
-                        other => other,
-                    },
-                }
-            }
+                    other => other,
+                },
+            },
         }
     }
 
@@ -237,7 +235,8 @@ impl SplitNode {
                     *r = ratio.clamp(0.2, 0.8);
                     true
                 } else {
-                    first.set_split_ratio(split_id, ratio) || second.set_split_ratio(split_id, ratio)
+                    first.set_split_ratio(split_id, ratio)
+                        || second.set_split_ratio(split_id, ratio)
                 }
             }
         }
@@ -512,7 +511,11 @@ impl WorkspaceSplit {
         });
     }
 
-    pub(crate) fn move_tab_to_pane(&mut self, tab_id: &str, pane_id: u64) -> Result<(), &'static str> {
+    pub(crate) fn move_tab_to_pane(
+        &mut self,
+        tab_id: &str,
+        pane_id: u64,
+    ) -> Result<(), &'static str> {
         if !self.root.contains_pane(pane_id) {
             return Err("pane was not found");
         }

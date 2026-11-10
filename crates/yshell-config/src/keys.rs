@@ -115,10 +115,7 @@ impl KeyCatalog {
                         continue;
                     }
                     if profile.id.trim().is_empty() {
-                        warnings.push(format!(
-                            "skipped key file {} with empty id",
-                            path.display()
-                        ));
+                        warnings.push(format!("skipped key file {} with empty id", path.display()));
                         continue;
                     }
                     if looks_like_private_key_pem(&profile) {
@@ -171,10 +168,7 @@ impl KeyCatalog {
 
     /// Replaces the in-memory catalog from a vec (does not touch disk).
     pub fn replace_from_vec(&mut self, keys: Vec<KeyProfile>) {
-        self.by_id = keys
-            .into_iter()
-            .map(|key| (key.id.clone(), key))
-            .collect();
+        self.by_id = keys.into_iter().map(|key| (key.id.clone(), key)).collect();
     }
 
     /// Looks up a key by id.
@@ -187,8 +181,7 @@ impl KeyCatalog {
     #[must_use]
     pub fn label_in_use(&self, label: &str, except_id: Option<&str>) -> bool {
         self.by_id.values().any(|key| {
-            except_id.is_none_or(|id| key.id != id)
-                && names_equal_ignore_case(&key.label, label)
+            except_id.is_none_or(|id| key.id != id) && names_equal_ignore_case(&key.label, label)
         })
     }
 
@@ -325,9 +318,8 @@ impl KeyCatalog {
 }
 
 fn load_key_file(path: &Path) -> Result<KeyProfile, String> {
-    let input = fs::read_to_string(path).map_err(|error| {
-        format!("failed to read key {}: {error}", path.display())
-    })?;
+    let input = fs::read_to_string(path)
+        .map_err(|error| format!("failed to read key {}: {error}", path.display()))?;
     if input.contains("BEGIN OPENSSH PRIVATE KEY")
         || input.contains("BEGIN RSA PRIVATE KEY")
         || input.contains("BEGIN PRIVATE KEY")
@@ -337,9 +329,8 @@ fn load_key_file(path: &Path) -> Result<KeyProfile, String> {
             path.display()
         ));
     }
-    toml::from_str(&input).map_err(|error| {
-        format!("failed to parse key {}: {error}", path.display())
-    })
+    toml::from_str(&input)
+        .map_err(|error| format!("failed to parse key {}: {error}", path.display()))
 }
 
 fn looks_like_private_key_pem(profile: &KeyProfile) -> bool {
@@ -393,9 +384,7 @@ mod tests {
         let temp = TempDir::new().expect("tempdir");
         let mut catalog = KeyCatalog::new(temp.path().join("keys"));
         catalog.save_key(sample("key-1", "Work")).expect("save");
-        let err = catalog
-            .save_key(sample("key-2", "work"))
-            .expect_err("dup");
+        let err = catalog.save_key(sample("key-2", "work")).expect_err("dup");
         assert!(matches!(err, KeyCatalogError::DuplicateLabel(_)));
     }
 
@@ -414,9 +403,11 @@ mod tests {
         let temp = TempDir::new().expect("tempdir");
         let mut catalog = KeyCatalog::new(temp.path().join("keys"));
         let mut bad = sample("key-1", "Work");
-        bad.comment = Some("-----BEGIN OPENSSH PRIVATE KEY-----\naaaa\n-----END OPENSSH PRIVATE KEY-----".to_owned());
+        bad.comment = Some(
+            "-----BEGIN OPENSSH PRIVATE KEY-----\naaaa\n-----END OPENSSH PRIVATE KEY-----"
+                .to_owned(),
+        );
         let err = catalog.save_key(bad).expect_err("pem");
         assert!(matches!(err, KeyCatalogError::Parse { .. }));
     }
-
 }

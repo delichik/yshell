@@ -150,7 +150,12 @@ fn settings_appearance_form_validates_and_persists() {
             .is_some_and(|label| label == "DejaVu Sans Mono"),
         "bundled DejaVu must remain a preset: {font_options:?}"
     );
-    assert_eq!(opened.settings_appearance_font_index, 0);
+    // 默认主字体随平台字体集而定；只要求索引落在选项范围内。
+    let font_index = opened.settings_appearance_font_index;
+    assert!(
+        (0..font_options.len() as i32).contains(&font_index),
+        "font index {font_index} out of range: {font_options:?}"
+    );
 
     let selected = runtime.select_settings_appearance_scheme("nord");
     assert_eq!(runtime.settings_appearance.color_scheme, "nord");
@@ -371,7 +376,10 @@ fn theme_manager_lists_builtin_and_user_themes_with_the_default_flagged() {
         .clone();
     assert!(user_id.starts_with("user-"));
     assert_eq!(cloned.theme_manager_user_count, 1);
-    assert_eq!(cloned.theme_manager_rows.len(), opened.theme_manager_rows.len() + 1);
+    assert_eq!(
+        cloned.theme_manager_rows.len(),
+        opened.theme_manager_rows.len() + 1
+    );
     let cloned_row = cloned
         .theme_manager_rows
         .iter()
@@ -493,7 +501,9 @@ fn theme_manager_clone_edit_and_delete_require_confirmation() {
     assert!(runtime.theme_catalog.contains_user(&user_id));
 
     runtime.request_delete_color_theme(&user_id);
-    let deleted = runtime.confirm_delete_color_theme().expect("delete confirmed");
+    let deleted = runtime
+        .confirm_delete_color_theme()
+        .expect("delete confirmed");
     assert!(!runtime.theme_catalog.contains_user(&user_id));
     assert!(!deleted
         .theme_manager_rows
@@ -512,8 +522,7 @@ fn theme_manager_delete_retargets_references_to_the_default() {
         AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
     runtime.open_theme_manager();
     runtime.clone_color_theme("nord").expect("clone");
-    let user_id = runtime
-        .theme_manager_selection_id();
+    let user_id = runtime.theme_manager_selection_id();
     runtime
         .apply_theme_manager_selection()
         .expect("apply cloned default");
@@ -659,8 +668,7 @@ fn folder_editor_three_state_round_trip() {
     assert!(opened
         .folder_editor_appearance_fields
         .iter()
-        .all(|field| field.key != "appearance.foreground"
-            && field.key != "appearance.background"));
+        .all(|field| field.key != "appearance.foreground" && field.key != "appearance.background"));
     let lines_row = opened
         .folder_editor_terminal_fields
         .iter()
@@ -730,8 +738,13 @@ fn folder_editor_validation_reports_translatable_status_kind() {
     runtime.folder_editor_field_action("terminal.scrollback_lines", ThemeFieldAction::SetExplicit);
 
     runtime.update_folder_editor_field("terminal.scrollback_lines", "not-a-number");
-    let rejected = runtime.save_folder_editor().expect("save returns a projection");
-    assert!(rejected.folder_editor_visible, "validation keeps editor open");
+    let rejected = runtime
+        .save_folder_editor()
+        .expect("save returns a projection");
+    assert!(
+        rejected.folder_editor_visible,
+        "validation keeps editor open"
+    );
     assert_eq!(
         rejected.folder_editor_status_kind_text,
         "folder-defaults-not-number"
@@ -742,7 +755,9 @@ fn folder_editor_validation_reports_translatable_status_kind() {
     );
 
     runtime.update_folder_editor_field("terminal.scrollback_lines", "999999999");
-    let rejected = runtime.save_folder_editor().expect("save returns a projection");
+    let rejected = runtime
+        .save_folder_editor()
+        .expect("save returns a projection");
     assert!(rejected.folder_editor_visible);
     assert_eq!(
         rejected.folder_editor_status_kind_text,
@@ -977,7 +992,9 @@ fn preview_lines_include_current_language_and_a_fixed_cjk_sample() {
     // Both languages keep the ASCII prompt/listing samples.
     for texts in [&english_text, &chinese_text] {
         assert!(
-            texts.iter().any(|line| line.contains("user@host:~$ ls --color")),
+            texts
+                .iter()
+                .any(|line| line.contains("user@host:~$ ls --color")),
             "missing ASCII prompt: {texts:?}"
         );
     }
@@ -1009,8 +1026,8 @@ fn preview_lines_keep_the_wide_cell_and_preview_width_conventions() {
     );
 
     // The sample must stay within the preview surface at the default font/DPI:
-    // 29 cells × 10 physical px = 290 px, well inside the 420 px bitmap area
-    // (`SETTINGS_PREVIEW_AREA_PX`); larger fonts shrink the rendered grid.
+    // 29 cells × 10 physical px = 290 px, well inside the shared 738 px bitmap
+    // area (`PREVIEW_AREA_PX`); larger fonts shrink the rendered grid.
     let widest = lines.iter().map(Vec::len).max().unwrap_or(0);
     assert!(
         widest <= 29,
@@ -1107,18 +1124,18 @@ fn settings_preview_uses_the_window_scale_factor() {
         // 1:1 physical-pixel contract: the bitmap is an exact multiple of the
         // physical cell and floors into the preview area (never stretched).
         let (columns, rows) = crate::runtime::theme::preview_grid_size(
-            crate::runtime::theme::SETTINGS_PREVIEW_AREA_PX,
+            crate::runtime::theme::PREVIEW_AREA_PX,
             scale,
             expected,
         );
         assert_eq!(scaled.width, u32::from(columns) * u32::from(expected.0));
         assert_eq!(scaled.height, u32::from(rows) * u32::from(expected.1));
         assert!(
-            scaled.width as f32 <= crate::runtime::theme::SETTINGS_PREVIEW_AREA_PX.0 * scale,
+            scaled.width as f32 <= crate::runtime::theme::PREVIEW_AREA_PX.0 * scale,
             "preview bitmap must fit the surface at {scale}x DPI"
         );
         assert!(
-            scaled.height as f32 <= crate::runtime::theme::SETTINGS_PREVIEW_AREA_PX.1 * scale,
+            scaled.height as f32 <= crate::runtime::theme::PREVIEW_AREA_PX.1 * scale,
             "preview bitmap must fit the surface at {scale}x DPI"
         );
     }
@@ -1139,7 +1156,7 @@ fn settings_preview_does_not_clamp_the_profile_font_size() {
         AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
     runtime.open_settings_appearance();
     runtime.note_ui_scale_factor(1.0);
-    let area = crate::runtime::theme::SETTINGS_PREVIEW_AREA_PX;
+    let area = crate::runtime::theme::PREVIEW_AREA_PX;
 
     // 40 px used to be clamped to 20 px for the preview only.
     runtime.update_settings_appearance_font_size("40");
@@ -1358,7 +1375,8 @@ fn session_editor_preview_only_renders_while_appearance_is_active() {
     );
 
     let appearance = runtime.select_session_editor_appearance();
-    assert_eq!(appearance.editor_section_text, "appearance");
+    // 原 Appearance 分区按原型改名 Terminal Style（section id `terminal-style`）。
+    assert_eq!(appearance.editor_section_text, "terminal-style");
     let frame = appearance
         .session_editor_preview
         .expect("Session Editor preview on the Appearance section");
@@ -1368,7 +1386,7 @@ fn session_editor_preview_only_renders_while_appearance_is_active() {
     let expected = yshell_terminal::TerminalRenderer::with_scale_factor(16.0, 1.0).cell_size();
     assert_eq!((frame.cell_width, frame.cell_height), expected);
     // 1:1 physical-pixel bitmap floored into the fixed surface area.
-    let area = crate::runtime::theme::SESSION_EDITOR_PREVIEW_AREA_PX;
+    let area = crate::runtime::theme::PREVIEW_AREA_PX;
     let (columns, rows) = crate::runtime::theme::preview_grid_size(area, 1.0, expected);
     assert_eq!(frame.width, u32::from(columns) * u32::from(expected.0));
     assert_eq!(frame.height, u32::from(rows) * u32::from(expected.1));
@@ -1404,6 +1422,54 @@ fn session_editor_preview_only_renders_while_appearance_is_active() {
     let closed = runtime.request_close_session_editor_modal();
     assert!(!closed.editor_modal_visible);
     assert!(closed.session_editor_preview.is_none());
+}
+
+/// Settings → Appearance and Session Editor → Terminal Style must render the
+/// same preview grid: one shared [`PREVIEW_AREA_PX`], therefore identical
+/// bitmap dimensions, cell metrics and row/column counts for the same
+/// font/DPI. Regression guard for the old 420×198 vs 480×98 split.
+#[test]
+fn settings_and_session_editor_previews_share_the_same_bitmap_size() {
+    use crate::runtime::theme::PREVIEW_AREA_PX;
+
+    let temp = tempdir().expect("tempdir");
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    runtime.note_ui_scale_factor(1.0);
+
+    let settings = runtime
+        .open_settings_appearance()
+        .settings_appearance_preview
+        .expect("Settings preview frame");
+    let session = runtime
+        .start_new_saved_session_editor()
+        .session_editor_preview;
+    assert!(
+        session.is_none(),
+        "editor preview must not render outside the Appearance section"
+    );
+    let session = runtime
+        .select_session_editor_appearance()
+        .session_editor_preview
+        .expect("Session Editor preview frame");
+
+    assert_eq!(
+        (settings.width, settings.height),
+        (session.width, session.height),
+        "both previews must rasterize the same shared bitmap area"
+    );
+    assert_eq!(
+        (settings.cell_width, settings.cell_height),
+        (session.cell_width, session.cell_height),
+        "both previews must use the same live-terminal cell metrics"
+    );
+    assert!(settings.width as f32 <= PREVIEW_AREA_PX.0);
+    assert!(settings.height as f32 <= PREVIEW_AREA_PX.1);
+
+    let expected = yshell_terminal::TerminalRenderer::with_scale_factor(16.0, 1.0).cell_size();
+    let (columns, rows) = crate::runtime::theme::preview_grid_size(PREVIEW_AREA_PX, 1.0, expected);
+    assert_eq!(settings.width, u32::from(columns) * u32::from(expected.0));
+    assert_eq!(settings.height, u32::from(rows) * u32::from(expected.1));
 }
 
 #[test]
@@ -1569,20 +1635,14 @@ fn folder_editor_choice_rows_feed_the_combo_box() {
     assert!(runtime.folder_editor.theme.color_scheme.explicit);
 
     // Logging format is the other Folder Editor choice row.
-    let format_row = folder_editor_row(
-        &opened.folder_editor_logging_fields,
-        "logging.format",
-    );
+    let format_row = folder_editor_row(&opened.folder_editor_logging_fields, "logging.format");
     assert_eq!(format_row.kind, "choice");
     assert_eq!(
         format_row.options,
         vec!["raw".to_owned(), "sanitized".to_owned()]
     );
     let selected = runtime.select_folder_editor_log_format_index(1);
-    let format_row = folder_editor_row(
-        &selected.folder_editor_logging_fields,
-        "logging.format",
-    );
+    let format_row = folder_editor_row(&selected.folder_editor_logging_fields, "logging.format");
     assert_eq!(format_row.selected, 1);
     assert_eq!(format_row.value, "sanitized");
 

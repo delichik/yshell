@@ -1,6 +1,8 @@
 # docs/prototypes
 
-现行 **UI 功能 / 布局 / 交互** 原型目录。规则见 [`docs/agents/prototypes.md`](../agents/prototypes.md)。
+现行 **UI 功能 / 布局 / 交互** 的**唯一设计稿**目录（及其本目录文档）。规则见 [`docs/agents/prototypes.md`](../agents/prototypes.md)。
+
+产品范围仍以 [`yshell-current-status.md`](../product/yshell-current-status.md) 为准。交互契约、archive、设计语言等**仅供参考**，冲突时以本目录原型 + status 为准。
 
 **浏览器目录页：** [`index.html`](./index.html) — 左侧列表、右侧 iframe 预览各子原型（含子窗文件）。
 

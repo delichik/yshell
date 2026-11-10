@@ -57,11 +57,7 @@ impl Default for FolderEditorState {
             folder_id: String::new(),
             folder_name: String::new(),
             folder_path: String::new(),
-            theme: ThemeDraft::from_resolved(
-                &parent_terminal,
-                None,
-                &ThemeCatalog::default(),
-            ),
+            theme: ThemeDraft::from_resolved(&parent_terminal, None, &ThemeCatalog::default()),
             scrollback_lines: ThemeFieldDraft {
                 text: parent_terminal.scrollback_lines.to_string(),
                 explicit: false,
@@ -462,8 +458,7 @@ impl AppRuntime {
                 "off" => false,
                 other => {
                     let other = other.to_owned();
-                    let text =
-                        format!("{KEY_LOGGING_ENABLED}: `{other}` is not `on` or `off`");
+                    let text = format!("{KEY_LOGGING_ENABLED}: `{other}` is not `on` or `off`");
                     self.set_folder_editor_status(
                         "folder-defaults-logging-toggle-invalid",
                         text,

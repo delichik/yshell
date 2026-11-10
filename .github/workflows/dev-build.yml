@@ -3,11 +3,22 @@ name: Dev build
 # Push to `dev` compiles the same artifacts as a release, but never publishes
 # anything and never creates a tag: the packages land in the run's artifacts and
 # in a single draft release that a maintainer has to publish by hand.
+#
+# Feature branches select a single system family so packaging only builds that
+# platform; plain `dev` keeps the full matrix.
+#
+# The system segment is the second path segment of `dev/<system>/<topic>`; git
+# cannot have both `dev` and `dev/...` refs, so the same scheme is accepted
+# without the `dev/` prefix (`win/ui-opt` → first segment).
 
 on:
   push:
     branches:
       - dev
+      - "dev/**"
+      - "win/**"
+      - "mac/**"
+      - "linux/**"
 
 permissions:
   contents: write
@@ -18,15 +29,51 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  plan:
+    name: Plan build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      platforms: ${{ steps.select.outputs.platforms }}
+      is_dev: ${{ steps.select.outputs.is_dev }}
+    steps:
+      - name: Select systems from the branch name
+        id: select
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          echo "branch: $REF_NAME"
+          # `dev/<system>/<topic>` → second segment; `<system>/<topic>` → first.
+          first=$(printf '%s' "$REF_NAME" | cut -d/ -f1)
+          second=$(printf '%s' "$REF_NAME" | cut -d/ -f2)
+          if [ "$first" = "dev" ]; then system="$second"; else system="$first"; fi
+          case "$system" in
+            win | windows) platforms='["windows-x86_64"]' ;;
+            mac | macos) platforms='["macos-x86_64","macos-aarch64"]' ;;
+            linux) platforms='["linux-x86_64"]' ;;
+            *) platforms='["windows-x86_64","macos-x86_64","macos-aarch64","linux-x86_64"]' ;;
+          esac
+          if [ "$REF_NAME" = "dev" ]; then is_dev=true; else is_dev=false; fi
+          echo "platforms: $platforms (is_dev=$is_dev)"
+          echo "platforms=$platforms" >> "$GITHUB_OUTPUT"
+          echo "is_dev=$is_dev" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build
+    needs: plan
     uses: ./.github/workflows/build-artifacts.yml
     with:
       retention-days: 90
+      platforms: ${{ needs.plan.outputs.platforms }}
 
   draft:
     name: Draft release
-    needs: build
+    needs:
+      - plan
+      - build
+    # Only the real `dev` branch maintains the rolling draft release.
+    if: needs.plan.outputs.is_dev == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

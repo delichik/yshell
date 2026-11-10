@@ -114,6 +114,33 @@ impl TransferQueue {
         Ok(())
     }
 
+    /// Pause every queued or running task; returns how many changed state.
+    pub fn pause_all_pausable(&mut self) -> usize {
+        let mut changed = 0usize;
+        for task in &mut self.tasks {
+            if matches!(
+                task.status,
+                TransferStatus::Queued | TransferStatus::Running
+            ) {
+                task.status = TransferStatus::Paused;
+                changed += 1;
+            }
+        }
+        changed
+    }
+
+    /// Re-queue every paused task; returns how many changed state.
+    pub fn resume_all_paused(&mut self) -> usize {
+        let mut changed = 0usize;
+        for task in &mut self.tasks {
+            if task.status == TransferStatus::Paused {
+                task.status = TransferStatus::Queued;
+                changed += 1;
+            }
+        }
+        changed
+    }
+
     /// Drop every completed task, returning how many were removed.
     pub fn clear_completed(&mut self) -> usize {
         let before = self.tasks.len();
@@ -187,12 +214,18 @@ mod tests {
             "b",
             None,
         ));
-        assert_eq!(queue.start_next().map(|task| task.id.as_str()), Some("running"));
+        assert_eq!(
+            queue.start_next().map(|task| task.id.as_str()),
+            Some("running")
+        );
 
         assert!(queue.pause("running").unwrap());
         assert_eq!(queue.tasks[0].status, TransferStatus::Paused);
         // A paused task is not handed out again by the runner.
-        assert_eq!(queue.start_next().map(|task| task.id.as_str()), Some("queued"));
+        assert_eq!(
+            queue.start_next().map(|task| task.id.as_str()),
+            Some("queued")
+        );
         assert!(!queue.pause("running").unwrap());
 
         assert!(queue.resume("running").unwrap());
@@ -212,15 +245,36 @@ mod tests {
     }
 
     #[test]
-    fn retry_is_capped_and_a_retried_task_can_fail_again() {
+    fn pause_all_and_resume_all() {
         let mut queue = TransferQueue::default();
-        let mut task = TransferTask::new(
-            "t1",
+        queue.enqueue(TransferTask::new(
+            "a",
             TransferDirection::Upload,
             "a",
             "/remote/a",
-            Some(100),
-        );
+            Some(4),
+        ));
+        queue.enqueue(TransferTask::new(
+            "b",
+            TransferDirection::Download,
+            "/remote/b",
+            "b",
+            None,
+        ));
+        queue.start_next();
+        assert_eq!(queue.pause_all_pausable(), 2);
+        assert_eq!(queue.tasks[0].status, TransferStatus::Paused);
+        assert_eq!(queue.tasks[1].status, TransferStatus::Paused);
+        assert_eq!(queue.resume_all_paused(), 2);
+        assert_eq!(queue.tasks[0].status, TransferStatus::Queued);
+        assert_eq!(queue.tasks[1].status, TransferStatus::Queued);
+    }
+
+    #[test]
+    fn retry_is_capped_and_a_retried_task_can_fail_again() {
+        let mut queue = TransferQueue::default();
+        let mut task =
+            TransferTask::new("t1", TransferDirection::Upload, "a", "/remote/a", Some(100));
         task.max_retries = 2;
         queue.enqueue(task);
         queue.start_next();

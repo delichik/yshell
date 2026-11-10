@@ -35,14 +35,20 @@ mod panels;
 mod projection;
 mod proxies;
 mod quick_connect;
+mod session_icon;
 mod sessions;
 mod sftp;
 mod sftp_ops;
+// --- settings-security ---
+mod security;
+mod settings;
+// --- settings-security end
 pub(crate) use sftp_ops::PendingRemoteEdit;
 pub(crate) use sftp_ops::{resolve_drop_move, same_local_volume};
 mod split_tree;
 mod ssh_config;
 mod tabs;
+mod terminal_input;
 mod theme;
 mod transfer;
 
@@ -60,9 +66,10 @@ pub(crate) use connection::PendingHostKeyPrompt;
 #[cfg(test)]
 pub(crate) use connection::PendingPasswordAuthMethod;
 pub(crate) use connection::PendingPasswordPrompt;
-pub(crate) use local_pane::LocalPaneState;
 pub(crate) use local_pane::local_crumbs_for;
+pub(crate) use local_pane::LocalPaneState;
 pub(crate) use projection::local_path_separator;
+pub use projection::TerminalFindAcrossRow;
 pub(crate) use sessions::collect_session_inventory_lines;
 pub(crate) use sessions::find_session_folder_id;
 pub use sessions::SessionTreeRow;
@@ -73,8 +80,8 @@ pub(crate) use sftp::normalize_remote_path;
 #[cfg(test)]
 pub(crate) use sftp::parent_remote_path;
 pub(crate) use sftp::parse_sftp_permissions;
-pub(crate) use sftp::LiveSftpClient;
 pub use sftp::FileCrumbData;
+pub(crate) use sftp::LiveSftpClient;
 pub use sftp::SftpCrumbData;
 pub(crate) use sftp::SftpListingState;
 pub use sftp::SftpPaneProjection;
@@ -113,6 +120,11 @@ pub(crate) use editor::EditorAuthTestStatus;
 pub(crate) use editor::EditorProxyMode;
 pub(crate) use editor::EditorSection;
 pub(crate) use editor::SessionEditorDraft;
+// --- session-editor：波 2-B 新增的编辑器数据类型 ---------------------------
+pub(crate) use editor::{
+    EditorInheritSourceData, EditorLoginStepDialog, EditorLoginStepRowData, EditorTunnelDialog,
+    EditorTunnelRowData, LoginScriptRun,
+};
 // N6 Phase 2：终端日志弹窗状态（mod.rs 字段 / bootstrap 消费）。
 pub(crate) use logging::LoggingDialogState;
 pub(crate) use panels::SettingsTerminalStatus;
@@ -137,18 +149,18 @@ use crate::{
     error::AppError, error::AppResult, session_runtime::SessionRuntime, sftp_view::SftpSortColumn,
 };
 use std::{
-    cell::Cell, collections::BTreeMap, collections::BTreeSet, env, fmt, fs, path::Path,
-    path::PathBuf, sync::Arc,
+    cell::Cell, collections::BTreeMap, collections::BTreeSet, fmt, fs, path::PathBuf, sync::Arc,
 };
 use yshell_config::{
-    ConfigDocument, ConfigStore, KeyCatalog, LoadOutcome, PanelSide, ThemeCatalog,
+    ConfigDocument, ConfigStore, KeyCatalog, LoadOutcome, MiddleClickAction, MultiLinePastePolicy,
+    PanelSide, RightClickAction, ThemeCatalog,
 };
 use yshell_core::CommandDispatcher;
 use yshell_core::CoreCommandDispatcher;
 use yshell_core::SessionCommand;
 #[cfg(test)]
 use yshell_core::SessionEvent;
-use yshell_secret::{FileKeychain, Keychain, OsKeychain};
+use yshell_secret::{Keychain, OsKeychain};
 use yshell_sftp::{FsEntry, RemoteEditSession, TransferQueue};
 use yshell_ssh::{HostKeyPolicy, KnownHosts};
 use yshell_terminal::SearchMatch;
@@ -156,7 +168,7 @@ use yshell_terminal::TerminalSnapshot;
 
 impl AppRuntime {
     pub fn new(config_dir: PathBuf) -> AppResult<Self> {
-        let selection = default_runtime_keychain(&config_dir)?;
+        let selection = default_runtime_keychain()?;
         Self::new_with_keychain_and_secret_store_path(
             config_dir,
             selection.keychain,
@@ -194,6 +206,14 @@ impl AppRuntime {
         }
         let terminal = document.terminal.clone();
         let sftp_max_parallel_transfers = document.ui.sftp_max_parallel_transfers;
+        // Settings → Terminal / SFTP 的草稿初值都来自 `[ui]` 与 `[sftp]`。
+        let ui_defaults = document.ui.clone();
+        let sftp_show_hidden_default = document.sftp.show_hidden;
+        // --- settings-security ---
+        let settings_app_theme = settings::AppThemeDraft::from_ui(&ui_defaults);
+        let settings_sftp_defaults = document.sftp.clone();
+        let security_state = security::SecurityState::load(&config_dir);
+        // --- settings-security end
         let remembered_local_directory = document.ui.local_directory.clone();
         let default_local_dir = remembered_local_directory
             .as_deref()
@@ -242,7 +262,6 @@ impl AppRuntime {
             panel_drag: None,
             secret_store_path,
             secret_store_kind,
-            secret_reset_confirmation: String::new(),
             editor: SessionEditorDraft::default(),
             editor_baseline: None,
             editor_discard_dialog_visible: false,
@@ -257,12 +276,19 @@ impl AppRuntime {
             settings_scrollback_max_cells_text: terminal.scrollback_max_cells.to_string(),
             settings_sftp_max_parallel_transfers_text: sftp_max_parallel_transfers.to_string(),
             settings_terminal_status: SettingsTerminalStatus::Hint,
+            settings_terminal_middle_click: ui_defaults.terminal_middle_click,
+            settings_terminal_right_click: ui_defaults.terminal_right_click,
+            settings_terminal_multi_line_paste: ui_defaults.terminal_multi_line_paste,
+            settings_terminal_auto_copy: ui_defaults.terminal_auto_copy,
             terminal_clipboard: String::new(),
             terminal_search_query: String::new(),
             terminal_search_regex: false,
             terminal_search_error: String::new(),
             terminal_search_matches: Vec::new(),
             terminal_search_current_index: None,
+            terminal_search_across: false,
+            terminal_search_across_rows: Vec::new(),
+            terminal_search_across_selected: None,
             sftp_path: "/".to_owned(),
             sftp_listing: SftpListingState::ConnectReal,
             sftp_local_path: config_dir.join("sftp-transfer.txt").display().to_string(),
@@ -274,7 +300,7 @@ impl AppRuntime {
             sftp_last_probe: std::time::Instant::now(),
             sftp_sort_column: SftpSortColumn::Name,
             sftp_sort_ascending: true,
-            sftp_show_hidden: false,
+            sftp_show_hidden: sftp_show_hidden_default,
             sftp_column_ratio: 0.5,
             sftp_session: SftpSessionLifecycle::Disconnected { session_key: None },
             sftp_live: BTreeMap::new(),
@@ -289,6 +315,7 @@ impl AppRuntime {
             next_transfer_ordinal: 1,
             local_pane: LocalPaneState {
                 dir: default_local_dir,
+                show_hidden: sftp_show_hidden_default,
                 ..LocalPaneState::default()
             },
             sftp_selection: BTreeSet::new(),
@@ -303,13 +330,18 @@ impl AppRuntime {
             connect_jobs: None,
             persistent_known_hosts,
             temporary_known_hosts: KnownHosts::new(),
-            known_hosts_modal_visible: false,
-            known_hosts_selected_key: None,
-            known_hosts_clear_confirmation: String::new(),
             pending_host_key_prompt: None,
             pending_password_prompt: None,
             editor_modal_visible: false,
             editor_section: EditorSection::General,
+            // --- session-editor：波 2-B 子窗 / 选中 / 执行态 -------------------
+            editor_login_step_dialog: None,
+            editor_tunnel_dialog: None,
+            editor_selected_login_step: None,
+            editor_selected_tunnel: None,
+            editor_login_script_run: None,
+            editor_login_script_tabs: BTreeSet::new(),
+            editor_icon_browse_requested: false,
             host_key_policy_override: None,
             recovered_from_backup,
             next_runtime_ordinal: 1,
@@ -381,6 +413,51 @@ impl AppRuntime {
             mcp: mcp::McpControlState::default(),
             mcp_endpoint_token: None,
             mcp_listener_status: mcp::McpListenerStatus::Disabled,
+            // --- managers-dialogs ---
+            hosts_add_visible: false,
+            hosts_add_text: String::new(),
+            hosts_add_error_text: String::new(),
+            hosts_add_edit_target: None,
+            hosts_import_path_text: String::new(),
+            hosts_export_visible: false,
+            hosts_export_path_text: String::new(),
+            hosts_menu_group: None,
+            hosts_menu_entry: None,
+            keys_generate_visible: false,
+            keys_generate_result_visible: false,
+            keys_generate_algorithm_index: 0,
+            keys_generate_label: String::new(),
+            keys_generate_comment: String::new(),
+            keys_generate_passphrase: String::new(),
+            keys_generate_confirm: String::new(),
+            keys_generate_error_text: String::new(),
+            keys_generate_public_key: String::new(),
+            keys_generate_fingerprint: String::new(),
+            keys_generate_result_label: String::new(),
+            keys_import_visible: false,
+            keys_import_tab: 0,
+            keys_import_paste_text: String::new(),
+            keys_export_visible: false,
+            keys_export_path_text: String::new(),
+            keys_deploy_target_index: 0,
+            keys_menu_key_id: None,
+            proxies_menu_id: None,
+            // --- dialogs-closeout-a ---
+            sftp_chmod_visible: false,
+            sftp_chmod_path_text: String::new(),
+            sftp_chmod_mode_text: String::new(),
+            sftp_chmod_error_text: String::new(),
+            sftp_chmod_selection_count: 0,
+            // --- settings-security ---
+            settings_app_theme,
+            settings_app_theme_baseline: settings_app_theme,
+            settings_sftp_draft: settings::SettingsSftpDraft::from_profile(
+                &settings_sftp_defaults,
+                Vec::new(),
+            ),
+            settings_sftp_status: settings::SettingsSftpStatus::Hint,
+            security_state,
+            // --- settings-security end
         };
         let startup_text = runtime.startup_status();
         let saved_count = runtime.saved_session_count();
@@ -402,70 +479,6 @@ impl AppRuntime {
         }
         runtime.hydrate_saved_sessions();
         Ok(runtime)
-    }
-
-    pub fn update_secret_reset_confirmation(&mut self, confirmation: &str) -> AppProjection {
-        self.secret_reset_confirmation = confirmation.to_owned();
-        self.projection()
-    }
-
-    pub fn reset_secret_store(&mut self) -> AppResult<AppProjection> {
-        if self.secret_reset_confirmation.trim() != "RESET SECRETS" {
-            return Err(AppError::new(
-                "type `RESET SECRETS` exactly before resetting the local secret store",
-            ));
-        }
-        let Some(path) = self.secret_store_path.clone() else {
-            return Err(AppError::new(
-                "secret reset is only available for the local file-backed secret store",
-            ));
-        };
-        if path.exists() {
-            fs::remove_file(&path).map_err(AppError::from_error)?;
-        }
-        let Some(master_password) = env::var("YSHELL_MASTER_PASSWORD").ok() else {
-            self.keychain = None;
-            self.secret_store_kind = SecretStoreKind::Disabled;
-            self.secret_reset_confirmation.clear();
-            let path_text = path.display().to_string();
-            self.set_status_kind(
-                "secrets-reset",
-                format!(
-                    "Deleted `{path_text}` and left the secret store disabled because YSHELL_MASTER_PASSWORD is not set."
-                ),
-                path_text,
-                "master-password-missing".to_owned(),
-            );
-            return Ok(self.projection());
-        };
-        if master_password.trim().is_empty() {
-            self.keychain = None;
-            self.secret_store_kind = SecretStoreKind::Disabled;
-            self.secret_reset_confirmation.clear();
-            let path_text = path.display().to_string();
-            self.set_status_kind(
-                "secrets-reset",
-                format!(
-                    "Deleted `{path_text}` and left the secret store disabled because YSHELL_MASTER_PASSWORD is empty."
-                ),
-                path_text,
-                "master-password-empty".to_owned(),
-            );
-            return Ok(self.projection());
-        }
-        let keychain =
-            FileKeychain::open_or_create(&path, master_password).map_err(AppError::from_error)?;
-        self.keychain = Some(RuntimeKeychain(Arc::new(keychain)));
-        self.secret_store_kind = SecretStoreKind::File;
-        self.secret_reset_confirmation.clear();
-        let path_text = path.display().to_string();
-        self.set_status_kind(
-            "secrets-reset",
-            format!("Reset the local secret store at `{path_text}`."),
-            path_text,
-            String::new(),
-        );
-        Ok(self.projection())
     }
 
     pub(crate) fn status_i18n_parts(&self) -> (String, String, String) {
@@ -499,21 +512,39 @@ impl AppRuntime {
         ordinal
     }
 
-    /// TAB-4：记录窗口布局同步出的终端视口尺寸（本地 PTY 初始尺寸提示）。
+    /// 记录窗口布局同步出的终端视口尺寸（本地 PTY 与 SSH `request_pty` 的初始尺寸提示）。
     pub(crate) fn note_terminal_viewport_size(&mut self, columns: u16, rows: u16) {
         if columns > 0 && rows > 0 {
             self.terminal_viewport_hint = (columns, rows);
         }
     }
 
-    /// TAB-4：新建本地终端时使用的初始 PTY 尺寸。
+    /// 新建本地终端 / SSH 开壳时使用的初始 PTY 尺寸。
     ///
-    /// 窗口尚未创建/尚未同步视口时退回 `120x32`（`LocalPtyConfig` 默认尺寸为
-    /// `80x24`，这里给一个更接近常见终端窗口的起点）。
+    /// 窗口尚未创建/尚未同步视口时退回 `120x32`（`PtySize` / `LocalPtyConfig` 默认
+    /// 为 `80x24`，这里给一个更接近常见终端窗口的起点，避免 MOTD 先按 24 行排版
+    /// 再被视口拉高后留下 scrollback）。
     #[must_use]
-    #[allow(dead_code)]
     pub const fn local_terminal_initial_size(&self) -> (u16, u16) {
         self.terminal_viewport_hint
+    }
+
+    /// 把最近一次视口尺寸写成 [`yshell_ssh::PtySize`]（列/行至少为 1）。
+    #[must_use]
+    pub(crate) fn viewport_pty_size(&self) -> yshell_ssh::PtySize {
+        let (columns, rows) = self.local_terminal_initial_size();
+        yshell_ssh::PtySize {
+            columns: columns.max(1),
+            rows: rows.max(1),
+            pixel_width: 0,
+            pixel_height: 0,
+        }
+    }
+
+    /// 用视口提示覆盖会话期望的 PTY 尺寸与渲染网格（无 shell 也可调用）。
+    pub(crate) fn seed_session_pty_from_viewport(&self, runtime: &mut SessionRuntime) {
+        let size = self.viewport_pty_size();
+        let _ = runtime.resize_shell_pty(size.columns, size.rows);
     }
 
     pub(crate) fn active_session_key(&self) -> AppResult<String> {
@@ -589,7 +620,6 @@ pub struct AppRuntime {
     pub(crate) panel_drag: Option<panels::PanelDragState>,
     pub(crate) secret_store_path: Option<PathBuf>,
     pub(crate) secret_store_kind: SecretStoreKind,
-    pub(crate) secret_reset_confirmation: String,
     pub(crate) editor: SessionEditorDraft,
     /// Snapshot taken when the Session Editor opens; used for Discard Changes.
     pub(crate) editor_baseline: Option<SessionEditorDraft>,
@@ -608,12 +638,20 @@ pub struct AppRuntime {
     /// 设置页里的「SFTP 上传/下载最大并行数」（文本形式，便于直接编辑）。
     pub(crate) settings_sftp_max_parallel_transfers_text: String,
     pub(crate) settings_terminal_status: SettingsTerminalStatus,
+    /// Settings → Terminal 终端交互草稿（Save 时写入 `[ui]`）。
+    pub(crate) settings_terminal_middle_click: MiddleClickAction,
+    pub(crate) settings_terminal_right_click: RightClickAction,
+    pub(crate) settings_terminal_multi_line_paste: MultiLinePastePolicy,
+    pub(crate) settings_terminal_auto_copy: bool,
     pub(crate) terminal_clipboard: String,
     pub(crate) terminal_search_query: String,
     pub(crate) terminal_search_regex: bool,
     pub(crate) terminal_search_error: String,
     pub(crate) terminal_search_matches: Vec<SearchMatch>,
     pub(crate) terminal_search_current_index: Option<usize>,
+    pub(crate) terminal_search_across: bool,
+    pub(crate) terminal_search_across_rows: Vec<TerminalFindAcrossRow>,
+    pub(crate) terminal_search_across_selected: Option<usize>,
     pub(crate) sftp_path: String,
     pub(crate) sftp_listing: SftpListingState,
     pub(crate) sftp_local_path: String,
@@ -678,14 +716,25 @@ pub struct AppRuntime {
     pub(crate) connect_jobs: Option<crate::connect_jobs::ConnectJobHandle>,
     pub(crate) persistent_known_hosts: KnownHosts,
     pub(crate) temporary_known_hosts: KnownHosts,
-    pub(crate) known_hosts_modal_visible: bool,
-    pub(crate) known_hosts_selected_key: Option<String>,
-    pub(crate) known_hosts_clear_confirmation: String,
     pub(crate) pending_host_key_prompt: Option<PendingHostKeyPrompt>,
     /// W5：密码型认证缺少密钥时的挂起目标（仅内存；重试连接用）。
     pub(crate) pending_password_prompt: Option<PendingPasswordPrompt>,
     pub(crate) editor_modal_visible: bool,
     pub(crate) editor_section: EditorSection,
+    // --- session-editor：Login Script / Tunnel 子窗（波 2-B）-------------------
+    /// Login Script 步骤子窗状态（None = 关闭）。
+    pub(crate) editor_login_step_dialog: Option<EditorLoginStepDialog>,
+    /// Tunnel 子窗状态（None = 关闭）。
+    pub(crate) editor_tunnel_dialog: Option<EditorTunnelDialog>,
+    /// Login Script / Tunnel 清单的选中行（行右键菜单目标）。
+    pub(crate) editor_selected_login_step: Option<usize>,
+    pub(crate) editor_selected_tunnel: Option<usize>,
+    /// 正在执行的 Login Script（连接成功后的 Keys/Wait 推进）。
+    pub(crate) editor_login_script_run: Option<LoginScriptRun>,
+    /// 已经为哪几个标签启动过 Login Script（断开/关闭即移除，重连后会再跑一次）。
+    pub(crate) editor_login_script_tabs: BTreeSet<String>,
+    /// Session Editor 的 Icon Browse 请求（`windows.rs` tick 消费 → 拉起 rfd）。
+    pub(crate) editor_icon_browse_requested: bool,
     pub(crate) host_key_policy_override: Option<HostKeyPolicy>,
     pub(crate) recovered_from_backup: Option<PathBuf>,
     pub(crate) next_runtime_ordinal: usize,
@@ -800,6 +849,65 @@ pub struct AppRuntime {
     pub(crate) mcp_endpoint_token: Option<String>,
     /// Loopback listener status shown in Settings → AI / MCP.
     pub(crate) mcp_listener_status: mcp::McpListenerStatus,
+    // --- managers-dialogs：波2-C 管理器子窗与行级动作状态 -----------------------
+    /// Known Hosts：Add / Edit 单字段窗（`hosts_add_edit_target` 非空 = Edit）。
+    pub(crate) hosts_add_visible: bool,
+    pub(crate) hosts_add_text: String,
+    pub(crate) hosts_add_error_text: String,
+    /// 编辑目标（原 `host:port`；Add 提交后删除旧条目）。
+    pub(crate) hosts_add_edit_target: Option<String>,
+    /// Known Hosts：Import / Export 子窗（`host_keys_import_visible` 复用为 Import 窗）。
+    pub(crate) hosts_import_path_text: String,
+    pub(crate) hosts_export_visible: bool,
+    pub(crate) hosts_export_path_text: String,
+    /// Known Hosts：行右键菜单指向的（组, 条目）。
+    pub(crate) hosts_menu_group: Option<usize>,
+    pub(crate) hosts_menu_entry: Option<usize>,
+    /// Private Keys：Generate 子窗（表单 → 结果页）。
+    pub(crate) keys_generate_visible: bool,
+    pub(crate) keys_generate_result_visible: bool,
+    pub(crate) keys_generate_algorithm_index: i32,
+    pub(crate) keys_generate_label: String,
+    pub(crate) keys_generate_comment: String,
+    pub(crate) keys_generate_passphrase: String,
+    pub(crate) keys_generate_confirm: String,
+    pub(crate) keys_generate_error_text: String,
+    pub(crate) keys_generate_public_key: String,
+    pub(crate) keys_generate_fingerprint: String,
+    pub(crate) keys_generate_result_label: String,
+    /// Private Keys：Import（文件 / 粘贴两个 tab）子窗。
+    pub(crate) keys_import_visible: bool,
+    pub(crate) keys_import_tab: i32,
+    pub(crate) keys_import_paste_text: String,
+    /// Private Keys：Export 公钥子窗。
+    pub(crate) keys_export_visible: bool,
+    pub(crate) keys_export_path_text: String,
+    /// Private Keys：Deploy 子窗（目标会话选择；复用 `private_keys_deploy_confirm_visible`）。
+    pub(crate) keys_deploy_target_index: i32,
+    /// Private Keys：行右键菜单指向的 key id。
+    pub(crate) keys_menu_key_id: Option<String>,
+    /// Proxies：行右键菜单指向的 profile id。
+    pub(crate) proxies_menu_id: Option<String>,
+    // --- dialogs-closeout-a ---
+    /// SFTP chmod 窗（compact）：目标路径/选择数 + 八进制文本 + 内联错误。
+    pub(crate) sftp_chmod_visible: bool,
+    pub(crate) sftp_chmod_path_text: String,
+    pub(crate) sftp_chmod_mode_text: String,
+    pub(crate) sftp_chmod_error_text: String,
+    /// 打开时针对的选择数（>1 = 批量 chmod）。
+    pub(crate) sftp_chmod_selection_count: usize,
+    // --- settings-security ---
+    /// D36 App theme draft (instant preview until Save).
+    pub(crate) settings_app_theme: settings::AppThemeDraft,
+    /// Persisted App theme baseline; Cancel / × / Esc revert to it.
+    pub(crate) settings_app_theme_baseline: settings::AppThemeDraft,
+    /// D33 SFTP defaults draft.
+    pub(crate) settings_sftp_draft: settings::SettingsSftpDraft,
+    /// Inline status of the SFTP section.
+    pub(crate) settings_sftp_status: settings::SettingsSftpStatus,
+    /// D35 master password state machine (card + sub-dialogs + startup unlock).
+    pub(crate) security_state: security::SecurityState,
+    // --- settings-security end
 }
 
 /// N7：单个窗口持有的标签 UI 归属（标签本身仍在 `AppRuntime::tabs` 登记）。
@@ -844,7 +952,14 @@ pub(crate) struct RuntimeKeychain(Arc<dyn Keychain>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SecretStoreKind {
+    /// No keychain. Tests construct this when they open a runtime without one;
+    /// production startup always uses [`Self::Os`].
+    #[allow(dead_code)]
     Disabled,
+    // TODO(env-cleanup): the file-backed store is only injected by tests now —
+    // there is no production selector after removing YSHELL_MASTER_PASSWORD.
+    // Drop this allow once the encrypted-store UI configures it.
+    #[allow(dead_code)]
     File,
     Os,
     #[cfg(test)]
@@ -886,7 +1001,6 @@ impl fmt::Debug for AppRuntime {
             .field("tunnels_visible", &self.tunnels_visible)
             .field("commands_visible", &self.commands_visible)
             .field("secret_store_path", &self.secret_store_path)
-            .field("secret_reset_confirmation", &self.secret_reset_confirmation)
             .field("editor", &self.editor)
             .field("status_text", &self.status_text)
             .field(
@@ -1168,26 +1282,13 @@ pub(crate) struct DefaultRuntimeKeychainSelection {
     pub(crate) kind: SecretStoreKind,
 }
 
-pub(crate) fn default_runtime_keychain(
-    config_dir: &Path,
-) -> AppResult<DefaultRuntimeKeychainSelection> {
-    let path = config_dir.join("secret-store.toml");
-    if let Ok(master_password) = env::var("YSHELL_MASTER_PASSWORD") {
-        if master_password.trim().is_empty() {
-            return Ok(DefaultRuntimeKeychainSelection {
-                keychain: None,
-                secret_store_path: Some(path),
-                kind: SecretStoreKind::Disabled,
-            });
-        }
-        let keychain = FileKeychain::open_or_create(path.clone(), master_password)
-            .map_err(AppError::from_error)?;
-        return Ok(DefaultRuntimeKeychainSelection {
-            keychain: Some(Arc::new(keychain)),
-            secret_store_path: Some(path),
-            kind: SecretStoreKind::File,
-        });
-    }
+/// Production keychain selection: the operating-system keychain is the only
+/// default.
+///
+/// The file-backed encrypted store is never selected from an environment
+/// variable; tests inject it explicitly through
+/// [`AppRuntime::new_with_keychain_and_secret_store_path`].
+pub(crate) fn default_runtime_keychain() -> AppResult<DefaultRuntimeKeychainSelection> {
     Ok(DefaultRuntimeKeychainSelection {
         keychain: Some(Arc::new(OsKeychain::new("yshell"))),
         secret_store_path: None,
@@ -1219,5 +1320,125 @@ impl AppRuntime {
             });
         }
         events
+    }
+}
+
+// --- managers-dialogs ---
+// 波2-C：SFTP chmod 窗（八进制 <-> 9 个勾选）的纯逻辑；入口接线在波 3-G。
+pub(crate) mod sftp_chmod;
+
+// --- dialogs-closeout-a ---
+// 关标签 / 退出确认的「后果清单」：按要关闭的标签集合汇总将断开的
+// SSH 会话 / SFTP 面板 / 在途传输 / 端口转发，供 CompactConfirmWindow 以
+// 项目符号行展示（文案在 dialog_windows 组装，保持与既有确认框一致）。
+impl AppRuntime {
+    /// 关标签确认的后果行 + 底部 note。
+    pub(crate) fn close_tabs_consequences(
+        &self,
+        tab_ids: &[String],
+        active_connections: usize,
+    ) -> (Vec<String>, String) {
+        let mut rows = Vec::new();
+        let mut sftp_tabs = 0usize;
+        let mut terminal_tabs = 0usize;
+        let mut tunnel_count = 0usize;
+        for tab_id in tab_ids {
+            let Some(tab) = self.tabs.iter().find(|tab| &tab.tab_id == tab_id) else {
+                continue;
+            };
+            match &tab.kind {
+                tabs::TabKind::Sftp { session_id } => {
+                    sftp_tabs += 1;
+                    if let Some(session) = self.sessions.get(session_id) {
+                        tunnel_count += session.ssh_config.tunnels.len();
+                    }
+                }
+                tabs::TabKind::Terminal { session_id } => {
+                    terminal_tabs += 1;
+                    if let Some(session) = self.sessions.get(session_id) {
+                        tunnel_count += session.ssh_config.tunnels.len();
+                    }
+                }
+                tabs::TabKind::NewTab => {}
+            }
+        }
+        if active_connections > 0 {
+            rows.push(format!(
+                "Disconnect {active_connections} active SSH session(s) on the closing tab(s)."
+            ));
+        }
+        if sftp_tabs > 0 {
+            rows.push(format!(
+                "Stop the SFTP panel on {sftp_tabs} closing tab(s)."
+            ));
+        }
+        if terminal_tabs > 0 {
+            rows.push("Unsaved terminal buffer content is not preserved.".to_owned());
+        }
+        let transfers = self.sftp_transfer_counts().active;
+        if transfers > 0 {
+            rows.push(format!("Cancel {transfers} in-flight file transfer(s)."));
+        }
+        if tunnel_count > 0 {
+            rows.push(format!(
+                "Stop {tunnel_count} port forward(s) attached to the closing session(s)."
+            ));
+        }
+        let note = if tunnel_count > 0 {
+            "Port forwards tied to those sessions stop with them (see Tunnels panel).".to_owned()
+        } else {
+            String::new()
+        };
+        (rows, note)
+    }
+
+    /// 退出确认的后果行 + 底部 note（应用级：所有标签/会话/传输）。
+    pub(crate) fn quit_consequences(&self) -> (Vec<String>, String) {
+        let active_sessions = self
+            .sessions
+            .values()
+            .filter(|session| {
+                matches!(
+                    session.state,
+                    yshell_core::SessionState::Connected | yshell_core::SessionState::Connecting
+                )
+            })
+            .count();
+        let sftp_tabs = self
+            .tabs
+            .iter()
+            .filter(|tab| matches!(tab.kind, tabs::TabKind::Sftp { .. }))
+            .count();
+        let transfers = self.sftp_transfer_counts().active;
+        let tunnel_count = self
+            .sessions
+            .values()
+            .map(|session| session.ssh_config.tunnels.len())
+            .sum::<usize>();
+        let mut rows = Vec::new();
+        if active_sessions > 0 {
+            rows.push(format!(
+                "Disconnect {active_sessions} active SSH session(s)."
+            ));
+        }
+        if sftp_tabs > 0 || transfers > 0 {
+            rows.push(format!(
+                "Stop SFTP where open ({sftp_tabs} tab(s)) and cancel {transfers} in-flight file transfer(s)."
+            ));
+        }
+        if !self.tabs.is_empty() {
+            rows.push(format!("Close all workspace tabs ({}).", self.tabs.len()));
+        }
+        if tunnel_count > 0 {
+            rows.push(format!(
+                "Stop {tunnel_count} port forward(s) tied to those sessions."
+            ));
+        }
+        let note = if tunnel_count > 0 || active_sessions > 0 {
+            "Port forwards tied to those sessions stop with them (see Tunnels panel).".to_owned()
+        } else {
+            String::new()
+        };
+        (rows, note)
     }
 }

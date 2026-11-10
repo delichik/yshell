@@ -1,17 +1,17 @@
 // Confirm tool window — product ContentDialog layout on ToolWindowChrome.
 //
-// Hierarchy: chrome title → consequence message → optional typed confirm /
-// don't-ask → footer divider → Cancel + Confirm (safe action leftmost of the
-// pair; destructive uses critical styling; no Enter-to-confirm by default).
+// Hierarchy: chrome title → consequence message → optional don't-ask →
+// footer divider → Cancel + Confirm (safe action leftmost of the pair;
+// destructive uses critical styling; no Enter-to-confirm by default).
 
 import { Theme } from "../theme.slint";
+import { TextFormats } from "../text_formats.slint";
 import { Icon } from "../components/basic/icons.slint";
-import { WinButton, WinToggle } from "../components/basic/controls.slint";
-import { WinTextInput } from "../components/basic/text_input.slint";
+import { WinButton, WinCheckBox } from "../components/basic/controls.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component CompactConfirmWindow inherits Window {
-    title: root.title-text;
+    title: root.display-title();
     no-frame: true;
     resize-border-width: 0px;
     preferred-width: Theme.tool-window-width-compact;
@@ -26,9 +26,17 @@ export component CompactConfirmWindow inherits Window {
 
     in property <string> title-text: @tr("Confirm");
     in property <string> message-text: "";
-    in property <string> confirmation-token: "";
-    in property <string> confirmation-placeholder: "";
-    in-out property <string> confirmation-text: "";
+    /// `editor-discard` / `close-tabs` 的标题、正文、确认按钮走 TextFormats；
+    /// 其余 kind 继续用 Rust 传入的 title-text / message-text / confirm-label。
+    in property <string> kind: "";
+    in property <bool> close-tabs-single: false;
+    in property <string> close-tabs-name: "";
+    in property <int> close-tabs-count: 0;
+    in property <int> close-tabs-active-count: 0;
+    /// 关标签 / 退出确认的后果清单（项目符号行；空 = 只显示 message）。
+    in property <[string]> details: [];
+    /// 后果清单下的补充说明（端口转发等；空 = 不显示）。
+    in property <string> note-text: "";
     in property <string> confirm-label: @tr("Confirm");
     in property <string> cancel-label: @tr("Cancel");
     in property <bool> destructive: false;
@@ -41,8 +49,42 @@ export component CompactConfirmWindow inherits Window {
     callback canceled();
     callback title_drag_requested();
 
-    private property <bool> needs-token: root.confirmation-token != "";
-    private property <bool> is-dangerous: root.destructive || root.needs-token;
+    pure function display-title() -> string {
+        if root.kind == "editor-discard" {
+            return TextFormats.editor-discard-confirm-title();
+        }
+        if root.kind == "close-tabs" {
+            return TextFormats.close-tabs-confirm-title(root.close-tabs-single);
+        }
+        return root.title-text;
+    }
+
+    pure function display-message() -> string {
+        if root.kind == "editor-discard" {
+            return TextFormats.editor-discard-confirm-message();
+        }
+        if root.kind == "close-tabs" {
+            return TextFormats.close-tabs-confirm-message(
+                root.close-tabs-single,
+                root.close-tabs-name,
+                root.close-tabs-count,
+                root.close-tabs-active-count,
+            );
+        }
+        return root.message-text;
+    }
+
+    pure function display-confirm-label() -> string {
+        if root.kind == "editor-discard" {
+            return TextFormats.editor-discard-confirm-label();
+        }
+        if root.kind == "close-tabs" {
+            return TextFormats.close-tabs-confirm-label();
+        }
+        return root.confirm-label;
+    }
+
+    private property <bool> is-dangerous: root.destructive;
 
     dialog_scope := FocusScope {
         width: Theme.tool-window-width-compact;
@@ -59,7 +101,7 @@ export component CompactConfirmWindow inherits Window {
         ToolWindowChrome {
             width: Theme.tool-window-width-compact;
             height: Theme.tool-window-height-compact;
-            title-text: root.title-text;
+            title-text: root.display-title();
             native-title-drag: root.native_title_drag;
             close-requested => { root.canceled(); }
             title-drag-requested => { root.title_drag_requested(); }
@@ -84,7 +126,7 @@ export component CompactConfirmWindow inherits Window {
                 }
 
                 Text {
-                    text: root.message-text;
+                    text: root.display-message();
                     color: root.is-dangerous ? Theme.critical : Theme.text-primary;
                     font-size: Theme.font-body;
                     font-weight: root.is-dangerous ? Theme.weight-semibold : 400;
@@ -94,28 +136,38 @@ export component CompactConfirmWindow inherits Window {
                 }
             }
 
-            // --- Typed confirmation (host key REPLACE / secret reset style) -
-            if root.needs-token : Text {
-                text: root.confirmation-placeholder != ""
-                    ? root.confirmation-placeholder
-                    : @tr("Type {0} to confirm", root.confirmation-token);
-                color: Theme.text-secondary;
-                font-size: Theme.font-body;
+            // --- Consequences list (close tab / quit) -----------------------
+            if root.details.length > 0 : VerticalLayout {
+                spacing: Theme.spacing-8;
+                vertical-stretch: 0;
+
+                for line in root.details : HorizontalLayout {
+                    spacing: Theme.spacing-8;
+                    alignment: start;
+                    cross-axis-alignment: start;
+
+                    Text {
+                        text: "•";
+                        color: root.is-dangerous ? Theme.critical : Theme.text-secondary;
+                        font-size: Theme.font-body;
+                        vertical-alignment: top;
+                    }
+
+                    Text {
+                        text: line;
+                        color: Theme.text-primary;
+                        font-size: Theme.font-body;
+                        horizontal-stretch: 1;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+
+            if root.note-text != "" : Text {
+                text: root.note-text;
+                color: Theme.text-tertiary;
+                font-size: Theme.font-caption;
                 wrap: word-wrap;
-            }
-
-            confirm_input := WinTextInput {
-                height: root.needs-token ? Theme.control-height : 0px;
-                visible: root.needs-token;
-                enabled: root.needs-token;
-                text <=> root.confirmation-text;
-                placeholder-text: root.confirmation-token;
-            }
-
-            if root.show-dont-ask-again : WinToggle {
-                text: @tr("Don't ask again");
-                checked <=> root.dont-ask-again;
-                horizontal-stretch: 0;
             }
 
             Rectangle {
@@ -137,16 +189,26 @@ export component CompactConfirmWindow inherits Window {
                 vertical-stretch: 0;
                 padding-top: Theme.spacing-4;
 
+                // 原型 close-tab-confirm：「Don't ask again」是勾选框（非开关），
+                // 与 Cancel / 主操作同一行、位于最左。
+                if root.show-dont-ask-again : WinCheckBox {
+                    text: @tr("Don't ask again");
+                    accessible-name: @tr("Don't ask again");
+                    checked <=> root.dont-ask-again;
+                    horizontal-stretch: 0;
+                }
+
+                Rectangle { horizontal-stretch: 1; }
+
                 cancel_button := WinButton {
                     text: root.cancel-label;
                     clicked => { root.canceled(); }
                 }
 
                 WinButton {
-                    text: root.confirm-label;
+                    text: root.display-confirm-label();
                     accent: !root.is-dangerous;
                     critical: root.is-dangerous;
-                    enabled: !root.needs-token || root.confirmation-text == root.confirmation-token;
                     clicked => { root.confirmed(); }
                 }
             }
@@ -154,11 +216,9 @@ export component CompactConfirmWindow inherits Window {
     }
 
     public function focus-dialog() {
-        // E-064: never default-focus the destructive confirm; typed confirms
-        // focus the input; plain confirms keep Esc on the scope (not Enter).
-        if (root.needs-token) {
-            confirm_input.focus-input();
-        } else if (root.is-dangerous) {
+        // Never default-focus the destructive confirm. Plain confirms keep
+        // Esc on the scope (not Enter).
+        if (root.is-dangerous) {
             cancel_button.focus-button();
         } else {
             dialog_scope.focus();

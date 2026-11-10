@@ -2,9 +2,9 @@
 # YShell portable launcher.
 # Keeps configuration, known hosts, logs and the local secret store in
 # ./data next to this script instead of the user config directory.
+# Configuration is passed as a CLI argument (`--config-dir`), not an
+# environment variable: application configuration never comes from the env.
 set -eu
 
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-YSHELL_CONFIG_DIR="$HERE/data"
-export YSHELL_CONFIG_DIR
-exec "$HERE/yshell" "$@"
+exec "$HERE/yshell" --config-dir "$HERE/data" "$@"

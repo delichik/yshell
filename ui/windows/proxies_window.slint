@@ -5,7 +5,7 @@ import { ProxiesPage, ProxyRow } from "../pages/proxies.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component ProxiesWindow inherits Window {
-    title: @tr("Proxy Manager");
+    title: @tr("Proxies");
     no-frame: true;
     resize-border-width: 0px;
     preferred-width: Theme.tool-window-width-wide;
@@ -25,7 +25,7 @@ export component ProxiesWindow inherits Window {
 
     in property <[ProxyRow]> proxies;
     in property <string> list-summary-text;
-    in property <string> empty-text;
+    in property <string> empty-text: @tr("No managed proxies yet. Create one to use it in a session.");
     in property <string> status-text;
     in property <string> status-kind-text;
     in property <string> status-param-1-text;
@@ -45,6 +45,7 @@ export component ProxiesWindow inherits Window {
     in property <bool> editor-password-stored;
     in property <bool> editor-dns-by-proxy;
     in-out property <int> editor-protocol-index;
+    in property <bool> editor-save-enabled;
 
     in-out property <bool> native_title_drag: false;
 
@@ -66,13 +67,18 @@ export component ProxiesWindow inherits Window {
     callback update-proxy-password(string);
     callback select-proxy-protocol(int);
     callback toggle-proxy-dns();
+    callback prepare-context-menu(int);
+    callback duplicate-from-menu();
+    callback test-from-menu();
+    callback remove-from-menu();
     callback title_drag_requested();
 
     chrome := ToolWindowChrome {
         width: Theme.tool-window-width-wide;
         height: Theme.tool-window-height-tall;
-        title-text: @tr("Proxy Manager");
-        summary-text: root.list-summary-text;
+        title-text: @tr("Proxies");
+        // 计数只在页内工具条右侧；标题栏不重复（对齐原型 title = 名称）。
+        summary-text: "";
         native-title-drag: root.native_title_drag;
         close-requested => { root.dismiss(); }
         title-drag-requested => { root.title_drag_requested(); }
@@ -103,6 +109,7 @@ export component ProxiesWindow inherits Window {
             editor-password-stored: root.editor-password-stored;
             editor-dns-by-proxy: root.editor-dns-by-proxy;
             editor-protocol-index <=> root.editor-protocol-index;
+            editor-save-enabled: root.editor-save-enabled;
             close => { root.dismiss(); }
             select-proxy(int) => { root.select-proxy(int); }
             start-new-proxy => { root.start-new-proxy(); }
@@ -121,6 +128,10 @@ export component ProxiesWindow inherits Window {
             update-proxy-password(string) => { root.update-proxy-password(string); }
             select-proxy-protocol(int) => { root.select-proxy-protocol(int); }
             toggle-proxy-dns => { root.toggle-proxy-dns(); }
+            prepare-context-menu(int) => { root.prepare-context-menu(int); }
+            duplicate-from-menu => { root.duplicate-from-menu(); }
+            test-from-menu => { root.test-from-menu(); }
+            remove-from-menu => { root.remove-from-menu(); }
         }
     }
 

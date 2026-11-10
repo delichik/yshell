@@ -12,8 +12,8 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
 use yshell_config::{
-    ColorTheme, ConfigDocument, ConfigWarning, FolderProfile, LoggingProfile, TerminalProfile,
-    ThemeCatalog,
+    AccentColor, AppearanceMode, ColorTheme, ConfigDocument, ConfigWarning, FolderProfile,
+    LoggingProfile, TerminalProfile, ThemeCatalog,
 };
 use yshell_terminal::{
     color_scheme, FontFamilyFaces, FontSelection, GridPoint, PrimaryFont, SelectionRange,
@@ -233,13 +233,10 @@ pub(crate) fn scheme_id_known(id: &str, catalog: &ThemeCatalog) -> bool {
 /// Converts a persisted [`ColorTheme`] into a renderer palette.
 #[must_use]
 pub(crate) fn palette_from_color_theme(theme: &ColorTheme) -> TerminalPalette {
-    let parse = |value: &str, fallback: TerminalColor| {
-        TerminalColor::from_hex(value).unwrap_or(fallback)
-    };
+    let parse =
+        |value: &str, fallback: TerminalColor| TerminalColor::from_hex(value).unwrap_or(fallback);
     let default = TerminalPalette::DEFAULT;
-    let ansi = std::array::from_fn(|index| {
-        parse(&theme.ansi[index], default.ansi[index])
-    });
+    let ansi = std::array::from_fn(|index| parse(&theme.ansi[index], default.ansi[index]));
     TerminalPalette {
         foreground: parse(&theme.foreground, default.foreground),
         background: parse(&theme.background, default.background),
@@ -280,7 +277,10 @@ pub(crate) fn builtin_as_color_theme(id: &str) -> Option<ColorTheme> {
 
 /// Palette resolved from a profile: named theme (user or built-in) plus any
 /// legacy inline color overrides (kept until migration clears them).
-pub(crate) fn resolve_palette(profile: &TerminalProfile, catalog: &ThemeCatalog) -> TerminalPalette {
+pub(crate) fn resolve_palette(
+    profile: &TerminalProfile,
+    catalog: &ThemeCatalog,
+) -> TerminalPalette {
     let mut palette = lookup_scheme_palette(profile.color_scheme.as_deref(), catalog);
     if let Some(color) = profile
         .foreground
@@ -328,7 +328,7 @@ fn profile_has_color_overrides(profile: &TerminalProfile) -> bool {
         || profile.ansi.is_some()
 }
 
-fn clear_color_overrides(profile: &mut TerminalProfile) {
+pub(crate) fn clear_color_overrides(profile: &mut TerminalProfile) {
     profile.foreground = None;
     profile.background = None;
     profile.cursor = None;
@@ -342,12 +342,7 @@ pub(crate) fn migrate_inline_color_overrides(
     catalog: &mut ThemeCatalog,
 ) -> Vec<ConfigWarning> {
     let mut warnings = Vec::new();
-    migrate_profile_overrides(
-        &mut document.terminal,
-        "terminal",
-        catalog,
-        &mut warnings,
-    );
+    migrate_profile_overrides(&mut document.terminal, "terminal", catalog, &mut warnings);
     for folder in &mut document.folders {
         migrate_folder_overrides(folder, "folders", catalog, &mut warnings);
     }
@@ -362,12 +357,7 @@ fn migrate_folder_overrides(
 ) {
     let location = format!("{prefix}.{}", folder.id);
     if let Some(terminal) = folder.terminal.as_mut() {
-        migrate_profile_overrides(
-            terminal,
-            &format!("{location}.terminal"),
-            catalog,
-            warnings,
-        );
+        migrate_profile_overrides(terminal, &format!("{location}.terminal"), catalog, warnings);
     }
     for session in &mut folder.sessions {
         if let Some(terminal) = session.terminal.as_mut() {
@@ -779,11 +769,7 @@ impl ThemeDraft {
 
     /// Refreshes the display text of every inherited field from a new parent
     /// resolution (the editor's target folder changed).
-    pub(crate) fn refresh_inherited(
-        &mut self,
-        resolved: &TerminalProfile,
-        catalog: &ThemeCatalog,
-    ) {
+    pub(crate) fn refresh_inherited(&mut self, resolved: &TerminalProfile, catalog: &ThemeCatalog) {
         let update = |field: &mut ThemeFieldDraft, text: String| {
             if !field.explicit {
                 field.text = text;
@@ -1275,6 +1261,11 @@ impl AppRuntime {
 // ---------------------------------------------------------------------------
 
 /// Editable state of the Settings Appearance section.
+///
+/// D36: the section has two groups — **App theme** (`app_mode` / `app_accent`,
+/// instant preview + Save persist) and **Terminal style** (the color-scheme
+/// profile picker below; font/color *editing* lives in the Terminal Styles
+/// manager, so the font fields are kept for import/migration only).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SettingsAppearanceDraft {
     pub(crate) color_scheme: String,
@@ -1282,11 +1273,19 @@ pub(crate) struct SettingsAppearanceDraft {
     pub(crate) font_size_text: String,
     /// Single backup font path (TERM-5); the form offers exactly one value.
     pub(crate) backup_font_text: String,
+    /// D36 App theme Mode draft (`System` / `Light` / `Dark`).
+    pub(crate) app_mode: AppearanceMode,
+    /// D36 App theme Accent draft (`FollowSystem` + six presets).
+    pub(crate) app_accent: AccentColor,
 }
 
 impl Default for SettingsAppearanceDraft {
     fn default() -> Self {
-        Self::from_terminal_profile(&TerminalProfile::default(), &ThemeCatalog::default())
+        Self::from_config(
+            &TerminalProfile::default(),
+            &yshell_config::UiProfile::default(),
+            &ThemeCatalog::default(),
+        )
     }
 }
 
@@ -1317,8 +1316,9 @@ impl SettingsAppearanceDraft {
             .unwrap_or(0)
     }
 
-    pub(crate) fn from_terminal_profile(
+    pub(crate) fn from_config(
         profile: &TerminalProfile,
+        ui: &yshell_config::UiProfile,
         catalog: &ThemeCatalog,
     ) -> Self {
         let (font, _) = resolve_font(profile);
@@ -1335,6 +1335,8 @@ impl SettingsAppearanceDraft {
             },
             font_size_text: resolve_font_size(profile.font_size).round().to_string(),
             backup_font_text: profile.backup_font.clone().unwrap_or_default(),
+            app_mode: ui.appearance_mode,
+            app_accent: ui.appearance_accent,
         }
     }
 
@@ -1516,18 +1518,35 @@ impl SettingsAppearanceStatus {
 }
 
 impl AppRuntime {
-    /// Loads the Appearance draft when Settings opens (inline form + preview).
+    /// Loads the Settings drafts when the dialog opens. The dialog is one
+    /// window with one `Cancel | Save` footer, so all sections share this
+    /// lifecycle; only the Appearance / SFTP drafts are re-read here (the
+    /// Terminal drafts keep the values the user may have already typed, and
+    /// `close_settings_appearance` reloads everything on cancel).
     pub fn open_settings_appearance(&mut self) -> AppProjection {
-        self.settings_appearance = SettingsAppearanceDraft::from_terminal_profile(
+        self.settings_appearance = SettingsAppearanceDraft::from_config(
             &self.config_document.terminal,
+            &self.config_document.ui,
             &self.theme_catalog,
         );
         self.settings_appearance_status = SettingsAppearanceStatus::Hint;
+        self.reload_settings_theme_drafts();
         self.settings_appearance_visible = true;
         self.projection()
     }
 
+    /// Cancels the Settings dialog: every draft is discarded and the App theme
+    /// instant preview reverts to the persisted baseline (§14.1 / D36).
     pub fn close_settings_appearance(&mut self) -> AppProjection {
+        self.settings_appearance = SettingsAppearanceDraft::from_config(
+            &self.config_document.terminal,
+            &self.config_document.ui,
+            &self.theme_catalog,
+        );
+        self.settings_appearance_status = SettingsAppearanceStatus::Hint;
+        // D36: discard the instant preview before reloading the baseline drafts.
+        self.revert_settings_app_theme();
+        self.reload_settings_drafts();
         self.settings_appearance_visible = false;
         self.theme_editor = None;
         self.projection()
@@ -1572,10 +1591,8 @@ impl AppRuntime {
     /// Row click: select a theme **for the preview only**. The global default
     /// changes only through [`Self::apply_theme_manager_selection`].
     pub fn select_theme_manager_row(&mut self, index: i32) -> AppProjection {
-        let default_id = resolved_global_scheme_id(
-            &self.config_document.terminal,
-            &self.theme_catalog,
-        );
+        let default_id =
+            resolved_global_scheme_id(&self.config_document.terminal, &self.theme_catalog);
         let selected_id = self.theme_manager_selection_id();
         let rows = theme_manager_rows(&self.theme_catalog, &selected_id, &default_id);
         if let Some(row) = usize::try_from(index)
@@ -1740,7 +1757,9 @@ impl AppRuntime {
             return Ok(self.projection());
         };
         if editor.builtin {
-            return Err(AppError::new("built-in themes cannot be modified; clone first"));
+            return Err(AppError::new(
+                "built-in themes cannot be modified; clone first",
+            ));
         }
         let theme = editor.to_color_theme();
         if !theme.colors_valid() {
@@ -1781,7 +1800,11 @@ impl AppRuntime {
         if self.settings_appearance.color_scheme == id {
             self.settings_appearance.color_scheme = DEFAULT_COLOR_SCHEME_ID.to_owned();
         }
-        if self.theme_editor.as_ref().is_some_and(|editor| editor.id == id) {
+        if self
+            .theme_editor
+            .as_ref()
+            .is_some_and(|editor| editor.id == id)
+        {
             self.theme_editor = None;
         }
         if self.theme_manager_pending_delete.as_deref() == Some(id) {
@@ -1829,9 +1852,10 @@ impl AppRuntime {
             .settings_appearance
             .font_size()
             .unwrap_or(DEFAULT_FONT_SIZE as u16);
-        let next = i32::from(current)
-            .saturating_add(delta)
-            .clamp(i32::from(THEME_FONT_SIZE_MIN), i32::from(THEME_FONT_SIZE_MAX));
+        let next = i32::from(current).saturating_add(delta).clamp(
+            i32::from(THEME_FONT_SIZE_MIN),
+            i32::from(THEME_FONT_SIZE_MAX),
+        );
         self.settings_appearance.font_size_text = next.to_string();
         self.settings_appearance_status = SettingsAppearanceStatus::Hint;
         self.projection()
@@ -1865,16 +1889,18 @@ impl AppRuntime {
     /// Restores the built-in defaults into the form (saved by `save_...`).
     pub fn reset_settings_appearance_defaults(&mut self) -> AppProjection {
         self.settings_appearance = SettingsAppearanceDraft::default();
+        // D36: the App theme preview draft follows the reset (defaults).
+        self.settings_app_theme = super::settings::AppThemeDraft {
+            mode: self.settings_appearance.app_mode,
+            accent: self.settings_appearance.app_accent,
+        };
         self.settings_appearance_status = SettingsAppearanceStatus::Hint;
         self.projection()
     }
 
     /// Validates and persists the global terminal appearance defaults.
     pub fn save_settings_appearance(&mut self) -> AppResult<AppProjection> {
-        let theme = match self
-            .settings_appearance
-            .theme_fields(&self.theme_catalog)
-        {
+        let theme = match self.settings_appearance.theme_fields(&self.theme_catalog) {
             Ok(theme) => theme,
             Err(error) => {
                 self.settings_appearance_status = SettingsAppearanceStatus::Rejected(error);
@@ -1890,12 +1916,16 @@ impl AppRuntime {
         // TERM-5: drop the legacy list if it is still around, so a save always
         // writes the single-value field only.
         terminal.legacy_fallback_fonts = None;
+        // D36: the same dialog-level Save also persists the App theme group.
+        self.config_document.ui.appearance_mode = self.settings_appearance.app_mode;
+        self.config_document.ui.appearance_accent = self.settings_appearance.app_accent;
         self.config_store
             .save(&self.config_document)
             .map_err(AppError::from_error)?;
         self.settings_appearance_status = SettingsAppearanceStatus::Saved;
-        self.settings_appearance = SettingsAppearanceDraft::from_terminal_profile(
+        self.settings_appearance = SettingsAppearanceDraft::from_config(
             &self.config_document.terminal,
+            &self.config_document.ui,
             &self.theme_catalog,
         );
         self.set_status_kind(
@@ -1975,8 +2005,9 @@ impl AppRuntime {
     /// * the window's real scale factor is applied, so cell metrics and glyphs
     ///   are rasterized at `font_size * scale_factor` physical pixels;
     /// * the profile's resolved font size is used as-is (no preview-only clamp);
-    /// * the grid is floored into [`SETTINGS_PREVIEW_AREA_PX`], so a font that
-    ///   does not fit yields fewer rows/columns instead of a stretched bitmap.
+    /// * the grid is floored into [`PREVIEW_AREA_PX`] (shared with the Session
+    ///   Editor preview), so a font that does not fit yields fewer rows/columns
+    ///   instead of a stretched bitmap.
     pub(crate) fn settings_appearance_preview_frame(&self) -> Option<TerminalFrame> {
         if !self.settings_appearance_visible {
             return None;
@@ -1989,7 +2020,7 @@ impl AppRuntime {
             font,
             font_size,
             self.ui_scale_factor(),
-            SETTINGS_PREVIEW_AREA_PX,
+            PREVIEW_AREA_PX,
             self.ui_language(),
         ))
     }
@@ -2008,17 +2039,15 @@ impl AppRuntime {
     ///   the combo/font choices immediately;
     /// * the real window DPR is applied and the profile font size is used
     ///   as-is (no preview-only 8–20 clamp);
-    /// * the grid is floored into [`SESSION_EDITOR_PREVIEW_AREA_PX`], so a
-    ///   large font yields fewer rows/columns instead of a stretched bitmap;
+    /// * the grid is floored into [`PREVIEW_AREA_PX`] — the *same* bitmap area
+    ///   as the Settings preview, so both surfaces show an identical grid;
     /// * the localized + CJK sample, block cursor and selection decorations
     ///   come from the same helpers as Settings and the live terminal.
     ///
     /// Cancel/discard never writes the draft, so reopening the editor renders
     /// the persisted theme again.
     pub(crate) fn session_editor_preview_frame(&self) -> Option<TerminalFrame> {
-        if !self.editor_modal_visible
-            || !matches!(self.editor_section, EditorSection::Appearance)
-        {
+        if !self.editor_modal_visible || !matches!(self.editor_section, EditorSection::Appearance) {
             return None;
         }
         let resolved = self.editor_theme_resolved_terminal();
@@ -2029,7 +2058,7 @@ impl AppRuntime {
             font,
             resolve_font_size(resolved.font_size),
             self.ui_scale_factor(),
-            SESSION_EDITOR_PREVIEW_AREA_PX,
+            PREVIEW_AREA_PX,
             self.ui_language(),
         ))
     }
@@ -2059,36 +2088,28 @@ impl AppRuntime {
 }
 
 // ---------------------------------------------------------------------------
-// Settings live preview geometry (TERM-2)
+// Live preview geometry (TERM-2 / TERM-4)
 // ---------------------------------------------------------------------------
 
-/// Logical-pixel bitmap area of the Settings live preview surface.
+/// Logical-pixel bitmap area of the **shared** terminal live preview surface.
 ///
-/// Mirrors `ui/pages/settings.slint`: the preview surface spans the Settings
-/// card content width (434 px = 760 dialog − 40 body padding − 240 navigation −
-/// 12 gap − 2 card border − 32 card padding) and is 200 px tall; subtracting
-/// the surface border (1 px) and the terminal horizontal padding
-/// (`Theme.terminal-padding-x`, 6 px per side) leaves 420 × 198 logical pixels.
+/// Settings → Appearance and Session Editor → Terminal Style render the same
+/// widget (`TerminalPreview`) inside identical tool windows, so they must use
+/// exactly one bitmap area — otherwise the two previews show a different grid
+/// (row/column count) for the same font and DPI.
+///
+/// Mirrors both `ui/pages/settings.slint` and `ui/pages/session_editor.slint`:
+/// * tool window 1100 px − 2 × `Theme.tool-window-padding` (28) = 1044 px body;
+/// * − navigation 240 px − 12 px gap = 792 px card;
+/// * − 2 × card padding (20) = 752 px preview surface width;
+/// * − 2 × surface border (1) − 2 × `Theme.terminal-padding-x` (6) = **738 px**;
+/// * surface height 200 px (`Theme.terminal-preview-height`) − 2 × border = **198 px**.
 ///
 /// The renderer **floors** the grid into this area exactly like the live
 /// terminal floors its PTY grid: when a font/DPI combination does not fit, the
 /// preview drops columns/rows and keeps the bitmap at 1:1 physical pixels; the
 /// remainder stays as surface background (never a stretched image).
-pub(crate) const SETTINGS_PREVIEW_AREA_PX: (f32, f32) = (420.0, 198.0);
-
-/// Logical-pixel bitmap area of the Session Editor live preview surface.
-///
-/// Mirrors `ui/pages/session_editor.slint`: the Session Editor card content is
-/// 760 dialog − 40 body padding − 180 navigation − 12 gap − 2 card border −
-/// 32 card padding = 494 px wide, and the fixed preview surface is 100 px tall.
-/// The surface border (1 px) and `Theme.terminal-padding-x` (6 px per side)
-/// leave this 480 × 98 px bitmap area.
-///
-/// The renderer **floors** the grid into this area exactly like Settings and
-/// the live terminal: a font/DPI combination that does not fit drops
-/// columns/rows and keeps the bitmap at 1:1 physical pixels (never a stretched
-/// image).
-pub(crate) const SESSION_EDITOR_PREVIEW_AREA_PX: (f32, f32) = (480.0, 98.0);
+pub(crate) const PREVIEW_AREA_PX: (f32, f32) = (738.0, 198.0);
 
 /// Logical-pixel bitmap area of the Theme Manager live preview surface.
 ///

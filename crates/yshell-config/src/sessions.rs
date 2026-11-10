@@ -22,7 +22,10 @@ use crate::{
     names::{
         name_collides, names_equal_ignore_case, sanitize_entry_name, validate_entry_name, NameError,
     },
-    schema::{AppearanceProfile, FolderProfile, LoggingProfile, SessionProfile, TerminalProfile},
+    schema::{
+        AppearanceProfile, FolderProfile, LoggingProfile, LoginScriptProfile, SessionProfile,
+        SftpProfile, TerminalProfile, TunnelProfile,
+    },
 };
 
 /// Directory name under the config root that holds the session tree.
@@ -92,6 +95,18 @@ struct FolderMetaFile {
     pub logging: Option<LoggingProfile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub appearance: Option<AppearanceProfile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth_profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proxy_profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sftp: Option<SftpProfile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tunnel: Option<TunnelProfile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub login_script: Option<LoginScriptProfile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
 }
 
 impl SessionTreeStore {
@@ -182,10 +197,7 @@ impl SessionTreeStore {
                     .collect()
             }
         };
-        if name_collides(
-            &name,
-            sibling_names.iter().map(String::as_str),
-        ) {
+        if name_collides(&name, sibling_names.iter().map(String::as_str)) {
             return Err(NameError::Collision { name }.into());
         }
 
@@ -248,12 +260,7 @@ impl SessionTreeStore {
                     .iter()
                     .filter(|s| s.id != session_id)
                     .map(|s| s.name.as_str())
-                    .chain(
-                        folder
-                            .folders
-                            .iter()
-                            .map(|f| f.name.as_str()),
-                    )
+                    .chain(folder.folders.iter().map(|f| f.name.as_str()))
                     .collect()
             })
             .unwrap_or_default();
@@ -281,7 +288,7 @@ impl SessionTreeStore {
     /// Inserts a new session into `folder_id` in memory and on disk.
     pub fn add_session(
         &self,
-        folders: &mut Vec<FolderProfile>,
+        folders: &mut [FolderProfile],
         folder_id: &str,
         mut session: SessionProfile,
     ) -> Result<(), SessionTreeError> {
@@ -312,7 +319,7 @@ impl SessionTreeStore {
     /// Updates an existing session in memory and on disk.
     pub fn update_session(
         &self,
-        folders: &mut Vec<FolderProfile>,
+        folders: &mut [FolderProfile],
         session: SessionProfile,
     ) -> Result<(), SessionTreeError> {
         let session_id = session.id.clone();
@@ -335,7 +342,7 @@ impl SessionTreeStore {
     /// Removes a session from memory and deletes its file.
     pub fn delete_session(
         &self,
-        folders: &mut Vec<FolderProfile>,
+        folders: &mut [FolderProfile],
         session_id: &str,
     ) -> Result<SessionProfile, SessionTreeError> {
         let (folder_id, session) = find_session_with_parent(folders, session_id)
@@ -414,6 +421,12 @@ impl SessionTreeStore {
             terminal: folder.terminal.clone(),
             logging: folder.logging.clone(),
             appearance: folder.appearance.clone(),
+            auth_profile_id: folder.auth_profile_id.clone(),
+            proxy_profile_id: folder.proxy_profile_id.clone(),
+            sftp: folder.sftp.clone(),
+            tunnel: folder.tunnel.clone(),
+            login_script: folder.login_script.clone(),
+            notes: folder.notes.clone(),
         };
         atomic_write_toml(&folder_path.join(FOLDER_META_FILE_NAME), &meta)
     }
@@ -446,10 +459,12 @@ impl SessionTreeStore {
         let name = path
             .file_name()
             .and_then(|value| value.to_str())
-            .ok_or_else(|| SessionTreeError::Ambiguous(format!(
-                "folder path {} has a non-utf8 name",
-                path.display()
-            )))?
+            .ok_or_else(|| {
+                SessionTreeError::Ambiguous(format!(
+                    "folder path {} has a non-utf8 name",
+                    path.display()
+                ))
+            })?
             .to_owned();
         let name = validate_entry_name(&name)?;
         let meta_path = path.join(FOLDER_META_FILE_NAME);
@@ -463,6 +478,12 @@ impl SessionTreeStore {
                         terminal: None,
                         logging: None,
                         appearance: None,
+                        auth_profile_id: None,
+                        proxy_profile_id: None,
+                        sftp: None,
+                        tunnel: None,
+                        login_script: None,
+                        notes: None,
                     }
                 }
             }
@@ -472,6 +493,12 @@ impl SessionTreeStore {
                 terminal: None,
                 logging: None,
                 appearance: None,
+                auth_profile_id: None,
+                proxy_profile_id: None,
+                sftp: None,
+                tunnel: None,
+                login_script: None,
+                notes: None,
             }
         };
 
@@ -529,6 +556,12 @@ impl SessionTreeStore {
             terminal: meta.terminal,
             logging: meta.logging,
             appearance: meta.appearance,
+            auth_profile_id: meta.auth_profile_id,
+            proxy_profile_id: meta.proxy_profile_id,
+            sftp: meta.sftp,
+            tunnel: meta.tunnel,
+            login_script: meta.login_script,
+            notes: meta.notes,
         })
     }
 }
@@ -545,12 +578,9 @@ fn atomic_write_toml<T: Serialize>(path: &Path, value: &T) -> Result<(), Session
 }
 
 fn load_toml<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, String> {
-    let input = fs::read_to_string(path).map_err(|error| {
-        format!("failed to read {}: {error}", path.display())
-    })?;
-    toml::from_str(&input).map_err(|error| {
-        format!("failed to parse {}: {error}", path.display())
-    })
+    let input = fs::read_to_string(path)
+        .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+    toml::from_str(&input).map_err(|error| format!("failed to parse {}: {error}", path.display()))
 }
 
 fn synthesize_folder_id(name: &str) -> String {
@@ -666,7 +696,7 @@ fn find_session_with_parent<'a>(
     folders.iter().find_map(|folder| walk(folder, session_id))
 }
 
-fn remove_session(folders: &mut Vec<FolderProfile>, id: &str) -> Option<SessionProfile> {
+fn remove_session(folders: &mut [FolderProfile], id: &str) -> Option<SessionProfile> {
     for folder in folders.iter_mut() {
         if let Some(removed) = folder.remove_session(id) {
             return Some(removed);
@@ -690,6 +720,7 @@ fn remove_folder(folders: &mut Vec<FolderProfile>, id: &str) -> Option<FolderPro
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::schema::{LoginStep, LoginStepAction, TunnelForward, TunnelForwardKind};
     use tempfile::TempDir;
 
     fn sample_tree() -> Vec<FolderProfile> {
@@ -709,15 +740,9 @@ mod tests {
         let temp = TempDir::new().expect("tempdir");
         let store = SessionTreeStore::new(temp.path());
         store.write_tree(&sample_tree()).expect("write");
-        assert!(temp
-            .path()
-            .join("sessions/Prod/.folder.toml")
-            .exists());
+        assert!(temp.path().join("sessions/Prod/.folder.toml").exists());
         assert!(temp.path().join("sessions/Prod/web.toml").exists());
-        assert!(temp
-            .path()
-            .join("sessions/Prod/Nested/api.toml")
-            .exists());
+        assert!(temp.path().join("sessions/Prod/Nested/api.toml").exists());
 
         let (loaded, warnings) = store.load();
         assert!(warnings.is_empty(), "{warnings:?}");
@@ -725,6 +750,57 @@ mod tests {
         assert_eq!(loaded[0].name, "Prod");
         assert_eq!(loaded[0].sessions[0].name, "web");
         assert_eq!(loaded[0].folders[0].sessions[0].host, "api.example.test");
+    }
+
+    #[test]
+    fn folder_meta_round_trips_session_icon_and_inheritance_overrides() {
+        let temp = TempDir::new().expect("tempdir");
+        let store = SessionTreeStore::new(temp.path());
+
+        let mut folder = FolderProfile::new("folder-dev", "Dev");
+        folder.auth_profile_id = Some("auth-1".to_owned());
+        folder.proxy_profile_id = Some("proxy-1".to_owned());
+        folder.sftp = Some(SftpProfile {
+            show_hidden: false,
+            ..SftpProfile::default()
+        });
+        folder.tunnel = Some(TunnelProfile {
+            forwards: vec![TunnelForward {
+                name: Some("db".to_owned()),
+                enabled: true,
+                kind: TunnelForwardKind::Local,
+                bind_host: "127.0.0.1".to_owned(),
+                bind_port: 8080,
+                target_host: "db.test".to_owned(),
+                target_port: 5432,
+            }],
+        });
+        folder.login_script = Some(LoginScriptProfile {
+            steps: vec![LoginStep {
+                name: "login".to_owned(),
+                action: LoginStepAction::Keys {
+                    keys: "whoami\n".to_owned(),
+                    tokens: false,
+                },
+            }],
+        });
+        let mut session = SessionProfile::new("saved-dev", "Dev box", "dev.test");
+        session.icon = Some("server".to_owned());
+        folder.sessions.push(session);
+
+        store.write_tree(&[folder]).expect("write");
+        let (loaded, warnings) = store.load();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let folder = &loaded[0];
+        assert_eq!(folder.auth_profile_id.as_deref(), Some("auth-1"));
+        assert_eq!(folder.proxy_profile_id.as_deref(), Some("proxy-1"));
+        assert!(!folder.sftp.as_ref().expect("sftp").show_hidden);
+        assert_eq!(folder.tunnel.as_ref().expect("tunnel").forwards.len(), 1);
+        assert_eq!(
+            folder.login_script.as_ref().expect("script").steps[0].name,
+            "login"
+        );
+        assert_eq!(folder.sessions[0].icon.as_deref(), Some("server"));
     }
 
     #[test]
@@ -739,7 +815,10 @@ mod tests {
                 SessionProfile::new("saved-other", "WEB", "other.test"),
             )
             .expect_err("collision");
-        assert!(matches!(err, SessionTreeError::Name(NameError::Collision { .. })));
+        assert!(matches!(
+            err,
+            SessionTreeError::Name(NameError::Collision { .. })
+        ));
     }
 
     #[test]

@@ -7,30 +7,7 @@
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
 import { WinButton, WinInfoBar } from "basic/controls.slint";
-
-component DetailRow inherits HorizontalLayout {
-    in property <string> label: "";
-    in property <string> value: "";
-    spacing: Theme.spacing-16;
-
-    Text {
-        text: root.label;
-        color: Theme.text-secondary;
-        font-size: Theme.font-body;
-        width: Theme.form-label-width-medium;
-        vertical-alignment: top;
-        wrap: word-wrap;
-    }
-
-    Text {
-        text: root.value;
-        color: Theme.text-primary;
-        font-size: Theme.font-body;
-        font-family: Theme.font-mono;
-        horizontal-stretch: 1;
-        wrap: word-wrap;
-    }
-}
+import { DetailRow } from "basic/forms.slint";
 
 export component HostKeyDialog inherits Rectangle {
     in property <bool> open: false;
@@ -46,6 +23,8 @@ export component HostKeyDialog inherits Rectangle {
     callback cancel();
     callback trust-once();
     callback trust-and-save();
+    /// changed 模式：复制指纹/路径等详情（原型 C · Actions）。
+    callback copy-details();
     callback dismissed();
 
     private property <bool> is-changed: root.mode-text == "changed";
@@ -125,21 +104,25 @@ export component HostKeyDialog inherits Rectangle {
 
             // Facts to verify
             VerticalLayout {
-                spacing: Theme.spacing-12;
+                spacing: Theme.spacing-8;
 
                 if root.detail-visible && root.known-hosts-path-text != "" : DetailRow {
                     label: @tr("Known hosts");
                     value: root.known-hosts-path-text;
+                    mono: true;
                 }
 
                 if root.detail-visible && root.is-changed && root.expected-algorithm-text != "" : DetailRow {
                     label: @tr("Expected");
                     value: @tr("{0} {1}", root.expected-algorithm-text, root.expected-fingerprint-text);
+                    mono: true;
                 }
 
                 if root.detail-visible && root.algorithm-text != "" : DetailRow {
                     label: root.is-changed ? @tr("Presented") : @tr("Fingerprint");
                     value: @tr("{0} {1}", root.algorithm-text, root.fingerprint-text);
+                    mono: true;
+                    last: true;
                 }
 
                 if !root.detail-visible && root.prompt-text != "" : Text {
@@ -175,9 +158,14 @@ export component HostKeyDialog inherits Rectangle {
                     clicked => { root.cancel(); }
                 }
 
-                WinButton {
+                if !root.is-changed : WinButton {
                     text: @tr("Trust Once");
                     clicked => { root.trust-once(); }
+                }
+
+                if root.is-changed : WinButton {
+                    text: @tr("Copy Details");
+                    clicked => { root.copy-details(); }
                 }
 
                 WinButton {

@@ -1,0 +1,117 @@
+// N9：终端工作区上方的同步输入横幅（组模型；无 KEYS 确认）。
+// 原型对齐后的简化：只保留「本会话开关」+「结束全部同步」；不再放暂停。
+import { Theme } from "../theme.slint";
+import { WinButton, WinSwitch } from "basic/controls.slint";
+import { Icon } from "basic/icons.slint";
+
+export component SyncInputBanner inherits Rectangle {
+    /// 当前焦点会话是否在同步组内（WinSwitch 勾选态）。
+    in property <bool> member-enabled: false;
+    /// 是否允许切换成员（未连接 / 本地终端时为 false）。
+    in property <bool> member-toggle-enabled: false;
+    in property <string> title-text: "";
+    /// 控制键广播提示（非空时显示 Ctrl/Alt warn chip）。
+    in property <string> warn-text: "";
+    /// 组是否非空（有成员时显示「结束全部同步」）。
+    in property <bool> group-active: false;
+    callback member-toggled();
+    callback stop-clicked();
+
+    height: 40px;
+    vertical-stretch: 0;
+    background: root.member-enabled
+        ? Theme.banner-warning-background
+        : Theme.banner-info-background;
+    border-width: 0px;
+
+    Rectangle {
+        y: parent.height - 2px;
+        height: 2px;
+        width: 100%;
+        background: root.member-enabled
+            ? Theme.caution
+            : Theme.layer-stroke;
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-12;
+        padding-right: Theme.spacing-12;
+        spacing: Theme.spacing-8;
+        cross-axis-alignment: center;
+
+        Icon {
+            name: "sync";
+            icon-color: root.member-enabled
+                ? Theme.caution
+                : Theme.text-secondary;
+            icon-size: Theme.icon-size-small;
+            cross-axis-self-alignment: center;
+        }
+
+        Text {
+            text: @tr("MainWindow" => "Input Sync");
+            color: root.member-enabled
+                ? Theme.banner-warning-text
+                : Theme.text-primary;
+            font-size: Theme.font-caption;
+            font-weight: Theme.weight-semibold;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            horizontal-stretch: 0;
+        }
+
+        if root.warn-text != "" : Rectangle {
+            border-radius: Theme.radius-control;
+            border-width: 1px;
+            border-color: Theme.caution;
+            background: Theme.attention-background;
+            horizontal-stretch: 0;
+            VerticalLayout {
+                padding-left: Theme.spacing-8;
+                padding-right: Theme.spacing-8;
+                padding-top: 2px;
+                padding-bottom: 2px;
+                Text {
+                    text: root.warn-text;
+                    color: Theme.caution;
+                    font-size: Theme.font-caption;
+                    font-weight: Theme.weight-semibold;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                }
+            }
+        }
+
+        Text {
+            text: root.title-text;
+            color: root.member-enabled
+                ? Theme.banner-warning-text
+                : Theme.text-secondary;
+            font-size: Theme.font-caption;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+            horizontal-stretch: 1;
+            min-width: 0px;
+        }
+
+        if root.group-active : WinButton {
+            text: @tr("MainWindow" => "End all sync");
+            horizontal-stretch: 0;
+            height: Theme.control-height-compact + 2px;
+            clicked => { root.stop-clicked(); }
+        }
+
+        // 原型：开关在右侧。
+        WinSwitch {
+            checked: root.member-enabled;
+            enabled: root.member-toggle-enabled;
+            text: root.member-enabled
+                ? @tr("MainWindow" => "On")
+                : @tr("MainWindow" => "Off");
+            accessible-name: @tr("MainWindow" => "Input Sync");
+            horizontal-stretch: 0;
+            toggled => { root.member-toggled(); }
+        }
+    }
+}

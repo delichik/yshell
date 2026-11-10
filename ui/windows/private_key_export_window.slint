@@ -1,0 +1,156 @@
+// Private Keys · Export public key（standard 720×580）。
+//
+// 规范：docs/prototypes/private-keys/modals.html：公钥预览 + Destination（Browse）→
+// 页脚 Cancel | Export。写盘由 runtime 完成（`export_private_key_to_path`）。
+
+import { Theme } from "../theme.slint";
+import { WinButton, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
+import { WinTextInput } from "../components/basic/text_input.slint";
+import { FormHint, FormRow } from "../components/basic/forms.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
+
+export component PrivateKeyExportWindow inherits Window {
+    title: @tr("Export Public Key");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-standard;
+    min-width: Theme.tool-window-width-standard;
+    max-width: Theme.tool-window-width-standard;
+    preferred-height: Theme.tool-window-height-standard;
+    min-height: Theme.tool-window-height-standard;
+    max-height: Theme.tool-window-height-standard;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in-out property <string> path-text: "";
+    in property <string> public-key-text: "";
+    in property <string> error-text: "";
+
+    in-out property <bool> native_title_drag: false;
+
+    callback canceled();
+    callback exported();
+    callback browse-file();
+    callback update-path(string);
+    callback title_drag_requested();
+
+    private property <length> body-width:
+        Theme.tool-window-width-standard - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-standard - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+
+    ToolWindowChrome {
+        width: Theme.tool-window-width-standard;
+        height: Theme.tool-window-height-standard;
+        title-text: @tr("Export Public Key");
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.canceled(); }
+        title-drag-requested => { root.title_drag_requested(); }
+
+        VerticalLayout {
+            width: root.body-width;
+            height: root.body-height;
+            spacing: Theme.form-row-gap;
+
+            FormRow {
+                label: @tr("Public key");
+
+                Rectangle {
+                    width: Theme.form-field-width;
+                    height: 140px;
+                    clip: true;
+                    background: Theme.control-fill;
+                    border-radius: Theme.radius-control;
+                    border-width: 1px;
+                    border-color: Theme.control-stroke;
+
+                    pubkey-scroll := Flickable {
+                        width: parent.width;
+                        height: parent.height;
+                        interactive: true;
+                        content-width: self.width;
+                        content-height: pubkey-block.preferred-height + 20px;
+
+                        pubkey-block := Text {
+                            x: Theme.spacing-8;
+                            y: Theme.spacing-8;
+                            width: parent.width - 2 * Theme.spacing-8;
+                            text: root.public-key-text;
+                            color: Theme.text-secondary;
+                            font-size: Theme.font-caption;
+                            font-family: Theme.font-mono;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    WinScrollIndicator {
+                        x: parent.width - self.width - Theme.spacing-4;
+                        y: Theme.spacing-4;
+                        height: parent.height - 2 * Theme.spacing-4;
+                        viewport-position: pubkey-scroll.content-y;
+                        content-extent: pubkey-scroll.content-height;
+                        viewport-extent: pubkey-scroll.height;
+                        thumb-min-length: 24px;
+                    }
+                }
+            }
+
+            FormRow {
+                label: @tr("Destination");
+
+                HorizontalLayout {
+                    horizontal-stretch: 1;
+                    spacing: Theme.spacing-8;
+
+                    WinTextInput {
+                        horizontal-stretch: 1;
+                        text <=> root.path-text;
+                        placeholder-text: @tr("Destination file");
+                        font-family: Theme.font-mono;
+                        font-size: Theme.font-caption;
+                        edited => { root.update-path(self.text); }
+                    }
+
+                    WinIconButton {
+                        icon: "file";
+                        accessible-name: @tr("Browse");
+                        tooltip-text: @tr("Browse");
+                        clicked => { root.browse-file(); }
+                    }
+                }
+            }
+
+            if root.error-text != "" : FormHint {
+                text: root.error-text;
+                hint-color: Theme.critical;
+            }
+
+            Rectangle { vertical-stretch: 1; }
+
+            Rectangle {
+                height: 1px;
+                vertical-stretch: 0;
+                background: Theme.divider;
+            }
+
+            HorizontalLayout {
+                alignment: end;
+                vertical-stretch: 0;
+                spacing: Theme.spacing-8;
+
+                WinButton {
+                    text: @tr("Cancel");
+                    clicked => { root.canceled(); }
+                }
+
+                WinButton {
+                    text: @tr("Export");
+                    accent: true;
+                    enabled: root.path-text != "";
+                    clicked => { root.exported(); }
+                }
+            }
+        }
+    }
+}

@@ -8,6 +8,7 @@
 // 无法随 `Theme` 深浅切换）。LineEdit 的文本编辑能力由 `TextInput` 提供。
 
 import { Theme } from "../../theme.slint";
+import { FocusRing } from "controls.slint";
 
 export component WinTextInput inherits Rectangle {
     in property <string> placeholder-text: "";
@@ -36,6 +37,14 @@ export component WinTextInput inherits Rectangle {
     border-color: root.has-focus ? Theme.accent : Theme.control-stroke;
     background: Theme.control-fill;
     animate border-color { duration: Theme.duration-faster; easing: ease-out; }
+
+    // TextInput 不提供 FocusReason，环跟输入焦点走；底部强调条保持原有形态。
+    FocusRing {
+        visible-ring: root.has-focus && root.enabled;
+        radius: root.border-radius;
+        target-width: root.width;
+        target-height: root.height;
+    }
 
     // 聚焦时底部 2px 强调条
     Rectangle {

@@ -8,17 +8,19 @@
 
 摘要：
 
-- 设计或调整页面功能 / 布局 / 交互时，**直接修改** [`docs/prototypes/`](../prototypes/) 下原型并展示预期效果。
+- **设计稿只有原型及其文档**（`docs/prototypes/**`、本文件链到的原型规则、计划/差距跟踪）。
+- 设计或调整页面功能 / 布局 / 交互时，**直接修改** [`docs/prototypes/`](../prototypes/) 并展示预期效果。
 - 原型只表达功能、布局、交互逻辑；不要堆复杂 CSS / 动效。
 - 无对应原型（或不先更新原型）不要大改 `ui/`。
+- 交互契约 / 设计语言 / archive **仅供参考**，不得单独当成待实现设计。
 
-## 1. 现行文档
+## 1. 文档角色
 
-| 优先级 | 文档 |
+| 角色 | 文档 |
 |---|---|
-| 范围 | [`yshell-current-status.md`](../product/yshell-current-status.md) |
-| 交互 | [`yshell-ui-interaction-contract.md`](../product/yshell-ui-interaction-contract.md) |
-| 视觉 | [`ui-winui3-design-language.md`](../product/ui-winui3-design-language.md) |
+| 产品范围 | [`yshell-current-status.md`](../product/yshell-current-status.md) |
+| **设计稿** | [`docs/prototypes/`](../prototypes/README.md) + [`prototypes.md`](./prototypes.md) |
+| 参考 | [`yshell-ui-interaction-contract.md`](../product/yshell-ui-interaction-contract.md)、[`ui-winui3-design-language.md`](../product/ui-winui3-design-language.md)、archive |
 
 本版不做的入口保持 disabled + tooltip 或空态，禁止按愿景稿「全部启用」验收。
 
@@ -32,7 +34,7 @@
 ## 3. 实现约束
 
 - **Token 优先**：颜色、间距、字号、时长走 `Theme`；避免散落魔法数（既有 `ui_token_discipline` 测试需继续满足）。
-- **动效**：可关（减少动画 / `YSHELL_REDUCE_MOTION`）；新动效必须尊重 `Theme.animations-enabled`。
+- **动效**：可关（Settings → General → Reduce motion，持久化在 `[ui] reduce_motion`）；新动效必须尊重 `Theme.animations-enabled`。
 - **i18n**：用户可见文案走既有翻译流程，勿硬编码中英混用新串而不入库。
 - **无障碍与对比度**：改对比度相关时参考设计语言与 xtask 对比度检查（若已有）。
 - **弹窗**：遵循 L2 约定（Esc / 遮罩 / 阻断安全对话框不可 Esc 关掉等），与契约一致。

@@ -2,7 +2,7 @@
 //
 // 纯展示 + 回调：本组件不访问文件系统、不做 rfd 调用，只把字段值与语义回调交给
 // 宿主（Rust）：
-//   * 保存位置（目录）：`directory-text` 可编辑；"Browse…" 发 `browse-requested()`，
+//   * 保存位置（目录）：`directory-text` 可编辑；"Browse" 图标钮发 `browse-requested()`，
 //     宿主用 rfd 选择目录后写回（WSLg 降级为直接输入路径，`browse-enabled` 控制）。
 //   * 文件名：默认 `{session}-{timestamp}.log`；非法字符/空值由宿主校验并回填
 //     `file-name-error-text`；已存在时 `file-exists` + `overwrite-confirmed` 确认覆盖。
@@ -17,31 +17,10 @@
 // 独立工具窗口内使用（`logging_window.slint`）：填满父级，无遮罩；Esc 走 `cancel()`。
 
 import { Theme } from "../theme.slint";
-import { WinButton, WinToggle, WinInfoBar, WinScrollIndicator } from "basic/controls.slint";
+import { WinButton, WinIconButton, WinRadio, WinSwitch, WinInfoBar, WinScrollIndicator } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 import { Icon } from "basic/icons.slint";
-
-// 表单行：左侧固定宽度标签 + 右侧控件列（与 session_editor 的 FormRow 同形）。
-component LoggingFormRow inherits HorizontalLayout {
-    in property <string> label: "";
-    spacing: Theme.spacing-12;
-
-    Text {
-        text: root.label;
-        color: Theme.text-secondary;
-        font-size: Theme.font-body;
-        width: Theme.form-label-width;
-        vertical-alignment: center;
-        wrap: no-wrap;
-        overflow: elide;
-    }
-
-    VerticalLayout {
-        horizontal-stretch: 1;
-        spacing: Theme.spacing-4;
-        @children
-    }
-}
+import { FormHint, FormRow } from "basic/forms.slint";
 
 export component LoggingDialog inherits Rectangle {
     in property <bool> open: false;
@@ -188,6 +167,7 @@ export component LoggingDialog inherits Rectangle {
                     }
 
                     Rectangle {
+                        max-width: Theme.form-field-width;
                         background: Theme.control-fill;
                         border-radius: Theme.radius-control;
                         border-width: 1px;
@@ -213,6 +193,7 @@ export component LoggingDialog inherits Rectangle {
                             text: @tr("Open File");
                             icon: "file";
                             subtle: true;
+                            tooltip-text: @tr("Open File");
                             enabled: root.active-path-text != "";
                             clicked => { root.open-file-requested(); }
                         }
@@ -221,6 +202,7 @@ export component LoggingDialog inherits Rectangle {
                             text: @tr("Open Folder");
                             icon: "folder";
                             subtle: true;
+                            tooltip-text: @tr("Open Folder");
                             enabled: root.active-path-text != "";
                             clicked => { root.open-folder-requested(); }
                         }
@@ -229,7 +211,7 @@ export component LoggingDialog inherits Rectangle {
 
                 // ------------------------------------------------- 开启表单视图
                 if !root.logging-active : VerticalLayout {
-                    spacing: Theme.spacing-16;
+                    spacing: Theme.form-row-gap;
 
                     Text {
                         text: @tr("Destination");
@@ -238,13 +220,15 @@ export component LoggingDialog inherits Rectangle {
                         font-weight: Theme.weight-semibold;
                     }
 
-                    LoggingFormRow {
+                    FormRow {
                         label: @tr("Save to");
 
                         HorizontalLayout {
+                            width: Theme.form-field-width;
                             spacing: Theme.spacing-8;
 
                             WinTextInput {
+                                horizontal-stretch: 1;
                                 text <=> root.directory-text;
                                 font-family: Theme.font-mono;
                                 font-size: Theme.font-caption;
@@ -252,55 +236,54 @@ export component LoggingDialog inherits Rectangle {
                                 edited(text) => { root.directory-changed(text); }
                             }
 
-                            WinButton {
-                                text: @tr("Browse\u{2026}");
+                            // 原型 `.btn-icon`：图标钮（title / aria-label = Browse）。
+                            WinIconButton {
                                 icon: "folder";
+                                accessible-name: @tr("Browse");
+                                tooltip-text: @tr("Browse");
                                 enabled: root.browse-enabled;
                                 clicked => { root.browse-requested(); }
                             }
                         }
-
-                        Text {
-                            text: @tr("Default: the last used folder, or the configured logs directory.");
-                            color: Theme.text-tertiary;
-                            font-size: Theme.font-caption;
-                            wrap: word-wrap;
-                            width: root.field-width;
-                        }
                     }
 
-                    LoggingFormRow {
+                    FormHint {
+                        text: @tr("Default: the last used folder, or the configured logs directory.");
+                    }
+
+                    FormRow {
                         label: @tr("File name");
 
                         WinTextInput {
+                            width: Theme.form-field-width;
                             text <=> root.file-name-text;
                             font-family: Theme.font-mono;
                             font-size: Theme.font-caption;
                             placeholder-text: @tr("session-{{timestamp}}.log");
                             edited(text) => { root.file-name-changed(text); }
                         }
-
-                        if root.file-name-error-text != "" : Text {
-                            text: root.file-name-error-text;
-                            color: Theme.critical;
-                            font-size: Theme.font-caption;
-                            wrap: word-wrap;
-                            width: root.field-width;
-                        }
-
-                        if root.file-exists && root.file-name-error-text == "" : Text {
-                            text: @tr("This file already exists. Confirm to overwrite it, or choose another name.");
-                            color: Theme.caution;
-                            font-size: Theme.font-caption;
-                            wrap: word-wrap;
-                            width: root.field-width;
-                        }
                     }
 
-                    if root.file-exists : WinToggle {
-                        text: @tr("Overwrite the existing file");
-                        checked <=> root.overwrite-confirmed;
-                        toggled => { root.notify-options(); }
+                    if root.file-name-error-text != "" : FormHint {
+                        text: root.file-name-error-text;
+                        hint-color: Theme.critical;
+                    }
+
+                    if root.file-exists && root.file-name-error-text == "" : FormHint {
+                        text: @tr("This file already exists. Confirm to overwrite it, or choose another name.");
+                        hint-color: Theme.caution;
+                    }
+
+                    // 目标文件已存在：布尔选项用共享开关 + form-row（原型未画，行为与其它布尔一致）。
+                    if root.file-exists : FormRow {
+                        label: @tr("Overwrite the existing file");
+
+                        WinSwitch {
+                            text: root.overwrite-confirmed ? @tr("On") : @tr("Off");
+                            accessible-name: @tr("Overwrite the existing file");
+                            checked <=> root.overwrite-confirmed;
+                            toggled => { root.notify-options(); }
+                        }
                     }
 
                     Text {
@@ -310,70 +293,75 @@ export component LoggingDialog inherits Rectangle {
                         font-weight: Theme.weight-semibold;
                     }
 
-                    LoggingFormRow {
+                    FormRow {
                         label: @tr("Format");
 
                         HorizontalLayout {
-                            spacing: Theme.spacing-8;
+                            spacing: Theme.spacing-16;
 
-                            WinToggle {
+                            // 互斥选项：原型 `.radio-line`（原生 radio），用共享 WinRadio。
+                            WinRadio {
                                 text: @tr("Sanitized (plain text)");
-                                radio: true;
                                 checked <=> root.sanitized-format;
                                 toggled => { root.sanitized-format = true; root.raw-format = false; root.notify-options(); }
                             }
 
-                            WinToggle {
+                            WinRadio {
                                 text: @tr("Raw (with ANSI escapes)");
-                                radio: true;
                                 checked <=> root.raw-format;
                                 toggled => { root.raw-format = true; root.sanitized-format = false; root.notify-options(); }
                             }
                         }
                     }
 
-                    WinToggle {
-                        text: @tr("Timestamp each line with the local [HH:MM:SS]");
-                        checked <=> root.timestamps;
-                        toggled => { root.notify-options(); }
+                    FormRow {
+                        label: @tr("Timestamp");
+
+                        WinSwitch {
+                            text: root.timestamps ? @tr("On") : @tr("Off");
+                            accessible-name: @tr("Timestamp");
+                            checked <=> root.timestamps;
+                            toggled => { root.notify-options(); }
+                        }
                     }
 
-                    WinToggle {
-                        text: @tr("Also record local input (commands you type)");
-                        checked <=> root.include-input;
-                        toggled => {
-                            if (!root.include-input) {
-                                root.input-confirmed = false;
+                    FormRow {
+                        label: @tr("Record input");
+
+                        WinSwitch {
+                            text: root.include-input ? @tr("On") : @tr("Off");
+                            accessible-name: @tr("Record input");
+                            checked <=> root.include-input;
+                            toggled => {
+                                if (!root.include-input) {
+                                    root.input-confirmed = false;
+                                }
+                                root.notify-options();
                             }
-                            root.notify-options();
                         }
+                    }
+
+                    // 原型 hint：紧跟 Record input 行，缩进到控件列。
+                    FormHint {
+                        text: @tr("Starts from now — existing scrollback is not written.");
                     }
 
                     if root.include-input : WinInfoBar {
                         severity: "warning";
                         text: @tr("Local input is written to the log in plain text, including passwords you type interactively. Confirm before enabling.");
 
-                        WinToggle {
+                        WinSwitch {
                             text: @tr("I understand local input will be recorded");
+                            accessible-name: @tr("I understand local input will be recorded");
                             checked <=> root.input-confirmed;
                             toggled => { root.notify-options(); }
                         }
                     }
 
-                    if root.path-error-text != "" : Text {
+                    if root.path-error-text != "" : FormHint {
                         text: root.path-error-text;
-                        color: Theme.critical;
-                        font-size: Theme.font-caption;
-                        wrap: word-wrap;
-                        width: root.content-width;
-                    }
-
-                    Text {
-                        text: @tr("Logging starts now: existing scrollback is not written; new output is recorded.");
-                        color: Theme.text-tertiary;
-                        font-size: Theme.font-caption;
-                        wrap: word-wrap;
-                        width: root.content-width;
+                        hint-color: Theme.critical;
+                        indent: false;
                     }
                 }
                         }
@@ -404,17 +392,20 @@ export component LoggingDialog inherits Rectangle {
 
                     WinButton {
                         text: root.logging-active ? @tr("Close") : @tr("Cancel");
+                        tooltip-text: root.logging-active ? @tr("Close") : @tr("Cancel");
                         clicked => { root.cancel(); }
                     }
 
                     if root.logging-active : WinButton {
                         text: @tr("Stop Logging");
+                        tooltip-text: @tr("Stop Logging");
                         critical: true;
                         clicked => { root.stop-requested(); }
                     }
 
                     if !root.logging-active : WinButton {
                         text: @tr("Start Logging");
+                        tooltip-text: @tr("Start Logging");
                         accent: true;
                         enabled: root.can-start;
                         clicked => { root.start-requested(); }

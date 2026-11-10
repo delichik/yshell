@@ -1,70 +1,56 @@
+// Session / Folder Editor 页（原型 `docs/prototypes/session-editor/`）。
+//
+// 结构：左侧分区导航（General / Authentication / Login Script / Proxy / Tunnels /
+// Terminal Style；SFTP / Advanced 本版禁用）+ 右侧分区内容 + 整窗页脚
+// （Test Connection | Cancel | Save | Save and Connect）。分区内容区**不再**放大标题，
+// 可 Inherit 的分区只保留顶栏 Inherit 开关 + 来源说明；分区内**没有** Save。
+//
+// 业务状态在 Rust（`runtime/editor.rs`）：本页只做展示与回调。
+
 import { Theme } from "../theme.slint";
-import { WinButton, WinNavItem, WinScrollIndicator } from "../components/basic/controls.slint";
+import { TextFormats } from "../text_formats.slint";
+import {
+    FocusRing, WinButton, WinComboBox, WinIconButton, WinNavItem, WinScrollIndicator, WinSwitch,
+} from "../components/basic/controls.slint";
+import { FormHint, FormRow } from "../components/basic/forms.slint";
 import { Icon } from "../components/basic/icons.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { TerminalPreview } from "../components/terminal_preview.slint";
 import { AuthKeyOption } from "../components/auth_prompt_dialog.slint";
-import { ProxyProfileOption } from "proxies.slint";
-import { TriStateField, TriStateFieldSection } from "./folder_editor.slint";
 import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
 
-// 表单行：左侧固定宽度标签 + 右侧控件（可长高，避免 Method 等挤进 32px）。
-component FormRow inherits Rectangle {
-    in property <string> label: "";
-    // 与 Theme.form-label-width 同源（禁止在别处再写一份字面量）
-    in property <length> label-width: Theme.form-label-width;
-
-    height: max(Theme.control-height, body.preferred-height);
-    background: transparent;
-
-    body := HorizontalLayout {
-        spacing: Theme.spacing-12;
-        cross-axis-alignment: center;
-
-        Text {
-            text: root.label;
-            color: Theme.text-secondary;
-            font-size: Theme.font-body;
-            width: root.label-width;
-            vertical-alignment: center;
-            wrap: no-wrap;
-            overflow: elide;
-        }
-
-        HorizontalLayout {
-            horizontal-stretch: 1;
-            spacing: Theme.spacing-8;
-            cross-axis-alignment: center;
-            @children
-        }
-    }
+// Login Script 清单行（Rust `EditorLoginStepRowData` 的镜像）。
+export struct LoginStepRow {
+    kind: string,   // "keys" | "wait"
+    name: string,   // 用户命名（可空）
+    detail: string, // 未命名时的摘要：Keys 原文首行 / "N ms"
 }
 
-// 小节标题
-component SectionTitle inherits Text {
-    in property <string> heading: "";
-    text: root.heading;
-    color: Theme.text-primary;
-    font-size: Theme.font-body-large;
-    font-weight: Theme.weight-semibold;
+// Tunnel 清单行（Rust `EditorTunnelRowData` 的镜像）。
+// 名字带 `Editor` 前缀：`TunnelRow` 已被 Tunnel 面板占用，Slint 生成代码
+// 不会导出同名结构（会变成不可访问的 `TunnelRow2`）。
+export struct EditorTunnelRow {
+    kind: string, // "local" | "remote" | "dynamic"
+    name: string,
+    route: string,
 }
 
-// 字段说明 / 路径 / 状态：低对比小字
-component HintText inherits Text {
-    in property <string> hint: "";
-    text: root.hint;
-    color: Theme.text-tertiary;
-    font-size: Theme.font-caption;
-    wrap: word-wrap;
+// 页级 Inherit 来源（Rust `EditorInheritSourceData` 的镜像）。
+export struct InheritSource {
+    kind: string,  // "folder" | "global"
+    param: string, // 就近父级文件夹名
 }
 
-// 分区导航项：WinNavItem + 可选的禁用说明 tooltip。
+// 表单行/说明使用共享 `forms.slint`（与 Settings 同一实现：
+// label 120 右对齐 / 13px、gap 12、行间距 10；hint 缩进到控件列）。
+
+// 分区导航项：WinNavItem + 禁用说明 tooltip。
 component EditorNavItem inherits Rectangle {
     in property <string> text: "";
     in property <string> icon: "settings";
     in property <bool> selected: false;
     in property <bool> enabled: true;
-    /// 非空且禁用时，hover 显示"本版本未提供"一类说明（契约 §18：disabled 必须有 tooltip）
+    /// 非空且禁用时 hover 显示原因（禁用项必须有原因）。
     in property <string> hint: "";
     callback clicked();
 
@@ -86,8 +72,94 @@ component EditorNavItem inherits Rectangle {
     }
 }
 
-// SSH-1：托管私钥下拉。选 Key 认证后只允许从密钥管理器条目里选择；不再提供
-// 手输路径/口令。展开行显示 label + 算法/指纹（与认证弹窗同一 `AuthKeyOption`）。
+// 页级 Inherit 开关（右对齐：Inherit 文案 + 开关）。
+// 开关视觉统一走共享 `WinSwitch`（§5.3：40×20 轨道 + 12 滑块 + 167ms）；
+// 不再在本页自绘 switch，避免各页动画/禁用态/键盘可达性不一致。
+component InheritBar inherits Rectangle {
+    in property <bool> inherit: true;
+    callback toggled(bool);
+
+    height: Theme.control-height;
+    background: transparent;
+
+    HorizontalLayout {
+        alignment: end;
+        spacing: Theme.spacing-8;
+
+        Text {
+            text: @tr("Inherit");
+            color: Theme.text-secondary;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+        }
+
+        WinSwitch {
+            checked: root.inherit;
+            accessible-name: @tr("Inherit");
+            toggled => { root.toggled(!root.inherit); }
+        }
+    }
+}
+
+// 来源说明：Inherit 时「Using parent: …」；自定义时「Custom — 已从父级拷贝」。
+component InheritSourceText inherits Text {
+    in property <bool> inherit: true;
+    in property <string> source-kind: "global";
+    in property <string> source-param: "";
+
+    text: root.inherit
+        ? (root.source-kind == "folder"
+            ? @tr("Using parent: Folder «{0}» / Global", root.source-param)
+            : @tr("Using parent: Global"))
+        : @tr("Custom — copied from the parent; changes stay with this session.");
+    color: Theme.text-tertiary;
+    font-size: Theme.font-caption;
+    wrap: word-wrap;
+}
+
+// 多行等宽编辑区（Notes / Login Keys 正文）：宽 420、高 4× 行高（原型 `--field-h-md`）。
+export component EditorTextArea inherits Rectangle {
+    in-out property <string> text <=> input.text;
+    in property <string> placeholder-text: "";
+    in property <bool> enabled: true;
+    in property <bool> monospace: false;
+    // 4 × ctrl-h（行高/控件高必须是 control-height 整数倍）。
+    in property <length> area-height: Theme.control-height * 4;
+    callback edited(string);
+
+    height: root.area-height;
+    width: Theme.form-field-width;
+    border-radius: Theme.radius-control;
+    border-width: 1px;
+    border-color: input.has-focus ? Theme.accent : Theme.control-stroke;
+    background: !root.enabled ? Theme.control-fill-disabled : Theme.control-fill;
+
+    input := TextInput {
+        x: Theme.spacing-8;
+        y: Theme.spacing-8;
+        width: parent.width - 2 * Theme.spacing-8;
+        height: parent.height - 2 * Theme.spacing-8;
+        enabled: root.enabled;
+        single-line: false;
+        wrap: word-wrap;
+        color: root.enabled ? Theme.text-primary : Theme.text-disabled;
+        font-size: Theme.font-body;
+        font-family: root.monospace ? Theme.font-mono : Theme.font-ui;
+        edited => { root.edited(self.text); }
+    }
+
+    if root.text == "" && root.placeholder-text != "" : Text {
+        x: Theme.spacing-8;
+        y: Theme.spacing-8;
+        width: parent.width - 2 * Theme.spacing-8;
+        text: root.placeholder-text;
+        color: Theme.text-tertiary;
+        font-size: Theme.font-body;
+        wrap: word-wrap;
+    }
+}
+
+// SSH-1：托管私钥下拉（`AuthKeyOption`: id/label/detail）。
 component ManagedKeyPicker inherits Rectangle {
     in property <[AuthKeyOption]> options: [];
     in-out property <int> selected-index: -1;
@@ -108,11 +180,17 @@ component ManagedKeyPicker inherits Rectangle {
     background: picker_touch.pressed ? Theme.control-fill-pressed
         : picker_touch.has-hover ? Theme.control-fill-hover
         : Theme.control-fill;
-    animate background { duration: Theme.duration-faster; easing: ease-out; }
-    animate border-color { duration: Theme.duration-faster; easing: ease-out; }
 
     accessible-role: combobox;
     accessible-label: root.has-selection ? root.selected-label : root.placeholder-text;
+    private property <bool> keyboard-focus: false;
+
+    FocusRing {
+        visible-ring: root.keyboard-focus;
+        radius: root.border-radius;
+        target-width: root.width;
+        target-height: root.height;
+    }
 
     HorizontalLayout {
         padding-left: Theme.spacing-12;
@@ -152,6 +230,8 @@ component ManagedKeyPicker inherits Rectangle {
             }
             return reject;
         }
+        focus-gained(reason) => { root.keyboard-focus = reason == FocusReason.tab-navigation; }
+        focus-lost(reason) => { root.keyboard-focus = false; }
     }
 
     picker_touch := TouchArea {
@@ -163,7 +243,6 @@ component ManagedKeyPicker inherits Rectangle {
         clicked => { picker.show(); }
     }
 
-    // close-on-click-outside：点选项本身由选项回调关闭（与 WinComboBox 一致）。
     picker := PopupWindow {
         width: max(root.width, 280px);
         y: root.height + 2px;
@@ -191,7 +270,8 @@ component ManagedKeyPicker inherits Rectangle {
                     spacing: 0px;
 
                     for option[index] in root.options : Rectangle {
-                        height: 44px;
+                        // 两行下拉选项（主标签 + 明细）：1×ctrl-h 再加一行 caption。
+                        height: Theme.control-height + Theme.spacing-12;
                         border-radius: Theme.radius-control;
                         background: option_touch.pressed ? Theme.subtle-pressed
                             : option_touch.has-hover ? Theme.subtle-hover
@@ -238,153 +318,139 @@ component ManagedKeyPicker inherits Rectangle {
     }
 }
 
-// NET-1：托管代理下拉。列表项显示名称 + 协议/地址/口令状态；会话只保存
-// profile id，编辑管理器条目会影响所有引用会话。
-component ProxyPicker inherits Rectangle {
-    in property <[ProxyProfileOption]> options: [];
-    in-out property <int> selected-index: -1;
-    in property <string> placeholder-text: "";
-    callback selected(int);
+// 上下文菜单项（文字项；禁用项有 tooltip 说明）。
+component ContextMenuItem inherits Rectangle {
+    in property <string> text: "";
+    in property <bool> danger: false;
+    in property <bool> enabled: true;
+    /// 禁用原因（禁用时 hover 显示）。
+    in property <string> disabled-hint: "";
+    callback clicked();
 
-    private property <bool> has-selection:
-        root.selected-index >= 0 && root.selected-index < root.options.length;
-    private property <string> selected-label:
-        root.has-selection ? root.options[root.selected-index].label : "";
+    height: Theme.row-height-menu;
+    background: root.enabled && item_touch.has-hover ? Theme.subtle-hover : transparent;
 
-    height: Theme.control-height;
-    min-width: 0px;
-    preferred-width: 0px;
-    border-radius: Theme.radius-control;
+    Text {
+        x: Theme.spacing-12;
+        width: parent.width - 2 * Theme.spacing-12;
+        height: parent.height;
+        text: root.text;
+        color: !root.enabled ? Theme.text-disabled
+            : root.danger ? Theme.critical
+            : Theme.text-primary;
+        font-size: Theme.font-body;
+        vertical-alignment: center;
+        wrap: no-wrap;
+        overflow: elide;
+    }
+
+    item_touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+
+    // 同一元素只允许一个 Tooltip：启用时显示文案，禁用时显示原因。
+    Tooltip {
+        text: @markdown("\{root.enabled ? root.text : root.disabled-hint}");
+    }
+}
+component ContextMenuSeparator inherits Rectangle {
+    height: 1px;
+    background: Theme.divider;
+    // 在 VerticalLayout 里横向拉伸；左右缩进由布局 padding 提供。
+}
+
+// Login Script 行右键菜单：Edit / Duplicate / Delete + 调序（与原型一致）。
+component LoginStepMenu inherits Rectangle {
+    in property <int> index: -1;
+    in property <bool> can-move-up: false;
+    in property <bool> can-move-down: false;
+    callback edit(int);
+    callback duplicate(int);
+    callback remove(int);
+    callback move-up(int);
+    callback move-down(int);
+    callback move-top(int);
+    callback move-bottom(int);
+
+    height: layout.preferred-height;
+    width: 200px;
+    background: Theme.flyout-background;
     border-width: 1px;
-    border-color: (picker_focus.has-focus || picker_touch.has-hover) ? Theme.accent : Theme.control-stroke;
-    background: picker_touch.pressed ? Theme.control-fill-pressed
-        : picker_touch.has-hover ? Theme.control-fill-hover
-        : Theme.control-fill;
-    animate background { duration: Theme.duration-faster; easing: ease-out; }
-    animate border-color { duration: Theme.duration-faster; easing: ease-out; }
+    border-color: Theme.layer-stroke;
+    border-radius: Theme.radius-panel;
+    drop-shadow-blur: Theme.shadow-blur;
+    drop-shadow-color: Theme.shadow-color;
+    drop-shadow-offset-y: Theme.shadow-offset-y;
 
-    accessible-role: combobox;
-    accessible-label: root.has-selection ? root.selected-label : root.placeholder-text;
+    layout := VerticalLayout {
+        padding: 4px;
+        spacing: 0px;
 
-    HorizontalLayout {
-        padding-left: Theme.spacing-12;
-        padding-right: Theme.spacing-8;
-        spacing: Theme.spacing-8;
-
-        Text {
-            text: root.has-selection ? root.selected-label : root.placeholder-text;
-            color: root.has-selection ? Theme.text-primary : Theme.text-tertiary;
-            font-size: Theme.font-body;
-            vertical-alignment: center;
-            horizontal-stretch: 1;
-            wrap: no-wrap;
-            overflow: elide;
+        ContextMenuItem { text: @tr("Edit"); clicked => { root.edit(root.index); } }
+        ContextMenuItem { text: @tr("Duplicate"); clicked => { root.duplicate(root.index); } }
+        ContextMenuItem {
+            text: @tr("Delete");
+            danger: true;
+            clicked => { root.remove(root.index); }
         }
-
-        Rectangle {
-            width: Theme.icon-size-small;
-            vertical-stretch: 1;
-            background: transparent;
-
-            Icon {
-                name: "chevron-down";
-                icon-color: Theme.text-secondary;
-                icon-size: Theme.icon-size-small;
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
-            }
+        ContextMenuSeparator { }
+        ContextMenuItem {
+            text: @tr("Move Up");
+            enabled: root.can-move-up;
+            disabled-hint: @tr("Already at the top.");
+            clicked => { root.move-up(root.index); }
         }
-    }
-
-    picker_focus := FocusScope {
-        key-pressed(event) => {
-            if (event.text == Key.Space || event.text == Key.Return) {
-                picker.show();
-                return accept;
-            }
-            return reject;
+        ContextMenuItem {
+            text: @tr("Move Down");
+            enabled: root.can-move-down;
+            disabled-hint: @tr("Already at the bottom.");
+            clicked => { root.move-down(root.index); }
+        }
+        ContextMenuSeparator { }
+        ContextMenuItem {
+            text: @tr("Move to Top");
+            enabled: root.can-move-up;
+            disabled-hint: @tr("Already at the top.");
+            clicked => { root.move-top(root.index); }
+        }
+        ContextMenuItem {
+            text: @tr("Move to Bottom");
+            enabled: root.can-move-down;
+            disabled-hint: @tr("Already at the bottom.");
+            clicked => { root.move-bottom(root.index); }
         }
     }
+}
 
-    picker_touch := TouchArea {
-        pointer-event(event) => {
-            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
-                picker_focus.focus();
-            }
-        }
-        clicked => { picker.show(); }
-    }
+// Tunnel 行右键菜单：Edit / Duplicate / Delete（与原型一致）。
+component TunnelMenu inherits Rectangle {
+    in property <int> index: -1;
+    callback edit(int);
+    callback duplicate(int);
+    callback remove(int);
 
-    picker := PopupWindow {
-        width: max(root.width, 280px);
-        y: root.height + 2px;
-        close-policy: close-on-click-outside;
+    height: layout.preferred-height;
+    width: 180px;
+    background: Theme.flyout-background;
+    border-width: 1px;
+    border-color: Theme.layer-stroke;
+    border-radius: Theme.radius-panel;
+    drop-shadow-blur: Theme.shadow-blur;
+    drop-shadow-color: Theme.shadow-color;
+    drop-shadow-offset-y: Theme.shadow-offset-y;
 
-        Rectangle {
-            background: Theme.flyout-background;
-            border-width: 1px;
-            border-color: Theme.layer-stroke;
-            border-radius: Theme.radius-panel;
-            drop-shadow-blur: Theme.shadow-blur;
-            drop-shadow-color: Theme.shadow-color;
-            drop-shadow-offset-y: Theme.shadow-offset-y;
-            height: min(options_layout.preferred-height + 8px, 360px);
+    layout := VerticalLayout {
+        padding: 4px;
+        spacing: 0px;
 
-            Flickable {
-                width: parent.width;
-                height: parent.height;
-                interactive: self.content-height > self.height;
-                content-width: self.width;
-                content-height: options_layout.preferred-height;
-
-                options_layout := VerticalLayout {
-                    padding: 4px;
-                    spacing: 0px;
-
-                    for option[index] in root.options : Rectangle {
-                        height: 44px;
-                        border-radius: Theme.radius-control;
-                        background: option_touch.pressed ? Theme.subtle-pressed
-                            : option_touch.has-hover ? Theme.subtle-hover
-                            : index == root.selected-index ? Theme.subtle-selected
-                            : transparent;
-
-                        VerticalLayout {
-                            padding-left: 8px;
-                            padding-right: 8px;
-                            padding-top: 5px;
-                            padding-bottom: 5px;
-                            spacing: 1px;
-
-                            Text {
-                                text: option.label;
-                                color: Theme.text-primary;
-                                font-size: Theme.font-body;
-                                font-weight: index == root.selected-index ? Theme.weight-semibold : 400;
-                                wrap: no-wrap;
-                                overflow: elide;
-                            }
-
-                            Text {
-                                text: option.detail;
-                                color: Theme.text-tertiary;
-                                font-size: Theme.font-caption;
-                                font-family: Theme.font-mono;
-                                wrap: no-wrap;
-                                overflow: elide;
-                            }
-                        }
-
-                        option_touch := TouchArea {
-                            clicked => {
-                                root.selected-index = index;
-                                root.selected(index);
-                                picker.close();
-                            }
-                        }
-                    }
-                }
-            }
+        ContextMenuItem { text: @tr("Edit"); clicked => { root.edit(root.index); } }
+        ContextMenuItem { text: @tr("Duplicate"); clicked => { root.duplicate(root.index); } }
+        ContextMenuSeparator { }
+        ContextMenuItem {
+            text: @tr("Delete");
+            danger: true;
+            clicked => { root.remove(root.index); }
         }
     }
 }
@@ -394,100 +460,166 @@ export component SessionEditor inherits Rectangle {
     in property <string> section: "general";
     in property <string> target-text: "";
     in property <string> folder-text: "";
+    /// Folder 模式：Host / Port 隐藏（文件夹没有连接目标）。
+    in property <bool> folder-mode: false;
     in-out property <string> name-text: "";
     in-out property <string> host-text: "";
     in-out property <string> port-text: "22";
     in-out property <string> username-text: "";
     in property <string> auth-method-text: "agent";
     in-out property <string> password-text: "";
-    // SSH-1：Key 认证的托管密钥选择（`AuthKeyOption`: id/label/detail）。
+    in-out property <string> passphrase-text: "";
     in property <[AuthKeyOption]> key-options: [];
     in-out property <int> selected-key-index: -1;
     in property <bool> selected-key-missing: false;
-    // 旧 path-only 私钥：只读展示并标记 legacy；选中托管密钥后迁移。
     in property <string> legacy-key-path-text: "";
     in property <bool> legacy-key-has-passphrase: false;
     in property <bool> has-stored-password: false;
     in property <string> auth-test-status-text: "";
-    in property <string> proxy-mode-text: "none";
-    // NET-1：托管代理下拉 + legacy 只读摘要；不再有 per-session 自定义字段。
-    in property <[ProxyProfileOption]> proxy-options: [];
-    in-out property <int> selected-proxy-index: -1;
+    // --- session-editor：General ------------------------------------------
+    /// Icon 下拉下标：0 Default / 1 预设 Server / 2 预设 Database / 3 自定义图片。
+    in property <int> icon-index: 0;
+    in property <string> icon-custom-text: "";
+    in-out property <string> notes-text: "";
+    // --- session-editor：页级 Inherit --------------------------------------
+    in property <bool> inherit-auth: true;
+    in property <bool> inherit-login-script: true;
+    in property <bool> inherit-proxy: true;
+    in property <bool> inherit-tunnels: true;
+    in property <bool> inherit-terminal-style: true;
+    /// 顺序 = auth / login-script / proxy / tunnels / terminal-style。
+    in property <[InheritSource]> inherit-sources: [];
+    in property <string> parent-auth-text: "";
+    in property <string> parent-proxy-text: "";
+    in property <string> parent-terminal-style-text: "";
+    in property <int> parent-login-step-count: 0;
+    in property <int> parent-tunnel-count: 0;
+    // --- session-editor：Login Script --------------------------------------
+    in property <[LoginStepRow]> login-steps: [];
+    in property <int> selected-login-step: -1;
+    // --- session-editor：Tunnels -------------------------------------------
+    in property <[EditorTunnelRow]> tunnels: [];
+    in property <int> selected-tunnel: -1;
+    // --- session-editor：Proxy / Terminal Style ----------------------------
+    in property <[string]> proxy-option-labels: [];
+    in property <int> proxy-option-index: 0;
     in property <string> proxy-selected-detail-text: "";
     in property <string> proxy-legacy-text: "";
     in property <bool> proxy-selected-missing: false;
-    in property <string> tunnel-kind-text: "local";
-    in-out property <string> tunnel-bind-host-text: "127.0.0.1";
-    in-out property <string> tunnel-bind-port-text: "";
-    in-out property <string> tunnel-target-host-text: "";
-    in-out property <string> tunnel-target-port-text: "";
-    in property <string> tunnel-summary-text: "";
-    // N5：Appearance 三态覆盖字段（Rust 组装 TriStateField 模型）。
-    // 字体 / 配色必须是 choice，禁止自由文本输入。
-    in property <[TriStateField]> editor-appearance-fields: [];
-    // TERM-4：外观分区的 live preview 位图（Rust 按窗口 DPR 渲染；仅在编辑器
-    // 打开且停在外观分区时非空）。尺寸与 Rust 侧
-    // `SESSION_EDITOR_PREVIEW_AREA_PX` 对应，1:1 物理像素显示、不拉伸。
+    in property <[string]> scheme-options: [];
+    in property <int> scheme-index: 0;
     in property <image> preview-frame;
-    /// 预览表面底色（跟随预览配色；见 `terminal_preview.slint`）。
     in property <color> preview-background: Theme.terminal-surface;
 
     callback close();
     callback select-general();
     callback select-authentication();
+    callback select-login-script();
     callback select-tunnels();
     callback select-proxy();
-    callback select-appearance();
+    callback select-terminal-style();
     callback update-name(string);
     callback update-host(string);
     callback update-port(string);
     callback update-username(string);
-    callback set-auth-method-agent();
+    callback update-icon-index(int);
+    callback browse-icon();
+    callback reset-icon();
+    callback update-notes(string);
     callback set-auth-method-password();
-    callback set-auth-method-keyboard-interactive();
     callback set-auth-method-private-key();
+    callback set-auth-method-keyboard-interactive();
     callback update-password(string);
+    callback update-passphrase(string);
     callback select-key(int);
     callback manage-keys();
-    callback test-auth();
+    callback toggle-inherit-auth(bool);
+    callback toggle-inherit-login-script(bool);
+    callback toggle-inherit-proxy(bool);
+    callback toggle-inherit-tunnels(bool);
+    callback toggle-inherit-terminal-style(bool);
+    // Login Script 步骤
+    callback add-login-step(string);
+    callback edit-login-step(int);
+    callback select-login-step(int);
+    callback duplicate-login-step(int);
+    callback delete-login-step(int);
+    callback move-login-step(int, int);
+    // Tunnels
+    callback add-tunnel();
+    callback edit-tunnel(int);
+    callback select-tunnel(int);
+    callback duplicate-tunnel(int);
+    callback delete-tunnel(int);
+    callback clear-tunnels();
+    // Proxy / Terminal Style
     callback set-proxy-mode-none();
     callback select-proxy-profile(int);
     callback manage-proxies();
-    callback set-tunnel-kind-local();
-    callback set-tunnel-kind-remote();
-    callback set-tunnel-kind-dynamic();
-    callback update-tunnel-bind-host(string);
-    callback update-tunnel-bind-port(string);
-    callback update-tunnel-target-host(string);
-    callback update-tunnel-target-port(string);
-    callback add-tunnel();
-    callback clear-tunnels();
+    callback select-scheme(int);
+    callback manage-terminal-styles();
+    // 页脚
+    callback test-auth();
     callback save();
     callback save-connect();
-    // N5：Appearance 三态字段动作。
-    callback editor-theme-field-action(string, string);
-    callback update-editor-theme-field(string, string);
-    callback editor-select-scheme(int);
-    callback editor-select-font(int);
-    callback reset-all-editor-theme();
 
-    private property <bool> show-password-auth:
-        root.auth-method-text == "password" || root.auth-method-text == "keyboard_interactive";
+    // --- 页内状态 ---------------------------------------------------------
+    private property <length> field-width: Theme.form-field-width;
+    private property <int> drag-from: -1;
+    private property <int> drag-over: -1;
+    private property <bool> login-menu-open: false;
+    private property <int> login-menu-index: -1;
+    private property <length> menu-x: 0px;
+    private property <length> menu-y: 0px;
+    private property <bool> tunnel-menu-open: false;
+    private property <int> tunnel-menu-index: -1;
+
+    private property <bool> show-password-auth: root.auth-method-text == "password" || root.auth-method-text == "keyboard_interactive";
     private property <bool> show-key-auth: root.auth-method-text == "private_key";
-    private property <bool> show-tunnel-target: root.tunnel-kind-text != "dynamic";
-    // SSH-1：Key 认证要么选中托管密钥，要么保留旧 path-only 会话（legacy）。
     private property <bool> has-selected-key:
         root.selected-key-index >= 0 && root.selected-key-index < root.key-options.length;
-    private property <string> selected-key-detail:
-        root.has-selected-key ? root.key-options[root.selected-key-index].detail : "";
     private property <bool> key-selection-valid:
         !root.show-key-auth || root.has-selected-key || root.legacy-key-path-text != "";
-
-    // 保存校验（B 轮3 #16）：运行时要求会话名与主机非空；这里同步禁用并用就地提示替代
-    // 只写在状态栏的英文错误（状态栏文案的本地化由 WS-D 处理）。
-    // SSH-1：Key 认证还要求选中托管密钥（或保留旧 path-only legacy 会话）。
+    /// 保存门限：名称 / 主机非空；Key 认证需要选中托管密钥（或保留 legacy 路径）。
     private property <bool> save-blocked:
-        root.name-text == "" || root.host-text == "" || !root.key-selection-valid;
+        root.name-text == "" || (!root.folder-mode && root.host-text == "") || !root.key-selection-valid;
+    private property <bool> session-mode: !root.folder-mode;
+
+    private property <string> auth-source-kind: root.inherit-sources.length > 0 ? root.inherit-sources[0].kind : "global";
+    private property <string> auth-source-param: root.inherit-sources.length > 0 ? root.inherit-sources[0].param : "";
+    private property <string> login-source-kind: root.inherit-sources.length > 1 ? root.inherit-sources[1].kind : "global";
+    private property <string> login-source-param: root.inherit-sources.length > 1 ? root.inherit-sources[1].param : "";
+    private property <string> proxy-source-kind: root.inherit-sources.length > 2 ? root.inherit-sources[2].kind : "global";
+    private property <string> proxy-source-param: root.inherit-sources.length > 2 ? root.inherit-sources[2].param : "";
+    private property <string> tunnels-source-kind: root.inherit-sources.length > 3 ? root.inherit-sources[3].kind : "global";
+    private property <string> tunnels-source-param: root.inherit-sources.length > 3 ? root.inherit-sources[3].param : "";
+    private property <string> style-source-kind: root.inherit-sources.length > 4 ? root.inherit-sources[4].kind : "global";
+    private property <string> style-source-param: root.inherit-sources.length > 4 ? root.inherit-sources[4].param : "";
+
+    pure function icon-glyph(index: int) -> string {
+        if (index == 1) { return "Srv"; }
+        if (index == 2) { return "DB"; }
+        if (index == 3) { return "★"; }
+        return "S";
+    }
+
+    pure function kind-tag(kind: string) -> string {
+        if (kind == "wait") { return "Wait"; }
+        return "Keys";
+    }
+
+    pure function tunnel-kind-label(kind: string) -> string {
+        if (kind == "remote") { return @tr("Remote forward"); }
+        if (kind == "dynamic") { return @tr("Dynamic (SOCKS)"); }
+        return @tr("Local forward");
+    }
+
+    pure function clamp-index(value: int, count: int) -> int {
+        if (count <= 0) { return 0; }
+        if (value < 0) { return 0; }
+        if (value > count - 1) { return count - 1; }
+        return value;
+    }
 
     visible: root.open;
     background: transparent;
@@ -498,546 +630,840 @@ export component SessionEditor inherits Rectangle {
         open: root.open;
         close => { root.close(); }
 
-        // --- 主体：左侧分区导航 + 右侧表单 -----------------------------
         HorizontalLayout {
-                    vertical-stretch: 1;
+            vertical-stretch: 1;
+            spacing: Theme.spacing-12;
+
+            // --- 左侧分区导航 ---------------------------------------------
+            Rectangle {
+                width: Theme.nav-width;
+                vertical-stretch: 1;
+                background: Theme.layer-fill;
+                border-radius: Theme.radius-panel;
+                border-width: 1px;
+                border-color: Theme.layer-stroke;
+
+                VerticalLayout {
+                    padding: Theme.spacing-8;
+                    spacing: 2px;
+                    alignment: start;
+
+                    EditorNavItem { text: @tr("General"); icon: "settings"; selected: root.section == "general"; clicked => { root.select-general(); } }
+                    EditorNavItem { text: @tr("Authentication"); icon: "shield"; selected: root.section == "authentication"; clicked => { root.select-authentication(); } }
+                    EditorNavItem { text: @tr("Login Script"); icon: "code"; selected: root.section == "login-script"; clicked => { root.select-login-script(); } }
+                    EditorNavItem { text: @tr("Proxy"); icon: "globe"; selected: root.section == "proxy"; clicked => { root.select-proxy(); } }
+                    EditorNavItem { text: @tr("Tunnels"); icon: "connect"; selected: root.section == "tunnels"; clicked => { root.select-tunnels(); } }
+                    EditorNavItem { text: @tr("Terminal Style"); icon: "eye"; selected: root.section == "terminal-style"; clicked => { root.select-terminal-style(); } }
+                    // 本版不做：SFTP / Advanced 分区（status §2），禁用并标原因。
+                    EditorNavItem {
+                        text: @tr("SFTP");
+                        icon: "folder";
+                        enabled: false;
+                        hint: @tr("Not in this version.");
+                    }
+                    EditorNavItem {
+                        text: @tr("Advanced");
+                        icon: "settings";
+                        enabled: false;
+                        hint: @tr("Not in this version.");
+                    }
+                }
+            }
+
+            // --- 右侧分区内容 ---------------------------------------------
+            Rectangle {
+                vertical-stretch: 1;
+                background: Theme.card-fill;
+                border-radius: Theme.radius-panel;
+                border-width: 1px;
+                border-color: Theme.card-stroke;
+
+                VerticalLayout {
+                    padding: Theme.spacing-20;
                     spacing: Theme.spacing-12;
 
-                    // 分区导航（与 Settings 同用 Theme.nav-width）
-                    Rectangle {
-                        width: Theme.nav-width;
-                        vertical-stretch: 1;
-                        background: Theme.layer-fill;
-                        border-radius: Theme.radius-panel;
-                        border-width: 1px;
-                        border-color: Theme.layer-stroke;
-
-                        VerticalLayout {
-                            padding: Theme.spacing-8;
-                            spacing: 2px;
-                            alignment: start;
-
-                            EditorNavItem { text: @tr("General"); icon: "settings"; selected: root.section == "general"; clicked => { root.select-general(); } }
-                            EditorNavItem { text: @tr("Authentication"); icon: "shield"; selected: root.section == "authentication"; clicked => { root.select-authentication(); } }
-                            // SFTP / 高级本版本无字段；Terminal scrollback 归全局 Settings；Logging 走会话树/终端右键。
-                            EditorNavItem { text: @tr("SFTP"); icon: "folder"; enabled: false; hint: @tr("Not available in this version."); }
-                            EditorNavItem { text: @tr("Tunnels"); icon: "connect"; selected: root.section == "tunnels"; clicked => { root.select-tunnels(); } }
-                            EditorNavItem { text: @tr("Proxy"); icon: "globe"; selected: root.section == "proxy"; clicked => { root.select-proxy(); } }
-                            EditorNavItem { text: @tr("Advanced"); icon: "code"; enabled: false; hint: @tr("Not available in this version."); }
-                            EditorNavItem { text: @tr("Appearance"); icon: "eye"; selected: root.section == "appearance"; clicked => { root.select-appearance(); } }
-                        }
-                    }
-
-                    // 表单卡片
                     Rectangle {
                         vertical-stretch: 1;
-                        background: Theme.card-fill;
-                        border-radius: Theme.radius-panel;
-                        border-width: 1px;
-                        border-color: Theme.card-stroke;
+                        clip: true;
+                        background: transparent;
 
-                        VerticalLayout {
-                            padding: Theme.spacing-16;
-                            spacing: Theme.spacing-12;
+                        form-scroll := Flickable {
+                            width: parent.width;
+                            height: parent.height;
+                            interactive: true;
+                            content-width: self.width;
+                            content-height: form-content.preferred-height;
 
-                            // TERM-4：外观分区的 live preview 固定在表单滚动区上方，
-                            // 这样滚动到下方字段改配色/字体时预览仍可见（选择即预览）。
-                            // 只在编辑器打开且当前分区是 Appearance 时由 Rust 投影位图；
-                            // 其它分区不渲染、不占高度。
-                            if root.section == "appearance" : VerticalLayout {
-                                // 固定高度：不参与外层 VerticalLayout 的剩余空间分配，
-                                // 剩余高度全部留给下方可滚动的字段区。
-                                vertical-stretch: 0;
-                                spacing: Theme.spacing-4;
+                            form-content := VerticalLayout {
                                 alignment: start;
+                                spacing: Theme.form-row-gap;
 
-                                Text {
-                                    text: @tr("Live preview");
-                                    color: Theme.text-secondary;
-                                    font-size: Theme.font-caption;
-                                    font-weight: Theme.weight-semibold;
+                                // ---------------- General ----------------
+                                if root.section == "general" : VerticalLayout {
+                                    alignment: start;
+                                    spacing: Theme.form-row-gap;
+
+                                    if root.folder-text != "" : FormRow {
+                                        label: @tr("Folder");
+                                        Text {
+                                            text: root.folder-text;
+                                            color: Theme.text-secondary;
+                                            font-size: Theme.font-body;
+                                            height: Theme.control-height;
+                                            vertical-alignment: center;
+                                            wrap: no-wrap;
+                                            overflow: elide;
+                                        }
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Name");
+                                        WinTextInput {
+                                            width: root.field-width;
+                                            text <=> root.name-text;
+                                            placeholder-text: @tr("Session name");
+                                            edited => { root.update-name(self.text); }
+                                        }
+                                    }
+
+                                    // 原型 General：Name / Host / Port 各占独立行（不并排）。
+                                    if root.session-mode : FormRow {
+                                        label: @tr("Host");
+                                        WinTextInput {
+                                            width: root.field-width;
+                                            text <=> root.host-text;
+                                            placeholder-text: @tr("Host");
+                                            edited => { root.update-host(self.text); }
+                                        }
+                                    }
+
+                                    if root.session-mode : FormRow {
+                                        label: @tr("Port");
+                                        WinTextInput {
+                                            width: Theme.form-port-width;
+                                            text <=> root.port-text;
+                                            placeholder-text: "22";
+                                            edited => { root.update-port(self.text); }
+                                        }
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Icon");
+
+                                        Rectangle {
+                                            width: Theme.control-height;
+                                            height: Theme.control-height;
+                                            border-radius: Theme.radius-control;
+                                            border-width: 1px;
+                                            border-color: Theme.control-stroke;
+                                            background: root.icon-index == 3 ? Theme.terminal-background : Theme.subtle-hover;
+
+                                            Text {
+                                                text: root.icon-glyph(root.icon-index);
+                                                color: root.icon-index == 3 ? Theme.terminal-surface : Theme.text-primary;
+                                                font-size: Theme.font-caption;
+                                                font-weight: Theme.weight-semibold;
+                                                width: parent.width;
+                                                height: parent.height;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+
+                                        WinComboBox {
+                                            width: 220px;
+                                            model: [
+                                                @tr("Default"),
+                                                @tr("Preset · Server"),
+                                                @tr("Preset · Database"),
+                                                @tr("Custom image"),
+                                            ];
+                                            current-index: root.icon-index;
+                                            selected(index) => { root.update-icon-index(index); }
+                                        }
+
+                                        if root.icon-index == 3 : WinIconButton {
+                                            icon: "folder";
+                                            accessible-name: @tr("Browse");
+                                            tooltip-text: @tr("Browse");
+                                            clicked => { root.browse-icon(); }
+                                        }
+
+                                        if root.icon-index != 0 : WinIconButton {
+                                            icon: "clear";
+                                            accessible-name: @tr("Reset to default");
+                                            tooltip-text: @tr("Reset to default");
+                                            clicked => { root.reset-icon(); }
+                                        }
+                                    }
+
+                                    // 原型 General 只有 Icon 一行（预览块 + 下拉 + Browse/Reset）；
+                                    // 自定义图片文件名不再单独占一行。
+
+                                    FormRow {
+                                        label: @tr("Notes");
+                                        EditorTextArea {
+                                            text <=> root.notes-text;
+                                            placeholder-text: @tr("Optional notes for this session");
+                                            edited(value) => { root.update-notes(value); }
+                                        }
+                                    }
+
+                                    if root.save-blocked : Text {
+                                        text: @tr("A session name and a host are required before saving.");
+                                        color: Theme.critical;
+                                        font-size: Theme.font-caption;
+                                        wrap: word-wrap;
+                                    }
                                 }
 
-                                // 尺寸契约：卡内容宽 494px − 2px 边框 − 2×6px 终端
-                                // 内边距 = 480px；高 100px − 2px 边框 = 98px，对应
-                                // Rust 侧 `SESSION_EDITOR_PREVIEW_AREA_PX`。
-                                TerminalPreview {
-                                    frame: root.preview-frame;
-                                    surface-background: root.preview-background;
-                                    surface-height: 100px;
+                                // ---------------- Authentication ----------------
+                                if root.section == "authentication" : VerticalLayout {
+                                    alignment: start;
+                                    spacing: Theme.form-row-gap;
+
+                                    InheritBar {
+                                        inherit: root.inherit-auth;
+                                        toggled(value) => { root.toggle-inherit-auth(value); }
+                                    }
+                                    InheritSourceText {
+                                        inherit: root.inherit-auth;
+                                        source-kind: root.auth-source-kind;
+                                        source-param: root.auth-source-param;
+                                    }
+
+                                    if root.inherit-auth && root.parent-auth-text != "" : FormRow {
+                                        label: @tr("Parent");
+                                        Text {
+                                            text: root.parent-auth-text;
+                                            color: Theme.text-secondary;
+                                            font-size: Theme.font-body;
+                                            height: Theme.control-height;
+                                            vertical-alignment: center;
+                                            wrap: no-wrap;
+                                            overflow: elide;
+                                        }
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Username");
+                                        WinTextInput {
+                                            width: root.field-width;
+                                            text <=> root.username-text;
+                                            placeholder-text: @tr("Username");
+                                            enabled: !root.inherit-auth;
+                                            edited => { root.update-username(self.text); }
+                                        }
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Method");
+                                        HorizontalLayout {
+                                            spacing: Theme.spacing-8;
+                                            WinButton {
+                                                text: @tr("Password");
+                                                accent: root.auth-method-text == "password";
+                                                enabled: !root.inherit-auth;
+                                                clicked => { root.set-auth-method-password(); }
+                                            }
+                                            WinButton {
+                                                text: @tr("Private Key");
+                                                accent: root.show-key-auth;
+                                                enabled: !root.inherit-auth;
+                                                clicked => { root.set-auth-method-private-key(); }
+                                            }
+                                            WinButton {
+                                                text: @tr("Keyboard Interactive");
+                                                accent: root.auth-method-text == "keyboard_interactive";
+                                                enabled: !root.inherit-auth;
+                                                clicked => { root.set-auth-method-keyboard-interactive(); }
+                                            }
+                                        }
+                                    }
+
+                                    if root.show-password-auth : FormRow {
+                                        label: @tr("Password");
+                                        WinTextInput {
+                                            width: root.field-width;
+                                            text <=> root.password-text;
+                                            input-type: password;
+                                            enabled: !root.inherit-auth;
+                                            placeholder-text: root.has-stored-password
+                                                ? @tr("Leave blank to keep the saved password")
+                                                : @tr("Empty = ask on connect");
+                                            edited => { root.update-password(self.text); }
+                                        }
+                                    }
+
+                                    if root.show-key-auth : FormRow {
+                                        label: @tr("Private key");
+                                        ManagedKeyPicker {
+                                            width: root.field-width - Theme.control-height - Theme.spacing-8;
+                                            options: root.key-options;
+                                            selected-index <=> root.selected-key-index;
+                                            placeholder-text: @tr("Choose a managed key");
+                                            selected(index) => { root.select-key(index); }
+                                        }
+                                        WinIconButton {
+                                            icon: "settings";
+                                            accessible-name: @tr("Manage keys");
+                                            tooltip-text: @tr("Manage keys");
+                                            clicked => { root.manage-keys(); }
+                                        }
+                                    }
+
+                                    if root.show-key-auth : FormHint {
+                                        text: root.key-options.length == 0
+                                            ? @tr("Import an OpenSSH private key in the Private Keys manager, then pick it here.")
+                                            : @tr("Keys are managed in Private Keys.");
+                                    }
+
+                                    if root.show-key-auth : FormRow {
+                                        label: @tr("Passphrase");
+                                        WinTextInput {
+                                            width: root.field-width;
+                                            text <=> root.passphrase-text;
+                                            input-type: password;
+                                            enabled: !root.inherit-auth;
+                                            placeholder-text: @tr("Empty = ask when needed");
+                                            edited => { root.update-passphrase(self.text); }
+                                        }
+                                    }
+
+                                    if root.show-key-auth && root.selected-key-missing : Text {
+                                        text: @tr("The selected managed key is no longer available. Choose another key.");
+                                        color: Theme.critical;
+                                        font-size: Theme.font-caption;
+                                        wrap: word-wrap;
+                                    }
+
+                                    if root.show-key-auth && root.legacy-key-path-text != "" : FormRow {
+                                        label: @tr("Legacy key");
+                                        Text {
+                                            text: root.legacy-key-path-text;
+                                            color: Theme.text-secondary;
+                                            font-size: Theme.font-body;
+                                            font-family: Theme.font-mono;
+                                            height: Theme.control-height;
+                                            vertical-alignment: center;
+                                            wrap: no-wrap;
+                                            overflow: elide;
+                                        }
+                                    }
+
+                                    if root.show-key-auth && root.legacy-key-path-text != "" : FormHint {
+                                        text: root.legacy-key-has-passphrase
+                                            ? @tr("Legacy key path with a saved passphrase. Select a managed key to migrate this session.")
+                                            : @tr("Legacy key path. Select a managed key to migrate this session.");
+                                    }
+
+                                    if root.show-key-auth && !root.key-selection-valid : Text {
+                                        text: @tr("Choose a managed private key before saving.");
+                                        color: Theme.critical;
+                                        font-size: Theme.font-caption;
+                                        wrap: word-wrap;
+                                    }
+
+                                    FormHint { text: root.auth-test-status-text; }
                                 }
-                            }
 
-                            // 表单区：内容高于面板时在卡片内滚动（左侧导航与底部操作区固定不动）
-                            Rectangle {
-                                vertical-stretch: 1;
-                                clip: true;
-                                background: transparent;
+                                // ---------------- Login Script ----------------
+                                if root.section == "login-script" : VerticalLayout {
+                                    alignment: start;
+                                    spacing: Theme.form-row-gap;
 
-                                form-scroll := Flickable {
-                                    width: parent.width;
-                                    height: parent.height;
-                                    interactive: true;
-                                    content-width: self.width;
-                                    content-height: form-content.preferred-height;
+                                    InheritBar {
+                                        inherit: root.inherit-login-script;
+                                        toggled(value) => { root.toggle-inherit-login-script(value); }
+                                    }
+                                    InheritSourceText {
+                                        inherit: root.inherit-login-script;
+                                        source-kind: root.login-source-kind;
+                                        source-param: root.login-source-param;
+                                    }
 
-                                    form-content := VerticalLayout {
-                                        alignment: start;
-                                        spacing: Theme.spacing-12;
-
-                                        if root.section == "general" : VerticalLayout {
-                                            alignment: start;
-                                            spacing: Theme.spacing-12;
-
-                                            SectionTitle { heading: @tr("General"); }
-
-                                            // 文件夹只读：归属由会话树「New Session Here」决定；
-                                            // 新建/改名文件夹走树右键，不在此对话框里选或建。
-                                            if root.folder-text != "" : FormRow {
-                                                label: @tr("Folder");
-
-                                                Text {
-                                                    text: root.folder-text;
-                                                    color: Theme.text-secondary;
-                                                    font-size: Theme.font-body;
-                                                    horizontal-stretch: 1;
-                                                    height: Theme.control-height;
-                                                    vertical-alignment: center;
-                                                    wrap: no-wrap;
-                                                    overflow: elide;
-                                                }
-                                            }
-
-                                            FormRow {
-                                                label: @tr("Session name");
-
-                                                WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    text <=> root.name-text;
-                                                    placeholder-text: @tr("Session name");
-                                                    edited => { root.update-name(self.text); }
-                                                }
-                                            }
-
-                                            // Host + Port 同一行（与 Proxies 一致；Port 带标签）。
-                                            FormRow {
-                                                label: @tr("Host");
-
-                                                WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    text <=> root.host-text;
-                                                    placeholder-text: @tr("Host");
-                                                    edited => { root.update-host(self.text); }
-                                                }
-
-                                                Text {
-                                                    text: @tr("Port");
-                                                    color: Theme.text-secondary;
-                                                    font-size: Theme.font-caption;
-                                                    vertical-alignment: center;
-                                                    wrap: no-wrap;
-                                                }
-
-                                                WinTextInput {
-                                                    width: Theme.form-port-width;
-                                                    text <=> root.port-text;
-                                                    placeholder-text: "22";
-                                                    edited => { root.update-port(self.text); }
-                                                }
-                                            }
-
-                                            FormRow {
-                                                label: @tr("Username");
-
-                                                WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    text <=> root.username-text;
-                                                    placeholder-text: @tr("Username");
-                                                    edited => { root.update-username(self.text); }
-                                                }
-                                            }
-
-                                            // B 轮3 #16：保存前就地校验（运行时仍会兜底校验；
-                                            // 状态栏错误文案的本地化归 WS-D）。
-                                            if root.save-blocked : Text {
-                                                text: @tr("A session name and a host are required before saving.");
-                                                color: Theme.critical;
-                                                font-size: Theme.font-caption;
-                                                wrap: word-wrap;
-                                            }
+                                    // 工具条固定在清单**上方**（区分 Keys / Wait 两种添加）。
+                                    // Inherit 下也可直接添加：第一次编辑会自动切成 Custom
+                                    // （"已从父级拷贝；改动只留在本会话"）。
+                                    HorizontalLayout {
+                                        spacing: Theme.spacing-8;
+                                        WinButton {
+                                            text: @tr("Keys");
+                                            clicked => { root.add-login-step("keys"); }
                                         }
-                                        if root.section == "authentication" : VerticalLayout {
-                                            alignment: start;
-                                            spacing: Theme.spacing-12;
+                                        WinButton {
+                                            text: @tr("Wait");
+                                            clicked => { root.add-login-step("wait"); }
+                                        }
+                                    }
 
-                                            SectionTitle { heading: @tr("Authentication"); }
+                                    Rectangle {
+                                        width: parent.width;
+                                        // 7 × ctrl-h：清单可视高度按行高整数倍。
+                                        height: Theme.control-height * 7;
+                                        border-radius: Theme.radius-control;
+                                        border-width: 1px;
+                                        border-color: Theme.layer-stroke;
+                                        background: Theme.panel-background;
+                                        clip: true;
 
-                                            // Method：可长高 FormRow 内两行按钮，不再用空 label 续行。
-                                            FormRow {
-                                                label: @tr("Method");
+                                        if root.login-steps.length == 0 : Text {
+                                            x: Theme.spacing-12;
+                                            y: Theme.spacing-12;
+                                            text: @tr("No steps — use Keys / Wait above");
+                                            color: Theme.text-tertiary;
+                                            font-size: Theme.font-caption;
+                                            wrap: word-wrap;
+                                        }
 
-                                                VerticalLayout {
-                                                    horizontal-stretch: 1;
-                                                    spacing: Theme.spacing-8;
+                                        Flickable {
+                                            width: parent.width;
+                                            height: parent.height;
+                                            interactive: true;
+                                            content-width: self.width;
+                                            content-height: step-list.preferred-height;
+
+                                            step-list := VerticalLayout {
+                                                alignment: start;
+                                                spacing: 0px;
+
+                                                for step[i] in root.login-steps : Rectangle {
+                                                    width: parent.width;
+                                                    height: Theme.row-height-list;
+                                                    background: i == root.selected-login-step ? Theme.subtle-selected
+                                                        : step_touch.has-hover ? Theme.subtle-hover
+                                                        : i == root.drag-over && root.drag-from >= 0 ? Theme.accent-soft
+                                                        : transparent;
 
                                                     HorizontalLayout {
+                                                        padding-left: Theme.spacing-8;
+                                                        padding-right: Theme.spacing-12;
                                                         spacing: Theme.spacing-8;
-                                                        WinButton { text: @tr("Agent"); accent: root.auth-method-text == "agent"; clicked => { root.set-auth-method-agent(); } }
-                                                        WinButton { text: @tr("Password"); accent: root.auth-method-text == "password"; clicked => { root.set-auth-method-password(); } }
+
+                                                        // 拖拽手柄（装饰；实际拖动由整行接收）。
+                                                        Text {
+                                                            text: "⁞⁞";
+                                                            color: Theme.text-tertiary;
+                                                            font-size: Theme.font-caption;
+                                                            vertical-alignment: center;
+                                                            width: 12px;
+                                                            horizontal-alignment: center;
+                                                        }
+
+                                                        Text {
+                                                            text: "\{i + 1}";
+                                                            color: Theme.text-tertiary;
+                                                            font-size: Theme.font-caption;
+                                                            width: 20px;
+                                                            vertical-alignment: center;
+                                                            horizontal-alignment: end;
+                                                        }
+
+                                                        Rectangle {
+                                                            width: 48px;
+                                                            height: 20px;
+                                                            border-radius: Theme.radius-control;
+                                                            border-width: 1px;
+                                                            border-color: Theme.control-stroke;
+                                                            background: Theme.subtle-hover;
+
+                                                            Text {
+                                                                text: root.kind-tag(step.kind);
+                                                                color: Theme.text-primary;
+                                                                font-size: Theme.font-caption;
+                                                                font-weight: Theme.weight-semibold;
+                                                                width: parent.width;
+                                                                height: parent.height;
+                                                                horizontal-alignment: center;
+                                                                vertical-alignment: center;
+                                                            }
+                                                        }
+
+                                                        Text {
+                                                            text: step.name != "" ? step.name : step.detail;
+                                                            color: step.name != "" ? Theme.text-primary : Theme.text-tertiary;
+                                                            font-size: Theme.font-body;
+                                                            font-family: step.name != "" ? Theme.font-ui : Theme.font-mono;
+                                                            vertical-alignment: center;
+                                                            horizontal-stretch: 1;
+                                                            wrap: no-wrap;
+                                                            overflow: elide;
+                                                        }
                                                     }
 
-                                                    HorizontalLayout {
-                                                        spacing: Theme.spacing-8;
-                                                        WinButton { text: @tr("Keyboard Interactive"); accent: root.auth-method-text == "keyboard_interactive"; clicked => { root.set-auth-method-keyboard-interactive(); } }
-                                                        WinButton { text: @tr("Key"); accent: root.auth-method-text == "private_key"; clicked => { root.set-auth-method-private-key(); } }
+                                                    step_touch := TouchArea {
+                                                        pointer-event(event) => {
+                                                            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
+                                                                root.login-menu-index = i;
+                                                                root.menu-x = step_touch.absolute-position.x - root.absolute-position.x + step_touch.mouse-x;
+                                                                root.menu-y = step_touch.absolute-position.y - root.absolute-position.y + step_touch.mouse-y;
+                                                                root.login-menu-open = true;
+                                                                root.tunnel-menu-open = false;
+                                                            } else if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                                                                root.login-menu-open = false;
+                                                                root.drag-from = i;
+                                                                root.drag-over = i;
+                                                            } else if (event.kind == PointerEventKind.move && root.drag-from >= 0) {
+                                                                // 拖动中被按下的行持续收到事件；按相对位移换算目标行。
+                                                                root.drag-over = root.clamp-index(
+                                                                    root.drag-from + Math.floor((step_touch.mouse-y + Theme.row-height-list / 2) / Theme.row-height-list),
+                                                                    root.login-steps.length,
+                                                                );
+                                                            } else if (event.kind == PointerEventKind.up) {
+                                                                if (root.drag-from >= 0 && root.drag-over >= 0 && root.drag-from != root.drag-over) {
+                                                                    root.move-login-step(root.drag-from, root.drag-over);
+                                                                }
+                                                                root.drag-from = -1;
+                                                                root.drag-over = -1;
+                                                            }
+                                                        }
+                                                        clicked => {
+                                                            root.select-login-step(i);
+                                                            root.login-menu-open = false;
+                                                        }
                                                     }
-                                                }
-                                            }
-
-                                            // 主机密钥策略不在会话编辑器中暴露：所有会话默认走严格
-                                            // known_hosts 校验；首次/变更密钥由主机密钥确认对话框询问。
-                                            if root.show-password-auth : FormRow {
-                                                label: @tr("Password");
-
-                                                WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    text <=> root.password-text;
-                                                    input-type: password;
-                                                    placeholder-text: root.has-stored-password
-                                                        ? @tr("Leave blank to keep saved password")
-                                                        : @tr("Password / keyboard-interactive secret");
-                                                    edited => { root.update-password(self.text); }
-                                                }
-                                            }
-
-                                            // SSH-1：Key 认证只从密钥管理器选择，不再手输路径/口令；
-                                            // 空清单显示“去导入”引导，不渲染空下拉。
-                                            if root.show-key-auth && root.key-options.length > 0 : FormRow {
-                                                label: @tr("Private key");
-
-                                                ManagedKeyPicker {
-                                                    horizontal-stretch: 1;
-                                                    options: root.key-options;
-                                                    selected-index <=> root.selected-key-index;
-                                                    placeholder-text: @tr("Choose a managed key");
-                                                    selected(index) => { root.select-key(index); }
-                                                }
-
-                                                WinButton {
-                                                    text: @tr("Manage keys…");
-                                                    subtle: true;
-                                                    clicked => { root.manage-keys(); }
-                                                }
-                                            }
-
-                                            if root.show-key-auth && root.key-options.length == 0 : FormRow {
-                                                label: @tr("Private key");
-
-                                                Text {
-                                                    text: @tr("No managed private keys yet.");
-                                                    color: Theme.text-tertiary;
-                                                    font-size: Theme.font-body;
-                                                    horizontal-stretch: 1;
-                                                    height: Theme.control-height;
-                                                    vertical-alignment: center;
-                                                    wrap: no-wrap;
-                                                    overflow: elide;
-                                                }
-
-                                                WinButton {
-                                                    text: @tr("Manage keys…");
-                                                    subtle: true;
-                                                    clicked => { root.manage-keys(); }
-                                                }
-                                            }
-
-                                            if root.show-key-auth && root.key-options.length == 0 : HintText {
-                                                hint: @tr("Import an OpenSSH private key in the Private Keys manager, then pick it here.");
-                                            }
-
-                                            if root.show-key-auth && root.has-selected-key : Text {
-                                                text: root.selected-key-detail;
-                                                color: Theme.text-tertiary;
-                                                font-size: Theme.font-caption;
-                                                font-family: Theme.font-mono;
-                                                wrap: no-wrap;
-                                                overflow: elide;
-                                            }
-
-                                            if root.show-key-auth && root.selected-key-missing : Text {
-                                                text: @tr("The selected managed key is no longer available. Choose another key or open Manage keys….");
-                                                color: Theme.critical;
-                                                font-size: Theme.font-caption;
-                                                wrap: word-wrap;
-                                            }
-
-                                            // 旧 path-only 配置仍可连接：只读显示并标记 legacy；
-                                            // 选中托管密钥后保存即迁移（草稿清空 path）。
-                                            if root.show-key-auth && root.legacy-key-path-text != "" : FormRow {
-                                                label: @tr("Legacy key");
-
-                                                Text {
-                                                    text: root.legacy-key-path-text;
-                                                    color: Theme.text-secondary;
-                                                    font-size: Theme.font-body;
-                                                    font-family: Theme.font-mono;
-                                                    horizontal-stretch: 1;
-                                                    height: Theme.control-height;
-                                                    vertical-alignment: center;
-                                                    wrap: no-wrap;
-                                                    overflow: elide;
-                                                }
-                                            }
-
-                                            if root.show-key-auth && root.legacy-key-path-text != "" : HintText {
-                                                hint: root.legacy-key-has-passphrase
-                                                    ? @tr("Legacy key path with a stored passphrase. Select a managed key to migrate this session.")
-                                                    : @tr("Legacy key path. Select a managed key to migrate this session.");
-                                            }
-
-                                            if root.show-key-auth && !root.key-selection-valid : Text {
-                                                text: @tr("Choose a managed private key before saving.");
-                                                color: Theme.critical;
-                                                font-size: Theme.font-caption;
-                                                wrap: word-wrap;
-                                            }
-
-                                            FormRow {
-                                                label: "";
-
-                                                WinButton { text: @tr("Test Connection"); icon: "refresh"; clicked => { root.test-auth(); } }
-                                            }
-
-                                            HintText { hint: root.auth-test-status-text; }
-                                        }
-                                        if root.section == "proxy" : VerticalLayout {
-                                            alignment: start;
-                                            spacing: Theme.spacing-12;
-
-                                            SectionTitle { heading: @tr("Proxy"); }
-
-                                            FormRow {
-                                                label: @tr("Mode");
-
-                                                WinButton {
-                                                    text: @tr("No Proxy");
-                                                    accent: root.proxy-mode-text == "none";
-                                                    clicked => { root.set-proxy-mode-none(); }
-                                                }
-
-                                                WinButton {
-                                                    text: @tr("Manage proxies…");
-                                                    subtle: true;
-                                                    clicked => { root.manage-proxies(); }
-                                                }
-                                            }
-
-                                            if root.proxy-options.length > 0 : FormRow {
-                                                label: @tr("Profile");
-
-                                                ProxyPicker {
-                                                    horizontal-stretch: 1;
-                                                    options: root.proxy-options;
-                                                    selected-index <=> root.selected-proxy-index;
-                                                    placeholder-text: @tr("Choose a managed proxy");
-                                                    selected(index) => { root.select-proxy-profile(index); }
-                                                }
-                                            }
-
-                                            if root.proxy-options.length == 0 : FormRow {
-                                                label: @tr("Profile");
-
-                                                Text {
-                                                    text: @tr("No managed proxies yet.");
-                                                    color: Theme.text-tertiary;
-                                                    font-size: Theme.font-body;
-                                                    horizontal-stretch: 1;
-                                                    height: Theme.control-height;
-                                                    vertical-alignment: center;
-                                                    wrap: no-wrap;
-                                                    overflow: elide;
-                                                }
-                                            }
-
-                                            // 选中托管代理：只读摘要（条目在管理器里编辑）。
-                                            if root.proxy-mode-text == "managed" && root.proxy-selected-detail-text != "" : Text {
-                                                text: root.proxy-selected-detail-text;
-                                                color: Theme.text-tertiary;
-                                                font-size: Theme.font-caption;
-                                                font-family: Theme.font-mono;
-                                                wrap: no-wrap;
-                                                overflow: elide;
-                                            }
-
-                                            if root.proxy-selected-missing : Text {
-                                                text: @tr("The selected managed proxy is no longer available. Choose another proxy or No Proxy.");
-                                                color: Theme.critical;
-                                                font-size: Theme.font-caption;
-                                                wrap: word-wrap;
-                                            }
-
-                                            // 旧 per-session / 悬空引用：只读展示并标记 legacy，保持可连接。
-                                            if root.proxy-mode-text == "legacy" && root.proxy-legacy-text != "" : FormRow {
-                                                label: @tr("Legacy proxy");
-
-                                                Text {
-                                                    text: root.proxy-legacy-text;
-                                                    color: Theme.text-secondary;
-                                                    font-size: Theme.font-body;
-                                                    font-family: Theme.font-mono;
-                                                    horizontal-stretch: 1;
-                                                    height: Theme.control-height;
-                                                    vertical-alignment: center;
-                                                    wrap: no-wrap;
-                                                    overflow: elide;
-                                                }
-                                            }
-
-                                            if root.proxy-mode-text == "legacy" : HintText {
-                                                hint: @tr("Legacy per-session proxy. Select a managed proxy to migrate this session, or choose No Proxy.");
-                                            }
-
-                                            if root.proxy-mode-text == "managed" : HintText {
-                                                hint: @tr("Uses a managed proxy profile. Edits in the Proxy Manager apply to every session that references it.");
-                                            }
-
-                                            if root.proxy-mode-text == "none" : HintText {
-                                                hint: @tr("Proxy disabled for this editor session.");
-                                            }
-                                        }
-                                        if root.section == "tunnels" : VerticalLayout {
-                                            alignment: start;
-                                            spacing: Theme.spacing-12;
-
-                                            SectionTitle { heading: @tr("Tunnels"); }
-
-                                            FormRow {
-                                                label: @tr("Kind");
-
-                                                WinButton { text: @tr("Local"); accent: root.tunnel-kind-text == "local"; clicked => { root.set-tunnel-kind-local(); } }
-                                                WinButton { text: @tr("Remote"); accent: root.tunnel-kind-text == "remote"; clicked => { root.set-tunnel-kind-remote(); } }
-                                                WinButton { text: @tr("Dynamic"); accent: root.tunnel-kind-text == "dynamic"; clicked => { root.set-tunnel-kind-dynamic(); } }
-                                            }
-
-                                            FormRow {
-                                                label: @tr("Listen host");
-
-                                                WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    text <=> root.tunnel-bind-host-text;
-                                                    placeholder-text: "127.0.0.1";
-                                                    edited => { root.update-tunnel-bind-host(self.text); }
-                                                }
-                                            }
-
-                                            FormRow {
-                                                label: @tr("Listen port");
-
-                                                WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    text <=> root.tunnel-bind-port-text;
-                                                    placeholder-text: @tr("Listen port");
-                                                    edited => { root.update-tunnel-bind-port(self.text); }
-                                                }
-                                            }
-
-                                            if root.show-tunnel-target : FormRow {
-                                                label: @tr("Target host");
-
-                                                WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    text <=> root.tunnel-target-host-text;
-                                                    placeholder-text: @tr("Target host");
-                                                    edited => { root.update-tunnel-target-host(self.text); }
-                                                }
-                                            }
-
-                                            if root.show-tunnel-target : FormRow {
-                                                label: @tr("Target port");
-
-                                                WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    text <=> root.tunnel-target-port-text;
-                                                    placeholder-text: @tr("Target port");
-                                                    edited => { root.update-tunnel-target-port(self.text); }
-                                                }
-                                            }
-
-                                            FormRow {
-                                                label: "";
-
-                                                WinButton { text: @tr("Add Tunnel"); icon: "plus"; clicked => { root.add-tunnel(); } }
-                                                WinButton { text: @tr("Clear Tunnels"); icon: "trash"; subtle: true; clicked => { root.clear-tunnels(); } }
-                                            }
-
-                                            HintText { hint: root.tunnel-summary-text; }
-                                        }
-                                        if root.section == "appearance" : VerticalLayout {
-                                            alignment: start;
-                                            spacing: Theme.spacing-12;
-
-                                            SectionTitle { heading: @tr("Appearance"); }
-
-                                            HintText { hint: @tr("Per-field overrides for this session. Inherited rows show the resolved value and where it comes from."); }
-
-                                            TriStateFieldSection {
-                                                fields: root.editor-appearance-fields;
-                                                // TERM-4：下拉框需要完整的值区宽度；标签列收到
-                                                // 110px 后当前配色名不再被省略（最长标签约 86px）。
-                                                label-width: Theme.form-label-width;
-                                                field-set-inherit(key) => { root.editor-theme-field-action(key, "inherit"); }
-                                                field-set-explicit(key) => { root.editor-theme-field-action(key, "explicit"); }
-                                                field-reset(key) => { root.editor-theme-field-action(key, "reset"); }
-                                                field-edited(key, value) => { root.update-editor-theme-field(key, value); }
-                                                field-toggled(key) => { }
-                                                field-selected(key, index) => {
-                                                    if (key == "appearance.color_scheme") {
-                                                        root.editor-select-scheme(index);
-                                                    } else if (key == "appearance.font_family") {
-                                                        root.editor-select-font(index);
-                                                    }
-                                                }
-                                            }
-
-                                            HorizontalLayout {
-                                                alignment: end;
-                                                WinButton {
-                                                    text: @tr("Reset All");
-                                                    clicked => { root.reset-all-editor-theme(); }
                                                 }
                                             }
                                         }
                                     }
+
+                                    // 拖动时整行高亮依赖 drag-over；清单外松手不产生移动。
+                                    if root.inherit-login-script : FormHint {
+                                        text: @tr("Inherited from the parent. Turn off Inherit to edit the steps for this session.");
+                                        indent: false;
+                                    }
                                 }
 
-                                // 滚动指示：E22 可复用组件（内部按 `-content-y` 计算进度）。
-                                WinScrollIndicator {
-                                    x: form-scroll.width - self.width - Theme.spacing-4;
-                                    y: Theme.spacing-4;
-                                    height: parent.height - 2 * Theme.spacing-4;
-                                    viewport-position: form-scroll.content-y;
-                                    content-extent: form-scroll.content-height;
-                                    viewport-extent: form-scroll.height;
-                                    thumb-min-length: 24px;
+                                // ---------------- Proxy ----------------
+                                if root.section == "proxy" : VerticalLayout {
+                                    alignment: start;
+                                    spacing: Theme.form-row-gap;
+
+                                    InheritBar {
+                                        inherit: root.inherit-proxy;
+                                        toggled(value) => { root.toggle-inherit-proxy(value); }
+                                    }
+                                    InheritSourceText {
+                                        inherit: root.inherit-proxy;
+                                        source-kind: root.proxy-source-kind;
+                                        source-param: root.proxy-source-param;
+                                    }
+
+                                    if root.inherit-proxy && root.parent-proxy-text != "" : FormRow {
+                                        label: @tr("Parent");
+                                        Text {
+                                            text: root.parent-proxy-text;
+                                            color: Theme.text-secondary;
+                                            font-size: Theme.font-body;
+                                            height: Theme.control-height;
+                                            vertical-alignment: center;
+                                            wrap: no-wrap;
+                                            overflow: elide;
+                                        }
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Profile");
+                                        WinComboBox {
+                                            width: root.field-width - Theme.control-height - Theme.spacing-8;
+                                            // Rust 投影稳定 id（`no-proxy` / 托管 profile 名），
+                                            // 显示文案用 @tr 映射（`TextFormats.proxy-option-label`）。
+                                            model: root.proxy-option-labels;
+                                            has-label-map: true;
+                                            label-for(id) => {
+                                                return TextFormats.proxy-option-label(id);
+                                            }
+                                            current-index: root.proxy-option-index;
+                                            enabled: !root.inherit-proxy;
+                                            selected(index) => {
+                                                if (index == 0) {
+                                                    root.set-proxy-mode-none();
+                                                } else {
+                                                    root.select-proxy-profile(index - 1);
+                                                }
+                                            }
+                                        }
+                                        WinIconButton {
+                                            icon: "settings";
+                                            accessible-name: @tr("Manage proxies");
+                                            tooltip-text: @tr("Manage proxies");
+                                            clicked => { root.manage-proxies(); }
+                                        }
+                                    }
+
+                                    if !root.inherit-proxy : FormHint {
+                                        text: @tr("Profiles are managed in Proxies.");
+                                    }
+
+                                    if root.proxy-selected-detail-text != "" : Text {
+                                        text: root.proxy-selected-detail-text;
+                                        color: Theme.text-tertiary;
+                                        font-size: Theme.font-caption;
+                                        font-family: Theme.font-mono;
+                                        wrap: no-wrap;
+                                        overflow: elide;
+                                    }
+
+                                    if root.proxy-selected-missing : Text {
+                                        text: @tr("The selected managed proxy is no longer available. Choose another proxy or No Proxy.");
+                                        color: Theme.critical;
+                                        font-size: Theme.font-caption;
+                                        wrap: word-wrap;
+                                    }
+
+                                    if root.proxy-legacy-text != "" : FormRow {
+                                        label: @tr("Legacy proxy");
+                                        Text {
+                                            text: root.proxy-legacy-text;
+                                            color: Theme.text-secondary;
+                                            font-size: Theme.font-body;
+                                            font-family: Theme.font-mono;
+                                            height: Theme.control-height;
+                                            vertical-alignment: center;
+                                            wrap: no-wrap;
+                                            overflow: elide;
+                                        }
+                                    }
+                                }
+
+                                // ---------------- Tunnels ----------------
+                                if root.section == "tunnels" : VerticalLayout {
+                                    alignment: start;
+                                    spacing: Theme.form-row-gap;
+
+                                    InheritBar {
+                                        inherit: root.inherit-tunnels;
+                                        toggled(value) => { root.toggle-inherit-tunnels(value); }
+                                    }
+                                    InheritSourceText {
+                                        inherit: root.inherit-tunnels;
+                                        source-kind: root.tunnels-source-kind;
+                                        source-param: root.tunnels-source-param;
+                                    }
+
+                                    // 顶栏只放全局动作（添加 / 清空），行级动作走右键。
+                                    // Inherit 下添加/清空会自动切成 Custom（同原型）。
+                                    HorizontalLayout {
+                                        spacing: Theme.spacing-8;
+                                        WinIconButton {
+                                            icon: "plus";
+                                            accessible-name: @tr("Add Tunnel");
+                                            tooltip-text: @tr("Add Tunnel");
+                                            clicked => { root.add-tunnel(); }
+                                        }
+                                        WinIconButton {
+                                            icon: "trash";
+                                            accessible-name: @tr("Clear Tunnels");
+                                            tooltip-text: @tr("Clear Tunnels");
+                                            clicked => { root.clear-tunnels(); }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: parent.width;
+                                        // 7 × ctrl-h：清单可视高度按行高整数倍。
+                                        height: Theme.control-height * 7;
+                                        border-radius: Theme.radius-control;
+                                        border-width: 1px;
+                                        border-color: Theme.layer-stroke;
+                                        background: Theme.panel-background;
+                                        clip: true;
+
+                                        if root.tunnels.length == 0 : Text {
+                                            x: Theme.spacing-12;
+                                            y: Theme.spacing-12;
+                                            text: @tr("No tunnels — use + above");
+                                            color: Theme.text-tertiary;
+                                            font-size: Theme.font-caption;
+                                            wrap: word-wrap;
+                                        }
+
+                                        Flickable {
+                                            width: parent.width;
+                                            height: parent.height;
+                                            interactive: true;
+                                            content-width: self.width;
+                                            content-height: tunnel-list.preferred-height;
+
+                                            tunnel-list := VerticalLayout {
+                                                alignment: start;
+                                                spacing: 0px;
+
+                                                for tunnel[i] in root.tunnels : Rectangle {
+                                                    width: parent.width;
+                                                    height: Theme.row-height-list * 2;
+                                                    background: i == root.selected-tunnel ? Theme.subtle-selected
+                                                        : tunnel_touch.has-hover ? Theme.subtle-hover
+                                                        : transparent;
+
+                                                    VerticalLayout {
+                                                        padding-left: Theme.spacing-12;
+                                                        padding-right: Theme.spacing-12;
+                                                        padding-top: Theme.spacing-4;
+                                                        padding-bottom: Theme.spacing-4;
+                                                        spacing: 2px;
+                                                        alignment: center;
+
+                                                        Text {
+                                                            text: tunnel.name != "" ? tunnel.name : root.tunnel-kind-label(tunnel.kind);
+                                                            color: Theme.text-primary;
+                                                            font-size: Theme.font-body;
+                                                            font-weight: Theme.weight-semibold;
+                                                            wrap: no-wrap;
+                                                            overflow: elide;
+                                                        }
+
+                                                        Text {
+                                                            text: tunnel.route;
+                                                            color: Theme.text-tertiary;
+                                                            font-size: Theme.font-caption;
+                                                            font-family: Theme.font-mono;
+                                                            wrap: no-wrap;
+                                                            overflow: elide;
+                                                        }
+                                                    }
+
+                                                    tunnel_touch := TouchArea {
+                                                        pointer-event(event) => {
+                                                            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
+                                                                root.tunnel-menu-index = i;
+                                                                root.menu-x = tunnel_touch.absolute-position.x - root.absolute-position.x + tunnel_touch.mouse-x;
+                                                                root.menu-y = tunnel_touch.absolute-position.y - root.absolute-position.y + tunnel_touch.mouse-y;
+                                                                root.tunnel-menu-open = true;
+                                                                root.login-menu-open = false;
+                                                            } else if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                                                                root.tunnel-menu-open = false;
+                                                            }
+                                                        }
+                                                        clicked => {
+                                                            root.select-tunnel(i);
+                                                            root.tunnel-menu-open = false;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if root.inherit-tunnels && root.parent-tunnel-count > 0 : FormHint {
+                                        text: @tr("Using {0} tunnel(s) from the parent. Turn off Inherit to edit them for this session.", root.parent-tunnel-count);
+                                        indent: false;
+                                    }
+                                }
+
+                                // ---------------- Terminal Style ----------------
+                                if root.section == "terminal-style" : VerticalLayout {
+                                    alignment: start;
+                                    spacing: Theme.form-row-gap;
+
+                                    InheritBar {
+                                        inherit: root.inherit-terminal-style;
+                                        toggled(value) => { root.toggle-inherit-terminal-style(value); }
+                                    }
+                                    InheritSourceText {
+                                        inherit: root.inherit-terminal-style;
+                                        source-kind: root.style-source-kind;
+                                        source-param: root.style-source-param;
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Style");
+                                        WinComboBox {
+                                            width: root.field-width - Theme.control-height - Theme.spacing-8;
+                                            model: root.scheme-options;
+                                            current-index: root.scheme-index;
+                                            enabled: !root.inherit-terminal-style;
+                                            selected(index) => { root.select-scheme(index); }
+                                        }
+                                        WinIconButton {
+                                            icon: "settings";
+                                            accessible-name: @tr("Manage terminal styles");
+                                            tooltip-text: @tr("Manage terminal styles");
+                                            clicked => { root.manage-terminal-styles(); }
+                                        }
+                                    }
+
+                                    FormHint {
+                                        text: root.inherit-terminal-style && root.parent-terminal-style-text != ""
+                                            ? @tr("Using parent style: {0}", root.parent-terminal-style-text)
+                                            : @tr("Fonts and colors are edited in Terminal Styles.");
+                                    }
+
+                                    // 特殊块：预览没有左侧 label、占满整行（与 Settings 预览一致；
+                                    // 高度统一走 `Theme.terminal-preview-height`）。
+                                    TerminalPreview {
+                                        frame: root.preview-frame;
+                                        surface-background: root.preview-background;
+                                        surface-height: Theme.terminal-preview-height;
+                                    }
                                 }
                             }
                         }
+
+                        WinScrollIndicator {
+                            x: form-scroll.width - self.width - Theme.spacing-4;
+                            y: Theme.spacing-4;
+                            height: parent.height - 2 * Theme.spacing-4;
+                            viewport-position: form-scroll.content-y;
+                            content-extent: form-scroll.content-height;
+                            viewport-extent: form-scroll.height;
+                            thumb-min-length: 24px;
+                        }
                     }
                 }
+            }
+        }
 
         Rectangle { height: 1px; background: Theme.layer-stroke; }
 
-        // --- 底部操作区（右对齐，主操作在最右） -------------------------
+        // --- 整窗页脚（分区内没有 Save）-------------------------------------
         HorizontalLayout {
             alignment: end;
             spacing: Theme.spacing-8;
 
+            if root.session-mode : WinButton {
+                text: @tr("Test Connection");
+                clicked => { root.test-auth(); }
+            }
             WinButton { text: @tr("Cancel"); subtle: true; clicked => { root.close(); } }
-            // B 轮3 #16：运行时要求会话名与主机非空；这里同步门限，避免只留一条
-            // 被模态遮住的状态栏英文错误。
-            WinButton { text: @tr("Save"); enabled: !root.save-blocked; clicked => { root.save(); } }
-            WinButton { text: @tr("Save and Connect"); icon: "connect"; accent: true; enabled: !root.save-blocked; clicked => { root.save-connect(); } }
+            WinButton {
+                text: @tr("Save");
+                enabled: !root.save-blocked;
+                clicked => { root.save(); }
+            }
+            WinButton {
+                text: @tr("Save and Connect");
+                icon: "connect";
+                accent: true;
+                enabled: !root.save-blocked;
+                clicked => { root.save-connect(); }
+            }
         }
+    }
+
+    // --- 行右键菜单（页根层叠层，避免被清单裁剪）----------------------------
+    if root.login-menu-open : LoginStepMenu {
+        x: Math.min(root.menu-x, root.width - self.width - Theme.spacing-4);
+        y: Math.min(root.menu-y, root.height - self.height - Theme.spacing-4);
+        index: root.login-menu-index;
+        can-move-up: root.login-menu-index > 0;
+        can-move-down: root.login-menu-index >= 0 && root.login-menu-index < root.login-steps.length - 1;
+        edit(index) => { root.login-menu-open = false; root.edit-login-step(index); }
+        duplicate(index) => { root.login-menu-open = false; root.duplicate-login-step(index); }
+        remove(index) => { root.login-menu-open = false; root.delete-login-step(index); }
+        move-up(index) => { root.login-menu-open = false; root.move-login-step(index, index - 1); }
+        move-down(index) => { root.login-menu-open = false; root.move-login-step(index, index + 1); }
+        move-top(index) => { root.login-menu-open = false; root.move-login-step(index, 0); }
+        move-bottom(index) => { root.login-menu-open = false; root.move-login-step(index, root.login-steps.length - 1); }
+    }
+
+    if root.tunnel-menu-open : TunnelMenu {
+        x: Math.min(root.menu-x, root.width - self.width - Theme.spacing-4);
+        y: Math.min(root.menu-y, root.height - self.height - Theme.spacing-4);
+        index: root.tunnel-menu-index;
+        edit(index) => { root.tunnel-menu-open = false; root.edit-tunnel(index); }
+        duplicate(index) => { root.tunnel-menu-open = false; root.duplicate-tunnel(index); }
+        remove(index) => { root.tunnel-menu-open = false; root.delete-tunnel(index); }
     }
 
     /// L2：宿主在关闭上层弹窗后把键盘焦点交还给本弹窗（嵌套场景）。

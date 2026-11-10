@@ -212,6 +212,9 @@ pub fn run(ctx: &Context, options: &DistOptions) -> Result<()> {
         println!("==> reusing {}", binary.display());
     } else {
         let mut command = context::cargo(ctx);
+        // Bake the same label About / `--version` / PE resources use into the
+        // binary so the artifact name and the UI stay in sync.
+        command.env("YSHELL_RELEASE_VERSION", &version);
         command.args([
             "build",
             "--release",

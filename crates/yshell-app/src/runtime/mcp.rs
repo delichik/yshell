@@ -2,6 +2,7 @@
 
 use std::sync::mpsc;
 
+use yshell_config::McpListenMode;
 use yshell_core::{CommandDispatcher, SessionCommand, SessionState};
 use yshell_mcp::{
     ConnectedSessionInfo, IpcErrorBody, IpcRequest, IpcResponse, IpcResult, OutputMode,
@@ -24,17 +25,16 @@ pub enum McpConsentDecision {
 }
 
 /// Phase of the single global MCP control lock.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum McpControlPhase {
+    #[default]
     Idle,
-    AwaitingConsent { client_id: String },
-    Controlling { client_id: String },
-}
-
-impl Default for McpControlPhase {
-    fn default() -> Self {
-        Self::Idle
-    }
+    AwaitingConsent {
+        client_id: String,
+    },
+    Controlling {
+        client_id: String,
+    },
 }
 
 /// Reply channel for a pending `request_control`.
@@ -45,8 +45,12 @@ pub type McpControlReply = mpsc::Sender<Result<(), String>>;
 pub enum McpListenerStatus {
     #[default]
     Disabled,
-    Ready { port: u16 },
-    Failed { message: String },
+    Ready {
+        port: u16,
+    },
+    Failed {
+        message: String,
+    },
 }
 
 /// In-memory MCP control state owned by [`AppRuntime`].
@@ -87,6 +91,9 @@ impl AppRuntime {
 
     /// Persist MCP enable flag. WindowManager reconciles the listener on the next tick.
     pub fn set_mcp_enabled(&mut self, enabled: bool) -> AppResult<AppProjection> {
+        if enabled {
+            self.mcp_validate_listen_config()?;
+        }
         if self.config_document.ui.mcp_enabled != enabled {
             self.config_document.ui.mcp_enabled = enabled;
             self.config_store
@@ -147,9 +154,50 @@ impl AppRuntime {
                 }
             }
             McpListenerStatus::Ready { port } => {
-                format!("Ready — listening on 127.0.0.1:{port}")
+                let host = self.config_document.ui.mcp_listen.bind_host();
+                format!("Ready — listening on {host}:{port}")
             }
             McpListenerStatus::Failed { message } => format!("Failed — {message}"),
+        }
+    }
+
+    /// Stable projection id for the Settings → MCP status line.
+    ///
+    /// The user-facing sentence is rendered by
+    /// `TextFormats.settings-mcp-status`; keep these ids in sync with
+    /// `ui/text_formats.slint`. `mcp_status_text` stays as the English status
+    /// used by the MCP `get_mcp_info` reply (agent-facing, not translated).
+    #[must_use]
+    pub fn mcp_status_kind(&self) -> &'static str {
+        if self.mcp.is_controlling() {
+            return "controlling";
+        }
+        if self.mcp.consent_visible() {
+            return "awaiting-consent";
+        }
+        match &self.mcp_listener_status {
+            McpListenerStatus::Disabled => {
+                if self.mcp_enabled() {
+                    "starting"
+                } else {
+                    "disabled"
+                }
+            }
+            McpListenerStatus::Ready { .. } => "ready",
+            McpListenerStatus::Failed { .. } => "failed",
+        }
+    }
+
+    /// Detail for [`Self::mcp_status_kind`] (`host:port` / failure message).
+    #[must_use]
+    pub fn mcp_status_detail(&self) -> String {
+        match &self.mcp_listener_status {
+            McpListenerStatus::Ready { port } => {
+                let host = self.config_document.ui.mcp_listen.bind_host();
+                format!("{host}:{port}")
+            }
+            McpListenerStatus::Failed { message } => message.clone(),
+            McpListenerStatus::Disabled => String::new(),
         }
     }
 
@@ -191,6 +239,165 @@ impl AppRuntime {
             );
         }
         Ok(self.projection())
+    }
+
+    /// Validate Port / Listen / API key before enabling or (re)binding.
+    pub fn mcp_validate_listen_config(&self) -> AppResult<()> {
+        let port = self.config_document.ui.mcp_port;
+        if port == 0 {
+            return Err(AppError::new("MCP port must be between 1 and 65535"));
+        }
+        if self.config_document.ui.mcp_listen == McpListenMode::Lan
+            && self.config_document.ui.mcp_api_key.trim().is_empty()
+        {
+            return Err(AppError::new(
+                "API key is required when Listen is LAN. Generate a key first.",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Token published to `mcp-endpoint.json` / verified on IPC.
+    ///
+    /// Prefer the configured API key; when Local and the key is empty, reuse the
+    /// current session token or mint a new one (not persisted until Generate).
+    #[must_use]
+    pub fn mcp_resolve_endpoint_token(&self) -> String {
+        let configured = self.config_document.ui.mcp_api_key.trim();
+        if !configured.is_empty() {
+            return configured.to_owned();
+        }
+        self.mcp_endpoint_token
+            .clone()
+            .unwrap_or_else(crate::mcp_server::new_endpoint_token)
+    }
+
+    pub fn set_mcp_port(&mut self, port: u16) -> AppResult<AppProjection> {
+        if port == 0 {
+            return Err(AppError::new("MCP port must be between 1 and 65535"));
+        }
+        if self.config_document.ui.mcp_port != port {
+            self.config_document.ui.mcp_port = port;
+            self.config_store
+                .save(&self.config_document)
+                .map_err(AppError::from_error)?;
+            // Force listener reconcile (clear sticky Failed for the old bind).
+            if self.mcp_enabled() {
+                self.mcp_listener_status = McpListenerStatus::Disabled;
+            }
+            self.ui_dirty = true;
+        }
+        Ok(self.projection())
+    }
+
+    pub fn set_mcp_listen_mode(&mut self, mode: McpListenMode) -> AppResult<AppProjection> {
+        if mode == McpListenMode::Lan && self.config_document.ui.mcp_api_key.trim().is_empty() {
+            return Err(AppError::new(
+                "API key is required when Listen is LAN. Generate a key first.",
+            ));
+        }
+        if self.config_document.ui.mcp_listen != mode {
+            self.config_document.ui.mcp_listen = mode;
+            self.config_store
+                .save(&self.config_document)
+                .map_err(AppError::from_error)?;
+            if self.mcp_enabled() {
+                self.mcp_listener_status = McpListenerStatus::Disabled;
+            }
+            self.ui_dirty = true;
+        }
+        Ok(self.projection())
+    }
+
+    pub fn set_mcp_api_key(&mut self, key: &str) -> AppResult<AppProjection> {
+        let key = key.trim().to_owned();
+        if self.config_document.ui.mcp_listen == McpListenMode::Lan && key.is_empty() {
+            return Err(AppError::new(
+                "API key is required when Listen is LAN. Generate a key first.",
+            ));
+        }
+        if self.config_document.ui.mcp_api_key != key {
+            self.config_document.ui.mcp_api_key = key;
+            self.config_store
+                .save(&self.config_document)
+                .map_err(AppError::from_error)?;
+            if self.mcp_enabled() {
+                self.mcp_listener_status = McpListenerStatus::Disabled;
+            }
+            self.ui_dirty = true;
+        }
+        Ok(self.projection())
+    }
+
+    /// Mint a new API key, persist it, and return the projection.
+    pub fn generate_mcp_api_key(&mut self) -> AppResult<AppProjection> {
+        let key = format!(
+            "ys_mcp_{}",
+            crate::mcp_server::new_endpoint_token().trim_start_matches("tok-")
+        );
+        self.set_mcp_api_key(&key)
+    }
+
+    pub fn set_mcp_view_user_connections(&mut self, enabled: bool) -> AppResult<AppProjection> {
+        let mut changed = false;
+        if self.config_document.ui.mcp_view_user_connections != enabled {
+            self.config_document.ui.mcp_view_user_connections = enabled;
+            changed = true;
+        }
+        // Turning View off forces Control off (D34).
+        if !enabled && self.config_document.ui.mcp_control_user_connections {
+            self.config_document.ui.mcp_control_user_connections = false;
+            changed = true;
+        }
+        if changed {
+            self.config_store
+                .save(&self.config_document)
+                .map_err(AppError::from_error)?;
+            self.ui_dirty = true;
+        }
+        Ok(self.projection())
+    }
+
+    pub fn set_mcp_control_user_connections(&mut self, enabled: bool) -> AppResult<AppProjection> {
+        let mut changed = false;
+        if self.config_document.ui.mcp_control_user_connections != enabled {
+            self.config_document.ui.mcp_control_user_connections = enabled;
+            changed = true;
+        }
+        // Control implies View.
+        if enabled && !self.config_document.ui.mcp_view_user_connections {
+            self.config_document.ui.mcp_view_user_connections = true;
+            changed = true;
+        }
+        if changed {
+            self.config_store
+                .save(&self.config_document)
+                .map_err(AppError::from_error)?;
+            self.ui_dirty = true;
+        }
+        Ok(self.projection())
+    }
+
+    fn mcp_tab_is_ai_origin(&self, tab_id: &str) -> bool {
+        self.tabs
+            .iter()
+            .find(|tab| tab.tab_id == tab_id)
+            .is_some_and(|tab| tab.ai_origin)
+    }
+
+    fn mcp_allow_view_tab(&self, tab_id: &str) -> bool {
+        self.mcp_tab_is_ai_origin(tab_id) || self.config_document.ui.mcp_view_user_connections
+    }
+
+    fn mcp_allow_control_tab(&self, tab_id: &str) -> Result<(), IpcErrorBody> {
+        if self.mcp_tab_is_ai_origin(tab_id) || self.config_document.ui.mcp_control_user_connections
+        {
+            return Ok(());
+        }
+        Err(IpcErrorBody {
+            code: "user_connection_denied".into(),
+            message: "AI control of user-created connections is disabled in Settings → MCP".into(),
+        })
     }
 
     /// User clicked Exit on the "AI controlling" chip.
@@ -287,14 +494,10 @@ impl AppRuntime {
                 return;
             }
             McpControlPhase::Controlling { .. } => {
-                let _ = reply.send(Err(
-                    "another client already holds AI control".to_owned()
-                ));
+                let _ = reply.send(Err("another client already holds AI control".to_owned()));
                 return;
             }
-            McpControlPhase::AwaitingConsent { client_id: waiting }
-                if waiting != &client_id =>
-            {
+            McpControlPhase::AwaitingConsent { client_id: waiting } if waiting != &client_id => {
                 let _ = reply.send(Err(
                     "another control request is waiting for the user".to_owned()
                 ));
@@ -343,9 +546,7 @@ impl AppRuntime {
                 },
             ),
             METHOD_LIST_SAVED => match self.mcp_list_saved_sessions() {
-                Ok(sessions) => {
-                    IpcResponse::ok(request.id, IpcResult::SavedSessions { sessions })
-                }
+                Ok(sessions) => IpcResponse::ok(request.id, IpcResult::SavedSessions { sessions }),
                 Err(error) => IpcResponse::err(request.id, "error", error.to_string()),
             },
             METHOD_LIST_CONNECTED | METHOD_LIST_SESSIONS => IpcResponse::ok(
@@ -437,6 +638,9 @@ impl AppRuntime {
             if !matches!(tab.kind, tabs::TabKind::Terminal { .. }) {
                 continue;
             }
+            if !self.mcp_allow_view_tab(&tab.tab_id) {
+                continue;
+            }
             if let Some(info) = self.mcp_connected_info_for_tab(&tab.tab_id) {
                 out.push(info);
             } else {
@@ -509,6 +713,13 @@ impl AppRuntime {
             .get("tab_id")
             .and_then(|v| v.as_str())
             .unwrap_or_default();
+        if !self.mcp_allow_view_tab(tab_id) {
+            return IpcResponse::err(
+                request.id,
+                "user_connection_denied",
+                "AI view of user-created connections is disabled in Settings → MCP",
+            );
+        }
         match self.mcp_connected_info_for_tab(tab_id) {
             Some(session) => IpcResponse::ok(request.id, IpcResult::SessionInfo { session }),
             None => IpcResponse::err(
@@ -528,6 +739,9 @@ impl AppRuntime {
             .get("tab_id")
             .and_then(|v| v.as_str())
             .unwrap_or_default();
+        if let Err(error) = self.mcp_allow_control_tab(tab_id) {
+            return IpcResponse::err(request.id, error.code, error.message);
+        }
         let text = request
             .params
             .get("text")
@@ -553,6 +767,13 @@ impl AppRuntime {
             .get("tab_id")
             .and_then(|v| v.as_str())
             .unwrap_or_default();
+        if !self.mcp_allow_view_tab(tab_id) {
+            return IpcResponse::err(
+                request.id,
+                "user_connection_denied",
+                "AI view of user-created connections is disabled in Settings → MCP",
+            );
+        }
         let mode_raw = request
             .params
             .get("mode")
@@ -591,6 +812,9 @@ impl AppRuntime {
             .get("tab_id")
             .and_then(|v| v.as_str())
             .unwrap_or_default();
+        if let Err(error) = self.mcp_allow_control_tab(tab_id) {
+            return IpcResponse::err(request.id, error.code, error.message);
+        }
         let key = request
             .params
             .get("key")
@@ -621,6 +845,8 @@ impl AppRuntime {
                     .find(|id| !before.contains(id))
                     .or_else(|| self.active_tab_id.clone())
                     .unwrap_or_default();
+                // D34 / tab-bar 原型：MCP 打开的工作区标签带 AI 标志。
+                self.mark_tab_ai_origin(&tab_id);
                 let info = self.mcp_connected_info_for_tab(&tab_id);
                 let session_id = info.as_ref().map(|s| s.session_id.clone());
                 let state = info
@@ -654,6 +880,9 @@ impl AppRuntime {
             .get("tab_id")
             .and_then(|v| v.as_str())
             .unwrap_or_default();
+        if let Err(error) = self.mcp_allow_control_tab(tab_id) {
+            return IpcResponse::err(request.id, error.code, error.message);
+        }
         match self.disconnect_tab_session(tab_id) {
             Ok(_) => IpcResponse::ok(request.id, IpcResult::Ok),
             Err(error) => IpcResponse::err(request.id, "disconnect_failed", error.to_string()),
@@ -669,6 +898,9 @@ impl AppRuntime {
             .get("tab_id")
             .and_then(|v| v.as_str())
             .unwrap_or_default();
+        if let Err(error) = self.mcp_allow_control_tab(tab_id) {
+            return IpcResponse::err(request.id, error.code, error.message);
+        }
         let before: Vec<_> = self.tabs.iter().map(|t| t.tab_id.clone()).collect();
         match self.duplicate_tab(tab_id) {
             Ok(_) => {
@@ -679,6 +911,7 @@ impl AppRuntime {
                     .find(|id| !before.contains(id))
                     .or_else(|| self.active_tab_id.clone())
                     .unwrap_or_default();
+                self.mark_tab_ai_origin(&new_tab);
                 let info = self.mcp_connected_info_for_tab(&new_tab);
                 IpcResponse::ok(
                     request.id,
@@ -738,6 +971,17 @@ impl AppRuntime {
             .find(|tab| tab.tab_id == tab_id)
             .and_then(|tab| tab.session_id().map(str::to_owned))
             .ok_or_else(|| AppError::new(format!("tab `{tab_id}` was not found")))?;
+        // N9（组模型）：AI/MCP 输入不得被广播——写入前把该会话移出同步组，
+        // 并在状态栏留一次性说明（chip notice + status kind）。
+        if self.disable_input_sync_for_tab(tab_id) {
+            let title = self.tab_display_title(tab_id);
+            self.set_status_kind(
+                "input-sync-ai-opt-out",
+                format!("AI input turned off input sync for `{title}`."),
+                title,
+                String::new(),
+            );
+        }
         let session_id = self
             .sessions
             .get(&session_key)
@@ -843,7 +1087,11 @@ fn mcp_encode_key_spec(spec: &str) -> AppResult<Vec<u8>> {
         return Err(AppError::new("key is required"));
     }
     let lower = raw.to_ascii_lowercase();
-    let parts: Vec<&str> = lower.split('+').map(str::trim).filter(|p| !p.is_empty()).collect();
+    let parts: Vec<&str> = lower
+        .split('+')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .collect();
     if parts.is_empty() {
         return Err(AppError::new("key is required"));
     }
@@ -936,9 +1184,7 @@ mod tests {
         let mut runtime = AppRuntime::new(dir.path().to_path_buf()).expect("runtime");
         runtime.mcp_endpoint_token = Some("secret".into());
         runtime.set_mcp_enabled(true).expect("enable");
-        runtime
-            .set_mcp_auto_approve_control(true)
-            .expect("persist");
+        runtime.set_mcp_auto_approve_control(true).expect("persist");
         let (tx, rx) = mpsc::channel();
         runtime.mcp_begin_request_control("client-a".into(), tx);
         rx.recv().expect("reply").expect("granted");
@@ -1024,6 +1270,115 @@ mod tests {
     }
 
     #[test]
+    fn projection_status_kind_and_detail_track_listener_state() {
+        let dir = tempdir().expect("tempdir");
+        let mut runtime = AppRuntime::new(dir.path().to_path_buf()).expect("runtime");
+
+        // Default: MCP off.
+        assert_eq!(runtime.mcp_status_kind(), "disabled");
+        assert_eq!(runtime.mcp_status_detail(), "");
+
+        // Enabled, listener not up yet: the UI template shows "Starting".
+        runtime.set_mcp_enabled(true).expect("enable");
+        assert_eq!(runtime.mcp_status_kind(), "starting");
+
+        // Ready / failed carry their detail to the UI template (host:port / reason).
+        runtime.set_mcp_listener_status(McpListenerStatus::Ready { port: 6123 });
+        assert_eq!(runtime.mcp_status_kind(), "ready");
+        assert_eq!(runtime.mcp_status_detail(), "127.0.0.1:6123");
+
+        runtime.set_mcp_listener_status(McpListenerStatus::Failed {
+            message: "bind failed".to_owned(),
+        });
+        assert_eq!(runtime.mcp_status_kind(), "failed");
+        assert_eq!(runtime.mcp_status_detail(), "bind failed");
+    }
+
+    #[test]
+    fn listen_lan_requires_api_key() {
+        let dir = tempdir().expect("tempdir");
+        let mut runtime = AppRuntime::new(dir.path().to_path_buf()).expect("runtime");
+        assert!(runtime
+            .set_mcp_listen_mode(McpListenMode::Lan)
+            .expect_err("LAN without key")
+            .to_string()
+            .contains("API key"));
+        runtime.generate_mcp_api_key().expect("generate key");
+        runtime
+            .set_mcp_listen_mode(McpListenMode::Lan)
+            .expect("lan with key");
+        assert_eq!(runtime.config_document.ui.mcp_listen, McpListenMode::Lan);
+        assert!(runtime
+            .set_mcp_api_key("")
+            .expect_err("clear key on LAN")
+            .to_string()
+            .contains("API key"));
+    }
+
+    #[test]
+    fn control_user_implies_view_and_view_off_clears_control() {
+        let dir = tempdir().expect("tempdir");
+        let mut runtime = AppRuntime::new(dir.path().to_path_buf()).expect("runtime");
+        runtime
+            .set_mcp_control_user_connections(true)
+            .expect("control on");
+        assert!(runtime.config_document.ui.mcp_control_user_connections);
+        assert!(runtime.config_document.ui.mcp_view_user_connections);
+
+        runtime
+            .set_mcp_view_user_connections(false)
+            .expect("view off");
+        assert!(!runtime.config_document.ui.mcp_view_user_connections);
+        assert!(!runtime.config_document.ui.mcp_control_user_connections);
+    }
+
+    #[test]
+    fn user_tabs_hidden_until_view_enabled() {
+        let dir = tempdir().expect("tempdir");
+        let mut runtime = AppRuntime::new(dir.path().to_path_buf()).expect("runtime");
+        let key = "sess-user".to_owned();
+        let session = SessionRuntime::from_quick_connect(
+            yshell_config::QuickConnectTarget {
+                username: Some("u".into()),
+                host: "example.test".into(),
+                port: 22,
+            },
+            1,
+        );
+        runtime.sessions.insert(key.clone(), session);
+        runtime
+            .tabs
+            .push(tabs::TabEntry::terminal("tab-user".into(), key));
+
+        assert!(runtime.mcp_list_connected_sessions().is_empty());
+        runtime
+            .set_mcp_view_user_connections(true)
+            .expect("view on");
+        assert_eq!(runtime.mcp_list_connected_sessions().len(), 1);
+
+        let key_ai = "sess-ai".to_owned();
+        let session_ai = SessionRuntime::from_quick_connect(
+            yshell_config::QuickConnectTarget {
+                username: Some("u".into()),
+                host: "ai.test".into(),
+                port: 22,
+            },
+            1,
+        );
+        runtime.sessions.insert(key_ai.clone(), session_ai);
+        runtime
+            .tabs
+            .push(tabs::TabEntry::terminal("tab-ai".into(), key_ai));
+        runtime.mark_tab_ai_origin("tab-ai");
+        runtime
+            .set_mcp_view_user_connections(false)
+            .expect("view off");
+        let listed = runtime.mcp_list_connected_sessions();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].tab_id, "tab-ai");
+    }
+
+    #[test]
     fn connected_session_reports_password_blocker() {
         let dir = tempdir().expect("tempdir");
         let mut runtime = AppRuntime::new(dir.path().to_path_buf()).expect("runtime");
@@ -1080,10 +1435,9 @@ mod tests {
         }
         session.mcp_output_watermark = Some(1);
         runtime.sessions.insert(key.clone(), session);
-        runtime.tabs.push(tabs::TabEntry::terminal(
-            "tab-mcp-out".into(),
-            key.clone(),
-        ));
+        runtime
+            .tabs
+            .push(tabs::TabEntry::terminal("tab-mcp-out".into(), key.clone()));
         let last = runtime
             .mcp_read_terminal_output("tab-mcp-out", OutputMode::LastLine, None)
             .expect("last");

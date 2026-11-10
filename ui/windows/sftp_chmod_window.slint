@@ -1,0 +1,291 @@
+// SFTP Change permissions 子窗（compact 560×400，原型 docs/prototypes/sftp-chmod/）。
+//
+// 八进制 Mode 输入与 Owner/Group/Other × Read/Write/Execute 九个勾选框双向同步：
+//   * 改 Mode（3 位八进制）→ 派生 9 个勾选；
+//   * 勾选任一权限 → 重算 Mode 文本。
+// 入口（SFTP 行右键 / 属性）在波 3-G 接线，本窗只负责表单与提交回调。
+//
+// 一窗一条提交/关闭栏：Cancel | Apply（无打字确认词）。
+
+import { Theme } from "../theme.slint";
+import { WinButton, WinCheckBox } from "../components/basic/controls.slint";
+import { WinTextInput } from "../components/basic/text_input.slint";
+import { FormHint, FormRow } from "../components/basic/forms.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
+
+/// 权限表格里的表头单元格。
+component PermissionHeader inherits Text {
+    color: Theme.text-tertiary;
+    font-size: Theme.font-caption;
+    horizontal-alignment: center;
+    vertical-alignment: center;
+    height: Theme.control-height;
+}
+
+export component SftpChmodWindow inherits Window {
+    title: @tr("Change permissions");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-compact;
+    min-width: Theme.tool-window-width-compact;
+    max-width: Theme.tool-window-width-compact;
+    preferred-height: Theme.tool-window-height-compact;
+    min-height: Theme.tool-window-height-compact;
+    max-height: Theme.tool-window-height-compact;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <string> path-text;
+    in-out property <string> mode-text: "644";
+    in-out property <bool> owner-read: true;
+    in-out property <bool> owner-write: true;
+    in-out property <bool> owner-exec: false;
+    in-out property <bool> group-read: true;
+    in-out property <bool> group-write: false;
+    in-out property <bool> group-exec: false;
+    in-out property <bool> other-read: true;
+    in-out property <bool> other-write: false;
+    in-out property <bool> other-exec: false;
+    in property <string> error-text: "";
+
+    in-out property <bool> native_title_drag: false;
+
+    callback canceled();
+    callback applied();
+    callback update-mode(string);
+    callback title_drag_requested();
+
+    private property <int> mode-value: Math.round(root.mode-text.to-float());
+    private property <bool> mode-valid:
+        root.mode-text != "" && root.mode-value >= 0 && root.mode-value <= 777;
+    private property <int> owner-digit: Math.floor(Math.mod(root.mode-value, 1000) / 100);
+    private property <int> group-digit: Math.floor(Math.mod(root.mode-value, 100) / 10);
+    private property <int> other-digit: Math.mod(root.mode-value, 10);
+
+    pure function digit-of(read: bool, write: bool, exec: bool) -> int {
+        return (read ? 4 : 0) + (write ? 2 : 0) + (exec ? 1 : 0);
+    }
+
+    pure function bit-of(digit: int, weight: int) -> bool {
+        return Math.mod(Math.floor(digit / weight), 2) == 1;
+    }
+
+    function sync-from-mode() {
+        if (root.mode-valid) {
+            root.owner-read = root.bit-of(root.owner-digit, 4);
+            root.owner-write = root.bit-of(root.owner-digit, 2);
+            root.owner-exec = root.bit-of(root.owner-digit, 1);
+            root.group-read = root.bit-of(root.group-digit, 4);
+            root.group-write = root.bit-of(root.group-digit, 2);
+            root.group-exec = root.bit-of(root.group-digit, 1);
+            root.other-read = root.bit-of(root.other-digit, 4);
+            root.other-write = root.bit-of(root.other-digit, 2);
+            root.other-exec = root.bit-of(root.other-digit, 1);
+        }
+    }
+
+    function sync-to-mode() {
+        root.mode-text = @tr(
+            "{0}{1}{2}",
+            root.digit-of(root.owner-read, root.owner-write, root.owner-exec),
+            root.digit-of(root.group-read, root.group-write, root.group-exec),
+            root.digit-of(root.other-read, root.other-write, root.other-exec)
+        );
+    }
+
+    changed mode-text => { root.sync-from-mode(); }
+
+    private property <length> body-width:
+        Theme.tool-window-width-compact - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-compact - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+
+    ToolWindowChrome {
+        width: Theme.tool-window-width-compact;
+        height: Theme.tool-window-height-compact;
+        title-text: @tr("Change permissions");
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.canceled(); }
+        title-drag-requested => { root.title_drag_requested(); }
+
+        body := Rectangle {
+            width: root.body-width;
+            height: root.body-height;
+            background: transparent;
+
+            VerticalLayout {
+                width: parent.width;
+                height: parent.height;
+                spacing: Theme.form-row-gap;
+
+                FormRow {
+                    label: @tr("Path");
+
+                    WinTextInput {
+                        width: Theme.form-field-width;
+                        text: root.path-text;
+                        font-family: Theme.font-mono;
+                        font-size: Theme.font-caption;
+                        read-only: true;
+                    }
+                }
+
+                FormRow {
+                    label: @tr("Mode");
+
+                    WinTextInput {
+                        width: Theme.form-port-width;
+                        text <=> root.mode-text;
+                        placeholder-text: "644";
+                        edited => { root.update-mode(self.text); }
+                    }
+                }
+
+                FormHint {
+                    text: @tr("Octal, e.g. 755. Changes sync with the checkboxes.");
+                }
+
+                // --- Permissions: Owner / Group / Other × Read / Write / Execute --
+                GridLayout {
+                    width: 420px;
+                    spacing: Theme.spacing-4;
+
+                    Text { row: 0; col: 0; text: ""; height: Theme.control-height; }
+                    PermissionHeader { row: 0; col: 1; text: @tr("Owner"); }
+                    PermissionHeader { row: 0; col: 2; text: @tr("Group"); }
+                    PermissionHeader { row: 0; col: 3; text: @tr("Other"); }
+
+                    Text {
+                        row: 1;
+                        col: 0;
+                        text: @tr("Read");
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-body;
+                        vertical-alignment: center;
+                        height: Theme.control-height;
+                    }
+                    WinCheckBox {
+                        row: 1; col: 1;
+                        checked <=> root.owner-read;
+                        accessible-name: @tr("Owner read");
+                        toggled => { root.sync-to-mode(); }
+                    }
+                    WinCheckBox {
+                        row: 1; col: 2;
+                        checked <=> root.group-read;
+                        accessible-name: @tr("Group read");
+                        toggled => { root.sync-to-mode(); }
+                    }
+                    WinCheckBox {
+                        row: 1; col: 3;
+                        checked <=> root.other-read;
+                        accessible-name: @tr("Other read");
+                        toggled => { root.sync-to-mode(); }
+                    }
+
+                    Text {
+                        row: 2;
+                        col: 0;
+                        text: @tr("Write");
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-body;
+                        vertical-alignment: center;
+                        height: Theme.control-height;
+                    }
+                    WinCheckBox {
+                        row: 2; col: 1;
+                        checked <=> root.owner-write;
+                        accessible-name: @tr("Owner write");
+                        toggled => { root.sync-to-mode(); }
+                    }
+                    WinCheckBox {
+                        row: 2; col: 2;
+                        checked <=> root.group-write;
+                        accessible-name: @tr("Group write");
+                        toggled => { root.sync-to-mode(); }
+                    }
+                    WinCheckBox {
+                        row: 2; col: 3;
+                        checked <=> root.other-write;
+                        accessible-name: @tr("Other write");
+                        toggled => { root.sync-to-mode(); }
+                    }
+
+                    Text {
+                        row: 3;
+                        col: 0;
+                        text: @tr("Execute");
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-body;
+                        vertical-alignment: center;
+                        height: Theme.control-height;
+                    }
+                    WinCheckBox {
+                        row: 3; col: 1;
+                        checked <=> root.owner-exec;
+                        accessible-name: @tr("Owner execute");
+                        toggled => { root.sync-to-mode(); }
+                    }
+                    WinCheckBox {
+                        row: 3; col: 2;
+                        checked <=> root.group-exec;
+                        accessible-name: @tr("Group execute");
+                        toggled => { root.sync-to-mode(); }
+                    }
+                    WinCheckBox {
+                        row: 3; col: 3;
+                        checked <=> root.other-exec;
+                        accessible-name: @tr("Other execute");
+                        toggled => { root.sync-to-mode(); }
+                    }
+                }
+
+                if !root.mode-valid : FormHint {
+                    text: @tr("Mode must be three octal digits, e.g. 755.");
+                    hint-color: Theme.critical;
+                }
+
+                if root.error-text != "" : FormHint {
+                    text: root.error-text;
+                    hint-color: Theme.critical;
+                }
+
+                Rectangle { vertical-stretch: 1; }
+
+                Rectangle {
+                    height: 1px;
+                    vertical-stretch: 0;
+                    background: Theme.divider;
+                }
+
+                HorizontalLayout {
+                    alignment: end;
+                    vertical-stretch: 0;
+                    spacing: Theme.spacing-8;
+
+                    WinButton {
+                        text: @tr("Cancel");
+                        clicked => { root.canceled(); }
+                    }
+
+                    WinButton {
+                        text: @tr("Apply");
+                        accent: true;
+                        enabled: root.mode-valid && root.path-text != "";
+                        clicked => { root.applied(); }
+                    }
+                }
+            }
+        }
+    }
+
+    /// 宿主每次 sync 后调用：按当前八进制文本重置 9 个勾选（窗口复用）。
+    public function sync-mode() {
+        root.sync-from-mode();
+    }
+
+    init => {
+        root.sync-from-mode();
+    }
+}

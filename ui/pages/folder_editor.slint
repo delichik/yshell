@@ -1,6 +1,6 @@
 import { Theme } from "../theme.slint";
 import { TextFormats } from "../text_formats.slint";
-import { WinButton, WinComboBox, WinToggle, WinScrollIndicator } from "../components/basic/controls.slint";
+import { WinButton, WinComboBox, WinScrollIndicator, WinSwitch } from "../components/basic/controls.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
 
@@ -231,8 +231,10 @@ component FieldRow inherits Rectangle {
                     if root.data.state == "explicit" : HorizontalLayout {
                         spacing: Theme.spacing-8;
 
-                        if root.data.kind == "toggle" : WinToggle {
+                        // 布尔字段：原型 forms.html 的 form-switch（Enabled/Disabled 文案）。
+                        if root.data.kind == "toggle" : WinSwitch {
                             text: root.data.value == "on" ? @tr("Enabled") : @tr("Disabled");
+                            accessible-name: root.label-text;
                             checked: root.data.value == "on";
                             toggled => { root.toggled(); }
                         }

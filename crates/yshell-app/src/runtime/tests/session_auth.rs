@@ -329,8 +329,6 @@ fn saved_session_private_key_auth_profile_resolves_passphrase_secret() {
 
 #[test]
 fn saved_session_password_auth_profile_prompts_without_keychain() {
-    let _guard = lock_env();
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
     let temp = tempdir().expect("tempdir");
     let store = ConfigStore::new(temp.path());
     let mut document = ConfigDocument::default();
@@ -392,8 +390,6 @@ fn saved_session_password_auth_profile_prompts_without_keychain() {
 
 #[test]
 fn submit_password_retries_saved_session_and_connects() {
-    let _guard = lock_env();
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
     let temp = tempdir().expect("tempdir");
     let store = ConfigStore::new(temp.path());
     let mut document = ConfigDocument::default();
@@ -467,8 +463,6 @@ fn submit_password_retries_saved_session_and_connects() {
 
 #[test]
 fn submit_password_reports_failure_and_closes_prompt_when_target_is_gone() {
-    let _guard = lock_env();
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
     let temp = tempdir().expect("tempdir");
     let store = ConfigStore::new(temp.path());
     let mut document = ConfigDocument::default();
@@ -603,8 +597,6 @@ fn cancel_password_prompt_clears_pending_state() {
 
 #[test]
 fn saved_session_keyboard_interactive_auth_prompts_without_keychain() {
-    let _guard = lock_env();
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
     let temp = tempdir().expect("tempdir");
     let store = ConfigStore::new(temp.path());
     let mut document = ConfigDocument::default();

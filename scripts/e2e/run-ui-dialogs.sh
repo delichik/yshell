@@ -155,6 +155,11 @@ sessions = [
     { id = "dlg-strict", name = "Dlg Strict", host = "127.0.0.1", port = $ssh_port, username = "root", auth_profile_id = "auth-key", host_key_policy = "strict" },
     { id = "dlg-changed", name = "Dlg Changed", host = "localhost", port = $ssh_port, username = "root", auth_profile_id = "auth-key", host_key_policy = "strict" },
 ]
+
+# Application configuration comes from this file (no YSHELL_* env overrides).
+[ui]
+language = "$lang"
+appearance_mode = "$theme"
 TOML
 }
 

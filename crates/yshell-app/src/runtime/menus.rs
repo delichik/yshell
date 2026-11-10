@@ -95,22 +95,27 @@ impl AppRuntime {
         )
     }
 
-    /// N9：终端右键"同步发送按键"菜单的启用旗标（针对活动终端）。
+    /// N9：终端右键同步菜单的启用旗标（针对活动终端）。
     ///
-    /// 返回 `(send_all, send_visible, stop)`：前两项要求活动标签是已连接终端；
-    /// `stop` 只在同步进行中可用（`Send to Current` 语义 = 取消同步）。
+    /// 返回 `(toggle, is_member, stop)`：`toggle` 要求活动标签是已连接 SSH 终端；
+    /// `is_member` = 该终端已在同步组内（决定菜单文案 Enable/Disable）；
+    /// `stop` = 组非空（Pause/Stop 可用）。
     pub(crate) fn input_sync_menu_flags(&self) -> (bool, bool, bool) {
-        let source_ready = self
+        let toggle = self
             .active_tab_id
             .as_deref()
             .is_some_and(|tab_id| self.input_sync_tab_connected(tab_id));
-        (source_ready, source_ready, self.input_sync.is_active())
+        (
+            toggle,
+            self.input_sync_focused_is_member(),
+            self.input_sync.is_active(),
+        )
     }
 
-    /// N9：标签右键"接收键输入"的 `(enabled, checked, disabled_reason)`。
+    /// N9：标签右键“Sync Input for This Tab”的 `(enabled, checked, disabled_reason)`。
     ///
-    /// `disabled_reason` 取值：`""`（可用）/ `no-sync` / `source` / `not-connected` /
-    /// `no-session`，由 Slint 侧 `TextFormats` 渲染成提示句。
+    /// `disabled_reason` 取值：`""`（可用）/ `no-session` / `not-connected` /
+    /// `local-terminal`，由 Slint 侧 `TextFormats` 渲染成提示句。
     pub(crate) fn tab_menu_receive_key_input_flags(&self) -> (bool, bool, String) {
         let Some(tab_id) = self.tab_menu_tab_id.as_deref() else {
             return (false, false, "no-session".to_owned());
@@ -118,22 +123,19 @@ impl AppRuntime {
         let Some(index) = self.tab_index(tab_id) else {
             return (false, false, "no-session".to_owned());
         };
-        if !self.input_sync.is_active() {
-            return (false, false, "no-sync".to_owned());
-        }
-        if self.input_sync.source.as_deref() == Some(tab_id) {
-            return (false, false, "source".to_owned());
-        }
-        if self.tabs[index].session_id().is_none() {
+        let Some(session_id) = self.tabs[index].session_id() else {
             return (false, false, "no-session".to_owned());
+        };
+        if self
+            .sessions
+            .get(session_id)
+            .is_some_and(|runtime| runtime.is_local())
+        {
+            return (false, false, "local-terminal".to_owned());
         }
         if !self.input_sync_tab_connected(tab_id) {
             return (false, false, "not-connected".to_owned());
         }
-        (
-            true,
-            self.input_sync.targets.contains(tab_id),
-            String::new(),
-        )
+        (true, self.input_sync.is_member(tab_id), String::new())
     }
 }

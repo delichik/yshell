@@ -1,0 +1,152 @@
+// Private Keys · Deploy（standard 720×580，选择目标会话）。
+//
+// 规范：docs/prototypes/private-keys/modals.html 的 Deploy 子窗：公钥 + 目标会话
+// 下拉 + 幂等追加命令预览 → 页脚 Cancel | Deploy。执行由 runtime 在后台连接目标
+// 会话完成（A0 `SshClient::exec`），本窗只负责选择与确认。
+
+import { Theme } from "../theme.slint";
+import { WinButton, WinComboBox, WinScrollIndicator } from "../components/basic/controls.slint";
+import { FormHint, FormRow } from "../components/basic/forms.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
+
+export component PrivateKeyDeployWindow inherits Window {
+    title: @tr("Deploy Public Key");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-standard;
+    min-width: Theme.tool-window-width-standard;
+    max-width: Theme.tool-window-width-standard;
+    preferred-height: Theme.tool-window-height-standard;
+    min-height: Theme.tool-window-height-standard;
+    max-height: Theme.tool-window-height-standard;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <string> key-label-text: "";
+    in property <string> public-key-text: "";
+    in property <[string]> target-options: [];
+    in-out property <int> target-index: 0;
+    in property <string> summary-text: "";
+    in property <string> command-text: "";
+    in property <string> error-text: "";
+
+    in-out property <bool> native_title_drag: false;
+
+    callback canceled();
+    callback deployed();
+    callback select-target(int);
+    callback title_drag_requested();
+
+    private property <length> body-width:
+        Theme.tool-window-width-standard - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-standard - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+
+    ToolWindowChrome {
+        width: Theme.tool-window-width-standard;
+        height: Theme.tool-window-height-standard;
+        title-text: @tr("Deploy {0}", root.key-label-text);
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.canceled(); }
+        title-drag-requested => { root.title_drag_requested(); }
+
+        VerticalLayout {
+            width: root.body-width;
+            height: root.body-height;
+            spacing: Theme.form-row-gap;
+
+            FormRow {
+                label: @tr("Target session");
+
+                WinComboBox {
+                    width: Theme.form-field-width;
+                    model: root.target-options;
+                    current-index <=> root.target-index;
+                    selected(index) => { root.select-target(index); }
+                }
+            }
+
+            FormHint {
+                text: root.summary-text;
+                indent: false;
+            }
+
+            if root.target-options.length == 0 : FormHint {
+                text: @tr("No live SSH session is available. Open an SSH session, then deploy again.");
+                hint-color: Theme.critical;
+                indent: false;
+            }
+
+            Rectangle {
+                height: 120px;
+                clip: true;
+                background: Theme.control-fill;
+                border-radius: Theme.radius-control;
+                border-width: 1px;
+                border-color: Theme.control-stroke;
+
+                cmd-scroll := Flickable {
+                    width: parent.width;
+                    height: parent.height;
+                    interactive: true;
+                    content-width: self.width;
+                    content-height: cmd-block.preferred-height + 20px;
+
+                    cmd-block := Text {
+                        x: Theme.spacing-8;
+                        y: Theme.spacing-8;
+                        width: parent.width - 2 * Theme.spacing-8;
+                        text: root.command-text;
+                        color: Theme.text-secondary;
+                        font-size: Theme.font-caption;
+                        font-family: Theme.font-mono;
+                        wrap: word-wrap;
+                    }
+                }
+
+                WinScrollIndicator {
+                    x: parent.width - self.width - Theme.spacing-4;
+                    y: Theme.spacing-4;
+                    height: parent.height - 2 * Theme.spacing-4;
+                    viewport-position: cmd-scroll.content-y;
+                    content-extent: cmd-scroll.content-height;
+                    viewport-extent: cmd-scroll.height;
+                    thumb-min-length: 24px;
+                }
+            }
+
+            if root.error-text != "" : FormHint {
+                text: root.error-text;
+                hint-color: Theme.critical;
+                indent: false;
+            }
+
+            Rectangle { vertical-stretch: 1; }
+
+            Rectangle {
+                height: 1px;
+                vertical-stretch: 0;
+                background: Theme.divider;
+            }
+
+            HorizontalLayout {
+                alignment: end;
+                vertical-stretch: 0;
+                spacing: Theme.spacing-8;
+
+                WinButton {
+                    text: @tr("Cancel");
+                    clicked => { root.canceled(); }
+                }
+
+                WinButton {
+                    text: @tr("Deploy");
+                    accent: true;
+                    enabled: root.target-options.length > 0;
+                    clicked => { root.deployed(); }
+                }
+            }
+        }
+    }
+}

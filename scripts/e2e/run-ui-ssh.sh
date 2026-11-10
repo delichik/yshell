@@ -139,6 +139,11 @@ sessions = [
     { id = "e2e-key", name = "Docker Key", host = "$ssh_host", port = $ssh_port, username = "root", auth_profile_id = "auth-key", host_key_policy = "strict" },
     { id = "e2e-pass", name = "Docker Pass", host = "$ssh_host", port = $ssh_port, username = "$ssh_user", auth_profile_id = "auth-pass", host_key_policy = "trust_on_first_use" },
 ]
+
+# Application configuration comes from this file (no YSHELL_* env overrides).
+[ui]
+language = "$lang"
+appearance_mode = "$theme"
 TOML
 }
 

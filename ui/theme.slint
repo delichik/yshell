@@ -159,10 +159,18 @@ export global Theme {
     out property <length> terminal-padding-x: 6px;
     /// 终端表面内容区上下内边距（UI-1 / D9：pane 贴边，上下不再留白）。
     out property <length> terminal-padding-y: 0px;
+    /// 终端配色预览表面高度（Settings 外观 / Session Editor Terminal Style 共用，
+    /// 两边视觉一致；宽度跟随内容区整行）。
+    ///
+    /// Rust 侧按同一个 `PREVIEW_AREA_PX`（738×198，= 整行内容宽 − 2 边框 −
+    /// 2×`terminal-padding-x`）光栅化；不要给任一页单独传别的高度。
+    out property <length> terminal-preview-height: 200px;
 
     // -------------------------------------------------------------------- 字阶
     out property <length> font-caption: 12px;
     out property <length> font-body: 14px;
+    /// 表单标签字阶（原型 `form.css` `.form-row .lbl` = 13px）。
+    out property <length> font-label: 13px;
     out property <length> font-body-large: 16px;
     out property <length> font-subtitle: 20px;
     out property <length> font-title: 28px;
@@ -181,8 +189,12 @@ export global Theme {
     /// 默认给 Linux 常见族名；Windows/macOS 由 Rust `apply_fonts` 写成
     /// Cascadia Mono / Consolas / Menlo（与 `font-ui` 同机制）。
     in-out property <string> font-mono: "DejaVu Sans Mono";
-    /// 表单标签列宽（对话框里的「标签 + 控件」两列布局）
+    /// 表单标签列宽（对话框里的「标签 + 控件」两列布局；原型 `--lbl-w` = 120）。
     out property <length> form-label-width: 120px;
+    /// 表单控件列最大宽（原型 `--field-w` = 420）。
+    out property <length> form-field-width: 420px;
+    /// 表单行间距（原型 `.form-row` margin-bottom = 10）。
+    out property <length> form-row-gap: 10px;
     /// 表单标签列宽分档：窄（表单两列挤）/ 宽（长标签，如 Scrollback memory cap）。
     out property <length> form-label-width-narrow: 112px;
     out property <length> form-label-width-medium: 128px;
@@ -208,8 +220,8 @@ export global Theme {
     out property <length> tool-window-padding: 28px;
     /// 列表+详情管理器的左栏宽度（Host Keys / Private Keys / Known Hosts / Proxies）。
     out property <length> manager-list-width: 380px;
-    /// Host+Port 一行里 Port 字段固定宽（带标签）。
-    out property <length> form-port-width: 96px;
+    /// Host+Port 一行里 Port 字段固定宽（带标签；原型 `--port-w` = 100）。
+    out property <length> form-port-width: 100px;
 
     // -------------------------------------------------------------------- 尺寸
     out property <length> icon-size: 20px;
@@ -218,15 +230,29 @@ export global Theme {
     out property <length> icon-size-large: 28px;
     out property <length> control-height: 32px;
     out property <length> control-height-compact: 24px;
+    // §5.3 选择类控件：CheckBox / Radio 20×20；Switch 40×20 轨道 + 12 滑块
+    // （滑块动画统一用 `duration-fast` = 167ms）。
+    /// CheckBox / Radio 的标记尺寸（§5.3）。
+    out property <length> choice-size: 20px;
+    /// Switch 轨道。
+    out property <length> switch-width: 40px;
+    out property <length> switch-height: 20px;
+    /// Switch 滑块直径与离轨道边缘的内边距。
+    out property <length> switch-knob-size: 12px;
+    out property <length> switch-padding: 4px;
     out property <length> row-height-nav: 40px;
     out property <length> row-height-list: 32px;
     out property <length> row-height-tree: 28px;
-    /// 自绘顶栏（菜单 + 窗口控件）：§4.1 / §5.16 = 32px
-    /// （Win11 原生标题栏高度，caption 按钮 46×32 正好满高）。
-    out property <length> bar-height-menubar: 32px;
+    /// 上下文菜单行高（右键菜单项；与 tree 行同高）。
+    out property <length> row-height-menu: 28px;
+    /// 自绘顶栏（菜单 + 窗口控件）与工具窗标题栏：40px。
+    /// 比 Win11 原生 32px caption 略高，菜单文字与 ─ □ × 更好点按；
+    /// CaptionButton 宽仍 46、高随顶栏（height: 100%）。
+    out property <length> bar-height-menubar: 40px;
     /// 旧 CommandBar 高度（已并入菜单栏，保留 token 以免外部引用断裂）。
     out property <length> bar-height-commandbar: 48px;
-    out property <length> bar-height-status: 26px;
+    /// 状态栏高度（原型 main-shell 28px；略高于旧 26，改善 chip 可读性）。
+    out property <length> bar-height-status: 28px;
     out property <length> bar-height-tabs: 32px;
     /// 右侧面板头部高度（tool_dock 的 6 个面板头；§3.3 控件高 32，这里另有一档）。
     out property <length> bar-height-panel-header: 44px;
@@ -235,8 +261,8 @@ export global Theme {
     out property <length> swatch-size-small: 12px;
     /// 窗口缩放边框宽度（自绘无框窗口的 resize hit 区）。
     out property <length> resize-border-width: 8px;
-    out property <length> nav-width: 240px;
-    out property <length> dock-width: 320px;
+    out property <length> nav-width: 260px;
+    out property <length> dock-width: 280px;
     /// 面板拖拽把手宽度（§4.2：4px，悬停变色）
     out property <length> resize-handle-width: 4px;
     /// 窗口 <960px 时左导航折叠成的图标条宽度（§4.2）

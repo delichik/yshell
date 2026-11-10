@@ -15,7 +15,7 @@ use crate::keys::KeyCatalog;
 use crate::schema::{ConfigDocument, ConfigSchemaError, ConfigWarning};
 use crate::sessions::SessionTreeStore;
 use serde::{Deserialize, Serialize};
-use yshell_ssh::{HostKeyFingerprint, KnownHosts};
+use yshell_ssh::{normalize_host_key_fingerprint, HostKeyFingerprint, KnownHosts};
 
 const CONFIG_FILE_NAME: &str = "config.toml";
 const KNOWN_HOSTS_FILE_NAME: &str = "known_hosts.toml";
@@ -159,9 +159,7 @@ impl ConfigStore {
             .map_err(ConfigStoreError::SessionTree)?;
         let mut catalog = KeyCatalog::new(self.keys_dir());
         catalog.replace_from_vec(document.keys.clone());
-        catalog
-            .write_all()
-            .map_err(ConfigStoreError::KeyCatalog)?;
+        catalog.write_all().map_err(ConfigStoreError::KeyCatalog)?;
         Ok(())
     }
 
@@ -362,7 +360,9 @@ impl KnownHostsDocument {
                         key,
                         HostKeyFingerprint {
                             algorithm: value.algorithm,
-                            fingerprint: value.fingerprint,
+                            // Legacy pins stored raw key-blob hex; migrate to OpenSSH SHA256 on read
+                            // so Known Hosts UI and trust compare see the modern form.
+                            fingerprint: normalize_host_key_fingerprint(&value.fingerprint),
                         },
                     )
                 })
@@ -447,7 +447,7 @@ target = "not a host"
             22,
             HostKeyFingerprint {
                 algorithm: "ssh-ed25519".to_owned(),
-                fingerprint: "abc123".to_owned(),
+                fingerprint: "SHA256:abc123".to_owned(),
             },
         );
 
@@ -457,6 +457,35 @@ target = "not a host"
         let loaded = store.load_known_hosts().expect("load known_hosts");
 
         assert_eq!(loaded, known_hosts);
+    }
+
+    #[test]
+    fn loads_legacy_key_blob_hex_as_openssh_sha256_fingerprint() {
+        use yshell_ssh::{legacy_key_blob_hex, openssh_sha256_fingerprint};
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = ConfigStore::new(temp.path());
+        let key_blob = b"0123456789abcdef0123456789abcdef";
+        let mut known_hosts = KnownHosts::new();
+        known_hosts.pin(
+            "legacy.example.test",
+            22,
+            HostKeyFingerprint {
+                algorithm: "ssh-ed25519".to_owned(),
+                fingerprint: legacy_key_blob_hex(key_blob),
+            },
+        );
+        store
+            .save_known_hosts(&known_hosts)
+            .expect("save known_hosts");
+
+        let loaded = store.load_known_hosts().expect("load known_hosts");
+        let entry = loaded.get("legacy.example.test", 22).expect("legacy entry");
+        assert_eq!(
+            entry.fingerprint,
+            openssh_sha256_fingerprint(key_blob),
+            "known_hosts.toml legacy hex should normalize on read"
+        );
     }
 
     #[test]
@@ -491,13 +520,14 @@ secret_ref = "local://yshell/keys/key-1/material"
         )
         .expect("write legacy config");
 
-        let (outcome, warnings) = store
-            .load_or_recover_with_warnings()
-            .expect("load+migrate");
+        let (outcome, warnings) = store.load_or_recover_with_warnings().expect("load+migrate");
         assert!(outcome.recovered_from_backup.is_none());
         assert_eq!(outcome.document.folders.len(), 1);
         assert_eq!(outcome.document.folders[0].name, "Prod");
-        assert_eq!(outcome.document.folders[0].sessions[0].host, "web.example.test");
+        assert_eq!(
+            outcome.document.folders[0].sessions[0].host,
+            "web.example.test"
+        );
         assert_eq!(outcome.document.keys.len(), 1);
         assert_eq!(outcome.document.keys[0].label, "Work");
         assert!(temp.path().join("sessions/Prod/web.toml").exists());

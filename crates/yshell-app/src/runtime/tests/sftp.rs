@@ -344,27 +344,23 @@ fn sftp_hidden_toggle_filters_dotfiles_and_reports_empty_state() {
         demo_file("/demo/readme.txt", 2_048),
     ];
 
-    let hidden_off = runtime.projection();
-    assert!(!hidden_off.sftp_show_hidden);
-    assert_eq!(hidden_off.sftp_rows.len(), 2);
-    assert_eq!(hidden_off.sftp_rows[0].name, "..");
-    assert_eq!(hidden_off.sftp_rows[1].name, "readme.txt");
-    assert_eq!(hidden_off.sftp_item_summary_text, "1 item · 0 dirs");
-
-    let shown = runtime.toggle_sftp_hidden_files();
+    // 新默认显示隐藏文件（Settings → SFTP）。
+    let shown = runtime.projection();
     assert!(shown.sftp_show_hidden);
-    assert!(shown.status_text.contains("now shown"));
     assert_eq!(shown.sftp_rows.len(), 3);
+    assert_eq!(shown.sftp_rows[0].name, "..");
     assert_eq!(shown.sftp_rows[1].name, ".secret");
 
-    // Selecting the visible dotfile and hiding hidden files clears it again.
+    // 选中可见 dotfile 后再隐藏隐藏文件：选中项被清掉。
     runtime.select_sftp_entry(1);
     assert_eq!(runtime.projection().sftp_selected_name_text, ".secret");
-    let rehidden = runtime.toggle_sftp_hidden_files();
-    assert!(!rehidden.sftp_show_hidden);
-    assert!(rehidden.status_text.contains("now hidden"));
-    assert_eq!(rehidden.sftp_selected_index, -1);
-    assert_eq!(rehidden.sftp_rows.len(), 2);
+    let hidden = runtime.toggle_sftp_hidden_files();
+    assert!(!hidden.sftp_show_hidden);
+    assert!(hidden.status_text.contains("now hidden"));
+    assert_eq!(hidden.sftp_selected_index, -1);
+    assert_eq!(hidden.sftp_rows.len(), 2);
+    assert_eq!(hidden.sftp_rows[1].name, "readme.txt");
+    assert_eq!(hidden.sftp_item_summary_text, "1 item · 0 dirs");
 
     // A directory with only dotfiles explains why the list is empty.
     runtime.sftp_entries = vec![demo_file("/demo/.only", 1)];
@@ -372,8 +368,9 @@ fn sftp_hidden_toggle_filters_dotfiles_and_reports_empty_state() {
     assert_eq!(empty.sftp_rows.len(), 1);
     assert!(empty.sftp_rows[0].is_parent);
     assert!(empty.sftp_empty_text.contains("Enable Hidden"));
-    runtime.toggle_sftp_hidden_files();
-    let revealed = runtime.projection();
+    let revealed = runtime.toggle_sftp_hidden_files();
+    assert!(revealed.sftp_show_hidden);
+    assert!(revealed.status_text.contains("now shown"));
     assert_eq!(revealed.sftp_rows.len(), 2);
     assert!(revealed.sftp_empty_text.is_empty());
 }

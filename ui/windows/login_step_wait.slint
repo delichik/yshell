@@ -1,0 +1,119 @@
+// Login Script · Wait 步骤子窗（standard 720×580）。
+//
+// 原型：`docs/prototypes/session-editor/sections/login-step-wait.html`。
+// 单字段（Wait ms）；页脚 Delete（编辑态）| Cancel | Save。
+
+import { Theme } from "../theme.slint";
+import { WinButton, WinIconButton } from "../components/basic/controls.slint";
+import { FormHint, FormRow } from "../components/basic/forms.slint";
+import { WinTextInput } from "../components/basic/text_input.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
+
+
+export component LoginStepWaitWindow inherits Window {
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-standard;
+    min-width: Theme.tool-window-width-standard;
+    max-width: Theme.tool-window-width-standard;
+    preferred-height: Theme.tool-window-height-standard;
+    min-height: Theme.tool-window-height-standard;
+    max-height: Theme.tool-window-height-standard;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    title: root.edit-mode ? @tr("Edit Wait") : @tr("Add Wait");
+
+    private property <length> body-width:
+        Theme.tool-window-width-standard - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-standard - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+
+    /// true = 编辑已有步骤（标题 Edit Wait，页脚出现 Delete）。
+    in property <bool> edit-mode: false;
+    in-out property <string> millis-text: "500";
+
+    in-out property <bool> native_title_drag: false;
+
+    callback dismiss();
+    callback update-millis(string);
+    callback save();
+    callback delete-step();
+    callback title_drag_requested();
+
+    chrome := ToolWindowChrome {
+        width: Theme.tool-window-width-standard;
+        height: Theme.tool-window-height-standard;
+        title-text: root.edit-mode ? @tr("Edit Wait") : @tr("Add Wait");
+        native-title-drag: root.native_title_drag;
+        close-requested => { root.dismiss(); }
+        title-drag-requested => { root.title_drag_requested(); }
+
+        VerticalLayout {
+            width: root.body-width;
+            height: root.body-height;
+            spacing: Theme.form-row-gap;
+
+            FormRow {
+                label: @tr("Wait (ms)");
+                WinTextInput {
+                    width: 140px;
+                    input-type: number;
+                    text <=> root.millis-text;
+                    placeholder-text: "500";
+                    edited => { root.update-millis(self.text); }
+                }
+            }
+
+            FormHint {
+                text: @tr("Waits this long before the next step runs.");
+            }
+
+            Rectangle { vertical-stretch: 1; background: transparent; }
+
+            Rectangle { height: 1px; background: Theme.layer-stroke; }
+
+            HorizontalLayout {
+                spacing: Theme.spacing-8;
+
+                if root.edit-mode : WinIconButton {
+                    icon: "trash";
+                    accessible-name: @tr("Delete");
+                    tooltip-text: @tr("Delete");
+                    clicked => { root.delete-step(); }
+                }
+
+                Rectangle { horizontal-stretch: 1; background: transparent; }
+
+                WinButton { text: @tr("Cancel"); subtle: true; clicked => { root.dismiss(); } }
+                WinButton {
+                    text: @tr("Save");
+                    accent: true;
+                    enabled: root.millis-text != "";
+                    clicked => { root.save(); }
+                }
+            }
+        }
+    }
+
+    public function focus-dialog() {
+        focus_scope.focus();
+    }
+
+    focus_scope := FocusScope {
+        width: 0px;
+        height: 0px;
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.dismiss();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    init => {
+        root.focus-dialog();
+    }
+}

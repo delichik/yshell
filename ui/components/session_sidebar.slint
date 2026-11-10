@@ -143,6 +143,11 @@ export component SessionSidebarContent inherits Rectangle {
     /// A9：空白区左键 = 清空选中（契约 §5.2）。当前未接线：
     /// 需 `tool_dock.slint` 转发 → `main_window.clear_saved_session_selection()` → Rust。
     callback clear-selection();
+    in-out property <string> inline-rename-id: "";
+    in-out property <string> inline-rename-text: "";
+    callback inline-rename-start(string);
+    callback inline-rename-commit(string);
+    callback inline-rename-cancel();
 
     background: transparent;
 
@@ -213,6 +218,11 @@ export component SessionSidebarContent inherits Rectangle {
             blank-context-menu-requested(x, y) => {
                 root.blank-menu-requested(x, y);
             }
+            inline-rename-id <=> root.inline-rename-id;
+            inline-rename-text <=> root.inline-rename-text;
+            inline-rename-start(id) => { root.inline-rename-start(id); }
+            inline-rename-commit(text) => { root.inline-rename-commit(text); }
+            inline-rename-cancel() => { root.inline-rename-cancel(); }
         }
     }
 }

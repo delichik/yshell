@@ -1,11 +1,15 @@
-// Host Keys as an independent non-resizable tool window.
+// Known Hosts as an independent non-resizable tool window.
+//
+// 工具窗 = `ToolWindowChrome`（标题 + 仅关闭）+ 页面内容。行右键 Edit/Remove /
+// 工具条 Add-Import-Export 都转发给宿主：Add / Import / Export 打开独立子窗，
+// Remove 走宿主 ConfirmDialog。
 
 import { Theme } from "../theme.slint";
 import { HostKeysPage, HostKeyGroup } from "../pages/host_keys.slint";
 import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
 
 export component HostKeysWindow inherits Window {
-    title: @tr("Host Keys");
+    title: @tr("Known Hosts");
     no-frame: true;
     resize-border-width: 0px;
     preferred-width: Theme.tool-window-width-wide;
@@ -35,7 +39,7 @@ export component HostKeysWindow inherits Window {
     in property <string> status-kind-text;
     in property <string> status-param-1-text;
     in property <string> status-param-2-text;
-    in property <string> empty-text;
+    in property <string> empty-text: @tr("No host keys have been saved yet. They are recorded when you trust a host.");
     in-out property <int> selected-group;
     in-out property <int> selected-entry;
     in-out property <bool> import-visible;
@@ -47,19 +51,25 @@ export component HostKeysWindow inherits Window {
     callback select-group(int);
     callback select-entry(int, int);
     callback request-remove();
+    callback request-edit(int, int);
+    callback request-remove-at(int, int);
     callback browse-import-file();
     callback toggle-import();
     callback update-import-text(string);
     callback import-keys();
     callback export-keys();
     callback request-clear-all();
+    callback open-add-dialog();
+    callback open-import-dialog();
+    callback open-export-dialog();
     callback title_drag_requested();
 
     chrome := ToolWindowChrome {
         width: Theme.tool-window-width-wide;
         height: Theme.tool-window-height-tall;
-        title-text: @tr("Host Keys");
-        summary-text: @tr("{0} host(s) · {1} key(s)", root.groups.length, root.key-count);
+        title-text: @tr("Known Hosts");
+        // 计数只在页内工具条右侧；标题栏不重复（对齐原型 title = 名称）。
+        summary-text: "";
         native-title-drag: root.native_title_drag;
         close-requested => { root.dismiss(); }
         title-drag-requested => { root.title_drag_requested(); }
@@ -89,12 +99,17 @@ export component HostKeysWindow inherits Window {
             select-group(int) => { root.select-group(int); }
             select-entry(int, int) => { root.select-entry(int, int); }
             request-remove => { root.request-remove(); }
+            request-edit(g, e) => { root.request-edit(g, e); }
+            request-remove-at(g, e) => { root.request-remove-at(g, e); }
             browse-import-file => { root.browse-import-file(); }
             toggle-import => { root.toggle-import(); }
             update-import-text(string) => { root.update-import-text(string); }
             import-keys => { root.import-keys(); }
             export-keys => { root.export-keys(); }
             request-clear-all => { root.request-clear-all(); }
+            open-add-dialog => { root.open-add-dialog(); }
+            open-import-dialog => { root.open-import-dialog(); }
+            open-export-dialog => { root.open-export-dialog(); }
         }
     }
 
@@ -106,4 +121,3 @@ export component HostKeysWindow inherits Window {
         root.focus-dialog();
     }
 }
-

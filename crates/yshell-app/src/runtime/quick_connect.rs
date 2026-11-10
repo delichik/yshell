@@ -73,6 +73,9 @@ impl AppRuntime {
     }
 
     /// 关闭当前 New Tab（无论当前模式，用于重置/测试路径）。
+    ///
+    /// Unlike clicking the tab's ×, Esc / Ctrl+O dismiss must leave an empty
+    /// workspace when this was the last tab — not request window close.
     pub fn close_quick_connect(&mut self) -> AppProjection {
         let Some(tab_id) = self.active_tab_id.clone().filter(|tab_id| {
             self.tab_index(tab_id)
@@ -81,6 +84,9 @@ impl AppRuntime {
             return self.projection();
         };
         self.close_tab_immediate(&tab_id);
+        // `close_tab_immediate` treats "last tab closed" like the window ×;
+        // QC dismiss is overlay semantics and must not quit the app.
+        self.requested_window_close = None;
         self.set_status_kind(
             "quick-connect-closed",
             "Closed the Quick Connect page.".to_owned(),
@@ -109,7 +115,11 @@ impl AppRuntime {
 
     // -------------------------------------------------------- 输入与提交（§2）
     /// 输入框逐键回传：写入当前 New Tab 的独立输入状态。
+    ///
+    /// Whitespace-only input is stored as empty so Connect / Clear stay gated
+    /// the same as a truly blank field (Slint has no `trim` for the enable check).
     pub fn update_quick_connect_input(&mut self, value: &str) -> AppProjection {
+        let value = if value.trim().is_empty() { "" } else { value };
         if let Some(index) = self
             .active_tab_id
             .as_deref()
@@ -128,6 +138,7 @@ impl AppRuntime {
     /// * 解析成功：当前 New Tab 原地变成 Terminal，沿用同一 tab id；
     /// * 需要密码/主机密钥确认时，弹窗流程结束后仍回到这个 tab。
     pub fn submit_quick_connect(&mut self, input: &str) -> AppResult<AppProjection> {
+        let input = input.trim();
         let mut active_new_tab = self
             .active_tab_id
             .as_deref()
@@ -142,6 +153,13 @@ impl AppRuntime {
                 .as_deref()
                 .and_then(|tab_id| self.tab_index(tab_id))
                 .filter(|index| self.tabs[*index].is_new_tab());
+        }
+        if input.is_empty() {
+            if let Some(index) = active_new_tab {
+                self.tabs[index].quick_connect_input.clear();
+                self.tabs[index].quick_connect_error.clear();
+            }
+            return Ok(self.projection());
         }
         let target = match parse_quick_connect(input) {
             Ok(target) => target,

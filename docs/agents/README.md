@@ -5,7 +5,7 @@ Agent 专项规则索引。仓库通用规则见根目录 [`AGENTS.md`](../../AG
 | 文件 | 内容 |
 |---|---|
 | [`prototypes.md`](./prototypes.md) | UI 原型优先：功能 / 布局 / 交互；存放与修改约定 |
-| [`frontend.md`](./frontend.md) | Slint UI、契约、设计语言、实现约束 |
+| [`frontend.md`](./frontend.md) | Slint UI、文档角色（原型=设计稿）、实现约束 |
 | [`backend.md`](./backend.md) | Rust crates、边界、测试与发布路径 |
 
 原型产物目录：[`docs/prototypes/`](../prototypes/README.md)。

@@ -25,7 +25,7 @@ export component PrivateKeysWindow inherits Window {
 
     in property <[PrivateKeyRow]> keys;
     in property <string> list-summary-text;
-    in property <string> empty-text;
+    in property <string> empty-text: @tr("No managed private keys yet. Generate a key or import an OpenSSH private key.");
     in property <string> details-text;
     in property <string> public-key-text;
     in property <string> test-result-text;
@@ -64,13 +64,22 @@ export component PrivateKeysWindow inherits Window {
     callback save-passphrase();
     callback forget-passphrase();
     callback rename-key(string);
+    // 子窗入口 + 行右键动作（DialogWindowManager 接线）。
+    callback open-generate-dialog();
+    callback open-import-dialog();
+    callback prepare-context-menu(int);
+    callback test-from-menu();
+    callback export-from-menu();
+    callback deploy-from-menu();
+    callback remove-from-menu();
     callback title_drag_requested();
 
     chrome := ToolWindowChrome {
         width: Theme.tool-window-width-wide;
         height: Theme.tool-window-height-tall;
         title-text: @tr("Private Keys");
-        summary-text: root.list-summary-text;
+        // 计数只在页内工具条右侧；标题栏不重复（对齐原型 title = 名称）。
+        summary-text: "";
         native-title-drag: root.native_title_drag;
         close-requested => { root.dismiss(); }
         title-drag-requested => { root.title_drag_requested(); }
@@ -117,6 +126,13 @@ export component PrivateKeysWindow inherits Window {
             save-passphrase => { root.save-passphrase(); }
             forget-passphrase => { root.forget-passphrase(); }
             rename-key(string) => { root.rename-key(string); }
+            open-generate-dialog => { root.open-generate-dialog(); }
+            open-import-dialog => { root.open-import-dialog(); }
+            prepare-context-menu(int) => { root.prepare-context-menu(int); }
+            test-from-menu => { root.test-from-menu(); }
+            export-from-menu => { root.export-from-menu(); }
+            deploy-from-menu => { root.deploy-from-menu(); }
+            remove-from-menu => { root.remove-from-menu(); }
         }
     }
 

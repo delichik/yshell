@@ -1,8 +1,8 @@
 //! Unit tests for the runtime composition layer, split by feature domain.
 
 use std::{
-    fs, net::TcpListener, path::Path, path::PathBuf, sync::Mutex, sync::OnceLock, thread,
-    time::Duration,
+    fs, net::TcpListener, path::Path, path::PathBuf, sync::Arc, sync::Mutex, sync::OnceLock,
+    thread, time::Duration,
 };
 use yshell_config::{ConfigDocument, ConfigStore, FolderProfile, SessionProfile};
 use yshell_sftp::FsEntry;
@@ -102,6 +102,24 @@ pub(crate) fn tab_test_store(config_dir: &Path, count: usize) -> ConfigStore {
 pub(crate) fn tab_runtime(config_dir: &Path, count: usize) -> AppRuntime {
     tab_test_store(config_dir, count);
     AppRuntime::new_with_keychain(config_dir.to_path_buf(), None).expect("runtime")
+}
+
+/// Runtime whose secret store is an explicit file-backed keychain.
+///
+/// `AppRuntime::new` no longer reads `YSHELL_MASTER_PASSWORD` (application
+/// configuration must not come from the environment): production always uses
+/// the OS keychain and tests inject the encrypted file store explicitly.
+pub(crate) fn file_keychain_runtime(config_dir: &Path) -> AppRuntime {
+    let path = config_dir.join("secret-store.toml");
+    let keychain = yshell_secret::FileKeychain::open_or_create(&path, "test-master-password")
+        .expect("test file keychain");
+    AppRuntime::new_with_keychain_and_secret_store_path(
+        config_dir.to_path_buf(),
+        Some(Arc::new(keychain)),
+        Some(path),
+        SecretStoreKind::File,
+    )
+    .expect("runtime with file keychain")
 }
 
 pub(crate) fn open_saved_tab(runtime: &mut AppRuntime, profile_id: &str) -> String {

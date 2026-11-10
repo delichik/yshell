@@ -15,11 +15,14 @@ Running `yshell` without arguments starts the native Slint main window with the 
 The CLI also exposes smoke-friendly commands:
 
 ```bash
-yshell --check-config
-yshell --print-config-dir
+yshell --config-dir /tmp/yshell-config --check-config
+yshell --config-dir /tmp/yshell-config --print-config-dir
+yshell --config-dir /tmp/yshell-config
 yshell --quick-connect user@example.com
 yshell --version
 ```
+
+`--config-dir <path>` selects the configuration directory (test / smoke isolation and portable runs) and is the **only** configuration override: app settings (language, appearance, motion, fonts, local shell, secret store) are read from that directory, never from `YSHELL_*` environment variables.
 
 Quick Connect input is parsed and validated both from the CLI and from the native toolbar.
 
@@ -87,10 +90,10 @@ which packaging tools are available. See [packaging/README.md](packaging/README.
 The GitHub Actions pipeline does the same work on GitHub-hosted runners, so no
 local toolchain is required:
 
-- **CI** (`ci.yml`): rustfmt, clippy, tests on Windows/macOS/Linux, live
-  SSH/SFTP smoke tests against a disposable sshd container, cargo-deny, and a
-  full packaging run on pushes to `main` (so installers cannot rot between
-  releases).
+- **CI** (`ci.yml`): rustfmt, clippy, the test suite on Linux with compile
+  checks on Windows and macOS, live SSH/SFTP smoke tests against a disposable
+  sshd container, cargo-deny, and a full packaging run on pushes to `main` (so
+  installers cannot rot between releases).
 - **Release** (`release.yml`): push a tag to publish. `vX.Y.Z` creates a
   release, `portable-*` a prerelease, both with portable archives, installers
   and `SHA256SUMS.txt`; `workflow_dispatch` builds the artifacts without

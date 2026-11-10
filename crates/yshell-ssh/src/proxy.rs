@@ -110,7 +110,12 @@ pub fn probe_proxy_connectivity(
         ProxyConfig::None => unreachable!("address() rejected None"),
         ProxyConfig::Socks5 {
             username, password, ..
-        } => negotiate_socks5(&mut stream, username.as_deref(), password.as_deref(), timeout)?,
+        } => negotiate_socks5(
+            &mut stream,
+            username.as_deref(),
+            password.as_deref(),
+            timeout,
+        )?,
         ProxyConfig::Socks4 { .. }
         | ProxyConfig::Socks4a { .. }
         | ProxyConfig::HttpConnect { .. } => {
@@ -412,8 +417,8 @@ mod tests {
 
     #[test]
     fn probing_none_is_a_configuration_error() {
-        let error =
-            probe_proxy_connectivity(&ProxyConfig::None, Duration::from_millis(50)).expect_err("probe");
+        let error = probe_proxy_connectivity(&ProxyConfig::None, Duration::from_millis(50))
+            .expect_err("probe");
         assert_eq!(error.kind, SshErrorKind::Configuration);
     }
 }

@@ -1,0 +1,296 @@
+// Private Keys · Generate（standard 720×580，表单 → 结果页）。
+//
+// 规范：docs/prototypes/private-keys/modals.html：
+//   * 表单：Algorithm / Label / Comment / Passphrase / Confirm → 页脚 Cancel | Generate；
+//   * 结果页：私钥已入库提示 + Fingerprint / Type / Public key（+ Copy）→ 页脚 Done。
+// 生成/入库由 runtime 完成（`ssh-key` ED25519 / RSA），本窗只负责表单与结果展示。
+
+import { Theme } from "../theme.slint";
+import { WinButton, WinComboBox, WinIconButton, WinScrollIndicator } from "../components/basic/controls.slint";
+import { WinTextInput } from "../components/basic/text_input.slint";
+import { DetailRow, FormHint, FormRow } from "../components/basic/forms.slint";
+import { ToolWindowChrome } from "../components/tool_window_chrome.slint";
+
+export component PrivateKeyGenerateWindow inherits Window {
+    title: @tr("Generate Private Key");
+    no-frame: true;
+    resize-border-width: 0px;
+    preferred-width: Theme.tool-window-width-standard;
+    min-width: Theme.tool-window-width-standard;
+    max-width: Theme.tool-window-width-standard;
+    preferred-height: Theme.tool-window-height-standard;
+    min-height: Theme.tool-window-height-standard;
+    max-height: Theme.tool-window-height-standard;
+    background: Theme.window-background;
+    default-font-size: Theme.font-body;
+    default-font-family: Theme.font-ui;
+
+    in property <bool> result-visible: false;
+    in-out property <int> algorithm-index: 0;
+    in property <[string]> algorithm-options: ["ED25519", "RSA"];
+    in-out property <string> label-text: "";
+    in-out property <string> comment-text: "";
+    in-out property <string> passphrase-text: "";
+    in-out property <string> confirm-text: "";
+    in property <string> error-text: "";
+    in property <string> result-label-text: "";
+    in property <string> result-fingerprint-text: "";
+    in property <string> result-public-key-text: "";
+    in property <string> result-type-text: "";
+
+    in-out property <bool> native_title_drag: false;
+
+    callback canceled();
+    callback submitted();
+    callback done();
+    callback update-label(string);
+    callback update-comment(string);
+    callback update-passphrase(string);
+    callback update-confirm(string);
+    callback select-algorithm(int);
+    callback copy-public-key();
+    callback title_drag_requested();
+
+    private property <length> body-width:
+        Theme.tool-window-width-standard - 2 * Theme.tool-window-padding;
+    private property <length> body-height:
+        Theme.tool-window-height-standard - Theme.bar-height-menubar - 2 * Theme.tool-window-padding;
+
+    ToolWindowChrome {
+        width: Theme.tool-window-width-standard;
+        height: Theme.tool-window-height-standard;
+        title-text: root.result-visible
+            ? @tr("Key Generated — {0}", root.result-label-text)
+            : @tr("Generate Private Key");
+        native-title-drag: root.native_title_drag;
+        close-requested => {
+            if root.result-visible { root.done(); } else { root.canceled(); }
+        }
+        title-drag-requested => { root.title_drag_requested(); }
+
+        VerticalLayout {
+            width: root.body-width;
+            height: root.body-height;
+            spacing: Theme.spacing-12;
+
+            // --- 表单 ------------------------------------------------------
+            if !root.result-visible : Rectangle {
+                vertical-stretch: 1;
+                clip: true;
+                background: transparent;
+
+                form-scroll := Flickable {
+                    width: parent.width;
+                    height: parent.height;
+                    interactive: true;
+                    content-width: self.width;
+                    content-height: form-body.preferred-height;
+
+                    form-body := VerticalLayout {
+                        spacing: Theme.form-row-gap;
+
+                        FormRow {
+                            label: @tr("Algorithm");
+
+                            WinComboBox {
+                                width: Theme.form-field-width;
+                                model: root.algorithm-options;
+                                current-index <=> root.algorithm-index;
+                                selected(index) => { root.select-algorithm(index); }
+                            }
+                        }
+
+                        FormRow {
+                            label: @tr("Label");
+
+                            WinTextInput {
+                                width: Theme.form-field-width;
+                                text <=> root.label-text;
+                                placeholder-text: @tr("Managed key label (optional)");
+                                edited => { root.update-label(self.text); }
+                            }
+                        }
+
+                        FormRow {
+                            label: @tr("Comment");
+
+                            WinTextInput {
+                                width: Theme.form-field-width;
+                                text <=> root.comment-text;
+                                placeholder-text: @tr("Comment (optional)");
+                                edited => { root.update-comment(self.text); }
+                            }
+                        }
+
+                        FormRow {
+                            label: @tr("Passphrase");
+
+                            WinTextInput {
+                                width: Theme.form-field-width;
+                                text <=> root.passphrase-text;
+                                placeholder-text: @tr("Optional");
+                                input-type: password;
+                                edited => { root.update-passphrase(self.text); }
+                            }
+                        }
+
+                        FormRow {
+                            label: @tr("Confirm");
+
+                            WinTextInput {
+                                width: Theme.form-field-width;
+                                text <=> root.confirm-text;
+                                placeholder-text: @tr("Repeat passphrase");
+                                input-type: password;
+                                edited => { root.update-confirm(self.text); }
+                            }
+                        }
+
+                        if root.error-text != "" : FormHint {
+                            text: root.error-text;
+                            hint-color: Theme.critical;
+                        }
+                    }
+                }
+
+                WinScrollIndicator {
+                    x: parent.width - self.width - Theme.spacing-4;
+                    y: Theme.spacing-4;
+                    height: parent.height - 2 * Theme.spacing-4;
+                    viewport-position: form-scroll.content-y;
+                    content-extent: form-scroll.content-height;
+                    viewport-extent: form-scroll.height;
+                    thumb-min-length: 24px;
+                }
+            }
+
+            // --- 结果页 ----------------------------------------------------
+            if root.result-visible : Rectangle {
+                vertical-stretch: 1;
+                clip: true;
+                background: transparent;
+
+                result-scroll := Flickable {
+                    width: parent.width;
+                    height: parent.height;
+                    interactive: true;
+                    content-width: self.width;
+                    content-height: result-body.preferred-height;
+
+                    result-body := VerticalLayout {
+                        spacing: Theme.form-row-gap;
+
+                        Text {
+                            text: @tr("Private key saved to the secret store.");
+                            color: Theme.text-primary;
+                            font-size: Theme.font-body;
+                            font-weight: Theme.weight-semibold;
+                            wrap: word-wrap;
+                        }
+
+                        DetailRow {
+                            label: @tr("Fingerprint");
+                            value: root.result-fingerprint-text;
+                            mono: true;
+                        }
+
+                        DetailRow {
+                            label: @tr("Type");
+                            value: root.result-type-text;
+                            last: true;
+                        }
+
+                        FormRow {
+                            label: @tr("Public key");
+
+                            Rectangle {
+                                width: Theme.form-field-width;
+                                height: max(128px, min(160px, pubkey-block.preferred-height + 20px));
+                                clip: true;
+                                background: Theme.control-fill;
+                                border-radius: Theme.radius-control;
+                                border-width: 1px;
+                                border-color: Theme.control-stroke;
+
+                                pubkey-scroll := Flickable {
+                                    width: parent.width;
+                                    height: parent.height;
+                                    interactive: true;
+                                    content-width: self.width;
+                                    content-height: pubkey-block.preferred-height + 20px;
+
+                                    pubkey-block := Text {
+                                        x: Theme.spacing-8;
+                                        y: Theme.spacing-8;
+                                        width: parent.width - 2 * Theme.spacing-8;
+                                        text: root.result-public-key-text;
+                                        color: Theme.text-secondary;
+                                        font-size: Theme.font-caption;
+                                        font-family: Theme.font-mono;
+                                        wrap: word-wrap;
+                                    }
+                                }
+
+                                WinScrollIndicator {
+                                    x: parent.width - self.width - Theme.spacing-4;
+                                    y: Theme.spacing-4;
+                                    height: parent.height - 2 * Theme.spacing-4;
+                                    viewport-position: pubkey-scroll.content-y;
+                                    content-extent: pubkey-scroll.content-height;
+                                    viewport-extent: pubkey-scroll.height;
+                                    thumb-min-length: 24px;
+                                }
+                            }
+
+                            WinIconButton {
+                                icon: "copy";
+                                accessible-name: @tr("Copy public key");
+                                tooltip-text: @tr("Copy public key");
+                                clicked => { root.copy-public-key(); }
+                            }
+                        }
+                    }
+                }
+
+                WinScrollIndicator {
+                    x: parent.width - self.width - Theme.spacing-4;
+                    y: Theme.spacing-4;
+                    height: parent.height - 2 * Theme.spacing-4;
+                    viewport-position: result-scroll.content-y;
+                    content-extent: result-scroll.content-height;
+                    viewport-extent: result-scroll.height;
+                    thumb-min-length: 24px;
+                }
+            }
+
+            Rectangle {
+                height: 1px;
+                vertical-stretch: 0;
+                background: Theme.divider;
+            }
+
+            HorizontalLayout {
+                alignment: end;
+                vertical-stretch: 0;
+                spacing: Theme.spacing-8;
+
+                if !root.result-visible : WinButton {
+                    text: @tr("Cancel");
+                    clicked => { root.canceled(); }
+                }
+
+                if !root.result-visible : WinButton {
+                    text: @tr("Generate");
+                    accent: true;
+                    clicked => { root.submitted(); }
+                }
+
+                if root.result-visible : WinButton {
+                    text: @tr("Done");
+                    accent: true;
+                    clicked => { root.done(); }
+                }
+            }
+        }
+    }
+}

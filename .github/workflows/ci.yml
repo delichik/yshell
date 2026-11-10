@@ -63,14 +63,21 @@ jobs:
         run: cargo xtask lint
 
   test:
-    name: Test (${{ matrix.os }})
+    name: ${{ matrix.mode == 'test' && 'Test' || 'Compile check' }} (${{ matrix.os }})
     strategy:
       fail-fast: false
+      # The full suite runs once: a second and third full test run did not pay
+      # for the compile time it added. The other platforms only need to prove
+      # that their cfg, native dependencies and build scripts still compile;
+      # run `cargo xtask test` there when touching platform-specific code.
       matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-          - macos-latest
+        include:
+          - os: ubuntu-latest
+            mode: test
+          - os: windows-latest
+            mode: check
+          - os: macos-latest
+            mode: check
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
@@ -83,7 +90,12 @@ jobs:
           cache-key: test-${{ matrix.os }}
 
       - name: Run tests
+        if: matrix.mode == 'test'
         run: cargo xtask test
+
+      - name: Compile-check the workspace
+        if: matrix.mode == 'check'
+        run: cargo check --workspace --all-targets --all-features --locked
 
   live-ssh:
     name: Live SSH/SFTP smoke tests

@@ -48,10 +48,8 @@ fn store_with_proxies(
 
 #[test]
 fn proxy_manager_create_edit_duplicate_delete() {
-    let _guard = lock_env();
-    std::env::set_var("YSHELL_MASTER_PASSWORD", "proxy-manager-master");
     let temp = tempdir().expect("tempdir");
-    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    let mut runtime = file_keychain_runtime(temp.path());
 
     let opened = runtime.open_proxies_manager();
     assert!(opened.proxies_modal_visible);
@@ -64,7 +62,10 @@ fn proxy_manager_create_edit_duplicate_delete() {
     let _ = runtime.update_proxy_editor_username("proxy-user");
     let _ = runtime.update_proxy_editor_password("proxy-secret");
     let projection = runtime.save_proxy_editor();
-    assert!(!projection.proxies_modal_visible, "Save closes the proxies dialog");
+    assert!(
+        !projection.proxies_modal_visible,
+        "Save closes the proxies dialog"
+    );
     assert_eq!(runtime.config_document.proxy_profiles.len(), 1);
     assert_eq!(projection.proxies_selected_index, 0);
     assert_eq!(projection.proxies_rows.len(), 1);
@@ -130,8 +131,7 @@ fn proxy_manager_create_edit_duplicate_delete() {
         .proxy_row_data()
         .iter()
         .position(|row| row.id == copy.id)
-        .expect("copy row")
-        as i32;
+        .expect("copy row") as i32;
     let _ = runtime.select_proxy(copy_index);
     let projection = runtime.request_proxy_remove();
     assert!(!projection.proxies_remove_blocked);
@@ -143,8 +143,6 @@ fn proxy_manager_create_edit_duplicate_delete() {
         .config_document
         .proxy_profiles
         .contains_key(&copy.id));
-
-    std::env::remove_var("YSHELL_MASTER_PASSWORD");
 }
 
 #[test]
@@ -171,7 +169,10 @@ fn deleting_a_referenced_proxy_is_blocked_and_can_be_cleared_explicitly() {
     assert!(!projection.proxies_remove_confirm_visible);
     assert!(projection.proxies_referencing_text.contains("Prod"));
     assert!(projection.proxies_referencing_text.contains("Staging"));
-    assert_eq!(projection.proxies_status_kind_text, "proxies-remove-blocked");
+    assert_eq!(
+        projection.proxies_status_kind_text,
+        "proxies-remove-blocked"
+    );
     assert_eq!(projection.proxies_status_param_1_text, "Shared SOCKS");
     assert!(projection.proxies_status_param_2_text.contains("Prod"));
     assert!(projection.proxies_status_text.contains("Prod"));
@@ -283,5 +284,27 @@ fn proxy_manager_open_close_and_password_input_hygiene() {
     let _ = runtime.update_proxy_editor_password("typed-but-not-saved");
     let closed = runtime.close_proxies_manager();
     assert!(!closed.proxies_modal_visible);
+    assert!(runtime.proxies_editor_password.is_empty());
+}
+
+#[test]
+fn cancel_proxy_editor_discards_and_closes_like_chrome_x() {
+    let temp = tempdir().expect("tempdir");
+    store_with_proxies(
+        temp.path(),
+        vec![proxy_profile("proxy-1", "SOCKS", "127.0.0.1", 1080)],
+        Vec::new(),
+    );
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    let keychain: Arc<dyn Keychain> = Arc::new(FakeKeychain::new("proxy-cancel-master"));
+    runtime.keychain = Some(RuntimeKeychain(keychain));
+    let opened = runtime.open_proxies_manager();
+    assert!(opened.proxies_modal_visible);
+    let _ = runtime.update_proxy_editor_name("unsaved-rename");
+    let canceled = runtime.cancel_proxy_editor();
+    assert!(
+        !canceled.proxies_modal_visible,
+        "Cancel must close the manager (same path as ×)"
+    );
     assert!(runtime.proxies_editor_password.is_empty());
 }

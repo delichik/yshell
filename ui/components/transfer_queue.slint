@@ -1,7 +1,7 @@
 import { ListView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
-import { WinIconButton } from "basic/controls.slint";
+import { WinButton, WinIconButton } from "basic/controls.slint";
 import { ListScrollBar } from "file_pane.slint";
 import { SftpTransferRow } from "sftp_panel.slint";
 
@@ -21,6 +21,8 @@ export component TransferQueue inherits Rectangle {
     callback cancel(string);
     callback remove(string);
     callback clear-completed();
+    callback pause-all();
+    callback resume-all();
     /// Opens/focuses the SFTP transfer drawer (same model) when the user wants
     /// the fuller drawer chrome inside the SFTP panel.
     callback open-sftp-drawer();
@@ -88,6 +90,20 @@ export component TransferQueue inherits Rectangle {
                 wrap: no-wrap;
                 overflow: elide;
                 horizontal-stretch: 1;
+            }
+
+            WinButton {
+                text: @tr("Pause All");
+                subtle: true;
+                enabled: root.active-count > 0;
+                clicked => { root.pause-all(); }
+            }
+
+            WinButton {
+                text: @tr("Resume All");
+                subtle: true;
+                enabled: root.paused-count > 0;
+                clicked => { root.resume-all(); }
             }
 
             if root.completed-count > 0 : WinIconButton {

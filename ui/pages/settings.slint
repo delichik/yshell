@@ -1,8 +1,11 @@
 import { Theme } from "../theme.slint";
-import { WinButton, WinComboBox, WinIconButton, WinNavItem, WinScrollIndicator, WinToggle } from "../components/basic/controls.slint";
+import { WinButton, WinComboBox, WinIconButton, WinNavItem, WinScrollIndicator, WinSwitch } from "../components/basic/controls.slint";
+import { FormGroupLabel, FormHint, FormRow } from "../components/basic/forms.slint";
+import { Icon } from "../components/basic/icons.slint";
 import { WinTextInput } from "../components/basic/text_input.slint";
 import { TerminalPreview } from "../components/terminal_preview.slint";
 import { ManagerDialogShell } from "../components/manager_dialog_shell.slint";
+import { TextFormats } from "../text_formats.slint";
 
 // 分区导航项：WinNavItem + 可选的禁用说明 tooltip。
 // （基础控件 WinNavItem 不属本文件；Tooltip 必须声明在其直接父元素下，故包一层薄壳。）
@@ -11,7 +14,7 @@ component SettingsNavItem inherits Rectangle {
     in property <string> icon: "settings";
     in property <bool> selected: false;
     in property <bool> enabled: true;
-    /// 非空且禁用时，hover 显示"本版本未提供"一类说明（契约 §18：disabled 必须有 tooltip）
+    /// 非空且禁用时，hover 显示「本版本未提供」一类说明（契约 §18：disabled 必须有 tooltip）
     in property <string> hint: "";
     callback clicked();
 
@@ -33,33 +36,173 @@ component SettingsNavItem inherits Rectangle {
     }
 }
 
-// Appearance 表单的标签 + 控件行（右对齐标签列，消除自由文本时代的错位）。
-// 标签列 128px：比 Theme.form-label-width 略宽，容纳 Foreground / Fallback font。
-component AppearanceFieldRow inherits HorizontalLayout {
-    in property <string> label: "";
-    spacing: Theme.spacing-12;
-    alignment: stretch;
-    // 交叉轴（垂直）居中：28px 色块与控件、右对齐标签在同一水平线；
-    // 固定尺寸子项不再贴顶（默认 stretch 会把它们放在 padding.begin）。
-    cross-axis-alignment: center;
+// 表单行/分组标题/hint 使用共享 `forms.slint`（与 Session Editor 同一实现，
+// 度量按原型 form.css：label 120 右对齐 / 13px、gap 12、行间距 10）。
 
-    Text {
-        text: root.label;
-        width: Theme.form-label-width-medium;
-        horizontal-alignment: right;
-        color: Theme.text-secondary;
-        font-size: Theme.font-body;
-        vertical-alignment: center;
+// 文字按钮 + tooltip（规范：每个可点按钮都要有悬停提示）。
+component SettingsActionButton inherits Rectangle {
+    in property <string> text: "";
+    in property <string> hint: "";
+    in property <bool> accent: false;
+    in property <bool> critical: false;
+    callback clicked();
+
+    height: Theme.control-height;
+    width: button.preferred-width;
+
+    button := WinButton {
+        width: parent.width;
+        height: parent.height;
+        text: root.text;
+        accent: root.accent;
+        critical: root.critical;
+        clicked => { root.clicked(); }
     }
 
-    @children
+    if root.hint != "" : Tooltip {
+        text: @markdown("\{root.hint}");
+    }
+}
+
+// Mode 分段控件的一项（System / Light / Dark；也可做单项禁用占位）。
+component SettingsMethodButton inherits Rectangle {
+    in property <string> text: "";
+    in property <string> hint: "";
+    in property <bool> selected: false;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: Theme.control-height;
+    width: max(96px, method.preferred-width);
+
+    method := WinButton {
+        width: parent.width;
+        height: parent.height;
+        text: root.text;
+        accent: root.selected;
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+
+    if root.hint != "" : Tooltip {
+        text: @markdown("\{root.hint}");
+    }
+}
+
+// 强调色色板：Follow system + 6 预设；选中项加粗描边（原型 `aria-pressed` 态）。
+// Follow system 用半白半黑渐变（原型 `.accent-system`），与 Blue 实色区分。
+component AccentSwatch inherits Rectangle {
+    in property <color> swatch: transparent;
+    in property <string> hint: "";
+    in property <bool> selected: false;
+    /// Index 0 = Follow system：半白半黑，不吃 `swatch` 实色。
+    in property <bool> follow-system: false;
+    callback clicked();
+
+    width: Theme.control-height;
+    height: Theme.control-height;
+    border-radius: Theme.radius-control;
+    border-width: root.selected ? 2px : 1px;
+    border-color: root.selected ? Theme.text-primary : Theme.control-stroke;
+    background: root.follow-system
+        ? @linear-gradient(90deg, #ffffff 0%, #ffffff 50%, #202020 50%, #202020 100%)
+        : root.swatch;
+    clip: true;
+
+    TouchArea {
+        clicked => { root.clicked(); }
+    }
+
+    if root.hint != "" : Tooltip {
+        text: @markdown("\{root.hint}");
+    }
+}
+
+// Security → Managers 的整行可点清单行：图标 + 名称 + 计数 + chevron。
+// 行级动作走整行跳转，不在行下堆按钮。
+component SettingsManagerRow inherits Rectangle {
+    in property <string> icon: "file";
+    in property <string> name: "";
+    in property <int> count: 0;
+    in property <string> hint: "";
+    callback clicked();
+
+    height: Theme.control-height * 2;
+    background: touch.has-hover ? Theme.subtle-hover : transparent;
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-12;
+        padding-right: Theme.spacing-12;
+        spacing: Theme.spacing-12;
+        // 必须是 stretch：行内名称用 `horizontal-stretch: 1` 撑开，计数与 chevron
+        // 才会被推到行尾（原型 `.set-row .name { flex: 1 }`）；`alignment: start`
+        // 时布局只按 preferred 尺寸摆子项，右侧计数/chevron 会挤在名称后面。
+        alignment: stretch;
+
+        Rectangle {
+            width: Theme.control-height;
+            height: Theme.control-height;
+            vertical-stretch: 0;
+            cross-axis-self-alignment: center;
+            background: Theme.control-fill;
+            border-radius: Theme.radius-control;
+            border-width: 1px;
+            border-color: Theme.control-stroke;
+
+            Icon {
+                name: root.icon;
+                icon-size: Theme.icon-size-small;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            text: root.name;
+            color: Theme.text-primary;
+            font-size: Theme.font-body;
+            font-weight: Theme.weight-semibold;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        Text {
+            text: "\{root.count}";
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            vertical-alignment: center;
+        }
+
+        Rectangle {
+            width: Theme.icon-size-small;
+            height: Theme.icon-size-small;
+            cross-axis-self-alignment: center;
+            background: transparent;
+
+            Icon {
+                name: "chevron-right";
+                icon-size: Theme.icon-size-small;
+            }
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+
+    if root.hint != "" : Tooltip {
+        text: @markdown("\{root.hint}");
+    }
 }
 
 // Settings dialog：左导航多分区（General / Appearance / Terminal / Security /
-// Advanced）；SFTP / Shortcuts 本版本禁用。Host Keys / Private Keys 以独立页打开。
+// MCP / Advanced / SFTP）；Shortcuts 本版本禁用。
 //
-// WinUI 3 形态：标题 → 左导航 + 右滚动表单 → 固定关闭操作区。
-// 面板高度固定（与 Session Editor 同理），切换分区时导航不跳动。
+// WinUI 3 形态：标题 → 左导航 + 右滚动表单 → 固定 Cancel | Save 操作区。
+// + `Cancel` / `×` / `Esc` = 弃稿关闭；`Save` = 校验全部分区并保存后关闭。
+// + 分区内容区不复述分区大标题（docs/agents/prototypes.md）。
 
 export component SettingsDialog inherits Rectangle {
     in property <bool> open: false;
@@ -67,7 +210,7 @@ export component SettingsDialog inherits Rectangle {
     in property <string> secret-store-status-text: "";
     in-out property <string> scrollback-lines-text: "";
     in-out property <string> scrollback-max-cells-text: "";
-    /// 设置页「SFTP」分区的最大并行传输数。
+    /// 设置页「SFTP」分区的最大并行传输数（已退出 Settings，保留属性兼容旧接线）。
     in-out property <string> settings-sftp-max-parallel-transfers-text: "4";
     in property <string> terminal-status-text: "";
     /// UI language preference: `system` / `zh-CN` / `en-US`.
@@ -80,20 +223,63 @@ export component SettingsDialog inherits Rectangle {
     in-out property <bool> confirm-quit-app-enabled: true;
     /// MCP master switch (hosts the local endpoint for AI clients).
     in-out property <bool> mcp-enabled: false;
+    /// MCP TCP port text (`1–65535`).
+    in-out property <string> mcp-port-text: "18765";
+    /// Listen == LAN (`0.0.0.0`); false = Local (`127.0.0.1`).
+    in-out property <bool> mcp-listen-lan: false;
+    /// API key (required for LAN).
+    in-out property <string> mcp-api-key-text: "";
+    /// Allow AI to view user-created connections.
+    in-out property <bool> mcp-view-user-connections: false;
+    /// Allow AI to control user-created connections (implies view).
+    in-out property <bool> mcp-control-user-connections: false;
     /// Auto-approve MCP AI control requests (skip the consent dialog).
     in-out property <bool> mcp-auto-approve-control-enabled: false;
-    /// Listener / control status for Settings → AI / MCP.
-    in property <string> mcp-status-text: "";
-    /// Product boundaries copy.
-    in property <string> mcp-boundaries-text: "";
-    /// Stdio MCP host config snippet.
-    in property <string> mcp-host-config-text: "";
+    /// MCP listener / control status kind id (rendered by
+    /// `TextFormats.settings-mcp-status`; see `runtime/mcp.rs::mcp_status_kind`).
+    in property <string> mcp-status-kind-text: "";
+    /// Optional detail for the MCP status kind (listening port / failure reason).
+    in property <string> mcp-status-detail-text: "";
     /// Absolute path of the debug log directory.
     in property <string> debug-log-dir-text: "";
     /// Active left-nav section id.
     in-out property <string> section: "general";
 
-    // N5：Appearance 分区（字体 + 当前主题摘要；主题管理在独立 Theme Manager）。
+    // --- settings-security ---
+    // D36 App theme：Mode 分段 + Accent 色板（即时预览；Save 持久化，Cancel 回滚）。
+    in property <int> settings-appearance-mode-index: 0;
+    in property <int> settings-appearance-accent-index: 1;
+    in property <[color]> settings-appearance-accent-light-swatches: [];
+    in property <[color]> settings-appearance-accent-dark-swatches: [];
+    /// Terminal style 下拉（全局 color-scheme profile）。
+    in property <[string]> settings-appearance-style-options: [];
+    in property <int> settings-appearance-style-index: 0;
+    // D37 Terminal 交互四项草稿。
+    in-out property <int> settings-terminal-middle-click-index: 0;
+    in-out property <int> settings-terminal-right-click-index: 0;
+    in-out property <int> settings-terminal-multi-line-paste-index: 0;
+    in-out property <bool> settings-terminal-auto-copy: false;
+    in property <string> settings-terminal-status-kind-text: "";
+    in property <string> settings-terminal-status-field-text: "";
+    in property <string> settings-terminal-status-value-text: "";
+    in property <string> settings-terminal-status-limit-text: "";
+    // D33 SFTP 默认值。
+    in-out property <bool> settings-sftp-show-hidden: true;
+    in-out property <int> settings-sftp-conflict-index: 0;
+    in property <[string]> settings-sftp-editor-options: [];
+    in-out property <int> settings-sftp-editor-index: 0;
+    in property <bool> settings-sftp-editor-custom-visible: false;
+    in-out property <string> settings-sftp-editor-path-text: "";
+    in property <string> settings-sftp-status-kind-text: "";
+    // D35 Security 卡片 + Managers 行计数。
+    in property <bool> settings-master-password-set: false;
+    in property <bool> settings-master-password-locked: false;
+    in property <int> settings-security-known-hosts-count: 0;
+    in property <int> settings-security-private-keys-count: 0;
+    in property <int> settings-security-proxies-count: 0;
+    // --- settings-security end
+
+    // N5：Terminal style 预览（颜色方案即时预览；字体 / 配色编辑在 Terminal Styles）。
     in property <string> appearance-color-scheme-name-text: "";
     in property <bool> appearance-color-scheme-builtin: false;
     in property <[color]> appearance-palette-swatches: [];
@@ -121,7 +307,16 @@ export component SettingsDialog inherits Rectangle {
     callback set-debug-logging(bool);
     callback set-confirm-close-session(bool);
     callback set-confirm-quit-app(bool);
+    /// General → Motion：持久化到 `[ui] reduce_motion`（应用配置只来自配置文件）。
+    callback set-reduce-motion(bool);
     callback set-mcp-enabled(bool);
+    callback update-mcp-port(string);
+    callback set-mcp-listen-lan(bool);
+    callback update-mcp-api-key(string);
+    callback generate-mcp-api-key();
+    callback copy-mcp-api-key();
+    callback set-mcp-view-user-connections(bool);
+    callback set-mcp-control-user-connections(bool);
     callback set-mcp-auto-approve-control(bool);
     callback open-debug-log-dir();
     // Appearance（字体；主题编辑已迁移到 Theme Manager）
@@ -134,6 +329,27 @@ export component SettingsDialog inherits Rectangle {
     callback clear-appearance-fallbacks();
     callback reset-appearance-defaults();
     callback save-appearance();
+    // --- settings-security ---
+    // D36 / D37 / D33 草稿更新。
+    callback update-settings-appearance-mode(int);
+    callback update-settings-appearance-accent(int);
+    callback select-settings-appearance-style(int);
+    callback update-settings-terminal-middle-click(int);
+    callback update-settings-terminal-right-click(int);
+    callback update-settings-terminal-multi-line-paste(int);
+    callback update-settings-terminal-auto-copy(bool);
+    callback update-settings-sftp-show-hidden(bool);
+    callback update-settings-sftp-conflict-action(int);
+    callback update-settings-sftp-external-editor(int);
+    callback update-settings-sftp-external-editor-path(string);
+    callback browse-settings-sftp-external-editor();
+    // D35 主密码子窗入口（kind: set / change / remove / reset）。
+    callback open-master-password-dialog(string);
+    // Advanced：打开配置目录（日志目录用既有 open-debug-log-dir）。
+    callback open-config-dir();
+    // 整窗 Save = 校验全部分区 + 持久化 + 关闭。
+    callback save-settings();
+    // --- settings-security end
 
     visible: root.open;
     background: transparent;
@@ -146,844 +362,902 @@ export component SettingsDialog inherits Rectangle {
 
         // 主体：左侧分区导航 + 右侧表单
         HorizontalLayout {
-                    vertical-stretch: 1;
-                    spacing: Theme.spacing-12;
+            vertical-stretch: 1;
+            spacing: Theme.spacing-12;
 
-                    // 分区导航（NavigationView 形态）
-                    Rectangle {
-                        width: Theme.nav-width;
-                        vertical-stretch: 1;
-                        background: Theme.layer-fill;
-                        border-radius: Theme.radius-panel;
-                        border-width: 1px;
-                        border-color: Theme.layer-stroke;
+            // 分区导航（NavigationView 形态）
+            Rectangle {
+                width: Theme.nav-width;
+                vertical-stretch: 1;
+                background: Theme.layer-fill;
+                border-radius: Theme.radius-panel;
+                border-width: 1px;
+                border-color: Theme.layer-stroke;
 
-                        VerticalLayout {
-                            padding: Theme.spacing-8;
-                            spacing: 2px;
-                            alignment: start;
+                VerticalLayout {
+                    padding: Theme.spacing-8;
+                    spacing: 2px;
+                    alignment: start;
 
-                            SettingsNavItem {
-                                text: @tr("General");
-                                icon: "settings";
-                                selected: root.section == "general";
-                                clicked => { root.section = "general"; }
-                            }
-                            SettingsNavItem {
-                                text: @tr("Appearance");
-                                icon: "eye";
-                                selected: root.section == "appearance";
-                                clicked => { root.section = "appearance"; }
-                            }
-                            SettingsNavItem {
-                                text: @tr("Terminal");
-                                icon: "terminal";
-                                selected: root.section == "terminal";
-                                clicked => { root.section = "terminal"; }
-                            }
-                            SettingsNavItem {
-                                text: @tr("Security");
-                                icon: "shield";
-                                selected: root.section == "security";
-                                clicked => { root.section = "security"; }
-                            }
-                            SettingsNavItem {
-                                text: @tr("AI / MCP");
-                                icon: "link";
-                                selected: root.section == "mcp";
-                                clicked => { root.section = "mcp"; }
-                            }
-                            SettingsNavItem {
-                                text: @tr("Advanced");
-                                icon: "code";
-                                selected: root.section == "advanced";
-                                clicked => { root.section = "advanced"; }
-                            }
-                            SettingsNavItem {
-                                text: @tr("SFTP");
-                                icon: "folder";
-                                selected: root.section == "sftp";
-                                clicked => { root.section = "sftp"; }
-                            }
-                            SettingsNavItem {
-                                text: @tr("Shortcuts");
-                                icon: "edit";
-                                enabled: false;
-                                hint: @tr("Not available in this version.");
-                            }
-                        }
+                    SettingsNavItem {
+                        text: @tr("General");
+                        icon: "settings";
+                        selected: root.section == "general";
+                        clicked => { root.section = "general"; }
                     }
+                    SettingsNavItem {
+                        text: @tr("Appearance");
+                        icon: "eye";
+                        selected: root.section == "appearance";
+                        clicked => { root.section = "appearance"; }
+                    }
+                    SettingsNavItem {
+                        text: @tr("Terminal");
+                        icon: "terminal";
+                        selected: root.section == "terminal";
+                        clicked => { root.section = "terminal"; }
+                    }
+                    SettingsNavItem {
+                        text: @tr("Security");
+                        icon: "shield";
+                        selected: root.section == "security";
+                        clicked => { root.section = "security"; }
+                    }
+                    SettingsNavItem {
+                        text: @tr("MCP");
+                        icon: "link";
+                        selected: root.section == "mcp";
+                        clicked => { root.section = "mcp"; }
+                    }
+                    SettingsNavItem {
+                        text: @tr("Advanced");
+                        icon: "code";
+                        selected: root.section == "advanced";
+                        clicked => { root.section = "advanced"; }
+                    }
+                    SettingsNavItem {
+                        text: @tr("SFTP");
+                        icon: "folder";
+                        selected: root.section == "sftp";
+                        clicked => { root.section = "sftp"; }
+                    }
+                    SettingsNavItem {
+                        text: @tr("Shortcuts");
+                        icon: "edit";
+                        enabled: false;
+                        hint: @tr("Not available in this version.");
+                    }
+                }
+            }
 
-                    // 表单卡片（内容区滚动）
+            // 表单卡片（内容区滚动）
+            Rectangle {
+                vertical-stretch: 1;
+                horizontal-stretch: 1;
+                background: Theme.card-fill;
+                border-radius: Theme.radius-panel;
+                border-width: 1px;
+                border-color: Theme.card-stroke;
+
+                VerticalLayout {
+                    padding: Theme.spacing-20;
+                    spacing: Theme.spacing-16;
+
                     Rectangle {
                         vertical-stretch: 1;
-                        horizontal-stretch: 1;
-                        background: Theme.card-fill;
-                        border-radius: Theme.radius-panel;
-                        border-width: 1px;
-                        border-color: Theme.card-stroke;
+                        clip: true;
+                        background: transparent;
 
-                            VerticalLayout {
-                            padding: Theme.spacing-20;
-                            spacing: Theme.spacing-16;
+                        scroll := Flickable {
+                            width: parent.width;
+                            height: parent.height;
+                            interactive: true;
+                            content-width: self.width;
+                            content-height: sections.preferred-height;
 
-                            Rectangle {
-                                vertical-stretch: 1;
-                                clip: true;
-                                background: transparent;
+                            sections := VerticalLayout {
+                                alignment: start;
+                                spacing: Theme.spacing-12;
 
-                                scroll := Flickable {
-                                    width: parent.width;
-                                    height: parent.height;
-                                    interactive: true;
-                                    content-width: self.width;
-                                    content-height: sections.preferred-height;
+                                // --- General -------------------------------------
+                                if root.section == "general" : VerticalLayout {
+                                    alignment: start;
+                                    spacing: Theme.form-row-gap;
 
-                                    sections := VerticalLayout {
-                                        alignment: start;
-                                        spacing: Theme.spacing-12;
+                                    FormRow {
+                                        label: @tr("Language");
+                                        WinComboBox {
+                                            max-width: Theme.form-field-width;
+                                            horizontal-stretch: 1;
+                                            model: [@tr("System default"), @tr("English"), @tr("中文")];
+                                            current-index: root.language-text == "zh-CN" ? 2
+                                                : root.language-text == "en-US" ? 1 : 0;
+                                            selected(index) => {
+                                                root.set-language(
+                                                    index == 1 ? "en-US"
+                                                    : index == 2 ? "zh-CN" : "system"
+                                                );
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Applies immediately.");
+                                    }
 
-                                        // --- General ------------------------------------------
-                                        if root.section == "general" : VerticalLayout {
+                                    FormRow {
+                                        label: @tr("Confirm close");
+                                        WinSwitch {
+                                            text: root.confirm-close-session-enabled ? @tr("On") : @tr("Off");
+                                            accessible-name: @tr("Confirm close");
+                                            checked <=> root.confirm-close-session-enabled;
+                                            toggled => {
+                                                root.set-confirm-close-session(root.confirm-close-session-enabled);
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Ask before closing an active session.");
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Confirm quit");
+                                        WinSwitch {
+                                            text: root.confirm-quit-app-enabled ? @tr("On") : @tr("Off");
+                                            accessible-name: @tr("Confirm quit");
+                                            checked <=> root.confirm-quit-app-enabled;
+                                            toggled => {
+                                                root.set-confirm-quit-app(root.confirm-quit-app-enabled);
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Ask before quitting YShell.");
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Reduce motion");
+                                        WinSwitch {
+                                            text: Theme.reduce-motion ? @tr("On") : @tr("Off");
+                                            accessible-name: @tr("Reduce motion");
+                                            checked: Theme.reduce-motion;
+                                            toggled => {
+                                                // 即时应用 + 落盘（`[ui] reduce_motion`）。
+                                                Theme.reduce-motion = self.checked;
+                                                root.set-reduce-motion(self.checked);
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Turns off transitions.");
+                                    }
+                                }
+
+                                // --- Appearance（D36：App theme + Terminal style）--
+                                if root.section == "appearance" : VerticalLayout {
+                                    alignment: start;
+                                    spacing: Theme.form-row-gap;
+
+                                    FormGroupLabel {
+                                        text: @tr("App theme");
+                                        first: true;
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Mode");
+                                        HorizontalLayout {
+                                            spacing: Theme.spacing-8;
                                             alignment: start;
+                                            SettingsMethodButton {
+                                                text: @tr("System");
+                                                hint: @tr("Follow system");
+                                                selected: root.settings-appearance-mode-index == 0;
+                                                clicked => { root.update-settings-appearance-mode(0); }
+                                            }
+                                            SettingsMethodButton {
+                                                text: @tr("Light");
+                                                hint: @tr("Light");
+                                                selected: root.settings-appearance-mode-index == 1;
+                                                clicked => { root.update-settings-appearance-mode(1); }
+                                            }
+                                            SettingsMethodButton {
+                                                text: @tr("Dark");
+                                                hint: @tr("Dark");
+                                                selected: root.settings-appearance-mode-index == 2;
+                                                clicked => { root.update-settings-appearance-mode(2); }
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Applies to the whole app.");
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Accent");
+                                        HorizontalLayout {
+                                            spacing: Theme.spacing-8;
+                                            alignment: start;
+                                            for swatch[index] in Theme.dark
+                                                ? root.settings-appearance-accent-dark-swatches
+                                                : root.settings-appearance-accent-light-swatches : AccentSwatch {
+                                                swatch: swatch;
+                                                follow-system: index == 0;
+                                                selected: root.settings-appearance-accent-index == index;
+                                                hint: TextFormats.appearance-accent-label(index);
+                                                clicked => { root.update-settings-appearance-accent(index); }
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Used for buttons, focus, and selection.");
+                                    }
+
+                                    FormGroupLabel {
+                                        text: @tr("Terminal style");
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Style");
+                                        // 与 session-editor / 原型 `.ctl-with-btn` 一致：下拉固定宽 +
+                                        // manage（settings）图标钮；不用 eye，避免与 ComboBox 箭头粘成一块易误点。
+                                        // 显式宽度也避开 WinComboBox preferred-width=0 在 start 对齐下塌成零宽。
+                                        WinComboBox {
+                                            width: Theme.form-field-width - Theme.control-height - Theme.spacing-8;
+                                            model: root.settings-appearance-style-options;
+                                            current-index: root.settings-appearance-style-index;
+                                            selected(index) => {
+                                                root.select-settings-appearance-style(index);
+                                            }
+                                        }
+                                        WinIconButton {
+                                            icon: "settings";
+                                            tooltip-text: @tr("Manage terminal styles");
+                                            accessible-name: @tr("Manage terminal styles");
+                                            clicked => { root.open-theme-manager(); }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Default for new terminals; fonts and colors are edited in Terminal Styles.");
+                                    }
+
+                                    // 颜色方案即时预览（字体 / 配色在管理器里编辑）。
+                                    // 特殊块：无 label、占满整行（与 Session Editor 预览一致）。
+                                    TerminalPreview {
+                                        frame: root.appearance-preview;
+                                        surface-background: root.appearance-preview-background;
+                                        surface-height: Theme.terminal-preview-height;
+                                    }
+                                }
+
+                                // --- Terminal（D37）-----------------------------
+                                if root.section == "terminal" : VerticalLayout {
+                                    alignment: start;
+                                    spacing: Theme.form-row-gap;
+
+                                    FormGroupLabel {
+                                        text: @tr("Scrollback");
+                                        first: true;
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Scrollback lines");
+                                        WinTextInput {
+                                            max-width: Theme.form-field-width;
+                                            horizontal-stretch: 1;
+                                            text <=> root.scrollback-lines-text;
+                                            placeholder-text: "10000";
+                                            edited => { root.update-scrollback-lines(self.text); }
+                                        }
+                                    }
+                                    FormRow {
+                                        label: @tr("Max cells");
+                                        WinTextInput {
+                                            max-width: Theme.form-field-width;
+                                            horizontal-stretch: 1;
+                                            text <=> root.scrollback-max-cells-text;
+                                            placeholder-text: "2000000";
+                                            edited => { root.update-scrollback-max-cells(self.text); }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: TextFormats.settings-terminal-status(
+                                            root.settings-terminal-status-kind-text,
+                                            root.settings-terminal-status-field-text,
+                                            root.settings-terminal-status-value-text,
+                                            root.settings-terminal-status-limit-text,
+                                        );
+                                        hint-color: (root.settings-terminal-status-kind-text == "hint"
+                                            || root.settings-terminal-status-kind-text == "saved")
+                                            ? Theme.text-tertiary : Theme.critical;
+                                    }
+
+                                    FormRow {
+                                        label: "";
+                                        SettingsActionButton {
+                                            text: @tr("Reset defaults");
+                                            hint: @tr("Reset defaults");
+                                            clicked => { root.reset-terminal-defaults(); }
+                                        }
+                                    }
+
+                                    FormGroupLabel {
+                                        text: @tr("Mouse & paste");
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Middle click");
+                                        WinComboBox {
+                                            max-width: Theme.form-field-width;
+                                            horizontal-stretch: 1;
+                                            model: [@tr("Paste"), @tr("Do nothing")];
+                                            current-index: root.settings-terminal-middle-click-index;
+                                            selected(index) => {
+                                                root.update-settings-terminal-middle-click(index);
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Paste from the clipboard or ignore the click.");
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Right click");
+                                        WinComboBox {
+                                            max-width: Theme.form-field-width;
+                                            horizontal-stretch: 1;
+                                            model: [@tr("Context menu"), @tr("Paste"), @tr("Do nothing")];
+                                            current-index: root.settings-terminal-right-click-index;
+                                            selected(index) => {
+                                                root.update-settings-terminal-right-click(index);
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Open the terminal menu, paste, or ignore the click.");
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Multi-line paste");
+                                        WinComboBox {
+                                            max-width: Theme.form-field-width;
+                                            horizontal-stretch: 1;
+                                            model: [@tr("Ask"), @tr("Paste"), @tr("Block")];
+                                            current-index: root.settings-terminal-multi-line-paste-index;
+                                            selected(index) => {
+                                                root.update-settings-terminal-multi-line-paste(index);
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Ask before sending text with more than one line.");
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Auto copy");
+                                        WinSwitch {
+                                            text: root.settings-terminal-auto-copy ? @tr("On") : @tr("Off");
+                                            accessible-name: @tr("Auto copy");
+                                            checked <=> root.settings-terminal-auto-copy;
+                                            toggled => {
+                                                root.update-settings-terminal-auto-copy(root.settings-terminal-auto-copy);
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Copy selected terminal text to the clipboard automatically.");
+                                    }
+                                }
+
+                                // --- Security（D35）----------------------------
+                                if root.section == "security" : VerticalLayout {
+                                    alignment: start;
+                                    spacing: Theme.form-row-gap;
+
+                                    // Master password 卡片：图标 + 标题 + 状态 pill + 说明 + 动作区。
+                                    Rectangle {
+                                        background: Theme.card-fill;
+                                        border-radius: Theme.radius-panel;
+                                        border-width: 1px;
+                                        border-color: Theme.card-stroke;
+
+                                        VerticalLayout {
+                                            padding: Theme.spacing-16;
                                             spacing: Theme.spacing-12;
 
-                                            Text {
-                                                text: @tr("Language");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body-large;
-                                                font-weight: Theme.weight-semibold;
-                                            }
-
-                                            Text {
-                                                text: @tr("Default follows the operating system. Changes apply immediately.");
-                                                color: Theme.text-secondary;
-                                                font-size: Theme.font-body;
-                                                wrap: word-wrap;
-                                            }
-
                                             HorizontalLayout {
-                                                spacing: Theme.spacing-8;
+                                                spacing: Theme.spacing-12;
                                                 cross-axis-alignment: center;
 
-                                                WinButton {
-                                                    text: @tr("System");
-                                                    accent: root.language-text == "system";
-                                                    clicked => { root.set-language("system"); }
-                                                }
-                                                WinButton {
-                                                    text: @tr("Chinese (Simplified)");
-                                                    accent: root.language-text == "zh-CN";
-                                                    clicked => { root.set-language("zh-CN"); }
-                                                }
-                                                WinButton {
-                                                    text: @tr("English");
-                                                    accent: root.language-text == "en-US";
-                                                    clicked => { root.set-language("en-US"); }
-                                                }
-                                            }
+                                                Rectangle {
+                                                    width: Theme.control-height;
+                                                    height: Theme.control-height;
+                                                    background: Theme.control-fill;
+                                                    border-radius: Theme.radius-control;
+                                                    border-width: 1px;
+                                                    border-color: Theme.control-stroke;
 
-                                            Rectangle {
-                                                height: 1px;
-                                                background: Theme.divider;
-                                            }
-
-                                            Text {
-                                                text: @tr("Confirmations");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body-large;
-                                                font-weight: Theme.weight-semibold;
-                                            }
-
-                                            Text {
-                                                text: @tr("Turn off a confirmation to close or quit without asking. You can turn it back on here at any time.");
-                                                color: Theme.text-secondary;
-                                                font-size: Theme.font-body;
-                                                wrap: word-wrap;
-                                            }
-
-                                            WinToggle {
-                                                text: @tr("Confirm before closing a session");
-                                                checked <=> root.confirm-close-session-enabled;
-                                                toggled => {
-                                                    root.set-confirm-close-session(root.confirm-close-session-enabled);
-                                                }
-                                                horizontal-stretch: 0;
-                                            }
-
-                                            WinToggle {
-                                                text: @tr("Confirm before quitting YShell");
-                                                checked <=> root.confirm-quit-app-enabled;
-                                                toggled => {
-                                                    root.set-confirm-quit-app(root.confirm-quit-app-enabled);
-                                                }
-                                                horizontal-stretch: 0;
-                                            }
-
-                                            Rectangle {
-                                                height: 1px;
-                                                background: Theme.divider;
-                                            }
-
-                                            // §6.4：统一动画开关。Theme.reduce-motion
-                                            // 为 true 时所有 Theme.duration-* 归零，
-                                            // 界面只剩状态色即时切换（§6.1.5 / §6.2 motion.instant）。
-                                            // 方向：勾上"减少动画"= 关掉动效（绑 reduce-motion，
-                                            // 不要直接绑 animations-enabled，那会把语义写反）。
-                                            Text {
-                                                text: @tr("Motion");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body-large;
-                                                font-weight: Theme.weight-semibold;
-                                            }
-
-                                            Text {
-                                                text: @tr("Reduce motion turns off transitions. State colors still change instantly.");
-                                                color: Theme.text-secondary;
-                                                font-size: Theme.font-body;
-                                                wrap: word-wrap;
-                                            }
-
-                                            WinToggle {
-                                                text: @tr("Reduce motion");
-                                                checked <=> Theme.reduce-motion;
-                                                horizontal-stretch: 0;
-                                            }
-                                        }
-
-                                        // --- Appearance（内联；原嵌套弹窗主体迁入此分区）------
-                                        if root.section == "appearance" : VerticalLayout {
-                                            alignment: start;
-                                            spacing: Theme.spacing-12;
-
-                                            Text {
-                                                text: @tr("Appearance");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body-large;
-                                                font-weight: Theme.weight-semibold;
-                                            }
-
-                                            Text {
-                                                text: @tr("Global defaults for terminals opened after saving. Open terminals keep their theme.");
-                                                color: Theme.text-secondary;
-                                                font-size: Theme.font-body;
-                                                wrap: word-wrap;
-                                            }
-
-                                            Text {
-                                                text: @tr("Current theme");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body;
-                                                font-weight: Theme.weight-semibold;
-                                            }
-
-                                            Rectangle {
-                                                background: Theme.card-fill;
-                                                border-radius: Theme.radius-control;
-                                                border-width: 1px;
-                                                border-color: Theme.card-stroke;
-
-                                                HorizontalLayout {
-                                                    padding: Theme.spacing-12;
-                                                    spacing: Theme.spacing-12;
-                                                    cross-axis-alignment: center;
-
-                                                    VerticalLayout {
-                                                        horizontal-stretch: 1;
-                                                        spacing: Theme.spacing-4;
-
-                                                        HorizontalLayout {
-                                                            spacing: Theme.spacing-8;
-                                                            cross-axis-alignment: center;
-
-                                                            Text {
-                                                                horizontal-stretch: 1;
-                                                                text: root.appearance-color-scheme-name-text;
-                                                                color: Theme.text-primary;
-                                                                font-size: Theme.font-body;
-                                                                font-weight: Theme.weight-semibold;
-                                                                wrap: no-wrap;
-                                                                overflow: elide;
-                                                            }
-
-                                                            Text {
-                                                                text: root.appearance-color-scheme-builtin
-                                                                    ? @tr("Built-in theme")
-                                                                    : @tr("Custom theme");
-                                                                color: Theme.text-tertiary;
-                                                                font-size: Theme.font-caption;
-                                                                wrap: no-wrap;
-                                                            }
-                                                        }
-
-                                                        HorizontalLayout {
-                                                            spacing: 3px;
-                                                            cross-axis-alignment: center;
-
-                                                            for swatch in root.appearance-palette-swatches : Rectangle {
-                                                                width: 14px;
-                                                                height: 14px;
-                                                                border-radius: 3px;
-                                                                border-width: 1px;
-                                                                border-color: Theme.control-stroke;
-                                                                background: swatch;
-                                                            }
-                                                        }
-                                                    }
-
-                                                    WinButton {
-                                                        text: @tr("Manage themes…");
-                                                        icon: "eye";
-                                                        clicked => { root.open-theme-manager(); }
+                                                    Icon {
+                                                        name: "shield";
+                                                        icon-size: Theme.icon-size-small;
+                                                        x: (parent.width - self.width) / 2;
+                                                        y: (parent.height - self.height) / 2;
                                                     }
                                                 }
-                                            }
 
-                                            Text {
-                                                text: @tr("Clone, edit and delete color themes in the Theme Manager. Font settings apply to every theme.");
-                                                color: Theme.text-secondary;
-                                                font-size: Theme.font-body;
-                                                wrap: word-wrap;
-                                            }
-
-                                            Rectangle { height: 1px; background: Theme.divider; }
-
-                                            Text {
-                                                text: @tr("Font");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body;
-                                                font-weight: Theme.weight-semibold;
-                                            }
-
-                                            AppearanceFieldRow {
-                                                label: @tr("Font family");
-                                                WinComboBox {
-                                                    horizontal-stretch: 1;
-                                                    model: root.appearance-font-options;
-                                                    current-index <=> root.appearance-font-index;
-                                                    placeholder-text: @tr("DejaVu Sans Mono");
-                                                    selected(index) => { root.select-appearance-font(index); }
-                                                }
-                                                WinButton {
-                                                    text: @tr("Add Font File…");
-                                                    clicked => { root.browse-appearance-font-file(); }
-                                                }
-                                            }
-
-                                            AppearanceFieldRow {
-                                                label: @tr("Font size");
-                                                HorizontalLayout {
-                                                    spacing: Theme.spacing-4;
-                                                    WinIconButton {
-                                                        icon: "chevron-left";
-                                                        accessible-name: @tr("Decrease font size");
-                                                        clicked => { root.bump-appearance-font-size(-1); }
-                                                    }
-                                                    Text {
-                                                        text: root.appearance-font-size-text;
-                                                        color: Theme.text-primary;
-                                                        font-size: Theme.font-body;
-                                                        vertical-alignment: center;
-                                                        horizontal-alignment: center;
-                                                        width: 40px;
-                                                    }
-                                                    WinIconButton {
-                                                        icon: "chevron-right";
-                                                        accessible-name: @tr("Increase font size");
-                                                        clicked => { root.bump-appearance-font-size(1); }
-                                                    }
-                                                    Text {
-                                                        text: @tr("Logical pixels (6-72)");
-                                                        color: Theme.text-tertiary;
-                                                        font-size: Theme.font-caption;
-                                                        vertical-alignment: center;
-                                                        horizontal-stretch: 1;
-                                                    }
-                                                }
-                                            }
-
-                                            AppearanceFieldRow {
-                                                label: @tr("Fallback font");
-                                                WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    text <=> root.appearance-fallback-fonts-text;
-                                                    placeholder-text: @tr("Font file path");
-                                                    edited => { root.update-appearance-fallback-fonts(self.text); }
-                                                }
-                                            }
-
-                                            HorizontalLayout {
-                                                spacing: Theme.spacing-8;
-                                                padding-left: Theme.form-label-width-medium + Theme.spacing-12;
-                                                alignment: start;
-
-                                                WinButton {
-                                                    text: @tr("Select File…");
-                                                    clicked => { root.browse-appearance-fallback-font(); }
-                                                }
-                                                WinButton {
-                                                    text: @tr("Clear");
-                                                    clicked => { root.clear-appearance-fallbacks(); }
-                                                }
-                                            }
-
-                                            Rectangle { height: 1px; background: Theme.divider; }
-
-                                            Text {
-                                                text: @tr("Live preview");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body;
-                                                font-weight: Theme.weight-semibold;
-                                            }
-
-                                            // TERM-2：live preview 与真实终端共用
-                                            // `TerminalPreview` 的像素契约（Rust 按物理
-                                            // 像素光栅化，1phx 1:1 显示、pixelated、绝不
-                                            // 缩放）。尺寸契约：卡内容宽 434px − 2px 边框
-                                            // − 2×6px 终端内边距 = 420px；高 200px − 2px
-                                            // 边框 = 198px，对应 Rust 侧
-                                            // `SETTINGS_PREVIEW_AREA_PX`（放不下时 Rust
-                                            // 减少渲染行列）。
-                                            TerminalPreview {
-                                                frame: root.appearance-preview;
-                                                surface-background: root.appearance-preview-background;
-                                            }
-
-                                            Text {
-                                                text: root.appearance-status-text;
-                                                color: Theme.text-tertiary;
-                                                font-size: Theme.font-caption;
-                                                wrap: word-wrap;
-                                            }
-
-                                            HorizontalLayout {
-                                                spacing: Theme.spacing-8;
-                                                alignment: end;
-
-                                                WinButton {
-                                                    text: @tr("Reset Defaults");
-                                                    clicked => { root.reset-appearance-defaults(); }
-                                                }
-                                                WinButton {
-                                                    text: @tr("Save");
-                                                    accent: true;
-                                                    clicked => { root.save-appearance(); }
-                                                }
-                                            }
-                                        }
-
-                                        // --- Terminal -----------------------------------------
-                                        if root.section == "terminal" : VerticalLayout {
-                                            alignment: start;
-                                            spacing: Theme.spacing-12;
-
-                                            Text {
-                                                text: @tr("Terminal");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body-large;
-                                                font-weight: Theme.weight-semibold;
-                                            }
-
-                                            HorizontalLayout {
-                                                spacing: Theme.spacing-12;
-
-                                                // 标签列：右对齐。左对齐 + 固定宽会在标签与输入框之间留下空洞。
-                                                // 列宽用 Theme.form-label-width-wide（宽标签档），不再写死 220px。
                                                 Text {
-                                                    text: @tr("Scrollback lines");
-                                                    width: Theme.form-label-width-wide;
-                                                    horizontal-alignment: right;
-                                                    color: Theme.text-secondary;
-                                                    font-size: Theme.font-body;
+                                                    horizontal-stretch: 1;
+                                                    text: @tr("Master password");
+                                                    color: Theme.text-primary;
+                                                    font-size: Theme.font-body-large;
+                                                    font-weight: Theme.weight-semibold;
                                                     vertical-alignment: center;
                                                 }
 
-                                                // 输入框：WinTextInput 自带 control-fill 底 + control-stroke 描边 + 聚焦强调条（§5.2）
-                                                scrollback-lines-input := WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    text <=> root.scrollback-lines-text;
-                                                    placeholder-text: "10000";
-                                                    edited => { root.update-scrollback-lines(self.text); }
-                                                }
-                                            }
+                                                Rectangle {
+                                                    background: root.settings-master-password-set
+                                                        ? Theme.accent-soft : Theme.control-fill;
+                                                    border-radius: Theme.radius-panel;
+                                                    border-width: 1px;
+                                                    border-color: Theme.control-stroke;
 
-                                            HorizontalLayout {
-                                                spacing: Theme.spacing-12;
-
-                                                Text {
-                                                    text: @tr("Scrollback memory cap (cells)");
-                                                    width: Theme.form-label-width-wide;
-                                                    horizontal-alignment: right;
-                                                    color: Theme.text-secondary;
-                                                    font-size: Theme.font-body;
-                                                    vertical-alignment: center;
-                                                }
-
-                                                scrollback-cells-input := WinTextInput {
-                                                    horizontal-stretch: 1;
-                                                    text <=> root.scrollback-max-cells-text;
-                                                    placeholder-text: "2000000";
-                                                    edited => { root.update-scrollback-max-cells(self.text); }
+                                                    HorizontalLayout {
+                                                        padding-left: Theme.spacing-8;
+                                                        padding-right: Theme.spacing-8;
+                                                        Text {
+                                                            text: TextFormats.master-password-status(root.settings-master-password-set);
+                                                            color: Theme.text-primary;
+                                                            font-size: Theme.font-caption;
+                                                            font-weight: Theme.weight-semibold;
+                                                        }
+                                                    }
                                                 }
                                             }
 
                                             Text {
-                                                text: @tr("Scrollback is stored compressed (about 3 MB per session at the defaults). Both the line count and the total cell count are enforced.");
-                                                color: Theme.text-tertiary;
-                                                font-size: Theme.font-caption;
-                                                wrap: word-wrap;
-                                            }
-
-                                            Text {
-                                                text: @tr("Allowed range: 100-1000000 lines, 100000-100000000 cells.");
-                                                color: Theme.text-tertiary;
-                                                font-size: Theme.font-caption;
+                                                text: root.settings-master-password-set
+                                                    ? @tr("Sessions and keys are encrypted.")
+                                                    : @tr("Sessions and keys are not encrypted.");
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-body;
                                                 wrap: word-wrap;
                                             }
 
                                             HorizontalLayout {
                                                 spacing: Theme.spacing-8;
-                                                alignment: end;
+                                                // stretch：密码已设置时用可 stretch 的占位把
+                                                // Forgot password? 推到行尾（原型 `.grow`）。
+                                                alignment: stretch;
 
-                                                WinButton {
-                                                    text: @tr("Reset Defaults");
-                                                    clicked => { root.reset-terminal-defaults(); }
-                                                }
-
-                                                WinButton {
-                                                    text: @tr("Save Terminal Settings");
+                                                if !root.settings-master-password-set : SettingsActionButton {
+                                                    text: @tr("Set");
+                                                    hint: @tr("Set master password");
                                                     accent: true;
-                                                    clicked => { root.save-terminal-settings(); }
+                                                    clicked => { root.open-master-password-dialog("set"); }
                                                 }
-                                            }
-
-                                            Text {
-                                                text: root.terminal-status-text;
-                                                color: Theme.text-tertiary;
-                                                font-size: Theme.font-caption;
-                                                wrap: word-wrap;
-                                            }
-                                        }
-
-                                        // --- SFTP --------------------------------------------
-                                        if root.section == "sftp" : VerticalLayout {
-                                            alignment: start;
-                                            spacing: Theme.spacing-12;
-
-                                            Text {
-                                                text: @tr("SFTP");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body-large;
-                                                font-weight: Theme.weight-semibold;
-                                            }
-
-                                            Text {
-                                                text: @tr("How many uploads and downloads may run at the same time. A higher value is faster on fast links but uses more bandwidth.");
-                                                color: Theme.text-secondary;
-                                                font-size: Theme.font-body;
-                                                wrap: word-wrap;
-                                            }
-
-                                            AppearanceFieldRow {
-                                                label: @tr("Max parallel transfers");
-
-                                                WinTextInput {
+                                                if root.settings-master-password-set : SettingsActionButton {
+                                                    text: @tr("Change");
+                                                    hint: @tr("Change master password");
+                                                    clicked => { root.open-master-password-dialog("change"); }
+                                                }
+                                                if root.settings-master-password-set : SettingsActionButton {
+                                                    text: @tr("Remove");
+                                                    hint: @tr("Remove master password");
+                                                    clicked => { root.open-master-password-dialog("remove"); }
+                                                }
+                                                if root.settings-master-password-set : Rectangle {
                                                     horizontal-stretch: 1;
-                                                    text <=> root.settings-sftp-max-parallel-transfers-text;
-                                                    placeholder-text: "4";
-                                                    font-family: Theme.font-mono;
-                                                    edited(text) => { root.update-settings-sftp-max-parallel-transfers(text); }
+                                                    height: 1px;
+                                                    background: transparent;
+                                                }
+                                                if root.settings-master-password-set : SettingsActionButton {
+                                                    text: @tr("Forgot password?");
+                                                    hint: @tr("Reset master password");
+                                                    critical: true;
+                                                    clicked => { root.open-master-password-dialog("reset"); }
                                                 }
                                             }
 
-                                            Text {
-                                                text: @tr("Allowed range: 1-16 transfers.");
+                                            if !root.settings-master-password-set : Text {
+                                                text: @tr("Set a password to encrypt saved sessions and keys.");
                                                 color: Theme.text-tertiary;
                                                 font-size: Theme.font-caption;
                                                 wrap: word-wrap;
                                             }
-
-                                            HorizontalLayout {
-                                                spacing: Theme.spacing-8;
-                                                alignment: end;
-
-                                                WinButton {
-                                                    text: @tr("Save SFTP Settings");
-                                                    accent: true;
-                                                    clicked => { root.save-settings-sftp(); }
-                                                }
+                                            if root.settings-master-password-set : Text {
+                                                text: @tr("Remove decrypts files; Reset deletes them.");
+                                                color: Theme.text-tertiary;
+                                                font-size: Theme.font-caption;
+                                                wrap: word-wrap;
                                             }
                                         }
+                                    }
 
-                                        // --- Security -----------------------------------------
-                                        if root.section == "security" : VerticalLayout {
+                                    FormGroupLabel {
+                                        text: @tr("Managers");
+                                    }
+
+                                    // 整行可点清单：图标 + 名称 + 计数 + chevron（不写摘要）。
+                                    Rectangle {
+                                        background: Theme.card-fill;
+                                        border-radius: Theme.radius-panel;
+                                        border-width: 1px;
+                                        border-color: Theme.card-stroke;
+
+                                        VerticalLayout {
                                             alignment: start;
-                                            spacing: Theme.spacing-12;
 
-                                            Text {
-                                                text: @tr("Security");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body-large;
-                                                font-weight: Theme.weight-semibold;
+                                            SettingsManagerRow {
+                                                icon: "check";
+                                                name: @tr("Known Hosts");
+                                                count: root.settings-security-known-hosts-count;
+                                                hint: @tr("Open Known Hosts");
+                                                clicked => { root.open-host-keys(); }
                                             }
-
-                                            Text {
-                                                text: root.secret-store-status-text;
-                                                color: Theme.text-secondary;
-                                                font-size: Theme.font-body;
-                                                wrap: word-wrap;
-                                            }
-
-                                            Text {
-                                                text: @tr("Config directory: {0}", root.config-dir-text);
-                                                color: Theme.text-tertiary;
-                                                font-size: Theme.font-caption;
-                                                wrap: word-wrap;
-                                            }
-
-                                            // 宽工具窗下入口可横排；窄时仍自动换行由布局分配。
-                                            HorizontalLayout {
-                                                spacing: Theme.spacing-8;
-                                                alignment: start;
-
-                                                WinButton {
-                                                    text: @tr("Open Host Keys…");
-                                                    clicked => { root.open-host-keys(); }
-                                                }
-
-                                                WinButton {
-                                                    text: @tr("Open Private Keys…");
-                                                    clicked => { root.open-private-keys(); }
-                                                }
-
-                                                WinButton {
-                                                    text: @tr("Open Proxy Manager…");
-                                                    clicked => { root.open-proxies(); }
-                                                }
-                                            }
-                                        }
-
-                                        // --- AI / MCP -----------------------------------------
-                                        if root.section == "mcp" : VerticalLayout {
-                                            alignment: start;
-                                            spacing: Theme.spacing-12;
-
-                                            Text {
-                                                text: @tr("AI / MCP");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body-large;
-                                                font-weight: Theme.weight-semibold;
-                                            }
-
-                                            Text {
-                                                text: @tr("Let an AI host (Cursor, Claude Desktop, or any stdio MCP client) control terminal sessions in this running YShell window. Off by default.");
-                                                color: Theme.text-secondary;
-                                                font-size: Theme.font-body;
-                                                wrap: word-wrap;
-                                            }
-
-                                            WinToggle {
-                                                text: @tr("Enable MCP");
-                                                checked <=> root.mcp-enabled;
-                                                toggled => {
-                                                    root.set-mcp-enabled(root.mcp-enabled);
-                                                }
-                                                horizontal-stretch: 0;
-                                            }
-
-                                            Text {
-                                                text: @tr("Status");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body;
-                                                font-weight: Theme.weight-semibold;
-                                            }
-
-                                            Text {
-                                                text: root.mcp-status-text;
-                                                color: Theme.text-secondary;
-                                                font-size: Theme.font-body;
-                                                wrap: word-wrap;
-                                                font-family: Theme.font-mono;
-                                            }
-
-                                            Text {
-                                                text: @tr("How to connect");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body;
-                                                font-weight: Theme.weight-semibold;
-                                            }
-
-                                            Text {
-                                                text: @tr("Keep YShell open with MCP enabled. In your AI host, add a stdio MCP server that starts YShell with --mcp (not a command you run yourself):");
-                                                color: Theme.text-secondary;
-                                                font-size: Theme.font-body;
-                                                wrap: word-wrap;
-                                            }
-
-                                            Text {
-                                                text: root.mcp-host-config-text;
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-caption;
-                                                wrap: word-wrap;
-                                                font-family: Theme.font-mono;
-                                            }
-
-                                            Text {
-                                                text: @tr("If yshell is not on PATH, set command to the full path of the YShell binary.");
-                                                color: Theme.text-tertiary;
-                                                font-size: Theme.font-caption;
-                                                wrap: word-wrap;
-                                            }
-
-                                            Text {
-                                                text: @tr("What it can and cannot do");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body;
-                                                font-weight: Theme.weight-semibold;
-                                            }
-
-                                            Text {
-                                                text: root.mcp-boundaries-text;
-                                                color: Theme.text-secondary;
-                                                font-size: Theme.font-body;
-                                                wrap: word-wrap;
-                                            }
-
-                                            Rectangle {
-                                                height: 1px;
-                                                background: Theme.divider;
-                                            }
-
-                                            Text {
-                                                text: @tr("Control approval");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body;
-                                                font-weight: Theme.weight-semibold;
-                                            }
-
-                                            Text {
-                                                text: @tr("By default each AI control request asks you first. Auto-approve grants full terminal control to any local MCP client that connects.");
-                                                color: Theme.text-secondary;
-                                                font-size: Theme.font-body;
-                                                wrap: word-wrap;
-                                            }
-
-                                            WinToggle {
-                                                text: @tr("Auto-approve AI control");
-                                                checked <=> root.mcp-auto-approve-control-enabled;
-                                                enabled: root.mcp-enabled;
-                                                toggled => {
-                                                    root.set-mcp-auto-approve-control(root.mcp-auto-approve-control-enabled);
-                                                }
-                                                horizontal-stretch: 0;
-                                            }
-                                        }
-
-                                        // --- Advanced -----------------------------------------
-                                        if root.section == "advanced" : VerticalLayout {
-                                            alignment: start;
-                                            spacing: Theme.spacing-12;
-
-                                            Text {
-                                                text: @tr("Advanced");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body-large;
-                                                font-weight: Theme.weight-semibold;
-                                            }
-
-                                            Text {
-                                                text: @tr("Config directory");
-                                                color: Theme.text-secondary;
-                                                font-size: Theme.font-body;
-                                            }
-
-                                            Text {
-                                                text: root.config-dir-text;
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body;
-                                                font-family: Theme.font-mono;
-                                                wrap: word-wrap;
-                                            }
-
-                                            Text {
-                                                text: @tr("Application data, sessions, and related files live under this directory.");
-                                                color: Theme.text-tertiary;
-                                                font-size: Theme.font-caption;
-                                                wrap: word-wrap;
-                                            }
-
                                             Rectangle { height: 1px; background: Theme.divider; }
-
-                                            Text {
-                                                text: @tr("Debug logging");
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-body;
-                                                font-weight: Theme.weight-semibold;
+                                            SettingsManagerRow {
+                                                icon: "file";
+                                                name: @tr("Private Keys");
+                                                count: root.settings-security-private-keys-count;
+                                                hint: @tr("Open Private Keys");
+                                                clicked => { root.open-private-keys(); }
                                             }
-
-                                            Text {
-                                                text: @tr("When enabled, diagnostic logs are written under the config directory. The console window stays hidden.");
-                                                color: Theme.text-secondary;
-                                                font-size: Theme.font-body;
-                                                wrap: word-wrap;
-                                            }
-
-                                            WinToggle {
-                                                text: @tr("Record debug logs");
-                                                checked <=> root.debug-logging-enabled;
-                                                toggled => {
-                                                    root.set-debug-logging(root.debug-logging-enabled);
-                                                }
-                                            }
-
-                                            Text {
-                                                text: root.debug-log-dir-text;
-                                                color: Theme.text-primary;
-                                                font-size: Theme.font-caption;
-                                                font-family: Theme.font-mono;
-                                                wrap: word-wrap;
-                                            }
-
-                                            HorizontalLayout {
-                                                spacing: Theme.spacing-8;
-                                                alignment: start;
-
-                                                WinButton {
-                                                    text: @tr("Open Log Folder");
-                                                    clicked => { root.open-debug-log-dir(); }
-                                                }
+                                            Rectangle { height: 1px; background: Theme.divider; }
+                                            SettingsManagerRow {
+                                                icon: "globe";
+                                                name: @tr("Proxies");
+                                                count: root.settings-security-proxies-count;
+                                                hint: @tr("Open Proxies");
+                                                clicked => { root.open-proxies(); }
                                             }
                                         }
                                     }
                                 }
 
-                                // 滚动指示：E22 可复用组件（内部按 `-content-y` 计算进度）。
-                                WinScrollIndicator {
-                                    x: scroll.width - self.width - Theme.spacing-4;
-                                    y: Theme.spacing-4;
-                                    height: parent.height - 2 * Theme.spacing-4;
-                                    viewport-position: scroll.content-y;
-                                    content-extent: scroll.content-height;
-                                    viewport-extent: scroll.height;
-                                    thumb-min-length: 24px;
+                                // --- SFTP（D33）--------------------------------
+                                if root.section == "sftp" : VerticalLayout {
+                                    alignment: start;
+                                    spacing: Theme.form-row-gap;
+
+                                    FormRow {
+                                        label: @tr("Show hidden");
+                                        WinSwitch {
+                                            text: root.settings-sftp-show-hidden ? @tr("On") : @tr("Off");
+                                            accessible-name: @tr("Show hidden");
+                                            checked <=> root.settings-sftp-show-hidden;
+                                            toggled => {
+                                                root.update-settings-sftp-show-hidden(root.settings-sftp-show-hidden);
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("New SFTP tabs start with hidden files shown.");
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Conflict");
+                                        WinComboBox {
+                                            max-width: Theme.form-field-width;
+                                            horizontal-stretch: 1;
+                                            model: [@tr("Ask"), @tr("Replace"), @tr("Skip"), @tr("Stop")];
+                                            current-index: root.settings-sftp-conflict-index;
+                                            selected(index) => {
+                                                root.update-settings-sftp-conflict-action(index);
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Ask opens a dialog; the others apply automatically.");
+                                    }
+
+                                    FormRow {
+                                        label: @tr("External editor");
+                                        WinComboBox {
+                                            max-width: Theme.form-field-width;
+                                            horizontal-stretch: 1;
+                                            // Rust 投影稳定 id（`system-default` / `custom` / 编辑器名），
+                                            // 显示文案用 @tr 映射（`TextFormats.settings-sftp-editor-label`）。
+                                            model: root.settings-sftp-editor-options;
+                                            has-label-map: true;
+                                            label-for(id) => {
+                                                return TextFormats.settings-sftp-editor-label(id);
+                                            }
+                                            current-index: root.settings-sftp-editor-index;
+                                            selected(index) => {
+                                                root.update-settings-sftp-external-editor(index);
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Used to open remote files for editing.");
+                                    }
+
+                                    if root.settings-sftp-editor-custom-visible : FormRow {
+                                        label: "";
+                                        WinTextInput {
+                                            max-width: 388px;
+                                            horizontal-stretch: 1;
+                                            text <=> root.settings-sftp-editor-path-text;
+                                            placeholder-text: @tr("Path to editor executable");
+                                            edited => {
+                                                root.update-settings-sftp-external-editor-path(self.text);
+                                            }
+                                        }
+                                        WinIconButton {
+                                            icon: "folder";
+                                            tooltip-text: @tr("Browse");
+                                            accessible-name: @tr("Browse");
+                                            clicked => { root.browse-settings-sftp-external-editor(); }
+                                        }
+                                    }
+
+                                    FormHint {
+                                        text: TextFormats.settings-sftp-status(
+                                            root.settings-sftp-status-kind-text,
+                                            "",
+                                        );
+                                        hint-color: root.settings-sftp-status-kind-text == "custom-editor-path-required"
+                                            ? Theme.critical : Theme.text-tertiary;
+                                    }
+                                }
+
+                                // --- MCP（D34：Enable / Port / Listen / API key /
+                                // View user / Control user / Auto-approve）----------------
+                                if root.section == "mcp" : VerticalLayout {
+                                    alignment: start;
+                                    spacing: Theme.form-row-gap;
+
+                                    FormRow {
+                                        label: @tr("Enable");
+                                        WinSwitch {
+                                            text: root.mcp-enabled ? @tr("On") : @tr("Off");
+                                            accessible-name: @tr("Enable");
+                                            checked <=> root.mcp-enabled;
+                                            toggled => { root.set-mcp-enabled(root.mcp-enabled); }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Off by default; other MCP controls are disabled.");
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Port");
+                                        WinTextInput {
+                                            width: Theme.form-port-width;
+                                            enabled: root.mcp-enabled;
+                                            text <=> root.mcp-port-text;
+                                            accepted => { root.update-mcp-port(root.mcp-port-text); }
+                                            edited => { root.update-mcp-port(root.mcp-port-text); }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("1–65535.");
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Listen");
+                                        HorizontalLayout {
+                                            spacing: Theme.spacing-8;
+                                            SettingsMethodButton {
+                                                text: @tr("Local");
+                                                hint: @tr("Local = 127.0.0.1");
+                                                selected: !root.mcp-listen-lan;
+                                                enabled: root.mcp-enabled;
+                                                clicked => { root.set-mcp-listen-lan(false); }
+                                            }
+                                            SettingsMethodButton {
+                                                text: @tr("LAN");
+                                                hint: @tr("LAN = 0.0.0.0; API key required");
+                                                selected: root.mcp-listen-lan;
+                                                enabled: root.mcp-enabled;
+                                                clicked => { root.set-mcp-listen-lan(true); }
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Local = 127.0.0.1; LAN = 0.0.0.0.");
+                                    }
+
+                                    FormRow {
+                                        label: @tr("API key");
+                                        HorizontalLayout {
+                                            spacing: Theme.spacing-8;
+                                            max-width: Theme.form-field-width;
+                                            horizontal-stretch: 1;
+                                            WinTextInput {
+                                                horizontal-stretch: 1;
+                                                enabled: root.mcp-enabled;
+                                                input-type: password;
+                                                text <=> root.mcp-api-key-text;
+                                                placeholder-text: @tr("Required for LAN");
+                                                edited => { root.update-mcp-api-key(root.mcp-api-key-text); }
+                                                accepted => { root.update-mcp-api-key(root.mcp-api-key-text); }
+                                            }
+                                            WinIconButton {
+                                                icon: "refresh";
+                                                enabled: root.mcp-enabled;
+                                                accessible-name: @tr("Generate");
+                                                tooltip-text: @tr("Generate");
+                                                clicked => { root.generate-mcp-api-key(); }
+                                            }
+                                            WinIconButton {
+                                                icon: "copy";
+                                                enabled: root.mcp-enabled && root.mcp-api-key-text != "";
+                                                accessible-name: @tr("Copy");
+                                                tooltip-text: @tr("Copy");
+                                                clicked => { root.copy-mcp-api-key(); }
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Required for LAN.");
+                                    }
+
+                                    FormRow {
+                                        label: @tr("View user");
+                                        WinSwitch {
+                                            text: root.mcp-view-user-connections ? @tr("On") : @tr("Off");
+                                            accessible-name: @tr("View user");
+                                            enabled: root.mcp-enabled;
+                                            checked <=> root.mcp-view-user-connections;
+                                            toggled => {
+                                                root.set-mcp-view-user-connections(root.mcp-view-user-connections);
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("AI can see user-created connections.");
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Control user");
+                                        WinSwitch {
+                                            text: root.mcp-control-user-connections ? @tr("On") : @tr("Off");
+                                            accessible-name: @tr("Control user");
+                                            enabled: root.mcp-enabled;
+                                            checked <=> root.mcp-control-user-connections;
+                                            toggled => {
+                                                root.set-mcp-control-user-connections(root.mcp-control-user-connections);
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("AI can operate user-created connections.");
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Auto-approve");
+                                        WinSwitch {
+                                            text: root.mcp-auto-approve-control-enabled ? @tr("On") : @tr("Off");
+                                            accessible-name: @tr("Auto-approve");
+                                            checked <=> root.mcp-auto-approve-control-enabled;
+                                            enabled: root.mcp-enabled;
+                                            toggled => {
+                                                root.set-mcp-auto-approve-control(root.mcp-auto-approve-control-enabled);
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Skip the control consent dialog.");
+                                    }
+
+                                    FormHint {
+                                        text: TextFormats.settings-mcp-status(
+                                            root.mcp-status-kind-text,
+                                            root.mcp-status-detail-text,
+                                        );
+                                        hint-color: root.mcp-status-kind-text == "failed"
+                                            ? Theme.critical : Theme.text-tertiary;
+                                    }
+
+                                    FormHint {
+                                        text: @tr("Add this stdio server in your AI host; do not run it yourself.");
+                                    }
+                                    HorizontalLayout {
+                                        spacing: 0px;
+                                        alignment: start;
+
+                                        Rectangle {
+                                            width: Theme.form-label-width + Theme.spacing-12;
+                                            height: 1px;
+                                            background: transparent;
+                                        }
+                                        Text {
+                                            text: "command = \"yshell\", args = [\"--mcp\"]";
+                                            color: Theme.text-primary;
+                                            font-size: Theme.font-caption;
+                                            font-family: Theme.font-mono;
+                                            wrap: no-wrap;
+                                            overflow: elide;
+                                        }
+                                    }
+                                }
+
+                                // --- Advanced ----------------------------------
+                                if root.section == "advanced" : VerticalLayout {
+                                    alignment: start;
+                                    spacing: Theme.form-row-gap;
+
+                                    FormRow {
+                                        label: @tr("Debug logging");
+                                        HorizontalLayout {
+                                            spacing: Theme.spacing-8;
+                                            alignment: start;
+                                            WinSwitch {
+                                                text: root.debug-logging-enabled ? @tr("On") : @tr("Off");
+                                                accessible-name: @tr("Debug logging");
+                                                checked <=> root.debug-logging-enabled;
+                                                toggled => {
+                                                    root.set-debug-logging(root.debug-logging-enabled);
+                                                }
+                                            }
+                                            WinIconButton {
+                                                icon: "folder";
+                                                tooltip-text: @tr("Open debug log folder");
+                                                accessible-name: @tr("Open debug log folder");
+                                                clicked => { root.open-debug-log-dir(); }
+                                            }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Writes logs under the config directory.");
+                                    }
+
+                                    FormRow {
+                                        label: @tr("Config directory");
+                                        WinTextInput {
+                                            max-width: 388px;
+                                            horizontal-stretch: 1;
+                                            read-only: true;
+                                            text: root.config-dir-text;
+                                        }
+                                        WinIconButton {
+                                            icon: "folder";
+                                            tooltip-text: @tr("Open config directory");
+                                            accessible-name: @tr("Open config directory");
+                                            clicked => { root.open-config-dir(); }
+                                        }
+                                    }
+                                    FormHint {
+                                        text: @tr("Read-only path to sessions, keys, and logs.");
+                                    }
                                 }
                             }
                         }
+
+                        // 滚动指示：E22 可复用组件（内部按 `-content-y` 计算进度）。
+                        WinScrollIndicator {
+                            x: scroll.width - self.width - Theme.spacing-4;
+                            y: Theme.spacing-4;
+                            height: parent.height - 2 * Theme.spacing-4;
+                            viewport-position: scroll.content-y;
+                            content-extent: scroll.content-height;
+                            viewport-extent: scroll.height;
+                            thumb-min-length: 24px;
+                        }
                     }
                 }
+            }
+        }
 
         Rectangle {
             height: 1px;
             background: Theme.divider;
         }
 
-        // 操作区（固定）：右对齐
+        // 操作区（固定）：Cancel | Save（Save = 保存并关闭；分区内不放 Save）。
         HorizontalLayout {
             alignment: end;
+            spacing: Theme.spacing-8;
 
-            WinButton {
-                text: @tr("Close");
+            SettingsActionButton {
+                text: @tr("Cancel");
+                hint: @tr("Discard changes and close");
                 clicked => { root.close(); }
+            }
+            SettingsActionButton {
+                text: @tr("Save");
+                hint: @tr("Save all sections and close");
+                accent: true;
+                clicked => { root.save-settings(); }
             }
         }
     }
