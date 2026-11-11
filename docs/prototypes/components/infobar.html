@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-proto-autoboot>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Component — infobar</title>
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_chrome.css">
+  <link rel="stylesheet" href="../_proto.css">
+  <style>
+    body { margin: 0; padding: 0; background: transparent; }
+    .infobar { width: 100%; box-sizing: border-box; }
+  </style>
+</head>
+<body data-proto-autoboot>
+  <div class="infobar" id="bar" role="status">
+    <span class="i i-link" id="icon" aria-hidden="true"></span>
+    <div>
+      <strong data-q="title">Sync input</strong>
+      <div data-q="body">Keystrokes go to all sessions in this group.</div>
+    </div>
+    <div class="infobar-actions">
+      <button type="button" class="btn btn-subtle" data-q="action" data-q-title="action" title="End all">End all</button>
+    </div>
+  </div>
+  <script src="../_embed.js"></script>
+  <script>
+    ProtoEmbed.boot({ toggle: false });
+    (function () {
+      var q = new URLSearchParams(location.search);
+      if (q.get("warning") === "1") {
+        document.getElementById("bar").classList.add("warning");
+        var icon = document.getElementById("icon");
+        icon.className = "i i-warning";
+      }
+    })();
+  </script>
+</body>
+</html>

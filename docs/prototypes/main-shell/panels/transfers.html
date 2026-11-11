@@ -1,19 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <link rel="stylesheet" href="../../form.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_chrome.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_anno.css">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — Transfers panel wireframe</title>
+  <title>YShell — Transfers panel UI</title>
   <link rel="stylesheet" href="../../_icons.css">
+  <link rel="stylesheet" href="../../_anno.css">
   <style>
     :root {
       --board-w: 320px;
       --board-h: 520px;
-      --line: #111;
-      --fill: #fff;
-      --mute: #555;
-      --soft: #f0f0f0;
-      --bg: #e8e8e8;
       --ctrl-h: 32px;
       --head-h: 36px;
       --row-h: 52px;
@@ -23,17 +27,17 @@
       margin: 0;
       padding: 24px;
       font-family: ui-sans-serif, system-ui, sans-serif;
-      color: var(--line);
-      background: var(--bg);
+      color: var(--text-primary);
+      background: var(--window-bg);
     }
     .meta {
       max-width: 520px;
       margin: 0 0 8px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
       line-height: 1.45;
     }
-    .meta a { color: var(--line); }
+    .meta a { color: var(--text-primary); }
     .meta code { font-size: 12px; }
     .tools {
       display: flex;
@@ -42,19 +46,19 @@
       align-items: center;
       margin: 0 0 12px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
     .tools button {
       height: var(--ctrl-h);
       padding: 0 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font: inherit;
       font-size: 13px;
       cursor: pointer;
     }
     .tools button[aria-pressed="true"] {
-      background: var(--soft);
+      background: var(--subtle-hover);
       font-weight: 600;
     }
     .stage { overflow-x: auto; padding-bottom: 8px; }
@@ -64,8 +68,7 @@
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      background: var(--fill);
-      border: 1px solid var(--line);
+      background: var(--card-fill); border: 1px solid var(--card-stroke);
       position: relative;
     }
     .panel-head {
@@ -74,14 +77,14 @@
       align-items: center;
       justify-content: space-between;
       padding: 0 10px;
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--layer-stroke);
       font-size: 13px;
       font-weight: 600;
     }
     .panel-head button.icon {
       width: 28px;
       height: 28px;
-      border: 1px solid var(--line);
+      border: 1px solid var(--card-stroke);
       background: transparent;
       font: inherit;
       font-size: 16px;
@@ -100,22 +103,14 @@
     .toolbar button {
       height: 28px;
       padding: 0 8px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font: inherit;
       font-size: 12px;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-    }
-    .toolbar button.btn-icon {
-      width: 28px;
-      min-width: 28px;
-      padding: 0;
-      font-size: 18px;
-      font-weight: 600;
-      line-height: 1;
     }
     .panel-body {
       flex: 1;
@@ -128,7 +123,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--mute);
+      color: var(--text-secondary);
       font-size: 13px;
       padding: 24px;
       text-align: center;
@@ -163,17 +158,17 @@
       letter-spacing: 0.03em;
       text-transform: uppercase;
       padding: 1px 6px;
-      border: 1px solid var(--line);
-      background: var(--soft);
+      border: 1px solid var(--card-stroke);
+      background: var(--subtle-hover);
     }
-    .status.running { background: var(--fill); }
-    .status.paused { color: var(--mute); border-style: dashed; }
+    .status.running { background: var(--card-fill); }
+    .status.paused { color: var(--text-secondary); border-style: dashed; }
     .status.failed { background: var(--line); color: var(--fill); }
-    .status.done { color: var(--mute); border-color: var(--mute); background: transparent; }
+    .status.done { color: var(--text-secondary); border-color: var(--text-secondary); background: transparent; }
     .xfer-row .bar {
       height: 6px;
-      background: var(--soft);
-      border: 1px solid var(--line);
+      background: var(--subtle-hover);
+      border: 1px solid var(--card-stroke);
     }
     .xfer-row .bar > i {
       display: block;
@@ -186,8 +181,8 @@
       position: absolute;
       z-index: 10;
       min-width: 160px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.08);
       display: none;
       font-size: 13px;
@@ -202,26 +197,16 @@
       cursor: default;
     }
     .ctx-item:last-child { border-bottom: 0; }
-    .ctx-item.disabled { color: var(--mute); }
-    .legend {
-      max-width: 520px;
-      margin: 16px 0 0;
-      padding: 12px 14px;
-      border: 1px dashed var(--line);
-      font-size: 12px;
-      color: var(--mute);
-      line-height: 1.5;
-    }
-    .legend strong { color: var(--line); }
-    .legend a { color: var(--line); }
+    .ctx-item.disabled { color: var(--text-secondary); }
+    .legend a { color: var(--text-primary); }
     .toast {
       position: fixed;
       bottom: 24px;
       right: 24px;
       z-index: 100;
       padding: 10px 14px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font-size: 13px;
       display: none;
       box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.08);
@@ -245,6 +230,14 @@
   <div class="stage">
     <div class="board" aria-label="Transfers panel">
       <header class="panel-head">
+  <link rel="stylesheet" href="../../form.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_chrome.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_anno.css">
         <span>Transfers</span>
         <button type="button" class="icon" id="menuBtn" aria-label="Panel menu" title="Panel menu">⋯</button>
       </header>

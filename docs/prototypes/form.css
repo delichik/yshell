@@ -1,38 +1,12 @@
-/* YShell prototype form components — SINGLE SOURCE OF TRUTH.
+/* YShell design-draft form controls — WinUI 3 / Fluent 2.
    Showcase: forms.html
-   All prototypes must use these classes/tokens; do not fork local copies.
-   Animations: only the transitions defined here (switch thumb, etc.). */
+   Tokens: _theme.css · Icons: _icons.css
+   Do not fork local copies of control styles. */
 
+@import url("_theme.css");
 @import url("_icons.css");
 
-:root {
-  --field-w: 420px;
-  --lbl-w: 120px;
-  --port-w: 100px;
-  --icon-select-w: 220px;
-  /* Row unit: form/list heights must be integer multiples of --ctrl-h. */
-  --ctrl-h: 32px;                         /* 1× — min form row / control */
-  --row-h: calc(var(--ctrl-h) * 2);       /* 2× — CRUD list rows */
-  --field-h-md: calc(var(--ctrl-h) * 4);  /* 4× — textarea / term preview */
-  --field-h-lg: calc(var(--ctrl-h) * 5);  /* 5× — pubkey / tall boxes */
-  --switch-w: 40px;
-  --switch-h: 22px;
-  --switch-knob: 16px;
-  --switch-pad: 2px;
-  --switch-travel: 18px;
-  --motion-switch: transform .12s ease;
-  --line: #111;
-  --fill: #fff;
-  --mute: #555;
-  --soft: #f0f0f0;
-  --danger: #800;
-  --focus-ring: #111;
-}
-
-/* ── Row ───────────────────────────────────────────────────────────
-   Height = n × --ctrl-h (n ≥ 1). Default min = 1×; tall value cells
-   use --field-h-* so the row grows in whole units. Always start;
-   label pad optically centers vs single-line controls. */
+/* ── Row ─────────────────────────────────────────────────────────── */
 .form-row {
   display: grid;
   grid-template-columns: var(--lbl-w) minmax(0, 1fr);
@@ -46,14 +20,13 @@
 .form-row.top { align-items: start; }
 .form-row .lbl {
   text-align: right;
-  color: var(--mute);
+  color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.2;
   padding-top: calc((var(--ctrl-h) - 1.2em) / 2);
 }
 .form-row > .btn { justify-self: start; width: auto; }
 
-/* Display / detail rows (manager right pane) — same n×ctrl-h rule */
 .detail-row {
   display: grid;
   grid-template-columns: var(--lbl-w) minmax(0, 1fr);
@@ -61,13 +34,13 @@
   align-items: start;
   min-height: var(--ctrl-h);
   box-sizing: border-box;
-  padding: 0;
-  border-bottom: 1px solid var(--soft);
+  padding: 4px 0;
+  border-bottom: 1px solid var(--layer-stroke);
   font-size: 13px;
 }
 .detail-row.top { align-items: start; }
 .detail-label {
-  color: var(--mute);
+  color: var(--text-secondary);
   line-height: 1.2;
   padding-top: calc((var(--ctrl-h) - 1.2em) / 2);
 }
@@ -76,19 +49,19 @@
   display: flex;
   align-items: center;
   word-break: break-all;
+  color: var(--text-primary);
 }
 .detail-row.top .detail-value { display: block; min-height: 0; }
 .detail-value.mono {
-  font-family: ui-monospace, monospace;
+  font-family: ui-monospace, Consolas, monospace;
   font-size: 12px;
 }
 
-/* Narrow label column variants */
 .form-row.lbl-100 { grid-template-columns: 100px minmax(0, 1fr); }
 .form-row.lbl-110 { grid-template-columns: 110px minmax(0, 1fr); }
 .detail-row.lbl-110 { grid-template-columns: 110px minmax(0, 1fr); }
 
-/* ── Text / select / textarea / boxes ───────────────────────────── */
+/* ── Text / select / textarea ───────────────────────────────────── */
 .input,
 .select,
 .textarea,
@@ -98,31 +71,48 @@
   width: 100%;
   max-width: var(--field-w);
   box-sizing: border-box;
-  border: 1px solid var(--line);
-  background: var(--fill);
-  color: var(--line);
+  border: 1px solid var(--control-stroke);
+  border-radius: var(--radius-ctrl);
+  background: var(--control-fill-solid);
+  color: var(--text-primary);
   font: inherit;
+  transition: background var(--motion-faster) ease, border-color var(--motion-faster) ease;
 }
 
 .input,
 .select {
   height: var(--ctrl-h);
-  padding: 0 8px;
+  padding: 0 10px;
   font-size: 14px;
+  cursor: text;
+}
+.select { cursor: default; appearance: none; background-image: none; }
+
+.input::placeholder,
+.textarea::placeholder { color: var(--text-tertiary); }
+
+.input:hover:not(:disabled):not(:focus),
+.select:hover:not(:disabled):not(:focus),
+.textarea:hover:not(:disabled):not(:focus) {
+  background: var(--control-fill-hover-solid);
 }
 
 .input:disabled,
 .select:disabled,
 .textarea:disabled {
-  background: var(--soft);
-  color: var(--mute);
+  background: var(--control-fill-disabled);
+  color: var(--text-disabled);
+  border-color: var(--control-stroke);
 }
 
+/* Fluent: bottom accent indicator on focus */
 .input:focus,
 .select:focus,
 .textarea:focus {
-  outline: 1px solid var(--focus-ring);
-  outline-offset: 0;
+  outline: none;
+  border-color: var(--control-stroke);
+  background: var(--card-fill);
+  box-shadow: inset 0 -2px 0 0 var(--accent);
 }
 
 .input-port {
@@ -131,84 +121,134 @@
 }
 
 .textarea {
-  min-height: var(--field-h-md); /* 4× */
-  box-sizing: border-box;
-  padding: 8px;
+  min-height: var(--field-h-md);
+  padding: 8px 10px;
   font-size: 14px;
   resize: vertical;
   line-height: 1.4;
+  cursor: text;
 }
 .textarea.mono {
-  font-family: ui-monospace, monospace;
+  font-family: ui-monospace, Consolas, monospace;
   font-size: 12px;
 }
 
 .pubkey,
 .field-box {
-  font-family: ui-monospace, monospace;
+  font-family: ui-monospace, Consolas, monospace;
   font-size: 12px;
   white-space: pre-wrap;
   word-break: break-all;
-  box-sizing: border-box;
   padding: 8px 10px;
-  background: var(--soft);
+  background: var(--subtle-selected);
   min-height: var(--ctrl-h);
-  max-height: var(--field-h-lg); /* 5× */
+  max-height: var(--field-h-lg);
   overflow: auto;
   line-height: 1.45;
 }
 
 .term-preview {
-  height: var(--field-h-md); /* 4× */
-  box-sizing: border-box;
+  height: var(--field-h-md);
   padding: 8px 12px;
-  font-family: ui-monospace, monospace;
+  font-family: ui-monospace, Consolas, monospace;
   font-size: 12px;
   line-height: 1.45;
   overflow: hidden;
-  background: #1e1e1e;
-  color: #ddd;
+  background: var(--terminal-bg);
+  color: var(--terminal-fg);
+  border-color: var(--control-stroke);
 }
 
 /* ── Buttons ─────────────────────────────────────────────────────── */
 .btn {
   height: var(--ctrl-h);
   padding: 0 12px;
-  border: 1px solid var(--line);
-  background: var(--fill);
-  color: var(--line);
+  border: 1px solid var(--control-stroke);
+  border-radius: var(--radius-ctrl);
+  background: var(--control-fill-solid);
+  color: var(--text-primary);
   font: inherit;
   font-size: 14px;
-  cursor: pointer;
+  line-height: 20px;
+  cursor: default;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   text-decoration: none;
   width: auto;
   flex: 0 0 auto;
   box-sizing: border-box;
+  transition: background var(--motion-faster) ease;
 }
-.btn:hover { background: var(--soft); }
+.btn:hover:not(:disabled) { background: var(--control-fill-hover-solid); }
+.btn:active:not(:disabled) { background: var(--control-fill-pressed-solid); }
 .btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+  color: var(--text-disabled);
+  background: var(--control-fill-disabled);
+  cursor: default;
 }
-.btn:focus {
-  outline: 1px solid var(--focus-ring);
+.btn:focus { outline: none; }
+.btn:focus-visible {
+  outline: 2px solid var(--focus-inner);
   outline-offset: 1px;
+  box-shadow: 0 0 0 4px var(--accent);
 }
-.btn-primary { background: var(--soft); font-weight: 600; }
-.btn-danger { border-color: var(--danger); color: var(--danger); }
-.btn-danger.btn-primary {
-  background: var(--danger);
-  color: #fff;
-  border-color: var(--danger);
-}
-/* Filled danger: icon mask uses currentColor (white). */
-.btn-danger.btn-primary .i { background-color: currentColor; }
 
-/* Icon toolbar btn — same chrome as .btn; glyph via .i (mask + currentColor).
-   Destructive icon actions use .btn-icon.btn-danger (match text Delete). */
+.btn-primary,
+.btn-accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.btn-primary:hover:not(:disabled),
+.btn-accent:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.btn-primary:active:not(:disabled),
+.btn-accent:active:not(:disabled) {
+  background: var(--accent-pressed);
+  border-color: var(--accent-pressed);
+}
+.btn-primary:disabled,
+.btn-accent:disabled {
+  opacity: 0.4;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.btn-subtle {
+  border-color: transparent;
+  background: transparent;
+}
+.btn-subtle:hover:not(:disabled) { background: var(--subtle-hover); }
+.btn-subtle:active:not(:disabled) { background: var(--subtle-pressed); }
+
+/* Critical: outline / text — not solid red fill */
+.btn-danger {
+  border-color: var(--system-critical);
+  color: var(--system-critical);
+  background: var(--control-fill);
+}
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--system-critical) 10%, transparent);
+}
+.btn-danger.btn-primary,
+.btn-danger.btn-accent {
+  background: transparent;
+  border-color: var(--system-critical);
+  color: var(--system-critical);
+  font-weight: 600;
+}
+.btn-danger.btn-primary:hover:not(:disabled),
+.btn-danger.btn-accent:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--system-critical) 12%, transparent);
+}
+.btn-danger .i { background-color: currentColor; }
+
 .btn-icon {
   width: var(--ctrl-h);
   min-width: var(--ctrl-h);
@@ -218,7 +258,7 @@
   line-height: 1;
 }
 
-/* ── Sidecar 管理 / Browse (only allowed overflow past field-w) ─── */
+/* ── Sidecar ─────────────────────────────────────────────────────── */
 .ctl-with-btn {
   display: flex;
   align-items: flex-start;
@@ -239,9 +279,7 @@
   white-space: nowrap;
   margin-top: 0;
 }
-.ctl-with-btn.center .btn { margin-top: 0; }
 
-/* Icon + select row (session icon) */
 .icon-row {
   display: flex;
   align-items: center;
@@ -260,21 +298,23 @@
 .ico-preview {
   width: 28px;
   height: 28px;
-  border: 1px solid var(--line);
-  background: var(--soft);
+  border: 1px solid var(--control-stroke);
+  border-radius: var(--radius-ctrl);
+  background: var(--subtle-selected);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 11px;
   font-weight: 700;
   flex: 0 0 auto;
+  color: var(--text-primary);
 }
 
 .hint,
 .hint-indent {
   margin: 0 0 10px;
   font-size: 12px;
-  color: var(--mute);
+  color: var(--text-secondary);
   line-height: 1.35;
 }
 .hint-indent {
@@ -282,16 +322,16 @@
   max-width: var(--field-w);
 }
 
-/* ── Switch + contextual text (booleans / Inherit) ───────────────── */
+/* ── Switch ──────────────────────────────────────────────────────── */
 .form-switch,
 .inherit-toggle {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: var(--mute);
+  color: var(--text-secondary);
   user-select: none;
-  cursor: pointer;
+  cursor: default;
   position: relative;
   width: fit-content;
   justify-self: start;
@@ -310,8 +350,10 @@
   width: var(--switch-w);
   height: var(--switch-h);
   flex-shrink: 0;
-  border: 1px solid var(--line);
-  background: var(--fill);
+  border: 1px solid var(--control-stroke);
+  border-radius: 999px;
+  background: var(--control-fill-solid);
+  transition: background var(--motion-fast) ease, border-color var(--motion-fast) ease;
 }
 .form-switch .switch::after,
 .inherit-toggle .switch::after {
@@ -321,67 +363,73 @@
   left: var(--switch-pad);
   width: var(--switch-knob);
   height: var(--switch-knob);
-  background: var(--line);
+  border-radius: 50%;
+  background: var(--text-secondary);
   transition: var(--motion-switch);
 }
 .form-switch input:checked + .switch,
 .inherit-toggle input:checked + .switch {
-  background: var(--soft);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 .form-switch input:checked + .switch::after,
 .inherit-toggle input:checked + .switch::after {
   transform: translateX(var(--switch-travel));
+  background: var(--accent-text);
 }
 .form-switch input:focus-visible + .switch,
 .inherit-toggle input:focus-visible + .switch {
-  outline: 1px solid var(--focus-ring);
+  outline: 2px solid var(--focus-inner);
   outline-offset: 1px;
+  box-shadow: 0 0 0 4px var(--accent);
 }
 .form-switch .txt-on { display: none; }
 .form-switch input:checked ~ .switch-txt .txt-on { display: inline; }
 .form-switch input:checked ~ .switch-txt .txt-off { display: none; }
 .form-switch input:disabled + .switch,
-.inherit-toggle input:disabled + .switch {
-  opacity: 0.55;
-}
+.inherit-toggle input:disabled + .switch { opacity: 0.4; }
 .form-switch:has(input:disabled),
-.inherit-toggle:has(input:disabled) {
-  cursor: not-allowed;
-  opacity: 0.85;
-}
+.inherit-toggle:has(input:disabled) { color: var(--text-disabled); }
 
-/* ── Method segmented control ────────────────────────────────────── */
+/* ── Method segmented ────────────────────────────────────────────── */
 .methods {
-  display: flex;
-  gap: 0;
-  border: 1px solid var(--line);
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--control-stroke);
+  border-radius: var(--radius-ctrl);
+  background: var(--subtle-selected);
   width: fit-content;
   max-width: var(--field-w);
+  box-sizing: border-box;
 }
 .methods .method {
-  height: var(--ctrl-h);
+  height: calc(var(--ctrl-h) - 6px);
   padding: 0 14px;
   border: 0;
-  border-right: 1px solid var(--line);
-  background: var(--fill);
-  color: var(--line);
+  border-radius: calc(var(--radius-ctrl) - 1px);
+  background: transparent;
+  color: var(--text-primary);
   font: inherit;
   font-size: 13px;
-  cursor: pointer;
+  cursor: default;
+  transition: background var(--motion-faster) ease;
 }
-.methods .method:last-child { border-right: 0; }
-.methods .method:hover { background: var(--soft); }
+.methods .method:hover { background: var(--subtle-hover); }
 .methods .method[aria-pressed="true"] {
-  background: var(--soft);
+  background: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
-.methods .method:focus {
-  outline: 1px solid var(--focus-ring);
-  outline-offset: -1px;
+.methods .method:focus { outline: none; }
+.methods .method:focus-visible {
+  outline: 2px solid var(--focus-inner);
+  outline-offset: 0;
+  box-shadow: 0 0 0 3px var(--accent);
   z-index: 1;
 }
 
-/* ── Lists (full width — not field-w) ────────────────────────────── */
+/* ── Lists ───────────────────────────────────────────────────────── */
 .step-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -395,7 +443,9 @@
 .scroll-list {
   width: 100%;
   box-sizing: border-box;
-  border: 1px dashed var(--line);
+  border: 1px solid var(--control-stroke);
+  border-radius: var(--radius-ctrl);
+  background: var(--card-fill);
   overflow: auto;
 }
 
@@ -403,12 +453,13 @@
 .key-row,
 .proxy-row,
 .style-row {
+  position: relative;
   min-height: var(--row-h);
   height: var(--row-h);
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--line);
+  padding: 6px 10px 6px 14px;
+  border-bottom: 1px solid var(--layer-stroke);
   font-size: 13px;
-  cursor: pointer;
+  cursor: default;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -426,43 +477,62 @@
 .key-row:last-child,
 .proxy-row:last-child,
 .style-row:last-child { border-bottom: 0; }
+.list-row:hover,
+.key-row:hover,
+.proxy-row:hover,
+.style-row:hover { background: var(--subtle-hover); }
 .list-row[aria-selected="true"],
 .key-row[aria-selected="true"],
 .proxy-row[aria-selected="true"],
-.style-row[aria-pressed="true"] {
-  background: var(--soft);
+.style-row[aria-pressed="true"] { background: var(--subtle-selected); }
+.list-row[aria-selected="true"]::before,
+.key-row[aria-selected="true"]::before,
+.proxy-row[aria-selected="true"]::before,
+.style-row[aria-pressed="true"]::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--accent);
 }
 .list-row .name,
 .key-row .name,
 .proxy-row .name,
-.style-row .name { display: block; font-weight: 600; }
+.style-row .name {
+  display: block;
+  font-weight: 600;
+  color: var(--text-primary);
+}
 .list-row small,
 .key-row small,
 .proxy-row small,
 .style-row .kind {
   display: block;
   font-size: 11px;
-  color: var(--mute);
+  color: var(--text-secondary);
   margin-top: 2px;
 }
 .key-row small,
-.proxy-row small { font-family: ui-monospace, monospace; }
+.proxy-row small { font-family: ui-monospace, Consolas, monospace; }
 
-/* ── Single-field modal body (no label column) ───────────────────── */
 .single-field .input,
 .single-field .textarea {
   max-width: none;
   width: 100%;
 }
 
-/* ── Radios (rare; prefer methods / switch) ──────────────────────── */
 .radio-line {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   font-size: 14px;
-  cursor: pointer;
+  cursor: default;
   min-height: var(--ctrl-h);
+  color: var(--text-primary);
 }
 .radios {
   display: flex;

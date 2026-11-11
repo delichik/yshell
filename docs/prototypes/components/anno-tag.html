@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-proto-autoboot>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Component — anno tag</title>
+  <link rel="stylesheet" href="../_theme.css">
+  <link rel="stylesheet" href="../_anno.css">
+  <link rel="stylesheet" href="../_proto.css">
+  <style>
+    body { margin: 0; padding: 16px; background: var(--window-bg); }
+    body.proto-embed-root { padding: 8px; }
+    .region {
+      width: 280px;
+      height: 72px;
+      border: 1px solid var(--card-stroke);
+      border-radius: var(--radius-surface, 8px);
+      background: var(--card-fill);
+    }
+  </style>
+</head>
+<body data-proto-autoboot>
+  <div class="region">
+    <span class="anno-tag" data-q="tag">A · message</span>
+  </div>
+  <script src="../_embed.js"></script>
+  <script>ProtoEmbed.boot({ toggle: false });</script>
+</body>
+</html>

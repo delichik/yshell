@@ -3,35 +3,35 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — Tunnel editor wireframe</title>
+  <title>YShell — Tunnel editor UI</title>
   <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_chrome.css">
   <link rel="stylesheet" href="../_anno.css">
   <style>
     /* Theme.tool-window-standard: 720×580, titlebar 32, padding 28 */
     :root {
       --win-w: 720px;
       --win-h: 580px;
-      --titlebar-h: 40px;
+      --titlebar-h: 32px;
       --pad: 28px;
       --gap: 14px;
-      --bg: #e8e8e8;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       padding: 24px;
       font-family: ui-sans-serif, system-ui, sans-serif;
-      color: var(--line);
-      background: var(--bg);
+      color: var(--text-primary);
+      background: var(--window-bg);
       line-height: 1.45;
     }
     .meta {
       max-width: var(--win-w);
       margin: 0 0 8px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
-    .meta a { color: var(--line); }
+    .meta a { color: var(--text-primary); }
     .meta code { font-size: 12px; }
     .tools {
       display: flex;
@@ -40,47 +40,22 @@
       align-items: center;
       margin: 0 0 12px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
     .tools a {
       height: var(--ctrl-h);
       padding: 0 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font: inherit;
       font-size: 13px;
-      color: var(--line);
+      color: var(--text-primary);
       text-decoration: none;
       display: inline-flex;
       align-items: center;
     }
     .stage { overflow-x: auto; padding-bottom: 8px; }
-    .win {
-      width: var(--win-w);
-      height: var(--win-h);
-      flex-shrink: 0;
-      display: flex;
-      flex-direction: column;
-      background: var(--fill);
-      border: 1px solid var(--line);
-    }
-    .titlebar {
-      height: var(--titlebar-h);
-      flex: 0 0 var(--titlebar-h);
-      display: flex;
-      align-items: center;
-      padding: 0 8px 0 12px;
-      gap: 8px;
-      border-bottom: 1px solid var(--line);
-    }
-    .title { flex: 1; font-size: 12px; font-weight: 600; }
-    .cap {
-      width: 40px;
-      height: 24px;
-      border: 1px solid var(--line);
-      background: transparent;
-      font-size: 10px;
-    }
+    .win { /* size via win-* class; chrome from _chrome.css */ }
     .body {
       flex: 1 1 auto;
       min-height: 0;
@@ -92,7 +67,7 @@
     }
     .form-card {
       flex: 0 0 auto;
-      border: 1px solid var(--line);
+      border: 1px solid var(--card-stroke);
       padding: 20px;
     }
     .section-title {
@@ -110,33 +85,24 @@
     .form-card .hint {
       margin: 12px 0 0;
       padding: 10px 12px;
-      border: 1px dashed var(--line);
+      border: 1px dashed var(--layer-stroke);
       max-width: none;
     }
     .spacer { flex: 1 1 auto; min-height: 8px; }
-    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+    .rule { border: 0; border-top: 1px solid var(--layer-stroke); margin: 0; }
     .actions {
       display: flex;
       justify-content: flex-end;
       gap: 8px;
     }
-    .legend {
-      max-width: var(--win-w);
-      margin: 16px 0 0;
-      padding: 12px 14px;
-      border: 1px dashed var(--line);
-      font-size: 12px;
-      color: var(--mute);
-      line-height: 1.55;
-    }
-    .legend strong { color: var(--line); }
-    .legend a { color: var(--line); }
-    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+    .legend a { color: var(--text-primary); }
     .panel[hidden] { display: none !important; }
   </style>
 </head>
-<body>
-  <p class="meta">Tunnel editor · <code>720×580</code> · 自 Tunnels 面板 Add。 <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>。</p>
+<body class="proto-body">
+  
+  <label class="proto-theme-toggle"><input type="checkbox" id="theme-toggle" /> Dark theme</label>
+<p class="meta">Tunnel editor · <code>720×580</code> · 自 Tunnels 面板 Add。 <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>。</p>
 
   <div class="tools">
     <span>Type preview:</span>
@@ -146,7 +112,7 @@
   </div>
 
   <div class="stage">
-    <div class="win" role="dialog" aria-labelledby="winTitle">
+    <div class="win win-standard" role="dialog" aria-labelledby="winTitle">
       <div class="titlebar">
         <div class="title" id="winTitle">Add Tunnel</div>
         <button type="button" class="cap" tabindex="-1" aria-hidden="true">_</button>
@@ -236,5 +202,7 @@
       syncType("local");
     })();
   </script>
+<script src="../_proto.js"></script>
+<script>enableProtoThemeToggle();</script>
 </body>
 </html>

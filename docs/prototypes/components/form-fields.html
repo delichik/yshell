@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-proto-autoboot>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Component — form fields</title>
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_proto.css">
+  <style>
+    body { margin: 0; padding: 12px; background: var(--card-fill); color: var(--text-primary); max-width: 520px; }
+    body.proto-embed-root { padding: 8px 12px; }
+  </style>
+</head>
+<body data-proto-autoboot>
+  <div class="form-row">
+    <span class="lbl" data-q="lbl1">Name</span>
+    <input class="input" data-q="val1" value="prod-edge" aria-label="Name" />
+  </div>
+  <div class="form-row">
+    <span class="lbl" data-q="lbl2">Port</span>
+    <input class="input input-port" data-q="val2" value="22" inputmode="numeric" aria-label="Port" />
+  </div>
+  <div class="form-row">
+    <span class="lbl" data-q="lbl3">Protocol</span>
+    <select class="select" aria-label="Protocol">
+      <option selected>SOCKS5</option>
+      <option>HTTP CONNECT</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <span class="lbl" data-q="lbl4">Password</span>
+    <input class="input" type="password" placeholder="Empty = ask on connect" aria-label="Password" />
+  </div>
+  <div class="form-row">
+    <span class="lbl" data-q="lbl5">Enabled</span>
+    <label class="form-switch">
+      <input type="checkbox" checked aria-label="Enabled" />
+      <span class="switch" aria-hidden="true"></span>
+      <span class="switch-txt"><span class="txt-on">On</span><span class="txt-off">Off</span></span>
+    </label>
+  </div>
+  <div class="form-row top">
+    <span class="lbl" data-q="lbl6">Notes</span>
+    <textarea class="textarea" data-q="val6" aria-label="Notes">Tall value — label top pad unchanged.</textarea>
+  </div>
+  <p class="hint hint-indent" data-q="hint">hint-indent 与控件列左缘对齐。</p>
+  <script src="../_embed.js"></script>
+  <script>ProtoEmbed.boot({ toggle: false });</script>
+</body>
+</html>

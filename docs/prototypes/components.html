@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Prototype components</title>
+  <link rel="stylesheet" href="_theme.css">
+  <link rel="stylesheet" href="_chrome.css">
+  <link rel="stylesheet" href="_proto.css">
+  <style>
+    .page { max-width: 1200px; margin: 0 auto; padding: 24px 20px 64px; }
+    h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
+    .lead { margin: 0 0 16px; font-size: 14px; color: var(--text-secondary); max-width: 760px; }
+    .lead a { color: var(--accent); font-weight: 600; text-decoration: none; }
+    h2 {
+      margin: 28px 0 8px;
+      font-size: 15px;
+      font-weight: 600;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--layer-stroke);
+    }
+    .map {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 0 0 16px;
+    }
+    .map th, .map td {
+      text-align: left;
+      padding: 8px 10px;
+      border: 1px solid var(--layer-stroke);
+      vertical-align: top;
+    }
+    .map th { background: var(--subtle-selected); font-weight: 600; }
+    .map code { font-size: 12px; }
+    .map a { color: var(--accent); font-weight: 600; text-decoration: none; }
+    .note { margin: 0 0 10px; font-size: 12px; color: var(--text-secondary); line-height: 1.45; }
+    .note code { font-size: 11px; }
+    .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; margin-bottom: 12px; }
+  </style>
+</head>
+<body class="proto-body">
+  <div class="page">
+    <h1>Prototype components</h1>
+    <p class="lead">
+      一组件一 HTML；此处用定高 <strong>iframe</strong> 引用真源。
+      Query：<code>theme</code> · <code>embed=1</code> · <code>tier</code> · 以及各页 <code>data-q</code> / <code>data-q-href</code>。
+      样式：<a href="_chrome.css">_chrome.css</a> · <a href="form.css">form.css</a> ·
+      <a href="_embed.js">_embed.js</a> · ← <a href="index.html">hub</a>
+    </p>
+
+    <label class="proto-theme-toggle">
+      <input type="checkbox" id="theme-toggle" />
+      Dark theme
+    </label>
+
+    <h2>对照实现（本轮不改 ui/）</h2>
+    <table class="map">
+      <thead>
+        <tr>
+          <th>组件 URL</th>
+          <th>CSS</th>
+          <th>Slint</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><a href="components/tool-window.html"><code>components/tool-window.html</code></a></td>
+          <td><code>.win</code> <code>.titlebar</code> <code>.win-body</code> <code>.win-footer</code></td>
+          <td><code>ui/components/tool_window_chrome.slint</code></td>
+        </tr>
+        <tr>
+          <td><a href="components/titlebar-tool.html"><code>components/titlebar-tool.html</code></a></td>
+          <td><code>.titlebar</code> 仅关闭</td>
+          <td><code>tool_window_chrome</code> + <code>window_caption.slint</code></td>
+        </tr>
+        <tr>
+          <td><a href="components/titlebar-main.html"><code>components/titlebar-main.html</code></a></td>
+          <td><code>.titlebar</code> 三钮</td>
+          <td><code>window_caption.slint</code></td>
+        </tr>
+        <tr>
+          <td><a href="components/nav-pane.html"><code>components/nav-pane.html</code></a></td>
+          <td><code>.nav-pane</code> <code>.nav-item</code></td>
+          <td><code>WinNavItem</code> · <code>basic/controls.slint</code></td>
+        </tr>
+        <tr>
+          <td><a href="components/menubar.html"><code>components/menubar.html</code></a></td>
+          <td><code>.menubar</code></td>
+          <td><code>menu_bar.slint</code></td>
+        </tr>
+        <tr>
+          <td><a href="components/tabbar.html"><code>components/tabbar.html</code></a></td>
+          <td><code>.tabbar</code> <code>.tab</code></td>
+          <td><code>workspace_tab_bar.slint</code></td>
+        </tr>
+        <tr>
+          <td><a href="components/statusbar.html"><code>components/statusbar.html</code></a></td>
+          <td><code>.statusbar</code></td>
+          <td><code>status_bar.slint</code></td>
+        </tr>
+        <tr>
+          <td><a href="components/flyout.html"><code>components/flyout.html</code></a></td>
+          <td><code>.flyout</code></td>
+          <td><code>menu_popup.slint</code></td>
+        </tr>
+        <tr>
+          <td><a href="components/infobar.html"><code>components/infobar.html</code></a></td>
+          <td><code>.infobar</code></td>
+          <td><code>WinInfoBar</code> · <code>basic/controls.slint</code></td>
+        </tr>
+        <tr>
+          <td><a href="components/buttons.html"><code>components/buttons.html</code></a></td>
+          <td><code>.btn</code> <code>.btn-accent</code> <code>.btn-danger</code> <code>.btn-subtle</code> <code>.btn-icon</code></td>
+          <td><code>WinButton</code> · <code>basic/controls.slint</code></td>
+        </tr>
+        <tr>
+          <td><a href="components/form-fields.html"><code>components/form-fields.html</code></a></td>
+          <td><code>.form-row</code> <code>.input</code> <code>.select</code> <code>.textarea</code> <code>.form-switch</code></td>
+          <td><code>WinTextInput</code> / <code>WinComboBox</code> / <code>WinSwitch</code></td>
+        </tr>
+        <tr>
+          <td><a href="components/method-seg.html"><code>components/method-seg.html</code></a></td>
+          <td><code>.method</code></td>
+          <td><code>WinPivotBar</code> / segmented</td>
+        </tr>
+        <tr>
+          <td><a href="forms.html"><code>forms.html</code></a></td>
+          <td>完整控件画廊（同上 + list / sidecar）</td>
+          <td>同上 + <code>WinListRow</code> …</td>
+        </tr>
+        <tr>
+          <td><a href="components/anno-legend.html"><code>components/anno-legend.html</code></a></td>
+          <td><code>.legend</code> <code>.anno</code> · <code>_anno.css</code></td>
+          <td>设计稿注释（无对应 Slint；实现勿抄进产品 UI）</td>
+        </tr>
+        <tr>
+          <td><a href="components/anno-callout.html"><code>components/anno-callout.html</code></a></td>
+          <td><code>.callouts</code> <code>.callout</code> <code>.anno-tag</code></td>
+          <td>同上</td>
+        </tr>
+        <tr>
+          <td><a href="components/anno-tag.html"><code>components/anno-tag.html</code></a></td>
+          <td><code>.anno-tag</code> / <code>.tag</code></td>
+          <td>同上</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Annotations（通用注释）</h2>
+    <p class="note">格式 <code>A · Short name</code>。样式只在 <a href="_anno.css"><code>_anno.css</code></a>；说明页 <a href="annotations.html">annotations.html</a>。功能页禁止再抄 <code>.legend</code> / <code>.callout</code>。</p>
+    <div class="row">
+      <iframe class="proto-embed proto-embed--anno-tag" data-proto-embed title="anno-tag"
+        src="components/anno-tag.html?embed=1&amp;tag=A%20%C2%B7%20message"></iframe>
+      <iframe class="proto-embed proto-embed--anno-legend" data-proto-embed title="anno-legend"
+        src="components/anno-legend.html?embed=1"></iframe>
+    </div>
+    <iframe class="proto-embed proto-embed--anno-callout" data-proto-embed title="anno-callout"
+      src="components/anno-callout.html?embed=1"></iframe>
+
+    <h2>Buttons · Form fields · Method</h2>
+    <p class="note">唯一视觉源 <a href="form.css"><code>form.css</code></a>。功能页禁止本地重写 <code>.btn</code> / <code>.input</code> / <code>.form-row</code>。</p>
+    <div class="row">
+      <iframe class="proto-embed proto-embed--buttons" data-proto-embed title="buttons"
+        src="components/buttons.html?embed=1"></iframe>
+    </div>
+    <div class="row">
+      <iframe class="proto-embed proto-embed--fields" data-proto-embed title="form-fields"
+        src="components/form-fields.html?embed=1"></iframe>
+      <iframe class="proto-embed proto-embed--method" data-proto-embed title="method"
+        src="components/method-seg.html?embed=1"></iframe>
+    </div>
+
+    <h2>Tool window</h2>
+    <p class="note">
+      示例 query：<code>tier=compact&amp;title=Disconnect&amp;message=…&amp;primary=Disconnect</code>。
+      实现：<code>ToolWindowChrome</code>。
+    </p>
+    <iframe
+      class="proto-embed proto-embed--compact"
+      data-proto-embed
+      title="tool-window"
+      src="components/tool-window.html?embed=1&amp;tier=compact&amp;title=Disconnect&amp;message=Close%20the%20active%20session%3F&amp;primary=Disconnect&amp;secondary=Cancel"
+    ></iframe>
+
+    <h2>Titlebars</h2>
+    <div class="row">
+      <div>
+        <p class="note">Tool · 仅关闭</p>
+        <iframe class="proto-embed proto-embed--titlebar" data-proto-embed title="titlebar-tool"
+          src="components/titlebar-tool.html?embed=1&amp;title=Settings"></iframe>
+      </div>
+      <div>
+        <p class="note">Main · 三钮</p>
+        <iframe class="proto-embed proto-embed--titlebar" data-proto-embed title="titlebar-main"
+          src="components/titlebar-main.html?embed=1&amp;title=YShell%20%E2%80%94%20web-01"></iframe>
+      </div>
+    </div>
+
+    <h2>NavigationView</h2>
+    <p class="note">实现：<code>WinNavItem</code></p>
+    <iframe class="proto-embed proto-embed--nav" data-proto-embed title="nav-pane"
+      src="components/nav-pane.html?embed=1"></iframe>
+
+    <h2>MenuBar · TabBar · StatusBar</h2>
+    <div class="row" style="flex-direction:column">
+      <iframe class="proto-embed proto-embed--menubar" data-proto-embed title="menubar"
+        src="components/menubar.html?embed=1"></iframe>
+      <iframe class="proto-embed proto-embed--tabbar" data-proto-embed title="tabbar"
+        src="components/tabbar.html?embed=1&amp;tab1=web-01&amp;tab2=sftp-01"></iframe>
+      <iframe class="proto-embed proto-embed--statusbar" data-proto-embed title="statusbar"
+        src="components/statusbar.html?embed=1&amp;left=Connected%20%C2%B7%2012ms"></iframe>
+    </div>
+
+    <h2>Flyout · InfoBar</h2>
+    <div class="row">
+      <iframe class="proto-embed proto-embed--flyout" data-proto-embed title="flyout"
+        src="components/flyout.html?embed=1"></iframe>
+      <iframe class="proto-embed proto-embed--infobar" data-proto-embed title="infobar"
+        src="components/infobar.html?embed=1&amp;title=Sync%20input&amp;body=Keystrokes%20go%20to%20all%20sessions."></iframe>
+    </div>
+
+    <h2>Forms</h2>
+    <p class="note">控件真源仍是 <a href="forms.html">forms.html</a>（完整画廊，此处链过去，不嵌整页）。</p>
+  </div>
+  <script src="_embed.js"></script>
+  <script>ProtoEmbed.boot();</script>
+</body>
+</html>

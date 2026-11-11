@@ -3,52 +3,46 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — Known hosts wireframe</title>
+  <title>YShell — Known hosts UI</title>
   <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_chrome.css">
   <link rel="stylesheet" href="../_anno.css">
   <style>
     :root {
-      --win-w: 1100px; --win-h: 820px; --titlebar-h: 40px; --pad: 28px; --gap: 12px;
+      --win-w: 1100px; --win-h: 820px; --titlebar-h: 32px; --pad: 28px; --gap: 12px;
       --list-w: 380px;
     }
     * { box-sizing: border-box; }
-    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
-    .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--text-primary); background: var(--window-bg); }
+    .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--text-secondary); line-height: 1.45; }
     .meta a { color: inherit; }
     .stage { overflow-x: auto; padding-bottom: 8px; }
-    .win { width: var(--win-w); height: var(--win-h); flex-shrink: 0; display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line); }
-    .titlebar {
-      height: var(--titlebar-h); flex: 0 0 var(--titlebar-h);
-      display: flex; align-items: center; padding: 0 8px 0 12px; gap: 8px;
-      border-bottom: 1px solid var(--line);
-    }
-    .title { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .cap { width: 40px; height: 24px; border: 1px solid var(--line); background: transparent; font-size: 10px; color: var(--line); padding: 0; }
+    .win { /* size via win-* class; chrome from _chrome.css */ }
     .body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: var(--pad); gap: var(--gap); overflow: hidden; }
     .toolbar { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .toolbar .grow { flex: 1; }
     .split { flex: 1 1 auto; min-height: 0; display: flex; gap: 16px; overflow: hidden; }
     .col-left { width: var(--list-w); flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; gap: 8px; }
     .col-right { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
-    .scroll-box { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px dashed var(--line); padding: 4px; }
+    .scroll-box { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px dashed var(--layer-stroke); padding: 4px; }
     .entry {
-      min-height: var(--row-h); height: var(--row-h); padding: 6px 10px; border-bottom: 1px solid var(--line);
+      min-height: var(--row-h); height: var(--row-h); padding: 6px 10px; border-bottom: 1px solid var(--layer-stroke);
       font-size: 13px; cursor: pointer; display: flex; flex-direction: column; justify-content: center;
     }
-    .entry[aria-selected="true"] { background: var(--soft); }
+    .entry[aria-selected="true"] { background: var(--subtle-hover); }
     .entry .host { display: block; font-weight: 600; }
-    .entry .fp { display: block; font-family: ui-monospace, monospace; font-size: 11px; color: var(--mute); margin-top: 2px; }
+    .entry .fp { display: block; font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
     .detail-panel {
       flex: 1 1 auto; min-height: 0; overflow: auto;
-      border: 1px solid var(--line); padding: 16px;
+      border: 1px solid var(--card-stroke); padding: 16px;
     }
     .detail-row:last-child { border-bottom: 0; }
     .spacer { flex: 1 1 auto; min-height: 8px; }
-    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+    .rule { border: 0; border-top: 1px solid var(--layer-stroke); margin: 0; }
     .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
     .flyout {
       display: none; position: fixed; z-index: 5; min-width: 180px;
-      background: var(--fill); border: 1px solid var(--line); padding: 4px 0; font-size: 13px;
+      background: var(--card-fill); border: 1px solid var(--card-stroke); padding: 4px 0; font-size: 13px;
     }
     .flyout.open { display: block; }
     .flyout a, .flyout button {
@@ -56,18 +50,18 @@
       border: 0; background: transparent; font: inherit; font-size: 13px; text-align: left;
       cursor: pointer; color: inherit; text-decoration: none;
     }
-    .flyout a:hover, .flyout button:hover { background: var(--soft); }
+    .flyout a:hover, .flyout button:hover { background: var(--subtle-hover); }
     .flyout .danger { color: #800; }
     .flyout .sep { height: 1px; background: var(--line); margin: 4px 0; }
-    .legend { max-width: var(--win-w); margin: 20px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
-    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
   </style>
 </head>
-<body>
-  <p class="meta">Known Hosts · 清单 host:port + 指纹；右栏只读详情。 <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>。</p>
+<body class="proto-body">
+  
+  <label class="proto-theme-toggle"><input type="checkbox" id="theme-toggle" /> Dark theme</label>
+<p class="meta">Known Hosts · 清单 host:port + 指纹；右栏只读详情。 <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>。</p>
 
   <div class="stage">
-    <div class="win" role="dialog">
+    <div class="win win-wide" role="dialog">
       <div class="titlebar">
         <div class="title">Known Hosts</div>
         <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
@@ -78,7 +72,7 @@
           <a class="btn btn-icon" href="modals.html#import" title="Import" aria-label="Import"><span class="i i-import" aria-hidden="true"></span></a>
           <a class="btn btn-icon" href="modals.html#export" title="Export" aria-label="Export"><span class="i i-export" aria-hidden="true"></span></a>
           <span class="grow"></span>
-          <span style="font-size:12px;color:var(--mute)">3 hosts · 4 keys</span>
+          <span style="font-size:12px;color: var(--text-secondary)">3 hosts · 4 keys</span>
         </div>
         <div class="split">
           <div class="col-left">
@@ -220,5 +214,7 @@
       });
     })();
   </script>
+<script src="../_proto.js"></script>
+<script>enableProtoThemeToggle();</script>
 </body>
 </html>

@@ -3,58 +3,52 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — Private keys wireframe</title>
+  <title>YShell — Private keys UI</title>
   <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_chrome.css">
   <link rel="stylesheet" href="../_anno.css">
   <style>
     :root {
-      --win-w: 1100px; --win-h: 820px; --titlebar-h: 40px; --pad: 28px; --gap: 12px;
+      --win-w: 1100px; --win-h: 820px; --titlebar-h: 32px; --pad: 28px; --gap: 12px;
       --list-w: 380px;
     }
     * { box-sizing: border-box; }
-    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
-    .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--text-primary); background: var(--window-bg); }
+    .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--text-secondary); line-height: 1.45; }
     .meta a { color: inherit; }
-    .tools { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--mute); margin-bottom: 10px; }
-    .tools button { height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line); background: var(--fill); font: inherit; cursor: pointer; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; }
+    .tools button { height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--card-stroke); background: var(--card-fill); font: inherit; cursor: pointer; }
     .stage { overflow-x: auto; padding-bottom: 8px; }
-    .win { width: var(--win-w); height: var(--win-h); flex-shrink: 0; display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line); }
-    .titlebar {
-      height: var(--titlebar-h); flex: 0 0 var(--titlebar-h);
-      display: flex; align-items: center; padding: 0 8px 0 12px; gap: 8px;
-      border-bottom: 1px solid var(--line);
-    }
-    .title { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .cap { width: 40px; height: 24px; border: 1px solid var(--line); background: transparent; font-size: 10px; color: var(--line); padding: 0; }
+    .win { /* size via win-* class; chrome from _chrome.css */ }
     .body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: var(--pad); gap: var(--gap); overflow: hidden; }
     .toolbar { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .toolbar .grow { flex: 1; }
     .split { flex: 1 1 auto; min-height: 0; display: flex; gap: 16px; overflow: hidden; }
     .col-left { width: var(--list-w); flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; gap: 8px; }
     .col-right { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
-    .scroll-list { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px dashed var(--line); }
+    .scroll-list { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px dashed var(--layer-stroke); }
     .empty {
       flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 12px; padding: 24px; text-align: center; font-size: 13px; color: var(--mute);
-      border: 1px dashed var(--line);
+      gap: 12px; padding: 24px; text-align: center; font-size: 13px; color: var(--text-secondary);
+      border: 1px dashed var(--layer-stroke);
     }
     .empty[hidden], .scroll-list[hidden], .detail[hidden], .detail-empty[hidden] { display: none !important; }
-    .detail { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px solid var(--line); padding: 16px; }
+    .detail { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px solid var(--card-stroke); padding: 16px; }
     .detail-empty {
       flex: 1 1 auto; min-height: 0;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 8px; padding: 24px; text-align: center; font-size: 13px; color: var(--mute);
-      border: 1px dashed var(--line);
+      gap: 8px; padding: 24px; text-align: center; font-size: 13px; color: var(--text-secondary);
+      border: 1px dashed var(--layer-stroke);
     }
     .detail .detail-row { grid-template-columns: 110px minmax(0, 1fr); }
     .section-gap { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--soft); }
     .row-btns { display: flex; gap: 8px; flex-wrap: wrap; }
     .spacer { flex: 1 1 auto; min-height: 8px; }
-    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+    .rule { border: 0; border-top: 1px solid var(--layer-stroke); margin: 0; }
     .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
     .flyout {
       display: none; position: fixed; z-index: 5; min-width: 180px;
-      background: var(--fill); border: 1px solid var(--line); padding: 4px 0; font-size: 13px;
+      background: var(--card-fill); border: 1px solid var(--card-stroke); padding: 4px 0; font-size: 13px;
     }
     .flyout.open { display: block; }
     .flyout a, .flyout button {
@@ -62,22 +56,22 @@
       border: 0; background: transparent; font: inherit; font-size: 13px; text-align: left;
       cursor: pointer; color: inherit; text-decoration: none;
     }
-    .flyout a:hover, .flyout button:hover { background: var(--soft); }
+    .flyout a:hover, .flyout button:hover { background: var(--subtle-hover); }
     .flyout .danger { color: #800; }
     .flyout .sep { height: 1px; background: var(--line); margin: 4px 0; }
-    .legend { max-width: var(--win-w); margin: 20px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
-    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
   </style>
 </head>
-<body>
-  <p class="meta">Private Keys · Generate / Import；右栏公钥；空列表无详情。 <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>。</p>
+<body class="proto-body">
+  
+  <label class="proto-theme-toggle"><input type="checkbox" id="theme-toggle" /> Dark theme</label>
+<p class="meta">Private Keys · Generate / Import；右栏公钥；空列表无详情。 <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>。</p>
   <div class="tools">
     <button type="button" id="demo-list" aria-pressed="true" title="有密钥">有密钥</button>
     <button type="button" id="demo-empty" aria-pressed="false" title="空列表">空列表</button>
   </div>
 
   <div class="stage">
-    <div class="win" role="dialog">
+    <div class="win win-wide" role="dialog">
       <div class="titlebar">
         <div class="title">Private Keys</div>
         <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
@@ -87,7 +81,7 @@
           <a class="btn btn-primary btn-icon" href="modals.html#generate" title="Generate" aria-label="Generate"><span class="i i-generate" aria-hidden="true"></span></a>
           <a class="btn btn-icon" href="modals.html#import-file" title="Import" aria-label="Import"><span class="i i-import" aria-hidden="true"></span></a>
           <span class="grow"></span>
-          <span style="font-size:12px;color:var(--mute)" id="summary">3 keys</span>
+          <span style="font-size:12px;color: var(--text-secondary)" id="summary">3 keys</span>
         </div>
         <div class="split">
           <div class="col-left">
@@ -243,5 +237,7 @@
       btnEmpty.addEventListener("click", function () { setEmpty(true); });
     })();
   </script>
+<script src="../_proto.js"></script>
+<script>enableProtoThemeToggle();</script>
 </body>
 </html>

@@ -3,22 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — UI prototypes</title>
+  <title>YShell — UI design drafts</title>
+  <link rel="stylesheet" href="_theme.css">
   <style>
-    :root {
-      --line: #111;
-      --fill: #fff;
-      --mute: #555;
-      --soft: #f0f0f0;
-      --bg: #e8e8e8;
-      --nav-w: 300px;
-    }
+    :root { --hub-nav-w: 300px; }
     * { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; }
     body {
-      font-family: ui-sans-serif, system-ui, sans-serif;
-      color: var(--line);
-      background: var(--bg);
+      font-family: "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+      color: var(--text-primary);
+      background: var(--window-bg);
       display: flex;
       flex-direction: column;
       min-height: 100%;
@@ -26,8 +20,8 @@
     .top {
       flex: 0 0 auto;
       padding: 12px 16px;
-      border-bottom: 1px solid var(--line);
-      background: var(--fill);
+      border-bottom: 1px solid var(--layer-stroke);
+      background: var(--card-fill);
     }
     .top h1 {
       margin: 0 0 4px;
@@ -37,20 +31,20 @@
     .top .lead {
       margin: 0;
       font-size: 12px;
-      color: var(--mute);
+      color: var(--text-secondary);
       line-height: 1.4;
     }
-    .top .lead a { color: var(--line); }
+    .top .lead a { color: var(--accent); font-weight: 600; text-decoration: none; }
     .shell {
       flex: 1 1 auto;
       min-height: 0;
       display: flex;
     }
     .nav {
-      width: var(--nav-w);
+      width: var(--hub-nav-w);
       flex-shrink: 0;
-      border-right: 1px solid var(--line);
-      background: var(--fill);
+      border-right: 1px solid var(--layer-stroke);
+      background: var(--card-fill);
       overflow: auto;
       padding: 8px 0 24px;
     }
@@ -61,7 +55,7 @@
       font-weight: 600;
       letter-spacing: 0.04em;
       text-transform: uppercase;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
     .group .size {
       font-weight: 400;
@@ -80,12 +74,11 @@
       cursor: pointer;
       color: inherit;
     }
-    .nav button.item:hover { background: var(--soft); }
+    .nav button.item:hover { background: var(--subtle-hover); }
     .nav button.item[aria-current="true"] {
-      background: var(--soft);
+      background: var(--subtle-selected);
       font-weight: 600;
-      outline: 1px solid var(--line);
-      outline-offset: -1px;
+      box-shadow: inset 3px 0 0 var(--accent);
     }
     .nav button.item .name {
       display: block;
@@ -96,7 +89,7 @@
       display: block;
       margin-top: 2px;
       font-size: 11px;
-      color: var(--mute);
+      color: var(--text-secondary);
       font-weight: 400;
       line-height: 1.35;
     }
@@ -106,7 +99,7 @@
       min-height: 0;
       display: flex;
       flex-direction: column;
-      background: #ddd;
+      background: var(--window-bg);
     }
     .stage-bar {
       flex: 0 0 auto;
@@ -114,16 +107,18 @@
       align-items: center;
       gap: 10px;
       padding: 8px 12px;
-      border-bottom: 1px solid var(--line);
-      background: var(--fill);
+      border-bottom: 1px solid var(--layer-stroke);
+      background: var(--card-fill);
       font-size: 12px;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
-    .stage-bar strong { color: var(--line); font-weight: 600; }
+    .stage-bar strong { color: var(--text-primary); font-weight: 600; }
     .stage-bar a {
-      color: var(--line);
+      color: var(--accent);
       margin-left: auto;
       font-size: 12px;
+      text-decoration: none;
+      font-weight: 600;
     }
     .frame-wrap {
       flex: 1 1 auto;
@@ -136,18 +131,20 @@
       width: 100%;
       height: 100%;
       border: 0;
-      background: var(--bg);
+      background: var(--window-bg);
     }
   </style>
 </head>
 <body>
   <header class="top">
-    <h1>YShell UI prototypes</h1>
+    <h1>YShell UI design drafts</h1>
     <p class="lead">
-      左侧选原型，右侧 iframe 预览。规则：<code>docs/agents/prototypes.md</code> ·
-      注释约定：<a href="annotations.html">annotations</a> ·
-      表单控件：<a href="forms.html">forms</a>（样式源 <code>form.css</code>）。
-      也可 <a id="open-tab" href="#" target="_blank" rel="noopener">新标签打开当前项</a>。
+      WinUI 3 设计稿目录：左侧选页，右侧 iframe 预览。规则：<code>docs/agents/prototypes.md</code> ·
+      注释：<a href="annotations.html">annotations</a> ·
+      控件：<a href="forms.html">forms</a> ·
+      壳层：<a href="chrome.html">chrome</a>。
+      条带 Fluent 32（实现 menubar 40 为缺口）。
+      <a id="open-tab" href="#" target="_blank" rel="noopener">新标签打开当前项</a>。
     </p>
   </header>
   <div class="shell">
@@ -172,7 +169,9 @@
           size: "shared",
           items: [
             { href: "annotations.html", name: "annotations", desc: "注释格式 · 通用 chrome/spacer/footer" },
-            { href: "forms.html", name: "forms", desc: "表单控件规范 · form.css 唯一样式源" }
+            { href: "components.html", name: "components", desc: "组件库 · iframe 真源 + Slint 对照 + query" },
+            { href: "forms.html", name: "forms", desc: "表单控件设计稿 · form.css" },
+            { href: "chrome.html", name: "chrome", desc: "窗壳画廊（逐步改为 iframe components/*）" }
           ]
         },
         {

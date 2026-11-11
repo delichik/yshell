@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-proto-autoboot>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Component — nav-pane</title>
+  <link rel="stylesheet" href="../_chrome.css">
+  <link rel="stylesheet" href="../_proto.css">
+  <style>
+    body { margin: 0; padding: 0; background: transparent; height: 100%; }
+    .nav-pane { height: 100%; box-sizing: border-box; }
+  </style>
+</head>
+<body data-proto-autoboot>
+  <nav class="nav-pane" aria-label="Sections">
+    <a class="nav-item" data-q-href="item1" href="#" aria-current="page" title="General">
+      <span class="i i-settings" aria-hidden="true"></span><span data-q="item1">General</span>
+    </a>
+    <a class="nav-item" data-q-href="item2" href="#" title="Appearance">
+      <span class="i i-eye" aria-hidden="true"></span><span data-q="item2">Appearance</span>
+    </a>
+    <a class="nav-item" data-q-href="item3" href="#" title="Terminal">
+      <span class="i i-terminal" aria-hidden="true"></span><span data-q="item3">Terminal</span>
+    </a>
+    <a class="nav-item" data-q-href="item4" href="#" title="Security">
+      <span class="i i-shield" aria-hidden="true"></span><span data-q="item4">Security</span>
+    </a>
+    <a class="nav-item" href="#" aria-disabled="true" title="Not this version">
+      <span class="i i-edit" aria-hidden="true"></span><span data-q="disabled">Shortcuts</span>
+    </a>
+  </nav>
+  <script src="../_embed.js"></script>
+  <script>ProtoEmbed.boot({ toggle: false });</script>
+</body>
+</html>

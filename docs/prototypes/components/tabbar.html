@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-proto-autoboot>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Component — tabbar</title>
+  <link rel="stylesheet" href="../_chrome.css">
+  <link rel="stylesheet" href="../_proto.css">
+  <style>
+    body { margin: 0; background: var(--mica-tint); }
+  </style>
+</head>
+<body data-proto-autoboot>
+  <div class="tabbar" role="tablist">
+    <button type="button" class="tab" aria-selected="true" data-q-title="tab1" title="web-01">
+      <span data-q="tab1">web-01</span>
+      <span class="tab-x" title="Close" aria-label="Close"><span class="i i-close" aria-hidden="true"></span></span>
+    </button>
+    <button type="button" class="tab" aria-selected="false" data-q-title="tab2" title="sftp-01">
+      <span data-q="tab2">sftp-01</span>
+    </button>
+    <button type="button" class="tab-add" title="New tab" aria-label="New tab">
+      <span class="i i-plus" aria-hidden="true"></span>
+    </button>
+  </div>
+  <script src="../_embed.js"></script>
+  <script>ProtoEmbed.boot({ toggle: false });</script>
+</body>
+</html>

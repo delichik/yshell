@@ -4,177 +4,121 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YShell — Settings hub</title>
-  <link rel="stylesheet" href="../_icons.css">
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_chrome.css">
+  <link rel="stylesheet" href="../_proto.css">
   <style>
-    :root {
-      --win-w: 1100px; --win-h: 820px; --titlebar-h: 40px; --pad: 28px; --gap: 12px;
-      --ctrl-h: 32px; --nav-w: 240px; --nav-item-h: 40px;
-      --line: #111; --fill: #fff; --mute: #555; --soft: #f0f0f0; --panel: #f4f4f4;
-    }
-    * { box-sizing: border-box; }
-    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
-    .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); line-height: 1.45; }
-    .meta a { color: var(--line); font-weight: 600; }
-    .meta code { font-size: 12px; }
-    .stage { overflow-x: auto; padding-bottom: 8px; }
-    .win {
-      width: var(--win-w); height: var(--win-h); flex-shrink: 0;
-      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
-    }
-    .titlebar {
-      height: var(--titlebar-h); flex: 0 0 var(--titlebar-h);
-      display: flex; align-items: center; padding: 0 8px 0 12px; gap: 8px;
-      border-bottom: 1px solid var(--line);
-    }
-    .title { flex: 1; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .cap { width: 40px; height: 24px; border: 1px solid var(--line); background: transparent; font-size: 10px; color: var(--line); padding: 0; }
-    .body {
-      flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
-      padding: var(--pad); gap: var(--gap); overflow: hidden;
-    }
-    .main { flex: 1 1 auto; min-height: 0; display: flex; gap: var(--gap); overflow: hidden; }
-    .nav-panel {
-      width: var(--nav-w); flex-shrink: 0; border: 1px solid var(--line); background: var(--panel);
-      padding: 8px; display: flex; flex-direction: column; gap: 2px;
-    }
-    a.nav-item, .nav-dis {
-      height: var(--nav-item-h); display: flex; align-items: center; padding: 0 10px;
-      font: inherit; font-size: 14px; text-decoration: none; color: inherit; box-sizing: border-box;
-    }
-    a.nav-item:hover { background: var(--soft); }
-    a.nav-item[aria-current="page"] { background: var(--soft); font-weight: 600; }
-    .nav-dis { opacity: 0.5; color: var(--mute); font-size: 13px; cursor: not-allowed; }
-    .form-card {
-      flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto;
-      border: 1px solid var(--line); padding: 20px;
-      display: flex; flex-direction: column; gap: 12px;
-    }
     .region {
-      border: 1px dashed var(--line); padding: 14px 16px;
-      display: flex; flex-direction: column; gap: 6px;
+      border: 1px dashed var(--layer-stroke);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
     .region .rid { font-size: 13px; font-weight: 700; }
-    .region .hint { font-size: 12px; color: var(--mute); line-height: 1.45; }
-    .region a { font-size: 13px; color: var(--line); font-weight: 600; }
+    .region .hint { font-size: 12px; color: var(--text-secondary); line-height: 1.45; }
+    .region a { font-size: 13px; color: var(--accent); font-weight: 600; text-decoration: none; }
     .region[hidden] { display: none !important; }
-    .spacer { flex: 1 1 auto; min-height: 8px; }
-    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
-    .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-    .btn {
-      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line); background: var(--fill);
-      font: inherit; font-size: 14px; cursor: pointer;
+    .nav-dis {
+      opacity: 0.5;
+      color: var(--text-secondary);
+      font-size: 13px;
+      height: var(--nav-item-h);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      cursor: not-allowed;
     }
-    .btn-primary { background: var(--soft); font-weight: 600; }
-    .legend {
-      max-width: var(--win-w); margin: 20px 0 0; padding: 12px 14px; border: 1px dashed var(--line);
-      font-size: 12px; color: var(--mute); line-height: 1.55;
-    }
-    .legend strong { color: var(--line); }
   </style>
 </head>
-<body>
-  <p class="meta">
-    Settings <strong>整壳 hub</strong> · <code>1100×820</code> ·
-    <strong>本页只标分区</strong>，表单细节在 <code>sections/*</code>。
-    <a href="../index.html">hub</a>
+<body class="proto-body">
+  <label class="proto-theme-toggle"><input type="checkbox" id="theme-toggle" /> Dark theme</label>
+  <p class="proto-meta">
+    Settings 整壳 hub · <code>1100×820</code> · 壳用共享 class；分区细节在 <code>sections/*</code>。
+    Nav 样例真源：<a href="../components/nav-pane.html">components/nav-pane</a> ·
+    <a href="../components.html">components</a> · <a href="../index.html">hub</a>
   </p>
-
-  <div class="stage">
-    <div class="win" role="dialog" aria-labelledby="win-title">
+  <div class="proto-stage">
+    <div class="win win-wide" role="dialog" aria-labelledby="win-title">
       <div class="titlebar">
-        <div class="title" id="win-title">Settings</div>
-        <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
+        <span class="title" id="win-title">Settings</span>
+        <button type="button" class="cap cap-close" title="Close" aria-label="Close">
+          <span class="i i-close" aria-hidden="true"></span>
+        </button>
       </div>
-      <div class="body">
-        <div class="main">
-          <nav class="nav-panel" aria-label="Settings sections">
-            <a class="nav-item" href="#general" data-section="general" aria-current="page" title="General">General</a>
-            <a class="nav-item" href="#appearance" data-section="appearance" title="Appearance">Appearance</a>
-            <a class="nav-item" href="#terminal" data-section="terminal" title="Terminal">Terminal</a>
-            <a class="nav-item" href="#security" data-section="security" title="Security">Security</a>
-            <a class="nav-item" href="#mcp" data-section="mcp" title="MCP">MCP</a>
-            <a class="nav-item" href="#advanced" data-section="advanced" title="Advanced">Advanced</a>
-            <a class="nav-item" href="#sftp" data-section="sftp" title="SFTP">SFTP</a>
-            <span class="nav-dis" title="Not available in this version.">Shortcuts (not this version)</span>
-          </nav>
-          <div class="form-card">
-            <div class="region" data-panel="general">
-              <span class="rid">General</span>
-              <span class="hint">Language · confirmations · motion</span>
-              <a href="sections/general.html">→ sections/general.html</a>
-            </div>
-            <div class="region" data-panel="appearance" hidden>
-              <span class="rid">Appearance</span>
-              <span class="hint">App theme · Terminal style</span>
-              <a href="sections/appearance.html">→ sections/appearance.html</a>
-            </div>
-            <div class="region" data-panel="terminal" hidden>
-              <span class="rid">Terminal</span>
-              <span class="hint">Scrollback · mouse · paste</span>
-              <a href="sections/terminal.html">→ sections/terminal.html</a>
-            </div>
-            <div class="region" data-panel="security" hidden>
-              <span class="rid">Security</span>
-              <span class="hint">Master password · managers · unlock</span>
-              <a href="sections/security.html">→ sections/security.html</a>
-              <a href="master-password.html">→ master-password.html</a>
-              <a href="master-password-unlock.html">→ master-password-unlock.html</a>
-            </div>
-            <div class="region" data-panel="mcp" hidden>
-              <span class="rid">MCP</span>
-              <span class="hint">Enable · Port · Listen · Access</span>
-              <a href="sections/mcp.html">→ sections/mcp.html</a>
-              <a href="mcp-consent.html">→ mcp-consent.html</a>
-            </div>
-            <div class="region" data-panel="advanced" hidden>
-              <span class="rid">Advanced</span>
-              <span class="hint">Debug logging · config directory</span>
-              <a href="sections/advanced.html">→ sections/advanced.html</a>
-            </div>
-            <div class="region" data-panel="sftp" hidden>
-              <span class="rid">SFTP</span>
-              <span class="hint">Show hidden · Conflict · Editor</span>
-              <a href="sections/sftp.html">→ sections/sftp.html</a>
-            </div>
+      <div class="win-body row">
+        <nav class="nav-pane" aria-label="Settings sections">
+          <a class="nav-item" href="#general" data-section="general" aria-current="page" title="General">General</a>
+          <a class="nav-item" href="#appearance" data-section="appearance" title="Appearance">Appearance</a>
+          <a class="nav-item" href="#terminal" data-section="terminal" title="Terminal">Terminal</a>
+          <a class="nav-item" href="#security" data-section="security" title="Security">Security</a>
+          <a class="nav-item" href="#mcp" data-section="mcp" title="MCP">MCP</a>
+          <a class="nav-item" href="#advanced" data-section="advanced" title="Advanced">Advanced</a>
+          <a class="nav-item" href="#sftp" data-section="sftp" title="SFTP">SFTP</a>
+          <span class="nav-dis" title="Not available in this version.">Shortcuts (not this version)</span>
+        </nav>
+        <div class="content-card">
+          <div class="region" data-panel="general">
+            <span class="rid">General</span>
+            <span class="hint">Language · confirmations · motion</span>
+            <a href="sections/general.html">→ sections/general.html</a>
           </div>
-        </div>
-        <div class="spacer"></div>
-        <div class="footer">
-          <hr class="rule" />
-          <div class="actions">
+          <div class="region" data-panel="appearance" hidden>
+            <span class="rid">Appearance</span>
+            <span class="hint">App theme · Terminal style</span>
+            <a href="sections/appearance.html">→ sections/appearance.html</a>
+          </div>
+          <div class="region" data-panel="terminal" hidden>
+            <span class="rid">Terminal</span>
+            <span class="hint">Scrollback · mouse · paste</span>
+            <a href="sections/terminal.html">→ sections/terminal.html</a>
+          </div>
+          <div class="region" data-panel="security" hidden>
+            <span class="rid">Security</span>
+            <span class="hint">Master password · managers</span>
+            <a href="sections/security.html">→ sections/security.html</a>
+          </div>
+          <div class="region" data-panel="mcp" hidden>
+            <span class="rid">MCP</span>
+            <span class="hint">Enable / listen / access</span>
+            <a href="sections/mcp.html">→ sections/mcp.html</a>
+          </div>
+          <div class="region" data-panel="advanced" hidden>
+            <span class="rid">Advanced</span>
+            <span class="hint">Debug · config directory</span>
+            <a href="sections/advanced.html">→ sections/advanced.html</a>
+          </div>
+          <div class="region" data-panel="sftp" hidden>
+            <span class="rid">SFTP</span>
+            <span class="hint">Hidden files · conflict · editor</span>
+            <a href="sections/sftp.html">→ sections/sftp.html</a>
+          </div>
+          <div class="win-spacer"></div>
+          <div class="win-footer">
             <button type="button" class="btn" title="Cancel">Cancel</button>
-            <button type="button" class="btn btn-primary" title="Save">Save</button>
+            <button type="button" class="btn btn-accent" title="Save">Save</button>
           </div>
         </div>
       </div>
     </div>
   </div>
-
-  <div class="legend">
-    <strong>本页职责</strong> — 整壳几何与左导航。分区<strong>只写标签 + 跳转</strong>；控件细节在 <code>sections/*</code>。
-    页脚 <strong>Cancel | Save</strong>：Save 保存全部分区草稿并关闭；分区内<strong>不要</strong>再放 Save。
-  </div>
-
+  <script src="../_embed.js"></script>
   <script>
+    ProtoEmbed.boot();
     (function () {
       var nav = document.querySelectorAll(".nav-item[data-section]");
       var panels = document.querySelectorAll("[data-panel]");
-      function showSection(id) {
-        nav.forEach(function (a) {
-          a.setAttribute("aria-current", a.getAttribute("data-section") === id ? "page" : "false");
-        });
-        panels.forEach(function (p) {
-          p.hidden = p.getAttribute("data-panel") !== id;
-        });
-      }
       nav.forEach(function (a) {
-        a.addEventListener("click", function (ev) {
-          ev.preventDefault();
-          showSection(a.getAttribute("data-section"));
+        a.addEventListener("click", function (e) {
+          e.preventDefault();
+          var id = a.getAttribute("data-section");
+          nav.forEach(function (n) { n.removeAttribute("aria-current"); });
+          a.setAttribute("aria-current", "page");
+          panels.forEach(function (p) {
+            p.hidden = p.getAttribute("data-panel") !== id;
+          });
         });
       });
-      var hash = (location.hash || "").replace(/^#/, "");
-      showSection(hash || "general");
     })();
   </script>
 </body>

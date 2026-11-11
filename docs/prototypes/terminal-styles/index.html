@@ -3,38 +3,29 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — Terminal styles wireframe</title>
+  <title>YShell — Terminal styles UI</title>
   <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_chrome.css">
   <link rel="stylesheet" href="../_anno.css">
   <style>
     :root {
-      --win-w: 1100px; --win-h: 820px; --titlebar-h: 40px; --pad: 28px; --gap: 12px;
+      --win-w: 1100px; --win-h: 820px; --titlebar-h: 32px; --pad: 28px; --gap: 12px;
       --list-w: 380px; /* --row-h / preview from form.css (2× / 4×) */
       --term-bg: #0c0c0c; --term-fg: #cccccc; --term-border: #333;
       --c1: #c50f1f; --c2: #13a10e; --c3: #c19c00; --c4: #0037da;
       --c5: #881798; --c6: #3a96dd; --c8: #767676; --c15: #f2f2f2;
     }
     * { box-sizing: border-box; }
-    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
-    .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); line-height: 1.45; }
-    .tools { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--mute); margin-bottom: 10px; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--text-primary); background: var(--window-bg); }
+    .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--text-secondary); line-height: 1.45; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; }
     .tools button {
-      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line);
-      background: var(--fill); font: inherit; cursor: pointer;
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--card-stroke);
+      background: var(--card-fill); font: inherit; cursor: pointer;
     }
-    .tools button[aria-pressed="true"] { background: var(--soft); font-weight: 600; }
+    .tools button[aria-pressed="true"] { background: var(--subtle-hover); font-weight: 600; }
     .stage { overflow-x: auto; padding-bottom: 8px; }
-    .win {
-      width: var(--win-w); height: var(--win-h); flex-shrink: 0;
-      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
-    }
-    .titlebar {
-      height: var(--titlebar-h); flex: 0 0 var(--titlebar-h);
-      display: flex; align-items: center; padding: 0 8px 0 12px; gap: 8px;
-      border-bottom: 1px solid var(--line);
-    }
-    .title { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .cap { width: 40px; height: 24px; border: 1px solid var(--line); background: transparent; font-size: 10px; color: var(--line); padding: 0; }
+    .win { /* size via win-* class; chrome from _chrome.css */ }
     .body {
       flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
       padding: var(--pad); gap: var(--gap); overflow: hidden;
@@ -50,7 +41,7 @@
       flex: 1 1 auto; min-width: 0; min-height: 0;
       display: flex; flex-direction: column; gap: 10px; overflow: hidden;
     }
-    .scroll-list { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px dashed var(--line); }
+    .scroll-list { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px dashed var(--layer-stroke); }
     .style-row { height: var(--row-h); min-height: var(--row-h); }
 
     /* Theme-colored preview overrides form.css .term-preview neutrals */
@@ -75,64 +66,59 @@
 
     .detail-scroll {
       flex: 1 1 auto; min-height: 0; overflow: auto;
-      border: 1px solid var(--line); padding: 16px;
+      border: 1px solid var(--card-stroke); padding: 16px;
       display: flex; flex-direction: column; gap: 10px;
     }
     .section { font-size: 13px; font-weight: 600; margin: 4px 0 0; }
-    .detail-scroll .form-row { grid-template-columns: 110px minmax(0, 1fr); margin-bottom: 0; }
-    .id-line { margin: 0 0 0 122px; font-size: 12px; color: var(--mute); font-family: ui-monospace, monospace; }
+    .id-line { margin: 0 0 0 122px; font-size: 12px; color: var(--text-secondary); font-family: ui-monospace, monospace; }
     .row-inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .ctl-with-btn { flex-wrap: wrap; align-items: center; }
     .size-val { width: 40px; text-align: center; font-size: 14px; }
     .swatch-btn {
-      width: 28px; height: 28px; border: 1px solid var(--line); padding: 0; cursor: pointer;
+      width: 28px; height: 28px; border: 1px solid var(--card-stroke); padding: 0; cursor: pointer;
     }
     .swatch-btn:disabled { cursor: not-allowed; opacity: 0.7; }
-    .ansi-label { font-size: 13px; color: var(--mute); margin: 4px 0 0; }
+    .ansi-label { font-size: 13px; color: var(--text-secondary); margin: 4px 0 0; }
     .ansi-grid {
       display: grid; grid-template-columns: repeat(8, 28px); gap: 4px;
       margin-left: 122px;
     }
     .ansi-grid button {
-      width: 28px; height: 28px; border: 1px solid var(--line); padding: 0; cursor: pointer;
+      width: 28px; height: 28px; border: 1px solid var(--card-stroke); padding: 0; cursor: pointer;
     }
     .ansi-grid button:disabled { cursor: not-allowed; opacity: 0.7; }
-    .ro-note { font-size: 12px; color: var(--mute); margin: 0 0 0 122px; }
-    .hint-inline { font-size: 12px; color: var(--mute); }
+    .ro-note { font-size: 12px; color: var(--text-secondary); margin: 0 0 0 122px; }
+    .hint-inline { font-size: 12px; color: var(--text-secondary); }
 
     .spacer { flex: 1 1 auto; min-height: 8px; }
-    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+    .rule { border: 0; border-top: 1px solid var(--layer-stroke); margin: 0; }
     .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .flyout {
       display: none; position: fixed; z-index: 5; min-width: 180px;
-      background: var(--fill); border: 1px solid var(--line); padding: 4px 0; font-size: 13px;
+      background: var(--card-fill); border: 1px solid var(--card-stroke); padding: 4px 0; font-size: 13px;
     }
     .flyout.open { display: block; }
     .flyout button {
       display: flex; align-items: center; width: 100%; height: 28px; padding: 0 12px;
       border: 0; background: transparent; font: inherit; font-size: 13px; text-align: left; cursor: pointer;
     }
-    .flyout button:hover { background: var(--soft); }
+    .flyout button:hover { background: var(--subtle-hover); }
     .flyout button:disabled { opacity: 0.4; cursor: not-allowed; }
     .flyout .danger { color: #800; }
     .flyout .sep { height: 1px; background: var(--line); margin: 4px 0; }
-    .legend {
-      max-width: var(--win-w); margin: 20px 0 0; padding: 12px 14px;
-      border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55;
-    }
-    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
   </style>
 </head>
-<body>
-  <p class="meta">Terminal Styles。 <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>。</p>
+<body class="proto-body">
+  
+  <label class="proto-theme-toggle"><input type="checkbox" id="theme-toggle" /> Dark theme</label>
+<p class="meta">Terminal Styles。 <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>。</p>
   <div class="tools" role="group">
     <button type="button" id="pick-custom" aria-pressed="true" title="选中 Custom（可编辑）">选中 Custom（可编辑）</button>
     <button type="button" id="pick-builtin" aria-pressed="false" title="选中 Built-in（只读）">选中 Built-in（只读）</button>
   </div>
 
   <div class="stage">
-    <div class="win" role="dialog">
+    <div class="win win-wide" role="dialog">
       <div class="titlebar">
         <div class="title">Terminal Styles</div>
         <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
@@ -141,7 +127,7 @@
         <div class="toolbar">
           <button type="button" class="btn btn-primary btn-icon" id="btn-new" aria-label="New style" title="New style"><span class="i i-plus" aria-hidden="true"></span></button>
           <span class="grow"></span>
-          <span style="font-size:12px;color:var(--mute)" id="summary">4 styles</span>
+          <span style="font-size:12px;color: var(--text-secondary)" id="summary">4 styles</span>
         </div>
         <div class="split">
           <div class="col-left">
@@ -173,14 +159,14 @@
 <span class="br">Ready.</span><span class="cursor"></span>
             </div>
             <div class="detail-scroll" id="detail">
-              <div class="form-row">
+              <div class="form-row lbl-110">
                 <span class="lbl">Name</span>
                 <input class="input" id="fld-name" value="Custom — ops" />
               </div>
               <p class="id-line" id="fld-id">Style id: user-ops-7f3a</p>
 
               <p class="section">Font</p>
-              <div class="form-row">
+              <div class="form-row lbl-110">
                 <span class="lbl">Font family</span>
                 <div class="ctl-with-btn">
                   <select class="select" id="fld-font" title="Monospace fonts only">
@@ -194,7 +180,7 @@
                   <span class="hint-inline">monospace only</span>
                 </div>
               </div>
-              <div class="form-row">
+              <div class="form-row lbl-110">
                 <span class="lbl">Font size</span>
                 <div class="row-inline">
                   <button type="button" class="btn" id="btn-size-dec" aria-label="Decrease" title="Decrease">−</button>
@@ -203,7 +189,7 @@
                   <span class="hint-inline">Logical pixels (6–72)</span>
                 </div>
               </div>
-              <div class="form-row">
+              <div class="form-row lbl-110">
                 <span class="lbl">Fallback</span>
                 <div class="ctl-with-btn">
                   <select class="select" id="fld-fallback" title="Any installed font">
@@ -229,19 +215,19 @@
               </div>
 
               <p class="section">Colors</p>
-              <div class="form-row">
+              <div class="form-row lbl-110">
                 <span class="lbl">Foreground</span>
                 <button type="button" class="swatch-btn" id="sw-fg" style="background:#e8e0d0" title="pick"></button>
               </div>
-              <div class="form-row">
+              <div class="form-row lbl-110">
                 <span class="lbl">Background</span>
                 <button type="button" class="swatch-btn" id="sw-bg" style="background:#1a1a2e" title="pick"></button>
               </div>
-              <div class="form-row">
+              <div class="form-row lbl-110">
                 <span class="lbl">Cursor</span>
                 <button type="button" class="swatch-btn" id="sw-cur" style="background:#e8e0d0" title="pick"></button>
               </div>
-              <div class="form-row">
+              <div class="form-row lbl-110">
                 <span class="lbl">Selection</span>
                 <button type="button" class="swatch-btn" id="sw-sel" style="background:#264f78" title="pick"></button>
               </div>
@@ -453,5 +439,7 @@
       });
     })();
   </script>
+<script src="../_proto.js"></script>
+<script>enableProtoThemeToggle();</script>
 </body>
 </html>

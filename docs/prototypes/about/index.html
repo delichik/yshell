@@ -1,25 +1,23 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_chrome.css">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — About wireframe</title>
+  <title>YShell — About UI</title>
   <link rel="stylesheet" href="../_anno.css">
   <link rel="stylesheet" href="../_icons.css">
   <style>
     :root {
       --win-w: 720px;
       --win-h: 580px;
-      --titlebar-h: 40px;
+      --titlebar-h: 32px;
       --pad: 28px;
       --gap: 16px;
       --ctrl-h: 32px;
       --anno-w: 200px;
       --label-w: 140px;
-      --line: #111;
-      --fill: #fff;
-      --mute: #555;
-      --soft: #f0f0f0;
       --anno: #336;
     }
     * { box-sizing: border-box; }
@@ -27,22 +25,22 @@
       margin: 0;
       padding: 24px;
       font-family: ui-sans-serif, system-ui, sans-serif;
-      color: var(--line);
-      background: #e8e8e8;
+      color: var(--text-primary);
+      background: var(--window-bg);
     }
     .meta {
       max-width: calc(var(--win-w) + 16px + var(--anno-w));
       margin: 0 0 16px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
     .meta a { color: inherit; }
     .tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
     .tools button {
-      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line);
-      background: var(--fill); font: inherit; cursor: pointer;
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--card-stroke);
+      background: var(--card-fill); font: inherit; cursor: pointer;
     }
-    .tools button[aria-pressed="true"] { background: var(--soft); font-weight: 600; }
+    .tools button[aria-pressed="true"] { background: var(--subtle-hover); font-weight: 600; }
     .stage { overflow-x: auto; padding-bottom: 8px; }
     .frame {
       display: grid;
@@ -55,55 +53,12 @@
       height: var(--win-h);
       display: flex;
       flex-direction: column;
-      background: var(--fill);
-      border: 1px solid var(--line);
+      /* mica: _chrome.css */
       flex-shrink: 0;
     }
-    .callouts {
-      grid-column: 2;
-      position: relative;
-      height: var(--win-h);
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .callout {
-      position: absolute;
-      left: 0;
-      right: 0;
-      font-size: 11px;
-      color: var(--anno);
-      line-height: 1.35;
-    }
-    .callout::before {
-      content: "";
-      position: absolute;
-      left: -12px;
-      top: 0.55em;
-      width: 10px;
-      border-top: 1px dashed var(--anno);
-    }
-    .callout strong { display: block; color: var(--line); margin-bottom: 2px; }
     .callout-copy { top: 72px; }
     .callout-grid { top: 140px; }
     .callout-oss { top: 230px; }
-    .titlebar {
-      height: var(--titlebar-h);
-      flex: 0 0 var(--titlebar-h);
-      display: flex;
-      align-items: center;
-      padding: 0 8px 0 12px;
-      gap: 8px;
-      border-bottom: 1px solid var(--line);
-    }
-    .title { flex: 1; font-size: 12px; font-weight: 600; }
-    .cap {
-      width: 40px;
-      height: 24px;
-      border: 1px solid var(--line);
-      font-size: 10px;
-      background: transparent;
-    }
     .body {
       flex: 1 1 auto;
       min-height: 0;
@@ -112,18 +67,6 @@
       padding: var(--pad);
       gap: var(--gap);
       overflow: hidden;
-    }
-    .tag {
-      position: absolute;
-      top: 0;
-      right: 0;
-      font-size: 10px;
-      font-weight: 600;
-      color: var(--anno);
-      background: #e8e8e8;
-      border: 1px dashed var(--anno);
-      padding: 1px 5px;
-      pointer-events: none;
     }
     .region { position: relative; }
 
@@ -135,7 +78,7 @@
     .blurb {
       margin: 0;
       font-size: 14px;
-      color: var(--mute);
+      color: var(--text-secondary);
       line-height: 1.45;
       max-width: 52em;
     }
@@ -147,7 +90,7 @@
       padding-top: 8px;
       font-size: 14px;
     }
-    .grid .lbl { color: var(--mute); }
+    .grid .lbl { color: var(--text-secondary); }
     .grid .val.mono { font-family: ui-monospace, monospace; word-break: break-all; }
 
     .oss {
@@ -161,8 +104,8 @@
       align-self: start;
       height: var(--ctrl-h);
       padding: 0 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font: inherit;
       font-size: 14px;
       cursor: pointer;
@@ -170,20 +113,20 @@
       align-items: center;
       gap: 8px;
     }
-    .oss-toggle .chev { font-size: 12px; color: var(--mute); width: 1em; }
+    .oss-toggle .chev { font-size: 12px; color: var(--text-secondary); width: 1em; }
     .oss-panel {
       flex: 1 1 auto;
       min-height: 0;
       max-height: 220px;
-      border: 1px solid var(--line);
-      background: var(--soft);
+      border: 1px solid var(--card-stroke);
+      background: var(--subtle-hover);
       overflow: auto;
       padding: 10px 12px;
       font-family: ui-monospace, monospace;
       font-size: 12px;
       line-height: 1.45;
       white-space: pre-wrap;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
     .oss-panel[hidden] { display: none !important; }
     .win.is-oss-open .spacer { display: none; }
@@ -191,31 +134,14 @@
 
     .spacer { flex: 1 1 auto; min-height: 12px; }
     .footer { flex: 0 0 auto; }
-    .rule { margin: 0 0 12px; border: 0; border-top: 1px solid var(--line); }
+    .rule { margin: 0 0 12px; border: 0; border-top: 1px solid var(--layer-stroke); }
     .actions { display: flex; justify-content: flex-end; }
-    .btn {
-      height: var(--ctrl-h);
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      background: var(--soft);
-      font: inherit;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    .legend {
-      max-width: calc(var(--win-w) + 16px + var(--anno-w));
-      margin: 20px 0 0;
-      padding: 12px 14px;
-      border: 1px dashed var(--line);
-      font-size: 12px;
-      color: var(--mute);
-    }
   </style>
 </head>
-<body>
-  <p class="meta">About · <code>720×580</code>。 <a href="../annotations.html">annotations</a>。</p>
+<body class="proto-body">
+  
+  <label class="proto-theme-toggle"><input type="checkbox" id="theme-toggle" /> Dark theme</label>
+<p class="meta">About · <code>720×580</code>。 <a href="../annotations.html">annotations</a>。</p>
   <div class="tools" role="group" aria-label="About state">
     <button type="button" id="state-collapsed" aria-pressed="true">Licenses collapsed</button>
     <button type="button" id="state-expanded" aria-pressed="false">Licenses expanded</button>
@@ -223,7 +149,7 @@
 
   <div class="stage">
     <div class="frame">
-      <div class="win" id="about-win" role="dialog">
+      <div class="win win-standard" id="about-win" role="dialog">
         <div class="titlebar region">
           <div class="title">About YShell</div>
           <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
@@ -309,5 +235,7 @@
       else setExpanded(false);
     })();
   </script>
+<script src="../_proto.js"></script>
+<script>enableProtoThemeToggle();</script>
 </body>
 </html>

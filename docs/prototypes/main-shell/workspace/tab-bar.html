@@ -3,36 +3,37 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — Tab bar wireframe</title>
+  <title>YShell — Tab bar UI</title>
+  <link rel="stylesheet" href="../../form.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_chrome.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_anno.css">
   <style>
     /* Isolated TabBar slice — board 960×200, tabbar-h 36 */
     :root {
       --board-w: 960px;
       --board-h: 200px;
-      --tabbar-h: 36px;
+      --tabbar-h: 32px;
       --ctrl-h: 32px;
-      --line: #111;
-      --fill: #fff;
-      --mute: #555;
-      --soft: #f0f0f0;
-      --bg: #e8e8e8;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       padding: 24px;
       font-family: ui-sans-serif, system-ui, sans-serif;
-      color: var(--line);
-      background: var(--bg);
+      color: var(--text-primary);
+      background: var(--window-bg);
     }
     .meta {
       max-width: var(--board-w);
       margin: 0 0 8px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
       line-height: 1.45;
     }
-    .meta a { color: var(--line); }
+    .meta a { color: var(--text-primary); }
     .meta code { font-size: 12px; }
     .tools {
       display: flex;
@@ -41,19 +42,19 @@
       align-items: center;
       margin: 0 0 12px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
     .tools button {
       height: var(--ctrl-h);
       padding: 0 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font: inherit;
       font-size: 13px;
       cursor: pointer;
     }
     .tools button[aria-pressed="true"] {
-      background: var(--soft);
+      background: var(--subtle-hover);
       font-weight: 600;
     }
     .stage {
@@ -66,8 +67,7 @@
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      background: var(--fill);
-      border: 1px solid var(--line);
+      background: var(--card-fill); border: 1px solid var(--card-stroke);
       position: relative;
     }
     .board-label {
@@ -77,7 +77,7 @@
       font-weight: 600;
       letter-spacing: 0.04em;
       text-transform: uppercase;
-      color: var(--mute);
+      color: var(--text-secondary);
       border-bottom: 1px solid var(--soft);
     }
     .tabbar {
@@ -85,7 +85,7 @@
       flex: 0 0 var(--tabbar-h);
       display: flex;
       align-items: stretch;
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--layer-stroke);
     }
     .tab {
       appearance: none;
@@ -93,7 +93,7 @@
       align-items: center;
       gap: 6px;
       border: 0;
-      border-right: 1px solid var(--line);
+      border-right: 1px solid var(--layer-stroke);
       background: transparent;
       padding: 0 14px;
       min-width: 120px;
@@ -104,15 +104,15 @@
       position: relative;
     }
     .tab[aria-pressed="true"] {
-      background: var(--soft);
+      background: var(--subtle-hover);
       font-weight: 600;
     }
     .sess-ico {
       width: 16px;
       height: 16px;
       flex: 0 0 16px;
-      border: 1px solid var(--line);
-      background: var(--soft);
+      border: 1px solid var(--card-stroke);
+      background: var(--subtle-hover);
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -135,14 +135,14 @@
       font-size: 9px;
       font-weight: 700;
       letter-spacing: 0.04em;
-      color: var(--mute);
-      border: 1px solid var(--line);
+      color: var(--text-secondary);
+      border: 1px solid var(--card-stroke);
       padding: 0 4px;
       height: 16px;
       line-height: 14px;
-      background: var(--fill);
+      background: var(--card-fill);
     }
-    .tab[data-mode="sftp"] .mode-chip { color: var(--line); }
+    .tab[data-mode="sftp"] .mode-chip { color: var(--text-primary); }
     .tab[data-mode="new"] .mode-chip { border-style: dashed; }
     .ai-chip {
       flex: 0 0 auto;
@@ -150,23 +150,23 @@
       font-weight: 700;
       letter-spacing: 0.04em;
       color: var(--fill);
-      border: 1px solid var(--line);
+      border: 1px solid var(--card-stroke);
       padding: 0 4px;
       height: 16px;
       line-height: 14px;
       background: var(--line);
     }
-    .anno-ref { max-width: var(--board-w); margin: 10px 0 0; font-size: 12px; color: var(--mute); line-height: 1.5; }
-    .anno-ref a { color: var(--line); font-weight: 600; }
-    .anno-ref strong { color: var(--line); font-weight: 600; }
+    .anno-ref { max-width: var(--board-w); margin: 10px 0 0; font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+    .anno-ref a { color: var(--text-primary); font-weight: 600; }
+    .anno-ref strong { color: var(--text-primary); font-weight: 600; }
     .tab-spacer { flex: 1; min-width: 0; }
     .inline-rename {
       flex: 1;
       min-width: 72px;
       height: 24px;
       border: 2px solid var(--line);
-      background: var(--fill);
-      color: var(--line);
+      background: var(--card-fill);
+      color: var(--text-primary);
       font: inherit;
       font-size: 13px;
       padding: 0 4px;
@@ -176,7 +176,7 @@
     .tab.renaming {
       outline: 1px dashed var(--line);
       outline-offset: -1px;
-      background: var(--soft);
+      background: var(--subtle-hover);
       overflow: visible;
     }
     .renaming-badge {
@@ -187,33 +187,21 @@
       z-index: 2;
       font-size: 10px;
       font-weight: 700;
-      color: var(--mute);
-      border: 1px solid var(--line);
+      color: var(--text-secondary);
+      border: 1px solid var(--card-stroke);
       padding: 0 4px;
       height: 18px;
       line-height: 16px;
       white-space: nowrap;
-      background: var(--fill);
+      background: var(--card-fill);
       pointer-events: none;
     }
-    .legend {
-      max-width: var(--board-w);
-      margin: 16px 0 0;
-      padding: 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
-      font-size: 12px;
-      color: var(--mute);
-      line-height: 1.5;
-    }
-    .legend strong { color: var(--line); }
     .flyout {
       position: fixed;
       z-index: 1000;
       min-width: 240px;
       max-width: 280px;
-      background: var(--fill);
-      border: 1px solid var(--line);
+      background: var(--card-fill); border: 1px solid var(--card-stroke);
       padding: 4px 0;
       font-size: 13px;
       display: none;
@@ -231,14 +219,14 @@
       text-align: left;
       cursor: pointer;
     }
-    .flyout button:hover { background: var(--soft); }
+    .flyout button:hover { background: var(--subtle-hover); }
     .flyout button.dis {
-      color: var(--mute);
+      color: var(--text-secondary);
       cursor: not-allowed;
     }
     .flyout .sep {
       height: 1px;
-      background: var(--soft);
+      background: var(--subtle-hover);
       margin: 4px 0;
       border: 0;
     }
@@ -248,21 +236,31 @@
       left: 50%;
       transform: translateX(-50%);
       padding: 8px 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font-size: 12px;
       display: none;
     }
     .toast.show { display: block; }
   </style>
 </head>
-<body>
-  <p class="meta">
-    <strong>TabBar</strong> isolated wireframe · board <code>960×200</code> (tab strip <code>36</code> + context-menu annotation).
-    Hub: <a href="../../index.html">prototypes index</a> · shell: <a href="../index.html">main-window</a>.
+<body class="proto-body">
+  <label class="proto-theme-toggle"><input type="checkbox" id="theme-toggle" /> Dark theme</label>
+  <p class="proto-meta">
+    <strong>TabBar</strong> · 共享真源 iframe（下）+ 本页交互板。
+    Hub: <a href="../../index.html">prototypes index</a> ·
+    <a href="../../components/tabbar.html">components/tabbar</a> ·
+    shell: <a href="../index.html">main-window</a>.
   </p>
+  <iframe
+    class="proto-embed proto-embed--tabbar"
+    data-proto-embed
+    title="Shared TabBar component"
+    src="../../components/tabbar.html?embed=1&amp;tab1=web-01&amp;tab2=sftp-01"
+  ></iframe>
+  <p class="proto-meta" style="margin-top:12px">Interactive board (page-unique rename / switch demos):</p>
 
-  <div class="tools" role="group" aria-label="Prototype states">
+  <div class="proto-tools" role="group" aria-label="Prototype states">
     <span>State:</span>
     <button type="button" data-state="default" aria-pressed="true" title="Default">Default</button>
     <button type="button" data-state="renaming" aria-pressed="false" title="Renaming tab">Renaming tab</button>
@@ -597,5 +595,7 @@
       applyState("default");
     })();
   </script>
+  <script src="../../_embed.js"></script>
+  <script>ProtoEmbed.boot();</script>
 </body>
 </html>

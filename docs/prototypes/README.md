@@ -1,25 +1,36 @@
 # docs/prototypes
 
-现行 **UI 功能 / 布局 / 交互** 的**唯一设计稿**目录（及其本目录文档）。规则见 [`docs/agents/prototypes.md`](../agents/prototypes.md)。
+现行 **UI 设计稿**目录（功能 / 布局 / 交互 / **WinUI 3 观感与准确几何**）。规则见 [`docs/agents/prototypes.md`](../agents/prototypes.md)。
 
-产品范围仍以 [`yshell-current-status.md`](../product/yshell-current-status.md) 为准。交互契约、archive、设计语言等**仅供参考**，冲突时以本目录原型 + status 为准。
+产品范围仍以 [`yshell-current-status.md`](../product/yshell-current-status.md) 为准。冲突时以本目录原型 + status 为准。
 
-**浏览器目录页：** [`index.html`](./index.html) — 左侧列表、右侧 iframe 预览各子原型（含子窗文件）。
+**视觉真源（设计稿）**：对齐 [`ui-winui3-design-language.md`](../product/ui-winui3-design-language.md)。条带高度 Fluent **32**（title/menu/tab）；实现 `Theme.bar-height-menubar = 40` 为已知缺口。共享样式：
 
-主壳统一在 [`main-shell/`](./main-shell/)：同功能目录多 HTML（对齐 `known-hosts/modals`），可再套一层分组（`panels/`、`workspace/`）。
+| 文件 | 用途 | 样板 |
+|---|---|---|
+| [`_theme.css`](./_theme.css) | Light/Dark token + 几何 | — |
+| [`form.css`](./form.css) | 表单控件（唯一） | [`forms.html`](./forms.html) · [`components/buttons.html`](./components/buttons.html) · [`form-fields.html`](./components/form-fields.html) |
+| [`_chrome.css`](./_chrome.css) | 窗壳 / Nav / Tab / Flyout / InfoBar | [`chrome.html`](./chrome.html) |
+| [`_proto.css`](./_proto.css) + [`_embed.js`](./_embed.js) | 舞台脚手架、iframe 定高、query/`theme` | — |
+| [`components/`](./components/) | **组件真源**（壳 / 控件 / 注释 … iframe + query） | [`components.html`](./components.html) |
+| [`_anno.css`](./_anno.css) | 通用注释（tag / callout / legend） | [`annotations.html`](./annotations.html) · `components/anno-*` |
+
+**浏览器目录页：** [`index.html`](./index.html) — 左侧列表、右侧 iframe 预览。组件对照：[`components.html`](./components.html)。
+
+主壳统一在 [`main-shell/`](./main-shell/)：同功能目录多 HTML，可再套一层分组（`panels/`、`workspace/`）。
 
 ## 约定
 
 - 每个功能或页面一个子目录，入口一般为 `index.html`（浏览器直接打开）。
-- **同功能多文件**：弹窗 / 独立区用同目录下的 `modals.html`、`sections/login-step-keys.html` 等，不要每个再开一层空壳目录。
-- **可再套一层**：同一产品壳内按区分子目录（例：`main-shell/panels/`、`main-shell/workspace/`），仍用多 HTML，不要 `foo/index.html` 无限嵌套。
-- 低保真：块级布局 + 文案标签 + 简单状态切换；不要复杂 CSS / 动效。
-- **任何 UI 设计阶段直接改这里的文件** 来展示预期效果；确认后再改 `ui/`。
-- 固定 Theme 尺寸；舞台可横滚，**不压缩**对话框；仅清单等明确区域可滚。
-- 原地编辑类交互必须用页内状态钮（或默认演示态）把输入框钉在画面上，不能只靠右键偶发出现。
+- **同功能多文件**：弹窗 / 独立区用同目录下的 `modals.html`、`sections/…` 等。
+- **可再套一层**：同一产品壳内按区分子目录，仍用多 HTML。
+- **视觉**：WinUI 3 / Fluent 2；钉死窗档与控件几何；禁止页内线框色板 / 控件样式分叉。
+- **任何 UI 设计阶段直接改这里的文件**；确认后再改 `ui/`。
+- 固定窗档尺寸；舞台可横滚，**不压缩**对话框；仅清单等明确区域可滚。
+- 原地编辑类交互必须用页内状态钮把输入框钉在画面上。
 - **禁止**再把 Sessions 写成固定「左 sidebar」、工具面板写成固定「RightDock Tab」。
-- **注释**：统一 `A · Short name`（见 [`annotations.html`](./annotations.html) + [`_anno.css`](./_anno.css)）。**不要**在每个原型重复标注通用 chrome / spacer / footer。
-- **表单控件**：唯一样式源 [`form.css`](./form.css)，验收样板 [`forms.html`](./forms.html)。开关动画、行高、按钮、`.ctl-with-btn`、Method 分段等均以该页为准；禁止各页另写一套。`session-editor/form.css` 仅 `@import` 根文件。
+- **注释**：统一 `A · Short name`（[`annotations.html`](./annotations.html) + [`_anno.css`](./_anno.css)）。
+- **表单 / 壳层**：引用根 `form.css` + `_chrome.css`；`session-editor/form.css` 仅 `@import` 根文件。
 
 ## 弹窗尺寸
 
@@ -123,3 +134,11 @@ settings/                         session-editor/
 | [`proxies/`](./proxies/index.html) | Proxies |
 
 历史观感稿：[`docs/product/ui-sketches/`](../product/ui-sketches/)。
+
+## 实现对齐缺口（本轮不改 `ui/`）
+
+| 项 | 设计稿 | 当前实现 |
+|---|---|---|
+| Menubar / 顶栏条带 | Fluent **32**（`_theme.css` `--menubar-h`） | Slint `Theme.bar-height-menubar = **40**` |
+
+设计验收以本目录为准；把实现改到 32 走单独轨道，勿把设计稿改回 40。

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-proto-autoboot>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Component — titlebar (main)</title>
+  <link rel="stylesheet" href="../_chrome.css">
+  <link rel="stylesheet" href="../_proto.css">
+  <style>
+    body { margin: 0; background: var(--mica-tint); }
+  </style>
+</head>
+<body data-proto-autoboot>
+  <div class="titlebar">
+    <span class="title" data-q="title">YShell — web-01</span>
+    <button type="button" class="cap" title="Minimize" aria-label="Minimize">─</button>
+    <button type="button" class="cap" title="Maximize" aria-label="Maximize">□</button>
+    <button type="button" class="cap cap-close" title="Close" aria-label="Close">
+      <span class="i i-close" aria-hidden="true"></span>
+    </button>
+  </div>
+  <script src="../_embed.js"></script>
+  <script>ProtoEmbed.boot({ toggle: false });</script>
+</body>
+</html>

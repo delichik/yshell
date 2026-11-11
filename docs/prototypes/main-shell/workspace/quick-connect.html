@@ -1,38 +1,42 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <link rel="stylesheet" href="../../form.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_chrome.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_anno.css">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — Quick Connect wireframe</title>
+  <title>YShell — Quick Connect UI</title>
   <link rel="stylesheet" href="../../_icons.css">
+  <link rel="stylesheet" href="../../_anno.css">
   <style>
     /* Quick Connect panel — board 720×480 */
     :root {
       --board-w: 720px;
       --board-h: 480px;
       --ctrl-h: 32px;
-      --line: #111;
-      --fill: #fff;
-      --mute: #555;
-      --soft: #f0f0f0;
-      --bg: #e8e8e8;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       padding: 24px;
       font-family: ui-sans-serif, system-ui, sans-serif;
-      color: var(--line);
-      background: var(--bg);
+      color: var(--text-primary);
+      background: var(--window-bg);
     }
     .meta {
       max-width: var(--board-w);
       margin: 0 0 8px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
       line-height: 1.45;
     }
-    .meta a { color: var(--line); }
+    .meta a { color: var(--text-primary); }
     .meta code { font-size: 12px; }
     .tools {
       display: flex;
@@ -41,19 +45,19 @@
       align-items: center;
       margin: 0 0 12px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
     .tools button {
       height: var(--ctrl-h);
       padding: 0 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font: inherit;
       font-size: 13px;
       cursor: pointer;
     }
     .tools button[aria-pressed="true"] {
-      background: var(--soft);
+      background: var(--subtle-hover);
       font-weight: 600;
     }
     .stage {
@@ -66,8 +70,7 @@
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      background: var(--fill);
-      border: 1px solid var(--line);
+      background: var(--card-fill); border: 1px solid var(--card-stroke);
     }
     .board-label {
       flex: 0 0 auto;
@@ -76,7 +79,7 @@
       font-weight: 600;
       letter-spacing: 0.04em;
       text-transform: uppercase;
-      color: var(--mute);
+      color: var(--text-secondary);
       border-bottom: 1px solid var(--soft);
     }
     .qc {
@@ -90,45 +93,28 @@
     }
     .qc label {
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
       display: flex;
       flex-direction: column;
       gap: 6px;
     }
     .qc input[type="text"] {
       height: var(--ctrl-h);
-      border: 1px solid var(--line);
+      border: 1px solid var(--card-stroke);
       padding: 0 8px;
       font: inherit;
       width: min(420px, 100%);
-      background: var(--fill);
-      color: var(--line);
+      background: var(--card-fill);
+      color: var(--text-primary);
     }
     .qc-actions { display: flex; gap: 8px; }
-    .btn {
-      height: var(--ctrl-h);
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
-      font: inherit;
-      font-size: 14px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .btn-icon { width: var(--ctrl-h); min-width: var(--ctrl-h); padding: 0; font-size: 20px; font-weight: 600; line-height: 1; }
-    .btn-primary {
-      background: var(--soft);
-      font-weight: 600;
-    }
     .section-title {
       font-size: 13px;
       font-weight: 600;
       margin-top: 4px;
     }
     .qc-list {
-      border: 1px dashed var(--line);
+      border: 1px dashed var(--layer-stroke);
       flex: 1;
       min-height: var(--field-h-md);
       max-height: calc(var(--ctrl-h) * 9);
@@ -140,14 +126,14 @@
       flex-direction: column;
       justify-content: center;
       padding: 0 10px;
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--layer-stroke);
       font-size: 13px;
       cursor: default;
     }
     .qc-row:last-child { border-bottom: 0; }
     .qc-row .d {
       font-size: 12px;
-      color: var(--mute);
+      color: var(--text-secondary);
       font-family: ui-monospace, monospace;
     }
     .empty {
@@ -157,38 +143,23 @@
       align-items: center;
       justify-content: center;
       padding: 16px;
-      border: 1px dashed var(--line);
+      border: 1px dashed var(--layer-stroke);
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
       text-align: center;
       line-height: 1.45;
     }
-    .legend {
-      max-width: var(--board-w);
-      margin: 16px 0 0;
-      padding: 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
-      font-size: 12px;
-      color: var(--mute);
-      line-height: 1.5;
-    }
-    .legend strong { color: var(--line); }
     .field-error {
       margin: 0;
       font-size: 12px;
       font-weight: 600;
-      color: var(--line);
+      color: var(--text-primary);
       display: none;
     }
     .field-error.visible { display: block; }
     .qc input[type="text"].invalid {
       border-width: 2px;
-      border-color: var(--line);
-    }
-    .btn:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
+      border-color: var(--text-primary);
     }
   </style>
 </head>

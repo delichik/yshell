@@ -5,25 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YShell — settings · Appearance</title>
   <link rel="stylesheet" href="../../form.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_chrome.css">
+  <link rel="stylesheet" href="../../_proto.css">
   <link rel="stylesheet" href="../../_icons.css">
   <link rel="stylesheet" href="../../_anno.css">
   <style>
     :root { --board-w: 800px; --board-h: 640px; }
     * { box-sizing: border-box; }
-    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
-    .meta { max-width: var(--board-w); margin: 0 0 8px; font-size: 13px; color: var(--mute); line-height: 1.45; }
-    .meta a { color: var(--line); font-weight: 600; }
-    .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; font-size: 13px; color: var(--mute); }
-    .tools .btn { font-size: 13px; }
-    .tools a.btn[aria-current="page"] { background: var(--soft); font-weight: 600; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--text-primary); background: var(--window-bg); }
+    .meta { max-width: var(--board-w); margin: 0 0 8px; font-size: 13px; color: var(--text-secondary); line-height: 1.45; }
+    .meta a { color: var(--text-primary); font-weight: 600; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; font-size: 13px; color: var(--text-secondary); }
+    .tools a.btn[aria-current="page"] { background: var(--subtle-hover); font-weight: 600; }
     .stage { overflow-x: auto; padding-bottom: 8px; }
     .board {
       width: var(--board-w); height: var(--board-h); flex-shrink: 0;
-      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
-      color: var(--line);
+      display: flex; flex-direction: column; background: var(--card-fill); border: 1px solid var(--card-stroke);
+      color: var(--text-primary);
     }
     .board[data-theme="dark"] {
-      --line: #e8e8e8;
+      
       --fill: #202020;
       --mute: #b8b8b8;
       --soft: #343434;
@@ -32,21 +34,19 @@
     }
     .board-label {
       font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-      color: var(--mute); padding: 6px 10px 0;
+      color: var(--text-secondary); padding: 6px 10px 0;
     }
-    .board-body { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; border-top: 1px solid var(--line); margin-top: 4px; }
-    .group-label { margin: 20px 0 8px; font-size: 12px; font-weight: 600; color: var(--mute); }
+    .board-body { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; border-top: 1px solid var(--layer-stroke); margin-top: 4px; }
+    .group-label { margin: 20px 0 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
     .board-body > .group-label:first-child { margin-top: 0; }
     .accent-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-height: var(--ctrl-h); }
     .accent-swatch {
       width: var(--ctrl-h); height: var(--ctrl-h); padding: 0;
-      border: 1px solid var(--line); cursor: pointer; box-sizing: border-box;
+      border: 1px solid var(--card-stroke); cursor: pointer; box-sizing: border-box;
     }
     .accent-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--fill), 0 0 0 4px var(--line); }
     .accent-swatch:focus { outline: 1px solid var(--focus-ring); outline-offset: 1px; }
     .accent-system { background: linear-gradient(90deg, #ffffff 50%, #202020 50%); }
-    .legend { max-width: var(--board-w); margin: 16px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
-    .legend strong { color: var(--line); }
   </style>
 </head>
 <body>

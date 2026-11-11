@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-proto-autoboot>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Component — tool-window</title>
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_chrome.css">
+  <link rel="stylesheet" href="../_proto.css">
+  <style>
+    body.proto-body { padding: 24px; }
+    .win-body > .msg { margin: 0; color: var(--text-primary); font-size: 14px; line-height: 1.45; }
+  </style>
+</head>
+<body class="proto-body" data-proto-autoboot>
+  <p class="proto-meta">Tool window shell · query: <code>tier</code> <code>title</code> <code>message</code> <code>primary</code> <code>cancel</code> (href) <code>theme</code> <code>embed</code></p>
+  <div class="proto-stage">
+    <div class="win win-compact" data-tier-target role="dialog" aria-labelledby="tw-title">
+      <div class="titlebar">
+        <span class="title" id="tw-title" data-q="title">Close tab?</span>
+        <button type="button" class="cap cap-close" title="Close" aria-label="Close">
+          <span class="i i-close" aria-hidden="true"></span>
+        </button>
+      </div>
+      <div class="win-body">
+        <p class="msg" data-q="message">Close this tab? The session will disconnect.</p>
+        <div class="win-spacer"></div>
+        <div class="win-footer">
+          <a class="btn" data-q="secondary" data-q-href="cancel" data-q-title="secondary" href="../index.html" title="Cancel">Cancel</a>
+          <button type="button" class="btn btn-accent" data-q="primary" data-q-title="primary" title="Close tab">Close tab</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="../_embed.js"></script>
+  <script>ProtoEmbed.boot({ toggle: false });</script>
+</body>
+</html>

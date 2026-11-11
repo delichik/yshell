@@ -1,29 +1,32 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+  <link rel="stylesheet" href="../../form.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_chrome.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_anno.css">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — SFTP dual-pane wireframe</title>
+  <title>YShell — SFTP dual-pane UI</title>
   <style>
     /*
       SFTP content region tokens (board only, not full main window):
       --board-w: 960px; --board-h: 560px;
-      --toolbar-h: 36px; --path-h: 28px; --row-h: 28px; --ctrl-h: 32px;
+      --toolbar-h: 32px; --path-h: 28px; --row-h: 28px; --ctrl-h: 32px;
       --anno-w: 220px;
-      Colors: --line #111 · --fill #fff · --mute #555 · --soft #f0f0f0 · page #e8e8e8
     */
     :root {
       --board-w: 960px;
       --board-h: 560px;
-      --toolbar-h: 36px;
+      --toolbar-h: 32px;
       --path-h: 28px;
       --row-h: 28px;
       --ctrl-h: 32px;
       --anno-w: 220px;
-      --line: #111;
-      --fill: #fff;
-      --mute: #555;
-      --soft: #f0f0f0;
       --anno: #555;
     }
     * { box-sizing: border-box; }
@@ -31,14 +34,14 @@
       margin: 0;
       padding: 24px;
       font-family: ui-sans-serif, system-ui, sans-serif;
-      color: var(--line);
-      background: #e8e8e8;
+      color: var(--text-primary);
+      background: var(--window-bg);
     }
     .meta {
       max-width: calc(var(--board-w) + 16px + var(--anno-w));
       margin: 0 0 16px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
       line-height: 1.45;
     }
     .meta code { font-size: 12px; }
@@ -46,8 +49,8 @@
       max-width: calc(var(--board-w) + 16px + var(--anno-w));
       margin: 0 0 12px;
       padding: 8px 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font-size: 13px;
       font-family: ui-monospace, monospace;
       min-height: 36px;
@@ -63,7 +66,7 @@
       gap: 8px 16px;
       margin: 0 0 12px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
     .tools label {
       display: inline-flex;
@@ -88,64 +91,14 @@
       flex-shrink: 0;
       grid-column: 1;
       grid-row: 1;
-      background: var(--fill);
-      border: 1px solid var(--line);
+      background: var(--card-fill); border: 1px solid var(--card-stroke);
       overflow: hidden;
       position: relative;
-    }
-    .callouts {
-      grid-column: 2;
-      grid-row: 1;
-      position: relative;
-      height: var(--board-h);
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .callout {
-      position: absolute;
-      left: 0;
-      right: 0;
-      font-size: 11px;
-      line-height: 1.35;
-      color: var(--anno);
-    }
-    .callout::before {
-      content: "";
-      position: absolute;
-      left: -12px;
-      top: 0.55em;
-      width: 10px;
-      border-top: 1px dashed var(--anno);
-    }
-    .callout strong {
-      display: block;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      margin-bottom: 2px;
-      color: var(--line);
     }
     .callout-a { top: 4px; }
     .callout-b { top: 52px; }
     .callout-c { top: 300px; }
     .callout-d { top: 468px; }
-
-    .tag {
-      position: absolute;
-      top: 0;
-      right: 0;
-      z-index: 2;
-      padding: 1px 5px;
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.03em;
-      color: var(--anno);
-      background: #e8e8e8;
-      border: 1px dashed var(--anno);
-      pointer-events: none;
-      user-select: none;
-    }
     .region { position: relative; }
 
     .sftp {
@@ -163,7 +116,7 @@
       align-items: center;
       gap: 8px;
       padding: 0 10px;
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--layer-stroke);
       font-size: 12px;
       min-width: 0;
     }
@@ -179,7 +132,7 @@
       gap: 4px;
       font-family: ui-monospace, monospace;
       font-size: 11px;
-      color: var(--mute);
+      color: var(--text-secondary);
       overflow: hidden;
       white-space: nowrap;
     }
@@ -205,30 +158,14 @@
     }
     .toolbar-actions .mute {
       font-size: 12px;
-      color: var(--mute);
+      color: var(--text-secondary);
       white-space: nowrap;
-    }
-    .btn {
-      appearance: none;
-      height: 24px;
-      padding: 0 10px;
-      border: 1px solid var(--line);
-      background: var(--fill);
-      color: var(--line);
-      font: inherit;
-      font-size: 12px;
-      cursor: pointer;
-      border-radius: 0;
-    }
-    .btn-primary {
-      background: var(--soft);
-      font-weight: 600;
     }
     .sftp-pane {
       min-height: 0;
       display: flex;
       flex-direction: column;
-      border-right: 1px solid var(--line);
+      border-right: 1px solid var(--layer-stroke);
     }
     .sftp-pane:last-child { border-right: 0; }
     .sftp-path {
@@ -237,13 +174,13 @@
       display: flex;
       align-items: center;
       padding: 0 10px;
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--layer-stroke);
       font-size: 12px;
       font-family: ui-monospace, monospace;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
     .sftp-head {
       flex: 0 0 auto;
@@ -253,11 +190,11 @@
       align-items: center;
       padding: 0 10px;
       gap: 8px;
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--layer-stroke);
       font-size: 11px;
       font-weight: 600;
-      color: var(--mute);
-      background: var(--soft);
+      color: var(--text-secondary);
+      background: var(--subtle-hover);
     }
     .sftp-list {
       flex: 1;
@@ -286,15 +223,15 @@
       overflow: visible;
       outline: 1px dashed var(--line);
       outline-offset: -1px;
-      background: var(--soft);
+      background: var(--subtle-hover);
     }
     .inline-rename {
       width: 100%;
       max-width: 100%;
       height: 22px;
       border: 2px solid var(--line);
-      background: var(--fill);
-      color: var(--line);
+      background: var(--card-fill);
+      color: var(--text-primary);
       font: inherit;
       font-size: 13px;
       padding: 0 4px;
@@ -311,13 +248,13 @@
       font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.02em;
-      color: var(--mute);
-      border: 1px solid var(--line);
+      color: var(--text-secondary);
+      border: 1px solid var(--card-stroke);
       padding: 0 4px;
       height: 18px;
       line-height: 16px;
       white-space: nowrap;
-      background: var(--fill);
+      background: var(--card-fill);
       pointer-events: none;
     }
 
@@ -326,8 +263,7 @@
       z-index: 1000;
       min-width: 200px;
       max-width: 280px;
-      background: var(--fill);
-      border: 1px solid var(--line);
+      background: var(--card-fill); border: 1px solid var(--card-stroke);
       padding: 4px 0;
       font-size: 13px;
       display: none;
@@ -346,10 +282,10 @@
       color: inherit;
       cursor: pointer;
     }
-    .flyout button:hover { background: var(--soft); }
+    .flyout button:hover { background: var(--subtle-hover); }
     .flyout .sep {
       height: 1px;
-      background: var(--soft);
+      background: var(--subtle-hover);
       margin: 4px 0;
       border: 0;
     }
@@ -360,8 +296,8 @@
       right: 24px;
       z-index: 1100;
       padding: 10px 14px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font-size: 13px;
       max-width: 360px;
       display: none;
@@ -383,19 +319,13 @@
       justify-content: flex-start;
       padding: 8px 4px;
       gap: 8px;
-      border-right: 1px solid var(--line);
-      background: var(--soft);
+      border-right: 1px solid var(--layer-stroke);
+      background: var(--subtle-hover);
       writing-mode: vertical-rl;
       text-orientation: mixed;
       font-size: 11px;
       font-weight: 600;
       letter-spacing: 0.04em;
-    }
-    .collapse-strip .btn {
-      writing-mode: horizontal-tb;
-      height: var(--ctrl-h);
-      width: 24px;
-      padding: 0;
     }
     .root[data-demo="local-collapsed"] .sftp {
       grid-template-columns: 32px 1fr;
@@ -420,23 +350,13 @@
       pointer-events: none;
     }
     .root[data-demo="drag-drop"] .drop-overlay { display: flex; }
-
-    .legend {
-      max-width: calc(var(--board-w) + 16px + var(--anno-w));
-      margin: 20px 0 0;
-      padding: 12px 14px;
-      border: 1px dashed var(--line);
-      font-size: 12px;
-      color: var(--mute);
-      line-height: 1.55;
-    }
-    .legend strong { color: var(--line); font-weight: 600; }
-    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
-    .legend a { color: var(--line); }
+    .legend a { color: var(--text-primary); }
   </style>
 </head>
-<body>
-  <div class="root" id="root">
+<body class="proto-body">
+  
+  <label class="proto-theme-toggle"><input type="checkbox" id="theme-toggle" /> Dark theme</label>
+<div class="root" id="root">
     <p class="meta">
       SFTP · 标签 <code>mode=sftp</code> 时的内容区（工作区标签，<strong>不是</strong> dock 面板）·
       固定 <code>960×560</code> · Local | Remote 双栏。
@@ -924,5 +844,7 @@
       applyDemoState("default");
     })();
   </script>
+<script src="../../_proto.js"></script>
+<script>enableProtoThemeToggle();</script>
 </body>
 </html>

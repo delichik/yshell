@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-proto-autoboot>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Component — buttons</title>
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_proto.css">
+  <style>
+    body { margin: 0; padding: 12px; background: var(--card-fill); color: var(--text-primary); }
+    body.proto-embed-root { padding: 8px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  </style>
+</head>
+<body data-proto-autoboot>
+  <div class="row" role="group" aria-label="Buttons">
+    <button type="button" class="btn" data-q="secondary" data-q-title="secondary" title="Cancel">Cancel</button>
+    <button type="button" class="btn btn-accent" data-q="primary" data-q-title="primary" title="Save">Save</button>
+    <button type="button" class="btn btn-subtle" data-q="subtle" data-q-title="subtle" title="Subtle">Subtle</button>
+    <button type="button" class="btn btn-danger" data-q="danger" data-q-title="danger" title="Delete">Delete</button>
+    <button type="button" class="btn" disabled title="Disabled">Disabled</button>
+    <button type="button" class="btn btn-icon" title="Add" aria-label="Add"><span class="i i-plus" aria-hidden="true"></span></button>
+  </div>
+  <script src="../_embed.js"></script>
+  <script>ProtoEmbed.boot({ toggle: false });</script>
+</body>
+</html>

@@ -1,9 +1,17 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+  <link rel="stylesheet" href="../../form.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_chrome.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_anno.css">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — Sessions panel wireframe</title>
+  <title>YShell — Sessions panel UI</title>
   <style>
     /* Theme: panel content 260 + chrome → board 280×640 (PanelId::Sessions). */
     :root {
@@ -13,10 +21,6 @@
       --row-h: 28px;
       --ctrl-h: 32px;
       --anno-w: 220px;
-      --line: #111;
-      --fill: #fff;
-      --mute: #555;
-      --soft: #f0f0f0;
       --anno: #336;
     }
     * { box-sizing: border-box; }
@@ -24,14 +28,14 @@
       margin: 0;
       padding: 24px;
       font-family: ui-sans-serif, system-ui, sans-serif;
-      color: var(--line);
-      background: #e8e8e8;
+      color: var(--text-primary);
+      background: var(--window-bg);
     }
     .meta {
       max-width: calc(var(--board-w) + 16px + var(--anno-w));
       margin: 0 0 8px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
       line-height: 1.45;
     }
     .meta code { font-size: 12px; }
@@ -39,8 +43,8 @@
       max-width: calc(var(--board-w) + 16px + var(--anno-w));
       margin: 0 0 12px;
       padding: 8px 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font-size: 13px;
       font-family: ui-monospace, monospace;
       min-height: 36px;
@@ -59,19 +63,19 @@
       align-items: center;
       margin: 0 0 12px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
     .tools button {
       height: var(--ctrl-h);
       padding: 0 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font: inherit;
       font-size: 13px;
       cursor: pointer;
     }
     .tools button[aria-pressed="true"] {
-      background: var(--soft);
+      background: var(--subtle-hover);
       font-weight: 600;
     }
     .stage {
@@ -91,8 +95,7 @@
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      background: var(--fill);
-      border: 1px solid var(--line);
+      background: var(--card-fill); border: 1px solid var(--card-stroke);
       grid-column: 1;
       grid-row: 1;
     }
@@ -101,7 +104,7 @@
       font-weight: 700;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      color: var(--mute);
+      color: var(--text-secondary);
       padding: 4px 8px 0;
     }
     .panel-body {
@@ -110,25 +113,25 @@
       width: 100%;
       display: flex;
       flex-direction: column;
-      border-top: 1px solid var(--line);
+      border-top: 1px solid var(--layer-stroke);
       margin-top: 4px;
     }
     .panel-head {
       flex: 0 0 auto;
       padding: 8px 10px;
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--layer-stroke);
       font-size: 12px;
       font-weight: 600;
     }
     .panel-search {
       flex: 0 0 auto;
       padding: 8px 10px;
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--layer-stroke);
     }
     .panel-search input {
       width: 100%;
       height: var(--row-h);
-      border: 1px solid var(--line);
+      border: 1px solid var(--card-stroke);
       padding: 0 8px;
       font: inherit;
       font-size: 13px;
@@ -159,14 +162,14 @@
       outline-offset: -1px;
       font-weight: 600;
     }
-    .tree-row.folder { color: var(--mute); }
+    .tree-row.folder { color: var(--text-secondary); }
     .tree-row .prefix { flex: 0 0 auto; }
     .sess-ico {
       width: 16px;
       height: 16px;
       flex: 0 0 16px;
-      border: 1px solid var(--line);
-      background: var(--soft);
+      border: 1px solid var(--card-stroke);
+      background: var(--subtle-hover);
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -193,7 +196,7 @@
       align-items: center;
       justify-content: center;
       font-size: 11px;
-      color: var(--mute);
+      color: var(--text-secondary);
       text-align: center;
       padding: 8px;
     }
@@ -202,8 +205,8 @@
       flex: 1;
       min-width: 0;
       border: 2px solid var(--line);
-      background: var(--fill);
-      color: var(--line);
+      background: var(--card-fill);
+      color: var(--text-primary);
       font: inherit;
       font-size: 13px;
       padding: 0 4px;
@@ -215,7 +218,7 @@
       overflow: visible;
       outline: 1px dashed var(--line);
       outline-offset: -1px;
-      background: var(--soft);
+      background: var(--subtle-hover);
     }
     .renaming-badge {
       position: absolute;
@@ -226,47 +229,14 @@
       font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.02em;
-      color: var(--mute);
-      border: 1px solid var(--line);
+      color: var(--text-secondary);
+      border: 1px solid var(--card-stroke);
       padding: 0 4px;
       height: 18px;
       line-height: 16px;
       white-space: nowrap;
-      background: var(--fill);
+      background: var(--card-fill);
       pointer-events: none;
-    }
-    .callouts {
-      grid-column: 2;
-      grid-row: 1;
-      position: relative;
-      height: var(--board-h);
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .callout {
-      position: absolute;
-      left: 0;
-      right: 0;
-      font-size: 11px;
-      line-height: 1.35;
-      color: var(--anno);
-    }
-    .callout::before {
-      content: "";
-      position: absolute;
-      left: -12px;
-      top: 0.55em;
-      width: 10px;
-      border-top: 1px dashed var(--anno);
-    }
-    .callout strong {
-      display: block;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      margin-bottom: 2px;
-      color: var(--line);
     }
     .callout-head { top: 28px; }
     .callout-search { top: 72px; }
@@ -281,8 +251,8 @@
       min-width: 240px;
       max-width: 320px;
       padding: 4px 0;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.08);
       display: none;
     }
@@ -304,23 +274,23 @@
       gap: 8px;
     }
     .flyout button:hover:not(.dis):not(:disabled),
-    .flyout a.fly-item:hover { background: var(--soft); }
+    .flyout a.fly-item:hover { background: var(--subtle-hover); }
     .flyout .label { flex: 1; min-width: 0; }
     .flyout .kbd {
       font-size: 11px;
-      color: var(--mute);
+      color: var(--text-secondary);
       font-family: ui-monospace, monospace;
       white-space: nowrap;
     }
     .flyout .sep {
       height: 1px;
-      background: var(--soft);
+      background: var(--subtle-hover);
       margin: 4px 0;
       border: 0;
     }
     .flyout button.dis,
     .flyout button:disabled {
-      color: var(--mute);
+      color: var(--text-secondary);
       cursor: not-allowed;
     }
     .toast {
@@ -329,25 +299,15 @@
       right: 24px;
       z-index: 1100;
       padding: 10px 14px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font-size: 13px;
       max-width: 360px;
       display: none;
       box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.08);
     }
     .toast.show { display: block; }
-    .legend {
-      max-width: calc(var(--board-w) + 16px + var(--anno-w));
-      margin: 20px 0 0;
-      padding: 12px 14px;
-      border: 1px dashed var(--line);
-      font-size: 12px;
-      color: var(--mute);
-      line-height: 1.5;
-    }
-    .legend strong { color: var(--line); font-weight: 600; }
-    .legend a { color: var(--line); }
+    .legend a { color: var(--text-primary); }
   </style>
 </head>
 <body>

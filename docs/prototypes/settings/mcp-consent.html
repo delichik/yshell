@@ -5,83 +5,62 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YShell — MCP control consent</title>
   <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_chrome.css">
+  <link rel="stylesheet" href="../_proto.css">
   <link rel="stylesheet" href="../_anno.css">
-  <link rel="stylesheet" href="../_icons.css">
   <style>
-    /* Theme.tool-window-*-compact */
-    :root { --win-w: 560px; --win-h: 400px; --titlebar-h: 40px; --pad: 28px; }
-    * { box-sizing: border-box; }
-    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
-    .meta { max-width: var(--win-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); line-height: 1.45; }
-    .meta a { color: var(--line); font-weight: 600; }
-    .stage { overflow-x: auto; padding-bottom: 8px; }
-    .win {
-      width: var(--win-w); height: var(--win-h); flex-shrink: 0;
-      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
-    }
-    .titlebar {
-      height: var(--titlebar-h); flex: 0 0 var(--titlebar-h);
-      display: flex; align-items: center; padding: 0 8px 0 12px; gap: 8px;
-      border-bottom: 1px solid var(--line);
-    }
-    .title { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .cap { width: 40px; height: 24px; border: 1px solid var(--line); background: transparent; font-size: 10px; color: var(--line); padding: 0; }
-    .body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: var(--pad); gap: 12px; overflow: hidden; }
-    .message { margin: 0; font-size: 14px; line-height: 1.45; }
-    .spacer { flex: 1; min-height: 8px; }
-    .footer { display: flex; flex-direction: column; gap: 12px; }
-    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
-    .actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
     .dont-ask {
       margin-right: auto;
-      display: inline-flex; align-items: center; gap: 8px;
-      font-size: 13px; color: var(--mute); cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
     }
     .dont-ask input { width: 16px; height: 16px; margin: 0; }
-    .legend { max-width: var(--win-w); margin: 16px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
-    .legend strong { color: var(--line); }
+    .msg { margin: 0; font-size: 14px; line-height: 1.45; }
   </style>
 </head>
-<body>
-  <p class="meta">MCP control consent · compact <code>560×400</code>。 Settings：<a href="sections/mcp.html">sections/mcp</a> · 共用壳 <a href="../compact-confirm/index.html">compact-confirm</a>。</p>
-
-  <div class="stage">
-    <div class="win" role="dialog" aria-labelledby="win-title">
+<body class="proto-body">
+  <label class="proto-theme-toggle"><input type="checkbox" id="theme-toggle" /> Dark theme</label>
+  <p class="proto-meta">
+    MCP consent · compact · 壳同构
+    <a href="../components/tool-window.html">tool-window</a>
+   （多控件页脚故整页保留）。← <a href="sections/mcp.html">sections/mcp</a>
+  </p>
+  <div class="proto-stage">
+    <div class="win win-compact" role="dialog" aria-labelledby="win-title">
       <div class="titlebar">
-        <div class="title" id="win-title">Allow AI control of terminals</div>
-        <button type="button" class="cap" title="Close" aria-label="Close"><span class="i i-close" aria-hidden="true"></span></button>
+        <span class="title" id="win-title">Allow AI control of terminals</span>
+        <button type="button" class="cap cap-close" title="Close" aria-label="Close">
+          <span class="i i-close" aria-hidden="true"></span>
+        </button>
       </div>
-      <div class="body">
-        <p class="message">
+      <div class="win-body">
+        <p class="msg">
           An AI agent wants control of YShell terminal sessions: run commands, read the screen, and open or close tabs.
           It cannot fill passwords or accept host keys — those stay in this app.
         </p>
-
-        <div class="spacer" aria-hidden="true"></div>
-
-        <div class="footer">
-          <hr class="rule" />
-          <div class="actions">
-            <label class="dont-ask" title="Don't ask again for MCP control requests">
-              <input type="checkbox" id="fld-dont-ask" aria-label="Don't ask again" />
-              Don't ask again
-            </label>
-            <button type="button" class="btn" title="Deny">Deny</button>
-            <button type="button" class="btn btn-primary" title="Allow">Allow</button>
-          </div>
+        <div class="win-spacer"></div>
+        <div class="win-footer">
+          <label class="dont-ask" title="Don't ask again for MCP control requests">
+            <input type="checkbox" id="fld-dont-ask" aria-label="Don't ask again" />
+            Don't ask again
+          </label>
+          <button type="button" class="btn" title="Deny">Deny</button>
+          <button type="button" class="btn btn-accent" title="Allow">Allow</button>
         </div>
       </div>
     </div>
   </div>
-
-  <div class="legend">
+  <div class="proto-legend">
     <ul class="anno">
-      <li><strong>A · When</strong> MCP Enable 且 Auto-approve Off → AI <code>request_control</code> 时弹窗。</li>
-      <li><strong>B · Don't ask again</strong> 与 Deny / Allow 同一行最左；仅随 Allow 生效，打开 Settings → MCP Auto-approve；Deny 不改。</li>
-      <li><strong>C · Actions</strong> Deny | Allow；Esc / × = Deny。</li>
-      <li><strong>D · Settings</strong> ← <a href="sections/mcp.html">sections/mcp.html</a></li>
+      <li><strong>A · When</strong> MCP Enable 且 Auto-approve Off → <code>request_control</code>。</li>
+      <li><strong>B · Don't ask again</strong> 仅随 Allow 生效。</li>
     </ul>
-    <p class="anno-ref"><a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a></p>
   </div>
+  <script src="../_embed.js"></script>
+  <script>ProtoEmbed.boot();</script>
 </body>
 </html>

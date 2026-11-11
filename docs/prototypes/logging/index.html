@@ -3,15 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — Logging wireframe</title>
+  <title>YShell — Logging UI</title>
   
   <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_chrome.css">
   <link rel="stylesheet" href="../_anno.css">
 <style>
     :root {
       --win-w: 720px;
       --win-h: 580px;
-      --titlebar-h: 40px;
+      --titlebar-h: 32px;
       --pad: 28px;
       --gap: 16px;
       --anno-w: 200px;
@@ -23,14 +24,14 @@
       margin: 0;
       padding: 24px;
       font-family: ui-sans-serif, system-ui, sans-serif;
-      color: var(--line);
-      background: #e8e8e8;
+      color: var(--text-primary);
+      background: var(--window-bg);
     }
     .meta {
       max-width: calc(var(--win-w) + 16px + var(--anno-w));
       margin: 0 0 16px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
       line-height: 1.45;
     }
     .meta code { font-size: 12px; }
@@ -40,7 +41,7 @@
       gap: 8px 16px;
       margin: 0 0 12px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
     .tools label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
     .stage { overflow-x: auto; padding-bottom: 8px; }
@@ -56,55 +57,11 @@
       height: var(--win-h);
       display: flex;
       flex-direction: column;
-      background: var(--fill);
-      border: 1px solid var(--line);
+      /* mica: _chrome.css */
       flex-shrink: 0;
     }
-    .callouts {
-      grid-column: 2;
-      grid-row: 1;
-      position: relative;
-      height: var(--win-h);
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .callout {
-      position: absolute;
-      left: 0;
-      right: 0;
-      font-size: 11px;
-      line-height: 1.35;
-      color: var(--anno);
-    }
-    .callout::before {
-      content: "";
-      position: absolute;
-      left: -12px;
-      top: 0.55em;
-      width: 10px;
-      border-top: 1px dashed var(--anno);
-    }
-    .callout strong { display: block; font-weight: 700; margin-bottom: 2px; color: var(--line); }
     .callout-session { top: 48px; }
     .callout-content { top: 88px; }
-    .titlebar {
-      height: var(--titlebar-h);
-      flex: 0 0 var(--titlebar-h);
-      display: flex;
-      align-items: center;
-      padding: 0 8px 0 12px;
-      gap: 8px;
-      border-bottom: 1px solid var(--line);
-    }
-    .title { flex: 1; font-size: 12px; font-weight: 600; }
-    .cap {
-      width: 40px;
-      height: 24px;
-      border: 1px solid var(--line);
-      background: transparent;
-      font-size: 10px;
-    }
     .body {
       flex: 1 1 auto;
       min-height: 0;
@@ -113,18 +70,6 @@
       padding: var(--pad);
       gap: var(--gap);
       overflow: hidden;
-    }
-    .tag {
-      position: absolute;
-      top: 0;
-      right: 0;
-      padding: 1px 5px;
-      font-size: 10px;
-      font-weight: 600;
-      color: var(--anno);
-      background: #e8e8e8;
-      border: 1px dashed var(--anno);
-      pointer-events: none;
     }
     .region { position: relative; }
 
@@ -149,13 +94,6 @@
       font-weight: 600;
     }
     /* Logging uses flex label | field-col (not grid form-row); keep layout override */
-    .content .form-row {
-      display: flex;
-      grid-template-columns: none;
-      gap: 12px;
-      align-items: flex-start;
-      margin-bottom: 0;
-    }
     .content .form-row > .lbl {
       flex: 0 0 var(--label-w);
       width: var(--label-w);
@@ -174,19 +112,10 @@
       align-items: center;
       min-width: 0;
     }
-    .path-row .input {
-      flex: 0 1 var(--field-w);
-      width: var(--field-w);
-      max-width: var(--field-w);
-      min-width: 0;
-      font-family: ui-monospace, monospace;
-      font-size: 13px;
-    }
-    .path-row .btn { flex: 0 0 auto; white-space: nowrap; }
     .warn-box {
       padding: 8px 10px;
-      border: 1px solid var(--line);
-      background: var(--soft);
+      border: 1px solid var(--card-stroke);
+      background: var(--subtle-hover);
       font-size: 12px;
       line-height: 1.4;
     }
@@ -200,7 +129,7 @@
     .active-lead .mark {
       width: 20px;
       height: 20px;
-      border: 1px solid var(--line);
+      border: 1px solid var(--card-stroke);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -212,8 +141,8 @@
       max-width: 420px;
       box-sizing: border-box;
       padding: 10px 12px;
-      border: 1px solid var(--line);
-      background: var(--soft);
+      border: 1px solid var(--card-stroke);
+      background: var(--subtle-hover);
       font-family: ui-monospace, monospace;
       font-size: 12px;
       line-height: 1.45;
@@ -223,8 +152,8 @@
       display: flex;
       gap: 8px;
     }
-    .btn-subtle { background: var(--soft); }
-    .btn-accent { background: var(--soft); font-weight: 600; }
+    .btn-subtle { background: var(--subtle-hover); }
+    .btn-accent { background: var(--subtle-hover); font-weight: 600; }
     .btn-stop {
       background: var(--line);
       color: var(--fill);
@@ -241,23 +170,14 @@
       flex-direction: column;
       gap: 12px;
     }
-    .rule { margin: 0; border: 0; border-top: 1px solid var(--line); }
+    .rule { margin: 0; border: 0; border-top: 1px solid var(--layer-stroke); }
     .actions { display: flex; justify-content: flex-end; gap: 8px; }
-
-    .legend {
-      max-width: calc(var(--win-w) + 16px + var(--anno-w));
-      margin: 20px 0 0;
-      padding: 12px 14px;
-      border: 1px dashed var(--line);
-      font-size: 12px;
-      color: var(--mute);
-      line-height: 1.55;
-    }
-    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
   </style>
 </head>
-<body>
-  <div class="root" id="root">
+<body class="proto-body">
+  
+  <label class="proto-theme-toggle"><input type="checkbox" id="theme-toggle" /> Dark theme</label>
+<div class="root" id="root">
     <p class="meta">Session logging · <code>720×580</code>。 <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>。</p>
 
     <div class="tools">
@@ -267,7 +187,7 @@
 
     <div class="stage">
       <div class="frame">
-        <div class="win" role="dialog">
+        <div class="win win-standard" role="dialog">
           <div class="titlebar">
 <div class="title">Session logging</div>
             <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
@@ -392,5 +312,7 @@
       sync();
     })();
   </script>
+<script src="../_proto.js"></script>
+<script>enableProtoThemeToggle();</script>
 </body>
 </html>

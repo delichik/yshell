@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-proto-autoboot>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Component — flyout</title>
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_chrome.css">
+  <link rel="stylesheet" href="../_proto.css">
+  <style>
+    body { margin: 0; padding: 8px; background: transparent; }
+  </style>
+</head>
+<body data-proto-autoboot>
+  <div class="flyout" role="menu">
+    <button type="button" data-q="a1" data-q-title="a1" title="Connect">Connect <span class="kbd">Enter</span></button>
+    <button type="button" data-q="a2" data-q-title="a2" title="Edit">Edit <span class="kbd">F2</span></button>
+    <div class="sep"></div>
+    <button type="button" data-q="a3" data-q-title="a3" title="Show in tree">✓ Show in tree</button>
+    <button type="button" data-q="a4" data-q-title="a4" title="Connect All">Connect All</button>
+    <div class="sep"></div>
+    <button type="button" class="danger" data-q="a5" data-q-title="a5" title="Delete">Delete <span class="kbd">Del</span></button>
+  </div>
+  <script src="../_embed.js"></script>
+  <script>ProtoEmbed.boot({ toggle: false });</script>
+</body>
+</html>

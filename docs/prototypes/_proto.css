@@ -1,0 +1,149 @@
+/* Prototype page stage + iframe embed frames.
+   Tokens from _theme.css (import via form.css / _chrome.css or link this after theme). */
+
+.proto-meta {
+  max-width: 1100px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+.proto-meta a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.proto-meta code { font-size: 12px; }
+.proto-meta strong { color: var(--text-primary); }
+
+.proto-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.proto-tools label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.proto-tools button,
+.proto-tools .btn {
+  height: var(--ctrl-h, 32px);
+}
+
+.proto-stage {
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.proto-frame {
+  display: grid;
+  column-gap: 16px;
+  width: max-content;
+  align-items: start;
+}
+
+/* .proto-legend visual = _anno.css .legend (link both); keep class for embed hide */
+
+/* Fixed-size iframe embeds of components/* */
+.proto-embed {
+  display: block;
+  border: 0;
+  background: transparent;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: var(--radius-surface, 8px);
+}
+.proto-embed--compact {
+  width: var(--win-compact-w, 560px);
+  height: var(--win-compact-h, 400px);
+}
+.proto-embed--standard {
+  width: var(--win-standard-w, 720px);
+  height: var(--win-standard-h, 580px);
+}
+.proto-embed--wide {
+  width: var(--win-wide-w, 1100px);
+  height: var(--win-wide-h, 820px);
+}
+.proto-embed--main {
+  width: var(--win-main-w, 1440px);
+  height: var(--win-main-h, 900px);
+}
+.proto-embed--titlebar {
+  width: 560px;
+  height: 32px;
+}
+.proto-embed--menubar {
+  width: 720px;
+  height: 32px;
+}
+.proto-embed--tabbar {
+  width: 720px;
+  height: 32px;
+}
+.proto-embed--statusbar {
+  width: 720px;
+  height: 28px;
+}
+.proto-embed--nav {
+  width: 240px;
+  height: 320px;
+}
+.proto-embed--flyout {
+  width: 280px;
+  height: 240px;
+}
+.proto-embed--infobar {
+  width: 720px;
+  height: 72px;
+}
+.proto-embed--strip {
+  width: 960px;
+  height: 420px;
+}
+.proto-embed--buttons {
+  width: 560px;
+  height: 56px;
+}
+.proto-embed--fields {
+  width: 520px;
+  height: 320px;
+}
+.proto-embed--method {
+  width: 420px;
+  height: 48px;
+}
+.proto-embed--anno-legend {
+  width: 560px;
+  height: 140px;
+}
+.proto-embed--anno-callout {
+  width: 520px;
+  height: 180px;
+}
+.proto-embed--anno-tag {
+  width: 320px;
+  height: 100px;
+}
+
+/* Component page when ?embed=1 */
+html.proto-embed-root,
+body.proto-embed-root {
+  margin: 0 !important;
+  padding: 0 !important;
+  min-height: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+}
+body.proto-embed-root .proto-meta,
+body.proto-embed-root .proto-tools,
+body.proto-embed-root .proto-theme-toggle,
+body.proto-embed-root .proto-legend {
+  display: none !important;
+}

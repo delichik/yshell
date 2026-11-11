@@ -1,19 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <link rel="stylesheet" href="../../form.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_chrome.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_anno.css">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — Tunnels panel wireframe</title>
+  <title>YShell — Tunnels panel UI</title>
   <link rel="stylesheet" href="../../_icons.css">
+  <link rel="stylesheet" href="../../_anno.css">
   <style>
     :root {
       --board-w: 320px;
       --board-h: 560px;
-      --line: #111;
-      --fill: #fff;
-      --mute: #555;
-      --soft: #f0f0f0;
-      --bg: #e8e8e8;
       --ctrl-h: 32px;
       --head-h: 36px;
       --row-h: 64px; /* 2× ctrl-h */
@@ -23,17 +27,17 @@
       margin: 0;
       padding: 24px;
       font-family: ui-sans-serif, system-ui, sans-serif;
-      color: var(--line);
-      background: var(--bg);
+      color: var(--text-primary);
+      background: var(--window-bg);
     }
     .meta {
       max-width: 520px;
       margin: 0 0 8px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
       line-height: 1.45;
     }
-    .meta a { color: var(--line); }
+    .meta a { color: var(--text-primary); }
     .meta code { font-size: 12px; }
     .tools {
       display: flex;
@@ -42,19 +46,19 @@
       align-items: center;
       margin: 0 0 12px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
     .tools button {
       height: var(--ctrl-h);
       padding: 0 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font: inherit;
       font-size: 13px;
       cursor: pointer;
     }
     .tools button[aria-pressed="true"] {
-      background: var(--soft);
+      background: var(--subtle-hover);
       font-weight: 600;
     }
     .stage { overflow-x: auto; padding-bottom: 8px; }
@@ -64,8 +68,7 @@
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      background: var(--fill);
-      border: 1px solid var(--line);
+      background: var(--card-fill); border: 1px solid var(--card-stroke);
     }
     .panel-head {
       flex: 0 0 var(--head-h);
@@ -73,14 +76,14 @@
       align-items: center;
       justify-content: space-between;
       padding: 0 10px;
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--layer-stroke);
       font-size: 13px;
       font-weight: 600;
     }
     .panel-head button.icon {
       width: 28px;
       height: 28px;
-      border: 1px solid var(--line);
+      border: 1px solid var(--card-stroke);
       background: transparent;
       font: inherit;
       font-size: 16px;
@@ -91,26 +94,6 @@
       flex: 0 0 auto;
       padding: 8px 10px;
       border-bottom: 1px solid var(--soft);
-    }
-    .panel-actions a.btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      height: var(--ctrl-h);
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--line);
-      text-decoration: none;
-    }
-    .panel-actions a.btn-icon {
-      width: var(--ctrl-h);
-      min-width: var(--ctrl-h);
-      padding: 0;
-      font-size: 20px;
-      line-height: 1;
     }
     .panel-body {
       flex: 1;
@@ -145,46 +128,36 @@
       text-transform: uppercase;
       letter-spacing: 0.03em;
       padding: 1px 6px;
-      border: 1px solid var(--line);
-      background: var(--soft);
+      border: 1px solid var(--card-stroke);
+      background: var(--subtle-hover);
     }
     .state-badge.running { background: var(--line); color: var(--fill); }
-    .state-badge.stopped { color: var(--mute); }
+    .state-badge.stopped { color: var(--text-secondary); }
     .state-badge.failed { border-width: 2px; }
     .row-btns { display: flex; gap: 6px; }
     .row-btns button {
       height: 26px;
       padding: 0 8px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font: inherit;
       font-size: 11px;
       cursor: not-allowed;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
-    .row-btns button:not(:disabled) { cursor: pointer; color: var(--line); }
+    .row-btns button:not(:disabled) { cursor: pointer; color: var(--text-primary); }
     .gap-note {
       margin-top: 10px;
       padding: 10px;
       border: 2px solid var(--line);
-      background: var(--soft);
+      background: var(--subtle-hover);
       font-size: 11px;
-      color: var(--line);
+      color: var(--text-primary);
       line-height: 1.45;
       font-weight: 600;
     }
-    .gap-note span { display: block; font-weight: 400; color: var(--mute); margin-top: 4px; }
-    .legend {
-      max-width: 520px;
-      margin: 16px 0 0;
-      padding: 12px 14px;
-      border: 1px dashed var(--line);
-      font-size: 12px;
-      color: var(--mute);
-      line-height: 1.5;
-    }
-    .legend strong { color: var(--line); }
-    .legend a { color: var(--line); }
+    .gap-note span { display: block; font-weight: 400; color: var(--text-secondary); margin-top: 4px; }
+    .legend a { color: var(--text-primary); }
     .tooltip-wrap { position: relative; display: inline-block; }
     .tooltip-wrap[data-tip]:hover::after {
       content: attr(data-tip);
@@ -194,11 +167,11 @@
       z-index: 5;
       min-width: 180px;
       padding: 6px 8px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font-size: 11px;
       font-weight: 400;
-      color: var(--mute);
+      color: var(--text-secondary);
       line-height: 1.35;
       box-shadow: 2px 2px 0 rgba(0,0,0,0.06);
     }
@@ -220,6 +193,14 @@
   <div class="stage">
     <div class="board" aria-label="Tunnels panel">
       <header class="panel-head">
+  <link rel="stylesheet" href="../../form.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_chrome.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_anno.css">
         <span>Tunnels</span>
         <button type="button" class="icon" aria-label="Panel menu" title="Panel menu">⋯</button>
       </header>

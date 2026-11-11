@@ -3,404 +3,92 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — Compact confirm wireframe</title>
-  
+  <title>YShell — Compact confirm UI</title>
+  <link rel="stylesheet" href="../_theme.css">
+  <link rel="stylesheet" href="../_proto.css">
   <link rel="stylesheet" href="../_anno.css">
-  <link rel="stylesheet" href="../_icons.css">
-<style>
-    /* Theme.tool-window-*-compact — do not scale the dialog to the viewport. */
-    :root {
-      --win-w: 560px;
-      --win-h: 400px;
-      --titlebar-h: 40px;
-      --pad: 28px;
-      --gap: 16px;
-      --ctrl-h: 32px;
-      --anno-w: 200px;
-      --line: #111;
-      --fill: #fff;
-      --mute: #555;
-      --soft: #f0f0f0;
-      --anno: #336;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      padding: 24px;
-      font-family: ui-sans-serif, system-ui, sans-serif;
-      color: var(--line);
-      background: #e8e8e8;
-    }
-    .meta {
-      max-width: calc(var(--win-w) + 16px + var(--anno-w));
-      margin: 0 0 16px;
-      font-size: 13px;
-      color: var(--mute);
-      line-height: 1.45;
-    }
-    .meta code { font-size: 12px; }
-    .tools {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px 16px;
-      margin: 0 0 12px;
-      font-size: 13px;
-      color: var(--mute);
-    }
-    .tools label {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      cursor: pointer;
-    }
-    .stage {
-      overflow-x: auto;
-      padding-bottom: 8px;
-    }
-    .frame {
-      display: grid;
-      grid-template-columns: var(--win-w) var(--anno-w);
-      column-gap: 16px;
-      width: max-content;
-      align-items: start;
-    }
-    .win {
-      width: var(--win-w);
-      height: var(--win-h);
-      display: flex;
-      flex-direction: column;
-      background: var(--fill);
-      border: 1px solid var(--line);
-      flex-shrink: 0;
-      grid-column: 1;
-      grid-row: 1;
-    }
-    .callouts {
-      grid-column: 2;
-      grid-row: 1;
-      position: relative;
-      height: var(--win-h);
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .callout {
-      position: absolute;
-      left: 0;
-      right: 0;
-      font-size: 11px;
-      line-height: 1.35;
-      color: var(--anno);
-    }
-    .callout::before {
-      content: "";
-      position: absolute;
-      left: -12px;
-      top: 0.55em;
-      width: 10px;
-      border-top: 1px dashed var(--anno);
-    }
-    .callout strong {
-      display: block;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      margin-bottom: 2px;
-      color: var(--line);
-    }
-    .callout-message { top: 72px; }
-    .root:not([data-state="token"]) .titlebar {
-      height: var(--titlebar-h);
-      flex: 0 0 var(--titlebar-h);
-      display: flex;
-      align-items: center;
-      padding: 0 8px 0 12px;
-      gap: 8px;
-      border-bottom: 1px solid var(--line);
-    }
-    .title {
-      flex: 1;
-      min-width: 0;
-      font-size: 12px;
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .cap {
-      width: 40px;
-      height: 24px;
-      border: 1px solid var(--line);
-      background: transparent;
-      font-size: 10px;
-      color: var(--line);
-      padding: 0;
-      border-radius: 0;
-    }
-    .body {
-      flex: 1 1 auto;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      padding: var(--pad);
-      gap: var(--gap);
-      overflow: hidden;
-    }
-    .tag {
-      position: absolute;
-      top: 0;
-      right: 0;
-      z-index: 1;
-      padding: 1px 5px;
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.03em;
-      color: var(--anno);
-      background: #e8e8e8;
-      border: 1px dashed var(--anno);
-      pointer-events: none;
-      user-select: none;
-    }
-    .region { position: relative; }
-    .message-row {
-      flex: 0 0 auto;
-      display: flex;
-      gap: 12px;
-      align-items: flex-start;
-    }
-    .warn-icon {
-      flex: 0 0 24px;
-      width: 24px;
-      height: 24px;
-      border: 1px solid var(--line);
-      font-size: 14px;
-      font-weight: 700;
-      line-height: 22px;
-      text-align: center;
-      display: none;
-    }
-    .root[data-state="destructive"] .warn-icon,
-    .root[data-state="token"] .warn-icon { display: block; }
-    .message {
-      margin: 0;
-      font-size: 14px;
-      line-height: 1.4;
-      flex: 1;
-    }
-    .root[data-state="destructive"] .message,
-    .root[data-state="token"] .message {
-      font-weight: 600;
-    }
-    .token-block {
-      flex: 0 0 auto;
-      display: none;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .root[data-state="token"] .token-block { display: flex; }
-    .label {
-      font-size: 13px;
-      color: var(--mute);
-    }
-    .input {
-      height: var(--ctrl-h);
-      padding: 0 8px;
-      border: 1px solid var(--line);
-      background: var(--fill);
-      color: var(--line);
-      font: inherit;
-      font-size: 14px;
-      border-radius: 0;
-      width: 100%;
-    }
-    .hint {
-      margin: 0;
-      font-size: 13px;
-      color: var(--mute);
-      line-height: 1.35;
-    }
-    .note {
-      margin: 0;
-      font-size: 11px;
-      color: var(--anno);
-      line-height: 1.35;
-    }
-    .spacer {
-      flex: 1 1 auto;
-      min-height: 12px;
-      position: relative;
-      border: 1px dashed transparent;
-    }
-    .spacer::after {
-      content: "spacer · 顶开页脚";
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 10px;
-      color: var(--mute);
-      white-space: nowrap;
-      pointer-events: none;
-      opacity: 0.7;
-    }
-    .footer {
-      flex: 0 0 auto;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .rule {
-      height: 0;
-      margin: 0;
-      border: 0;
-      border-top: 1px solid var(--line);
-    }
-    .actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-    }
-    .btn {
-      appearance: none;
-      height: var(--ctrl-h);
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
-      color: var(--line);
-      font: inherit;
-      font-size: 14px;
-      cursor: pointer;
-      border-radius: 0;
-    }
-    .btn-primary {
-      background: var(--soft);
-      font-weight: 600;
-    }
-    .btn-danger {
-      background: var(--line);
-      color: var(--fill);
-      font-weight: 600;
-    }
-    .btn:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-    }
-    .legend {
-      max-width: calc(var(--win-w) + 16px + var(--anno-w));
-      margin: 20px 0 0;
-      padding: 12px 14px;
-      border: 1px dashed var(--line);
-      font-size: 12px;
-      color: var(--mute);
-      line-height: 1.55;
-    }
-    .legend strong { color: var(--line); font-weight: 600; }
-    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
-  </style>
 </head>
-<body>
-  <div class="root" id="root" data-state="normal">
-    <p class="meta">Compact confirm · <code>560×400</code> · 普通 / 破坏性 / 多行粘贴。 <a href="../annotations.html">annotations</a>。</p>
-
-    <div class="tools" role="group" aria-label="Prototype state">
-      <label><input type="radio" name="state" value="normal" checked /> Normal confirm</label>
-      <label><input type="radio" name="state" value="destructive" /> Destructive (delete / clear)</label>
-      <label><input type="radio" name="state" value="paste" /> Multi-line paste</label>
-    </div>
-
-    <div class="stage">
-      <div class="frame">
-        <div class="win" role="dialog" aria-labelledby="win-title">
-          <div class="titlebar">
-<div class="title" id="win-title">Disconnect</div>
-            <button type="button" class="cap" title="Close" aria-label="Close"><span class="i i-close" aria-hidden="true"></span></button>
-          </div>
-
-          <div class="body">
-            <div class="message-row region">
-              <span class="tag">A · message</span>
-              <div class="warn-icon" aria-hidden="true">!</div>
-              <p class="message" id="message">Close the active session to web-01? Unsaved work in the terminal is not preserved.</p>
-            </div>
-
-            <div class="spacer" aria-hidden="true"></div>
-
-            <div class="footer">
-<hr class="rule" />
-              <div class="actions">
-                <button type="button" class="btn" title="Cancel">Cancel</button>
-                <button type="button" class="btn btn-primary" id="confirm-btn" title="Confirm">Confirm</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <ul class="callouts" aria-label="Design annotations">
-          <li class="callout callout-message">
-            <strong>A · Message</strong>
-            后果正文；destructive 加警告图标。标题栏写 Disconnect / Delete / Clear All / Paste N lines?。
-          </li>
-        </ul>
-      </div>
-    </div>
-
-    <div class="legend">
-      <ul class="anno">
-        <li><strong>A · Message</strong> 后果正文；无手输确认词。</li>
-        <li><strong>B · Focus</strong> <span id="focus-note">危险确认默认 focus Cancel；Esc = Cancel</span>。</li>
-      </ul>
-      <p class="anno-ref"><a href="../annotations.html">annotations</a></p>
-    </div>
-<script>
+<body class="proto-body">
+  <label class="proto-theme-toggle"><input type="checkbox" id="theme-toggle" /> Dark theme</label>
+  <p class="proto-meta">
+    Compact confirm · iframe → <a href="../components/tool-window.html"><code>components/tool-window.html</code></a>
+    + query（<code>title</code> / <code>message</code> / <code>primary</code>）。
+    <a href="../annotations.html">annotations</a> ·
+    <a href="../components.html">components</a>
+  </p>
+  <div class="proto-tools" role="group" aria-label="Prototype state">
+    <label><input type="radio" name="state" value="normal" checked /> Normal confirm</label>
+    <label><input type="radio" name="state" value="destructive" /> Destructive (delete / clear)</label>
+    <label><input type="radio" name="state" value="paste" /> Multi-line paste</label>
+  </div>
+  <div class="proto-stage">
+    <iframe
+      id="frame"
+      class="proto-embed proto-embed--compact"
+      data-proto-embed
+      title="Compact confirm"
+      src="../components/tool-window.html?embed=1&amp;tier=compact"
+    ></iframe>
+  </div>
+  <div class="proto-legend">
+    <ul class="anno">
+      <li><strong>A · Message</strong> 后果正文；无手输确认词。真源只有 tool-window 一份。</li>
+      <li><strong>B · Params</strong> 切换上方状态只改 query，不复制 DOM。</li>
+    </ul>
+  </div>
+  <script src="../_embed.js"></script>
+  <script>
+    ProtoEmbed.boot();
     (function () {
-      var root = document.getElementById("root");
-      var title = document.getElementById("win-title");
-      var message = document.getElementById("message");
-      var confirmBtn = document.getElementById("confirm-btn");
-      var focusNote = document.getElementById("focus-note");
-
-      var copy = {
+      var STATES = {
         normal: {
           title: "Disconnect",
           message: "Close the active session to web-01? Unsaved work in the terminal is not preserved.",
-          label: "Disconnect",
-          focus: "Esc = Cancel"
+          primary: "Confirm",
+          secondary: "Cancel"
         },
         destructive: {
-          title: "Clear all known hosts",
-          message: "Remove every persisted known host entry from disk. New connections will ask you to trust hosts again. This cannot be undone.",
-          label: "Clear all",
-          focus: "默认 focus Cancel；Esc = Cancel"
+          title: "Delete",
+          message: "Delete selected items permanently? This cannot be undone.",
+          primary: "Delete",
+          secondary: "Cancel"
         },
         paste: {
-          title: "Paste 3 lines?",
-          message: "The clipboard contains 3 lines. Paste anyway?",
-          label: "Paste",
-          focus: "默认 focus Cancel；Esc = Cancel"
+          title: "Paste 128 lines?",
+          message: "Paste a large multi-line block into the terminal?",
+          primary: "Paste",
+          secondary: "Cancel"
         }
       };
-
-      function setState(name) {
-        root.setAttribute("data-state", name);
-        var c = copy[name];
-        if (title) title.textContent = c.title;
-        if (message) message.textContent = c.message;
-        if (confirmBtn) {
-          confirmBtn.textContent = c.label;
-          confirmBtn.title = c.label;
-          confirmBtn.className = "btn " + (name === "destructive" ? "btn-danger" : "btn-primary");
-          confirmBtn.disabled = false;
-        }
-        if (focusNote) focusNote.textContent = c.focus;
+      var frame = document.getElementById("frame");
+      function apply(state) {
+        var s = STATES[state] || STATES.normal;
+        var u = new URL("../components/tool-window.html", location.href);
+        u.searchParams.set("embed", "1");
+        u.searchParams.set("tier", "compact");
+        u.searchParams.set("title", s.title);
+        u.searchParams.set("message", s.message);
+        u.searchParams.set("primary", s.primary);
+        u.searchParams.set("secondary", s.secondary);
+        var theme = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+        u.searchParams.set("theme", theme);
+        frame.src = u.pathname.replace(/^\//, "") + "?" + u.searchParams.toString();
+        // Prefer relative path for file/http both
+        frame.src = "../components/tool-window.html?" + u.searchParams.toString();
       }
-
-      root.querySelectorAll('input[name="state"]').forEach(function (r) {
-        r.addEventListener("change", function () {
-          if (r.checked) setState(r.value);
+      document.querySelectorAll('input[name="state"]').forEach(function (el) {
+        el.addEventListener("change", function () {
+          if (el.checked) apply(el.value);
         });
       });
-
-      setState("normal");
+      apply("normal");
+      var toggle = document.getElementById("theme-toggle");
+      if (toggle) {
+        toggle.addEventListener("change", function () {
+          var cur = document.querySelector('input[name="state"]:checked');
+          apply(cur ? cur.value : "normal");
+        });
+      }
     })();
   </script>
 </body>

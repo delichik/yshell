@@ -1,39 +1,42 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+  <link rel="stylesheet" href="../../form.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_chrome.css">
+  <link rel="stylesheet" href="../../_anno.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_anno.css">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — Workspace split wireframe</title>
+  <title>YShell — Workspace split UI</title>
   <style>
-    /* Per-pane TabBar + content. No product leaf-cap in this wireframe (4-pane is a demo layout only). */
+    /* Per-pane TabBar + content. No product leaf-cap in this UI (4-pane is a demo layout only). */
     :root {
       --board-w: 1100px;
       --board-h: 640px;
-      --tabbar-h: 36px;
+      --tabbar-h: 32px;
       --split: 4px;
       --ctrl-h: 32px;
-      --line: #111;
-      --fill: #fff;
-      --mute: #555;
-      --soft: #f0f0f0;
-      --bg: #e8e8e8;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       padding: 24px;
       font-family: ui-sans-serif, system-ui, sans-serif;
-      color: var(--line);
-      background: var(--bg);
+      color: var(--text-primary);
+      background: var(--window-bg);
     }
     .meta {
       max-width: var(--board-w);
       margin: 0 0 8px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
       line-height: 1.45;
     }
-    .meta a { color: var(--line); }
+    .meta a { color: var(--text-primary); }
     .meta code { font-size: 12px; }
     .tools {
       display: flex;
@@ -42,19 +45,19 @@
       align-items: center;
       margin: 0 0 12px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
     .tools button {
       height: var(--ctrl-h);
       padding: 0 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font: inherit;
       font-size: 13px;
       cursor: pointer;
     }
     .tools button[aria-pressed="true"] {
-      background: var(--soft);
+      background: var(--subtle-hover);
       font-weight: 600;
     }
     .stage { overflow-x: auto; padding-bottom: 8px; }
@@ -64,8 +67,7 @@
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      background: var(--fill);
-      border: 1px solid var(--line);
+      background: var(--card-fill); border: 1px solid var(--card-stroke);
     }
     .board-label {
       flex: 0 0 auto;
@@ -74,7 +76,7 @@
       font-weight: 600;
       letter-spacing: 0.04em;
       text-transform: uppercase;
-      color: var(--mute);
+      color: var(--text-secondary);
       border-bottom: 1px solid var(--soft);
     }
     .toolbar-row {
@@ -85,13 +87,13 @@
       padding: 6px 10px;
       border-bottom: 1px solid var(--soft);
       font-size: 12px;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
     .toolbar-row .btn-lite {
       height: 26px;
       padding: 0 10px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font: inherit;
       font-size: 11px;
     }
@@ -140,16 +142,16 @@
       display: flex;
       flex-direction: column;
       border: 1px solid var(--soft);
-      background: var(--fill);
+      background: var(--card-fill);
     }
     .pane.focused { outline: 1px solid var(--line); outline-offset: -1px; }
-    .pane.empty { background: var(--soft); }
+    .pane.empty { background: var(--subtle-hover); }
     .leaf-tabbar {
       height: var(--tabbar-h);
       flex: 0 0 var(--tabbar-h);
       display: flex;
       align-items: stretch;
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--layer-stroke);
       font-size: 12px;
       overflow: hidden;
     }
@@ -158,14 +160,14 @@
       align-items: center;
       gap: 4px;
       padding: 0 10px;
-      border-right: 1px solid var(--line);
+      border-right: 1px solid var(--layer-stroke);
       max-width: 140px;
       white-space: nowrap;
     }
-    .leaf-tab.active { background: var(--soft); font-weight: 600; }
+    .leaf-tab.active { background: var(--subtle-hover); font-weight: 600; }
     .leaf-tab .ico {
       width: 14px; height: 14px; flex: 0 0 14px;
-      border: 1px solid var(--line); background: var(--soft);
+      border: 1px solid var(--card-stroke); background: var(--subtle-hover);
       display: inline-flex; align-items: center; justify-content: center;
       font-size: 8px; font-weight: 700;
     }
@@ -174,8 +176,8 @@
       overflow: hidden; text-overflow: ellipsis; min-width: 0;
     }
     .leaf-tab .md {
-      font-size: 8px; font-weight: 700; color: var(--mute);
-      border: 1px solid var(--line); padding: 0 3px; height: 14px; line-height: 12px;
+      font-size: 8px; font-weight: 700; color: var(--text-secondary);
+      border: 1px solid var(--card-stroke); padding: 0 3px; height: 14px; line-height: 12px;
     }
     .leaf-body {
       flex: 1;
@@ -184,7 +186,7 @@
       font-family: ui-monospace, monospace;
       font-size: 12px;
       line-height: 1.5;
-      color: var(--mute);
+      color: var(--text-secondary);
       overflow: auto;
     }
     .pane.empty .leaf-body {
@@ -195,20 +197,8 @@
       font-family: ui-sans-serif, system-ui, sans-serif;
       font-size: 13px;
     }
-    .legend {
-      max-width: var(--board-w);
-      margin: 16px 0 0;
-      padding: 12px 14px;
-      border: 1px solid var(--line);
-      background: var(--fill);
-      font-size: 12px;
-      color: var(--mute);
-      line-height: 1.55;
-    }
-    .legend strong { color: var(--line); }
-    .legend ul { margin: 8px 0 0; padding-left: 18px; }
     .legend li { margin: 4px 0; }
-    .legend a { color: var(--line); }
+    .legend a { color: var(--text-primary); }
   </style>
 </head>
 <body data-layout="2v">
@@ -325,7 +315,7 @@
           <div class="split-v" aria-hidden="true"></div>
           <div class="pane empty">
             <div class="leaf-tabbar" style="opacity:0.5">
-              <div class="leaf-tab" style="color:var(--mute)">(empty)</div>
+              <div class="leaf-tab" style="color: var(--text-secondary)">(empty)</div>
             </div>
             <div class="leaf-body">
               No session in this pane.<br>

@@ -1,9 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_anno.css">
+  <link rel="stylesheet" href="../_proto.css">
+  <link rel="stylesheet" href="../_anno.css">
+  <link rel="stylesheet" href="../_chrome.css">
+  <link rel="stylesheet" href="../_anno.css">
+  <link rel="stylesheet" href="../_proto.css">
+  <link rel="stylesheet" href="../_anno.css">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — N3 ToolDock chrome wireframe</title>
+  <title>YShell — N3 ToolDock chrome UI</title>
   <style>
     /* N3 ToolDock — fixed board 1100×640; stage overflow-x:auto */
     :root {
@@ -13,11 +21,6 @@
       --right-stack-w: 300px;
       --header-h: 32px;
       --split-h: 4px;
-      --line: #111;
-      --fill: #fff;
-      --mute: #555;
-      --soft: #f0f0f0;
-      --bg: #e8e8e8;
       --ctrl-h: 32px;
     }
     * { box-sizing: border-box; }
@@ -25,24 +28,24 @@
       margin: 0;
       padding: 24px;
       font-family: ui-sans-serif, system-ui, sans-serif;
-      color: var(--line);
-      background: var(--bg);
+      color: var(--text-primary);
+      background: var(--window-bg);
       line-height: 1.45;
     }
     .meta {
       max-width: var(--board-w);
       margin: 0 0 8px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
-    .meta a { color: var(--line); }
+    .meta a { color: var(--text-primary); }
     .meta code { font-size: 12px; }
     .hud {
       max-width: var(--board-w);
       margin: 0 0 12px;
       padding: 8px 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font-size: 13px;
       min-height: var(--ctrl-h);
       display: flex;
@@ -50,7 +53,7 @@
       gap: 8px;
     }
     .hud strong { font-weight: 600; white-space: nowrap; }
-    .hud span { font-family: ui-monospace, monospace; font-size: 12px; color: var(--mute); }
+    .hud span { font-family: ui-monospace, monospace; font-size: 12px; color: var(--text-secondary); }
     .tools {
       display: flex;
       flex-wrap: wrap;
@@ -58,7 +61,7 @@
       align-items: center;
       margin: 0 0 12px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
     .tools label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
     .tools input { margin: 0; }
@@ -72,8 +75,7 @@
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      background: var(--fill);
-      border: 1px solid var(--line);
+      background: var(--card-fill); border: 1px solid var(--card-stroke);
     }
     .board-title {
       flex: 0 0 auto;
@@ -85,8 +87,8 @@
       font-weight: 600;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      border-bottom: 1px solid var(--line);
-      background: var(--soft);
+      border-bottom: 1px solid var(--layer-stroke);
+      background: var(--subtle-hover);
     }
     .board-body {
       flex: 1;
@@ -99,8 +101,8 @@
       display: flex;
       flex-direction: column;
       min-height: 0;
-      background: var(--soft);
-      border-right: 1px solid var(--line);
+      background: var(--subtle-hover);
+      border-right: 1px solid var(--layer-stroke);
     }
     .stack.left { width: var(--left-stack-w); }
     .stack.right {
@@ -118,7 +120,7 @@
       align-items: center;
       justify-content: center;
       font-size: 11px;
-      color: var(--mute);
+      color: var(--text-secondary);
       padding: 8px;
       text-align: center;
     }
@@ -142,16 +144,16 @@
       justify-content: center;
       padding: 16px;
       font-size: 14px;
-      color: var(--mute);
-      border-right: 1px solid var(--line);
+      color: var(--text-secondary);
+      border-right: 1px solid var(--layer-stroke);
     }
     .panel-frame {
       flex: 1;
       min-height: 0;
       display: flex;
       flex-direction: column;
-      background: var(--fill);
-      border-bottom: 1px solid var(--line);
+      background: var(--card-fill);
+      border-bottom: 1px solid var(--layer-stroke);
     }
     .panel-frame:last-child { border-bottom: 0; }
     .panel-frame.collapsed { flex: 0 0 auto; }
@@ -163,7 +165,7 @@
       justify-content: space-between;
       padding: 0 8px 0 10px;
       border-bottom: 1px solid var(--soft);
-      background: var(--fill);
+      background: var(--card-fill);
       position: relative;
     }
     .panel-frame.collapsed .panel-header { border-bottom: 0; }
@@ -183,23 +185,23 @@
       padding: 0;
     }
     .panel-menu-btn[aria-expanded="true"] {
-      border-color: var(--line);
-      background: var(--soft);
+      border-color: var(--text-primary);
+      background: var(--subtle-hover);
     }
     .panel-body {
       flex: 1;
       min-height: 0;
       padding: 10px 12px;
       font-size: 12px;
-      color: var(--mute);
+      color: var(--text-secondary);
       overflow: auto;
     }
-    .panel-body a { color: var(--line); }
+    .panel-body a { color: var(--text-primary); }
     .split-handle {
       flex: 0 0 var(--split-h);
       border-top: 1px dashed var(--mute);
       border-bottom: 1px dashed var(--mute);
-      background: var(--soft);
+      background: var(--subtle-hover);
     }
     .panel-menu {
       position: absolute;
@@ -207,8 +209,8 @@
       right: 4px;
       z-index: 10;
       min-width: 168px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       list-style: none;
       margin: 0;
       padding: 4px 0;
@@ -219,38 +221,27 @@
       padding: 6px 12px;
     }
     .panel-menu li.disabled {
-      color: var(--mute);
+      color: var(--text-secondary);
       opacity: 0.55;
     }
     .panel-menu li:not(.disabled):hover {
-      background: var(--soft);
-    }
-    .legend {
-      max-width: var(--board-w);
-      margin: 20px 0 0;
-      padding: 16px;
-      border: 1px solid var(--line);
-      background: var(--fill);
-      font-size: 13px;
-      color: var(--mute);
+      background: var(--subtle-hover);
     }
     .legend h2 {
       margin: 0 0 10px;
       font-size: 14px;
       font-weight: 600;
-      color: var(--line);
+      color: var(--text-primary);
     }
-    .legend ul {
-      margin: 8px 0 0;
-      padding-left: 18px;
-    }
-    .legend a { color: var(--line); }
+    .legend a { color: var(--text-primary); }
     .legend p { margin: 0 0 8px; }
   </style>
 </head>
-<body>
-  <p class="meta">
-    <strong>N3 ToolDock</strong> — relocatable panel stacks (chrome only). Board <code>1100×640</code>, greyscale wireframe.
+<body class="proto-body">
+  
+  <label class="proto-theme-toggle"><input type="checkbox" id="theme-toggle" /> Dark theme</label>
+<p class="meta">
+    <strong>N3 ToolDock</strong> — relocatable panel stacks (chrome only). Board <code>1100×640</code>, greyscale UI.
     Content UX lives in <code>panel-*</code> prototypes; this page shows headers, splits, and placement.
   </p>
 
@@ -499,5 +490,7 @@
       render('default');
     })();
   </script>
+<script src="../_proto.js"></script>
+<script>enableProtoThemeToggle();</script>
 </body>
 </html>

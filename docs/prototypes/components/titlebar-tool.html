@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-proto-autoboot>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Component — titlebar (tool)</title>
+  <link rel="stylesheet" href="../_chrome.css">
+  <link rel="stylesheet" href="../_proto.css">
+  <style>
+    body { margin: 0; background: var(--mica-tint); }
+    .wrap { width: 100%; }
+  </style>
+</head>
+<body data-proto-autoboot>
+  <div class="wrap">
+    <div class="titlebar">
+      <span class="title" data-q="title">Settings</span>
+      <button type="button" class="cap cap-close" title="Close" aria-label="Close">
+        <span class="i i-close" aria-hidden="true"></span>
+      </button>
+    </div>
+  </div>
+  <script src="../_embed.js"></script>
+  <script>ProtoEmbed.boot({ toggle: false });</script>
+</body>
+</html>

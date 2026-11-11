@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YShell — settings · Security</title>
   <link rel="stylesheet" href="../../form.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_chrome.css">
+  <link rel="stylesheet" href="../../_proto.css">
   <link rel="stylesheet" href="../../_icons.css">
   <link rel="stylesheet" href="../../_anno.css">
   <style>
@@ -13,75 +16,71 @@
     }
     * { box-sizing: border-box; }
     [hidden] { display: none !important; }
-    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
-    .meta { max-width: var(--board-w); margin: 0 0 8px; font-size: 13px; color: var(--mute); line-height: 1.45; }
-    .meta a { color: var(--line); font-weight: 600; }
-    .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; font-size: 13px; color: var(--mute); }
-    .tools .btn { font-size: 13px; }
-    .tools a.btn[aria-current="page"] { background: var(--soft); font-weight: 600; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--text-primary); background: var(--window-bg); }
+    .meta { max-width: var(--board-w); margin: 0 0 8px; font-size: 13px; color: var(--text-secondary); line-height: 1.45; }
+    .meta a { color: var(--text-primary); font-weight: 600; }
+    .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; font-size: 13px; color: var(--text-secondary); }
+    .tools a.btn[aria-current="page"] { background: var(--subtle-hover); font-weight: 600; }
     .tools button {
-      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line);
-      background: var(--fill); font: inherit; font-size: 13px; cursor: pointer;
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--card-stroke);
+      background: var(--card-fill); font: inherit; font-size: 13px; cursor: pointer;
     }
-    .tools button[aria-pressed="true"] { background: var(--soft); font-weight: 600; }
+    .tools button[aria-pressed="true"] { background: var(--subtle-hover); font-weight: 600; }
     .stage { overflow-x: auto; padding-bottom: 8px; }
     .board {
       width: var(--board-w); height: var(--board-h); flex-shrink: 0;
-      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+      display: flex; flex-direction: column; background: var(--card-fill); border: 1px solid var(--card-stroke);
     }
     .board-label {
       font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-      color: var(--mute); padding: 6px 10px 0;
+      color: var(--text-secondary); padding: 6px 10px 0;
     }
-    .board-body { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; border-top: 1px solid var(--line); margin-top: 4px; }
+    .board-body { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; border-top: 1px solid var(--layer-stroke); margin-top: 4px; }
 
     .set-card {
-      width: 100%; border: 1px solid var(--line); background: var(--fill);
+      width: 100%; border: 1px solid var(--card-stroke); background: var(--card-fill);
       padding: 16px; box-sizing: border-box;
     }
     .set-head { display: flex; align-items: center; gap: 12px; }
     .set-icon {
       width: var(--ctrl-h); height: var(--ctrl-h); flex: 0 0 var(--ctrl-h);
       display: inline-flex; align-items: center; justify-content: center;
-      border: 1px solid var(--line); background: var(--soft);
+      border: 1px solid var(--card-stroke); background: var(--subtle-hover);
     }
     .set-title { flex: 1; min-width: 0; margin: 0; font-size: 15px; font-weight: 600; }
     .status-pill {
-      height: 24px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px;
+      height: 24px; padding: 0 10px; border: 1px solid var(--card-stroke); border-radius: 999px;
       display: inline-flex; align-items: center; flex: 0 0 auto;
       font-size: 12px; font-weight: 600;
     }
-    .status-pill.is-set { background: var(--soft); }
+    .status-pill.is-set { background: var(--subtle-hover); }
     .set-desc { margin: 10px 0 0; font-size: 14px; }
     .set-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
     .set-actions .grow { flex: 1 1 12px; }
     .link-quiet {
-      font-size: 13px; color: var(--mute); text-decoration: underline;
+      font-size: 13px; color: var(--text-secondary); text-decoration: underline;
       display: inline-flex; align-items: center; min-height: var(--ctrl-h);
     }
     .link-danger { color: var(--danger); }
 
-    .group-label { margin: 20px 0 8px; font-size: 12px; font-weight: 600; color: var(--mute); }
-    .set-list { width: 100%; border: 1px solid var(--line); background: var(--fill); }
+    .group-label { margin: 20px 0 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+    .set-list { width: 100%; border: 1px solid var(--card-stroke); background: var(--card-fill); }
     .set-row {
       display: flex; align-items: center; gap: 12px;
       min-height: var(--row-h); padding: 8px 14px;
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--layer-stroke);
       color: inherit; text-decoration: none;
     }
     .set-row:last-child { border-bottom: 0; }
-    .set-row:hover { background: var(--soft); }
+    .set-row:hover { background: var(--subtle-hover); }
     .set-row .ico {
       width: var(--ctrl-h); height: var(--ctrl-h); flex: 0 0 var(--ctrl-h);
       display: inline-flex; align-items: center; justify-content: center;
-      border: 1px solid var(--line);
+      border: 1px solid var(--card-stroke);
     }
     .set-row .name { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; }
-    .set-row .count { flex: 0 0 auto; font-size: 12px; color: var(--mute); }
-    .set-row .chev { flex: 0 0 auto; color: var(--mute); }
-
-    .legend { max-width: var(--board-w); margin: 16px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
-    .legend strong { color: var(--line); }
+    .set-row .count { flex: 0 0 auto; font-size: 12px; color: var(--text-secondary); }
+    .set-row .chev { flex: 0 0 auto; color: var(--text-secondary); }
   </style>
 </head>
 <body>

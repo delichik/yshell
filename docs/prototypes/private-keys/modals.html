@@ -5,41 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YShell — Private keys · modals</title>
   <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_proto.css">
+  <link rel="stylesheet" href="../_chrome.css">
+  <link rel="stylesheet" href="../_proto.css">
   <link rel="stylesheet" href="../_anno.css">
   <style>
     :root {
       /* Generate 表单项多：用 standard 720×580；Import/Export 同框避免切换跳尺寸 */
-      --modal-w: 720px; --modal-h: 580px; --titlebar-h: 40px; --pad: 28px;
+      --modal-w: 720px; --modal-h: 580px; --titlebar-h: 32px; --pad: 28px;
     }
     * { box-sizing: border-box; }
-    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
-    .meta { max-width: var(--modal-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--text-primary); background: var(--window-bg); }
+    .meta { max-width: var(--modal-w); margin: 0 0 12px; font-size: 13px; color: var(--text-secondary); line-height: 1.45; }
     .meta a { color: inherit; }
     .tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
     .tools button {
-      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line);
-      background: var(--fill); font: inherit; cursor: pointer;
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--card-stroke);
+      background: var(--card-fill); font: inherit; cursor: pointer;
     }
-    .tools button[aria-pressed="true"] { background: var(--soft); font-weight: 600; }
+    .tools button[aria-pressed="true"] { background: var(--subtle-hover); font-weight: 600; }
     .stage { overflow-x: auto; padding-bottom: 8px; }
-    .modal {
+    .win {
       width: var(--modal-w); height: var(--modal-h); flex-shrink: 0;
-      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
+      display: flex; flex-direction: column;
     }
-    .modal[hidden] { display: none !important; }
-    .titlebar {
-      height: var(--titlebar-h); flex: 0 0 var(--titlebar-h);
-      display: flex; align-items: center; padding: 0 8px 0 12px; gap: 8px;
-      border-bottom: 1px solid var(--line);
-    }
-    .title { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .cap { width: 40px; height: 24px; border: 1px solid var(--line); background: transparent; font-size: 10px; color: var(--line); padding: 0; }
+    .win[hidden] { display: none !important; }
     .m-body { flex: 1; min-height: 0; padding: var(--pad); display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
     .m-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
     .m-spacer { flex: 1; min-height: 8px; }
     .field { margin: 0; }
     .m-body .form-row { margin-bottom: 0; }
-    .label { font-size: 13px; color: var(--mute); display: block; margin-bottom: 4px; }
+    .label { font-size: 13px; color: var(--text-secondary); display: block; margin-bottom: 4px; }
     .textarea {
       /* PEM paste: tall editor, still ≤420 */
       min-height: var(--field-h-md); resize: none;
@@ -47,15 +43,15 @@
     .pubkey { min-height: 96px; max-height: 180px; }
     .row-btns { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .ok { margin: 0; font-size: 14px; font-weight: 600; }
-    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+    .rule { border: 0; border-top: 1px solid var(--layer-stroke); margin: 0; }
     .actions { display: flex; justify-content: flex-end; gap: 8px; flex: 0 0 auto; }
-    .linkish { background: transparent; border: 0; padding: 0; font: inherit; font-size: 13px; color: var(--mute); text-decoration: underline; cursor: pointer; }
-    .legend { max-width: var(--modal-w); margin: 20px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
-    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
+    .linkish { background: transparent; border: 0; padding: 0; font: inherit; font-size: 13px; color: var(--text-secondary); text-decoration: underline; cursor: pointer; }
   </style>
 </head>
-<body>
-  <p class="meta">Private Keys 子窗 · Generate / Import / Export。 <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>。</p>
+<body class="proto-body">
+  
+  <label class="proto-theme-toggle"><input type="checkbox" id="theme-toggle" /> Dark theme</label>
+<p class="meta">Private Keys 子窗 · Generate / Import / Export。 <a href="../forms.html">forms</a> · <a href="../annotations.html">annotations</a>。</p>
   <div class="tools" role="group" aria-label="Modal state">
     <button type="button" id="state-generate" aria-pressed="true" title="Generate">Generate</button>
     <button type="button" id="state-gen-done" aria-pressed="false" title="Generate result">Generate result</button>
@@ -66,7 +62,7 @@
 
   <div class="stage">
     <!-- Generate form -->
-    <div class="modal" id="modal-generate" role="dialog">
+    <div class="win win-standard" id="modal-generate" role="dialog">
       <div class="titlebar">
         <div class="title">Generate Private Key</div>
         <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
@@ -103,7 +99,7 @@
     </div>
 
     <!-- Generate result: public key visible -->
-    <div class="modal" id="modal-gen-done" role="dialog" hidden>
+    <div class="win win-standard" id="modal-gen-done" role="dialog" hidden>
       <div class="titlebar">
         <div class="title">Key Generated — work-ed25519</div>
         <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
@@ -129,7 +125,7 @@
     </div>
 
     <!-- Import from file -->
-    <div class="modal" id="modal-import-file" role="dialog" hidden>
+    <div class="win win-standard" id="modal-import-file" role="dialog" hidden>
       <div class="titlebar">
         <div class="title">Import Private Key</div>
         <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
@@ -156,7 +152,7 @@
     </div>
 
     <!-- Import paste -->
-    <div class="modal" id="modal-import-paste" role="dialog" hidden>
+    <div class="win win-standard" id="modal-import-paste" role="dialog" hidden>
       <div class="titlebar">
         <div class="title">Paste Private Key</div>
         <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
@@ -180,7 +176,7 @@
     </div>
 
     <!-- Export public key -->
-    <div class="modal" id="modal-export" role="dialog" hidden>
+    <div class="win win-standard" id="modal-export" role="dialog" hidden>
       <div class="titlebar">
         <div class="title">Export Public Key</div>
         <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
@@ -252,5 +248,7 @@
       if (aliases[hash]) show(aliases[hash]);
     })();
   </script>
+<script src="../_proto.js"></script>
+<script>enableProtoThemeToggle();</script>
 </body>
 </html>

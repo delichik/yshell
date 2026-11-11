@@ -1,397 +1,82 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — Close tab / quit confirm wireframe</title>
+  <title>YShell — Close tab / quit confirm UI</title>
+  <link rel="stylesheet" href="../_theme.css">
+  <link rel="stylesheet" href="../_proto.css">
   <link rel="stylesheet" href="../_anno.css">
-  <link rel="stylesheet" href="../_icons.css">
-  <style>
-    /* Theme.tool-window-*-compact — fixed geometry, no viewport scaling. */
-    :root {
-      --win-w: 560px;
-      --win-h: 400px;
-      --titlebar-h: 40px;
-      --pad: 28px;
-      --gap: 16px;
-      --ctrl-h: 32px;
-      --anno-w: 200px;
-      --line: #111;
-      --fill: #fff;
-      --mute: #555;
-      --soft: #f0f0f0;
-      --anno: #555;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      padding: 24px;
-      font-family: ui-sans-serif, system-ui, sans-serif;
-      color: var(--line);
-      background: #e8e8e8;
-    }
-    .meta {
-      max-width: calc(var(--win-w) + 16px + var(--anno-w));
-      margin: 0 0 16px;
-      font-size: 13px;
-      color: var(--mute);
-      line-height: 1.45;
-    }
-    .meta code { font-size: 12px; }
-    .tools {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px 16px;
-      margin: 0 0 12px;
-      font-size: 13px;
-      color: var(--mute);
-    }
-    .tools label {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      cursor: pointer;
-    }
-    .stage {
-      overflow-x: auto;
-      padding-bottom: 8px;
-    }
-    .frame {
-      display: grid;
-      grid-template-columns: var(--win-w) var(--anno-w);
-      column-gap: 16px;
-      width: max-content;
-      align-items: start;
-    }
-    .win {
-      width: var(--win-w);
-      height: var(--win-h);
-      display: flex;
-      flex-direction: column;
-      background: var(--fill);
-      border: 1px solid var(--line);
-      flex-shrink: 0;
-      grid-column: 1;
-      grid-row: 1;
-    }
-    .callouts {
-      grid-column: 2;
-      grid-row: 1;
-      position: relative;
-      height: var(--win-h);
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .callout {
-      position: absolute;
-      left: 0;
-      right: 0;
-      font-size: 11px;
-      line-height: 1.35;
-      color: var(--anno);
-    }
-    .callout::before {
-      content: "";
-      position: absolute;
-      left: -12px;
-      top: 0.55em;
-      width: 10px;
-      border-top: 1px dashed var(--anno);
-    }
-    .callout strong {
-      display: block;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      margin-bottom: 2px;
-      color: var(--line);
-    }
-    .callout-list { top: 88px; }
-    .titlebar {
-      height: var(--titlebar-h);
-      flex: 0 0 var(--titlebar-h);
-      display: flex;
-      align-items: center;
-      padding: 0 8px 0 12px;
-      gap: 8px;
-      border-bottom: 1px solid var(--line);
-    }
-    .title {
-      flex: 1;
-      min-width: 0;
-      font-size: 12px;
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .cap {
-      width: 40px;
-      height: 24px;
-      border: 1px solid var(--line);
-      background: transparent;
-      font-size: 10px;
-      color: var(--line);
-      padding: 0;
-      border-radius: 0;
-    }
-    .body {
-      flex: 1 1 auto;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      padding: var(--pad);
-      gap: var(--gap);
-      overflow: hidden;
-    }
-    .tag {
-      position: absolute;
-      top: 0;
-      right: 0;
-      z-index: 1;
-      padding: 1px 5px;
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.03em;
-      color: var(--anno);
-      background: #e8e8e8;
-      border: 1px dashed var(--anno);
-      pointer-events: none;
-      user-select: none;
-    }
-    .region { position: relative; }
-    .lead {
-      margin: 0;
-      font-size: 14px;
-      line-height: 1.4;
-      font-weight: 600;
-    }
-    .consequences {
-      margin: 0;
-      padding-left: 1.25em;
-      font-size: 13px;
-      line-height: 1.45;
-      color: var(--line);
-    }
-    .consequences li { margin: 0 0 6px; }
-    .consequences li:last-child { margin-bottom: 0; }
-    .note-inline {
-      margin: 0;
-      font-size: 12px;
-      color: var(--mute);
-      line-height: 1.35;
-    }
-    .spacer {
-      flex: 1 1 auto;
-      min-height: 12px;
-      position: relative;
-      border: 1px dashed transparent;
-    }
-    .spacer::after {
-      content: "spacer · pins footer";
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 10px;
-      color: var(--mute);
-      white-space: nowrap;
-      pointer-events: none;
-      opacity: 0.7;
-    }
-    .footer {
-      flex: 0 0 auto;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .rule {
-      height: 0;
-      margin: 0;
-      border: 0;
-      border-top: 1px solid var(--line);
-    }
-    .actions {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 8px;
-    }
-    .dont-ask {
-      margin-right: auto;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-      color: var(--mute);
-      cursor: pointer;
-    }
-    .dont-ask input { width: 16px; height: 16px; margin: 0; }
-    .btn {
-      appearance: none;
-      height: var(--ctrl-h);
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
-      color: var(--line);
-      font: inherit;
-      font-size: 14px;
-      cursor: pointer;
-      border-radius: 0;
-    }
-    .btn-destructive {
-      background: var(--fill);
-      font-weight: 700;
-      border: 2px solid var(--line);
-    }
-    .focus-note {
-      margin: 0;
-      font-size: 11px;
-      color: var(--mute);
-      line-height: 1.35;
-    }
-    .legend {
-      max-width: calc(var(--win-w) + 16px + var(--anno-w));
-      margin: 20px 0 0;
-      padding: 12px 14px;
-      border: 1px dashed var(--line);
-      font-size: 12px;
-      color: var(--mute);
-      line-height: 1.55;
-    }
-    .legend strong { color: var(--line); font-weight: 600; }
-    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
-    .legend a { color: var(--line); }
-  </style>
 </head>
-<body>
-  <div class="root" id="root" data-state="close-ssh">
-    <p class="meta">Close tab / Quit · <code>560×400</code>。 <a href="../annotations.html">annotations</a>。</p>
-
-    <div class="tools" role="group" aria-label="Prototype state">
-      <label><input type="radio" name="state" value="close-ssh" checked /> Close Tab (SSH)</label>
-      <label><input type="radio" name="state" value="close-sftp" /> Close Tab (SFTP + xfers)</label>
-      <label><input type="radio" name="state" value="quit" /> Quit app</label>
-    </div>
-
-    <div class="stage">
-      <div class="frame">
-        <div class="win" role="dialog" aria-labelledby="win-title">
-          <div class="titlebar">
-<div class="title" id="win-title">Close tab — prod-edge</div>
-            <button type="button" class="cap" title="Cancel" aria-label="Cancel"><span class="i i-close" aria-hidden="true"></span></button>
-          </div>
-
-          <div class="body">
-            <div class="region">
-              <span class="tag">A · consequences</span>
-              <p class="lead" id="lead">Close the tab for session <strong>prod-edge</strong>?</p>
-              <ul class="consequences" id="consequences"></ul>
-              <p class="note-inline" id="tunnel-note"></p>
-            </div>
-
-            <div class="spacer" aria-hidden="true"></div>
-
-            <div class="footer">
-<hr class="rule" />
-              <div class="actions">
-                <label class="dont-ask" title="Don't ask again for this action">
-                  <input type="checkbox" id="fld-dont-ask" aria-label="Don't ask again" />
-                  Don't ask again
-                </label>
-                <button type="button" class="btn" title="Cancel">Cancel</button>
-                <button type="button" class="btn btn-destructive" id="primary-btn" title="Close Tab">Close Tab</button>
-              </div>
-              <p class="focus-note">Esc = Cancel · default focus Cancel · no type-to-confirm</p>
-            </div>
-          </div>
-        </div>
-
-        <ul class="callouts" aria-label="Design annotations">
-          <li class="callout callout-list">
-            <strong>A · Consequences</strong>
-            列出将断开的 SSH / SFTP / transfers / tunnels。
-          </li>
-        </ul>
-      </div>
-    </div>
-
-    <div class="legend">
-      <ul class="anno">
-        <li><strong>A · Consequences</strong> 活动资源摘要；Keep Running 可 disabled。</li>
-        <li><strong>B · Actions</strong> Cancel | Close Tab / Quit；安全默认 Cancel。</li>
-        <li><strong>C · Don't ask again</strong> 与 Cancel 同一行最左；勾选并确认后写 Settings → General 的 Confirm close / quit = Off；Cancel / × 不改。</li>
-      </ul>
-      <p class="anno-ref"><a href="../annotations.html">annotations</a></p>
-    </div>
+<body class="proto-body">
+  <label class="proto-theme-toggle"><input type="checkbox" id="theme-toggle" /> Dark theme</label>
+  <p class="proto-meta">
+    Close tab / Quit · iframe → <a href="../components/tool-window.html"><code>components/tool-window.html</code></a>
+    + query。<a href="../components.html">components</a>
+  </p>
+  <div class="proto-tools" role="group" aria-label="Prototype state">
+    <label><input type="radio" name="state" value="tab" checked /> Close tab</label>
+    <label><input type="radio" name="state" value="quit" /> Quit app</label>
   </div>
-
+  <div class="proto-stage">
+    <iframe
+      id="frame"
+      class="proto-embed proto-embed--compact"
+      data-proto-embed
+      title="Close tab confirm"
+      src="../components/tool-window.html?embed=1&amp;tier=compact"
+    ></iframe>
+  </div>
+  <div class="proto-legend">
+    <ul class="anno">
+      <li><strong>A · Same shell</strong> 与 compact-confirm 共用 tool-window 真源。</li>
+    </ul>
+  </div>
+  <script src="../_embed.js"></script>
   <script>
+    ProtoEmbed.boot();
     (function () {
-      var root = document.getElementById("root");
-      var title = document.getElementById("win-title");
-      var lead = document.getElementById("lead");
-      var list = document.getElementById("consequences");
-      var tunnelNote = document.getElementById("tunnel-note");
-      var primaryBtn = document.getElementById("primary-btn");
-
-      var copy = {
-        "close-ssh": {
+      var STATES = {
+        tab: {
           title: "Close tab — prod-edge",
-          leadHtml: 'Close the tab for session <strong>prod-edge</strong>?',
-          items: [
-            "Disconnect the active SSH session on this tab.",
-            "Unsaved terminal buffer content is not preserved."
-          ],
-          tunnel: "1 active port forward on this session will stop.",
-          primary: "Close Tab"
-        },
-        "close-sftp": {
-          title: "Close tab — prod-edge (SFTP)",
-          leadHtml: 'Close the tab for session <strong>prod-edge</strong>?',
-          items: [
-            "Disconnect the active SSH session on this tab.",
-            "Stop the SFTP panel on this tab.",
-            "Cancel 3 pending file transfer(s) for this session."
-          ],
-          tunnel: "1 active port forward on this session will stop.",
-          primary: "Close Tab"
+          message: "Close this tab? The session will disconnect.",
+          primary: "Close tab",
+          secondary: "Cancel"
         },
         quit: {
           title: "Quit YShell?",
-          leadHtml: "Quit the application while sessions are still active?",
-          items: [
-            "Disconnect 2 active SSH session(s).",
-            "Stop SFTP where open and cancel in-flight transfers.",
-            "Close all workspace tabs."
-          ],
-          tunnel: "Port forwards tied to those sessions will stop (see Tunnels panel).",
-          primary: "Quit"
+          message: "Quit and close all sessions?",
+          primary: "Quit",
+          secondary: "Cancel"
         }
       };
-
-      function setState(name) {
-        root.setAttribute("data-state", name);
-        var c = copy[name];
-        if (title) title.textContent = c.title;
-        if (lead) lead.innerHTML = c.leadHtml;
-        if (list) {
-          list.innerHTML = c.items.map(function (t) {
-            return "<li>" + t + "</li>";
-          }).join("");
-        }
-        if (tunnelNote) tunnelNote.textContent = c.tunnel;
-        if (primaryBtn) primaryBtn.textContent = c.primary;
+      var frame = document.getElementById("frame");
+      function apply(state) {
+        var s = STATES[state] || STATES.tab;
+        var q = new URLSearchParams({
+          embed: "1",
+          tier: "compact",
+          title: s.title,
+          message: s.message,
+          primary: s.primary,
+          secondary: s.secondary,
+          theme: document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light"
+        });
+        frame.src = "../components/tool-window.html?" + q.toString();
       }
-
-      root.querySelectorAll('input[name="state"]').forEach(function (r) {
-        r.addEventListener("change", function () {
-          if (r.checked) setState(r.value);
+      document.querySelectorAll('input[name="state"]').forEach(function (el) {
+        el.addEventListener("change", function () {
+          if (el.checked) apply(el.value);
         });
       });
-
-      setState("close-ssh");
+      apply("tab");
+      var toggle = document.getElementById("theme-toggle");
+      if (toggle) {
+        toggle.addEventListener("change", function () {
+          var cur = document.querySelector('input[name="state"]:checked');
+          apply(cur ? cur.value : "tab");
+        });
+      }
     })();
   </script>
 </body>

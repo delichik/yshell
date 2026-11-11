@@ -6,55 +6,38 @@
   <title>YShell — Login Script · Wait step</title>
   <link rel="stylesheet" href="../../_anno.css">
   <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../../_proto.css">
+  <link rel="stylesheet" href="../../_chrome.css">
+  <link rel="stylesheet" href="../../_proto.css">
   <style>
     :root {
-      --modal-w: 560px; --modal-h: 400px; --titlebar-h: 40px; --pad: 28px;
+      --modal-w: 560px; --modal-h: 400px; --titlebar-h: 32px; --pad: 28px;
       --ctrl-h: 32px;
-      --line: #111; --fill: #fff; --mute: #555; --soft: #f0f0f0;
+      
     }
     * { box-sizing: border-box; }
-    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--line); background: #e8e8e8; }
-    .meta { max-width: var(--modal-w); margin: 0 0 12px; font-size: 13px; color: var(--mute); line-height: 1.45; }
+    body { margin: 0; padding: 24px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--text-primary); background: var(--window-bg); }
+    .meta { max-width: var(--modal-w); margin: 0 0 12px; font-size: 13px; color: var(--text-secondary); line-height: 1.45; }
     .meta a { color: inherit; }
     .tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
     .tools button {
-      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line);
-      background: var(--fill); font: inherit; cursor: pointer;
+      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--card-stroke);
+      background: var(--card-fill); font: inherit; cursor: pointer;
     }
-    .tools button[aria-pressed="true"] { background: var(--soft); font-weight: 600; }
+    .tools button[aria-pressed="true"] { background: var(--subtle-hover); font-weight: 600; }
     .stage { overflow-x: auto; padding-bottom: 8px; }
-    .modal {
+    .win {
       width: var(--modal-w); height: var(--modal-h); flex-shrink: 0;
-      display: flex; flex-direction: column; background: var(--fill); border: 1px solid var(--line);
-    }
-    .titlebar {
-      height: var(--titlebar-h); flex: 0 0 var(--titlebar-h);
-      display: flex; align-items: center; padding: 0 8px 0 12px; gap: 8px;
-      border-bottom: 1px solid var(--line);
-    }
-    .title { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .cap {
-      width: 40px; height: 24px; border: 1px solid var(--line); background: transparent;
-      font-size: 10px; color: var(--line); padding: 0; text-decoration: none;
-      display: inline-flex; align-items: center; justify-content: center;
+      display: flex; flex-direction: column;
     }
     .m-body { flex: 1; min-height: 0; padding: var(--pad); display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
     .m-spacer { flex: 1; min-height: 8px; }
-    .form-row { grid-template-columns: 100px minmax(0, 1fr); gap: 8px 12px; }
     .input-ms { width: 140px; max-width: 140px; }
-    .hint { margin: 0 0 0 112px; font-size: 12px; color: var(--mute); max-width: var(--field-w); }
-    .rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+    .hint { margin: 0 0 0 112px; font-size: 12px; color: var(--text-secondary); max-width: var(--field-w); }
+    .rule { border: 0; border-top: 1px solid var(--layer-stroke); margin: 0; }
     .actions { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
     .actions .grow { flex: 1; }
-    .btn {
-      height: var(--ctrl-h); padding: 0 12px; border: 1px solid var(--line);
-      background: var(--fill); font: inherit; font-size: 14px; cursor: pointer;
-      display: inline-flex; align-items: center; text-decoration: none; color: inherit;
-    }
-    .btn-primary { background: var(--soft); font-weight: 600; }
     #btn-delete[hidden] { display: none !important; }
-    .legend { max-width: var(--modal-w); margin: 20px 0 0; padding: 12px 14px; border: 1px dashed var(--line); font-size: 12px; color: var(--mute); line-height: 1.55; }
-    .legend ul { margin: 6px 0 0; padding-left: 1.2em; }
   </style>
 </head>
 <body>
@@ -65,13 +48,13 @@
   </div>
 
   <div class="stage">
-    <div class="modal" role="dialog" aria-labelledby="win-title">
+    <div class="win win-compact" role="dialog" aria-labelledby="win-title">
       <div class="titlebar">
         <div class="title" id="win-title">Add Wait</div>
         <a class="cap" href="login-script.html" aria-label="Close" title="Close"><span class="i i-close" aria-hidden="true"></span></a>
       </div>
       <div class="m-body">
-        <div class="form-row">
+        <div class="form-row lbl-100">
           <span class="lbl">Wait (ms)</span>
           <input class="input input-ms" id="fld-wait" type="number" min="0" step="50" value="500" />
         </div>

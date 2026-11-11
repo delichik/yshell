@@ -3,47 +3,50 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — Main window wireframe</title>
+  <title>YShell — Main window UI</title>
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_anno.css">
+  <link rel="stylesheet" href="../_chrome.css">
+  <link rel="stylesheet" href="../_anno.css">
+  <link rel="stylesheet" href="../_proto.css">
+  <link rel="stylesheet" href="../_anno.css">
   <link rel="stylesheet" href="../_icons.css">
+  <link rel="stylesheet" href="../_anno.css">
   <style>
     /* Theme: preferred 1440×900 — shell hub only; region detail lives in sibling prototypes. */
     :root {
       --win-w: 1440px;
       --win-h: 900px;
-      --titlebar-h: 40px;
+      --titlebar-h: 32px;
       --statusbar-h: 28px;
       --sidebar-w: 260px;
       --right-w: 280px;
-      --tabbar-h: 36px;
+      --tabbar-h: 32px;
       --ctrl-h: 32px;
-      --line: #111;
-      --fill: #fff;
-      --mute: #555;
-      --soft: #f0f0f0;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       padding: 24px;
       font-family: ui-sans-serif, system-ui, sans-serif;
-      color: var(--line);
-      background: #e8e8e8;
+      color: var(--text-primary);
+      background: var(--window-bg);
     }
     .meta {
       max-width: var(--win-w);
       margin: 0 0 8px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
       line-height: 1.45;
     }
     .meta code { font-size: 12px; }
-    .meta strong { color: var(--line); }
+    .meta strong { color: var(--text-primary); }
     .nav-hud {
       max-width: var(--win-w);
       margin: 0 0 12px;
       padding: 8px 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font-size: 13px;
       font-family: ui-monospace, monospace;
       min-height: 36px;
@@ -57,25 +60,25 @@
       gap: 8px;
       margin: 0 0 12px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
       align-items: center;
     }
     .tools a.btn,
     .tools button {
       height: var(--ctrl-h);
       padding: 0 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font: inherit;
       font-size: 13px;
       cursor: pointer;
-      color: var(--line);
+      color: var(--text-primary);
       text-decoration: none;
       display: inline-flex;
       align-items: center;
     }
     .tools button[aria-pressed="true"] {
-      background: var(--soft);
+      background: var(--subtle-hover);
       font-weight: 600;
     }
     .stage { overflow-x: auto; padding-bottom: 8px; }
@@ -84,25 +87,13 @@
       height: var(--win-h);
       display: flex;
       flex-direction: column;
-      background: var(--fill);
-      border: 1px solid var(--line);
+      /* mica: _chrome.css */
       flex-shrink: 0;
       position: relative;
     }
     .win.fullscreen-demo {
       outline: 3px double var(--line);
       outline-offset: 4px;
-    }
-    .titlebar {
-      height: var(--titlebar-h);
-      flex: 0 0 var(--titlebar-h);
-      display: flex;
-      align-items: center;
-      padding: 0 8px 0 4px;
-      gap: 8px;
-      border-bottom: 1px solid var(--line);
-      position: relative;
-      z-index: 20;
     }
     .menus {
       display: flex;
@@ -122,9 +113,9 @@
       height: 100%;
     }
     .menu-btn:hover,
-    .menu-btn[aria-expanded="true"] { background: var(--soft); }
+    .menu-btn[aria-expanded="true"] { background: var(--subtle-hover); }
     .menus .dis {
-      color: var(--mute);
+      color: var(--text-secondary);
       text-decoration: line-through;
       padding: 0 10px;
       display: flex;
@@ -132,13 +123,6 @@
       pointer-events: none;
     }
     .title-end { display: flex; gap: 4px; margin-left: auto; }
-    .cap {
-      width: 40px;
-      height: 24px;
-      border: 1px solid var(--line);
-      background: transparent;
-      font-size: 10px;
-    }
     .shell {
       flex: 1 1 auto;
       min-height: 0;
@@ -148,11 +132,11 @@
     .sidebar {
       width: var(--sidebar-w);
       flex: 0 0 var(--sidebar-w);
-      border-right: 1px solid var(--line);
+      border-right: 1px solid var(--layer-stroke);
       display: flex;
       flex-direction: column;
       min-height: 0;
-      background: var(--soft);
+      background: var(--subtle-hover);
     }
     .win.hide-sidebar .sidebar { display: none; }
     .win.focus-mode .sidebar,
@@ -179,21 +163,21 @@
       display: none;
       flex-direction: column;
       min-height: 0;
-      background: var(--soft);
+      background: var(--subtle-hover);
     }
     .win.show-right .right { display: flex; }
     .status {
       height: var(--statusbar-h);
       flex: 0 0 var(--statusbar-h);
-      border-top: 1px solid var(--line);
+      border-top: 1px solid var(--layer-stroke);
       display: flex;
       align-items: center;
       gap: 12px;
       padding: 0 10px;
       font-size: 12px;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
-    .status .grow { flex: 1; min-width: 0; color: var(--line); }
+    .status .grow { flex: 1; min-width: 0; color: var(--text-primary); }
 
     /* Region stubs — labels only; detail in linked prototypes */
     .region {
@@ -201,7 +185,7 @@
       min-height: 0;
       margin: 8px;
       border: 1px dashed var(--mute);
-      background: var(--fill);
+      background: var(--card-fill);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -209,18 +193,18 @@
       gap: 6px;
       padding: 16px 12px;
       text-align: center;
-      color: var(--mute);
+      color: var(--text-secondary);
       font-size: 12px;
       line-height: 1.45;
     }
     .region .rid {
       font-size: 13px;
       font-weight: 700;
-      color: var(--line);
+      color: var(--text-primary);
       letter-spacing: 0.02em;
     }
     .region a {
-      color: var(--line);
+      color: var(--text-primary);
       font-weight: 600;
     }
     .region .hint { font-size: 11px; max-width: 220px; }
@@ -232,8 +216,7 @@
       z-index: 1000;
       min-width: 220px;
       max-width: 300px;
-      background: var(--fill);
-      border: 1px solid var(--line);
+      background: var(--card-fill); border: 1px solid var(--card-stroke);
       padding: 4px 0;
       font-size: 13px;
       display: none;
@@ -253,22 +236,22 @@
       font-size: 13px;
       text-align: left;
       cursor: pointer;
-      color: var(--line);
+      color: var(--text-primary);
       text-decoration: none;
       box-sizing: border-box;
     }
     .flyout button:hover,
-    .flyout a.fly-item:hover { background: var(--soft); }
+    .flyout a.fly-item:hover { background: var(--subtle-hover); }
     .flyout button.dis {
-      color: var(--mute);
+      color: var(--text-secondary);
       cursor: not-allowed;
     }
-    .flyout .kbd { color: var(--mute); font-size: 11px; font-family: ui-monospace, monospace; }
-    .flyout .sep { height: 1px; background: var(--soft); margin: 4px 0; border: 0; }
+    .flyout .kbd { color: var(--text-secondary); font-size: 11px; font-family: ui-monospace, monospace; }
+    .flyout .sep { height: 1px; background: var(--subtle-hover); margin: 4px 0; border: 0; }
     .flyout .note {
       margin: 4px 12px 8px;
       font-size: 11px;
-      color: var(--mute);
+      color: var(--text-secondary);
       line-height: 1.35;
     }
     .toast {
@@ -277,24 +260,13 @@
       left: 50%;
       transform: translateX(-50%);
       padding: 8px 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
+      border: 1px solid var(--card-stroke);
+      background: var(--card-fill);
       font-size: 12px;
       display: none;
       z-index: 1100;
     }
     .toast.show { display: block; }
-    .legend {
-      max-width: var(--win-w);
-      margin: 16px 0 0;
-      padding: 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
-      font-size: 12px;
-      color: var(--mute);
-      line-height: 1.5;
-    }
-    .legend strong { color: var(--line); }
     .kbd-table {
       width: 100%;
       border-collapse: collapse;
@@ -303,20 +275,35 @@
     }
     .kbd-table th,
     .kbd-table td {
-      border: 1px solid var(--line);
+      border: 1px solid var(--card-stroke);
       padding: 6px 8px;
       text-align: left;
     }
-    .kbd-table th { background: var(--soft); color: var(--line); }
+    .kbd-table th { background: var(--subtle-hover); color: var(--text-primary); }
     .kbd-table code { font-size: 11px; }
   </style>
 </head>
-<body>
-  <p class="meta">
+<body class="proto-body">
+  
+  <label class="proto-theme-toggle"><input type="checkbox" id="theme-toggle" /> Dark theme</label>
+  <p class="proto-meta">
     Main shell hub · N3 <strong>Left stack | Workspace | Right stack</strong> · board <code>1440×900</code>。
-    <strong>本页只标区域</strong>，不画树 / 标签 / 终端 / SFTP 细节（避免与分区原型打架）。
-    分区验收 → Regions 链接；停靠换边 → <a href="tool-dock.html">tool-dock</a>。
+    条带真源 iframe（下）· 分区 → Regions；停靠 → <a href="tool-dock.html">tool-dock</a> ·
+    <a href="../components.html">components</a>。
   </p>
+  <div class="proto-stage" style="margin-bottom:12px">
+    <div style="display:flex;flex-direction:column;gap:6px;width:720px">
+      <iframe class="proto-embed proto-embed--titlebar" data-proto-embed title="titlebar-main"
+        src="../components/titlebar-main.html?embed=1&amp;title=YShell"></iframe>
+      <iframe class="proto-embed proto-embed--menubar" data-proto-embed title="menubar"
+        src="../components/menubar.html?embed=1"></iframe>
+      <iframe class="proto-embed proto-embed--tabbar" data-proto-embed title="tabbar"
+        src="../components/tabbar.html?embed=1&amp;tab1=web-01&amp;tab2=sftp-01"></iframe>
+      <iframe class="proto-embed proto-embed--statusbar" data-proto-embed title="statusbar"
+        src="../components/statusbar.html?embed=1"></iframe>
+    </div>
+  </div>
+  <p class="proto-meta">Assembled board (layout demo; chrome classes from shared CSS):</p>
 
   <div class="tools" role="group" aria-label="Region prototypes">
     <span>Regions:</span>
@@ -347,7 +334,7 @@
   </div>
 
   <div class="stage">
-    <div class="win" id="win" role="application" aria-label="YShell main window">
+    <div class="win win-main" id="win" role="application" aria-label="YShell main window">
       <div class="titlebar">
         <div class="menus" aria-label="Application menus">
           <button type="button" class="menu-btn" data-menu="file" aria-haspopup="true" aria-expanded="false" title="File">File</button>
@@ -764,5 +751,8 @@
       syncLayoutButtons("workspace");
     })();
   </script>
+<script src="../_embed.js"></script>
+<script>ProtoEmbed.boot();</script>
+<script>enableProtoThemeToggle();</script>
 </body>
 </html>

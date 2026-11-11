@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-proto-autoboot>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Component — method segmented</title>
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_proto.css">
+  <style>
+    body { margin: 0; padding: 12px; background: var(--card-fill); }
+    body.proto-embed-root { padding: 8px; }
+  </style>
+</head>
+<body data-proto-autoboot>
+  <div class="method" role="group" aria-label="Auth method">
+    <button type="button" data-q="m1" title="Password" aria-pressed="false">Password</button>
+    <button type="button" data-q="m2" title="Private Key" aria-pressed="true">Private Key</button>
+    <button type="button" data-q="m3" title="Challenge" aria-pressed="false">Challenge</button>
+  </div>
+  <script src="../_embed.js"></script>
+  <script>ProtoEmbed.boot({ toggle: false });</script>
+</body>
+</html>

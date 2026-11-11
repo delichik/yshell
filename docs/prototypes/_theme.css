@@ -1,0 +1,192 @@
+/* YShell design-draft theme — Fluent 2 / WinUI 3 tokens + geometry.
+   Light default; set data-theme="dark" on <html> for dark.
+   Showcase: forms.html · chrome.html
+   Source: docs/product/ui-winui3-design-language.md §3
+
+   NOTE: Design-language hex is WinUI #AARRGGBB. CSS 8-digit hex is #RRGGBBAA.
+   Use rgba() / solid hex here — do NOT paste WinUI AARRGGBB.
+
+   Geometry: design draft uses Fluent title/menu/tab 32.
+   Slint Theme.bar-height-menubar is currently 40 (implementation gap). */
+
+:root {
+  /* ── Geometry ─────────────────────────────────────────────────── */
+  --field-w: 420px;
+  --lbl-w: 120px;
+  --port-w: 100px;
+  --icon-select-w: 220px;
+  --ctrl-h: 32px;
+  --row-h: calc(var(--ctrl-h) * 2);
+  --field-h-md: calc(var(--ctrl-h) * 4);
+  --field-h-lg: calc(var(--ctrl-h) * 5);
+  --nav-item-h: 40px;
+  --menubar-h: 32px;
+  --tabbar-h: 32px;
+  --titlebar-h: 32px;
+  --statusbar-h: 28px;
+  --commandbar-h: 48px;
+  --tool-pad: 28px;
+  --nav-w: 240px;
+  --manager-list-w: 380px;
+  --dock-w: 300px;
+
+  /* Window tiers (flex-shrink: 0 — never compress) */
+  --win-compact-w: 560px;
+  --win-compact-h: 400px;
+  --win-standard-w: 720px;
+  --win-standard-h: 580px;
+  --win-wide-w: 1100px;
+  --win-wide-h: 820px;
+  --win-main-w: 1440px;
+  --win-main-h: 900px;
+
+  --radius-ctrl: 4px;
+  --radius-surface: 8px;
+  --shadow-flyout: 0 8px 16px rgba(0, 0, 0, 0.14);
+
+  --switch-w: 40px;
+  --switch-h: 20px;
+  --switch-knob: 12px;
+  --switch-pad: 4px;
+  --switch-travel: 20px;
+
+  --motion-faster: 100ms;
+  --motion-fast: 167ms;
+  --motion-normal: 250ms;
+  --motion-switch: transform var(--motion-fast) cubic-bezier(0.33, 0, 0.67, 1);
+
+  /* ── Light — Fluent 2 ─────────────────────────────────────────── */
+  --window-bg: #f3f3f3;
+  --layer-fill: rgba(255, 255, 255, 0.70);
+  --layer-stroke: rgba(0, 0, 0, 0.06);
+  --card-fill: rgba(255, 255, 255, 0.72);
+  --card-stroke: rgba(0, 0, 0, 0.06);
+  --control-fill: rgba(255, 255, 255, 0.70);
+  --control-fill-hover: rgba(249, 249, 249, 0.50);
+  --control-fill-pressed: rgba(255, 255, 255, 0.30);
+  --control-fill-disabled: rgba(249, 249, 249, 0.30);
+  --control-stroke: rgba(0, 0, 0, 0.14);
+  --subtle-hover: rgba(0, 0, 0, 0.04);
+  --subtle-pressed: rgba(0, 0, 0, 0.02);
+  --subtle-selected: rgba(0, 0, 0, 0.06);
+  --text-primary: rgba(0, 0, 0, 0.90);
+  --text-secondary: rgba(0, 0, 0, 0.62);
+  --text-tertiary: rgba(0, 0, 0, 0.45);
+  --text-disabled: rgba(0, 0, 0, 0.36);
+  --accent: #005fb8;
+  --accent-hover: #0067c0;
+  --accent-pressed: #003e92;
+  --accent-text: #ffffff;
+  --accent-soft: rgba(0, 95, 184, 0.20);
+  --system-success: #0f7b0f;
+  --system-caution: #9d5d00;
+  --system-critical: #c42b1c;
+  --focus-outer: #ffffff;
+  --focus-inner: #000000;
+  --terminal-bg: #0c0c0c;
+  --terminal-fg: #cccccc;
+  --flyout-fill: rgba(252, 252, 252, 0.95);
+  --nav-rail: var(--accent);
+
+  /* Mica approximation (HTML only) */
+  --mica-tint: rgba(243, 243, 243, 0.78);
+  --mica-tint-alt: rgba(243, 243, 243, 0.88);
+  --mica-blur: 60px;
+  --mica-saturate: 1.35;
+  --desktop-fallback: #3a6ea5;
+  --desktop-a: #2d5a87;
+  --desktop-b: #5a8f6a;
+  --desktop-c: #c4a35a;
+
+  /* Readable controls on translucent cards */
+  --control-fill-solid: rgba(255, 255, 255, 0.92);
+  --control-fill-hover-solid: rgba(245, 245, 245, 0.95);
+  --control-fill-pressed-solid: rgba(238, 238, 238, 0.95);
+
+  /* Legacy aliases (older pages migrating off greyscale) */
+  --line: var(--text-primary);
+  --fill: var(--card-fill);
+  --mute: var(--text-secondary);
+  --soft: var(--subtle-selected);
+  --danger: var(--system-critical);
+  --focus-ring: var(--accent);
+  --panel: var(--window-bg);
+}
+
+html[data-theme="dark"] {
+  --window-bg: #202020;
+  --layer-fill: rgba(255, 255, 255, 0.06);
+  --layer-stroke: rgba(255, 255, 255, 0.08);
+  --card-fill: rgba(44, 44, 44, 0.85);
+  --card-stroke: rgba(255, 255, 255, 0.08);
+  --control-fill: rgba(255, 255, 255, 0.06);
+  --control-fill-hover: rgba(255, 255, 255, 0.09);
+  --control-fill-pressed: rgba(255, 255, 255, 0.04);
+  --control-fill-disabled: rgba(255, 255, 255, 0.04);
+  --control-stroke: rgba(255, 255, 255, 0.12);
+  --subtle-hover: rgba(255, 255, 255, 0.06);
+  --subtle-pressed: rgba(255, 255, 255, 0.04);
+  --subtle-selected: rgba(255, 255, 255, 0.08);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.78);
+  --text-tertiary: rgba(255, 255, 255, 0.54);
+  --text-disabled: rgba(255, 255, 255, 0.36);
+  --accent: #60cdff;
+  --accent-hover: #7edeff;
+  --accent-pressed: #4fb8e8;
+  --accent-text: #000000;
+  --accent-soft: rgba(96, 205, 255, 0.20);
+  --system-success: #6ccb5f;
+  --system-caution: #fce100;
+  --system-critical: #ff99a4;
+  --focus-outer: #000000;
+  --focus-inner: #ffffff;
+  --terminal-bg: #0c0c0c;
+  --terminal-fg: #cccccc;
+  --flyout-fill: rgba(44, 44, 44, 0.96);
+  --mica-tint: rgba(32, 32, 32, 0.80);
+  --mica-tint-alt: rgba(42, 42, 42, 0.90);
+  --desktop-fallback: #1a1a2e;
+  --desktop-a: #16213e;
+  --desktop-b: #0f3460;
+  --desktop-c: #533483;
+  --control-fill-solid: rgba(255, 255, 255, 0.08);
+  --control-fill-hover-solid: rgba(255, 255, 255, 0.11);
+  --control-fill-pressed-solid: rgba(255, 255, 255, 0.05);
+  --shadow-flyout: 0 8px 16px rgba(0, 0, 0, 0.45);
+}
+
+/* ── Page chrome for design drafts ──────────────────────────────── */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+.proto-body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-primary);
+  background-color: var(--desktop-fallback);
+  background-image:
+    radial-gradient(ellipse 80% 60% at 20% 30%, var(--desktop-a), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 80% 20%, var(--desktop-b), transparent 50%),
+    radial-gradient(ellipse 60% 50% at 60% 80%, var(--desktop-c), transparent 45%);
+  background-attachment: fixed;
+}
+
+.proto-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  user-select: none;
+  cursor: default;
+}
+
+.proto-theme-toggle input { accent-color: var(--accent); }
+
+/* Shared dark-toggle helper (pages call enableProtoThemeToggle) */

@@ -4,199 +4,78 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YShell — Prototype annotations</title>
+  <link rel="stylesheet" href="_theme.css">
+  <link rel="stylesheet" href="_proto.css">
   <link rel="stylesheet" href="_anno.css">
   <style>
-    :root {
-      --win-w: 720px;
-      --win-h: 580px;
-      --titlebar-h: 40px;
-      --pad: 28px;
-      --ctrl-h: 32px;
-      --line: #111;
-      --fill: #fff;
-      --mute: #555;
-      --soft: #f0f0f0;
-      --bg: #e8e8e8;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      padding: 24px;
-      font-family: ui-sans-serif, system-ui, sans-serif;
-      color: var(--line);
-      background: var(--bg);
-      line-height: 1.5;
-    }
-    .wrap { max-width: 920px; }
-    h1 { margin: 0 0 8px; font-size: 20px; }
-    .lead { margin: 0 0 20px; font-size: 14px; color: var(--mute); }
-    .lead a { color: var(--line); }
-    h2 { margin: 28px 0 10px; font-size: 15px; }
-    p, li { font-size: 13px; }
-    code { font-size: 12px; }
+    .page { max-width: 920px; margin: 0 auto; padding: 24px 20px 64px; }
+    h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
+    .lead { margin: 0 0 16px; font-size: 14px; color: var(--text-secondary); }
+    .lead a { color: var(--accent); font-weight: 600; text-decoration: none; }
+    h2 { margin: 28px 0 10px; font-size: 15px; font-weight: 600; }
     .box {
-      border: 1px dashed var(--line);
-      background: var(--fill);
+      border: 1px dashed var(--layer-stroke);
+      background: var(--card-fill);
       padding: 14px 16px;
       margin: 0 0 16px;
+      font-size: 13px;
+      color: var(--text-primary);
+      line-height: 1.5;
     }
-    .demo {
-      display: grid;
-      grid-template-columns: var(--win-w) var(--anno-w);
-      gap: 16px;
-      width: max-content;
-      margin: 16px 0;
-    }
-    .win {
-      width: var(--win-w);
-      height: 320px;
-      display: flex;
-      flex-direction: column;
-      background: var(--fill);
-      border: 1px solid var(--line);
-    }
-    .titlebar {
-      height: var(--titlebar-h);
-      flex: 0 0 var(--titlebar-h);
-      display: flex;
-      align-items: center;
-      padding: 0 8px 0 12px;
-      gap: 8px;
-      border-bottom: 1px solid var(--line);
-      font-size: 12px;
-      font-weight: 600;
-    }
-    .titlebar .grow { flex: 1; }
-    .cap {
-      width: 40px; height: 24px; border: 1px solid var(--line);
-      background: transparent; font-size: 10px;
-    }
-    .body {
-      flex: 1;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      padding: var(--pad);
-      gap: 12px;
-    }
-    .body .fake {
-      height: 32px;
-      border: 1px dashed var(--line);
-      background: var(--soft);
-      font-size: 12px;
-      color: var(--mute);
-      display: flex;
-      align-items: center;
-      padding: 0 8px;
-    }
-    .spacer { flex: 1; min-height: 8px; }
-    .footer {
-      flex: 0 0 auto;
-      border-top: 1px solid var(--line);
-      padding-top: 12px;
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-    }
-    .btn {
-      height: var(--ctrl-h);
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
-      font: inherit;
-      font-size: 14px;
-    }
-    .btn-primary { background: var(--soft); font-weight: 600; }
-    .callouts { height: 320px; min-height: 320px; }
-    .callout-a { top: 8px; }
-    .callout-b { top: 120px; }
-    .callout-c { top: 250px; }
     .fmt {
       font-family: ui-monospace, monospace;
       font-size: 13px;
       padding: 2px 6px;
-      border: 1px solid var(--line);
-      background: var(--soft);
+      border: 1px solid var(--layer-stroke);
+      background: var(--subtle-selected);
     }
     ul.rules { margin: 8px 0 0; padding-left: 1.2em; }
-    ul.rules li { margin-bottom: 6px; }
+    ul.rules li { margin-bottom: 6px; font-size: 13px; }
+    .note { font-size: 12px; color: var(--text-secondary); margin: 0 0 10px; }
+    .note a { color: var(--accent); font-weight: 600; text-decoration: none; }
   </style>
 </head>
-<body>
-  <div class="wrap">
+<body class="proto-body">
+  <div class="page">
     <h1>Prototype annotations</h1>
     <p class="lead">
-      所有原型共用的<strong>注释格式</strong>与<strong>通用窗体分区</strong>。
-      页面专有交互再写本页字母角标；chrome / spacer / footer <strong>不要</strong>在每个原型重复。
-      表单控件样式 / 动画见 <a href="forms.html">forms</a>（<code>form.css</code>）。
-      ← <a href="index.html">prototypes index</a>
+      通用注释<strong>只维护一份</strong>：样式 <a href="_anno.css"><code>_anno.css</code></a>，
+      切片 <a href="components.html">components/anno-*</a>（iframe + query）。
+      功能页只写本页字母内容，禁止再抄 legend/callout CSS。
+      ← <a href="index.html">hub</a>
     </p>
+    <label class="proto-theme-toggle"><input type="checkbox" id="theme-toggle" /> Dark theme</label>
 
     <h2>1. 标准格式</h2>
     <div class="box">
-      <p>字母 + 间隔号 + 短名：</p>
-      <p><span class="fmt">A · Short name</span></p>
+      <p>字母 + 间隔号 + 短名： <span class="fmt">A · Short name</span></p>
       <ul class="rules">
-        <li><strong>窗内角标</strong>：<code>.anno-tag</code> / <code>.tag</code>，叠在分区右上角，不占布局。</li>
-        <li><strong>窗内叠加层</strong>：<code>.anno-layer</code> 固定为 <code>position:absolute; inset:0; pointer-events:none</code>；注释节点必须放这一层，<strong>不得进入菜单 / 表单 / pane / footer 的文档流</strong>。</li>
-        <li><strong>窗侧 callout</strong>：与角标<strong>同一字母与标题</strong>；放在产品几何外（不计入 720×580 / 560×400）。</li>
-        <li><strong>页底 / board 图例</strong>：同样用 <code>A · Title</code> 列表（<code>.anno</code>），无侧栏时用这个。</li>
-        <li>字母从 <strong>A</strong> 起，只编<strong>本页特有</strong>分区；不要跳号，不要用 chrome/spacer/footer 占字母。</li>
-        <li>蓝色小字 <code>.anno-note</code>：实现易漏点（焦点 / 互斥），不是分区字母；也只能放在叠加层或窗口外。</li>
+        <li><strong>窗内角标</strong>：<code>.anno-tag</code> — iframe <a href="components/anno-tag.html">anno-tag</a></li>
+        <li><strong>窗侧 callout</strong>：<code>.callout</code> — iframe <a href="components/anno-callout.html">anno-callout</a></li>
+        <li><strong>页底图例</strong>：<code>.legend</code> + <code>.anno</code> — iframe <a href="components/anno-legend.html">anno-legend</a></li>
+        <li>字母从 <strong>A</strong> 起，只编本页特有分区；chrome/spacer/footer 不占字母。</li>
+        <li><code>.anno-note</code>：实现提示，不占字母；只放叠加层或窗外。</li>
       </ul>
     </div>
 
-    <h2>2. 通用分区（各页勿再注释）</h2>
-    <p>标准工具窗示意（标题栏 / 内容 / spacer / 页脚）。下列含义全局成立：</p>
-    <div class="demo">
-      <div class="win" role="img" aria-label="Common tool window regions">
-        <div class="titlebar region">
-          <span class="grow">Window title</span>
-          <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
-        </div>
-        <div class="body">
-          <div class="fake">Page-specific body (forms / lists) — annotate with A · B · …</div>
-          <div class="spacer" aria-hidden="true"></div>
-          <div class="footer">
-            <button type="button" class="btn" title="Cancel">Cancel</button>
-            <button type="button" class="btn btn-primary" title="Save">Save</button>
-          </div>
-        </div>
-      </div>
-      <ul class="callouts" aria-label="Common regions">
-        <li class="callout callout-a">
-          <strong>Chrome</strong>
-          标题栏 + 仅关闭 ×（工具窗不要 _ / □）。Esc / × 与页脚 Cancel 或 Close 同路径。尺寸见 Theme token。
-        </li>
-        <li class="callout callout-b">
-          <strong>Spacer</strong>
-          flex 余量顶开页脚；字段顶对齐，中间留空是预期，不是居中失败。
-        </li>
-        <li class="callout callout-c">
-          <strong>Footer</strong>
-          浏览型仅 Close；编辑型 Cancel | Save（或主操作）。禁止再叠一层窗级 Close。分隔线 + 右对齐按钮。
-        </li>
-      </ul>
+    <h2>2. 真源切片（iframe）</h2>
+    <p class="note">改 <code>_anno.css</code> 或这些文件，所有嵌入处一起变。</p>
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+      <iframe class="proto-embed proto-embed--anno-tag" data-proto-embed title="anno-tag"
+        src="components/anno-tag.html?embed=1&amp;tag=A%20%C2%B7%20message"></iframe>
+      <iframe class="proto-embed proto-embed--anno-legend" data-proto-embed title="anno-legend"
+        src="components/anno-legend.html?embed=1"></iframe>
     </div>
-    <div class="box">
-      <ul class="rules">
-        <li><strong>Chrome</strong> — ToolWindowChrome：标题文案可写主机/会话名；正文不要重复「Sign in to…」类抬头。</li>
-        <li><strong>Spacer</strong> — 固定窗高时消化多余垂直空间；单字段页也会有大块空白。</li>
-        <li><strong>Footer</strong> — 一窗一条提交栏；破坏性主按钮可标 critical，安全默认焦点在 Cancel。</li>
-        <li>主壳 / 管理器宽窗同样：标题栏与底栏规则相同；左右栏内容用本页字母注，不要再标「Chrome」。</li>
-      </ul>
-    </div>
+    <iframe class="proto-embed proto-embed--anno-callout" data-proto-embed title="anno-callout"
+      src="components/anno-callout.html?embed=1" style="margin-top:12px"></iframe>
 
-    <h2>3. 本页该写什么</h2>
+    <h2>3. 与产品壳</h2>
     <div class="box">
-      <ul class="rules">
-        <li>只写<strong>与别页不同</strong>的分区：Method、错误条、清单/表单、空态、右键入口等。</li>
-        <li>角标与 callout / <code>.anno</code> 列表一一对应；共用样式见 <a href="_anno.css"><code>_anno.css</code></a>。</li>
-        <li>页头 <code>meta</code> / 页底 <code>.anno-ref</code> 只链规范页（<code>annotations</code> / <code>forms</code>），不要再复述 chrome/spacer/footer 或控件规则长句。</li>
-        <li>产品规则（「管理」文案、Remember、行高等）写在 <a href="forms.html">forms</a> / 契约 / 本规则文件；<strong>不要</strong>塞进表单 <code>hint</code> 或角标正文。</li>
-        <li>用户向 <code>hint</code> 可以有：只写非显而易见的产品行为；勿教 SSH 常识、勿复述标题/开关（见 <a href="forms.html">forms</a>）。</li>
-      </ul>
+      Titlebar / body / spacer / footer 用 <a href="components/tool-window.html">tool-window</a> /
+      <a href="_chrome.css">_chrome.css</a>，不要用注释字母去标通用壳。
     </div>
   </div>
+  <script src="_embed.js"></script>
+  <script>ProtoEmbed.boot();</script>
 </body>
 </html>

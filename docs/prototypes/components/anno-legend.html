@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-proto-autoboot>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Component — anno legend</title>
+  <link rel="stylesheet" href="../_theme.css">
+  <link rel="stylesheet" href="../_anno.css">
+  <link rel="stylesheet" href="../_proto.css">
+  <style>
+    body { margin: 0; padding: 12px; background: var(--window-bg); }
+    body.proto-embed-root { padding: 8px; }
+    .legend { margin: 0; max-width: none; }
+  </style>
+</head>
+<body data-proto-autoboot>
+  <div class="legend">
+    <ul class="anno">
+      <li>
+        <strong data-q="a">A · Message</strong>
+        <span data-q="a-body">后果正文；无手输确认词。格式：字母 · 短名。</span>
+      </li>
+      <li>
+        <strong data-q="b">B · Focus</strong>
+        <span data-q="b-body">Esc = Cancel；危险确认默认 focus Cancel。</span>
+      </li>
+    </ul>
+    <p class="anno-ref"><a data-q-href="ref" href="../annotations.html">annotations</a></p>
+  </div>
+  <script src="../_embed.js"></script>
+  <script>ProtoEmbed.boot({ toggle: false });</script>
+</body>
+</html>

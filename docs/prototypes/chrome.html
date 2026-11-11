@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YShell — Shell chrome (WinUI 3)</title>
+  <link rel="stylesheet" href="_theme.css">
+  <link rel="stylesheet" href="_proto.css">
+  <style>
+    .page { max-width: 1200px; margin: 0 auto; padding: 24px 20px 64px; }
+    h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
+    .lead { margin: 0 0 16px; font-size: 14px; color: var(--text-secondary); max-width: 720px; }
+    .lead a { color: var(--accent); font-weight: 600; text-decoration: none; }
+    h2 {
+      margin: 28px 0 8px;
+      font-size: 15px;
+      font-weight: 600;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--layer-stroke);
+    }
+    .note { margin: 0 0 10px; font-size: 12px; color: var(--text-secondary); }
+    .note a { color: var(--accent); font-weight: 600; text-decoration: none; }
+    .stack { display: flex; flex-direction: column; gap: 8px; }
+  </style>
+</head>
+<body class="proto-body">
+  <div class="page">
+    <h1>Shell chrome</h1>
+    <p class="lead">
+      画廊改为 <strong>iframe</strong> 引用 <a href="components.html">components/*</a> 真源（不再复制 DOM）。
+      ← <a href="index.html">hub</a>
+    </p>
+    <label class="proto-theme-toggle">
+      <input type="checkbox" id="theme-toggle" />
+      Dark theme
+    </label>
+    <p class="note">Geometry: title/menu/tab 32 · status 28 · Implement gap: Slint menubar 40.</p>
+
+    <h2>Titlebar · MenuBar · TabBar · StatusBar</h2>
+    <div class="stack">
+      <iframe class="proto-embed proto-embed--titlebar" data-proto-embed title="titlebar-main"
+        src="components/titlebar-main.html?embed=1&amp;title=YShell%20%E2%80%94%20web-01"></iframe>
+      <iframe class="proto-embed proto-embed--menubar" data-proto-embed title="menubar"
+        src="components/menubar.html?embed=1"></iframe>
+      <iframe class="proto-embed proto-embed--tabbar" data-proto-embed title="tabbar"
+        src="components/tabbar.html?embed=1&amp;tab1=web-01&amp;tab2=sftp-01"></iframe>
+      <iframe class="proto-embed proto-embed--statusbar" data-proto-embed title="statusbar"
+        src="components/statusbar.html?embed=1"></iframe>
+    </div>
+
+    <h2>NavigationView</h2>
+    <iframe class="proto-embed proto-embed--nav" data-proto-embed title="nav-pane"
+      src="components/nav-pane.html?embed=1"></iframe>
+
+    <h2>Flyout · InfoBar</h2>
+    <div class="stack">
+      <iframe class="proto-embed proto-embed--flyout" data-proto-embed title="flyout"
+        src="components/flyout.html?embed=1"></iframe>
+      <iframe class="proto-embed proto-embed--infobar" data-proto-embed title="infobar"
+        src="components/infobar.html?embed=1"></iframe>
+    </div>
+
+    <h2>Compact tool window</h2>
+    <p class="note">同 <a href="compact-confirm/index.html">compact-confirm</a> 真源。</p>
+    <iframe class="proto-embed proto-embed--compact" data-proto-embed title="tool-window"
+      src="components/tool-window.html?embed=1&amp;tier=compact&amp;title=Close%20tab%3F&amp;message=Close%20this%20tab%3F%20The%20session%20will%20disconnect.&amp;primary=Close%20tab"></iframe>
+  </div>
+  <script src="_embed.js"></script>
+  <script>ProtoEmbed.boot();</script>
+</body>
+</html>

@@ -1,25 +1,23 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+  <link rel="stylesheet" href="../form.css">
+  <link rel="stylesheet" href="../_chrome.css">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YShell — SFTP properties wireframe</title>
+  <title>YShell — SFTP properties UI</title>
   <link rel="stylesheet" href="../_anno.css">
   <link rel="stylesheet" href="../_icons.css">
   <style>
     :root {
       --win-w: 720px;
       --win-h: 580px;
-      --titlebar-h: 40px;
+      --titlebar-h: 32px;
       --pad: 28px;
       --gap: 16px;
       --ctrl-h: 32px;
       --anno-w: 200px;
       --label-w: 120px;
-      --line: #111;
-      --fill: #fff;
-      --mute: #555;
-      --soft: #f0f0f0;
       --anno: #336;
     }
     * { box-sizing: border-box; }
@@ -27,14 +25,14 @@
       margin: 0;
       padding: 24px;
       font-family: ui-sans-serif, system-ui, sans-serif;
-      color: var(--line);
-      background: #e8e8e8;
+      color: var(--text-primary);
+      background: var(--window-bg);
     }
     .meta {
       max-width: calc(var(--win-w) + 16px + var(--anno-w));
       margin: 0 0 16px;
       font-size: 13px;
-      color: var(--mute);
+      color: var(--text-secondary);
     }
     .stage { overflow-x: auto; padding-bottom: 8px; }
     .frame {
@@ -48,53 +46,10 @@
       height: var(--win-h);
       display: flex;
       flex-direction: column;
-      background: var(--fill);
-      border: 1px solid var(--line);
+      /* mica: _chrome.css */
       flex-shrink: 0;
     }
-    .callouts {
-      grid-column: 2;
-      position: relative;
-      height: var(--win-h);
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .callout {
-      position: absolute;
-      left: 0;
-      right: 0;
-      font-size: 11px;
-      color: var(--anno);
-      line-height: 1.35;
-    }
-    .callout::before {
-      content: "";
-      position: absolute;
-      left: -12px;
-      top: 0.55em;
-      width: 10px;
-      border-top: 1px dashed var(--anno);
-    }
-    .callout strong { display: block; color: var(--line); margin-bottom: 2px; }
     .callout-grid { top: 56px; }
-    .titlebar {
-      height: var(--titlebar-h);
-      flex: 0 0 var(--titlebar-h);
-      display: flex;
-      align-items: center;
-      padding: 0 8px 0 12px;
-      gap: 8px;
-      border-bottom: 1px solid var(--line);
-    }
-    .title { flex: 1; font-size: 12px; font-weight: 600; }
-    .cap {
-      width: 40px;
-      height: 24px;
-      border: 1px solid var(--line);
-      font-size: 10px;
-      background: transparent;
-    }
     .body {
       flex: 1 1 auto;
       min-height: 0;
@@ -103,18 +58,6 @@
       padding: var(--pad);
       gap: var(--gap);
       overflow: hidden;
-    }
-    .tag {
-      position: absolute;
-      top: 0;
-      right: 0;
-      font-size: 10px;
-      font-weight: 600;
-      color: var(--anno);
-      background: #e8e8e8;
-      border: 1px dashed var(--anno);
-      padding: 1px 5px;
-      pointer-events: none;
     }
     .region { position: relative; }
 
@@ -126,7 +69,7 @@
       font-size: 14px;
       align-items: start;
     }
-    .grid .lbl { color: var(--mute); }
+    .grid .lbl { color: var(--text-secondary); }
     .grid .val { word-break: break-word; }
     .grid .val.mono { font-family: ui-monospace, monospace; }
     .grid .val.elide {
@@ -137,39 +80,19 @@
 
     .spacer { flex: 1 1 auto; min-height: 12px; }
     .footer { flex: 0 0 auto; }
-    .rule { margin: 0 0 12px; border: 0; border-top: 1px solid var(--line); }
+    .rule { margin: 0 0 12px; border: 0; border-top: 1px solid var(--layer-stroke); }
     .actions { display: flex; justify-content: flex-end; gap: 8px; }
-    .btn {
-      height: var(--ctrl-h);
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      background: var(--fill);
-      font: inherit;
-      font-size: 14px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .btn-icon { width: var(--ctrl-h); min-width: var(--ctrl-h); padding: 0; font-size: 20px; font-weight: 600; line-height: 1; }
-    .btn-accent { background: var(--soft); font-weight: 600; }
-
-    .legend {
-      max-width: calc(var(--win-w) + 16px + var(--anno-w));
-      margin: 20px 0 0;
-      padding: 12px 14px;
-      border: 1px dashed var(--line);
-      font-size: 12px;
-      color: var(--mute);
-    }
+    .btn-accent { background: var(--subtle-hover); font-weight: 600; }
   </style>
 </head>
-<body>
-  <p class="meta">SFTP properties · <code>720×580</code>。 <a href="../annotations.html">annotations</a>。</p>
+<body class="proto-body">
+  
+  <label class="proto-theme-toggle"><input type="checkbox" id="theme-toggle" /> Dark theme</label>
+<p class="meta">SFTP properties · <code>720×580</code>。 <a href="../annotations.html">annotations</a>。</p>
 
   <div class="stage">
     <div class="frame">
-      <div class="win" role="dialog">
+      <div class="win win-standard" role="dialog">
         <div class="titlebar region">
 <div class="title">Properties</div>
           <button type="button" class="cap" tabindex="-1" aria-hidden="true"><span class="i i-close" aria-hidden="true"></span></button>
@@ -217,5 +140,7 @@
       </ul>
       <p class="anno-ref"><a href="../annotations.html">annotations</a></p>
     </div>
+<script src="../_proto.js"></script>
+<script>enableProtoThemeToggle();</script>
 </body>
 </html>
