@@ -31,6 +31,6 @@ pub use schema::{
 pub use sessions::{SessionTreeError, SessionTreeStore, FOLDER_META_FILE_NAME, SESSIONS_DIR_NAME};
 pub use store::{ConfigStore, ConfigStoreError, LoadOutcome};
 pub use themes::{
-    allocate_user_theme_id, is_builtin_scheme_id, ColorTheme, ThemeCatalog, ThemeCatalogError,
-    BUILTIN_SCHEME_IDS, THEMES_DIR_NAME,
+    allocate_user_theme_id, resolve_shipped_themes_dir, ColorTheme, ThemeCatalog,
+    ThemeCatalogError, DEFAULT_THEME_ID, THEMES_DIR_NAME,
 };

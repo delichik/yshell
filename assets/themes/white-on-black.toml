@@ -1,0 +1,25 @@
+id = "white-on-black"
+name = "White on Black"
+foreground = "#ffffff"
+background = "#000000"
+cursor = "#ffffff"
+selection = "#404040"
+ansi = [
+  "#ffffff",
+  "#ffffff",
+  "#ffffff",
+  "#ffffff",
+  "#ffffff",
+  "#ffffff",
+  "#ffffff",
+  "#ffffff",
+  "#ffffff",
+  "#ffffff",
+  "#ffffff",
+  "#ffffff",
+  "#ffffff",
+  "#ffffff",
+  "#ffffff",
+  "#ffffff",
+]
+

@@ -40,11 +40,14 @@ install -D -m 0644 %{_sourcedir}/LICENSE %{buildroot}/usr/share/licenses/yshell/
 install -D -m 0644 %{_sourcedir}/README.md %{buildroot}/usr/share/doc/yshell/README.md
 mkdir -p %{buildroot}/usr/share/yshell/fonts
 cp -a %{_sourcedir}/fonts/. %{buildroot}/usr/share/yshell/fonts/ || true
+mkdir -p %{buildroot}/usr/share/yshell/themes
+cp -a %{_sourcedir}/themes/. %{buildroot}/usr/share/yshell/themes/ || true
 
 %files
 /usr/bin/yshell
 /usr/share/applications/yshell.desktop
 /usr/share/yshell/fonts
+/usr/share/yshell/themes
 %license /usr/share/licenses/yshell/LICENSE
 %doc /usr/share/doc/yshell/README.md
 

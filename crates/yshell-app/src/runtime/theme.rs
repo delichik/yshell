@@ -16,9 +16,9 @@ use yshell_config::{
     LoggingProfile, TerminalProfile, ThemeCatalog,
 };
 use yshell_terminal::{
-    color_scheme, FontFamilyFaces, FontSelection, GridPoint, PrimaryFont, SelectionRange,
-    TerminalCell, TerminalColor, TerminalFrame, TerminalPalette, TerminalRenderer,
-    TerminalSnapshot, COLOR_SCHEMES, DEFAULT_FONT_SIZE, DEFAULT_SCALE_FACTOR,
+    FontFamilyFaces, FontSelection, GridPoint, PrimaryFont, SelectionRange, TerminalCell,
+    TerminalColor, TerminalFrame, TerminalPalette, TerminalRenderer, TerminalSnapshot,
+    DEFAULT_FONT_SIZE, DEFAULT_SCALE_FACTOR,
 };
 
 use super::*;
@@ -218,16 +218,16 @@ pub(crate) fn lookup_scheme_palette(id: Option<&str>, catalog: &ThemeCatalog) ->
     let Some(id) = id.filter(|value| !value.is_empty()) else {
         return TerminalPalette::DEFAULT;
     };
-    if let Some(theme) = catalog.get_user(id) {
-        return palette_from_color_theme(theme);
-    }
-    color_scheme(id).map_or(TerminalPalette::DEFAULT, |scheme| scheme.palette)
+    catalog
+        .get(id)
+        .map(palette_from_color_theme)
+        .unwrap_or(TerminalPalette::DEFAULT)
 }
 
 /// Whether `id` resolves to a built-in or user theme.
 #[must_use]
 pub(crate) fn scheme_id_known(id: &str, catalog: &ThemeCatalog) -> bool {
-    catalog.contains_user(id) || color_scheme(id).is_some()
+    catalog.contains(id)
 }
 
 /// Converts a persisted [`ColorTheme`] into a renderer palette.
@@ -266,13 +266,8 @@ pub(crate) fn color_theme_from_palette(
 
 /// Built-in scheme as a [`ColorTheme`] document (for clone).
 #[must_use]
-pub(crate) fn builtin_as_color_theme(id: &str) -> Option<ColorTheme> {
-    let scheme = color_scheme(id)?;
-    Some(color_theme_from_palette(
-        scheme.id,
-        scheme.name,
-        scheme.palette,
-    ))
+pub(crate) fn builtin_as_color_theme(id: &str, catalog: &ThemeCatalog) -> Option<ColorTheme> {
+    catalog.get_builtin(id).cloned()
 }
 
 /// Palette resolved from a profile: named theme (user or built-in) plus any
@@ -387,12 +382,7 @@ fn migrate_profile_overrides(
     let base_name = profile
         .color_scheme
         .as_deref()
-        .and_then(|id| {
-            catalog
-                .get_user(id)
-                .map(|theme| theme.name.clone())
-                .or_else(|| color_scheme(id).map(|scheme| scheme.name.to_owned()))
-        })
+        .and_then(|id| catalog.get(id).map(|theme| theme.name.clone()))
         .unwrap_or_else(|| "Custom".to_owned());
     let theme_name = format!("Custom from {base_name}");
     let source = color_theme_from_palette("pending", &theme_name, palette);
@@ -511,14 +501,15 @@ pub(crate) struct ThemeSchemeOption {
 /// Built-in + user schemes as projection data. Scheme chips carry the four role
 /// colors (foreground/background/cursor/selection) so the name stays readable.
 pub(crate) fn scheme_options(catalog: &ThemeCatalog) -> Vec<ThemeSchemeOption> {
-    let mut options: Vec<ThemeSchemeOption> = COLOR_SCHEMES
-        .iter()
-        .map(|scheme| {
-            let mut swatches = palette_swatches(scheme.palette);
+    let mut options: Vec<ThemeSchemeOption> = catalog
+        .builtin_themes()
+        .map(|theme| {
+            let palette = palette_from_color_theme(theme);
+            let mut swatches = palette_swatches(palette);
             swatches.truncate(4);
             ThemeSchemeOption {
-                id: scheme.id.to_owned(),
-                name: scheme.name.to_owned(),
+                id: theme.id.clone(),
+                name: theme.name.clone(),
                 swatches,
                 builtin: true,
             }
@@ -565,11 +556,9 @@ pub(crate) fn color_scheme_id_at(catalog: &ThemeCatalog, index: i32) -> Option<S
 
 /// Display name for a scheme id (user or built-in).
 pub(crate) fn scheme_display_name(id: &str, catalog: &ThemeCatalog) -> String {
-    if let Some(theme) = catalog.get_user(id) {
-        return theme.name.clone();
-    }
-    color_scheme(id)
-        .map(|scheme| scheme.name.to_owned())
+    catalog
+        .get(id)
+        .map(|theme| theme.name.clone())
         .unwrap_or_else(|| id.to_owned())
 }
 
@@ -602,22 +591,22 @@ pub(crate) struct ThemeManagerRowData {
 
 /// Built-in + user themes as Theme Manager rows.
 ///
-/// Order matches the rest of the app: built-ins (compile-time order) first,
-/// then user themes sorted by id (the catalog is a `BTreeMap`).
+/// Order matches the rest of the app: shipped themes (sorted by id) first,
+/// then user themes sorted by id (both maps are `BTreeMap`s).
 pub(crate) fn theme_manager_rows(
     catalog: &ThemeCatalog,
     selected_id: &str,
     default_id: &str,
 ) -> Vec<ThemeManagerRowData> {
-    let mut rows: Vec<ThemeManagerRowData> = COLOR_SCHEMES
-        .iter()
-        .map(|scheme| ThemeManagerRowData {
-            id: scheme.id.to_owned(),
-            name: scheme.name.to_owned(),
-            swatches: palette_swatches(scheme.palette),
+    let mut rows: Vec<ThemeManagerRowData> = catalog
+        .builtin_themes()
+        .map(|theme| ThemeManagerRowData {
+            id: theme.id.clone(),
+            name: theme.name.clone(),
+            swatches: palette_swatches(palette_from_color_theme(theme)),
             builtin: true,
-            selected: scheme.id == selected_id,
-            current: scheme.id == default_id,
+            selected: theme.id == selected_id,
+            current: theme.id == default_id,
         })
         .collect();
     for theme in catalog.user_themes() {
@@ -1681,7 +1670,7 @@ impl AppRuntime {
     pub fn clone_color_theme(&mut self, source_id: &str) -> AppResult<AppProjection> {
         let source = if let Some(user) = self.theme_catalog.get_user(source_id).cloned() {
             user
-        } else if let Some(builtin) = builtin_as_color_theme(source_id) {
+        } else if let Some(builtin) = builtin_as_color_theme(source_id, &self.theme_catalog) {
             builtin
         } else {
             return Err(AppError::new(format!("unknown theme '{source_id}'")));
@@ -1707,7 +1696,7 @@ impl AppRuntime {
             self.theme_editor = Some(ThemeEditorDraft::from_color_theme(&user, false));
             self.theme_manager_selected_id = Some(id.to_owned());
             self.theme_manager_pending_delete = None;
-        } else if let Some(builtin) = builtin_as_color_theme(id) {
+        } else if let Some(builtin) = builtin_as_color_theme(id, &self.theme_catalog) {
             self.theme_editor = Some(ThemeEditorDraft::from_color_theme(&builtin, true));
             self.theme_manager_selected_id = Some(id.to_owned());
             self.theme_manager_pending_delete = None;

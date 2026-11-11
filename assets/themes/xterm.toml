@@ -1,0 +1,25 @@
+id = "xterm"
+name = "XTerm"
+foreground = "#e5e5e5"
+background = "#000000"
+cursor = "#e5e5e5"
+selection = "#393939"
+ansi = [
+  "#000000",
+  "#bb0000",
+  "#006400",
+  "#c8af00",
+  "#1e90f5",
+  "#bb00bb",
+  "#00cdcd",
+  "#ebebeb",
+  "#555555",
+  "#ff5555",
+  "#55ff55",
+  "#fff555",
+  "#50beff",
+  "#ff55ff",
+  "#55ffff",
+  "#ffffff",
+]
+

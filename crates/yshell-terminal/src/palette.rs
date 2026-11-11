@@ -1,4 +1,4 @@
-//! Terminal color palettes and the built-in color schemes.
+//! Terminal color palettes.
 //!
 //! The renderer used to hardcode the foreground, background and selection
 //! colors plus the 16 ANSI entries as `TerminalColor` constants. A
@@ -7,8 +7,9 @@
 //! [`TerminalRenderer::apply_appearance`](crate::TerminalRenderer::apply_appearance)
 //! installs a selected palette on a renderer.
 //!
-//! [`COLOR_SCHEMES`] is the list the settings UI offers. Ids are stable and
-//! are what a `TerminalProfile::color_scheme` stores.
+//! Named built-in schemes ship as sidecar TOML under `themes/` (see
+//! `yshell-config::ThemeCatalog`); this module only owns the palette type and
+//! the hard-coded default fallback.
 
 use crate::color::TerminalColor;
 use crate::render::{DEFAULT_BACKGROUND, DEFAULT_CURSOR, DEFAULT_FOREGROUND, SELECTION_BACKGROUND};
@@ -124,230 +125,8 @@ impl Default for TerminalPalette {
     }
 }
 
-/// One built-in color scheme: a stable [`id`](Self::id), a display
-/// [`name`](Self::name) and its [`palette`](Self::palette).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TerminalColorScheme {
-    /// Stable identifier stored in `TerminalProfile::color_scheme`.
-    pub id: &'static str,
-    /// Display name for the settings UI.
-    pub name: &'static str,
-    /// The scheme's colors.
-    pub palette: TerminalPalette,
-}
-
-/// The built-in color schemes offered by the settings UI, first version.
-pub const COLOR_SCHEMES: &[TerminalColorScheme] = &[
-    TerminalColorScheme {
-        id: "yshell-default",
-        name: "YShell Default",
-        palette: TerminalPalette::DEFAULT,
-    },
-    TerminalColorScheme {
-        id: "dracula",
-        name: "Dracula",
-        palette: TerminalPalette {
-            foreground: c(0xf8, 0xf8, 0xf2),
-            background: c(0x28, 0x2a, 0x36),
-            cursor: c(0xf8, 0xf8, 0xf2),
-            selection: c(0x44, 0x47, 0x5a),
-            ansi: [
-                c(0x21, 0x22, 0x2c),
-                c(0xff, 0x55, 0x55),
-                c(0x50, 0xfa, 0x7b),
-                c(0xf1, 0xfa, 0x8c),
-                c(0xbd, 0x93, 0xf9),
-                c(0xff, 0x79, 0xc6),
-                c(0x8b, 0xe9, 0xfd),
-                c(0xf8, 0xf8, 0xf2),
-                c(0x62, 0x72, 0xa4),
-                c(0xff, 0x6e, 0x6e),
-                c(0x69, 0xff, 0x94),
-                c(0xff, 0xff, 0xa5),
-                c(0xd6, 0xac, 0xff),
-                c(0xff, 0x92, 0xdf),
-                c(0xa4, 0xff, 0xff),
-                c(0xff, 0xff, 0xff),
-            ],
-        },
-    },
-    TerminalColorScheme {
-        id: "nord",
-        name: "Nord",
-        palette: TerminalPalette {
-            foreground: c(0xd8, 0xde, 0xe9),
-            background: c(0x2e, 0x34, 0x40),
-            cursor: c(0xd8, 0xde, 0xe9),
-            selection: c(0x43, 0x4c, 0x5e),
-            ansi: [
-                c(0x3b, 0x42, 0x52),
-                c(0xbf, 0x61, 0x6a),
-                c(0xa3, 0xbe, 0x8c),
-                c(0xeb, 0xcb, 0x8b),
-                c(0x81, 0xa1, 0xc1),
-                c(0xb4, 0x8e, 0xad),
-                c(0x88, 0xc0, 0xd0),
-                c(0xe5, 0xe9, 0xf0),
-                c(0x4c, 0x56, 0x6a),
-                c(0xbf, 0x61, 0x6a),
-                c(0xa3, 0xbe, 0x8c),
-                c(0xeb, 0xcb, 0x8b),
-                c(0x81, 0xa1, 0xc1),
-                c(0xb4, 0x8e, 0xad),
-                c(0x8f, 0xbc, 0xbb),
-                c(0xec, 0xef, 0xf4),
-            ],
-        },
-    },
-    TerminalColorScheme {
-        id: "gruvbox-dark",
-        name: "Gruvbox Dark",
-        palette: TerminalPalette {
-            foreground: c(0xeb, 0xdb, 0xb2),
-            background: c(0x28, 0x28, 0x28),
-            cursor: c(0xeb, 0xdb, 0xb2),
-            selection: c(0x50, 0x49, 0x45),
-            ansi: [
-                c(0x28, 0x28, 0x28),
-                c(0xcc, 0x24, 0x1d),
-                c(0x98, 0x97, 0x1a),
-                c(0xd7, 0x99, 0x21),
-                c(0x45, 0x85, 0x88),
-                c(0xb1, 0x62, 0x86),
-                c(0x68, 0x9d, 0x6a),
-                c(0xa8, 0x99, 0x84),
-                c(0x92, 0x83, 0x74),
-                c(0xfb, 0x49, 0x34),
-                c(0xb8, 0xbb, 0x26),
-                c(0xfa, 0xbd, 0x2f),
-                c(0x83, 0xa5, 0x98),
-                c(0xd3, 0x86, 0x9b),
-                c(0x8e, 0xc0, 0x7c),
-                c(0xeb, 0xdb, 0xb2),
-            ],
-        },
-    },
-    TerminalColorScheme {
-        id: "solarized-dark",
-        name: "Solarized Dark",
-        palette: TerminalPalette {
-            foreground: c(0x83, 0x94, 0x96),
-            background: c(0x00, 0x2b, 0x36),
-            cursor: c(0x93, 0xa1, 0xa1),
-            selection: c(0x07, 0x36, 0x42),
-            ansi: [
-                c(0x07, 0x36, 0x42),
-                c(0xdc, 0x32, 0x2f),
-                c(0x85, 0x99, 0x00),
-                c(0xb5, 0x89, 0x00),
-                c(0x26, 0x8b, 0xd2),
-                c(0xd3, 0x36, 0x82),
-                c(0x2a, 0xa1, 0x98),
-                c(0xee, 0xe8, 0xd5),
-                c(0x00, 0x2b, 0x36),
-                c(0xcb, 0x4b, 0x16),
-                c(0x58, 0x6e, 0x75),
-                c(0x65, 0x7b, 0x83),
-                c(0x83, 0x94, 0x96),
-                c(0x6c, 0x71, 0xc4),
-                c(0x93, 0xa1, 0xa1),
-                c(0xfd, 0xf6, 0xe3),
-            ],
-        },
-    },
-    TerminalColorScheme {
-        id: "solarized-light",
-        name: "Solarized Light",
-        palette: TerminalPalette {
-            foreground: c(0x65, 0x7b, 0x83),
-            background: c(0xfd, 0xf6, 0xe3),
-            cursor: c(0x58, 0x6e, 0x75),
-            selection: c(0xee, 0xe8, 0xd5),
-            ansi: [
-                c(0x07, 0x36, 0x42),
-                c(0xdc, 0x32, 0x2f),
-                c(0x85, 0x99, 0x00),
-                c(0xb5, 0x89, 0x00),
-                c(0x26, 0x8b, 0xd2),
-                c(0xd3, 0x36, 0x82),
-                c(0x2a, 0xa1, 0x98),
-                c(0xee, 0xe8, 0xd5),
-                c(0x00, 0x2b, 0x36),
-                c(0xcb, 0x4b, 0x16),
-                c(0x58, 0x6e, 0x75),
-                c(0x65, 0x7b, 0x83),
-                c(0x83, 0x94, 0x96),
-                c(0x6c, 0x71, 0xc4),
-                c(0x93, 0xa1, 0xa1),
-                c(0xfd, 0xf6, 0xe3),
-            ],
-        },
-    },
-    TerminalColorScheme {
-        id: "one-dark",
-        name: "One Dark",
-        palette: TerminalPalette {
-            foreground: c(0xab, 0xb2, 0xbf),
-            background: c(0x28, 0x2c, 0x34),
-            cursor: c(0x52, 0x8b, 0xff),
-            selection: c(0x3e, 0x44, 0x51),
-            ansi: [
-                c(0x28, 0x2c, 0x34),
-                c(0xe0, 0x6c, 0x75),
-                c(0x98, 0xc3, 0x79),
-                c(0xe5, 0xc0, 0x7b),
-                c(0x61, 0xaf, 0xef),
-                c(0xc6, 0x78, 0xdd),
-                c(0x56, 0xb6, 0xc2),
-                c(0xab, 0xb2, 0xbf),
-                c(0x5c, 0x63, 0x70),
-                c(0xe0, 0x6c, 0x75),
-                c(0x98, 0xc3, 0x79),
-                c(0xe5, 0xc0, 0x7b),
-                c(0x61, 0xaf, 0xef),
-                c(0xc6, 0x78, 0xdd),
-                c(0x56, 0xb6, 0xc2),
-                c(0xff, 0xff, 0xff),
-            ],
-        },
-    },
-    TerminalColorScheme {
-        id: "tokyo-night",
-        name: "Tokyo Night",
-        palette: TerminalPalette {
-            foreground: c(0xc0, 0xca, 0xf5),
-            background: c(0x1a, 0x1b, 0x26),
-            cursor: c(0xc0, 0xca, 0xf5),
-            selection: c(0x33, 0x46, 0x7c),
-            ansi: [
-                c(0x15, 0x16, 0x1e),
-                c(0xf7, 0x76, 0x8e),
-                c(0x9e, 0xce, 0x6a),
-                c(0xe0, 0xaf, 0x68),
-                c(0x7a, 0xa2, 0xf7),
-                c(0xbb, 0x9a, 0xf7),
-                c(0x7d, 0xcf, 0xff),
-                c(0xa9, 0xb1, 0xd6),
-                c(0x41, 0x48, 0x68),
-                c(0xf7, 0x76, 0x8e),
-                c(0x9e, 0xce, 0x6a),
-                c(0xe0, 0xaf, 0x68),
-                c(0x7a, 0xa2, 0xf7),
-                c(0xbb, 0x9a, 0xf7),
-                c(0x7d, 0xcf, 0xff),
-                c(0xc0, 0xca, 0xf5),
-            ],
-        },
-    },
-];
-
-/// Looks up a built-in scheme by its stable [`TerminalColorScheme::id`].
-#[must_use]
-pub fn color_scheme(id: &str) -> Option<&'static TerminalColorScheme> {
-    COLOR_SCHEMES.iter().find(|scheme| scheme.id == id)
-}
-
-/// Short alias for `TerminalColor::rgb` in the table above.
+/// Short alias for `TerminalColor::rgb` in builders / tests.
+#[cfg(test)]
 const fn c(red: u8, green: u8, blue: u8) -> TerminalColor {
     TerminalColor::rgb(red, green, blue)
 }
@@ -371,38 +150,6 @@ mod tests {
             );
         }
         assert_eq!(palette.ansi(16), palette.ansi(0), "index bits are masked");
-    }
-
-    #[test]
-    fn color_scheme_catalog_is_complete_and_unique() {
-        assert!(
-            (6..=8).contains(&COLOR_SCHEMES.len()),
-            "expected 6-8 built-in schemes, got {}",
-            COLOR_SCHEMES.len()
-        );
-        for (index, scheme) in COLOR_SCHEMES.iter().enumerate() {
-            assert!(!scheme.id.is_empty());
-            assert!(!scheme.name.is_empty());
-            assert!(
-                COLOR_SCHEMES[..index]
-                    .iter()
-                    .all(|earlier| earlier.id != scheme.id),
-                "duplicate scheme id {}",
-                scheme.id
-            );
-            // A usable scheme must not paint text in the background color.
-            assert_ne!(
-                scheme.palette.foreground, scheme.palette.background,
-                "scheme {} has an invisible foreground",
-                scheme.id
-            );
-        }
-
-        let default = color_scheme("yshell-default").expect("default scheme is listed");
-        assert_eq!(default.name, "YShell Default");
-        assert_eq!(default.palette, TerminalPalette::default());
-        assert_eq!(color_scheme("dracula").map(|s| s.name), Some("Dracula"));
-        assert!(color_scheme("not-a-scheme").is_none());
     }
 
     #[test]

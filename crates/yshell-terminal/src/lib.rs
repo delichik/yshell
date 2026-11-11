@@ -18,7 +18,7 @@ pub use color::TerminalColor;
 pub use grid::{TerminalGrid, DEFAULT_SCROLLBACK_LINES, DEFAULT_SCROLLBACK_MAX_CELLS};
 pub use input::{ControlKey, TerminalInputEvent};
 pub use keys::encode_key;
-pub use palette::{color_scheme, TerminalColorScheme, TerminalPalette, COLOR_SCHEMES};
+pub use palette::TerminalPalette;
 pub use parser::TerminalParser;
 pub use render::{
     resolve_fonts_dir, FontFace, FontFaceError, FontFaceStyle, FontFamilyFaces, FontLineMetrics,

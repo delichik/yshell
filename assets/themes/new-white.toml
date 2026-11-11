@@ -1,0 +1,25 @@
+id = "new-white"
+name = "New White"
+foreground = "#292929"
+background = "#ffffff"
+cursor = "#292929"
+selection = "#cacaca"
+ansi = [
+  "#36342e",
+  "#a56434",
+  "#008000",
+  "#999606",
+  "#0000cc",
+  "#7b5175",
+  "#00a2c4",
+  "#cfd8d3",
+  "#535755",
+  "#cf9e72",
+  "#1cc470",
+  "#e2e234",
+  "#2929ef",
+  "#a97ead",
+  "#50ebfc",
+  "#eceeee",
+]
+

@@ -403,6 +403,7 @@ fn prepare_portable_staging(
     copy_file(&root.join("README.md"), &staging.join("README.md"), false)?;
     copy_file(&root.join("LICENSE"), &staging.join("LICENSE"), false)?;
     copy_shipped_fonts(root, &staging.join("fonts"))?;
+    copy_shipped_themes(root, &staging.join("themes"))?;
     copy_file(
         &root.join("packaging/PORTABLE.txt"),
         &staging.join("PORTABLE.txt"),
@@ -501,6 +502,11 @@ pub fn copy_shipped_fonts_public(root: &Path, dest: &Path) -> Result<()> {
     copy_shipped_fonts(root, dest)
 }
 
+/// Copies product-shipped terminal color themes next to the binary (`themes/`).
+pub fn copy_shipped_themes_public(root: &Path, dest: &Path) -> Result<()> {
+    copy_shipped_themes(root, dest)
+}
+
 /// Copies product-shipped open-source fonts next to the binary (`fonts/`).
 fn copy_shipped_fonts(root: &Path, dest: &Path) -> Result<()> {
     let source = root.join("crates/yshell-terminal/assets");
@@ -518,6 +524,31 @@ fn copy_shipped_fonts(root: &Path, dest: &Path) -> Result<()> {
         if from.is_file() {
             copy_file(&from, &dest.join(name), false)?;
         }
+    }
+    Ok(())
+}
+
+/// Copies product-shipped terminal color themes next to the binary (`themes/`).
+fn copy_shipped_themes(root: &Path, dest: &Path) -> Result<()> {
+    let source = root.join("assets/themes");
+    fs::create_dir_all(dest).with_context(|| format!("failed to create {}", dest.display()))?;
+    let Ok(entries) = fs::read_dir(&source) else {
+        bail!("shipped themes directory missing: {}", source.display());
+    };
+    let mut copied = 0usize;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("toml") {
+            continue;
+        }
+        let Some(name) = path.file_name() else {
+            continue;
+        };
+        copy_file(&path, &dest.join(name), false)?;
+        copied += 1;
+    }
+    if copied == 0 {
+        bail!("no theme TOML files found under {}", source.display());
     }
     Ok(())
 }

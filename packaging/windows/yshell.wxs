@@ -2,9 +2,11 @@
 <!--
   WiX v3 source for the YShell MSI, rendered by `cargo xtask dist` with the
   msi format selected (see xtask/src/installers.rs). @VERSION@ is a three part
-  numeric version, @BINARY@/@README@/@LICENSE@/@LICENSE_RTF@/@FONTS_DIR@ are
-  absolute paths. Fonts must sit beside the exe as INSTALLFOLDER\fonts\ — see
-  resolve_fonts_dir() in crates/yshell-terminal.
+  numeric version, @BINARY@/@README@/@LICENSE@/@LICENSE_RTF@/@FONTS_DIR@/@THEMES_DIR@
+  are absolute paths. Fonts must sit beside the exe as INSTALLFOLDER\fonts\ —
+  see resolve_fonts_dir() in crates/yshell-terminal. Themes must sit beside the
+  exe as INSTALLFOLDER\themes\ — see resolve_shipped_themes_dir() in
+  crates/yshell-config.
 -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*"
@@ -44,6 +46,38 @@
               <File Id="FontLicenseNoto" Source="@FONTS_DIR@\LICENSE-NotoSansMonoCJK-OFL-1.1.txt" />
             </Component>
           </Directory>
+          <Directory Id="ThemesFolder" Name="themes">
+            <Component Id="YShellThemes" Guid="{C8F1A4B2-6D7E-4F90-A1B2-3C4D5E6F7081}">
+              <File Id="Theme_afterglow" Source="@THEMES_DIR@\afterglow.toml" KeyPath="yes" />
+              <File Id="Theme_ansi_colors_on_black" Source="@THEMES_DIR@\ansi-colors-on-black.toml" />
+              <File Id="Theme_ansi_colors_on_white" Source="@THEMES_DIR@\ansi-colors-on-white.toml" />
+              <File Id="Theme_arthur" Source="@THEMES_DIR@\arthur.toml" />
+              <File Id="Theme_belafonte_day" Source="@THEMES_DIR@\belafonte-day.toml" />
+              <File Id="Theme_black_on_white" Source="@THEMES_DIR@\black-on-white.toml" />
+              <File Id="Theme_chalk" Source="@THEMES_DIR@\chalk.toml" />
+              <File Id="Theme_chalkboard" Source="@THEMES_DIR@\chalkboard.toml" />
+              <File Id="Theme_codeschool" Source="@THEMES_DIR@\codeschool.toml" />
+              <File Id="Theme_dracula" Source="@THEMES_DIR@\dracula.toml" />
+              <File Id="Theme_earthsong" Source="@THEMES_DIR@\earthsong.toml" />
+              <File Id="Theme_espresso" Source="@THEMES_DIR@\espresso.toml" />
+              <File Id="Theme_gruvbox_dark" Source="@THEMES_DIR@\gruvbox-dark.toml" />
+              <File Id="Theme_idletoes" Source="@THEMES_DIR@\idletoes.toml" />
+              <File Id="Theme_ir_black" Source="@THEMES_DIR@\ir-black.toml" />
+              <File Id="Theme_new_black" Source="@THEMES_DIR@\new-black.toml" />
+              <File Id="Theme_new_white" Source="@THEMES_DIR@\new-white.toml" />
+              <File Id="Theme_nord" Source="@THEMES_DIR@\nord.toml" />
+              <File Id="Theme_obsidian" Source="@THEMES_DIR@\obsidian.toml" />
+              <File Id="Theme_one_dark" Source="@THEMES_DIR@\one-dark.toml" />
+              <File Id="Theme_pastel_on_black" Source="@THEMES_DIR@\pastel-on-black.toml" />
+              <File Id="Theme_pastel_on_white" Source="@THEMES_DIR@\pastel-on-white.toml" />
+              <File Id="Theme_solarized_dark" Source="@THEMES_DIR@\solarized-dark.toml" />
+              <File Id="Theme_solarized_light" Source="@THEMES_DIR@\solarized-light.toml" />
+              <File Id="Theme_tokyo_night" Source="@THEMES_DIR@\tokyo-night.toml" />
+              <File Id="Theme_white_on_black" Source="@THEMES_DIR@\white-on-black.toml" />
+              <File Id="Theme_xterm" Source="@THEMES_DIR@\xterm.toml" />
+              <File Id="Theme_yshell_default" Source="@THEMES_DIR@\yshell-default.toml" />
+            </Component>
+          </Directory>
         </Directory>
       </Directory>
       <Directory Id="ProgramMenuFolder">
@@ -72,6 +106,7 @@
       <ComponentRef Id="YShellExecutable" />
       <ComponentRef Id="YShellDocs" />
       <ComponentRef Id="YShellFonts" />
+      <ComponentRef Id="YShellThemes" />
       <ComponentRef Id="YShellShortcut" />
     </Feature>
   </Product>

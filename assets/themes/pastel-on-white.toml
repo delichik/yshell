@@ -1,0 +1,25 @@
+id = "pastel-on-white"
+name = "Pastel on White"
+foreground = "#000000"
+background = "#ffffff"
+cursor = "#000000"
+selection = "#bfbfbf"
+ansi = [
+  "#000000",
+  "#c00000",
+  "#00c000",
+  "#c0c000",
+  "#0000c0",
+  "#c000c0",
+  "#00c0c0",
+  "#c0c0c0",
+  "#555555",
+  "#ff5555",
+  "#55ff55",
+  "#ffff55",
+  "#5555ff",
+  "#ff55ff",
+  "#55ffff",
+  "#ffffff",
+]
+

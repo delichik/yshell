@@ -1,0 +1,25 @@
+id = "idletoes"
+name = "idleToes"
+foreground = "#ffffff"
+background = "#323232"
+cursor = "#ffffff"
+selection = "#656565"
+ansi = [
+  "#535353",
+  "#f07070",
+  "#9dff91",
+  "#ffe48b",
+  "#5eb7f7",
+  "#ff9dff",
+  "#dcf4ff",
+  "#ffffff",
+  "#323232",
+  "#d25252",
+  "#7fe173",
+  "#ffc66d",
+  "#4099ff",
+  "#f680ff",
+  "#bed6ff",
+  "#eeeeec",
+]
+

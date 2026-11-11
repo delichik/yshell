@@ -1,0 +1,25 @@
+id = "obsidian"
+name = "Obsidian"
+foreground = "#cdcdcd"
+background = "#283033"
+cursor = "#cdcdcd"
+selection = "#51575a"
+ansi = [
+  "#555555",
+  "#ff0003",
+  "#93c863",
+  "#fef874",
+  "#a1d7ff",
+  "#ff55ff",
+  "#55ffff",
+  "#ffffff",
+  "#000000",
+  "#a60001",
+  "#00bb00",
+  "#fecd22",
+  "#3a9bdb",
+  "#bb00bb",
+  "#00bbbb",
+  "#bbbbbb",
+]
+

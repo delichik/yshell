@@ -186,6 +186,10 @@ fn msi(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
     // `resolve_fonts_dir()`; without them the binary panics at startup.
     let fonts_dir = work.join("fonts");
     crate::dist::copy_shipped_fonts_public(ctx.root, &fonts_dir)?;
+    // Ship themes beside the exe (`INSTALLFOLDER\themes\`) for
+    // `resolve_shipped_themes_dir()`.
+    let themes_dir = work.join("themes");
+    crate::dist::copy_shipped_themes_public(ctx.root, &themes_dir)?;
 
     let template = ctx.root.join("packaging/windows/yshell.wxs");
     let rendered = render_template(
@@ -197,6 +201,7 @@ fn msi(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
             ("@LICENSE@", &absolute_path(&ctx.root.join("LICENSE"))?),
             ("@LICENSE_RTF@", &absolute_path(&license_rtf_path)?),
             ("@FONTS_DIR@", &absolute_path(&fonts_dir)?),
+            ("@THEMES_DIR@", &absolute_path(&themes_dir)?),
         ],
     )?;
     let source = work.join("yshell.wxs");
@@ -252,6 +257,7 @@ fn dmg(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
         copy_file(ctx.binary, &macos_dir.join("yshell"), true)?;
         // Beside the binary (`Contents/MacOS/fonts`) for `resolve_fonts_dir()`.
         crate::dist::copy_shipped_fonts_public(ctx.root, &macos_dir.join("fonts"))?;
+        crate::dist::copy_shipped_themes_public(ctx.root, &macos_dir.join("themes"))?;
 
         let icon_source = ctx.root.join("assets/icons/yshell.icns");
         let icon_entry = if icon_source.is_file() {
@@ -359,6 +365,7 @@ fn rpm(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
         false,
     )?;
     crate::dist::copy_shipped_fonts_public(ctx.root, &sources.join("fonts"))?;
+    crate::dist::copy_shipped_themes_public(ctx.root, &sources.join("themes"))?;
 
     let (version, release) = rpm_version(ctx.version);
     let spec = render_template(
@@ -655,6 +662,29 @@ mod tests {
         assert!(
             wxs.contains("DejaVuSansMono.ttf"),
             "MSI must package the primary DejaVu face"
+        );
+    }
+
+    #[test]
+    fn msi_wxs_ships_themes_beside_the_executable() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let wxs = fs::read_to_string(root.join("packaging/windows/yshell.wxs"))
+            .expect("read packaging/windows/yshell.wxs");
+        assert!(
+            wxs.contains("@THEMES_DIR@"),
+            "MSI template must take a staged themes directory"
+        );
+        assert!(
+            wxs.contains("Name=\"themes\""),
+            "MSI must install themes next to the exe (resolve_shipped_themes_dir)"
+        );
+        assert!(
+            wxs.contains("ComponentRef Id=\"YShellThemes\""),
+            "MSI feature must include the themes component"
+        );
+        assert!(
+            wxs.contains("yshell-default.toml"),
+            "MSI must package the default terminal theme"
         );
     }
 }

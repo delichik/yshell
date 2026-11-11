@@ -5,11 +5,19 @@
 
 use tempfile::tempdir;
 use yshell_config::{ConfigDocument, ConfigStore, FolderProfile, SessionProfile, TerminalProfile};
-use yshell_terminal::{color_scheme, TerminalCell, TerminalColor, TerminalPalette};
+use yshell_terminal::{TerminalCell, TerminalColor, TerminalPalette};
 
 use crate::runtime::ThemeFieldAction;
 
 use super::*;
+
+fn builtin_palette(catalog: &yshell_config::ThemeCatalog, id: &str) -> TerminalPalette {
+    crate::runtime::theme::palette_from_color_theme(
+        catalog
+            .get_builtin(id)
+            .unwrap_or_else(|| panic!("missing shipped theme {id}")),
+    )
+}
 
 fn store_with_prod_folder(config_dir: &Path) -> ConfigStore {
     let store = ConfigStore::new(config_dir);
@@ -45,7 +53,7 @@ fn palette_resolution_uses_named_theme_and_legacy_overrides() {
         ..TerminalProfile::default()
     };
     let appearance = crate::runtime::theme::terminal_appearance(&profile, &catalog);
-    let dracula = color_scheme("dracula").expect("scheme").palette;
+    let dracula = builtin_palette(&catalog, "dracula");
     assert_eq!(
         appearance.palette.foreground,
         TerminalColor::rgb(0x11, 0x22, 0x33)
@@ -335,15 +343,17 @@ fn theme_manager_lists_builtin_and_user_themes_with_the_default_flagged() {
 
     let opened = runtime.open_theme_manager();
     assert!(opened.theme_manager_visible);
+    let builtin_count = runtime.theme_catalog.builtin_count();
+    assert!(
+        builtin_count >= 28,
+        "expected shipped themes, got {builtin_count}"
+    );
     assert_eq!(
         opened.theme_manager_builtin_count,
-        i32::try_from(yshell_terminal::COLOR_SCHEMES.len()).expect("builtin count")
+        i32::try_from(builtin_count).expect("builtin count")
     );
     assert_eq!(opened.theme_manager_user_count, 0);
-    assert_eq!(
-        opened.theme_manager_rows.len(),
-        yshell_terminal::COLOR_SCHEMES.len()
-    );
+    assert_eq!(opened.theme_manager_rows.len(), builtin_count);
     let current = opened
         .theme_manager_rows
         .iter()
@@ -414,7 +424,7 @@ fn theme_manager_row_selection_updates_preview_and_apply_sets_default() {
         .iter()
         .any(|row| row.id == "dracula" && row.selected && !row.current));
 
-    let dracula = color_scheme("dracula").expect("dracula scheme").palette;
+    let dracula = builtin_palette(&runtime.theme_catalog, "dracula");
     let frame = selected
         .theme_manager_preview
         .as_ref()
@@ -819,7 +829,14 @@ fn session_editor_theme_overrides_persist() {
     assert_eq!(scheme.state, "inherit");
 
     runtime.editor_theme_field_action("appearance.color_scheme", ThemeFieldAction::SetExplicit);
-    runtime.select_editor_scheme_index(1); // Dracula
+    let scheme_row = runtime
+        .projection()
+        .editor_appearance_fields
+        .iter()
+        .find(|field| field.key == "appearance.color_scheme")
+        .cloned()
+        .expect("scheme row");
+    runtime.select_editor_scheme_index(choice_index(&scheme_row, "Dracula"));
     runtime.update_editor_theme_field("appearance.font_size", "21");
     runtime.editor_theme_field_action("appearance.font_size", ThemeFieldAction::SetExplicit);
     let saved = runtime.save_editor_to_saved_session().expect("save editor");
@@ -887,7 +904,7 @@ fn terminal_appearance_is_frozen_when_the_session_is_created() {
 
     let _ = open_saved_tab(&mut runtime, "saved-1");
     let second = runtime.active_session_id.clone().expect("active session");
-    let dracula = color_scheme("dracula").expect("scheme").palette;
+    let dracula = builtin_palette(&runtime.theme_catalog, "dracula");
     assert_eq!(
         runtime
             .sessions
@@ -907,7 +924,7 @@ fn scheme_options_include_builtin_and_user_themes() {
     let options = crate::runtime::theme::scheme_options(&runtime.theme_catalog);
     assert_eq!(
         options.iter().filter(|option| option.builtin).count(),
-        yshell_terminal::COLOR_SCHEMES.len()
+        runtime.theme_catalog.builtin_count()
     );
     let dracula = options
         .iter()
@@ -1290,7 +1307,7 @@ fn settings_preview_updates_immediately_on_theme_change() {
 
     runtime.select_settings_appearance_scheme("dracula");
     let palette = runtime.settings_appearance_palette();
-    let dracula = color_scheme("dracula").expect("dracula scheme").palette;
+    let dracula = builtin_palette(&runtime.theme_catalog, "dracula");
     assert_eq!(palette.background, dracula.background);
     assert_ne!(palette.background, TerminalPalette::DEFAULT.background);
 
@@ -1488,9 +1505,13 @@ fn session_editor_choice_combo_updates_the_draft_and_preview() {
     let scheme_row = editor_appearance_row(&opened, "appearance.color_scheme");
     assert_eq!(scheme_row.kind, "choice");
     assert_eq!(scheme_row.state, "inherit");
-    assert_eq!(scheme_row.selected, 0);
-    assert_eq!(scheme_row.options[0], "YShell Default");
+    let default_index = choice_index(scheme_row, "YShell Default");
+    assert_eq!(scheme_row.selected, default_index);
     assert_eq!(scheme_row.value, "YShell Default");
+    assert!(scheme_row
+        .options
+        .iter()
+        .any(|option| option == "YShell Default"));
 
     // Selecting an index (what WinComboBox reports) flips the field to explicit,
     // stores the scheme id in the draft and re-renders the preview immediately.
@@ -1503,7 +1524,7 @@ fn session_editor_choice_combo_updates_the_draft_and_preview() {
     assert_eq!(runtime.editor.theme.theme.color_scheme.text, "dracula");
     assert!(runtime.editor.theme.theme.color_scheme.explicit);
 
-    let dracula = color_scheme("dracula").expect("dracula palette").palette;
+    let dracula = builtin_palette(&runtime.theme_catalog, "dracula");
     let frame = session_editor_preview(&runtime);
     let columns = u16::try_from(frame.width / frame.cell_width).expect("columns");
     let rows = u16::try_from(frame.height / frame.cell_height).expect("rows");

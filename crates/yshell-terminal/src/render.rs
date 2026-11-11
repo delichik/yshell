@@ -2416,11 +2416,70 @@ mod tests {
         );
     }
 
+    /// Fixture matching the shipped `assets/themes/dracula.toml` palette.
+    fn dracula_palette() -> TerminalPalette {
+        const fn c(r: u8, g: u8, b: u8) -> TerminalColor {
+            TerminalColor::rgb(r, g, b)
+        }
+        TerminalPalette {
+            foreground: c(0xf8, 0xf8, 0xf2),
+            background: c(0x28, 0x2a, 0x36),
+            cursor: c(0xf8, 0xf8, 0xf2),
+            selection: c(0x44, 0x47, 0x5a),
+            ansi: [
+                c(0x21, 0x22, 0x2c),
+                c(0xff, 0x55, 0x55),
+                c(0x50, 0xfa, 0x7b),
+                c(0xf1, 0xfa, 0x8c),
+                c(0xbd, 0x93, 0xf9),
+                c(0xff, 0x79, 0xc6),
+                c(0x8b, 0xe9, 0xfd),
+                c(0xf8, 0xf8, 0xf2),
+                c(0x62, 0x72, 0xa4),
+                c(0xff, 0x6e, 0x6e),
+                c(0x69, 0xff, 0x94),
+                c(0xff, 0xff, 0xa5),
+                c(0xd6, 0xac, 0xff),
+                c(0xff, 0x92, 0xdf),
+                c(0xa4, 0xff, 0xff),
+                c(0xff, 0xff, 0xff),
+            ],
+        }
+    }
+
+    fn solarized_light_palette() -> TerminalPalette {
+        const fn c(r: u8, g: u8, b: u8) -> TerminalColor {
+            TerminalColor::rgb(r, g, b)
+        }
+        TerminalPalette {
+            foreground: c(0x65, 0x7b, 0x83),
+            background: c(0xfd, 0xf6, 0xe3),
+            cursor: c(0x58, 0x6e, 0x75),
+            selection: c(0xee, 0xe8, 0xd5),
+            ansi: [
+                c(0x07, 0x36, 0x42),
+                c(0xdc, 0x32, 0x2f),
+                c(0x85, 0x99, 0x00),
+                c(0xb5, 0x89, 0x00),
+                c(0x26, 0x8b, 0xd2),
+                c(0xd3, 0x36, 0x82),
+                c(0x2a, 0xa1, 0x98),
+                c(0xee, 0xe8, 0xd5),
+                c(0x00, 0x2b, 0x36),
+                c(0xcb, 0x4b, 0x16),
+                c(0x58, 0x6e, 0x75),
+                c(0x65, 0x7b, 0x83),
+                c(0x83, 0x94, 0x96),
+                c(0x6c, 0x71, 0xc4),
+                c(0x93, 0xa1, 0xa1),
+                c(0xfd, 0xf6, 0xe3),
+            ],
+        }
+    }
+
     #[test]
     fn applied_palette_repaints_background_and_foreground() {
-        let dracula = crate::palette::color_scheme("dracula")
-            .expect("dracula is a built-in scheme")
-            .palette;
+        let dracula = dracula_palette();
         let mut renderer = TerminalRenderer::new();
         let rejected = renderer.apply_appearance(dracula, FontSelection::default());
         assert!(rejected.is_empty());
@@ -2523,9 +2582,7 @@ mod tests {
         assert!(cached >= 2, "expected cached glyphs, got {cached}");
 
         // Palette changes are paint-time only: the cached bitmaps stay valid.
-        let dracula = crate::palette::color_scheme("dracula")
-            .expect("dracula is a built-in scheme")
-            .palette;
+        let dracula = dracula_palette();
         let rejected = renderer.apply_appearance(dracula, FontSelection::default());
         assert!(rejected.is_empty());
         assert_eq!(renderer.glyph_cache_len(), cached);
@@ -2703,11 +2760,13 @@ mod tests {
             start: crate::GridPoint { column: 2, row: 2 },
             end: crate::GridPoint { column: 12, row: 3 },
         });
-        for id in ["yshell-default", "dracula", "solarized-light"] {
-            let scheme =
-                crate::palette::color_scheme(id).expect("evidence scheme is in the catalog");
+        for (id, palette) in [
+            ("yshell-default", TerminalPalette::DEFAULT),
+            ("dracula", dracula_palette()),
+            ("solarized-light", solarized_light_palette()),
+        ] {
             let mut renderer = TerminalRenderer::new();
-            let rejected = renderer.apply_appearance(scheme.palette, FontSelection::default());
+            let rejected = renderer.apply_appearance(palette, FontSelection::default());
             assert!(rejected.is_empty());
             let frame = render_lines(
                 &mut renderer,

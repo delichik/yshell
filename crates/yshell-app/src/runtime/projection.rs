@@ -235,8 +235,9 @@ impl AppRuntime {
             theme::resolved_global_scheme_id(&self.config_document.terminal, &self.theme_catalog);
         let settings_appearance_color_scheme_name_text =
             theme::scheme_display_name(&settings_appearance_color_scheme_id, &self.theme_catalog);
-        let settings_appearance_color_scheme_builtin =
-            yshell_config::ThemeCatalog::is_builtin(&settings_appearance_color_scheme_id);
+        let settings_appearance_color_scheme_builtin = self
+            .theme_catalog
+            .is_builtin(&settings_appearance_color_scheme_id);
         let settings_appearance_palette = palette_parts(self.settings_appearance_palette());
         // --- settings-security ---
         // D36 App theme draft (instant preview) + D33 SFTP defaults + D35

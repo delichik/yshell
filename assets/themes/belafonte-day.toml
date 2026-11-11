@@ -1,0 +1,25 @@
+id = "belafonte-day"
+name = "Belafonte Day"
+foreground = "#45373c"
+background = "#d5ccba"
+cursor = "#45373c"
+selection = "#b1a79a"
+ansi = [
+  "#5e5252",
+  "#be100e",
+  "#858162",
+  "#eaa549",
+  "#426a79",
+  "#97522c",
+  "#989a9c",
+  "#d5ccba",
+  "#20111b",
+  "#be100e",
+  "#858162",
+  "#eaa549",
+  "#426a79",
+  "#97522c",
+  "#989a9c",
+  "#968c83",
+]
+
