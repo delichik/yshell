@@ -242,6 +242,8 @@ fn terminal_surface_color(color: TerminalColor) -> slint::Color {
 }
 
 pub struct YShellApp {
+    /// D38 Host facade (owns runtime + run-state / job).
+    host: Rc<RefCell<crate::host::HostService>>,
     /// 单实例共享的运行时（窗口只持有它的 `Rc`）。
     runtime: Rc<RefCell<AppRuntime>>,
     /// N7：`show()` 创建、`run()`/`run_event_loop()` 期间保持存活。
@@ -249,9 +251,11 @@ pub struct YShellApp {
 }
 
 impl YShellApp {
-    pub fn new(runtime: AppRuntime) -> Self {
+    pub fn new(host: Rc<RefCell<crate::host::HostService>>) -> Self {
+        let runtime = host.borrow().runtime();
         Self {
-            runtime: Rc::new(RefCell::new(runtime)),
+            host,
+            runtime,
             manager: None,
         }
     }
@@ -272,7 +276,8 @@ impl YShellApp {
             .runtime
             .borrow_mut()
             .prepare_desktop_startup_workspace();
-        let manager = crate::windows::WindowManager::new(Rc::clone(&self.runtime))?;
+        let manager =
+            crate::windows::WindowManager::new(Rc::clone(&self.runtime), Rc::clone(&self.host))?;
         self.manager = Some(manager);
         // D35：启动主密码解锁（仅 GUI 路径；CLI / MCP 不弹窗，也不读任何
         // 主密码环境变量；见契约 §14.4b）。投影标志置位后 `dialog_windows` 同步创建解锁窗。
@@ -7584,7 +7589,8 @@ pub fn bootstrap_app(config_dir_override: Option<PathBuf>) -> AppResult<YShellAp
     };
     let runtime = AppState::new(config_dir)?.runtime;
     init_logging_for_runtime(&runtime)?;
-    Ok(YShellApp::new(runtime))
+    let host = crate::host::HostService::start(runtime)?;
+    Ok(YShellApp::new(host))
 }
 
 /// Installs the process tracing subscriber from the loaded UI preference.

@@ -132,6 +132,7 @@ settings/                         session-editor/
 | [`known-hosts/`](./known-hosts/index.html) | Known Hosts · [`modals.html`](./known-hosts/modals.html) |
 | [`private-keys/`](./private-keys/index.html) | Private Keys · [`modals.html`](./private-keys/modals.html) |
 | [`proxies/`](./proxies/index.html) | Proxies |
+| [`process-architecture.md`](./process-architecture.md) | **进程 / 多窗口架构**（Host / SessionWorker / Mcp / Shell；生命周期与防野进程；非 HTML） |
 
 历史观感稿：[`docs/product/ui-sketches/`](../product/ui-sketches/)。
 

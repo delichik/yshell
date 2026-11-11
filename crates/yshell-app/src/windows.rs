@@ -135,6 +135,8 @@ fn window_close_action(
 /// N7：窗口生命周期 + 应用级轮询的管理器。
 pub(crate) struct WindowManager {
     runtime: Rc<RefCell<AppRuntime>>,
+    /// D38 Host facade — window count / shutdown ownership (not session I/O).
+    host: Rc<RefCell<crate::host::HostService>>,
     windows: Vec<WindowEntry>,
     next_window_id: u64,
     dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
@@ -155,7 +157,10 @@ pub(crate) struct WindowManager {
 
 impl WindowManager {
     /// 创建管理器并打开初始窗口（主窗口 id = 0）。
-    pub(crate) fn new(runtime: Rc<RefCell<AppRuntime>>) -> AppResult<Rc<RefCell<Self>>> {
+    pub(crate) fn new(
+        runtime: Rc<RefCell<AppRuntime>>,
+        host: Rc<RefCell<crate::host::HostService>>,
+    ) -> AppResult<Rc<RefCell<Self>>> {
         let (dialog_tx, dialog_rx) = std::sync::mpsc::channel();
         let (sftp_job_tx, sftp_job_rx, sftp_limiter) =
             crate::sftp_jobs::start_sftp_job_worker_with_limit(1);
@@ -187,6 +192,7 @@ impl WindowManager {
         }
         let manager = Rc::new(RefCell::new(Self {
             runtime,
+            host,
             windows: Vec::new(),
             next_window_id: 0,
             dialog_tx,
@@ -209,6 +215,7 @@ impl WindowManager {
                 .set_window_manager(weak);
         }
         Self::open_window(&manager, None)?;
+        manager.borrow_mut().publish_window_count();
         let weak: Weak<RefCell<Self>> = Rc::downgrade(&manager);
         let timer = Timer::default();
         timer.start(TimerMode::Repeated, POLL_INTERVAL, move || {
@@ -330,6 +337,7 @@ impl WindowManager {
                 last_viewport: (0, 0),
                 last_secondary_viewport: (0, 0),
             });
+            this.publish_window_count();
         }
         // 首次布局后立刻把视口尺寸同步进 PTY，避免首个 tick 前仍是默认 80×24，
         // 导致 htop 等全屏 TUI 按错误网格排版。
@@ -489,6 +497,7 @@ impl WindowManager {
             let entry = self.windows.remove(position);
             let _ = entry.window.hide();
         }
+        self.publish_window_count();
         if is_last {
             self.shutdown();
         } else {
@@ -496,11 +505,24 @@ impl WindowManager {
         }
     }
 
-    /// 退出：停日志 + 结束事件循环（窗口在 `run()` 收尾时统一 drop）。
+    /// 退出：Host 关机序列 + 停日志 + 结束事件循环（窗口在 `run()` 收尾时统一 drop）。
     pub(crate) fn shutdown(&mut self) {
         self.timer = None;
+        let _ = self
+            .host
+            .borrow_mut()
+            .dispatch(crate::host::HostCommand::RequestShutdown);
         self.runtime.borrow_mut().stop_all_session_logging();
         let _ = slint::quit_event_loop();
+    }
+
+    /// Tell Host how many UI windows are alive (zero → Host shutdown sequence).
+    fn publish_window_count(&mut self) {
+        let count = u32::try_from(self.windows.len()).unwrap_or(u32::MAX);
+        let _ = self
+            .host
+            .borrow_mut()
+            .dispatch(crate::host::HostCommand::SetWindowCount { count });
     }
 
     /// 把窗口标记为交互窗口（键盘/窗口激活回调；不产生投影）。

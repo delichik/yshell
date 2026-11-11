@@ -31,6 +31,7 @@ yshell-sftp = { path = "../yshell-sftp" }
 yshell-ssh = { path = "../yshell-ssh" }
 yshell-terminal = { path = "../yshell-terminal" }
 yshell-ui = { path = "../yshell-ui" }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 regex = { workspace = true }
 # D1：运行时内部诊断只进 tracing 日志，不再写进终端网格。
@@ -52,7 +53,7 @@ slint = { version = "=1.18.1", default-features = false, features = ["std", "com
 # 与子窗居中（ClientToScreen/GetClientRect）；仅 Windows 链接。
 [target.'cfg(windows)'.dependencies]
 raw-window-handle = "0.6"
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_System_Console", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_Security", "Win32_System_Console", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
 
 [build-dependencies]
 slint-build = "=1.18.1"

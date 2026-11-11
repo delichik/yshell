@@ -1,6 +1,6 @@
 # YShell 本 build 产品现状
 
-更新时间：2026-11-06  
+更新时间：2026-11-11  
 性质：**唯一现行产品范围文档**（有什么 / 砍了什么 / 还缺什么 / 仍生效的决策）
 
 冲突时：**本文（产品范围）> [`docs/prototypes/`](../prototypes/README.md) 及其文档（设计稿）> 实现与单测 > 参考文档**（[`yshell-ui-interaction-contract.md`](./yshell-ui-interaction-contract.md)、设计语言、[`archive/`](./archive/README.md) 等）。  
@@ -62,6 +62,7 @@ UI 为 disabled + tooltip、空态，或决策延后。**不是待补闭环。**
 | N6 遗留 | R-107 存为会话默认；日志大小上限 |
 | `ui.new_tab_mode` | schema 有；`+` 忽略 session-editor；Settings 无项（相对 D11） |
 | `ui.multi_window_enabled` | schema 幽灵字段，未接线 |
+| Host/Session/MCP/Shell 真多进程 | D38 目标架构；同进程 Host 边界 / CLI 角色 / run-state / Job 已落地，Worker·MCP·Shell 分进程 I/O 桥接仍推进中（见 [`process-architecture.md`](../prototypes/process-architecture.md)） |
 | L1 状态栏 i18n 方案 | 方案文档未落盘 |
 | L4 fmt + cargo-deny 冻结 | 等独占窗口 |
 
@@ -89,6 +90,7 @@ UI 为 disabled + tooltip、空态，或决策延后。**不是待补闭环。**
 | D35 | Settings → Security：Master password 卡片（状态 + Set / Change / Remove / Forgot password?）；管理器入口用整行可点清单（图标 + 名称 + 计数 + chevron），不写摘要。Master password 可选（对齐 Xshell）：Not set = 不启用主密码加密层；Set = 加密全部 session/key 文件与保存的口令，启动时解锁；Change / Remove 校验当前口令；Reset 删除受保护数据，无打字确认词。 |
 | D36 | Settings → Appearance 分两组：**App theme**（Mode System / Light / Dark + Accent Follow system / 6 预设）与 **Terminal style**（全局 Style 下拉 + 管理；字体 / 配色在 Terminal Styles 管理器）。App theme 即时预览，Save 持久化；Terminal style 保存后对新开终端生效。 |
 | D37 | Settings → Terminal 新增交互项：Middle click（Paste 默认 / Do nothing）、Right click（Context menu 默认 / Paste / Do nothing）、Multi-line paste（Ask 默认 / Paste / Block）、Auto copy（Off 默认）；Reset defaults 一并重置这些值。 |
+| D38 | **进程拆分（目标架构）**：Host / SessionWorker（一连一进程）/ McpProcess（监听单例）/ Shell（纯 UI）。MCP **全局**可见全部 session、可随时切换，**不**绑定「宿主窗」；新建连接的 tab 仅临时落在某窗展示。清理权**只在 Host**；零 UI 窗 → Host 关机收尸；Job Object + 心跳 + `run-state` 启动收尸防野进程。细节与分阶段见 [`docs/prototypes/process-architecture.md`](../prototypes/process-architecture.md)。本版 UI 仍可单进程运行；真多进程按该文档分阶段落地。 |
 
 完整原文与 N0–N9 需求叙述见 [`archive/yshell-next-features-requirements.md`](./archive/yshell-next-features-requirements.md)。
 

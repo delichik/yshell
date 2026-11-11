@@ -6973,6 +6973,7 @@ dependencies = [
  "raw-window-handle",
  "regex",
  "rfd",
+ "serde",
  "serde_json",
  "slint",
  "slint-build",

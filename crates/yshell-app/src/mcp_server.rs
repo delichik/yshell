@@ -100,6 +100,11 @@ impl McpInbox {
             .map(|queue| queue.is_empty())
             .unwrap_or(true)
     }
+
+    /// Pop one pending job (used by the standalone `--mcp-daemon` drain loop).
+    pub fn try_pop(&self) -> Option<McpJob> {
+        self.inner.lock().ok()?.pop_front()
+    }
 }
 
 /// Stops the accept loop and clears the endpoint file.

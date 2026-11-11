@@ -9,6 +9,7 @@ mod bootstrap;
 mod connect_jobs;
 mod dialog_windows;
 mod error;
+mod host;
 mod local_fs;
 mod mcp_server;
 mod runtime;
@@ -27,7 +28,7 @@ use runtime::AppRuntime;
 
 fn main() -> AppResult<()> {
     let invocation = CliInvocation::parse(env::args().skip(1))?;
-    if !matches!(invocation.command, CliCommand::RunShell) {
+    if !matches!(invocation.command, CliCommand::RunShell | CliCommand::Shell) {
         attach_parent_console();
     }
     match invocation.command {
@@ -63,7 +64,42 @@ fn main() -> AppResult<()> {
             let config_dir = resolve_config_dir(invocation.config_dir)?;
             yshell_mcp::run_stdio_server(&config_dir).map_err(AppError::from_error)
         }
-        CliCommand::RunShell => {
+        CliCommand::Host => {
+            let config_dir = resolve_config_dir(invocation.config_dir)?;
+            host::run_host_headless(config_dir)
+        }
+        CliCommand::SessionWorker {
+            session_id,
+            generation,
+            parent_pid,
+        } => {
+            let config_dir = resolve_config_dir(invocation.config_dir)?;
+            host::run_session_worker(host::SessionWorkerArgs {
+                config_dir,
+                session_id,
+                generation,
+                parent_pid,
+            })
+        }
+        CliCommand::McpDaemon {
+            bind_host,
+            port,
+            token,
+            generation,
+            parent_pid,
+        } => {
+            let config_dir = resolve_config_dir(invocation.config_dir)?;
+            host::run_mcp_daemon(host::McpDaemonArgs {
+                config_dir,
+                bind_host,
+                port,
+                token,
+                generation,
+                parent_pid,
+            })
+        }
+        CliCommand::RunShell | CliCommand::Shell => {
+            // Default GUI path: in-process Host + Shell (D38 Phase 1/4 scaffolding).
             let app = bootstrap_app(invocation.config_dir)?;
             app.run()
         }
@@ -100,6 +136,22 @@ enum CliCommand {
     Version,
     Help,
     Mcp,
+    /// Headless Host process (D38).
+    Host,
+    /// GUI Shell role (same binary path as default run for now).
+    Shell,
+    SessionWorker {
+        session_id: String,
+        generation: u64,
+        parent_pid: u32,
+    },
+    McpDaemon {
+        bind_host: String,
+        port: u16,
+        token: String,
+        generation: u64,
+        parent_pid: u32,
+    },
     RunShell,
 }
 
@@ -117,6 +169,11 @@ impl CliInvocation {
     fn parse(args: impl IntoIterator<Item = String>) -> AppResult<Self> {
         let mut config_dir = None;
         let mut command = None;
+        let mut generation = 0u64;
+        let mut parent_pid = 0u32;
+        let mut mcp_bind = "127.0.0.1".to_owned();
+        let mut mcp_port = yshell_config::default_mcp_port();
+        let mut mcp_token = String::new();
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
             match arg.as_str() {
@@ -131,6 +188,40 @@ impl CliInvocation {
                     }
                     config_dir = Some(PathBuf::from(value));
                 }
+                "--generation" => {
+                    let value = args
+                        .next()
+                        .ok_or_else(|| AppError::new("--generation requires an integer"))?;
+                    generation = value
+                        .parse()
+                        .map_err(|_| AppError::new("--generation must be an integer"))?;
+                }
+                "--parent-pid" => {
+                    let value = args
+                        .next()
+                        .ok_or_else(|| AppError::new("--parent-pid requires an integer"))?;
+                    parent_pid = value
+                        .parse()
+                        .map_err(|_| AppError::new("--parent-pid must be an integer"))?;
+                }
+                "--mcp-bind" => {
+                    mcp_bind = args
+                        .next()
+                        .ok_or_else(|| AppError::new("--mcp-bind requires a host"))?;
+                }
+                "--mcp-port" => {
+                    let value = args
+                        .next()
+                        .ok_or_else(|| AppError::new("--mcp-port requires a port"))?;
+                    mcp_port = value
+                        .parse()
+                        .map_err(|_| AppError::new("--mcp-port must be an integer"))?;
+                }
+                "--mcp-token" => {
+                    mcp_token = args
+                        .next()
+                        .ok_or_else(|| AppError::new("--mcp-token requires a token"))?;
+                }
                 "--check-config" => set_command(&mut command, CliCommand::CheckConfig)?,
                 "--print-config-dir" => set_command(&mut command, CliCommand::PrintConfigDir)?,
                 "--quick-connect" => {
@@ -142,12 +233,67 @@ impl CliInvocation {
                 "--version" | "-V" => set_command(&mut command, CliCommand::Version)?,
                 "--help" | "-h" => set_command(&mut command, CliCommand::Help)?,
                 "--mcp" => set_command(&mut command, CliCommand::Mcp)?,
+                "--host" => set_command(&mut command, CliCommand::Host)?,
+                "--shell" => set_command(&mut command, CliCommand::Shell)?,
+                "--session-worker" => {
+                    let session_id = args
+                        .next()
+                        .ok_or_else(|| AppError::new("--session-worker requires a session id"))?;
+                    set_command(
+                        &mut command,
+                        CliCommand::SessionWorker {
+                            session_id,
+                            generation: 0,
+                            parent_pid: 0,
+                        },
+                    )?;
+                }
+                "--mcp-daemon" => set_command(
+                    &mut command,
+                    CliCommand::McpDaemon {
+                        bind_host: String::new(),
+                        port: 0,
+                        token: String::new(),
+                        generation: 0,
+                        parent_pid: 0,
+                    },
+                )?,
                 unknown => return Err(AppError::new(format!("unknown argument: {unknown}"))),
             }
         }
+
+        let mut command = command.unwrap_or(CliCommand::RunShell);
+        match &mut command {
+            CliCommand::SessionWorker {
+                generation: gen,
+                parent_pid: parent,
+                ..
+            } => {
+                *gen = generation;
+                *parent = parent_pid;
+            }
+            CliCommand::McpDaemon {
+                bind_host,
+                port,
+                token,
+                generation: gen,
+                parent_pid: parent,
+            } => {
+                *bind_host = mcp_bind;
+                *port = mcp_port;
+                *token = mcp_token;
+                *gen = generation;
+                *parent = parent_pid;
+                if token.is_empty() {
+                    return Err(AppError::new("--mcp-daemon requires --mcp-token"));
+                }
+            }
+            _ => {}
+        }
+
         Ok(Self {
             config_dir,
-            command: command.unwrap_or(CliCommand::RunShell),
+            command,
         })
     }
 }
@@ -162,7 +308,7 @@ fn set_command(slot: &mut Option<CliCommand>, command: CliCommand) -> AppResult<
 
 fn print_help() {
     println!(
-        "YShell\n\nUSAGE:\n    yshell [OPTIONS]\n\nOPTIONS:\n    --config-dir <path>       Use <path> as the configuration directory (test / smoke isolation)\n    --check-config            Validate configuration discovery\n    --print-config-dir        Print the configuration directory\n    --quick-connect <input>   Run the runtime quick-connect path without launching UI\n    --mcp                     Host-facing MCP stdio server (AI clients only; enable MCP in the GUI Settings first)\n    --version                 Print version\n    --help                    Print help\n\nCONFIGURATION:\n    All application settings (language, appearance, motion, fonts, local shell,\n    secret store) are read from the configuration directory only; YShell does\n    not use environment variables for configuration."
+        "YShell\n\nUSAGE:\n    yshell [OPTIONS]\n\nOPTIONS:\n    --config-dir <path>       Use <path> as the configuration directory (test / smoke isolation)\n    --check-config            Validate configuration discovery\n    --print-config-dir        Print the configuration directory\n    --quick-connect <input>   Run the runtime quick-connect path without launching UI\n    --mcp                     Host-facing MCP stdio bridge (AI clients; enable MCP in Settings first)\n    --host                    Run headless Host process (D38)\n    --shell                   Run GUI Shell (same as default launch for now)\n    --session-worker <id>     Run a SessionWorker child (Host-spawned)\n    --mcp-daemon              Run standalone MCP TCP listener (Host-spawned)\n    --generation <n>          Host generation for worker/daemon children\n    --parent-pid <pid>        Parent Host pid for worker/daemon children\n    --mcp-bind <host>         MCP daemon bind host\n    --mcp-port <port>         MCP daemon port\n    --mcp-token <token>       MCP daemon endpoint token\n    --version                 Print version\n    --help                    Print help\n\nCONFIGURATION:\n    All application settings (language, appearance, motion, fonts, local shell,\n    secret store) are read from the configuration directory only; YShell does\n    not use environment variables for configuration.\n\nSee docs/prototypes/process-architecture.md for the Host/Session/MCP/Shell model."
     );
 }
 
@@ -219,5 +365,54 @@ mod tests {
     fn rejects_unknown_and_duplicate_commands() {
         assert!(parse(&["--bogus"]).is_err());
         assert!(parse(&["--version", "--help"]).is_err());
+    }
+
+    #[test]
+    fn parses_host_and_session_worker_roles() {
+        assert_eq!(parse(&["--host"]).expect("host").command, CliCommand::Host);
+        let worker = parse(&[
+            "--session-worker",
+            "ses_1",
+            "--generation",
+            "3",
+            "--parent-pid",
+            "42",
+        ])
+        .expect("worker");
+        assert_eq!(
+            worker.command,
+            CliCommand::SessionWorker {
+                session_id: "ses_1".to_owned(),
+                generation: 3,
+                parent_pid: 42,
+            }
+        );
+    }
+
+    #[test]
+    fn mcp_daemon_requires_token() {
+        assert!(parse(&["--mcp-daemon", "--mcp-port", "9"]).is_err());
+        let daemon = parse(&[
+            "--mcp-daemon",
+            "--mcp-bind",
+            "127.0.0.1",
+            "--mcp-port",
+            "9",
+            "--mcp-token",
+            "secret",
+            "--generation",
+            "1",
+        ])
+        .expect("daemon");
+        assert_eq!(
+            daemon.command,
+            CliCommand::McpDaemon {
+                bind_host: "127.0.0.1".to_owned(),
+                port: 9,
+                token: "secret".to_owned(),
+                generation: 1,
+                parent_pid: 0,
+            }
+        );
     }
 }
