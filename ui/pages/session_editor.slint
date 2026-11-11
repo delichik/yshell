@@ -10,7 +10,7 @@
 import { Theme } from "../theme.slint";
 import { TextFormats } from "../text_formats.slint";
 import {
-    FocusRing, WinButton, WinComboBox, WinIconButton, WinNavItem, WinScrollIndicator, WinSwitch,
+    FocusRing, WinButton, WinComboBox, WinIconButton, WinMethodSeg, WinNavItem, WinScrollIndicator, WinSwitch,
 } from "../components/basic/controls.slint";
 import { FormHint, FormRow } from "../components/basic/forms.slint";
 import { Icon } from "../components/basic/icons.slint";
@@ -101,17 +101,17 @@ component InheritBar inherits Rectangle {
     }
 }
 
-// 来源说明：Inherit 时「Using parent: …」；自定义时「Custom — 已从父级拷贝」。
+// 来源说明：仅 Inherit 开启时显示（对齐原型 `.source`「Using parent: …」）。
+// 关掉 Inherit 后不再写「自定义 — …」长句，避免空表单上方多一块怪文案。
 component InheritSourceText inherits Text {
     in property <bool> inherit: true;
     in property <string> source-kind: "global";
     in property <string> source-param: "";
 
-    text: root.inherit
-        ? (root.source-kind == "folder"
-            ? @tr("Using parent: Folder «{0}» / Global", root.source-param)
-            : @tr("Using parent: Global"))
-        : @tr("Custom — copied from the parent; changes stay with this session.");
+    visible: root.inherit;
+    text: root.source-kind == "folder"
+        ? @tr("Using parent: Folder «{0}» / Global", root.source-param)
+        : @tr("Using parent: Global");
     color: Theme.text-tertiary;
     font-size: Theme.font-caption;
     wrap: word-wrap;
@@ -131,8 +131,22 @@ export component EditorTextArea inherits Rectangle {
     width: Theme.form-field-width;
     border-radius: Theme.radius-control;
     border-width: 1px;
-    border-color: input.has-focus ? Theme.accent : Theme.control-stroke;
-    background: !root.enabled ? Theme.control-fill-disabled : Theme.control-fill;
+    // 原型 TextBox：描边保持；聚焦仅底部 accent 条。
+    border-color: Theme.control-stroke;
+    background: !root.enabled ? Theme.control-fill-disabled
+        : input.has-focus ? Theme.card-fill
+        : Theme.control-fill-solid;
+
+    // 聚焦底部 2px accent
+    Rectangle {
+        visible: input.has-focus && root.enabled;
+        x: 1px;
+        y: parent.height - 2px;
+        width: parent.width - 2px;
+        height: 2px;
+        border-radius: 1px;
+        background: Theme.accent;
+    }
 
     input := TextInput {
         x: Theme.spacing-8;
@@ -176,10 +190,11 @@ component ManagedKeyPicker inherits Rectangle {
     preferred-width: 0px;
     border-radius: Theme.radius-control;
     border-width: 1px;
-    border-color: (picker_focus.has-focus || picker_touch.has-hover) ? Theme.accent : Theme.control-stroke;
-    background: picker_touch.pressed ? Theme.control-fill-pressed
-        : picker_touch.has-hover ? Theme.control-fill-hover
-        : Theme.control-fill;
+    border-color: Theme.control-stroke;
+    background: picker_focus.has-focus ? Theme.card-fill
+        : picker_touch.pressed ? Theme.control-fill-pressed-solid
+        : picker_touch.has-hover ? Theme.control-fill-hover-solid
+        : Theme.control-fill-solid;
 
     accessible-role: combobox;
     accessible-label: root.has-selection ? root.selected-label : root.placeholder-text;
@@ -190,6 +205,16 @@ component ManagedKeyPicker inherits Rectangle {
         radius: root.border-radius;
         target-width: root.width;
         target-height: root.height;
+    }
+
+    Rectangle {
+        visible: picker_focus.has-focus;
+        x: 1px;
+        y: parent.height - 2px;
+        width: parent.width - 2px;
+        height: 2px;
+        border-radius: 1px;
+        background: Theme.accent;
     }
 
     HorizontalLayout {
@@ -251,7 +276,7 @@ component ManagedKeyPicker inherits Rectangle {
         Rectangle {
             background: Theme.flyout-background;
             border-width: 1px;
-            border-color: Theme.layer-stroke;
+            border-color: Theme.card-stroke;
             border-radius: Theme.radius-panel;
             drop-shadow-blur: Theme.shadow-blur;
             drop-shadow-color: Theme.shadow-color;
@@ -327,7 +352,8 @@ component ContextMenuItem inherits Rectangle {
     in property <string> disabled-hint: "";
     callback clicked();
 
-    height: Theme.row-height-menu;
+    // 原型 Flyout 行高 32（与 MenuPopup 一致）。
+    height: Theme.row-height-list;
     background: root.enabled && item_touch.has-hover ? Theme.subtle-hover : transparent;
 
     Text {
@@ -377,7 +403,7 @@ component LoginStepMenu inherits Rectangle {
     width: 200px;
     background: Theme.flyout-background;
     border-width: 1px;
-    border-color: Theme.layer-stroke;
+    border-color: Theme.card-stroke;
     border-radius: Theme.radius-panel;
     drop-shadow-blur: Theme.shadow-blur;
     drop-shadow-color: Theme.shadow-color;
@@ -434,7 +460,7 @@ component TunnelMenu inherits Rectangle {
     width: 180px;
     background: Theme.flyout-background;
     border-width: 1px;
-    border-color: Theme.layer-stroke;
+    border-color: Theme.card-stroke;
     border-radius: Theme.radius-panel;
     drop-shadow-blur: Theme.shadow-blur;
     drop-shadow-color: Theme.shadow-color;
@@ -679,7 +705,7 @@ export component SessionEditor inherits Rectangle {
                 border-color: Theme.card-stroke;
 
                 VerticalLayout {
-                    padding: Theme.spacing-20;
+                    padding: Theme.spacing-16;
                     spacing: Theme.spacing-12;
 
                     Rectangle {
@@ -832,19 +858,6 @@ export component SessionEditor inherits Rectangle {
                                         source-param: root.auth-source-param;
                                     }
 
-                                    if root.inherit-auth && root.parent-auth-text != "" : FormRow {
-                                        label: @tr("Parent");
-                                        Text {
-                                            text: root.parent-auth-text;
-                                            color: Theme.text-secondary;
-                                            font-size: Theme.font-body;
-                                            height: Theme.control-height;
-                                            vertical-alignment: center;
-                                            wrap: no-wrap;
-                                            overflow: elide;
-                                        }
-                                    }
-
                                     FormRow {
                                         label: @tr("Username");
                                         WinTextInput {
@@ -858,25 +871,24 @@ export component SessionEditor inherits Rectangle {
 
                                     FormRow {
                                         label: @tr("Method");
-                                        HorizontalLayout {
-                                            spacing: Theme.spacing-8;
-                                            WinButton {
-                                                text: @tr("Password");
-                                                accent: root.auth-method-text == "password";
-                                                enabled: !root.inherit-auth;
-                                                clicked => { root.set-auth-method-password(); }
-                                            }
-                                            WinButton {
-                                                text: @tr("Private Key");
-                                                accent: root.show-key-auth;
-                                                enabled: !root.inherit-auth;
-                                                clicked => { root.set-auth-method-private-key(); }
-                                            }
-                                            WinButton {
-                                                text: @tr("Keyboard Interactive");
-                                                accent: root.auth-method-text == "keyboard_interactive";
-                                                enabled: !root.inherit-auth;
-                                                clicked => { root.set-auth-method-keyboard-interactive(); }
+                                        WinMethodSeg {
+                                            enabled: !root.inherit-auth;
+                                            labels: [
+                                                @tr("Password"),
+                                                @tr("Private Key"),
+                                                @tr("Keyboard Interactive"),
+                                            ];
+                                            selected-index: root.auth-method-text == "password" ? 0
+                                                : root.show-key-auth ? 1
+                                                : 2;
+                                            selected(index) => {
+                                                if (index == 0) {
+                                                    root.set-auth-method-password();
+                                                } else if (index == 1) {
+                                                    root.set-auth-method-private-key();
+                                                } else {
+                                                    root.set-auth-method-keyboard-interactive();
+                                                }
                                             }
                                         }
                                     }
@@ -1029,14 +1041,25 @@ export component SessionEditor inherits Rectangle {
 
                                                 for step[i] in root.login-steps : Rectangle {
                                                     width: parent.width;
-                                                    height: Theme.row-height-list;
+                                                    // 原型 `.step` / `--row-h` = 2×ctrl-h
+                                                    height: Theme.control-height * 2;
                                                     background: i == root.selected-login-step ? Theme.subtle-selected
                                                         : step_touch.has-hover ? Theme.subtle-hover
                                                         : i == root.drag-over && root.drag-from >= 0 ? Theme.accent-soft
                                                         : transparent;
 
+                                                    Rectangle {
+                                                        visible: i == root.selected-login-step;
+                                                        x: 4px;
+                                                        y: (parent.height - 16px) / 2;
+                                                        width: 3px;
+                                                        height: 16px;
+                                                        border-radius: 2px;
+                                                        background: Theme.accent;
+                                                    }
+
                                                     HorizontalLayout {
-                                                        padding-left: Theme.spacing-8;
+                                                        padding-left: 14px;
                                                         padding-right: Theme.spacing-12;
                                                         spacing: Theme.spacing-8;
 
@@ -1147,19 +1170,6 @@ export component SessionEditor inherits Rectangle {
                                         inherit: root.inherit-proxy;
                                         source-kind: root.proxy-source-kind;
                                         source-param: root.proxy-source-param;
-                                    }
-
-                                    if root.inherit-proxy && root.parent-proxy-text != "" : FormRow {
-                                        label: @tr("Parent");
-                                        Text {
-                                            text: root.parent-proxy-text;
-                                            color: Theme.text-secondary;
-                                            font-size: Theme.font-body;
-                                            height: Theme.control-height;
-                                            vertical-alignment: center;
-                                            wrap: no-wrap;
-                                            overflow: elide;
-                                        }
                                     }
 
                                     FormRow {
@@ -1426,15 +1436,16 @@ export component SessionEditor inherits Rectangle {
                 clicked => { root.test-auth(); }
             }
             WinButton { text: @tr("Cancel"); subtle: true; clicked => { root.close(); } }
+            // 原型页脚 accent = Save；Save and Connect 为次级（产品入口保留）。
             WinButton {
                 text: @tr("Save");
+                accent: true;
                 enabled: !root.save-blocked;
                 clicked => { root.save(); }
             }
             WinButton {
                 text: @tr("Save and Connect");
                 icon: "connect";
-                accent: true;
                 enabled: !root.save-blocked;
                 clicked => { root.save-connect(); }
             }

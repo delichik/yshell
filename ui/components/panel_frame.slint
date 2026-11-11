@@ -43,10 +43,10 @@ export component PanelFrame inherits Rectangle {
     in property <string> icon: "";
     /// 折叠态：只保留标题条（总高 = header-height）。
     in property <bool> collapsed: false;
-    /// 标题条高度（也是折叠态总高；设计 28–32px）。
-    in property <length> header-height: Theme.control-height;
-    /// 内容槽内边距（默认与 WinCard 的 12px 对齐）。
-    in property <length> content-padding: Theme.spacing-12;
+    /// 标题条高度（也是折叠态总高；对齐原型 `.panel-head` = 40）。
+    in property <length> header-height: Theme.bar-height-panel-header;
+    /// 内容槽内边距（原型 `.panel-body` padding = 8）。
+    in property <length> content-padding: Theme.spacing-8;
     /// 可选头部主操作（如 Sessions 的「新建会话」`+`）：仅 `header-action-icon`
     /// 非空时在 `⋯` 之前渲染。
     in property <string> header-action-icon: "";
@@ -136,10 +136,16 @@ export component PanelFrame inherits Rectangle {
         }
     }
 
-    // 标题条与内容之间不再画分隔线：卡片本身已有 1px `card-stroke` 描边，
-    // 而 `layer-stroke` 与 `card-stroke` 取值完全相同（同一半透明描边色），
-    // 两条同色同粗的线叠在一起会读成「框中框」——卡片像是被切开却没切干净。
-    // 现在靠 12px 内容内边距 + 标题的 `body-strong` 字重区分层级。
+    // 原型 `.panel-head`：底部分隔线（layer-stroke，现已弱于 card-stroke）。
+    Rectangle {
+        visible: !root.collapsed;
+        x: 0px;
+        y: root.header-height - 1px;
+        width: parent.width;
+        height: 1px;
+        background: Theme.layer-stroke;
+        z: 1;
+    }
 
     // 内容槽：折叠时高度为 0（clip 裁剪；子内容保留实例与状态）。
     Rectangle {

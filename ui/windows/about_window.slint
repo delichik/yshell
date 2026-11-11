@@ -26,8 +26,12 @@ export component AboutWindow inherits Window {
 
     in property <string> version-text: "";
     in property <string> config-dir-text: "";
-    /// 开源许可正文（产品侧从编译内置的资源文件载入；空 = 显示占位说明）。
+    /// 开源许可预览正文（产品侧截断后写入；全文过大，不可直接塞进 Text）。
     in property <string> licenses-text: "";
+    /// 预览是否被截断；展开区底部提供「打开全文」。
+    in property <bool> licenses-truncated: false;
+    /// 预览行数（Rust 计数）；Flickable 用它估高，禁止 preferred-height 量正文。
+    in property <int> licenses-preview-lines: 0;
     in-out property <bool> native_title_drag: false;
 
     /// open source licenses 面板是否展开（默认折叠；展开后窗口尺寸不变）。
@@ -35,6 +39,8 @@ export component AboutWindow inherits Window {
 
     callback dismiss();
     callback title_drag_requested();
+    /// 将完整许可证清单写到临时文件并用系统默认程序打开。
+    callback open_full_licenses();
 
     dialog_scope := FocusScope {
         width: Theme.tool-window-width-standard;
@@ -110,35 +116,61 @@ export component AboutWindow inherits Window {
                         clicked => { root.licenses-open = !root.licenses-open; }
                     }
 
-                    if root.licenses-open : Rectangle {
+                    if root.licenses-open : VerticalLayout {
                         vertical-stretch: 1;
-                        min-height: 120px;
-                        max-height: 220px;
-                        background: Theme.control-fill;
-                        border-radius: Theme.radius-control;
-                        border-width: 1px;
-                        border-color: Theme.control-stroke;
-                        clip: true;
+                        spacing: Theme.spacing-8;
+                        min-height: 0px;
 
-                        Flickable {
-                            width: parent.width;
-                            height: parent.height;
-                            interactive: true;
-                            content-width: self.width;
-                            content-height: licenses_text.preferred-height + 2 * Theme.spacing-8;
+                        Rectangle {
+                            vertical-stretch: 1;
+                            min-height: 120px;
+                            max-height: 220px;
+                            background: Theme.control-fill;
+                            border-radius: Theme.radius-control;
+                            border-width: 1px;
+                            border-color: Theme.control-stroke;
+                            clip: true;
 
-                            licenses_text := Text {
-                                x: Theme.spacing-12;
-                                y: Theme.spacing-8;
-                                width: parent.width - 2 * Theme.spacing-12;
-                                text: root.licenses-text == ""
-                                    ? @tr("Open source licenses are not bundled in this build.")
-                                    : root.licenses-text;
-                                color: Theme.text-secondary;
-                                font-size: Theme.font-caption;
-                                font-family: Theme.font-mono;
-                                wrap: word-wrap;
+                            // 行高由 Rust 预计算；禁止对正文做 preferred-height（即便截断
+                            // 后上千行，ComplexText 量高仍会卡死 UI 线程）。
+                            Flickable {
+                                width: parent.width;
+                                height: parent.height;
+                                interactive: true;
+                                content-width: self.width;
+                                content-height: Math.max(
+                                    self.height,
+                                    root.licenses-preview-lines * Theme.line-caption + 2 * Theme.spacing-8
+                                );
+
+                                Text {
+                                    x: Theme.spacing-12;
+                                    y: Theme.spacing-8;
+                                    width: parent.width - 2 * Theme.spacing-12;
+                                    height: Math.max(
+                                        parent.height - 2 * Theme.spacing-8,
+                                        root.licenses-preview-lines * Theme.line-caption
+                                    );
+                                    text: root.licenses-text == ""
+                                        ? @tr("Open source licenses are not bundled in this build.")
+                                        : root.licenses-truncated
+                                            ? root.licenses-text + "\n\n" + @tr("Preview truncated. Open the full text to review every license.")
+                                            : root.licenses-text;
+                                    color: Theme.text-secondary;
+                                    font-size: Theme.font-caption;
+                                    font-family: Theme.font-mono;
+                                    wrap: no-wrap;
+                                    overflow: elide;
+                                }
                             }
+                        }
+
+                        WinButton {
+                            text: root.licenses-truncated
+                                ? @tr("Open full text…")
+                                : @tr("Open licenses file…");
+                            tooltip-text: @tr("Open the complete open-source license list");
+                            clicked => { root.open_full_licenses(); }
                         }
                     }
                 }

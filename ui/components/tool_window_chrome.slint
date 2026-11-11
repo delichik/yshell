@@ -23,6 +23,7 @@ export component ToolWindowChrome inherits Rectangle {
         padding: 0px;
 
         title_bar := Rectangle {
+            // 与主窗顶栏同高（原型 titlebar 32）；标题字阶 12/600。
             height: Theme.bar-height-menubar;
             vertical-stretch: 0;
             background: Theme.window-background;
@@ -31,7 +32,7 @@ export component ToolWindowChrome inherits Rectangle {
                 y: parent.height - 1px;
                 width: parent.width;
                 height: 1px;
-                background: Theme.divider;
+                background: Theme.layer-stroke;
             }
 
             if !root.native-title-drag : WindowMoveArea {
@@ -53,7 +54,7 @@ export component ToolWindowChrome inherits Rectangle {
                 Text {
                     text: root.title-text;
                     color: Theme.text-primary;
-                    font-size: Theme.font-body;
+                    font-size: Theme.font-caption;
                     font-weight: Theme.weight-semibold;
                     vertical-alignment: center;
                     horizontal-stretch: root.summary-text == "" ? 1 : 0;

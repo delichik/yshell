@@ -57,27 +57,39 @@ component ProxyListItem inherits Rectangle {
         : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
+    // 原型 `.proxy-row` 选中轨：left 4 · 3×16
+    Rectangle {
+        visible: root.selected;
+        x: 4px;
+        y: (parent.height - 16px) / 2;
+        width: 3px;
+        height: 16px;
+        border-radius: 2px;
+        background: Theme.accent;
+    }
+
     VerticalLayout {
-        padding-left: Theme.spacing-8;
+        padding-left: 14px;
         padding-right: Theme.spacing-8;
-        padding-top: Theme.spacing-4;
-        padding-bottom: Theme.spacing-4;
+        padding-top: 6px;
+        padding-bottom: 6px;
         spacing: 2px;
         alignment: center;
 
         Text {
             text: node.name;
             color: Theme.text-primary;
-            font-size: Theme.font-body;
-            font-weight: node.selected ? Theme.weight-semibold : 400;
+            font-size: Theme.font-label;
+            font-weight: root.selected ? Theme.weight-semibold : 400;
             wrap: no-wrap;
             overflow: elide;
         }
 
         Text {
-            text: node.protocol + " · " + node.address;
+            // 原型 `.proxy-row small`：host:port（协议进右栏表单）。
+            text: node.address;
             color: Theme.text-tertiary;
-            font-size: Theme.font-caption;
+            font-size: 11px;
             font-family: Theme.font-mono;
             wrap: no-wrap;
             overflow: elide;
@@ -224,130 +236,117 @@ export component ProxiesPage inherits Rectangle {
         open: root.open;
         close => { root.close(); }
 
-        HorizontalLayout {
-            spacing: Theme.spacing-16;
+        // 原型：全宽工具条（仅 +）→ 左右分栏 → Cancel | Save。
+        VerticalLayout {
+            spacing: Theme.spacing-12;
             vertical-stretch: 1;
 
-            // --- 左：工具条只放 `+` + 极简清单 + 右键动作 ----------------------
-            Rectangle {
-                width: Theme.manager-list-width;
-                clip: true;
-                background: transparent;
+            HorizontalLayout {
+                spacing: Theme.spacing-8;
+                vertical-stretch: 0;
+                cross-axis-alignment: center;
 
-                left-scroll := Flickable {
-                    width: parent.width;
-                    height: parent.height;
-                    interactive: true;
-                    content-width: self.width;
-                    content-height: left-column.preferred-height;
+                WinIconButton {
+                    icon: "plus";
+                    accent: true;
+                    accessible-name: @tr("New");
+                    tooltip-text: @tr("New proxy");
+                    clicked => { root.start-new-proxy(); }
+                }
 
-                    left-column := VerticalLayout {
+                Rectangle { horizontal-stretch: 1; }
+
+                Text {
+                    text: @tr("{0} proxies", root.proxies.length);
+                    color: Theme.text-tertiary;
+                    font-size: Theme.font-caption;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                    overflow: elide;
+                }
+            }
+
+            HorizontalLayout {
+                spacing: Theme.spacing-16;
+                vertical-stretch: 1;
+
+                // --- 左：极简清单 --------------------------------------------
+                Rectangle {
+                    width: Theme.manager-list-width;
+                    clip: true;
+                    background: Theme.card-fill;
+                    border-radius: Theme.radius-control;
+                    border-width: 1px;
+                    border-color: Theme.control-stroke;
+
+                    proxies-list := Flickable {
+                        visible: root.proxies.length > 0;
+                        width: parent.width;
+                        height: parent.height;
+                        interactive: true;
+                        content-width: self.width;
+                        content-height: rows.preferred-height;
+
+                        rows := VerticalLayout {
+                            padding: Theme.spacing-4;
+                            spacing: 2px;
+
+                            for row[i] in root.proxies : ProxyListItem {
+                                node: row;
+                                selected: i == root.selected-index;
+                                clicked => {
+                                    root.selected-index = i;
+                                    root.select-proxy(i);
+                                }
+                                context-menu-requested(x, y) => {
+                                    root.selected-index = i;
+                                    root.prepare-context-menu(i);
+                                    root.open-row-menu(i, x, y);
+                                }
+                            }
+                        }
+                    }
+
+                    WinScrollIndicator {
+                        visible: root.proxies.length > 0;
+                        x: parent.width - self.width - Theme.spacing-4;
+                        y: Theme.spacing-4;
+                        height: parent.height - 2 * Theme.spacing-4;
+                        viewport-position: proxies-list.content-y;
+                        content-extent: proxies-list.content-height;
+                        viewport-extent: proxies-list.height;
+                        thumb-min-length: 24px;
+                    }
+
+                    // 空态只留说明：New 已在顶栏，清单内不再重复按钮。
+                    Text {
+                        visible: root.proxies.length == 0;
+                        x: Theme.spacing-16;
+                        y: max((parent.height - self.preferred-height) / 2, Theme.spacing-12);
+                        width: parent.width - 2 * Theme.spacing-16;
+                        text: root.empty-text;
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                    }
+                }
+
+                // --- 右：编辑表单（原型 `.form-scroll`）------------------------
+                Rectangle {
+                    clip: true;
+                    background: Theme.card-fill;
+                    border-radius: Theme.radius-control;
+                    border-width: 1px;
+                    border-color: Theme.control-stroke;
+
+                    VerticalLayout {
                         spacing: Theme.spacing-8;
-
-                        HorizontalLayout {
-                            spacing: Theme.spacing-8;
-                            cross-axis-alignment: center;
-
-                            WinIconButton {
-                                icon: "plus";
-                                accessible-name: @tr("New");
-                                tooltip-text: @tr("New proxy");
-                                clicked => { root.start-new-proxy(); }
-                            }
-
-                            Rectangle { horizontal-stretch: 1; }
-
-                            // 对齐原型工具条右侧短计数（`2 proxies`）。
-                            Text {
-                                text: @tr("{0} proxies", root.proxies.length);
-                                color: Theme.text-tertiary;
-                                font-size: Theme.font-caption;
-                                vertical-alignment: center;
-                                wrap: no-wrap;
-                                overflow: elide;
-                            }
-                        }
-
-                        Rectangle {
-                            height: max(180px, min(root.proxies.length * 64px + 8px, 520px));
-                            clip: true;
-                            background: Theme.control-fill;
-                            border-radius: Theme.radius-control;
-                            border-width: 1px;
-                            border-color: Theme.control-stroke;
-
-                            proxies-list := Flickable {
-                                visible: root.proxies.length > 0;
-                                width: parent.width;
-                                height: parent.height;
-                                interactive: true;
-                                content-width: self.width;
-                                content-height: rows.preferred-height;
-
-                                rows := VerticalLayout {
-                                    padding: Theme.spacing-4;
-                                    spacing: 2px;
-
-                                    for row[i] in root.proxies : ProxyListItem {
-                                        node: row;
-                                        selected: i == root.selected-index;
-                                        clicked => {
-                                            root.selected-index = i;
-                                            root.select-proxy(i);
-                                        }
-                                        context-menu-requested(x, y) => {
-                                            root.selected-index = i;
-                                            root.prepare-context-menu(i);
-                                            root.open-row-menu(i, x, y);
-                                        }
-                                    }
-                                }
-                            }
-
-                            WinScrollIndicator {
-                                visible: root.proxies.length > 0;
-                                x: parent.width - self.width - Theme.spacing-4;
-                                y: Theme.spacing-4;
-                                height: parent.height - 2 * Theme.spacing-4;
-                                viewport-position: proxies-list.content-y;
-                                content-extent: proxies-list.content-height;
-                                viewport-extent: proxies-list.height;
-                                thumb-min-length: 24px;
-                            }
-
-                            empty := VerticalLayout {
-                                visible: root.proxies.length == 0;
-                                y: max((parent.height - self.preferred-height) / 2, Theme.spacing-12);
-                                width: parent.width;
-                                padding-left: Theme.spacing-16;
-                                padding-right: Theme.spacing-16;
-                                spacing: Theme.spacing-12;
-                                alignment: center;
-
-                                Text {
-                                    width: min(parent.width - 2 * Theme.spacing-16, 250px);
-                                    text: root.empty-text;
-                                    color: Theme.text-tertiary;
-                                    font-size: Theme.font-caption;
-                                    horizontal-alignment: center;
-                                    wrap: word-wrap;
-                                }
-
-                                HorizontalLayout {
-                                    alignment: center;
-
-                                    WinButton {
-                                        text: @tr("New");
-                                        icon: "plus";
-                                        accent: true;
-                                        clicked => { root.start-new-proxy(); }
-                                    }
-                                }
-                            }
-                        }
+                        padding: 0px;
 
                         // D8：删除被阻止时说明引用方并提供显式迁移动作。
                         if root.remove-blocked : Rectangle {
+                            vertical-stretch: 0;
                             background: Theme.banner-warning-background;
                             border-radius: Theme.radius-control;
                             border-width: 1px;
@@ -390,212 +389,171 @@ export component ProxiesPage inherits Rectangle {
                                 }
                             }
                         }
-                    }
 
-                    WinScrollIndicator {
-                        x: parent.width - self.width - Theme.spacing-4;
-                        y: Theme.spacing-4;
-                        height: parent.height - 2 * Theme.spacing-4;
-                        viewport-position: left-scroll.content-y;
-                        content-extent: left-scroll.content-height;
-                        viewport-extent: left-scroll.height;
-                        thumb-min-length: 24px;
-                    }
-                }
-            }
+                        Rectangle {
+                            vertical-stretch: 1;
+                            clip: true;
+                            background: transparent;
 
-            // --- 右：编辑表单（页脚只有 Cancel | Save）------------------------
-            Rectangle {
-                clip: true;
-                background: transparent;
+                            scroll := Flickable {
+                                width: parent.width;
+                                height: parent.height;
+                                interactive: true;
+                                content-width: self.width;
+                                content-height: sections.preferred-height;
 
-                VerticalLayout {
-                    spacing: Theme.spacing-8;
+                                sections := VerticalLayout {
+                                    padding: Theme.spacing-16;
+                                    spacing: Theme.form-row-gap;
 
-                    Rectangle {
-                        vertical-stretch: 1;
-                        clip: true;
-                        background: transparent;
+                                    FormRow {
+                                        label: @tr("Name");
 
-                        scroll := Flickable {
-                            width: parent.width;
-                            height: parent.height;
-                            interactive: true;
-                            content-width: self.width;
-                            content-height: sections.preferred-height;
-
-                            sections := VerticalLayout {
-                                spacing: Theme.form-row-gap;
-
-                                FormRow {
-                                    label: @tr("Name");
-
-                                    WinTextInput {
-                                        width: Theme.form-field-width;
-                                        text <=> root.editor-name-text;
-                                        placeholder-text: @tr("Proxy name");
-                                        edited => { root.update-proxy-name(self.text); }
-                                    }
-                                }
-
-                                FormRow {
-                                    label: @tr("Protocol");
-
-                                    WinComboBox {
-                                        width: Theme.form-field-width;
-                                        model: root.protocol-options;
-                                        current-index <=> root.editor-protocol-index;
-                                        selected(index) => {
-                                            root.select-proxy-protocol(index);
+                                        WinTextInput {
+                                            width: Theme.form-field-width;
+                                            text <=> root.editor-name-text;
+                                            placeholder-text: @tr("Proxy name");
+                                            edited => { root.update-proxy-name(self.text); }
                                         }
                                     }
-                                }
 
-                                FormRow {
-                                    label: @tr("Host");
+                                    FormRow {
+                                        label: @tr("Protocol");
 
-                                    WinTextInput {
-                                        width: Theme.form-field-width;
-                                        text <=> root.editor-host-text;
-                                        placeholder-text: @tr("Proxy host");
-                                        edited => { root.update-proxy-host(self.text); }
+                                        WinComboBox {
+                                            width: Theme.form-field-width;
+                                            model: root.protocol-options;
+                                            current-index <=> root.editor-protocol-index;
+                                            selected(index) => {
+                                                root.select-proxy-protocol(index);
+                                            }
+                                        }
                                     }
-                                }
 
-                                FormRow {
-                                    label: @tr("Port");
+                                    FormRow {
+                                        label: @tr("Host");
 
-                                    WinTextInput {
-                                        width: Theme.form-port-width;
-                                        text <=> root.editor-port-text;
-                                        placeholder-text: "1080";
-                                        edited => { root.update-proxy-port(self.text); }
+                                        WinTextInput {
+                                            width: Theme.form-field-width;
+                                            text <=> root.editor-host-text;
+                                            placeholder-text: @tr("Proxy host");
+                                            edited => { root.update-proxy-host(self.text); }
+                                        }
                                     }
-                                }
 
-                                FormRow {
-                                    label: @tr("Username");
+                                    FormRow {
+                                        label: @tr("Port");
 
-                                    WinTextInput {
-                                        width: Theme.form-field-width;
-                                        text <=> root.editor-username-text;
-                                        placeholder-text: @tr("Proxy username (optional)");
-                                        edited => { root.update-proxy-username(self.text); }
+                                        WinTextInput {
+                                            width: Theme.form-port-width;
+                                            text <=> root.editor-port-text;
+                                            placeholder-text: "1080";
+                                            edited => { root.update-proxy-port(self.text); }
+                                        }
                                     }
-                                }
 
-                                FormRow {
-                                    label: @tr("Password");
+                                    FormRow {
+                                        label: @tr("Username");
 
-                                    WinTextInput {
-                                        width: Theme.form-field-width;
-                                        text <=> root.editor-password-text;
-                                        input-type: password;
-                                        placeholder-text: root.editor-password-stored
-                                            ? @tr("Leave blank to keep the saved password")
-                                            : @tr("Proxy password (optional)");
-                                        edited => { root.update-proxy-password(self.text); }
+                                        WinTextInput {
+                                            width: Theme.form-field-width;
+                                            text <=> root.editor-username-text;
+                                            placeholder-text: @tr("Proxy username (optional)");
+                                            edited => { root.update-proxy-username(self.text); }
+                                        }
                                     }
-                                }
 
-                                FormRow {
-                                    label: @tr("DNS via proxy");
+                                    FormRow {
+                                        label: @tr("Password");
 
-                                    // 原型 proxies/index.html：form-switch + On/Off 文案。
-                                    WinSwitch {
-                                        text: root.editor-dns-by-proxy ? @tr("On") : @tr("Off");
-                                        accessible-name: @tr("DNS via proxy");
-                                        checked: root.editor-dns-by-proxy;
-                                        toggled => { root.toggle-proxy-dns(); }
+                                        WinTextInput {
+                                            width: Theme.form-field-width;
+                                            text <=> root.editor-password-text;
+                                            input-type: password;
+                                            placeholder-text: root.editor-password-stored
+                                                ? @tr("Leave blank to keep the saved password")
+                                                : @tr("Proxy password (optional)");
+                                            edited => { root.update-proxy-password(self.text); }
+                                        }
                                     }
-                                }
 
-                                // Test 放到表单末行（原型）；行右键同样可用。
-                                FormRow {
-                                    label: "";
+                                    FormRow {
+                                        label: @tr("DNS via proxy");
 
-                                    WinButton {
-                                        text: @tr("Test");
-                                        icon: "check";
-                                        enabled: !root.test-in-flight;
-                                        clicked => { root.test-proxy(); }
+                                        WinSwitch {
+                                            text: root.editor-dns-by-proxy ? @tr("On") : @tr("Off");
+                                            accessible-name: @tr("DNS via proxy");
+                                            checked: root.editor-dns-by-proxy;
+                                            toggled => { root.toggle-proxy-dns(); }
+                                        }
                                     }
-                                }
 
-                                if !root.editor-is-new && root.editor-id-text != "" : FormHint {
-                                    text: @tr("Profile id: {0}", root.editor-id-text);
-                                }
+                                    FormRow {
+                                        label: "";
 
-                                if root.test-result-text != "" : Rectangle {
-                                    vertical-stretch: 0;
-                                    background: Theme.control-fill;
-                                    border-radius: Theme.radius-control;
-                                    border-width: 1px;
-                                    border-color: Theme.control-stroke;
+                                        WinButton {
+                                            text: @tr("Test");
+                                            icon: "check";
+                                            enabled: !root.test-in-flight;
+                                            clicked => { root.test-proxy(); }
+                                        }
+                                    }
 
-                                    Text {
-                                        x: Theme.spacing-8;
-                                        y: Theme.spacing-8;
-                                        width: parent.width - 2 * Theme.spacing-8;
+                                    if root.test-result-text != "" : FormHint {
                                         text: root.test-result-text;
-                                        color: Theme.text-secondary;
-                                        font-size: Theme.font-caption;
-                                        font-family: Theme.font-mono;
-                                        wrap: word-wrap;
+                                        mono: true;
                                     }
                                 }
                             }
-                        }
 
-                        WinScrollIndicator {
-                            x: parent.width - self.width - Theme.spacing-4;
-                            y: Theme.spacing-4;
-                            height: parent.height - 2 * Theme.spacing-4;
-                            viewport-position: scroll.content-y;
-                            content-extent: scroll.content-height;
-                            viewport-extent: scroll.height;
-                            thumb-min-length: 24px;
+                            WinScrollIndicator {
+                                x: parent.width - self.width - Theme.spacing-4;
+                                y: Theme.spacing-4;
+                                height: parent.height - 2 * Theme.spacing-4;
+                                viewport-position: scroll.content-y;
+                                content-extent: scroll.content-height;
+                                viewport-extent: scroll.height;
+                                thumb-min-length: 24px;
+                            }
                         }
                     }
                 }
             }
-        }
 
-        // 一窗一条提交/关闭栏：状态 | Cancel | Save（Cancel/×/Esc 同弃稿关闭；Save = 保存并关闭）。
-        // 状态放页脚左侧，避免右栏「Test ↔ 状态」之间被 stretch 撑出大片空洞（对齐原型 spacer + footer）。
-        Rectangle {
-            height: 1px;
-            background: Theme.divider;
-            vertical-stretch: 0;
-        }
-
-        HorizontalLayout {
-            vertical-stretch: 0;
-            spacing: Theme.spacing-8;
-            cross-axis-alignment: center;
-
-            Text {
-                horizontal-stretch: 1;
-                height: Theme.control-height;
-                text: root.status-display;
-                color: Theme.text-secondary;
-                font-size: Theme.font-caption;
-                vertical-alignment: center;
-                wrap: no-wrap;
-                overflow: elide;
+            Rectangle {
+                height: 1px;
+                background: Theme.divider;
+                vertical-stretch: 0;
             }
 
-            WinButton {
-                text: @tr("Cancel");
-                clicked => { root.cancel-proxy-editor(); }
-            }
+            HorizontalLayout {
+                vertical-stretch: 0;
+                spacing: Theme.spacing-8;
+                cross-axis-alignment: center;
 
-            WinButton {
-                text: @tr("Save");
-                icon: "check";
-                accent: true;
-                enabled: root.save-enabled;
-                clicked => { root.save-proxy-editor(); }
+                Text {
+                    horizontal-stretch: 1;
+                    height: Theme.control-height;
+                    text: root.status-display;
+                    color: Theme.text-secondary;
+                    font-size: Theme.font-caption;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                    overflow: elide;
+                }
+
+                WinButton {
+                    text: @tr("Cancel");
+                    clicked => { root.cancel-proxy-editor(); }
+                }
+
+                WinButton {
+                    text: @tr("Save");
+                    icon: "check";
+                    accent: true;
+                    enabled: root.save-enabled;
+                    clicked => { root.save-proxy-editor(); }
+                }
             }
         }
     }

@@ -32,11 +32,11 @@
 
   /* Window tiers (flex-shrink: 0 — never compress) */
   --win-compact-w: 560px;
-  --win-compact-h: 400px;
+  --win-compact-h: 340px;
   --win-standard-w: 720px;
-  --win-standard-h: 580px;
+  --win-standard-h: 520px;
   --win-wide-w: 1100px;
-  --win-wide-h: 820px;
+  --win-wide-h: 700px;
   --win-main-w: 1440px;
   --win-main-h: 900px;
 

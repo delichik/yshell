@@ -61,15 +61,15 @@
 }
 .proto-embed--compact {
   width: var(--win-compact-w, 560px);
-  height: var(--win-compact-h, 400px);
+  height: var(--win-compact-h, 340px);
 }
 .proto-embed--standard {
   width: var(--win-standard-w, 720px);
-  height: var(--win-standard-h, 580px);
+  height: var(--win-standard-h, 520px);
 }
 .proto-embed--wide {
   width: var(--win-wide-w, 1100px);
-  height: var(--win-wide-h, 820px);
+  height: var(--win-wide-h, 700px);
 }
 .proto-embed--main {
   width: var(--win-main-w, 1440px);

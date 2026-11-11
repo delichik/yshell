@@ -32,10 +32,8 @@ export component TunnelPanel inherits Rectangle {
     private property <string> stop-text: @tr("Stop tunnel");
     private property <string> runtime-not-provisioned-tip: @tr("runtime not provisioned");
 
-    // PANEL-2：行高 = padding 4+4 + 名称行 + spacing-4 + compact 动作行 24。
-    // 旧值用满血 32 按钮会把窄栏摘要挤没；改用 control-height-compact。
-    private property <length> row-height: 2 * Theme.spacing-4
-        + (Theme.font-caption + 2px) + Theme.spacing-4 + Theme.control-height-compact;
+    // 原型 `.tunnel-row` 最小高度 `--row-h` = 64。
+    private property <length> row-height: Theme.control-height * 2;
 
     if root.rows.length == 0 : Text {
         text: root.empty-kind == "none"

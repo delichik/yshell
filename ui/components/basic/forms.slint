@@ -124,7 +124,8 @@ export component DetailRow inherits Rectangle {
             min-height: Theme.control-height;
             text: root.value;
             color: Theme.text-primary;
-            font-size: root.mono ? Theme.font-caption : Theme.font-body;
+            // 原型 `.detail-value` = 13px（mono 块仍用 caption 12）。
+            font-size: root.mono ? Theme.font-caption : Theme.font-label;
             font-family: root.mono ? Theme.font-mono : Theme.font-ui;
             vertical-alignment: center;
             wrap: word-wrap;
@@ -135,7 +136,7 @@ export component DetailRow inherits Rectangle {
         y: parent.height - 1px;
         width: parent.width;
         height: 1px;
-        background: Theme.divider;
+        background: Theme.layer-stroke;
     }
 }
 

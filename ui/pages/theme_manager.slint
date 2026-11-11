@@ -73,12 +73,12 @@ component ThemeListRow inherits Rectangle {
         : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
-    // 选中标记：左侧 3px 强调色细条。
+    // 选中标记：原型 left 4 · 3×16 居中。
     if root.selected : Rectangle {
-        x: 0px;
-        y: 8px;
+        x: 4px;
+        y: (parent.height - 16px) / 2;
         width: 3px;
-        height: parent.height - 16px;
+        height: 16px;
         border-radius: 2px;
         background: Theme.accent;
     }
@@ -258,6 +258,7 @@ export component ThemeManagerPage inherits Rectangle {
 
             WinIconButton {
                 icon: "plus";
+                accent: true;
                 accessible-name: @tr("New style");
                 tooltip-text: @tr("New style");
                 enabled: !root.theme-editor-open;
@@ -286,7 +287,7 @@ export component ThemeManagerPage inherits Rectangle {
             Rectangle {
                 width: Theme.manager-list-width;
                 clip: true;
-                background: Theme.control-fill;
+                background: Theme.card-fill;
                 border-radius: Theme.radius-control;
                 border-width: 1px;
                 border-color: Theme.control-stroke;

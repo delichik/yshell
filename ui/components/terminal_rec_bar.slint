@@ -7,8 +7,12 @@ export component TerminalRecBar inherits Rectangle {
     in property <string> path-text: "";
     callback stop-logging();
 
-    visible: root.active && root.path-text != "";
-    height: 28px;
+    // `visible: false` 仍占布局高度；未录音时必须 height=0，否则终端底会露出
+    // `terminal-background`（浅色主题近白）形成一条「白条」。
+    property <bool> shown: root.active && root.path-text != "";
+    visible: root.shown;
+    height: root.shown ? 28px : 0px;
+    clip: true;
     background: Theme.layer-fill;
 
     Rectangle {

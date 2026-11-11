@@ -48,8 +48,10 @@ export component WorkspaceTabItem inherits Rectangle {
 
     height: Theme.bar-height-tabs;
     horizontal-stretch: 0;
+    max-width: 200px;
+    // 原型 `.tab`：顶圆角；活动态底透明，仅底部 accent 指示条。
     border-radius: Theme.radius-control;
-    background: tab-active ? Theme.layer-fill : tab-hover.pressed ? Theme.subtle-pressed : tab-hover.has-hover ? Theme.subtle-hover : transparent;
+    background: tab-active ? transparent : tab-hover.pressed ? Theme.subtle-pressed : tab-hover.has-hover ? Theme.subtle-hover : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
     // E19：标签语义（与 WinTab 一致）
@@ -68,16 +70,16 @@ export component WorkspaceTabItem inherits Rectangle {
         background: Theme.divider;
     }
 
-    // 活动标签底部强调条
+    // 活动标签底部强调条（原型 left/right inset 8）
     Rectangle {
         // §6.3 #7：切换标签时强调条淡入淡出（100ms / ease-out）。
         // 不做跨标签位移——每个 tab 自带一条指示条，位移需要标签条持有唯一指示条，
         // 属于结构改动（见 problems.md）。
         opacity: root.tab-active ? 1.0 : 0.0;
         animate opacity { duration: Theme.duration-faster; easing: ease-out; }
-        x: 0;
+        x: 8px;
         y: parent.height - 2px;
-        width: parent.width;
+        width: parent.width - 16px;
         height: 2px;
         border-radius: 1px;
         background: Theme.accent;

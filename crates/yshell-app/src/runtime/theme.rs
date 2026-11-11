@@ -2103,13 +2103,14 @@ impl AppRuntime {
 /// * − navigation 240 px − 12 px gap = 792 px card;
 /// * − 2 × card padding (20) = 752 px preview surface width;
 /// * − 2 × surface border (1) − 2 × `Theme.terminal-padding-x` (6) = **738 px**;
-/// * surface height 200 px (`Theme.terminal-preview-height`) − 2 × border = **198 px**.
+/// * surface height 128 px (`Theme.terminal-preview-height`, prototype
+///   `--field-h-md`) − 2 × border = **126 px**.
 ///
 /// The renderer **floors** the grid into this area exactly like the live
 /// terminal floors its PTY grid: when a font/DPI combination does not fit, the
 /// preview drops columns/rows and keeps the bitmap at 1:1 physical pixels; the
 /// remainder stays as surface background (never a stretched image).
-pub(crate) const PREVIEW_AREA_PX: (f32, f32) = (738.0, 198.0);
+pub(crate) const PREVIEW_AREA_PX: (f32, f32) = (738.0, 126.0);
 
 /// Logical-pixel bitmap area of the Theme Manager live preview surface.
 ///

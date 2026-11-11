@@ -4,7 +4,7 @@
 
 **视觉**：原型是 **WinUI 3 / Fluent 2 设计稿**（尺寸、位置、控件观感可验收），对齐 [`ui-winui3-design-language.md`](../product/ui-winui3-design-language.md)。共享样式源：[`_theme.css`](../prototypes/_theme.css)、[`form.css`](../prototypes/form.css)、[`_chrome.css`](../prototypes/_chrome.css)、[`_proto.css`](../prototypes/_proto.css)；组件真源 [`components/`](../prototypes/components/)（**iframe + query** 复用，见 [`components.html`](../prototypes/components.html)）；样板 [`forms.html`](../prototypes/forms.html)、[`chrome.html`](../prototypes/chrome.html)。
 
-HTML 设计稿可用假桌面 + `backdrop-filter` **近似 Mica**。Slint `renderer-software` **不能**做真实云母；实现侧用实色分层代替。设计稿条带高度为 Fluent **32**（title / menu / tab）；实现 [`Theme.bar-height-menubar = 40`](../../ui/theme.slint) 为已知对齐缺口，单独轨道再改，勿在未确认前把原型改成 40。
+HTML 设计稿可用假桌面 + `backdrop-filter` **近似 Mica**。Slint `renderer-software` **不能**做真实云母；实现侧用实色分层代替。设计稿条带高度为 Fluent **32**（title / menu / tab）；实现 [`Theme.bar-height-menubar = 32`](../../ui/theme.slint) 已对齐。
 
 ## 目的
 
@@ -98,8 +98,8 @@ docs/prototypes/
 原型必须能验收 **真实占位**，不能用「跟着视口挤扁」的假布局。
 
 1. **对标固定尺寸（设计稿 = Fluent）**  
-   条带：title / menu / tab **32**、status **28**（实现 menubar 现为 40，见上文缺口）。`tool-window-padding` **28**。  
-   **弹窗只有三档**：compact `560×400` / standard `720×580` / wide `1100×820`。主窗 `1440×900`。切片尺寸见 README（不是弹窗档）。
+   条带：title / menu / tab **32**、status **28**。`tool-window-padding` **28**。  
+   **弹窗只有三档**：compact `560×340` / standard `720×520` / wide `1100×700`。主窗 `1440×900`。切片尺寸见 README（不是弹窗档）。
 2. **禁止用视口百分比压扁对话框**  
    舞台窄时 `overflow-x: auto`，对话框 `flex-shrink: 0`。
 3. **整窗不要无故滚动**  

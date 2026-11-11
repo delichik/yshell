@@ -99,10 +99,10 @@ component SessionTreeRowItem inherits Rectangle {
         text: @markdown("\{root.tooltip-text}");
     }
 
-    // 选中指示条（与 WinNavItem 一致：3×16 强调色）
+    // 选中指示条（与 WinNavItem / 原型一致：left 4 · 3×16）
     Rectangle {
         visible: root.selected;
-        x: 0;
+        x: 4px;
         y: (parent.height - 16px) / 2;
         width: 3px;
         height: 16px;

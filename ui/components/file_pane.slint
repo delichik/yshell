@@ -330,7 +330,8 @@ export component FilePane inherits Rectangle {
     // 高度不足时按「列头 → 错误条」的优先级隐藏可选行，列表视口向下取整到
     // 整数行，汇总行始终完整可见（不被 clip 裁切）。
     private property <length> layout-gap: Theme.spacing-4;
-    private property <length> header-height: Theme.control-height;
+    // 原型 SFTP path / toolbar 条带 28。
+    private property <length> header-height: Theme.row-height-tree;
     // 错误条高度：装得下 32px 的「重试」按钮（§3.3 标准控件高度）。
     // 原来用 28px（row-height-tree），32px 按钮会溢出错误条并被顶到行首。
     private property <length> error-height: Theme.control-height;
@@ -356,9 +357,9 @@ export component FilePane inherits Rectangle {
         + root.footer-height;
     private property <bool> shows-error: !root.collapsed && root.error-text != ""
         && root.height >= root.min-height-no-option + root.error-height + root.layout-gap
-            + Theme.row-height-list + root.layout-gap;
+            + Theme.row-height-tree + root.layout-gap;
     private property <bool> shows-column-header: !root.collapsed
-        && root.height >= root.min-height-no-option + Theme.row-height-list + root.layout-gap
+        && root.height >= root.min-height-no-option + Theme.row-height-tree + root.layout-gap
             + root.column-height + root.layout-gap
             + (root.shows-error ? root.error-height + root.layout-gap : 0px);
 
@@ -379,8 +380,8 @@ export component FilePane inherits Rectangle {
     private property <length> list-bottom: max(root.list-top,
         root.height - root.footer-height - root.layout-gap - root.hscroll-height);
     private property <length> list-height: root.collapsed ? 0px
-        : floor(max(0px, root.list-bottom - root.list-top) / Theme.row-height-list)
-            * Theme.row-height-list;
+        : floor(max(0px, root.list-bottom - root.list-top) / Theme.row-height-tree)
+            * Theme.row-height-tree;
 
     /// 路径编辑态：点路径条空白处进入，回车提交。
     private property <bool> path-editing: false;
@@ -480,7 +481,7 @@ export component FilePane inherits Rectangle {
     ///
     /// 视口坐标 = 内容坐标 + 滚动偏移（`content-y`/`content-x` ≤ 0）。
     public function viewport-y(row-index: int, y-in-row: length) -> length {
-        return row-index * Theme.row-height-list + y-in-row + list.content-y;
+        return row-index * Theme.row-height-tree + y-in-row + list.content-y;
     }
 
     /// 行内横坐标 → 列表视口横坐标。
@@ -505,7 +506,7 @@ export component FilePane inherits Rectangle {
         root.box-current-x = x;
         root.box-current-y = y;
         // 只是点了一下（没有拖出矩形）→ 保留按下的那行的选择。
-        if (root.box-height < Theme.row-height-list / 2) {
+        if (root.box-height < Theme.row-height-tree / 2) {
             return;
         }
         root.apply-box-selection();
@@ -515,10 +516,10 @@ export component FilePane inherits Rectangle {
     public function apply-box-selection() {
         // 行区间：视口坐标 → 内容坐标（减掉滚动偏移）。
         root.box-first-row = Math.floor(
-            (root.box-top - list.content-y) / Theme.row-height-list
+            (root.box-top - list.content-y) / Theme.row-height-tree
         );
         root.box-last-row = Math.floor(
-            (root.box-top + root.box-height - list.content-y - 1px) / Theme.row-height-list
+            (root.box-top + root.box-height - list.content-y - 1px) / Theme.row-height-tree
         );
         if (root.box-first-row < 0) {
             root.box-first-row = 0;
@@ -784,7 +785,7 @@ export component FilePane inherits Rectangle {
             // 不挡行）。
             blank_band := TouchArea {
                 x: 0;
-                y: max(0px, root.rows.length * Theme.row-height-list + list.content-y);
+                y: max(0px, root.rows.length * Theme.row-height-tree + list.content-y);
                 width: parent.width;
                 height: max(0px, parent.height - self.y);
                 pointer-event(event) => {
@@ -808,7 +809,7 @@ export component FilePane inherits Rectangle {
                             self.y + self.mouse-y
                         );
                         // 单击空白 = 取消选择（负索引 = 清空）。
-                        if (root.box-height < Theme.row-height-list / 2) {
+                        if (root.box-height < Theme.row-height-tree / 2) {
                             root.select-row(-1, false, false);
                         }
                     }
@@ -847,7 +848,8 @@ export component FilePane inherits Rectangle {
                     // 内容宽度的，只设 `width` 的话内容宽度仍是视口宽，横向滚不动。
                     width: root.content-width;
                     min-width: root.content-width;
-                    height: Theme.row-height-list;
+                    // 原型 `--row-h: 28px`
+                    height: Theme.row-height-tree;
                     border-radius: Theme.radius-control;
                     background: row.selected || index == root.selected-index ? Theme.subtle-selected
                         : row_hit.pressed ? Theme.subtle-pressed

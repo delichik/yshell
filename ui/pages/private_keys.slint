@@ -47,27 +47,39 @@ component PrivateKeyListItem inherits Rectangle {
         : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
+    // 原型 `.key-row` 选中轨：left 4 · 3×16
+    Rectangle {
+        visible: root.selected;
+        x: 4px;
+        y: (parent.height - 16px) / 2;
+        width: 3px;
+        height: 16px;
+        border-radius: 2px;
+        background: Theme.accent;
+    }
+
     VerticalLayout {
-        padding-left: Theme.spacing-8;
+        padding-left: 14px;
         padding-right: Theme.spacing-8;
-        padding-top: Theme.spacing-4;
-        padding-bottom: Theme.spacing-4;
+        padding-top: 6px;
+        padding-bottom: 6px;
         spacing: 2px;
         alignment: center;
 
         Text {
             text: node.label;
             color: Theme.text-primary;
-            font-size: Theme.font-body;
-            font-weight: node.selected ? Theme.weight-semibold : 400;
+            font-size: Theme.font-label;
+            font-weight: root.selected ? Theme.weight-semibold : 400;
             wrap: no-wrap;
             overflow: elide;
         }
 
         Text {
-            text: node.algorithm + " · " + node.fingerprint;
+            // 原型 `.key-row small`：只显示指纹摘要（算法进右栏详情）。
+            text: node.fingerprint;
             color: Theme.text-tertiary;
-            font-size: Theme.font-caption;
+            font-size: 11px;
             font-family: Theme.font-mono;
             wrap: no-wrap;
             overflow: elide;
@@ -220,339 +232,297 @@ export component PrivateKeysPage inherits Rectangle {
         open: root.open;
         close => { root.close(); }
 
-        HorizontalLayout {
-            spacing: Theme.spacing-16;
+        // 原型：全宽工具条 → 左右分栏 → Close。
+        VerticalLayout {
+            spacing: Theme.spacing-12;
             vertical-stretch: 1;
 
-            // --- 左：清单（工具条图标钮 + 极简行 + 右键动作）-------------------
-            Rectangle {
-                width: Theme.manager-list-width;
-                clip: true;
-                background: transparent;
+            HorizontalLayout {
+                spacing: Theme.spacing-8;
+                vertical-stretch: 0;
+                cross-axis-alignment: center;
 
-                left-column := VerticalLayout {
-                    width: parent.width;
-                    height: parent.height;
-                    spacing: Theme.spacing-8;
+                WinIconButton {
+                    icon: "plus";
+                    accent: true;
+                    accessible-name: @tr("Generate");
+                    tooltip-text: @tr("Generate private key");
+                    enabled: !root.busy;
+                    clicked => { root.open-generate-dialog(); }
+                }
 
-                    HorizontalLayout {
-                        spacing: Theme.spacing-8;
-                        vertical-stretch: 0;
-                        cross-axis-alignment: center;
+                WinIconButton {
+                    icon: "upload";
+                    bordered: true;
+                    accessible-name: @tr("Import");
+                    tooltip-text: @tr("Import private key");
+                    enabled: !root.busy;
+                    clicked => { root.open-import-dialog(); }
+                }
 
-                        WinIconButton {
-                            icon: "plus";
-                            accessible-name: @tr("Generate");
-                            tooltip-text: @tr("Generate private key");
-                            enabled: !root.busy;
-                            clicked => { root.open-generate-dialog(); }
-                        }
+                Rectangle { horizontal-stretch: 1; }
 
-                        WinIconButton {
-                            icon: "upload";
-                            accessible-name: @tr("Import");
-                            tooltip-text: @tr("Import private key");
-                            enabled: !root.busy;
-                            clicked => { root.open-import-dialog(); }
-                        }
+                Text {
+                    text: @tr("{0} key(s)", root.keys.length);
+                    color: Theme.text-tertiary;
+                    font-size: Theme.font-caption;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                    overflow: elide;
+                }
+            }
 
-                        Rectangle { horizontal-stretch: 1; }
+            HorizontalLayout {
+                spacing: Theme.spacing-16;
+                vertical-stretch: 1;
 
-                        // 对齐原型工具条右侧短计数（`3 keys`）；长英文摘要留给状态栏/详情。
-                        Text {
-                            text: @tr("{0} key(s)", root.keys.length);
-                            color: Theme.text-tertiary;
-                            font-size: Theme.font-caption;
-                            vertical-alignment: center;
-                            wrap: no-wrap;
-                            overflow: elide;
+                // --- 左：极简清单 ------------------------------------------------
+                Rectangle {
+                    width: Theme.manager-list-width;
+                    clip: true;
+                    background: Theme.card-fill;
+                    border-radius: Theme.radius-control;
+                    border-width: 1px;
+                    border-color: Theme.control-stroke;
+
+                    keys-list := Flickable {
+                        visible: root.keys.length > 0;
+                        width: parent.width;
+                        height: parent.height;
+                        interactive: true;
+                        content-width: self.width;
+                        content-height: rows.preferred-height;
+
+                        rows := VerticalLayout {
+                            padding: Theme.spacing-4;
+                            spacing: 2px;
+
+                            for row[i] in root.keys : PrivateKeyListItem {
+                                node: row;
+                                selected: i == root.selected-index;
+                                clicked => {
+                                    root.selected-index = i;
+                                    root.select-key(i);
+                                }
+                                context-menu-requested(x, y) => {
+                                    root.selected-index = i;
+                                    root.prepare-context-menu(i);
+                                    root.open-row-menu(i, x, y);
+                                }
+                            }
                         }
                     }
 
-                    Rectangle {
-                        vertical-stretch: 1;
-                        clip: true;
-                        background: Theme.control-fill;
-                        border-radius: Theme.radius-control;
-                        border-width: 1px;
-                        border-color: Theme.control-stroke;
+                    WinScrollIndicator {
+                        visible: root.keys.length > 0;
+                        x: parent.width - self.width - Theme.spacing-4;
+                        y: Theme.spacing-4;
+                        height: parent.height - 2 * Theme.spacing-4;
+                        viewport-position: keys-list.content-y;
+                        content-extent: keys-list.content-height;
+                        viewport-extent: keys-list.height;
+                        thumb-min-length: 24px;
+                    }
 
-                        keys-list := Flickable {
-                            visible: root.keys.length > 0;
+                    // 空态只留说明：Generate / Import 已在顶栏，清单内不再重复按钮。
+                    Text {
+                        visible: root.keys.length == 0;
+                        x: Theme.spacing-16;
+                        y: max((parent.height - self.preferred-height) / 2, Theme.spacing-12);
+                        width: parent.width - 2 * Theme.spacing-16;
+                        text: root.empty-text;
+                        color: Theme.text-tertiary;
+                        font-size: Theme.font-caption;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                    }
+                }
+
+                // --- 右：详情面板（原型 `.detail`）------------------------------
+                Rectangle {
+                    clip: true;
+                    background: Theme.card-fill;
+                    border-radius: Theme.radius-control;
+                    border-width: 1px;
+                    border-color: Theme.control-stroke;
+
+                    // 空列表 / 未选中：居中空态。
+                    if !root.has-selection : VerticalLayout {
+                        width: parent.width;
+                        height: parent.height;
+                        alignment: center;
+                        spacing: Theme.spacing-8;
+                        padding: Theme.spacing-24;
+
+                        Text {
+                            text: root.keys.length == 0
+                                ? @tr("No key selected.")
+                                : @tr("Select a key to see details.");
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-body;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
+                        }
+
+                        if root.keys.length == 0 : Text {
+                            text: @tr("Generate or import a key first.");
+                            color: Theme.text-tertiary;
+                            font-size: Theme.font-caption;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    if root.has-selection : Rectangle {
+                        width: parent.width;
+                        height: parent.height;
+
+                        scroll := Flickable {
                             width: parent.width;
                             height: parent.height;
                             interactive: true;
                             content-width: self.width;
-                            content-height: rows.preferred-height;
+                            content-height: sections.preferred-height;
 
-                            rows := VerticalLayout {
-                                padding: Theme.spacing-4;
-                                spacing: 2px;
+                            sections := VerticalLayout {
+                                padding: Theme.spacing-16;
+                                spacing: Theme.form-row-gap;
 
-                                for row[i] in root.keys : PrivateKeyListItem {
-                                    node: row;
-                                    selected: i == root.selected-index;
-                                    clicked => {
-                                        root.selected-index = i;
-                                        root.select-key(i);
+                                DetailRow {
+                                    label: @tr("Algorithm");
+                                    value: root.selected-algorithm;
+                                }
+
+                                DetailRow {
+                                    label: @tr("Fingerprint");
+                                    value: root.selected-fingerprint;
+                                    mono: true;
+                                }
+
+                                DetailRow {
+                                    label: @tr("Used by");
+                                    value: root.selected-used-by;
+                                    last: true;
+                                }
+
+                                if root.status-display != "" : FormHint {
+                                    text: root.status-display;
+                                }
+
+                                if root.test-result-text != "" : FormHint {
+                                    text: root.test-result-text;
+                                }
+
+                                if root.public-key-text != "" : FormRow {
+                                    label: @tr("Public key");
+
+                                    Rectangle {
+                                        width: Theme.form-field-width;
+                                        height: max(128px, min(160px, pubkey-block.preferred-height + 20px));
+                                        clip: true;
+                                        background: Theme.subtle-selected;
+                                        border-radius: Theme.radius-control;
+                                        border-width: 1px;
+                                        border-color: Theme.control-stroke;
+
+                                        pubkey-scroll := Flickable {
+                                            width: parent.width;
+                                            height: parent.height;
+                                            interactive: true;
+                                            content-width: self.width;
+                                            content-height: pubkey-block.preferred-height + 20px;
+
+                                            pubkey-block := Text {
+                                                x: Theme.spacing-8;
+                                                y: Theme.spacing-8;
+                                                width: parent.width - 2 * Theme.spacing-8;
+                                                text: root.public-key-text;
+                                                color: Theme.text-secondary;
+                                                font-size: Theme.font-caption;
+                                                font-family: Theme.font-mono;
+                                                wrap: word-wrap;
+                                            }
+                                        }
+
+                                        WinScrollIndicator {
+                                            x: parent.width - self.width - Theme.spacing-4;
+                                            y: Theme.spacing-4;
+                                            height: parent.height - 2 * Theme.spacing-4;
+                                            viewport-position: pubkey-scroll.content-y;
+                                            content-extent: pubkey-scroll.content-height;
+                                            viewport-extent: pubkey-scroll.height;
+                                            thumb-min-length: 24px;
+                                        }
                                     }
-                                    context-menu-requested(x, y) => {
-                                        root.selected-index = i;
-                                        root.prepare-context-menu(i);
-                                        root.open-row-menu(i, x, y);
+
+                                    WinIconButton {
+                                        icon: "copy";
+                                        accessible-name: @tr("Copy public key");
+                                        tooltip-text: @tr("Copy public key");
+                                        clicked => { root.copy-public-key(); }
                                     }
+                                }
+
+                                FormHint {
+                                    text: @tr("Leave empty to keep current passphrase");
+                                }
+
+                                FormRow {
+                                    label: @tr("Passphrase");
+
+                                    WinTextInput {
+                                        width: Theme.form-field-width;
+                                        text <=> root.passphrase-text;
+                                        placeholder-text: @tr("New or replace");
+                                        input-type: password;
+                                        enabled: root.passphrase-manage-enabled;
+                                        edited => { root.update-passphrase(self.text); }
+                                        accepted => { root.save-passphrase(); }
+                                    }
+
+                                    WinIconButton {
+                                        icon: "clear";
+                                        accessible-name: @tr("Forget passphrase");
+                                        tooltip-text: @tr("Forget passphrase");
+                                        enabled: root.passphrase-manage-enabled
+                                            && root.passphrase-stored && !root.busy;
+                                        clicked => { root.forget-passphrase(); }
+                                    }
+                                }
+
+                                if root.remove-warning-text != "" : FormHint {
+                                    text: root.remove-warning-text;
                                 }
                             }
                         }
 
                         WinScrollIndicator {
-                            visible: root.keys.length > 0;
                             x: parent.width - self.width - Theme.spacing-4;
                             y: Theme.spacing-4;
                             height: parent.height - 2 * Theme.spacing-4;
-                            viewport-position: keys-list.content-y;
-                            content-extent: keys-list.content-height;
-                            viewport-extent: keys-list.height;
+                            viewport-position: scroll.content-y;
+                            content-extent: scroll.content-height;
+                            viewport-extent: scroll.height;
                             thumb-min-length: 24px;
                         }
-
-                        empty-state := VerticalLayout {
-                            visible: root.keys.length == 0;
-                            y: max((parent.height - self.preferred-height) / 2, Theme.spacing-12);
-                            width: parent.width;
-                            padding-left: Theme.spacing-16;
-                            padding-right: Theme.spacing-16;
-                            spacing: Theme.spacing-12;
-                            alignment: center;
-
-                            Text {
-                                width: min(parent.width - 2 * Theme.spacing-16, 280px);
-                                text: root.empty-text;
-                                color: Theme.text-tertiary;
-                                font-size: Theme.font-caption;
-                                horizontal-alignment: center;
-                                wrap: word-wrap;
-                            }
-
-                            HorizontalLayout {
-                                alignment: center;
-                                spacing: Theme.spacing-8;
-
-                                WinButton {
-                                    text: @tr("Generate");
-                                    icon: "plus";
-                                    accent: true;
-                                    enabled: !root.busy;
-                                    clicked => { root.open-generate-dialog(); }
-                                }
-
-                                WinButton {
-                                    text: @tr("Import");
-                                    icon: "upload";
-                                    enabled: !root.busy;
-                                    clicked => { root.open-import-dialog(); }
-                                }
-                            }
-                        }
                     }
                 }
             }
 
-            // --- 右：只读详情 + 公钥 Copy + 口令 -------------------------------
             Rectangle {
-                clip: true;
-                background: transparent;
-
-                scroll := Flickable {
-                    width: parent.width;
-                    height: parent.height;
-                    interactive: true;
-                    content-width: self.width;
-                    content-height: sections.preferred-height;
-
-                    sections := VerticalLayout {
-                        spacing: Theme.form-row-gap;
-
-                        if root.keys.length == 0 : Text {
-                            text: @tr("No key selected. Generate or import a key first.");
-                            color: Theme.text-tertiary;
-                            font-size: Theme.font-body;
-                            wrap: word-wrap;
-                        }
-
-                        if root.keys.length > 0 : VerticalLayout {
-                            spacing: Theme.form-row-gap;
-
-                            DetailRow {
-                                label: @tr("Algorithm");
-                                value: root.selected-algorithm;
-                            }
-
-                            DetailRow {
-                                label: @tr("Fingerprint");
-                                value: root.selected-fingerprint;
-                                mono: true;
-                            }
-
-                            DetailRow {
-                                label: @tr("Used by");
-                                value: root.selected-used-by;
-                                last: true;
-                            }
-
-                            if root.status-display != "" : FormHint {
-                                text: root.status-display;
-                            }
-
-                            if root.test-result-text != "" : FormHint {
-                                text: root.test-result-text;
-                            }
-
-                            // 派生公钥（等宽块 + Copy 图标钮）。
-                            if root.public-key-text != "" : FormRow {
-                                label: @tr("Public key");
-
-                                Rectangle {
-                                    width: Theme.form-field-width;
-                                    height: max(128px, min(160px, pubkey-block.preferred-height + 20px));
-                                    clip: true;
-                                    background: Theme.control-fill;
-                                    border-radius: Theme.radius-control;
-                                    border-width: 1px;
-                                    border-color: Theme.control-stroke;
-
-                                    pubkey-scroll := Flickable {
-                                        width: parent.width;
-                                        height: parent.height;
-                                        interactive: true;
-                                        content-width: self.width;
-                                        content-height: pubkey-block.preferred-height + 20px;
-
-                                        pubkey-block := Text {
-                                            x: Theme.spacing-8;
-                                            y: Theme.spacing-8;
-                                            width: parent.width - 2 * Theme.spacing-8;
-                                            text: root.public-key-text;
-                                            color: Theme.text-secondary;
-                                            font-size: Theme.font-caption;
-                                            font-family: Theme.font-mono;
-                                            wrap: word-wrap;
-                                        }
-                                    }
-
-                                    WinScrollIndicator {
-                                        x: parent.width - self.width - Theme.spacing-4;
-                                        y: Theme.spacing-4;
-                                        height: parent.height - 2 * Theme.spacing-4;
-                                        viewport-position: pubkey-scroll.content-y;
-                                        content-extent: pubkey-scroll.content-height;
-                                        viewport-extent: pubkey-scroll.height;
-                                        thumb-min-length: 24px;
-                                    }
-                                }
-
-                                WinIconButton {
-                                    icon: "copy";
-                                    accessible-name: @tr("Copy public key");
-                                    tooltip-text: @tr("Copy public key");
-                                    clicked => { root.copy-public-key(); }
-                                }
-                            }
-
-                            // 重命名（标签就地编辑；保存由宿主落盘）。
-                            FormRow {
-                                label: @tr("Label");
-
-                                rename-input := WinTextInput {
-                                    width: Theme.form-field-width;
-                                    text: root.selected-label;
-                                    placeholder-text: @tr("Label");
-                                    enabled: root.has-selection && !root.busy;
-                                    accepted => { root.rename-key(self.text); }
-                                }
-
-                                WinButton {
-                                    text: @tr("Rename");
-                                    enabled: root.has-selection && !root.busy;
-                                    clicked => { root.rename-key(rename-input.text); }
-                                }
-                            }
-                        }
-
-                        // 口令管理（选中的托管密钥）
-                        if root.has-selection : VerticalLayout {
-                            spacing: Theme.form-row-gap;
-
-                            FormHint {
-                                text: root.passphrase-stored
-                                    ? @tr("A passphrase is saved for this key.")
-                                    : @tr("No passphrase is saved for this key.");
-                            }
-
-                            FormRow {
-                                label: @tr("Passphrase");
-
-                                WinTextInput {
-                                    width: Theme.form-field-width;
-                                    text <=> root.passphrase-text;
-                                    placeholder-text: @tr("New or replace");
-                                    input-type: password;
-                                    enabled: root.passphrase-manage-enabled;
-                                    edited => { root.update-passphrase(self.text); }
-                                    accepted => { root.save-passphrase(); }
-                                }
-
-                                WinIconButton {
-                                    icon: "check";
-                                    accessible-name: @tr("Remember passphrase");
-                                    tooltip-text: @tr("Remember passphrase");
-                                    enabled: root.passphrase-manage-enabled
-                                        && root.passphrase-text != "" && !root.busy;
-                                    clicked => { root.save-passphrase(); }
-                                }
-
-                                WinIconButton {
-                                    icon: "clear";
-                                    accessible-name: @tr("Forget passphrase");
-                                    tooltip-text: @tr("Forget passphrase");
-                                    enabled: root.passphrase-manage-enabled
-                                        && root.passphrase-stored && !root.busy;
-                                    clicked => { root.forget-passphrase(); }
-                                }
-                            }
-
-                            if root.remove-warning-text != "" : FormHint {
-                                text: root.remove-warning-text;
-                            }
-                        }
-                    }
-                }
-
-                WinScrollIndicator {
-                    x: parent.width - self.width - Theme.spacing-4;
-                    y: Theme.spacing-4;
-                    height: parent.height - 2 * Theme.spacing-4;
-                    viewport-position: scroll.content-y;
-                    content-extent: scroll.content-height;
-                    viewport-extent: scroll.height;
-                    thumb-min-length: 24px;
-                }
+                height: 1px;
+                background: Theme.divider;
+                vertical-stretch: 0;
             }
-        }
 
-        Rectangle {
-            height: 1px;
-            background: Theme.divider;
-            vertical-stretch: 0;
-        }
+            HorizontalLayout {
+                alignment: end;
+                vertical-stretch: 0;
 
-        HorizontalLayout {
-            alignment: end;
-            vertical-stretch: 0;
-
-            WinButton {
-                text: @tr("Close");
-                clicked => { root.close(); }
+                WinButton {
+                    text: @tr("Close");
+                    clicked => { root.close(); }
+                }
             }
         }
     }

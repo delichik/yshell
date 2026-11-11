@@ -1915,6 +1915,14 @@ impl AppRuntime {
             .unwrap_or_default()
     }
 
+    /// D20：主机密钥页详情端口（无选中时为空串；原型独立 Port 行）。
+    #[must_use]
+    pub(crate) fn host_keys_detail_port_text(&self) -> String {
+        self.selected_host_key_entry()
+            .map(|entry| entry.port.to_string())
+            .unwrap_or_default()
+    }
+
     /// D20：主机密钥页详情算法（无选中时为空串）。
     #[must_use]
     pub(crate) fn host_keys_detail_algorithm_text(&self) -> String {

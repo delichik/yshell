@@ -459,9 +459,23 @@ fn platform_default_mono_font() -> &'static str {
 
 /// 把 UI / 等宽字体族写入 `Theme` 全局（须在窗口创建后、`run()` 前调用）。
 pub(crate) fn apply_fonts(window: &MainWindow) {
-    let theme = window.global::<Theme>();
+    apply_fonts_to_theme(&window.global::<Theme>());
+}
+
+/// 任意工具窗 / 对话框的 `Theme` 字体写入（与主窗同一套平台默认）。
+pub(crate) fn apply_fonts_to_theme(theme: &Theme<'_>) {
     theme.set_font_ui(platform_default_ui_font().into());
     theme.set_font_mono(platform_default_mono_font().into());
+}
+
+/// 工具窗创建后 / 每次投影同步：跟主窗同一套 App theme + 字体。
+///
+/// 每个 Slint `Window` 有自己的 `Theme` 全局；只更新主窗 / Settings 时，
+/// Tools 菜单打开的管理器会一直停在默认 `mode=0`（跟随系统），浅色 App
+/// 主题下就会仍是黑底。
+pub(crate) fn apply_tool_window_theme(theme: &Theme<'_>, projection: &AppProjection) {
+    apply_fonts_to_theme(theme);
+    apply_app_theme_preview(theme, projection);
 }
 
 /// 解析语言：显式 `zh-CN`/`en-US` 直通（大小写与首尾空白不敏感）；
@@ -7492,6 +7506,7 @@ pub(crate) fn apply_projection(window: &MainWindow, projection: &AppProjection) 
     window.set_host_keys_details_text(projection.host_keys_details_text.clone().into());
     // D20：详情拆分字段（标签由 UI 侧 @tr 渲染）。
     window.set_host_keys_detail_host_text(projection.host_keys_detail_host_text.clone().into());
+    window.set_host_keys_detail_port_text(projection.host_keys_detail_port_text.clone().into());
     window.set_host_keys_detail_algorithm_text(
         projection.host_keys_detail_algorithm_text.clone().into(),
     );

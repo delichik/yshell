@@ -17,9 +17,15 @@ pub fn set_resizable(window: &slint::Window, resizable: bool) {
     });
 }
 
-/// 独立弹窗 show 后收尾：Win11 圆角 + 不可缩放。
+/// 独立弹窗 show 后收尾：Win11 圆角 + 不可缩放 + 关掉 DWM 整窗过渡。
+///
+/// Owned 工具窗在系统「动画效果」开启时，关闭常有淡出、打开却没有对应淡入
+/// （不对称）。设计语言 §6.1 明确软件渲染器不做整窗淡入，因此这里强制关掉
+/// 该窗的 DWM transition，开合都瞬间切换，并与 `Theme.animations-enabled`
+/// 下的控件级动效分开。
 pub fn prepare_aux_window(window: &slint::Window) {
     apply_rounded_corners(window);
+    disable_dwm_transitions(window);
     set_resizable(window, false);
 }
 
@@ -488,12 +494,34 @@ fn ensure_window_on_screen_windows(window: &slint::Window) {
 /// `invoke_from_event_loop` 里再试一次。非 Windows / 取不到句柄时为 no-op。
 #[cfg(windows)]
 pub fn apply_rounded_corners(window: &slint::Window) {
+    use windows_sys::Win32::Graphics::Dwm::{DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND};
+
+    set_dwm_attribute(window, DWMWA_WINDOW_CORNER_PREFERENCE as u32, DWMWCP_ROUND);
+}
+
+#[cfg(not(windows))]
+pub fn apply_rounded_corners(_window: &slint::Window) {}
+
+/// 关掉单个窗口的 DWM show/hide 过渡（避免工具窗「只淡出不淡入」）。
+#[cfg(windows)]
+pub fn disable_dwm_transitions(window: &slint::Window) {
+    use windows_sys::Win32::Foundation::BOOL;
+    use windows_sys::Win32::Graphics::Dwm::DWMWA_TRANSITIONS_FORCEDISABLED;
+
+    // TRUE = 强制禁用该窗的 DWM transitions。
+    let disabled: BOOL = 1;
+    set_dwm_attribute(window, DWMWA_TRANSITIONS_FORCEDISABLED as u32, disabled);
+}
+
+#[cfg(not(windows))]
+pub fn disable_dwm_transitions(_window: &slint::Window) {}
+
+#[cfg(windows)]
+fn set_dwm_attribute<T: Copy>(window: &slint::Window, attribute: u32, value: T) {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
     use slint::winit_030::WinitWindowAccessor;
     use windows_sys::Win32::Foundation::HWND;
-    use windows_sys::Win32::Graphics::Dwm::{
-        DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
-    };
+    use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
 
     let _ = window.with_winit_window(|winit_window| {
         let Ok(handle) = winit_window.window_handle() else {
@@ -503,22 +531,18 @@ pub fn apply_rounded_corners(window: &slint::Window) {
             return;
         };
         let hwnd = win32.hwnd.get() as HWND;
-        let preference = DWMWCP_ROUND;
         // DwmSetWindowAttribute 是 Win32 FFI；工作区默认 deny unsafe，此处单独放行。
         #[allow(unsafe_code)]
         let _ = unsafe {
             DwmSetWindowAttribute(
                 hwnd,
-                DWMWA_WINDOW_CORNER_PREFERENCE as u32,
-                std::ptr::from_ref(&preference).cast(),
-                std::mem::size_of_val(&preference) as u32,
+                attribute,
+                std::ptr::from_ref(&value).cast(),
+                std::mem::size_of_val(&value) as u32,
             )
         };
     });
 }
-
-#[cfg(not(windows))]
-pub fn apply_rounded_corners(_window: &slint::Window) {}
 
 /// 在标题栏按下并拖动时启动原生窗口移动。
 ///

@@ -954,6 +954,7 @@ impl AppRuntime {
             host_keys_key_count: host_keys.key_count,
             host_keys_details_text: host_keys.details_text,
             host_keys_detail_host_text: host_keys.detail_host_text,
+            host_keys_detail_port_text: host_keys.detail_port_text,
             host_keys_detail_algorithm_text: host_keys.detail_algorithm_text,
             host_keys_detail_fingerprint_text: host_keys.detail_fingerprint_text,
             host_keys_detail_path_text: host_keys.detail_path_text,
@@ -1614,6 +1615,7 @@ struct HostKeysProjectionParts {
     details_text: String,
     /// D20：详情拆分字段（标签由 UI 侧 `@tr` 渲染；指纹为 D9 分组格式）。
     detail_host_text: String,
+    detail_port_text: String,
     detail_algorithm_text: String,
     detail_fingerprint_text: String,
     detail_path_text: String,
@@ -1881,6 +1883,7 @@ impl AppRuntime {
             key_count,
             details_text: self.host_keys_details_text(),
             detail_host_text: self.host_keys_detail_host_text(),
+            detail_port_text: self.host_keys_detail_port_text(),
             detail_algorithm_text: self.host_keys_detail_algorithm_text(),
             detail_fingerprint_text: self.host_keys_detail_fingerprint_text(),
             detail_path_text: self.host_keys_detail_path_text(),
@@ -2567,6 +2570,7 @@ pub struct AppProjection {
     pub host_keys_details_text: String,
     /// D20：主机密钥页详情拆分字段（标签由 UI 侧 `@tr` 渲染；指纹为 D9 分组格式）。
     pub host_keys_detail_host_text: String,
+    pub host_keys_detail_port_text: String,
     pub host_keys_detail_algorithm_text: String,
     pub host_keys_detail_fingerprint_text: String,
     pub host_keys_detail_path_text: String,

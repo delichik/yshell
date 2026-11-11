@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="../_anno.css">
   <style>
     :root {
-      --win-w: 1100px; --win-h: 820px; --titlebar-h: 32px; --pad: 28px; --gap: 12px;
+      --win-w: 1100px; --win-h: 700px; --titlebar-h: 32px; --pad: 20px; --gap: 12px;
       --list-w: 380px;
     }
     * { box-sizing: border-box; }
@@ -100,11 +100,7 @@
               </div>
             </div>
             <div class="empty" id="empty" hidden>
-              <span>No managed private keys yet.</span>
-              <div class="row-btns">
-                <a class="btn btn-primary btn-icon" href="modals.html#generate" title="Generate" aria-label="Generate"><span class="i i-generate" aria-hidden="true"></span></a>
-                <a class="btn btn-icon" href="modals.html#import-file" title="Import" aria-label="Import"><span class="i i-import" aria-hidden="true"></span></a>
-              </div>
+              <span>No managed private keys yet. Use Generate / Import in the toolbar.</span>
             </div>
           </div>
           <div class="col-right">

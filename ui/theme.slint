@@ -61,18 +61,17 @@ export global Theme {
     out property <color> window-background: dark ? #202020 : #F3F3F3;
     /// 内容层（命令栏/菜单栏/导航栏/状态栏等）
     out property <color> layer-fill: dark ? #FFFFFF0F : #FFFFFFB3;
-    /// 内容层描边/分隔线（B 轮4：原 6% 的 1px 线实测只有 1.14:1，几乎不可见；
-    /// 提到 light 14% / dark 16%，既保住"发丝线"观感又让面板边界可辨）
-    out property <color> layer-stroke: dark ? #FFFFFF29 : #00000024;
+    /// 内容层描边/分隔线（对齐原型 `_theme.css`：light 6% / dark 8%）
+    out property <color> layer-stroke: dark ? #FFFFFF14 : #0000000F;
     /// 浮层内分隔线（比 layer-stroke 强一档，用于弹窗分区线/菜单分隔符/列表表头下沿）
     out property <color> divider: dark ? #FFFFFF33 : #00000029;
     /// 窗口内的卡片（右侧工具面板等）
-    out property <color> card-fill: dark ? #FFFFFF0D : #FFFFFFB3;
-    out property <color> card-stroke: dark ? #FFFFFF29 : #00000024;
+    out property <color> card-fill: dark ? #FFFFFF0D : #FFFFFFB8;
+    out property <color> card-stroke: dark ? #FFFFFF14 : #0000000F;
     /// 不透明浮层/对话框底（菜单、ContentDialog）
     out property <color> panel-background: dark ? #2C2C2C : #FFFFFF;
-    /// 菜单/下拉浮层底（规范 §5.11：比卡片再"亮"一级）
-    out property <color> flyout-background: dark ? #2C2C2C : #FFFFFF;
+    /// 菜单/下拉浮层底（原型 flyout-fill；软件渲染器用近实色）
+    out property <color> flyout-background: dark ? #2C2C2CF5 : #FCFCFCF2;
     /// 模态遮罩
     out property <color> scrim: #00000088;
     /// 主题/ANSI 颜色选择器的预设色板（纯数据，供设置页色块弹层使用）。
@@ -85,30 +84,35 @@ export global Theme {
         "#000000", "#FFFFFF", "#FF5555", "#50FA7B", "#F1FA8C", "#BD93F9", "#FF79C6", "#8BE9FD",
         "#282A36", "#44475A", "#6272A4", "#F8F8F2", "#002B36", "#073642", "#839496", "#EEE8D5"
     ];
-    /// 浮层阴影
-    out property <color> shadow-color: dark ? #00000055 : #00000033;
-    out property <length> shadow-blur: 10px;
-    out property <length> shadow-offset-y: 3px;
+    /// 浮层阴影（原型 `--shadow-flyout`: 0 8px 16px）
+    out property <color> shadow-color: dark ? #00000073 : #00000024;
+    out property <length> shadow-blur: 16px;
+    out property <length> shadow-offset-y: 8px;
 
     // ---------------------------------------------------------------- 控件状态
     out property <color> control-fill: dark ? #FFFFFF0F : #FFFFFFB3;
-    out property <color> control-fill-hover: dark ? #FFFFFF17 : #FFFFFF80;
+    out property <color> control-fill-hover: dark ? #FFFFFF17 : #F9F9F980;
     out property <color> control-fill-pressed: dark ? #FFFFFF0A : #FFFFFF4D;
-    out property <color> control-fill-disabled: dark ? #FFFFFF0A : #FFFFFFF0;
-    out property <color> control-stroke: dark ? #FFFFFF14 : #0000000F;
+    out property <color> control-fill-disabled: dark ? #FFFFFF0A : #F9F9F94D;
+    /// 控件实色底（原型 `--control-fill-*-solid`：按钮/输入在实色卡片上更可读）
+    out property <color> control-fill-solid: dark ? #FFFFFF14 : #FFFFFFEB;
+    out property <color> control-fill-hover-solid: dark ? #FFFFFF1C : #F5F5F5F2;
+    out property <color> control-fill-pressed-solid: dark ? #FFFFFF0D : #EEEEEEF2;
+    /// 控件描边（对齐原型：light 14% / dark 12%；比层描边更明显）
+    out property <color> control-stroke: dark ? #FFFFFF1F : #00000024;
     /// 列表/导航项悬停
-    out property <color> subtle-hover: dark ? #FFFFFF0F : #0000000F;
-    out property <color> subtle-pressed: dark ? #FFFFFF0A : #0000000A;
-    out property <color> subtle-selected: dark ? #FFFFFF0F : #0000000F;
+    out property <color> subtle-hover: dark ? #FFFFFF0F : #0000000A;
+    out property <color> subtle-pressed: dark ? #FFFFFF0A : #00000005;
+    out property <color> subtle-selected: dark ? #FFFFFF14 : #0000000F;
     /// 文本选区
     out property <color> selection-fill: dark ? #60CDFF33 : #005FB833;
 
     // -------------------------------------------------------------------- 文本
     out property <color> text-primary: dark ? #FFFFFF : #000000E4;
     out property <color> text-secondary: dark ? #FFFFFFC5 : #0000009E;
-    /// 第三级文本（辅助信息/汇总行）。B 轮5：light 原 54.5% 在 12px caption 上余量过小，
-    /// 提到 60%（白底合成 ~#666666，约 5.7:1），dark 侧余量充足保持不变。
-    out property <color> text-tertiary: dark ? #FFFFFF87 : #00000099;
+    /// 第三级文本。原型 light 45% 在 body 字阶不满足 WCAG AA（~3.3:1），
+    /// 实现保留 light 60% / dark 54%（对比度门禁）；观感仍次于 secondary。
+    out property <color> text-tertiary: dark ? #FFFFFF8A : #00000099;
     out property <color> text-disabled: dark ? #FFFFFF5D : #0000005C;
 
     // ---------------------------------------------------------------- 系统语义
@@ -162,9 +166,10 @@ export global Theme {
     /// 终端配色预览表面高度（Settings 外观 / Session Editor Terminal Style 共用，
     /// 两边视觉一致；宽度跟随内容区整行）。
     ///
-    /// Rust 侧按同一个 `PREVIEW_AREA_PX`（738×198，= 整行内容宽 − 2 边框 −
-    /// 2×`terminal-padding-x`）光栅化；不要给任一页单独传别的高度。
-    out property <length> terminal-preview-height: 200px;
+    /// 对齐原型 `.term-preview` = `--field-h-md` = 4×ctrl-h = 128。
+    /// Rust 侧按同一个 `PREVIEW_AREA_PX`（738×126，= 整行内容宽 − 2 边框 −
+    /// 2×`terminal-padding-x`；高 = 128 − 2 边框）光栅化。
+    out property <length> terminal-preview-height: 128px;
 
     // -------------------------------------------------------------------- 字阶
     out property <length> font-caption: 12px;
@@ -206,18 +211,18 @@ export global Theme {
     /// 独立工具窗口请用 `tool-window-width-wide`。
     out property <length> dialog-width-wide: 1040px;
     /// 管理器面板最大高度（Folder Editor 等滚动钳制；跟 tall 窗内容区对齐）。
-    out property <length> manager-panel-max-height: 732px;
+    out property <length> manager-panel-max-height: 616px;
     /// 独立工具窗口：紧凑档（确认 / 密码 / New Folder / SFTP 改名等短表单）。
     out property <length> tool-window-width-compact: 560px;
-    out property <length> tool-window-height-compact: 400px;
-    /// 独立工具窗口：标准档（Auth / Host Key / Logging / About / SFTP 冲突·属性）。
+    out property <length> tool-window-height-compact: 340px;
+    /// 独立工具窗口：标准档（Auth / Logging / About / SFTP 冲突·属性）。
     out property <length> tool-window-width-standard: 720px;
-    out property <length> tool-window-height-standard: 580px;
+    out property <length> tool-window-height-standard: 520px;
     /// 独立工具窗口：宽页（Settings / 编辑器 / 列表+详情管理器）。
     out property <length> tool-window-width-wide: 1100px;
-    out property <length> tool-window-height-tall: 820px;
+    out property <length> tool-window-height-tall: 700px;
     /// 工具窗口内容区内边距（ToolWindowChrome 统一施加）。
-    out property <length> tool-window-padding: 28px;
+    out property <length> tool-window-padding: 20px;
     /// 列表+详情管理器的左栏宽度（Host Keys / Private Keys / Known Hosts / Proxies）。
     out property <length> manager-list-width: 380px;
     /// Host+Port 一行里 Port 字段固定宽（带标签；原型 `--port-w` = 100）。
@@ -245,23 +250,23 @@ export global Theme {
     out property <length> row-height-tree: 28px;
     /// 上下文菜单行高（右键菜单项；与 tree 行同高）。
     out property <length> row-height-menu: 28px;
-    /// 自绘顶栏（菜单 + 窗口控件）与工具窗标题栏：40px。
-    /// 比 Win11 原生 32px caption 略高，菜单文字与 ─ □ × 更好点按；
+    /// 自绘顶栏（菜单 + 窗口控件）与工具窗标题栏：Fluent / 原型 32。
     /// CaptionButton 宽仍 46、高随顶栏（height: 100%）。
-    out property <length> bar-height-menubar: 40px;
+    out property <length> bar-height-menubar: 32px;
     /// 旧 CommandBar 高度（已并入菜单栏，保留 token 以免外部引用断裂）。
     out property <length> bar-height-commandbar: 48px;
     /// 状态栏高度（原型 main-shell 28px；略高于旧 26，改善 chip 可读性）。
     out property <length> bar-height-status: 28px;
     out property <length> bar-height-tabs: 32px;
-    /// 右侧面板头部高度（tool_dock 的 6 个面板头；§3.3 控件高 32，这里另有一档）。
-    out property <length> bar-height-panel-header: 44px;
+    /// 右侧面板头部高度（对齐原型 `.panel-head` = 40）。
+    out property <length> bar-height-panel-header: 40px;
     /// 调色板小色块尺寸（§5.13 色板）。
     out property <length> swatch-size: 14px;
     out property <length> swatch-size-small: 12px;
     /// 窗口缩放边框宽度（自绘无框窗口的 resize hit 区）。
     out property <length> resize-border-width: 8px;
-    out property <length> nav-width: 260px;
+    /// 对齐原型 `--nav-w` = 240（Settings / Session Editor NavigationView）
+    out property <length> nav-width: 240px;
     out property <length> dock-width: 280px;
     /// 面板拖拽把手宽度（§4.2：4px，悬停变色）
     out property <length> resize-handle-width: 4px;

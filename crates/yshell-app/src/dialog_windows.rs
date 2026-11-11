@@ -754,16 +754,21 @@ impl DialogWindowManager {
             if self.about.is_none() {
                 let window = AboutWindow::new().map_err(AppError::from_error)?;
                 window.set_native_title_drag(cfg!(windows));
-                // open-source licenses 正文是构建期静态资源（third-party 清单由
-                // `cargo metadata --offline` 生成）；随窗口创建回填一次，不在
-                // 每个 tick 重复设置。
-                window.set_licenses_text(include_str!("../assets/open_source_licenses.txt").into());
+                // 许可证资源可达数 MB；全文不可直接塞进 Slint Text（量高会卡死）。
+                // 短预览 + 行数估高进 UI，全文按需写临时文件打开。
+                let preview = about_licenses_preview();
+                window.set_licenses_text(preview.text);
+                window.set_licenses_truncated(preview.truncated);
+                window.set_licenses_preview_lines(preview.lines);
                 let host = self.host.clone();
                 window.on_dismiss(move || {
                     if let Some(host) = host.upgrade() {
                         host.borrow_mut().dialogs.local.about = false;
                         host.borrow_mut().dialogs.hide_about();
                     }
+                });
+                window.on_open_full_licenses(|| {
+                    open_full_open_source_licenses();
                 });
                 let host = self.host.clone();
                 window.on_title_drag_requested(move || {
@@ -789,6 +794,13 @@ impl DialogWindowManager {
             if let Some(about) = self.about.as_ref() {
                 about.set_version_text(projection.app_version_text.clone().into());
                 about.set_config_dir_text(projection.config_dir_text.clone().into());
+                crate::bootstrap::apply_tool_window_theme(&about.global::<Theme>(), projection);
+                if let Some(main) = main {
+                    crate::bootstrap::apply_reduce_motion(
+                        &about.global::<Theme>(),
+                        main.global::<Theme>().get_reduce_motion(),
+                    );
+                }
                 if !self.about_shown {
                     self.show_aux_modal(about, main, owner_id)?;
                     self.about_shown = true;
@@ -819,7 +831,7 @@ impl DialogWindowManager {
         window_runtime: Option<Rc<WindowRuntime>>,
     ) -> AppResult<()> {
         match self.active_confirm_spec(projection, main) {
-            Some(spec) => self.show_confirm(spec, main, owner_id, window_runtime)?,
+            Some(spec) => self.show_confirm(spec, projection, main, owner_id, window_runtime)?,
             None => self.hide_confirm(),
         }
         Ok(())
@@ -1007,6 +1019,7 @@ impl DialogWindowManager {
     fn show_confirm(
         &mut self,
         spec: ConfirmSpec,
+        projection: &AppProjection,
         main: Option<&MainWindow>,
         owner_id: Option<u64>,
         window_runtime: Option<Rc<WindowRuntime>>,
@@ -1019,6 +1032,14 @@ impl DialogWindowManager {
             self.confirm = Some(window);
         }
         let window = self.confirm.as_ref().expect("confirm");
+        // CompactConfirm 不走 sync_projection_tool：这里单独跟主窗 Theme。
+        crate::bootstrap::apply_tool_window_theme(&window.global::<Theme>(), projection);
+        if let Some(main) = main {
+            crate::bootstrap::apply_reduce_motion(
+                &window.global::<Theme>(),
+                main.global::<Theme>().get_reduce_motion(),
+            );
+        }
         window.set_title_text(spec.title.into());
         window.set_message_text(spec.message.into());
         window.set_details(option_model(&spec.details));
@@ -1446,6 +1467,7 @@ fn sync_projection_tool<W, Create, Prep, Wire, SyncProps>(
 ) -> AppResult<ModalAction>
 where
     W: ComponentHandle + 'static,
+    for<'a> Theme<'a>: slint::Global<'a, W>,
     Create: FnOnce() -> AppResult<W>,
     Prep: FnOnce(&W),
     Wire: FnOnce(&W),
@@ -1460,6 +1482,15 @@ where
         }
         if let Some(window) = slot.as_ref() {
             sync_props(window, projection, main);
+            // 每个工具窗有独立 Theme 全局：必须跟主窗 / Settings 草稿同步，
+            // 否则 App theme 切到浅色后 Tools 管理器仍停在系统深色。
+            crate::bootstrap::apply_tool_window_theme(&window.global::<Theme>(), projection);
+            if let Some(main) = main {
+                crate::bootstrap::apply_reduce_motion(
+                    &window.global::<Theme>(),
+                    main.global::<Theme>().get_reduce_motion(),
+                );
+            }
             if !*shown {
                 *shown = true;
                 return Ok(ModalAction::Show);
@@ -3996,6 +4027,7 @@ fn sync_host_keys(w: &HostKeysWindow, p: &AppProjection, _m: Option<&MainWindow>
     w.set_selected_group(p.host_keys_selected_group);
     w.set_selected_entry(p.host_keys_selected_entry);
     w.set_detail_host_text(p.host_keys_detail_host_text.clone().into());
+    w.set_detail_port_text(p.host_keys_detail_port_text.clone().into());
     w.set_detail_algorithm_text(p.host_keys_detail_algorithm_text.clone().into());
     w.set_detail_fingerprint_text(p.host_keys_detail_fingerprint_text.clone().into());
     w.set_detail_path_text(p.host_keys_detail_path_text.clone().into());
@@ -4137,4 +4169,59 @@ fn sync_sftp_chmod(w: &SftpChmodWindow, p: &AppProjection) {
     w.set_error_text(p.sftp_chmod_error_text.clone().into());
     // 窗口复用：重新打开时把勾选框按当前八进制文本重置（changed 不一定触发）。
     w.invoke_sync_mode();
+}
+
+/// 构建期嵌入的完整开源许可证清单（`cargo metadata` 生成）。
+const OPEN_SOURCE_LICENSES: &str = include_str!("../assets/open_source_licenses.txt");
+
+/// About 展开区预览上限：行数优先（ComplexText 量高成本随行数涨）。
+const ABOUT_LICENSES_PREVIEW_MAX_LINES: usize = 80;
+
+struct AboutLicensesPreview {
+    text: SharedString,
+    truncated: bool,
+    lines: i32,
+}
+
+fn about_licenses_preview() -> AboutLicensesPreview {
+    let mut end = OPEN_SOURCE_LICENSES.len();
+    let mut lines = 0usize;
+    let mut truncated = false;
+    for (idx, ch) in OPEN_SOURCE_LICENSES.char_indices() {
+        if ch == '\n' {
+            lines += 1;
+            if lines >= ABOUT_LICENSES_PREVIEW_MAX_LINES {
+                end = idx;
+                truncated = true;
+                break;
+            }
+        }
+    }
+    if !truncated {
+        if !OPEN_SOURCE_LICENSES.is_empty() && !OPEN_SOURCE_LICENSES.ends_with('\n') {
+            lines += 1;
+        }
+    } else {
+        // 截断提示行也计入估高。
+        lines = ABOUT_LICENSES_PREVIEW_MAX_LINES + 3;
+    }
+    AboutLicensesPreview {
+        text: OPEN_SOURCE_LICENSES[..end].into(),
+        truncated,
+        lines: i32::try_from(lines).unwrap_or(i32::MAX),
+    }
+}
+
+fn open_full_open_source_licenses() {
+    std::thread::spawn(|| {
+        let dir = std::env::temp_dir().join("yshell");
+        if std::fs::create_dir_all(&dir).is_err() {
+            return;
+        }
+        let path = dir.join("open_source_licenses.txt");
+        if std::fs::write(&path, OPEN_SOURCE_LICENSES).is_err() {
+            return;
+        }
+        crate::bootstrap::spawn_open_path(path.display().to_string());
+    });
 }

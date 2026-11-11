@@ -29,27 +29,12 @@ export component TransferQueue inherits Rectangle {
 
     background: transparent;
 
-    // P3：进度条 + 文案列（原 64px 纯文字太弱）。
-    private property <length> progress-column-width: 76px;
-
     // 行内动作按钮的无障碍名 / Tooltip 文案（§5.7：图标化操作必须带提示）。
     private property <string> pause-text: @tr("Pause transfer");
     private property <string> resume-text: @tr("Resume transfer");
     private property <string> retry-text: @tr("Retry transfer");
     private property <string> cancel-text: @tr("Cancel transfer");
     private property <string> remove-text: @tr("Remove transfer");
-
-    pure function action-count(row: SftpTransferRow) -> int {
-        return (row.can-pause ? 1 : 0) + (row.can-resume ? 1 : 0) + (row.can-retry ? 1 : 0)
-             + (row.can-cancel ? 1 : 0) + (row.can-remove ? 1 : 0);
-    }
-
-    pure function action-width(row: SftpTransferRow) -> length {
-        // 右栏窄内容宽：行内动作用 compact 24×24（与队列头一致），避免 5×32
-        // 把文件名挤没；相邻 4px 间距仍走 token。
-        return root.action-count(row) * Theme.control-height-compact
-             + Math.max(0, root.action-count(row) - 1) * Theme.spacing-4;
-    }
 
     pure function summary-text() -> string {
         return @tr("{0} transfer(s)", root.total-count)
@@ -151,13 +136,14 @@ export component TransferQueue inherits Rectangle {
                     vertical-scrollbar-policy: ScrollBarPolicy.always-off;
                     // PANEL-2：视口按行高整数倍对齐，底部不出现被腰斩的半行；
                     // 空间不足一行时仍保留可滚动视口（而不是 0 高度）。
+                    // 原型 transfers `--row-h: 52px`
                     height: min(parent.height,
-                        max(Theme.row-height-list,
-                            floor(max(0px, parent.height) / Theme.row-height-list)
-                                * Theme.row-height-list));
+                        max(52px,
+                            floor(max(0px, parent.height) / 52px)
+                                * 52px));
 
                     for row[index] in root.rows : Rectangle {
-                        height: Theme.row-height-list;
+                        height: 52px;
                         border-radius: Theme.radius-control;
                         // 失败行用错误色（§5.9）：此前借用 attention-*（警告黄），
                         // 会把"传输失败"渲染成"警告"，与 InfoBar 的 error 档不一致。
@@ -166,60 +152,63 @@ export component TransferQueue inherits Rectangle {
                         border-width: row.is-failed ? 1px : 0px;
                         border-color: row.is-failed ? Theme.banner-error-stroke : transparent;
 
-                        Text {
-                            x: Theme.spacing-4;
-                            y: 0;
-                            width: max(0px, parent.width - root.action-width(row)
-                                - root.progress-column-width - 2 * Theme.spacing-4);
-                            height: parent.height;
-                            text: row.file-name-text;
-                            color: row.is-failed ? Theme.banner-error-text : Theme.text-primary;
-                            font-size: Theme.font-caption;
-                            vertical-alignment: center;
-                            wrap: no-wrap;
-                            overflow: elide;
-                        }
+                        // 原型 `.xfer-row`：上名称/状态，下进度条；动作钉右侧。
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: Theme.spacing-4;
+                            spacing: Theme.spacing-8;
+                            cross-axis-alignment: center;
 
-                        // P3：进度条（progress-percent）+ 失败/状态文案。
-                        VerticalLayout {
-                            x: parent.width - root.action-width(row) - root.progress-column-width - Theme.spacing-4;
-                            y: (parent.height - self.preferred-height) / 2;
-                            width: root.progress-column-width;
-                            spacing: 2px;
-                            alignment: center;
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                spacing: 4px;
+                                alignment: center;
 
-                            if !row.is-failed : Rectangle {
-                                height: 4px;
-                                border-radius: 2px;
-                                background: Theme.control-stroke;
-                                clip: true;
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-8;
+                                    cross-axis-alignment: center;
+
+                                    Text {
+                                        text: row.file-name-text;
+                                        color: row.is-failed ? Theme.banner-error-text : Theme.text-primary;
+                                        font-size: Theme.font-caption;
+                                        horizontal-stretch: 1;
+                                        wrap: no-wrap;
+                                        overflow: elide;
+                                    }
+
+                                    Text {
+                                        text: row.is-failed ? row.status-text : row.progress-text;
+                                        color: row.is-failed ? Theme.critical : Theme.text-tertiary;
+                                        font-size: 10px;
+                                        font-weight: Theme.weight-semibold;
+                                        wrap: no-wrap;
+                                        overflow: elide;
+                                        horizontal-stretch: 0;
+                                    }
+                                }
 
                                 Rectangle {
-                                    width: parent.width * max(0, min(100, row.progress-percent)) / 100;
-                                    height: parent.height;
-                                    background: Theme.accent;
-                                    border-radius: 2px;
+                                    height: 6px;
+                                    border-radius: 1px;
+                                    border-width: 1px;
+                                    border-color: Theme.card-stroke;
+                                    background: Theme.subtle-hover;
+                                    opacity: (row.is-failed || row.progress-percent >= 100) ? 0.35 : 1.0;
+                                    clip: true;
+
+                                    if !row.is-failed : Rectangle {
+                                        width: parent.width * max(0, min(100, row.progress-percent)) / 100;
+                                        height: parent.height;
+                                        background: Theme.text-primary;
+                                    }
                                 }
                             }
 
-                            Text {
-                                text: row.is-failed ? row.status-text : row.progress-text;
-                                color: row.is-failed ? Theme.critical : Theme.text-tertiary;
-                                font-size: Theme.font-caption;
-                                horizontal-alignment: right;
-                                wrap: no-wrap;
-                                overflow: elide;
-                                width: parent.width;
-                            }
-                        }
-
-                        HorizontalLayout {
-                            x: parent.width - root.action-width(row);
-                            y: 0;
-                            width: root.action-width(row);
-                            height: parent.height;
-                            spacing: Theme.spacing-4;
-                            alignment: end;
+                            HorizontalLayout {
+                                spacing: Theme.spacing-4;
+                                alignment: end;
+                                horizontal-stretch: 0;
 
                             // 右栏行内动作：compact 24×24（窄栏观感优先于满血 32）。
                             if row.can-pause : WinIconButton {
@@ -266,6 +255,7 @@ export component TransferQueue inherits Rectangle {
                                 tooltip-text: root.remove-text;
                                 cross-axis-self-alignment: center;
                                 clicked => { root.remove(row.id); }
+                            }
                             }
                         }
                     }

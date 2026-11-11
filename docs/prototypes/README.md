@@ -4,7 +4,7 @@
 
 产品范围仍以 [`yshell-current-status.md`](../product/yshell-current-status.md) 为准。冲突时以本目录原型 + status 为准。
 
-**视觉真源（设计稿）**：对齐 [`ui-winui3-design-language.md`](../product/ui-winui3-design-language.md)。条带高度 Fluent **32**（title/menu/tab）；实现 `Theme.bar-height-menubar = 40` 为已知缺口。共享样式：
+**视觉真源（设计稿）**：对齐 [`ui-winui3-design-language.md`](../product/ui-winui3-design-language.md)。条带高度 Fluent **32**（title/menu/tab）；实现 `Theme.bar-height-menubar = 32` 已对齐。共享样式：
 
 | 文件 | 用途 | 样板 |
 |---|---|---|
@@ -38,11 +38,11 @@
 
 | 档位 | 尺寸 | 目录 |
 |---|---|---|
-| compact | 560×400 | `compact-confirm` · `close-tab-confirm` · `host-key` · `sftp-chmod` · `settings/mcp-consent` · `settings/master-password` · `settings/master-password-unlock` · `known-hosts/modals` · `session-editor/sections/login-step-wait` |
-| standard | 720×580 | `auth-prompt` · `logging` · `about` · `sftp-conflict` · `sftp-properties` · `tunnel-editor` · `private-keys/modals` · `session-editor/sections/login-step-keys` |
-| wide | 1100×820 | `settings` · `session-editor` · `known-hosts` · `private-keys` · `proxies` · `terminal-styles` |
+| compact | 560×340 | `compact-confirm` · `close-tab-confirm` · `host-key` · `sftp-chmod` · `settings/mcp-consent` · `settings/master-password` · `settings/master-password-unlock` · `known-hosts/modals` · `session-editor/sections/login-step-wait` |
+| standard | 720×520 | `auth-prompt` · `logging` · `about` · `sftp-conflict` · `sftp-properties` · `tunnel-editor` · `private-keys/modals` · `session-editor/sections/login-step-keys` |
+| wide | 1100×700 | `settings` · `session-editor` · `known-hosts` · `private-keys` · `proxies` · `terminal-styles` |
 
-**非弹窗尺寸（切片/主窗）**：主窗 `1440×900`；工作区切片 `960×560`；tab bar 切片 `960×200`；Quick Connect 切片 `720×480`；split / tool-dock 切片 `1100×640`；Settings / Session Editor 内容切片 `800×640`（实际窗仍 wide `1100×820`）；dock 面板 `280–320` 宽。
+**非弹窗尺寸（切片/主窗）**：主窗 `1440×900`；工作区切片 `960×560`；tab bar 切片 `960×200`；Quick Connect 切片 `720×480`；split / tool-dock 切片 `1100×640`；Settings / Session Editor 内容切片 `800×640`（实际窗仍 wide `1100×700`）；dock 面板 `280–320` 宽。
 
 ## 索引
 
@@ -85,7 +85,7 @@ N3：Left stack | Workspace | Right stack。可停靠面板可换边。
 
 旧入口 stub：[`session-sidebar/`](./session-sidebar/index.html) → `panels/sessions`；[`right-dock/`](./right-dock/index.html) → `tool-dock`。
 
-### Compact（560×400）
+### Compact（560×340）
 
 | 目录 | 覆盖 |
 |---|---|
@@ -94,7 +94,7 @@ N3：Left stack | Workspace | Right stack。可停靠面板可换边。
 | [`host-key/`](./host-key/index.html) | Host key 首次信任 / 变更（compact） |
 | [`sftp-chmod/`](./sftp-chmod/index.html) | SFTP 权限：八进制 + Owner / Group / Other 勾选框 |
 
-### Standard（720×580）
+### Standard（720×520）
 
 | 目录 | 覆盖 |
 |---|---|
@@ -105,7 +105,7 @@ N3：Left stack | Workspace | Right stack。可停靠面板可换边。
 | [`sftp-properties/`](./sftp-properties/index.html) | SFTP 属性 |
 | [`tunnel-editor/`](./tunnel-editor/index.html) | 隧道表单 · 来自 panels/tunnels Add |
 
-### Wide（1100×820）
+### Wide（1100×700）
 
 对齐 main-shell：`index` 整壳 + 一层 `sections/` 切片（不是每区复制整窗）。
 
@@ -135,10 +135,10 @@ settings/                         session-editor/
 
 历史观感稿：[`docs/product/ui-sketches/`](../product/ui-sketches/)。
 
-## 实现对齐缺口（本轮不改 `ui/`）
+## 实现对齐缺口
 
 | 项 | 设计稿 | 当前实现 |
 |---|---|---|
-| Menubar / 顶栏条带 | Fluent **32**（`_theme.css` `--menubar-h`） | Slint `Theme.bar-height-menubar = **40**` |
+| Menubar / 顶栏条带 | Fluent **32** | Slint `Theme.bar-height-menubar = 32`（已对齐） |
 
-设计验收以本目录为准；把实现改到 32 走单独轨道，勿把设计稿改回 40。
+设计验收以本目录为准。

@@ -26,7 +26,8 @@ export component TerminalPreview inherits Rectangle {
 
     height: root.surface-height;
     background: root.surface-background;
-    border-radius: Theme.radius-panel;
+    // 原型 `.term-preview` 用控件圆角 4（不是卡片 8）。
+    border-radius: Theme.radius-control;
     border-width: 1px;
     border-color: Theme.terminal-border;
     clip: true;

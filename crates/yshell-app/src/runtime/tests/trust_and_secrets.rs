@@ -294,6 +294,7 @@ fn host_keys_manager_detail_fields_match_selected_entry() {
     assert!(opened.host_keys_modal_visible);
     // D20：详情拆分字段（无英文标签；纯 hex 指纹走 D9 分组）。
     assert_eq!(opened.host_keys_detail_host_text, "gamma.example.test");
+    assert_eq!(opened.host_keys_detail_port_text, "22");
     assert_eq!(opened.host_keys_detail_algorithm_text, "ssh-ed25519");
     assert_eq!(
         opened.host_keys_detail_fingerprint_text,
