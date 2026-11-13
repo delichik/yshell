@@ -117,9 +117,9 @@ flowchart LR
 
 ### 正常路径
 
-1. **启动 `yshell`**：已有 Host → 请求它开新窗后退出；无 Host → 收尸后成为唯一 Host，并 spawn 一个 `yshell-shell --attach` GUI 子进程。
+1. **启动 `yshell`**：已有 Host → 请求它开新窗后退出；无 Host → 成为唯一 Host，并 spawn 一个 `yshell-shell --attach` GUI 子进程。
 2. **关非最后窗**：Host 更新归属；只停本应断开的 Worker。
-3. **Quit 或关到零窗**：Host 关机序列（停 McpProcess → 优雅停全部 Worker → 停 Shell 子进程 → 超时强杀 → 清 endpoint / run-state → 释单实例锁 → Host 退出）。
+3. **Quit 或关到零窗**：Host 关机序列（停 McpProcess → 优雅停全部 Worker → 停 Shell 子进程 → 超时强杀 → 清 bridge endpoint → 释单实例锁 → Host 退出）。
 4. **MCP 建连**：全局 API + tab 临时落某窗展示（可带 AI 标志，对齐 D34）。
 
 ### 异常路径
@@ -130,8 +130,8 @@ flowchart LR
 | 级联未生效 | Worker/Mcp **心跳**：IPC 断开或超时无 Host 应答 → **自退出** | 第二道保险 |
 | 单窗异常退出 | Host 更新 tab 归属；Worker 保留（仍在其它窗或待附着） | MCP 全局视图不变 |
 | **零 UI 窗** | Host **立即**关机序列 | 不把收尸交给已死窗口 |
-| 冷启动残留 | 读 `run-state.json` **启动收尸** | 清野 PID / 陈旧 endpoint |
-| 再开 yshell | 单实例锁/桥：请求已有 Host 开新窗（Host 进程内多窗，不起第二套进程树）；无 Host 则收尸后起新 Host | 不会第二套 MCP/野 Host |
+| 冷启动残留 | 平台级联 + 子进程 IPC EOF/父进程检测自退；**无持久进程状态文件** | 子进程随 Host 死亡而退出，不需要新 Host 收尸 |
+| 再开 yshell | 单实例锁/桥：请求已有 Host 开新窗（Host 进程内多窗，不起第二套进程树）；无 Host 则起新 Host | 不会第二套 MCP/野 Host |
 
 ### 子进程级联（Host 死 ⇒ 全部子进程死）
 
@@ -140,18 +140,17 @@ flowchart LR
 | Windows | Host 持有 **Job Object**（`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`），GUI Shell / SessionWorker / McpDaemon 都加入该 Job | **OS 级**：Host 正常退出、崩溃或被强杀 → Job 句柄关闭 → 内核终止全部子进程 |
 | Linux | 每个角色子进程在 exec 前设置 `PR_SET_PDEATHSIG(SIGKILL)`（`spawn::configure_child_spawn`） | **内核级**：Host 死 → 子进程立即收到 SIGKILL；父进程已死时设置也会立即触发 |
 | macOS | 无 PDEATHSIG 等价物：GUI Shell / Worker / MCP 用 `parent_pid` watchdog + Host bridge/IPC 断连检测，发现父进程消失后自杀 | **非硬实时**：依赖轮询间隔，不是 OS 级联保证；Host 被 SIGKILL 时也能在下一周期退出 |
-| 正常关机 | Host 关机序列显式处理：停 MCP → 停 Worker → Shell 退出 → 清 run-state/bridge → 释锁 | 顺序 + 超时强杀；Shell 只上报关窗，不负责清理 session |
+| 正常关机 | Host 关机序列显式处理：停 MCP → 停 Worker → Shell 退出 → 清 bridge endpoint → 释锁 | 顺序 + 超时强杀；Shell 只上报关窗，不负责清理 session |
 
-### run-state（Host 维护）
+### 存活检测（无持久状态）
 
-落在 config_dir（例：`run-state.json`）：
+**没有 `run-state.json`**。子进程的存活判断完全依赖运行时信号：
 
-- `generation`（每次 Host 启动递增）
-- `host_pid`
-- `mcp_pid`（可选）
-- `workers: [{ session_id, pid }]`
-
-规则：spawn/exit 同步写；关机成功删除文件；新 Host 杀非本 generation 残留；Worker 启动带 `generation`，心跳不对齐则自退。
+- **IPC 连接 EOF**：Shell/MCP 连 Host bridge、SessionWorker 连 Host IPC socket；Host 死亡 → 连接立即断开（FIN/RST）→ 子进程读到 EOF/写失败即退出。这是主路径，且连接带每次启动随机的 token，天然免疫 PID 复用。
+- **父进程检测**（廉价副路径）：Unix/macOS 用 `getppid()`（父死即 reparent）；Windows 可用父进程句柄 `WaitForSingleObject`（启动时取得一次，不按 PID 反复轮询）。
+- **平台级联兜底**：Windows Job Object / Linux `PDEATHSIG` 见上表。
+- **单实例 + 发现**：`instance.lock`（OS 锁）判定唯一 Host；`host-bridge.json`（host/port/token，非进程状态）供 Shell/MCP 发现并认证 Host；Host pid 不落盘。
+- `generation` 仅在内存中（每次 Host 启动取时间戳），子进程从 argv 取得，仅用于事件标注，不再从文件校验。
 
 ### 明确不采用
 
@@ -189,7 +188,7 @@ flowchart LR
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| **Phase 1** | 同进程 Host 门面 / run-state / Job / 窗计数关机 | **已落地**：`HostService` 单实例锁（Windows 命名互斥量 / Unix `flock`）、run-state（含 pid 身份：镜像路径 + 启动时间，收尸前校验）、子进程 `try_wait` 回收并同步 `WorkerExited`/`McpExited`、关机序列（停 MCP → 断开 session → 3s 宽限 → 强杀 → 关 bridge → 清 run-state）。Shell 连接断开（正常退出、崩溃、被杀、socket reset）都会立即 Detach → 零窗 → 关机，不依赖 45s 心跳超时。Host 的 stderr 追加到 `{config_dir}/host-stderr.log`（detached 进程无控制台，便于诊断 panic/启动失败）。 |
+| **Phase 1** | 同进程 Host 门面 / Job / 窗计数关机 | **已落地**：`HostService` 单实例锁（Windows 命名互斥量 / Unix `flock`）、子进程 `try_wait` 回收并同步 `WorkerExited`/`McpExited`、关机序列（停 MCP → 断开 session → 3s 宽限 → 强杀 → 关 bridge）。Shell 连接断开（正常退出、崩溃、被杀、socket reset）都会立即 Detach → 零窗 → 关机，不依赖 45s 心跳超时。Host 的 stderr 追加到 `{config_dir}/host-stderr.log`（detached 进程无控制台，便于诊断 panic/启动失败）。 |
 | **Phase 2** | SessionWorker 真进程 + SSH/终端 IPC | **部分**：终端 Connect → spawn `--session-worker` + loopback NDJSON（Host 监听、worker 回拨）；**SFTP 子系统、终端解析、本地 PTY 仍在 Host**；SFTP-only / `YSHELL_TEST_INPROCESS_SSH` / `cfg(test)` 回同进程。 |
 | **Phase 3** | McpProcess 独立 OS 进程；经 Host bridge 进 AppRuntime | **已落地**：Settings Enable → spawn `--mcp-daemon`，经 bridge 进 Host；崩溃按 Settings 重启。`McpStatus`/`WorkerFaulted` 事件目前只进 `HostEvent` 队列，未推送 Shell（投影状态间接反映）。 |
 | **Phase 4** | Shell/Host 分 OS 进程 + 二次启动附着 | **默认路径可用（含多窗）**：`yshell` = Host 入口（headless；二次启动只请求已有 Host 开新窗）；Host spawn 一个 `yshell-shell --attach` GUI 子进程；`--host` = Host only、`--shell` = ensure Host + 附着、`--attach` = attach-only（无 Host 报错退出）。Shell NDJSON（Attach / UiCall / HostTick / 投影 / snapshot；请求 id 配对、读写超时分级、Host 重启后懒重连 + 重附着）；Shell 进程内多 Slint 窗（Host 单调 window id + tab 归属，move-tab-to-new-window / move-to-main / 关闭次窗 / 二次启动请求已有 Host 开新窗 / 零窗关机）；viewport/DPI 已上报；主窗回调 **202/359**（其余为独立 OS 窗，已在 `remote_dialog_wire.rs` 接线）；Worker 退出/MCP 退出经投影变为 Failed 状态；Shell 不再构造 AppRuntime。远程 OS 窗：解锁 / 密码 / host-key、Settings、主密码子窗、会话编辑器（含步骤 / 隧道）、文件夹默认值、私钥（含子窗）/ 代理 / 终端样式 / Host Keys（含子窗）/ 日志、认证、SFTP 冲突 / 属性 / chmod、About、新建文件夹、SFTP 条目，以及删除 / 关标签 / 退出 / 关窗 / 清 scrollback / MCP consent。未闭环项见 §6.1。`YSHELL_TEST_INPROCESS_HOST=1` = 同进程完整 DialogWindowManager。 |
@@ -207,16 +206,16 @@ flowchart LR
 
 `YSHELL_TEST_INPROCESS_HOST=1`：同进程 Host 门面 + 完整 WindowManager；`YSHELL_TEST_INPROCESS_SSH=1`：SSH 连接留在 Host（调试用）。
 
-关键落点：`crates/yshell-app`（`host/`（含 `lock.rs` / `run_state.rs` / `roles.rs` / `ensure.rs` / `spawn.rs`）、`launcher.rs`、`role_shell.rs` / `role_worker.rs` / `role_mcp.rs`、`remote_shell.rs`、`runtime/`、`windows.rs`、`session_runtime.rs`、`mcp_server.rs`、`bootstrap.rs`、`src/bin/`）、`yshell-mcp`；Windows Job Object；`run-state.json` / `host-bridge.json` / `instance.lock`。
+关键落点：`crates/yshell-app`（`host/`（含 `lock.rs` / `liveness.rs` / `roles.rs` / `ensure.rs` / `spawn.rs`）、`launcher.rs`、`role_shell.rs` / `role_worker.rs` / `role_mcp.rs`、`remote_shell.rs`、`runtime/`、`windows.rs`、`session_runtime.rs`、`mcp_server.rs`、`bootstrap.rs`、`src/bin/`）、`yshell-mcp`；Windows Job Object；`host-bridge.json` / `instance.lock`（无进程状态文件）。
 
 验证入口：
 
 - `cargo check --workspace --all-targets --locked`
-- `cargo test -p yshell-app --lib -- host::`（IPC 死锁/连接断开关机回归 / 单实例锁 / pid 身份 / run-state / Job）
+- `cargo test -p yshell-app --lib -- host::`（IPC 死锁/连接断开关机回归 / 单实例锁 / 存活检测 / Job）
 - `cargo test -p yshell-app --test role_binaries`（进程级：`yshell` 入口的 `--version`/`--help`/`--print-config-dir`；3 个角色二进制的 metadata 命令；bare SessionWorker / McpDaemon 参数报错；无 Host 时 bare GUI Shell 干净失败且不开窗）
-- `cargo test -p yshell-app --test host_process_smoke`（真实 `yshell --host`：起 Host → 附着 → 零窗关机 → 清 run-state）
+- `cargo test -p yshell-app --test host_process_smoke`（真实 `yshell --host`：起 Host → 附着 → 零窗关机 → 无残留状态文件）
 - `cargo test -p xtask`（dist/MSI 模板等）
-- 真实 GUI 冒烟（开发者本机）：`yshell --config-dir <tmp>` → 出窗（标题 YShell）+ `yshell-shell` 子进程；再次 `yshell` → 已有 Host 开新窗；正常关窗 → Host 关机、全部子进程退出、run-state/bridge 清理；硬杀 Host → 级联杀 Shell/Worker/MCP；硬杀 Shell → Host Detach → 零窗关机。
+- 真实 GUI 冒烟（开发者本机）：`yshell --config-dir <tmp>` → 出窗（标题 YShell）+ `yshell-shell` 子进程；再次 `yshell` → 已有 Host 开新窗；正常关窗 → Host 关机、全部子进程退出、bridge 清理；硬杀 Host → 级联杀 Shell/Worker/MCP；硬杀 Shell → Host Detach → 零窗关机。
 - 构建提示：Windows GNU dev 构建现在也带 16MB 栈（`build.rs` 对 msvc `-Wl`/`/STACK` 两个 toolchain 都发）；否则 Host/Slint 主线程会 1MB 栈溢出（表现为 Host 启动 ~0.3s 后 JSON 文件残留、Shell 报 connection refused）。
 
 ### 6.1 尚未闭环（按优先级）

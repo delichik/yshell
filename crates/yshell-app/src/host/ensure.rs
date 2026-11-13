@@ -10,7 +10,7 @@ use crate::error::{AppError, AppResult};
 use super::api::ProcessRole;
 use super::bridge::{load_host_bridge, HostBridgeInfo};
 use super::roles::role_exe;
-use super::run_state::{current_pid, process_is_alive, RunState};
+
 use super::shell_ipc::HostShellClient;
 
 /// When set to a truthy value, GUI keeps an in-process Host facade (tests / debugging).
@@ -98,16 +98,8 @@ pub fn ensure_host_process(config_dir: &Path) -> AppResult<HostBridgeInfo> {
 }
 
 fn live_host_bridge(config_dir: &Path) -> Option<HostBridgeInfo> {
-    let state = RunState::load(config_dir).ok().flatten()?;
-    if state.host_pid == current_pid() {
-        // Same process — not an out-of-process Host.
-        return None;
-    }
-    if !process_is_alive(state.host_pid) {
-        return None;
-    }
     let info = load_host_bridge(config_dir).ok()?;
-    // Probe TCP.
+    // Probe TCP: a successful connect means a Host is serving this config dir.
     if std::net::TcpStream::connect((info.host.as_str(), info.port)).is_ok() {
         Some(info)
     } else {

@@ -25,7 +25,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use super::bridge::load_host_bridge;
-use super::run_state::current_pid;
+use super::liveness::current_pid;
 use super::shell_inbox::ShellInbox;
 use super::shell_jobs::{oneshot, ShellJob, ShellJobInbox};
 
@@ -1116,7 +1116,6 @@ mod tests {
 
     use tempfile::TempDir;
 
-    use crate::host::run_state::RunState;
     use crate::host::service::HostService;
     use crate::runtime::AppRuntime;
 
@@ -1212,10 +1211,6 @@ mod tests {
             .recv_timeout(Duration::from_secs(10))
             .expect("Host must shut down when the Shell connection drops");
         host.join().expect("host thread");
-        assert!(
-            !RunState::path(&config_dir).exists(),
-            "run-state must be cleared after the Shell connection loss shutdown"
-        );
     }
 
     /// The selection field was added after the first wire format; an older

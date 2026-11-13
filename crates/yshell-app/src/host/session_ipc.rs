@@ -26,7 +26,7 @@ use yshell_ssh::{
 
 use crate::error::{AppError, AppResult};
 
-use super::run_state::current_pid;
+use super::liveness::current_pid;
 
 const CONNECT_ACCEPT_TIMEOUT: Duration = Duration::from_secs(15);
 const CONNECT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(120);
@@ -867,14 +867,14 @@ fn wire_stage_static(stage: Option<&str>) -> Option<&'static str> {
 }
 
 fn terminate_child_pid(pid: u32) {
-    let _ = super::run_state::terminate_pid(pid);
+    let _ = super::liveness::terminate_pid(pid);
 }
 
 /// Session-worker process entry: dial Host IPC and own the SSH session.
 pub fn run_session_worker_ipc(
-    config_dir: PathBuf,
+    _config_dir: PathBuf,
     _session_id: String,
-    generation: u64,
+    _generation: u64,
     parent_pid: u32,
     ipc_port: u16,
     ipc_token: String,
@@ -971,15 +971,11 @@ pub fn run_session_worker_ipc(
         .map_err(AppError::from_error)?;
 
     loop {
-        if parent_pid != 0 && !super::run_state::process_is_alive(parent_pid) {
+        // Parent liveness is a cheap secondary check; the Host IPC socket EOF
+        // below is the authoritative "Host is gone" signal.
+        if parent_pid != 0 && !super::liveness::process_is_alive(parent_pid) {
             break;
         }
-        match super::run_state::RunState::load(&config_dir).ok().flatten() {
-            Some(state) if generation != 0 && state.generation != generation => break,
-            None if generation != 0 => break,
-            _ => {}
-        }
-
         // Drain host commands (non-blocking via read timeout).
         loop {
             let mut cmd_line = String::new();

@@ -17,7 +17,7 @@ use yshell_mcp::{IpcRequest, IpcResponse};
 use crate::error::{AppError, AppResult};
 use crate::mcp_server::{McpInbox, McpJob};
 
-use super::run_state::{current_pid, process_is_alive, RunState};
+use super::liveness::current_pid;
 use super::shell_inbox::{ShellCommand, ShellInbox};
 use super::shell_jobs::ShellJobInbox;
 
@@ -429,32 +429,21 @@ impl HostBridgeClient {
 
 /// If a live Host already owns this config dir, ask it to open a window and
 /// return `Ok(true)` so the new process can exit. Otherwise `Ok(false)`.
+///
+/// Liveness is the bridge itself: connecting and authenticating proves a Host
+/// is serving this config dir (and its token), so no pid file is needed.
 pub fn try_notify_existing_instance(config_dir: &Path) -> AppResult<bool> {
-    let Some(state) = RunState::load(config_dir).ok().flatten() else {
-        return Ok(false);
-    };
-    if !process_is_alive(state.host_pid) {
-        return Ok(false);
-    }
-    // Same process re-entry (shouldn't happen) — do not attach to self.
-    if state.host_pid == super::run_state::current_pid() {
-        return Ok(false);
-    }
     let Ok(client) = HostBridgeClient::connect(config_dir) else {
         return Ok(false);
     };
     match client.open_window() {
         Ok(()) => {
-            tracing::info!(
-                host_pid = state.host_pid,
-                "notified existing yshell instance to open a window"
-            );
+            tracing::info!("notified existing yshell instance to open a window");
             Ok(true)
         }
         Err(error) => {
             tracing::warn!(
                 error = %error,
-                host_pid = state.host_pid,
                 "existing instance bridge unreachable; starting a new Host"
             );
             Ok(false)

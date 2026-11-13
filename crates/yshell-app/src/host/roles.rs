@@ -13,7 +13,7 @@ use crate::runtime::AppRuntime;
 
 use super::api::ProcessRole;
 use super::bridge::HostBridgeClient;
-use super::run_state::{current_pid, process_is_alive, RunState};
+use super::liveness::{current_pid, process_is_alive};
 
 /// CLI payload for `--session-worker`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -227,17 +227,12 @@ pub fn run_mcp_daemon(args: McpDaemonArgs) -> AppResult<()> {
     )
     .ok();
 
-    let config_dir = args.config_dir.clone();
-    let generation = args.generation;
     let parent_pid = args.parent_pid;
     loop {
+        // The bridge/daemon connection is the liveness signal; the parent pid is
+        // a cheap secondary check for the standalone (Host-spawned) daemon.
         if parent_pid != 0 && !process_is_alive(parent_pid) {
             break;
-        }
-        match RunState::load(&config_dir).ok().flatten() {
-            Some(state) if state.generation != generation => break,
-            None if generation != 0 => break,
-            _ => {}
         }
         while let Some(job) = inbox.try_pop() {
             forward_mcp_job(&bridge, job);

@@ -711,7 +711,7 @@ impl AppRuntime {
                                 is_reconnect,
                             );
                         } else if let Some(worker) = worker {
-                            let _ = crate::host::run_state::terminate_pid(worker.pid);
+                            let _ = crate::host::liveness::terminate_pid(worker.pid);
                         }
                     }
                     ConnectJobOutcome::Failed { error } => {

@@ -7,9 +7,9 @@ pub mod bridge;
 mod dialog_dispatch;
 pub mod ensure;
 pub mod job;
+pub mod liveness;
 pub mod lock;
 pub mod roles;
-pub mod run_state;
 pub mod runtime_client;
 pub mod runtime_dispatch;
 pub mod service;
@@ -28,12 +28,12 @@ pub use ensure::{
     connect_shell_client, connect_shell_client_attached, ensure_host_process,
     inprocess_host_requested, spawn_shell,
 };
+#[allow(unused_imports)] // re-exported for callers / future IPC wiring
+pub use liveness::{current_pid, force_terminate_pid, process_is_alive, terminate_pid};
 pub use roles::{
     role_exe, role_exe_name, run_host_headless, run_mcp_daemon, run_session_worker, McpDaemonArgs,
     SessionWorkerArgs,
 };
-#[allow(unused_imports)] // re-exported for callers / future IPC wiring
-pub use run_state::{current_pid, process_is_alive, RunState, RUN_STATE_FILE_NAME};
 pub use runtime_client::AppRuntimeClient;
 pub use service::HostService;
 pub use shell_inbox::{ShellCommand, ShellInbox};

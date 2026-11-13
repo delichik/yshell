@@ -241,7 +241,7 @@ fn run_connect_out_of_process(
     if job.cancel.load(Ordering::SeqCst) {
         if let Ok((mut shell, worker)) = result {
             let _ = shell.disconnect();
-            let _ = crate::host::run_state::terminate_pid(worker.pid);
+            let _ = crate::host::liveness::terminate_pid(worker.pid);
         }
         return ConnectJobOutcome::Cancelled;
     }

@@ -16,8 +16,8 @@ use crate::runtime::AppRuntime;
 use super::api::{HostCommand, HostEvent, ProcessRole};
 use super::bridge::HostBridgeHandle;
 use super::job::JobObject;
+use super::liveness::{current_pid, now_unix_ms};
 use super::lock::InstanceLock;
-use super::run_state::{current_pid, RunState};
 use super::runtime_dispatch;
 use super::shell_inbox::{ShellCommand, ShellInbox};
 use super::shell_ipc::{capture_terminal_snapshot, projection_json, ShellRegistry};
@@ -44,7 +44,10 @@ struct TrackedChild {
 pub struct HostService {
     config_dir: PathBuf,
     runtime: Rc<RefCell<AppRuntime>>,
-    run_state: RunState,
+    /// In-memory Host generation passed to children (never persisted).
+    generation: u64,
+    /// Running MCP daemon pid (in-memory bookkeeping).
+    mcp_pid: Option<u32>,
     job: Option<JobObject>,
     window_count: u32,
     shutdown_requested: bool,
@@ -79,32 +82,17 @@ pub struct HostService {
 }
 
 impl HostService {
-    /// Starts (or reclaims into) a Host generation wrapping `runtime`.
+    /// Starts the Host generation wrapping `runtime`.
     pub fn start(runtime: AppRuntime) -> AppResult<Rc<RefCell<Self>>> {
         let config_dir = runtime.config_dir.clone();
         // One Host per config directory. The OS releases this lock if the Host
         // dies, so a stale lock can never block the next start.
         let instance_lock = InstanceLock::acquire(&config_dir)?;
-        let self_pid = current_pid();
-        let generation = match RunState::load(&config_dir)? {
-            Some(stale) => {
-                if stale.host_pid != self_pid {
-                    let killed = RunState::reclaim_orphans(&stale, self_pid);
-                    if killed > 0 {
-                        tracing::warn!(
-                            killed,
-                            generation = stale.generation,
-                            "reclaimed orphaned yshell processes from prior run-state"
-                        );
-                    }
-                }
-                stale.generation.saturating_add(1).max(1)
-            }
-            None => 1,
-        };
-        let _ = RunState::clear(&config_dir);
-        let run_state = RunState::new(generation, self_pid);
-        run_state.save(&config_dir)?;
+        // No persisted run-state: the Host is discovered through the bridge and
+        // children detect Host death via IPC EOF / parent liveness. Remove the
+        // file left behind by older installs.
+        let _ = std::fs::remove_file(config_dir.join("run-state.json"));
+        let generation = now_unix_ms().max(1);
 
         let job = match JobObject::create() {
             Ok(job) => Some(job),
@@ -119,7 +107,7 @@ impl HostService {
         let shell_jobs = ShellJobInbox::new();
         let bridge = match super::bridge::start_host_bridge(
             config_dir.clone(),
-            run_state.generation,
+            generation,
             mcp_inbox.clone(),
             shell_inbox.clone(),
             shell_jobs.clone(),
@@ -132,7 +120,7 @@ impl HostService {
         };
 
         let mut runtime = runtime;
-        runtime.host_generation = run_state.generation;
+        runtime.host_generation = generation;
         let (connect_jobs, connect_job_rx) = crate::connect_jobs::start_connect_job_worker();
         runtime.connect_jobs = Some(connect_jobs);
         let parallel = runtime
@@ -156,7 +144,8 @@ impl HostService {
         Ok(Rc::new(RefCell::new(Self {
             config_dir,
             runtime: Rc::new(RefCell::new(runtime)),
-            run_state,
+            generation,
+            mcp_pid: None,
             job,
             window_count: 0,
             shutdown_requested: false,
@@ -385,7 +374,7 @@ impl HostService {
                 } => {
                     self.shell_registry.attach(pid, window_count);
                     self.shell_spawn_pending = false;
-                    let _ = reply.send(Ok((self.run_state.generation, current_pid())));
+                    let _ = reply.send(Ok((self.generation, current_pid())));
                 }
                 ShellJob::Detach { pid } => {
                     self.shell_registry.detach(pid);
@@ -543,27 +532,17 @@ impl HostService {
             .mcp_daemon_fingerprint
             .as_ref()
             .is_some_and(|(h, p, t)| h == bind_host && *p == port && t == token)
-            && self
-                .run_state
-                .mcp_pid
-                .is_some_and(super::run_state::process_is_alive)
+            && self.mcp_pid.is_some_and(super::liveness::process_is_alive)
         {
             return Ok(false);
         }
         let _ = self.stop_mcp_daemon();
-        let child = spawn_mcp_daemon(
-            &self.config_dir,
-            bind_host,
-            port,
-            token,
-            self.run_state.generation,
-        )?;
+        let child = spawn_mcp_daemon(&self.config_dir, bind_host, port, token, self.generation)?;
         let pid = child.id();
         if pid != current_pid() {
             let _ = self.track_child_pid(pid);
         }
-        self.run_state.set_mcp_pid(pid);
-        self.persist_run_state()?;
+        self.mcp_pid = Some(pid);
         self.mcp_daemon_fingerprint = Some((bind_host.to_owned(), port, token.to_owned()));
         self.children.push(TrackedChild {
             child,
@@ -578,18 +557,17 @@ impl HostService {
     }
 
     fn stop_mcp_daemon(&mut self) -> bool {
-        let had = self.mcp_daemon_fingerprint.take().is_some() || self.run_state.mcp_pid.is_some();
+        let had = self.mcp_daemon_fingerprint.take().is_some() || self.mcp_pid.is_some();
         if !had {
             // Called from every supervisor tick while MCP is disabled; do not
             // rewrite run-state / clear the endpoint when nothing is running.
             return false;
         }
-        if let Some(pid) = self.run_state.mcp_pid {
-            let _ = super::run_state::terminate_pid(pid);
+        if let Some(pid) = self.mcp_pid {
+            let _ = super::liveness::terminate_pid(pid);
             self.children.retain(|tracked| tracked.child.id() != pid);
         }
-        self.run_state.clear_mcp_pid();
-        let _ = self.persist_run_state();
+        self.mcp_pid = None;
         let _ = yshell_mcp::clear_endpoint(&self.config_dir);
         had
     }
@@ -602,7 +580,7 @@ impl HostService {
 
     #[must_use]
     pub fn generation(&self) -> u64 {
-        self.run_state.generation
+        self.generation
     }
 
     #[must_use]
@@ -645,17 +623,13 @@ impl HostService {
             HostCommand::RequestShutdown => {
                 self.begin_shutdown()?;
             }
-            HostCommand::WorkerStarted { session_id, pid } => {
+            HostCommand::WorkerStarted { session_id: _, pid } => {
                 // Never assign the Host process itself into its own job.
                 if pid != current_pid() {
                     let _ = self.track_child_pid(pid);
                 }
-                self.run_state.upsert_worker(session_id, pid);
-                self.persist_run_state()?;
             }
             HostCommand::WorkerExited { session_id } => {
-                self.run_state.remove_worker(&session_id);
-                self.persist_run_state()?;
                 // Surface the crash to the Shell through the projection instead
                 // of leaving the tab "connected" until a poll notices.
                 self.runtime
@@ -668,16 +642,14 @@ impl HostService {
                 if pid != current_pid() {
                     let _ = self.track_child_pid(pid);
                 }
-                self.run_state.set_mcp_pid(pid);
-                self.persist_run_state()?;
+                self.mcp_pid = Some(pid);
                 self.pending_events.push(HostEvent::McpStatus {
                     ready: true,
                     detail: format!("mcp pid {pid}"),
                 });
             }
             HostCommand::McpExited => {
-                self.run_state.clear_mcp_pid();
-                self.persist_run_state()?;
+                self.mcp_pid = None;
                 self.runtime.borrow_mut().set_mcp_listener_status(
                     crate::runtime::mcp::McpListenerStatus::Failed {
                         message: "MCP daemon exited unexpectedly".to_owned(),
@@ -693,10 +665,10 @@ impl HostService {
                 role,
                 pid,
             } => {
-                if generation != self.run_state.generation {
+                if generation != self.generation {
                     return Err(AppError::new(format!(
                         "heartbeat generation mismatch from {role} pid {pid}: got {generation}, host {}",
-                        self.run_state.generation
+                        self.generation
                     )));
                 }
             }
@@ -734,28 +706,19 @@ impl HostService {
         }
         // 3. Force-kill anything that ignored the disconnect.
         for tracked in &mut self.children {
-            let _ = super::run_state::force_terminate_pid(tracked.child.id());
+            let _ = super::liveness::force_terminate_pid(tracked.child.id());
         }
         self.children.clear();
         // 4. Close the bridge so second launches stop finding this Host.
         if let Some(bridge) = self.bridge.take() {
             bridge.shutdown();
         }
-        // 5. Clear run-state so a crash mid-exit does not leave a false live map.
-        RunState::clear(&self.config_dir)?;
         tracing::info!(
-            generation = self.run_state.generation,
+            generation = self.generation,
             role = ProcessRole::Host.as_str(),
             "host shutdown sequence started"
         );
         Ok(())
-    }
-
-    fn persist_run_state(&mut self) -> AppResult<()> {
-        if self.shutdown_requested {
-            return Ok(());
-        }
-        self.run_state.save(&self.config_dir)
     }
 }
 
@@ -769,10 +732,9 @@ mod tests {
     }
 
     #[test]
-    fn zero_windows_requests_shutdown_and_clears_run_state() {
+    fn zero_windows_requests_shutdown() {
         let temp = TempDir::new().expect("temp");
         let host = HostService::start(runtime_in(&temp)).expect("host");
-        assert!(RunState::path(temp.path()).exists());
         {
             let mut host = host.borrow_mut();
             host.dispatch(HostCommand::SetWindowCount { count: 1 })
@@ -786,11 +748,10 @@ mod tests {
                 .iter()
                 .any(|event| matches!(event, HostEvent::ShutdownStarted)));
         }
-        assert!(!RunState::path(temp.path()).exists());
     }
 
     #[test]
-    fn worker_registration_persists() {
+    fn worker_registration_is_bookkeeping_only() {
         let temp = TempDir::new().expect("temp");
         let host = HostService::start(runtime_in(&temp)).expect("host");
         // Use a non-self pid so we do not AssignProcessToJobObject(self).
@@ -800,9 +761,8 @@ mod tests {
                 pid: 1,
             })
             .expect("worker");
-        let loaded = RunState::load(temp.path()).expect("load").expect("some");
-        assert_eq!(loaded.workers.len(), 1);
-        assert_eq!(loaded.workers[0].session_id, "ses_1");
-        assert_eq!(loaded.workers[0].pid, 1);
+        assert!(!host.borrow().shutdown_requested());
+        // No run-state file is created anymore.
+        assert!(!temp.path().join("run-state.json").exists());
     }
 }

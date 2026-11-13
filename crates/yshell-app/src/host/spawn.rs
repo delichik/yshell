@@ -11,8 +11,8 @@ use std::process::{Child, Command, Stdio};
 use crate::error::{AppError, AppResult};
 
 use super::api::ProcessRole;
+use super::liveness::current_pid;
 use super::roles::role_exe;
-use super::run_state::current_pid;
 
 /// Common configuration for Host-spawned role children.
 ///
