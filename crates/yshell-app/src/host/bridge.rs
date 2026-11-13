@@ -169,6 +169,9 @@ fn accept_loop(listener: TcpListener, shared: BridgeConnShared) {
 }
 
 fn handle_bridge_conn(stream: TcpStream, shared: &BridgeConnShared) -> AppResult<()> {
+    // The listener is non-blocking; accepted sockets inherit that on Windows,
+    // which would make the NDJSON reader spin on WouldBlock forever.
+    let _ = stream.set_nonblocking(false);
     let expected_token = shared.expected_token.as_str();
     let inbox = &shared.inbox;
     let shell_inbox = &shared.shell_inbox;

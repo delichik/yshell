@@ -92,30 +92,52 @@ fn git_short_sha() -> Option<String> {
     }
 }
 
-/// Embed PE FileVersion / ProductVersion so Explorer and installers see a real
-/// version string (not empty). Best-effort: skip quietly when the host has no
-/// `rc` / `windres` (e.g. incomplete mingw).
+/// Embed PE FileVersion / ProductVersion and a **role-specific FileDescription**
+/// so Windows Task Manager / Explorer can tell the four binaries apart.
+/// Best-effort: skip quietly when the host has no `rc` / `windres`.
 fn embed_windows_version_info(version: &str) {
     if std::env::var_os("CARGO_CFG_WINDOWS").is_none() {
         return;
     }
     let (major, minor, patch, build) = parse_pe_version_parts(version);
-    let mut resource = winresource::WindowsResource::new();
-    resource.set("FileVersion", version);
-    resource.set("ProductVersion", version);
-    resource.set("ProductName", "YShell");
-    resource.set("FileDescription", "YShell SSH terminal and SFTP client");
-    resource.set("LegalCopyright", "YShell contributors");
-    resource.set_version_info(
-        winresource::VersionInfo::FILEVERSION,
-        pe_u64(major, minor, patch, build),
-    );
-    resource.set_version_info(
-        winresource::VersionInfo::PRODUCTVERSION,
-        pe_u64(major, minor, patch, build),
-    );
-    if let Err(error) = resource.compile() {
-        println!("cargo:warning=skipping Windows version resource: {error}");
+    // (binary, FileDescription, InternalName/OriginalFilename)
+    let roles = [
+        ("yshell", "YShell Host (process supervisor)", "yshell.exe"),
+        ("yshell-shell", "YShell GUI Shell", "yshell-shell.exe"),
+        (
+            "yshell-session-worker",
+            "YShell Session Worker (SSH/PTY)",
+            "yshell-session-worker.exe",
+        ),
+        (
+            "yshell-mcp-daemon",
+            "YShell MCP Daemon",
+            "yshell-mcp-daemon.exe",
+        ),
+    ];
+    for (binary, description, original_name) in roles {
+        let mut resource = winresource::WindowsResource::new();
+        resource.set("FileVersion", version);
+        resource.set("ProductVersion", version);
+        resource.set("ProductName", "YShell");
+        resource.set("FileDescription", description);
+        resource.set("InternalName", original_name);
+        resource.set("OriginalFilename", original_name);
+        resource.set("LegalCopyright", "YShell contributors");
+        resource.set_version_info(
+            winresource::VersionInfo::FILEVERSION,
+            pe_u64(major, minor, patch, build),
+        );
+        resource.set_version_info(
+            winresource::VersionInfo::PRODUCTVERSION,
+            pe_u64(major, minor, patch, build),
+        );
+        // `compile_for` attaches the resource only to that bin
+        // (`cargo:rustc-link-arg-bin=<bin>=<res>`), so each role gets its own
+        // description instead of all four sharing one.
+        if let Err(error) = resource.compile_for(binary) {
+            println!("cargo:warning=skipping Windows version resource for {binary}: {error}");
+        }
     }
 }
 

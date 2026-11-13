@@ -457,6 +457,8 @@ fn read_shell_line(reader: &mut BufReader<TcpStream>, line: &mut String) -> AppR
                 if error.kind() == std::io::ErrorKind::WouldBlock
                     || error.kind() == std::io::ErrorKind::TimedOut =>
             {
+                // Defensive: never spin if a non-blocking socket slips through.
+                std::thread::sleep(Duration::from_millis(1));
                 continue;
             }
             Err(error) => return Err(AppError::from_error(error)),

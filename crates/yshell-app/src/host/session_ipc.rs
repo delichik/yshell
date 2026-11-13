@@ -771,6 +771,16 @@ fn write_msg(writer: &mut impl Write, msg: &HostToWorker) -> AppResult<()> {
     Ok(())
 }
 
+fn send_worker_msg(
+    writer: &std::sync::Arc<std::sync::Mutex<TcpStream>>,
+    msg: &WorkerToHost,
+) -> AppResult<()> {
+    let mut writer = writer
+        .lock()
+        .map_err(|_| AppError::new("session worker ipc lock poisoned"))?;
+    write_worker_msg(&mut *writer, msg)
+}
+
 fn write_worker_msg(writer: &mut impl Write, msg: &WorkerToHost) -> AppResult<()> {
     serde_json::to_writer(&mut *writer, msg)
         .map_err(|error| AppError::new(format!("session ipc encode: {error}")))?;
@@ -890,6 +900,9 @@ pub fn run_session_worker_ipc(
     let mut writer = stream.try_clone().map_err(AppError::from_error)?;
     writeln!(writer, "{ipc_token}").map_err(AppError::from_error)?;
     writer.flush().map_err(AppError::from_error)?;
+    // One lock for every write: the progress thread and the main worker loop
+    // share this socket clone, and interleaved writes would corrupt NDJSON.
+    let writer = std::sync::Arc::new(std::sync::Mutex::new(writer));
     let mut reader = BufReader::new(stream);
 
     // First command must be Connect.
@@ -907,13 +920,13 @@ pub fn run_session_worker_ipc(
     };
 
     let (progress_tx, progress_rx) = mpsc::channel::<String>();
-    let writer_for_progress = writer.try_clone().map_err(AppError::from_error)?;
+    let writer_for_progress = std::sync::Arc::clone(&writer);
     let progress_thread = thread::Builder::new()
         .name("yshell-sw-progress".into())
         .spawn(move || {
-            let mut writer = writer_for_progress;
             while let Ok(stage) = progress_rx.recv() {
-                if write_worker_msg(&mut writer, &WorkerToHost::Progress { stage }).is_err() {
+                if send_worker_msg(&writer_for_progress, &WorkerToHost::Progress { stage }).is_err()
+                {
                     break;
                 }
             }
@@ -941,12 +954,12 @@ pub fn run_session_worker_ipc(
 
     let (transport, mut shell) = match connect_result {
         Ok(pair) => {
-            write_worker_msg(&mut writer, &WorkerToHost::Connected)?;
+            send_worker_msg(&writer, &WorkerToHost::Connected)?;
             pair
         }
         Err(error) => {
-            write_worker_msg(
-                &mut writer,
+            send_worker_msg(
+                &writer,
                 &WorkerToHost::Failed {
                     message: error.to_string(),
                     stage: error.connection_stage.map(str::to_owned),
@@ -960,7 +973,7 @@ pub fn run_session_worker_ipc(
     let Some(mut shell) = shell.take() else {
         // SFTP-only should not use this path; close and exit.
         transport.close();
-        write_worker_msg(&mut writer, &WorkerToHost::Exited)?;
+        send_worker_msg(&writer, &WorkerToHost::Exited)?;
         return Ok(());
     };
 
@@ -983,7 +996,7 @@ pub fn run_session_worker_ipc(
                 Ok(0) => {
                     let _ = shell.disconnect();
                     transport.close();
-                    let _ = write_worker_msg(&mut writer, &WorkerToHost::Exited);
+                    let _ = send_worker_msg(&writer, &WorkerToHost::Exited);
                     return Ok(());
                 }
                 Ok(_) => {
@@ -1014,7 +1027,7 @@ pub fn run_session_worker_ipc(
                         HostToWorker::Disconnect => {
                             let _ = shell.disconnect();
                             transport.close();
-                            let _ = write_worker_msg(&mut writer, &WorkerToHost::Exited);
+                            let _ = send_worker_msg(&writer, &WorkerToHost::Exited);
                             return Ok(());
                         }
                         HostToWorker::Connect { .. } => {}
@@ -1039,8 +1052,8 @@ pub fn run_session_worker_ipc(
         }
         match shell.poll_output() {
             Ok(bytes) if !bytes.is_empty() => {
-                if write_worker_msg(
-                    &mut writer,
+                if send_worker_msg(
+                    &writer,
                     &WorkerToHost::Output {
                         data_b64: B64.encode(&bytes),
                     },
@@ -1058,7 +1071,7 @@ pub fn run_session_worker_ipc(
 
     let _ = shell.disconnect();
     transport.close();
-    let _ = write_worker_msg(&mut writer, &WorkerToHost::Exited);
+    let _ = send_worker_msg(&writer, &WorkerToHost::Exited);
     Ok(())
 }
 

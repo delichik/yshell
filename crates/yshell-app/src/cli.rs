@@ -232,6 +232,7 @@ impl CliInvocation {
                 "--host" => set_command(&mut command, CliCommand::Host)?,
                 "--shell" => set_command(&mut command, CliCommand::Shell)?,
                 "--attach" => set_command(&mut command, CliCommand::AttachShell)?,
+
                 "--session-worker" => {
                     let session_id = args
                         .next()
