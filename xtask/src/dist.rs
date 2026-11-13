@@ -69,14 +69,12 @@ pub struct ChecksumOptions {
 
 /// Thin role executables shipped next to the user-facing `yshell` entry.
 ///
-/// Keep in sync with the `[[bin]]` targets in `crates/yshell-app/Cargo.toml`
-/// (and `crates/yshell-app/src/host/roles.rs`, which resolves them at runtime).
-pub const ROLE_BINARY_NAMES: [&str; 4] = [
-    "yshell-host",
-    "yshell-shell",
-    "yshell-session-worker",
-    "yshell-mcp-daemon",
-];
+/// `yshell` itself is the headless Host entry (it spawns the GUI Shell and the
+/// worker / MCP children), so it is not a "role" binary here. Keep this list in
+/// sync with the `[[bin]]` targets in `crates/yshell-app/Cargo.toml` (and
+/// `crates/yshell-app/src/host/roles.rs`, which resolves them at runtime).
+pub const ROLE_BINARY_NAMES: [&str; 3] =
+    ["yshell-shell", "yshell-session-worker", "yshell-mcp-daemon"];
 
 /// Operating system of the build target.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -124,8 +122,8 @@ impl TargetOs {
         }
     }
 
-    /// Every executable shipped in the bundle: the user-facing `yshell` entry
-    /// followed by the thin role binaries.
+    /// Every executable shipped in the bundle: the Host entry `yshell`
+    /// followed by the thin role binaries (GUI Shell / worker / MCP daemon).
     pub fn binary_names(&self) -> Vec<String> {
         std::iter::once("yshell")
             .chain(ROLE_BINARY_NAMES)
@@ -223,7 +221,7 @@ pub fn run(ctx: &Context, options: &DistOptions) -> Result<()> {
 
     println!("==> target {target} ({platform}), version {version}");
     // `cargo build -p yshell-app` builds every bin target; ship them all next
-    // to each other so role processes find their role executables as siblings.
+    // to each other so the Host resolves its role executables as siblings.
     let binaries: Vec<PathBuf> = target_os
         .binary_names()
         .iter()
@@ -262,8 +260,8 @@ pub fn run(ctx: &Context, options: &DistOptions) -> Result<()> {
     }
 
     if !options.no_smoke {
-        // Smoke every executable: `yshell` is the user-facing entry, the role
-        // binaries are launched by the Host at runtime and must start too.
+        // Smoke every executable: `yshell` is the Host entry, the role binaries
+        // are spawned as children at runtime and must start too.
         for path in &binaries {
             let mut command = Command::new(path);
             command.arg("--version");
@@ -436,9 +434,9 @@ fn prepare_portable_staging(
     fs::create_dir_all(staging)
         .with_context(|| format!("failed to create {}", staging.display()))?;
 
-    // Keep every executable side by side: role processes resolve fonts/themes
-    // relative to their own executable directory and locate their role
-    // executables as siblings.
+    // Keep every executable side by side: the Host resolves its role
+    // executables as siblings and they resolve fonts/themes relative to their
+    // own executable directory.
     for (source, name) in binaries.iter().zip(target_os.binary_names()) {
         copy_file(source, &staging.join(name), true)?;
     }
@@ -755,7 +753,7 @@ mod tests {
     }
 
     #[test]
-    fn role_binaries_ship_next_to_the_user_facing_entry() {
+    fn role_binaries_ship_next_to_the_host_entry() {
         let windows = TargetOs::parse("x86_64-pc-windows-msvc").unwrap();
         let windows_names = windows.binary_names();
         assert_eq!(
@@ -769,17 +767,22 @@ mod tests {
                 "Windows bundle must ship {role}.exe"
             );
         }
+        assert!(
+            !windows_names.iter().any(|name| name == "yshell-host.exe"),
+            "yshell.exe is the Host entry; there is no separate yshell-host binary"
+        );
 
         let linux = TargetOs::parse("x86_64-unknown-linux-gnu").unwrap();
-        assert_eq!(
-            linux.binary_names().first().map(String::as_str),
-            Some("yshell")
-        );
-        assert!(linux
-            .binary_names()
-            .iter()
-            .any(|name| name == "yshell-host"));
-        assert_eq!(linux.binary_names().len(), 1 + ROLE_BINARY_NAMES.len());
+        let linux_names = linux.binary_names();
+        assert_eq!(linux_names.first().map(String::as_str), Some("yshell"));
+        for role in ROLE_BINARY_NAMES {
+            assert!(
+                linux_names.iter().any(|name| name == role),
+                "Linux bundle must ship {role}"
+            );
+        }
+        assert!(!linux_names.iter().any(|name| name == "yshell-host"));
+        assert_eq!(linux_names.len(), 1 + ROLE_BINARY_NAMES.len());
     }
 
     #[test]
@@ -787,12 +790,17 @@ mod tests {
         for executable in [
             "yshell",
             "yshell.exe",
-            "yshell-host",
-            "yshell-mcp-daemon.exe",
+            "yshell-shell",
+            "yshell-session-worker.exe",
+            "yshell-mcp-daemon",
         ] {
             assert!(is_executable_artifact(executable), "{executable}");
         }
         assert!(is_executable_artifact("yshell-portable.sh"));
+        assert!(
+            !is_executable_artifact("yshell-host"),
+            "yshell-host is no longer shipped"
+        );
         assert!(!is_executable_artifact("README.md"));
         assert!(!is_executable_artifact("fonts/DejaVuSansMono.ttf"));
     }

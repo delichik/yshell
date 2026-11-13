@@ -19,7 +19,7 @@ use super::job::JobObject;
 use super::lock::InstanceLock;
 use super::run_state::{current_pid, RunState};
 use super::runtime_dispatch;
-use super::shell_inbox::ShellInbox;
+use super::shell_inbox::{ShellCommand, ShellInbox};
 use super::shell_ipc::{capture_terminal_snapshot, projection_json, ShellRegistry};
 use super::shell_jobs::{ShellJob, ShellJobInbox};
 use super::spawn::spawn_mcp_daemon;
@@ -29,6 +29,8 @@ use super::spawn::spawn_mcp_daemon;
 enum ChildRole {
     SessionWorker,
     McpDaemon,
+    /// GUI Shell process spawned by the Host entry.
+    Shell,
 }
 
 /// A Host-owned child process plus the run-state identity it belongs to.
@@ -60,6 +62,12 @@ pub struct HostService {
     shell_jobs: ShellJobInbox,
     /// Attached Shell processes and aggregated window counts.
     shell_registry: ShellRegistry,
+    /// True while a GUI Shell spawn is in flight (avoids spawning duplicates for
+    /// rapid `OpenWindow` requests from second launches).
+    shell_spawn_pending: bool,
+    /// Set when the spawned Shell exited before ever attaching (startup failure),
+    /// so the Host entry can fail instead of lingering headless.
+    shell_spawn_failed: bool,
     /// Loopback bridge the MCP daemon dials into.
     bridge: Option<HostBridgeHandle>,
     /// Fingerprint of the running MCP daemon child (`bind`, port, token).
@@ -159,6 +167,8 @@ impl HostService {
             shell_inbox,
             shell_jobs,
             shell_registry: ShellRegistry::new(),
+            shell_spawn_pending: false,
+            shell_spawn_failed: false,
             bridge,
             mcp_daemon_fingerprint: None,
             connect_job_rx: Some(connect_job_rx),
@@ -201,6 +211,7 @@ impl HostService {
     /// Returns `true` when shutdown was requested (caller should exit).
     pub fn supervisor_tick(&mut self) -> AppResult<bool> {
         self.poll_children();
+        self.drain_shell_inbox()?;
         {
             let mut runtime = self.runtime.borrow_mut();
             self.mcp_inbox.drain(&mut runtime);
@@ -301,8 +312,67 @@ impl HostService {
                 ChildRole::McpDaemon => {
                     let _ = self.dispatch(HostCommand::McpExited);
                 }
+                ChildRole::Shell => {
+                    // The Shell connection EOF / window count drives shutdown.
+                    self.shell_spawn_pending = false;
+                    if self.shell_registry.shell_count() == 0 {
+                        self.shell_spawn_failed = true;
+                    }
+                }
             }
         }
+    }
+
+    /// Handles second-launch / "open a window" requests from the bridge.
+    ///
+    /// When a Shell is connected its IPC thread drains the same inbox (it owns
+    /// the connection writer). Only the "no Shell attached" case belongs to the
+    /// Host: it spawns a fresh GUI Shell for the requested window.
+    fn drain_shell_inbox(&mut self) -> AppResult<()> {
+        if self.shell_registry.shell_count() > 0 {
+            return Ok(());
+        }
+        while let Some(command) = self.shell_inbox.try_pop() {
+            match command {
+                ShellCommand::OpenWindow => self.spawn_shell_process()?,
+            }
+        }
+        Ok(())
+    }
+
+    /// Spawns the GUI Shell child (Host entry path / window request without one).
+    pub fn spawn_shell_process(&mut self) -> AppResult<()> {
+        if self.shell_registry.shell_count() > 0 || self.shell_spawn_pending {
+            return Ok(());
+        }
+        self.shell_spawn_pending = true;
+        self.shell_spawn_failed = false;
+        let child = match super::ensure::spawn_shell(&self.config_dir) {
+            Ok(child) => child,
+            Err(error) => {
+                self.shell_spawn_pending = false;
+                return Err(error);
+            }
+        };
+        if child.id() != current_pid() {
+            let _ = self.track_child_pid(child.id());
+        }
+        tracing::info!(
+            pid = child.id(),
+            "spawned GUI Shell for a window request (no Shell was attached)"
+        );
+        self.children.push(TrackedChild {
+            child,
+            role: ChildRole::Shell,
+            session_id: None,
+        });
+        Ok(())
+    }
+
+    /// Whether the spawned Shell died before attaching (Host entry startup error).
+    #[must_use]
+    pub fn shell_spawn_failed(&self) -> bool {
+        self.shell_spawn_failed
     }
 
     fn drain_shell_jobs(&mut self) -> AppResult<()> {
@@ -314,6 +384,7 @@ impl HostService {
                     reply,
                 } => {
                     self.shell_registry.attach(pid, window_count);
+                    self.shell_spawn_pending = false;
                     let _ = reply.send(Ok((self.run_state.generation, current_pid())));
                 }
                 ShellJob::Detach { pid } => {

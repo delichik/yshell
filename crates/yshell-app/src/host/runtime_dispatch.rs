@@ -48,6 +48,16 @@ pub fn dispatch(runtime: &mut AppRuntime, method: &str, args: Value) -> Result<V
             runtime.register_window(window_id);
             Ok(Value::Null)
         }
+        "allocate_window" => {
+            // Host-authoritative window id allocation for second-launch windows:
+            // the new window starts with a fresh New Tab page (otherwise the
+            // Shell would immediately close the empty secondary window).
+            let window_id = runtime.allocate_window_id();
+            runtime.register_window(window_id);
+            runtime.focus_window(window_id);
+            let _ = runtime.open_new_tab();
+            Ok(json!(window_id))
+        }
         "focus_window" => {
             let window_id = arg_u64(&args, 0)?;
             runtime.focus_window(window_id);

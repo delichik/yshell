@@ -2,8 +2,9 @@
 #
 # Rendered by `cargo xtask dist --formats rpm` (see xtask/src/installers.rs):
 # @VERSION@/@RELEASE@ come from the release label and @ARCH@ is the RPM
-# architecture (x86_64, aarch64, ...). The binary, desktop entry, LICENSE and
-# README are placed in <topdir>/SOURCES by the build tool.
+# architecture (x86_64, aarch64, ...). The Host entry binary (yshell), role
+# binaries, desktop entry, LICENSE and README are placed in <topdir>/SOURCES by
+# the build tool.
 %global debug_package %{nil}
 
 Name:           yshell
@@ -34,10 +35,9 @@ YShell is a native, cross-platform SSH terminal and SFTP client with a session
 manager, terminal tabs, SFTP browser, tunnels and quick commands.
 
 %install
+# yshell is the Host entry; role binaries are spawned as children and must live
+# beside it in /usr/bin (sibling lookup).
 install -D -m 0755 %{_sourcedir}/yshell %{buildroot}/usr/bin/yshell
-# Thin role executables live beside yshell in /usr/bin (the Host spawns them
-# as siblings of the executable it runs).
-install -D -m 0755 %{_sourcedir}/yshell-host %{buildroot}/usr/bin/yshell-host
 install -D -m 0755 %{_sourcedir}/yshell-shell %{buildroot}/usr/bin/yshell-shell
 install -D -m 0755 %{_sourcedir}/yshell-session-worker %{buildroot}/usr/bin/yshell-session-worker
 install -D -m 0755 %{_sourcedir}/yshell-mcp-daemon %{buildroot}/usr/bin/yshell-mcp-daemon
@@ -51,7 +51,6 @@ cp -a %{_sourcedir}/themes/. %{buildroot}/usr/share/yshell/themes/ || true
 
 %files
 /usr/bin/yshell
-/usr/bin/yshell-host
 /usr/bin/yshell-shell
 /usr/bin/yshell-session-worker
 /usr/bin/yshell-mcp-daemon

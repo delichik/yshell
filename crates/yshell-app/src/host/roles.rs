@@ -3,7 +3,7 @@
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use yshell_mcp::IpcResponse;
 
@@ -38,10 +38,13 @@ pub struct McpDaemonArgs {
 }
 
 /// File name of the executable implementing `role` (without `.exe`).
+///
+/// `Host` maps to the user-facing `yshell` entry itself: the Host is the entry
+/// process now, not a separate `yshell-host` binary.
 #[must_use]
 pub fn role_exe_name(role: ProcessRole) -> &'static str {
     match role {
-        ProcessRole::Host => "yshell-host",
+        ProcessRole::Host => "yshell",
         ProcessRole::Shell => "yshell-shell",
         ProcessRole::SessionWorker => "yshell-session-worker",
         ProcessRole::McpDaemon => "yshell-mcp-daemon",
@@ -79,7 +82,11 @@ pub fn role_exe(role: ProcessRole) -> PathBuf {
 }
 
 /// Headless Host supervisor loop — owns AppRuntime (D38 Phase 4).
-pub fn run_host_headless(config_dir: PathBuf) -> AppResult<()> {
+///
+/// `spawn_shell` is true for the default `yshell` entry: the Host spawns one GUI
+/// Shell child, waits for it to attach and shuts down when the last window closes
+/// (or when the Shell dies). `--host` runs with `spawn_shell = false`.
+pub fn run_host_headless(config_dir: PathBuf, spawn_shell: bool) -> AppResult<()> {
     let runtime = AppRuntime::new(config_dir)?;
     // The Host is the only process that owns configuration state; give it a
     // file-backed log so startup/shutdown problems are diagnosable even when it
@@ -92,6 +99,7 @@ pub fn run_host_headless(config_dir: PathBuf) -> AppResult<()> {
         generation = host.borrow().generation(),
         pid = current_pid(),
         role = ProcessRole::Host.as_str(),
+        spawn_shell,
         "host supervisor started"
     );
     writeln!(
@@ -102,6 +110,18 @@ pub fn run_host_headless(config_dir: PathBuf) -> AppResult<()> {
         ProcessRole::Host.as_str()
     )
     .ok();
+
+    // The Host entry owns the GUI Shell: spawn it after the bridge is published
+    // and supervise it. The Job Object (Win) / PDEATHSIG (Linux) / parent-pid
+    // watchdog (macOS) guarantee that the Shell dies with the Host.
+    if spawn_shell {
+        host.borrow_mut().spawn_shell_process()?;
+    }
+    let shell_deadline = if spawn_shell {
+        Some(Instant::now() + Duration::from_secs(30))
+    } else {
+        None
+    };
 
     // Wait until a Shell attaches or we are asked to quit. After the first
     // Shell has attached and later detached to zero windows, supervisor_tick
@@ -117,6 +137,24 @@ pub fn run_host_headless(config_dir: PathBuf) -> AppResult<()> {
         };
         if host.borrow().shell_registry_shell_count() > 0 {
             saw_shell = true;
+        }
+        // A Shell that dies before attaching (startup failure) or never attaches
+        // must not leave a headless Host lingering.
+        if !saw_shell {
+            if host.borrow().shell_spawn_failed() {
+                tracing::error!("GUI Shell exited before attaching to the Host");
+                let _ = host.borrow_mut().begin_shutdown();
+                return Err(AppError::new(
+                    "GUI Shell exited before attaching to the Host",
+                ));
+            }
+            if shell_deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+                tracing::error!("GUI Shell did not attach within 30s");
+                let _ = host.borrow_mut().begin_shutdown();
+                return Err(AppError::new(
+                    "timed out waiting for the GUI Shell to attach",
+                ));
+            }
         }
         if shutdown {
             break;

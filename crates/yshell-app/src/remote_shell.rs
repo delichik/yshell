@@ -9,7 +9,6 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use copypasta::{ClipboardContext, ClipboardProvider};
@@ -24,7 +23,7 @@ use crate::host::shell_ipc::{
     projection_from_json, HostShellClient, WireSelection, WireTerminalAppearance,
     WireTerminalSnapshot,
 };
-use crate::host::{connect_shell_client, AppRuntimeClient};
+use crate::host::{connect_shell_client_attached, AppRuntimeClient};
 use crate::remote_dialog_wire::FileTx;
 use crate::remote_dialogs::{sync_from_value, RemoteDialogHost};
 use yshell_terminal::{TerminalCell, TerminalColor, TerminalRenderer, TerminalSnapshot};
@@ -99,9 +98,13 @@ impl ShellWindows {
 }
 
 /// Run the Shell UI against an already-running Host.
+///
+/// Attach-only: this process is spawned by the Host entry (`yshell`) or asked to
+/// attach explicitly. It never starts a Host; losing the Host means this Shell
+/// must exit (the Host is the single owner of the sessions and windows).
 pub fn run_remote_shell(config_dir: std::path::PathBuf) -> AppResult<()> {
     crate::win_chrome::select_backend()?;
-    let client = Arc::new(connect_shell_client(&config_dir)?);
+    let client = Arc::new(connect_shell_client_attached(&config_dir)?);
     client.attach(1)?;
 
     let rt = AppRuntimeClient::remote(Arc::clone(&client));
@@ -138,7 +141,7 @@ pub fn run_remote_shell(config_dir: std::path::PathBuf) -> AppResult<()> {
     focus_window_by_id(&shell, &client, 0);
     publish_window_count(&shell, &client);
 
-    let timer = start_shell_timer(&shell, &client, &config_dir);
+    let timer = start_shell_timer(&shell, &client);
     let _timer = timer;
 
     slint::run_event_loop().map_err(AppError::from_error)?;
@@ -273,17 +276,11 @@ fn wire_window_lifecycle(
 
 /// Shared 16 ms timer: Host tick, per-window projection/terminal refresh, PTY
 /// viewport sync and the live window-count heartbeat.
-fn start_shell_timer(
-    shell: &Rc<RefCell<ShellWindows>>,
-    client: &Arc<HostShellClient>,
-    config_dir: &std::path::Path,
-) -> Timer {
+fn start_shell_timer(shell: &Rc<RefCell<ShellWindows>>, client: &Arc<HostShellClient>) -> Timer {
     let timer_client = Arc::clone(client);
     let timer_rt = AppRuntimeClient::remote(Arc::clone(client));
     let shell_weak = Rc::downgrade(shell);
     let timer_failures = Rc::new(Cell::new(0u32));
-    let timer_recovery = Arc::new(AtomicBool::new(false));
-    let timer_config_dir = config_dir.to_path_buf();
     let timer = Timer::default();
     timer.start(
         TimerMode::Repeated,
@@ -308,13 +305,11 @@ fn start_shell_timer(
                 Ok((dirty, _count, shutdown)) => {
                     // Reconnected: refresh every window (restores the status line).
                     let was_failing = timer_failures.replace(0) > 0;
-                    if was_failing {
-                        timer_recovery.store(false, Ordering::SeqCst);
-                    }
                     if timer_client.take_open_window() {
-                        // Second `yshell` launch: focus the focused window (or show
-                        // the first one if every window is hidden).
-                        focus_open_window(&shell, &timer_client);
+                        // Second `yshell` launch: open another window in this
+                        // Shell process (the Host only asks; the Shell owns the
+                        // OS windows).
+                        open_new_shell_window(&shell, &timer_client);
                     }
                     if shutdown {
                         shutdown_shell(&shell, &timer_client);
@@ -342,36 +337,17 @@ fn start_shell_timer(
                     let failures = timer_failures.get().saturating_add(1);
                     timer_failures.set(failures);
                     if failures == 1 {
-                        tracing::warn!(error = %error, "shell lost the Host bridge; retrying");
+                        tracing::warn!(error = %error, "shell lost the Host bridge");
                     }
-                    // The Host may have crashed. Try to bring it back in the
-                    // background (once at a time) instead of freezing the UI.
-                    if failures >= 30 && !timer_recovery.swap(true, Ordering::SeqCst) {
-                        let config_dir = timer_config_dir.clone();
-                        let recovery = Arc::clone(&timer_recovery);
-                        std::thread::spawn(move || {
-                            match crate::host::ensure_host_process(&config_dir) {
-                                Ok(info) => tracing::info!(
-                                    host = %info.host,
-                                    port = info.port,
-                                    "restarted Host after the Shell lost the bridge"
-                                ),
-                                Err(error) => {
-                                    tracing::warn!(error = %error, "could not restart Host")
-                                }
-                            }
-                            recovery.store(false, Ordering::SeqCst);
-                        });
-                    }
-                    if failures == 32 {
+                    // The Host is the single owner: it was killed together with
+                    // its children (or is shutting down). Do not try to start a
+                    // new Host — the whole process tree must die with it.
+                    if failures >= 3 {
+                        tracing::error!(%error, "host connection lost; shutting the Shell down");
                         for entry in shell.borrow().snapshot() {
-                            entry
-                                .window
-                                .set_status_text("Host connection lost; reconnecting…".into());
-                            entry
-                                .window
-                                .set_status_kind_text("host-connection-lost".into());
+                            let _ = entry.window.hide();
                         }
+                        let _ = slint::quit_event_loop();
                     }
                 }
             }
@@ -648,19 +624,33 @@ fn focus_window_by_id(
 }
 
 /// Second-instance launch: show + focus the focused window (fallback: first one).
-fn focus_open_window(shell: &Rc<RefCell<ShellWindows>>, client: &Arc<HostShellClient>) {
-    let (focused, fallback) = {
-        let state = shell.borrow();
-        (state.focused_window_id, state.main_window_id())
-    };
-    let target = window_by_id(shell, focused)
-        .or_else(|| fallback.and_then(|window_id| window_by_id(shell, window_id)));
-    match target {
-        Some(entry) => {
-            focus_window_by_id(shell, client, entry.id);
-            refresh_remote_window(shell, client, &entry, true);
+/// Second-instance launch: ask the Host for a fresh window id and open another
+/// Slint window in this Shell process (the Shell owns the OS windows).
+fn open_new_shell_window(shell: &Rc<RefCell<ShellWindows>>, client: &Arc<HostShellClient>) {
+    let rt = AppRuntimeClient::remote(Arc::clone(client));
+    let window_id = match rt.call_value("allocate_window", serde_json::json!([])) {
+        Ok(value) => value.as_u64(),
+        Err(error) => {
+            tracing::warn!(%error, "Host refused to allocate a new window");
+            None
         }
-        None => tracing::warn!("Host asked for a window but the Shell has none open"),
+    };
+    let Some(window_id) = window_id else {
+        return;
+    };
+    match create_remote_window(shell, client, window_id, false) {
+        Ok(entry) => {
+            tracing::info!(
+                window_id,
+                live = shell.borrow().live_count(),
+                tabs = entry.tab_count.get(),
+                "opened a new Shell window for a second launch"
+            );
+            focus_window_by_id(shell, client, window_id);
+            let _ = entry.window.show();
+            publish_window_count(shell, client);
+        }
+        Err(error) => tracing::warn!(%error, "failed to open a new Shell window"),
     }
 }
 

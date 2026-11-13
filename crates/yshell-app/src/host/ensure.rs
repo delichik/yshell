@@ -33,7 +33,7 @@ pub(crate) fn env_flag(name: &str) -> bool {
         })
 }
 
-/// Spawn the Host role executable (`yshell-host --host …`) detached.
+/// Spawn the Host role executable (`yshell --host …`) detached.
 ///
 /// The Host's stderr is appended to `{config_dir}/host-stderr.log`: detached
 /// role processes have no console, so a panic or startup error would otherwise
@@ -119,4 +119,64 @@ fn live_host_bridge(config_dir: &Path) -> Option<HostBridgeInfo> {
 pub fn connect_shell_client(config_dir: &Path) -> AppResult<HostShellClient> {
     let _ = ensure_host_process(config_dir)?;
     HostShellClient::connect(config_dir)
+}
+
+/// Spawn the GUI Shell child (`yshell-shell --attach …`) for the Host entry.
+///
+/// The Host writes `host-bridge.json` before spawning, so the child can attach
+/// immediately. Its stderr is appended to `{config_dir}/shell-stderr.log` for
+/// diagnostics (children run without a console).
+pub fn spawn_shell(config_dir: &Path) -> AppResult<std::process::Child> {
+    let exe = role_exe(ProcessRole::Shell);
+    // Never fall back to the Host entry for the Shell role: that would run the
+    // GUI inside the Host process. Dev builds must build the role binaries
+    // (`cargo xtask build`) or ship them next to the entry.
+    if std::env::current_exe()
+        .ok()
+        .is_some_and(|current| current == exe)
+    {
+        return Err(AppError::new(
+            "GUI Shell binary `yshell-shell` is missing next to the Host entry; \
+             build the workspace binaries (`cargo xtask build`) or reinstall",
+        ));
+    }
+    let stderr = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(config_dir.join("shell-stderr.log"))
+        .map(Stdio::from)
+        .unwrap_or_else(|_| Stdio::null());
+    let mut cmd = Command::new(&exe);
+    cmd.arg("--config-dir")
+        .arg(config_dir)
+        .arg("--attach")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(stderr);
+    super::spawn::configure_child_spawn(&mut cmd);
+    cmd.spawn().map_err(|error| {
+        AppError::new(format!(
+            "failed to spawn GUI Shell process at {}: {error}",
+            exe.display()
+        ))
+    })
+}
+
+/// Attach-only Shell client: used by a Host-spawned Shell. It never starts a
+/// Host by itself; a missing bridge is an error (the Host will reap this child).
+pub fn connect_shell_client_attached(config_dir: &Path) -> AppResult<HostShellClient> {
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        match HostShellClient::connect(config_dir) {
+            Ok(client) => return Ok(client),
+            Err(error) => {
+                if Instant::now() >= deadline {
+                    return Err(AppError::new(format!(
+                        "cannot attach the Shell to the Host ({error}); is the Host running?"
+                    )));
+                }
+                thread::sleep(Duration::from_millis(50));
+            }
+        }
+    }
 }

@@ -484,7 +484,7 @@ pub fn handle_shell_stream(
     // heartbeat prune before it can run its shutdown sequence.
     let result: AppResult<()> = (|| {
         loop {
-            // Push OpenWindow if queued.
+            // Second launch / window request: Host queued an OpenWindow command.
             while let Some(cmd) = shell_inbox.try_pop() {
                 match cmd {
                     super::shell_inbox::ShellCommand::OpenWindow => {
@@ -492,7 +492,6 @@ pub fn handle_shell_stream(
                     }
                 }
             }
-
             match read_shell_line(&mut reader, &mut line) {
                 Ok(false) => {
                     break;

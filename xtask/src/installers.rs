@@ -123,9 +123,10 @@ pub struct InstallerContext<'a> {
     pub root: &'a Path,
     pub out_dir: &'a Path,
     pub work_dir: &'a Path,
-    /// User-facing entry executable (`yshell`).
+    /// Host entry executable (`yshell`; headless, spawns the GUI Shell child).
     pub binary: &'a Path,
-    /// Thin role executables shipped beside [`Self::binary`].
+    /// Thin role executables shipped beside [`Self::binary`] (GUI Shell /
+    /// SessionWorker / MCP daemon).
     pub role_binaries: &'a [PathBuf],
     pub version: &'a str,
     pub target: &'a str,
@@ -137,8 +138,8 @@ pub struct InstallerContext<'a> {
 
 impl InstallerContext<'_> {
     /// Resolve the role executables as absolute paths for a packaging template.
-    fn role_binary_paths(&self) -> Result<[String; 4]> {
-        let [host, shell, worker, daemon] = self.role_binaries else {
+    fn role_binary_paths(&self) -> Result<[String; 3]> {
+        let [shell, worker, daemon] = self.role_binaries else {
             bail!(
                 "expected {} role binaries next to {}",
                 crate::dist::ROLE_BINARY_NAMES.len(),
@@ -146,7 +147,6 @@ impl InstallerContext<'_> {
             );
         };
         Ok([
-            absolute_path(host)?,
             absolute_path(shell)?,
             absolute_path(worker)?,
             absolute_path(daemon)?,
@@ -216,7 +216,7 @@ fn msi(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
     let template = ctx.root.join("packaging/windows/yshell.wxs");
     let version = msi_version(ctx.version);
     let binary_path = absolute_path(ctx.binary)?;
-    let [host_bin, shell_bin, worker_bin, daemon_bin] = ctx.role_binary_paths()?;
+    let [shell_bin, worker_bin, daemon_bin] = ctx.role_binary_paths()?;
     let readme = absolute_path(&ctx.root.join("README.md"))?;
     let license = absolute_path(&ctx.root.join("LICENSE"))?;
     let license_rtf = absolute_path(&license_rtf_path)?;
@@ -227,7 +227,6 @@ fn msi(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
         &[
             ("@VERSION@", version.as_str()),
             ("@BINARY@", binary_path.as_str()),
-            ("@HOST_BIN@", host_bin.as_str()),
             ("@SHELL_BIN@", shell_bin.as_str()),
             ("@SESSION_WORKER_BIN@", worker_bin.as_str()),
             ("@MCP_DAEMON_BIN@", daemon_bin.as_str()),
@@ -289,7 +288,7 @@ fn dmg(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
         fs::create_dir_all(&resources_dir)?;
 
         copy_file(ctx.binary, &macos_dir.join("yshell"), true)?;
-        // The Host spawns role executables as siblings of the running binary.
+        // The Host entry (`yshell`) spawns these role executables as siblings.
         for role in ctx.role_binaries {
             let name = role
                 .file_name()
@@ -737,12 +736,15 @@ mod tests {
     }
 
     #[test]
-    fn msi_wxs_installs_every_role_executable_beside_the_entry() {
+    fn msi_wxs_installs_every_role_executable_beside_the_host_entry() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
         let wxs = fs::read_to_string(root.join("packaging/windows/yshell.wxs"))
             .expect("read packaging/windows/yshell.wxs");
+        assert!(
+            wxs.contains("@BINARY@"),
+            "MSI template must install the Host entry executable"
+        );
         for (placeholder, component) in [
-            ("@HOST_BIN@", "YShellHostExecutable"),
             ("@SHELL_BIN@", "YShellShellExecutable"),
             ("@SESSION_WORKER_BIN@", "YShellSessionWorkerExecutable"),
             ("@MCP_DAEMON_BIN@", "YShellMcpDaemonExecutable"),
@@ -760,5 +762,9 @@ mod tests {
                 "MSI feature must reference {component}"
             );
         }
+        assert!(
+            !wxs.contains("@HOST_BIN@") && !wxs.contains("YShellHostExecutable"),
+            "yshell.exe is the Host entry; there is no separate yshell-host binary"
+        );
     }
 }

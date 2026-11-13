@@ -24,7 +24,10 @@ pub use api::{HostCommand, HostEvent, ProcessRole};
 pub use bridge::try_notify_existing_instance;
 #[allow(unused_imports)] // used by ensure_host_process; re-export for tests / tooling
 pub use ensure::spawn_host;
-pub use ensure::{connect_shell_client, ensure_host_process, inprocess_host_requested};
+pub use ensure::{
+    connect_shell_client, connect_shell_client_attached, ensure_host_process,
+    inprocess_host_requested, spawn_shell,
+};
 pub use roles::{
     role_exe, role_exe_name, run_host_headless, run_mcp_daemon, run_session_worker, McpDaemonArgs,
     SessionWorkerArgs,

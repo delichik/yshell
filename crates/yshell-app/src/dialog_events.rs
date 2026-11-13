@@ -2,7 +2,7 @@
 //!
 //! These types used to live in `bootstrap.rs`, but the out-of-process Host also
 //! needs them (`host::dialog_dispatch` applies a picked path over UiCall).
-//! Keeping them in a Slint-free module lets `yshell-host` avoid linking the UI.
+//! Keeping them in a Slint-free module lets the Host entry avoid linking the UI.
 
 use crate::runtime::{AppProjection, AppRuntime};
 

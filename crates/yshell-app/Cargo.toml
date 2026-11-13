@@ -9,16 +9,12 @@ rust-version.workspace = true
 [lints]
 workspace = true
 
+# `yshell` is the Host entry (headless): it spawns the GUI Shell child.
+# Role binaries are shipped next to it (same directory: fonts/themes are
+# resolved relative to the executable).
 [[bin]]
 name = "yshell"
 path = "src/main.rs"
-
-# Thin role binaries, shipped next to `yshell` (same directory: fonts/themes
-# are resolved relative to the executable). `yshell` stays the user-facing
-# entry and keeps every role argv flag for backward compatibility.
-[[bin]]
-name = "yshell-host"
-path = "src/bin/yshell-host.rs"
 
 [[bin]]
 name = "yshell-shell"
@@ -111,7 +107,6 @@ assets = [
     ["target/release/yshell", "usr/bin/", "755"],
     # Thin role executables must sit beside `yshell` (the Host spawns them as
     # siblings; fonts/themes resolve relative to the executable directory).
-    ["target/release/yshell-host", "usr/bin/", "755"],
     ["target/release/yshell-shell", "usr/bin/", "755"],
     ["target/release/yshell-session-worker", "usr/bin/", "755"],
     ["target/release/yshell-mcp-daemon", "usr/bin/", "755"],

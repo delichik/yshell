@@ -1,17 +1,16 @@
-//! Full CLI launcher used by the user-facing `yshell` binary.
+//! Host-entry launcher for the user-facing `yshell` binary.
 //!
-//! This module is deliberately separate from [`crate::cli`] (pure parsing):
-//! role binaries link their own small `role_*` entry modules, so the Host /
-//! worker binaries do not pull the GUI/Shell code (and Slint) through the
-//! parser module.
+//! `yshell` is the **Host entry** and is intentionally Slint-free: the default
+//! command becomes the globally unique Host for the configuration directory and
+//! spawns the GUI Shell child (`yshell-shell --attach`). A second launch only
+//! asks the running Host to open a new window. This module must not reference
+//! `bootstrap`/`remote_shell`, otherwise the Host binary would link the whole GUI.
 
 use std::env;
 
-use crate::bootstrap::bootstrap_app;
 use crate::cli::{self, CliCommand, CliInvocation};
 use crate::error::{AppError, AppResult};
 use crate::host;
-use crate::remote_shell::run_remote_shell;
 use crate::runtime::AppRuntime;
 
 /// Run the product launcher / multi-role CLI (`yshell` binary).
@@ -20,7 +19,10 @@ pub fn run() -> AppResult<()> {
 }
 
 fn dispatch(invocation: CliInvocation) -> AppResult<()> {
-    if !matches!(invocation.command, CliCommand::RunShell | CliCommand::Shell) {
+    if !matches!(
+        invocation.command,
+        CliCommand::HostEntry | CliCommand::Shell
+    ) {
         cli::attach_parent_console();
     }
     match invocation.command {
@@ -45,10 +47,17 @@ fn dispatch(invocation: CliInvocation) -> AppResult<()> {
             let config_dir = cli::resolve_config_dir(invocation.config_dir)?;
             yshell_mcp::run_stdio_server(&config_dir).map_err(AppError::from_error)
         }
+        // Default launch and `--shell` both mean "make sure a window exists":
+        // Host entry owns the singleton Host and opens a window (or asks the
+        // running Host for another one).
+        CliCommand::HostEntry | CliCommand::Shell => host_entry(invocation.config_dir),
         CliCommand::Host => {
             let config_dir = cli::resolve_config_dir(invocation.config_dir)?;
-            host::run_host_headless(config_dir)
+            host::run_host_headless(config_dir, false)
         }
+        CliCommand::AttachShell => Err(AppError::new(
+            "--attach is internal to yshell-shell; run `yshell` to open a window",
+        )),
         CliCommand::SessionWorker {
             session_id,
             generation,
@@ -83,20 +92,45 @@ fn dispatch(invocation: CliInvocation) -> AppResult<()> {
                 parent_pid,
             })
         }
-        CliCommand::RunShell | CliCommand::Shell => {
-            let config_dir = cli::resolve_config_dir(invocation.config_dir.clone())?;
-            // Single-instance: second launch asks the live Host to open a window.
-            if host::try_notify_existing_instance(&config_dir)? {
+    }
+}
+
+/// Default launch: become the unique Host (or wake the running one) and make
+/// sure one GUI Shell window exists. Never starts a second Host.
+fn host_entry(config_dir: Option<std::path::PathBuf>) -> AppResult<()> {
+    let config_dir = cli::resolve_config_dir(config_dir)?;
+    if host::inprocess_host_requested() {
+        // Debug / test escape hatch: the full in-process GUI lives in the Shell
+        // binary; the Host entry only spawns it (Slint must not be linked here).
+        return spawn_shell_child_and_wait(&config_dir);
+    }
+    if host::try_notify_existing_instance(&config_dir)? {
+        return Ok(());
+    }
+    match host::run_host_headless(config_dir.clone(), true) {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            // Lost the single-instance race (another launch became the Host in
+            // between): behave like a second launch and ask it for a window.
+            if error.to_string().contains("another yshell Host") {
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+                while std::time::Instant::now() < deadline {
+                    if host::try_notify_existing_instance(&config_dir)? {
+                        return Ok(());
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
                 return Ok(());
             }
-            if host::inprocess_host_requested() {
-                // Debug / test: classic in-process Host facade + full GUI.
-                let app = bootstrap_app(Some(config_dir.clone()))?;
-                return app.run();
-            }
-            // D38 Phase 4: ensure Host OS process, then attach Shell UI.
-            host::ensure_host_process(&config_dir)?;
-            run_remote_shell(config_dir)
+            Err(error)
         }
     }
+}
+
+/// Spawn `yshell-shell --attach` and wait for it (used by the in-process debug
+/// escape hatch, where the Shell itself hosts the in-process Host facade).
+fn spawn_shell_child_and_wait(config_dir: &std::path::Path) -> AppResult<()> {
+    let mut child = host::spawn_shell(config_dir)?;
+    child.wait().map_err(AppError::from_error)?;
+    Ok(())
 }

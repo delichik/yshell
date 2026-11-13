@@ -94,7 +94,10 @@ pub(crate) enum CliCommand {
         generation: u64,
         parent_pid: u32,
     },
-    RunShell,
+    /// Default entry: become the unique Host and spawn one GUI Shell window.
+    HostEntry,
+    /// Attach-only GUI Shell (Host-spawned; fails when no Host is running).
+    AttachShell,
 }
 
 /// Parsed command line: one optional command plus the `--config-dir` override.
@@ -112,7 +115,7 @@ impl CliCommand {
     pub(crate) fn for_role(role: ProcessRole) -> Self {
         match role {
             ProcessRole::Host => Self::Host,
-            ProcessRole::Shell => Self::Shell,
+            ProcessRole::Shell => Self::AttachShell,
             // Worker / daemon children are always spawned with their full
             // argv flags; a bare role launch therefore fails the usual
             // argument validation with a clear error instead of guessing.
@@ -228,6 +231,7 @@ impl CliInvocation {
                 "--mcp" => set_command(&mut command, CliCommand::Mcp)?,
                 "--host" => set_command(&mut command, CliCommand::Host)?,
                 "--shell" => set_command(&mut command, CliCommand::Shell)?,
+                "--attach" => set_command(&mut command, CliCommand::AttachShell)?,
                 "--session-worker" => {
                     let session_id = args
                         .next()
@@ -259,7 +263,7 @@ impl CliInvocation {
 
         let mut command = command
             .or_else(|| default_role.map(CliCommand::for_role))
-            .unwrap_or(CliCommand::RunShell);
+            .unwrap_or(CliCommand::HostEntry);
         match &mut command {
             CliCommand::SessionWorker {
                 generation: gen,
@@ -309,7 +313,7 @@ fn set_command(slot: &mut Option<CliCommand>, command: CliCommand) -> AppResult<
 
 pub(crate) fn print_help() {
     println!(
-        "YShell\n\nUSAGE:\n    yshell [OPTIONS]\n\nOPTIONS:\n    --config-dir <path>       Use <path> as the configuration directory (test / smoke isolation)\n    --check-config            Validate configuration discovery\n    --print-config-dir        Print the configuration directory\n    --quick-connect <input>   Run the runtime quick-connect path without launching UI\n    --mcp                     Host-facing MCP stdio bridge (AI clients; enable MCP in Settings first)\n    --host                    Run headless Host process (D38)\n    --shell                   Run GUI Shell (same as default launch for now)\n    --session-worker <id>     Run a SessionWorker child (Host-spawned)\n    --mcp-daemon              Run standalone MCP TCP listener (Host-spawned)\n    --generation <n>          Host generation for worker/daemon children\n    --parent-pid <pid>        Parent Host pid for worker/daemon children\n    --ipc-port <port>         SessionWorker Host IPC port\n    --ipc-token <token>       SessionWorker Host IPC token\n    --mcp-bind <host>         MCP daemon bind host\n    --mcp-port <port>         MCP daemon port\n    --mcp-token <token>       MCP daemon endpoint token\n    --version                 Print version\n    --help                    Print help\n\nCONFIGURATION:\n    All application settings (language, appearance, motion, fonts, local shell,\n    secret store) are read from the configuration directory only; YShell does\n    not use environment variables for configuration.\n\nSee docs/prototypes/process-architecture.md for the Host/Session/MCP/Shell model."
+        "YShell\n\nUSAGE:\n    yshell [OPTIONS]\n\nOPTIONS:\n    --config-dir <path>       Use <path> as the configuration directory (test / smoke isolation)\n    --check-config            Validate configuration discovery\n    --print-config-dir        Print the configuration directory\n    --quick-connect <input>   Run the runtime quick-connect path without launching UI\n    --mcp                     Host-facing MCP stdio bridge (AI clients; enable MCP in Settings first)\n    --host                    Run the Host only, without spawning a GUI Shell (debug/headless)\n    --shell                   Run/attach a GUI Shell, ensuring a Host exists\n    --attach                  Attach this GUI Shell to a running Host (internal; no Host spawn)\n    --session-worker <id>     Run a SessionWorker child (Host-spawned)\n    --mcp-daemon              Run standalone MCP TCP listener (Host-spawned)\n    --generation <n>          Host generation for worker/daemon children\n    --parent-pid <pid>        Parent Host pid for worker/daemon children\n    --ipc-port <port>         SessionWorker Host IPC port\n    --ipc-token <token>       SessionWorker Host IPC token\n    --mcp-bind <host>         MCP daemon bind host\n    --mcp-port <port>         MCP daemon port\n    --mcp-token <token>       MCP daemon endpoint token\n    --version                 Print version\n    --help                    Print help\n\nDEFAULT: become the unique Host for this configuration directory and spawn one\nGUI Shell window; a second launch only asks the running Host to open a window.\n\nCONFIGURATION:\n    All application settings (language, appearance, motion, fonts, local shell,\n    secret store) are read from the configuration directory only; YShell does\n    not use environment variables for configuration.\n\nSee docs/prototypes/process-architecture.md for the Host/Session/MCP/Shell model."
     );
 }
 
@@ -332,9 +336,9 @@ mod tests {
     }
 
     #[test]
-    fn defaults_to_the_shell_with_the_platform_config_dir() {
+    fn defaults_to_the_host_entry_with_the_platform_config_dir() {
         let invocation = parse(&[]).expect("parse");
-        assert_eq!(invocation.command, CliCommand::RunShell);
+        assert_eq!(invocation.command, CliCommand::HostEntry);
         assert!(invocation.config_dir.is_none());
     }
 
@@ -349,7 +353,7 @@ mod tests {
         );
         assert_eq!(
             parse_role(ProcessRole::Shell).expect("shell").command,
-            CliCommand::Shell
+            CliCommand::AttachShell
         );
         assert!(matches!(
             parse_role(ProcessRole::SessionWorker)
