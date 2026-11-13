@@ -146,7 +146,7 @@ flowchart LR
 
 **没有 `run-state.json`**。子进程的存活判断完全依赖运行时信号：
 
-- **IPC 连接 EOF**：Shell/MCP 连 Host bridge、SessionWorker 连 Host IPC socket；Host 死亡 → 连接立即断开（FIN/RST）→ 子进程读到 EOF/写失败即退出。这是主路径，且连接带每次启动随机的 token，天然免疫 PID 复用。
+- **IPC 连接 EOF**：Shell/MCP 连 Host bridge、SessionWorker 连 Host IPC socket；Host 死亡 → 连接立即断开（FIN/RST）→ 子进程读到 EOF/写失败即退出。这是主路径，且连接带每次启动随机的 token，天然免疫 PID 复用。Host 侧同样以 **Shell 子进程退出** 为兜底：即使 detach/零窗消息丢失，GUI 进程一退 Host 立即关机。
 - **父进程检测**（廉价副路径）：Unix/macOS 用 `getppid()`（父死即 reparent）；Windows 可用父进程句柄 `WaitForSingleObject`（启动时取得一次，不按 PID 反复轮询）。
 - **平台级联兜底**：Windows Job Object / Linux `PDEATHSIG` 见上表。
 - **单实例 + 发现**：`instance.lock`（OS 锁）判定唯一 Host；`host-bridge.json`（host/port/token，非进程状态）供 Shell/MCP 发现并认证 Host；Host pid 不落盘。

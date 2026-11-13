@@ -71,6 +71,9 @@ pub struct HostService {
     /// Set when the spawned Shell exited before ever attaching (startup failure),
     /// so the Host entry can fail instead of lingering headless.
     shell_spawn_failed: bool,
+    /// Whether the GUI Shell ever attached (after that, its exit must shut down
+    /// the Host even if a detach message was lost).
+    shell_ever_attached: bool,
     /// Loopback bridge the MCP daemon dials into.
     bridge: Option<HostBridgeHandle>,
     /// Fingerprint of the running MCP daemon child (`bind`, port, token).
@@ -158,6 +161,7 @@ impl HostService {
             shell_registry: ShellRegistry::new(),
             shell_spawn_pending: false,
             shell_spawn_failed: false,
+            shell_ever_attached: false,
             bridge,
             mcp_daemon_fingerprint: None,
             connect_job_rx: Some(connect_job_rx),
@@ -302,9 +306,12 @@ impl HostService {
                     let _ = self.dispatch(HostCommand::McpExited);
                 }
                 ChildRole::Shell => {
-                    // The Shell connection EOF / window count drives shutdown.
                     self.shell_spawn_pending = false;
-                    if self.shell_registry.shell_count() == 0 {
+                    if self.shell_ever_attached {
+                        // The Host entry's GUI is gone (normal quit or crash):
+                        // there is nothing left to display, so shut down.
+                        let _ = self.dispatch(HostCommand::RequestShutdown);
+                    } else if self.shell_registry.shell_count() == 0 {
                         self.shell_spawn_failed = true;
                     }
                 }
@@ -374,6 +381,7 @@ impl HostService {
                 } => {
                     self.shell_registry.attach(pid, window_count);
                     self.shell_spawn_pending = false;
+                    self.shell_ever_attached = true;
                     let _ = reply.send(Ok((self.generation, current_pid())));
                 }
                 ShellJob::Detach { pid } => {
