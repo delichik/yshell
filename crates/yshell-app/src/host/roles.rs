@@ -84,7 +84,7 @@ pub fn run_host_headless(config_dir: PathBuf) -> AppResult<()> {
     // The Host is the only process that owns configuration state; give it a
     // file-backed log so startup/shutdown problems are diagnosable even when it
     // was spawned detached (stdlib stderr is /dev/null in that case).
-    if let Err(error) = crate::bootstrap::init_logging_for_runtime(&runtime) {
+    if let Err(error) = crate::logging_setup::init_logging_for_runtime(&runtime) {
         tracing::debug!(%error, "host logging initialisation failed");
     }
     let host = super::service::HostService::start(runtime)?;

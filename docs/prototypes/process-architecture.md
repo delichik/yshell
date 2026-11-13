@@ -162,7 +162,9 @@ flowchart LR
 二进制形态：
 
 - 用户入口 `yshell`（GUI Shell）；`yshell-host` / `yshell-shell` / `yshell-session-worker` / `yshell-mcp-daemon` 为薄角色二进制（同目录、同版本）。
-- 角色二进制默认命令 = 自身角色；原有 `--host` / `--shell` / `--session-worker` / `--mcp-daemon` argv 形态保留（开发/测试 fallback，`--config-dir` 等共享 flag 不变）。
+- 每个角色有独立的入口模块（`role_host.rs` / `role_shell.rs` / `role_worker.rs` / `role_mcp.rs`）；完整多角色分发只在 `launcher.rs`（`yshell` 使用）。日志初始化与文件对话框结果模型也在 Slint-free 的 `logging_setup.rs` / `dialog_events.rs`，因此 Host/Worker/MCP 进程不会链接 GUI/Slint 代码。
+- release profile：`strip = "symbols"` + `lto = "thin"`。不使用角色入口拆分 + LTO 时，Windows-GNU 链接器按 CGU 整块保留（`AppProjection` 的 drop glue 落在 UI 的 CGU 里），所有角色二进制都会等于完整 GUI 大小。
+- 实测（Windows x86_64 GNU dev build，2026-11-13）：`yshell` 73.9 MB、`yshell-shell` 73.35 MB、`yshell-host` 18.89 MB、`yshell-session-worker` 10.71 MB、`yshell-mcp-daemon` 7.65 MB；portable zip 66.5 MB（此前每个 exe 均 110.9 MB、zip 139.9 MB）。MSVC release 因工具链差异数字会不同，但相对关系一致。
 - 子进程寻址：`host::roles::role_exe()` 优先同目录 role binary，缺失时回退 `current_exe()` + 角色 flag；Windows 角色子进程带 `CREATE_NO_WINDOW`。
 - 打包：portable / MSI / DMG / deb / rpm 都安装同一目录下的 4 个角色二进制（`xtask dist` / `xtask/src/installers.rs`）。
 

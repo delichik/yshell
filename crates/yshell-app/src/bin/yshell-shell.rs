@@ -4,5 +4,5 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 fn main() -> yshell_app::AppResult<()> {
-    yshell_app::cli::run_with_role(yshell_app::host::ProcessRole::Shell)
+    yshell_app::run_shell_role()
 }

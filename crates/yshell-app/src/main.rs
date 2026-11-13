@@ -5,5 +5,5 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 fn main() -> yshell_app::AppResult<()> {
-    yshell_app::cli::run()
+    yshell_app::run()
 }

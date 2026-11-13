@@ -3,127 +3,53 @@
 use std::env;
 use std::path::PathBuf;
 
-use crate::bootstrap::bootstrap_app;
 use crate::error::{AppError, AppResult};
-use crate::host;
 use crate::host::ProcessRole;
-use crate::remote_shell::run_remote_shell;
-use crate::runtime::AppRuntime;
 
-/// Run the product launcher / multi-role CLI (`yshell` binary).
-pub fn run() -> AppResult<()> {
-    dispatch(CliInvocation::parse(env::args().skip(1))?)
+pub(crate) fn print_version() -> AppResult<()> {
+    println!("yshell {}", env!("YSHELL_VERSION"));
+    Ok(())
 }
 
-/// Run a thin role binary (`yshell-host`, `yshell-shell`, …).
-///
-/// The role only supplies the *default* command: an explicit command flag (and
-/// every shared option such as `--config-dir`) still wins, so the role binaries
-/// remain compatible with the argv flags used by the Host-spawned children.
-pub fn run_with_role(role: ProcessRole) -> AppResult<()> {
-    dispatch(CliInvocation::parse_with_role(
-        env::args().skip(1),
-        Some(role),
-    )?)
+pub(crate) fn print_check_config(config_dir: Option<PathBuf>) -> AppResult<()> {
+    let config_dir = resolve_config_dir(config_dir)?;
+    println!("configuration OK: {}", config_dir.display());
+    Ok(())
 }
 
-fn dispatch(invocation: CliInvocation) -> AppResult<()> {
-    if !matches!(invocation.command, CliCommand::RunShell | CliCommand::Shell) {
-        attach_parent_console();
-    }
-    match invocation.command {
-        CliCommand::CheckConfig => {
-            let config_dir = resolve_config_dir(invocation.config_dir)?;
-            println!("configuration OK: {}", config_dir.display());
-            Ok(())
-        }
-        CliCommand::PrintConfigDir => {
-            let config_dir = resolve_config_dir(invocation.config_dir)?;
-            println!("{}", config_dir.display());
-            Ok(())
-        }
-        CliCommand::QuickConnect(input) => {
-            let config_dir = resolve_config_dir(invocation.config_dir)?;
-            let mut runtime = AppRuntime::new(config_dir)?;
-            let projection = runtime.handle_quick_connect(&input)?;
-            println!(
-                "quick connect pipeline initialized: {}",
-                projection.status_text
-            );
-            Ok(())
-        }
-        CliCommand::Version => {
-            println!("yshell {}", env!("YSHELL_VERSION"));
-            Ok(())
-        }
+pub(crate) fn print_config_dir(config_dir: Option<PathBuf>) -> AppResult<()> {
+    let config_dir = resolve_config_dir(config_dir)?;
+    println!("{}", config_dir.display());
+    Ok(())
+}
+
+/// Parses the argv for a role binary, defaulting the command to its role.
+pub(crate) fn parse_for_role(role: ProcessRole) -> AppResult<CliInvocation> {
+    CliInvocation::parse_with_role(env::args().skip(1), Some(role))
+}
+
+/// Handles the metadata commands shared by every role (--version / --help /
+/// config-dir inspection). Returns None when the command is role-specific.
+pub(crate) fn handle_metadata_command(
+    command: &CliCommand,
+    config_dir: Option<PathBuf>,
+) -> Option<AppResult<()>> {
+    match command {
+        CliCommand::Version => Some(print_version()),
         CliCommand::Help => {
             print_help();
-            Ok(())
+            Some(Ok(()))
         }
-        CliCommand::Mcp => {
-            let config_dir = resolve_config_dir(invocation.config_dir)?;
-            yshell_mcp::run_stdio_server(&config_dir).map_err(AppError::from_error)
-        }
-        CliCommand::Host => {
-            let config_dir = resolve_config_dir(invocation.config_dir)?;
-            host::run_host_headless(config_dir)
-        }
-        CliCommand::SessionWorker {
-            session_id,
-            generation,
-            parent_pid,
-            ipc_port,
-            ipc_token,
-        } => {
-            let config_dir = resolve_config_dir(invocation.config_dir)?;
-            host::run_session_worker(host::SessionWorkerArgs {
-                config_dir,
-                session_id,
-                generation,
-                parent_pid,
-                ipc_port,
-                ipc_token,
-            })
-        }
-        CliCommand::McpDaemon {
-            bind_host,
-            port,
-            token,
-            generation,
-            parent_pid,
-        } => {
-            let config_dir = resolve_config_dir(invocation.config_dir)?;
-            host::run_mcp_daemon(host::McpDaemonArgs {
-                config_dir,
-                bind_host,
-                port,
-                token,
-                generation,
-                parent_pid,
-            })
-        }
-        CliCommand::RunShell | CliCommand::Shell => {
-            let config_dir = resolve_config_dir(invocation.config_dir.clone())?;
-            // Single-instance: second launch asks the live Host to open a window.
-            if host::try_notify_existing_instance(&config_dir)? {
-                return Ok(());
-            }
-            if host::inprocess_host_requested() {
-                // Debug / test: classic in-process Host facade + full GUI.
-                let app = bootstrap_app(invocation.config_dir)?;
-                return app.run();
-            }
-            // D38 Phase 4: ensure Host OS process, then attach Shell UI.
-            host::ensure_host_process(&config_dir)?;
-            run_remote_shell(config_dir)
-        }
+        CliCommand::CheckConfig => Some(print_check_config(config_dir)),
+        CliCommand::PrintConfigDir => Some(print_config_dir(config_dir)),
+        _ => None,
     }
 }
 
 /// Resolves the configuration directory: explicit `--config-dir` or the
 /// platform default. Application configuration never comes from environment
 /// variables (only the `--config-dir` CLI argument is honoured).
-fn resolve_config_dir(override_dir: Option<PathBuf>) -> AppResult<PathBuf> {
+pub(crate) fn resolve_config_dir(override_dir: Option<PathBuf>) -> AppResult<PathBuf> {
     match override_dir {
         Some(dir) => Ok(dir),
         None => yshell_config::discover_config_dir().map_err(AppError::from_error),
@@ -132,7 +58,7 @@ fn resolve_config_dir(override_dir: Option<PathBuf>) -> AppResult<PathBuf> {
 
 /// Re-attach stdout/stderr to the launching console for CLI flags.
 #[cfg(windows)]
-fn attach_parent_console() {
+pub(crate) fn attach_parent_console() {
     use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
     // AttachConsole is Win32 FFI; workspace denies unsafe by default.
     #[allow(unsafe_code)]
@@ -140,10 +66,10 @@ fn attach_parent_console() {
 }
 
 #[cfg(not(windows))]
-fn attach_parent_console() {}
+pub(crate) fn attach_parent_console() {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum CliCommand {
+pub(crate) enum CliCommand {
     CheckConfig,
     PrintConfigDir,
     QuickConnect(String),
@@ -173,17 +99,17 @@ enum CliCommand {
 
 /// Parsed command line: one optional command plus the `--config-dir` override.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct CliInvocation {
+pub(crate) struct CliInvocation {
     /// Test / smoke configuration directory (`--config-dir <path>`). This is a
     /// CLI argument on purpose: the product must not read its configuration
     /// from environment variables.
-    config_dir: Option<PathBuf>,
-    command: CliCommand,
+    pub(crate) config_dir: Option<PathBuf>,
+    pub(crate) command: CliCommand,
 }
 
 impl CliCommand {
     /// Command a role binary runs when no explicit command flag is given.
-    fn for_role(role: ProcessRole) -> Self {
+    pub(crate) fn for_role(role: ProcessRole) -> Self {
         match role {
             ProcessRole::Host => Self::Host,
             ProcessRole::Shell => Self::Shell,
@@ -209,13 +135,13 @@ impl CliCommand {
 }
 
 impl CliInvocation {
-    fn parse(args: impl IntoIterator<Item = String>) -> AppResult<Self> {
+    pub(crate) fn parse(args: impl IntoIterator<Item = String>) -> AppResult<Self> {
         Self::parse_with_role(args, None)
     }
 
     /// Parse `args`, defaulting the command to `default_role` when the caller
     /// gave no explicit command flag.
-    fn parse_with_role(
+    pub(crate) fn parse_with_role(
         args: impl IntoIterator<Item = String>,
         default_role: Option<ProcessRole>,
     ) -> AppResult<Self> {
@@ -381,7 +307,7 @@ fn set_command(slot: &mut Option<CliCommand>, command: CliCommand) -> AppResult<
     Ok(())
 }
 
-fn print_help() {
+pub(crate) fn print_help() {
     println!(
         "YShell\n\nUSAGE:\n    yshell [OPTIONS]\n\nOPTIONS:\n    --config-dir <path>       Use <path> as the configuration directory (test / smoke isolation)\n    --check-config            Validate configuration discovery\n    --print-config-dir        Print the configuration directory\n    --quick-connect <input>   Run the runtime quick-connect path without launching UI\n    --mcp                     Host-facing MCP stdio bridge (AI clients; enable MCP in Settings first)\n    --host                    Run headless Host process (D38)\n    --shell                   Run GUI Shell (same as default launch for now)\n    --session-worker <id>     Run a SessionWorker child (Host-spawned)\n    --mcp-daemon              Run standalone MCP TCP listener (Host-spawned)\n    --generation <n>          Host generation for worker/daemon children\n    --parent-pid <pid>        Parent Host pid for worker/daemon children\n    --ipc-port <port>         SessionWorker Host IPC port\n    --ipc-token <token>       SessionWorker Host IPC token\n    --mcp-bind <host>         MCP daemon bind host\n    --mcp-port <port>         MCP daemon port\n    --mcp-token <token>       MCP daemon endpoint token\n    --version                 Print version\n    --help                    Print help\n\nCONFIGURATION:\n    All application settings (language, appearance, motion, fonts, local shell,\n    secret store) are read from the configuration directory only; YShell does\n    not use environment variables for configuration.\n\nSee docs/prototypes/process-architecture.md for the Host/Session/MCP/Shell model."
     );

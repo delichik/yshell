@@ -39,6 +39,14 @@ rust-version = "1.92"
 [workspace.lints.rust]
 unsafe_code = "deny"
 
+# Distributable binaries: keep symbols out of release artifacts and let ThinLTO
+# drop the code a role never reaches (all role binaries share one library crate;
+# without LTO the linker keeps whole codegen units, which is why every role
+# binary used to be exactly the same size as the full GUI build).
+[profile.release]
+strip = "symbols"
+lto = "thin"
+
 [workspace.dependencies]
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

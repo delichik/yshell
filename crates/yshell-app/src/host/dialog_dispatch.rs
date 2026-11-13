@@ -40,12 +40,14 @@ fn dispatch_inner(runtime: &mut AppRuntime, method: &str, args: &Value) -> Resul
         "apply_file_dialog_picked" => {
             let kind = arg_str(args, 0)?;
             let path = arg_str(args, 1)?;
-            let kind = crate::bootstrap::dialog_kind_from_name(&kind)
+            let kind = crate::dialog_events::dialog_kind_from_name(&kind)
                 .ok_or_else(|| format!("unknown dialog kind: {kind}"))?;
-            Ok(projection_json(&crate::bootstrap::apply_dialog_outcome(
-                runtime,
-                crate::bootstrap::FileDialogOutcome::Picked { kind, path },
-            )))
+            Ok(projection_json(
+                &crate::dialog_events::apply_dialog_outcome(
+                    runtime,
+                    crate::dialog_events::FileDialogOutcome::Picked { kind, path },
+                ),
+            ))
         }
         "set_status_kind" => {
             runtime.set_status_kind(

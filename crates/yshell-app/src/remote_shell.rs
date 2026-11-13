@@ -116,7 +116,7 @@ pub fn run_remote_shell(config_dir: std::path::PathBuf) -> AppResult<()> {
         .get("settings_debug_logging_enabled")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    if let Err(error) = crate::bootstrap::init_logging_for_shell(&config_dir, debug_logging) {
+    if let Err(error) = crate::logging_setup::init_logging_for_shell(&config_dir, debug_logging) {
         eprintln!("yshell: shell logging initialisation failed: {error}");
     }
 
