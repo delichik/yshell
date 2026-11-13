@@ -2185,6 +2185,21 @@ impl AppRuntime {
         self.windows.entry(window_id).or_default();
     }
 
+    /// D38：分配一个稳定、单调递增的新窗口 id（Host 侧唯一分配者）。
+    ///
+    /// 取"现有最大 id + 1"与已分配游标的最大值，因此即使有窗口被关闭、或外部
+    /// 先登记了更大的 id，也不会复用旧 id。第一个调用在无窗口时返回 0。
+    pub(crate) fn allocate_window_id(&mut self) -> u64 {
+        let next = self
+            .windows
+            .keys()
+            .next_back()
+            .map_or(0, |id| id.saturating_add(1))
+            .max(self.next_window_id);
+        self.next_window_id = next.saturating_add(1);
+        next
+    }
+
     /// N7：主窗口 = 现存最小编号窗口。
     pub(crate) fn main_window_id(&self) -> Option<u64> {
         self.windows.keys().next().copied()
@@ -2540,7 +2555,7 @@ fn tab_connection_state(state: SessionState) -> (String, String) {
 }
 
 /// N0：单个标签的只读投影（Slint 标签条模型）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TabData {
     /// 标签 id（`activate_tab`/`close_tab` 的入参）。
     pub id: String,
@@ -2591,7 +2606,7 @@ pub(crate) struct SessionPollOutcome {
 }
 
 /// 单个分屏叶子投影（绝对归一化几何）。
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct WorkspacePaneLeafProjection {
     pub pane_id: i32,
     pub x: f32,
@@ -2618,7 +2633,7 @@ pub struct WorkspacePaneLeafProjection {
 }
 
 /// 分屏把手投影。
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct WorkspaceSplitterProjection {
     pub split_id: i32,
     /// `true` = 竖条（左右分）；`false` = 横条（上下分）。
@@ -2635,7 +2650,7 @@ pub struct WorkspaceSplitterProjection {
 }
 
 /// WP4：分屏投影（递归树摊平为叶子 + 把手）。
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct WorkspaceSplitProjection {
     pub active: bool,
     pub orientation_text: String,
@@ -3337,5 +3352,36 @@ mod window_ownership_tests {
 
         runtime.set_window_close_pending(1, false);
         assert!(!runtime.window_close_pending(1));
+    }
+
+    /// D38：Host 分配窗口 id 必须单调递增、不复用；"移动到新窗口" = 分配 + 登记 +
+    /// 迁移（Shell 只负责为返回的 id 建 OS 窗口）。`runtime_dispatch` 的窗口
+    /// 分发 arm 只是这三个模型方法的组合。
+    #[test]
+    fn host_allocates_monotonic_window_ids_for_moved_tabs() {
+        let temp = tempdir().expect("tempdir");
+        let mut runtime = tab_runtime(temp.path(), 2);
+        let first = open_saved_tab(&mut runtime, "saved-0");
+        let second = open_saved_tab(&mut runtime, "saved-1");
+        runtime.register_window(0);
+
+        assert_eq!(runtime.allocate_window_id(), 1);
+        assert_eq!(runtime.allocate_window_id(), 2);
+        runtime.register_window(2);
+        // 关闭最大窗口后也不复用旧 id（稳定窗口身份）。
+        runtime.close_window_tabs(2);
+        assert_eq!(runtime.allocate_window_id(), 3);
+
+        let new_window = runtime.allocate_window_id();
+        assert_eq!(new_window, 4);
+        runtime.register_window(new_window);
+        runtime
+            .move_tab_to_window(&second, new_window)
+            .expect("move tab to new window");
+        assert_eq!(runtime.window_of_tab(&second), Some(new_window));
+        assert_eq!(runtime.window_tab_ids(new_window), vec![second.clone()]);
+        assert_eq!(runtime.window_of_tab(&first), Some(0));
+        assert_eq!(runtime.sessions.len(), 2, "moving a tab keeps its session");
+        assert_tab_invariants(&runtime);
     }
 }

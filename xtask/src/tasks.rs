@@ -132,7 +132,9 @@ pub fn test(ctx: &Context, options: &TestOptions) -> Result<()> {
 /// Run the native app from source.
 pub fn run_app(ctx: &Context, options: &RunOptions) -> Result<()> {
     let mut command = context::cargo(ctx);
-    command.args(["run", "--locked", "-p", "yshell-app"]);
+    // Several role binaries live in yshell-app; `yshell` stays the user-facing
+    // entry, so select it explicitly instead of relying on cargo's default.
+    command.args(["run", "--locked", "-p", "yshell-app", "--bin", "yshell"]);
     if options.release {
         command.arg("--release");
     }

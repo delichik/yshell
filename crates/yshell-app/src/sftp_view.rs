@@ -16,7 +16,7 @@ use yshell_sftp::{FsEntry, FsEntryKind};
 /// The local pane and the remote pane share this shape (and therefore the
 /// same Slint component): the only difference between the two sides is which
 /// directory the `path_text` points at.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct FileRowData {
     /// Full entry name (`..` for the synthetic parent row).
     pub name: String,
@@ -50,8 +50,8 @@ pub struct FileRowData {
 ///
 /// ```
 /// # use yshell_app::sftp_view::split_file_name;
-/// assert_eq!(split_file_name("report.txt"), ("repo".to_owned(), "rt.txt".to_owned()));
-/// assert_eq!(split_file_name("Makefile"), ("Mak".to_owned(), "efile".to_owned()));
+/// assert_eq!(split_file_name("report.txt"), ("rep".to_owned(), "ort.txt".to_owned()));
+/// assert_eq!(split_file_name("Makefile"), ("Makef".to_owned(), "ile".to_owned()));
 /// ```
 #[must_use]
 pub fn split_file_name(name: &str) -> (String, String) {

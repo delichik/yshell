@@ -3462,8 +3462,8 @@ msgstr "局域网"
 
 #: ui/pages/settings.slint:1045
 msgctxt "SettingsDialog"
-msgid "LAN = 0.0.0.0; API key required"
-msgstr "局域网 = 0.0.0.0；需要 API 密钥"
+msgid "LAN = 0.0.0.0; API key recommended"
+msgstr "局域网 = 0.0.0.0；推荐使用 API 密钥"
 
 #: ui/pages/settings.slint:1053
 msgctxt "SettingsDialog"
@@ -3477,8 +3477,8 @@ msgstr "API 密钥"
 
 #: ui/pages/settings.slint:1067
 msgctxt "SettingsDialog"
-msgid "Required for LAN"
-msgstr "局域网必填"
+msgid "Recommended for LAN"
+msgstr "局域网推荐"
 
 #: ui/pages/settings.slint:1074 ui/pages/settings.slint:1075
 msgctxt "SettingsDialog"
@@ -3492,8 +3492,8 @@ msgstr "复制"
 
 #: ui/pages/settings.slint:1088
 msgctxt "SettingsDialog"
-msgid "Required for LAN."
-msgstr "局域网必填。"
+msgid "Optional. Recommended when Listen is LAN."
+msgstr "可选。Listen 为局域网时推荐设置。"
 
 #: ui/pages/settings.slint:1092 ui/pages/settings.slint:1095
 msgctxt "SettingsDialog"

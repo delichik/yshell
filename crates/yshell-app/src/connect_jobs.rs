@@ -3,8 +3,13 @@
 //! Pattern mirrors [`crate::sftp_jobs`]: the UI thread submits a job and drains
 //! [`ConnectJobMessage`]s from the app Timer. Stage progress comes from
 //! [`yshell_ssh::with_connection_stage_hook`] hooked into `RealConnectionAttempt`.
+//!
+//! Terminal connects (`open_shell`) run in an out-of-process SessionWorker by
+//! default (D38). SFTP-only connects stay in-process. Set `YSHELL_INPROCESS_SSH=1`
+//! to force the legacy in-process path (tests / debugging).
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     mpsc::{Receiver, Sender},
@@ -15,6 +20,8 @@ use yshell_ssh::{
     with_connection_stage_hook, RealConnectionStage, ShellSession, SshConnectionConfig, SshError,
     SshTransport,
 };
+
+use crate::host::session_ipc::{self, SessionWorkerChild};
 
 /// Work item for the connect worker.
 #[derive(Debug, Clone)]
@@ -28,6 +35,9 @@ pub struct ConnectJobSpec {
     /// Open a shell channel after authentication (terminal tabs). SFTP tabs
     /// connect the transport only and open the SFTP subsystem lazily.
     pub open_shell: bool,
+    /// Config dir + Host generation for SessionWorker spawn / run-state.
+    pub config_dir: PathBuf,
+    pub generation: u64,
 }
 
 /// Messages the worker sends back to the UI thread.
@@ -50,10 +60,14 @@ pub enum ConnectJobMessage {
 #[derive(Debug)]
 pub enum ConnectJobOutcome {
     Succeeded {
-        transport: SshTransport,
+        /// Present for in-process connects (SFTP-only or `YSHELL_INPROCESS_SSH`).
+        /// Out-of-process SessionWorker keeps the transport in the child.
+        transport: Option<SshTransport>,
         /// `None` for SFTP-only tabs (the transport is connected but no shell
         /// channel was opened).
         shell: Option<Box<dyn ShellSession>>,
+        /// Out-of-process worker child for Host Job / run-state tracking.
+        worker: Option<SessionWorkerChild>,
     },
     Failed {
         error: SshError,
@@ -155,6 +169,10 @@ fn run_connect(job: &ConnectJob, msg_tx: &Sender<ConnectJobMessage>) -> ConnectJ
         stage: overlay_stage_id(RealConnectionStage::TcpConnect).to_owned(),
     });
 
+    if should_use_session_worker(&job.spec) {
+        return run_connect_out_of_process(job, msg_tx);
+    }
+
     let progress_tx = msg_tx.clone();
     let progress_key = session_key.clone();
     let result = with_connection_stage_hook(
@@ -175,7 +193,65 @@ fn run_connect(job: &ConnectJob, msg_tx: &Sender<ConnectJobMessage>) -> ConnectJ
     }
 
     match result {
-        Ok((transport, shell)) => ConnectJobOutcome::Succeeded { transport, shell },
+        Ok((transport, shell)) => ConnectJobOutcome::Succeeded {
+            transport: Some(transport),
+            shell,
+            worker: None,
+        },
+        Err(error) => ConnectJobOutcome::Failed { error },
+    }
+}
+
+fn should_use_session_worker(spec: &ConnectJobSpec) -> bool {
+    if !spec.open_shell {
+        return false;
+    }
+    if crate::host::ensure::env_flag("YSHELL_TEST_INPROCESS_SSH") {
+        return false;
+    }
+    // Tests that drive connect_jobs without a real binary should stay in-process.
+    if cfg!(test) {
+        return false;
+    }
+    true
+}
+
+fn run_connect_out_of_process(
+    job: &ConnectJob,
+    msg_tx: &Sender<ConnectJobMessage>,
+) -> ConnectJobOutcome {
+    let session_key = job.spec.session_key.clone();
+    let progress_tx = msg_tx.clone();
+    let progress_key = session_key;
+    let result = session_ipc::connect_via_session_worker(
+        &job.spec.config_dir,
+        &job.spec.session_key,
+        job.spec.generation,
+        &job.spec.ssh_config,
+        job.spec.open_shell,
+        &job.cancel,
+        Box::new(move |stage| {
+            let _ = progress_tx.send(ConnectJobMessage::Progress {
+                session_key: progress_key.clone(),
+                stage,
+            });
+        }),
+    );
+
+    if job.cancel.load(Ordering::SeqCst) {
+        if let Ok((mut shell, worker)) = result {
+            let _ = shell.disconnect();
+            let _ = crate::host::run_state::terminate_pid(worker.pid);
+        }
+        return ConnectJobOutcome::Cancelled;
+    }
+
+    match result {
+        Ok((shell, worker)) => ConnectJobOutcome::Succeeded {
+            transport: None,
+            shell: Some(Box::new(shell)),
+            worker: Some(worker),
+        },
         Err(error) => ConnectJobOutcome::Failed { error },
     }
 }

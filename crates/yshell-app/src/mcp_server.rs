@@ -112,19 +112,9 @@ pub struct McpServerHandle {
     shutdown: Arc<AtomicBool>,
     config_dir: PathBuf,
     pub port: u16,
-    /// Bind host used at start (`127.0.0.1` or `0.0.0.0`).
-    pub bind_host: String,
-    /// Endpoint token published for this listener.
-    pub token: String,
 }
 
 impl McpServerHandle {
-    /// Whether this running listener still matches the desired bind/token.
-    #[must_use]
-    pub fn matches(&self, bind_host: &str, port: u16, token: &str) -> bool {
-        self.bind_host == bind_host && self.port == port && self.token == token
-    }
-
     pub fn shutdown(&self) {
         self.shutdown.store(true, Ordering::SeqCst);
         let _ = clear_endpoint(&self.config_dir);
@@ -165,12 +155,11 @@ pub fn start_mcp_server(
         .spawn(move || accept_loop(listener, accept_shutdown, inbox))
         .map_err(AppError::from_error)?;
 
+    let _ = endpoint_token;
     Ok(McpServerHandle {
         shutdown,
         config_dir,
         port: bound_port,
-        bind_host: bind_host.to_owned(),
-        token: endpoint_token,
     })
 }
 

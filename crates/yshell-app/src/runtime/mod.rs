@@ -238,6 +238,7 @@ impl AppRuntime {
             tabs: Vec::new(),
             active_tab_id: None,
             windows: BTreeMap::new(),
+            next_window_id: 0,
             focused_window: None,
             projection_window: Cell::new(None),
             pending_close_windows: BTreeSet::new(),
@@ -328,6 +329,8 @@ impl AppRuntime {
             sftp_upload_dir_override: None,
             sftp_jobs: None,
             connect_jobs: None,
+            host_generation: 0,
+            pending_session_workers: Vec::new(),
             persistent_known_hosts,
             temporary_known_hosts: KnownHosts::new(),
             pending_host_key_prompt: None,
@@ -574,6 +577,11 @@ pub struct AppRuntime {
     /// `tabs` 仍是所有标签的运行时登记表（轮询/会话回收按它遍历）；本表只回答
     /// "这个标签现在显示在哪个窗口"，以及每个窗口自己的活动标签。
     pub(crate) windows: BTreeMap<u64, WindowTabs>,
+    /// D38：下一个可分配的多窗口 id（单调递增；`register_window`/`move_tab_to_new_window` 使用）。
+    ///
+    /// Host 是窗口 id 的唯一分配者：Shell 通过 `move_tab_to_new_window` 请求新 id，
+    /// 再为它创建 Slint 窗口。id 不复用，保证"移动到新窗口"后窗口身份稳定。
+    pub(crate) next_window_id: u64,
     /// 最近交互的窗口（键盘/菜单/终端回调会更新；决定 `active_tab_id`/`active_session_id` 指向）。
     pub(crate) focused_window: Option<u64>,
     /// `projection_for_window` 期间的窗口覆盖：让投影里的终端/标签字段解析到
@@ -714,6 +722,10 @@ pub struct AppRuntime {
     /// WP1：SSH connect worker handle (injected by `windows`; absent in unit tests
     /// so connect stays synchronous via the in-memory test shell).
     pub(crate) connect_jobs: Option<crate::connect_jobs::ConnectJobHandle>,
+    /// Host run-state generation (set by [`crate::host::HostService`]; SessionWorker spawn).
+    pub(crate) host_generation: u64,
+    /// SessionWorker children waiting for HostService adoption (window tick).
+    pub(crate) pending_session_workers: Vec<crate::host::session_ipc::SessionWorkerChild>,
     pub(crate) persistent_known_hosts: KnownHosts,
     pub(crate) temporary_known_hosts: KnownHosts,
     pub(crate) pending_host_key_prompt: Option<PendingHostKeyPrompt>,
@@ -1086,6 +1098,40 @@ impl AppRuntime {
     pub(crate) fn focus_terminal_runtime(&self) -> Option<&SessionRuntime> {
         self.focus_session_key()
             .and_then(|session_key| self.sessions.get(session_key))
+    }
+
+    /// Host shutdown: ask every live session to disconnect.
+    ///
+    /// Dropping the shell session makes an out-of-process SessionWorker exit its
+    /// I/O loop; the Host waits briefly for the child before force-terminating it.
+    pub(crate) fn disconnect_all_sessions(&mut self) {
+        for session in self.sessions.values_mut() {
+            if let Some(shell) = session.shell_session.as_mut() {
+                let _ = shell.disconnect();
+            }
+            session.shell_session = None;
+            if let Some(transport) = session.transport.take() {
+                transport.close();
+            }
+        }
+    }
+
+    /// Surface an unexpected SessionWorker exit to the Shell (projection event).
+    pub(crate) fn mark_session_worker_exited(&mut self, session_key: &str) {
+        if let Some(session) = self.sessions.get_mut(session_key) {
+            session.shell_session = None;
+            if let Some(transport) = session.transport.take() {
+                transport.close();
+            }
+            session.set_state(yshell_core::SessionState::Failed);
+            session.log_runtime_event("Session worker exited; the connection was dropped.");
+        }
+        self.set_status_kind(
+            "session-worker-exited",
+            format!("Session worker for `{session_key}` exited; reconnect the tab."),
+            session_key.to_owned(),
+            String::new(),
+        );
     }
 
     /// N7：指定窗口活动会话的终端外观（每窗口渲染器各自同步 N5 外观）。

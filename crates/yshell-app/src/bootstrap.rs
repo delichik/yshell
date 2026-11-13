@@ -246,6 +246,8 @@ pub struct YShellApp {
     host: Rc<RefCell<crate::host::HostService>>,
     /// 单实例共享的运行时（窗口只持有它的 `Rc`）。
     runtime: Rc<RefCell<AppRuntime>>,
+    /// Local AppRuntimeClient for in-process Shell (`YSHELL_INPROCESS_HOST=1`).
+    runtime_client: crate::host::AppRuntimeClient,
     /// N7：`show()` 创建、`run()`/`run_event_loop()` 期间保持存活。
     manager: Option<Rc<RefCell<crate::windows::WindowManager>>>,
 }
@@ -253,9 +255,11 @@ pub struct YShellApp {
 impl YShellApp {
     pub fn new(host: Rc<RefCell<crate::host::HostService>>) -> Self {
         let runtime = host.borrow().runtime();
+        let runtime_client = crate::host::AppRuntimeClient::local(Rc::clone(&runtime));
         Self {
             host,
             runtime,
+            runtime_client,
             manager: None,
         }
     }
@@ -276,8 +280,11 @@ impl YShellApp {
             .runtime
             .borrow_mut()
             .prepare_desktop_startup_workspace();
-        let manager =
-            crate::windows::WindowManager::new(Rc::clone(&self.runtime), Rc::clone(&self.host))?;
+        let manager = crate::windows::WindowManager::new(
+            Rc::clone(&self.runtime),
+            Rc::clone(&self.host),
+            self.runtime_client.clone(),
+        )?;
         self.manager = Some(manager);
         // D35：启动主密码解锁（仅 GUI 路径；CLI / MCP 不弹窗，也不读任何
         // 主密码环境变量；见契约 §14.4b）。投影标志置位后 `dialog_windows` 同步创建解锁窗。
@@ -399,12 +406,23 @@ fn apply_accent_to_theme(theme: &Theme, accent: AccentColors) {
 /// scheme` 是 `Palette.color-scheme` 的实时绑定，覆盖 `Palette` 会让"跟随系统"
 /// 再也读不回系统值（启动时的 `apply_appearance` 是 `Palette` 的唯一写入点）。
 pub(crate) fn apply_app_theme_preview(theme: &Theme<'_>, projection: &AppProjection) {
-    theme.set_mode(projection.settings_appearance_mode_index.clamp(0, 2));
+    apply_app_theme_indices(
+        theme,
+        projection.settings_appearance_mode_index,
+        projection.settings_appearance_accent_index,
+    );
+}
+
+/// Mode + accent on a window `Theme`, without a Host round-trip.
+///
+/// Remote Settings paints this on the Settings window and the main window
+/// while the L-tier draft is edited. The Host projection stays on the saved
+/// theme until Save, so the Shell reapplies the draft after each tick.
+pub(crate) fn apply_app_theme_indices(theme: &Theme<'_>, mode: i32, accent_index: i32) {
+    theme.set_mode(mode.clamp(0, 2));
     // Swatch order = `runtime/settings.rs::APP_ACCENT_IDS`
     // (0 = Follow system → Windows Blue, 1 = Blue, then the presets).
-    let accent = appearance::resolve_accent(accent_preset_id(
-        projection.settings_appearance_accent_index,
-    ));
+    let accent = appearance::resolve_accent(accent_preset_id(accent_index));
     apply_accent_to_theme(theme, accent);
 }
 
@@ -4718,17 +4736,52 @@ pub(crate) enum DialogKind {
     SessionIcon,
 }
 
+pub(crate) fn dialog_kind_name(kind: DialogKind) -> &'static str {
+    match kind {
+        DialogKind::PrivateKeyImport => "private_key_import",
+        DialogKind::AuthKeyFile => "auth_key_file",
+        DialogKind::PublicKeyExport => "public_key_export",
+        DialogKind::HostKeysImport => "host_keys_import",
+        DialogKind::HostKeysExport => "host_keys_export",
+        DialogKind::LoggingDirectory => "logging_directory",
+        DialogKind::SftpUploadFile => "sftp_upload_file",
+        DialogKind::SftpDownloadFolder => "sftp_download_folder",
+        DialogKind::TerminalFontPrimary => "terminal_font_primary",
+        DialogKind::TerminalFontBackup => "terminal_font_backup",
+        DialogKind::SettingsSftpEditor => "settings_sftp_editor",
+        DialogKind::SessionIcon => "session_icon",
+    }
+}
+
+pub(crate) fn dialog_kind_from_name(name: &str) -> Option<DialogKind> {
+    Some(match name {
+        "private_key_import" => DialogKind::PrivateKeyImport,
+        "auth_key_file" => DialogKind::AuthKeyFile,
+        "public_key_export" => DialogKind::PublicKeyExport,
+        "host_keys_import" => DialogKind::HostKeysImport,
+        "host_keys_export" => DialogKind::HostKeysExport,
+        "logging_directory" => DialogKind::LoggingDirectory,
+        "sftp_upload_file" => DialogKind::SftpUploadFile,
+        "sftp_download_folder" => DialogKind::SftpDownloadFolder,
+        "terminal_font_primary" => DialogKind::TerminalFontPrimary,
+        "terminal_font_backup" => DialogKind::TerminalFontBackup,
+        "settings_sftp_editor" => DialogKind::SettingsSftpEditor,
+        "session_icon" => DialogKind::SessionIcon,
+        _ => return None,
+    })
+}
+
 /// rfd 的 GTK 后端是单个全局线程：并发/重复调用会在同一 GTK 主循环上嵌套对话框。
 static DIALOG_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
 /// N6：rfd 需要显示服务器；纯无头环境下用 display 预检降级为路径输入
 /// （gtk3 不能用 `pick_*` 返回 `None` 判不可用——取消也是 `None`，见 spike §10.3）。
-fn file_dialogs_available() -> bool {
+pub(crate) fn file_dialogs_available() -> bool {
     std::env::var_os("DISPLAY").is_some() || std::env::var_os("WAYLAND_DISPLAY").is_some()
 }
 
 /// N6：在 worker 线程上打开 `pick_folder`（禁止 UI 线程直调：实测会冻结渲染）。
-fn spawn_pick_folder(
+pub(crate) fn spawn_pick_folder(
     dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
     kind: DialogKind,
     title: &str,
@@ -5369,17 +5422,17 @@ fn theme_field_action(action: &str) -> ThemeFieldAction {
 }
 
 /// `[TriStateFieldData]` → Slint model.
-fn tri_state_field_model(fields: &[TriStateFieldData]) -> ModelRc<TriStateField> {
+pub(crate) fn tri_state_field_model(fields: &[TriStateFieldData]) -> ModelRc<TriStateField> {
     let rows: Vec<TriStateField> = fields
         .iter()
         .map(|field| TriStateField {
             key: field.key.clone().into(),
             label: field.label.clone().into(),
             hint: field.hint.clone().into(),
-            kind: field.kind.into(),
-            state: field.state.into(),
+            kind: field.kind.as_str().into(),
+            state: field.state.as_str().into(),
             value: field.value.clone().into(),
-            source_kind: field.source_kind.into(),
+            source_kind: field.source_kind.as_str().into(),
             source_param: field.source_param.clone().into(),
             options: ModelRc::new(VecModel::from(
                 field
@@ -7598,24 +7651,38 @@ pub fn bootstrap_app(config_dir_override: Option<PathBuf>) -> AppResult<YShellAp
 /// GUI builds write only to `{config_dir}/logs` when debug logging is enabled
 /// (no console window). `RUST_LOG` still overrides the filter when set.
 pub fn init_logging_for_runtime(runtime: &AppRuntime) -> AppResult<()> {
+    init_logging_for_shell(&runtime.config_dir, runtime.debug_logging_enabled())?;
+    if runtime.debug_logging_enabled() {
+        tracing::info!(
+            path = %yshell_logging::debug_log_path(&runtime.config_dir).display(),
+            "debug logging enabled"
+        );
+    }
+    Ok(())
+}
+
+/// Shell-process logging initialisation that does **not** construct an
+/// `AppRuntime` (the Host is the only process that loads/migrates/writes the
+/// configuration; the Shell only uses the projected debug-logging flag).
+pub fn init_logging_for_shell(config_dir: &std::path::Path, debug_enabled: bool) -> AppResult<()> {
     let env_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "yshell=debug,warn".to_owned());
     let config = yshell_logging::LoggingConfig::with_env_filter(env_filter)
         .with_ansi(false)
         .with_stderr(false)
-        .with_file_directory(yshell_logging::debug_log_dir(&runtime.config_dir))
-        .with_debug_enabled(runtime.debug_logging_enabled());
+        .with_file_directory(yshell_logging::debug_log_dir(config_dir))
+        .with_debug_enabled(debug_enabled);
     match yshell_logging::init_tracing(&config) {
         Ok(()) => {
-            if runtime.debug_logging_enabled() {
+            if debug_enabled {
                 tracing::info!(
-                    path = %yshell_logging::debug_log_path(&runtime.config_dir).display(),
+                    path = %yshell_logging::debug_log_path(config_dir).display(),
                     "debug logging enabled"
                 );
             }
             Ok(())
         }
         Err(yshell_logging::InitLoggingError::AlreadyInitialized(_)) => {
-            yshell_logging::set_debug_logging_enabled(runtime.debug_logging_enabled());
+            yshell_logging::set_debug_logging_enabled(debug_enabled);
             Ok(())
         }
         Err(error) => Err(AppError::from_error(error)),

@@ -22,9 +22,15 @@ export component WinTextInput inherits Rectangle {
     /// 字号覆盖：默认 body（14/20）
     in property <length> font-size: Theme.font-body;
     out property <bool> has-focus: input.has-focus;
+    /// 变为可见且启用时自动聚焦并全选（原地改名 / 新建行）。
+    in property <bool> auto-focus: false;
 
     callback accepted();
     callback edited(string);
+    /// Esc：调用方取消编辑（TextInput 本身不消费 Esc）。
+    callback cancelled();
+    /// 曾持有焦点后失焦：调用方用作「点击其它处 = 确认」。
+    callback focus-lost();
 
     height: Theme.control-height;
     // WP2：不让内部 TextInput 的内容宽驱动本控件 preferred-width（QC / 查找栏会被撑开）。
@@ -93,6 +99,14 @@ export component WinTextInput inherits Rectangle {
         text-cursor-width: 1px;
         edited => { root.edited(self.text); }
         accepted => { root.accepted(); }
+        // Esc 在 TextInput 拿到焦点时不会冒泡到兄弟 FocusScope；在这里拦截。
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.cancelled();
+                return accept;
+            }
+            return reject;
+        }
     }
 
     /// 供调用方聚焦（例如菜单里的"快速连接"；不能叫 focus，那是内建函数名）
@@ -106,5 +120,22 @@ export component WinTextInput inherits Rectangle {
 
     public function clear-input-focus() {
         input.clear-focus();
+    }
+
+    function arm-auto-focus() {
+        if (root.auto-focus && root.visible && root.enabled) {
+            input.focus();
+            input.select-all();
+        }
+    }
+
+    changed visible => { root.arm-auto-focus(); }
+    changed enabled => { root.arm-auto-focus(); }
+    changed auto-focus => { root.arm-auto-focus(); }
+
+    changed has-focus => {
+        if (!input.has-focus) {
+            root.focus-lost();
+        }
     }
 }

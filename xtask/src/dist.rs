@@ -67,6 +67,17 @@ pub struct ChecksumOptions {
     pub output: Option<String>,
 }
 
+/// Thin role executables shipped next to the user-facing `yshell` entry.
+///
+/// Keep in sync with the `[[bin]]` targets in `crates/yshell-app/Cargo.toml`
+/// (and `crates/yshell-app/src/host/roles.rs`, which resolves them at runtime).
+pub const ROLE_BINARY_NAMES: [&str; 4] = [
+    "yshell-host",
+    "yshell-shell",
+    "yshell-session-worker",
+    "yshell-mcp-daemon",
+];
+
 /// Operating system of the build target.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TargetOs {
@@ -105,11 +116,21 @@ impl TargetOs {
         }
     }
 
-    pub fn binary_name(&self) -> &str {
+    /// File name of one of the package's binary targets (adds `.exe` on Windows).
+    pub fn exe_name(&self, base: &str) -> String {
         match self {
-            Self::Windows => "yshell.exe",
-            _ => "yshell",
+            Self::Windows => format!("{base}.exe"),
+            _ => base.to_owned(),
         }
+    }
+
+    /// Every executable shipped in the bundle: the user-facing `yshell` entry
+    /// followed by the thin role binaries.
+    pub fn binary_names(&self) -> Vec<String> {
+        std::iter::once("yshell")
+            .chain(ROLE_BINARY_NAMES)
+            .map(|base| self.exe_name(base))
+            .collect()
     }
 }
 
@@ -201,15 +222,27 @@ pub fn run(ctx: &Context, options: &DistOptions) -> Result<()> {
     }
 
     println!("==> target {target} ({platform}), version {version}");
-    let binary = ctx.release_binary(&target, target_os.binary_name());
+    // `cargo build -p yshell-app` builds every bin target; ship them all next
+    // to each other so role processes find their role executables as siblings.
+    let binaries: Vec<PathBuf> = target_os
+        .binary_names()
+        .iter()
+        .map(|name| ctx.release_binary(&target, name))
+        .collect();
+    let binary: &Path = binaries
+        .first()
+        .map(PathBuf::as_path)
+        .expect("the binary name list always contains yshell");
     if options.no_build {
-        if !binary.is_file() {
-            bail!(
-                "{} does not exist; run without --no-build to build it first",
-                binary.display()
-            );
+        for path in &binaries {
+            if !path.is_file() {
+                bail!(
+                    "{} does not exist; run without --no-build to build it first",
+                    path.display()
+                );
+            }
         }
-        println!("==> reusing {}", binary.display());
+        println!("==> reusing {} binaries", binaries.len());
     } else {
         let mut command = context::cargo(ctx);
         // Bake the same label About / `--version` / PE resources use into the
@@ -229,21 +262,24 @@ pub fn run(ctx: &Context, options: &DistOptions) -> Result<()> {
     }
 
     if !options.no_smoke {
-        let mut command = Command::new(&binary);
-        command.arg("--version");
-        context::run(command).with_context(|| {
-            format!(
-                "{} failed to run (use --no-smoke to skip)",
-                binary.display()
-            )
-        })?;
+        // Smoke every executable: `yshell` is the user-facing entry, the role
+        // binaries are launched by the Host at runtime and must start too.
+        for path in &binaries {
+            let mut command = Command::new(path);
+            command.arg("--version");
+            context::run(command).with_context(|| {
+                format!("{} failed to run (use --no-smoke to skip)", path.display())
+            })?;
+        }
     }
 
     let mut artifacts: Vec<PathBuf> = Vec::new();
     let portable_name = format!("yshell-{version}-{platform}-portable");
     if options.formats.contains(&Format::Portable) {
         let staging = out_dir.join(&portable_name);
-        prepare_portable_staging(&ctx.root, &binary, &target_os, &target, &version, &staging)?;
+        prepare_portable_staging(
+            &ctx.root, &binaries, &target_os, &target, &version, &staging,
+        )?;
         let archive = archive_portable(&target_os, &staging, &out_dir, &portable_name)?;
         println!("==> portable archive {}", archive.display());
         artifacts.push(archive);
@@ -258,7 +294,8 @@ pub fn run(ctx: &Context, options: &DistOptions) -> Result<()> {
             root: &ctx.root,
             out_dir: &out_dir,
             work_dir: &work_dir,
-            binary: &binary,
+            binary,
+            role_binaries: &binaries[1..],
             version: &version,
             target: &target,
             target_os: target_os.clone(),
@@ -386,7 +423,7 @@ pub fn render_template(path: &Path, replacements: &[(&str, &str)]) -> Result<Str
 
 fn prepare_portable_staging(
     root: &Path,
-    binary: &Path,
+    binaries: &[PathBuf],
     target_os: &TargetOs,
     target: &str,
     version: &str,
@@ -399,7 +436,12 @@ fn prepare_portable_staging(
     fs::create_dir_all(staging)
         .with_context(|| format!("failed to create {}", staging.display()))?;
 
-    copy_file(binary, &staging.join(target_os.binary_name()), true)?;
+    // Keep every executable side by side: role processes resolve fonts/themes
+    // relative to their own executable directory and locate their role
+    // executables as siblings.
+    for (source, name) in binaries.iter().zip(target_os.binary_names()) {
+        copy_file(source, &staging.join(name), true)?;
+    }
     copy_file(&root.join("README.md"), &staging.join("README.md"), false)?;
     copy_file(&root.join("LICENSE"), &staging.join("LICENSE"), false)?;
     copy_shipped_fonts(root, &staging.join("fonts"))?;
@@ -486,8 +528,7 @@ fn collect_files_into(root: &Path, dir: &Path, entries: &mut Vec<ArchiveEntry>) 
             .to_string_lossy()
             .replace('\\', "/");
         let file_name = entry.file_name().to_string_lossy().into_owned();
-        let executable =
-            file_name == "yshell" || file_name == "yshell.exe" || file_name.ends_with(".sh");
+        let executable = is_executable_artifact(&file_name);
         entries.push(ArchiveEntry {
             name,
             path,
@@ -495,6 +536,16 @@ fn collect_files_into(root: &Path, dir: &Path, entries: &mut Vec<ArchiveEntry>) 
         });
     }
     Ok(())
+}
+
+/// Whether a bundled file is an executable that should keep its exec bit
+/// (`yshell`, every role binary and the portable shell launcher).
+fn is_executable_artifact(file_name: &str) -> bool {
+    if file_name.ends_with(".sh") {
+        return true;
+    }
+    let stem = file_name.strip_suffix(".exe").unwrap_or(file_name);
+    stem == "yshell" || ROLE_BINARY_NAMES.contains(&stem)
 }
 
 /// Copies product-shipped open-source fonts next to the binary (`fonts/`).
@@ -699,8 +750,51 @@ mod tests {
             let os = TargetOs::parse(triple).unwrap();
             let arch = Arch::parse(triple).unwrap();
             assert_eq!(format!("{}-{}", os.slug(), arch.slug()), slug, "{triple}");
-            assert_eq!(os.binary_name(), binary, "{triple}");
+            assert_eq!(os.exe_name("yshell"), binary, "{triple}");
         }
+    }
+
+    #[test]
+    fn role_binaries_ship_next_to_the_user_facing_entry() {
+        let windows = TargetOs::parse("x86_64-pc-windows-msvc").unwrap();
+        let windows_names = windows.binary_names();
+        assert_eq!(
+            windows_names.first().map(String::as_str),
+            Some("yshell.exe")
+        );
+        assert_eq!(windows_names.len(), 1 + ROLE_BINARY_NAMES.len());
+        for role in ROLE_BINARY_NAMES {
+            assert!(
+                windows_names.contains(&format!("{role}.exe")),
+                "Windows bundle must ship {role}.exe"
+            );
+        }
+
+        let linux = TargetOs::parse("x86_64-unknown-linux-gnu").unwrap();
+        assert_eq!(
+            linux.binary_names().first().map(String::as_str),
+            Some("yshell")
+        );
+        assert!(linux
+            .binary_names()
+            .iter()
+            .any(|name| name == "yshell-host"));
+        assert_eq!(linux.binary_names().len(), 1 + ROLE_BINARY_NAMES.len());
+    }
+
+    #[test]
+    fn every_bundled_executable_keeps_its_exec_bit() {
+        for executable in [
+            "yshell",
+            "yshell.exe",
+            "yshell-host",
+            "yshell-mcp-daemon.exe",
+        ] {
+            assert!(is_executable_artifact(executable), "{executable}");
+        }
+        assert!(is_executable_artifact("yshell-portable.sh"));
+        assert!(!is_executable_artifact("README.md"));
+        assert!(!is_executable_artifact("fonts/DejaVuSansMono.ttf"));
     }
 
     #[test]

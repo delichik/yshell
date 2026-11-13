@@ -35,6 +35,12 @@ manager, terminal tabs, SFTP browser, tunnels and quick commands.
 
 %install
 install -D -m 0755 %{_sourcedir}/yshell %{buildroot}/usr/bin/yshell
+# Thin role executables live beside yshell in /usr/bin (the Host spawns them
+# as siblings of the executable it runs).
+install -D -m 0755 %{_sourcedir}/yshell-host %{buildroot}/usr/bin/yshell-host
+install -D -m 0755 %{_sourcedir}/yshell-shell %{buildroot}/usr/bin/yshell-shell
+install -D -m 0755 %{_sourcedir}/yshell-session-worker %{buildroot}/usr/bin/yshell-session-worker
+install -D -m 0755 %{_sourcedir}/yshell-mcp-daemon %{buildroot}/usr/bin/yshell-mcp-daemon
 install -D -m 0644 %{_sourcedir}/yshell.desktop %{buildroot}/usr/share/applications/yshell.desktop
 install -D -m 0644 %{_sourcedir}/LICENSE %{buildroot}/usr/share/licenses/yshell/LICENSE
 install -D -m 0644 %{_sourcedir}/README.md %{buildroot}/usr/share/doc/yshell/README.md
@@ -45,6 +51,10 @@ cp -a %{_sourcedir}/themes/. %{buildroot}/usr/share/yshell/themes/ || true
 
 %files
 /usr/bin/yshell
+/usr/bin/yshell-host
+/usr/bin/yshell-shell
+/usr/bin/yshell-session-worker
+/usr/bin/yshell-mcp-daemon
 /usr/share/applications/yshell.desktop
 /usr/share/yshell/fonts
 /usr/share/yshell/themes

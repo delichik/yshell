@@ -575,7 +575,7 @@ pub(crate) fn resolved_global_scheme_id(
 }
 
 /// One row of the independent Theme Manager list (Slint `ThemeManagerRow`).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ThemeManagerRowData {
     pub id: String,
     pub name: String,
@@ -920,18 +920,18 @@ impl ThemeFieldError {
 }
 
 /// Plain-data mirror of the Slint `TriStateField` struct.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct TriStateFieldData {
     pub(crate) key: String,
     pub(crate) label: String,
     pub(crate) hint: String,
     /// `text` | `number` | `hex` | `toggle` | `choice`
-    pub(crate) kind: &'static str,
+    pub(crate) kind: String,
     /// `inherit` | `explicit`
-    pub(crate) state: &'static str,
+    pub(crate) state: String,
     pub(crate) value: String,
     /// `builtin` | `global` | `folder` | `scheme` | `local-folder` | `local-session`
-    pub(crate) source_kind: &'static str,
+    pub(crate) source_kind: String,
     pub(crate) source_param: String,
     pub(crate) options: Vec<String>,
     pub(crate) selected: i32,
@@ -957,10 +957,10 @@ impl TriStateFieldData {
             key: key.to_owned(),
             label: label.to_owned(),
             hint: hint.to_owned(),
-            kind,
-            state,
+            kind: kind.to_owned(),
+            state: state.to_owned(),
             value: field.text.clone(),
-            source_kind,
+            source_kind: source_kind.to_owned(),
             source_param,
             options: Vec::new(),
             selected: -1,

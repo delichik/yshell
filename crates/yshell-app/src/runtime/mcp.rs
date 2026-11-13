@@ -241,26 +241,22 @@ impl AppRuntime {
         Ok(self.projection())
     }
 
-    /// Validate Port / Listen / API key before enabling or (re)binding.
+    /// Validate Port before enabling or (re)binding.
+    ///
+    /// API key is optional for both Local and LAN (recommended on LAN; see Settings hint).
     pub fn mcp_validate_listen_config(&self) -> AppResult<()> {
         let port = self.config_document.ui.mcp_port;
         if port == 0 {
             return Err(AppError::new("MCP port must be between 1 and 65535"));
-        }
-        if self.config_document.ui.mcp_listen == McpListenMode::Lan
-            && self.config_document.ui.mcp_api_key.trim().is_empty()
-        {
-            return Err(AppError::new(
-                "API key is required when Listen is LAN. Generate a key first.",
-            ));
         }
         Ok(())
     }
 
     /// Token published to `mcp-endpoint.json` / verified on IPC.
     ///
-    /// Prefer the configured API key; when Local and the key is empty, reuse the
-    /// current session token or mint a new one (not persisted until Generate).
+    /// Prefer the configured API key; when empty, reuse the current session token
+    /// or mint a new one (not persisted until Generate). LAN without a key still
+    /// works but is less safe on shared networks.
     #[must_use]
     pub fn mcp_resolve_endpoint_token(&self) -> String {
         let configured = self.config_document.ui.mcp_api_key.trim();
@@ -291,11 +287,6 @@ impl AppRuntime {
     }
 
     pub fn set_mcp_listen_mode(&mut self, mode: McpListenMode) -> AppResult<AppProjection> {
-        if mode == McpListenMode::Lan && self.config_document.ui.mcp_api_key.trim().is_empty() {
-            return Err(AppError::new(
-                "API key is required when Listen is LAN. Generate a key first.",
-            ));
-        }
         if self.config_document.ui.mcp_listen != mode {
             self.config_document.ui.mcp_listen = mode;
             self.config_store
@@ -311,11 +302,6 @@ impl AppRuntime {
 
     pub fn set_mcp_api_key(&mut self, key: &str) -> AppResult<AppProjection> {
         let key = key.trim().to_owned();
-        if self.config_document.ui.mcp_listen == McpListenMode::Lan && key.is_empty() {
-            return Err(AppError::new(
-                "API key is required when Listen is LAN. Generate a key first.",
-            ));
-        }
         if self.config_document.ui.mcp_api_key != key {
             self.config_document.ui.mcp_api_key = key;
             self.config_store
@@ -1295,24 +1281,20 @@ mod tests {
     }
 
     #[test]
-    fn listen_lan_requires_api_key() {
+    fn listen_lan_allows_enable_without_api_key() {
         let dir = tempdir().expect("tempdir");
         let mut runtime = AppRuntime::new(dir.path().to_path_buf()).expect("runtime");
-        assert!(runtime
-            .set_mcp_listen_mode(McpListenMode::Lan)
-            .expect_err("LAN without key")
-            .to_string()
-            .contains("API key"));
-        runtime.generate_mcp_api_key().expect("generate key");
         runtime
             .set_mcp_listen_mode(McpListenMode::Lan)
-            .expect("lan with key");
+            .expect("select LAN without key");
         assert_eq!(runtime.config_document.ui.mcp_listen, McpListenMode::Lan);
-        assert!(runtime
-            .set_mcp_api_key("")
-            .expect_err("clear key on LAN")
-            .to_string()
-            .contains("API key"));
+        runtime
+            .set_mcp_enabled(true)
+            .expect("enable LAN without key");
+        runtime.generate_mcp_api_key().expect("generate key");
+        assert!(!runtime.config_document.ui.mcp_api_key.is_empty());
+        runtime.set_mcp_api_key("").expect("clear key while on LAN");
+        assert!(runtime.config_document.ui.mcp_api_key.is_empty());
     }
 
     #[test]

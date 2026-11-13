@@ -1179,7 +1179,7 @@ fn auto_panel_height(panel: PanelId) -> Option<f32> {
 }
 
 /// One dock Tunnels-panel row (Slint `TunnelRow` mirror).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TunnelRowData {
     pub id: String,
     pub name_text: String,

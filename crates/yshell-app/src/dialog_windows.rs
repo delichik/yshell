@@ -15,14 +15,14 @@ use slint::{CloseRequestResponse, ComponentHandle, Model, ModelRc, SharedString,
 use copypasta::{ClipboardContext, ClipboardProvider};
 
 use crate::bootstrap::generated_ui::{
-    AboutWindow, AuthKeyOption, AuthPromptWindow, CompactConfirmWindow, EditorTunnelRow,
-    FolderEditorWindow, HostKeyWindow, HostKeysWindow, InheritSource, KnownHostAddWindow,
-    KnownHostExportWindow, KnownHostImportWindow, LoggingWindow, LoginStepKeysWindow, LoginStepRow,
-    LoginStepWaitWindow, MainWindow, MasterPasswordUnlockWindow, MasterPasswordWindow,
-    NewFolderWindow, PasswordPromptWindow, PrivateKeyDeployWindow, PrivateKeyExportWindow,
-    PrivateKeyGenerateWindow, PrivateKeyImportWindow, PrivateKeysWindow, ProxiesWindow,
-    SessionEditorWindow, SettingsWindow, SftpChmodWindow, SftpConflictWindow, SftpEntryWindow,
-    SftpPropertiesWindow, Theme, ThemeManagerWindow, TunnelEditorWindow,
+    AboutWindow, AuthKeyOption, AuthKeyboardPrompt, AuthPromptWindow, CompactConfirmWindow,
+    EditorTunnelRow, FolderEditorWindow, HostKeyWindow, HostKeysWindow, InheritSource,
+    KnownHostAddWindow, KnownHostExportWindow, KnownHostImportWindow, LoggingWindow,
+    LoginStepKeysWindow, LoginStepRow, LoginStepWaitWindow, MainWindow, MasterPasswordUnlockWindow,
+    MasterPasswordWindow, NewFolderWindow, PasswordPromptWindow, PrivateKeyDeployWindow,
+    PrivateKeyExportWindow, PrivateKeyGenerateWindow, PrivateKeyImportWindow, PrivateKeysWindow,
+    ProxiesWindow, SessionEditorWindow, SettingsWindow, SftpChmodWindow, SftpConflictWindow,
+    SftpEntryWindow, SftpPropertiesWindow, Theme, ThemeManagerWindow, TunnelEditorWindow,
 };
 use crate::bootstrap::{
     frame_image, host_key_group_from, host_key_group_matches, private_key_row_from,
@@ -2683,7 +2683,7 @@ fn file_name_of(path: &str, fallback: &str) -> String {
 }
 
 /// 写系统剪贴板（失败返回 false；调用方写状态反馈）。
-fn write_clipboard(text: &str) -> bool {
+pub(crate) fn write_clipboard(text: &str) -> bool {
     ClipboardContext::new()
         .ok()
         .is_some_and(|mut clipboard| clipboard.set_contents(text.to_owned()).is_ok())
@@ -3033,17 +3033,27 @@ fn close_tabs_copy(projection: &AppProjection) -> (String, String) {
     }
 }
 
-fn sync_session_editor(w: &SessionEditorWindow, p: &AppProjection, m: Option<&MainWindow>) {
+pub(crate) fn sync_session_editor(
+    w: &SessionEditorWindow,
+    p: &AppProjection,
+    m: Option<&MainWindow>,
+) {
+    // Password / passphrase stay in the widget until Submit; projection never
+    // carries plaintext (D38: secrets must not enter Shell via AppProjection).
+    // Clear local secret fields when the edited session identity changes.
+    let previous_target = w.get_target_text();
+    let next_target = if p.editor_target_editing {
+        p.editor_target_session_id_text.as_str()
+    } else {
+        ""
+    };
+    if previous_target.as_str() != next_target {
+        w.set_password_text("".into());
+        w.set_passphrase_text("".into());
+    }
     // 分区 / 目标
     w.set_section(p.editor_section_text.clone().into());
-    w.set_target_text(
-        if p.editor_target_editing {
-            p.editor_target_session_id_text.clone()
-        } else {
-            String::new()
-        }
-        .into(),
-    );
+    w.set_target_text(next_target.to_owned().into());
     w.set_folder_text(
         if p.editor_folder_known {
             format!(
@@ -3066,8 +3076,6 @@ fn sync_session_editor(w: &SessionEditorWindow, p: &AppProjection, m: Option<&Ma
     w.set_notes_text(p.editor_notes_text.clone().into());
     // Authentication
     w.set_auth_method_text(p.editor_auth_method_text.clone().into());
-    w.set_password_text(p.editor_password_text.clone().into());
-    w.set_passphrase_text(p.editor_passphrase_text.clone().into());
     w.set_key_options(ModelRc::new(VecModel::from(
         p.editor_key_options
             .iter()
@@ -3134,7 +3142,7 @@ fn inherit_source_model(items: &[EditorInheritSourceData]) -> ModelRc<InheritSou
         items
             .iter()
             .map(|item| InheritSource {
-                kind: item.kind.into(),
+                kind: item.kind.as_str().into(),
                 param: item.param.clone().into(),
             })
             .collect::<Vec<_>>(),
@@ -3146,7 +3154,7 @@ fn login_step_row_model(items: &[EditorLoginStepRowData]) -> ModelRc<LoginStepRo
         items
             .iter()
             .map(|item| LoginStepRow {
-                kind: item.kind.into(),
+                kind: item.kind.as_str().into(),
                 name: item.name.clone().into(),
                 detail: item.detail.clone().into(),
             })
@@ -3159,7 +3167,7 @@ fn tunnel_editor_row_model(items: &[EditorTunnelRowData]) -> ModelRc<EditorTunne
         items
             .iter()
             .map(|item| EditorTunnelRow {
-                kind: item.kind.into(),
+                kind: item.kind.as_str().into(),
                 name: item.name.clone().into(),
                 route: item.route.clone().into(),
             })
@@ -3167,19 +3175,31 @@ fn tunnel_editor_row_model(items: &[EditorTunnelRowData]) -> ModelRc<EditorTunne
     ))
 }
 
-fn sync_login_step_keys(w: &LoginStepKeysWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+pub(crate) fn sync_login_step_keys(
+    w: &LoginStepKeysWindow,
+    p: &AppProjection,
+    _m: Option<&MainWindow>,
+) {
     w.set_edit_mode(p.editor_login_step_is_edit);
     w.set_name_text(p.editor_login_step_name_text.clone().into());
     w.set_keys_text(p.editor_login_step_keys_text.clone().into());
     w.set_tokens(p.editor_login_step_tokens);
 }
 
-fn sync_login_step_wait(w: &LoginStepWaitWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+pub(crate) fn sync_login_step_wait(
+    w: &LoginStepWaitWindow,
+    p: &AppProjection,
+    _m: Option<&MainWindow>,
+) {
     w.set_edit_mode(p.editor_login_step_is_edit);
     w.set_millis_text(p.editor_login_step_millis_text.clone().into());
 }
 
-fn sync_tunnel_editor(w: &TunnelEditorWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+pub(crate) fn sync_tunnel_editor(
+    w: &TunnelEditorWindow,
+    p: &AppProjection,
+    _m: Option<&MainWindow>,
+) {
     w.set_edit_mode(p.editor_tunnel_is_edit);
     w.set_name_text(p.editor_tunnel_name_text.clone().into());
     w.set_kind_text(p.editor_tunnel_dialog_kind_text.clone().into());
@@ -3287,7 +3307,7 @@ fn wire_master_password_unlock_window(
     });
 }
 
-fn sync_master_password_props(
+pub(crate) fn sync_master_password_props(
     w: &MasterPasswordWindow,
     p: &AppProjection,
     _m: Option<&MainWindow>,
@@ -3298,7 +3318,7 @@ fn sync_master_password_props(
     crate::bootstrap::apply_app_theme_preview(&w.global::<Theme>(), p);
 }
 
-fn sync_master_password_unlock_props(
+pub(crate) fn sync_master_password_unlock_props(
     w: &MasterPasswordUnlockWindow,
     p: &AppProjection,
     _m: Option<&MainWindow>,
@@ -3641,7 +3661,7 @@ fn wire_settings_actions(
     });
 }
 
-fn sync_settings_from(
+pub(crate) fn sync_settings_from(
     settings: &SettingsWindow,
     projection: &AppProjection,
     main: Option<&MainWindow>,
@@ -3799,7 +3819,7 @@ fn set_settings_swatches(
     }
 }
 
-fn set_settings_options(settings: &SettingsWindow, fonts: &[String], styles: &[String]) {
+pub(crate) fn set_settings_options(settings: &SettingsWindow, fonts: &[String], styles: &[String]) {
     if !string_model_matches(&settings.get_appearance_font_options(), fonts) {
         settings.set_appearance_font_options(option_model(fonts));
     }
@@ -3844,13 +3864,29 @@ fn string_model_matches(model: &ModelRc<SharedString>, expected: &[String]) -> b
             .all(|(item, value)| item.as_str() == value.as_str())
 }
 
-fn sync_folder_editor(w: &FolderEditorWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+pub(crate) fn sync_folder_editor(
+    w: &FolderEditorWindow,
+    p: &AppProjection,
+    _m: Option<&MainWindow>,
+) {
     w.set_folder_name(p.folder_editor_name_text.clone().into());
     w.set_folder_path(p.folder_editor_path_text.clone().into());
     w.set_status_text(p.folder_editor_status_text.clone().into());
+    w.set_status_kind_text(p.folder_editor_status_kind_text.clone().into());
+    w.set_status_param_1_text(p.folder_editor_status_param_1_text.clone().into());
+    w.set_status_param_2_text(p.folder_editor_status_param_2_text.clone().into());
+    w.set_appearance_fields(crate::bootstrap::tri_state_field_model(
+        &p.folder_editor_appearance_fields,
+    ));
+    w.set_terminal_fields(crate::bootstrap::tri_state_field_model(
+        &p.folder_editor_terminal_fields,
+    ));
+    w.set_logging_fields(crate::bootstrap::tri_state_field_model(
+        &p.folder_editor_logging_fields,
+    ));
 }
 
-fn sync_private_keys(w: &PrivateKeysWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+pub(crate) fn sync_private_keys(w: &PrivateKeysWindow, p: &AppProjection, _m: Option<&MainWindow>) {
     // 清单模型（只在内容变化时重建，sync 每个 tick 都跑）。
     let current = w.get_keys();
     let rebuild = current.row_count() != p.private_keys_rows.len()
@@ -3876,14 +3912,17 @@ fn sync_private_keys(w: &PrivateKeysWindow, p: &AppProjection, _m: Option<&MainW
     w.set_status_param_1_text(p.private_keys_status_param_1_text.clone().into());
     w.set_status_param_2_text(p.private_keys_status_param_2_text.clone().into());
     w.set_remove_warning_text(p.private_keys_remove_warning_text.clone().into());
+    let previous_index = w.get_selected_index();
     w.set_selected_index(p.private_keys_selected_index);
+    if previous_index != p.private_keys_selected_index {
+        w.set_passphrase_text("".into());
+    }
     w.set_busy(false);
-    w.set_passphrase_text(p.private_keys_passphrase_text.clone().into());
     w.set_passphrase_stored(p.private_keys_passphrase_stored);
     w.set_passphrase_manage_enabled(p.private_keys_passphrase_manage_enabled);
 }
 
-fn sync_proxies(w: &ProxiesWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+pub(crate) fn sync_proxies(w: &ProxiesWindow, p: &AppProjection, _m: Option<&MainWindow>) {
     let current = w.get_proxies();
     let rebuild = current.row_count() != p.proxies_rows.len()
         || !(0..p.proxies_rows.len()).all(|index| {
@@ -3910,19 +3949,26 @@ fn sync_proxies(w: &ProxiesWindow, p: &AppProjection, _m: Option<&MainWindow>) {
     w.set_remove_blocked(p.proxies_remove_blocked);
     w.set_referencing_text(p.proxies_referencing_text.clone().into());
     w.set_editor_is_new(p.proxies_editor_is_new);
+    let previous_proxy_id = w.get_editor_id_text();
     w.set_editor_id_text(p.proxies_editor_id_text.clone().into());
+    if previous_proxy_id.as_str() != p.proxies_editor_id_text {
+        w.set_editor_password_text("".into());
+    }
     w.set_editor_name_text(p.proxies_editor_name_text.clone().into());
     w.set_editor_host_text(p.proxies_editor_host_text.clone().into());
     w.set_editor_port_text(p.proxies_editor_port_text.clone().into());
     w.set_editor_username_text(p.proxies_editor_username_text.clone().into());
-    w.set_editor_password_text(p.proxies_editor_password_text.clone().into());
     w.set_editor_password_stored(p.proxies_editor_password_stored);
     w.set_editor_dns_by_proxy(p.proxies_editor_dns_by_proxy);
     w.set_editor_protocol_index(p.proxies_editor_protocol_index);
     w.set_editor_save_enabled(p.proxies_editor_save_enabled);
 }
 
-fn sync_theme_manager(w: &ThemeManagerWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+pub(crate) fn sync_theme_manager(
+    w: &ThemeManagerWindow,
+    p: &AppProjection,
+    _m: Option<&MainWindow>,
+) {
     let current = w.get_themes();
     let rebuild = current.row_count() != p.theme_manager_rows.len()
         || !(0..p.theme_manager_rows.len()).all(|index| {
@@ -4001,7 +4047,7 @@ fn sync_theme_manager(w: &ThemeManagerWindow, p: &AppProjection, _m: Option<&Mai
     w.set_backup_font_text(p.themes_backup_font_text.clone().into());
 }
 
-fn sync_host_keys(w: &HostKeysWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+pub(crate) fn sync_host_keys(w: &HostKeysWindow, p: &AppProjection, _m: Option<&MainWindow>) {
     let current = w.get_groups();
     let rebuild = current.row_count() != p.host_keys_groups.len()
         || !(0..p.host_keys_groups.len()).all(|index| {
@@ -4035,23 +4081,35 @@ fn sync_host_keys(w: &HostKeysWindow, p: &AppProjection, _m: Option<&MainWindow>
 
 // --- managers-dialogs：管理器的 7 个子窗 sync --------------------------------
 
-fn sync_known_host_add(w: &KnownHostAddWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+pub(crate) fn sync_known_host_add(
+    w: &KnownHostAddWindow,
+    p: &AppProjection,
+    _m: Option<&MainWindow>,
+) {
     w.set_edit_mode(p.hosts_add_edit_mode);
     w.set_entries_text(p.hosts_add_text.clone().into());
     w.set_error_text(p.hosts_add_error_text.clone().into());
 }
 
-fn sync_known_host_import(w: &KnownHostImportWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+pub(crate) fn sync_known_host_import(
+    w: &KnownHostImportWindow,
+    p: &AppProjection,
+    _m: Option<&MainWindow>,
+) {
     w.set_path_text(p.hosts_import_path_text.clone().into());
     w.set_error_text(p.hosts_import_error_text.clone().into());
 }
 
-fn sync_known_host_export(w: &KnownHostExportWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+pub(crate) fn sync_known_host_export(
+    w: &KnownHostExportWindow,
+    p: &AppProjection,
+    _m: Option<&MainWindow>,
+) {
     w.set_path_text(p.hosts_export_path_text.clone().into());
     w.set_error_text(p.hosts_export_error_text.clone().into());
 }
 
-fn sync_private_key_generate(
+pub(crate) fn sync_private_key_generate(
     w: &PrivateKeyGenerateWindow,
     p: &AppProjection,
     _m: Option<&MainWindow>,
@@ -4066,8 +4124,6 @@ fn sync_private_key_generate(
     }
     w.set_label_text(p.keys_generate_label_text.clone().into());
     w.set_comment_text(p.keys_generate_comment_text.clone().into());
-    w.set_passphrase_text(p.keys_generate_passphrase_text.clone().into());
-    w.set_confirm_text(p.keys_generate_confirm_text.clone().into());
     w.set_error_text(p.keys_generate_error_text.clone().into());
     w.set_result_label_text(p.keys_generate_result_label_text.clone().into());
     w.set_result_fingerprint_text(p.keys_generate_fingerprint_text.clone().into());
@@ -4081,22 +4137,32 @@ fn sync_private_key_generate(
     w.set_result_type_text(result_type.into());
 }
 
-fn sync_private_key_import(w: &PrivateKeyImportWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+pub(crate) fn sync_private_key_import(
+    w: &PrivateKeyImportWindow,
+    p: &AppProjection,
+    _m: Option<&MainWindow>,
+) {
     w.set_tab(p.keys_import_tab);
     w.set_label_text(p.private_keys_import_label_text.clone().into());
     w.set_path_text(p.private_keys_import_path_text.clone().into());
-    w.set_passphrase_text(p.private_keys_import_passphrase_text.clone().into());
-    w.set_paste_text(p.keys_import_paste_text.clone().into());
     w.set_error_text(p.keys_import_error_text.clone().into());
 }
 
-fn sync_private_key_export(w: &PrivateKeyExportWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+pub(crate) fn sync_private_key_export(
+    w: &PrivateKeyExportWindow,
+    p: &AppProjection,
+    _m: Option<&MainWindow>,
+) {
     w.set_path_text(p.keys_export_path_text.clone().into());
     w.set_public_key_text(p.keys_export_public_key_text.clone().into());
     w.set_error_text(p.keys_export_error_text.clone().into());
 }
 
-fn sync_private_key_deploy(w: &PrivateKeyDeployWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+pub(crate) fn sync_private_key_deploy(
+    w: &PrivateKeyDeployWindow,
+    p: &AppProjection,
+    _m: Option<&MainWindow>,
+) {
     w.set_key_label_text(p.keys_deploy_key_label_text.clone().into());
     w.set_public_key_text(p.keys_export_public_key_text.clone().into());
     if !string_model_matches(&w.get_target_options(), &p.keys_deploy_target_options) {
@@ -4118,29 +4184,104 @@ fn sync_private_key_deploy(w: &PrivateKeyDeployWindow, p: &AppProjection, _m: Op
     w.set_error_text(p.keys_deploy_error_text.clone().into());
 }
 
-fn sync_logging(w: &LoggingWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+pub(crate) fn sync_logging(w: &LoggingWindow, p: &AppProjection, _m: Option<&MainWindow>) {
     w.set_session_name_text(p.logging_dialog_session_text.clone().into());
     w.set_logging_active(p.logging_active);
     w.set_active_path_text(p.logging_path_text.clone().into());
-    w.set_directory_text(p.logging_dialog_directory_text.clone().into());
-    w.set_file_name_text(p.logging_dialog_file_name_text.clone().into());
+    w.set_browse_enabled(cfg!(windows) || crate::bootstrap::file_dialogs_available());
+    if w.get_directory_text().as_str() != p.logging_dialog_directory_text {
+        w.set_directory_text(p.logging_dialog_directory_text.clone().into());
+    }
+    if w.get_file_name_text().as_str() != p.logging_dialog_file_name_text {
+        w.set_file_name_text(p.logging_dialog_file_name_text.clone().into());
+    }
+    w.set_file_name_error_text(p.logging_dialog_file_name_error_text.clone().into());
+    w.set_file_exists(p.logging_dialog_file_exists);
+    w.set_path_error_text(p.logging_dialog_path_error_text.clone().into());
+    w.set_raw_format(p.logging_dialog_raw_format);
+    w.set_sanitized_format(!p.logging_dialog_raw_format);
+    w.set_timestamps(p.logging_dialog_timestamps);
+    w.set_include_input(p.logging_dialog_include_input);
+    w.set_input_confirmed(p.logging_dialog_input_confirmed);
+    w.set_overwrite_confirmed(p.logging_dialog_overwrite_confirmed);
 }
 
-fn sync_password(w: &PasswordPromptWindow, _p: &AppProjection, m: Option<&MainWindow>) {
+pub(crate) fn sync_password(w: &PasswordPromptWindow, p: &AppProjection, m: Option<&MainWindow>) {
     if let Some(main) = m {
         w.set_title_text(main.get_password_prompt_title_text());
         w.set_message_text(main.get_password_prompt_message_text());
-        w.set_password_text(main.get_password_prompt_value_text());
-        w.set_connect_enabled(!main.get_password_prompt_value_text().is_empty());
+    } else {
+        w.set_title_text(p.password_prompt_host_text.clone().into());
+        w.set_message_text(p.password_prompt_host_text.clone().into());
     }
+    // Typed password stays in this window; never push from MainWindow/projection.
+    w.set_connect_enabled(!w.get_password_text().is_empty());
 }
 
-fn sync_auth(w: &AuthPromptWindow, p: &AppProjection, _m: Option<&MainWindow>) {
+pub(crate) fn sync_auth(w: &AuthPromptWindow, p: &AppProjection, _m: Option<&MainWindow>) {
     w.set_host_text(p.auth_prompt_host_text.clone().into());
     w.set_problem_text(p.auth_prompt_problem_text.clone().into());
+    w.set_has_usable_method(p.auth_prompt_has_usable_method);
+    w.set_selected_method(p.auth_prompt_selected_method);
+    w.set_password_visible(p.auth_prompt_password_visible);
+    w.set_publickey_visible(p.auth_prompt_publickey_visible);
+    w.set_keyboard_visible(p.auth_prompt_keyboard_visible);
+    w.set_submit_enabled(p.auth_prompt_submit_enabled);
+    let current_keys = w.get_key_options();
+    let keys_changed = current_keys.row_count() != p.auth_prompt_key_options.len()
+        || !(0..p.auth_prompt_key_options.len()).all(|index| {
+            current_keys.row_data(index).is_some_and(|option| {
+                option.id == p.auth_prompt_key_options[index].id.as_str()
+                    && option.label == p.auth_prompt_key_options[index].label.as_str()
+                    && option.detail == p.auth_prompt_key_options[index].detail.as_str()
+            })
+        });
+    if keys_changed {
+        w.set_key_options(ModelRc::new(VecModel::from(
+            p.auth_prompt_key_options
+                .iter()
+                .map(|option| AuthKeyOption {
+                    id: option.id.clone().into(),
+                    label: option.label.clone().into(),
+                    detail: option.detail.clone().into(),
+                })
+                .collect::<Vec<_>>(),
+        )));
+    }
+    w.set_selected_key_index(p.auth_prompt_selected_key_index);
+    w.set_selected_key_label(p.auth_prompt_selected_key_label.clone().into());
+    w.set_use_agent(p.auth_prompt_use_agent);
+    w.set_publickey_submit_enabled(p.auth_prompt_publickey_submit_enabled);
+    w.set_challenge_name(p.auth_prompt_challenge_name.clone().into());
+    w.set_challenge_instruction(p.auth_prompt_challenge_instruction.clone().into());
+    let current_prompts = w.get_challenge_prompts();
+    let prompts_changed = current_prompts.row_count() != p.auth_prompt_challenge_prompts.len()
+        || !(0..p.auth_prompt_challenge_prompts.len()).all(|index| {
+            current_prompts.row_data(index).is_some_and(|prompt| {
+                prompt.text == p.auth_prompt_challenge_prompts[index].text.as_str()
+                    && prompt.echo == p.auth_prompt_challenge_prompts[index].echo
+                    && prompt.answer == p.auth_prompt_challenge_prompts[index].answer.as_str()
+            })
+        });
+    if prompts_changed {
+        w.set_challenge_prompts(ModelRc::new(VecModel::from(
+            p.auth_prompt_challenge_prompts
+                .iter()
+                .map(|prompt| AuthKeyboardPrompt {
+                    text: prompt.text.clone().into(),
+                    echo: prompt.echo,
+                    answer: prompt.answer.clone().into(),
+                })
+                .collect::<Vec<_>>(),
+        )));
+    }
+    w.set_challenge_round(p.auth_prompt_challenge_round);
+    w.set_challenge_round_total(p.auth_prompt_challenge_round_total);
+    w.set_keyboard_final_round(p.auth_prompt_keyboard_final_round);
+    w.set_keyboard_submit_enabled(p.auth_prompt_keyboard_submit_enabled);
 }
 
-fn sync_host_key_prompt(w: &HostKeyWindow, p: &AppProjection) {
+pub(crate) fn sync_host_key_prompt(w: &HostKeyWindow, p: &AppProjection) {
     w.set_prompt_text(p.host_key_prompt_text.clone().into());
     w.set_mode_text(p.host_key_prompt_mode_text.clone().into());
     w.set_target_text(p.host_key_prompt_target_text.clone().into());
@@ -4151,19 +4292,19 @@ fn sync_host_key_prompt(w: &HostKeyWindow, p: &AppProjection) {
     w.set_expected_fingerprint_text(p.host_key_prompt_expected_fingerprint_text.clone().into());
 }
 
-fn sync_sftp_conflict(w: &SftpConflictWindow, p: &AppProjection) {
+pub(crate) fn sync_sftp_conflict(w: &SftpConflictWindow, p: &AppProjection) {
     w.set_source_text(p.sftp_conflict_source_text.clone().into());
     w.set_destination_text(p.sftp_conflict_destination_text.clone().into());
     w.set_conflict_count(p.sftp_conflict_count);
 }
 
-fn sync_sftp_properties(w: &SftpPropertiesWindow, p: &AppProjection) {
+pub(crate) fn sync_sftp_properties(w: &SftpPropertiesWindow, p: &AppProjection) {
     w.set_name_text(p.sftp_properties_name_text.clone().into());
     w.set_path_text(p.sftp_properties_path_text.clone().into());
 }
 
 /// dialogs-closeout-a：SFTP chmod 窗（八进制 ↔ 9 勾选联动在 Slint 侧）。
-fn sync_sftp_chmod(w: &SftpChmodWindow, p: &AppProjection) {
+pub(crate) fn sync_sftp_chmod(w: &SftpChmodWindow, p: &AppProjection) {
     w.set_path_text(p.sftp_chmod_path_text.clone().into());
     w.set_mode_text(p.sftp_chmod_mode_text.clone().into());
     w.set_error_text(p.sftp_chmod_error_text.clone().into());
@@ -4177,13 +4318,13 @@ const OPEN_SOURCE_LICENSES: &str = include_str!("../assets/open_source_licenses.
 /// About 展开区预览上限：行数优先（ComplexText 量高成本随行数涨）。
 const ABOUT_LICENSES_PREVIEW_MAX_LINES: usize = 80;
 
-struct AboutLicensesPreview {
-    text: SharedString,
-    truncated: bool,
-    lines: i32,
+pub(crate) struct AboutLicensesPreview {
+    pub text: SharedString,
+    pub truncated: bool,
+    pub lines: i32,
 }
 
-fn about_licenses_preview() -> AboutLicensesPreview {
+pub(crate) fn about_licenses_preview() -> AboutLicensesPreview {
     let mut end = OPEN_SOURCE_LICENSES.len();
     let mut lines = 0usize;
     let mut truncated = false;
@@ -4212,7 +4353,7 @@ fn about_licenses_preview() -> AboutLicensesPreview {
     }
 }
 
-fn open_full_open_source_licenses() {
+pub(crate) fn open_full_open_source_licenses() {
     std::thread::spawn(|| {
         let dir = std::env::temp_dir().join("yshell");
         if std::fs::create_dir_all(&dir).is_err() {

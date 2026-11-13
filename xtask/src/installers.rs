@@ -123,13 +123,35 @@ pub struct InstallerContext<'a> {
     pub root: &'a Path,
     pub out_dir: &'a Path,
     pub work_dir: &'a Path,
+    /// User-facing entry executable (`yshell`).
     pub binary: &'a Path,
+    /// Thin role executables shipped beside [`Self::binary`].
+    pub role_binaries: &'a [PathBuf],
     pub version: &'a str,
     pub target: &'a str,
     pub target_os: TargetOs,
     pub arch: Arch,
     /// Artifact base name without extension, e.g. `yshell-v0.1.0-linux-x86_64`.
     pub name: String,
+}
+
+impl InstallerContext<'_> {
+    /// Resolve the role executables as absolute paths for a packaging template.
+    fn role_binary_paths(&self) -> Result<[String; 4]> {
+        let [host, shell, worker, daemon] = self.role_binaries else {
+            bail!(
+                "expected {} role binaries next to {}",
+                crate::dist::ROLE_BINARY_NAMES.len(),
+                self.binary.display()
+            );
+        };
+        Ok([
+            absolute_path(host)?,
+            absolute_path(shell)?,
+            absolute_path(worker)?,
+            absolute_path(daemon)?,
+        ])
+    }
 }
 
 /// Check that a format can be produced for `os` on this host, with an install
@@ -192,16 +214,28 @@ fn msi(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
     crate::dist::copy_shipped_themes_public(ctx.root, &themes_dir)?;
 
     let template = ctx.root.join("packaging/windows/yshell.wxs");
+    let version = msi_version(ctx.version);
+    let binary_path = absolute_path(ctx.binary)?;
+    let [host_bin, shell_bin, worker_bin, daemon_bin] = ctx.role_binary_paths()?;
+    let readme = absolute_path(&ctx.root.join("README.md"))?;
+    let license = absolute_path(&ctx.root.join("LICENSE"))?;
+    let license_rtf = absolute_path(&license_rtf_path)?;
+    let fonts = absolute_path(&fonts_dir)?;
+    let themes = absolute_path(&themes_dir)?;
     let rendered = render_template(
         &template,
         &[
-            ("@VERSION@", &msi_version(ctx.version)),
-            ("@BINARY@", &absolute_path(ctx.binary)?),
-            ("@README@", &absolute_path(&ctx.root.join("README.md"))?),
-            ("@LICENSE@", &absolute_path(&ctx.root.join("LICENSE"))?),
-            ("@LICENSE_RTF@", &absolute_path(&license_rtf_path)?),
-            ("@FONTS_DIR@", &absolute_path(&fonts_dir)?),
-            ("@THEMES_DIR@", &absolute_path(&themes_dir)?),
+            ("@VERSION@", version.as_str()),
+            ("@BINARY@", binary_path.as_str()),
+            ("@HOST_BIN@", host_bin.as_str()),
+            ("@SHELL_BIN@", shell_bin.as_str()),
+            ("@SESSION_WORKER_BIN@", worker_bin.as_str()),
+            ("@MCP_DAEMON_BIN@", daemon_bin.as_str()),
+            ("@README@", readme.as_str()),
+            ("@LICENSE@", license.as_str()),
+            ("@LICENSE_RTF@", license_rtf.as_str()),
+            ("@FONTS_DIR@", fonts.as_str()),
+            ("@THEMES_DIR@", themes.as_str()),
         ],
     )?;
     let source = work.join("yshell.wxs");
@@ -255,6 +289,13 @@ fn dmg(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
         fs::create_dir_all(&resources_dir)?;
 
         copy_file(ctx.binary, &macos_dir.join("yshell"), true)?;
+        // The Host spawns role executables as siblings of the running binary.
+        for role in ctx.role_binaries {
+            let name = role
+                .file_name()
+                .with_context(|| format!("{} has no file name", role.display()))?;
+            copy_file(role, &macos_dir.join(name), true)?;
+        }
         // Beside the binary (`Contents/MacOS/fonts`) for `resolve_fonts_dir()`.
         crate::dist::copy_shipped_fonts_public(ctx.root, &macos_dir.join("fonts"))?;
         crate::dist::copy_shipped_themes_public(ctx.root, &macos_dir.join("themes"))?;
@@ -353,6 +394,13 @@ fn rpm(ctx: &InstallerContext<'_>) -> Result<PathBuf> {
     }
     let sources = top.join("SOURCES");
     copy_file(ctx.binary, &sources.join("yshell"), true)?;
+    // Role executables must sit in /usr/bin beside `yshell` (sibling lookup).
+    for role in ctx.role_binaries {
+        let name = role
+            .file_name()
+            .with_context(|| format!("{} has no file name", role.display()))?;
+        copy_file(role, &sources.join(name), true)?;
+    }
     copy_file(
         &ctx.root.join("packaging/linux/yshell.desktop"),
         &sources.join("yshell.desktop"),
@@ -686,5 +734,31 @@ mod tests {
             wxs.contains("yshell-default.toml"),
             "MSI must package the default terminal theme"
         );
+    }
+
+    #[test]
+    fn msi_wxs_installs_every_role_executable_beside_the_entry() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let wxs = fs::read_to_string(root.join("packaging/windows/yshell.wxs"))
+            .expect("read packaging/windows/yshell.wxs");
+        for (placeholder, component) in [
+            ("@HOST_BIN@", "YShellHostExecutable"),
+            ("@SHELL_BIN@", "YShellShellExecutable"),
+            ("@SESSION_WORKER_BIN@", "YShellSessionWorkerExecutable"),
+            ("@MCP_DAEMON_BIN@", "YShellMcpDaemonExecutable"),
+        ] {
+            assert!(
+                wxs.contains(placeholder),
+                "MSI template must install {placeholder}"
+            );
+            assert!(
+                wxs.contains(&format!("Component Id=\"{component}\"")),
+                "MSI must define the {component} component"
+            );
+            assert!(
+                wxs.contains(&format!("ComponentRef Id=\"{component}\"")),
+                "MSI feature must reference {component}"
+            );
+        }
     }
 }

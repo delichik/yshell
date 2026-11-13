@@ -28,11 +28,13 @@ fn is_allowed(name: &str) -> bool {
 
 /// `env::var*`/`set_var`/`remove_var` first-argument literals in one file.
 fn env_var_literals(source: &str) -> Vec<(usize, String)> {
-    const NEEDLES: [&str; 4] = [
+    const NEEDLES: [&str; 5] = [
         "env::var(\"",
         "env::var_os(\"",
         "env::set_var(\"",
         "env::remove_var(\"",
+        // Debug/test switches funnel through `ensure::env_flag("<name>")`.
+        "env_flag(\"",
     ];
     let mut found = Vec::new();
     for (line_index, line) in source.lines().enumerate() {

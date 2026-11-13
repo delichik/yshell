@@ -6969,7 +6969,9 @@ dependencies = [
 name = "yshell-app"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "copypasta",
+ "libc",
  "raw-window-handle",
  "regex",
  "rfd",
@@ -7074,6 +7076,7 @@ name = "yshell-terminal"
 version = "0.1.0"
 dependencies = [
  "regex",
+ "serde",
  "swash",
  "unicode-width 0.1.14",
 ]

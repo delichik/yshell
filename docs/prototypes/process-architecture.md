@@ -3,7 +3,7 @@
 性质：多窗口与 MCP 相关的**技术设计真源**（进程边界、所有权、生命周期）。  
 产品范围决策见 [`yshell-current-status.md`](../product/yshell-current-status.md) **D38**；UI 观感仍以本目录 HTML 原型为准。
 
-更新：2026-11-11
+更新：2026-11-12
 
 ---
 
@@ -148,29 +148,81 @@ flowchart LR
 
 ---
 
-## 6. 实现分阶段
+## 6. 实现进度（诚实状态）
 
-| 阶段 | 内容 | 验收要点 |
+更新：2026-11-12（多进程收口）
+
+| 阶段 | 内容 | 状态 |
 |---|---|---|
-| **Phase 1** | 同进程抽出 Host / Session / Mcp / Shell **邮箱 API**（行为不变） | 现有 N7/MCP 行为与单测绿 |
-| **Phase 2** | SessionWorker 出进程；纳入 Host Job；心跳 | 杀一 Worker 不影响其它；杀 Host 带走 Worker |
-| **Phase 3** | McpProcess 独立；经 Host 全局 session API；建连 tab 临时落窗 | MCP 端口/进程单例；Mcp 挂不影响 session |
-| **Phase 4** | Shell/Host 分进程；单实例附着；跨窗移 tab；零窗退出 | 二次启动附着；迁窗不重建 Worker |
+| **Phase 1** | 同进程 Host 门面 / run-state / Job / 窗计数关机 | **已落地**：`HostService` 单实例锁（Windows 命名互斥量 / Unix `flock`）、run-state（含 pid 身份：镜像路径 + 启动时间，收尸前校验）、子进程 `try_wait` 回收并同步 `WorkerExited`/`McpExited`、关机序列（停 MCP → 断开 session → 3s 宽限 → 强杀 → 关 bridge → 清 run-state）。Shell 连接断开（正常退出、崩溃、被杀、socket reset）都会立即 Detach → 零窗 → 关机，不依赖 45s 心跳超时。Host 的 stderr 追加到 `{config_dir}/host-stderr.log`（detached 进程无控制台，便于诊断 panic/启动失败）。 |
+| **Phase 2** | SessionWorker 真进程 + SSH/终端 IPC | **部分**：终端 Connect → spawn `--session-worker` + loopback NDJSON（Host 监听、worker 回拨）；**SFTP 子系统、终端解析、本地 PTY 仍在 Host**；SFTP-only / `YSHELL_TEST_INPROCESS_SSH` / `cfg(test)` 回同进程。 |
+| **Phase 3** | McpProcess 独立 OS 进程；经 Host bridge 进 AppRuntime | **已落地**：Settings Enable → spawn `--mcp-daemon`，经 bridge 进 Host；崩溃按 Settings 重启。`McpStatus`/`WorkerFaulted` 事件目前只进 `HostEvent` 队列，未推送 Shell（投影状态间接反映）。 |
+| **Phase 4** | Shell/Host 分 OS 进程 + 二次启动附着 | **默认路径可用（含多窗）**：Shell NDJSON（Attach / UiCall / HostTick / 投影 / snapshot；请求 id 配对、读写超时分级、Host 重启后懒重连 + 重附着）；Shell 进程内多 Slint 窗（Host 单调 window id + tab 归属，move-tab-to-new-window / move-to-main / 关闭次窗 / 二次启动聚焦 / 零窗关机）；viewport/DPI 已上报；主窗回调 **202/359**（其余为独立 OS 窗，已在 `remote_dialog_wire.rs` 接线）；Worker 退出/MCP 退出经投影变为 Failed 状态；Shell 不再构造 AppRuntime。远程 OS 窗：解锁 / 密码 / host-key、Settings、主密码子窗、会话编辑器（含步骤 / 隧道）、文件夹默认值、私钥（含子窗）/ 代理 / 终端样式 / Host Keys（含子窗）/ 日志、认证、SFTP 冲突 / 属性 / chmod、About、新建文件夹、SFTP 条目，以及删除 / 关标签 / 退出 / 关窗 / 清 scrollback / MCP consent。未闭环项见 §6.1。`YSHELL_TEST_INPROCESS_HOST=1` = 同进程完整 DialogWindowManager。 |
 
-CLI 形态（实现期）：
+二进制形态：
 
-- 默认：ensure Host（或附着）→ Shell
-- `--host`：无 UI 协调进程
-- `--shell`：仅 UI
-- `--session-worker --session-id <id> --generation <n>`
-- `--mcp-daemon`：MCP 监听（由 Host 按 Settings 启停）
-- 现有 `--mcp`：stdio 桥（不变）
+- 用户入口 `yshell`（GUI Shell）；`yshell-host` / `yshell-shell` / `yshell-session-worker` / `yshell-mcp-daemon` 为薄角色二进制（同目录、同版本）。
+- 角色二进制默认命令 = 自身角色；原有 `--host` / `--shell` / `--session-worker` / `--mcp-daemon` argv 形态保留（开发/测试 fallback，`--config-dir` 等共享 flag 不变）。
+- 子进程寻址：`host::roles::role_exe()` 优先同目录 role binary，缺失时回退 `current_exe()` + 角色 flag；Windows 角色子进程带 `CREATE_NO_WINDOW`。
+- 打包：portable / MSI / DMG / deb / rpm 都安装同一目录下的 4 个角色二进制（`xtask dist` / `xtask/src/installers.rs`）。
 
-关键落点：`crates/yshell-app`（`runtime/`、`windows.rs`、`session_runtime.rs`、`mcp_server.rs`、`bootstrap.rs`）、`yshell-mcp`；协议 crate `yshell-host-ipc`（或等价模块）；Windows Job Object；`run-state.json`。
+`YSHELL_TEST_INPROCESS_HOST=1`：同进程 Host 门面 + 完整 WindowManager；`YSHELL_TEST_INPROCESS_SSH=1`：SSH 连接留在 Host（调试用）。
+
+关键落点：`crates/yshell-app`（`host/`（含 `lock.rs` / `run_state.rs` / `roles.rs`）、`remote_shell.rs`、`runtime/`、`windows.rs`、`session_runtime.rs`、`mcp_server.rs`、`bootstrap.rs`、`src/bin/`）、`yshell-mcp`；Windows Job Object；`run-state.json` / `host-bridge.json` / `instance.lock`。
+
+验证入口：
+
+- `cargo check --workspace --all-targets --locked`
+- `cargo test -p yshell-app --lib -- host::`（IPC 死锁/连接断开关机回归 / 单实例锁 / pid 身份 / run-state / Job）
+- `cargo test -p yshell-app --test role_binaries`（4 个进程级角色二进制用例）
+- `cargo test -p yshell-app --test host_process_smoke`（真实 `yshell --host`：起 Host → 附着 → 零窗关机 → 清 run-state）
+- `cargo test -p xtask`（dist/MSI 模板等）
+- 真实 GUI 冒烟（开发者本机）：`yshell --config-dir <tmp>` → 出窗（标题 YShell）+ `yshell-host` 子进程；正常关窗 → Host 退出、run-state/bridge 清理；硬杀 Shell → Host 立即 Detach 并完成关机。
+- 构建提示：Windows GNU dev 构建现在也带 16MB 栈（`build.rs` 对 msvc `-Wl`/`/STACK` 两个 toolchain 都发）；否则 Host/Slint 主线程会 1MB 栈溢出（表现为 Host 启动 ~0.3s 后 JSON 文件残留、Shell 报 connection refused）。
+
+### 6.1 尚未闭环（按优先级）
+
+1. ~~多窗~~ **已落地（默认路径）**：Shell 进程内多 Slint 窗（每窗独立投影 / 终端帧 / renderer / viewport），Host 维护单调 window id 与 tab 归属；支持 move-tab-to-new-window / move-to-main、关闭次窗、二次启动聚焦、零窗关机。简化：远程关闭确认窗仍按 window 0 处理（有连接时回退为把 tab 移到另一窗，不丢会话）；主窗关最后一个 tab 不自动退出。
+2. ~~远程终端渲染细节~~ **已补**：选区随 `WireTerminalSnapshot.selection` 下发并在 Shell 渲染；终端外观（字号 / 字体 / 配色 / 光标 / 选区色）经 `window_terminal_appearance` 投影并在建窗 / 切换 tab / 新帧时应用到每窗口 renderer；副 pane PTY 尺寸经 `sync_window_secondary_terminal_size` 上报。**仍缺**：Shell 不绘制副 pane 位图（split 渲染是 N7 既有限制，与 D38 无关）。
+3. ~~原生文件选择器~~ **已补（Shell 侧）**：主窗 Browse（私钥 / host keys / 认证 key / 日志目录 / 字体）与 SFTP 上传 / 下载使用真实 `rfd`，无显示环境时保留窗口内路径输入回退；独立 OS 窗的选择器原本已接线。
+4. **SFTP / 终端解析 / 本地 PTY 归位 SessionWorker**：仍在 Host（SFTP 会为 terminal session 新开一条 SSH 连接）；这是下一阶段的架构项，不在本版收口范围。
+5. ~~Host 去阻塞~~ **已落地**：周期探针、tab 激活延迟列表、**用户主动 SFTP 导航**（open path / parent / refresh）都改走独立 SFTP control 线程（`pump_sftp_control`：Host tick 只提交/应用）；传输本就在 sftp 作业线程。探针使用 control worker 自己的缓存连接：检测主机/网络不可达，不检测"浏览通道单边死亡"（下次用户操作会以列表错误暴露）。
+6. ~~事件面~~ **已补**：Host 在 Worker 异常退出时经投影把 session 标为 Failed 并给出 `session-worker-exited` 状态；MCP daemon 退出把 listener 置 Failed。`HostEvent` 队列保留给后续主动推送通道。
+7. ~~Shell 只读化~~ **已补**：Shell 不再构造 `AppRuntime`；日志按 Host 投影的 debug 开关初始化（`bootstrap::init_logging_for_shell`），Host 仍是唯一落盘者。
+8. **Unix 监督**：已接 `flock` 单实例锁、子进程独立进程组、syscall 级 liveness / 终止（SIGTERM → SIGKILL）、JobObject 的 Unix 兜底（Host 正常退出时 `killpg`）、Linux 角色子进程 `PR_SET_PDEATHSIG(SIGKILL)`。macOS 无 PDEATHSIG：靠 worker/mcp 对 `parent_pid` 的心跳检查；Host 被强杀后的 OS 级联保证仍只在 Windows 完全成立。
+9. **i18n**：本轮新增的 `@tr` 文案尚未回填 `translations/*.po` / `.pot`（缺翻译时按英文回退）。
+
 
 ---
 
-## 7. 风险
+## 7. Shell 本地 vs Host（落盘=Host）
+
+**唯一写盘在 Host**（`ConfigStore` / `AppRuntime`）。Shell 画窗，并持有本地草稿与预览；不写配置文件。明文密钥不进 Shell。
+
+Attach 时 Host 投影一次已保存配置，Shell 据此建本地缓存（主题、点击策略、language 等）。下表是目标所有权。**当前实现**：远程 Settings 的 L 档在 Shell 窗口上本地草稿，Save 才批量 UiCall（终端样式位图仍用打开时的 Host 预览，Save 后更新）。Mode/Accent 预览写在 Settings 窗和主窗，不经 Host。I/R 每次 UiCall。Managers / editors 的控件仍每次 UiCall。
+
+| 档 | 含义 | UiCall |
+|---|---|---|
+| **L** Local | Shell 草稿 + 本地 apply；Host 可暂不知 | **Save**（关窗可丢弃草稿） |
+| **I** Immediate | 一改就要影响 Host 活状态或其它窗 | **每次变更**（需要时同时落盘） |
+| **R** Runtime | 活 session / 认证 / tab / 清理；Shell 只展示与上报 | **每次用户动作** |
+
+**L**（本地草稿，Save 才 UiCall）：
+
+- Appearance：Mode / Accent / Terminal style / 字体预览
+- Terminal：click / paste / auto-copy 草稿
+- SFTP 默认值草稿
+- Settings 窗口的打开 / 关闭 / 左栏 section
+
+**I**（每次变更即 UiCall）：Language、Confirm close / Confirm quit、Reduce motion、全部 MCP 控件、Debug logging。
+
+**R**（每次用户动作）：主密码与解锁；认证 / 密码 / host-key 提示；keys / proxies / host-keys 的增删改；日志对话框；活 tabs / 终端 / SFTP 操作；Connect。列表与提示由 Shell 绘制，突变与续连在 Host。
+
+**编辑器**（Session / Folder / Tunnel / Login-step）：目标为 **L** 草稿。近端允许草稿暂留 Host；不把「草稿必须在 Host」写成约束。Save 与 Connect 经 Host。
+
+---
+
+## 8. 风险
 
 - **Host 必须薄**：禁止在 Host 做阻塞 SSH/大文件 I/O。
 - **帧带宽**：Worker → Host → Shell 两跳；优先 dirty 推送，不足再 shared memory。

@@ -897,7 +897,7 @@ impl AppRuntime {
 /// The tree is flattened in display order (a folder row followed by its
 /// visible children) so the Slint side can render it as a single list without
 /// nested models. Folders that are collapsed simply do not emit their children.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SessionTreeRow {
     /// `"folder"` or `"session"`.
     pub kind: String,

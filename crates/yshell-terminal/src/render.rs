@@ -50,7 +50,7 @@ pub const DEFAULT_CURSOR: TerminalColor = DEFAULT_FOREGROUND;
 pub const SELECTION_BACKGROUND: TerminalColor = TerminalColor::rgb(0x26, 0x4f, 0x78);
 
 /// A rasterized terminal frame ready to be uploaded as a texture.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TerminalFrame {
     pub width: u32,
     pub height: u32,

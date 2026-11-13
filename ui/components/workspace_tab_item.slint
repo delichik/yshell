@@ -150,24 +150,18 @@ export component WorkspaceTabItem inherits Rectangle {
             rename_input := WinTextInput {
                 visible: root.renaming;
                 enabled: root.renaming;
+                auto-focus: true;
                 width: parent.width;
                 height: Theme.control-height-compact;
                 y: (parent.height - self.height) / 2;
                 font-size: Theme.font-body;
                 text <=> root.rename-text;
                 accepted => { root.rename-committed(root.rename-text); }
-            }
-
-            rename_scope := FocusScope {
-                visible: root.renaming;
-                width: parent.width;
-                height: parent.height;
-                key-pressed(event) => {
-                    if (event.text == "\u{001b}") {
-                        root.rename-canceled();
-                        return accept;
+                cancelled => { root.rename-canceled(); }
+                focus-lost => {
+                    if (root.renaming) {
+                        root.rename-committed(root.rename-text);
                     }
-                    return reject;
                 }
             }
 

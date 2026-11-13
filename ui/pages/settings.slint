@@ -105,7 +105,7 @@ component AccentSwatch inherits Rectangle {
     border-width: root.selected ? 2px : 1px;
     border-color: root.selected ? Theme.text-primary : Theme.control-stroke;
     background: root.follow-system
-        ? @linear-gradient(90deg, #ffffff 0%, #ffffff 50%, #202020 50%, #202020 100%)
+        ? @linear-gradient(90deg, Theme.follow-system-swatch-light 0%, Theme.follow-system-swatch-light 50%, Theme.follow-system-swatch-dark 50%, Theme.follow-system-swatch-dark 100%)
         : root.swatch;
     clip: true;
 
@@ -227,7 +227,7 @@ export component SettingsDialog inherits Rectangle {
     in-out property <string> mcp-port-text: "18765";
     /// Listen == LAN (`0.0.0.0`); false = Local (`127.0.0.1`).
     in-out property <bool> mcp-listen-lan: false;
-    /// API key (required for LAN).
+    /// API key (optional; recommended for LAN).
     in-out property <string> mcp-api-key-text: "";
     /// Allow AI to view user-created connections.
     in-out property <bool> mcp-view-user-connections: false;
@@ -1045,7 +1045,7 @@ export component SettingsDialog inherits Rectangle {
                                             }
                                             SettingsMethodButton {
                                                 text: @tr("LAN");
-                                                hint: @tr("LAN = 0.0.0.0; API key required");
+                                                hint: @tr("LAN = 0.0.0.0; API key recommended");
                                                 selected: root.mcp-listen-lan;
                                                 enabled: root.mcp-enabled;
                                                 clicked => { root.set-mcp-listen-lan(true); }
@@ -1067,7 +1067,7 @@ export component SettingsDialog inherits Rectangle {
                                                 enabled: root.mcp-enabled;
                                                 input-type: password;
                                                 text <=> root.mcp-api-key-text;
-                                                placeholder-text: @tr("Required for LAN");
+                                                placeholder-text: @tr("Recommended for LAN");
                                                 edited => { root.update-mcp-api-key(root.mcp-api-key-text); }
                                                 accepted => { root.update-mcp-api-key(root.mcp-api-key-text); }
                                             }
@@ -1088,7 +1088,7 @@ export component SettingsDialog inherits Rectangle {
                                         }
                                     }
                                     FormHint {
-                                        text: @tr("Required for LAN.");
+                                        text: @tr("Optional. Recommended when Listen is LAN.");
                                     }
 
                                     FormRow {

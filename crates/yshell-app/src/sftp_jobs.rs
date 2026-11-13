@@ -13,7 +13,7 @@
 //! config, the paths and the overwrite policy.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     fs,
     path::{Path, PathBuf},
     sync::{
@@ -21,11 +21,12 @@ use std::{
         mpsc::{Receiver, Sender},
         Arc, Condvar, Mutex,
     },
+    time::Duration,
 };
 
 use yshell_sftp::{
-    FsEntryKind, OverwritePolicy, SftpClient, TransferProgress, TreeTransferOptions,
-    TreeTransferReport,
+    DirectoryListing, FsEntryKind, OverwritePolicy, RealSftpBackend, SftpClient, SftpErrorKind,
+    TransferProgress, TreeTransferOptions, TreeTransferReport,
 };
 use yshell_ssh::SshConnectionConfig;
 
@@ -220,6 +221,353 @@ pub enum SftpJobOutcome {
     },
 }
 
+// ---------------------------------------------------------------------------
+// Control-plane worker: liveness probes + directory listings
+// ---------------------------------------------------------------------------
+//
+// The Host supervisor tick must never block on SFTP. Listing a directory and
+// probing the connection are both synchronous network operations, so they are
+// submitted here and the results are drained on a later tick. This worker is
+// deliberately separate from the transfer pool: a probe queued behind a multi
+// gigabyte upload would be useless, and the probe/listing work must not consume
+// a transfer slot.
+
+/// One control-plane request handled by the SFTP control worker.
+#[derive(Debug, Clone)]
+pub enum SftpControlRequest {
+    /// Cheap liveness probe (`stat` of the tab's current directory). The
+    /// worker reports back `{ session_key, ok, error }`; the tick only marks the
+    /// session disconnected when the failure is a transport/backend failure,
+    /// exactly like the previous synchronous probe.
+    Probe {
+        session_key: String,
+        /// Tab the probe was issued for; a result for a closed/retargeted tab is
+        /// dropped by the runtime.
+        tab_id: String,
+        config: SshConnectionConfig,
+        path: String,
+        /// I/O timeout for the probe; a dead connection must fail fast.
+        timeout_secs: u64,
+    },
+    /// One directory listing for a specific SFTP tab.
+    ListDir {
+        session_key: String,
+        tab_id: String,
+        config: SshConnectionConfig,
+        path: String,
+    },
+    /// Drops the worker's cached control connections for a session (tab or
+    /// session closed). No result is reported back.
+    CloseSession { session_key: String },
+}
+
+/// Result of one control request, drained by the Host tick.
+#[derive(Debug, Clone)]
+pub enum SftpControlMessage {
+    ProbeResult {
+        session_key: String,
+        tab_id: String,
+        /// `false` when the probe failed for any reason (see `transport_failed`).
+        ok: bool,
+        /// Whether the failure is a transport/backend failure, i.e. the same
+        /// condition that used to flip the session to disconnected. A missing
+        /// directory or a permission error is not a transport failure.
+        transport_failed: bool,
+        error: Option<String>,
+    },
+    ListingResult {
+        session_key: String,
+        tab_id: String,
+        path: String,
+        result: Result<DirectoryListing, String>,
+    },
+}
+
+/// Why a cached control connection exists (probe vs listing timeouts differ).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum ControlClientKind {
+    Probe,
+    List,
+}
+
+/// A cached control-plane SFTP client plus the config it was opened for.
+#[derive(Debug)]
+struct ControlClient {
+    config: SshConnectionConfig,
+    client: SftpClient<RealSftpBackend>,
+}
+
+/// State shared between the runtime handle and the control worker thread.
+#[derive(Debug, Default)]
+struct ControlShared {
+    results: VecDeque<SftpControlMessage>,
+    probe_in_flight: bool,
+    /// Listing requests that have not reported back yet (session, tab, path).
+    listings_in_flight: Vec<(String, String, String)>,
+}
+
+/// Runtime-side handle to the control worker.
+///
+/// Cloning is cheap: the queue and the in-flight markers live in an `Arc`, so a
+/// `&SftpControlHandle` is never needed for mutable access. The runtime keeps it
+/// inside [`SftpJobHandle`] so no new `AppRuntime` field is required.
+#[derive(Debug, Clone)]
+pub struct SftpControlHandle {
+    tx: Sender<SftpControlRequest>,
+    shared: Arc<Mutex<ControlShared>>,
+}
+
+impl SftpControlHandle {
+    /// Handle around an explicit request sender (tests / embedded workers).
+    pub fn new(tx: Sender<SftpControlRequest>) -> Self {
+        Self {
+            tx,
+            shared: Arc::new(Mutex::new(ControlShared::default())),
+        }
+    }
+
+    /// Whether a probe is already in flight (the tick must not queue another).
+    pub fn probe_in_flight(&self) -> bool {
+        self.shared
+            .lock()
+            .expect("sftp control state poisoned")
+            .probe_in_flight
+    }
+
+    /// Whether a listing for this exact (session, tab, path) is in flight.
+    pub fn listing_in_flight_for(&self, session_key: &str, tab_id: &str, path: &str) -> bool {
+        self.shared
+            .lock()
+            .expect("sftp control state poisoned")
+            .listings_in_flight
+            .iter()
+            .any(|(session, tab, listed)| session == session_key && tab == tab_id && listed == path)
+    }
+
+    /// Submits one control request; returns `false` when the worker is gone.
+    ///
+    /// The in-flight marker is recorded *before* the send so a result that the
+    /// worker produces immediately is still matched to this request.
+    pub fn submit(&self, request: SftpControlRequest) -> bool {
+        let is_probe = matches!(&request, SftpControlRequest::Probe { .. });
+        let listing_key = match &request {
+            SftpControlRequest::ListDir {
+                session_key,
+                tab_id,
+                path,
+                ..
+            } => Some((session_key.clone(), tab_id.clone(), path.clone())),
+            _ => None,
+        };
+        {
+            let mut shared = self.shared.lock().expect("sftp control state poisoned");
+            if is_probe {
+                shared.probe_in_flight = true;
+            }
+            if let Some(key) = &listing_key {
+                shared.listings_in_flight.push(key.clone());
+            }
+        }
+        if self.tx.send(request).is_err() {
+            let mut shared = self.shared.lock().expect("sftp control state poisoned");
+            if is_probe {
+                shared.probe_in_flight = false;
+            }
+            if let Some(key) = &listing_key {
+                shared.listings_in_flight.retain(|entry| entry != key);
+            }
+            return false;
+        }
+        true
+    }
+
+    /// Drains the results the worker reported, clearing their in-flight markers.
+    pub fn drain_results(&self) -> Vec<SftpControlMessage> {
+        let mut shared = self.shared.lock().expect("sftp control state poisoned");
+        let results = shared.results.drain(..).collect::<Vec<_>>();
+        for result in &results {
+            match result {
+                SftpControlMessage::ProbeResult { .. } => shared.probe_in_flight = false,
+                SftpControlMessage::ListingResult {
+                    session_key,
+                    tab_id,
+                    path,
+                    ..
+                } => shared
+                    .listings_in_flight
+                    .retain(|entry| entry != &(session_key.clone(), tab_id.clone(), path.clone())),
+            }
+        }
+        results
+    }
+
+    /// Queues a result as if the worker had produced it (unit tests only).
+    #[cfg(test)]
+    fn push_result_for_test(&self, message: SftpControlMessage) {
+        self.shared
+            .lock()
+            .expect("sftp control state poisoned")
+            .results
+            .push_back(message);
+    }
+}
+
+/// Spawns the dedicated SFTP control worker (liveness probes + listings).
+///
+/// The worker owns its SSH/SFTP connections: requests carry the connection
+/// config and the worker keeps one cached client per `(session, purpose)`, so a
+/// probe every few seconds does not redo a TCP+SSH handshake each time. A cached
+/// client that fails with a transport error is dropped and the request retried
+/// once on a fresh connection, so a stale cache can never report a live session
+/// as dead.
+///
+/// Trade-off: these are *separate* connections from the SFTP tab's browsing
+/// client (`AppRuntime::sftp_live`) and from the app-owned SSH transport. In the
+/// remote-Shell Host process the runtime has no transport anyway (the
+/// SessionWorker owns it), so the previous probe already used a config-based
+/// connection; a fresh-connection failure still means "this host is unreachable
+/// from here", which is what the tab badge reports.
+pub fn start_sftp_control_worker() -> SftpControlHandle {
+    let (tx, rx) = std::sync::mpsc::channel::<SftpControlRequest>();
+    let handle = SftpControlHandle::new(tx);
+    let shared = Arc::clone(&handle.shared);
+    let spawned = std::thread::Builder::new()
+        .name("yshell-sftp-control".to_owned())
+        .spawn(move || control_worker_loop(rx, shared));
+    if let Err(error) = spawned {
+        tracing::warn!(error = %error, "failed to start the SFTP control worker");
+    }
+    handle
+}
+
+fn control_worker_loop(rx: Receiver<SftpControlRequest>, shared: Arc<Mutex<ControlShared>>) {
+    let mut cache = HashMap::<(String, ControlClientKind), ControlClient>::new();
+    while let Ok(request) = rx.recv() {
+        let Some(message) = run_control_request(&mut cache, request) else {
+            continue;
+        };
+        match shared.lock() {
+            Ok(mut shared) => shared.results.push_back(message),
+            Err(_) => return,
+        }
+    }
+}
+
+fn run_control_request(
+    cache: &mut HashMap<(String, ControlClientKind), ControlClient>,
+    request: SftpControlRequest,
+) -> Option<SftpControlMessage> {
+    match request {
+        SftpControlRequest::Probe {
+            session_key,
+            tab_id,
+            config,
+            path,
+            timeout_secs,
+        } => {
+            let mut probe_config = config;
+            // The probe must fail fast: a black-holed connection cannot be
+            // allowed to keep the probe (and the listings queued behind it)
+            // waiting for the full connect timeout.
+            probe_config.connect_timeout = Duration::from_secs(timeout_secs.max(1));
+            let outcome = with_control_client(
+                cache,
+                (session_key.clone(), ControlClientKind::Probe),
+                &probe_config,
+                |client| client.entry_kind(&path),
+            );
+            let transport_failed =
+                matches!(&outcome, Err(error) if error.kind == SftpErrorKind::Backend);
+            Some(SftpControlMessage::ProbeResult {
+                session_key,
+                tab_id,
+                ok: outcome.is_ok(),
+                transport_failed,
+                error: outcome.err().map(|error| error.to_string()),
+            })
+        }
+        SftpControlRequest::ListDir {
+            session_key,
+            tab_id,
+            config,
+            path,
+        } => {
+            let outcome = with_control_client(
+                cache,
+                (session_key.clone(), ControlClientKind::List),
+                &config,
+                |client| client.list_dir(&path),
+            );
+            Some(SftpControlMessage::ListingResult {
+                session_key,
+                tab_id,
+                path,
+                result: outcome.map_err(|error| error.to_string()),
+            })
+        }
+        SftpControlRequest::CloseSession { session_key } => {
+            // Tab/session closed: drop every cached connection for it so a long
+            // Host session does not accumulate one SSH connection per closed
+            // SFTP tab.
+            cache.retain(|(session, _), _| session != &session_key);
+            None
+        }
+    }
+}
+
+/// Runs one operation on the cached control client, reconnecting once when the
+/// cached connection turns out to be dead.
+fn with_control_client<T>(
+    cache: &mut HashMap<(String, ControlClientKind), ControlClient>,
+    key: (String, ControlClientKind),
+    config: &SshConnectionConfig,
+    operation: impl Fn(&SftpClient<RealSftpBackend>) -> yshell_sftp::SftpResult<T>,
+) -> yshell_sftp::SftpResult<T> {
+    ensure_control_client(cache, &key, config);
+    let first = {
+        let entry = cache.get(&key).expect("control client was just inserted");
+        operation(&entry.client)
+    };
+    match first {
+        Ok(value) => Ok(value),
+        Err(error) if error.kind == SftpErrorKind::Backend => {
+            // The cached connection died (remote reboot, idle timeout, ...):
+            // retry once on a fresh connection before reporting a transport
+            // failure, so a stale cache never marks a live session dead.
+            cache.remove(&key);
+            ensure_control_client(cache, &key, config);
+            let retry = {
+                let entry = cache.get(&key).expect("control client was just inserted");
+                operation(&entry.client)
+            };
+            if matches!(&retry, Err(error) if error.kind == SftpErrorKind::Backend) {
+                cache.remove(&key);
+            }
+            retry
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn ensure_control_client(
+    cache: &mut HashMap<(String, ControlClientKind), ControlClient>,
+    key: &(String, ControlClientKind),
+    config: &SshConnectionConfig,
+) {
+    if cache.get(key).is_some_and(|entry| &entry.config != config) {
+        cache.remove(key);
+    }
+    if !cache.contains_key(key) {
+        cache.insert(
+            key.clone(),
+            ControlClient {
+                config: config.clone(),
+                client: SftpClient::with_real_backend(config.clone()),
+            },
+        );
+    }
+}
+
 /// UI-thread handle to the worker: submit jobs, cancel them, forget finished ones.
 #[derive(Debug)]
 pub struct SftpJobHandle {
@@ -229,6 +577,9 @@ pub struct SftpJobHandle {
     /// conflicts can be re-run with an explicit policy.
     specs: HashMap<String, SftpJobSpec>,
     limiter: Arc<TransferLimiter>,
+    /// Off-thread probe/listing worker (Host-owned; absent in the fallback
+    /// in-process path and in unit tests).
+    control: Option<SftpControlHandle>,
 }
 
 impl SftpJobHandle {
@@ -240,7 +591,25 @@ impl SftpJobHandle {
             cancels: HashMap::new(),
             specs: HashMap::new(),
             limiter,
+            control: None,
         }
+    }
+
+    /// Handle with an explicit concurrency limit and an SFTP control worker.
+    pub fn with_limiter_and_control(
+        tx: Sender<SftpJob>,
+        limiter: Arc<TransferLimiter>,
+        control: SftpControlHandle,
+    ) -> Self {
+        Self {
+            control: Some(control),
+            ..Self::with_limiter(tx, limiter)
+        }
+    }
+
+    /// The off-thread probe/listing worker, when one was wired.
+    pub fn control(&self) -> Option<&SftpControlHandle> {
+        self.control.as_ref()
     }
 
     /// Changes how many transfers may run at the same time.
@@ -987,11 +1356,14 @@ mod tests {
     use std::{path::PathBuf, sync::atomic::AtomicBool, sync::Arc};
 
     use tempfile::tempdir;
-    use yshell_sftp::{FsEntry, InMemorySftpBackend, SftpClient, TreeTransferOptions};
+    use yshell_sftp::{
+        DirectoryListing, FsEntry, InMemorySftpBackend, SftpClient, TreeTransferOptions,
+    };
     use yshell_ssh::SshConnectionConfig;
 
     use super::{
-        delete_remote_entry, join_remote, numbered_name, split_remote, SftpJobSpec, TransferLimiter,
+        delete_remote_entry, join_remote, numbered_name, split_remote, SftpControlHandle,
+        SftpControlMessage, SftpControlRequest, SftpJobSpec, TransferLimiter,
     };
 
     fn in_memory_client(entries: &[FsEntry]) -> SftpClient<InMemorySftpBackend> {
@@ -1143,5 +1515,76 @@ mod tests {
         assert_eq!(limiter.limit(), 4);
         limiter.release();
         limiter.release();
+    }
+
+    #[test]
+    fn control_handle_tracks_in_flight_work_and_drains_results() {
+        let (tx, rx) = std::sync::mpsc::channel::<SftpControlRequest>();
+        let handle = SftpControlHandle::new(tx);
+        assert!(!handle.probe_in_flight());
+
+        assert!(handle.submit(SftpControlRequest::Probe {
+            session_key: "s1".to_owned(),
+            tab_id: "t1".to_owned(),
+            config: config(),
+            path: "/srv".to_owned(),
+            timeout_secs: 3,
+        }));
+        assert!(handle.probe_in_flight());
+        assert!(matches!(
+            rx.recv().expect("probe request"),
+            SftpControlRequest::Probe { .. }
+        ));
+
+        // A worker result clears the in-flight marker when the tick drains it.
+        handle.push_result_for_test(SftpControlMessage::ProbeResult {
+            session_key: "s1".to_owned(),
+            tab_id: "t1".to_owned(),
+            ok: false,
+            transport_failed: true,
+            error: Some("transport closed".to_owned()),
+        });
+        assert_eq!(handle.drain_results().len(), 1);
+        assert!(!handle.probe_in_flight());
+
+        assert!(handle.submit(SftpControlRequest::ListDir {
+            session_key: "s1".to_owned(),
+            tab_id: "t1".to_owned(),
+            config: config(),
+            path: "/srv".to_owned(),
+        }));
+        // Dedupe is keyed on the exact (session, tab, path) triple.
+        assert!(handle.listing_in_flight_for("s1", "t1", "/srv"));
+        assert!(!handle.listing_in_flight_for("s1", "t2", "/srv"));
+        rx.recv().expect("listing request");
+        handle.push_result_for_test(SftpControlMessage::ListingResult {
+            session_key: "s1".to_owned(),
+            tab_id: "t1".to_owned(),
+            path: "/srv".to_owned(),
+            result: Ok(DirectoryListing {
+                path: "/srv".to_owned(),
+                entries: vec![FsEntry::directory("/srv/sub")],
+            }),
+        });
+        assert_eq!(handle.drain_results().len(), 1);
+        assert!(!handle.listing_in_flight_for("s1", "t1", "/srv"));
+    }
+
+    #[test]
+    fn control_handle_rolls_back_when_the_worker_is_gone() {
+        let (tx, rx) = std::sync::mpsc::channel::<SftpControlRequest>();
+        drop(rx);
+        let handle = SftpControlHandle::new(tx);
+        assert!(!handle.submit(SftpControlRequest::Probe {
+            session_key: "s1".to_owned(),
+            tab_id: "t1".to_owned(),
+            config: config(),
+            path: "/".to_owned(),
+            timeout_secs: 3,
+        }));
+        // A failed submission must not leave a probe marked in flight (that
+        // would silently disable probing forever).
+        assert!(!handle.probe_in_flight());
+        assert!(handle.drain_results().is_empty());
     }
 }

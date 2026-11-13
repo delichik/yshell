@@ -2,11 +2,13 @@
 <!--
   WiX v3 source for the YShell MSI, rendered by `cargo xtask dist` with the
   msi format selected (see xtask/src/installers.rs). @VERSION@ is a three part
-  numeric version, @BINARY@/@README@/@LICENSE@/@LICENSE_RTF@/@FONTS_DIR@/@THEMES_DIR@
-  are absolute paths. Fonts must sit beside the exe as INSTALLFOLDER\fonts\ —
-  see resolve_fonts_dir() in crates/yshell-terminal. Themes must sit beside the
-  exe as INSTALLFOLDER\themes\ — see resolve_shipped_themes_dir() in
-  crates/yshell-config.
+  numeric version, @BINARY@/@HOST_BIN@/@SHELL_BIN@/@SESSION_WORKER_BIN@/
+  @MCP_DAEMON_BIN@/@README@/@LICENSE@/@LICENSE_RTF@/@FONTS_DIR@/@THEMES_DIR@
+  are absolute paths. The role executables are installed in INSTALLFOLDER beside
+  yshell.exe (the Host spawns them as siblings). Fonts must sit beside the exe as
+  INSTALLFOLDER\fonts\ — see resolve_fonts_dir() in crates/yshell-terminal. Themes
+  must sit beside the exe as INSTALLFOLDER\themes\ — see
+  resolve_shipped_themes_dir() in crates/yshell-config.
 -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*"
@@ -30,6 +32,21 @@
         <Directory Id="INSTALLFOLDER" Name="YShell">
           <Component Id="YShellExecutable" Guid="{B454BD78-5C13-41FB-A1B4-5ACB11EEC51D}">
             <File Id="YShellExe" Source="@BINARY@" KeyPath="yes" />
+          </Component>
+          <!-- Thin role executables. Installed beside yshell.exe: the Host
+               spawns them as siblings and they resolve fonts/themes relative
+               to their own executable directory. No separate shortcuts. -->
+          <Component Id="YShellHostExecutable" Guid="{3B6F0C2A-1D4E-4A7B-8C5D-2E9F10B34A61}">
+            <File Id="YShellHostExe" Source="@HOST_BIN@" KeyPath="yes" />
+          </Component>
+          <Component Id="YShellShellExecutable" Guid="{6D2A8E41-9F3C-4B62-AD71-5C0E93D27B82}">
+            <File Id="YShellShellExe" Source="@SHELL_BIN@" KeyPath="yes" />
+          </Component>
+          <Component Id="YShellSessionWorkerExecutable" Guid="{9E5C7B12-4A6D-4F83-B2E0-71C4D5A69823}">
+            <File Id="YShellSessionWorkerExe" Source="@SESSION_WORKER_BIN@" KeyPath="yes" />
+          </Component>
+          <Component Id="YShellMcpDaemonExecutable" Guid="{C1D84F63-2B7A-4E95-8A3F-6E05B29D7C34}">
+            <File Id="YShellMcpDaemonExe" Source="@MCP_DAEMON_BIN@" KeyPath="yes" />
           </Component>
           <Component Id="YShellDocs" Guid="{81F67662-0FCB-4E83-BBFA-58D5237D52E3}">
             <File Id="YShellReadme" Source="@README@" />
@@ -104,6 +121,10 @@
 
     <Feature Id="YShellFeature" Title="YShell" Level="1">
       <ComponentRef Id="YShellExecutable" />
+      <ComponentRef Id="YShellHostExecutable" />
+      <ComponentRef Id="YShellShellExecutable" />
+      <ComponentRef Id="YShellSessionWorkerExecutable" />
+      <ComponentRef Id="YShellMcpDaemonExecutable" />
       <ComponentRef Id="YShellDocs" />
       <ComponentRef Id="YShellFonts" />
       <ComponentRef Id="YShellThemes" />

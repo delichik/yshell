@@ -56,6 +56,12 @@ export global Theme {
     /// 强调色的浅底（选中项/开关底）
     out property <color> accent-soft: dark ? accent-soft-dark : accent-soft-light;
 
+    // ------------------------------------------------ Follow-system accent swatch
+    /// “跟随系统”色块的固定半白/半黑预览：不随当前主题变化，故不是主题色，
+    /// 但仍集中在 Token 里，避免页面里出现硬编码颜色（ui_token_discipline）。
+    out property <color> follow-system-swatch-light: #ffffff;
+    out property <color> follow-system-swatch-dark: #202020;
+
     // -------------------------------------------------------------- 表面与层次
     /// 窗口底色（代替 Mica 的实色）
     out property <color> window-background: dark ? #202020 : #F3F3F3;

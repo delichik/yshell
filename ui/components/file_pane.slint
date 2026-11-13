@@ -871,15 +871,22 @@ export component FilePane inherits Rectangle {
                     //   * 完整名字放得下 → 原样显示，不加任何省略号；
                     //   * 放不下 → 只显示 "…" + 尾段（后缀 + 后缀前 3 个字符），
                     //     前导省略号，片段左对齐——前面那一截根本不画。
+                    // 原地改名：盖住 meta 列、占满行宽（TextInput 不自动横滚）；
+                    // Enter / 失焦确认，Esc 取消；双击仍走 activate-row。
                     Rectangle {
                         x: root.icon-column-width;
                         y: 0;
-                        width: root.name-width;
+                        width: index == root.inline-rename-index && !row.is-parent
+                            ? max(0px, root.content-width - root.icon-column-width)
+                            : root.name-width;
                         height: parent.height;
-                        clip: true;
+                        clip: index != root.inline-rename-index || row.is-parent;
+                        z: index == root.inline-rename-index && !row.is-parent ? 1 : 0;
 
                         rename_input := WinTextInput {
                             visible: index == root.inline-rename-index && !row.is-parent;
+                            enabled: index == root.inline-rename-index && !row.is-parent;
+                            auto-focus: true;
                             width: parent.width;
                             height: Theme.control-height-compact;
                             y: (parent.height - self.height) / 2;
@@ -887,18 +894,13 @@ export component FilePane inherits Rectangle {
                             accepted => {
                                 root.inline-rename-commit(root.inline-rename-text);
                             }
-                        }
-
-                        rename_scope := FocusScope {
-                            visible: index == root.inline-rename-index && !row.is-parent;
-                            width: parent.width;
-                            height: parent.height;
-                            key-pressed(event) => {
-                                if (event.text == "\u{001b}") {
-                                    root.inline-rename-cancel();
-                                    return accept;
+                            cancelled => {
+                                root.inline-rename-cancel();
+                            }
+                            focus-lost => {
+                                if (index == root.inline-rename-index && !row.is-parent) {
+                                    root.inline-rename-commit(root.inline-rename-text);
                                 }
-                                return reject;
                             }
                         }
 
@@ -942,6 +944,7 @@ export component FilePane inherits Rectangle {
                     }
 
                     Text {
+                        visible: index != root.inline-rename-index || row.is-parent;
                         x: parent.width - root.meta-width;
                         width: root.size-column-width;
                         height: parent.height;
@@ -954,6 +957,7 @@ export component FilePane inherits Rectangle {
                         overflow: elide;
                     }
                     Text {
+                        visible: index != root.inline-rename-index || row.is-parent;
                         x: parent.width - root.meta-width + root.size-column-width + root.column-gap;
                         width: root.modified-column-width;
                         height: parent.height;
@@ -966,7 +970,8 @@ export component FilePane inherits Rectangle {
                         overflow: elide;
                     }
                     Text {
-                        visible: root.show-permissions;
+                        visible: root.show-permissions
+                            && (index != root.inline-rename-index || row.is-parent);
                         x: parent.width - root.permissions-column-width;
                         width: root.permissions-column-width;
                         height: parent.height;
@@ -1004,12 +1009,15 @@ export component FilePane inherits Rectangle {
                         width: parent.width;
                         height: parent.height;
                         // 框选期间停用：DragArea 会在越过阈值时截走手势。
-                        enabled: !row.is-parent && !root.box-armed;
+                        // 原地改名时停用，避免盖住输入框（即便改名层 z 更高也兜底）。
+                        enabled: !row.is-parent && !root.box-armed
+                            && index != root.inline-rename-index;
                         data: root.drag-payload(root.selection-key);
                         allow-copy: true;
                         allow-move: true;
 
                         row_hit := TouchArea {
+                            enabled: index != root.inline-rename-index || row.is-parent;
                             pointer-event(event) => {
                                 if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
                                     // 右键落在已选中的行上时保留多选（B18），

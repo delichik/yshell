@@ -558,14 +558,14 @@ pub enum AppearanceMode {
 /// MCP listen scope (Settings → MCP → Listen).
 ///
 /// * [`Self::Local`] — bind `127.0.0.1` (loopback only).
-/// * [`Self::Lan`] — bind `0.0.0.0` (reachable on the LAN; API key required).
+/// * [`Self::Lan`] — bind `0.0.0.0` (reachable on the LAN; API key recommended).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum McpListenMode {
     /// Loopback only (`127.0.0.1`).
     #[default]
     Local,
-    /// All interfaces (`0.0.0.0`); requires a non-empty API key.
+    /// All interfaces (`0.0.0.0`); API key optional but recommended.
     Lan,
 }
 
@@ -828,9 +828,9 @@ pub struct UiProfile {
     /// Bind scope: Local (`127.0.0.1`) or LAN (`0.0.0.0`).
     #[serde(default)]
     pub mcp_listen: McpListenMode,
-    /// Shared secret required on every MCP IPC request. Required when
-    /// [`Self::mcp_listen`] is [`McpListenMode::Lan`]; optional for Local
-    /// (empty → mint a session token into `mcp-endpoint.json` on start).
+    /// Shared secret verified on every MCP IPC request. Optional for Local and
+    /// LAN; **recommended** when [`Self::mcp_listen`] is [`McpListenMode::Lan`].
+    /// Empty → mint a session token into `mcp-endpoint.json` on start.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub mcp_api_key: String,
     /// When true, AI may **view** user-created connections (not only AI-origin tabs).

@@ -1,6 +1,6 @@
 # YShell 本 build 产品现状
 
-更新时间：2026-11-11  
+更新时间：2026-11-12  
 性质：**唯一现行产品范围文档**（有什么 / 砍了什么 / 还缺什么 / 仍生效的决策）
 
 冲突时：**本文（产品范围）> [`docs/prototypes/`](../prototypes/README.md) 及其文档（设计稿）> 实现与单测 > 参考文档**（[`yshell-ui-interaction-contract.md`](./yshell-ui-interaction-contract.md)、设计语言、[`archive/`](./archive/README.md) 等）。  
@@ -24,6 +24,7 @@
 | 本地终端 | runtime/PTY 已有；**本版无 UI 入口**（`+` 开 QC；`open_local_terminal` 仅测试/预留） |
 | 基建 | Slint 1.18、R1/R2 拆分、L2 Esc/遮罩、对比度 xtask、真实 SSH only |
 | MCP（终端控制） | Settings → **MCP** 独立分区（原型）：Enable / Port / Listen(Local\|LAN) / API key / View user / Control user / Auto-approve；默认关。AI 创建的标签带 AI 标志（TabBar 原型）。实现仍含授权锁 + `session_run`/blocker；不含 SFTP、不含代填密码/host key（见 D34） |
+| D38 四角色多进程 | Host（拥有 AppRuntime）/ SessionWorker / McpDaemon / Shell；**角色二进制已分离**（`yshell` 用户入口 + `yshell-host` / `yshell-shell` / `yshell-session-worker` / `yshell-mcp-daemon`，argv 角色 flag 保留）；默认 ensure Host + Shell 附着；单实例锁 + run-state pid 身份校验 + 子进程回收 + 优雅关机序列；零窗关机；二次启动聚焦已有窗口；Host 重启后 Shell 懒重连。未闭环见 §3「远程 Shell UI 完整度」。`YSHELL_TEST_INPROCESS_HOST=1` 同进程完整 GUI |
 
 ---
 
@@ -62,7 +63,7 @@ UI 为 disabled + tooltip、空态，或决策延后。**不是待补闭环。**
 | N6 遗留 | R-107 存为会话默认；日志大小上限 |
 | `ui.new_tab_mode` | schema 有；`+` 忽略 session-editor；Settings 无项（相对 D11） |
 | `ui.multi_window_enabled` | schema 幽灵字段，未接线 |
-| Host/Session/MCP/Shell 真多进程 | D38 目标架构；同进程 Host 边界 / CLI 角色 / run-state / Job 已落地，Worker·MCP·Shell 分进程 I/O 桥接仍推进中（见 [`process-architecture.md`](../prototypes/process-architecture.md)） |
+| 远程 Shell UI 完整度 | D38 默认分进程：完整投影 + 终端 snapshot（含选区）；**主窗回调 202/359**（其余为独立 OS 窗，已在 `remote_dialog_wire.rs` 接线）；SFTP 面板 / 终端选择复制粘贴查找 / 本地栏 / 传输 / tab 菜单 / 面板拖动 / viewport-DPI / 终端外观投影 / 原生文件选择器已接通；**多窗已落地**（Host 单调 window id + tab 归属、move-tab-to-new-window / move-to-main、关闭次窗、零窗关机；关闭确认窗仍按 window 0 简化）；Worker/MCP 退出经投影变 Failed；Shell 不再构造 AppRuntime。Host 拥有 SFTP worker 与唯一落盘权；周期探针 / 延迟列表 / 用户导航均在独立 SFTP control 线程。远程 OS 窗：解锁 / 密码 / host-key、Settings、主密码子窗、会话编辑器（含 Login Script / Tunnel）、文件夹默认值、私钥（含生成/导入/导出/部署）、代理、终端样式、Host Keys（含增/导入/导出）、日志、认证、SFTP 冲突 / 属性 / chmod、About、新建文件夹、SFTP 条目，以及删除确认、关标签、退出、关窗、清 scrollback、MCP consent。Settings 的 L 档在 Shell 本地直到 Save（I/R 与其它窗的控件仍每次 UiCall）。**未闭环**：副 pane 位图未绘制（N7 既有限制）、SFTP/终端解析/本地 PTY 仍在 Host、新增 `@tr` 文案未回填 `.po/.pot`。`YSHELL_TEST_INPROCESS_HOST=1` 仍为完整 DialogWindowManager。见 [`process-architecture.md`](../prototypes/process-architecture.md) |
 | L1 状态栏 i18n 方案 | 方案文档未落盘 |
 | L4 fmt + cargo-deny 冻结 | 等独占窗口 |
 
@@ -86,11 +87,11 @@ UI 为 disabled + tooltip、空态，或决策延后。**不是待补闭环。**
 | D25–D26 | 会话栏收敛；仅真实 SSH |
 | D27–D32 | 状态栏 i18n / Esc 遮罩 / 对比度 / 字形 N5a / swash / WSL 构建路径等（多数已落地，L1/L4 见 §3） |
 | D33 | Settings → SFTP 本版只保留：Show hidden 默认、Conflict 默认动作（Ask / Replace / Skip / Stop，默认 Ask）、External editor（下拉：System default + 自动检测知名编辑器 + Custom；仅 Custom 才 Browse 路径）。Remote Edit 对齐 Xftp：保存即自动上传；监视在编辑器进程退出或 SFTP/SSH 断开后结束。路径 / 并行 / 时间戳等旧全局项本版不进 Settings。 |
-| D34 | Settings → **MCP** 独立分区：Enable、Port、Listen（Local / LAN）、API key（LAN 必填）、View user、Control user（隐含 View）、Auto-approve。默认 Off。Auto-approve Off 时 `request_control` 弹 MCP control consent（Deny \| Allow；Don't ask again + Allow → 打开 Auto-approve）。MCP/AI 创建的工作区标签显示 **AI** 标志。 |
+| D34 | Settings → **MCP** 独立分区：Enable、Port、Listen（Local / LAN）、API key（可选；LAN **推荐**）、View user、Control user（隐含 View）、Auto-approve。默认 Off。Auto-approve Off 时 `request_control` 弹 MCP control consent（Deny \| Allow；Don't ask again + Allow → 打开 Auto-approve）。MCP/AI 创建的工作区标签显示 **AI** 标志。 |
 | D35 | Settings → Security：Master password 卡片（状态 + Set / Change / Remove / Forgot password?）；管理器入口用整行可点清单（图标 + 名称 + 计数 + chevron），不写摘要。Master password 可选（对齐 Xshell）：Not set = 不启用主密码加密层；Set = 加密全部 session/key 文件与保存的口令，启动时解锁；Change / Remove 校验当前口令；Reset 删除受保护数据，无打字确认词。 |
 | D36 | Settings → Appearance 分两组：**App theme**（Mode System / Light / Dark + Accent Follow system / 6 预设）与 **Terminal style**（全局 Style 下拉 + 管理；字体 / 配色在 Terminal Styles 管理器）。App theme 即时预览，Save 持久化；Terminal style 保存后对新开终端生效。 |
 | D37 | Settings → Terminal 新增交互项：Middle click（Paste 默认 / Do nothing）、Right click（Context menu 默认 / Paste / Do nothing）、Multi-line paste（Ask 默认 / Paste / Block）、Auto copy（Off 默认）；Reset defaults 一并重置这些值。 |
-| D38 | **进程拆分（目标架构）**：Host / SessionWorker（一连一进程）/ McpProcess（监听单例）/ Shell（纯 UI）。MCP **全局**可见全部 session、可随时切换，**不**绑定「宿主窗」；新建连接的 tab 仅临时落在某窗展示。清理权**只在 Host**；零 UI 窗 → Host 关机收尸；Job Object + 心跳 + `run-state` 启动收尸防野进程。细节与分阶段见 [`docs/prototypes/process-architecture.md`](../prototypes/process-architecture.md)。本版 UI 仍可单进程运行；真多进程按该文档分阶段落地。 |
+| D38 | **进程拆分**：Host / SessionWorker（一连一进程）/ McpProcess（监听单例）/ Shell（纯 UI）。MCP **全局**可见全部 session、可随时切换，**不**绑定「宿主窗」；新建连接的 tab 仅临时落在某窗展示。清理权**只在 Host**；零 UI 窗 → Host 关机收尸；Job Object + 心跳 + `run-state` 启动收尸防野进程。默认启动：ensure Host OS 进程 → Shell 附着；`YSHELL_TEST_INPROCESS_HOST=1` 保留同进程完整 GUI。配置 L/I/R：L 档 Shell 本地草稿至 Save，I/R 经 UiCall；Host 是唯一落盘者。细节见 [`docs/prototypes/process-architecture.md`](../prototypes/process-architecture.md) §7。 |
 
 完整原文与 N0–N9 需求叙述见 [`archive/yshell-next-features-requirements.md`](./archive/yshell-next-features-requirements.md)。
 

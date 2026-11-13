@@ -10,3 +10,9 @@
 
 # Local problem-tracking file (must never be committed).
 problems.md
+
+# Local variant build trees (MSVC / GNU / MSYS2) must never be committed.
+/target-*/
+
+# Local QA scratch output.
+/.qa-locks/

@@ -56,7 +56,7 @@
 | 原型要求 | 现状 | 证据（文件:行） | 优先级 |
 |---|---|---|---|
 | 会话树显示 `session.icon`（Default / 预设 / 自定义图） | 缺失：固定 `terminal` 图标，无图标数据模型 | `ui/components/session_tree.slint:147-161`；`docs/prototypes/main-shell/panels/sessions.html:384-398` | P1 |
-| Session 原地改名（右键 Rename / 双击名称） | 缺失：菜单无 Rename，双击只打开 | `ui/main_window.slint:1725-1758`；`sessions.html:431-439` | P1 |
+| Session 原地改名（右键 Rename） | 已落地：右键进入；双击 = Connect；Enter/失焦确认、Esc 取消 | `session_tree.slint`；`sessions.html` | — |
 | Session 右键：Connect / Open in New Tab / Open SFTP / Edit / Rename / Duplicate / Favorite(**disabled**) / Export(disabled) / Delete | 波 3 #18 已对齐原型（Favorite/Export 禁用） | `sessions.html`；`main_window.slint` saved session menu | — |
 | 会话树空白区 New Folder 本版禁用 | 冲突：实现启用（可创建根文件夹） | `ui/main_window.slint:1794-1815`；`sessions.html:417-420` | P1 |
 | Folder 右键 New Folder / Rename / Delete / Connect All 禁用 + 原因 | 已实现 | `ui/main_window.slint:1764-1791` | — |
@@ -117,7 +117,7 @@
 | Terminal：Scrollback lines/max cells + Reset + Mouse&paste（middle/right/multi-line/auto copy） | **本轮实施中，未计入缺口** | `settings.slint:806-966` | — |
 | Security：主密码卡片（Not set/Set，Set/Change/Remove/Forgot）+ Managers 清单计数 | **本轮实施中，未计入缺口** | `settings.slint:1009-1186` | — |
 | master-password（Set/Change/Remove/Reset）与启动解锁窗 | **本轮实施中，未计入缺口** | `ui/pages/settings.slint:366-369`；`ui/windows/master_password_window.slint`、`master_password_unlock_window.slint`（本轮新增） | — |
-| MCP：Enable + Port + Listen(Local/LAN) + API key(Generate/Copy) + View user + Control user + Auto-approve | 已实现（D34）：GUI 按 Port/Listen 绑定 TCP；`yshell --mcp` 仍为 stdio 桥；LAN 必填 API key；View/Control 门控用户标签 | `settings.slint` MCP 分区；`runtime/mcp.rs`；`windows.rs::reconcile_mcp_server`；`settings/sections/mcp.html` | — |
+| MCP：Enable + Port + Listen(Local/LAN) + API key(Generate/Copy) + View user + Control user + Auto-approve | 已实现（D34）：GUI 按 Port/Listen 绑定 TCP；`yshell --mcp` 仍为 stdio 桥；API key 可选、LAN 推荐；View/Control 门控用户标签 | `settings.slint` MCP 分区；`runtime/mcp.rs`；`windows.rs::reconcile_mcp_server`；`settings/sections/mcp.html` | — |
 | Advanced：Debug logging 开关 + 打开日志目录 + Config directory 只读 + 打开目录 | 部分：缺 Config directory 的「打开目录」按钮 | `settings.slint:1303-1376`；`settings/sections/advanced.html:48-72` | P2 |
 | SFTP：Show hidden（默认开）/ Conflict（Ask/Replace/Skip/Stop）/ External editor（含 Custom 路径） | 缺失：仅有原型没有的「Max parallel transfers」 | `settings.slint:967-1007`；`settings/sections/sftp.html:52-92` | P1 |
 | 分区内容区不再放 General/Authentication 等大标题 | 冲突：SFTP / AI MCP / Advanced 三个分区顶部仍复述分区名大标题（Security 分区本轮正按规则收口） | `ui/pages/settings.slint:974-979,1191-1196,1307-1312`；`docs/agents/prototypes.md:81` | P1 |

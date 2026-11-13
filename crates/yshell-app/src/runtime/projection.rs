@@ -346,8 +346,8 @@ impl AppRuntime {
         let editor_scheme_index = self.editor_scheme_selected_index();
         let editor_icon_index = self.editor_icon_index();
         let editor_icon_custom_text = self.editor_icon_custom_text();
-        // session-editor：Private Key 口令草稿（口令字段不落盘，只有草稿值）。
-        let editor_passphrase_text = self.editor.passphrase.clone();
+        // Secrets stay on Host: projection never carries plaintext passwords /
+        // passphrases / PEM paste. Widgets keep keystrokes locally until Submit.
         let mut editor_proxy_option_labels = vec!["no-proxy".to_owned()];
         editor_proxy_option_labels.extend(
             editor_proxy_options
@@ -389,7 +389,7 @@ impl AppRuntime {
             editor_port_text: self.editor.port_text.clone(),
             editor_username_text: self.editor.username.clone(),
             editor_auth_method_text: self.editor.auth_method.label().to_owned(),
-            editor_password_text: self.editor.password.clone(),
+            editor_password_text: String::new(),
             editor_key_options,
             editor_selected_key_index,
             editor_selected_key_missing,
@@ -517,7 +517,7 @@ impl AppRuntime {
             // --- session-editor：波 2-B 投影 ------------------------------
             editor_icon_index,
             editor_icon_custom_text,
-            editor_passphrase_text,
+            editor_passphrase_text: String::new(),
             editor_notes_text: self.editor.notes.clone(),
             editor_inherit_auth: self.editor.inherit_auth,
             editor_inherit_login_script: self.editor.inherit_login_script,
@@ -1105,15 +1105,15 @@ impl AppRuntime {
                 .collect(),
             keys_generate_label_text: self.keys_generate_label.clone(),
             keys_generate_comment_text: self.keys_generate_comment.clone(),
-            keys_generate_passphrase_text: self.keys_generate_passphrase.clone(),
-            keys_generate_confirm_text: self.keys_generate_confirm.clone(),
+            keys_generate_passphrase_text: String::new(),
+            keys_generate_confirm_text: String::new(),
             keys_generate_error_text: self.keys_generate_error_text.clone(),
             keys_generate_public_key_text: self.keys_generate_public_key.clone(),
             keys_generate_fingerprint_text: self.keys_generate_fingerprint.clone(),
             keys_generate_result_label_text: self.keys_generate_result_label.clone(),
             keys_import_visible: self.keys_import_visible,
             keys_import_tab: self.keys_import_tab,
-            keys_import_paste_text: self.keys_import_paste_text.clone(),
+            keys_import_paste_text: String::new(),
             keys_import_error_text: if self.keys_import_visible
                 && self
                     .private_keys_status_kind
@@ -1782,10 +1782,10 @@ impl AppRuntime {
             remove_warning_text,
             import_label_text: self.private_keys_import_label.clone(),
             import_path_text: self.private_keys_import_path.clone(),
-            import_passphrase_text: self.private_keys_import_passphrase.clone(),
+            import_passphrase_text: String::new(),
             remember_import_passphrase: self.private_keys_remember_import_passphrase,
             import_enabled: !self.private_keys_import_path.trim().is_empty(),
-            passphrase_text: self.private_keys_passphrase_input.clone(),
+            passphrase_text: String::new(),
             passphrase_stored: selected
                 .as_ref()
                 .is_some_and(|entry| entry.passphrase_stored),
@@ -1835,7 +1835,7 @@ impl AppRuntime {
             editor_host_text: self.proxies_editor_host.clone(),
             editor_port_text: self.proxies_editor_port_text.clone(),
             editor_username_text: self.proxies_editor_username.clone(),
-            editor_password_text: self.proxies_editor_password.clone(),
+            editor_password_text: String::new(),
             editor_dns_by_proxy: self.proxies_editor_dns_by_proxy,
             editor_password_stored: editing
                 .is_some_and(|profile| profile.password_secret_key.is_some()),
@@ -1951,16 +1951,12 @@ impl AppRuntime {
                 prompt.selected() == AuthPromptMethod::Password
                     && !prompt.password_text.trim().is_empty()
             }),
-            password_text: prompt
-                .map(|prompt| prompt.password_text.clone())
-                .unwrap_or_default(),
+            password_text: String::new(),
             remember_password: prompt.is_some_and(|prompt| prompt.remember_password),
             key_options,
             selected_key_index,
             selected_key_label,
-            passphrase_text: prompt
-                .map(|prompt| prompt.passphrase_text.clone())
-                .unwrap_or_default(),
+            passphrase_text: String::new(),
             use_agent: prompt.is_some_and(|prompt| prompt.use_agent),
             publickey_submit_enabled: prompt
                 .is_some_and(PendingAuthPrompt::publickey_submit_enabled),
@@ -1991,7 +1987,7 @@ impl AppRuntime {
 }
 
 /// One SSH tab hit in Find Across SSH (sidebar row).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TerminalFindAcrossRow {
     pub tab_id: String,
     pub title: String,
@@ -2003,7 +1999,7 @@ pub struct TerminalFindAcrossRow {
 /// `ui/main_window.slint` (`@tr`), so every field here is either a raw value
 /// (host/path/count/enum id) or machine data assembled from values.
 // WP4：含 `workspace_split.ratio: f32`，故去掉 `Eq`（仍保留 `PartialEq`）。
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AppProjection {
     pub config_dir_text: String,
     pub secret_store_kind_text: String,
@@ -2743,7 +2739,7 @@ pub struct AppProjection {
 }
 
 /// 单个面板框的 px 几何（Slint 侧 `PanelFrameData` 的同构体）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PanelFrameData {
     /// "left" / "right" / "hidden"。
     pub placement: String,
@@ -2782,7 +2778,7 @@ impl PanelFrameData {
 }
 
 /// N3：分栏手柄投影（Slint 侧 `SplitHandleData` 的同构体）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SplitHandleData {
     /// "left" / "right"
     pub side: String,
@@ -2794,7 +2790,7 @@ pub struct SplitHandleData {
 }
 
 /// N3：面板拖拽插入位置指示线。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PanelDragIndicator {
     pub x: i32,
     pub y: i32,
@@ -2803,7 +2799,7 @@ pub struct PanelDragIndicator {
 }
 
 /// N3：内容区布局投影（断点标志 + 面板框 + 分栏手柄 + 拖拽指示）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LayoutProjection {
     pub left_width_px: i32,
     pub right_width_px: i32,

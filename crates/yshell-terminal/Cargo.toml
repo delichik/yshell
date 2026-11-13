@@ -13,5 +13,6 @@ path = "src/lib.rs"
 
 [dependencies]
 regex = { workspace = true }
+serde = { version = "1", features = ["derive"] }
 swash = { workspace = true }
 unicode-width = "0.1"

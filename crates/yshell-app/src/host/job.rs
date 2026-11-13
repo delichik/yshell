@@ -1,31 +1,45 @@
-//! Windows Job Object wrapper so Host death cascades to Worker / MCP children.
+//! Process-supervision fallback for Host children.
 //!
-//! Non-Windows builds expose a no-op handle; orphans are still covered by heartbeat
-//! and `run-state` reclaim (see `docs/prototypes/process-architecture.md`).
+//! Windows: a Job Object with `KILL_ON_JOB_CLOSE` so Host death cascades to
+//! Worker / MCP children.
+//!
+//! Unix: there is no kernel-level job object; children are spawned in their own
+//! process groups (see the spawn helpers) and this handle records their pids so
+//! it can `killpg` the recorded groups when the Host exits normally. When the
+//! Host is killed abruptly, the heartbeat + `run-state` reclaim path covers the
+//! orphans instead (see `docs/prototypes/process-architecture.md` §6.1).
 
 use crate::error::{AppError, AppResult};
 
-/// Process job that kills assigned children when the Host process exits.
+/// Process job that tears down Host children when the Host exits.
 #[derive(Debug)]
 pub struct JobObject {
     #[cfg(windows)]
     handle: windows_sys::Win32::Foundation::HANDLE,
+    #[cfg(unix)]
+    pids: std::sync::Mutex<Vec<u32>>,
 }
 
 impl JobObject {
-    /// Creates a job with `KILL_ON_JOB_CLOSE`.
+    /// Creates a job with `KILL_ON_JOB_CLOSE` (Windows) or an empty pid set (Unix).
     pub fn create() -> AppResult<Self> {
         #[cfg(windows)]
         {
             windows_create_job()
         }
-        #[cfg(not(windows))]
+        #[cfg(unix)]
+        {
+            Ok(Self {
+                pids: std::sync::Mutex::new(Vec::new()),
+            })
+        }
+        #[cfg(not(any(windows, unix)))]
         {
             Ok(Self {})
         }
     }
 
-    /// Assigns an existing process id to this job.
+    /// Assigns a child process to this job.
     pub fn assign_pid(&self, pid: u32) -> AppResult<()> {
         if pid == 0 {
             return Err(AppError::new("cannot assign pid 0 to job"));
@@ -34,7 +48,18 @@ impl JobObject {
         {
             windows_assign_pid(self.handle, pid)
         }
-        #[cfg(not(windows))]
+        #[cfg(unix)]
+        {
+            let mut pids = self
+                .pids
+                .lock()
+                .map_err(|_| AppError::new("job pid lock poisoned"))?;
+            if !pids.contains(&pid) {
+                pids.push(pid);
+            }
+            Ok(())
+        }
+        #[cfg(not(any(windows, unix)))]
         {
             let _ = self;
             let _ = pid;
@@ -54,6 +79,26 @@ impl Drop for JobObject {
                     let _ = CloseHandle(self.handle);
                 }
                 self.handle = std::ptr::null_mut();
+            }
+        }
+        #[cfg(unix)]
+        {
+            let pids = self
+                .pids
+                .get_mut()
+                .map(|pids| std::mem::take(&mut *pids))
+                .unwrap_or_default();
+            for pid in pids {
+                if pid == 0 {
+                    continue;
+                }
+                // Children run in their own process groups; killing the group
+                // also reaps local shells spawned by a worker.
+                #[allow(unsafe_code)]
+                unsafe {
+                    let _ = libc::kill(-(pid as libc::pid_t), libc::SIGKILL);
+                    let _ = libc::kill(pid as libc::pid_t, libc::SIGKILL);
+                }
             }
         }
     }

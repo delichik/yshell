@@ -473,6 +473,9 @@ export global TextFormats {
         if kind == "session-connect-failed" {
             return @tr("MainWindow" => "Could not connect to {0}.", param_1);
         }
+        if kind == "session-worker-exited" {
+            return @tr("MainWindow" => "Session worker for `{0}` exited; reconnect the tab.", param_1);
+        }
         if kind == "session-password-required" {
             return @tr("MainWindow" => "Password required for {0}.", param_1);
         }

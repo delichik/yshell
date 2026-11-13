@@ -3540,7 +3540,7 @@ msgstr ""
 
 #: ui/pages/settings.slint:1045
 msgctxt "SettingsDialog"
-msgid "LAN = 0.0.0.0; API key required"
+msgid "LAN = 0.0.0.0; API key recommended"
 msgstr ""
 
 #: ui/pages/settings.slint:1053
@@ -3555,7 +3555,7 @@ msgstr ""
 
 #: ui/pages/settings.slint:1067
 msgctxt "SettingsDialog"
-msgid "Required for LAN"
+msgid "Recommended for LAN"
 msgstr ""
 
 #: ui/pages/settings.slint:1074 ui/pages/settings.slint:1075
@@ -3570,7 +3570,7 @@ msgstr ""
 
 #: ui/pages/settings.slint:1088
 msgctxt "SettingsDialog"
-msgid "Required for LAN."
+msgid "Optional. Recommended when Listen is LAN."
 msgstr ""
 
 #: ui/pages/settings.slint:1092 ui/pages/settings.slint:1095

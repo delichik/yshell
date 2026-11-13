@@ -398,7 +398,7 @@
     <strong>Session context</strong> — Connect · Open in New Tab · Open SFTP · Edit → session-editor · Duplicate ·
     Rename (inline) · Delete → <a href="../../compact-confirm/index.html">compact-confirm</a>.
     <strong>Favorite / Export</strong> 本版禁用（契约 Favorites 愿景不作设计；无收藏面）。
-    Double-click session name starts rename.<br>
+    Inline rename：右键 Rename 进入；<strong>Enter</strong> / 点击其它处确认 · <strong>Esc</strong> 取消；双击名称 = Connect（不进改名）。<br>
     <strong>session.icon</strong> — General 里配置（Default / Preset · Server / Database / Custom image）。
     Saved Sessions 行与已打开的 session 标签均显示此图标（标签见 <a href="../workspace/tab-bar.html">tab-bar</a>）。
   </div>
@@ -630,6 +630,10 @@
 
       document.addEventListener("click", function (ev) {
         if (ev.target.closest(".inline-rename")) return;
+        // 点击其它处 = 确认（与失焦一致；钉住 Demo 态忽略）。
+        if (renameState && !renameState.sticky) {
+          endInlineRename(true);
+        }
         var actEl = ev.target.closest("[data-act]");
         if (actEl && ctxMenu.contains(actEl)) {
           if (actEl.disabled || actEl.classList.contains("dis")) {
@@ -685,11 +689,15 @@
         if (ev.key === "Escape" && !renameState) closeFlyouts();
       });
 
+      // 双击会话行 = Connect（与实现一致）；原地改名只从右键 Rename 进入。
       document.getElementById("sessionTree").addEventListener("dblclick", function (ev) {
+        if (ev.target.closest(".inline-rename")) return;
         var row = ev.target.closest(".tree-row[data-ctx='tree-session']");
-        if (!row || !ev.target.closest(".name")) return;
+        if (!row) return;
         ev.preventDefault();
-        beginInlineRename(row, "Rename", { sticky: board.getAttribute("data-state") === "session-rename" });
+        var name = (row.querySelector(".name") || {}).textContent || "session";
+        recordAction("Connect", "Double-click → " + name);
+        showToast("Connect " + name);
       });
 
       document.querySelectorAll(".tree-row.folder").forEach(function (row) {

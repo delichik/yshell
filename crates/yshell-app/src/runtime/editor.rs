@@ -1452,19 +1452,19 @@ impl EditorInheritScope {
 /// 页级 Inherit 来源：就近父级文件夹名，或全局。
 ///
 /// 文案在 Slint 侧用 `@tr` 组装（Rust 不投英文句子）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EditorInheritSourceData {
     /// `folder` | `global`
-    pub(crate) kind: &'static str,
+    pub(crate) kind: String,
     /// 就近定义该分区的父级文件夹名（`kind == "global"` 时为空）。
     pub(crate) param: String,
 }
 
 /// Login Script 清单行（Slint `LoginStepRow` 的镜像）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EditorLoginStepRowData {
     /// `keys` | `wait`
-    pub(crate) kind: &'static str,
+    pub(crate) kind: String,
     /// 步骤名（可空）。
     pub(crate) name: String,
     /// 未命名时的摘要：Keys 原文首行，或 `N ms`。
@@ -1472,10 +1472,10 @@ pub(crate) struct EditorLoginStepRowData {
 }
 
 /// Tunnel 清单行（Slint `TunnelRow` 的镜像）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EditorTunnelRowData {
     /// `local` | `remote` | `dynamic`
-    pub(crate) kind: &'static str,
+    pub(crate) kind: String,
     /// 用户命名（可空；空时 Slint 侧回退到类型标签）。
     pub(crate) name: String,
     /// `bind -> target` 摘要（dynamic 只有 bind）。
@@ -1739,13 +1739,13 @@ impl AppRuntime {
             };
             if defines {
                 return EditorInheritSourceData {
-                    kind: "folder",
+                    kind: "folder".to_owned(),
                     param: folder.name.clone(),
                 };
             }
         }
         EditorInheritSourceData {
-            kind: "global",
+            kind: "global".to_owned(),
             param: String::new(),
         }
     }
@@ -1970,7 +1970,7 @@ impl AppRuntime {
                     LoginStepAction::Wait { millis } => ("wait", format!("{millis} ms")),
                 };
                 EditorLoginStepRowData {
-                    kind,
+                    kind: kind.to_owned(),
                     name: step.name.clone(),
                     detail,
                 }
@@ -2183,7 +2183,7 @@ impl AppRuntime {
             .tunnels
             .iter()
             .map(|forward| EditorTunnelRowData {
-                kind: tunnel_kind_label(forward.kind),
+                kind: tunnel_kind_label(forward.kind).to_owned(),
                 name: forward.name.clone().unwrap_or_default(),
                 route: super::ssh_config::tunnel_forward_summary_body(forward),
             })

@@ -100,7 +100,7 @@ struct WindowEntry {
 
 /// 点击窗口关闭按钮后的动作。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum WindowCloseAction {
+pub(crate) enum WindowCloseAction {
     /// 直接关闭窗口（最后一个窗口 = 退出应用）。
     CloseNow,
     /// 最后一个窗口仍有活动连接：弹 Quit 确认。
@@ -113,7 +113,7 @@ enum WindowCloseAction {
 ///
 /// 「关闭会话前确认」只控制非最后窗口的关闭确认；最后一个窗口的退出确认由
 /// `confirm_quit_app` 单独控制，不能被「不再询问关闭会话」顺手关掉。
-fn window_close_action(
+pub(crate) fn window_close_action(
     has_active_connections: bool,
     is_last: bool,
     confirm_close_session: bool,
@@ -137,6 +137,9 @@ pub(crate) struct WindowManager {
     runtime: Rc<RefCell<AppRuntime>>,
     /// D38 Host facade — window count / shutdown ownership (not session I/O).
     host: Rc<RefCell<crate::host::HostService>>,
+    /// Local/Remote runtime handle (in-process path uses Local).
+    #[allow(dead_code)] // held for D38 Shell client parity; remote path uses HostShellClient
+    runtime_client: crate::host::AppRuntimeClient,
     windows: Vec<WindowEntry>,
     next_window_id: u64,
     dialog_tx: std::sync::mpsc::Sender<FileDialogOutcome>,
@@ -146,12 +149,12 @@ pub(crate) struct WindowManager {
     timer: Option<Timer>,
     /// App-scoped independent dialog / tool windows.
     dialog_host: Rc<RefCell<DialogHost>>,
-    /// MCP IPC inbox drained on the UI tick.
+    /// MCP IPC inbox drained on the UI tick (filled by out-of-process MCP daemon
+    /// via the Host bridge).
     mcp_inbox: crate::mcp_server::McpInbox,
-    /// Loopback MCP acceptor; started only while Settings → MCP is enabled.
-    mcp_server: Option<crate::mcp_server::McpServerHandle>,
-    /// Last failed bind fingerprint (`bind_host`, port, token) so we do not
-    /// retry every tick until Settings changes.
+    /// Second-instance attach commands from the Host bridge.
+    shell_inbox: crate::host::ShellInbox,
+    /// Last failed MCP daemon spawn fingerprint so we do not retry every tick.
     mcp_failed_bind: Option<(String, u16, String)>,
 }
 
@@ -160,19 +163,36 @@ impl WindowManager {
     pub(crate) fn new(
         runtime: Rc<RefCell<AppRuntime>>,
         host: Rc<RefCell<crate::host::HostService>>,
+        runtime_client: crate::host::AppRuntimeClient,
     ) -> AppResult<Rc<RefCell<Self>>> {
         let (dialog_tx, dialog_rx) = std::sync::mpsc::channel();
-        let (sftp_job_tx, sftp_job_rx, sftp_limiter) =
-            crate::sftp_jobs::start_sftp_job_worker_with_limit(1);
-        let (connect_jobs, connect_job_rx) = crate::connect_jobs::start_connect_job_worker();
+        let connect_job_rx = host.borrow_mut().take_connect_job_rx().unwrap_or_else(|| {
+            let (connect_jobs, connect_job_rx) = crate::connect_jobs::start_connect_job_worker();
+            runtime.borrow_mut().connect_jobs = Some(connect_jobs);
+            connect_job_rx
+        });
+        // Prefer Host-owned SFTP worker (D38); fall back only if Host had none.
+        let sftp_job_rx = host.borrow_mut().take_sftp_job_rx().unwrap_or_else(|| {
+            let limit = runtime
+                .borrow()
+                .config_document
+                .ui
+                .sftp_max_parallel_transfers
+                .max(1);
+            let (sftp_job_tx, sftp_job_rx, sftp_limiter) =
+                crate::sftp_jobs::start_sftp_job_worker_with_limit(limit);
+            let mut runtime = runtime.borrow_mut();
+            if runtime.sftp_jobs.is_none() {
+                runtime.sftp_jobs = Some(crate::sftp_jobs::SftpJobHandle::with_limiter(
+                    sftp_job_tx,
+                    sftp_limiter,
+                ));
+            }
+            runtime.set_sftp_parallel_transfer_limit(limit);
+            sftp_job_rx
+        });
         {
             let mut runtime = runtime.borrow_mut();
-            runtime.sftp_jobs = Some(crate::sftp_jobs::SftpJobHandle::with_limiter(
-                sftp_job_tx,
-                sftp_limiter,
-            ));
-            runtime.connect_jobs = Some(connect_jobs);
-            // 应用配置里的并行传输数立即生效（不必重启）。
             let limit = runtime.config_document.ui.sftp_max_parallel_transfers;
             runtime.set_sftp_parallel_transfer_limit(limit);
         }
@@ -180,7 +200,8 @@ impl WindowManager {
             Rc::clone(&runtime),
             dialog_tx.clone(),
         );
-        let mcp_inbox = crate::mcp_server::McpInbox::new();
+        let mcp_inbox = host.borrow().mcp_inbox();
+        let shell_inbox = host.borrow().shell_inbox();
         // MCP is opt-in: clear any stale endpoint until Settings enables it.
         {
             let config_dir = runtime.borrow().config_dir.clone();
@@ -193,6 +214,7 @@ impl WindowManager {
         let manager = Rc::new(RefCell::new(Self {
             runtime,
             host,
+            runtime_client,
             windows: Vec::new(),
             next_window_id: 0,
             dialog_tx,
@@ -202,7 +224,7 @@ impl WindowManager {
             timer: None,
             dialog_host,
             mcp_inbox,
-            mcp_server: None,
+            shell_inbox,
             mcp_failed_bind: None,
         }));
         {
@@ -222,13 +244,30 @@ impl WindowManager {
             let Some(manager) = weak.upgrade() else {
                 return;
             };
-            let Ok(mut manager) = manager.try_borrow_mut() else {
-                return;
-            };
-            manager.tick();
+            {
+                let Ok(mut manager) = manager.try_borrow_mut() else {
+                    return;
+                };
+                manager.drain_shell_inbox();
+                manager.tick();
+            }
         });
         manager.borrow_mut().timer = Some(timer);
         Ok(manager)
+    }
+
+    /// Second-instance launch: focus an existing Shell window.
+    fn drain_shell_inbox(&mut self) {
+        while let Some(command) = self.shell_inbox.try_pop() {
+            match command {
+                crate::host::ShellCommand::OpenWindow => {
+                    if let Some(entry) = self.windows.first() {
+                        crate::win_chrome::focus_window(entry.window.window());
+                        entry.window.invoke_focus_global_shortcuts();
+                    }
+                }
+            }
+        }
     }
 
     fn allocate_window_id(&mut self) -> u64 {
@@ -673,12 +712,17 @@ impl WindowManager {
         dirty || changed || secondary_changed
     }
 
-    /// Start / stop / restart the MCP TCP acceptor to match Settings → MCP.
+    /// Start / stop / restart the **out-of-process** MCP daemon to match Settings.
     fn reconcile_mcp_server(&mut self) -> bool {
         let enabled = self.runtime.borrow().mcp_enabled();
         if !enabled {
             self.mcp_failed_bind = None;
-            if self.mcp_server.take().is_some() {
+            let stopped = self
+                .host
+                .borrow_mut()
+                .reconcile_mcp_daemon(false, "", 0, "")
+                .unwrap_or(false);
+            if stopped {
                 let mut runtime = self.runtime.borrow_mut();
                 runtime.mcp_endpoint_token = None;
                 runtime.set_mcp_listener_status(crate::runtime::mcp::McpListenerStatus::Disabled);
@@ -687,7 +731,7 @@ impl WindowManager {
             return false;
         }
 
-        let (bind_host, port, token, config_dir) = {
+        let (bind_host, port, token) = {
             let runtime = self.runtime.borrow();
             if let Err(error) = runtime.mcp_validate_listen_config() {
                 drop(runtime);
@@ -696,23 +740,18 @@ impl WindowManager {
                 runtime.set_mcp_listener_status(crate::runtime::mcp::McpListenerStatus::Failed {
                     message: error.to_string(),
                 });
-                let _ = self.mcp_server.take();
+                let _ = self
+                    .host
+                    .borrow_mut()
+                    .reconcile_mcp_daemon(false, "", 0, "");
                 return true;
             }
             (
                 runtime.config_document.ui.mcp_listen.bind_host().to_owned(),
                 runtime.config_document.ui.mcp_port,
                 runtime.mcp_resolve_endpoint_token(),
-                runtime.config_dir.clone(),
             )
         };
-
-        if let Some(server) = self.mcp_server.as_ref() {
-            if server.matches(&bind_host, port, &token) {
-                return false;
-            }
-            let _ = self.mcp_server.take();
-        }
 
         if self
             .mcp_failed_bind
@@ -722,35 +761,31 @@ impl WindowManager {
             return false;
         }
 
-        match crate::mcp_server::start_mcp_server(
-            config_dir,
-            &bind_host,
-            port,
-            "127.0.0.1",
-            token.clone(),
-            self.mcp_inbox.clone(),
-        ) {
-            Ok(handle) => {
-                let bound_port = handle.port;
-                self.mcp_server = Some(handle);
+        match self
+            .host
+            .borrow_mut()
+            .reconcile_mcp_daemon(true, &bind_host, port, &token)
+        {
+            Ok(false) => false,
+            Ok(true) => {
                 self.mcp_failed_bind = None;
                 let mut runtime = self.runtime.borrow_mut();
                 runtime.mcp_endpoint_token = Some(token);
                 runtime.set_mcp_listener_status(crate::runtime::mcp::McpListenerStatus::Ready {
-                    port: bound_port,
+                    port,
                 });
                 runtime.set_status_kind(
                     "mcp-listener-ready",
                     format!(
-                        "MCP ready on {bind_host}:{bound_port}. Point your AI host at yshell --mcp."
+                        "MCP daemon ready on {bind_host}:{port}. Point your AI host at yshell --mcp."
                     ),
-                    bound_port.to_string(),
+                    port.to_string(),
                     String::new(),
                 );
                 true
             }
             Err(error) => {
-                tracing::warn!(error = %error, "MCP IPC server failed to start");
+                tracing::warn!(error = %error, "MCP daemon failed to start");
                 self.mcp_failed_bind = Some((bind_host, port, token));
                 let mut runtime = self.runtime.borrow_mut();
                 runtime.mcp_endpoint_token = None;
@@ -759,7 +794,7 @@ impl WindowManager {
                 });
                 runtime.set_status_kind(
                     "mcp-listener-failed",
-                    format!("MCP failed to start: {error}"),
+                    format!("MCP daemon failed to start: {error}"),
                     String::new(),
                     String::new(),
                 );
@@ -805,11 +840,21 @@ impl WindowManager {
                 let _ = runtime.apply_connect_job_message(message);
                 dirty = true;
             }
+            let pending_workers = std::mem::take(&mut runtime.pending_session_workers);
             // MCP：IPC worker 入队的控制/读写请求（含授权弹窗发起）。
             if !self.mcp_inbox.is_empty() {
                 self.mcp_inbox.drain(&mut runtime);
                 dirty = true;
             }
+            drop(runtime);
+            for worker in pending_workers {
+                if let Err(error) = self.host.borrow_mut().adopt_session_worker(worker) {
+                    tracing::warn!(error = %error, "failed to adopt session worker into Host");
+                }
+            }
+            let Ok(mut runtime) = self.runtime.try_borrow_mut() else {
+                return;
+            };
             // NET-1：代理管理器 "Test" 的后台探测结果。
             if runtime.poll_proxy_test_result() {
                 dirty = true;

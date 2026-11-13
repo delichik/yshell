@@ -30,7 +30,7 @@ const QUICK_CONNECT_ROW_LIMIT: usize = 20;
 const RECENT_SAVED_USAGE_LIMIT: usize = 8;
 
 /// "最近连接"行（与 Slint `QuickConnectRow` 字段一一对应，纯展示投影）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct QuickConnectRowData {
     /// `"recent"`（QC 历史）/ `"saved"`（已保存会话最近使用）。
     pub kind: String,

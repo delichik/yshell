@@ -33,10 +33,17 @@ fn run() {
     // Windows MSVC defaults the main thread to ~1MB; deep Slint trees (terminal
     // split) can overflow it. Match the common 8MB Unix default as a safety net
     // alongside conditional TerminalView mounting in workspace_split.slint.
-    if std::env::var_os("CARGO_CFG_WINDOWS").is_some()
-        && std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc")
-    {
-        println!("cargo:rustc-link-arg=/STACK:8388608");
+    if std::env::var_os("CARGO_CFG_WINDOWS").is_some() {
+        let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+        if target_env == "msvc" {
+            println!("cargo:rustc-link-arg=/STACK:16777216");
+        } else {
+            // windows-gnu: the PE stack reserve comes from ld, not from a
+            // rustc-emitted default; without this dev/GNU builds keep the 1 MB
+            // default and the Host/Slint main thread can overflow (the MSVC
+            // release build already gets /STACK).
+            println!("cargo:rustc-link-arg=-Wl,--stack,16777216");
+        }
     }
 
     // Pin the widget style so the built-in controls (Button/LineEdit/...) do not

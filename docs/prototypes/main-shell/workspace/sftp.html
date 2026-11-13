@@ -457,7 +457,7 @@
           </li>
           <li class="callout callout-d">
             <strong>Inline edit 就地编辑</strong>
-            徽章 <code>inline create</code> / <code>inline rename</code> · Enter 确认 · Esc 取消（新建取消则删行）。
+            徽章 <code>inline create</code> / <code>inline rename</code> · Enter / 点击其它处确认 · Esc 取消（新建取消则删行）；双击 = 打开/进入，不进改名。
           </li>
         </ul>
       </div>
@@ -467,8 +467,8 @@
       <strong>产品规则 · Legend</strong>
       <ul>
         <li><strong>Rename / New Folder</strong>：列表行内输入框，<strong>不是</strong>对话框。</li>
-        <li><strong>Enter</strong> 确认 · <strong>Esc</strong> 取消（新建取消移除临时行）。交互式操作在「Default list」下失焦亦确认；上方 Demo 态为<strong>钉住</strong>（blur 不消失）。</li>
-        <li>右键行：Rename / New Folder / Delete / Properties · 双击名称 → Rename · 工具栏 New Folder。</li>
+        <li><strong>Enter</strong> / 点击其它处确认 · <strong>Esc</strong> 取消（新建取消移除临时行）。交互式操作在「Default list」下失焦亦确认；上方 Demo 态为<strong>钉住</strong>（blur 不消失）。</li>
+        <li>右键行：Rename / New Folder / Delete / Properties · 双击行 → 打开文件 / 进入目录（不进改名）· 工具栏 New Folder。</li>
         <li><strong>Local collapsed</strong>（status D9）：本地栏收成窄条 + 展开钮；远程栏占满剩余宽。</li>
         <li><strong>Drag-drop</strong>：拖入远程时虚线叠层 “Drop to upload”。</li>
         <li><strong>Permissions</strong>：独立 compact 窗 <a href="../../sftp-chmod/index.html">sftp-chmod</a>；八进制 + 勾选框。</li>
@@ -832,7 +832,10 @@
           ev.preventDefault();
           demoState = "default";
           syncDemoRadios();
-          beginInlineRename(row, "Rename", { sticky: false });
+          var name = (row.querySelector(".name") || row).textContent || "entry";
+          name = String(name).trim().split(/\s+/)[0] || "entry";
+          recordAction("Activate", "Double-click → " + name);
+          showToast(row.classList.contains("dir") || name === ".." ? "Open " + name : "Open " + name);
         });
       });
 

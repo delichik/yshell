@@ -402,6 +402,8 @@ impl AppRuntime {
                     password_retry,
                     is_reconnect,
                     open_shell,
+                    config_dir: self.config_dir.clone(),
+                    generation: self.host_generation,
                 })
             })
             .unwrap_or(false);
@@ -521,15 +523,24 @@ impl AppRuntime {
     ///
     /// Terminal tabs arrive with a shell channel; SFTP tabs arrive with the
     /// authenticated transport only and open the SFTP subsystem lazily.
+    /// Out-of-process SessionWorker connects pass `transport = None` and a
+    /// `worker` child handle (adopted by [`crate::host::HostService`] via the
+    /// window tick).
+    #[allow(clippy::too_many_arguments)]
     fn finish_transport_attach(
         &mut self,
         session_key: &str,
         session_id: &yshell_core::SessionId,
-        transport: yshell_ssh::SshTransport,
+        transport: Option<yshell_ssh::SshTransport>,
         shell: Option<Box<dyn yshell_ssh::ShellSession>>,
+        worker: Option<crate::host::session_ipc::SessionWorkerChild>,
         password_retry: bool,
         is_reconnect: bool,
     ) -> AppResult<AppProjection> {
+        // Stash worker for the window manager to adopt into HostService.
+        if let Some(worker) = worker {
+            self.pending_session_workers.push(worker);
+        }
         let sftp_mode = self
             .sessions
             .get(session_key)
@@ -542,7 +553,9 @@ impl AppRuntime {
                 .get_mut(session_key)
                 .ok_or_else(|| AppError::new("active runtime session is missing"))?;
             runtime.clear_connection_overlay();
-            runtime.attach_transport(transport);
+            if let Some(transport) = transport {
+                runtime.attach_transport(transport);
+            }
             if let Some(shell) = shell {
                 runtime.attach_shell_session(shell);
                 // Resize to the window *before* draining MOTD (see viewport_pty_size).
@@ -678,7 +691,11 @@ impl AppRuntime {
                             String::new(),
                         );
                     }
-                    ConnectJobOutcome::Succeeded { transport, shell } => {
+                    ConnectJobOutcome::Succeeded {
+                        transport,
+                        shell,
+                        worker,
+                    } => {
                         let session_id = self
                             .sessions
                             .get(&session_key)
@@ -689,9 +706,12 @@ impl AppRuntime {
                                 &session_id,
                                 transport,
                                 shell,
+                                worker,
                                 password_retry,
                                 is_reconnect,
                             );
+                        } else if let Some(worker) = worker {
+                            let _ = crate::host::run_state::terminate_pid(worker.pid);
                         }
                     }
                     ConnectJobOutcome::Failed { error } => {
@@ -1922,7 +1942,7 @@ const fn attempt_kind_of(method: AuthPromptMethod) -> AuthAttemptKind {
 // ---------------------------------------------------------------------------
 
 /// 认证弹窗的私钥选项（Rust → Slint `AuthKeyOption` 的镜像）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct AuthKeyOptionData {
     pub(crate) id: String,
     pub(crate) label: String,
@@ -1930,7 +1950,7 @@ pub(crate) struct AuthKeyOptionData {
 }
 
 /// 认证弹窗的一个 keyboard-interactive prompt（Rust → Slint `AuthKeyboardPrompt`）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct AuthPromptQuestionData {
     pub(crate) text: String,
     pub(crate) echo: bool,

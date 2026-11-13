@@ -5,7 +5,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use tempfile::tempdir;
+#[cfg(unix)]
+use yshell_config::NewTabMode;
 use yshell_core::SessionState;
+#[cfg(unix)]
+use yshell_local::LocalPtyConfig;
 use yshell_ssh::{PtySize, ShellSession, SshError, SshErrorKind, SshResult};
 
 use super::*;

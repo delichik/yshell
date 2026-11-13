@@ -78,7 +78,7 @@ pub(crate) const fn proxy_protocol_at(index: i32) -> ProxyProtocol {
 }
 
 /// One row of the Proxy Manager list (Slint `ProxyRow` mirror).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ProxyRowData {
     pub(crate) id: String,
     pub(crate) name: String,
@@ -92,7 +92,7 @@ pub(crate) struct ProxyRowData {
 }
 
 /// One managed proxy option of the session editor picker.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ProxyProfileOptionData {
     pub(crate) id: String,
     pub(crate) label: String,

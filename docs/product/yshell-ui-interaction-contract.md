@@ -780,7 +780,7 @@ Settings 是 dialog，左侧分类，右侧内容（表单 / 设置卡片）。
 | `settings.mcp.enabled` | 开关 | Off | 开启后 GUI 托管 MCP endpoint。Off 时下列控件禁用。 |
 | `settings.mcp.port` | 数字（宽 Port） | `18765` | `1–65535`。 |
 | `settings.mcp.listen` | 分段 Local \| LAN | Local | **Local** = `127.0.0.1`；**LAN** = `0.0.0.0`。 |
-| `settings.mcp.api_key` | password + Generate / Copy | 空 | **LAN 必填**（Save 校验失败则留在窗内）；Local 可选。Generate 写入新密钥；Copy 复制当前值。 |
+| `settings.mcp.api_key` | password + Generate / Copy | 空 | 可选；**LAN 推荐**。Generate 写入新密钥；Copy 复制当前值。 |
 | `settings.mcp.view_user_connections` | 开关 | Off | On 时允许 AI **查看**用户创建的连接；Off 时 AI 仅见自身创建的连接。开 Control 时强制 On。 |
 | `settings.mcp.control_user_connections` | 开关 | Off | On 时允许 AI **操作**用户创建的连接（输入/开关等）；隐含 View。关 View 时强制 Off。 |
 | `settings.mcp.auto_approve` | 开关 | Off | On 时跳过 **MCP control consent**（§14.3a）；Off 时每次 `request_control` 弹窗。 |

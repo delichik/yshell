@@ -17,8 +17,9 @@ use super::panels::{
 use super::theme::{
     appearance_font_preset_labels, color_scheme_id_at, parse_scrollback, resolve_palette,
     scheme_display_name, theme_field_rows, ThemeDraft, ThemeFieldAction, ThemeFieldDraft,
-    ThemeFieldError, ThemeSources, TriStateFieldData, KEY_LOGGING_DIRECTORY, KEY_LOGGING_ENABLED,
-    KEY_LOGGING_FORMAT, KEY_SCROLLBACK_LINES, KEY_SCROLLBACK_MAX_CELLS, LOG_FORMAT_RAW,
+    ThemeFieldError, ThemeSources, TriStateFieldData, KEY_COLOR_SCHEME, KEY_FONT_FAMILY,
+    KEY_LOGGING_DIRECTORY, KEY_LOGGING_ENABLED, KEY_LOGGING_FORMAT, KEY_SCROLLBACK_LINES,
+    KEY_SCROLLBACK_MAX_CELLS, LOG_FORMAT_RAW,
 };
 use super::*;
 
@@ -315,6 +316,35 @@ impl AppRuntime {
         }
         self.clear_folder_editor_status();
         self.projection()
+    }
+
+    /// Folder Editor OS window: inherit / explicit / reset, keyed by field id.
+    pub fn apply_folder_editor_field_action(&mut self, key: &str, action: &str) -> AppProjection {
+        let action = match action {
+            "inherit" => ThemeFieldAction::SetInherit,
+            "explicit" => ThemeFieldAction::SetExplicit,
+            _ => ThemeFieldAction::Reset,
+        };
+        self.folder_editor_field_action(key, action)
+    }
+
+    /// Folder Editor OS window: boolean fields (session logging).
+    pub fn folder_editor_field_toggled(&mut self, key: &str) -> AppProjection {
+        if key == KEY_LOGGING_ENABLED {
+            self.toggle_folder_editor_logging()
+        } else {
+            self.projection()
+        }
+    }
+
+    /// Folder Editor OS window: choice fields (scheme, font, log format).
+    pub fn folder_editor_field_selected(&mut self, key: &str, index: i32) -> AppProjection {
+        match key {
+            KEY_COLOR_SCHEME => self.select_folder_editor_scheme_index(index),
+            KEY_FONT_FAMILY => self.select_folder_editor_font_index(index),
+            KEY_LOGGING_FORMAT => self.select_folder_editor_log_format_index(index),
+            _ => self.projection(),
+        }
     }
 
     /// Toggles the "session logging" field of the Folder Editor draft.

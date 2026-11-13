@@ -10,6 +10,9 @@ export component FilePaneInlineNewFolderRow inherits Rectangle {
     callback committed(string);
     callback canceled();
 
+    /// Enter / Esc 已收尾时抑制随后的 focus-lost，避免取消后又提交。
+    property <bool> closing: false;
+
     width: root.content-width;
     height: Theme.row-height-list;
     background: Theme.subtle-selected;
@@ -27,24 +30,27 @@ export component FilePaneInlineNewFolderRow inherits Rectangle {
         width: parent.width - self.x - Theme.spacing-8;
         height: Theme.control-height-compact;
         y: (parent.height - self.height) / 2;
+        auto-focus: true;
         text <=> root.edit-text;
         placeholder-text: "new-folder";
-        accepted => { root.committed(root.edit-text); }
-    }
-
-    focus_scope := FocusScope {
-        width: parent.width;
-        height: parent.height;
-        key-pressed(event) => {
-            if (event.text == "\u{001b}") {
-                root.canceled();
-                return accept;
+        accepted => {
+            root.closing = true;
+            root.committed(root.edit-text);
+        }
+        cancelled => {
+            root.closing = true;
+            root.canceled();
+        }
+        focus-lost => {
+            if (!root.closing) {
+                root.closing = true;
+                root.committed(root.edit-text);
             }
-            return reject;
         }
     }
 
     init => {
         edit_input.focus-input();
+        edit_input.select-all();
     }
 }

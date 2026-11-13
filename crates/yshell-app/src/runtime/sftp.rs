@@ -6,12 +6,22 @@ use std::time::Duration;
 
 use super::*;
 use crate::{
-    error::AppError, error::AppResult, local_fs::LocalRowData, sftp_view::format_sftp_modified,
-    sftp_view::format_sftp_permissions, sftp_view::format_sftp_permissions_octal,
-    sftp_view::format_sftp_size, sftp_view::sftp_kind_text, sftp_view::split_file_name,
-    sftp_view::visible_entries, sftp_view::FileRowData, sftp_view::SftpSortColumn,
+    error::AppError,
+    error::AppResult,
+    local_fs::LocalRowData,
+    sftp_jobs::{SftpControlMessage, SftpControlRequest},
+    sftp_view::format_sftp_modified,
+    sftp_view::format_sftp_permissions,
+    sftp_view::format_sftp_permissions_octal,
+    sftp_view::format_sftp_size,
+    sftp_view::sftp_kind_text,
+    sftp_view::split_file_name,
+    sftp_view::visible_entries,
+    sftp_view::FileRowData,
+    sftp_view::SftpSortColumn,
 };
 use yshell_sftp::{DirectoryListing, FsEntry, FsEntryKind, RealSftpBackend, SftpClient};
+use yshell_ssh::SshConnectionConfig;
 
 /// UI-thread live SFTP client bound to one runtime session key.
 pub(crate) struct LiveSftpClient {
@@ -210,7 +220,7 @@ impl AppRuntime {
     pub(crate) fn drop_sftp_tab_state(&mut self, tab_id: &str) {
         self.sftp_tab_states.remove(tab_id);
         if let Some(session_key) = self.sftp_tab_session_key(tab_id) {
-            self.sftp_live.remove(&session_key);
+            self.drop_sftp_live_client_for(&session_key);
         }
     }
 
@@ -286,6 +296,19 @@ impl AppRuntime {
     /// Drop the live client for one session (disconnect / transport failure).
     pub(crate) fn drop_sftp_live_client_for(&mut self, session_key: &str) {
         self.sftp_live.remove(session_key);
+        // The off-thread probe/listing worker keeps its own cached connections;
+        // release them too so closed sessions do not leak SSH connections.
+        self.close_sftp_control_session(session_key);
+    }
+
+    /// Tells the off-thread control worker to drop its cached connections for a
+    /// session that closed or lost its transport.
+    fn close_sftp_control_session(&mut self, session_key: &str) {
+        if let Some(handle) = self.sftp_control_handle() {
+            let _ = handle.submit(SftpControlRequest::CloseSession {
+                session_key: session_key.to_owned(),
+            });
+        }
     }
 
     /// Reuse or create the live SFTP client for `session_key`.
@@ -364,9 +387,53 @@ impl AppRuntime {
             self.set_status_kind("sftp-disconnected", text, String::new(), String::new());
             return Ok(self.projection());
         };
+        if self.sftp_control_handle().is_some() {
+            // Remote Host path: user navigation must not block the Host tick.
+            // Queue the listing on the control worker and apply the result on a
+            // later tick (`pump_sftp_control`); stale results are dropped by
+            // session/tab/path.
+            self.submit_sftp_listing_now(&session_key);
+            return Ok(self.projection());
+        }
         let status_text = self.sync_sftp_lifecycle_for_session(&session_key, true);
         self.record_sftp_refresh_status(status_text);
         Ok(self.projection())
+    }
+
+    /// Queues an immediate directory listing (user navigation) on the SFTP
+    /// control worker, falling back to the synchronous path when the worker is
+    /// gone.
+    fn submit_sftp_listing_now(&mut self, session_key: &str) {
+        let Some(control) = self.sftp_control_handle() else {
+            return;
+        };
+        let Some(tab_id) = self.active_tab_id.clone() else {
+            return;
+        };
+        let path = self.sftp_path.clone();
+        let config = match self.plan_sftp_listing(session_key, true) {
+            SftpListingPlan::Resolved(text) => {
+                self.record_sftp_refresh_status(text);
+                return;
+            }
+            SftpListingPlan::Remote(config) => *config,
+        };
+        if control.listing_in_flight_for(session_key, &tab_id, &path) {
+            return;
+        }
+        if control.submit(SftpControlRequest::ListDir {
+            session_key: session_key.to_owned(),
+            tab_id,
+            config,
+            path,
+        }) {
+            self.sftp_listing_pending = false;
+        } else {
+            // Worker gone mid-flight: keep the old synchronous behaviour so the
+            // UI still gets an answer.
+            let status_text = self.sync_sftp_lifecycle_for_session(session_key, true);
+            self.record_sftp_refresh_status(status_text);
+        }
     }
 
     pub(crate) fn record_sftp_refresh_status(&mut self, text: String) {
@@ -884,6 +951,28 @@ impl AppRuntime {
         session_key: &str,
         refresh_listing: bool,
     ) -> String {
+        match self.plan_sftp_listing(session_key, refresh_listing) {
+            SftpListingPlan::Resolved(text) => text,
+            SftpListingPlan::Remote(_config) => {
+                let path = self.sftp_path.clone();
+                let list_result = self
+                    .sftp_live_client_mut(session_key)
+                    .and_then(|client| client.list_dir(&path).map_err(AppError::from_error));
+                match list_result {
+                    Ok(listing) => self.apply_sftp_listing_load(listing),
+                    Err(error) => self.apply_sftp_listing_failure(session_key, error.to_string()),
+                }
+            }
+        }
+    }
+
+    /// Resolves the SFTP lifecycle for `session_key` before a directory listing.
+    ///
+    /// `Remote` means a real (blocking) `list_dir` is needed and must run on a
+    /// thread where blocking is allowed; `Resolved` carries the legacy status
+    /// text for every case that needs no I/O (missing session, local terminal,
+    /// disconnected session, test fixture without a real transport).
+    fn plan_sftp_listing(&mut self, session_key: &str, refresh_listing: bool) -> SftpListingPlan {
         let Some((session_state, is_local)) = self
             .sessions
             .get(session_key)
@@ -895,7 +984,7 @@ impl AppRuntime {
                 reason: "runtime session is missing".to_owned(),
             };
             self.sftp_listing = SftpListingState::SyncMissingSession;
-            return self.sftp_session.legacy_status_text();
+            return SftpListingPlan::Resolved(self.sftp_session.legacy_status_text());
         };
 
         // TAB-4：本地终端没有远端文件系统；生命周期固定为 disconnected，
@@ -906,7 +995,9 @@ impl AppRuntime {
                 session_key: Some(session_key.to_owned()),
             };
             self.sftp_listing = SftpListingState::SyncDisconnected;
-            return "SFTP is unavailable for local terminal sessions.".to_owned();
+            return SftpListingPlan::Resolved(
+                "SFTP is unavailable for local terminal sessions.".to_owned(),
+            );
         }
 
         if session_state != yshell_core::SessionState::Connected {
@@ -915,14 +1006,14 @@ impl AppRuntime {
                 session_key: Some(session_key.to_owned()),
             };
             self.sftp_listing = SftpListingState::SyncDisconnected;
-            return self.sftp_session.legacy_status_text();
+            return SftpListingPlan::Resolved(self.sftp_session.legacy_status_text());
         }
 
         self.sftp_session = SftpSessionLifecycle::Ready {
             session_key: session_key.to_owned(),
         };
         if !refresh_listing {
-            return self.sftp_session.legacy_status_text();
+            return SftpListingPlan::Resolved(self.sftp_session.legacy_status_text());
         }
         // Unit tests use a fake shell and have no app-owned SSH transport; do
         // not attempt a real TCP/SSH connection to the fixture host.
@@ -934,39 +1025,47 @@ impl AppRuntime {
         {
             self.sftp_listing = SftpListingState::EmptyDirectory;
             self.sftp_listing_pending = false;
-            return self.sftp_session.legacy_status_text();
+            return SftpListingPlan::Resolved(self.sftp_session.legacy_status_text());
         }
 
-        let path = self.sftp_path.clone();
-        let list_result = self
-            .sftp_live_client_mut(session_key)
-            .and_then(|client| client.list_dir(&path).map_err(AppError::from_error));
-        match list_result {
-            Ok(listing) => {
-                let entry_count = listing.entries.len();
-                let listing_path = listing.path.clone();
-                self.apply_sftp_listing(&listing);
-                self.sftp_listing_pending = false;
-                format!(
-                    "SFTP session ready. Loaded {entry_count} SFTP entr{} from `{listing_path}`.",
-                    if entry_count == 1 { "y" } else { "ies" }
-                )
-            }
-            Err(error) => {
-                // Force the next refresh to open a new SSH/SFTP channel for this session.
-                self.drop_sftp_live_client_for(session_key);
-                self.sftp_session = SftpSessionLifecycle::Failed {
-                    session_key: Some(session_key.to_owned()),
-                    reason: error.to_string(),
-                };
-                self.sftp_listing = SftpListingState::SyncFailed {
-                    session_key: session_key.to_owned(),
-                    path: self.sftp_path.clone(),
-                    error: error.to_string(),
-                };
-                self.sftp_session.legacy_status_text()
-            }
+        let config = self
+            .sessions
+            .get(session_key)
+            .map(|runtime| self.effective_ssh_config(&runtime.ssh_config));
+        match config {
+            Some(config) => SftpListingPlan::Remote(Box::new(config)),
+            None => SftpListingPlan::Resolved(self.sftp_session.legacy_status_text()),
         }
+    }
+
+    /// Applies a successful `list_dir` result (shared by the synchronous and the
+    /// off-thread listing paths) and returns the legacy status text.
+    fn apply_sftp_listing_load(&mut self, listing: DirectoryListing) -> String {
+        let entry_count = listing.entries.len();
+        let listing_path = listing.path.clone();
+        self.apply_sftp_listing(&listing);
+        self.sftp_listing_pending = false;
+        format!(
+            "SFTP session ready. Loaded {entry_count} SFTP entr{} from `{listing_path}`.",
+            if entry_count == 1 { "y" } else { "ies" }
+        )
+    }
+
+    /// Applies a failed `list_dir` result (shared by the synchronous and the
+    /// off-thread listing paths) and returns the legacy status text.
+    fn apply_sftp_listing_failure(&mut self, session_key: &str, error: String) -> String {
+        // Force the next refresh to open a new SSH/SFTP channel for this session.
+        self.drop_sftp_live_client_for(session_key);
+        self.sftp_session = SftpSessionLifecycle::Failed {
+            session_key: Some(session_key.to_owned()),
+            reason: error.clone(),
+        };
+        self.sftp_listing = SftpListingState::SyncFailed {
+            session_key: session_key.to_owned(),
+            path: self.sftp_path.clone(),
+            error,
+        };
+        self.sftp_session.legacy_status_text()
     }
 
     pub(crate) fn sftp_ready_session_key(&self) -> Option<&str> {
@@ -1041,6 +1140,260 @@ impl AppRuntime {
         }
     }
 
+    // ------------------------------------------------------------------
+    // Host-tick pump for the off-thread SFTP control worker
+    // ------------------------------------------------------------------
+    //
+    // The Host supervisor thread must never block on SFTP. The periodic
+    // liveness probe and the deferred listing after tab activation are both
+    // network operations, so the tick only submits them and applies whatever
+    // the worker reports back on a later iteration. Results carry the
+    // session/tab/path they were issued for and are dropped when stale.
+
+    /// Drains the control worker, then queues the probe/listing that is due.
+    ///
+    /// Returns `true` when the applied results changed the projection. When no
+    /// control worker is wired (unit tests / the in-process fallback path) the
+    /// previous synchronous behaviour is kept so results are unchanged there.
+    pub(crate) fn pump_sftp_control(&mut self) -> bool {
+        let mut dirty = self.apply_sftp_control_results();
+        if self.sftp_control_handle().is_some() {
+            self.submit_due_sftp_probe();
+            self.submit_pending_sftp_listing();
+        } else {
+            if self.poll_sftp_connection() {
+                dirty = true;
+            }
+            if self.drain_pending_sftp_listing().is_some() {
+                dirty = true;
+            }
+        }
+        dirty
+    }
+
+    /// Clone of the control-worker handle (cheap: an `Arc` + channel sender).
+    fn sftp_control_handle(&self) -> Option<crate::sftp_jobs::SftpControlHandle> {
+        self.sftp_jobs
+            .as_ref()
+            .and_then(crate::sftp_jobs::SftpJobHandle::control)
+            .cloned()
+    }
+
+    /// Applies every result the off-thread SFTP control worker reported.
+    fn apply_sftp_control_results(&mut self) -> bool {
+        let Some(control) = self.sftp_control_handle() else {
+            return false;
+        };
+        let mut dirty = false;
+        for message in control.drain_results() {
+            match message {
+                SftpControlMessage::ProbeResult {
+                    session_key,
+                    tab_id,
+                    ok,
+                    transport_failed,
+                    error,
+                } => {
+                    if self.apply_sftp_probe_result(
+                        &session_key,
+                        &tab_id,
+                        ok,
+                        transport_failed,
+                        error.as_deref(),
+                    ) {
+                        dirty = true;
+                    }
+                }
+                SftpControlMessage::ListingResult {
+                    session_key,
+                    tab_id,
+                    path,
+                    result,
+                } => {
+                    if self.apply_sftp_listing_message(&session_key, &tab_id, &path, result) {
+                        dirty = true;
+                    }
+                }
+            }
+        }
+        dirty
+    }
+
+    /// Applies one off-thread liveness-probe result.
+    ///
+    /// Same semantics as the synchronous probe: only a transport/backend
+    /// failure marks the session disconnected ("directory missing" does not).
+    /// Results for a closed or retargeted tab are dropped.
+    fn apply_sftp_probe_result(
+        &mut self,
+        session_key: &str,
+        tab_id: &str,
+        ok: bool,
+        transport_failed: bool,
+        error: Option<&str>,
+    ) -> bool {
+        if self.sftp_tab_session_key(tab_id).as_deref() != Some(session_key) {
+            return false;
+        }
+        if !transport_failed {
+            if let (false, Some(error)) = (ok, error) {
+                tracing::debug!(
+                    target: "yshell::app",
+                    "SFTP probe failed without a transport error (ignored): {error}"
+                );
+            }
+            return false;
+        }
+        let still_connected = self.sessions.get(session_key).is_some_and(|runtime| {
+            runtime.state == yshell_core::SessionState::Connected && !runtime.is_local()
+        });
+        if !still_connected {
+            return false;
+        }
+        self.mark_sftp_session_disconnected(session_key)
+    }
+
+    /// Applies one off-thread directory-listing result.
+    ///
+    /// The result is dropped when the tab closed, points at another session, is
+    /// no longer focused, or the user already navigated to another path while
+    /// the request was in flight.
+    fn apply_sftp_listing_message(
+        &mut self,
+        session_key: &str,
+        tab_id: &str,
+        path: &str,
+        result: Result<DirectoryListing, String>,
+    ) -> bool {
+        if self.sftp_tab_session_key(tab_id).as_deref() != Some(session_key) {
+            return false;
+        }
+        if self.active_tab_id.as_deref() != Some(tab_id) {
+            return false;
+        }
+        if self.sftp_path != path {
+            return false;
+        }
+        let still_connected = self.sessions.get(session_key).is_some_and(|runtime| {
+            runtime.state == yshell_core::SessionState::Connected && !runtime.is_local()
+        });
+        if !still_connected {
+            return false;
+        }
+        let text = match result {
+            Ok(listing) => self.apply_sftp_listing_load(listing),
+            Err(error) => self.apply_sftp_listing_failure(session_key, error),
+        };
+        self.record_sftp_refresh_status(text);
+        true
+    }
+
+    /// Queues the periodic liveness probe when it is due and none is running.
+    ///
+    /// Mirrors [`Self::poll_sftp_connection`]'s guards but performs no I/O; the
+    /// probe interval is unchanged (5 s), but the worker keeps its connection
+    /// cached so a probe does not redo a TCP+SSH handshake every time.
+    fn submit_due_sftp_probe(&mut self) {
+        let Some(control) = self.sftp_control_handle() else {
+            return;
+        };
+        if control.probe_in_flight() {
+            return;
+        }
+        let Some(tab_id) = self.active_tab_id.clone() else {
+            return;
+        };
+        if !self.is_sftp_tab(&tab_id) {
+            return;
+        }
+        let Some(session_key) = self.sftp_tab_session_key(&tab_id) else {
+            return;
+        };
+        let config = match self.sessions.get(&session_key) {
+            Some(runtime)
+                if runtime.state == yshell_core::SessionState::Connected && !runtime.is_local() =>
+            {
+                runtime.ssh_config.clone()
+            }
+            _ => return,
+        };
+        let now = std::time::Instant::now();
+        if now.duration_since(self.sftp_last_probe) < Duration::from_millis(SFTP_PROBE_INTERVAL_MS)
+        {
+            return;
+        }
+        self.sftp_last_probe = now;
+        let config = self.effective_ssh_config(&config);
+        let path = self.sftp_path.clone();
+        if !control.submit(SftpControlRequest::Probe {
+            session_key,
+            tab_id,
+            config,
+            path,
+            timeout_secs: SFTP_PROBE_TIMEOUT_SECS,
+        }) {
+            tracing::debug!(
+                target: "yshell::app",
+                "SFTP control worker is gone; the liveness probe could not be queued"
+            );
+        }
+    }
+
+    /// Queues the deferred listing requested by tab activation / reconnect.
+    ///
+    /// The lifecycle checks (missing session, local terminal, disconnected,
+    /// test fixture) run on the tick because they need no I/O; only a real
+    /// `list_dir` goes to the worker. The pending flag is cleared once the
+    /// request is queued and a stale result is dropped instead of applied.
+    fn submit_pending_sftp_listing(&mut self) {
+        if !self.sftp_listing_pending {
+            return;
+        }
+        let Some(control) = self.sftp_control_handle() else {
+            return;
+        };
+        let Some(active_tab_id) = self.active_tab_id.clone() else {
+            self.sftp_listing_pending = false;
+            return;
+        };
+        let Some(session_key) = self.active_session_id.clone() else {
+            self.sftp_listing_pending = false;
+            self.sftp_session = SftpSessionLifecycle::Disconnected { session_key: None };
+            self.sftp_listing = SftpListingState::RefreshNeedsSession;
+            let text = self.sftp_session.legacy_status_text();
+            self.set_status_kind("sftp-disconnected", text, String::new(), String::new());
+            return;
+        };
+        let path = self.sftp_path.clone();
+        let config = match self.plan_sftp_listing(&session_key, true) {
+            SftpListingPlan::Resolved(text) => {
+                self.sftp_listing_pending = false;
+                self.record_sftp_refresh_status(text);
+                return;
+            }
+            SftpListingPlan::Remote(config) => *config,
+        };
+        if control.listing_in_flight_for(&session_key, &active_tab_id, &path) {
+            // The same listing is already running; a stale result for this
+            // (session, tab, path) would be applied, so do not queue a duplicate.
+            self.sftp_listing_pending = false;
+            return;
+        }
+        if control.submit(SftpControlRequest::ListDir {
+            session_key,
+            tab_id: active_tab_id,
+            config,
+            path,
+        }) {
+            self.sftp_listing_pending = false;
+        } else {
+            tracing::debug!(
+                target: "yshell::app",
+                "SFTP control worker is gone; the listing stayed pending"
+            );
+        }
+    }
+
     /// 把 SFTP 会话标记为断开：会话状态、SFTP 生命周期、状态栏一起更新。
     ///
     /// 状态是 `Disconnected`（不是 `Failed`）：`Failed` 会弹出整屏的连接横幅，
@@ -1068,6 +1421,16 @@ const SFTP_PROBE_INTERVAL_MS: u64 = 5_000;
 /// 探活时的 I/O 超时（秒）——探针必须快速失败。
 const SFTP_PROBE_TIMEOUT_SECS: u64 = 3;
 
+/// What the lifecycle check decided a listing needs.
+enum SftpListingPlan {
+    /// A real remote `list_dir` is required; the payload is the connection
+    /// config the off-thread control worker should use.
+    Remote(Box<SshConnectionConfig>),
+    /// No I/O needed: the lifecycle/listing state was already updated and this
+    /// is the legacy status text.
+    Resolved(String),
+}
+
 /// One visible SFTP file-list row, ready for the Slint model.
 ///
 /// The remote pane shares the row shape with the local pane (and therefore
@@ -1078,7 +1441,7 @@ pub type SftpRowData = FileRowData;
 ///
 /// The local and the remote pane share the segmented path bar, so both sides
 /// produce the very same shape.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct FileCrumbData {
     pub label: String,
     pub path: String,
@@ -1171,7 +1534,7 @@ fn sftp_crumbs_for(path: &str) -> Vec<SftpCrumbData> {
 }
 
 /// Per-SFTP-tab data used by split panes (and reusable for a single page).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SftpPaneProjection {
     pub path_text: String,
     pub rows: Vec<SftpRowData>,
@@ -1646,4 +2009,80 @@ pub(crate) fn parse_sftp_permissions(value: &str) -> AppResult<u32> {
     }
     u32::from_str_radix(octal, 8)
         .map_err(|_| AppError::new("SFTP permissions must be valid octal digits"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn runtime() -> AppRuntime {
+        let temp = tempfile::tempdir().expect("tempdir");
+        AppRuntime::new(temp.path().to_path_buf()).expect("runtime")
+    }
+
+    #[test]
+    fn probe_result_for_an_unknown_session_is_ignored() {
+        let mut runtime = runtime();
+        assert!(!runtime.apply_sftp_probe_result(
+            "missing-session",
+            "missing-tab",
+            false,
+            true,
+            Some("transport closed"),
+        ));
+        assert!(!runtime.apply_sftp_probe_result(
+            "missing-session",
+            "missing-tab",
+            true,
+            false,
+            None,
+        ));
+    }
+
+    #[test]
+    fn listing_result_for_a_closed_tab_is_dropped() {
+        let mut runtime = runtime();
+        let listing = DirectoryListing {
+            path: "/srv".to_owned(),
+            entries: vec![FsEntry::file("/srv/app.log", 3)],
+        };
+        assert!(!runtime.apply_sftp_listing_message(
+            "missing-session",
+            "missing-tab",
+            "/srv",
+            Ok(listing),
+        ));
+        assert!(runtime.sftp_entries.is_empty());
+        assert_eq!(runtime.sftp_path, "/");
+    }
+
+    #[test]
+    fn listing_failure_for_an_unknown_session_is_dropped() {
+        let mut runtime = runtime();
+        assert!(!runtime.apply_sftp_listing_message(
+            "missing-session",
+            "missing-tab",
+            "/",
+            Err("connection lost".to_owned()),
+        ));
+        assert!(matches!(
+            runtime.sftp_listing,
+            SftpListingState::ConnectReal
+        ));
+    }
+
+    #[test]
+    fn pump_without_a_control_worker_keeps_the_synchronous_listing_path() {
+        // Unit tests and the in-process fallback have no SFTP control worker:
+        // the pump must keep the previous synchronous (non-blocking in that
+        // fixture) behaviour instead of leaving the listing queued forever.
+        let mut runtime = runtime();
+        runtime.sftp_listing_pending = true;
+        assert!(runtime.pump_sftp_control());
+        assert!(!runtime.sftp_listing_pending);
+        assert!(matches!(
+            runtime.sftp_listing,
+            SftpListingState::RefreshNeedsSession
+        ));
+    }
 }

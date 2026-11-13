@@ -342,7 +342,7 @@ impl AppRuntime {
 }
 
 /// One transfer-drawer row, ready for the Slint model.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TransferRowData {
     pub id: String,
     pub direction_id: String,

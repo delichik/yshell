@@ -63,21 +63,22 @@ jobs:
         run: cargo xtask lint
 
   test:
-    name: ${{ matrix.mode == 'test' && 'Test' || 'Compile check' }} (${{ matrix.os }})
+    name: ${{ matrix.mode == 'test' && 'Test' || 'Compile check + multiprocess' }} (${{ matrix.os }})
     strategy:
       fail-fast: false
-      # The full suite runs once: a second and third full test run did not pay
-      # for the compile time it added. The other platforms only need to prove
-      # that their cfg, native dependencies and build scripts still compile;
-      # run `cargo xtask test` there when touching platform-specific code.
+      # The full suite runs once (Ubuntu). Windows/macOS additionally run the
+      # D38 process-architecture tests: host unit tests (IPC / lock / pid
+      # identity), the five-binary role CLI tests and the real `yshell --host`
+      # boot/attach/shutdown smoke test. Those are the platform-sensitive parts
+      # (Job Object vs Unix process groups, console flags, flock vs Win32 mutex).
       matrix:
         include:
           - os: ubuntu-latest
             mode: test
           - os: windows-latest
-            mode: check
+            mode: multiprocess
           - os: macos-latest
-            mode: check
+            mode: multiprocess
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
@@ -94,8 +95,15 @@ jobs:
         run: cargo xtask test
 
       - name: Compile-check the workspace
-        if: matrix.mode == 'check'
+        if: matrix.mode == 'multiprocess'
         run: cargo check --workspace --all-targets --all-features --locked
+
+      - name: Host / role multiprocess tests
+        if: matrix.mode == 'multiprocess'
+        run: |
+          cargo test -p yshell-app --lib --locked -- host::
+          cargo test -p yshell-app --test role_binaries --locked
+          cargo test -p yshell-app --test host_process_smoke --locked
 
   live-ssh:
     name: Live SSH/SFTP smoke tests

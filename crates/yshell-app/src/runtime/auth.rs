@@ -879,7 +879,7 @@ impl AppRuntime {
 // ---------------------------------------------------------------------------
 
 /// 私钥清单行（Rust → Slint `PrivateKeyRow` 的镜像）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct PrivateKeyRowData {
     pub(crate) id: String,
     pub(crate) label: String,
@@ -892,7 +892,7 @@ pub(crate) struct PrivateKeyRowData {
 }
 
 /// 一条已保存的主机密钥（`key_line` 在 known_hosts 数据模型里不存在，留空）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct HostKeyEntryData {
     pub(crate) algorithm: String,
     pub(crate) fingerprint: String,
@@ -900,7 +900,7 @@ pub(crate) struct HostKeyEntryData {
 }
 
 /// 按 `host:port` 分组的主机密钥（Rust → Slint `HostKeyGroup` 的镜像）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct HostKeyGroupData {
     pub(crate) host: String,
     pub(crate) port: u16,
