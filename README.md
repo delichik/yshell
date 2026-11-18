@@ -104,41 +104,30 @@ local toolchain is required:
 
 See [docs/product/github-actions-release.md](docs/product/github-actions-release.md) for details.
 
-## Linux/WSL development
+## Linux development
 
 Linux is the current development focus; Windows and macOS use the same
-commands. The supported setup is WSL2 (Debian 13) with a current Rust
-toolchain. Note that Debian's packaged `rustc` 1.85 is too old for the locked
-dependencies (MSRV is 1.92), so install Rust with rustup:
+commands. Use a current Rust toolchain (MSRV 1.92); Debian's packaged `rustc`
+1.85 is too old, so install Rust with rustup:
 
 ```bash
 export RUSTUP_DIST_SERVER=https://rsproxy.cn RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal -c rustfmt -c clippy
 ```
 
-The repository lives on the WSL filesystem at `/root/yshell`; Windows
-accesses it as `\\wsl.localhost\debian\root\yshell`. The old `D:\NewSpace\yshell`
-copy is a frozen historical backup - do not edit code or build in it. Start
-each shell by sourcing [scripts/wsl-env.sh](scripts/wsl-env.sh), which puts the
-rustup toolchain on `PATH` (non-login shells otherwise get Debian's `rustc`
-1.85) and points `CARGO_TARGET_DIR` at the shared `/root/yshell-target`:
+Builds use the standard in-repo `target/` directory (see
+[docs/agents/build-artifacts.md](docs/agents/build-artifacts.md)); do not point
+`CARGO_TARGET_DIR` outside the repository:
 
 ```bash
-cd /root/yshell
-source scripts/wsl-env.sh
 cargo xtask doctor   # prints the apt command for the Linux build/runtime libraries
 cargo xtask test     # cargo test --workspace --all-features
 cargo xtask run      # run the native app from source
 cargo xtask dist     # build the release artifacts into dist/
 ```
 
-Builds must run from the WSL filesystem (9p mounts such as `/mnt/*` are very
-slow for cargo). Run the dev build from Windows (needs WSLg, i.e. Windows 11 or
-a recent WSL):
-
-```powershell
-wsl.exe -e bash -lc 'cd /root/yshell && source scripts/wsl-env.sh && cargo xtask run'
-```
+If you build under WSL, keep the repository on the native ext4 filesystem
+(`/root/...`); 9p mounts such as `/mnt/*` make cargo builds very slow.
 
 Live SSH/SFTP smoke tests run against a disposable Docker container:
 

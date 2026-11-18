@@ -4,34 +4,13 @@
 Windows / macOS / Linux / WSL 行为一致。本目录只保留容器化的 live 测试、辅助脚本和
 遗留的远程同步工具。
 
-## WSL 构建环境
+## 构建目录
 
-当前开发环境是 WSL2（Debian 13），仓库位于 `/root/yshell`；Windows 侧通过
-`\\wsl.localhost\debian\root\yshell` 访问（VS Code、资源管理器可直接打开）。每个新 shell
-先 source 环境脚本，再跑构建/检查/测试：
+构建/检查/测试统一使用 `cargo xtask`，构建产物在仓库内的 `target/`（Cargo 标准布局，已 gitignore）。
+不要设置 `CARGO_TARGET_DIR` 指向仓库外，也不要按任务另建 `target-*`；详见
+[`docs/agents/build-artifacts.md`](../docs/agents/build-artifacts.md)。
 
-```bash
-cd /root/yshell
-source scripts/wsl-env.sh
-cargo xtask lint
-```
-
-`scripts/wsl-env.sh` 做两件事：
-
-- **PATH**：把 `$HOME/.cargo/bin`（rustup 工具链）放到最前。WSL 非登录 shell 不读
-  `~/.profile`，默认拿到 Debian 打包的 rustc 1.85，不满足本仓 MSRV 1.92，`cargo xtask`
-  会直接失败。
-- **共享 target**：导出 `CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-/root/yshell-target}`。后续
-  所有任务的构建/检查/测试统一复用 `/root/yshell-target`，**不要再按任务自建 target**
-  （各自建 target 等于重复全量编译并浪费磁盘）。
-
-约束与提示：
-
-- **不要在 `/mnt/*` 下构建**：9p 文件系统让 cargo 构建极慢；仓库与 target 都在 WSL 原生
-  ext4 上。`cargo xtask doctor` 也会给出这样的提示。
-- 旧副本 `D:\NewSpace\yshell` 只是历史备份（已冻结）：不要在其中改代码或构建，避免两份
-  仓库状态漂移。
-
+本目录只保留容器化的 live 测试与辅助脚本，不再提供 WSL 专用构建环境脚本。
 ## 构建工具：`cargo xtask`
 
 ```bash

@@ -41,6 +41,8 @@
 
 ## 构建与检查
 
+构建目录就是仓库内的 `target/`（Cargo 标准布局，已 gitignore）；不要设置 `CARGO_TARGET_DIR` 指到仓库外。发布物只由 `cargo xtask dist` 写到 `dist/`；详见 [`docs/agents/build-artifacts.md`](docs/agents/build-artifacts.md)。
+
 ```bash
 cargo xtask check    # fmt + clippy -D warnings
 cargo xtask test

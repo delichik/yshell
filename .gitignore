@@ -1,8 +1,12 @@
-# Rust build output
+# Rust/Cargo build output (standard in-repo layout; see docs/agents/build-artifacts.md)
 /target/
+/target-*/
 
-# Dev build artifacts produced by scripts/wsl-dev.sh dist
+# Distribution artifacts (portable/MSI/DMG/deb/rpm zips, extracted packages, staging)
 /dist/
+
+# Local QA scratch output
+/.qa-locks/
 
 # IDE / local tooling data
 /.idea/
@@ -10,9 +14,3 @@
 
 # Local problem-tracking file (must never be committed).
 problems.md
-
-# Local variant build trees (MSVC / GNU / MSYS2) must never be committed.
-/target-*/
-
-# Local QA scratch output.
-/.qa-locks/
