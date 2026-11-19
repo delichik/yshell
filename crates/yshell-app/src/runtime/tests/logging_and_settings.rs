@@ -66,6 +66,11 @@ fn debug_logging_setting_persists_and_creates_log_dir() {
     assert!(enabled.settings_debug_logging_enabled);
     assert!(enabled.status_text.contains("Debug logging enabled"));
     assert!(temp.path().join("logs").is_dir());
+    // The Host publishes the switch other role processes follow at runtime.
+    assert!(
+        yshell_logging::debug_log_control_path(temp.path()).is_file(),
+        "enabling debug logging must publish the cross-process control file"
+    );
 
     let persisted = ConfigStore::new(temp.path())
         .load_or_recover()
@@ -80,6 +85,10 @@ fn debug_logging_setting_persists_and_creates_log_dir() {
         .expect("disable debug logging");
     assert!(!disabled.settings_debug_logging_enabled);
     assert!(disabled.status_text.contains("Debug logging disabled"));
+    assert!(
+        !yshell_logging::debug_log_control_path(temp.path()).exists(),
+        "disabling debug logging must clear the cross-process control file"
+    );
 }
 
 #[test]

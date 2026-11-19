@@ -103,25 +103,25 @@ impl ShellWindows {
 /// attach explicitly. It never starts a Host; losing the Host means this Shell
 /// must exit (the Host is the single owner of the sessions and windows).
 pub fn run_remote_shell(config_dir: std::path::PathBuf) -> AppResult<()> {
+    // Initialise logging before anything else: attach/startup failures must
+    // reach the Shell debug log too. The Host has already published the
+    // debug-logging control file, so this follows the persisted setting without
+    // the Shell ever loading the configuration.
+    if let Err(error) =
+        crate::logging_setup::init_logging_for_role(&config_dir, crate::host::ProcessRole::Shell)
+    {
+        eprintln!("yshell: shell logging initialisation failed: {error}");
+    }
+    tracing::info!(config_dir = %config_dir.display(), "shell process starting");
     crate::win_chrome::select_backend()?;
     let client = Arc::new(connect_shell_client_attached(&config_dir)?);
     client.attach(1)?;
+    tracing::info!("shell attached to host");
 
     let rt = AppRuntimeClient::remote(Arc::clone(&client));
-    let startup_projection = rt.call_value("prepare_desktop_startup_projection", json!([]))?;
+    let _ = rt.call_value("prepare_desktop_startup_projection", json!([]))?;
     let _ = rt.call_value("prepare_desktop_startup_workspace", json!([]))?;
     let _ = rt.call_value("request_master_password_unlock", json!([]))?;
-
-    // The Shell never constructs an AppRuntime: logging is initialised from the
-    // Host projection (debug-logging flag) so the Host stays the only process
-    // that loads/migrates/writes configuration.
-    let debug_logging = startup_projection
-        .get("settings_debug_logging_enabled")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    if let Err(error) = crate::logging_setup::init_logging_for_shell(&config_dir, debug_logging) {
-        eprintln!("yshell: shell logging initialisation failed: {error}");
-    }
 
     let dialogs = Rc::new(RefCell::new(RemoteDialogHost::new()));
     let window_count = Rc::new(Cell::new(0u32));

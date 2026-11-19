@@ -883,8 +883,8 @@ fn terminate_child_pid(pid: u32) {
 /// Session-worker process entry: dial Host IPC and own the SSH session.
 pub fn run_session_worker_ipc(
     _config_dir: PathBuf,
-    _session_id: String,
-    _generation: u64,
+    session_id: String,
+    generation: u64,
     parent_pid: u32,
     ipc_port: u16,
     ipc_token: String,
@@ -895,7 +895,17 @@ pub fn run_session_worker_ipc(
         ));
     }
 
-    let stream = TcpStream::connect(("127.0.0.1", ipc_port)).map_err(AppError::from_error)?;
+    tracing::info!(
+        session_id = %session_id,
+        generation,
+        parent_pid,
+        ipc_port,
+        "session worker connecting to the Host IPC"
+    );
+    let stream = TcpStream::connect(("127.0.0.1", ipc_port)).map_err(|error| {
+        tracing::error!(ipc_port, %error, "session worker could not reach the Host IPC");
+        AppError::from_error(error)
+    })?;
     stream.set_nodelay(true).map_err(AppError::from_error)?;
     let mut writer = stream.try_clone().map_err(AppError::from_error)?;
     writeln!(writer, "{ipc_token}").map_err(AppError::from_error)?;
@@ -907,17 +917,31 @@ pub fn run_session_worker_ipc(
 
     // First command must be Connect.
     let mut line = String::new();
-    reader.read_line(&mut line).map_err(AppError::from_error)?;
-    let connect: HostToWorker = serde_json::from_str(line.trim_end())
-        .map_err(|error| AppError::new(format!("invalid host connect: {error}")))?;
+    reader.read_line(&mut line).map_err(|error| {
+        tracing::error!(session_id = %session_id, %error, "session worker lost the Host IPC");
+        AppError::from_error(error)
+    })?;
+    let connect: HostToWorker = serde_json::from_str(line.trim_end()).map_err(|error| {
+        tracing::error!(session_id = %session_id, %error, "session worker received an invalid connect command");
+        AppError::new(format!("invalid host connect: {error}"))
+    })?;
     let (config, open_shell) = match connect {
         HostToWorker::Connect { config, open_shell } => (config.into_ssh(), open_shell),
         other => {
+            tracing::error!(session_id = %session_id, "session worker expected Connect, got an unsupported command");
             return Err(AppError::new(format!(
                 "session worker expected Connect, got {other:?}"
             )));
         }
     };
+    tracing::info!(
+        session_id = %session_id,
+        host = %config.host,
+        port = config.port,
+        username = %config.username(),
+        open_shell,
+        "session worker starting the SSH connection"
+    );
 
     let (progress_tx, progress_rx) = mpsc::channel::<String>();
     let writer_for_progress = std::sync::Arc::clone(&writer);
@@ -925,6 +949,7 @@ pub fn run_session_worker_ipc(
         .name("yshell-sw-progress".into())
         .spawn(move || {
             while let Ok(stage) = progress_rx.recv() {
+                tracing::debug!(stage = %stage, "session worker progress");
                 if send_worker_msg(&writer_for_progress, &WorkerToHost::Progress { stage }).is_err()
                 {
                     break;
@@ -954,10 +979,18 @@ pub fn run_session_worker_ipc(
 
     let (transport, mut shell) = match connect_result {
         Ok(pair) => {
+            tracing::info!(session_id = %session_id, "session worker connected");
             send_worker_msg(&writer, &WorkerToHost::Connected)?;
             pair
         }
         Err(error) => {
+            tracing::error!(
+                session_id = %session_id,
+                stage = error.connection_stage,
+                kind = ?error.kind,
+                %error,
+                "session worker connection failed"
+            );
             send_worker_msg(
                 &writer,
                 &WorkerToHost::Failed {
@@ -972,6 +1005,7 @@ pub fn run_session_worker_ipc(
 
     let Some(mut shell) = shell.take() else {
         // SFTP-only should not use this path; close and exit.
+        tracing::debug!(session_id = %session_id, "session worker has no PTY (SFTP-only); exiting");
         transport.close();
         send_worker_msg(&writer, &WorkerToHost::Exited)?;
         return Ok(());
@@ -987,6 +1021,7 @@ pub fn run_session_worker_ipc(
         // Parent liveness is a cheap secondary check; the Host IPC socket EOF
         // below is the authoritative "Host is gone" signal.
         if parent_pid != 0 && !super::liveness::process_is_alive(parent_pid) {
+            tracing::info!(parent_pid, "session worker parent host is gone; exiting");
             break;
         }
         // Drain host commands (non-blocking via read timeout).
@@ -994,6 +1029,7 @@ pub fn run_session_worker_ipc(
             let mut cmd_line = String::new();
             match reader.read_line(&mut cmd_line) {
                 Ok(0) => {
+                    tracing::info!("session worker Host IPC closed; disconnecting");
                     let _ = shell.disconnect();
                     transport.close();
                     let _ = send_worker_msg(&writer, &WorkerToHost::Exited);
@@ -1001,14 +1037,19 @@ pub fn run_session_worker_ipc(
                 }
                 Ok(_) => {
                     let Ok(cmd) = serde_json::from_str::<HostToWorker>(cmd_line.trim_end()) else {
+                        tracing::debug!("session worker ignored an invalid Host command");
                         continue;
                     };
                     match cmd {
                         HostToWorker::Input { data_b64 } => {
                             if let Ok(bytes) = B64.decode(data_b64.as_bytes()) {
-                                if shell.write_input(&bytes).is_err() {
+                                tracing::trace!(bytes = bytes.len(), "session worker input");
+                                if let Err(error) = shell.write_input(&bytes) {
+                                    tracing::warn!(%error, "session worker could not write input to the remote shell");
                                     break;
                                 }
+                            } else {
+                                tracing::debug!("session worker ignored invalid base64 input");
                             }
                         }
                         HostToWorker::Resize {
@@ -1017,6 +1058,13 @@ pub fn run_session_worker_ipc(
                             pixel_width,
                             pixel_height,
                         } => {
+                            tracing::debug!(
+                                columns,
+                                rows,
+                                pixel_width,
+                                pixel_height,
+                                "session worker resize"
+                            );
                             let _ = shell.resize_pty(PtySize {
                                 columns,
                                 rows,
@@ -1025,6 +1073,7 @@ pub fn run_session_worker_ipc(
                             });
                         }
                         HostToWorker::Disconnect => {
+                            tracing::info!("session worker disconnect requested by the Host");
                             let _ = shell.disconnect();
                             transport.close();
                             let _ = send_worker_msg(&writer, &WorkerToHost::Exited);
@@ -1039,7 +1088,8 @@ pub fn run_session_worker_ipc(
                 {
                     break;
                 }
-                Err(_) => {
+                Err(error) => {
+                    tracing::warn!(%error, "session worker lost the Host IPC");
                     let _ = shell.disconnect();
                     transport.close();
                     return Ok(());
@@ -1048,10 +1098,12 @@ pub fn run_session_worker_ipc(
         }
 
         if !shell.is_connected() {
+            tracing::info!("session worker remote shell is no longer connected");
             break;
         }
         match shell.poll_output() {
             Ok(bytes) if !bytes.is_empty() => {
+                tracing::trace!(bytes = bytes.len(), "session worker output");
                 if send_worker_msg(
                     &writer,
                     &WorkerToHost::Output {
@@ -1060,15 +1112,20 @@ pub fn run_session_worker_ipc(
                 )
                 .is_err()
                 {
+                    tracing::warn!("session worker could not forward output to the Host");
                     break;
                 }
             }
             Ok(_) => {}
-            Err(_) => break,
+            Err(error) => {
+                tracing::warn!(%error, "session worker output poll failed");
+                break;
+            }
         }
         thread::sleep(Duration::from_millis(5));
     }
 
+    tracing::info!("session worker exiting");
     let _ = shell.disconnect();
     transport.close();
     let _ = send_worker_msg(&writer, &WorkerToHost::Exited);

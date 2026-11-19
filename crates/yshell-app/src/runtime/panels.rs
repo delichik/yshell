@@ -119,6 +119,10 @@ impl AppRuntime {
     }
 
     /// Persist the debug-logging preference and apply it to the live subscriber.
+    ///
+    /// The Host also publishes the cross-process control file so the GUI Shell
+    /// and every running SessionWorker / MCP daemon follow the toggle without a
+    /// restart (they do not load the configuration themselves).
     pub fn set_debug_logging(&mut self, enabled: bool) -> AppResult<AppProjection> {
         if self.config_document.ui.debug_logging != enabled {
             self.config_document.ui.debug_logging = enabled;
@@ -129,6 +133,8 @@ impl AppRuntime {
         if enabled {
             let dir = self.debug_log_dir();
             std::fs::create_dir_all(&dir).map_err(AppError::from_error)?;
+            yshell_logging::set_debug_log_control(&self.config_dir, true)
+                .map_err(AppError::from_error)?;
             yshell_logging::set_debug_logging_enabled(true);
             tracing::info!(
                 path = %yshell_logging::debug_log_path(&self.config_dir).display(),
@@ -145,6 +151,9 @@ impl AppRuntime {
             // Log while the writer is still enabled so the disable event is persisted.
             tracing::info!("debug logging disabled");
             yshell_logging::set_debug_logging_enabled(false);
+            if let Err(error) = yshell_logging::set_debug_log_control(&self.config_dir, false) {
+                tracing::warn!(%error, "could not clear the debug logging control file");
+            }
             self.set_status_kind(
                 "settings-debug-logging-disabled",
                 "Debug logging disabled.".to_owned(),

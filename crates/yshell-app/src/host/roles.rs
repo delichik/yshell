@@ -90,9 +90,10 @@ pub fn run_host_headless(config_dir: PathBuf, spawn_shell: bool) -> AppResult<()
     let runtime = AppRuntime::new(config_dir)?;
     // The Host is the only process that owns configuration state; give it a
     // file-backed log so startup/shutdown problems are diagnosable even when it
-    // was spawned detached (stdlib stderr is /dev/null in that case).
+    // was spawned detached (stdlib stderr is /dev/null in that case). This also
+    // publishes the cross-process debug-logging switch.
     if let Err(error) = crate::logging_setup::init_logging_for_runtime(&runtime) {
-        tracing::debug!(%error, "host logging initialisation failed");
+        eprintln!("yshell: host logging initialisation failed: {error}");
     }
     let host = super::service::HostService::start(runtime)?;
     tracing::info!(
@@ -175,11 +176,25 @@ pub fn run_host_headless(config_dir: PathBuf, spawn_shell: bool) -> AppResult<()
 
 /// Session worker process — owns SSH/PTY for one session (D38 Phase 2).
 pub fn run_session_worker(args: SessionWorkerArgs) -> AppResult<()> {
+    // Validate before touching the config directory: a bare / misconfigured
+    // worker exits with a clear error and must not create log files.
     if args.ipc_port == 0 || args.ipc_token.is_empty() {
         return Err(AppError::new(
             "session-worker requires --ipc-port and --ipc-token (Host-spawned only)",
         ));
     }
+    if let Err(error) =
+        crate::logging_setup::init_logging_for_role(&args.config_dir, ProcessRole::SessionWorker)
+    {
+        eprintln!("yshell: session-worker logging initialisation failed: {error}");
+    }
+    tracing::info!(
+        session_id = %args.session_id,
+        generation = args.generation,
+        parent_pid = args.parent_pid,
+        ipc_port = args.ipc_port,
+        "session worker starting"
+    );
 
     super::session_ipc::run_session_worker_ipc(
         args.config_dir,
@@ -193,12 +208,39 @@ pub fn run_session_worker(args: SessionWorkerArgs) -> AppResult<()> {
 
 /// Standalone MCP TCP listener — real OS process.
 pub fn run_mcp_daemon(args: McpDaemonArgs) -> AppResult<()> {
+    if let Err(error) =
+        crate::logging_setup::init_logging_for_role(&args.config_dir, ProcessRole::McpDaemon)
+    {
+        eprintln!("yshell: mcp-daemon logging initialisation failed: {error}");
+    }
+    tracing::info!(
+        bind_host = %args.bind_host,
+        port = args.port,
+        generation = args.generation,
+        parent_pid = args.parent_pid,
+        "mcp daemon starting"
+    );
     if args.parent_pid != 0 && !process_is_alive(args.parent_pid) {
+        tracing::error!(
+            parent_pid = args.parent_pid,
+            "mcp daemon parent host is not alive"
+        );
         return Err(AppError::new("mcp-daemon parent host is not alive"));
     }
 
-    let bridge = HostBridgeClient::connect(&args.config_dir)?;
+    let bridge = match HostBridgeClient::connect(&args.config_dir) {
+        Ok(bridge) => bridge,
+        Err(error) => {
+            tracing::error!(%error, "mcp daemon could not connect to the Host bridge");
+            return Err(error);
+        }
+    };
     if bridge.info().generation != 0 && bridge.info().generation != args.generation {
+        tracing::error!(
+            bridge_generation = bridge.info().generation,
+            daemon_generation = args.generation,
+            "mcp daemon generation does not match the Host"
+        );
         return Err(AppError::new(format!(
             "host bridge generation {} != daemon generation {}",
             bridge.info().generation,
@@ -215,6 +257,12 @@ pub fn run_mcp_daemon(args: McpDaemonArgs) -> AppResult<()> {
         args.token.clone(),
         inbox.clone(),
     )?;
+    tracing::info!(
+        port = handle.port,
+        bridge_host = %bridge.info().host,
+        bridge_port = bridge.info().port,
+        "mcp daemon ready"
+    );
 
     writeln!(
         io::stdout(),
@@ -239,6 +287,7 @@ pub fn run_mcp_daemon(args: McpDaemonArgs) -> AppResult<()> {
         }
         thread::sleep(Duration::from_millis(5));
     }
+    tracing::info!("mcp daemon exiting");
     drop(handle);
     Ok(())
 }
@@ -246,9 +295,18 @@ pub fn run_mcp_daemon(args: McpDaemonArgs) -> AppResult<()> {
 fn forward_mcp_job(bridge: &HostBridgeClient, job: McpJob) {
     match job {
         McpJob::Handle { request, reply } => {
+            tracing::debug!(
+                request_id = request.id,
+                method = %request.method,
+                client_id = %request.client_id,
+                "mcp daemon forwarding request to the Host"
+            );
             let response = match bridge.mcp_handle(request.clone()) {
                 Ok(response) => response,
-                Err(error) => IpcResponse::err(request.id, "host_bridge", error.to_string()),
+                Err(error) => {
+                    tracing::warn!(method = %request.method, %error, "mcp request failed in the Host bridge");
+                    IpcResponse::err(request.id, "host_bridge", error.to_string())
+                }
             };
             let _ = reply.send(response);
         }
@@ -257,12 +315,17 @@ fn forward_mcp_job(bridge: &HostBridgeClient, job: McpJob) {
             endpoint_token,
             reply,
         } => {
+            tracing::debug!(%client_id, "mcp daemon requesting request-control");
             let result = bridge
                 .mcp_begin_control(client_id, endpoint_token)
                 .map_err(|error| error.to_string());
+            if let Err(error) = &result {
+                tracing::warn!(%error, "mcp request-control was denied");
+            }
             let _ = reply.send(result);
         }
         McpJob::ReleaseClient { client_id } => {
+            tracing::debug!(%client_id, "mcp daemon releasing request-control");
             let _ = bridge.mcp_release_client(client_id);
         }
     }

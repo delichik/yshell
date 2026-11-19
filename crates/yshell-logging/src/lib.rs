@@ -10,7 +10,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex, OnceLock,
     },
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use time::{error::IndeterminateOffset, OffsetDateTime};
@@ -26,6 +26,20 @@ pub const DEBUG_LOG_FILE_NAME: &str = "yshell-debug.log";
 /// Relative directory (under the config / user data root) for debug logs.
 pub const DEBUG_LOG_DIR_NAME: &str = "logs";
 
+/// File name of the cross-process debug-logging switch.
+///
+/// The Host owns the switch (it is the only process that loads and writes the
+/// configuration); every other role process watches this file so that enabling
+/// or disabling debug logging at runtime also reaches processes that were
+/// started earlier. The file merely mirrors the persisted setting: it exists
+/// while debug logging is enabled.
+pub const DEBUG_LOG_CONTROL_FILE_NAME: &str = "debug-logging.enabled";
+
+/// How often a role process re-reads [`DEBUG_LOG_CONTROL_FILE_NAME`] before it
+/// writes an event. Small enough to feel immediate, large enough that the
+/// extra metadata lookup is negligible.
+const DEBUG_LOG_CONTROL_POLL_INTERVAL: Duration = Duration::from_millis(250);
+
 static DEBUG_LOG_STATE: OnceLock<Arc<DebugLogState>> = OnceLock::new();
 
 /// Options used to initialize the process-wide tracing subscriber.
@@ -38,6 +52,11 @@ pub struct LoggingConfig {
     stderr: bool,
     /// When set, also install a file writer under this directory.
     file_directory: Option<PathBuf>,
+    /// Debug log file name inside `file_directory`.
+    file_name: String,
+    /// When set, the writer follows this control file: it is enabled exactly
+    /// while the file exists (see [`DEBUG_LOG_CONTROL_FILE_NAME`]).
+    debug_control_file: Option<PathBuf>,
     /// Initial enabled state for the optional file writer.
     debug_enabled: bool,
 }
@@ -50,6 +69,8 @@ impl Default for LoggingConfig {
             compact: false,
             stderr: true,
             file_directory: None,
+            file_name: DEBUG_LOG_FILE_NAME.to_owned(),
+            debug_control_file: None,
             debug_enabled: false,
         }
     }
@@ -93,6 +114,30 @@ impl LoggingConfig {
         self
     }
 
+    /// Selects the debug log file name inside the configured directory.
+    ///
+    /// Role processes use one file each (`yshell-debug.log` for the Host,
+    /// `yshell-*-debug.log` for the Shell / SessionWorker / MCP daemon) so the
+    /// interleaved output of four processes stays attributable.
+    #[must_use]
+    pub fn with_file_name(mut self, file_name: impl Into<String>) -> Self {
+        self.file_name = file_name.into();
+        self
+    }
+
+    /// Follows `path` as the cross-process debug-logging switch.
+    ///
+    /// While the control file exists the file writer is enabled, regardless of
+    /// [`Self::with_debug_enabled`]; while it is missing the writer is disabled.
+    /// An enable is observed on the next event; a disable is observed at most
+    /// [`DEBUG_LOG_CONTROL_POLL_INTERVAL`] later, so a Host-side toggle reaches
+    /// every running role process without a restart.
+    #[must_use]
+    pub fn with_debug_control_file(mut self, path: impl Into<PathBuf>) -> Self {
+        self.debug_control_file = Some(path.into());
+        self
+    }
+
     /// Sets whether the optional file writer is enabled initially.
     #[must_use]
     pub const fn with_debug_enabled(mut self, enabled: bool) -> Self {
@@ -113,12 +158,47 @@ pub fn debug_log_path(config_dir: &Path) -> PathBuf {
     debug_log_dir(config_dir).join(DEBUG_LOG_FILE_NAME)
 }
 
+/// Returns the path of a role-specific debug log file under `{config_dir}/logs`.
+#[must_use]
+pub fn debug_log_path_named(config_dir: &Path, file_name: &str) -> PathBuf {
+    debug_log_dir(config_dir).join(file_name)
+}
+
+/// Returns the path of the cross-process debug-logging control file.
+#[must_use]
+pub fn debug_log_control_path(config_dir: &Path) -> PathBuf {
+    debug_log_dir(config_dir).join(DEBUG_LOG_CONTROL_FILE_NAME)
+}
+
+/// Publishes the cross-process debug-logging switch.
+///
+/// `enabled = true` creates the log directory and the control file; `false`
+/// removes the control file (a missing file is treated as already disabled).
+/// Only the Host calls this: it owns the persisted setting, while the other
+/// role processes only read the file.
+pub fn set_debug_log_control(config_dir: &Path, enabled: bool) -> io::Result<()> {
+    let control = debug_log_control_path(config_dir);
+    if enabled {
+        fs::create_dir_all(debug_log_dir(config_dir))?;
+        fs::write(&control, b"1\n")
+    } else {
+        match fs::remove_file(&control) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error),
+        }
+    }
+}
+
 /// Enables or disables writing to the debug log file at runtime.
 ///
-/// No-op when tracing was initialized without a file directory.
+/// No-op when tracing was initialized without a file directory. The next write
+/// re-reads the control file immediately so a Host toggle takes effect without
+/// waiting for the poll interval.
 pub fn set_debug_logging_enabled(enabled: bool) {
     if let Some(state) = DEBUG_LOG_STATE.get() {
         state.enabled.store(enabled, Ordering::Release);
+        state.reset_control_check();
     }
 }
 
@@ -169,6 +249,9 @@ pub fn init_tracing(config: &LoggingConfig) -> Result<(), InitLoggingError> {
         let fmt_layer = tracing_fmt::layer()
             .with_ansi(config.ansi)
             .with_target(true)
+            .with_file(true)
+            .with_line_number(true)
+            .with_thread_names(true)
             .with_writer(writer)
             .compact();
         tracing_subscriber::registry()
@@ -180,6 +263,9 @@ pub fn init_tracing(config: &LoggingConfig) -> Result<(), InitLoggingError> {
         let fmt_layer = tracing_fmt::layer()
             .with_ansi(config.ansi)
             .with_target(true)
+            .with_file(true)
+            .with_line_number(true)
+            .with_thread_names(true)
             .with_writer(writer);
         tracing_subscriber::registry()
             .with(env_filter)
@@ -199,8 +285,10 @@ fn build_writer(config: &LoggingConfig) -> BoxMakeWriter {
         }
         let state = Arc::new(DebugLogState {
             enabled: AtomicBool::new(config.debug_enabled),
-            path: directory.join(DEBUG_LOG_FILE_NAME),
+            path: directory.join(&config.file_name),
             file: Mutex::new(None),
+            control_file: config.debug_control_file.clone(),
+            last_control_check: Mutex::new(None),
         });
         match DEBUG_LOG_STATE.set(Arc::clone(&state)) {
             Ok(()) => state,
@@ -225,10 +313,54 @@ struct DebugLogState {
     enabled: AtomicBool,
     path: PathBuf,
     file: Mutex<Option<File>>,
+    /// Optional cross-process switch: the writer is enabled while it exists.
+    control_file: Option<PathBuf>,
+    /// Last time `control_file` was consulted (throttles the metadata lookup).
+    last_control_check: Mutex<Option<Instant>>,
 }
 
 impl DebugLogState {
+    fn reset_control_check(&self) {
+        let mut last = self
+            .last_control_check
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *last = None;
+    }
+
+    /// Re-reads the cross-process control file.
+    ///
+    /// While the writer is disabled the file is checked on every event, so a
+    /// runtime enable takes effect on the next event instead of waiting for a
+    /// poll interval. While it is enabled the metadata lookup is throttled to
+    /// one per [`DEBUG_LOG_CONTROL_POLL_INTERVAL`]: enough to notice a runtime
+    /// disable without paying for a `stat` per event in the hot path.
+    fn refresh_control(&self) {
+        let Some(control) = self.control_file.as_ref() else {
+            return;
+        };
+        let was_enabled = self.enabled.load(Ordering::Acquire);
+        let now = Instant::now();
+        {
+            let mut last = self
+                .last_control_check
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if was_enabled
+                && last.is_some_and(|checked| {
+                    now.duration_since(checked) < DEBUG_LOG_CONTROL_POLL_INTERVAL
+                })
+            {
+                return;
+            }
+            *last = Some(now);
+        }
+        self.enabled.store(control.is_file(), Ordering::Release);
+    }
+
     fn write_all(&self, buf: &[u8]) -> io::Result<()> {
+        // Follow the Host-published switch before deciding to drop the event.
+        self.refresh_control();
         if !self.enabled.load(Ordering::Acquire) {
             return Ok(());
         }
@@ -912,6 +1044,8 @@ mod tests {
             enabled: AtomicBool::new(false),
             path: path.clone(),
             file: Mutex::new(None),
+            control_file: None,
+            last_control_check: Mutex::new(None),
         };
 
         state
@@ -921,6 +1055,66 @@ mod tests {
 
         state.enabled.store(true, Ordering::Release);
         state.write_all(b"visible\n").expect("write while enabled");
+        assert_eq!(fs::read_to_string(&path).expect("read"), "visible\n");
+    }
+
+    #[test]
+    fn role_log_files_and_control_file_nest_under_log_dir() {
+        let root = PathBuf::from("/tmp/yshell-home");
+        assert_eq!(
+            debug_log_path_named(&root, "yshell-shell-debug.log"),
+            PathBuf::from("/tmp/yshell-home/logs/yshell-shell-debug.log")
+        );
+        assert_eq!(
+            debug_log_control_path(&root),
+            PathBuf::from("/tmp/yshell-home/logs/debug-logging.enabled")
+        );
+    }
+
+    #[test]
+    fn set_debug_log_control_toggles_the_marker_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+
+        assert!(!debug_log_control_path(root).exists());
+        set_debug_log_control(root, true).expect("enable control");
+        assert!(debug_log_control_path(root).is_file());
+
+        set_debug_log_control(root, false).expect("disable control");
+        assert!(!debug_log_control_path(root).exists());
+        // Disabling twice is a no-op, not an error.
+        set_debug_log_control(root, false).expect("disable is idempotent");
+    }
+
+    #[test]
+    fn debug_log_state_follows_the_control_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("yshell-shell-debug.log");
+        let control = dir.path().join(DEBUG_LOG_CONTROL_FILE_NAME);
+        let state = DebugLogState {
+            enabled: AtomicBool::new(false),
+            path: path.clone(),
+            file: Mutex::new(None),
+            control_file: Some(control.clone()),
+            last_control_check: Mutex::new(None),
+        };
+
+        state
+            .write_all(b"hidden\n")
+            .expect("discard while disabled");
+        assert!(!path.exists());
+
+        // The Host enables debug logging at runtime: the marker appears and the
+        // next event is written without restarting the process.
+        fs::write(&control, b"1\n").expect("publish control");
+        state.reset_control_check();
+        state.write_all(b"visible\n").expect("write while enabled");
+        assert_eq!(fs::read_to_string(&path).expect("read"), "visible\n");
+
+        // Disabling removes the marker; later events are dropped again.
+        fs::remove_file(&control).expect("clear control");
+        state.reset_control_check();
+        state.write_all(b"hidden again\n").expect("discard");
         assert_eq!(fs::read_to_string(&path).expect("read"), "visible\n");
     }
 

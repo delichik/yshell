@@ -213,6 +213,7 @@ flowchart LR
 - `cargo check --workspace --all-targets --locked`
 - `cargo test -p yshell-app --lib -- host::`（IPC 死锁/连接断开关机回归 / 单实例锁 / 存活检测 / Job）
 - `cargo test -p yshell-app --test role_binaries`（进程级：`yshell` 入口的 `--version`/`--help`/`--print-config-dir`；3 个角色二进制的 metadata 命令；bare SessionWorker / McpDaemon 参数报错；无 Host 时 bare GUI Shell 干净失败且不开窗）
+- `cargo test -p yshell-app --test role_debug_logging`（进程级：debug 开关开启时 SessionWorker / MCP daemon / GUI Shell 各写自身 `logs/yshell-*-debug.log` 且含生命周期与失败细节；已启动 Worker 跟随运行中的开关；关闭时不创建日志目录）
 - `cargo test -p yshell-app --test host_process_smoke`（真实 `yshell --host`：起 Host → 附着 → 零窗关机 → 无残留状态文件）
 - `cargo test -p xtask`（dist/MSI 模板等）
 - 真实 GUI 冒烟（开发者本机）：`yshell --config-dir <tmp>` → 出窗（标题 YShell）+ `yshell-shell` 子进程；再次 `yshell` → 已有 Host 开新窗；正常关窗 → Host 关机、全部子进程退出、bridge 清理；硬杀 Host → 级联杀 Shell/Worker/MCP；硬杀 Shell → Host Detach → 零窗关机。
@@ -226,7 +227,7 @@ flowchart LR
 4. **SFTP / 终端解析 / 本地 PTY 归位 SessionWorker**：仍在 Host（SFTP 会为 terminal session 新开一条 SSH 连接）；这是下一阶段的架构项，不在本版收口范围。
 5. ~~Host 去阻塞~~ **已落地**：周期探针、tab 激活延迟列表、**用户主动 SFTP 导航**（open path / parent / refresh）都改走独立 SFTP control 线程（`pump_sftp_control`：Host tick 只提交/应用）；传输本就在 sftp 作业线程。探针使用 control worker 自己的缓存连接：检测主机/网络不可达，不检测"浏览通道单边死亡"（下次用户操作会以列表错误暴露）。
 6. ~~事件面~~ **已补**：Host 在 Worker 异常退出时经投影把 session 标为 Failed 并给出 `session-worker-exited` 状态；MCP daemon 退出把 listener 置 Failed。`HostEvent` 队列保留给后续主动推送通道。
-7. ~~Shell 只读化~~ **已补**：Shell 不再构造 `AppRuntime`；日志按 Host 投影的 debug 开关初始化（`bootstrap::init_logging_for_shell`），Host 仍是唯一落盘者。
+7. ~~Shell 只读化~~ **已补**：Shell 不再构造 `AppRuntime`；Host 仍是唯一配置落盘者。**四个角色进程都初始化文件日志**（`logging_setup::init_logging_for_role`）：每角色一个 `{config_dir}/logs/` 下的 `yshell-*-debug.log`（Host 仍为历史文件 `yshell-debug.log`），文件层带目标模块 / `文件:行` / 线程名，SSH/PTY worker 另记连接阶段、resize、输出块等生命周期事件。Host 把 Settings 的 debug 开关同步为 `logs/debug-logging.enabled` 控制文件；各角色 writer 跟随该文件（开启后下一个事件即落盘，关闭在 250ms 内生效），因此运行中开关对 Host、Shell、已启动的 SessionWorker / MCP daemon 同时生效（子进程不读配置、也无需重启）。
 8. **Unix 监督 / 级联**：已接 `flock` 单实例锁、子进程独立进程组、syscall 级 liveness / 终止（SIGTERM → SIGKILL）、JobObject 的 Unix 兜底（Host 正常退出时 `killpg`）。**级联**：Windows 由 Job Object（`KILL_ON_JOB_CLOSE`，包含 GUI Shell / Worker / MCP）OS 级保证；Linux 每个角色子进程在 exec 前 `PR_SET_PDEATHSIG(SIGKILL)`；macOS 无 PDEATHSIG 等价物，GUI Shell / Worker / MCP 靠 `parent_pid` watchdog + bridge/IPC 断连检测，Host 被强杀后的 OS 级级联保证仍只在 Windows 完全成立。
 9. **i18n**：本轮新增的 `@tr` 文案尚未回填 `translations/*.po` / `.pot`（缺翻译时按英文回退）。
 
