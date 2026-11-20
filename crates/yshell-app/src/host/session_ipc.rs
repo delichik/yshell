@@ -1112,7 +1112,7 @@ fn wire_stage_static(stage: Option<&str>) -> Option<&'static str> {
 /// between "show the trust prompt" and "just fail" from `host_key_problem`, and
 /// between "open the auth prompt" and "dead-end error" from `auth_problem`.
 /// Losing them over the IPC boundary silently turns a prompt into an error.
-fn worker_failure_to_error(
+pub(crate) fn worker_failure_to_error(
     message: String,
     stage: Option<String>,
     kind: Option<String>,
@@ -1514,6 +1514,28 @@ mod tests {
             Some(&problem),
             "the Host needs the presented fingerprint to show the trust prompt"
         );
+    }
+
+    /// 变更过的主机密钥也要能跨进程还原（弹窗要显示旧/新指纹）。
+    #[test]
+    fn wire_host_key_problem_roundtrips_a_changed_key() {
+        let problem = HostKeyProblem::Changed {
+            host: "10.0.0.2".to_owned(),
+            port: 22,
+            presented: HostKeyFingerprint {
+                algorithm: "ssh-ed25519".to_owned(),
+                fingerprint: "SHA256:new".to_owned(),
+            },
+            expected: HostKeyFingerprint {
+                algorithm: "ssh-ed25519".to_owned(),
+                fingerprint: "SHA256:old".to_owned(),
+            },
+        };
+        let encoded = serde_json::to_string(&WireHostKeyProblem::from(&problem))
+            .expect("encode host key problem");
+        let decoded: WireHostKeyProblem =
+            serde_json::from_str(&encoded).expect("decode host key problem");
+        assert_eq!(decoded.into_problem(), problem);
     }
 
     /// 回归：认证失败跨进程传回 Host 时必须还带着分类与服务端方法表，

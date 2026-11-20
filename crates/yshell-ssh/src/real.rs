@@ -9,7 +9,7 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ssh2::{Channel, KeyboardInteractivePrompt, MethodType, Session};
 
@@ -242,6 +242,8 @@ pub struct RealConnectionAttempt {
     /// Server advertised authentication methods learned after the handshake
     /// (`None` = not queried yet or the server did not return a list).
     pub auth_methods: Option<AuthMethods>,
+    /// Wall clock anchor for per-stage timings in the connection log.
+    started_at: Instant,
 }
 
 #[derive(Debug)]
@@ -577,6 +579,21 @@ fn finish_native_auth_call(
         cancelled,
         prompt_log,
     } = call;
+    // Log the server's actual answer (libssh2 code + message) next to the
+    // method we offered. A bare "invalid credentials" in the UI cannot tell a
+    // wrong password from a server that silently disallows password auth.
+    if let Some(error) = outcome.as_ref().err() {
+        tracing::warn!(
+            target: "yshell::ssh",
+            method = kind.label(),
+            code = ?error.code(),
+            error = %error,
+            cancelled,
+            server_auth_banner = %session.banner().unwrap_or(""),
+            elapsed_ms = attempt.started_at.elapsed().as_millis(),
+            "ssh authentication failed"
+        );
+    }
     let detail = if cancelled {
         "native keyboard-interactive authentication was cancelled by the user".to_owned()
     } else {
@@ -841,7 +858,12 @@ impl RealShellSessionPlaceholder {
     }
 
     fn try_start_live_shell(&mut self) -> SshResult<()> {
-        if self.attempt.stage != RealConnectionStage::SshHandshake {
+        // `TcpConnect` = the socket has not been opened yet (the scaffold no
+        // longer dials), `SshHandshake` = a caller advanced past the dial.
+        if !matches!(
+            self.attempt.stage,
+            RealConnectionStage::TcpConnect | RealConnectionStage::SshHandshake
+        ) {
             return Ok(());
         }
         if !matches!(self.attempt.plan.proxy, ProxyConfig::None) {
@@ -983,6 +1005,7 @@ impl RealConnectionAttempt {
             history: Vec::new(),
             action_log: Vec::new(),
             auth_methods: None,
+            started_at: Instant::now(),
         };
         attempt.record_snapshot(
             RealConnectionStage::Prepared,
@@ -1033,6 +1056,17 @@ impl RealConnectionAttempt {
     }
 
     pub fn advance_to(&mut self, stage: RealConnectionStage, note: impl Into<String>) {
+        let note = note.into();
+        // Per-stage timing in the debug log: "TCP waited forever / auth waited
+        // forever" must be answerable from the log alone.
+        tracing::debug!(
+            target: "yshell::ssh",
+            stage = stage.label(),
+            server = %format!("{}:{}", self.plan.host, self.plan.port),
+            elapsed_ms = self.started_at.elapsed().as_millis(),
+            note = %note,
+            "ssh connection stage"
+        );
         self.stage = stage;
         self.record_snapshot(stage, note);
         notify_connection_stage(stage);
@@ -1181,10 +1215,12 @@ impl RealConnectionAttempt {
     }
 
     pub fn execute_current_action(&mut self) -> SshResult<RealTransportExecutionReport> {
-        match self.next_action() {
-            RealTransportAction::OpenTcpSocket { .. } => self.execute_tcp_connect_action(),
-            _ => Ok(self.execute_current_action_scaffold()),
-        }
+        // No transport action opens a socket here: the live hand-off
+        // (`try_start_live_shell` → `establish_native_session`) owns the single
+        // TCP connection. The old scaffold dialled, reported, closed the socket
+        // and let the live path dial again — two TCP connections per open, one
+        // extra RTT, and two confusing records in the log.
+        Ok(self.execute_current_action_scaffold())
     }
 
     fn record_action(
@@ -1210,112 +1246,13 @@ impl RealConnectionAttempt {
         });
     }
 
-    fn execute_tcp_connect_action(&mut self) -> SshResult<RealTransportExecutionReport> {
-        let action = self.next_action();
-        let report_stage = self.stage;
-        let target = format!("{}:{}", self.plan.host, self.plan.port);
-        let resolved = (self.plan.host.as_str(), self.plan.port)
-            .to_socket_addrs()
-            .map_err(|error| {
-                self.record_action(
-                    action.clone(),
-                    RealTransportActionOutcome::Failed,
-                    format!("DNS resolution failed for `{target}`: {error}"),
-                );
-                self.mark_failed(format!("DNS resolution failed before TCP connect: {error}"));
-                SshError::new(
-                    SshErrorKind::Dns,
-                    format!("failed to resolve `{target}` before TCP connect: {error}"),
-                )
-            })?;
-        let addresses = resolved.collect::<Vec<_>>();
-        if addresses.is_empty() {
-            self.record_action(
-                action.clone(),
-                RealTransportActionOutcome::Failed,
-                format!("DNS resolution for `{target}` produced no socket addresses."),
-            );
-            self.mark_failed("DNS resolution produced no socket addresses.");
-            return Err(SshError::new(
-                SshErrorKind::Dns,
-                format!("failed to resolve `{target}` before TCP connect: no socket addresses"),
-            ));
-        }
-
-        let mut last_error = None;
-        for address in addresses {
-            match TcpStream::connect_timeout(&address, self.plan.connect_timeout) {
-                Ok(stream) => {
-                    let peer = stream.peer_addr().unwrap_or(address);
-                    let local = stream.local_addr().ok();
-                    let detail = match local {
-                        Some(local) => format!(
-                            "TCP socket opened from `{local}` to `{peer}`. The socket was released immediately because persistent SSH transport retention is not wired yet."
-                        ),
-                        None => format!(
-                            "TCP socket opened to `{peer}`. The socket was released immediately because persistent SSH transport retention is not wired yet."
-                        ),
-                    };
-                    let record = RealTransportActionRecord {
-                        action: action.clone(),
-                        outcome: RealTransportActionOutcome::Completed,
-                        detail,
-                    };
-                    self.action_log.push(record.clone());
-                    // D1：执行细节只进日志；报告不再写进终端网格。
-                    tracing::debug!(
-                        target: "yshell::ssh",
-                        detail = record.detail.as_str(),
-                        "tcp connect action completed"
-                    );
-                    self.advance_to(
-                        RealConnectionStage::SshHandshake,
-                        format!(
-                            "TCP connect reached `{peer}`. SSH handshake is the next live step once persistent transport plumbing is wired."
-                        ),
-                    );
-                    return Ok(RealTransportExecutionReport {
-                        stage: report_stage,
-                        action,
-                        record: Some(record.clone()),
-                        summary: format!(
-                            "live-execution stage={} {}",
-                            report_stage.label(),
-                            record.summary()
-                        ),
-                    });
-                }
-                Err(error) => {
-                    last_error = Some((address, error));
-                }
-            }
-        }
-
-        let (address, error) = last_error.expect("tcp connect attempted at least one address");
-        let kind = map_tcp_connect_error_kind(&error);
-        let detail = format!("TCP connect to `{address}` failed: {error}");
-        let record = RealTransportActionRecord {
-            action: action.clone(),
-            outcome: RealTransportActionOutcome::Failed,
-            detail: detail.clone(),
-        };
-        self.action_log.push(record.clone());
-        tracing::debug!(
-            target: "yshell::ssh",
-            detail = detail.as_str(),
-            "tcp connect action failed"
-        );
-        self.mark_failed(format!("TCP connect failed for `{address}`: {error}"));
-        Err(SshError::new(kind, detail))
-    }
-
     fn scaffold_action_detail(&self, action: &RealTransportAction) -> String {
         match action {
             RealTransportAction::NegotiateProxy { protocol, address } => format!(
                 "Proxy negotiation scaffold for `{protocol}` via `{address}` is defined, but no live proxy implementation is wired yet."
             ),
             RealTransportAction::OpenTcpSocket { address } => format!(
-                "TCP connect scaffold for `{address}` is defined, but no live socket implementation is wired yet."
+                "TCP connect to `{address}` is performed by the live transport hand-off."
             ),
             RealTransportAction::PerformSshHandshake { server } => format!(
                 "SSH handshake scaffold for `{server}` is defined, but no live handshake implementation is wired yet."
@@ -2025,8 +1962,52 @@ fn connect_authenticated_native_session(attempt: &mut RealConnectionAttempt) -> 
     Ok(session)
 }
 
+/// Logs the negotiated transport parameters once the handshake succeeded.
+///
+/// This is the line to look at when a server "should work" but does not: the
+/// server version (OpenSSH release / vendor patch level) plus the actual KEX /
+/// host-key / cipher / MAC choices make an algorithm-compatibility problem
+/// distinguishable from authentication or host-key trouble.
+fn log_native_negotiation(
+    session: &Session,
+    attempt: &RealConnectionAttempt,
+    server_version: Option<&str>,
+) {
+    let method = |kind: MethodType| session.methods(kind).unwrap_or("");
+    tracing::info!(
+        target: "yshell::ssh",
+        server = %format!("{}:{}", attempt.plan.host, attempt.plan.port),
+        server_version = server_version.unwrap_or(""),
+        server_auth_banner = %session.banner().unwrap_or(""),
+        kex = method(MethodType::Kex),
+        host_key_algorithm = method(MethodType::HostKey),
+        crypt_cs = method(MethodType::CryptCs),
+        crypt_sc = method(MethodType::CryptSc),
+        mac_cs = method(MethodType::MacCs),
+        mac_sc = method(MethodType::MacSc),
+        comp_cs = method(MethodType::CompCs),
+        comp_sc = method(MethodType::CompSc),
+        elapsed_ms = attempt.started_at.elapsed().as_millis(),
+        "ssh transport negotiated"
+    );
+}
+
 /// TCP connect + SSH handshake + host key verification + auth-method discovery.
 fn establish_native_session(attempt: &mut RealConnectionAttempt) -> SshResult<Session> {
+    // Compatibility context first: which server, which auth method, which host
+    // key policy and timeout the attempt runs with. Without this a "cannot
+    // connect" report has no way to tell a policy problem from an algorithm or
+    // credential problem.
+    tracing::info!(
+        target: "yshell::ssh",
+        server = %format!("{}:{}", attempt.plan.host, attempt.plan.port),
+        username = %attempt.plan.username,
+        auth = attempt.plan.auth_strategy.label(),
+        host_key_policy = attempt.plan.host_key_policy.label(),
+        proxy = attempt.plan.proxy.label(),
+        connect_timeout_s = attempt.plan.connect_timeout.as_secs(),
+        "ssh connection attempt starting"
+    );
     attempt.advance_to(
         RealConnectionStage::TcpConnect,
         "Opening a TCP socket for the SSH session.",
@@ -2035,6 +2016,22 @@ fn establish_native_session(attempt: &mut RealConnectionAttempt) -> SshResult<Se
         attempt.mark_failed(error.message.clone());
         error.with_connection_stage(RealConnectionStage::TcpConnect.label())
     })?;
+    // Peek the server's version line before libssh2 swallows it: "which server
+    // rejected us" is the first thing a compatibility report needs.
+    let server_version = peek_server_version(&stream);
+    match server_version.as_deref() {
+        Some(version) => tracing::info!(
+            target: "yshell::ssh",
+            server = %format!("{}:{}", attempt.plan.host, attempt.plan.port),
+            server_version = %version,
+            "ssh server version"
+        ),
+        None => tracing::debug!(
+            target: "yshell::ssh",
+            server = %format!("{}:{}", attempt.plan.host, attempt.plan.port),
+            "ssh server did not send a version line before the handshake"
+        ),
+    }
     attempt.advance_to(
         RealConnectionStage::SshHandshake,
         "TCP socket is open. Performing the SSH handshake.",
@@ -2051,14 +2048,34 @@ fn establish_native_session(attempt: &mut RealConnectionAttempt) -> SshResult<Se
     session.set_timeout(session_timeout_ms(attempt.plan.connect_timeout));
     // Prefer modern KEX before handshake to avoid DH-GEX-first Session(-5) failures.
     apply_preferred_kex_methods(&session);
-    session.handshake().map_err(|error| {
-        native_stage_error(
+    if let Err(error) = session.handshake() {
+        let auth_banner = session.banner().unwrap_or("");
+        // Record what the server said and what we support: an algorithm
+        // mismatch is only diagnosable with both lists.
+        tracing::warn!(
+            target: "yshell::ssh",
+            server = %format!("{}:{}", attempt.plan.host, attempt.plan.port),
+            server_version = server_version.as_deref().unwrap_or(""),
+            server_auth_banner = %auth_banner,
+            code = ?error.code(),
+            error = %error,
+            client_kex = ?session.supported_algs(MethodType::Kex).ok(),
+            client_host_key = ?session.supported_algs(MethodType::HostKey).ok(),
+            elapsed_ms = attempt.started_at.elapsed().as_millis(),
+            "ssh handshake failed"
+        );
+        let message = match server_version.as_deref() {
+            Some(version) => format!("SSH handshake failed: {error} (server: {version})"),
+            None => format!("SSH handshake failed: {error}"),
+        };
+        return Err(native_stage_error(
             attempt,
             RealConnectionStage::SshHandshake,
             SshErrorKind::Handshake,
-            format!("SSH handshake failed: {error}"),
-        )
-    })?;
+            message,
+        ));
+    }
+    log_native_negotiation(&session, attempt, server_version.as_deref());
     attempt.record_action(
         RealTransportAction::PerformSshHandshake {
             server: format!("{}:{}", attempt.plan.host, attempt.plan.port),
@@ -2077,6 +2094,15 @@ fn establish_native_session(attempt: &mut RealConnectionAttempt) -> SshResult<Se
     // (before any credential is sent) so the runtime can present the auth
     // window; the query is best effort and never fails the connection.
     let methods = query_native_auth_methods(&session, &attempt.plan.username);
+    // The advertised method list is what decides whether our configured method
+    // can ever succeed; keep it in the log even for successful connections.
+    tracing::debug!(
+        target: "yshell::ssh",
+        server = %format!("{}:{}", attempt.plan.host, attempt.plan.port),
+        auth_methods = methods.map(|methods| methods.describe()).unwrap_or_default(),
+        configured_auth = attempt.plan.auth_strategy.label(),
+        "ssh server auth methods"
+    );
     let auth_note = match methods {
         Some(methods) => format!(
             "Host key accepted. SSH authentication is next. Server auth methods: {}.",
@@ -2197,6 +2223,14 @@ fn connect_native_stream(plan: &RealConnectionPlan) -> SshResult<TcpStream> {
         }
     }
     let (address, error) = last_error.expect("native connect attempted at least one address");
+    tracing::warn!(
+        target: "yshell::ssh",
+        target = %target,
+        address = %address,
+        kind = ?error.kind(),
+        %error,
+        "ssh tcp connect failed"
+    );
     Err(SshError::new(
         map_tcp_connect_error_kind(&error),
         format!("failed to open SSH TCP stream to `{address}`: {error}"),
@@ -2205,6 +2239,35 @@ fn connect_native_stream(plan: &RealConnectionPlan) -> SshResult<TcpStream> {
 
 fn session_timeout_ms(timeout: Duration) -> u32 {
     timeout.as_millis().clamp(1, u32::MAX as u128) as u32
+}
+
+/// Reads (without consuming) the server's `SSH-2.0-…` version line.
+///
+/// `libssh2` consumes the version exchange itself and the Rust `ssh2` wrapper
+/// does not expose the peer version, but "which server rejected us" is the
+/// first thing a compatibility report needs. `peek` leaves the bytes in the
+/// socket so libssh2 can still parse them right afterwards.
+fn peek_server_version(stream: &TcpStream) -> Option<String> {
+    // Real SSH servers send the version line immediately after accept; a
+    // non-SSH listener sends nothing, so a short bound costs one RTT at most.
+    stream
+        .set_read_timeout(Some(Duration::from_millis(200)))
+        .ok()?;
+    let mut buffer = [0u8; 256];
+    let version = match stream.peek(&mut buffer) {
+        Ok(count) if count > 0 => {
+            let text = String::from_utf8_lossy(&buffer[..count]);
+            text.lines()
+                .next()
+                .map(str::trim)
+                .filter(|line| line.starts_with("SSH-"))
+                .map(str::to_owned)
+        }
+        _ => None,
+    };
+    // Restore blocking reads: libssh2 owns this socket from here on.
+    let _ = stream.set_read_timeout(None);
+    version
 }
 
 fn verify_native_host_key(session: &Session, attempt: &mut RealConnectionAttempt) -> SshResult<()> {
@@ -2222,6 +2285,18 @@ fn verify_native_host_key(session: &Session, attempt: &mut RealConnectionAttempt
     };
     let server = format!("{}:{}", attempt.plan.host, attempt.plan.port);
     let policy = attempt.plan.host_key_policy.clone();
+    // Always log what the server presented, even when it is trusted: it is the
+    // only record of the key a TOFU/Strict decision is about.
+    tracing::debug!(
+        target: "yshell::ssh",
+        server = %server,
+        algorithm = %presented.algorithm,
+        fingerprint = %presented.fingerprint,
+        known = attempt.plan.known_hosts.get(&attempt.plan.host, attempt.plan.port).is_some(),
+        policy = attempt.plan.host_key_policy.label(),
+        elapsed_ms = attempt.started_at.elapsed().as_millis(),
+        "ssh host key presented"
+    );
 
     // 唯一静默信任的分支：显式测试策略 accept-any-for-testing。
     if matches!(
@@ -2435,7 +2510,8 @@ mod tests {
 
     #[test]
     fn real_backend_open_shell_reports_handshake_failure_for_non_ssh_listener() {
-        let (port, accept_handle) = start_tcp_probe_target(2);
+        // One accept: a shell open must dial the server exactly once.
+        let (port, accept_handle) = start_tcp_probe_target(1);
         let client = ShellClient::with_real_backend();
         let config = localhost_agent_config(port);
 
@@ -2445,6 +2521,76 @@ mod tests {
         accept_handle.join().expect("accept thread");
         assert_eq!(error.kind, SshErrorKind::Handshake);
         assert!(error.message.contains("SSH handshake failed"));
+    }
+
+    /// `peek` must see the version line without consuming it, otherwise libssh2
+    /// would fail the version exchange.
+    #[test]
+    fn peek_server_version_reads_without_consuming() {
+        use std::io::{Read as _, Write as _};
+        use std::net::TcpStream;
+
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind peek probe");
+        let port = listener.local_addr().expect("listener addr").port();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept peek probe");
+            stream
+                .write_all(b"SSH-2.0-PeekTest\r\n")
+                .expect("write version");
+            stream.flush().expect("flush version");
+            thread::sleep(Duration::from_millis(100));
+        });
+
+        let stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
+        assert_eq!(
+            super::peek_server_version(&stream).as_deref(),
+            Some("SSH-2.0-PeekTest")
+        );
+        // The bytes stay in the socket for libssh2.
+        let mut buffer = [0u8; 64];
+        stream
+            .set_read_timeout(Some(Duration::from_secs(1)))
+            .expect("read timeout");
+        let read = (&stream)
+            .read(&mut buffer)
+            .expect("read version after peek");
+        server.join().expect("peek server thread");
+        assert!(String::from_utf8_lossy(&buffer[..read]).starts_with("SSH-2.0-PeekTest"));
+    }
+
+    /// 兼容性诊断：握手失败时错误里必须带上服务器版本串，否则"连不上"只能靠猜。
+    #[test]
+    fn handshake_failure_reports_the_server_banner() {
+        use std::io::Write as _;
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind banner probe");
+        let port = listener.local_addr().expect("listener addr").port();
+        let server = thread::spawn(move || {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            let _ = stream.write_all(b"SSH-2.0-CompatProbe_9.9\r\n");
+            let _ = stream.flush();
+            // Closing right after the banner forces a handshake failure while
+            // the client already knows the peer version.
+            thread::sleep(Duration::from_millis(30));
+        });
+
+        let client = ShellClient::with_real_backend();
+        let mut config = localhost_agent_config(port);
+        config.connect_timeout = Duration::from_secs(5);
+        let error = client
+            .open_shell(&config)
+            .expect_err("a peer that only greets must fail the handshake");
+        server.join().expect("banner server thread");
+
+        assert_eq!(error.kind, SshErrorKind::Handshake);
+        assert!(
+            error.message.contains("CompatProbe_9.9"),
+            "handshake failures must name the server: {}",
+            error.message
+        );
     }
 
     #[test]
@@ -2621,24 +2767,36 @@ mod tests {
 
     #[test]
     fn real_connect_returns_stage_aware_connection_attempt() {
-        let (port, accept_handle) = start_tcp_probe_target(1);
+        // Connecting is bookkeeping only: no socket is opened until the live
+        // transport hand-off. Regression guard for the old double dial.
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind no-dial probe");
+        let port = listener.local_addr().expect("listener addr").port();
+        listener
+            .set_nonblocking(true)
+            .expect("non-blocking listener");
         let adapter = RealSshAdapter;
         let config = localhost_agent_config(port);
 
         let attempt = adapter.connect(&config).expect("real connection attempt");
-        accept_handle.join().expect("accept thread");
-        assert_eq!(attempt.stage, RealConnectionStage::SshHandshake);
+        assert_eq!(attempt.stage, RealConnectionStage::TcpConnect);
         assert_eq!(attempt.plan.username, "alice");
-        assert_eq!(attempt.history.len(), 3);
+        assert_eq!(attempt.history.len(), 2);
         assert_eq!(attempt.action_log.len(), 1);
         assert_eq!(
             attempt
                 .latest_action_record()
                 .expect("action record")
                 .outcome,
-            RealTransportActionOutcome::Completed
+            RealTransportActionOutcome::Blocked
         );
-        assert!(attempt.history[2].note.contains("SSH handshake"));
+        thread::sleep(Duration::from_millis(50));
+        assert!(
+            matches!(
+                listener.accept(),
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock
+            ),
+            "connect() must not dial the server; the live transport owns the only socket"
+        );
     }
 
     #[test]
@@ -2874,7 +3032,10 @@ mod tests {
         assert!(report.summary().contains("scaffold-execution"));
         assert_eq!(record.outcome, RealTransportActionOutcome::Blocked);
         assert_eq!(record.action.summary(), "tcp-connect:example.test:22");
-        assert!(record.detail.contains("no live socket implementation"));
+        assert_eq!(
+            record.detail,
+            "TCP connect to `example.test:22` is performed by the live transport hand-off."
+        );
         assert_eq!(attempt.action_log.len(), 1);
     }
 
@@ -2911,32 +3072,32 @@ mod tests {
 
     #[test]
     fn real_connection_attempt_marks_failed_when_tcp_probe_cannot_connect() {
+        // The TCP dial now happens in the live transport path; a closed port
+        // must still surface as a TcpConnect failure there.
         let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind closed-port probe");
         let port = listener.local_addr().expect("listener addr").port();
         drop(listener);
 
-        let adapter = RealSshAdapter;
-        let config = localhost_agent_config(port);
-        let mut attempt = RealConnectionAttempt::prepared(
-            adapter.plan_connection(&config).expect("plan connection"),
-        );
-        attempt.advance_to(
-            RealConnectionStage::TcpConnect,
-            "Entering tcp-connect stage for failure testing.",
-        );
+        let client = SshClient::with_real_backend();
+        let mut config = localhost_agent_config(port);
+        config.connect_timeout = Duration::from_secs(2);
+        let mut attempt = client.connect(&config).expect("connection bookkeeping");
 
-        let error = attempt
-            .execute_current_action()
+        let error = client
+            .exec(&mut attempt, "true")
             .expect_err("tcp connect should fail once listener is gone");
-        assert_eq!(error.kind, crate::error::SshErrorKind::TcpConnect);
-        assert_eq!(attempt.stage, RealConnectionStage::Failed);
-        assert_eq!(
-            attempt
-                .latest_action_record()
-                .expect("action record")
-                .outcome,
-            RealTransportActionOutcome::Failed
+        // Windows reports a closed loopback port either as "refused" or as a
+        // connect timeout depending on timing; both must be attributed to the
+        // TCP stage instead of being swallowed.
+        assert!(
+            matches!(
+                error.kind,
+                crate::error::SshErrorKind::TcpConnect | crate::error::SshErrorKind::Timeout
+            ),
+            "unexpected error: {error}"
         );
+        assert_eq!(error.connection_stage, Some("tcp-connect"));
+        assert_eq!(attempt.stage, RealConnectionStage::Failed);
         assert!(attempt.current_summary().contains("failed"));
     }
 

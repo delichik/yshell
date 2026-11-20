@@ -64,6 +64,52 @@ fn unknown_host_key_error_surfaces_first_trust_prompt() {
     assert!(projection.host_key_prompt_text.contains("Trust Once"));
 }
 
+/// 回归（logs2）：未知主机密钥从 out-of-process SessionWorker 传回来时，必须
+/// 还带着指纹，能弹"是否信任"的窗——而不是直接 Failed、什么都不问。
+#[test]
+fn worker_host_key_failure_raises_the_trust_prompt() {
+    use crate::host::session_ipc::{worker_failure_to_error, WireHostKeyProblem};
+
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), None)
+        .expect("runtime without keychain");
+    runtime
+        .handle_quick_connect("alice@example.com:2200")
+        .expect("quick connect");
+    let session_key = runtime.active_session_key().expect("active session");
+
+    let presented = HostKeyFingerprint {
+        algorithm: "ecdsa-sha2-nistp256".to_owned(),
+        fingerprint: "SHA256:wm249I/oMRQaOmJYTKZvwx6nm8iCKkgtVt8exBwaXsg".to_owned(),
+    };
+    let error = worker_failure_to_error(
+        "no known host key for example.com:2200".to_owned(),
+        Some("host-key-verification".to_owned()),
+        Some("host_key_rejected".to_owned()),
+        Some(Box::new(WireHostKeyProblem {
+            host: "example.com".to_owned(),
+            port: 2200,
+            presented_algorithm: presented.algorithm.clone(),
+            presented_fingerprint: presented.fingerprint.clone(),
+            expected_algorithm: None,
+            expected_fingerprint: None,
+        })),
+        None,
+    );
+
+    assert!(
+        runtime.apply_host_key_prompt_from_error(&session_key, "alice".to_owned(), &error),
+        "the runtime must recognize the worker's host-key failure as a trust prompt"
+    );
+    let projection = runtime.projection();
+    assert!(projection.host_key_prompt_visible);
+    assert_eq!(projection.host_key_prompt_mode_text, "first-trust");
+    assert_eq!(
+        projection.host_key_prompt_fingerprint_text,
+        presented.fingerprint
+    );
+}
+
 #[test]
 fn trust_host_key_and_save_persists_known_hosts_and_reconnects() {
     let temp = tempdir().expect("tempdir");
