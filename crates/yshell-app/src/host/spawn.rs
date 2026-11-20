@@ -61,6 +61,14 @@ pub fn spawn_mcp_daemon(
     generation: u64,
 ) -> AppResult<Child> {
     let exe = role_exe(ProcessRole::McpDaemon);
+    // Same reason as the SessionWorker: no console and logging may not be
+    // initialized yet when it crashes, so keep stderr for diagnostics.
+    let stderr = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(config_dir.join("mcp-daemon-stderr.log"))
+        .map(Stdio::from)
+        .unwrap_or_else(|_| Stdio::null());
     let mut cmd = Command::new(&exe);
     cmd.arg("--config-dir")
         .arg(config_dir)
@@ -77,7 +85,7 @@ pub fn spawn_mcp_daemon(
         .arg(current_pid().to_string())
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stderr(stderr);
     configure_child_spawn(&mut cmd);
     cmd.spawn().map_err(|error| {
         AppError::new(format!(

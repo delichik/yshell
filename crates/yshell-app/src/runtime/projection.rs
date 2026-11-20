@@ -1948,8 +1948,7 @@ impl AppRuntime {
             keyboard_visible: prompt.is_none()
                 || visible_methods.contains(&AuthPromptMethod::KeyboardInteractive),
             submit_enabled: prompt.is_some_and(|prompt| {
-                prompt.selected() == AuthPromptMethod::Password
-                    && !prompt.password_text.trim().is_empty()
+                prompt.selected() == AuthPromptMethod::Password && !prompt.password_text.is_empty()
             }),
             password_text: String::new(),
             remember_password: prompt.is_some_and(|prompt| prompt.remember_password),

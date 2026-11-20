@@ -840,6 +840,10 @@ impl WindowManager {
                 let _ = runtime.apply_connect_job_message(message);
                 dirty = true;
             }
+            // 兜底：卡死的后台连接任务不能把会话永远留在 "Connecting"。
+            if runtime.expire_stalled_connect_jobs() {
+                dirty = true;
+            }
             let pending_workers = std::mem::take(&mut runtime.pending_session_workers);
             // MCP：IPC worker 入队的控制/读写请求（含授权弹窗发起）。
             if !self.mcp_inbox.is_empty() {

@@ -444,9 +444,14 @@ impl AppRuntime {
 
     /// Resolves the typed password, or the stored secret when editing and the
     /// field was left blank ("keep existing").
+    ///
+    /// The password is treated as an opaque byte-for-byte value: trimming it
+    /// would silently break credentials that legitimately start or end with a
+    /// space (copy/paste artifacts included), and the server would answer with a
+    /// generic "authentication failed" that looks like a wrong password.
     fn resolve_editor_password_secret(&self, keyboard_interactive: bool) -> AppResult<String> {
-        if !self.editor.password.trim().is_empty() {
-            return Ok(self.editor.password.trim().to_owned());
+        if !self.editor.password.is_empty() {
+            return Ok(self.editor.password.clone());
         }
         if !self.editor.has_stored_password {
             return Err(AppError::new(if keyboard_interactive {
@@ -517,9 +522,9 @@ impl AppRuntime {
         keyboard_interactive: bool,
         existing: Option<&yshell_config::AuthProfile>,
     ) -> AppResult<String> {
-        if !self.editor.password.trim().is_empty() {
+        if !self.editor.password.is_empty() {
             let secret_key = format!("local://yshell/{auth_profile_id}/{key_suffix}");
-            self.store_secret_value(&secret_key, self.editor.password.trim())?;
+            self.store_secret_value(&secret_key, &self.editor.password)?;
             return Ok(secret_key);
         }
         if self.editor.has_stored_password {
@@ -537,7 +542,18 @@ impl AppRuntime {
                 }
             }
             // Stable key when the profile id is unchanged but method metadata drifted.
-            return Ok(format!("local://yshell/{auth_profile_id}/{key_suffix}"));
+            // Never return a reference that resolves to nothing: a dangling secret
+            // key makes the session look "configured" while every connect ends in a
+            // password prompt (or, worse, an empty password attempt).
+            let stable_key = format!("local://yshell/{auth_profile_id}/{key_suffix}");
+            if self.secret_value_exists(&stable_key) {
+                return Ok(stable_key);
+            }
+            return Err(AppError::new(if keyboard_interactive {
+                "the saved keyboard-interactive response for this session is missing; enter it again"
+            } else {
+                "the saved password for this session is missing; enter it again"
+            }));
         }
         Err(AppError::new(if keyboard_interactive {
             "keyboard-interactive auth requires a response value"

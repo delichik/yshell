@@ -817,3 +817,211 @@ fn saved_session_legacy_key_path_stays_connectable() {
         other => panic!("expected legacy private key auth, got {other:?}"),
     }
 }
+
+/// 密码是逐字节值：手输密码带首尾空格时必须原样送给服务器。
+///
+/// 旧实现 `password_text.trim()` 会把首尾空格吃掉，服务器只回一个笼统的
+/// "authentication failed"，看起来就像密码填错了。
+#[test]
+fn submit_password_keeps_surrounding_whitespace() {
+    let temp = tempdir().expect("tempdir");
+    let store = ConfigStore::new(temp.path());
+    let mut document = ConfigDocument::default();
+    document.auth_profiles.insert(
+        "auth-password".to_owned(),
+        AuthProfile {
+            id: "auth-password".to_owned(),
+            name: "Password".to_owned(),
+            method: ConfigAuthMethod::Password {
+                secret_key: "fake://yshell/missing".to_owned(),
+            },
+        },
+    );
+    let mut profile = QuickConnectTarget {
+        username: Some("root".to_owned()),
+        host: "password.example.test".to_owned(),
+        port: 22,
+    }
+    .into_session_profile("saved-password");
+    profile.auth_profile_id = Some("auth-password".to_owned());
+    let mut folder = FolderProfile::new("saved-sessions", "Saved Sessions");
+    folder.sessions.push(profile);
+    document.folders.push(folder);
+    store.save_all(&document).expect("save config");
+
+    let mut runtime = AppRuntime::new_with_keychain(temp.path().to_path_buf(), None)
+        .expect("runtime without keychain");
+    let prompted = runtime
+        .open_saved_session("saved-password")
+        .expect("open saved session");
+    assert!(prompted.password_prompt_visible);
+
+    let projection = runtime
+        .submit_password("  hunter2  ")
+        .expect("submit password should retry the connection");
+    assert!(!projection.password_prompt_visible);
+    assert!(projection.active_session_connected);
+
+    let session_key = runtime.active_session_key().expect("active session");
+    let session = runtime.sessions.get(&session_key).expect("runtime session");
+    assert!(matches!(
+        session.ssh_config.auth,
+        SshAuthMethod::Password {
+            ref username,
+            ref password
+        } if username == "root" && password == "  hunter2  "
+    ));
+}
+
+/// 密钥库里存了一个空值（或是空条目）时，不能再把空串当密码发出去，也不能
+/// 让"已配置密码"的会话静默变成"请输入密码"——这里保证会走密码弹窗而不是
+/// 一次注定失败的连接。
+#[test]
+fn saved_session_password_with_empty_secret_prompts_instead_of_connecting() {
+    let temp = tempdir().expect("tempdir");
+    let secret_ref = SecretRef::new("fake://yshell/empty-password");
+    let keychain = FakeKeychain::new("master");
+    keychain
+        .put(secret_ref.clone(), SecretString::from(""))
+        .expect("seed empty secret");
+    let keychain: Arc<dyn Keychain> = Arc::new(keychain);
+
+    let store = ConfigStore::new(temp.path());
+    let mut document = ConfigDocument::default();
+    document.auth_profiles.insert(
+        "auth-password".to_owned(),
+        AuthProfile {
+            id: "auth-password".to_owned(),
+            name: "Password".to_owned(),
+            method: ConfigAuthMethod::Password {
+                secret_key: secret_ref.as_str().to_owned(),
+            },
+        },
+    );
+    let mut profile = QuickConnectTarget {
+        username: Some("root".to_owned()),
+        host: "empty-password.example.test".to_owned(),
+        port: 22,
+    }
+    .into_session_profile("saved-empty-password");
+    profile.auth_profile_id = Some("auth-password".to_owned());
+    let mut folder = FolderProfile::new("saved-sessions", "Saved Sessions");
+    folder.sessions.push(profile);
+    document.folders.push(folder);
+    store.save_all(&document).expect("save config");
+
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), Some(keychain)).expect("runtime");
+    let error = runtime
+        .resolve_secret_value(secret_ref.as_str())
+        .expect_err("an empty stored secret is not a usable password");
+    assert!(error.to_string().contains("empty"), "unexpected: {error}");
+
+    let projection = runtime
+        .open_saved_session("saved-empty-password")
+        .expect("empty secret should suspend, not connect with an empty password");
+    assert!(projection.password_prompt_visible);
+    assert!(runtime.active_session_id.is_none());
+}
+
+/// 服务器拒绝"会话里保存的密码"时，认证弹窗必须说清楚是已存密码被拒，
+/// 而不是让用户以为要从头输入凭据。
+#[test]
+fn rejected_saved_password_is_reported_as_saved_password_in_the_auth_prompt() {
+    use crate::runtime::connection::AuthPromptContext;
+    use yshell_ssh::{AuthMethods, AuthProblemKind, SshError, SshErrorKind};
+
+    let temp = tempdir().expect("tempdir");
+    let secret_ref = SecretRef::new("fake://yshell/saved-password");
+    let keychain = FakeKeychain::new("master");
+    keychain
+        .put(secret_ref.clone(), SecretString::from("right-password"))
+        .expect("seed secret");
+    let keychain: Arc<dyn Keychain> = Arc::new(keychain);
+
+    let store = ConfigStore::new(temp.path());
+    let mut document = ConfigDocument::default();
+    document.auth_profiles.insert(
+        "auth-password".to_owned(),
+        AuthProfile {
+            id: "auth-password".to_owned(),
+            name: "Password".to_owned(),
+            method: ConfigAuthMethod::Password {
+                secret_key: secret_ref.as_str().to_owned(),
+            },
+        },
+    );
+    let mut profile = QuickConnectTarget {
+        username: Some("root".to_owned()),
+        host: "saved-password.example.test".to_owned(),
+        port: 22,
+    }
+    .into_session_profile("saved-stored-password");
+    profile.auth_profile_id = Some("auth-password".to_owned());
+    let mut folder = FolderProfile::new("saved-sessions", "Saved Sessions");
+    folder.sessions.push(profile);
+    document.folders.push(folder);
+    store.save_all(&document).expect("save config");
+
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), Some(keychain)).expect("runtime");
+    let _ = runtime
+        .open_saved_session("saved-stored-password")
+        .expect("open saved session");
+    let session_key = runtime.active_session_key().expect("active session");
+    let context = {
+        let session = runtime.sessions.get(&session_key).expect("runtime session");
+        AuthPromptContext::for_runtime(&session_key, session)
+    };
+
+    let error = SshError::new(SshErrorKind::Authentication, "denied").with_auth_context(
+        Some(AuthMethods::parse("password").expect("methods")),
+        AuthProblemKind::InvalidCredentials,
+    );
+    assert!(runtime.apply_auth_prompt_from_error(context, &error));
+
+    let projection = runtime.projection();
+    assert!(projection.auth_prompt_visible);
+    assert!(
+        projection
+            .auth_prompt_problem_text
+            .contains("saved in this session's profile"),
+        "unexpected problem text: {}",
+        projection.auth_prompt_problem_text
+    );
+}
+
+/// 后台连接任务卡死（worker 没起来 / 排在别的卡死任务后面）时，看门狗必须把
+/// 会话从 Connecting 拉出来，而不是让 overlay 永远停在 TCP 阶段。
+#[test]
+fn stalled_connect_jobs_are_failed_by_the_watchdog() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime =
+        AppRuntime::new_with_keychain(temp.path().to_path_buf(), None).expect("runtime");
+    // 真实地走一遍运行时激活路径，让 core dispatcher 认识这个会话
+    // （否则失败状态无法回填）。
+    let _ = runtime
+        .handle_quick_connect("alice@stalled.example.test:22")
+        .expect("quick connect");
+    let session_key = runtime.active_session_key().expect("active session");
+    assert!(!runtime.expire_stalled_connect_jobs());
+
+    runtime
+        .connect_job_started
+        .insert(session_key.clone(), std::time::Instant::now());
+    assert!(!runtime.expire_stalled_connect_jobs());
+
+    runtime.connect_job_started.insert(
+        session_key.clone(),
+        std::time::Instant::now() - Duration::from_secs(60 * 60),
+    );
+    assert!(runtime.expire_stalled_connect_jobs());
+    let session = runtime.sessions.get(&session_key).expect("runtime session");
+    assert_eq!(session.state_label(), "failed");
+    assert!(session.connection_error.contains("did not finish within"));
+    assert!(!session.connection_in_flight);
+    assert_eq!(session.connection_stage, "failed");
+    assert!(runtime.connect_job_started.is_empty());
+    // 已经处理过：再次 tick 是空转。
+    assert!(!runtime.expire_stalled_connect_jobs());
+}

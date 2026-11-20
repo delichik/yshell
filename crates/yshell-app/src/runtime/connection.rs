@@ -6,6 +6,7 @@ use crate::{
     session_runtime::SessionSource, session_runtime::SessionViewMode,
 };
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 use yshell_config::{parse_quick_connect, AuthMethod as ConfigAuthMethod};
 use yshell_core::{CommandDispatcher, SessionCommand, SessionState};
 use yshell_ssh::{
@@ -15,6 +16,15 @@ use yshell_ssh::{
 };
 
 use super::*;
+
+/// UI 侧看门狗：一次后台连接任务超过这个时长还没有任何结果，就视为卡死。
+///
+/// 这是**兜底**而不是常规超时，取值必须明显大于"健康路径最坏耗时"，否则会把
+/// 慢连接误杀：底层 TCP/握手/认证各自受 `connect_timeout`（默认 30s）约束，
+/// Host 等 worker 的上限是 120s（`CONNECT_HANDSHAKE_TIMEOUT`），再叠加在单线程
+/// worker 队列里排队的余量。180s/240s 都可能误伤，300s 留足余量；它的目的只是
+/// 保证"永远不会无限停在 Connecting"。
+const CONNECT_JOB_STALL_TIMEOUT: Duration = Duration::from_secs(300);
 
 impl AppRuntime {
     pub fn handle_quick_connect(&mut self, input: &str) -> AppResult<AppProjection> {
@@ -93,7 +103,7 @@ impl AppRuntime {
             .pending_password_prompt
             .clone()
             .ok_or_else(|| AppError::new("no password prompt is pending"))?;
-        if password.trim().is_empty() {
+        if password.is_empty() {
             return Err(AppError::new("password must not be empty"));
         }
         let result = self.retry_pending_password_connection(&prompt, password);
@@ -415,6 +425,8 @@ impl AppRuntime {
             }
             return Err(AppError::new("connect job worker is unavailable"));
         }
+        self.connect_job_started
+            .insert(session_key.to_owned(), Instant::now());
         self.set_status_kind(
             "session-connecting",
             format!("Connecting to {host_text} ..."),
@@ -669,6 +681,7 @@ impl AppRuntime {
                 is_reconnect,
                 outcome,
             } => {
+                self.connect_job_started.remove(&session_key);
                 if let Some(handle) = self.connect_jobs.as_mut() {
                     handle.forget(&session_key);
                 }
@@ -735,6 +748,12 @@ impl AppRuntime {
                 }
             }
         }
+        // Connect-job results arrive on the Host supervisor tick, outside any
+        // Shell UiCall. Without this dirty flag the Shell keeps its last
+        // projection forever (stale "TCP connect"/"SSH handshake" overlay even
+        // though the attempt already finished). Mark it here so every caller -
+        // in-process timer or HostTick - repaints.
+        self.mark_ui_dirty();
         self.projection()
     }
 
@@ -744,13 +763,22 @@ impl AppRuntime {
             .get(session_key)
             .map(|session| session.session_id().clone())
             .ok_or_else(|| AppError::new("runtime session is missing"))?;
-        let failed_events = self
-            .dispatcher
-            .dispatch(SessionCommand::SetSessionState {
-                session_id: session_id.clone(),
-                state: yshell_core::SessionState::Failed,
-            })
-            .map_err(AppError::from_error)?;
+        let failed_events = match self.dispatcher.dispatch(SessionCommand::SetSessionState {
+            session_id: session_id.clone(),
+            state: yshell_core::SessionState::Failed,
+        }) {
+            Ok(events) => events,
+            Err(error) => {
+                // The runtime session may exist without a dispatcher entry
+                // (e.g. a watchdog timeout on an inconsistent/partially opened
+                // session). Still leave the visible state failed instead of
+                // pinning the overlay on "Connecting" forever.
+                if let Some(runtime) = self.sessions.get_mut(session_key) {
+                    runtime.set_state(yshell_core::SessionState::Failed);
+                }
+                return Err(AppError::from_error(error));
+            }
+        };
         if let Some(runtime) = self.sessions.get_mut(session_key) {
             Self::apply_session_events(&session_id, runtime, failed_events);
         }
@@ -762,9 +790,69 @@ impl AppRuntime {
         self.reconnect_active_session()
     }
 
+    /// UI 侧看门狗：把超过 [`CONNECT_JOB_STALL_TIMEOUT`] 仍无结果的连接任务
+    /// 取消并标记失败。
+    ///
+    /// 后台 connect worker 是单线程队列：一个任务卡住（worker 没起来 / 子进程
+    /// 不响应 / 排在别的卡死任务后面）时，后续重连只会安静地排队，overlay 永远
+    /// 停在初始阶段——用户看到的就是"一直卡在 TCP 连接"。这里返回 `true`
+    /// 表示发生了超时处理（调用方据此重绘）。
+    pub(crate) fn expire_stalled_connect_jobs(&mut self) -> bool {
+        if self.connect_job_started.is_empty() {
+            return false;
+        }
+        let now = Instant::now();
+        let stalled: Vec<String> = self
+            .connect_job_started
+            .iter()
+            .filter(|(_, started)| now.duration_since(**started) >= CONNECT_JOB_STALL_TIMEOUT)
+            .map(|(session_key, _)| session_key.clone())
+            .collect();
+        if stalled.is_empty() {
+            return false;
+        }
+        let mut last_target = String::new();
+        for session_key in stalled {
+            self.connect_job_started.remove(&session_key);
+            if let Some(handle) = self.connect_jobs.as_mut() {
+                handle.cancel(&session_key);
+                handle.forget(&session_key);
+            }
+            let Some(target) = self.sessions.get_mut(&session_key).map(|runtime| {
+                let message = format!(
+                    "The connection attempt did not finish within {}s and was cancelled. \
+                     The background session worker is not responding; retry, and check the \
+                     worker log if it keeps happening.",
+                    CONNECT_JOB_STALL_TIMEOUT.as_secs()
+                );
+                runtime.connection_in_flight = false;
+                runtime.connection_stage = "failed".to_owned();
+                runtime.connection_error = message.clone();
+                runtime.log_runtime_event(&message);
+                runtime.connection_target_text()
+            }) else {
+                // 会话已关闭：只清账，不再触碰状态。
+                continue;
+            };
+            let _ = self.mark_session_failed_after_connect(&session_key);
+            last_target = target;
+        }
+        if !last_target.is_empty() {
+            self.set_status_kind(
+                "session-connect-timeout",
+                format!("The connection attempt to {last_target} timed out."),
+                last_target,
+                String::new(),
+            );
+        }
+        self.mark_ui_dirty();
+        true
+    }
+
     /// Overlay Cancel: stop the in-flight job and leave the session failed.
     pub fn cancel_connection_overlay(&mut self) -> AppResult<AppProjection> {
         let session_key = self.active_session_key()?;
+        self.connect_job_started.remove(&session_key);
         if let Some(handle) = self.connect_jobs.as_mut() {
             handle.cancel(&session_key);
             handle.forget(&session_key);
@@ -978,7 +1066,17 @@ impl AppRuntime {
         let auth = resolved.auth.as_ref()?;
         let (secret_key, auth_method) = password_prompt_auth_method(auth)?;
         // 密钥库里有可用密码（或没有密钥库）都返回 None；后者只有真的取不到密钥时才挂起。
-        if self.resolve_secret_value(secret_key).is_ok() {
+        if let Err(error) = self.resolve_secret_value(secret_key) {
+            // 明明配置了密码型认证却要弹窗时，把原因留下：否则用户只会看到
+            // "Password required"，无法判断是密钥库缺失、条目为空还是读失败。
+            tracing::warn!(
+                target: "yshell::runtime",
+                session = %runtime.session_id().as_str(),
+                secret = %secret_key,
+                %error,
+                "saved password is not usable; falling back to the password prompt"
+            );
+        } else {
             return None;
         }
         Some(PendingPasswordPrompt {
@@ -1098,6 +1196,17 @@ impl AppRuntime {
         self.activate_runtime_session_with_ssh_config_bound(runtime, ssh_config, reuse_tab_id)
     }
 
+    /// 判断 `host:port` 的主机密钥是否已在已知列表里（持久 + 本次临时信任）。
+    ///
+    /// 已 pin 的主机密钥不会在握手后触发确认，所以"密码前的主机密钥探针"
+    /// 没有意义，只会多付一次同步握手（可能把 UI 线程卡住）。
+    fn host_key_is_pinned(&self, config: &SshConnectionConfig, host: &str, port: u16) -> bool {
+        self.effective_ssh_config(config)
+            .known_hosts
+            .get(host, port)
+            .is_some()
+    }
+
     /// D7：主机密钥确认完成后的续接。
     ///
     /// 探针路径里运行时实例尚未建立（也不需要重连），确认完成后回到密码弹窗；
@@ -1132,6 +1241,13 @@ impl AppRuntime {
         prompt: &PendingPasswordPrompt,
     ) -> AppResult<bool> {
         let mut probe_config = runtime.ssh_config.clone();
+        // 已知（已 pin）的主机密钥不需要联网探测：以前这里会在 UI 线程上同步
+        // 跑一次完整的 TCP + SSH 握手，服务器不可达时整个窗口会卡在 overlay
+        // 上（视觉上就是"一直停在 TCP 连接"）。只有未知/变更的主机密钥才值
+        // 得为弹窗顺序付费。
+        if self.host_key_is_pinned(&probe_config, &prompt.host, prompt.port) {
+            return Ok(false);
+        }
         probe_config.auth = AuthMethod::PrivateKey {
             username: prompt.username.clone(),
             // 空路径：libssh2 在本地读取失败，探针绝不提交凭据。
@@ -1701,6 +1817,8 @@ pub(crate) struct PendingAuthPrompt {
     pub(crate) last_problem: Option<AuthProblemKind>,
     /// 已尝试次数（含挂起前的那一次）。
     pub(crate) attempts: u32,
+    /// 上次尝试用的就是会话里保存的密码（服务器拒绝时文案直接指向配置）。
+    pub(crate) used_saved_password: bool,
     /// 当前选中的方式（用 `select` 修改，保证服务端允许）。
     selected: AuthPromptMethod,
     /// 密码输入（重试不清空；取消/关闭清空）。
@@ -1743,6 +1861,7 @@ impl PendingAuthPrompt {
             server_methods,
             last_problem: None,
             attempts: 1,
+            used_saved_password: false,
             selected: default_auth_prompt_selection(configured_method, server_methods),
             password_text: String::new(),
             remember_password: false,
@@ -1834,6 +1953,12 @@ impl PendingAuthPrompt {
     #[must_use]
     pub(crate) fn problem_text(&self) -> Option<String> {
         self.last_problem.map(|problem| match problem {
+            AuthProblemKind::InvalidCredentials if self.used_saved_password => {
+                "The server rejected the password saved in this session's profile. Update it in \
+                 the session editor (or enter a different password below and tick \"Remember \
+                 password\")."
+                    .to_owned()
+            }
             AuthProblemKind::InvalidCredentials => {
                 "The server rejected these credentials. Check them and retry.".to_owned()
             }
@@ -2049,10 +2174,14 @@ impl AppRuntime {
         let Some(problem) = error.auth_problem else {
             return false;
         };
+        // 本次尝试用的是不是"会话里保存的那份密码"：决定弹窗文案，避免把
+        // "服务器拒绝了已保存密码"说成"请重新输入凭据"。
+        let used_saved_password = self.session_attempted_saved_password(&context.session_key);
         // N4：同会话重试再次失败 → 原地更新同一个弹窗（刷新服务端方式 + 错误条，
         // 保留已填内容；设计 §2）。错误里必带 `auth_problem`，分支必为 true。
         if let Some(existing) = self.pending_auth_prompt.as_mut() {
             if existing.session_key == context.session_key && existing.apply_auth_error(error) {
+                existing.used_saved_password = used_saved_password;
                 return true;
             }
         }
@@ -2072,10 +2201,35 @@ impl AppRuntime {
         )
         .with_session_key(&context.session_key);
         prompt.last_problem = Some(problem);
+        prompt.used_saved_password = used_saved_password;
         self.pending_auth_prompt = Some(prompt);
         // 认证弹窗取代 W5 的密码挂起（同一窗口的两种形态）。
         self.pending_password_prompt = None;
         true
+    }
+
+    /// 本次失败的连接是否用的就是 saved session 里存的密码。
+    fn session_attempted_saved_password(&self, session_key: &str) -> bool {
+        let Some(runtime) = self.sessions.get(session_key) else {
+            return false;
+        };
+        let SessionSource::SavedSession { profile_id } = &runtime.source else {
+            return false;
+        };
+        let AuthMethod::Password { password, .. } = &runtime.ssh_config.auth else {
+            return false;
+        };
+        let Some(resolved) = self.config_document.resolve_session(profile_id) else {
+            return false;
+        };
+        let Some(auth) = resolved.auth else {
+            return false;
+        };
+        let ConfigAuthMethod::Password { secret_key } = auth.method else {
+            return false;
+        };
+        self.resolve_secret_value(&secret_key)
+            .is_ok_and(|stored| stored == *password)
     }
 
     pub fn select_auth_prompt_method(&mut self, index: i32) -> AppProjection {
@@ -2158,7 +2312,9 @@ impl AppRuntime {
         };
         let method = match prompt.selected() {
             AuthPromptMethod::Password => {
-                let password = prompt.password_text.trim().to_owned();
+                // 密码按原样使用：绝不 trim，否则首尾空格会被静默吃掉，
+                // 服务器只回一个笼统的 "authentication failed"。
+                let password = prompt.password_text.clone();
                 if password.is_empty() {
                     self.set_status_kind(
                         "auth-password-empty",

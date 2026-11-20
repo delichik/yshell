@@ -252,6 +252,20 @@ impl AuthProblemKind {
             Self::Cancelled => "cancelled",
         }
     }
+
+    /// Inverse of [`Self::label`], for the out-of-process worker wire format.
+    ///
+    /// Returns `None` for an unknown label so callers can fall back instead of
+    /// failing the connection over a protocol detail.
+    pub fn from_label(label: &str) -> Option<Self> {
+        match label {
+            "invalid-credentials" => Some(Self::InvalidCredentials),
+            "method-not-allowed" => Some(Self::MethodNotAllowed),
+            "other-method-required" => Some(Self::OtherMethodRequired),
+            "cancelled" => Some(Self::Cancelled),
+            _ => None,
+        }
+    }
 }
 
 /// One keyboard-interactive prompt as presented by the server.

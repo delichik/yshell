@@ -40,17 +40,29 @@ impl AppRuntime {
         entries
     }
 
+    /// Reads one secret from the configured keychain.
+    ///
+    /// An empty stored value is treated as "not usable": sending an empty string
+    /// to the server produces a bare `authentication failed` that is impossible to
+    /// tell apart from a wrong password, and silently falls through to the manual
+    /// password prompt even though the session has a password configured.
     pub(crate) fn resolve_secret_value(&self, secret_key: &str) -> AppResult<String> {
         let keychain = self.keychain.as_ref().ok_or_else(|| {
             AppError::new(format!(
                 "saved session auth requires secret `{secret_key}`, but no keychain is configured"
             ))
         })?;
-        keychain
+        let secret = keychain
             .0
             .get(&SecretRef::new(secret_key))
-            .map(|secret| secret.expose_secret().to_owned())
-            .map_err(AppError::from_error)
+            .map_err(AppError::from_error)?;
+        let value = secret.expose_secret();
+        if value.is_empty() {
+            return Err(AppError::new(format!(
+                "the saved secret `{secret_key}` is empty; re-enter it in the session editor"
+            )));
+        }
+        Ok(value.to_owned())
     }
 
     pub(crate) fn resolve_secret_value_with_override(
@@ -153,10 +165,8 @@ impl AppRuntime {
         }
     }
 
-    fn secret_value_exists(&self, secret_key: &str) -> bool {
-        self.keychain
-            .as_ref()
-            .is_some_and(|keychain| keychain.0.get(&SecretRef::new(secret_key)).is_ok())
+    pub(crate) fn secret_value_exists(&self, secret_key: &str) -> bool {
+        self.resolve_secret_value(secret_key).is_ok()
     }
 
     /// 导入私钥材料（OpenSSH 文本）：解析 → 派生公钥/指纹 → 材料（与可选口令）
@@ -275,7 +285,8 @@ impl AppRuntime {
         key_id: &str,
         passphrase: &str,
     ) -> AppResult<PrivateKeyEntryInfo> {
-        let passphrase = passphrase.trim();
+        // A passphrase is opaque too: trimming would make a passphrase that
+        // legitimately contains edge whitespace unrememberable.
         if passphrase.is_empty() {
             return Err(AppError::new("a passphrase to remember must not be empty"));
         }

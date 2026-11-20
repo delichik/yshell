@@ -19,9 +19,10 @@ use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use yshell_ssh::{
-    with_connection_stage_hook, AuthMethod, ChannelKind, ForwardingKind, HostKeyFingerprint,
-    HostKeyPolicy, KnownHosts, ProxyConfig, PtyConfig, PtySize, ShellSession, SshConnectionConfig,
-    SshError, SshErrorKind, SshTransport, TunnelConfig,
+    with_connection_stage_hook, AuthMethod, AuthMethods, AuthProblemKind, ChannelKind,
+    ForwardingKind, HostKeyFingerprint, HostKeyPolicy, HostKeyProblem, KnownHosts, ProxyConfig,
+    PtyConfig, PtySize, ShellSession, SshConnectionConfig, SshError, SshErrorKind, SshTransport,
+    TunnelConfig,
 };
 
 use crate::error::{AppError, AppResult};
@@ -64,8 +65,129 @@ pub enum WorkerToHost {
         message: String,
         stage: Option<String>,
         kind: Option<String>,
+        /// Host-key details (presented/expected fingerprint) so the Host can
+        /// raise the trust / changed-key prompt for an out-of-process worker.
+        /// Dropping them turns "unknown host key" into a bare failure with no
+        /// way to trust the key (the connection just errors out).
+        ///
+        /// Boxed: `Failed` is the largest variant and the wire payload is rare,
+        /// so indirection keeps every queued `WorkerToHost` small.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        host_key: Option<Box<WireHostKeyProblem>>,
+        /// Authentication classification + server method list, so the Host can
+        /// open the auth prompt instead of showing a dead-end error.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        auth: Option<Box<WireAuthContext>>,
     },
     Exited,
+}
+
+/// Host-key failure details carried from the worker to the Host.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WireHostKeyProblem {
+    pub host: String,
+    pub port: u16,
+    pub presented_algorithm: String,
+    pub presented_fingerprint: String,
+    /// `Some` = the stored key changed; `None` = first trust.
+    pub expected_algorithm: Option<String>,
+    pub expected_fingerprint: Option<String>,
+}
+
+/// Authentication failure details carried from the worker to the Host.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WireAuthContext {
+    /// [`yshell_ssh::AuthProblemKind::label`] value.
+    pub problem: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub methods: Option<WireAuthMethods>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct WireAuthMethods {
+    pub password: bool,
+    pub publickey: bool,
+    pub keyboard_interactive: bool,
+    pub agent: bool,
+}
+
+impl From<&HostKeyProblem> for WireHostKeyProblem {
+    fn from(problem: &HostKeyProblem) -> Self {
+        match problem {
+            HostKeyProblem::Unknown {
+                host,
+                port,
+                presented,
+            } => Self {
+                host: host.clone(),
+                port: *port,
+                presented_algorithm: presented.algorithm.clone(),
+                presented_fingerprint: presented.fingerprint.clone(),
+                expected_algorithm: None,
+                expected_fingerprint: None,
+            },
+            HostKeyProblem::Changed {
+                host,
+                port,
+                presented,
+                expected,
+            } => Self {
+                host: host.clone(),
+                port: *port,
+                presented_algorithm: presented.algorithm.clone(),
+                presented_fingerprint: presented.fingerprint.clone(),
+                expected_algorithm: Some(expected.algorithm.clone()),
+                expected_fingerprint: Some(expected.fingerprint.clone()),
+            },
+        }
+    }
+}
+
+impl WireHostKeyProblem {
+    fn into_problem(self) -> HostKeyProblem {
+        let presented = HostKeyFingerprint {
+            algorithm: self.presented_algorithm,
+            fingerprint: self.presented_fingerprint,
+        };
+        match (self.expected_algorithm, self.expected_fingerprint) {
+            (Some(algorithm), Some(fingerprint)) => HostKeyProblem::Changed {
+                host: self.host,
+                port: self.port,
+                presented,
+                expected: HostKeyFingerprint {
+                    algorithm,
+                    fingerprint,
+                },
+            },
+            _ => HostKeyProblem::Unknown {
+                host: self.host,
+                port: self.port,
+                presented,
+            },
+        }
+    }
+}
+
+impl From<&AuthMethods> for WireAuthMethods {
+    fn from(methods: &AuthMethods) -> Self {
+        Self {
+            password: methods.password,
+            publickey: methods.publickey,
+            keyboard_interactive: methods.keyboard_interactive,
+            agent: methods.agent,
+        }
+    }
+}
+
+impl From<WireAuthMethods> for AuthMethods {
+    fn from(methods: WireAuthMethods) -> Self {
+        Self {
+            password: methods.password,
+            publickey: methods.publickey,
+            keyboard_interactive: methods.keyboard_interactive,
+            agent: methods.agent,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -516,6 +638,13 @@ pub fn connect_via_session_worker(
             "session worker requires open_shell (SFTP-only stays in-process)",
         ));
     }
+    tracing::info!(
+        session_id,
+        host = %ssh_config.host,
+        port = ssh_config.port,
+        username = %ssh_config.username(),
+        "starting out-of-process SSH connect"
+    );
 
     let listener = TcpListener::bind(("127.0.0.1", 0)).map_err(|error| {
         SshError::new(
@@ -542,6 +671,12 @@ pub fn connect_via_session_worker(
 
     let child = spawn_worker_process(config_dir, session_id, generation, port, &token)?;
     let pid = child.id();
+    tracing::info!(
+        session_id,
+        worker_pid = pid,
+        generation,
+        "spawned session worker"
+    );
     let worker_child = SessionWorkerChild {
         session_id: session_id.to_owned(),
         pid,
@@ -589,6 +724,11 @@ pub fn connect_via_session_worker(
     stream
         .set_write_timeout(Some(Duration::from_secs(30)))
         .map_err(|error| SshError::new(SshErrorKind::Configuration, error.to_string()))?;
+    tracing::debug!(
+        session_id,
+        worker_pid = pid,
+        "session worker connected to the Host IPC"
+    );
 
     let mut reader = BufReader::new(
         stream
@@ -621,12 +761,24 @@ pub fn connect_via_session_worker(
         },
     )
     .map_err(|error| SshError::new(SshErrorKind::Configuration, error.to_string()))?;
+    tracing::debug!(
+        session_id,
+        worker_pid = pid,
+        "sent Connect to session worker"
+    );
 
-    let handshake_deadline = Instant::now() + CONNECT_HANDSHAKE_TIMEOUT;
+    let handshake_started = Instant::now();
+    let handshake_deadline = handshake_started + CONNECT_HANDSHAKE_TIMEOUT;
+    let mut last_stage = String::new();
     loop {
         if cancel.load(Ordering::SeqCst) {
             let _ = write_msg(&mut writer, &HostToWorker::Disconnect);
             terminate_child_pid(pid);
+            tracing::warn!(
+                session_id,
+                worker_pid = pid,
+                "connect cancelled by the user"
+            );
             return Err(SshError::new(SshErrorKind::Timeout, "connect cancelled"));
         }
         let mut line = String::new();
@@ -634,32 +786,88 @@ pub fn connect_via_session_worker(
             Ok(()) => {}
             Err(error) => {
                 terminate_child_pid(pid);
+                tracing::error!(
+                    session_id,
+                    worker_pid = pid,
+                    elapsed_ms = handshake_started.elapsed().as_millis(),
+                    last_stage = %last_stage,
+                    %error,
+                    "session worker handshake read failed"
+                );
                 return Err(error);
             }
         }
-        let msg: WorkerToHost = serde_json::from_str(line.trim_end()).map_err(|error| {
-            SshError::new(
-                SshErrorKind::Configuration,
-                format!("invalid session worker message: {error}"),
-            )
-        })?;
+        let msg: WorkerToHost = match serde_json::from_str(line.trim_end()) {
+            Ok(msg) => msg,
+            Err(error) => {
+                // 协议损坏：不清理子进程会留下一个孤儿 worker（旧版本在 11-13
+                // 的日志里就卡在这里）。
+                terminate_child_pid(pid);
+                tracing::error!(
+                    session_id,
+                    worker_pid = pid,
+                    last_stage = %last_stage,
+                    %error,
+                    "invalid session worker message"
+                );
+                return Err(SshError::new(
+                    SshErrorKind::Configuration,
+                    format!("invalid session worker message: {error}"),
+                ));
+            }
+        };
         match msg {
-            WorkerToHost::Progress { stage } => on_progress(stage),
-            WorkerToHost::Connected => break,
+            WorkerToHost::Progress { stage } => {
+                tracing::debug!(
+                    session_id,
+                    worker_pid = pid,
+                    stage = %stage,
+                    elapsed_ms = handshake_started.elapsed().as_millis(),
+                    "session worker progress"
+                );
+                last_stage = stage.clone();
+                on_progress(stage);
+            }
+            WorkerToHost::Connected => {
+                tracing::info!(
+                    session_id,
+                    worker_pid = pid,
+                    elapsed_ms = handshake_started.elapsed().as_millis(),
+                    "session worker connected"
+                );
+                break;
+            }
             WorkerToHost::Failed {
                 message,
                 stage,
                 kind,
+                host_key,
+                auth,
             } => {
                 terminate_child_pid(pid);
-                let mut error = SshError::new(parse_error_kind(kind.as_deref()), message);
-                if let Some(stage) = wire_stage_static(stage.as_deref()) {
-                    error = error.with_connection_stage(stage);
-                }
-                return Err(error);
+                tracing::error!(
+                    session_id,
+                    worker_pid = pid,
+                    stage = stage.as_deref().unwrap_or(""),
+                    kind = kind.as_deref().unwrap_or(""),
+                    host_key = host_key.is_some(),
+                    auth = auth.is_some(),
+                    elapsed_ms = handshake_started.elapsed().as_millis(),
+                    %message,
+                    "session worker connect failed"
+                );
+                return Err(worker_failure_to_error(
+                    message, stage, kind, host_key, auth,
+                ));
             }
             WorkerToHost::Exited => {
                 terminate_child_pid(pid);
+                tracing::error!(
+                    session_id,
+                    worker_pid = pid,
+                    last_stage = %last_stage,
+                    "session worker exited before connect finished"
+                );
                 return Err(SshError::new(
                     SshErrorKind::Channel,
                     "session worker exited before connect finished",
@@ -735,6 +943,16 @@ fn spawn_worker_process(
     ipc_token: &str,
 ) -> Result<Child, SshError> {
     let exe = super::roles::role_exe(super::api::ProcessRole::SessionWorker);
+    // Rust panics / startup failures happen before the worker's tracing
+    // subscriber exists (and the process has no console), so keep its stderr
+    // on disk. This is the only way to see why a worker died before it could
+    // write its debug log.
+    let stderr = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(config_dir.join("session-worker-stderr.log"))
+        .map(Stdio::from)
+        .unwrap_or_else(|_| Stdio::null());
     let mut cmd = Command::new(&exe);
     cmd.arg("--config-dir")
         .arg(config_dir)
@@ -750,7 +968,7 @@ fn spawn_worker_process(
         .arg(ipc_token)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stderr(stderr);
     super::spawn::configure_child_spawn(&mut cmd);
     cmd.spawn().map_err(|error| {
         SshError::new(
@@ -795,6 +1013,7 @@ fn read_line_deadline(
     deadline: Instant,
     cancel: &AtomicBool,
 ) -> Result<(), SshError> {
+    let mut last_report = Instant::now();
     loop {
         if cancel.load(Ordering::SeqCst) {
             return Err(SshError::new(SshErrorKind::Timeout, "connect cancelled"));
@@ -805,7 +1024,10 @@ fn read_line_deadline(
                 "timed out reading from session worker",
             ));
         }
-        line.clear();
+        // Never clear `line` on a retry: `read_line` appends, so a timeout in
+        // the middle of a JSON message must keep the bytes already received.
+        // Clearing them desynchronises the NDJSON stream and turns into
+        // "invalid session worker message" / lost progress updates.
         match reader.read_line(line) {
             Ok(0) => {
                 return Err(SshError::new(
@@ -818,6 +1040,14 @@ fn read_line_deadline(
                 if error.kind() == std::io::ErrorKind::WouldBlock
                     || error.kind() == std::io::ErrorKind::TimedOut =>
             {
+                if last_report.elapsed() >= Duration::from_secs(5) {
+                    last_report = Instant::now();
+                    tracing::debug!(
+                        partial_bytes = line.len(),
+                        remaining_s = deadline.saturating_duration_since(Instant::now()).as_secs(),
+                        "still waiting for a session worker message"
+                    );
+                }
                 thread::sleep(Duration::from_millis(20));
             }
             Err(error) => {
@@ -874,6 +1104,37 @@ fn wire_stage_static(stage: Option<&str>) -> Option<&'static str> {
         "failed" => Some("failed"),
         _ => Some("failed"),
     }
+}
+
+/// Rebuilds the rich [`SshError`] from the worker's wire failure.
+///
+/// The Host must recover the host-key / auth payload here: the runtime decides
+/// between "show the trust prompt" and "just fail" from `host_key_problem`, and
+/// between "open the auth prompt" and "dead-end error" from `auth_problem`.
+/// Losing them over the IPC boundary silently turns a prompt into an error.
+fn worker_failure_to_error(
+    message: String,
+    stage: Option<String>,
+    kind: Option<String>,
+    host_key: Option<Box<WireHostKeyProblem>>,
+    auth: Option<Box<WireAuthContext>>,
+) -> SshError {
+    let mut error = SshError::new(parse_error_kind(kind.as_deref()), message);
+    if let Some(stage) = wire_stage_static(stage.as_deref()) {
+        error = error.with_connection_stage(stage);
+    }
+    if let Some(host_key) = host_key {
+        error = error.with_host_key_problem((*host_key).into_problem());
+    }
+    if let Some(auth) = auth {
+        let auth = *auth;
+        error = error.with_auth_context(
+            auth.methods.map(AuthMethods::from),
+            AuthProblemKind::from_label(&auth.problem)
+                .unwrap_or(AuthProblemKind::OtherMethodRequired),
+        );
+    }
+    error
 }
 
 fn terminate_child_pid(pid: u32) {
@@ -997,6 +1258,19 @@ pub fn run_session_worker_ipc(
                     message: error.to_string(),
                     stage: error.connection_stage.map(str::to_owned),
                     kind: Some(error_kind_wire(error.kind).to_owned()),
+                    host_key: error
+                        .host_key_problem
+                        .as_deref()
+                        .map(WireHostKeyProblem::from)
+                        .map(Box::new),
+                    auth: error.auth_problem.map(|problem| {
+                        Box::new(WireAuthContext {
+                            problem: problem.label().to_owned(),
+                            methods: error
+                                .auth_methods
+                                .map(|methods| WireAuthMethods::from(&methods)),
+                        })
+                    }),
                 },
             )?;
             return Ok(());
@@ -1138,6 +1412,46 @@ mod tests {
     use yshell_ssh::AuthMethod;
 
     #[test]
+    fn read_line_deadline_keeps_partial_json_across_read_timeouts() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind listener");
+        let address = listener.local_addr().expect("listener address");
+        let writer = thread::spawn(move || {
+            let mut stream = TcpStream::connect(address).expect("connect");
+            // First half of one NDJSON message, then a pause longer than the
+            // read timeout, then the rest. A naive reader that clears its line
+            // buffer on every timeout loses the prefix and desynchronises.
+            stream
+                .write_all(b"{\"type\":\"pro")
+                .expect("write first half");
+            stream.flush().expect("flush first half");
+            thread::sleep(Duration::from_millis(350));
+            stream
+                .write_all(b"gress\",\"stage\":\"handshake\"}\n")
+                .expect("write second half");
+        });
+
+        let (stream, _) = listener.accept().expect("accept worker");
+        stream
+            .set_read_timeout(Some(Duration::from_millis(50)))
+            .expect("read timeout");
+        let mut reader = BufReader::new(stream);
+        let mut line = String::new();
+        read_line_deadline(
+            &mut reader,
+            &mut line,
+            Instant::now() + Duration::from_secs(5),
+            &AtomicBool::new(false),
+        )
+        .expect("read the full line across timeouts");
+        writer.join().expect("writer thread");
+
+        assert_eq!(
+            line.trim_end(),
+            "{\"type\":\"progress\",\"stage\":\"handshake\"}"
+        );
+    }
+
+    #[test]
     fn wire_ssh_config_roundtrips_password() {
         let mut config = SshConnectionConfig::new(
             "example.com",
@@ -1155,5 +1469,115 @@ mod tests {
         assert_eq!(back.port, 22);
         assert_eq!(back.pty.size.columns, 120);
         assert_eq!(back.username(), "u");
+    }
+
+    /// 回归：未知主机密钥跨进程传回 Host 时必须还带着指纹，否则 runtime
+    /// 无法弹"是否信任"的窗，只能直接失败（logs2 的现象）。
+    #[test]
+    fn worker_failure_keeps_host_key_problem_for_the_trust_prompt() {
+        let problem = HostKeyProblem::Unknown {
+            host: "10.0.0.2".to_owned(),
+            port: 22,
+            presented: HostKeyFingerprint {
+                algorithm: "ecdsa-sha2-nistp256".to_owned(),
+                fingerprint: "SHA256:wm249I/oMRQaOmJYTKZvwx6nm8iCKkgtVt8exBwaXsg".to_owned(),
+            },
+        };
+        let message = WorkerToHost::Failed {
+            message: "no known host key for 10.0.0.2:22".to_owned(),
+            stage: Some("host-key-verification".to_owned()),
+            kind: Some("host_key_rejected".to_owned()),
+            host_key: Some(Box::new(WireHostKeyProblem::from(&problem))),
+            auth: None,
+        };
+
+        // Round-trip through the real wire format (NDJSON).
+        let encoded = serde_json::to_string(&message).expect("encode failure");
+        let decoded: WorkerToHost = serde_json::from_str(&encoded).expect("decode failure");
+        let WorkerToHost::Failed {
+            message,
+            stage,
+            kind,
+            host_key,
+            auth,
+        } = decoded
+        else {
+            panic!("expected a Failed message");
+        };
+        assert!(auth.is_none());
+        let error = worker_failure_to_error(message, stage, kind, host_key, auth);
+
+        assert_eq!(error.kind, SshErrorKind::HostKeyRejected);
+        assert_eq!(error.connection_stage, Some("host-key-verification"));
+        assert_eq!(
+            error.host_key_problem.as_deref(),
+            Some(&problem),
+            "the Host needs the presented fingerprint to show the trust prompt"
+        );
+    }
+
+    /// 回归：认证失败跨进程传回 Host 时必须还带着分类与服务端方法表，
+    /// 否则 runtime 不会弹认证窗，只会显示一条死错误。
+    #[test]
+    fn worker_failure_keeps_auth_context_for_the_auth_prompt() {
+        let message = WorkerToHost::Failed {
+            message: "Authentication failed".to_owned(),
+            stage: Some("authentication".to_owned()),
+            kind: Some("authentication".to_owned()),
+            host_key: None,
+            auth: Some(Box::new(WireAuthContext {
+                problem: AuthProblemKind::InvalidCredentials.label().to_owned(),
+                methods: Some(WireAuthMethods::from(
+                    &AuthMethods::parse("password,publickey").expect("methods"),
+                )),
+            })),
+        };
+
+        let encoded = serde_json::to_string(&message).expect("encode failure");
+        let decoded: WorkerToHost = serde_json::from_str(&encoded).expect("decode failure");
+        let WorkerToHost::Failed {
+            message,
+            stage,
+            kind,
+            host_key,
+            auth,
+        } = decoded
+        else {
+            panic!("expected a Failed message");
+        };
+        assert!(host_key.is_none());
+        let error = worker_failure_to_error(message, stage, kind, host_key, auth);
+
+        assert_eq!(error.kind, SshErrorKind::Authentication);
+        assert_eq!(
+            error.auth_problem,
+            Some(AuthProblemKind::InvalidCredentials)
+        );
+        let methods = error.auth_methods.expect("server method list");
+        assert!(methods.password);
+        assert!(methods.publickey);
+        assert!(!methods.keyboard_interactive);
+    }
+
+    /// 旧 worker（不带新字段）发来的失败消息仍然可解析。
+    #[test]
+    fn worker_failure_without_details_still_decodes() {
+        let decoded: WorkerToHost =
+            serde_json::from_str(r#"{"type":"failed","message":"boom","stage":null,"kind":null}"#)
+                .expect("decode legacy failure");
+        let WorkerToHost::Failed {
+            message,
+            stage,
+            kind,
+            host_key,
+            auth,
+        } = decoded
+        else {
+            panic!("expected a Failed message");
+        };
+        let error = worker_failure_to_error(message, stage, kind, host_key, auth);
+        assert_eq!(error.host_key_problem, None);
+        assert_eq!(error.auth_problem, None);
+        assert_eq!(error.auth_methods, None);
     }
 }

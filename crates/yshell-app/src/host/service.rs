@@ -213,6 +213,8 @@ impl HostService {
                     let _ = runtime.apply_connect_job_message(message);
                 }
             }
+            // 兜底：卡死的后台连接任务不能把会话永远留在 "Connecting"。
+            let _ = runtime.expire_stalled_connect_jobs();
             if let Some(rx) = self.sftp_job_rx.as_ref() {
                 while let Ok(message) = rx.try_recv() {
                     let _ = runtime.apply_sftp_job_message(message);
@@ -435,6 +437,9 @@ impl HostService {
                                 let _ = runtime.apply_connect_job_message(message);
                                 dirty = true;
                             }
+                        }
+                        if runtime.expire_stalled_connect_jobs() {
+                            dirty = true;
                         }
                         if let Some(rx) = self.sftp_job_rx.as_ref() {
                             while let Ok(message) = rx.try_recv() {

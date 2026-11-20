@@ -873,6 +873,40 @@ fn editor_can_create_password_saved_session_and_persist_secret() {
 }
 
 #[test]
+fn editor_saves_password_with_surrounding_whitespace_verbatim() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = file_keychain_runtime(temp.path());
+    let _ = runtime.start_new_saved_session_editor();
+    let _ = runtime.update_editor_name("Whitespace Password Session");
+    let _ = runtime.update_editor_host("whitespace-password.example.test");
+    let _ = runtime.update_editor_username("root");
+    let _ = runtime.set_editor_auth_method_password();
+    // 首尾空格是密码的一部分：保存时必须原样落库。
+    let _ = runtime.update_editor_password("  super-secret  ");
+    let _ = runtime
+        .save_editor_to_saved_session()
+        .expect("save editor session");
+
+    let saved = runtime.saved_session_profiles();
+    let saved_session = saved.first().expect("saved session");
+    let auth = runtime
+        .config_document
+        .auth_profiles
+        .get(saved_session.auth_profile_id.as_deref().expect("auth id"))
+        .expect("auth profile");
+    let secret_key = match &auth.method {
+        ConfigAuthMethod::Password { secret_key } => secret_key.clone(),
+        other => panic!("expected password auth, got {other:?}"),
+    };
+    assert_eq!(
+        runtime
+            .resolve_secret_value(&secret_key)
+            .expect("resolve stored password"),
+        "  super-secret  "
+    );
+}
+
+#[test]
 fn editing_password_session_keeps_secret_when_password_left_blank() {
     let temp = tempdir().expect("tempdir");
     let mut runtime = file_keychain_runtime(temp.path());

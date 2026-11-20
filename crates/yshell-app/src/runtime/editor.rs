@@ -649,12 +649,14 @@ impl AppRuntime {
 
     /// Private Key 口令：非空时写入 secret store 并挂到该 auth profile。
     fn editor_store_key_passphrase(&mut self, auth_profile_id: &str) -> AppResult<()> {
-        let passphrase = self.editor.passphrase.trim().to_owned();
-        if passphrase.is_empty() || self.editor.auth_method != EditorAuthMethod::PrivateKey {
+        // 口令按原样保存（不 trim）：首尾空格可能是口令的一部分。
+        if self.editor.passphrase.is_empty()
+            || self.editor.auth_method != EditorAuthMethod::PrivateKey
+        {
             return Ok(());
         }
         let secret_key = format!("local://yshell/{auth_profile_id}/key-passphrase");
-        self.store_secret_value(&secret_key, &passphrase)?;
+        self.store_secret_value(&secret_key, &self.editor.passphrase)?;
         if let Some(profile) = self.config_document.auth_profiles.get_mut(auth_profile_id) {
             if let ConfigAuthMethod::PrivateKey {
                 passphrase_secret_key,

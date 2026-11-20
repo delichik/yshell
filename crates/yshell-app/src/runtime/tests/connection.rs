@@ -27,6 +27,44 @@ fn disconnect_and_reconnect_update_runtime_state() {
 }
 
 #[test]
+fn connect_job_messages_mark_the_ui_dirty() {
+    use crate::connect_jobs::{ConnectJobMessage, ConnectJobOutcome};
+    use yshell_ssh::{SshError, SshErrorKind};
+
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    runtime
+        .handle_quick_connect("alice@example.com:2200")
+        .expect("quick connect");
+    let session_key = runtime.active_session_key().expect("active session");
+    // Quick connect returns a projection directly; clear whatever dirty state
+    // it left so the assertions below only observe connect-job updates.
+    let _ = runtime.take_ui_dirty();
+
+    runtime.apply_connect_job_message(ConnectJobMessage::Progress {
+        session_key: session_key.clone(),
+        stage: "handshake".to_owned(),
+    });
+    assert!(
+        runtime.take_ui_dirty(),
+        "a progress update from the Host supervisor must repaint the Shell overlay"
+    );
+
+    runtime.apply_connect_job_message(ConnectJobMessage::Finished {
+        session_key,
+        password_retry: false,
+        is_reconnect: false,
+        outcome: ConnectJobOutcome::Failed {
+            error: SshError::new(SshErrorKind::Handshake, "handshake failed"),
+        },
+    });
+    assert!(
+        runtime.take_ui_dirty(),
+        "a failed connect must repaint the Shell so the overlay leaves the spinner"
+    );
+}
+
+#[test]
 fn real_ssh_marks_failed_when_non_ssh_target_rejects_handshake() {
     let (port, accept_handle) = start_tcp_probe_target();
     let temp = tempdir().expect("tempdir");

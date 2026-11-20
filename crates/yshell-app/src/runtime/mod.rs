@@ -329,6 +329,7 @@ impl AppRuntime {
             sftp_upload_dir_override: None,
             sftp_jobs: None,
             connect_jobs: None,
+            connect_job_started: BTreeMap::new(),
             host_generation: 0,
             pending_session_workers: Vec::new(),
             persistent_known_hosts,
@@ -722,6 +723,10 @@ pub struct AppRuntime {
     /// WP1：SSH connect worker handle (injected by `windows`; absent in unit tests
     /// so connect stays synchronous via the in-memory test shell).
     pub(crate) connect_jobs: Option<crate::connect_jobs::ConnectJobHandle>,
+    /// UI 侧看门狗：session key → 连接任务提交时刻。任务卡死（排队 / worker
+    /// 不响应）时用于把会话从 "Connecting" 里捞出来，避免 overlay 永远停在
+    /// 初始阶段。
+    pub(crate) connect_job_started: BTreeMap<String, std::time::Instant>,
     /// Host run-state generation (set by [`crate::host::HostService`]; SessionWorker spawn).
     pub(crate) host_generation: u64,
     /// SessionWorker children waiting for HostService adoption (window tick).
