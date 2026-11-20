@@ -119,7 +119,7 @@ flowchart LR
 
 1. **启动 `yshell`**：已有 Host → 请求它开新窗后退出；无 Host → 成为唯一 Host，并 spawn 一个 `yshell-shell --attach` GUI 子进程。
 2. **关非最后窗**：Host 更新归属；只停本应断开的 Worker。
-3. **Quit 或关到零窗**：Host 关机序列（停 McpProcess → 优雅停全部 Worker → 停 Shell 子进程 → 超时强杀 → 清 bridge endpoint → 释单实例锁 → Host 退出）。
+3. **Quit 或关到零窗**：Shell 先隐藏全部窗口（含退出确认框），再停日志 → 上报零窗 / `Detach`（此后**不再重连**，避免与 Host 关机竞争）；随后 Host 关机序列（停 McpProcess → 优雅停全部 Worker → 停 Shell 子进程 → 超时强杀 → 清 bridge endpoint → 释单实例锁 → Host 退出）。
 4. **MCP 建连**：全局 API + tab 临时落某窗展示（可带 AI 标志，对齐 D34）。
 
 ### 异常路径

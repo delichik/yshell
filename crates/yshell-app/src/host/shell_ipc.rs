@@ -759,12 +759,17 @@ pub fn capture_terminal_snapshot(
 /// Every clone shares the same connection state. When the Host dies (or the
 /// stream errors), the next call redials `host-bridge.json` and re-attaches with
 /// the last reported window count, so a Host restart does not require a Shell
-/// restart.
+/// restart. After an explicit `detach` / `shutdown` the client is closed for
+/// good and never redials.
 pub struct HostShellClient {
     config_dir: PathBuf,
     state: Mutex<ClientState>,
     next_id: AtomicU64,
     open_window: AtomicBool,
+    /// Set once the Shell detached for good (quit / Host gone). A closed client
+    /// never redials: reconnecting after `Detach` would race the Host shutdown
+    /// and block the UI thread waiting for an `Attach` reply nobody sends.
+    closed: AtomicBool,
 }
 
 #[derive(Default)]
@@ -817,6 +822,7 @@ impl HostShellClient {
             state: Mutex::new(ClientState::default()),
             next_id: AtomicU64::new(1),
             open_window: AtomicBool::new(false),
+            closed: AtomicBool::new(false),
         };
         {
             let mut state = client.state_lock()?;
@@ -845,6 +851,9 @@ impl HostShellClient {
 
     /// Dial (if needed) and re-attach (if needed), returning a live connection.
     fn open_ready_conn(&self, state: &mut ClientState) -> AppResult<ClientConn> {
+        if self.closed.load(Ordering::SeqCst) {
+            return Err(AppError::new("shell ipc client is closed"));
+        }
         if state.conn.is_none() {
             state.conn = Some(dial_host(&self.config_dir)?);
             state.attached = false;
@@ -1020,11 +1029,21 @@ impl HostShellClient {
 
     pub fn detach(&self) -> AppResult<()> {
         let result = self.send(ShellToHost::Detach { pid: current_pid() });
+        self.shutdown();
+        result
+    }
+
+    /// Terminal local teardown: drop the connection and refuse to redial.
+    ///
+    /// Called after `detach` (or when the Host is already gone) so the Shell's
+    /// final window teardown cannot reconnect and block the UI thread on an
+    /// `Attach` handshake with a Host that is shutting down.
+    pub fn shutdown(&self) {
+        self.closed.store(true, Ordering::SeqCst);
         if let Ok(mut state) = self.state.lock() {
             state.attached = false;
             state.conn = None;
         }
-        result
     }
 
     pub fn set_window_count(&self, count: u32) -> AppResult<()> {
@@ -1175,6 +1194,45 @@ mod tests {
 
         stop.store(true, Ordering::SeqCst);
         let _ = client.detach();
+        host.join().expect("host thread");
+    }
+
+    /// Regression: after `detach`, a Shell must not redial. Redialling races the
+    /// Host shutdown sequence and blocks the UI thread on an `Attach` handshake
+    /// nobody answers — the "quit confirm stays visible and frozen" report.
+    #[test]
+    fn detached_client_never_redials_and_returns_immediately() {
+        let temp = TempDir::new().expect("tempdir");
+        let config_dir = temp.path().to_path_buf();
+        let stop = Arc::new(AtomicBool::new(false));
+        let host_dir = config_dir.clone();
+        let host_stop = Arc::clone(&stop);
+        let host = std::thread::spawn(move || {
+            let runtime = AppRuntime::new_with_keychain(host_dir, None).expect("runtime");
+            let service = HostService::start(runtime).expect("host");
+            while !host_stop.load(Ordering::SeqCst) {
+                let _ = service.borrow_mut().supervisor_tick();
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            let _ = service.borrow_mut().begin_shutdown();
+        });
+
+        let client = wait_for_bridge(&config_dir);
+        client.attach(1).expect("attach");
+        client.detach().expect("detach");
+
+        let started = Instant::now();
+        assert!(client.set_window_count(0).is_err());
+        assert!(client.heartbeat(0).is_err());
+        assert!(client
+            .ui_call("mark_ui_dirty", serde_json::json!([]))
+            .is_err());
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "a detached client must fail fast instead of reconnecting"
+        );
+
+        stop.store(true, Ordering::SeqCst);
         host.join().expect("host thread");
     }
 

@@ -149,8 +149,16 @@ pub fn run_remote_shell(config_dir: std::path::PathBuf) -> AppResult<()> {
     for entry in shell.borrow().snapshot() {
         let _ = entry.window.hide();
     }
+    {
+        let dialogs = { Rc::clone(&shell.borrow().dialogs) };
+        dialogs.borrow_mut().hide_all_windows();
+    }
+    // Best-effort final report for exit paths that did not go through
+    // `shutdown_shell`. A client already detached by `shutdown_shell` refuses to
+    // redial, so this never blocks waiting for a shutting-down Host.
     let _ = client.set_window_count(0);
     let _ = client.detach();
+    client.shutdown();
     Ok(())
 }
 
@@ -347,6 +355,12 @@ fn start_shell_timer(shell: &Rc<RefCell<ShellWindows>>, client: &Arc<HostShellCl
                         for entry in shell.borrow().snapshot() {
                             let _ = entry.window.hide();
                         }
+                        {
+                            let dialogs = { Rc::clone(&shell.borrow().dialogs) };
+                            dialogs.borrow_mut().hide_all_windows();
+                        }
+                        // Do not redial while the process tears down.
+                        timer_client.shutdown();
                         let _ = slint::quit_event_loop();
                     }
                 }
@@ -907,14 +921,21 @@ fn move_tab_to_main_window(
     close_window_if_empty(shell, client, source);
 }
 
-/// Quit the whole Shell: stop logging, hide every window, report zero windows,
+/// Quit the whole Shell: hide every window, stop logging, report zero windows,
 /// detach from the Host and end the Slint event loop.
 fn shutdown_shell(shell: &Rc<RefCell<ShellWindows>>, client: &Arc<HostShellClient>) {
-    let rt = AppRuntimeClient::remote(Arc::clone(client));
-    let _ = call_quiet(&rt, "stop_all_session_logging", json!([]));
+    // Hide the UI first. The teardown calls below are synchronous IPC and the
+    // Slint event loop is about to stop repainting, so anything still visible
+    // here would freeze on screen until the process exits.
     for entry in shell.borrow().snapshot() {
         let _ = entry.window.hide();
     }
+    {
+        let dialogs = { Rc::clone(&shell.borrow().dialogs) };
+        dialogs.borrow_mut().hide_all_windows();
+    }
+    let rt = AppRuntimeClient::remote(Arc::clone(client));
+    let _ = call_quiet(&rt, "stop_all_session_logging", json!([]));
     shell.borrow().window_count.set(0);
     let _ = client.set_window_count(0);
     let _ = client.detach();

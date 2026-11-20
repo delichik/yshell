@@ -205,6 +205,56 @@ impl RemoteDialogHost {
         self.pending_exit.replace(false)
     }
 
+    /// Hide every Shell-local window (quit / Host-gone teardown).
+    ///
+    /// The main window is hidden first, but auxiliary windows are owned popups:
+    /// on some backends hiding the owner leaves them on screen. Hide them all
+    /// before the (possibly slow) Host teardown calls so no frozen dialog stays
+    /// visible after the user confirmed Quit.
+    pub fn hide_all_windows(&mut self) {
+        fn hide<W: ComponentHandle>(slot: &mut Slot<W>) {
+            if let Some(window) = slot.window.as_ref() {
+                let _ = window.hide();
+            }
+            slot.shown = false;
+        }
+        hide(&mut self.unlock);
+        hide(&mut self.master_password);
+        hide(&mut self.password);
+        hide(&mut self.host_key);
+        hide(&mut self.auth);
+        hide(&mut self.settings);
+        hide(&mut self.session_editor);
+        hide(&mut self.login_step_keys);
+        hide(&mut self.login_step_wait);
+        hide(&mut self.tunnel_editor);
+        hide(&mut self.folder_editor);
+        hide(&mut self.private_keys);
+        hide(&mut self.key_generate);
+        hide(&mut self.key_import);
+        hide(&mut self.key_export);
+        hide(&mut self.key_deploy);
+        hide(&mut self.proxies);
+        hide(&mut self.theme_manager);
+        hide(&mut self.host_keys);
+        hide(&mut self.known_host_add);
+        hide(&mut self.known_host_import);
+        hide(&mut self.known_host_export);
+        hide(&mut self.logging);
+        hide(&mut self.sftp_conflict);
+        hide(&mut self.sftp_properties);
+        hide(&mut self.sftp_chmod);
+        hide(&mut self.about);
+        hide(&mut self.new_folder);
+        hide(&mut self.sftp_entry);
+        if let Some(window) = self.confirm.as_ref() {
+            let _ = window.hide();
+        }
+        self.confirm_shown = false;
+        self.confirm_kind.set(0);
+        self.modal_depth.set(0);
+    }
+
     /// Local About / confirm / folder latch changed since the last sync.
     #[must_use]
     pub fn take_needs_refresh(&self) -> bool {

@@ -371,7 +371,13 @@ pub(crate) fn wire_unlock(window: &MasterPasswordUnlockWindow, client: Arc<HostS
     window.on_quit({
         let rt = rt.clone();
         let client = Arc::clone(&client);
+        let weak = window.as_weak();
         move || {
+            // Hide before the teardown IPC: the event loop stops right after and
+            // a visible window would freeze on screen until the process exits.
+            if let Some(window) = weak.upgrade() {
+                let _ = window.hide();
+            }
             call(&rt, "dismiss_master_password_unlock", json!([]));
             let _ = client.set_window_count(0);
             let _ = client.detach();
