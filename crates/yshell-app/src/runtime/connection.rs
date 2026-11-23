@@ -558,6 +558,7 @@ impl AppRuntime {
             .get(session_key)
             .is_some_and(SessionRuntime::is_sftp);
         let shell_connected = shell.as_ref().is_some_and(|shell| shell.is_connected());
+        let shell_present = shell.is_some();
         let viewport = self.viewport_pty_size();
         let logging_notice = {
             let runtime = self
@@ -657,6 +658,33 @@ impl AppRuntime {
         if (sftp_mode || shell_connected) && !password_retry && !is_reconnect {
             self.record_connect_success(session_key);
         }
+        // A shell object that reports itself dead must not leave the session in
+        // `Connecting`: the overlay would then stay on its default stage ("tcp")
+        // forever with only Cancel available (logs 2026-11-23).
+        if !sftp_mode && shell_present && !shell_connected {
+            let target = self
+                .sessions
+                .get(session_key)
+                .map(SessionRuntime::connection_target_text)
+                .unwrap_or_default();
+            let message = format!(
+                "The SSH connection to {target} opened but the shell is not live. \
+                 Reconnect, or check the session worker log."
+            );
+            tracing::warn!(
+                session = %session_key,
+                %target,
+                "transport attached but the shell reports disconnected"
+            );
+            if let Some(runtime) = self.sessions.get_mut(session_key) {
+                runtime.connection_in_flight = false;
+                runtime.connection_stage = "failed".to_owned();
+                runtime.connection_error = message.clone();
+                runtime.log_runtime_event(&message);
+            }
+            let _ = self.mark_session_failed_after_connect(session_key);
+            self.set_status_kind("session-shell-not-live", message, target, String::new());
+        }
         Ok(self.projection())
     }
 
@@ -714,7 +742,7 @@ impl AppRuntime {
                             .get(&session_key)
                             .map(|session| session.session_id().clone());
                         if let Some(session_id) = session_id {
-                            let _ = self.finish_transport_attach(
+                            if let Err(error) = self.finish_transport_attach(
                                 &session_key,
                                 &session_id,
                                 transport,
@@ -722,7 +750,25 @@ impl AppRuntime {
                                 worker,
                                 password_retry,
                                 is_reconnect,
-                            );
+                            ) {
+                                // Never swallow this: a failed attach used to
+                                // leave the session in `Connecting` for good, so
+                                // the overlay stayed on "TCP connect" with only
+                                // Cancel available.
+                                tracing::warn!(
+                                    session = %session_key,
+                                    %error,
+                                    "connected transport could not be attached"
+                                );
+                                let message = error.to_string();
+                                if let Some(runtime) = self.sessions.get_mut(&session_key) {
+                                    runtime.connection_in_flight = false;
+                                    runtime.connection_stage = "failed".to_owned();
+                                    runtime.connection_error = message.clone();
+                                    runtime.log_runtime_event(&message);
+                                }
+                                let _ = self.mark_session_failed_after_connect(&session_key);
+                            }
                         } else if let Some(worker) = worker {
                             let _ = crate::host::liveness::terminate_pid(worker.pid);
                         }

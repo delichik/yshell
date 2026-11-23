@@ -879,6 +879,18 @@ pub fn connect_via_session_worker(
         }
     }
 
+    // The handshake deadline is over: from here on the socket must block.
+    //
+    // This has to happen *before* the reader thread starts. The socket still
+    // carries the 500 ms handshake read timeout, and a read that starts with it
+    // keeps that timeout even if the option is cleared afterwards. The reader
+    // then gets `TimedOut` on the first silent half second, marks the session
+    // disconnected, and the Host never applies `Connected` — the UI sits on
+    // "TCP connect" forever.
+    writer
+        .set_read_timeout(None)
+        .map_err(|error| SshError::new(SshErrorKind::Configuration, error.to_string()))?;
+
     let (output_tx, output_rx) = mpsc::channel();
     let connected = Arc::new(AtomicBool::new(true));
     let reader_connected = Arc::clone(&connected);
@@ -894,7 +906,6 @@ pub fn connect_via_session_worker(
         ));
     }
 
-    let _ = writer.set_read_timeout(None);
     Ok((
         WorkerShellSession {
             connected,
@@ -915,6 +926,16 @@ fn reader_loop(
         match reader.read_line(&mut line) {
             Ok(0) => break,
             Ok(_) => {}
+            // An idle socket is not a disconnect. Without this, any read timeout
+            // that survived on the socket (or the 500 ms handshake timeout when
+            // this thread won the race against `set_read_timeout(None)`) kills
+            // the session on its first quiet moment.
+            Err(error)
+                if error.kind() == std::io::ErrorKind::WouldBlock
+                    || error.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                continue;
+            }
             Err(_) => break,
         }
         let Ok(msg) = serde_json::from_str::<WorkerToHost>(line.trim_end()) else {
@@ -1448,6 +1469,48 @@ mod tests {
         assert_eq!(
             line.trim_end(),
             "{\"type\":\"progress\",\"stage\":\"handshake\"}"
+        );
+    }
+
+    /// 回归（2026-11-23“一直停在 TCP 连接”）：socket 上的读超时只是“暂时没数据”，
+    /// 不是断线。reader 线程若把它当成 EOF，会把 `connected` 置 false，Host 就永远
+    /// 不会把会话设成 Connected，overlay 便停在默认阶段（tcp）。
+    #[test]
+    fn reader_loop_survives_idle_read_timeouts() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind reader probe");
+        let address = listener.local_addr().expect("listener addr");
+        let client = thread::spawn(move || TcpStream::connect(address).expect("connect"));
+        let (server, _) = listener.accept().expect("accept reader probe");
+        let mut writer = client.join().expect("client thread");
+        // Same shape as the handshake phase: a short read timeout on the socket.
+        server
+            .set_read_timeout(Some(Duration::from_millis(50)))
+            .expect("read timeout");
+
+        let (tx, rx) = mpsc::channel();
+        let connected = Arc::new(AtomicBool::new(true));
+        let reader_flag = Arc::clone(&connected);
+        let reader = thread::spawn(move || reader_loop(BufReader::new(server), tx, reader_flag));
+
+        // Several idle timeouts must not end the loop.
+        thread::sleep(Duration::from_millis(250));
+        assert!(
+            connected.load(Ordering::SeqCst),
+            "an idle socket must not be reported as disconnected"
+        );
+
+        writeln!(writer, r#"{{"type":"output","data_b64":"aGk="}}"#).expect("write output");
+        writer.flush().expect("flush output");
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(2)).expect("output"),
+            b"hi"
+        );
+
+        drop(writer);
+        reader.join().expect("reader thread");
+        assert!(
+            !connected.load(Ordering::SeqCst),
+            "EOF really is a disconnect"
         );
     }
 
