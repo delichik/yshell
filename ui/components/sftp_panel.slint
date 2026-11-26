@@ -12,7 +12,7 @@
 import { ListView } from "std-widgets.slint";
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
-import { WinButton, WinIconButton } from "basic/controls.slint";
+import { WinButton, WinIconButton, WinScrollIndicator } from "basic/controls.slint";
 import { DetailRow } from "basic/forms.slint";
 import { WinTextInput } from "basic/text_input.slint";
 import { MenuEntry, MenuPopup } from "menu_popup.slint";
@@ -101,8 +101,10 @@ component SftpTransferDrawer inherits Rectangle {
             spacing: Theme.spacing-4;
 
             WinIconButton {
-                icon: root.expanded ? "chevron-down" : "chevron-right";
+                icon: "chevron-right";
+                icon-rotation: root.expanded ? 90deg : 0deg;
                 accessible-name: root.expanded ? @tr("Hide transfers") : @tr("Show transfers");
+                tooltip-text: root.expanded ? @tr("Hide transfers") : @tr("Show transfers");
                 clicked => { root.toggle-expanded(); }
             }
 
@@ -165,6 +167,7 @@ component SftpTransferDrawer inherits Rectangle {
 
             transfer_list := ListView {
                 vertical-scrollbar-policy: ScrollBarPolicy.always-off;
+                horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
 
                 for row[index] in root.rows : Rectangle {
                     height: Theme.row-height-list;
@@ -172,7 +175,7 @@ component SftpTransferDrawer inherits Rectangle {
                     // 失败行用错误色（§5.9）：此前借用 attention-*（警告黄），
                     // 会把"传输失败"渲染成"警告"，与 InfoBar 的 error 档不一致。
                     background: row.is-failed ? Theme.banner-error-background
-                        : Math.mod(index, 2) == 0 ? transparent : Theme.card-fill;
+                        : Math.mod(index, 2) == 0 ? transparent : Theme.subtle-hover;
                     border-width: row.is-failed ? 1px : 0px;
                     border-color: row.is-failed ? Theme.banner-error-stroke : transparent;
 
@@ -230,6 +233,7 @@ component SftpTransferDrawer inherits Rectangle {
                             text: row.is-failed ? row.status-text : row.progress-text;
                             color: row.is-failed ? Theme.critical : Theme.text-tertiary;
                             font-size: Theme.font-caption;
+                            font-family: Theme.font-mono;
                             horizontal-alignment: right;
                             wrap: no-wrap;
                             overflow: elide;
@@ -660,6 +664,7 @@ export component SftpPanel inherits Rectangle {
                         background: column-touch.pressed ? Theme.accent
                             : column-touch.has-hover ? Theme.accent
                             : Theme.divider;
+                        animate background { duration: Theme.duration-faster; easing: ease-out; }
                     }
 
                     column-touch := TouchArea {
@@ -1046,7 +1051,7 @@ export component SftpContextMenu inherits Rectangle {
         if (index == 7) { return "paste-into-remote"; }
         if (index == 9) { return "up"; }
         if (index == 10) { return "home"; }
-        if (index == 11) { return "switch-to-terminal"; }
+        if (index == 12) { return "switch-to-terminal"; }
         return "";
     }
 
@@ -1399,15 +1404,31 @@ export component SftpConflictDialog inherits Rectangle {
                     border-color: Theme.control-stroke;
                     clip: true;
 
-                    conflicts-text := Text {
-                        x: Theme.spacing-12;
-                        y: Theme.spacing-12;
-                        width: parent.width - 2 * Theme.spacing-12;
-                        text: root.conflict-paths-text;
-                        color: Theme.text-primary;
-                        font-size: Theme.font-caption;
-                        font-family: Theme.font-mono;
-                        wrap: word-wrap;
+                    conflicts_flick := Flickable {
+                        width: parent.width;
+                        height: parent.height;
+                        content-width: self.width;
+                        content-height: conflicts-text.preferred-height + 2 * Theme.spacing-12;
+
+                        conflicts-text := Text {
+                            x: Theme.spacing-12;
+                            y: Theme.spacing-12;
+                            width: conflicts_flick.width - 2 * Theme.spacing-12 - Theme.spacing-8;
+                            text: root.conflict-paths-text;
+                            color: Theme.text-primary;
+                            font-size: Theme.font-caption;
+                            font-family: Theme.font-mono;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    WinScrollIndicator {
+                        x: parent.width - self.width - 2px;
+                        y: 2px;
+                        height: parent.height - 4px;
+                        viewport-position: conflicts_flick.content-y;
+                        content-extent: conflicts_flick.content-height;
+                        viewport-extent: conflicts_flick.height;
                     }
                 }
             }
@@ -1449,7 +1470,7 @@ export component SftpConflictDialog inherits Rectangle {
                 WinButton {
                     text: @tr("Overwrite");
                     tooltip-text: @tr("Overwrite");
-                    accent: true;
+                    critical: true;
                     clicked => { root.resolve("overwrite"); }
                 }
             }
@@ -1533,9 +1554,10 @@ export component SftpPropertiesDialog inherits Rectangle {
                 vertical-stretch: 0;
                 padding-top: Theme.spacing-4;
 
-                // 原型页脚：图标 Copy Path + 主按钮 Close。
+                // 原型页脚：图标 Copy Path + 常规按钮 Close。
                 WinIconButton {
                     icon: "copy";
+                    bordered: true;
                     accessible-name: @tr("Copy Path");
                     tooltip-text: @tr("Copy Path");
                     clicked => { root.copy-path(); }
@@ -1543,7 +1565,6 @@ export component SftpPropertiesDialog inherits Rectangle {
                 WinButton {
                     text: @tr("Close");
                     tooltip-text: @tr("Close");
-                    accent: true;
                     clicked => { root.canceled(); }
                 }
             }

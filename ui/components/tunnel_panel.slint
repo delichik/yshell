@@ -56,6 +56,7 @@ export component TunnelPanel inherits Rectangle {
 
         tunnel_list := ListView {
             vertical-scrollbar-policy: ScrollBarPolicy.always-off;
+            horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
             // PANEL-2：视口按行高整数倍对齐，底部不出现被腰斩的半行；空间
             // 不足一行时仍保留可滚动视口（而不是 0 高度导致完全无法滚动）。
             height: min(root.height,
@@ -72,7 +73,7 @@ export component TunnelPanel inherits Rectangle {
 
                 VerticalLayout {
                     padding-left: Theme.spacing-4;
-                    padding-right: Theme.spacing-4;
+                    padding-right: Theme.spacing-12;
                     padding-top: Theme.spacing-4;
                     padding-bottom: Theme.spacing-4;
                     spacing: Theme.spacing-4;

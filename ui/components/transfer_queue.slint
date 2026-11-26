@@ -80,6 +80,7 @@ export component TransferQueue inherits Rectangle {
             WinButton {
                 text: @tr("Pause All");
                 subtle: true;
+                height: Theme.control-height-compact;
                 enabled: root.active-count > 0;
                 clicked => { root.pause-all(); }
             }
@@ -87,6 +88,7 @@ export component TransferQueue inherits Rectangle {
             WinButton {
                 text: @tr("Resume All");
                 subtle: true;
+                height: Theme.control-height-compact;
                 enabled: root.paused-count > 0;
                 clicked => { root.resume-all(); }
             }
@@ -96,6 +98,7 @@ export component TransferQueue inherits Rectangle {
                 width: Theme.control-height-compact;
                 height: Theme.control-height-compact;
                 accessible-name: @tr("Clear completed");
+                tooltip-text: @tr("Clear completed");
                 clicked => { root.clear-completed(); }
             }
 
@@ -104,6 +107,7 @@ export component TransferQueue inherits Rectangle {
                 width: Theme.control-height-compact;
                 height: Theme.control-height-compact;
                 accessible-name: @tr("Show SFTP transfer drawer");
+                tooltip-text: @tr("Show SFTP transfer drawer");
                 clicked => { root.open-sftp-drawer(); }
             }
         }
@@ -134,6 +138,7 @@ export component TransferQueue inherits Rectangle {
 
                 transfer_list := ListView {
                     vertical-scrollbar-policy: ScrollBarPolicy.always-off;
+                    horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
                     // PANEL-2：视口按行高整数倍对齐，底部不出现被腰斩的半行；
                     // 空间不足一行时仍保留可滚动视口（而不是 0 高度）。
                     // 原型 transfers `--row-h: 52px`
@@ -148,14 +153,14 @@ export component TransferQueue inherits Rectangle {
                         // 失败行用错误色（§5.9）：此前借用 attention-*（警告黄），
                         // 会把"传输失败"渲染成"警告"，与 InfoBar 的 error 档不一致。
                         background: row.is-failed ? Theme.banner-error-background
-                            : Math.mod(index, 2) == 0 ? transparent : Theme.card-fill;
+                            : Math.mod(index, 2) == 0 ? transparent : Theme.subtle-hover;
                         border-width: row.is-failed ? 1px : 0px;
                         border-color: row.is-failed ? Theme.banner-error-stroke : transparent;
 
                         // 原型 `.xfer-row`：上名称/状态，下进度条；动作钉右侧。
                         HorizontalLayout {
                             padding-left: 10px;
-                            padding-right: Theme.spacing-4;
+                            padding-right: Theme.spacing-12;
                             spacing: Theme.spacing-8;
                             cross-axis-alignment: center;
 
@@ -180,7 +185,8 @@ export component TransferQueue inherits Rectangle {
                                     Text {
                                         text: row.is-failed ? row.status-text : row.progress-text;
                                         color: row.is-failed ? Theme.critical : Theme.text-tertiary;
-                                        font-size: 10px;
+                                        font-size: Theme.font-caption;
+                                        font-family: Theme.font-mono;
                                         font-weight: Theme.weight-semibold;
                                         wrap: no-wrap;
                                         overflow: elide;
@@ -189,18 +195,17 @@ export component TransferQueue inherits Rectangle {
                                 }
 
                                 Rectangle {
-                                    height: 6px;
-                                    border-radius: 1px;
-                                    border-width: 1px;
-                                    border-color: Theme.card-stroke;
-                                    background: Theme.subtle-hover;
+                                    height: 4px;
+                                    border-radius: 2px;
+                                    background: Theme.control-stroke;
                                     opacity: (row.is-failed || row.progress-percent >= 100) ? 0.35 : 1.0;
                                     clip: true;
 
                                     if !row.is-failed : Rectangle {
                                         width: parent.width * max(0, min(100, row.progress-percent)) / 100;
                                         height: parent.height;
-                                        background: Theme.text-primary;
+                                        border-radius: 2px;
+                                        background: Theme.accent;
                                     }
                                 }
                             }

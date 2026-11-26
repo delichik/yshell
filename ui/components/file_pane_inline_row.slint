@@ -31,6 +31,7 @@ export component FilePaneInlineNewFolderRow inherits Rectangle {
         height: Theme.control-height-compact;
         y: (parent.height - self.height) / 2;
         auto-focus: true;
+        consume-escape: true;
         text <=> root.edit-text;
         placeholder-text: "new-folder";
         accepted => {

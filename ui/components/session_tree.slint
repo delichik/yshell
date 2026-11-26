@@ -10,6 +10,7 @@
 //       Theme token。导出的属性/回调是主窗口与 Rust 的契约，名字与类型保持稳定。
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
+import { WinScrollIndicator } from "basic/controls.slint";
 import { WinTextInput } from "basic/text_input.slint";
 
 /// Rust 侧 `yshell_app::SessionTreeRow` 的 Slint 镜像（字段一一对应）。
@@ -106,18 +107,21 @@ component SessionTreeRowItem inherits Rectangle {
 
     // 选中指示条（与 WinNavItem / 原型一致：left 4 · 3×16）
     Rectangle {
-        visible: root.selected;
         x: 4px;
-        y: (parent.height - 16px) / 2;
+        y: (parent.height - self.height) / 2;
         width: 3px;
-        height: 16px;
+        height: root.selected ? 16px : 6px;
+        opacity: root.selected ? 1.0 : 0.0;
         border-radius: 2px;
         background: Theme.accent;
+        animate opacity { duration: Theme.duration-fast; easing: ease-out; }
+        animate height { duration: Theme.duration-fast; easing: ease-out; }
     }
 
     // 覆盖整行的命中区（参考 sftp_panel 的做法：整行一个 TouchArea，
     // 悬停/选中底由行容器绘制）。先声明让它位于行内容之下，箭头判定用 mouse-x。
     row_touch := TouchArea {
+        enabled: !root.renaming;
         clicked => {
             if (root.node.kind == "folder" && self.mouse-x <= root.chevron-hit-width) {
                 root.toggle();
@@ -151,7 +155,8 @@ component SessionTreeRowItem inherits Rectangle {
             background: transparent;
 
             Icon {
-                name: root.node.expanded ? "chevron-down" : "chevron-right";
+                name: "chevron-right";
+                icon-rotation: root.node.expanded ? 90deg : 0deg;
                 icon-size: Theme.icon-size-small;
                 icon-color: Theme.text-secondary;
                 y: (parent.height - self.height) / 2;
@@ -189,6 +194,7 @@ component SessionTreeRowItem inherits Rectangle {
                 visible: root.renaming;
                 enabled: root.renaming;
                 auto-focus: true;
+                consume-escape: true;
                 width: parent.width;
                 height: Theme.control-height-compact;
                 y: (parent.height - self.height) / 2;
@@ -214,6 +220,7 @@ component SessionTreeRowItem inherits Rectangle {
                 overflow: elide;
                 width: parent.width;
                 height: parent.height;
+                animate color { duration: Theme.duration-faster; easing: ease-out; }
             }
         }
 
@@ -301,7 +308,7 @@ export component SessionTree inherits Rectangle {
             }
         }
 
-        Flickable {
+        tree_flick := Flickable {
             visible: root.rows.length > 0;
             x: 0;
             y: 0;
@@ -310,7 +317,7 @@ export component SessionTree inherits Rectangle {
             content-width: self.width;
             content-height: rows_layout.preferred-height;
 
-            // A9：列表视口内的空白处左键 = 清空选中。声明在行布局之前 = 位于行下层，
+            // A9：列表视口内的空白处左键 = 清空选中，右键 = 打开空白区菜单。声明在行布局之前 = 位于行下层，
             // 行自己的命中区优先；高度取 `max(视口, 内容)` 以便滚动到底部时仍覆盖
             // 可见空白区。滚轮/滚动条由 Flickable 继续处理（滚轮事件沿祖先冒泡）。
             TouchArea {
@@ -319,6 +326,14 @@ export component SessionTree inherits Rectangle {
                 width: parent.width;
                 height: max(parent.height, rows_layout.preferred-height);
                 clicked => { root.blank-clicked(); }
+                pointer-event(event) => {
+                    if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                        root.blank-context-menu-requested(
+                            self.absolute-position.x + self.mouse-x,
+                            self.absolute-position.y + self.mouse-y
+                        );
+                    }
+                }
             }
 
             rows_layout := VerticalLayout {
@@ -364,12 +379,22 @@ export component SessionTree inherits Rectangle {
                 }
             }
         }
+
+        WinScrollIndicator {
+            visible: root.rows.length > 0 && tree_flick.content-height > tree_flick.height + 0.5px;
+            x: parent.width - self.width - 2px;
+            y: Theme.spacing-4;
+            height: max(0px, parent.height - 2 * Theme.spacing-4);
+            viewport-position: tree_flick.content-y;
+            content-extent: tree_flick.content-height;
+            viewport-extent: tree_flick.height;
+        }
     }
 
     background: transparent;
     // A7：行少时贴合内容，行多时由宿主给的 `vertical-stretch: 1` 占满面板
-    // 剩余高度（不再是 320px 硬上限 + 树外死区）；内部 Flickable 负责滚动。
-    height: max(root.row-height * 2, root.content-height + 2px);
+    // 剩余高度；设置 min-height 而非固定 height，避免挤压时锁死面板最小高度。
+    min-height: root.row-height * 2;
 
     if root.rows.length == 0 : Text {
         text: root.empty-text;

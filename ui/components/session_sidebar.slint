@@ -186,8 +186,7 @@ export component SessionSidebarContent inherits Rectangle {
         spacing: Theme.spacing-8;
         alignment: start;
 
-        WinTextInput {
-            visible: root.shows-search;
+        if root.shows-search : WinTextInput {
             text <=> root.search-text;
             placeholder-text: @tr("MainWindow" => "Search sessions");
             edited => { root.update-search(self.text); }
@@ -195,8 +194,7 @@ export component SessionSidebarContent inherits Rectangle {
 
         // 已保存会话：完整树结构（展开/折叠、单击选中、双击打开、
         // 右键菜单、搜索过滤都在组件内完成；旧的多行文本投影不再渲染）
-        Text {
-            visible: root.shows-saved;
+        if root.shows-saved : Text {
             text: @tr("MainWindow" => "SAVED");
             color: Theme.text-tertiary;
             font-size: Theme.font-caption;

@@ -90,6 +90,7 @@ export component ListScrollBar inherits Rectangle {
         height: root.thumb-height;
         border-radius: self.width / 2;
         background: track_touch.has-hover || root.dragging ? Theme.text-secondary : Theme.text-tertiary;
+        animate background { duration: Theme.duration-faster; easing: ease-out; }
         animate width { duration: Theme.duration-faster; easing: ease-out; }
     }
 
@@ -145,6 +146,7 @@ export component HorizontalScrollBar inherits Rectangle {
         height: Theme.spacing-4;
         border-radius: Theme.spacing-4 / 2;
         background: track_touch.has-hover || root.dragging ? Theme.text-secondary : Theme.text-tertiary;
+        animate background { duration: Theme.duration-faster; easing: ease-out; }
     }
 
     track_touch := TouchArea {
@@ -189,12 +191,12 @@ component ColumnResizeHandle inherits Rectangle {
         mouse-cursor: MouseCursor.col-resize;
         pointer-event(event) => {
             if (event.kind == PointerEventKind.down) {
-                root.drag-start-x = self.mouse-x;
+                root.drag-start-x = self.absolute-position.x + self.mouse-x;
             }
         }
         moved => {
             if (self.pressed) {
-                root.resized(self.mouse-x - root.drag-start-x);
+                root.resized((self.absolute-position.x + self.mouse-x) - root.drag-start-x);
             }
         }
     }
@@ -211,6 +213,7 @@ component FileColumnHeader inherits Rectangle {
     height: Theme.row-height-tree;
     border-radius: Theme.radius-control;
     background: header-touch.pressed ? Theme.subtle-pressed : header-touch.has-hover ? Theme.subtle-hover : transparent;
+    animate background { duration: Theme.duration-faster; easing: ease-out; }
 
     Text {
         text: root.active
@@ -309,10 +312,13 @@ export component FilePane inherits Rectangle {
 
     // ---------------------------------------------------- 列宽与内容宽度
     private property <length> column-gap: Theme.spacing-8;
+    /// 右缘留白，避免 `Perm` 等右对齐文字与 6px 自绘竖向滚动条重叠。
+    private property <length> right-gutter: Theme.spacing-8;
     /// 元数据区总宽（Size / Modified / Perm 恒在内容里，窄栏靠横向滚动查看）。
     private property <length> meta-width: root.size-column-width + root.column-gap
         + root.modified-column-width + root.column-gap
-        + (root.show-permissions ? root.permissions-column-width + root.column-gap : 0px);
+        + (root.show-permissions ? root.permissions-column-width + root.column-gap : 0px)
+        + root.right-gutter;
     /// 图标列 + 间距。
     private property <length> icon-column-width: Theme.icon-size-small + Theme.spacing-8;
     /// 名称列最小宽度：窄于此值时内容变宽、出现水平滚动条。
@@ -331,7 +337,7 @@ export component FilePane inherits Rectangle {
     // 整数行，汇总行始终完整可见（不被 clip 裁切）。
     private property <length> layout-gap: Theme.spacing-4;
     // 原型 SFTP path / toolbar 条带 28。
-    private property <length> header-height: Theme.row-height-tree;
+    private property <length> header-height: Theme.control-height;
     // 错误条高度：装得下 32px 的「重试」按钮（§3.3 标准控件高度）。
     // 原来用 28px（row-height-tree），32px 按钮会溢出错误条并被顶到行首。
     private property <length> error-height: Theme.control-height;
@@ -591,8 +597,10 @@ export component FilePane inherits Rectangle {
 
             // 独立 Local dock 面板时关闭内嵌折叠（由 PanelFrame 负责）。
             if root.toggle-enabled : WinIconButton {
-                icon: root.collapsed ? "chevron-right" : "chevron-down";
+                icon: "chevron-right";
+                icon-rotation: root.collapsed ? 0deg : 90deg;
                 accessible-name: root.collapsed ? @tr("Expand local pane") : @tr("Collapse local pane");
+                tooltip-text: root.collapsed ? @tr("Expand local pane") : @tr("Collapse local pane");
                 clicked => { root.toggle-collapsed(); }
             }
 
@@ -614,6 +622,7 @@ export component FilePane inherits Rectangle {
                 // 面包屑段盖在空白命中区之上，悬停段上时这里拿不到 hover。
                 background: breadcrumb_blank_touch.has-hover ? Theme.control-fill-hover
                     : Theme.control-fill;
+                animate background { duration: Theme.duration-faster; easing: ease-out; }
                 border-radius: Theme.radius-control;
                 border-width: 1px;
                 border-color: Theme.control-stroke;
@@ -660,6 +669,7 @@ export component FilePane inherits Rectangle {
                         Rectangle {
                             border-radius: Theme.radius-control;
                             background: crumb_hit.pressed ? Theme.subtle-pressed : crumb_hit.has-hover ? Theme.subtle-hover : transparent;
+                            animate background { duration: Theme.duration-faster; easing: ease-out; }
 
                             HorizontalLayout {
                                 padding-left: Theme.spacing-4;
@@ -696,12 +706,19 @@ export component FilePane inherits Rectangle {
                     y: 0;
                     width: parent.width;
                     height: parent.height;
+                    consume-escape: true;
                     visible: root.path-editing;
                     // 与 `path-text` 解绑：编辑期间后台投影不会覆盖用户输入。
                     text <=> root.path-edit-text;
                     placeholder-text: root.path-placeholder-text;
                     font-family: Theme.font-mono;
                     accepted => { root.commit-path(self.text); }
+                    cancelled => { root.path-editing = false; }
+                    focus-lost => {
+                        if (root.path-editing) {
+                            root.path-editing = false;
+                        }
+                    }
                 }
             }
 
@@ -718,6 +735,7 @@ export component FilePane inherits Rectangle {
                 icon: "eye";
                 checked: root.show-hidden;
                 accessible-name: @tr("Show hidden files");
+                tooltip-text: @tr("Show hidden files");
                 toggled => { root.toggle-hidden(); }
             }
         }
@@ -728,10 +746,10 @@ export component FilePane inherits Rectangle {
             y: root.error-y;
             width: root.width;
             height: root.error-height;
-            background: Theme.attention-background;
+            background: Theme.banner-error-background;
             border-radius: Theme.radius-control;
             border-width: 1px;
-            border-color: Theme.attention-stroke;
+            border-color: Theme.banner-error-stroke;
 
             HorizontalLayout {
                 padding-left: Theme.spacing-8;
@@ -740,7 +758,7 @@ export component FilePane inherits Rectangle {
 
                 Text {
                     text: root.error-text;
-                    color: Theme.attention-text;
+                    color: Theme.banner-error-text;
                     font-size: Theme.font-caption;
                     vertical-alignment: center;
                     wrap: no-wrap;
@@ -780,50 +798,6 @@ export component FilePane inherits Rectangle {
                 }
             }
 
-            // 列表内容下方的空白区：可滚动时 Flickable 会吃掉按下事件，
-            // 所以"清空选择/框选"的命中区必须盖在 ListView 之上（只盖空白部分，
-            // 不挡行）。
-            blank_band := TouchArea {
-                x: 0;
-                y: max(0px, root.rows.length * Theme.row-height-tree + list.content-y);
-                width: parent.width;
-                height: max(0px, parent.height - self.y);
-                pointer-event(event) => {
-                    if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
-                        root.context-menu-requested(
-                            -1,
-                            self.absolute-position.x + self.mouse-x,
-                            self.absolute-position.y + self.mouse-y
-                        );
-                    } else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
-                        root.focus-requested();
-                        root.start-box-selection(
-                            root.viewport-x(self.mouse-x),
-                            self.y + self.mouse-y,
-                            -1
-                        );
-                    } else if ((event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel)
-                        && event.button == PointerEventButton.left) {
-                        root.finish-box-selection(
-                            root.viewport-x(self.mouse-x),
-                            self.y + self.mouse-y
-                        );
-                        // 单击空白 = 取消选择（负索引 = 清空）。
-                        if (root.box-height < Theme.row-height-tree / 2) {
-                            root.select-row(-1, false, false);
-                        }
-                    }
-                }
-                moved => {
-                    if (root.box-selecting) {
-                        root.update-box-selection(
-                            root.viewport-x(self.mouse-x),
-                            self.y + self.mouse-y
-                        );
-                    }
-                }
-            }
-
             Text {
                 visible: root.rows.length == 0 && root.error-text == "";
                 text: root.empty-text;
@@ -853,8 +827,9 @@ export component FilePane inherits Rectangle {
                     border-radius: Theme.radius-control;
                     background: row.selected || index == root.selected-index ? Theme.subtle-selected
                         : row_hit.pressed ? Theme.subtle-pressed
-                : row_hit.has-hover ? Theme.subtle-hover
+                        : row_hit.has-hover ? Theme.subtle-hover
                         : transparent;
+                    animate background { duration: Theme.duration-faster; easing: ease-out; }
 
                     Icon {
                         name: row.is-parent ? "up"
@@ -887,6 +862,7 @@ export component FilePane inherits Rectangle {
                             visible: index == root.inline-rename-index && !row.is-parent;
                             enabled: index == root.inline-rename-index && !row.is-parent;
                             auto-focus: true;
+                            consume-escape: true;
                             width: parent.width;
                             height: Theme.control-height-compact;
                             y: (parent.height - self.height) / 2;
@@ -972,7 +948,7 @@ export component FilePane inherits Rectangle {
                     Text {
                         visible: root.show-permissions
                             && (index != root.inline-rename-index || row.is-parent);
-                        x: parent.width - root.permissions-column-width;
+                        x: parent.width - root.permissions-column-width - root.right-gutter;
                         width: root.permissions-column-width;
                         height: parent.height;
                         text: row.permissions-text;
@@ -1045,9 +1021,9 @@ export component FilePane inherits Rectangle {
                                             index
                                         );
                                     }
-                                } else if (event.button == PointerEventButton.left
-                                    && (event.kind == PointerEventKind.up
-                                        || event.kind == PointerEventKind.cancel)) {
+                                } else if ((event.kind == PointerEventKind.up
+                                        && event.button == PointerEventButton.left)
+                                    || event.kind == PointerEventKind.cancel) {
                                     root.finish-box-selection(
                                         root.viewport-x(self.mouse-x),
                                         root.viewport-y(index, self.mouse-y)
@@ -1079,19 +1055,66 @@ export component FilePane inherits Rectangle {
                 canceled => { root.inline-new-folder-cancel(); }
             }
 
+            // 列表内容下方的空白区：声明在 ListView 之后且 z: 1，确保可滚动时仍能
+            // 盖住可见空白区域，不被 ListView 吃掉按下事件（只盖空白部分，不挡行）。
+            blank_band := TouchArea {
+                z: 1;
+                x: 0;
+                y: max(0px, root.rows.length * Theme.row-height-tree + list.content-y);
+                width: parent.width;
+                height: max(0px, parent.height - self.y);
+                pointer-event(event) => {
+                    if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                        root.context-menu-requested(
+                            -1,
+                            self.absolute-position.x + self.mouse-x,
+                            self.absolute-position.y + self.mouse-y
+                        );
+                    } else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                        root.focus-requested();
+                        root.start-box-selection(
+                            root.viewport-x(self.mouse-x),
+                            self.y + self.mouse-y,
+                            -1
+                        );
+                    } else if ((event.kind == PointerEventKind.up
+                            && event.button == PointerEventButton.left)
+                        || event.kind == PointerEventKind.cancel) {
+                        root.finish-box-selection(
+                            root.viewport-x(self.mouse-x),
+                            self.y + self.mouse-y
+                        );
+                        // 单击空白 = 取消选择（负索引 = 清空）。
+                        if (root.box-height < Theme.row-height-tree / 2) {
+                            root.select-row(-1, false, false);
+                        }
+                    }
+                }
+                moved => {
+                    if (root.box-selecting) {
+                        root.update-box-selection(
+                            root.viewport-x(self.mouse-x),
+                            self.y + self.mouse-y
+                        );
+                    }
+                }
+            }
+
             // 框选矩形（画在行之上：按下点是一个角，可向四个方向伸展）。
             if root.box-selecting : Rectangle {
+                z: 2;
                 x: root.box-left;
                 y: root.box-top;
                 width: root.box-width;
                 height: root.box-height;
-                background: Theme.subtle-selected;
+                background: Theme.selection-fill;
                 border-width: 1px;
                 border-color: Theme.accent;
             }
 
             // 自绘滚动条（B8）：叠在列表右缘，双向绑定滚动位置。
             ListScrollBar {
+                z: 2;
                 x: parent.width - self.width;
                 y: 0;
                 height: parent.height;
@@ -1139,7 +1162,7 @@ export component FilePane inherits Rectangle {
             width: root.width;
             height: root.column-height;
             visible: root.shows-column-header;
-            background: transparent;
+            background: Theme.subtle-hover;
             clip: true;
 
             // 列头内容随列表一起横向滚动（content-x ≤ 0）。
