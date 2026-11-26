@@ -255,7 +255,10 @@ export component TerminalView inherits Rectangle {
                     width: min(420px, parent.width - 2 * Theme.spacing-24);
                     height: overlay_body.preferred-height;
                     x: (parent.width - self.width) / 2;
-                    y: (parent.height - self.height) / 2;
+                    y: root.connection-overlay-visible
+                        ? (parent.height - self.height) / 2
+                        : (parent.height - self.height) / 2 + 4px;
+                    animate y { duration: Theme.duration-normal; easing: ease-out; }
                     background: Theme.panel-background;
                     border-radius: Theme.radius-panel;
                     border-width: 1px;
@@ -328,7 +331,7 @@ export component TerminalView inherits Rectangle {
 
             // 滚动 / 选择反馈：右上角小浮层（半透明 chrome 底 + 4px 圆角），不占整行
             if root.interactive && (root.scroll-offset > 0 || root.selection-active) : Rectangle {
-                x: parent.width - self.width - Theme.terminal-padding-x;
+                x: parent.width - self.width - Theme.terminal-padding-x - 8px;
                 y: Theme.terminal-padding-y;
                 width: feedback_row.preferred-width;
                 height: feedback_row.preferred-height;
@@ -506,6 +509,7 @@ export component TerminalView inherits Rectangle {
                     content-height: self.height;
 
                     find_row := HorizontalLayout {
+                        width: max(self.preferred-width, find_flick.width);
                         // 文本左 8；右侧以 32×32 关闭按钮收尾；纵向 4 垂直居中
                         padding-left: Theme.spacing-8;
                         padding-right: Theme.spacing-4;
@@ -525,6 +529,7 @@ export component TerminalView inherits Rectangle {
                         // 搜索框：WinTextInput 自带 control-fill 底 + control-stroke 描边 + 聚焦强调条
                         search_input := WinTextInput {
                             horizontal-stretch: 1;
+                            consume-escape: true;
                             // P1：再压一点下限，给按钮留位；过窄时 Flickable 横滚
                             min-width: 72px;
                             text <=> root.search-query;
@@ -534,6 +539,10 @@ export component TerminalView inherits Rectangle {
                             accepted => {
                                 root.find-text(self.text);
                                 // 提交后回焦终端，避免后续按键继续落在输入框/直接进 shell 的歧义
+                                terminal_focus.focus();
+                            }
+                            cancelled => {
+                                root.dismiss-find();
                                 terminal_focus.focus();
                             }
                         }
@@ -592,6 +601,7 @@ export component TerminalView inherits Rectangle {
                         WinIconButton {
                             icon: "close";
                             accessible-name: @tr("Close find bar");
+                            tooltip-text: @tr("Close find bar");
                             clicked => { root.dismiss-find(); }
                         }
                     }

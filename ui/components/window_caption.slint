@@ -120,7 +120,7 @@ export component CaptionButton inherits Rectangle {
         : root.kind == "close" ? @tr("MenuBar" => "Close")
         : root.window-maximized ? @tr("MenuBar" => "Restore")
         : @tr("MenuBar" => "Maximize");
-    private property <color> glyph-color: root.is-close && touch.has-hover
+    private property <color> glyph-color: root.is-close && (touch.has-hover || touch.pressed)
         ? Theme.caption-close-hover-text
         : Theme.text-primary;
 
@@ -162,17 +162,22 @@ export component CaptionButton inherits Rectangle {
         y: (parent.height - self.height) / 2;
         background: transparent;
 
-        // 后层方框（偏右上）
+        // 后层方框外露 L 边（上 + 右）：前层保持透明，悬停/按下不出现底色补丁
         Rectangle {
             x: 2px;
             y: 0px;
             width: 8px;
-            height: 8px;
-            border-width: 1px;
-            border-color: root.glyph-color;
-            background: transparent;
+            height: 1px;
+            background: root.glyph-color;
         }
-        // 前层方框（偏左下，盖住后层一角）
+        Rectangle {
+            x: 9px;
+            y: 0px;
+            width: 1px;
+            height: 8px;
+            background: root.glyph-color;
+        }
+        // 前层方框（偏左下，透明底）
         Rectangle {
             x: 0px;
             y: 2px;
@@ -180,7 +185,7 @@ export component CaptionButton inherits Rectangle {
             height: 8px;
             border-width: 1px;
             border-color: root.glyph-color;
-            background: Theme.window-background;
+            background: transparent;
         }
     }
     if root.kind == "close" : Icon {
@@ -189,6 +194,10 @@ export component CaptionButton inherits Rectangle {
         icon-size: 12px;
         x: (parent.width - self.width) / 2;
         y: (parent.height - self.height) / 2;
+    }
+
+    Tooltip {
+        text: @markdown("\{root.access-label}");
     }
 
     touch := TouchArea {

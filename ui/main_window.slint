@@ -2375,10 +2375,19 @@ export component MainWindow inherits Window {
             return reject;
         }
 
-        VerticalLayout {
-            // FocusScope 不是布局容器：显式撑满窗口，保持内容区几何与之前一致。
+        Rectangle {
             width: parent.width;
             height: parent.height;
+            background: transparent;
+            border-width: root.maximized ? 0px : 1px;
+            border-color: Theme.card-stroke;
+
+        VerticalLayout {
+            // FocusScope 不是布局容器：显式撑满窗口，保持内容区几何与之前一致。
+            x: root.maximized ? 0px : 1px;
+            y: root.maximized ? 0px : 1px;
+            width: parent.width - (root.maximized ? 0px : 2px);
+            height: parent.height - (root.maximized ? 0px : 2px);
             spacing: 0px;
 
             // --- 自绘顶栏（菜单 + 窗口控件；阶段 B）----------------------------
@@ -2861,6 +2870,7 @@ export component MainWindow inherits Window {
                     );
                 }
             }
+        }
         }
     }
 

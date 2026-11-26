@@ -464,8 +464,10 @@ component SplitPaneLeaf inherits Rectangle {
                     path-text: root.sftp.path-text;
                     local-rows: root.sftp.local-rows;
                     local-path-text: root.sftp.local-path-text;
+                    local-crumbs: root.sftp.local-crumbs;
                     local-path-separator: root.sftp.local-path-separator;
                     local-show-hidden: root.sftp.local-show-hidden;
+                    local-permissions-visible: root.sftp.local-permissions-visible;
                     local-sort-column: root.sftp.local-sort-column-text;
                     local-sort-ascending: root.sftp.local-sort-ascending;
                     local-sort-text: root.sftp.local-sort-text;
@@ -812,6 +814,7 @@ export component WorkspaceSplitView inherits Rectangle {
         background: split-touch.pressed ? Theme.accent
             : split-touch.has-hover ? Theme.accent
             : Theme.divider;
+        animate background { duration: Theme.duration-faster; easing: ease-out; }
         split-touch := TouchArea {
             width: handle.vertical ? 8px : parent.width;
             height: handle.vertical ? parent.height : 8px;

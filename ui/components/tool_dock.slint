@@ -544,7 +544,7 @@ export component ToolDock inherits Rectangle {
     // Local 已拆成独立面板：show-local 固定 false。
     SftpPanel {
         x: root.sftp-frame.x + 8px;
-        y: root.sftp-frame.y + 44px;
+        y: root.sftp-frame.y + Theme.bar-height-panel-header;
         width: max(0px, root.sftp-frame.width - 16px);
         height: max(0px, root.sftp-frame.height - 52px);
         visible: false;
@@ -668,9 +668,9 @@ export component ToolDock inherits Rectangle {
             text: @tr("MainWindow" => "Command presets are not available in this build yet.");
             color: Theme.text-secondary;
             font-size: Theme.font-caption;
-            height: max(0px, root.quick-commands-frame.height - 44px
+            height: max(0px, root.quick-commands-frame.height - Theme.bar-height-panel-header
                 - 2 * Theme.spacing-12);
-            wrap: root.quick-commands-frame.height - 44px - 2 * Theme.spacing-12
+            wrap: root.quick-commands-frame.height - Theme.bar-height-panel-header - 2 * Theme.spacing-12
                 >= 2 * Theme.line-body ? word-wrap : no-wrap;
             overflow: elide;
             vertical-alignment: center;
@@ -731,7 +731,7 @@ export component ToolDock inherits Rectangle {
         grip-x: frame.f.x;
         grip-y: frame.f.y;
         grip-width: frame.f.width;
-        grip-height: 44px;
+        grip-height: Theme.bar-height-panel-header;
         // Sessions 头部有 `+` 主操作：拖拽区要为「32px 按钮 + 8px 间距 + 36px ⋯」
         // 让位，否则点击 `+` 会被拖拽层吞掉。
         grip-inset: frame.p == "sessions" || frame.p == "tunnels" ? 76px : 40px;

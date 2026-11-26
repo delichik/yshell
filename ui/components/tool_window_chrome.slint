@@ -17,16 +17,18 @@ export component ToolWindowChrome inherits Rectangle {
     callback title-drag-requested();
 
     background: Theme.window-background;
+    border-width: 1px;
+    border-color: Theme.card-stroke;
 
     VerticalLayout {
         spacing: 0px;
-        padding: 0px;
+        padding: 1px;
 
         title_bar := Rectangle {
             // 与主窗顶栏同高（原型 titlebar 32）；标题字阶 12/600。
             height: Theme.bar-height-menubar;
             vertical-stretch: 0;
-            background: Theme.window-background;
+            background: Theme.titlebar-background;
 
             Rectangle {
                 y: parent.height - 1px;
@@ -58,13 +60,14 @@ export component ToolWindowChrome inherits Rectangle {
                     font-weight: Theme.weight-semibold;
                     vertical-alignment: center;
                     horizontal-stretch: root.summary-text == "" ? 1 : 0;
+                    min-width: 0px;
                     overflow: elide;
                 }
 
                 if root.summary-text != "" : Text {
                     text: root.summary-text;
                     color: Theme.text-secondary;
-                    font-size: Theme.font-body;
+                    font-size: Theme.font-caption;
                     vertical-alignment: center;
                     overflow: elide;
                     horizontal-stretch: 1;

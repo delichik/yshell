@@ -60,10 +60,10 @@ export component WorkspaceTabItem inherits Rectangle {
     accessible-item-selectable: true;
     accessible-item-selected: root.tab-active;
 
-    // E11：标签之间的 1px 分隔线（上下各留 7px；画在间距中央，需要越过自身左缘 2px）
+    // E11：标签之间的 1px 分隔线（上下各留 7px；spacing=0 时落在自身左缘 x=0）
     Rectangle {
         visible: root.show-divider;
-        x: -2px;
+        x: 0px;
         y: (parent.height - 18px) / 2;
         width: 1px;
         height: 18px;
@@ -151,6 +151,7 @@ export component WorkspaceTabItem inherits Rectangle {
                 visible: root.renaming;
                 enabled: root.renaming;
                 auto-focus: true;
+                consume-escape: true;
                 width: parent.width;
                 height: Theme.control-height-compact;
                 y: (parent.height - self.height) / 2;
@@ -175,6 +176,7 @@ export component WorkspaceTabItem inherits Rectangle {
                 overflow: elide;
                 width: parent.width;
                 height: parent.height;
+                animate color { duration: Theme.duration-faster; easing: ease-out; }
             }
         }
 
@@ -279,6 +281,7 @@ export component WorkspaceTabItem inherits Rectangle {
             cross-axis-self-alignment: center;
             border-radius: Theme.radius-control;
             background: close-touch.pressed ? Theme.subtle-pressed : close-touch.has-hover ? Theme.control-fill-hover : transparent;
+            animate background { duration: Theme.duration-faster; easing: ease-out; }
 
             Icon {
                 name: "close";
@@ -289,8 +292,8 @@ export component WorkspaceTabItem inherits Rectangle {
             }
 
             close-touch := TouchArea {
-                // 命中区 32×32（§8 最小点击目标），与 WinTab 的偏移规则一致。
-                width: Theme.control-height;
+                // 命中区 24×32：不向左侧侵入徽标与标题尾部（避免误触关闭）。
+                width: 24px;
                 height: Theme.control-height;
                 x: parent.width + Theme.spacing-4 - self.width;
                 y: (parent.height - self.height) / 2;
@@ -300,10 +303,12 @@ export component WorkspaceTabItem inherits Rectangle {
     }
 
     // 拖拽整标签（关闭钮除外）；点击/双击/右键仍由内层 TouchArea 处理。
+    // 原地改名时必须禁用/隐藏，否则会盖在 rename_input 上方拦截鼠标点击与选字。
     DragArea {
-        width: parent.width - Theme.control-height;
+        visible: !root.renaming;
+        width: parent.width - 24px;
         height: parent.height;
-        enabled: root.drag-enabled;
+        enabled: root.drag-enabled && !root.renaming;
         data: root.drag-payload;
         allow-move: true;
         allow-copy: false;
@@ -311,6 +316,7 @@ export component WorkspaceTabItem inherits Rectangle {
         tab-hover := TouchArea {
             // 关闭命中区（右 32px）让给 close-touch：整标签命中区声明在布局之后，
             // 输入遍历会先命中它，否则关闭点击会被标签本体抢走。
+            enabled: !root.renaming;
             width: 100%;
             height: 100%;
             clicked => { root.activate(); }

@@ -5,6 +5,29 @@
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
 
+component ConnectionDot inherits Rectangle {
+    in property <bool> connecting: false;
+    in property <color> dot-color: Theme.text-tertiary;
+    // 首帧即处于 connecting 时也确保从 1.0 -> 0.4 触发动画。
+    private property <bool> pulse-started: false;
+    init => { root.pulse-started = true; }
+
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    background: root.dot-color;
+    animate background { duration: Theme.duration-fast; easing: ease-out; }
+    opacity: (root.connecting && root.pulse-started) ? 0.4 : 1.0;
+    animate opacity {
+        duration: Theme.duration-breathe;
+        easing: ease-in-out;
+        iteration-count: root.connecting ? -1 : 0;
+        direction: alternate;
+    }
+    accessible-role: none;
+    vertical-stretch: 0;
+}
+
 export component StatusBar inherits Rectangle {
     // A32（D14）：默认空（宿主投影启动时写入，避免闪现英文 "Ready"）。
     in property <string> message: "";
@@ -52,6 +75,14 @@ export component StatusBar inherits Rectangle {
     clip: true;
     background: Theme.layer-fill;
 
+    // 顶部 1px 分隔线（对齐原型 `_chrome.css` `.statusbar` border-top）
+    Rectangle {
+        y: 0px;
+        width: 100%;
+        height: 1px;
+        background: Theme.layer-stroke;
+    }
+
     property <color> connection-dot-color:
         root.connection-state == "connected" ? Theme.success
         : root.connection-state == "connecting" || root.connection-state == "pending" ? Theme.caution
@@ -66,22 +97,9 @@ export component StatusBar inherits Rectangle {
         cross-axis-alignment: center;
 
         // WP1：连接状态点（连接中 1.5s 呼吸；设计 §6.3）。
-        if root.connection-target != "" : Rectangle {
-            width: 8px;
-            height: 8px;
-            border-radius: 4px;
-            background: root.connection-dot-color;
-            opacity: root.connection-state == "connecting" ? 0.4 : 1.0;
-            animate opacity {
-                // §6.3 连接中呼吸（1.5s 无限 alternate）。
-                // 时长必须绑 Theme token，否则"减少动画"关不掉它（§6.4.4）。
-                duration: Theme.duration-breathe;
-                easing: ease-in-out;
-                iteration-count: root.connection-state == "connecting" ? -1 : 0;
-                direction: alternate;
-            }
-            accessible-role: none;
-            vertical-stretch: 0;
+        if root.connection-target != "" : ConnectionDot {
+            connecting: root.connection-state == "connecting";
+            dot-color: root.connection-dot-color;
         }
 
         // §8「状态不靠颜色」：圆点之外补一个状态词，
@@ -173,7 +191,11 @@ export component StatusBar inherits Rectangle {
         // MCP：AI 控制中 chip（点击 = 退出控制，AI 需重新 request_control）。
         if root.mcp-controlling : Rectangle {
             min-width: 32px;
+            height: 22px;
+            cross-axis-self-alignment: center;
             border-radius: Theme.radius-control;
+            border-width: 1px;
+            border-color: Theme.attention-stroke;
             background: mcp-touch.pressed ? Theme.subtle-pressed
                 : mcp-touch.has-hover ? Theme.subtle-hover
                 : Theme.attention-background;
@@ -187,7 +209,7 @@ export component StatusBar inherits Rectangle {
 
                 Text {
                     text: @tr("StatusBar" => "AI controlling — Exit");
-                    color: Theme.caution;
+                    color: Theme.banner-warning-text;
                     font-size: Theme.font-caption;
                     font-weight: Theme.weight-semibold;
                     vertical-alignment: center;
@@ -207,12 +229,18 @@ export component StatusBar inherits Rectangle {
                 accessible-label: @tr("StatusBar" => "Exit AI control");
                 clicked => { root.mcp-exit-clicked(); }
             }
+
+            Tooltip {
+                text: @markdown("\{mcp-touch.accessible-label}");
+            }
         }
 
-        // N9：同步输入 chip（`SYNC → n targets` / Pause + 一键停止）与一次性提示。
+        // N9：同步输入 chip（`SYNC → n targets` + 一键停止）与一次性提示。
         // 整条 chip 是命中区：点击 = 停止同步（组为空 = 清除残留提示）。
         if root.sync-active || root.sync-notice-text != "" : Rectangle {
             min-width: 32px;
+            height: 22px;
+            cross-axis-self-alignment: center;
             border-radius: Theme.radius-control;
             border-width: root.sync-active ? 1px : 0px;
             border-color: root.sync-mode-text == "paused" ? Theme.layer-stroke : Theme.caution;
@@ -269,12 +297,18 @@ export component StatusBar inherits Rectangle {
                     : @tr("StatusBar" => "Dismiss input sync notice");
                 clicked => { root.sync-stop-clicked(); }
             }
+
+            Tooltip {
+                text: @markdown("\{sync-touch.accessible-label}");
+            }
         }
 
         // N6：日志入口（REC 指示 + 文案；点击 = 日志菜单，与终端右键菜单同一入口）。
         if root.logging-usable : Rectangle {
-            // A10：命中区至少 32px 宽（§8）。状态栏高度由 bar-height-status 决定。
+            // A10：命中区至少 32px 宽（§8）；pill 高度 22px 留出上下呼吸感。
             min-width: 32px;
+            height: 22px;
+            cross-axis-self-alignment: center;
             border-radius: Theme.radius-control;
             background: logging-touch.pressed ? Theme.subtle-pressed : logging-touch.has-hover ? Theme.subtle-hover : transparent;
             animate background { duration: Theme.duration-faster; easing: ease-out; }
@@ -312,6 +346,10 @@ export component StatusBar inherits Rectangle {
                     ? @tr("StatusBar" => "Recording — open logging menu")
                     : @tr("StatusBar" => "Logging — open logging menu");
                 clicked => { root.logging-clicked(); }
+            }
+
+            Tooltip {
+                text: @markdown("\{logging-touch.accessible-label}");
             }
         }
     }

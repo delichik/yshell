@@ -135,9 +135,11 @@ export component WorkspaceTabBar inherits Rectangle {
                 }
 
                 WinScrollIndicator {
-                    x: parent.width - self.width - Theme.spacing-4;
-                    y: Theme.spacing-4;
-                    height: parent.height - 2 * Theme.spacing-4;
+                    horizontal: true;
+                    track-width: 2px;
+                    x: Theme.spacing-4;
+                    y: 1px;
+                    width: parent.width - 2 * Theme.spacing-4;
                     viewport-position: tabs-flickable.content-x;
                     content-extent: tabs-strip.width;
                     viewport-extent: tabs-flickable.width;

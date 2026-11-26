@@ -1,5 +1,6 @@
 import { Theme } from "../theme.slint";
 import { Icon } from "basic/icons.slint";
+import { WinScrollIndicator } from "basic/controls.slint";
 // Self-drawn menu popup used for the app menu bar and the context menus.
 //
 // The popup fills the window: a transparent scrim captures clicks outside the
@@ -22,6 +23,8 @@ export struct MenuEntry {
     /// 禁用项的原因说明：hover 该行时由内置 Tooltip 显示（空串 = 不显示）。
     /// 带默认值，既有条目无需逐条填写（S1 会话树空白区菜单的 disabled + tooltip 契约）。
     tooltip: string = "",
+    /// 破坏性操作项（§5.1 / `_chrome.css` `.flyout .danger`）：启用时文字用 `Theme.critical`。
+    danger: bool = false,
 }
 
 component MenuPopupRow inherits Rectangle {
@@ -32,7 +35,9 @@ component MenuPopupRow inherits Rectangle {
         checked: false,
         separator: false,
     };
+    in property <bool> highlighted: false;
     callback selected();
+    callback hovered();
 
     min-height: root.entry.hidden ? 0px : (root.entry.separator ? 9px : Theme.row-height-list);
     max-height: root.entry.hidden ? 0px : (root.entry.separator ? 9px : Theme.row-height-list);
@@ -40,7 +45,7 @@ component MenuPopupRow inherits Rectangle {
     opacity: (root.entry.enabled || root.entry.separator) ? 1.0 : 0.36;
     border-radius: Theme.radius-control;
     background: (row-touch.pressed && root.entry.enabled && !root.entry.separator) ? Theme.subtle-pressed
-        : (row-touch.has-hover && root.entry.enabled && !root.entry.separator) ? Theme.subtle-hover : transparent;
+        : ((row-touch.has-hover || root.highlighted) && root.entry.enabled && !root.entry.separator) ? Theme.subtle-hover : transparent;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
 
     // 分隔线（上下各留 4px）
@@ -73,7 +78,7 @@ component MenuPopupRow inherits Rectangle {
         width: parent.width - self.x - Theme.spacing-8
             - (root.entry.shortcut != "" ? shortcut_text.width + Theme.spacing-8 : 0px);
         height: parent.height;
-        color: Theme.text-primary;
+        color: (root.entry.danger && root.entry.enabled) ? Theme.critical : Theme.text-primary;
         font-size: Theme.font-body;
         vertical-alignment: center;
         wrap: no-wrap;
@@ -93,6 +98,7 @@ component MenuPopupRow inherits Rectangle {
 
     row-touch := TouchArea {
         enabled: root.entry.enabled && !root.entry.separator && !root.entry.hidden;
+        moved => { root.hovered(); }
         clicked => { root.selected(); }
     }
 
@@ -117,12 +123,57 @@ export component MenuPopup inherits Rectangle {
     callback selected(int);
     callback dismissed();
 
-    visible: self.open;
+    visible: root.open || self.opacity > 0.01;
+    opacity: root.open ? 1.0 : 0.0;
+    animate opacity { duration: Theme.duration-fast; easing: ease-out; }
     background: transparent;
 
-    // A2：弹层根 FocusScope —— 打开时聚焦，`Esc` = dismissed()（与 L2 弹窗同一套
-    // 语义，但只消费 Esc，其余按键继续冒泡）。关闭后的焦点回交由宿主负责
-    // （main_window 的 restore-focus-after-menu）。
+    private property <int> highlighted-index: -1;
+
+    pure function wrapped-index(idx: int) -> int {
+        return root.entries.length <= 0 ? -1
+            : Math.mod(Math.mod(idx, root.entries.length) + root.entries.length, root.entries.length);
+    }
+
+    pure function entry-selectable(idx: int) -> bool {
+        return idx >= 0 && idx < root.entries.length
+            && root.entries[idx].enabled
+            && !root.entries[idx].separator
+            && !root.entries[idx].hidden;
+    }
+
+    pure function scan4(s: int, d: int) -> int {
+        if (root.entry-selectable(root.wrapped-index(s))) { return root.wrapped-index(s); }
+        if (root.entry-selectable(root.wrapped-index(s + d))) { return root.wrapped-index(s + d); }
+        if (root.entry-selectable(root.wrapped-index(s + 2 * d))) { return root.wrapped-index(s + 2 * d); }
+        if (root.entry-selectable(root.wrapped-index(s + 3 * d))) { return root.wrapped-index(s + 3 * d); }
+        return -1;
+    }
+
+    pure function find-next-selectable(base: int, delta: int) -> int {
+        if (root.scan4(base, delta) >= 0) { return root.scan4(base, delta); }
+        if (root.scan4(base + 4 * delta, delta) >= 0) { return root.scan4(base + 4 * delta, delta); }
+        if (root.scan4(base + 8 * delta, delta) >= 0) { return root.scan4(base + 8 * delta, delta); }
+        if (root.scan4(base + 12 * delta, delta) >= 0) { return root.scan4(base + 12 * delta, delta); }
+        if (root.scan4(base + 16 * delta, delta) >= 0) { return root.scan4(base + 16 * delta, delta); }
+        return -1;
+    }
+
+    function move-highlight(delta: int) {
+        if (root.entries.length == 0) {
+            root.highlighted-index = -1;
+            return;
+        }
+        root.highlighted-index = root.find-next-selectable(
+            root.highlighted-index >= 0
+                ? root.highlighted-index + delta
+                : (delta > 0 ? 0 : root.entries.length - 1),
+            delta
+        );
+    }
+
+    // A2：弹层根 FocusScope —— 打开时聚焦，`Esc` = dismissed()，上下键/回车/空格导航触发。
+    // 关闭后的焦点回交由宿主负责（main_window 的 restore-focus-after-menu）。
     popup_scope := FocusScope {
         width: parent.width;
         height: parent.height;
@@ -133,6 +184,20 @@ export component MenuPopup inherits Rectangle {
                 root.dismissed();
                 return accept;
             }
+            if (event.text == Key.DownArrow) {
+                root.move-highlight(1);
+                return accept;
+            }
+            if (event.text == Key.UpArrow) {
+                root.move-highlight(-1);
+                return accept;
+            }
+            if (event.text == Key.Return || event.text == Key.Space) {
+                if (root.entry-selectable(root.highlighted-index)) {
+                    root.selected(root.highlighted-index);
+                    return accept;
+                }
+            }
             return reject;
         }
 
@@ -140,6 +205,7 @@ export component MenuPopup inherits Rectangle {
         // 只在 pointer down 关闭，避免与 clicked 双触发 restore-focus-after-menu。
         TouchArea {
             // A1：菜单栏下拉菜单的遮罩从菜单栏下方开始，菜单栏自身仍可点击/悬停切换。
+            enabled: root.open;
             y: root.scrim-top;
             height: parent.height - root.scrim-top;
             pointer-event(event) => {
@@ -150,13 +216,15 @@ export component MenuPopup inherits Rectangle {
         }
 
         panel := Rectangle {
+            private property <length> target-y:
+                min(max(root.anchor-y, 8px), max(root.height - self.height - 8px, 8px));
             // A15：贴边留 8px（窗口右/下缘不再只剩 4–5px，圆角与描边不被裁）。
             x: min(max(root.anchor-x, 8px), max(root.width - root.panel-width - 8px, 8px));
-            y: min(max(root.anchor-y, 8px), max(root.height - self.height - 8px, 8px));
+            y: root.open ? self.target-y : self.target-y - 4px;
+            animate y { duration: Theme.duration-fast; easing: ease-out; }
             width: root.panel-width;
-            // 4px padding on each side; +8px guards against a one-row
-            // preferred-height rounding error when hidden rows are collapsed.
-            height: entries-layout.preferred-height + Theme.spacing-8;
+            // entries-layout 已含 padding: 4px，不再额外 +8px；长菜单钳制在窗口内并允许滚动。
+            height: min(entries-layout.preferred-height, max(120px, root.height - 24px));
             background: Theme.flyout-background;
             border-width: 1px;
             border-color: Theme.card-stroke;
@@ -168,14 +236,42 @@ export component MenuPopup inherits Rectangle {
             // Swallow clicks on the panel background so they do not reach the scrim.
             TouchArea { }
 
-            entries-layout := VerticalLayout {
-                padding: 4px;
-                spacing: 0px;
+            Rectangle {
+                width: parent.width;
+                height: parent.height;
+                border-radius: Theme.radius-panel;
+                clip: true;
+                background: transparent;
 
-                for entry[i] in root.entries : MenuPopupRow {
-                    visible: !entry.hidden;
-                    entry: entry;
-                    selected => { root.selected(i); }
+                menu_flick := Flickable {
+                    width: parent.width;
+                    height: parent.height;
+                    interactive: true;
+                    content-width: self.width;
+                    content-height: entries-layout.preferred-height;
+
+                    entries-layout := VerticalLayout {
+                        width: parent.width;
+                        padding: 4px;
+                        spacing: 0px;
+
+                        for entry[i] in root.entries : MenuPopupRow {
+                            visible: !entry.hidden;
+                            entry: entry;
+                            highlighted: i == root.highlighted-index;
+                            hovered => { root.highlighted-index = i; }
+                            selected => { root.selected(i); }
+                        }
+                    }
+                }
+
+                WinScrollIndicator {
+                    x: parent.width - self.width - Theme.spacing-4;
+                    y: Theme.spacing-4;
+                    height: parent.height - 2 * Theme.spacing-4;
+                    viewport-position: menu_flick.content-y;
+                    content-extent: menu_flick.content-height;
+                    viewport-extent: menu_flick.height;
                 }
             }
         }
@@ -186,8 +282,9 @@ export component MenuPopup inherits Rectangle {
         popup_scope.focus();
     }
 
-    // A2：打开时弹层持有焦点，Esc 才能被上面的 key-pressed 捕获。
+    // A2：打开时弹层持有焦点，Esc/方向键才能被上面的 key-pressed 捕获。
     changed open => {
+        root.highlighted-index = -1;
         if (root.open) {
             popup_scope.focus();
         }
