@@ -17,6 +17,10 @@ export component WinTextInput inherits Rectangle {
     in property <bool> enabled: true;
     in property <InputType> input-type <=> input.input-type;
     in property <bool> read-only: false;
+    /// 行内改名 / 搜索栏等需要消费 Esc，避免误触发外层工具窗/弹窗。
+    in property <bool> consume-escape: false;
+    /// 错误状态（§5.2：critical 描边与底部指示条）
+    in property <bool> invalid: false;
     /// 字体族覆盖：默认与窗口一致；等宽场景（终端查找栏 / 路径类输入）传 `Theme.font-mono`
     in property <string> font-family: Theme.font-ui;
     /// 字号覆盖：默认 body（14/20）
@@ -39,23 +43,28 @@ export component WinTextInput inherits Rectangle {
     preferred-width: 0px;
     border-radius: Theme.radius-control;
     border-width: 1px;
-    // 原型：聚焦时描边保持 control-stroke，仅底部 2px accent 指示条。
-    border-color: Theme.control-stroke;
+    // 原型：聚焦时描边保持 control-stroke（错误态 critical），仅底部 2px 指示条。
+    border-color: (root.invalid && root.enabled) ? Theme.critical : Theme.control-stroke;
     background: !root.enabled ? Theme.control-fill-disabled
         : root.has-focus ? Theme.card-fill
         : padding_touch.has-hover ? Theme.control-fill-hover-solid
         : Theme.control-fill-solid;
     animate background { duration: Theme.duration-faster; easing: ease-out; }
+    animate border-color { duration: Theme.duration-faster; easing: ease-out; }
 
-    // 原型 TextBox：鼠标/键盘聚焦都只用底部 2px accent 条（无外圈 FocusRing）。
+    // 原型 TextBox：鼠标/键盘聚焦都只用底部 2px 指示条（无外圈 FocusRing）。
+    private property <bool> focus-bar-active: root.has-focus && root.enabled;
     Rectangle {
-        visible: root.has-focus && root.enabled;
-        x: 1px;
+        x: root.focus-bar-active ? 1px : parent.width / 2;
         y: parent.height - 2px;
-        width: parent.width - 2px;
+        width: root.focus-bar-active ? max(0px, parent.width - 2px) : 0px;
         height: 2px;
         border-radius: 1px;
-        background: Theme.accent;
+        opacity: root.focus-bar-active ? 1.0 : 0.0;
+        background: root.invalid ? Theme.critical : Theme.accent;
+        animate opacity { duration: Theme.duration-faster; easing: ease-out; }
+        animate x { duration: Theme.duration-fast; easing: ease-out; }
+        animate width { duration: Theme.duration-fast; easing: ease-out; }
     }
 
     // 占位符（空文本时显示；不占用布局空间）
@@ -99,11 +108,11 @@ export component WinTextInput inherits Rectangle {
         text-cursor-width: 1px;
         edited => { root.edited(self.text); }
         accepted => { root.accepted(); }
-        // Esc 在 TextInput 拿到焦点时不会冒泡到兄弟 FocusScope；在这里拦截。
+        // Esc 在 TextInput 拿到焦点时不会冒泡到兄弟 FocusScope；默认冒泡，行内编辑等显式拦截。
         key-pressed(event) => {
             if (event.text == "\u{001b}") {
                 root.cancelled();
-                return accept;
+                return root.consume-escape ? accept : reject;
             }
             return reject;
         }

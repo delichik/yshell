@@ -65,19 +65,21 @@ export global Theme {
     // -------------------------------------------------------------- 表面与层次
     /// 窗口底色（代替 Mica 的实色）
     out property <color> window-background: dark ? #202020 : #F3F3F3;
+    /// 标题栏/菜单栏底（Mica Alt 微区分层）
+    out property <color> titlebar-background: dark ? #1C1C1C : #EAEAEA;
     /// 内容层（命令栏/菜单栏/导航栏/状态栏等）
-    out property <color> layer-fill: dark ? #FFFFFF0F : #FFFFFFB3;
+    out property <color> layer-fill: dark ? #FFFFFF09 : #FFFFFFB3;
     /// 内容层描边/分隔线（对齐原型 `_theme.css`：light 6% / dark 8%）
     out property <color> layer-stroke: dark ? #FFFFFF14 : #0000000F;
     /// 浮层内分隔线（比 layer-stroke 强一档，用于弹窗分区线/菜单分隔符/列表表头下沿）
     out property <color> divider: dark ? #FFFFFF33 : #00000029;
-    /// 窗口内的卡片（右侧工具面板等）
-    out property <color> card-fill: dark ? #FFFFFF0D : #FFFFFFB8;
-    out property <color> card-stroke: dark ? #FFFFFF14 : #0000000F;
+    /// 窗口内的卡片（右侧工具面板/设置卡片等，深色模式明显高于 layer-fill 构成四层层级）
+    out property <color> card-fill: dark ? #2B2B2BF0 : #FFFFFFC4;
+    out property <color> card-stroke: dark ? #FFFFFF1A : #00000014;
     /// 不透明浮层/对话框底（菜单、ContentDialog）
-    out property <color> panel-background: dark ? #2C2C2C : #FFFFFF;
+    out property <color> panel-background: dark ? #2E2E2E : #FFFFFF;
     /// 菜单/下拉浮层底（原型 flyout-fill；软件渲染器用近实色）
-    out property <color> flyout-background: dark ? #2C2C2CF5 : #FCFCFCF2;
+    out property <color> flyout-background: dark ? #2E2E2EF7 : #FCFCFCF5;
     /// 模态遮罩
     out property <color> scrim: #00000088;
     /// 主题/ANSI 颜色选择器的预设色板（纯数据，供设置页色块弹层使用）。
@@ -125,6 +127,8 @@ export global Theme {
     out property <color> success: dark ? #6CCB5F : #0F7B0F;
     out property <color> caution: dark ? #FCE100 : #9D5D00;
     out property <color> critical: dark ? #FF99A4 : #C42B1C;
+    out property <color> critical-hover: dark ? #FF99A41F : #C42B1C1A;
+    out property <color> critical-pressed: dark ? #FF99A414 : #C42B1C26;
     /// 自绘标题栏关闭按钮悬停/按下底（WinUI CaptionButton，深浅色均为系统红）
     out property <color> caption-close-hover: #C42B1C;
     out property <color> caption-close-pressed: #B22A1B;
@@ -151,9 +155,9 @@ export global Theme {
 
     // ------------------------------------------------------------ 焦点环（§3.5）
     /// 键盘焦点环外圈（任何底色上可见）
-    out property <color> focus-outer: dark ? #FFFFFF : #000000;
+    out property <color> focus-outer: dark ? #000000 : #FFFFFF;
     /// 键盘焦点环内圈
-    out property <color> focus-inner: dark ? #000000 : #FFFFFF;
+    out property <color> focus-inner: dark ? #FFFFFF : #000000;
 
     // -------------------------------------------------------------------- 终端
     // E18（记录不改）：UI 主题的终端底色随深浅切换，但终端内的 16 色配色由
