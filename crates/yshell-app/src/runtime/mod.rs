@@ -1123,20 +1123,57 @@ impl AppRuntime {
 
     /// Surface an unexpected SessionWorker exit to the Shell (projection event).
     pub(crate) fn mark_session_worker_exited(&mut self, session_key: &str) {
+        let Some(existing) = self.sessions.get(session_key) else {
+            return;
+        };
+        let reason = existing
+            .shell_disconnect_reason()
+            .filter(|reason| !reason.trim().is_empty());
+        if existing.state == yshell_core::SessionState::Disconnected && reason.is_none() {
+            if let Some(session) = self.sessions.get_mut(session_key) {
+                session.shell_session = None;
+                if let Some(transport) = session.transport.take() {
+                    transport.close();
+                }
+            }
+            return;
+        }
+        if existing.state == yshell_core::SessionState::Failed && existing.shell_session.is_none() {
+            if let Some(reason) = reason {
+                if let Some(session) = self.sessions.get_mut(session_key) {
+                    if session.connection_error.is_empty() {
+                        session.connection_error = reason;
+                        self.mark_ui_dirty();
+                    }
+                }
+            }
+            return;
+        }
+        let error_text = reason.unwrap_or_else(|| {
+            "The session worker exited unexpectedly; the connection was dropped.".to_owned()
+        });
         if let Some(session) = self.sessions.get_mut(session_key) {
             session.shell_session = None;
             if let Some(transport) = session.transport.take() {
                 transport.close();
             }
-            session.set_state(yshell_core::SessionState::Failed);
-            session.log_runtime_event("Session worker exited; the connection was dropped.");
+            session.connection_in_flight = false;
+            session.connection_stage = "failed".to_owned();
+            if session.connection_error.is_empty() {
+                session.connection_error = error_text.clone();
+            }
+            session.log_runtime_event(&format!(
+                "Session worker exited; the connection was dropped: {error_text}"
+            ));
         }
+        let _ = self.mark_session_failed_after_connect(session_key);
         self.set_status_kind(
             "session-worker-exited",
             format!("Session worker for `{session_key}` exited; reconnect the tab."),
             session_key.to_owned(),
             String::new(),
         );
+        self.mark_ui_dirty();
     }
 
     /// N7：指定窗口活动会话的终端外观（每窗口渲染器各自同步 N5 外观）。

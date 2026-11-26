@@ -149,3 +149,139 @@ fn failed_auth_retry_updates_the_prompt_in_place_and_keeps_typed_values() {
     assert!(prompt.password_text.is_empty());
     assert_eq!(prompt.attempts, 1);
 }
+
+#[derive(Debug)]
+struct StubShellSession {
+    connected: bool,
+    disconnect_reason: Option<String>,
+}
+
+impl yshell_ssh::ShellSession for StubShellSession {
+    fn is_connected(&self) -> bool {
+        self.connected
+    }
+
+    fn poll_output(&mut self) -> yshell_ssh::SshResult<Vec<u8>> {
+        Ok(Vec::new())
+    }
+
+    fn write_input(&mut self, _bytes: &[u8]) -> yshell_ssh::SshResult<()> {
+        Ok(())
+    }
+
+    fn resize_pty(&mut self, _size: yshell_ssh::PtySize) -> yshell_ssh::SshResult<()> {
+        Ok(())
+    }
+
+    fn disconnect(&mut self) -> yshell_ssh::SshResult<()> {
+        self.connected = false;
+        Ok(())
+    }
+
+    fn disconnect_reason(&self) -> Option<String> {
+        self.disconnect_reason.clone()
+    }
+}
+
+#[test]
+fn mark_session_worker_exited_surfaces_reason_and_marks_ui_dirty() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+    runtime
+        .handle_quick_connect("alice@example.com:2200")
+        .expect("quick connect");
+    let session_key = runtime.active_session_key().expect("active session");
+    let reason =
+        "Io: failed while reading SSH stdout: transport read ([Session(-43)] transport read)";
+    runtime
+        .sessions
+        .get_mut(&session_key)
+        .expect("session")
+        .attach_shell_session(Box::new(StubShellSession {
+            connected: false,
+            disconnect_reason: Some(reason.to_owned()),
+        }));
+    let _ = runtime.take_ui_dirty();
+
+    runtime.mark_session_worker_exited(&session_key);
+
+    assert!(
+        runtime.take_ui_dirty(),
+        "unexpected worker exit must mark UI dirty so the Host tick repaints"
+    );
+    let session = runtime.sessions.get(&session_key).expect("session");
+    assert_eq!(session.state, yshell_core::SessionState::Failed);
+    assert_eq!(session.connection_error, reason);
+    let projection = runtime.projection();
+    assert!(projection.connection_overlay_failed);
+    assert_eq!(projection.connection_overlay_error_text, reason);
+
+    // Clean EOF already marked Disconnected without an error reason must not be
+    // overwritten into Failed when the worker process reaps afterwards.
+    runtime
+        .handle_quick_connect("bob@example.com:2200")
+        .expect("quick connect clean");
+    let clean_key = runtime.active_session_key().expect("clean session");
+    runtime
+        .sessions
+        .get_mut(&clean_key)
+        .expect("clean session")
+        .set_state(yshell_core::SessionState::Disconnected);
+    runtime
+        .sessions
+        .get_mut(&clean_key)
+        .expect("clean session")
+        .attach_shell_session(Box::new(StubShellSession {
+            connected: false,
+            disconnect_reason: None,
+        }));
+    runtime.mark_session_worker_exited(&clean_key);
+    assert_eq!(
+        runtime.sessions.get(&clean_key).expect("clean").state,
+        yshell_core::SessionState::Disconnected
+    );
+}
+
+#[test]
+fn poll_session_output_distinguishes_worker_failure_from_clean_eof() {
+    let temp = tempdir().expect("tempdir");
+    let mut runtime = AppRuntime::new(temp.path().to_path_buf()).expect("runtime");
+
+    runtime
+        .handle_quick_connect("alice@example.com:2200")
+        .expect("quick connect failed");
+    let failed_key = runtime.active_session_key().expect("failed session");
+    runtime
+        .sessions
+        .get_mut(&failed_key)
+        .expect("session")
+        .attach_shell_session(Box::new(StubShellSession {
+            connected: false,
+            disconnect_reason: Some("Io: transport read".to_owned()),
+        }));
+    runtime
+        .poll_session_output(&failed_key)
+        .expect("poll failed session");
+    let failed_session = runtime.sessions.get(&failed_key).expect("failed session");
+    assert_eq!(failed_session.state, yshell_core::SessionState::Failed);
+    assert_eq!(failed_session.connection_error, "Io: transport read");
+
+    runtime
+        .handle_quick_connect("bob@example.com:2200")
+        .expect("quick connect clean");
+    let clean_key = runtime.active_session_key().expect("clean session");
+    runtime
+        .sessions
+        .get_mut(&clean_key)
+        .expect("session")
+        .attach_shell_session(Box::new(StubShellSession {
+            connected: false,
+            disconnect_reason: None,
+        }));
+    runtime
+        .poll_session_output(&clean_key)
+        .expect("poll clean session");
+    let clean_session = runtime.sessions.get(&clean_key).expect("clean session");
+    assert_eq!(clean_session.state, yshell_core::SessionState::Disconnected);
+    assert!(clean_session.connection_error.is_empty());
+}

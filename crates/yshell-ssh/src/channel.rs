@@ -35,4 +35,9 @@ pub trait ShellSession: Debug + Send {
 
     /// Disconnects the channel.
     fn disconnect(&mut self) -> SshResult<()>;
+
+    /// Optional diagnostic reason explaining why the session disconnected or failed.
+    fn disconnect_reason(&self) -> Option<String> {
+        None
+    }
 }

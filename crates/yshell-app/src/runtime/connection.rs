@@ -803,7 +803,7 @@ impl AppRuntime {
         self.projection()
     }
 
-    fn mark_session_failed_after_connect(&mut self, session_key: &str) -> AppResult<()> {
+    pub(crate) fn mark_session_failed_after_connect(&mut self, session_key: &str) -> AppResult<()> {
         let session_id = self
             .sessions
             .get(session_key)

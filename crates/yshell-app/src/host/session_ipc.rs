@@ -79,7 +79,10 @@ pub enum WorkerToHost {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         auth: Option<Box<WireAuthContext>>,
     },
-    Exited,
+    Exited {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+    },
 }
 
 /// Host-key failure details carried from the worker to the Host.
@@ -528,6 +531,7 @@ pub struct WorkerShellSession {
     connected: Arc<AtomicBool>,
     writer: Mutex<TcpStream>,
     output_rx: Mutex<Receiver<Vec<u8>>>,
+    exit_reason: Arc<Mutex<Option<String>>>,
 }
 
 impl std::fmt::Debug for WorkerShellSession {
@@ -611,6 +615,10 @@ impl ShellSession for WorkerShellSession {
             let _ = write_msg(&mut *writer, &HostToWorker::Disconnect);
         }
         Ok(())
+    }
+
+    fn disconnect_reason(&self) -> Option<String> {
+        self.exit_reason.lock().ok().and_then(|guard| guard.clone())
     }
 }
 
@@ -860,18 +868,22 @@ pub fn connect_via_session_worker(
                     message, stage, kind, host_key, auth,
                 ));
             }
-            WorkerToHost::Exited => {
+            WorkerToHost::Exited { reason } => {
                 terminate_child_pid(pid);
                 tracing::error!(
                     session_id,
                     worker_pid = pid,
                     last_stage = %last_stage,
+                    reason = reason.as_deref().unwrap_or(""),
                     "session worker exited before connect finished"
                 );
-                return Err(SshError::new(
-                    SshErrorKind::Channel,
-                    "session worker exited before connect finished",
-                ));
+                let detail = match reason {
+                    Some(reason) if !reason.trim().is_empty() => {
+                        format!("session worker exited before connect finished: {reason}")
+                    }
+                    _ => "session worker exited before connect finished".to_owned(),
+                };
+                return Err(SshError::new(SshErrorKind::Channel, detail));
             }
             WorkerToHost::Output { .. } => {
                 // Ignore premature output during handshake.
@@ -893,10 +905,12 @@ pub fn connect_via_session_worker(
 
     let (output_tx, output_rx) = mpsc::channel();
     let connected = Arc::new(AtomicBool::new(true));
+    let exit_reason = Arc::new(Mutex::new(None));
     let reader_connected = Arc::clone(&connected);
+    let reader_exit_reason = Arc::clone(&exit_reason);
     let reader_thread = thread::Builder::new()
         .name(format!("yshell-sw-read-{session_id}"))
-        .spawn(move || reader_loop(reader, output_tx, reader_connected));
+        .spawn(move || reader_loop(reader, output_tx, reader_connected, reader_exit_reason));
     if reader_thread.is_err() {
         connected.store(false, Ordering::SeqCst);
         terminate_child_pid(pid);
@@ -911,6 +925,7 @@ pub fn connect_via_session_worker(
             connected,
             writer: Mutex::new(writer),
             output_rx: Mutex::new(output_rx),
+            exit_reason,
         },
         worker_child,
     ))
@@ -920,6 +935,7 @@ fn reader_loop(
     mut reader: BufReader<TcpStream>,
     output_tx: Sender<Vec<u8>>,
     connected: Arc<AtomicBool>,
+    exit_reason: Arc<Mutex<Option<String>>>,
 ) {
     loop {
         let mut line = String::new();
@@ -949,7 +965,20 @@ fn reader_loop(
                     }
                 }
             }
-            WorkerToHost::Exited | WorkerToHost::Failed { .. } => break,
+            WorkerToHost::Exited { reason } => {
+                if let Some(reason) = reason {
+                    if let Ok(mut guard) = exit_reason.lock() {
+                        *guard = Some(reason);
+                    }
+                }
+                break;
+            }
+            WorkerToHost::Failed { message, .. } => {
+                if let Ok(mut guard) = exit_reason.lock() {
+                    *guard = Some(message);
+                }
+                break;
+            }
             WorkerToHost::Progress { .. } | WorkerToHost::Connected => {}
         }
     }
@@ -1302,7 +1331,7 @@ pub fn run_session_worker_ipc(
         // SFTP-only should not use this path; close and exit.
         tracing::debug!(session_id = %session_id, "session worker has no PTY (SFTP-only); exiting");
         transport.close();
-        send_worker_msg(&writer, &WorkerToHost::Exited)?;
+        send_worker_msg(&writer, &WorkerToHost::Exited { reason: None })?;
         return Ok(());
     };
 
@@ -1312,12 +1341,15 @@ pub fn run_session_worker_ipc(
         .set_read_timeout(Some(Duration::from_millis(20)))
         .map_err(AppError::from_error)?;
 
-    loop {
+    let mut exit_reason: Option<String> = None;
+    let mut first_output_forwarded = false;
+
+    'io: loop {
         // Parent liveness is a cheap secondary check; the Host IPC socket EOF
         // below is the authoritative "Host is gone" signal.
         if parent_pid != 0 && !super::liveness::process_is_alive(parent_pid) {
             tracing::info!(parent_pid, "session worker parent host is gone; exiting");
-            break;
+            break 'io;
         }
         // Drain host commands (non-blocking via read timeout).
         loop {
@@ -1327,7 +1359,7 @@ pub fn run_session_worker_ipc(
                     tracing::info!("session worker Host IPC closed; disconnecting");
                     let _ = shell.disconnect();
                     transport.close();
-                    let _ = send_worker_msg(&writer, &WorkerToHost::Exited);
+                    let _ = send_worker_msg(&writer, &WorkerToHost::Exited { reason: None });
                     return Ok(());
                 }
                 Ok(_) => {
@@ -1341,7 +1373,8 @@ pub fn run_session_worker_ipc(
                                 tracing::trace!(bytes = bytes.len(), "session worker input");
                                 if let Err(error) = shell.write_input(&bytes) {
                                     tracing::warn!(%error, "session worker could not write input to the remote shell");
-                                    break;
+                                    exit_reason = Some(error.to_string());
+                                    break 'io;
                                 }
                             } else {
                                 tracing::debug!("session worker ignored invalid base64 input");
@@ -1360,18 +1393,26 @@ pub fn run_session_worker_ipc(
                                 pixel_height,
                                 "session worker resize"
                             );
-                            let _ = shell.resize_pty(PtySize {
+                            if let Err(error) = shell.resize_pty(PtySize {
                                 columns,
                                 rows,
                                 pixel_width,
                                 pixel_height,
-                            });
+                            }) {
+                                tracing::warn!(
+                                    %error,
+                                    columns,
+                                    rows,
+                                    "session worker could not resize remote PTY"
+                                );
+                            }
                         }
                         HostToWorker::Disconnect => {
                             tracing::info!("session worker disconnect requested by the Host");
                             let _ = shell.disconnect();
                             transport.close();
-                            let _ = send_worker_msg(&writer, &WorkerToHost::Exited);
+                            let _ =
+                                send_worker_msg(&writer, &WorkerToHost::Exited { reason: None });
                             return Ok(());
                         }
                         HostToWorker::Connect { .. } => {}
@@ -1394,27 +1435,37 @@ pub fn run_session_worker_ipc(
 
         if !shell.is_connected() {
             tracing::info!("session worker remote shell is no longer connected");
-            break;
+            break 'io;
         }
-        match shell.poll_output() {
-            Ok(bytes) if !bytes.is_empty() => {
-                tracing::trace!(bytes = bytes.len(), "session worker output");
-                if send_worker_msg(
-                    &writer,
-                    &WorkerToHost::Output {
-                        data_b64: B64.encode(&bytes),
-                    },
-                )
-                .is_err()
-                {
-                    tracing::warn!("session worker could not forward output to the Host");
-                    break;
+        for _ in 0..64 {
+            match shell.poll_output() {
+                Ok(bytes) if !bytes.is_empty() => {
+                    if !first_output_forwarded {
+                        first_output_forwarded = true;
+                        tracing::debug!(
+                            bytes = bytes.len(),
+                            "session worker forwarded first output to the Host"
+                        );
+                    }
+                    tracing::trace!(bytes = bytes.len(), "session worker output");
+                    if send_worker_msg(
+                        &writer,
+                        &WorkerToHost::Output {
+                            data_b64: B64.encode(&bytes),
+                        },
+                    )
+                    .is_err()
+                    {
+                        tracing::warn!("session worker could not forward output to the Host");
+                        break 'io;
+                    }
                 }
-            }
-            Ok(_) => {}
-            Err(error) => {
-                tracing::warn!(%error, "session worker output poll failed");
-                break;
+                Ok(_) => break,
+                Err(error) => {
+                    tracing::warn!(%error, "session worker output poll failed");
+                    exit_reason = Some(error.to_string());
+                    break 'io;
+                }
             }
         }
         thread::sleep(Duration::from_millis(5));
@@ -1423,7 +1474,12 @@ pub fn run_session_worker_ipc(
     tracing::info!("session worker exiting");
     let _ = shell.disconnect();
     transport.close();
-    let _ = send_worker_msg(&writer, &WorkerToHost::Exited);
+    let _ = send_worker_msg(
+        &writer,
+        &WorkerToHost::Exited {
+            reason: exit_reason,
+        },
+    );
     Ok(())
 }
 
@@ -1489,8 +1545,12 @@ mod tests {
 
         let (tx, rx) = mpsc::channel();
         let connected = Arc::new(AtomicBool::new(true));
+        let exit_reason = Arc::new(Mutex::new(None));
         let reader_flag = Arc::clone(&connected);
-        let reader = thread::spawn(move || reader_loop(BufReader::new(server), tx, reader_flag));
+        let reader_reason = Arc::clone(&exit_reason);
+        let reader = thread::spawn(move || {
+            reader_loop(BufReader::new(server), tx, reader_flag, reader_reason)
+        });
 
         // Several idle timeouts must not end the loop.
         thread::sleep(Duration::from_millis(250));
@@ -1664,5 +1724,65 @@ mod tests {
         assert_eq!(error.host_key_problem, None);
         assert_eq!(error.auth_problem, None);
         assert_eq!(error.auth_methods, None);
+    }
+
+    #[test]
+    fn worker_exited_roundtrips_reason_and_decodes_legacy() {
+        let with_reason = WorkerToHost::Exited {
+            reason: Some("Io: transport read ([Session(-43)] transport read)".to_owned()),
+        };
+        let encoded = serde_json::to_string(&with_reason).expect("encode Exited");
+        let decoded: WorkerToHost = serde_json::from_str(&encoded).expect("decode Exited");
+        match decoded {
+            WorkerToHost::Exited { reason } => {
+                assert_eq!(
+                    reason.as_deref(),
+                    Some("Io: transport read ([Session(-43)] transport read)")
+                );
+            }
+            other => panic!("expected Exited, got {other:?}"),
+        }
+
+        let legacy: WorkerToHost =
+            serde_json::from_str(r#"{"type":"exited"}"#).expect("decode legacy Exited");
+        match legacy {
+            WorkerToHost::Exited { reason } => assert_eq!(reason, None),
+            other => panic!("expected Exited, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn reader_loop_records_exit_reason_from_worker() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind reader probe");
+        let address = listener.local_addr().expect("listener addr");
+        let client = thread::spawn(move || TcpStream::connect(address).expect("connect"));
+        let (server, _) = listener.accept().expect("accept reader probe");
+        let mut writer = client.join().expect("client thread");
+
+        let (tx, _rx) = mpsc::channel();
+        let connected = Arc::new(AtomicBool::new(true));
+        let exit_reason = Arc::new(Mutex::new(None));
+        let reader_flag = Arc::clone(&connected);
+        let reader_reason = Arc::clone(&exit_reason);
+        let reader = thread::spawn(move || {
+            reader_loop(BufReader::new(server), tx, reader_flag, reader_reason)
+        });
+
+        let expected =
+            "Io: failed while reading SSH stdout: transport read ([Session(-43)] transport read)";
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&WorkerToHost::Exited {
+                reason: Some(expected.to_owned()),
+            })
+            .expect("serialize")
+        )
+        .expect("write Exited");
+        writer.flush().expect("flush");
+        reader.join().expect("reader thread");
+
+        assert!(!connected.load(Ordering::SeqCst));
+        assert_eq!(exit_reason.lock().expect("lock").as_deref(), Some(expected));
     }
 }

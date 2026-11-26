@@ -101,7 +101,7 @@ impl AppRuntime {
             return Ok(SessionPollOutcome::default());
         };
         let is_active = self.active_session_id.as_deref() == Some(session_key);
-        let (chunks_empty, terminal_changed, state_changed, shell_closed) = {
+        let (chunks_empty, terminal_changed, state_changed, shell_closed, failure_reason) = {
             let runtime = self
                 .sessions
                 .get_mut(session_key)
@@ -113,30 +113,57 @@ impl AppRuntime {
             // 状态下的 poll I/O 错误也视为传输已死（否则会每帧 WARN 刷屏）。
             let mut shell_closed =
                 previous_state == yshell_core::SessionState::Connected && !shell_connected;
+            let mut poll_error_text: Option<String> = None;
             let chunks = match poll_result {
                 Ok(chunks) => chunks,
-                Err(_) if shell_closed => Vec::new(),
+                Err(error) if shell_closed => {
+                    poll_error_text = Some(error.to_string());
+                    Vec::new()
+                }
                 Err(_) if previous_state == yshell_core::SessionState::Disconnected => Vec::new(),
                 Err(error) if previous_state == yshell_core::SessionState::Connected => {
                     tracing::warn!(
                         target: "yshell::app",
-                        "live shell transport failed while polling output; marking session disconnected: {error}"
+                        "live shell transport failed while polling output; marking session failed: {error}"
                     );
+                    poll_error_text = Some(error.to_string());
                     shell_closed = true;
                     Vec::new()
                 }
                 Err(error) => return Err(AppError::from_error(error)),
             };
-            if shell_closed {
-                runtime.set_state(yshell_core::SessionState::Disconnected);
-                runtime
-                    .log_runtime_event("Live shell closed while the app was polling for output.");
-            }
+            let failure_reason = if shell_closed {
+                let reason = poll_error_text
+                    .or_else(|| runtime.shell_disconnect_reason())
+                    .filter(|reason| !reason.trim().is_empty());
+                if let Some(reason) = reason.as_ref() {
+                    runtime.connection_in_flight = false;
+                    runtime.connection_stage = "failed".to_owned();
+                    runtime.connection_error = reason.clone();
+                    runtime.set_state(yshell_core::SessionState::Failed);
+                    runtime.shell_session = None;
+                    if let Some(transport) = runtime.transport.take() {
+                        transport.close();
+                    }
+                    runtime.log_runtime_event(&format!(
+                        "Live shell failed while the app was polling for output: {reason}"
+                    ));
+                } else {
+                    runtime.set_state(yshell_core::SessionState::Disconnected);
+                    runtime.log_runtime_event(
+                        "Live shell closed while the app was polling for output.",
+                    );
+                }
+                reason
+            } else {
+                None
+            };
             (
                 chunks.is_empty(),
                 runtime.visible_text() != previous_terminal,
                 runtime.state != previous_state,
                 shell_closed,
+                failure_reason,
             )
         };
         let output_changed = !chunks_empty || terminal_changed;
@@ -144,20 +171,37 @@ impl AppRuntime {
             return Ok(SessionPollOutcome::default());
         }
         if shell_closed {
+            if failure_reason.is_some() {
+                let _ = self.mark_session_failed_after_connect(session_key);
+            }
             let sftp_status = self.sync_sftp_lifecycle_for_session(session_key, false);
             if is_active {
-                tracing::info!(
-                    target: "yshell::app",
-                    "active live shell closed; {sftp_status}"
-                );
-                self.set_status_kind(
-                    "session-live-shell-closed",
-                    format!(
-                        "The active live shell closed while the terminal was refreshing. {sftp_status}"
-                    ),
-                    String::new(),
-                    String::new(),
-                );
+                if let Some(reason) = failure_reason {
+                    tracing::info!(
+                        target: "yshell::app",
+                        %reason,
+                        "active live shell failed; {sftp_status}"
+                    );
+                    self.set_status_kind(
+                        "session-worker-exited",
+                        format!("The active live shell failed: {reason} {sftp_status}"),
+                        session_key.to_owned(),
+                        String::new(),
+                    );
+                } else {
+                    tracing::info!(
+                        target: "yshell::app",
+                        "active live shell closed; {sftp_status}"
+                    );
+                    self.set_status_kind(
+                        "session-live-shell-closed",
+                        format!(
+                            "The active live shell closed while the terminal was refreshing. {sftp_status}"
+                        ),
+                        String::new(),
+                        String::new(),
+                    );
+                }
             }
         }
         self.fold_logging_notice_from_session(session_key);

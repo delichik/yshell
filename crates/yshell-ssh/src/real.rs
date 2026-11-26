@@ -264,6 +264,9 @@ struct RealNativeShellSession {
     channel: Channel,
     closed: bool,
     disconnect_reported: bool,
+    opened_at: Instant,
+    last_activity: Instant,
+    first_output_logged: bool,
 }
 
 impl RealSshAdapter {
@@ -512,10 +515,94 @@ const LIBSSH2_ERROR_METHOD_NONE: i32 = -17;
 const LIBSSH2_ERROR_AUTHENTICATION_FAILED: i32 = -18;
 const LIBSSH2_ERROR_PUBLICKEY_UNVERIFIED: i32 = -19;
 const LIBSSH2_ERROR_METHOD_NOT_SUPPORTED: i32 = -33;
+const LIBSSH2_ERROR_EAGAIN: i32 = -37;
 
 /// Seconds of idle SSH I/O before libssh2 sends a keepalive probe.
 /// Matches common client defaults (OpenSSH `ServerAliveInterval` style).
 const NATIVE_SSH_KEEPALIVE_INTERVAL_SECS: u32 = 15;
+
+fn should_send_keepalive(last_activity: Instant, now: Instant, interval: Duration) -> bool {
+    now.saturating_duration_since(last_activity) >= interval
+}
+
+fn describe_channel_read_failure(
+    stream_name: &str,
+    io_error: &io::Error,
+    ssh2_detail: Option<&str>,
+) -> String {
+    match ssh2_detail {
+        Some(detail) if !detail.is_empty() => {
+            format!("failed while reading SSH {stream_name}: {io_error} ({detail})")
+        }
+        _ => format!("failed while reading SSH {stream_name}: {io_error}"),
+    }
+}
+
+fn format_channel_read_error(
+    session: &Session,
+    channel: &Channel,
+    stream_name: &str,
+    io_error: &io::Error,
+    opened_at: Instant,
+) -> SshError {
+    let last_error = ssh2::Error::last_session_error(session);
+    let eof = channel.eof();
+    let exit_status = channel.exit_status().ok();
+    let elapsed_ms = opened_at.elapsed().as_millis();
+    let ssh2_detail = last_error.as_ref().map(ToString::to_string);
+    tracing::warn!(
+        target: "yshell::ssh",
+        stream = stream_name,
+        io_kind = ?io_error.kind(),
+        io_error = %io_error,
+        ssh2_code = ?last_error.as_ref().map(ssh2::Error::code),
+        ssh2_message = last_error.as_ref().map(ssh2::Error::message).unwrap_or(""),
+        eof,
+        exit_status,
+        elapsed_ms,
+        "ssh channel read failed"
+    );
+    SshError::new(
+        SshErrorKind::Io,
+        describe_channel_read_failure(stream_name, io_error, ssh2_detail.as_deref()),
+    )
+}
+
+fn resize_nonblocking_pty(channel: &mut Channel, size: PtySize) -> SshResult<()> {
+    let mut retries = 0u32;
+    loop {
+        match channel.request_pty_size(
+            size.columns as u32,
+            size.rows as u32,
+            Some(size.pixel_width as u32),
+            Some(size.pixel_height as u32),
+        ) {
+            Ok(()) => return Ok(()),
+            Err(error) if error.code() == ssh2::ErrorCode::Session(LIBSSH2_ERROR_EAGAIN) => {
+                retries += 1;
+                if retries > 500 {
+                    return Err(SshError::new(
+                        SshErrorKind::Channel,
+                        format!(
+                            "SSH PTY resize to {}x{} stalled waiting for backpressure to clear",
+                            size.columns, size.rows
+                        ),
+                    ));
+                }
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            Err(error) => {
+                return Err(SshError::new(
+                    SshErrorKind::Channel,
+                    format!(
+                        "failed to resize SSH PTY to {}x{}: {error}",
+                        size.columns, size.rows
+                    ),
+                ));
+            }
+        }
+    }
+}
 
 fn ssh2_error_code(error: &ssh2::Error) -> Option<i32> {
     match error.code() {
@@ -1416,11 +1503,15 @@ impl RealNativeShellSession {
             RealConnectionStage::Connected,
             "Interactive shell is live inside the embedded SSH transport.",
         );
+        let now = Instant::now();
         Ok(Self {
             session,
             channel,
             closed: false,
             disconnect_reported: false,
+            opened_at: now,
+            last_activity: now,
+            first_output_logged: false,
         })
     }
 
@@ -1440,29 +1531,64 @@ impl RealNativeShellSession {
         if self.closed {
             return Ok(());
         }
-        // keepalive_send is a no-op until the configured idle interval elapses;
-        // call it every poll so probes actually go out on the UI tick.
-        //
-        // A failing probe is NEVER fatal: the socket send buffer can be full
-        // for a moment (EAGAIN) and libssh2 reports that as a socket error,
-        // so killing the session here is what made healthy connections drop
-        // ("SSH connection lost"). The channel read below is the authoritative
-        // signal: a really dead socket makes `recv` return 0, which libssh2
-        // reports as "socket disconnected".
-        if let Err(error) = self.session.keepalive_send() {
-            tracing::debug!(
-                target: "yshell::ssh",
-                "SSH keepalive probe failed (continuing): {error}"
-            );
+        let now = Instant::now();
+        let interval = Duration::from_secs(u64::from(NATIVE_SSH_KEEPALIVE_INTERVAL_SECS));
+        // Only send keepalive after real idle time: libssh2 initializes
+        // `keepalive_last_sent = 0`, so calling `keepalive_send()` unconditionally
+        // fires a global request on the very first poll right after connect/resize.
+        if should_send_keepalive(self.last_activity, now, interval) {
+            self.last_activity = now;
+            if let Err(error) = self.session.keepalive_send() {
+                tracing::debug!(
+                    target: "yshell::ssh",
+                    "SSH keepalive probe failed (continuing): {error}"
+                );
+            }
         }
-        if let Err(error) = drain_channel_stream(&mut self.channel, queue) {
-            self.mark_closed_after_transport_error();
-            return Err(error);
-        }
-        let mut stderr = self.channel.stderr();
-        if let Err(error) = drain_read_stream(&mut stderr, queue) {
-            self.mark_closed_after_transport_error();
-            return Err(error);
+        let stdout_bytes = match drain_read_stream_raw(&mut self.channel, queue) {
+            Ok(bytes) => bytes,
+            Err(io_error) => {
+                let error = format_channel_read_error(
+                    &self.session,
+                    &self.channel,
+                    "stdout",
+                    &io_error,
+                    self.opened_at,
+                );
+                self.mark_closed_after_transport_error();
+                return Err(error);
+            }
+        };
+        let stderr_result = {
+            let mut stderr = self.channel.stderr();
+            drain_read_stream_raw(&mut stderr, queue)
+        };
+        let stderr_bytes = match stderr_result {
+            Ok(bytes) => bytes,
+            Err(io_error) => {
+                let error = format_channel_read_error(
+                    &self.session,
+                    &self.channel,
+                    "stderr",
+                    &io_error,
+                    self.opened_at,
+                );
+                self.mark_closed_after_transport_error();
+                return Err(error);
+            }
+        };
+        let total_bytes = stdout_bytes + stderr_bytes;
+        if total_bytes > 0 {
+            self.last_activity = Instant::now();
+            if !self.first_output_logged {
+                self.first_output_logged = true;
+                tracing::debug!(
+                    target: "yshell::ssh",
+                    bytes = total_bytes,
+                    elapsed_ms = self.opened_at.elapsed().as_millis(),
+                    "ssh shell received first output"
+                );
+            }
         }
         Ok(())
     }
@@ -1518,7 +1644,10 @@ impl RealNativeShellSession {
         retries = 0;
         loop {
             match self.channel.flush() {
-                Ok(()) => return Ok(()),
+                Ok(()) => {
+                    self.last_activity = Instant::now();
+                    return Ok(());
+                }
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
                     retries += 1;
                     if retries > 500 {
@@ -1542,22 +1671,15 @@ impl RealNativeShellSession {
     }
 
     fn resize_pty(&mut self, size: PtySize) -> SshResult<()> {
-        self.channel
-            .request_pty_size(
-                size.columns as u32,
-                size.rows as u32,
-                Some(size.pixel_width as u32),
-                Some(size.pixel_height as u32),
-            )
-            .map_err(|error| {
-                SshError::new(
-                    SshErrorKind::Channel,
-                    format!(
-                        "failed to resize SSH PTY to {}x{}: {error}",
-                        size.columns, size.rows
-                    ),
-                )
-            })
+        if self.closed {
+            return Err(SshError::new(
+                SshErrorKind::Channel,
+                "cannot resize a closed SSH shell".to_owned(),
+            ));
+        }
+        resize_nonblocking_pty(&mut self.channel, size)?;
+        self.last_activity = Instant::now();
+        Ok(())
     }
 
     fn disconnect(&mut self) -> SshResult<()> {
@@ -1777,11 +1899,15 @@ impl SshTransport {
         self.session.set_blocking(false);
         self.shell_attached.store(true, Ordering::SeqCst);
         notify_connection_stage(RealConnectionStage::Connected);
+        let now = Instant::now();
         Ok(Box::new(SshTransportShellSession {
             transport: self.clone(),
             channel,
             closed: false,
             pending_output: VecDeque::new(),
+            opened_at: now,
+            last_activity: now,
+            first_output_logged: false,
         }))
     }
 
@@ -1802,6 +1928,9 @@ struct SshTransportShellSession {
     channel: Channel,
     closed: bool,
     pending_output: VecDeque<Vec<u8>>,
+    opened_at: Instant,
+    last_activity: Instant,
+    first_output_logged: bool,
 }
 
 impl std::fmt::Debug for SshTransportShellSession {
@@ -1822,25 +1951,65 @@ impl ShellSession for SshTransportShellSession {
         if self.closed {
             return Ok(Vec::new());
         }
-        // A failing keepalive probe is never fatal (see
-        // `RealNativeShellSession`): the channel read below decides whether the
-        // session is really dead.
-        if let Err(error) = self.transport.session().keepalive_send() {
-            tracing::debug!(
-                target: "yshell::ssh",
-                "SSH keepalive probe failed (continuing): {error}"
-            );
+        let now = Instant::now();
+        let interval = Duration::from_secs(u64::from(NATIVE_SSH_KEEPALIVE_INTERVAL_SECS));
+        // Only send keepalive after real idle time (see `RealNativeShellSession`).
+        if should_send_keepalive(self.last_activity, now, interval) {
+            self.last_activity = now;
+            if let Err(error) = self.transport.session().keepalive_send() {
+                tracing::debug!(
+                    target: "yshell::ssh",
+                    "SSH keepalive probe failed (continuing): {error}"
+                );
+            }
         }
-        if let Err(error) = drain_channel_stream(&mut self.channel, &mut self.pending_output) {
-            self.closed = true;
-            self.transport.mark_closed();
-            return Err(error);
-        }
-        let mut stderr = self.channel.stderr();
-        if let Err(error) = drain_read_stream(&mut stderr, &mut self.pending_output) {
-            self.closed = true;
-            self.transport.mark_closed();
-            return Err(error);
+        let stdout_bytes = match drain_read_stream_raw(&mut self.channel, &mut self.pending_output)
+        {
+            Ok(bytes) => bytes,
+            Err(io_error) => {
+                let error = format_channel_read_error(
+                    self.transport.session(),
+                    &self.channel,
+                    "stdout",
+                    &io_error,
+                    self.opened_at,
+                );
+                self.closed = true;
+                self.transport.mark_closed();
+                return Err(error);
+            }
+        };
+        let stderr_result = {
+            let mut stderr = self.channel.stderr();
+            drain_read_stream_raw(&mut stderr, &mut self.pending_output)
+        };
+        let stderr_bytes = match stderr_result {
+            Ok(bytes) => bytes,
+            Err(io_error) => {
+                let error = format_channel_read_error(
+                    self.transport.session(),
+                    &self.channel,
+                    "stderr",
+                    &io_error,
+                    self.opened_at,
+                );
+                self.closed = true;
+                self.transport.mark_closed();
+                return Err(error);
+            }
+        };
+        let total_bytes = stdout_bytes + stderr_bytes;
+        if total_bytes > 0 {
+            self.last_activity = Instant::now();
+            if !self.first_output_logged {
+                self.first_output_logged = true;
+                tracing::debug!(
+                    target: "yshell::ssh",
+                    bytes = total_bytes,
+                    elapsed_ms = self.opened_at.elapsed().as_millis(),
+                    "ssh shell received first output"
+                );
+            }
         }
         Ok(self.pending_output.pop_front().unwrap_or_default())
     }
@@ -1892,7 +2061,10 @@ impl ShellSession for SshTransportShellSession {
         retries = 0;
         loop {
             match self.channel.flush() {
-                Ok(()) => return Ok(()),
+                Ok(()) => {
+                    self.last_activity = Instant::now();
+                    return Ok(());
+                }
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
                     retries += 1;
                     if retries > 500 {
@@ -1917,22 +2089,15 @@ impl ShellSession for SshTransportShellSession {
     }
 
     fn resize_pty(&mut self, size: PtySize) -> SshResult<()> {
-        self.channel
-            .request_pty_size(
-                size.columns as u32,
-                size.rows as u32,
-                Some(size.pixel_width as u32),
-                Some(size.pixel_height as u32),
-            )
-            .map_err(|error| {
-                SshError::new(
-                    SshErrorKind::Channel,
-                    format!(
-                        "failed to resize SSH PTY to {}x{}: {error}",
-                        size.columns, size.rows
-                    ),
-                )
-            })
+        if self.closed {
+            return Err(SshError::new(
+                SshErrorKind::Channel,
+                "cannot resize a closed SSH shell".to_owned(),
+            ));
+        }
+        resize_nonblocking_pty(&mut self.channel, size)?;
+        self.last_activity = Instant::now();
+        Ok(())
     }
 
     fn disconnect(&mut self) -> SshResult<()> {
@@ -2418,27 +2583,25 @@ fn authenticate_native_session(
     )
 }
 
-fn drain_channel_stream(channel: &mut Channel, queue: &mut VecDeque<Vec<u8>>) -> SshResult<()> {
-    drain_read_stream(channel, queue)
-}
-
-fn drain_read_stream(reader: &mut impl Read, queue: &mut VecDeque<Vec<u8>>) -> SshResult<()> {
+fn drain_read_stream_raw(
+    reader: &mut impl Read,
+    queue: &mut VecDeque<Vec<u8>>,
+) -> Result<usize, io::Error> {
+    let mut total = 0usize;
     loop {
         let mut buffer = [0u8; 4096];
         match reader.read(&mut buffer) {
             Ok(0) => break,
-            Ok(count) => queue.push_back(buffer[..count].to_vec()),
+            Ok(count) => {
+                total = total.saturating_add(count);
+                queue.push_back(buffer[..count].to_vec());
+            }
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
             Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-            Err(error) => {
-                return Err(SshError::new(
-                    SshErrorKind::Io,
-                    format!("failed while reading SSH output: {error}"),
-                ))
-            }
+            Err(error) => return Err(error),
         }
     }
-    Ok(())
+    Ok(total)
 }
 
 fn native_host_key_algorithm_label(key_type: ssh2::HostKeyType) -> &'static str {
@@ -2503,9 +2666,10 @@ mod tests {
     };
 
     use super::{
-        classify_native_auth_problem, describe_challenges, native_host_key_problem,
-        native_stage_error, ssh2_error_code, strategy_from_attempt, RealAuthStrategy,
-        RealConnectionAttempt, RealConnectionStage, RealSshAdapter, RealTransportActionOutcome,
+        classify_native_auth_problem, describe_challenges, describe_channel_read_failure,
+        native_host_key_problem, native_stage_error, should_send_keepalive, ssh2_error_code,
+        strategy_from_attempt, RealAuthStrategy, RealConnectionAttempt, RealConnectionStage,
+        RealSshAdapter, RealTransportActionOutcome,
     };
 
     #[test]
@@ -3385,5 +3549,45 @@ mod tests {
             .unwrap_or_else(|| panic!("YSHELL_LIVE_SSH_TARGET must include :port"));
         let port = port.parse::<u16>().expect("live ssh port");
         (username.to_owned(), host.to_owned(), port)
+    }
+
+    #[test]
+    fn should_send_keepalive_waits_for_full_idle_interval() {
+        let base = std::time::Instant::now();
+        let interval = Duration::from_secs(15);
+
+        assert!(!should_send_keepalive(base, base, interval));
+        assert!(!should_send_keepalive(
+            base,
+            base + Duration::from_secs(14),
+            interval
+        ));
+        assert!(should_send_keepalive(
+            base,
+            base + Duration::from_secs(15),
+            interval
+        ));
+        assert!(should_send_keepalive(
+            base,
+            base + Duration::from_secs(30),
+            interval
+        ));
+    }
+
+    #[test]
+    fn describe_channel_read_failure_includes_ssh2_error_detail() {
+        let io_err = std::io::Error::other("transport read");
+        assert_eq!(
+            describe_channel_read_failure("stdout", &io_err, Some("[Session(-43)] transport read")),
+            "failed while reading SSH stdout: transport read ([Session(-43)] transport read)"
+        );
+        assert_eq!(
+            describe_channel_read_failure("stderr", &io_err, None),
+            "failed while reading SSH stderr: transport read"
+        );
+        assert_eq!(
+            describe_channel_read_failure("stdout", &io_err, Some("")),
+            "failed while reading SSH stdout: transport read"
+        );
     }
 }

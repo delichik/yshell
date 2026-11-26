@@ -974,6 +974,12 @@ impl SessionRuntime {
             .map(|session| session.is_connected())
     }
 
+    pub fn shell_disconnect_reason(&self) -> Option<String> {
+        self.shell_session
+            .as_ref()
+            .and_then(|session| session.disconnect_reason())
+    }
+
     pub fn write_terminal_input(
         &mut self,
         bytes: &[u8],
